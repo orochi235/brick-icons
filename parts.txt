@@ -1,0 +1,42 @@
+# brick-icons — curated starter parts list (LDraw part ids)
+# One part per line. Whole-line '#' comments and blank lines are ignored.
+# (Inline trailing comments are NOT supported — keep ids bare.)
+# Spread across categories so a tuning run exercises different geometries.
+
+# --- Bricks ---  3001=2x4 3003=2x2 3004=1x2 3005=1x1 3010=1x4
+3001
+3003
+3004
+3005
+3010
+
+# --- Plates ---  3020=2x4 3022=2x2 3023=1x2 3024=1x1 3795=2x6
+3020
+3022
+3023
+3024
+3795
+
+# --- Tiles (smooth top) ---  3068b=2x2 3069b=1x2 3070b=1x1
+3068b
+3069b
+3070b
+
+# --- Slopes ---  3040b=45 2x1  3039=45 2x2  54200=30 cheese
+3040b
+3039
+54200
+
+# --- Round ---  3941=brick 2x2  4073=plate 1x1  3062b=brick 1x1
+3941
+4073
+3062b
+
+# --- Technic ---  3700=1x2 1-hole  3701=1x4 3-hole  32062=axle 2
+3700
+3701
+32062
+
+# --- SNOT / special ---  87087=1x1 stud-on-side  15573=1x2 jumper
+87087
+15573
