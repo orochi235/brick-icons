@@ -66,3 +66,28 @@ def test_make_outline_interior_adds_pixels(gradient_rgba):
     sil = np.asarray(process.make_outline(gradient_rgba, interior=False))
     full = np.asarray(process.make_outline(gradient_rgba, interior=True))
     assert (full == 0).sum() >= (sil == 0).sum()
+
+
+def _arr1(img):
+    assert img.mode == "1"
+    return np.asarray(img.convert("L"))
+
+
+def test_threshold_pure_bw(gradient_rgba):
+    g = process.to_grayscale(gradient_rgba)
+    a = _arr1(process.dither(g, "threshold", 128))
+    assert set(np.unique(a).tolist()) <= {0, 255}
+    assert a[:, 0].mean() == 0 and a[:, -1].mean() == 255
+
+
+@pytest.mark.parametrize("algo", ["floyd", "ordered", "atkinson"])
+def test_dithers_preserve_mean(gradient_rgba, algo):
+    g = process.to_grayscale(gradient_rgba)
+    a = _arr1(process.dither(g, algo))
+    assert set(np.unique(a).tolist()) <= {0, 255}
+    assert abs(a.mean() / 255 - np.asarray(g).mean() / 255) < 0.08
+
+
+def test_unknown_algo_raises(gradient_rgba):
+    with pytest.raises(ValueError):
+        process.dither(process.to_grayscale(gradient_rgba), "nope")
