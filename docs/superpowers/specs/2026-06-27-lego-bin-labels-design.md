@@ -220,6 +220,18 @@ Comparison sheets from this investigation are archived in the session scratchpad
 - **Python, not Node** — image-processing-centric; Pillow already present.
 - **New sibling repo**, not a subdirectory of `lbx-editor` — decoupled batch tool.
 
+## Portability
+
+macOS is the development platform, but the design keeps platform specifics out of
+the code so a later port is a config change, not a rewrite. The only OS-specific
+piece is the LDView invocation: `config.ldview` (binary path) and
+`config.ldview_launcher` (prefix args, default `["arch","-x86_64"]` on Apple
+Silicon, `[]` elsewhere via `default_ldview_launcher()`). LDView's `-Flags` are
+identical across its macOS/Linux/Windows builds; potrace, ImageMagick, Pillow,
+and NumPy are cross-platform. The `setup-ldview.sh` convenience script is
+macOS-only (dmg/hdiutil/brew); on Linux you install ldview + potrace via the
+package manager and set the two config values in `labels.toml`.
+
 ## Out of scope
 
 - LBX file assembly / printing (handled by the user's separate stack).

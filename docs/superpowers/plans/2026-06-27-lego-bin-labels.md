@@ -12,7 +12,14 @@
 
 ## Validated facts (from spec smoke-tests — do not re-litigate)
 
-- LDView is **x86_64-only**; invoke via `arch -x86_64 vendor/LDView.app/Contents/MacOS/LDView`. Rosetta is installed.
+- LDView is **x86_64-only** on macOS; invoke via `arch -x86_64 vendor/LDView.app/Contents/MacOS/LDView`. Rosetta is installed.
+
+## Portability (designed in — keep platform specifics in config, not code)
+
+Only the LDView *invocation* is platform-specific. Abstract it:
+- `config.ldview` — path to the LDView binary (default macOS `.app` path; on Linux set to e.g. `/usr/bin/ldview` via `labels.toml`).
+- `config.ldview_launcher` — list of prefix args before the binary (default `["arch","-x86_64"]` on Apple Silicon macOS, `[]` elsewhere, computed by `default_ldview_launcher()`; overridable in `labels.toml`).
+All LDView `-Flags` are identical across LDView's macOS/Linux/Windows builds, so the rest of the code is already portable. potrace, ImageMagick, Pillow, NumPy are cross-platform. The setup *script* is macOS-only (dmg/hdiutil/brew) and documented as such; on Linux you install ldview + potrace via the package manager and point `labels.toml` at them.
 - Render flags that work: `-SaveSnapshot -SaveWidth/-SaveHeight -AutoCrop=1 -SaveAlpha=1 -EdgeLines=1 -DefaultLatLong=LAT,LONG -CurveQuality=12 -HiResPrimitives=1 -AllowPrimitiveSubstitution=1 -Lighting=1 -UseQualityLighting=1 -LightVector=-1,1,2 -DefaultColor3=0xRRGGBB`.
 - Render transparent, flatten on white in Pillow.
 - potrace emits paths inside `<g transform="translate(0,H) scale(0.1,-0.1)">`; **preserve that transform** when assembling multi-band SVGs.
@@ -243,6 +250,19 @@ def test_defaults():
     assert cfg.scale == 1.0
     assert cfg.ldraw_dir == Path("/proj/vendor/ldraw")
     assert cfg.ldview == Path("/proj/vendor/LDView.app/Contents/MacOS/LDView")
+    assert isinstance(cfg.ldview_launcher, tuple)   # platform-detected prefix
+
+
+def test_default_launcher_by_platform():
+    from lego_bin_labels.config import default_ldview_launcher
+    assert default_ldview_launcher("Darwin", "arm64") == ["arch", "-x86_64"]
+    assert default_ldview_launcher("Darwin", "x86_64") == []
+    assert default_ldview_launcher("Linux", "x86_64") == []
+
+
+def test_launcher_override():
+    cfg = load_config(overrides={"ldview_launcher": []}, root="/p")
+    assert cfg.ldview_launcher == ()
 
 
 def test_overrides_win_and_none_ignored():
@@ -274,14 +294,27 @@ Expected: `ModuleNotFoundError: No module named 'lego_bin_labels.config'`
 ```python
 from __future__ import annotations
 
+import platform as _platform
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
 MM_PER_INCH = 25.4
 
+
+def default_ldview_launcher(system: str | None = None, machine: str | None = None) -> list[str]:
+    """Prefix args to launch LDView. macOS ships only an x86_64 build, so run it
+    under Rosetta on Apple Silicon; everywhere else, run the binary directly."""
+    system = system or _platform.system()
+    machine = machine or _platform.machine()
+    if system == "Darwin" and machine == "arm64":
+        return ["arch", "-x86_64"]
+    return []
+
+
 DEFAULTS = {
     "ldview": "vendor/LDView.app/Contents/MacOS/LDView",
+    "ldview_launcher": None,   # None -> default_ldview_launcher(); [] to force direct
     "ldraw_dir": "vendor/ldraw",
     "dpi": 180,
     "label_mm": None,        # (w_mm, h_mm) or None
@@ -308,6 +341,7 @@ DEFAULTS = {
 @dataclass(frozen=True)
 class Config:
     ldview: Path
+    ldview_launcher: tuple
     ldraw_dir: Path
     dpi: int
     width: int
@@ -343,8 +377,13 @@ def load_config(toml_path=None, overrides=None, root="."):
         data["width"] = round(w_mm / MM_PER_INCH * data["dpi"])
         data["height"] = round(h_mm / MM_PER_INCH * data["dpi"])
 
+    launcher = data["ldview_launcher"]
+    if launcher is None:
+        launcher = default_ldview_launcher()
+
     return Config(
         ldview=root / data["ldview"],
+        ldview_launcher=tuple(launcher),
         ldraw_dir=root / data["ldraw_dir"],
         dpi=int(data["dpi"]),
         width=int(data["width"]),
@@ -390,6 +429,11 @@ threshold = 128
 gamma = 1.0
 # part_color = "0xC0C0C0"
 # label_mm = [24.0, 12.0]
+#
+# --- Portability ---
+# On Linux/Windows, point at a native LDView and disable the Rosetta prefix:
+# ldview = "/usr/bin/ldview"
+# ldview_launcher = []
 ```
 
 - [ ] **Step 6: Commit**
@@ -684,10 +728,19 @@ def test_resolve_latlong_presets_and_explicit():
         render.resolve_latlong("sideways")
 
 
+def test_build_argv_uses_launcher_prefix():
+    direct = load_config(root=".", overrides={"ldview_launcher": []})
+    argv = render.build_argv(direct, Path("/p/3001.dat"), Path("/o/3001.png"))
+    assert argv[0] == str(direct.ldview)            # no prefix on Linux/direct
+    rosetta = load_config(root=".", overrides={"ldview_launcher": ["arch", "-x86_64"]})
+    argv2 = render.build_argv(rosetta, Path("/p/3001.dat"), Path("/o/3001.png"))
+    assert argv2[:3] == ["arch", "-x86_64", str(rosetta.ldview)]
+
+
 def test_build_argv_has_fidelity_lighting_angle():
     cfg = load_config(root=".")
     argv = render.build_argv(cfg, Path("/p/3001.dat"), Path("/o/3001.png"))
-    assert argv[:2] == ["arch", "-x86_64"] and str(cfg.ldview) in argv
+    assert str(cfg.ldview) in argv
     for flag in ["-SaveSnapshot=/o/3001.png", "-SaveWidth=2048", "-SaveHeight=2048",
                  "-AutoCrop=1", "-SaveAlpha=1", "-EdgeLines=1",
                  "-CurveQuality=12", "-HiResPrimitives=1", "-AllowPrimitiveSubstitution=1",
@@ -758,7 +811,7 @@ def resolve_part(cfg: Config, part: str) -> Path:
 def build_argv(cfg: Config, part_file: Path, out_png: Path) -> list[str]:
     lat, long = resolve_latlong(cfg.angle)
     argv = [
-        "arch", "-x86_64", str(cfg.ldview), str(part_file),
+        *cfg.ldview_launcher, str(cfg.ldview), str(part_file),
         f"-LDrawDir={cfg.ldraw_dir}",
         f"-SaveSnapshot={out_png}",
         f"-SaveWidth={cfg.render_px}", f"-SaveHeight={cfg.render_px}",
@@ -1243,7 +1296,13 @@ SVGs for Brother P-touch (LBX) bin labels.
     python3 -m venv .venv && .venv/bin/pip install -e .
     ./scripts/setup-ldview.sh        # vendor/LDView.app + vendor/ldraw + potrace
 
-LDView is x86_64-only; it runs under Rosetta automatically.
+LDView is x86_64-only on macOS; it runs under Rosetta automatically.
+
+### Porting to Linux/Windows
+
+Only the LDView invocation is platform-specific. Install LDView + potrace via your
+package manager, then in `labels.toml` set `ldview = "/path/to/ldview"` and
+`ldview_launcher = []`. No code changes needed; `setup-ldview.sh` is macOS-only.
 
 ## Usage
 
