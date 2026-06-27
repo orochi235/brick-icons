@@ -1,0 +1,21 @@
+# Default config for lego-bin-labels. CLI flags override these.
+dpi = 180
+margin = 6
+render_px = 2048       # LDView supersample before downscale
+curve_quality = 12     # LDView curve subdivision (max); 48-seg hi-res primitives
+angle = "iso"          # iso|front|back|left|right|top|bottom or "LAT,LONG"
+shading = "normal"     # normal | cel | outline
+cel_levels = 4         # bands for cel shading
+outline_interior = true
+fmt = "png"            # png | svg | both
+mode = "both"          # gray | mono | color | both
+dither = "atkinson"    # threshold | floyd | ordered | atkinson
+threshold = 128
+gamma = 1.0
+# part_color = "0xC0C0C0"
+# label_mm = [24.0, 12.0]
+#
+# --- Portability ---
+# On Linux/Windows, point at a native LDView and disable the Rosetta prefix:
+# ldview = "/usr/bin/ldview"
+# ldview_launcher = []
