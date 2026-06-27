@@ -30,7 +30,7 @@ def posterize(g: Image.Image, levels: int = 4) -> Image.Image:
     levels = max(2, levels)
     a = np.asarray(g, np.float64)
     q = np.round(a / 255 * (levels - 1)) / (levels - 1) * 255
-    return Image.fromarray(q.astype(np.uint8), "L")
+    return Image.fromarray(np.round(q).astype(np.uint8), "L")
 
 
 def fit_contain(g: Image.Image, w: int, h: int, margin: int = 6,

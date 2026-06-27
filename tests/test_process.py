@@ -33,6 +33,16 @@ def test_posterize_reduces_unique_levels(gradient_rgba):
     assert len(set(np.unique(out).tolist())) <= 4
 
 
+def test_posterize_rounds_odd_divisors():
+    import numpy as np
+    from PIL import Image
+    g = Image.fromarray(np.full((4, 4), 128, np.uint8), "L")
+    # levels=3 -> bands at 0, 127.5->128, 255; the 128 input maps to the 128 band
+    out = np.asarray(process.posterize(g, 3))
+    assert set(np.unique(out).tolist()) <= {0, 128, 255}
+    assert (out == 128).all()
+
+
 def test_fit_contain_centers_and_scales(half_transparent_rgba):
     g = process.to_grayscale(half_transparent_rgba)
     out = process.fit_contain(g, 100, 40, margin=5, scale=1.0)
