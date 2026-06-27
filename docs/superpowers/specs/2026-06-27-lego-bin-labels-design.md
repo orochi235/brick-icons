@@ -49,6 +49,24 @@ both are setup prerequisites (see Setup).
      PNG (and optionally a BMP).
    - `--mode both` → emit both.
 
+## Rendering parameters
+
+The render stage exposes camera and shading controls (LDView flags), so the same
+part can be shot the way that reads best on a tiny label:
+
+- **`--angle`** — viewing angle, mapped to LDView `-DefaultLatLong=LAT,LONG`:
+  - `iso` (**default**, 45° isometric: lat 30, long 45)
+  - `front` (0,0), `back` (0,180), `left` (0,-90), `right` (0,90),
+    `top` (90,0), `bottom` (-90,0)
+  - or an explicit `LAT,LONG` pair for anything else.
+- **`--shading`** — `normal` (lit 3D, default), `flat` (`-Lighting=0`, even fill
+  — pairs well with `threshold` for clean line art), `subdued`
+  (`-SubduedLighting=1`, softer for dithering).
+- **`--scale`** — how much of the label's view area the part fills, `0`–`1`
+  (default `1.0`). Applied in Pillow during the fit step (the render is always
+  auto-cropped first), so it composes with `--margin`. `0.8` leaves extra
+  breathing room around the part.
+
 ## Sizing
 
 Target pixel dimensions come from either:
