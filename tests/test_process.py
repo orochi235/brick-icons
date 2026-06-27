@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 from PIL import Image
-from lego_bin_labels import process
+from brick_icons import process
 
 
 def test_to_grayscale_flattens_onto_white(half_transparent_rgba):

@@ -1,4 +1,4 @@
-# Default config for lego-bin-labels. CLI flags override these.
+# Default config for brick-icons. CLI flags override these.
 dpi = 180
 margin = 6
 render_px = 2048       # LDView supersample before downscale

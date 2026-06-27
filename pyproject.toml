@@ -1,19 +1,19 @@
 [project]
-name = "lego-bin-labels"
+name = "brick-icons"
 version = "0.1.0"
 description = "Render LEGO parts from LDraw into bin-label bitmaps and SVGs"
 requires-python = ">=3.11"
 dependencies = ["pillow>=10", "numpy>=1.26"]
 
 [project.scripts]
-lego-bin-labels = "lego_bin_labels.cli:main"
+brick-icons = "brick_icons.cli:main"
 
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["lego_bin_labels*"]
+include = ["brick_icons*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

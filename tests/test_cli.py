@@ -3,7 +3,7 @@ import shutil
 import numpy as np
 import pytest
 from PIL import Image
-from lego_bin_labels import cli
+from brick_icons import cli
 
 
 def _fake_render(monkeypatch, size=(400, 300)):

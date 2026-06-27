@@ -3,7 +3,7 @@ import shutil
 import numpy as np
 import pytest
 from PIL import Image
-from lego_bin_labels import trace, process
+from brick_icons import trace, process
 
 HAVE_POTRACE = shutil.which("potrace") is not None
 pytestmark = pytest.mark.skipif(not HAVE_POTRACE, reason="potrace not installed")

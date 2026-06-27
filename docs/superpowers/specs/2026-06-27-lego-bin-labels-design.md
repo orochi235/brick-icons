@@ -1,4 +1,4 @@
-# lego-bin-labels — design
+# brick-icons — design
 
 **Date:** 2026-06-27
 **Status:** Approved (design); pending implementation plan
@@ -14,7 +14,7 @@ handled separately; this tool produces the image assets it consumes.
 
 ## Form
 
-Standalone Python CLI in its own repo at `~/src/lego-bin-labels`. Python because
+Standalone Python CLI in its own repo at `~/src/brick-icons`. Python because
 the work is overwhelmingly image processing and Pillow (already installed,
 v11.3.0) gives the cleanest control over dithering. Decoupled from `lbx-editor`
 (a TS/React app) because this is a batch-oriented asset generator, not editor UI.

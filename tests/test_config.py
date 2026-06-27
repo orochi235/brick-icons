@@ -1,5 +1,5 @@
 from pathlib import Path
-from lego_bin_labels.config import load_config
+from brick_icons.config import load_config
 
 
 def test_defaults():
@@ -17,7 +17,7 @@ def test_defaults():
 
 
 def test_default_launcher_by_platform():
-    from lego_bin_labels.config import default_ldview_launcher
+    from brick_icons.config import default_ldview_launcher
     assert default_ldview_launcher("Darwin", "arm64") == ["arch", "-x86_64"]
     assert default_ldview_launcher("Darwin", "x86_64") == []
     assert default_ldview_launcher("Linux", "x86_64") == []

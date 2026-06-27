@@ -10,7 +10,7 @@ from .config import load_config, Config
 
 
 def _parse_args(argv):
-    p = argparse.ArgumentParser(prog="lego-bin-labels",
+    p = argparse.ArgumentParser(prog="brick-icons",
                                 description="Render LEGO parts into bin-label assets.")
     p.add_argument("parts", nargs="*", help="part ids or .dat/.ldr paths")
     p.add_argument("--list", help="file with one part per line (overrides positional)")

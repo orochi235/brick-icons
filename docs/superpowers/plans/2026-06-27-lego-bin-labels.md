@@ -1,4 +1,4 @@
-# lego-bin-labels Implementation Plan
+# brick-icons Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -27,13 +27,13 @@ All LDView `-Flags` are identical across LDView's macOS/Linux/Windows builds, so
 ## File Structure
 
 ```
-lego-bin-labels/
+brick-icons/
   pyproject.toml                 # deps: pillow, numpy
   labels.toml                    # default config
   README.md
   .gitignore                     # vendor/, out/, debug/, .venv/
   scripts/setup-ldview.sh        # install LDView.app + LDraw lib; check potrace
-  lego_bin_labels/
+  brick_icons/
     __init__.py
     config.py                    # load labels.toml + overrides -> Config
     render.py                    # resolve part, build LDView argv, run snapshot
@@ -54,33 +54,33 @@ lego-bin-labels/
 
 ## Task 1: Project scaffold and dependencies
 
-**Files:** Create `pyproject.toml`, `lego_bin_labels/__init__.py`, `tests/conftest.py`; modify `.gitignore`.
+**Files:** Create `pyproject.toml`, `brick_icons/__init__.py`, `tests/conftest.py`; modify `.gitignore`.
 
 - [ ] **Step 1: Create `pyproject.toml`**
 
 ```toml
 [project]
-name = "lego-bin-labels"
+name = "brick-icons"
 version = "0.1.0"
 description = "Render LEGO parts from LDraw into bin-label bitmaps and SVGs"
 requires-python = ">=3.11"
 dependencies = ["pillow>=10", "numpy>=1.26"]
 
 [project.scripts]
-lego-bin-labels = "lego_bin_labels.cli:main"
+brick-icons = "brick_icons.cli:main"
 
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["lego_bin_labels*"]
+include = ["brick_icons*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 ```
 
-- [ ] **Step 2: Create `lego_bin_labels/__init__.py`**
+- [ ] **Step 2: Create `brick_icons/__init__.py`**
 
 ```python
 """Render LEGO parts from LDraw into bin-label bitmaps and SVGs."""
@@ -100,7 +100,7 @@ vendor/
 
 Run:
 ```bash
-cd ~/src/lego-bin-labels
+cd ~/src/brick-icons
 python3 -m venv .venv
 .venv/bin/pip install -q -e . && .venv/bin/pip install -q pytest
 .venv/bin/python -c "import PIL, numpy; print('deps ok')"
@@ -148,8 +148,8 @@ def disc_rgba():
 - [ ] **Step 6: Commit**
 
 ```bash
-git add pyproject.toml lego_bin_labels/__init__.py tests/conftest.py .gitignore
-git commit -m "chore: scaffold lego-bin-labels package and test deps"
+git add pyproject.toml brick_icons/__init__.py tests/conftest.py .gitignore
+git commit -m "chore: scaffold brick-icons package and test deps"
 ```
 
 ---
@@ -230,13 +230,13 @@ git commit -m "feat: add LDView + LDraw + potrace setup script"
 
 ## Task 3: Config loader
 
-**Files:** Create `lego_bin_labels/config.py`, `labels.toml`. Test `tests/test_config.py`.
+**Files:** Create `brick_icons/config.py`, `labels.toml`. Test `tests/test_config.py`.
 
 - [ ] **Step 1: Write `tests/test_config.py`**
 
 ```python
 from pathlib import Path
-from lego_bin_labels.config import load_config
+from brick_icons.config import load_config
 
 
 def test_defaults():
@@ -254,7 +254,7 @@ def test_defaults():
 
 
 def test_default_launcher_by_platform():
-    from lego_bin_labels.config import default_ldview_launcher
+    from brick_icons.config import default_ldview_launcher
     assert default_ldview_launcher("Darwin", "arm64") == ["arch", "-x86_64"]
     assert default_ldview_launcher("Darwin", "x86_64") == []
     assert default_ldview_launcher("Linux", "x86_64") == []
@@ -287,9 +287,9 @@ def test_toml_used(tmp_path):
 - [ ] **Step 2: Run — expect fail**
 
 Run: `.venv/bin/pytest tests/test_config.py -v`
-Expected: `ModuleNotFoundError: No module named 'lego_bin_labels.config'`
+Expected: `ModuleNotFoundError: No module named 'brick_icons.config'`
 
-- [ ] **Step 3: Write `lego_bin_labels/config.py`**
+- [ ] **Step 3: Write `brick_icons/config.py`**
 
 ```python
 from __future__ import annotations
@@ -413,7 +413,7 @@ Run: `.venv/bin/pytest tests/test_config.py -v`  → 4 passed
 - [ ] **Step 5: Create `labels.toml`**
 
 ```toml
-# Default config for lego-bin-labels. CLI flags override these.
+# Default config for brick-icons. CLI flags override these.
 dpi = 180
 margin = 6
 render_px = 2048       # LDView supersample before downscale
@@ -439,7 +439,7 @@ gamma = 1.0
 - [ ] **Step 6: Commit**
 
 ```bash
-git add lego_bin_labels/config.py labels.toml tests/test_config.py
+git add brick_icons/config.py labels.toml tests/test_config.py
 git commit -m "feat: add config loader (fidelity/shading/format defaults)"
 ```
 
@@ -447,7 +447,7 @@ git commit -m "feat: add config loader (fidelity/shading/format defaults)"
 
 ## Task 4: Image core — flatten, levels, posterize, fit, outline
 
-**Files:** Create `lego_bin_labels/process.py`. Test `tests/test_process.py`.
+**Files:** Create `brick_icons/process.py`. Test `tests/test_process.py`.
 
 - [ ] **Step 1: Write `tests/test_process.py`**
 
@@ -455,7 +455,7 @@ git commit -m "feat: add config loader (fidelity/shading/format defaults)"
 import numpy as np
 import pytest
 from PIL import Image
-from lego_bin_labels import process
+from brick_icons import process
 
 
 def test_to_grayscale_flattens_onto_white(half_transparent_rgba):
@@ -512,9 +512,9 @@ def test_make_outline_interior_adds_pixels(gradient_rgba):
     assert (full == 0).sum() >= (sil == 0).sum()
 ```
 
-- [ ] **Step 2: Run — expect fail** (`No module named 'lego_bin_labels.process'`)
+- [ ] **Step 2: Run — expect fail** (`No module named 'brick_icons.process'`)
 
-- [ ] **Step 3: Write `lego_bin_labels/process.py`**
+- [ ] **Step 3: Write `brick_icons/process.py`**
 
 ```python
 from __future__ import annotations
@@ -638,7 +638,7 @@ Run: `.venv/bin/pytest tests/test_process.py -v`  → all passed
 - [ ] **Step 5: Commit**
 
 ```bash
-git add lego_bin_labels/process.py tests/test_process.py
+git add brick_icons/process.py tests/test_process.py
 git commit -m "feat: image core (flatten/levels/posterize/outline/fit/dither)"
 ```
 
@@ -691,7 +691,7 @@ git commit -m "test: lock dither output semantics"
 
 ## Task 6: LDView render wrapper
 
-**Files:** Create `lego_bin_labels/render.py`. Test `tests/test_render.py`.
+**Files:** Create `brick_icons/render.py`. Test `tests/test_render.py`.
 
 - [ ] **Step 1: Write `tests/test_render.py`**
 
@@ -699,8 +699,8 @@ git commit -m "test: lock dither output semantics"
 from pathlib import Path
 import pytest
 from PIL import Image
-from lego_bin_labels.config import load_config
-from lego_bin_labels import render
+from brick_icons.config import load_config
+from brick_icons import render
 
 
 def test_resolve_part_id(tmp_path):
@@ -769,9 +769,9 @@ def test_render_part_live(tmp_path):
     assert im.mode == "RGBA" and im.width > 0
 ```
 
-- [ ] **Step 2: Run — expect fail** (`No module named 'lego_bin_labels.render'`)
+- [ ] **Step 2: Run — expect fail** (`No module named 'brick_icons.render'`)
 
-- [ ] **Step 3: Write `lego_bin_labels/render.py`**
+- [ ] **Step 3: Write `brick_icons/render.py`**
 
 ```python
 from __future__ import annotations
@@ -842,7 +842,7 @@ Run: `.venv/bin/pytest tests/test_render.py -v`
 - [ ] **Step 5: Commit**
 
 ```bash
-git add lego_bin_labels/render.py tests/test_render.py
+git add brick_icons/render.py tests/test_render.py
 git commit -m "feat: LDView render wrapper (fidelity/lighting/angle/color argv)"
 ```
 
@@ -850,7 +850,7 @@ git commit -m "feat: LDView render wrapper (fidelity/lighting/angle/color argv)"
 
 ## Task 7: SVG vector output (potrace)
 
-**Files:** Create `lego_bin_labels/trace.py`. Test `tests/test_trace.py`.
+**Files:** Create `brick_icons/trace.py`. Test `tests/test_trace.py`.
 
 - [ ] **Step 1: Write `tests/test_trace.py`**
 
@@ -860,7 +860,7 @@ import shutil
 import numpy as np
 import pytest
 from PIL import Image
-from lego_bin_labels import trace, process
+from brick_icons import trace, process
 
 HAVE_POTRACE = shutil.which("potrace") is not None
 pytestmark = pytest.mark.skipif(not HAVE_POTRACE, reason="potrace not installed")
@@ -907,9 +907,9 @@ def test_outline_svg_rasterizes_nonblank(tmp_path):
     assert (np.asarray(Image.open(png).convert("L")) < 250).sum() > 0
 ```
 
-- [ ] **Step 2: Run — expect fail** (`No module named 'lego_bin_labels.trace'`)
+- [ ] **Step 2: Run — expect fail** (`No module named 'brick_icons.trace'`)
 
-- [ ] **Step 3: Write `lego_bin_labels/trace.py`**
+- [ ] **Step 3: Write `brick_icons/trace.py`**
 
 ```python
 from __future__ import annotations
@@ -1001,7 +1001,7 @@ Run: `.venv/bin/pytest tests/test_trace.py -v`
 - [ ] **Step 5: Commit**
 
 ```bash
-git add lego_bin_labels/trace.py tests/test_trace.py
+git add brick_icons/trace.py tests/test_trace.py
 git commit -m "feat: potrace SVG output (outline + stacked-band cel)"
 ```
 
@@ -1009,7 +1009,7 @@ git commit -m "feat: potrace SVG output (outline + stacked-band cel)"
 
 ## Task 8: CLI — format/mode/shading wiring + batch + debug
 
-**Files:** Create `lego_bin_labels/cli.py`. Test `tests/test_cli.py`.
+**Files:** Create `brick_icons/cli.py`. Test `tests/test_cli.py`.
 
 - [ ] **Step 1: Write `tests/test_cli.py`**
 
@@ -1019,7 +1019,7 @@ import shutil
 import numpy as np
 import pytest
 from PIL import Image
-from lego_bin_labels import cli
+from brick_icons import cli
 
 
 def _fake_render(monkeypatch, size=(400, 300)):
@@ -1098,9 +1098,9 @@ def test_batch_list_file(tmp_path, monkeypatch):
     assert (tmp_path / "3001.mono.png").exists() and (tmp_path / "3002.mono.png").exists()
 ```
 
-- [ ] **Step 2: Run — expect fail** (`No module named 'lego_bin_labels.cli'`)
+- [ ] **Step 2: Run — expect fail** (`No module named 'brick_icons.cli'`)
 
-- [ ] **Step 3: Write `lego_bin_labels/cli.py`**
+- [ ] **Step 3: Write `brick_icons/cli.py`**
 
 ```python
 from __future__ import annotations
@@ -1115,7 +1115,7 @@ from .config import load_config, Config
 
 
 def _parse_args(argv):
-    p = argparse.ArgumentParser(prog="lego-bin-labels",
+    p = argparse.ArgumentParser(prog="brick-icons",
                                 description="Render LEGO parts into bin-label assets.")
     p.add_argument("parts", nargs="*", help="part ids or .dat/.ldr paths")
     p.add_argument("--list", help="file with one part per line (overrides positional)")
@@ -1251,7 +1251,7 @@ Run: `.venv/bin/pytest tests/test_cli.py -v`
 - [ ] **Step 5: Commit**
 
 ```bash
-git add lego_bin_labels/cli.py tests/test_cli.py
+git add brick_icons/cli.py tests/test_cli.py
 git commit -m "feat: CLI wiring (format/mode/shading, batch, debug-dir)"
 ```
 
@@ -1264,9 +1264,9 @@ git commit -m "feat: CLI wiring (format/mode/shading, batch, debug-dir)"
 - [ ] **Step 1: Full live run (setup script already run)**
 
 ```bash
-.venv/bin/python -m lego_bin_labels.cli 3001 3941 \
+.venv/bin/python -m brick_icons.cli 3001 3941 \
   --format both --shading cel --mode both --out out --debug-dir debug --root .
-.venv/bin/python -m lego_bin_labels.cli 3001 --format svg --shading outline --out out --root .
+.venv/bin/python -m brick_icons.cli 3001 --format svg --shading outline --out out --root .
 ls out/ debug/*/
 ```
 Expected: `out/3001.gray.png out/3001.mono.png out/3001.svg out/3941.*` and `debug/render|tone|mono/`.
@@ -1286,7 +1286,7 @@ Expected: all pass (live render + potrace tests pass if installed, else skip).
 - [ ] **Step 4: Expand `README.md`**
 
 ```markdown
-# lego-bin-labels
+# brick-icons
 
 Render LEGO parts from LDraw (via LDView) into monochrome/grayscale bitmaps and
 SVGs for Brother P-touch (LBX) bin labels.
@@ -1307,18 +1307,18 @@ package manager, then in `labels.toml` set `ldview = "/path/to/ldview"` and
 ## Usage
 
     # both PNG outputs, normal shading
-    .venv/bin/python -m lego_bin_labels.cli 3001 --mode both --out out
+    .venv/bin/python -m brick_icons.cli 3001 --mode both --out out
 
     # cel-shaded, 1-bit Atkinson dither, batch from a list, 360 dpi
-    .venv/bin/python -m lego_bin_labels.cli --list bins.txt --shading cel \
+    .venv/bin/python -m brick_icons.cli --list bins.txt --shading cel \
         --mode mono --dither atkinson --dpi 360 --out out
 
     # vector outline SVG, top-down
-    .venv/bin/python -m lego_bin_labels.cli 3001 --format svg --shading outline \
+    .venv/bin/python -m brick_icons.cli 3001 --format svg --shading outline \
         --angle top --out out
 
     # size by physical tape
-    .venv/bin/python -m lego_bin_labels.cli 3001 --label-mm 24 12 --mode mono
+    .venv/bin/python -m brick_icons.cli 3001 --label-mm 24 12 --mode mono
 
 Format: `png` | `svg` | `both`.  SVG needs `--shading outline` or `cel`.
 Shading: `normal` | `cel` (`--cel-levels N`) | `outline` (`--no-outline-interior`).
@@ -1334,14 +1334,14 @@ See `docs/superpowers/specs/` for the design.
 - [ ] **Step 5: Add to `~/src/PROJECTS.md`** under `## Personal`:
 
 ```
-- **lego-bin-labels** — Python CLI rendering LEGO parts from LDraw (LDView under Rosetta) into 1-bit dithered / grayscale / color PNGs and potrace SVGs (normal/cel/outline shading) for Brother P-touch (LBX) bin labels. Pure image+vector core, thin LDView wrapper.
+- **brick-icons** — Python CLI rendering LEGO parts from LDraw (LDView under Rosetta) into 1-bit dithered / grayscale / color PNGs and potrace SVGs (normal/cel/outline shading) for Brother P-touch (LBX) bin labels. Pure image+vector core, thin LDView wrapper.
 ```
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add README.md
-git commit -m "docs: usage README for lego-bin-labels"
+git commit -m "docs: usage README for brick-icons"
 ```
 
 ---

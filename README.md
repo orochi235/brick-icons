@@ -1,4 +1,4 @@
-# lego-bin-labels
+# brick-icons
 
 Render LEGO parts from LDraw (via LDView) into monochrome/grayscale bitmaps and
 SVGs for Brother P-touch (LBX) bin labels.
@@ -19,18 +19,18 @@ package manager, then in `labels.toml` set `ldview = "/path/to/ldview"` and
 ## Usage
 
     # both PNG outputs, normal shading
-    .venv/bin/python -m lego_bin_labels.cli 3001 --mode both --out out
+    .venv/bin/python -m brick_icons.cli 3001 --mode both --out out
 
     # cel-shaded, 1-bit Atkinson dither, batch from a list, 360 dpi
-    .venv/bin/python -m lego_bin_labels.cli --list bins.txt --shading cel \
+    .venv/bin/python -m brick_icons.cli --list bins.txt --shading cel \
         --mode mono --dither atkinson --dpi 360 --out out
 
     # vector outline SVG, top-down
-    .venv/bin/python -m lego_bin_labels.cli 3001 --format svg --shading outline \
+    .venv/bin/python -m brick_icons.cli 3001 --format svg --shading outline \
         --angle top --out out
 
     # size by physical tape
-    .venv/bin/python -m lego_bin_labels.cli 3001 --label-mm 24 12 --mode mono
+    .venv/bin/python -m brick_icons.cli 3001 --label-mm 24 12 --mode mono
 
 Format: `png` | `svg` | `both`.  SVG needs `--shading outline` or `cel`.
 Shading: `normal` | `cel` (`--cel-levels N`) | `outline` (`--no-outline-interior`).

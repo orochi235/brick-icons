@@ -1,8 +1,8 @@
 from pathlib import Path
 import pytest
 from PIL import Image
-from lego_bin_labels.config import load_config
-from lego_bin_labels import render
+from brick_icons.config import load_config
+from brick_icons import render
 
 
 def test_resolve_part_id(tmp_path):
