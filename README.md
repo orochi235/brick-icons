@@ -40,4 +40,12 @@ Angle: `iso` (default) | `front|back|left|right|top|bottom` | `LAT,LONG`.
 Knobs: `--part-color 0xRRGGBB`, `--scale 0-1`, `--curve-quality`, `--render-px`,
 `--levels B W`, `--gamma`, `--debug-dir DIR`.
 
+## Notes
+
+- `gray` output is saved at full render resolution — a high-res master for the
+  driver to scale and dither downstream. Only `mono` is fit to the label pixel
+  size (`--width`/`--height` or `--label-mm`).
+- `--mode color` emits the raw flattened color render and ignores `--shading`
+  (color is a preview only; the printer is 1-bit).
+
 See `docs/superpowers/specs/` for the design.
