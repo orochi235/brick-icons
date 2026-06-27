@@ -97,6 +97,37 @@ file from the command line without stealing window focus (per the user's
 foreground-focus preference). If LDView cannot run cleanly headless, fall back
 to LeoCAD's CLI image export before building the rest of the pipeline.
 
+## Smoke-test results (2026-06-27 — VALIDATED)
+
+The risky assumption was tested up front and the full chain works end-to-end:
+
+- **LDView distribution:** not in Homebrew. Latest macOS build is
+  `LDView_4.2.1_Universal.dmg` from SourceForge
+  (`/projects/ldview/files/01.%20LDView/LDView%204.2/`). "Universal" means
+  **i386 + x86_64 only — no arm64 slice.** On Apple Silicon it runs via
+  **Rosetta 2** (`arch -x86_64 LDView.app/Contents/MacOS/LDView ...`), which is
+  already installed on this machine. Strip quarantine (`xattr -dr
+  com.apple.quarantine LDView.app`) before first run to avoid a Gatekeeper
+  dialog.
+- **Headless render confirmed:** `-SaveSnapshot=out.png -SaveWidth=W
+  -SaveHeight=H -AutoCrop=1 -SaveAlpha=1 -EdgeLines=1` produced a correct,
+  auto-cropped, anti-aliased RGBA render of part 3001 with no blocking dialog,
+  no hang, clean stderr. Focus-steal was not observed (confirm on a real run).
+- **LDraw library:** `complete.zip` (~140 MB) from
+  `library.ldraw.org/library/updates/complete.zip` unpacks to a `ldraw/`
+  tree; `-LDrawDir=<...>/ldraw` resolves `parts/3001.dat` etc.
+- **Background:** render with `-SaveAlpha=1` (transparent) and flatten onto
+  white in Pillow — gives full control instead of LDView's default gray bg.
+- **Dither stage validated:** threshold / Floyd–Steinberg / ordered (Bayer) /
+  Atkinson all implemented and run against the render at a 256×170 label size.
+
+**Tuning need surfaced by the test (feeds the experimentation knobs):** with
+LDView's default lighting the part renders mid-gray, so naive threshold collapses
+the silhouette and the dithers come out dark/dense. The pipeline should expose
+**levels/contrast** and **lighting** controls, and likely composite **solid
+black edge lines over a lightened, dithered interior** for legible small labels.
+This is the first thing to dial in during implementation.
+
 ## Decisions made
 
 - **Python, not Node** — image-processing-centric; Pillow already present.
