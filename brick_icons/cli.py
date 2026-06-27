@@ -23,6 +23,8 @@ def _parse_args(argv):
     p.add_argument("--cel-levels", type=int)
     p.add_argument("--outline-interior", dest="outline_interior", action="store_true", default=None)
     p.add_argument("--no-outline-interior", dest="outline_interior", action="store_false")
+    p.add_argument("--line-width", type=int, help="outline interior stroke (output px)")
+    p.add_argument("--silhouette-width", type=int, help="outline contour stroke (output px)")
     p.add_argument("--dither", choices=["threshold", "floyd", "ordered", "atkinson"])
     p.add_argument("--angle")
     p.add_argument("--part-color")
@@ -46,6 +48,7 @@ def _config_from_args(args) -> Config:
     overrides = {
         "fmt": args.fmt, "mode": args.mode, "shading": args.shading,
         "cel_levels": args.cel_levels, "outline_interior": args.outline_interior,
+        "line_width": args.line_width, "silhouette_width": args.silhouette_width,
         "dither": args.dither, "angle": args.angle, "part_color": args.part_color,
         "curve_quality": args.curve_quality, "render_px": args.render_px,
         "scale": args.scale, "width": args.width, "height": args.height,
@@ -82,10 +85,20 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
     rgba = Image.open(render_png).convert("RGBA")
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # Outline stroke widths are output px; scale up by the contain ratio for the
+    # native-res renderers (SVG + gray master) so their weight matches the mono.
+    nat_line = nat_sil = 0
+    if cfg.shading == "outline":
+        f = process.contain_factor(rgba.width, rgba.height, cfg.width, cfg.height,
+                                   cfg.margin, cfg.scale)
+        nat_line = max(1, round(cfg.line_width / f))
+        nat_sil = max(1, round(cfg.silhouette_width / f))
+
     # --- SVG ---
     if cfg.fmt in ("svg", "both"):
         if cfg.shading == "outline":
-            trace.outline_svg(rgba, out_dir / f"{name}.svg", interior=cfg.outline_interior)
+            trace.outline_svg(rgba, out_dir / f"{name}.svg", interior=cfg.outline_interior,
+                              line_width=nat_line, sil_width=nat_sil)
         elif cfg.shading == "cel":
             trace.cel_svg(rgba, out_dir / f"{name}.svg", levels=cfg.cel_levels)
         else:
@@ -94,7 +107,8 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
     # --- PNG ---
     if cfg.fmt in ("png", "both"):
         if cfg.shading == "outline":
-            tone = process.make_outline(rgba, interior=cfg.outline_interior)
+            tone = process.make_outline(rgba, interior=cfg.outline_interior,
+                                        line_width=nat_line, sil_width=nat_sil)
         else:
             tone = _tone(cfg, rgba)
         if debug_dir:
@@ -105,10 +119,13 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
         if cfg.mode in ("gray", "both"):
             tone.save(out_dir / f"{name}.gray.png")
         if cfg.mode in ("mono", "both"):
-            fitted = process.fit_contain(tone, cfg.width, cfg.height, cfg.margin, cfg.scale)
             if cfg.shading == "outline":
-                mono = process.dither(fitted, "threshold", 200)  # keep lines crisp
+                mono = process.outline_mono(rgba, cfg.width, cfg.height, cfg.margin,
+                                            cfg.scale, line_width=cfg.line_width,
+                                            sil_width=cfg.silhouette_width,
+                                            interior=cfg.outline_interior)
             else:
+                fitted = process.fit_contain(tone, cfg.width, cfg.height, cfg.margin, cfg.scale)
                 mono = process.dither(fitted, cfg.dither, cfg.threshold)
             if debug_dir:
                 mono.save(_stage(debug_dir, "mono", name))

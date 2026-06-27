@@ -37,8 +37,16 @@ Shading: `normal` | `cel` (`--cel-levels N`) | `outline` (`--no-outline-interior
 Mode (PNG): `gray` | `mono` | `color` | `both`.
 Dither: `threshold` | `floyd` | `ordered` | `atkinson`.
 Angle: `iso` (default) | `front|back|left|right|top|bottom` | `LAT,LONG`.
+Outline weight: `--line-width N` (interior edges) and `--silhouette-width N`
+(outer contour), both in output pixels; applied to mono PNG and (scaled) SVG.
 Knobs: `--part-color 0xRRGGBB`, `--scale 0-1`, `--curve-quality`, `--render-px`,
 `--levels B W`, `--gamma`, `--debug-dir DIR`.
+
+A curated starter parts list spanning bricks/plates/tiles/slopes/round/technic
+ships as `parts.txt`:
+
+    .venv/bin/python -m brick_icons.cli --list parts.txt --format both \
+        --shading outline --mode both --out out
 
 ## Notes
 
