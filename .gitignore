@@ -5,3 +5,4 @@ out/
 debug/
 vendor/
 .pytest_cache/
+*.egg-info/
