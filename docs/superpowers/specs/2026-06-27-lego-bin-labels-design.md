@@ -34,38 +34,79 @@ both are setup prerequisites (see Setup).
 
    A part id resolves to `<ldraw-lib>/parts/<id>.dat`.
 
-2. **Render** (LDView, headless `-SaveSnapshot`) — render at high resolution
-   (supersampled for clean downscaling), edge lines on, a neutral part color on
-   a white background, auto-framed to the part. Output: a high-resolution
-   anti-aliased PNG.
+2. **Render** (LDView, headless `-SaveSnapshot`) — render at **2048px**
+   supersample, **max curve fidelity** (`-CurveQuality=12 -HiResPrimitives=1
+   -AllowPrimitiveSubstitution=1` → 48-segment primitives, re-tessellated),
+   **contrast lighting** (`-Lighting=1 -UseQualityLighting=1
+   -LightVector=-1,1,2`), edge lines on, transparent background. Output: a
+   high-resolution anti-aliased **RGBA** PNG (alpha preserved for silhouette
+   extraction and flatten-on-white).
 
-3. **Normalize** (Pillow) — autocrop to the part bounds, add a configurable
-   margin, desaturate to grayscale (`L`), apply optional contrast/levels.
+3. **Normalize / style** (Pillow) — flatten onto white, then apply the chosen
+   **shading** (see Rendering parameters), optional levels/gamma, autocrop is
+   already done by LDView, then fit to the label with margin and scale.
 
-4. **Output** (customizable — the experimentation surface):
-   - `--mode gray` → emit the high-resolution **grayscale** PNG; the Brother
+4. **Output** — two orthogonal axes: **format** (`--format png|svg|both`) and,
+   for PNG, **mode** (`--mode gray|mono|color|both`):
+   - PNG `gray` → high-resolution **grayscale** (or styled) PNG; the Brother
      driver does the scaling and dithering.
-   - `--mode mono` → **dither to 1-bit** at the target pixel size; emit a 1-bit
-     PNG (and optionally a BMP).
-   - `--mode both` → emit both.
+   - PNG `mono` → **dither to 1-bit** at the target pixel size; 1-bit PNG.
+   - PNG `color` → high-resolution **RGB** render flattened on white, no
+     dithering (preview only — the printer itself is 1-bit).
+   - PNG `both` → gray + mono.
+   - **SVG** → vector output via potrace; requires `--shading outline` or `cel`
+     (continuous-tone `normal` has nothing clean to vectorize). See SVG output.
 
 ## Rendering parameters
 
-The render stage exposes camera and shading controls (LDView flags), so the same
-part can be shot the way that reads best on a tiny label:
+The render stage exposes camera, fidelity, shading, and color controls so the
+same part can be shot the way that reads best on a tiny label:
 
 - **`--angle`** — viewing angle, mapped to LDView `-DefaultLatLong=LAT,LONG`:
   - `iso` (**default**, 45° isometric: lat 30, long 45)
   - `front` (0,0), `back` (0,180), `left` (0,-90), `right` (0,90),
     `top` (90,0), `bottom` (-90,0)
   - or an explicit `LAT,LONG` pair for anything else.
-- **`--shading`** — `normal` (lit 3D, default), `flat` (`-Lighting=0`, even fill
-  — pairs well with `threshold` for clean line art), `subdued`
-  (`-SubduedLighting=1`, softer for dithering).
+- **`--shading`** — how the part's tone is produced (validated against real
+  renders, see Smoke-test results):
+  - `normal` (**default**) — lit grayscale with the contrast lighting above.
+  - `cel` — the lit grayscale **posterized** to `--cel-levels` flat bands
+    (default 4); crisp, reads cleanly when dithered.
+  - `outline` — **line art** derived in Pillow: the part's silhouette contour
+    (from the alpha channel) plus, by default, interior structural edges
+    (`--outline-interior/--no-outline-interior`). Black lines on white.
+- **`--part-color`** — recolor the part via LDView `-DefaultColor3=0xRRGGBB`
+  (hex). Affects the gray tone after desaturation; mainly visible in
+  `--mode color`. Default: the part's own LDraw color.
+- **`--curve-quality`** — LDView curve subdivision (default `12`, its max).
+- **`--render-px`** — supersample size before downscaling (default `2048`).
 - **`--scale`** — how much of the label's view area the part fills, `0`–`1`
   (default `1.0`). Applied in Pillow during the fit step (the render is always
   auto-cropped first), so it composes with `--margin`. `0.8` leaves extra
   breathing room around the part.
+
+LDView's tessellation ceiling is 48-segment hi-res primitives; at label sizes
+this is visually smooth (confirmed). True mathematically-exact curves would
+require a ray-tracer (l3p + POV-Ray) — explicitly out of scope per design review.
+
+## SVG output
+
+Vector output (`--format svg`), validated against real renders, via the
+`potrace` CLI (external dependency, installed by the setup script):
+
+- **`outline`** — the Pillow line-art image (silhouette + optional interior
+  edges) is traced in one potrace pass into smooth Bézier paths: a crisp,
+  scalable line drawing.
+- **`cel`** — the lit render is posterized to `--cel-levels` bands; each band's
+  cumulative mask (pixels that dark or darker, within the silhouette) is traced
+  separately and the resulting filled paths are **stacked lightest→darkest**,
+  all sharing potrace's single y-flip/scale transform group. Produces flat
+  vector tonal regions.
+
+Implementation notes (learned during prototyping): potrace emits paths inside a
+`<g transform="translate(0,H) scale(0.1,-0.1)">`; the assembled multi-band SVG
+must preserve that transform or paths render off-canvas. ImageMagick's internal
+renderer rasterizes the result for previews/tests.
 
 ## Sizing
 
@@ -79,8 +120,8 @@ Target pixel dimensions come from either:
 `--dither floyd|atkinson|ordered|threshold`. Atkinson tends to look best on
 small 3D renders and is hand-rolled (Pillow lacks it); Floyd–Steinberg uses
 Pillow's `convert('1')`; ordered (Bayer) and plain threshold are implemented
-directly. Additional knobs: `--threshold`, `--part-color`, `--bg`, `--margin`,
-`--angle` (camera latitude/longitude).
+directly. Additional knobs: `--threshold`, `--margin`. (Camera, fidelity,
+shading, and color knobs are listed under Rendering parameters.)
 
 ## Batch & debugging
 
@@ -93,21 +134,26 @@ directly. Additional knobs: `--threshold`, `--part-color`, `--bg`, `--margin`,
 
 ## Modules
 
-- `render.py` — LDView invocation and snapshot handling.
-- `process.py` — crop, grayscale, resize, dither algorithms.
-- `cli.py` — argparse, batch handling, output modes.
+- `config.py` — load `labels.toml` + merge CLI overrides into a `Config`.
+- `render.py` — resolve part, build the LDView argv (fidelity/lighting/angle/
+  color), run the snapshot → hi-res RGBA PNG.
+- `process.py` — flatten, grayscale, levels, posterize (cel), line-art outline,
+  fit, and the four dither algorithms.
+- `trace.py` — potrace-backed vector output: `outline_svg` and `cel_svg`.
+- `cli.py` — argparse, batch handling, format/mode/shading wiring.
 - `labels.toml` — default config values, overridable by flags.
 
 Each module has one clear responsibility and a small interface: `render.py`
-turns a part file into a hi-res PNG, `process.py` turns a PNG into the requested
-output image(s), `cli.py` wires inputs to outputs.
+turns a part file into a hi-res RGBA PNG, `process.py` turns that into the
+requested raster image(s), `trace.py` turns it into SVG, `cli.py` wires inputs
+to outputs.
 
 ## Setup (prerequisites, validated as the first implementation task)
 
-1. Install LDView: `brew install --cask ldview` if available, otherwise the
-   SourceForge build.
-2. Install the LDraw parts library: `complete.zip` from ldraw.org, unpacked to
-   `~/ldraw` (configurable).
+1. Install LDView (x86_64, runs under Rosetta): SourceForge
+   `LDView_4.2.1_Universal.dmg` (not in Homebrew). The setup script handles it.
+2. Install the LDraw parts library: `complete.zip` from ldraw.org.
+3. Install `potrace` (`brew install potrace`) for SVG output.
 
 **Primary risk:** LDView headless snapshotting on macOS. The first
 implementation task is a focused smoke test confirming `-SaveSnapshot` writes a
@@ -141,10 +187,33 @@ The risky assumption was tested up front and the full chain works end-to-end:
 
 **Tuning need surfaced by the test (feeds the experimentation knobs):** with
 LDView's default lighting the part renders mid-gray, so naive threshold collapses
-the silhouette and the dithers come out dark/dense. The pipeline should expose
-**levels/contrast** and **lighting** controls, and likely composite **solid
-black edge lines over a lightened, dithered interior** for legible small labels.
-This is the first thing to dial in during implementation.
+the silhouette and the dithers come out dark/dense. This drove the render-tuning
+investigation below.
+
+## Render tuning + SVG investigation (2026-06-27 — VALIDATED)
+
+A settings matrix on a curvy part (2×2 round brick 3941) and a 2×4 (3001),
+viewed as contact sheets, settled the render-stage design:
+
+- **Curve fidelity:** baseline `-CurveQuality=2` is visibly faceted on round
+  parts. `-CurveQuality=12 -HiResPrimitives=1 -AllowPrimitiveSubstitution=1`
+  (48-segment hi-res primitives) plus 2048px supersample is smooth at label
+  size. This is LDView's ceiling — confirmed acceptable; POV-Ray true curves
+  ruled out.
+- **Contrast:** default lighting gives part-pixel stddev ~15 (dithers to a gray
+  blob). `-Lighting=1 -UseQualityLighting=1 -LightVector=-1,1,2` raises it to
+  ~40 with distinct face tones — the dither finally reads as a 3D brick. Adopted
+  as the default lighting.
+- **Shading modes:** `normal` (lit gray), `cel` (posterize to N bands — crisp,
+  reads great), `outline` (Pillow line-art: silhouette from alpha + interior
+  edges via `FIND_EDGES`). LDView's own flat+thick-edge "outline" path FAILED
+  (renders near-white) — the Pillow-derived outline is used instead.
+- **Color:** `-DefaultColor3=0xRRGGBB` recolors correctly (verified red/blue).
+- **SVG:** potrace traces both outline (one pass) and cel (per-band, stacked)
+  into clean vector output. Verified by rasterizing with ImageMagick.
+
+Comparison sheets from this investigation are archived in the session scratchpad
+(`keep/sheet_*.png`).
 
 ## Decisions made
 
@@ -156,3 +225,7 @@ This is the first thing to dial in during implementation.
 - LBX file assembly / printing (handled by the user's separate stack).
 - Fetching part images from the web; rendering is always local from LDraw.
 - A GUI; this is a CLI batch tool.
+- True mathematically-exact curved surfaces (l3p + POV-Ray); LDView's 48-segment
+  tessellation is sufficient at label size.
+- Color/multi-band raster tracing tools beyond potrace (e.g. vtracer); cel SVG
+  is built by stacking per-band potrace passes.
