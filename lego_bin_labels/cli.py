@@ -137,3 +137,7 @@ def main(argv=None) -> int:
         process_one(cfg, part, out_dir, debug_dir=args.debug_dir)
         print(f"done: {part}")
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
