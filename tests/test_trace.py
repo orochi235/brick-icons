@@ -45,3 +45,15 @@ def test_segments_to_svg_writes_lines(tmp_path):
     assert 'stroke-width="4"' in txt and 'stroke-width="2"' in txt
 
 
+
+def test_segments_to_svg_emits_arc_path(tmp_path):
+    ops = [("arc", 50.0, 50.0, 40.0, 30.0, 0.0, 0.0, 90.0, "edge")]
+    out = _trace.segments_to_svg(ops, 100, 100, tmp_path / "a.svg")
+    txt = out.read_text()
+    assert "<path" in txt and " A " in txt          # elliptical-arc command
+
+
+def test_segments_to_svg_mixed_line_and_legacy(tmp_path):
+    ops = [("line", 0.0, 0.0, 10.0, 10.0, "edge"), (1.0, 1.0, 2.0, 2.0, "sil")]
+    out = _trace.segments_to_svg(ops, 20, 20, tmp_path / "b.svg")
+    assert out.read_text().count("<line") == 2

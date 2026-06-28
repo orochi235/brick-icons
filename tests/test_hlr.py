@@ -70,9 +70,19 @@ def test_zbuffer_hides_segment_behind_face():
 def test_fit_segments_centers_in_box():
     segs = [(0.0, 0.0, 10.0, 0.0, "edge"), (0.0, 0.0, 0.0, 10.0, "edge")]
     fit = hlr.fit_segments(segs, (0, 0, 10, 10), 100, 100, margin=10, scale=1.0)
-    xs = [c for s in fit for c in (s[0], s[2])]
-    ys = [c for s in fit for c in (s[1], s[3])]
+    assert all(s[0] == "line" for s in fit)            # normalized to op form
+    xs = [c for s in fit for c in (s[1], s[3])]
+    ys = [c for s in fit for c in (s[2], s[4])]
     assert min(xs) >= 9 and max(xs) <= 91 and min(ys) >= 9 and max(ys) <= 91
+
+
+def test_fit_segments_scales_arc_ops():
+    segs = [("arc", 5.0, 5.0, 4.0, 2.0, 30.0, 0.0, 90.0, "edge")]
+    fit = hlr.fit_segments(segs, (0, 0, 10, 10), 100, 100, margin=10, scale=1.0)
+    assert fit[0][0] == "arc"
+    # bbox 10x10 into 80px -> factor 8; semi-axes scale by 8
+    assert np.isclose(fit[0][3], 32.0) and np.isclose(fit[0][4], 16.0)
+    assert fit[0][5] == 30.0                            # rotation unchanged
 
 
 def test_visible_segments_empty_geometry(tmp_path):

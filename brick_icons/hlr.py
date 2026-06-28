@@ -225,5 +225,14 @@ def fit_segments(segs, bbox, W, H, margin=6, scale=1.0):
     f = min(iw / bw, ih / bh)
     ox = (W - bw * f) / 2 - bx0 * f
     oy = (H - bh * f) / 2 - by0 * f
-    return [(x1 * f + ox, y1 * f + oy, x2 * f + ox, y2 * f + oy, k)
-            for (x1, y1, x2, y2, k) in segs]
+    out = []
+    for op in segs:
+        if len(op) == 5:                               # legacy line tuple
+            op = ("line",) + tuple(op)
+        if op[0] == "line":
+            _, x1, y1, x2, y2, k = op
+            out.append(("line", x1 * f + ox, y1 * f + oy, x2 * f + ox, y2 * f + oy, k))
+        else:
+            _, cx, cy, rx, ry, phi, t0, t1, k = op
+            out.append(("arc", cx * f + ox, cy * f + oy, rx * f, ry * f, phi, t0, t1, k))
+    return out

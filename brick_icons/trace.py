@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import re
 import subprocess
 import tempfile
@@ -48,15 +49,38 @@ def _write_svg(out_path: Path, viewbox: str, transform: str,
     out_path.write_text("\n".join(parts))
 
 
+def _arc_endpoints(cx, cy, rx, ry, phi_deg, t0_deg, t1_deg):
+    """Pixel endpoints of an elliptical arc at param angles t0/t1 (degrees)."""
+    ca, sa = math.cos(math.radians(phi_deg)), math.sin(math.radians(phi_deg))
+
+    def pt(t_deg):
+        a = math.radians(t_deg)
+        ux, uy = rx * math.cos(a), ry * math.sin(a)
+        return cx + ca * ux - sa * uy, cy + sa * ux + ca * uy
+    return pt(t0_deg), pt(t1_deg)
+
+
 def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=3) -> Path:
     parts = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" '
              f'preserveAspectRatio="xMidYMid meet">',
              '<rect width="100%" height="100%" fill="white"/>',
              '<g stroke="black" fill="none" stroke-linecap="round">']
-    for x1, y1, x2, y2, kind in segs:
-        sw = sil_px if kind == "sil" else line_px
-        parts.append(f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" '
-                     f'stroke-width="{sw}"/>')
+    for op in segs:
+        if len(op) == 5:                              # legacy line tuple
+            op = ("line",) + tuple(op)
+        if op[0] == "line":
+            _, x1, y1, x2, y2, kind = op
+            sw = sil_px if kind == "sil" else line_px
+            parts.append(f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" '
+                         f'stroke-width="{sw}"/>')
+        else:
+            _, cx, cy, rx, ry, phi, t0, t1, kind = op
+            sw = sil_px if kind == "sil" else line_px
+            (x0, y0), (x1e, y1e) = _arc_endpoints(cx, cy, rx, ry, phi, t0, t1)
+            large = 1 if abs(t1 - t0) > 180 else 0
+            sweep = 1 if t1 > t0 else 0
+            parts.append(f'<path d="M {x0:.2f} {y0:.2f} A {rx:.2f} {ry:.2f} {phi:.2f} '
+                         f'{large} {sweep} {x1e:.2f} {y1e:.2f}" stroke-width="{sw}"/>')
     parts += ["</g>", "</svg>"]
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)

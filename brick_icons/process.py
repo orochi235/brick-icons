@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import numpy as np
 from PIL import Image, ImageOps, ImageDraw
 
@@ -49,13 +51,30 @@ def _silhouette_mask(rgba: Image.Image, thr: int = 16) -> Image.Image:
 
 
 def draw_segments(segs, w, h, line_px=2, sil_px=3, supersample=3):
-    """Anti-aliased black line-art on white. 'sil' segments use sil_px width."""
+    """Anti-aliased black line-art on white. Accepts line ops and arc ops;
+    'sil' segments use sil_px width. Arc ops are sampled into polylines."""
     ss = max(1, supersample)
     img = Image.new("L", (w * ss, h * ss), 255)
     dr = ImageDraw.Draw(img)
-    for x1, y1, x2, y2, kind in segs:
+    for op in segs:
+        if len(op) == 5:                               # legacy line tuple
+            op = ("line",) + tuple(op)
+        kind = op[-1]
         wpx = max(1, round((sil_px if kind == "sil" else line_px) * ss))
-        dr.line([(x1 * ss, y1 * ss), (x2 * ss, y2 * ss)], fill=0, width=wpx)
+        if op[0] == "line":
+            _, x1, y1, x2, y2, _ = op
+            dr.line([(x1 * ss, y1 * ss), (x2 * ss, y2 * ss)], fill=0, width=wpx)
+        else:
+            _, cx, cy, rx, ry, phi, t0, t1, _ = op
+            a = math.radians(phi)
+            ca, sa = math.cos(a), math.sin(a)
+            n = max(2, int(abs(t1 - t0) / 2) + 2)
+            pts = []
+            for k in range(n):
+                ang = math.radians(t0 + (t1 - t0) * k / (n - 1))
+                ux, uy = rx * math.cos(ang), ry * math.sin(ang)
+                pts.append(((cx + ca * ux - sa * uy) * ss, (cy + sa * ux + ca * uy) * ss))
+            dr.line(pts, fill=0, width=wpx, joint="curve")
     return img.resize((w, h), Image.LANCZOS)
 
 
