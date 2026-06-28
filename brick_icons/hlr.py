@@ -107,6 +107,20 @@ def rasterize_zbuffer(tri_s: np.ndarray, tri_z: np.ndarray, W: int, H: int) -> n
     return zbuf
 
 
+def dilate_zbuffer(zbuf: np.ndarray, r: int) -> np.ndarray:
+    """Neighborhood-max of a z-buffer over a (2r+1) box: each cell becomes the
+    farthest depth nearby. Used for edge occlusion so silhouette-tangent edges
+    (with background on one side) survive while buried edges stay hidden."""
+    if r <= 0:
+        return zbuf
+    d = zbuf.copy()
+    for dy in range(-r, r + 1):
+        for dx in range(-r, r + 1):
+            if dx or dy:
+                d = np.maximum(d, np.roll(np.roll(zbuf, dy, 0), dx, 1))
+    return d
+
+
 def clip_visible(seg, zbuf, W, H, depth, bias):
     """Return list of visible sub-segments. `depth` may be a scalar (uniform) or
     (z1, z2) for per-endpoint depth. Samples the z-buffer along the segment."""
@@ -132,6 +146,14 @@ def clip_visible(seg, zbuf, W, H, depth, bias):
 
 EDGE_BIAS = 0.004      # fraction of depth range
 SIL_BIAS = 0.03        # larger: silhouette lines sit on their own surface
+EDGE_DILATE = 0.0024   # z-buffer dilation radius as a FRACTION of render_px:
+                       # occlude edges against a neighborhood-max ("farthest nearby
+                       # surface") buffer. Lets a silhouette-tangent edge (background
+                       # just outside it, e.g. a cylinder's bottom-rim where body
+                       # meets base) survive, while edges buried behind a surface on
+                       # all sides stay hidden. A flat depth bias can't separate
+                       # those two; see part 3941. Fraction (not px) so the effect is
+                       # resolution-independent across render_px.
 
 
 def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900):
@@ -163,11 +185,12 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900):
         zrange = tri_z.max() - tri_z.min() or 1.0
     else:
         zbuf = np.full((render_px, render_px), np.inf); zrange = 1.0
+    zedge = dilate_zbuffer(zbuf, max(2, round(render_px * EDGE_DILATE)))  # lenient for edges
 
     segs = []
     for e in out["2"]:
         ax, ay, az = to_px(e[0:1]); bx, by, bz = to_px(e[1:2])
-        segs += clip_visible((ax[0], ay[0], bx[0], by[0], "edge"), zbuf, render_px,
+        segs += clip_visible((ax[0], ay[0], bx[0], by[0], "edge"), zedge, render_px,
                              render_px, (az[0], bz[0]), EDGE_BIAS * zrange)
     for q in out["5"]:
         px, py, pz = to_px(q)

@@ -89,3 +89,29 @@ def test_visible_segments_on_real_part():
     assert len(segs) > 50
     assert all(s[4] in ("edge", "sil") for s in segs)
     assert bbox[2] > bbox[0] and bbox[3] > bbox[1]
+
+
+def test_dilate_zbuffer_neighborhood_max():
+    z = np.zeros((5, 5))
+    z[2, 2] = 9.0                       # one far cell
+    d = hlr.dilate_zbuffer(z, 1)
+    assert d[2, 2] == 9.0
+    assert d[1, 1] == 9.0 and d[2, 3] == 9.0   # spread to neighbors
+    assert d[0, 0] == 0.0               # outside the neighborhood, unchanged
+    assert np.array_equal(hlr.dilate_zbuffer(z, 0), z)   # r=0 is a no-op
+
+
+def test_dilated_occlusion_recovers_tangent_but_not_buried():
+    # a near surface (depth 0) covering x in [0,55]; background (inf) to the right
+    tri_s = np.array([[[0, 0], [55, 0], [55, 100]],
+                      [[0, 0], [55, 100], [0, 100]]], float)
+    tri_z = np.zeros((2, 3))
+    zbuf = hlr.rasterize_zbuffer(tri_s, tri_z, 100, 100)
+    zdil = hlr.dilate_zbuffer(zbuf, 3)
+    tangent = (53, 10, 53, 40, "edge")   # 2px inside the boundary -> background nearby
+    buried = (20, 10, 20, 40, "edge")    # deep inside the near surface
+    # plain occlusion culls the tangent edge; dilated occlusion recovers it
+    assert hlr.clip_visible(tangent, zbuf, 100, 100, 5.0, 0.01) == []
+    assert len(hlr.clip_visible(tangent, zdil, 100, 100, 5.0, 0.01)) >= 1
+    # a genuinely buried edge stays hidden even with dilation
+    assert hlr.clip_visible(buried, zdil, 100, 100, 5.0, 0.01) == []
