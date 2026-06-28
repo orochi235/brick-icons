@@ -150,3 +150,24 @@ def test_dithers_preserve_mean(gradient_rgba, algo):
 def test_unknown_algo_raises(gradient_rgba):
     with pytest.raises(ValueError):
         process.dither(process.to_grayscale(gradient_rgba), "nope")
+
+
+def test_draw_segments_black_on_white_sized():
+    segs = [(10.0, 10.0, 90.0, 10.0, "edge"), (10.0, 10.0, 10.0, 90.0, "sil")]
+    img = process.draw_segments(segs, 100, 100, line_px=2, sil_px=4)
+    assert img.size == (100, 100) and img.mode == "L"
+    a = np.asarray(img)
+    assert (a == 0).any() and a.mean() > 200
+
+
+def test_draw_segments_width_thickens():
+    segs = [(10.0, 50.0, 90.0, 50.0, "edge")]
+    thin = (np.asarray(process.draw_segments(segs, 100, 100, 1, 1)) < 128).sum()
+    thick = (np.asarray(process.draw_segments(segs, 100, 100, 6, 1)) < 128).sum()
+    assert thick > thin
+
+
+def test_segments_mono_is_1bit():
+    segs = [(10.0, 50.0, 90.0, 50.0, "edge")]
+    m = process.segments_mono(segs, 100, 100, line_px=2, sil_px=3)
+    assert m.mode == "1"

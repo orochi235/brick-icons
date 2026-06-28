@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
-from PIL import Image, ImageFilter, ImageOps
+from PIL import Image, ImageFilter, ImageOps, ImageDraw
 
 
 def flatten_rgb(rgba: Image.Image) -> Image.Image:
@@ -125,6 +125,22 @@ def outline_mono(rgba: Image.Image, w: int, h: int, margin: int = 6, scale: floa
     canvas = Image.new("L", (w, h), 255)
     canvas.paste(small, ((w - ow) // 2, (h - oh) // 2))
     return canvas.convert("1")
+
+
+def draw_segments(segs, w, h, line_px=2, sil_px=3, supersample=3):
+    """Anti-aliased black line-art on white. 'sil' segments use sil_px width."""
+    ss = max(1, supersample)
+    img = Image.new("L", (w * ss, h * ss), 255)
+    dr = ImageDraw.Draw(img)
+    for x1, y1, x2, y2, kind in segs:
+        wpx = max(1, round((sil_px if kind == "sil" else line_px) * ss))
+        dr.line([(x1 * ss, y1 * ss), (x2 * ss, y2 * ss)], fill=0, width=wpx)
+    return img.resize((w, h), Image.LANCZOS)
+
+
+def segments_mono(segs, w, h, line_px=2, sil_px=3, threshold=160):
+    g = draw_segments(segs, w, h, line_px, sil_px)
+    return g.point(lambda p: 255 if p >= threshold else 0).convert("1")
 
 
 _BAYER4 = np.array([[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]],
