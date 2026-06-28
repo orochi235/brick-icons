@@ -87,6 +87,16 @@ def test_fit_segments_scales_arc_ops():
     assert fit[0][7] == 0.0 and fit[0][8] == 90.0       # param range unchanged
 
 
+def test_visible_segments_unresolvable_part_raises():
+    with pytest.raises(FileNotFoundError):
+        hlr.visible_segments("definitely-not-a-part", "vendor/ldraw", render_px=200)
+
+
+def test_visible_segments_missing_dat_path_raises(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        hlr.visible_segments(str(tmp_path / "nope.ldr"), tmp_path, render_px=200)
+
+
 def test_visible_segments_empty_geometry(tmp_path):
     d = tmp_path / "empty.dat"
     d.write_text("0 just a comment, no geometry\n")

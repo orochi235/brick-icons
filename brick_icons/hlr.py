@@ -316,9 +316,23 @@ def _visible_segments_analytic(out, right, up, fwd, render_px):
     return segs, _ops_bbox(segs)
 
 
+def _resolve_input(part: str, roots: list[Path]) -> Path:
+    """Resolve a part id or .dat/.ldr/.mpd path to a file, or raise a clear error."""
+    s = str(part)
+    if s.lower().endswith((".dat", ".ldr", ".mpd")):
+        p = Path(s)
+        if not p.exists():
+            raise FileNotFoundError(f"part file not found: {s}")
+        return p
+    path = resolve(s + ".dat", roots)
+    if path is None:
+        raise FileNotFoundError(f"could not resolve part {part!r} under {[str(r) for r in roots]}")
+    return path
+
+
 def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900):
     roots = default_roots(ldraw_dir)
-    path = resolve(part + ".dat", roots) if not str(part).endswith(".dat") else Path(part)
+    path = _resolve_input(part, roots)
     out = {"2": [], "5": [], "tri": [], "analytic": []}
     flatten(path, np.eye(3), np.zeros(3), out, roots)
     right, up, fwd = view_basis(lat, long)
