@@ -115,3 +115,29 @@ def test_dilated_occlusion_recovers_tangent_but_not_buried():
     assert len(hlr.clip_visible(tangent, zdil, 100, 100, 5.0, 0.01)) >= 1
     # a genuinely buried edge stays hidden even with dilation
     assert hlr.clip_visible(buried, zdil, 100, 100, 5.0, 0.01) == []
+
+
+def test_flatten_substitutes_known_primitive(tmp_path):
+    (tmp_path / "p" / "48").mkdir(parents=True)
+    (tmp_path / "p" / "48" / "1-4edge.dat").write_text("0 quarter edge\n")
+    part = tmp_path / "thing.dat"
+    part.write_text("1 16 0 0 0  1 0 0  0 1 0  0 0 1  p\\48\\1-4edge.dat\n")
+    roots = hlr.default_roots(tmp_path)
+    out = {"2": [], "5": [], "tri": [], "analytic": []}
+    hlr.flatten(part, np.eye(3), np.zeros(3), out, roots)
+    assert len(out["analytic"]) == 1
+    rec = out["analytic"][0]
+    assert rec["kind"] == "edge" and rec["sector"] == 90.0
+    assert np.allclose(rec["R"], np.eye(3)) and np.allclose(rec["t"], 0)
+
+
+def test_flatten_unknown_primitive_recurses(tmp_path):
+    (tmp_path / "p").mkdir()
+    (tmp_path / "p" / "4-4ndis.dat").write_text("3 16 0 0 0  1 0 0  0 0 1\n")
+    part = tmp_path / "thing.dat"
+    part.write_text("1 16 0 0 0  1 0 0  0 1 0  0 0 1  p\\4-4ndis.dat\n")
+    roots = hlr.default_roots(tmp_path)
+    out = {"2": [], "5": [], "tri": [], "analytic": []}
+    hlr.flatten(part, np.eye(3), np.zeros(3), out, roots)
+    assert len(out["analytic"]) == 0
+    assert len(out["tri"]) == 1

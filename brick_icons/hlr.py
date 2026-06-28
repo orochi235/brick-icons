@@ -3,6 +3,8 @@ import math
 from pathlib import Path
 import numpy as np
 
+from . import primitives
+
 _text_cache: dict[Path, list[str]] = {}
 
 
@@ -42,9 +44,18 @@ def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
             a, b, c, d, e, f, g, h, i = map(float, tok[5:14])
             M = np.array([[a, b, c], [d, e, f], [g, h, i]], float)
             T = np.array([x, y, z], float)
-            sub = resolve(" ".join(tok[14:]), roots)
-            if sub is not None:
-                flatten(sub, R @ M, R @ T + t, out, roots, depth + 1)
+            ref = " ".join(tok[14:])
+            Rsub, tsub = R @ M, R @ T + t
+            spec = primitives.parse_primitive(ref)
+            if spec is not None and "analytic" in out:
+                kind, sector, inner = spec
+                out["analytic"].append(
+                    {"kind": kind, "sector": sector, "inner": inner,
+                     "R": Rsub, "t": tsub})
+            else:
+                sub = resolve(ref, roots)
+                if sub is not None:
+                    flatten(sub, Rsub, tsub, out, roots, depth + 1)
         elif typ in ("2", "5") and len(tok) >= 8:
             pts = np.array(list(map(float, tok[2:])), float).reshape(-1, 3)
             out[typ].append(pts @ R.T + t)
@@ -159,7 +170,7 @@ EDGE_DILATE = 0.0024   # z-buffer dilation radius as a FRACTION of render_px:
 def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900):
     roots = default_roots(ldraw_dir)
     path = resolve(part + ".dat", roots) if not str(part).endswith(".dat") else Path(part)
-    out = {"2": [], "5": [], "tri": []}
+    out = {"2": [], "5": [], "tri": [], "analytic": []}
     flatten(path, np.eye(3), np.zeros(3), out, roots)
     right, up, fwd = view_basis(lat, long)
 
