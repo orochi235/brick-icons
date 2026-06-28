@@ -84,3 +84,28 @@ def test_disc_depth():
                   [2.0, -5.0, 0.0]])                # outside radius -> miss
     d = disc.depth(O, F)
     assert np.isclose(d[0], 5.0) and np.isinf(d[1])
+
+
+def _proj_xz(Pw):   # A=x, B=z, Z=y (look along +y)
+    Pw = np.atleast_2d(Pw)
+    return Pw[:, 0], Pw[:, 2], Pw[:, 1]
+
+
+def test_drawn_edge_is_full_arc():
+    rec = {"kind": "edge", "sector": 360.0, "inner": 0, "R": np.eye(3), "t": np.zeros(3)}
+    ops = P.drawn_curves(rec, _proj_xz, s=1.0, cx=0.0, cy=0.0, half=0.0,
+                         fwd=np.array([0, 1.0, 0]))
+    assert len(ops) == 1 and ops[0][0] == "arc"
+    assert ops[0][-1] == "edge"
+
+
+def test_drawn_cylinder_has_two_silhouette_lines():
+    # cylinder axis +y; view along +z so the side silhouette is well-defined
+    def proj_z(Pw):
+        Pw = np.atleast_2d(Pw)
+        return Pw[:, 0], Pw[:, 1], Pw[:, 2]
+    rec = {"kind": "cyli", "sector": 360.0, "inner": 0, "R": np.eye(3), "t": np.zeros(3)}
+    ops = P.drawn_curves(rec, proj_z, s=1.0, cx=0.0, cy=0.0, half=0.0,
+                         fwd=np.array([0, 0, 1.0]))
+    sil_lines = [o for o in ops if o[0] == "line" and o[-1] == "sil"]
+    assert len(sil_lines) == 2

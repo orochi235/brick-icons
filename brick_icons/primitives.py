@@ -192,3 +192,67 @@ class DiscOccluder:
         valid = ((lam > -1e-9) & (rad >= self.inner - 1e-6) & (rad <= self.outer + 1e-6)
                  & _angle_in_sector(lx, lz, self.sector))
         return np.where(valid, lam, out)
+
+
+def _arc_op(ell, t0_deg, t1_deg, kind):
+    rx, ry, phi = ell.svg_axes()
+    return ("arc", float(ell.center[0]), float(ell.center[1]),
+            rx, ry, phi, float(t0_deg), float(t1_deg), kind)
+
+
+def _arc_depth_fn(ell):
+    zc, zu, zv = ell.depth_coeffs
+
+    def depth(deg):
+        t = np.radians(np.asarray(deg, float))
+        return zc + np.cos(t) * zu + np.sin(t) * zv
+    return depth
+
+
+def _line_depth_fn(z0, z1):
+    def depth(ts):
+        ts = np.asarray(ts, float)
+        return z0 + (z1 - z0) * ts
+    return depth
+
+
+def drawn_with_depth(rec, to_AB, s, cx, cy, half, fwd):
+    """Return [(op, depth_fn)] for one analytic record.
+
+    depth_fn maps an op's sample params to camera depth: degrees for arc ops,
+    t in [0,1] for line ops. Ops are pre-occlusion candidates.
+    """
+    kind, sector = rec["kind"], rec["sector"]
+    R, t = rec["R"], rec["t"]
+    pairs = []
+    if kind in ("edge", "disc", "ring"):
+        outer = (rec["inner"] + 1) if kind == "ring" else 1.0
+        ell = project_circle(R, t, outer, to_AB, s, cx, cy, half)
+        pairs.append((_arc_op(ell, 0.0, sector, "edge"), _arc_depth_fn(ell)))
+        if kind == "ring" and rec["inner"] > 0:
+            elli = project_circle(R, t, rec["inner"], to_AB, s, cx, cy, half)
+            pairs.append((_arc_op(elli, 0.0, sector, "edge"), _arc_depth_fn(elli)))
+    elif kind == "cyli":
+        R = np.asarray(R, float)
+        U, V, A = R[:, 0], R[:, 2], R[:, 1]
+        fwd = np.asarray(fwd, float)
+        # silhouette generators: radial normal perpendicular to view ->
+        # cos t (U.fwd) + sin t (V.fwd) = 0  ->  t = atan2(-(U.fwd), (V.fwd)).
+        uf, vf = float(U @ fwd), float(V @ fwd)
+        theta = math.atan2(-uf, vf)
+        base = project_circle(R, t, 1.0, to_AB, s, cx, cy, half)
+        top = project_circle(R, np.asarray(t, float) + A, 1.0, to_AB, s, cx, cy, half)
+        for th in (theta, theta + math.pi):
+            deg = math.degrees(th) % 360.0
+            if sector >= 360.0 - 1e-9 or deg <= sector + 1e-6:
+                pb, pt = base.point(th), top.point(th)
+                op = ("line", float(pb[0]), float(pb[1]), float(pt[0]), float(pt[1]), "sil")
+                pairs.append((op, _line_depth_fn(base.depth(th), top.depth(th))))
+        pairs.append((_arc_op(base, 0.0, sector, "edge"), _arc_depth_fn(base)))
+        pairs.append((_arc_op(top, 0.0, sector, "edge"), _arc_depth_fn(top)))
+    return pairs
+
+
+def drawn_curves(rec, to_AB, s, cx, cy, half, fwd):
+    """Pre-occlusion drawn ops (tuples only) for one analytic record."""
+    return [op for op, _ in drawn_with_depth(rec, to_AB, s, cx, cy, half, fwd)]
