@@ -184,9 +184,8 @@ def _ops_bbox(segs):
         if op[0] == "line":
             xs += [op[1], op[3]]; ys += [op[2], op[4]]
         else:
-            _, cx, cy, rx, ry, phi, t0, t1, _ = op
-            pts = primitives._ellipse_from_arc(cx, cy, rx, ry, phi).points(
-                np.radians(np.linspace(t0, t1, 12)))
+            pts = primitives.arc_ellipse(op).points(
+                np.radians(np.linspace(op[7], op[8], 12)))
             xs += list(pts[:, 0]); ys += list(pts[:, 1])
     xs = xs or [0, 1]; ys = ys or [0, 1]
     return (min(xs), min(ys), max(xs), max(ys))
@@ -344,6 +343,7 @@ def fit_segments(segs, bbox, W, H, margin=6, scale=1.0):
             _, x1, y1, x2, y2, k = op
             out.append(("line", x1 * f + ox, y1 * f + oy, x2 * f + ox, y2 * f + oy, k))
         else:
-            _, cx, cy, rx, ry, phi, t0, t1, k = op
-            out.append(("arc", cx * f + ox, cy * f + oy, rx * f, ry * f, phi, t0, t1, k))
+            _, cx, cy, ux, uy, vx, vy, t0, t1, k = op
+            out.append(("arc", cx * f + ox, cy * f + oy,
+                        ux * f, uy * f, vx * f, vy * f, t0, t1, k))
     return out

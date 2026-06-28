@@ -232,9 +232,19 @@ class TriangleOccluder:
 
 
 def _arc_op(ell, t0_deg, t1_deg, kind):
-    rx, ry, phi = ell.svg_axes()
+    """Parametric arc op: ('arc', cx, cy, ux, uy, vx, vy, t0_deg, t1_deg, kind).
+    The point at param t (degrees) is center + cos t*u + sin t*v — the SAME
+    parameterization the depth_fn uses, so visibility sampling stays consistent.
+    SVG (rx, ry, phi) is derived only at write time via Ellipse.svg_axes()."""
     return ("arc", float(ell.center[0]), float(ell.center[1]),
-            rx, ry, phi, float(t0_deg), float(t1_deg), kind)
+            float(ell.u[0]), float(ell.u[1]), float(ell.v[0]), float(ell.v[1]),
+            float(t0_deg), float(t1_deg), kind)
+
+
+def arc_ellipse(op):
+    """Reconstruct the parametric Ellipse from an arc op (carries depth-free geometry)."""
+    _, cx, cy, ux, uy, vx, vy, _, _, _ = op
+    return Ellipse((cx, cy), (ux, uy), (vx, vy))
 
 
 def _arc_depth_fn(ell):
@@ -295,13 +305,6 @@ def drawn_curves(rec, to_AB, s, cx, cy, half, fwd):
     return [op for op, _ in drawn_with_depth(rec, to_AB, s, cx, cy, half, fwd)]
 
 
-def _ellipse_from_arc(cx, cy, rx, ry, phi_deg):
-    a = math.radians(phi_deg)
-    maj = np.array([math.cos(a), math.sin(a)]) * rx
-    minr = np.array([-math.sin(a), math.cos(a)]) * ry
-    return Ellipse(np.array([cx, cy]), maj, minr)
-
-
 def _samples_for(op, n):
     """Return (xs, ys, params) sampling an op; params are t in [0,1] for lines
     and degrees for arcs (aligned with the op's depth_fn). `n` is a floor; the
@@ -313,11 +316,12 @@ def _samples_for(op, n):
         n = int(min(4000, max(n, 2, length / 2)))
         ts = np.linspace(0.0, 1.0, n)
         return x1 + (x2 - x1) * ts, y1 + (y2 - y1) * ts, ts
-    _, cx, cy, rx, ry, phi, t0, t1, _ = op
-    length = (rx + ry) / 2.0 * math.radians(abs(t1 - t0))
+    ell = arc_ellipse(op)
+    t0, t1 = op[7], op[8]
+    length = (np.hypot(*ell.u) + np.hypot(*ell.v)) / 2.0 * math.radians(abs(t1 - t0))
     n = int(min(4000, max(n, 2, length / 2)))
     degs = np.linspace(t0, t1, n)
-    pts = _ellipse_from_arc(cx, cy, rx, ry, phi).points(np.radians(degs))
+    pts = ell.points(np.radians(degs))
     return pts[:, 0], pts[:, 1], degs
 
 
@@ -362,7 +366,7 @@ def visible_subops(op_specs, occluders, ray_origin, fwd, eps, n=200):
                 result.append(("line", float(xs[i]), float(ys[i]),
                                float(xs[j]), float(ys[j]), op[-1]))
             else:
-                _, cx, cy, rx, ry, phi, _, _, kind = op
-                result.append(("arc", cx, cy, rx, ry, phi,
+                _, cx, cy, ux, uy, vx, vy, _, _, kind = op
+                result.append(("arc", cx, cy, ux, uy, vx, vy,
                                float(params[i]), float(params[j]), kind))
     return result

@@ -65,15 +65,13 @@ def draw_segments(segs, w, h, line_px=2, sil_px=3, supersample=3):
             _, x1, y1, x2, y2, _ = op
             dr.line([(x1 * ss, y1 * ss), (x2 * ss, y2 * ss)], fill=0, width=wpx)
         else:
-            _, cx, cy, rx, ry, phi, t0, t1, _ = op
-            a = math.radians(phi)
-            ca, sa = math.cos(a), math.sin(a)
+            _, cx, cy, ux, uy, vx, vy, t0, t1, _ = op
             n = max(2, int(abs(t1 - t0) / 2) + 2)
             pts = []
             for k in range(n):
                 ang = math.radians(t0 + (t1 - t0) * k / (n - 1))
-                ux, uy = rx * math.cos(ang), ry * math.sin(ang)
-                pts.append(((cx + ca * ux - sa * uy) * ss, (cy + sa * ux + ca * uy) * ss))
+                c, s = math.cos(ang), math.sin(ang)
+                pts.append(((cx + c * ux + s * vx) * ss, (cy + c * uy + s * vy) * ss))
             dr.line(pts, fill=0, width=wpx, joint="curve")
     return img.resize((w, h), Image.LANCZOS)
 

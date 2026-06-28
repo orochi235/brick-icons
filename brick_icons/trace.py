@@ -49,15 +49,27 @@ def _write_svg(out_path: Path, viewbox: str, transform: str,
     out_path.write_text("\n".join(parts))
 
 
-def _arc_endpoints(cx, cy, rx, ry, phi_deg, t0_deg, t1_deg):
-    """Pixel endpoints of an elliptical arc at param angles t0/t1 (degrees)."""
-    ca, sa = math.cos(math.radians(phi_deg)), math.sin(math.radians(phi_deg))
+def _arc_to_svg(op):
+    """Convert a parametric arc op ('arc', cx, cy, ux, uy, vx, vy, t0, t1, kind)
+    to an SVG elliptical-arc path 'd'. The point at param t is
+    center + cos t*u + sin t*v; semi-axes/rotation come from the SVD of [u v]."""
+    _, cx, cy, ux, uy, vx, vy, t0, t1, _ = op
+    u = np.array([ux, uy]); v = np.array([vx, vy])
+    M = np.column_stack([u, v])
+    U_, S_, _ = np.linalg.svd(M)
+    rx, ry = float(S_[0]), float(S_[1])
+    phi = math.degrees(math.atan2(U_[1, 0], U_[0, 0]))
 
     def pt(t_deg):
         a = math.radians(t_deg)
-        ux, uy = rx * math.cos(a), ry * math.sin(a)
-        return cx + ca * ux - sa * uy, cy + sa * ux + ca * uy
-    return pt(t0_deg), pt(t1_deg)
+        p = np.array([cx, cy]) + math.cos(a) * u + math.sin(a) * v
+        return p[0], p[1]
+    x0, y0 = pt(t0); x1e, y1e = pt(t1)
+    large = 1 if abs(t1 - t0) > 180 else 0
+    # increasing param sweeps u->v; sign of cross(u,v) gives screen orientation
+    sweep = 1 if (ux * vy - uy * vx) * (1 if t1 >= t0 else -1) > 0 else 0
+    return (f'M {x0:.2f} {y0:.2f} A {rx:.2f} {ry:.2f} {phi:.2f} '
+            f'{large} {sweep} {x1e:.2f} {y1e:.2f}')
 
 
 def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=3) -> Path:
@@ -74,13 +86,8 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=3) -> Path:
             parts.append(f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" '
                          f'stroke-width="{sw}"/>')
         else:
-            _, cx, cy, rx, ry, phi, t0, t1, kind = op
-            sw = sil_px if kind == "sil" else line_px
-            (x0, y0), (x1e, y1e) = _arc_endpoints(cx, cy, rx, ry, phi, t0, t1)
-            large = 1 if abs(t1 - t0) > 180 else 0
-            sweep = 1 if t1 > t0 else 0
-            parts.append(f'<path d="M {x0:.2f} {y0:.2f} A {rx:.2f} {ry:.2f} {phi:.2f} '
-                         f'{large} {sweep} {x1e:.2f} {y1e:.2f}" stroke-width="{sw}"/>')
+            sw = sil_px if op[-1] == "sil" else line_px
+            parts.append(f'<path d="{_arc_to_svg(op)}" stroke-width="{sw}"/>')
     parts += ["</g>", "</svg>"]
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)

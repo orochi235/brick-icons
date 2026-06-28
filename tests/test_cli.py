@@ -94,6 +94,7 @@ def test_outline_uses_hlr_not_ldview(tmp_path, monkeypatch):
     rc = cli.main(["3701", "--shading", "outline", "--format", "both",
                    "--mode", "both", "--out", str(tmp_path)])
     assert rc == 0 and called["n"] == 0
-    assert (tmp_path / "3701.svg").read_text().count("<line") > 50
+    svg = (tmp_path / "3701.svg").read_text()
+    assert svg.count("<line") + svg.count("<path") > 50    # lines + analytic arc paths
     assert Image.open(tmp_path / "3701.mono.png").mode == "1"
     assert (tmp_path / "3701.gray.png").exists()

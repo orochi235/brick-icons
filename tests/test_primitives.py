@@ -137,7 +137,8 @@ def test_visibility_keeps_unoccluded_arc_whole():
         def depth(self, O, F):
             return np.full(O.shape[0], np.inf)
 
-    op = ("arc", 50.0, 50.0, 40.0, 40.0, 0.0, 0.0, 360.0, "edge")
+    # parametric arc: center (50,50), u=(40,0), v=(0,40), params 0..360 deg
+    op = ("arc", 50.0, 50.0, 40.0, 0.0, 0.0, 40.0, 0.0, 360.0, "edge")
     depth_fn = lambda degs: np.zeros_like(np.asarray(degs, float))
 
     def ray_origin(xs, ys):
@@ -146,4 +147,4 @@ def test_visibility_keeps_unoccluded_arc_whole():
     vis = P.visible_subops([(op, depth_fn)], [Empty()], ray_origin,
                            fwd=np.array([0, 0, 1.0]), eps=1e-6, n=60)
     arcs = [o for o in vis if o[0] == "arc"]
-    assert len(arcs) == 1 and np.isclose(arcs[0][6], 0.0) and arcs[0][7] >= 350.0
+    assert len(arcs) == 1 and np.isclose(arcs[0][7], 0.0) and arcs[0][8] >= 350.0

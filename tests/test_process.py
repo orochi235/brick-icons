@@ -102,6 +102,6 @@ def test_segments_mono_is_1bit():
 def test_draw_segments_renders_arc_nonblank():
     from brick_icons import process
     import numpy as np
-    ops = [("arc", 50.0, 50.0, 40.0, 40.0, 0.0, 0.0, 360.0, "edge")]
+    ops = [("arc", 50.0, 50.0, 40.0, 0.0, 0.0, 40.0, 0.0, 360.0, "edge")]
     img = process.draw_segments(ops, 100, 100)
     assert np.asarray(img).min() < 128

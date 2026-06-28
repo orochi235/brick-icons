@@ -77,12 +77,14 @@ def test_fit_segments_centers_in_box():
 
 
 def test_fit_segments_scales_arc_ops():
-    segs = [("arc", 5.0, 5.0, 4.0, 2.0, 30.0, 0.0, 90.0, "edge")]
+    # parametric arc op: ('arc', cx, cy, ux, uy, vx, vy, t0, t1, kind)
+    segs = [("arc", 5.0, 5.0, 4.0, 0.0, 0.0, 2.0, 0.0, 90.0, "edge")]
     fit = hlr.fit_segments(segs, (0, 0, 10, 10), 100, 100, margin=10, scale=1.0)
     assert fit[0][0] == "arc"
-    # bbox 10x10 into 80px -> factor 8; semi-axes scale by 8
-    assert np.isclose(fit[0][3], 32.0) and np.isclose(fit[0][4], 16.0)
-    assert fit[0][5] == 30.0                            # rotation unchanged
+    # bbox 10x10 into 80px -> factor 8, offset 10; center 5*8+10=50; u,v scale by 8
+    assert np.isclose(fit[0][1], 50.0) and np.isclose(fit[0][2], 50.0)
+    assert np.isclose(fit[0][3], 32.0) and np.isclose(fit[0][6], 16.0)
+    assert fit[0][7] == 0.0 and fit[0][8] == 90.0       # param range unchanged
 
 
 def test_visible_segments_empty_geometry(tmp_path):
@@ -162,22 +164,27 @@ def test_visible_segments_emits_arcs_for_round_part():
 
 
 @pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
-def test_3941_base_gap_resolution_stable():
-    # The base silhouette (vertical side line) must reach down to the bottom-rim
-    # arc at both resolutions: the lowest silhouette endpoint and the lowest arc
-    # point should be within a few percent of the bbox height (no disconnect gap).
+def test_3941_base_silhouette_connects_to_rim():
+    # The historic artifact: the body's vertical side silhouette did not connect
+    # to the bottom-rim arc (a visible gap at the tangent), and the dilation fix
+    # was resolution-fragile. With exact analytic occlusion the lower endpoint of
+    # each tall body silhouette must sit on the bottom-rim arc at BOTH resolutions.
+    from brick_icons import primitives as _P
     for rpx in (900, 2048):
         segs, bbox = hlr.visible_segments("3941", LIB, lat=30, long=45, render_px=rpx)
-        h = bbox[3] - bbox[1]
-        sil_ys = [max(o[2], o[4]) for o in segs if o[0] == "line" and o[-1] == "sil"]
-        arc_ys = []
+        diag = math.hypot(bbox[2] - bbox[0], bbox[3] - bbox[1])
+        # arc sample cloud
+        apts = []
         for o in segs:
             if o[0] == "arc":
-                import numpy as _np
-                from brick_icons import primitives as _P
-                e = _P._ellipse_from_arc(o[1], o[2], o[3], o[4], o[5])
-                pts = e.points(_np.radians(_np.linspace(o[6], o[7], 16)))
-                arc_ys += list(pts[:, 1])
-        assert sil_ys and arc_ys
-        gap = abs(max(sil_ys) - max(arc_ys))
-        assert gap < 0.05 * h, f"base gap {gap:.1f} too large at {rpx} (h={h:.1f})"
+                p = _P.arc_ellipse(o).points(np.radians(np.linspace(o[7], o[8], 64)))
+                apts += [tuple(q) for q in p]
+        apts = np.array(apts)
+        # the two longest silhouette lines are the body's left/right sides
+        sils = [o for o in segs if o[0] == "line" and o[-1] == "sil"]
+        sils.sort(key=lambda o: math.hypot(o[3] - o[1], o[4] - o[2]), reverse=True)
+        assert len(sils) >= 2 and len(apts) > 0
+        for o in sils[:2]:
+            low = np.array([o[1], o[2]]) if o[2] > o[4] else np.array([o[3], o[4]])
+            d = np.min(np.hypot(apts[:, 0] - low[0], apts[:, 1] - low[1]))
+            assert d < 0.02 * diag, f"silhouette base gap {d:.1f}px at {rpx} (diag {diag:.0f})"

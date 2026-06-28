@@ -47,7 +47,8 @@ def test_segments_to_svg_writes_lines(tmp_path):
 
 
 def test_segments_to_svg_emits_arc_path(tmp_path):
-    ops = [("arc", 50.0, 50.0, 40.0, 30.0, 0.0, 0.0, 90.0, "edge")]
+    # parametric arc: center (50,50), u=(40,0), v=(0,30), params 0..90 deg
+    ops = [("arc", 50.0, 50.0, 40.0, 0.0, 0.0, 30.0, 0.0, 90.0, "edge")]
     out = _trace.segments_to_svg(ops, 100, 100, tmp_path / "a.svg")
     txt = out.read_text()
     assert "<path" in txt and " A " in txt          # elliptical-arc command
