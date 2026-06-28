@@ -75,6 +75,14 @@ def test_fit_segments_centers_in_box():
     assert min(xs) >= 9 and max(xs) <= 91 and min(ys) >= 9 and max(ys) <= 91
 
 
+def test_visible_segments_empty_geometry(tmp_path):
+    d = tmp_path / "empty.dat"
+    d.write_text("0 just a comment, no geometry\n")
+    segs, bbox = hlr.visible_segments(str(d), tmp_path, render_px=200)
+    assert segs == []
+    assert bbox == (0.0, 0.0, 1.0, 1.0)
+
+
 @pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
 def test_visible_segments_on_real_part():
     segs, bbox = hlr.visible_segments("3701", LIB, lat=30, long=45, render_px=600)

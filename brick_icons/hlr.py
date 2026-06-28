@@ -143,6 +143,8 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900):
 
     tri = np.array(out["tri"]) if out["tri"] else np.zeros((0, 3, 3))
     fitpts = tri.reshape(-1, 3) if len(tri) else np.array(out["2"]).reshape(-1, 3)
+    if len(fitpts) == 0:
+        return [], (0.0, 0.0, 1.0, 1.0)
     sx, sy, _ = project(fitpts, right, up, fwd)
     minx, maxx, miny, maxy = sx.min(), sx.max(), sy.min(), sy.max()
     span = max(maxx - minx, maxy - miny) or 1.0
