@@ -47,26 +47,6 @@ def test_cel_mono_posterizes(tmp_path, monkeypatch):
     assert levels <= 6
 
 
-@pytest.mark.skipif(shutil.which("potrace") is None, reason="potrace absent")
-def test_svg_outline(tmp_path, monkeypatch):
-    _fake_render(monkeypatch)
-    cli.main(["3001", "--format", "svg", "--shading", "outline",
-              "--out", str(tmp_path), "--root", str(tmp_path)])
-    assert (tmp_path / "3001.svg").exists()
-    assert "<path" in (tmp_path / "3001.svg").read_text()
-
-
-def test_outline_silhouette_width_flag_thickens(tmp_path, monkeypatch):
-    _fake_render(monkeypatch)
-    cli.main(["3001", "--shading", "outline", "--mode", "mono", "--silhouette-width", "1",
-              "--out", str(tmp_path), "--root", str(tmp_path)])
-    thin = (np.asarray(Image.open(tmp_path / "3001.mono.png").convert("L")) == 0).sum()
-    cli.main(["3001", "--shading", "outline", "--mode", "mono", "--silhouette-width", "9",
-              "--out", str(tmp_path), "--root", str(tmp_path)])
-    thick = (np.asarray(Image.open(tmp_path / "3001.mono.png").convert("L")) == 0).sum()
-    assert thick > thin
-
-
 def test_svg_requires_vector_shading(tmp_path, monkeypatch, capsys):
     _fake_render(monkeypatch)
     cli.main(["3001", "--format", "svg", "--shading", "normal",

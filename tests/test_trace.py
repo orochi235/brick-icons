@@ -17,14 +17,6 @@ def _disc():
     return Image.fromarray(a, "RGBA")
 
 
-def test_outline_svg_has_paths(tmp_path):
-    out = tmp_path / "d.svg"
-    trace.outline_svg(_disc(), out, interior=False)
-    txt = out.read_text()
-    assert "<svg" in txt and "<path" in txt
-    assert 'transform="translate(' in txt   # potrace transform preserved
-
-
 def test_cel_svg_layers_match_bands(tmp_path):
     out = tmp_path / "c.svg"
     # gradient disc so multiple bands exist
@@ -53,11 +45,3 @@ def test_segments_to_svg_writes_lines(tmp_path):
     assert 'stroke-width="4"' in txt and 'stroke-width="2"' in txt
 
 
-@pytest.mark.skipif(shutil.which("magick") is None, reason="ImageMagick absent")
-def test_outline_svg_rasterizes_nonblank(tmp_path):
-    svg = tmp_path / "d.svg"; png = tmp_path / "d.png"
-    trace.outline_svg(_disc(), svg, interior=True)
-    import subprocess
-    subprocess.run(["magick", "-density", "150", str(svg), "-background", "white",
-                    "-flatten", str(png)], check=True, capture_output=True)
-    assert (np.asarray(Image.open(png).convert("L")) < 250).sum() > 0

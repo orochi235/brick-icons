@@ -48,15 +48,6 @@ def _write_svg(out_path: Path, viewbox: str, transform: str,
     out_path.write_text("\n".join(parts))
 
 
-def outline_svg(rgba: Image.Image, out_path: Path, interior: bool = True,
-                line_width: float = 2, sil_width: float = 3) -> Path:
-    line = process.make_outline(rgba.convert("RGBA"), interior=interior,
-                                line_width=line_width, sil_width=sil_width)
-    ds, vb, tf = _potrace(line)
-    _write_svg(Path(out_path), vb, tf, [(ds, "black")])
-    return Path(out_path)
-
-
 def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=3) -> Path:
     parts = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" '
              f'preserveAspectRatio="xMidYMid meet">',

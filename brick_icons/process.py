@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
-from PIL import Image, ImageFilter, ImageOps, ImageDraw
+from PIL import Image, ImageOps, ImageDraw
 
 
 def flatten_rgb(rgba: Image.Image) -> Image.Image:
@@ -46,85 +46,6 @@ def fit_contain(g: Image.Image, w: int, h: int, margin: int = 6,
 
 def _silhouette_mask(rgba: Image.Image, thr: int = 16) -> Image.Image:
     return rgba.convert("RGBA").split()[-1].point(lambda p: 255 if p > thr else 0)
-
-
-def _dilate(mask: np.ndarray, px: float) -> np.ndarray:
-    """Thicken a boolean ink mask to ~`px` wide via max-filter dilation."""
-    px = int(round(px))
-    if px <= 1:
-        return mask
-    size = px if px % 2 == 1 else px + 1          # MaxFilter requires odd size
-    img = Image.fromarray(np.where(mask, 255, 0).astype(np.uint8), "L")
-    return np.asarray(img.filter(ImageFilter.MaxFilter(size)), int) > 0
-
-
-def _resize_ink(mask: np.ndarray, out_w: int, out_h: int) -> np.ndarray:
-    """Downscale a boolean ink mask while preserving thin lines: any output cell
-    touched by ink stays ink. (LANCZOS averaging washes 1px lines out to ~white,
-    which is what silently dropped interior edges on the label-size downscale.)"""
-    img = Image.fromarray(np.where(mask, 255, 0).astype(np.uint8), "L")
-    small = img.resize((max(1, out_w), max(1, out_h)), Image.BOX)
-    return np.asarray(small, int) > 12
-
-
-def outline_masks(rgba: Image.Image, edge_thr: int = 28) -> tuple[np.ndarray, np.ndarray]:
-    """Native-resolution (silhouette, interior) boolean line masks, each ~1px.
-    silhouette = contour of the alpha; interior = tonal edges strictly inside it."""
-    rgba = rgba.convert("RGBA")
-    a = _silhouette_mask(rgba)
-    dil = a.filter(ImageFilter.MaxFilter(3))
-    ero = a.filter(ImageFilter.MinFilter(3))
-    sil = (np.asarray(dil, int) - np.asarray(ero, int)) > 0
-    g = to_grayscale(rgba)
-    edges = np.asarray(g.filter(ImageFilter.FIND_EDGES), int)
-    inside = np.asarray(ero, int) > 16            # eroded alpha keeps edges off the rim
-    interior = (edges > edge_thr) & inside
-    return sil, interior
-
-
-def _compose_lines(sil: np.ndarray, interior_mask: np.ndarray, sil_width: float,
-                   line_width: float, interior: bool = True) -> Image.Image:
-    lines = _dilate(sil, sil_width)
-    if interior:
-        lines = lines | _dilate(interior_mask, line_width)
-    return Image.fromarray(np.where(lines, 0, 255).astype(np.uint8), "L")
-
-
-def make_outline(rgba: Image.Image, interior: bool = True, line_width: float = 2,
-                 sil_width: float = 3, edge_thr: int = 28) -> Image.Image:
-    """Black line-art on white at native resolution (SVG / gray master). Widths
-    are native pixels; the CLI scales output-px widths up by the contain ratio so
-    the SVG and gray master match the printed mono's stroke weight."""
-    sil, inter = outline_masks(rgba, edge_thr)
-    return _compose_lines(sil, inter, sil_width, line_width, interior)
-
-
-def contain_factor(nw: int, nh: int, w: int, h: int, margin: int = 6,
-                   scale: float = 1.0) -> float:
-    """Scale factor mapping a native (nw,nh) image into the (w,h) label inner box,
-    matching fit_contain's geometry."""
-    scale = max(0.01, min(1.0, scale))
-    inner_w = max(1.0, (w - 2 * margin) * scale)
-    inner_h = max(1.0, (h - 2 * margin) * scale)
-    return min(inner_w / nw, inner_h / nh)
-
-
-def outline_mono(rgba: Image.Image, w: int, h: int, margin: int = 6, scale: float = 1.0,
-                 line_width: float = 2, sil_width: float = 3, interior: bool = True,
-                 edge_thr: int = 28) -> Image.Image:
-    """1-bit outline at label resolution. Builds 1px masks at native res, then
-    ink-preservingly downscales them and dilates to the requested output-px widths
-    -- so interior detail survives the downscale at any thickness."""
-    rgba = rgba.convert("RGBA")
-    sil, inter = outline_masks(rgba, edge_thr)
-    nh, nw = sil.shape
-    f = contain_factor(nw, nh, w, h, margin, scale)
-    ow, oh = max(1, round(nw * f)), max(1, round(nh * f))
-    small = _compose_lines(_resize_ink(sil, ow, oh), _resize_ink(inter, ow, oh),
-                           sil_width, line_width, interior)
-    canvas = Image.new("L", (w, h), 255)
-    canvas.paste(small, ((w - ow) // 2, (h - oh) // 2))
-    return canvas.convert("1")
 
 
 def draw_segments(segs, w, h, line_px=2, sil_px=3, supersample=3):
