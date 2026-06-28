@@ -103,7 +103,6 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
                 process.segments_mono(mfit, cfg.width, cfg.height,
                                       line_px=cfg.line_width, sil_px=cfg.silhouette_width
                                       ).save(out_dir / f"{name}.mono.png")
-        print(f"done: {part}")
         return
 
     # --- LDView path (cel / normal / color) ---
