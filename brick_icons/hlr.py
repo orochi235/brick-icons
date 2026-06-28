@@ -57,3 +57,21 @@ def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
                 else:
                     out["tri"].append(pts[[0, 1, 2]])
                     out["tri"].append(pts[[0, 2, 3]])
+
+
+SIGN_Z = -1.0          # tuned so parts face the camera (matches LDView iso)
+
+
+def view_basis(lat: float, long: float):
+    la, lo = math.radians(lat), math.radians(long)
+    up_world = np.array([0.0, -1.0, 0.0])          # LDraw Y is down
+    d = np.array([math.cos(la) * math.sin(lo), -math.sin(la),
+                  SIGN_Z * math.cos(la) * math.cos(lo)])
+    forward = -d / np.linalg.norm(d)
+    right = np.cross(forward, up_world); right /= np.linalg.norm(right)
+    up = np.cross(right, forward)
+    return right, up, forward
+
+
+def project(P: np.ndarray, right, up, forward):
+    return P @ right, -(P @ up), P @ forward       # sx, sy(image-down), depth

@@ -26,3 +26,19 @@ def test_flatten_composes_subfile_transform(tmp_path):
     hlr.flatten(parent, np.eye(3), np.zeros(3), out, roots=[tmp_path])
     seg = out["2"][0]
     assert np.allclose(seg[0], [10, 0, 0]) and np.allclose(seg[1], [11, 0, 0])
+
+
+def test_front_view_axes():
+    # front (lat=0,long=0): +X -> +screen_x ; LDraw +Y(down) -> +screen_y (down)
+    right, up, fwd = hlr.view_basis(0.0, 0.0)
+    P = np.array([[1, 0, 0], [0, 1, 0]], float)
+    sx, sy, z = hlr.project(P, right, up, fwd)
+    assert sx[0] > 0.5 and abs(sy[0]) < 1e-6      # +X is rightward
+    assert sy[1] > 0.5                            # +Y(down) projects downward
+
+
+def test_view_basis_orthonormal():
+    r, u, f = hlr.view_basis(30.0, 45.0)
+    for v in (r, u, f):
+        assert abs(np.linalg.norm(v) - 1) < 1e-9
+    assert abs(r @ u) < 1e-9 and abs(r @ f) < 1e-9 and abs(u @ f) < 1e-9
