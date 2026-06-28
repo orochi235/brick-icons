@@ -99,3 +99,21 @@ def test_batch_list_skips_indented_comments(tmp_path, monkeypatch):
     cli.main(["--list", str(lst), "--mode", "mono", "--out", str(tmp_path), "--root", str(tmp_path)])
     assert (tmp_path / "3001.mono.png").exists() and (tmp_path / "3002.mono.png").exists()
     assert not any(p.name.startswith("#") for p in tmp_path.iterdir())
+
+
+HAVE_LIB = (Path("vendor/ldraw")).exists()
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_outline_uses_hlr_not_ldview(tmp_path, monkeypatch):
+    called = {"n": 0}
+    def boom(*a, **k):
+        called["n"] += 1
+        raise AssertionError("LDView must not be called for outline shading")
+    monkeypatch.setattr(cli.render, "render_part", boom)
+    rc = cli.main(["3701", "--shading", "outline", "--format", "both",
+                   "--mode", "both", "--out", str(tmp_path)])
+    assert rc == 0 and called["n"] == 0
+    assert (tmp_path / "3701.svg").read_text().count("<line") > 50
+    assert Image.open(tmp_path / "3701.mono.png").mode == "1"
+    assert (tmp_path / "3701.gray.png").exists()

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from . import render, process, trace
+from . import render, process, trace, hlr
 from .config import load_config, Config
 
 
@@ -79,54 +79,56 @@ def _tone(cfg: Config, rgba: Image.Image) -> Image.Image:
 
 def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
     name = Path(part).stem if Path(part).suffix else part
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    if cfg.shading == "outline":
+        lat, long = render.resolve_latlong(cfg.angle)
+        segs, bbox = hlr.visible_segments(part, cfg.ldraw_dir, lat=lat, long=long,
+                                          render_px=cfg.render_px)
+        if cfg.fmt in ("svg", "both"):
+            fit = hlr.fit_segments(segs, bbox, cfg.width, cfg.height, cfg.margin, cfg.scale)
+            trace.segments_to_svg(fit, cfg.width, cfg.height, out_dir / f"{name}.svg",
+                                  line_px=cfg.line_width, sil_px=cfg.silhouette_width)
+        if cfg.fmt in ("png", "both"):
+            if cfg.mode in ("gray", "both"):
+                gpx = max(cfg.width, cfg.height, cfg.render_px // 2)
+                gfit = hlr.fit_segments(segs, bbox, gpx, gpx, cfg.margin, cfg.scale)
+                ratio = gpx / max(cfg.width, cfg.height)
+                process.draw_segments(gfit, gpx, gpx,
+                                      line_px=cfg.line_width * ratio,
+                                      sil_px=cfg.silhouette_width * ratio
+                                      ).save(out_dir / f"{name}.gray.png")
+            if cfg.mode in ("mono", "both"):
+                mfit = hlr.fit_segments(segs, bbox, cfg.width, cfg.height, cfg.margin, cfg.scale)
+                process.segments_mono(mfit, cfg.width, cfg.height,
+                                      line_px=cfg.line_width, sil_px=cfg.silhouette_width
+                                      ).save(out_dir / f"{name}.mono.png")
+        print(f"done: {part}")
+        return
+
+    # --- LDView path (cel / normal / color) ---
     render_png = (_stage(debug_dir, "render", name) if debug_dir
                   else out_dir / f"{name}.render.png")
     render.render_part(cfg, part, render_png)
     rgba = Image.open(render_png).convert("RGBA")
-    out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Outline stroke widths are output px; scale up by the contain ratio for the
-    # native-res renderers (SVG + gray master) so their weight matches the mono.
-    nat_line = nat_sil = 0
-    if cfg.shading == "outline":
-        f = process.contain_factor(rgba.width, rgba.height, cfg.width, cfg.height,
-                                   cfg.margin, cfg.scale)
-        nat_line = max(1, round(cfg.line_width / f))
-        nat_sil = max(1, round(cfg.silhouette_width / f))
-
-    # --- SVG ---
     if cfg.fmt in ("svg", "both"):
-        if cfg.shading == "outline":
-            trace.outline_svg(rgba, out_dir / f"{name}.svg", interior=cfg.outline_interior,
-                              line_width=nat_line, sil_width=nat_sil)
-        elif cfg.shading == "cel":
+        if cfg.shading == "cel":
             trace.cel_svg(rgba, out_dir / f"{name}.svg", levels=cfg.cel_levels)
         else:
             print(f"skip svg for {name}: --shading must be outline or cel (got {cfg.shading})")
 
-    # --- PNG ---
     if cfg.fmt in ("png", "both"):
-        if cfg.shading == "outline":
-            tone = process.make_outline(rgba, interior=cfg.outline_interior,
-                                        line_width=nat_line, sil_width=nat_sil)
-        else:
-            tone = _tone(cfg, rgba)
+        tone = _tone(cfg, rgba)
         if debug_dir:
             tone.save(_stage(debug_dir, "tone", name))
-
         if cfg.mode == "color":
             process.flatten_rgb(rgba).save(out_dir / f"{name}.color.png")
         if cfg.mode in ("gray", "both"):
             tone.save(out_dir / f"{name}.gray.png")
         if cfg.mode in ("mono", "both"):
-            if cfg.shading == "outline":
-                mono = process.outline_mono(rgba, cfg.width, cfg.height, cfg.margin,
-                                            cfg.scale, line_width=cfg.line_width,
-                                            sil_width=cfg.silhouette_width,
-                                            interior=cfg.outline_interior)
-            else:
-                fitted = process.fit_contain(tone, cfg.width, cfg.height, cfg.margin, cfg.scale)
-                mono = process.dither(fitted, cfg.dither, cfg.threshold)
+            fitted = process.fit_contain(tone, cfg.width, cfg.height, cfg.margin, cfg.scale)
+            mono = process.dither(fitted, cfg.dither, cfg.threshold)
             if debug_dir:
                 mono.save(_stage(debug_dir, "mono", name))
             mono.save(out_dir / f"{name}.mono.png")
