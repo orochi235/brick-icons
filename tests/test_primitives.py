@@ -55,3 +55,32 @@ def test_ellipse_point_param():
     p0 = e.point(0.0)
     p90 = e.point(math.pi / 2)
     assert np.allclose(p0, [2.0, 0.0]) and np.allclose(p90, [0.0, 1.0])
+
+
+def test_cylinder_depth_hit_and_miss():
+    R, t = np.eye(3), np.zeros(3)
+    cyl = P.CylinderOccluder(R, t, sector=360.0)
+    F = np.array([0.0, 0.0, 1.0])               # look along +z
+    O = np.array([[0.0, 0.5, -5.0],              # through axis mid-height -> front wall z=-1
+                  [5.0, 0.5, -5.0]])              # misses (x=5 outside r=1)
+    d = cyl.depth(O, F)
+    assert np.isclose(d[0], 4.0, atol=1e-6)       # lam to reach z=-1 from z=-5
+    assert np.isinf(d[1])
+
+
+def test_cylinder_depth_clamps_height():
+    R, t = np.eye(3), np.zeros(3)
+    cyl = P.CylinderOccluder(R, t, sector=360.0)
+    F = np.array([0.0, 0.0, 1.0])
+    O = np.array([[0.0, 5.0, -5.0]])              # above the top (y=5 > 1) -> miss
+    assert np.isinf(cyl.depth(O, F)[0])
+
+
+def test_disc_depth():
+    R, t = np.eye(3), np.zeros(3)                 # disc in XZ plane at y=0, radius 1
+    disc = P.DiscOccluder(R, t, sector=360.0, inner=0.0, outer=1.0)
+    F = np.array([0.0, 1.0, 0.0])                 # look along +y onto the disc
+    O = np.array([[0.3, -5.0, 0.2],                # inside radius -> lam=5
+                  [2.0, -5.0, 0.0]])                # outside radius -> miss
+    d = disc.depth(O, F)
+    assert np.isclose(d[0], 5.0) and np.isinf(d[1])

@@ -102,3 +102,93 @@ def project_circle(R, t, radius, to_AB, s, cx, cy, half):
     v = np.array([px[2] - px[0], py[2] - py[0]])
     depth_coeffs = (float(Z[0]), float(Z[1] - Z[0]), float(Z[2] - Z[0]))
     return Ellipse(center, u, v, depth_coeffs)
+
+
+def _local_basis(R, t):
+    """Local axes and radius/scale from a primitive transform."""
+    R = np.asarray(R, float)
+    U, A, V = R[:, 0], R[:, 1], R[:, 2]
+    r = (np.linalg.norm(U) + np.linalg.norm(V)) / 2.0
+    ah = np.linalg.norm(A)
+    return U, V, A, r, ah
+
+
+def _angle_in_sector(local_x, local_z, sector):
+    """Boolean mask: do local (x,z) coords fall within [0, sector] degrees?"""
+    if sector >= 360.0 - 1e-9:
+        return np.ones(np.shape(local_x), bool)
+    ang = np.degrees(np.arctan2(local_z, local_x)) % 360.0
+    return ang <= sector + 1e-6
+
+
+class CylinderOccluder:
+    """Finite cylinder: radius r, axis A from C to C+A, optional angular sector.
+
+    `depth(O, F)` returns the nearest ray hit parameter lambda (depth along F)
+    for each ray origin in O, inf on miss.
+    """
+
+    def __init__(self, R, t, sector):
+        self.C = np.asarray(t, float)
+        self.U, self.V, self.A, self.r, self.ah = _local_basis(R, t)
+        self.ahat = self.A / (self.ah or 1.0)
+        self.sector = sector
+        self.uhat = self.U / (self.r or 1.0)
+        self.vhat = self.V / (self.r or 1.0)
+
+    def depth(self, O, F):
+        O = np.atleast_2d(O).astype(float)
+        F = np.asarray(F, float)
+        d = F - (F @ self.ahat) * self.ahat          # ray dir minus axial part
+        oc = O - self.C
+        oc_perp = oc - np.outer(oc @ self.ahat, self.ahat)
+        a = float(d @ d)
+        out = np.full(O.shape[0], np.inf)
+        if a < 1e-12:                                 # ray parallel to axis
+            return out
+        b = 2.0 * (oc_perp @ d)
+        c = np.sum(oc_perp * oc_perp, axis=1) - self.r ** 2
+        disc = b * b - 4 * a * c
+        ok = disc >= 0
+        sq = np.sqrt(np.where(ok, disc, 0.0))
+        for lam in ((-b - sq) / (2 * a), (-b + sq) / (2 * a)):
+            P_ = O + lam[:, None] * F
+            rel = P_ - self.C
+            h = rel @ self.ahat
+            lx = rel @ self.uhat
+            lz = rel @ self.vhat
+            valid = (ok & (lam > -1e-9) & (h >= -1e-6) & (h <= self.ah + 1e-6)
+                     & _angle_in_sector(lx, lz, self.sector))
+            out = np.minimum(out, np.where(valid, lam, np.inf))
+        return out
+
+
+class DiscOccluder:
+    """Planar disc / annulus in the primitive's local XZ plane (normal = axis A)."""
+
+    def __init__(self, R, t, sector, inner, outer):
+        self.C = np.asarray(t, float)
+        self.U, self.V, self.A, self.r, _ = _local_basis(R, t)
+        self.n = self.A / (np.linalg.norm(self.A) or 1.0)
+        self.inner = inner * self.r
+        self.outer = outer * self.r
+        self.sector = sector
+        self.uhat = self.U / (self.r or 1.0)
+        self.vhat = self.V / (self.r or 1.0)
+
+    def depth(self, O, F):
+        O = np.atleast_2d(O).astype(float)
+        F = np.asarray(F, float)
+        denom = float(F @ self.n)
+        out = np.full(O.shape[0], np.inf)
+        if abs(denom) < 1e-12:                        # ray parallel to plane
+            return out
+        lam = ((self.C - O) @ self.n) / denom
+        Phit = O + lam[:, None] * F
+        rel = Phit - self.C
+        lx = rel @ self.uhat
+        lz = rel @ self.vhat
+        rad = np.hypot(lx, lz)
+        valid = ((lam > -1e-9) & (rad >= self.inner - 1e-6) & (rad <= self.outer + 1e-6)
+                 & _angle_in_sector(lx, lz, self.sector))
+        return np.where(valid, lam, out)
