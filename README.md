@@ -33,7 +33,8 @@ package manager, then in `labels.toml` set `ldview = "/path/to/ldview"` and
     .venv/bin/python -m brick_icons.cli 3001 --label-mm 24 12 --mode mono
 
 Format: `png` | `svg` | `both`.  SVG needs `--shading outline` or `cel`.
-Shading: `normal` | `cel` (`--cel-levels N`) | `outline` (`--no-outline-interior`).
+Shading: `normal` | `cel` (`--cel-levels N`) | `outline` (vector hidden-line
+removal straight from LDraw geometry — smooth curves, no LDView/Rosetta needed).
 Mode (PNG): `gray` | `mono` | `color` | `both`.
 Dither: `threshold` | `floyd` | `ordered` | `atkinson`.
 Angle: `iso` (default) | `front|back|left|right|top|bottom` | `LAT,LONG`.
@@ -55,5 +56,10 @@ ships as `parts.txt`:
   size (`--width`/`--height` or `--label-mm`).
 - `--mode color` emits the raw flattened color render and ignores `--shading`
   (color is a preview only; the printer is 1-bit).
+- `--shading outline` runs a pure-Python hidden-line-removal renderer (parse →
+  project → z-buffer → visible edges + LDraw conditional-line silhouettes). It
+  reads `vendor/ldraw/*.dat` directly and does **not** invoke LDView, so it is
+  fast and deterministic. `cel`/`normal`/`color` still render via LDView. Stroke
+  weight via `--line-width` / `--silhouette-width`.
 
 See `docs/superpowers/specs/` for the design.
