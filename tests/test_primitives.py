@@ -109,3 +109,41 @@ def test_drawn_cylinder_has_two_silhouette_lines():
                          fwd=np.array([0, 0, 1.0]))
     sil_lines = [o for o in ops if o[0] == "line" and o[-1] == "sil"]
     assert len(sil_lines) == 2
+
+
+def test_visibility_splits_op_by_occluder():
+    # horizontal edge line across x in [0,10] at depth 0; an occluder slab
+    # covers x in [4,6] nearer (depth -1) -> the middle is hidden.
+    class Slab:
+        def depth(self, O, F):
+            x = O[:, 0]
+            return np.where((x >= 4) & (x <= 6), -1.0, np.inf)
+
+    op = ("line", 0.0, 0.0, 10.0, 0.0, "edge")
+    depth_fn = lambda ts: np.zeros_like(np.asarray(ts, float))   # line lies at depth 0
+
+    def ray_origin(xs, ys):
+        return np.stack([xs, ys, np.zeros_like(xs)], 1)
+
+    vis = P.visible_subops([(op, depth_fn)], [Slab()], ray_origin,
+                           fwd=np.array([0, 0, 1.0]), eps=1e-6, n=101)
+    lines = [o for o in vis if o[0] == "line"]
+    assert len(lines) == 2                        # left of 4 and right of 6
+    assert lines[0][1] < 4.0 and lines[1][3] > 6.0
+
+
+def test_visibility_keeps_unoccluded_arc_whole():
+    class Empty:
+        def depth(self, O, F):
+            return np.full(O.shape[0], np.inf)
+
+    op = ("arc", 50.0, 50.0, 40.0, 40.0, 0.0, 0.0, 360.0, "edge")
+    depth_fn = lambda degs: np.zeros_like(np.asarray(degs, float))
+
+    def ray_origin(xs, ys):
+        return np.stack([xs, ys, np.zeros_like(xs)], 1)
+
+    vis = P.visible_subops([(op, depth_fn)], [Empty()], ray_origin,
+                           fwd=np.array([0, 0, 1.0]), eps=1e-6, n=60)
+    arcs = [o for o in vis if o[0] == "arc"]
+    assert len(arcs) == 1 and np.isclose(arcs[0][6], 0.0) and arcs[0][7] >= 350.0

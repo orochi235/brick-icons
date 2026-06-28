@@ -256,3 +256,67 @@ def drawn_with_depth(rec, to_AB, s, cx, cy, half, fwd):
 def drawn_curves(rec, to_AB, s, cx, cy, half, fwd):
     """Pre-occlusion drawn ops (tuples only) for one analytic record."""
     return [op for op, _ in drawn_with_depth(rec, to_AB, s, cx, cy, half, fwd)]
+
+
+def _ellipse_from_arc(cx, cy, rx, ry, phi_deg):
+    a = math.radians(phi_deg)
+    maj = np.array([math.cos(a), math.sin(a)]) * rx
+    minr = np.array([-math.sin(a), math.cos(a)]) * ry
+    return Ellipse(np.array([cx, cy]), maj, minr)
+
+
+def _samples_for(op, n):
+    """Return (xs, ys, params) sampling an op; params are t in [0,1] for lines
+    and degrees for arcs (aligned with the op's depth_fn)."""
+    n = max(2, n)
+    if op[0] == "line":
+        _, x1, y1, x2, y2, _ = op
+        ts = np.linspace(0.0, 1.0, n)
+        return x1 + (x2 - x1) * ts, y1 + (y2 - y1) * ts, ts
+    _, cx, cy, rx, ry, phi, t0, t1, _ = op
+    degs = np.linspace(t0, t1, n)
+    pts = _ellipse_from_arc(cx, cy, rx, ry, phi).points(np.radians(degs))
+    return pts[:, 0], pts[:, 1], degs
+
+
+def _runs(mask):
+    runs, i, n = [], 0, len(mask)
+    while i < n:
+        if mask[i]:
+            j = i
+            while j + 1 < n and mask[j + 1]:
+                j += 1
+            runs.append((i, j))
+            i = j + 1
+        else:
+            i += 1
+    return runs
+
+
+def visible_subops(op_specs, occluders, ray_origin, fwd, eps, n=200):
+    """Split each (op, depth_fn) into visible sub-ops against the occluders.
+
+    `ray_origin(xs, ys) -> (N,3)` inverts the projection to world ray origins;
+    `fwd` is the view direction. A sample is visible iff its own depth
+    <= nearest occluder depth + eps.
+    """
+    result = []
+    for op, depth_fn in op_specs:
+        xs, ys, params = _samples_for(op, n)
+        O = ray_origin(xs, ys)
+        field = np.full(xs.shape, np.inf)
+        for occ in occluders:
+            field = np.minimum(field, occ.depth(O, fwd))
+        sd = np.asarray(depth_fn(params), float)
+        vis = sd <= field + eps
+        for (i, j) in _runs(vis):
+            if i == j:
+                continue                        # single isolated sample: skip
+            if op[0] == "line":
+                result.append(("line", float(xs[i]), float(ys[i]),
+                               float(xs[j]), float(ys[j]), op[-1]))
+            else:
+                _, cx, cy, rx, ry, phi, _, _, kind = op
+                result.append(("arc", cx, cy, rx, ry, phi,
+                               float(params[i]), float(params[j]), kind))
+    return result
