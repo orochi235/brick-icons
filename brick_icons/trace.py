@@ -57,6 +57,22 @@ def outline_svg(rgba: Image.Image, out_path: Path, interior: bool = True,
     return Path(out_path)
 
 
+def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=3) -> Path:
+    parts = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" '
+             f'preserveAspectRatio="xMidYMid meet">',
+             '<rect width="100%" height="100%" fill="white"/>',
+             '<g stroke="black" fill="none" stroke-linecap="round">']
+    for x1, y1, x2, y2, kind in segs:
+        sw = sil_px if kind == "sil" else line_px
+        parts.append(f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" '
+                     f'stroke-width="{sw}"/>')
+    parts += ["</g>", "</svg>"]
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text("\n".join(parts))
+    return out_path
+
+
 def cel_svg(rgba: Image.Image, out_path: Path, levels: int = 4) -> Path:
     rgba = rgba.convert("RGBA")
     g = process.posterize(process.to_grayscale(rgba), levels)

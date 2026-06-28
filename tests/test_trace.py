@@ -40,6 +40,19 @@ def test_cel_svg_layers_match_bands(tmp_path):
     assert "<path" in txt
 
 
+from brick_icons import trace as _trace
+
+
+def test_segments_to_svg_writes_lines(tmp_path):
+    segs = [(10.0, 10.0, 90.0, 10.0, "edge"), (10.0, 10.0, 10.0, 90.0, "sil")]
+    out = tmp_path / "s.svg"
+    _trace.segments_to_svg(segs, 100, 100, out, line_px=2, sil_px=4)
+    txt = out.read_text()
+    assert 'viewBox="0 0 100 100"' in txt
+    assert txt.count("<line") == 2
+    assert 'stroke-width="4"' in txt and 'stroke-width="2"' in txt
+
+
 @pytest.mark.skipif(shutil.which("magick") is None, reason="ImageMagick absent")
 def test_outline_svg_rasterizes_nonblank(tmp_path):
     svg = tmp_path / "d.svg"; png = tmp_path / "d.png"
