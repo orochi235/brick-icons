@@ -42,3 +42,21 @@ def test_view_basis_orthonormal():
     for v in (r, u, f):
         assert abs(np.linalg.norm(v) - 1) < 1e-9
     assert abs(r @ u) < 1e-9 and abs(r @ f) < 1e-9 and abs(u @ f) < 1e-9
+
+
+def test_conditional_same_side_predicate():
+    # control points on the same side -> drawn; opposite -> not
+    p1 = np.array([0.0, 0.0]); p2 = np.array([1.0, 0.0])
+    assert hlr.same_side(p1, p2, np.array([0.5, 1.0]), np.array([0.5, 2.0])) is True
+    assert hlr.same_side(p1, p2, np.array([0.5, 1.0]), np.array([0.5, -2.0])) is False
+
+
+def test_zbuffer_hides_segment_behind_face():
+    # a near triangle covering the center; a segment far behind it is culled
+    tri_s = np.array([[[10, 10], [90, 10], [50, 90]]], float)
+    tri_z = np.array([[0.0, 0.0, 0.0]], float)        # near (small z)
+    zbuf = hlr.rasterize_zbuffer(tri_s, tri_z, 100, 100)
+    behind = hlr.clip_visible((30, 40, 70, 40, "edge"), zbuf, 100, 100, depth=5.0, bias=0.01)
+    assert behind == []                                # fully hidden
+    front = hlr.clip_visible((30, 40, 70, 40, "edge"), zbuf, 100, 100, depth=-5.0, bias=0.01)
+    assert len(front) == 1                             # in front -> visible
