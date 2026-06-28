@@ -167,13 +167,33 @@ EDGE_DILATE = 0.0024   # z-buffer dilation radius as a FRACTION of render_px:
                        # resolution-independent across render_px.
 
 
-def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900):
-    roots = default_roots(ldraw_dir)
-    path = resolve(part + ".dat", roots) if not str(part).endswith(".dat") else Path(part)
-    out = {"2": [], "5": [], "tri": [], "analytic": []}
-    flatten(path, np.eye(3), np.zeros(3), out, roots)
-    right, up, fwd = view_basis(lat, long)
+def _fit_params(allpts, right, up, fwd, render_px):
+    """Pixel-fit (s, cx, cy) and depth range from a world point cloud."""
+    a, b, z = project(allpts, right, up, fwd)
+    minx, maxx, miny, maxy = a.min(), a.max(), b.min(), b.max()
+    span = max(maxx - minx, maxy - miny) or 1.0
+    s = (render_px - 20) / span
+    cx, cy = (minx + maxx) / 2, (miny + maxy) / 2
+    zrange = (z.max() - z.min()) or 1.0
+    return s, cx, cy, zrange
 
+
+def _ops_bbox(segs):
+    xs, ys = [], []
+    for op in segs:
+        if op[0] == "line":
+            xs += [op[1], op[3]]; ys += [op[2], op[4]]
+        else:
+            _, cx, cy, rx, ry, phi, t0, t1, _ = op
+            pts = primitives._ellipse_from_arc(cx, cy, rx, ry, phi).points(
+                np.radians(np.linspace(t0, t1, 12)))
+            xs += list(pts[:, 0]); ys += list(pts[:, 1])
+    xs = xs or [0, 1]; ys = ys or [0, 1]
+    return (min(xs), min(ys), max(xs), max(ys))
+
+
+def _visible_segments_faceted(out, right, up, fwd, render_px):
+    """Original z-buffer pipeline; used when no analytic primitives are present."""
     tri = np.array(out["tri"]) if out["tri"] else np.zeros((0, 3, 3))
     fitpts = tri.reshape(-1, 3) if len(tri) else np.array(out["2"]).reshape(-1, 3)
     if len(fitpts) == 0:
@@ -196,7 +216,7 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900):
         zrange = tri_z.max() - tri_z.min() or 1.0
     else:
         zbuf = np.full((render_px, render_px), np.inf); zrange = 1.0
-    zedge = dilate_zbuffer(zbuf, max(2, round(render_px * EDGE_DILATE)))  # lenient for edges
+    zedge = dilate_zbuffer(zbuf, max(2, round(render_px * EDGE_DILATE)))
 
     segs = []
     for e in out["2"]:
@@ -215,6 +235,97 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900):
     xs = [c for sg in segs for c in (sg[0], sg[2])] or [0, 1]
     ys = [c for sg in segs for c in (sg[1], sg[3])] or [0, 1]
     return segs, (min(xs), min(ys), max(xs), max(ys))
+
+
+def _analytic_circle_pts(rec, n=16):
+    """World sample points on a record's primary circle(s), for the pixel fit."""
+    R = np.asarray(rec["R"], float); C = np.asarray(rec["t"], float)
+    outer = (rec["inner"] + 1) if rec["kind"] == "ring" else 1.0
+    ang = np.linspace(0.0, math.radians(rec["sector"]), n)
+    circ = C + outer * (np.cos(ang)[:, None] * R[:, 0] + np.sin(ang)[:, None] * R[:, 2])
+    if rec["kind"] == "cyli":
+        return np.vstack([circ, circ + R[:, 1]])      # base + top rings
+    return circ
+
+
+def _visible_segments_analytic(out, right, up, fwd, render_px):
+    """Exact pipeline: analytic occlusion oracle + true arc/line drawn ops."""
+    analytic = out["analytic"]
+    half = render_px / 2.0
+
+    cloud = []
+    if out["tri"]:
+        cloud.append(np.array(out["tri"]).reshape(-1, 3))
+    if out["2"]:
+        cloud.append(np.array(out["2"]).reshape(-1, 3))
+    for rec in analytic:
+        cloud.append(_analytic_circle_pts(rec))
+    allpts = np.vstack(cloud)
+    s, cx, cy, zrange = _fit_params(allpts, right, up, fwd, render_px)
+    eps = 1e-3 * zrange
+
+    def to_AB(P):
+        return project(P, right, up, fwd)
+
+    def ray_origin(xs, ys):
+        a = (xs - half) / s + cx
+        b = (ys - half) / s + cy
+        return a[:, None] * right - b[:, None] * up
+
+    # occluders: analytic surfaces + flat triangles
+    occluders = []
+    rec_occ = {}
+    for rec in analytic:
+        k = rec["kind"]
+        if k == "cyli":
+            occ = primitives.CylinderOccluder(rec["R"], rec["t"], rec["sector"])
+        elif k == "disc":
+            occ = primitives.DiscOccluder(rec["R"], rec["t"], rec["sector"], 0.0, 1.0)
+        elif k == "ring":
+            occ = primitives.DiscOccluder(rec["R"], rec["t"], rec["sector"],
+                                          rec["inner"], rec["inner"] + 1)
+        else:
+            occ = None                                  # edge: no surface
+        if occ is not None:
+            occluders.append(occ); rec_occ[id(rec)] = occ
+    if out["tri"]:
+        occluders.append(primitives.TriangleOccluder(np.array(out["tri"])))
+
+    # drawn ops: analytic curves (+ a cylinder excludes itself from its silhouette)
+    specs = []
+    for rec in analytic:
+        own = rec_occ.get(id(rec))
+        for op, dfn in primitives.drawn_with_depth(rec, to_AB, s, cx, cy, half, fwd):
+            specs.append((op, dfn, own if op[-1] == "sil" else None))
+    # non-substituted straight edges (box edges, chords) and conditionals
+    for e in out["2"]:
+        a, b, z = to_AB(e)
+        px = (a - cx) * s + half; py = (b - cy) * s + half
+        specs.append((("line", float(px[0]), float(py[0]), float(px[1]), float(py[1]), "edge"),
+                      primitives._line_depth_fn(float(z[0]), float(z[1]))))
+    for q in out["5"]:
+        a, b, z = to_AB(q)
+        px = (a - cx) * s + half; py = (b - cy) * s + half
+        p1 = np.array([px[0], py[0]]); p2 = np.array([px[1], py[1]])
+        if math.hypot(*(p2 - p1)) < 0.5:
+            continue
+        if same_side(p1, p2, np.array([px[2], py[2]]), np.array([px[3], py[3]])):
+            specs.append((("line", float(px[0]), float(py[0]), float(px[1]), float(py[1]), "sil"),
+                          primitives._line_depth_fn(float(z[0]), float(z[1]))))
+
+    segs = primitives.visible_subops(specs, occluders, ray_origin, fwd, eps, n=64)
+    return segs, _ops_bbox(segs)
+
+
+def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900):
+    roots = default_roots(ldraw_dir)
+    path = resolve(part + ".dat", roots) if not str(part).endswith(".dat") else Path(part)
+    out = {"2": [], "5": [], "tri": [], "analytic": []}
+    flatten(path, np.eye(3), np.zeros(3), out, roots)
+    right, up, fwd = view_basis(lat, long)
+    if out["analytic"]:
+        return _visible_segments_analytic(out, right, up, fwd, render_px)
+    return _visible_segments_faceted(out, right, up, fwd, render_px)
 
 
 def fit_segments(segs, bbox, W, H, margin=6, scale=1.0):

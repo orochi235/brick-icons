@@ -157,7 +157,7 @@ class CylinderOccluder:
             h = rel @ self.ahat
             lx = rel @ self.uhat
             lz = rel @ self.vhat
-            valid = (ok & (lam > -1e-9) & (h >= -1e-6) & (h <= self.ah + 1e-6)
+            valid = (ok & (h >= -1e-6) & (h <= self.ah + 1e-6)
                      & _angle_in_sector(lx, lz, self.sector))
             out = np.minimum(out, np.where(valid, lam, np.inf))
         return out
@@ -189,9 +189,46 @@ class DiscOccluder:
         lx = rel @ self.uhat
         lz = rel @ self.vhat
         rad = np.hypot(lx, lz)
-        valid = ((lam > -1e-9) & (rad >= self.inner - 1e-6) & (rad <= self.outer + 1e-6)
+        valid = ((rad >= self.inner - 1e-6) & (rad <= self.outer + 1e-6)
                  & _angle_in_sector(lx, lz, self.sector))
         return np.where(valid, lam, out)
+
+
+class TriangleOccluder:
+    """Flat triangles (world coords, shape (M,3,3)) as a gridless depth source.
+
+    `depth(O, F)` returns, per ray, the nearest triangle-plane hit parameter
+    lambda inside the triangle, inf on miss.
+    """
+
+    def __init__(self, tris):
+        self.tris = np.asarray(tris, float) if len(tris) else np.zeros((0, 3, 3))
+
+    def depth(self, O, F):
+        O = np.atleast_2d(O).astype(float)
+        F = np.asarray(F, float)
+        out = np.full(O.shape[0], np.inf)
+        for tri in self.tris:
+            v0, v1, v2 = tri
+            e0, e1 = v1 - v0, v2 - v0
+            n = np.cross(e0, e1)
+            denom = float(F @ n)
+            if abs(denom) < 1e-12:
+                continue
+            lam = ((v0 - O) @ n) / denom
+            Ph = O + lam[:, None] * F
+            e2 = Ph - v0
+            d00 = float(e0 @ e0); d01 = float(e0 @ e1); d11 = float(e1 @ e1)
+            d20 = e2 @ e0; d21 = e2 @ e1
+            denomb = d00 * d11 - d01 * d01
+            if abs(denomb) < 1e-18:
+                continue
+            v = (d11 * d20 - d01 * d21) / denomb
+            w = (d00 * d21 - d01 * d20) / denomb
+            u = 1.0 - v - w
+            inside = (u >= -1e-6) & (v >= -1e-6) & (w >= -1e-6)
+            out = np.minimum(out, np.where(inside, lam, np.inf))
+        return out
 
 
 def _arc_op(ell, t0_deg, t1_deg, kind):
@@ -267,13 +304,18 @@ def _ellipse_from_arc(cx, cy, rx, ry, phi_deg):
 
 def _samples_for(op, n):
     """Return (xs, ys, params) sampling an op; params are t in [0,1] for lines
-    and degrees for arcs (aligned with the op's depth_fn)."""
-    n = max(2, n)
+    and degrees for arcs (aligned with the op's depth_fn). `n` is a floor; the
+    count is raised toward one sample per ~2 px so occlusion boundaries on long
+    ops are not missed, capped to bound cost."""
     if op[0] == "line":
         _, x1, y1, x2, y2, _ = op
+        length = math.hypot(x2 - x1, y2 - y1)
+        n = int(min(4000, max(n, 2, length / 2)))
         ts = np.linspace(0.0, 1.0, n)
         return x1 + (x2 - x1) * ts, y1 + (y2 - y1) * ts, ts
     _, cx, cy, rx, ry, phi, t0, t1, _ = op
+    length = (rx + ry) / 2.0 * math.radians(abs(t1 - t0))
+    n = int(min(4000, max(n, 2, length / 2)))
     degs = np.linspace(t0, t1, n)
     pts = _ellipse_from_arc(cx, cy, rx, ry, phi).points(np.radians(degs))
     return pts[:, 0], pts[:, 1], degs
@@ -301,11 +343,15 @@ def visible_subops(op_specs, occluders, ray_origin, fwd, eps, n=200):
     <= nearest occluder depth + eps.
     """
     result = []
-    for op, depth_fn in op_specs:
+    for spec in op_specs:
+        op, depth_fn = spec[0], spec[1]
+        exclude = spec[2] if len(spec) > 2 else None
         xs, ys, params = _samples_for(op, n)
         O = ray_origin(xs, ys)
         field = np.full(xs.shape, np.inf)
         for occ in occluders:
+            if occ is exclude:
+                continue
             field = np.minimum(field, occ.depth(O, fwd))
         sd = np.asarray(depth_fn(params), float)
         vis = sd <= field + eps

@@ -97,7 +97,7 @@ def test_visible_segments_empty_geometry(tmp_path):
 def test_visible_segments_on_real_part():
     segs, bbox = hlr.visible_segments("3701", LIB, lat=30, long=45, render_px=600)
     assert len(segs) > 50
-    assert all(s[4] in ("edge", "sil") for s in segs)
+    assert all(s[-1] in ("edge", "sil") for s in segs)
     assert bbox[2] > bbox[0] and bbox[3] > bbox[1]
 
 
@@ -151,3 +151,33 @@ def test_flatten_unknown_primitive_recurses(tmp_path):
     hlr.flatten(part, np.eye(3), np.zeros(3), out, roots)
     assert len(out["analytic"]) == 0
     assert len(out["tri"]) == 1
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_visible_segments_emits_arcs_for_round_part():
+    segs, bbox = hlr.visible_segments("3941", LIB, lat=30, long=45, render_px=900)
+    assert any(o[0] == "arc" for o in segs)             # analytic curves present
+    assert any(o[0] == "line" and o[-1] == "sil" for o in segs)  # cylinder silhouette
+    assert bbox[2] > bbox[0] and bbox[3] > bbox[1]
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_3941_base_gap_resolution_stable():
+    # The base silhouette (vertical side line) must reach down to the bottom-rim
+    # arc at both resolutions: the lowest silhouette endpoint and the lowest arc
+    # point should be within a few percent of the bbox height (no disconnect gap).
+    for rpx in (900, 2048):
+        segs, bbox = hlr.visible_segments("3941", LIB, lat=30, long=45, render_px=rpx)
+        h = bbox[3] - bbox[1]
+        sil_ys = [max(o[2], o[4]) for o in segs if o[0] == "line" and o[-1] == "sil"]
+        arc_ys = []
+        for o in segs:
+            if o[0] == "arc":
+                import numpy as _np
+                from brick_icons import primitives as _P
+                e = _P._ellipse_from_arc(o[1], o[2], o[3], o[4], o[5])
+                pts = e.points(_np.radians(_np.linspace(o[6], o[7], 16)))
+                arc_ys += list(pts[:, 1])
+        assert sil_ys and arc_ys
+        gap = abs(max(sil_ys) - max(arc_ys))
+        assert gap < 0.05 * h, f"base gap {gap:.1f} too large at {rpx} (h={h:.1f})"
