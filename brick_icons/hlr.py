@@ -128,3 +128,66 @@ def clip_visible(seg, zbuf, W, H, depth, bias):
         else:
             i += 1
     return runs
+
+
+EDGE_BIAS = 0.004      # fraction of depth range
+SIL_BIAS = 0.03        # larger: silhouette lines sit on their own surface
+
+
+def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900):
+    roots = default_roots(ldraw_dir)
+    path = resolve(part + ".dat", roots) if not str(part).endswith(".dat") else Path(part)
+    out = {"2": [], "5": [], "tri": []}
+    flatten(path, np.eye(3), np.zeros(3), out, roots)
+    right, up, fwd = view_basis(lat, long)
+
+    tri = np.array(out["tri"]) if out["tri"] else np.zeros((0, 3, 3))
+    fitpts = tri.reshape(-1, 3) if len(tri) else np.array(out["2"]).reshape(-1, 3)
+    sx, sy, _ = project(fitpts, right, up, fwd)
+    minx, maxx, miny, maxy = sx.min(), sx.max(), sy.min(), sy.max()
+    span = max(maxx - minx, maxy - miny) or 1.0
+    s = (render_px - 20) / span
+    cx, cy = (minx + maxx) / 2, (miny + maxy) / 2
+
+    def to_px(P):
+        a, b, z = project(P, right, up, fwd)
+        return (a - cx) * s + render_px / 2, (b - cy) * s + render_px / 2, z
+
+    if len(tri):
+        tpx, tpy, tz = to_px(tri.reshape(-1, 3))
+        tri_s = np.stack([tpx, tpy], 1).reshape(-1, 3, 2)
+        tri_z = tz.reshape(-1, 3)
+        zbuf = rasterize_zbuffer(tri_s, tri_z, render_px, render_px)
+        zrange = tri_z.max() - tri_z.min() or 1.0
+    else:
+        zbuf = np.full((render_px, render_px), np.inf); zrange = 1.0
+
+    segs = []
+    for e in out["2"]:
+        ax, ay, az = to_px(e[0:1]); bx, by, bz = to_px(e[1:2])
+        segs += clip_visible((ax[0], ay[0], bx[0], by[0], "edge"), zbuf, render_px,
+                             render_px, (az[0], bz[0]), EDGE_BIAS * zrange)
+    for q in out["5"]:
+        px, py, pz = to_px(q)
+        p1 = np.array([px[0], py[0]]); p2 = np.array([px[1], py[1]])
+        if math.hypot(*(p2 - p1)) < 0.5:
+            continue
+        if same_side(p1, p2, np.array([px[2], py[2]]), np.array([px[3], py[3]])):
+            segs += clip_visible((px[0], py[0], px[1], py[1], "sil"), zbuf, render_px,
+                                 render_px, (pz[0], pz[1]), SIL_BIAS * zrange)
+
+    xs = [c for sg in segs for c in (sg[0], sg[2])] or [0, 1]
+    ys = [c for sg in segs for c in (sg[1], sg[3])] or [0, 1]
+    return segs, (min(xs), min(ys), max(xs), max(ys))
+
+
+def fit_segments(segs, bbox, W, H, margin=6, scale=1.0):
+    scale = max(0.01, min(1.0, scale))
+    bx0, by0, bx1, by1 = bbox
+    bw, bh = (bx1 - bx0) or 1.0, (by1 - by0) or 1.0
+    iw = max(1.0, (W - 2 * margin) * scale); ih = max(1.0, (H - 2 * margin) * scale)
+    f = min(iw / bw, ih / bh)
+    ox = (W - bw * f) / 2 - bx0 * f
+    oy = (H - bh * f) / 2 - by0 * f
+    return [(x1 * f + ox, y1 * f + oy, x2 * f + ox, y2 * f + oy, k)
+            for (x1, y1, x2, y2, k) in segs]

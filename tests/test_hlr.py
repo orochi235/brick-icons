@@ -1,7 +1,12 @@
+import math
+import shutil
 import numpy as np
 import pytest
 from pathlib import Path
 from brick_icons import hlr
+
+LIB = Path("vendor/ldraw")
+HAVE_LIB = LIB.exists()
 
 
 def test_flatten_collects_typed_geometry(tmp_path):
@@ -60,3 +65,19 @@ def test_zbuffer_hides_segment_behind_face():
     assert behind == []                                # fully hidden
     front = hlr.clip_visible((30, 40, 70, 40, "edge"), zbuf, 100, 100, depth=-5.0, bias=0.01)
     assert len(front) == 1                             # in front -> visible
+
+
+def test_fit_segments_centers_in_box():
+    segs = [(0.0, 0.0, 10.0, 0.0, "edge"), (0.0, 0.0, 0.0, 10.0, "edge")]
+    fit = hlr.fit_segments(segs, (0, 0, 10, 10), 100, 100, margin=10, scale=1.0)
+    xs = [c for s in fit for c in (s[0], s[2])]
+    ys = [c for s in fit for c in (s[1], s[3])]
+    assert min(xs) >= 9 and max(xs) <= 91 and min(ys) >= 9 and max(ys) <= 91
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_visible_segments_on_real_part():
+    segs, bbox = hlr.visible_segments("3701", LIB, lat=30, long=45, render_px=600)
+    assert len(segs) > 50
+    assert all(s[4] in ("edge", "sil") for s in segs)
+    assert bbox[2] > bbox[0] and bbox[3] > bbox[1]
