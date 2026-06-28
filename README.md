@@ -56,7 +56,12 @@ ships as `parts.txt`:
   size (`--width`/`--height` or `--label-mm`).
 - `--mode color` emits the raw flattened color render and ignores `--shading`
   (color is a preview only; the printer is 1-bit).
-- `--shading outline` runs a pure-Python hidden-line-removal renderer (parse →
+- `--shading outline` runs a pure-Python hidden-line-removal renderer. Curved
+  LDraw primitives (cylinders, discs, rings, circular edges) are substituted with
+  their exact analytic shapes: their outlines are emitted as true elliptical arcs
+  (clean, scalable SVG) and occluded against a continuous analytic depth field, so
+  curves are smooth and resolution-independent. Parts (or features) with no
+  recognized curved primitive fall back to the faceted z-buffer pipeline (parse →
   project → z-buffer → visible edges + LDraw conditional-line silhouettes). It
   reads `vendor/ldraw/*.dat` directly and does **not** invoke LDView, so it is
   fast and deterministic. `cel`/`normal`/`color` still render via LDView. Stroke

@@ -212,6 +212,30 @@ Pure-geometry units run without the vendor library:
   walking); cel/normal/color shadings (still LDView); curved primitives outside
   the curated set (fall back to faceted recursion).
 
+## Implementation notes (as built, 2026-06-28)
+
+Deviations from the design above, discovered during implementation:
+
+- **Arc ops are parametric.** Drawn arcs are carried as
+  `("arc", cx, cy, ux, uy, vx, vy, t0_deg, t1_deg, kind)` — center plus the two
+  projected basis vectors `u, v`, with the point at param `t` being
+  `center + cos t*u + sin t*v`. The SVG `rx, ry, phi` form is derived (via SVD of
+  `[u v]`) only at write time. This is essential: `svg_axes` re-parameterizes the
+  ellipse, so storing `(rx, ry, phi)` end-to-end made the visibility sampler's
+  param diverge from the `depth_fn`'s param (sampled pixel and its depth came from
+  different 3-D points), which produced badly broken occlusion. Keeping the
+  parametric form makes sampling and depth share one parameterization.
+- **The faceted z-buffer pipeline is retained as the fallback**, not retired. When
+  a part has no analytic primitives (non-curved parts, and the `ndis`/`cyls`/`chrd`
+  primitives that intentionally fall back), `visible_segments` uses the original
+  z-buffer path. `EDGE_BIAS`/`SIL_BIAS`/`dilate_zbuffer` therefore remain, used
+  *only* on that fallback path; the analytic path does not use them.
+- **Occlusion tolerance.** The analytic path uses a small `eps = 1e-3 * depth
+  range` so a curve lying on its own surface isn't self-occluded; a cylinder is
+  additionally excluded from the occluder set when testing its *own* silhouette
+  lines (so a near-tangent silhouette can't be culled by its own front wall).
+- **cone dropped** — no cone primitives appear in the curated set.
+
 ## Reference
 
 LGEO (LDraw→POV primitive substitution) for the name→shape mapping precedent.
