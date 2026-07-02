@@ -64,10 +64,21 @@ def _arc_to_svg(op):
         a = math.radians(t_deg)
         p = np.array([cx, cy]) + math.cos(a) * u + math.sin(a) * v
         return p[0], p[1]
-    x0, y0 = pt(t0); x1e, y1e = pt(t1)
-    large = 1 if abs(t1 - t0) > 180 else 0
     # increasing param sweeps u->v; sign of cross(u,v) gives screen orientation
     sweep = 1 if (ux * vy - uy * vx) * (1 if t1 >= t0 else -1) > 0 else 0
+
+    # A single SVG elliptical-arc segment whose endpoints coincide renders as
+    # nothing, so a full ellipse (e.g. a fully-visible stud top rim, span ~360)
+    # must be split into two sub-arcs, each < 180 (large flag 0).
+    if abs(t1 - t0) >= 359.9:
+        tm = (t0 + t1) / 2.0
+        x0, y0 = pt(t0); xm, ym = pt(tm); x1e, y1e = pt(t1)
+        return (f'M {x0:.2f} {y0:.2f} A {rx:.2f} {ry:.2f} {phi:.2f} '
+                f'0 {sweep} {xm:.2f} {ym:.2f} '
+                f'A {rx:.2f} {ry:.2f} {phi:.2f} 0 {sweep} {x1e:.2f} {y1e:.2f}')
+
+    x0, y0 = pt(t0); x1e, y1e = pt(t1)
+    large = 1 if abs(t1 - t0) > 180 else 0
     return (f'M {x0:.2f} {y0:.2f} A {rx:.2f} {ry:.2f} {phi:.2f} '
             f'{large} {sweep} {x1e:.2f} {y1e:.2f}')
 
