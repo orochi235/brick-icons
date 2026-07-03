@@ -28,3 +28,22 @@ def test_faces_from_tris_culls_back_and_projects():
         assert abs(np.linalg.norm(f["normal"]) - 1.0) < 1e-6
         assert np.isfinite(f["depth"])
         assert f["kind"] == "tri"
+
+
+def test_flat3_tone_by_orientation():
+    from brick_icons import shade
+    style = shade.Flat3Style(part_color=(160, 160, 160))
+    top = style.tone(np.array([0.0, 1.0, -0.1]))
+    left = style.tone(np.array([-1.0, 0.0, -0.1]))
+    right = style.tone(np.array([1.0, 0.0, -0.1]))
+    assert top != left != right and top != right
+    def lum(h): return int(h[1:3], 16)
+    assert lum(top) > lum(left) > lum(right)
+
+
+def test_parse_hex_color():
+    from brick_icons import shade
+    assert shade.parse_hex_color("0xFF8040") == (255, 128, 64)
+    assert shade.parse_hex_color("#00ff00") == (0, 255, 0)
+    assert shade.parse_hex_color(None) == (157, 157, 157)
+    assert shade.parse_hex_color("nonsense") == (157, 157, 157)

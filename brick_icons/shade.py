@@ -60,6 +60,50 @@ def faces_from_analytic(analytic, right, up, fwd, s, cx, cy, half, bands=6):
     return faces
 
 
+def _hex(rgb):
+    r, g, b = (max(0, min(255, round(c))) for c in rgb)
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
+class ShadingStyle:
+    def tone(self, nv) -> str:
+        raise NotImplementedError
+
+
+class Flat3Style(ShadingStyle):
+    """Three tones by dominant face orientation: top / left / right."""
+    def __init__(self, part_color=(157, 157, 157)):
+        self.top = _hex([c * 1.30 for c in part_color])
+        self.left = _hex([c * 0.85 for c in part_color])
+        self.right = _hex([c * 0.60 for c in part_color])
+
+    def tone(self, nv):
+        if nv[1] > 0.5:
+            return self.top
+        return self.left if nv[0] < 0 else self.right
+
+
+STYLES = {"flat3": Flat3Style}
+
+
+def make_style(name, part_color=(157, 157, 157)):
+    return STYLES[name](part_color=part_color)
+
+
+def parse_hex_color(spec, default=(157, 157, 157)):
+    """'0xRRGGBB' or '#RRGGBB' or 'RRGGBB' -> (r, g, b); default on failure."""
+    if not spec:
+        return default
+    s = str(spec).lstrip("#").lower()
+    if s.startswith("0x"):
+        s = s[2:]
+    try:
+        v = int(s, 16)
+        return ((v >> 16) & 255, (v >> 8) & 255, v & 255)
+    except ValueError:
+        return default
+
+
 def faces_from_tris(tri, right, up, fwd, s, cx, cy, half):
     """Front-facing triangle faces as px-space polygons with view-space normals."""
     faces = []
