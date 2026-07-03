@@ -131,8 +131,14 @@ def fill_ops(faces, style):
     """Painter-sorted (far->near) fill ops. Flat faces: {'d','fill','depth'}.
     Gradient faces (cylinder walls): {'d','gradient','depth'} where gradient is
     {'x1','y1','x2','y2','stops':[(offset,color),...]}."""
+    # Flat (faceted) faces first, then analytic curved faces (studs, cylinder
+    # walls, discs) painted on top — a stud protrudes toward the camera from the
+    # surface it sits on, so it must never be clipped by that surface's own
+    # triangles. Each group is depth-sorted far->near.
+    flats = sorted((f for f in faces if f.get("kind") == "tri"), key=lambda f: -f["depth"])
+    curved = sorted((f for f in faces if f.get("kind") != "tri"), key=lambda f: -f["depth"])
     ops = []
-    for f in sorted(faces, key=lambda f: -f["depth"]):
+    for f in flats + curved:
         if "grad_axis" in f:
             p0, p1 = f["grad_axis"]
             stops = sorted(((off, style.ramp(nv)) for off, nv in f["grad_samples"]),
