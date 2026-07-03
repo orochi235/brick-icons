@@ -19,3 +19,11 @@ def test_reject_sticker_shortcut_moved_pattern():
     assert library.is_sortable(info("Tile 2 x 2 with Pattern")) is False
     assert library.is_sortable(info("~Brick 2 x 4")) is False
     assert library.is_sortable(info("Minifig Head")) is False
+
+
+def test_select_parts_finds_known_ids():
+    from brick_icons import library
+    ids = set(library.select_parts("vendor/ldraw", limit=None))
+    assert "3001" in ids and "3020" in ids and "3040b" in ids
+    assert all(not i.endswith(".dat") for i in ids)
+    assert len(ids) > 200
