@@ -211,3 +211,13 @@ def test_3941_base_silhouette_connects_to_rim():
             low = np.array([o[1], o[2]]) if o[2] > o[4] else np.array([o[3], o[4]])
             d = np.min(np.hypot(apts[:, 0] - low[0], apts[:, 1] - low[1]))
             assert d < 0.02 * diag, f"silhouette base gap {d:.1f}px at {rpx} (diag {diag:.0f})"
+
+
+def test_fit_affine_matches_fit_segments():
+    from brick_icons import hlr
+    bbox = (0.0, 0.0, 100.0, 50.0)
+    f, ox, oy = hlr.fit_affine(bbox, W=256, H=170, margin=6, scale=1.0)
+    seg = ("line", 0.0, 0.0, 100.0, 50.0, "edge")
+    out = hlr.fit_segments([seg], bbox, 256, 170, 6, 1.0)[0]
+    assert out[1] == 0.0 * f + ox and out[2] == 0.0 * f + oy
+    assert abs(out[3] - (100.0 * f + ox)) < 1e-9

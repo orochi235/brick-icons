@@ -344,7 +344,8 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900):
     return _visible_segments_faceted(out, right, up, fwd, render_px)
 
 
-def fit_segments(segs, bbox, W, H, margin=6, scale=1.0):
+def fit_affine(bbox, W, H, margin=6, scale=1.0):
+    """Uniform scale+offset mapping the segment bbox into a W x H canvas."""
     scale = max(0.01, min(1.0, scale))
     bx0, by0, bx1, by1 = bbox
     bw, bh = (bx1 - bx0) or 1.0, (by1 - by0) or 1.0
@@ -352,6 +353,11 @@ def fit_segments(segs, bbox, W, H, margin=6, scale=1.0):
     f = min(iw / bw, ih / bh)
     ox = (W - bw * f) / 2 - bx0 * f
     oy = (H - bh * f) / 2 - by0 * f
+    return f, ox, oy
+
+
+def fit_segments(segs, bbox, W, H, margin=6, scale=1.0):
+    f, ox, oy = fit_affine(bbox, W, H, margin, scale)
     out = []
     for op in segs:
         if len(op) == 5:                               # legacy line tuple
