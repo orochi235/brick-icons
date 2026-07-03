@@ -236,7 +236,9 @@ def _visible_segments_faceted(out, right, up, fwd, render_px):
 
     xs = [c for sg in segs for c in (sg[0], sg[2])] or [0, 1]
     ys = [c for sg in segs for c in (sg[1], sg[3])] or [0, 1]
-    return VisResult(segs, (min(xs), min(ys), max(xs), max(ys)), s, [], [], [])
+    from . import shade
+    faces = shade.faces_from_tris(tri, right, up, fwd, s, cx, cy, render_px / 2) if len(tri) else []
+    return VisResult(segs, (min(xs), min(ys), max(xs), max(ys)), s, faces, [], [])
 
 
 def _analytic_circle_pts(rec, n=16):
@@ -316,7 +318,11 @@ def _visible_segments_analytic(out, right, up, fwd, render_px):
                           primitives._line_depth_fn(float(z[0]), float(z[1]))))
 
     segs = primitives.visible_subops(specs, occluders, ray_origin, fwd, eps, n=64)
-    return VisResult(segs, _ops_bbox(segs), s, [], [], [])
+    from . import shade
+    faces = shade.faces_from_tris(np.array(out["tri"]), right, up, fwd, s, cx, cy, half) \
+        if out["tri"] else []
+    faces += shade.faces_from_analytic(analytic, right, up, fwd, s, cx, cy, half)
+    return VisResult(segs, _ops_bbox(segs), s, faces, analytic, [])
 
 
 def _resolve_input(part: str, roots: list[Path]) -> Path:

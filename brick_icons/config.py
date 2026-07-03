@@ -40,6 +40,7 @@ DEFAULTS = {
     "scale_mode": "fit",     # fit | physical  (physical: SVG sized in mm)
     "line_mm": 0.2,          # physical interior stroke width (mm)
     "silhouette_mm": 0.3,    # physical contour stroke width (mm)
+    "shade_style": "none",
     "fmt": "png",            # png | svg | both
     "mode": "both",          # gray | mono | color | both  (png only)
     "dither": "atkinson",    # threshold | floyd | ordered | atkinson
@@ -71,6 +72,7 @@ class Config:
     scale_mode: str
     line_mm: float
     silhouette_mm: float
+    shade_style: str
     fmt: str
     mode: str
     dither: str
@@ -118,6 +120,7 @@ def load_config(toml_path=None, overrides=None, root="."):
         scale_mode=str(data["scale_mode"]),
         line_mm=float(data["line_mm"]),
         silhouette_mm=float(data["silhouette_mm"]),
+        shade_style=str(data["shade_style"]),
         fmt=str(data["fmt"]),
         mode=str(data["mode"]),
         dither=str(data["dither"]),

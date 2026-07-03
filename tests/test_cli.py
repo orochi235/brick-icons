@@ -98,6 +98,17 @@ def test_physical_svg_scales_with_part(tmp_path):
 
 
 @pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_shade_style_flat3_adds_fills(tmp_path):
+    from brick_icons import cli
+    cli.main(["3001", "--format", "svg", "--shading", "outline",
+              "--shade-style", "flat3", "--out", str(tmp_path)])
+    txt = (tmp_path / "3001.svg").read_text()
+    assert 'stroke="none"' in txt and 'fill="#' in txt
+    cli.main(["3001", "--format", "svg", "--shading", "outline", "--out", str(tmp_path / "n")])
+    assert 'stroke="none"' not in (tmp_path / "n" / "3001.svg").read_text()
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
 def test_outline_uses_hlr_not_ldview(tmp_path, monkeypatch):
     called = {"n": 0}
     def boom(*a, **k):

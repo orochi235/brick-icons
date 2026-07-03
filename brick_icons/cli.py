@@ -5,7 +5,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from . import render, process, trace, hlr
+from . import render, process, trace, hlr, shade
 from .config import load_config, Config
 
 
@@ -42,6 +42,7 @@ def _parse_args(argv):
     p.add_argument("--threshold", type=int)
     p.add_argument("--gamma", type=float)
     p.add_argument("--levels", type=int, nargs=2, metavar=("BLACK", "WHITE"))
+    p.add_argument("--shade-style", dest="shade_style", choices=["none", "flat3", "cel", "gradient"])
     p.add_argument("--debug-dir", default=None)
     return p.parse_args(argv)
 
@@ -60,6 +61,7 @@ def _config_from_args(args) -> Config:
         "dpi": args.dpi, "label_mm": tuple(args.label_mm) if args.label_mm else None,
         "margin": args.margin, "threshold": args.threshold, "gamma": args.gamma,
         "levels": tuple(args.levels) if args.levels else None,
+        "shade_style": args.shade_style,
     }
     return load_config(toml_path=toml, overrides=overrides, root=args.root)
 
@@ -91,25 +93,37 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
         res = hlr.visible_segments(part, cfg.ldraw_dir, lat=lat, long=long,
                                    render_px=cfg.render_px)
         segs, bbox, s = res.segs, res.bbox, res.s
+        style = None
+        if cfg.shade_style != "none":
+            style = shade.make_style(cfg.shade_style, part_color=shade.parse_hex_color(cfg.part_color))
         if cfg.fmt in ("svg", "both"):
             if cfg.scale_mode == "physical":
                 bx0, by0, bx1, by1 = bbox
                 pad = cfg.margin / cfg.render_px * 100 * s   # small margin in px-space
                 vb_w = (bx1 - bx0) + 2 * pad
                 vb_h = (by1 - by0) + 2 * pad
-                shifted = hlr.fit_segments(
-                    segs, (bx0 - pad, by0 - pad, bx1 + pad, by1 + pad),
-                    round(vb_w), round(vb_h), margin=0, scale=1.0)
+                pbbox = (bx0 - pad, by0 - pad, bx1 + pad, by1 + pad)
+                shifted = hlr.fit_segments(segs, pbbox, round(vb_w), round(vb_h),
+                                           margin=0, scale=1.0)
+                fills = None
+                if style is not None:
+                    f, ox, oy = hlr.fit_affine(pbbox, round(vb_w), round(vb_h),
+                                               margin=0, scale=1.0)
+                    fills = shade.fill_ops(shade.apply_affine_faces(res.faces, f, ox, oy), style)
                 w_mm = vb_w / s * 0.4
                 h_mm = vb_h / s * 0.4
                 trace.segments_to_svg(
                     shifted, round(vb_w), round(vb_h), out_dir / f"{name}.svg",
                     physical=(w_mm, h_mm), s=s,
-                    line_mm=cfg.line_mm, sil_mm=cfg.silhouette_mm)
+                    line_mm=cfg.line_mm, sil_mm=cfg.silhouette_mm, fills=fills)
             else:
                 fit = hlr.fit_segments(segs, bbox, cfg.width, cfg.height, cfg.margin, cfg.scale)
+                fills = None
+                if style is not None:
+                    f, ox, oy = hlr.fit_affine(bbox, cfg.width, cfg.height, cfg.margin, cfg.scale)
+                    fills = shade.fill_ops(shade.apply_affine_faces(res.faces, f, ox, oy), style)
                 trace.segments_to_svg(fit, cfg.width, cfg.height, out_dir / f"{name}.svg",
-                                      line_px=cfg.line_width, sil_px=cfg.silhouette_width)
+                                      line_px=cfg.line_width, sil_px=cfg.silhouette_width, fills=fills)
         if cfg.fmt in ("png", "both"):
             if cfg.mode in ("gray", "both"):
                 gpx = max(cfg.width, cfg.height, cfg.render_px // 2)

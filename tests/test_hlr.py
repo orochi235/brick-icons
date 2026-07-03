@@ -178,7 +178,7 @@ def test_visible_segments_returns_scale_factor():
     from brick_icons import hlr
     res = hlr.visible_segments("3005", "vendor/ldraw", render_px=400)
     assert res.s > 0
-    assert res.faces == [] and res.analytic == [] and res.highlights == []
+    assert isinstance(res.faces, list) and isinstance(res.analytic, list) and res.highlights == []
     # 3005 is a 1x1 brick: footprint 20 LDU. bbox px width / s is a few tens of LDU.
     bx0, by0, bx1, by1 = res.bbox
     ldu_w = (bx1 - bx0) / res.s
