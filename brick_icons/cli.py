@@ -85,7 +85,7 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
         lat, long = render.resolve_latlong(cfg.angle)
         res = hlr.visible_segments(part, cfg.ldraw_dir, lat=lat, long=long,
                                    render_px=cfg.render_px)
-        segs, bbox, s = res.segs, res.bbox, res.s
+        segs, bbox = res.segs, res.bbox
         if cfg.fmt in ("svg", "both"):
             fit = hlr.fit_segments(segs, bbox, cfg.width, cfg.height, cfg.margin, cfg.scale)
             trace.segments_to_svg(fit, cfg.width, cfg.height, out_dir / f"{name}.svg",
