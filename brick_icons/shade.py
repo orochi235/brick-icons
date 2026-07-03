@@ -11,14 +11,16 @@ def _project_px(P, right, up, fwd, s, cx, cy, half):
     return (a - cx) * s + half, (b - cy) * s + half, z
 
 
-def _radius_pts(rec, thetas, level):
+def _radius_pts(rec, thetas, level, radius=None):
     """World points on the rec's circle at `thetas` (radians), `level` along axis
-    (0 = base ring, 1 = top ring). Honors ring inner/outer radius."""
+    (0 = base ring, 1 = top ring). `radius` overrides the unit radius (in
+    primitive units); default is the ring's outer radius (inner+1) or 1.0."""
     R = np.asarray(rec["R"], float); C = np.asarray(rec["t"], float)
-    r = (rec["inner"] + 1) if rec["kind"] == "ring" else 1.0
+    if radius is None:
+        radius = (rec["inner"] + 1) if rec["kind"] == "ring" else 1.0
     U, A, V = R[:, 0], R[:, 1], R[:, 2]
     base = C + level * A
-    return base + r * (np.cos(thetas)[:, None] * U + np.sin(thetas)[:, None] * V)
+    return base + radius * (np.cos(thetas)[:, None] * U + np.sin(thetas)[:, None] * V)
 
 
 def faces_from_analytic(analytic, right, up, fwd, s, cx, cy, half):
@@ -31,7 +33,14 @@ def faces_from_analytic(analytic, right, up, fwd, s, cx, cy, half):
         sect = math.radians(rec["sector"])
         if kind in ("disc", "ring"):
             th = np.linspace(0.0, sect, 64)
-            w = _radius_pts(rec, th, 0.0)
+            if kind == "ring":
+                # Annular band: outer arc forward, inner arc back, so the center
+                # hole (the bore) is cut out instead of filled by a solid disc.
+                outer = _radius_pts(rec, th, 0.0, radius=rec["inner"] + 1)
+                inner = _radius_pts(rec, th, 0.0, radius=rec["inner"])
+                w = np.concatenate([outer, inner[::-1]], axis=0)
+            else:
+                w = _radius_pts(rec, th, 0.0)
             px, py, z = _project_px(w, right, up, fwd, s, cx, cy, half)
             n = R[:, 1]; n = n / np.linalg.norm(n)
             nv = np.array([n @ right, n @ up, n @ fwd])

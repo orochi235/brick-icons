@@ -20,6 +20,25 @@ def test_faces_from_analytic_cylinder_gradient_and_disc():
     assert cyl_face["poly"].shape[1] == 2
 
 
+def test_faces_from_analytic_ring_is_annulus_not_solid_disc():
+    """A 'ring' primitive (inner radius N, outer N+1) must shade as an annulus
+    with the center hole cut out — not a filled disc that covers the bore.
+    View is set face-on to the ring so screen radii track world radii."""
+    from brick_icons import shade, hlr
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    # ring axis -> camera; U=right, V=up so it projects to a true (annular) circle
+    R = np.stack([right, -fwd, up], axis=1)
+    ring = {"kind": "ring", "sector": 360.0, "inner": 2, "R": R, "t": np.zeros(3)}
+    faces = shade.faces_from_analytic([ring], right, up, fwd,
+                                      s=1.0, cx=0.0, cy=0.0, half=0.0)
+    poly = next(f for f in faces if f["kind"] == "ring")["poly"]
+    c = poly.mean(axis=0)
+    rad = np.linalg.norm(poly - c, axis=1)
+    # inner arc at ~2, outer arc at ~3 -> clear inner/outer separation (ratio ~1.5).
+    # A solid disc would put every vertex at the outer radius (ratio ~1.0).
+    assert rad.max() / rad.min() > 1.3
+
+
 def test_faces_from_tris_culls_back_and_projects():
     # a single CCW triangle in the z=0 plane (LDraw world)
     tri = np.array([[[0, 0, 0], [10, 0, 0], [0, 10, 0]]], float)
