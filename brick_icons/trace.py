@@ -84,7 +84,8 @@ def _arc_to_svg(op):
 
 
 def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=3,
-                    physical=None, s=None, line_mm=0.2, sil_mm=0.3) -> Path:
+                    physical=None, s=None, line_mm=0.2, sil_mm=0.3,
+                    fills=None) -> Path:
     if physical is not None:
         w_mm, h_mm = physical
         root = (f'<svg xmlns="http://www.w3.org/2000/svg" '
@@ -95,9 +96,13 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=3,
     else:
         root = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" '
                 f'preserveAspectRatio="xMidYMid meet">')
-    parts = [root,
-             '<rect width="100%" height="100%" fill="white"/>',
-             '<g stroke="black" fill="none" stroke-linecap="round">']
+    parts = [root, '<rect width="100%" height="100%" fill="white"/>']
+    if fills:
+        parts.append('<g stroke="none">')
+        for fo in fills:
+            parts.append(f'<path d="{fo["d"]}" fill="{fo["fill"]}"/>')
+        parts.append("</g>")
+    parts.append('<g stroke="black" fill="none" stroke-linecap="round">')
     for op in segs:
         if len(op) == 5:                              # legacy line tuple
             op = ("line",) + tuple(op)

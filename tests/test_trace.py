@@ -76,6 +76,15 @@ def test_segments_to_svg_mixed_line_and_legacy(tmp_path):
     assert out.read_text().count("<line") == 2
 
 
+def test_segments_to_svg_writes_fill_layer(tmp_path):
+    segs = [("line", 0.0, 0.0, 10.0, 0.0, "edge")]
+    fills = [{"d": "M 0 0 L 10 0 L 0 10 Z", "fill": "#cccccc", "depth": 1.0}]
+    out = _trace.segments_to_svg(segs, 20, 20, tmp_path / "f.svg", fills=fills)
+    txt = out.read_text()
+    assert txt.index('fill="#cccccc"') < txt.index('<g stroke="black"')
+    assert 'stroke="none"' in txt
+
+
 def test_segments_to_svg_physical_mm(tmp_path):
     segs = [("line", 10.0, 10.0, 90.0, 10.0, "edge")]
     out = _trace.segments_to_svg(

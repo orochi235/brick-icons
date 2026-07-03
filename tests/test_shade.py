@@ -47,3 +47,17 @@ def test_parse_hex_color():
     assert shade.parse_hex_color("#00ff00") == (0, 255, 0)
     assert shade.parse_hex_color(None) == (157, 157, 157)
     assert shade.parse_hex_color("nonsense") == (157, 157, 157)
+
+
+def test_fill_ops_painter_sorted_back_to_front():
+    from brick_icons import shade
+    style = shade.Flat3Style()
+    faces = [
+        {"poly": np.array([[0, 0], [1, 0], [0, 1]]), "normal": np.array([0, 1, -1.0]),
+         "depth": 5.0, "kind": "tri"},   # far
+        {"poly": np.array([[0, 0], [2, 0], [0, 2]]), "normal": np.array([0, 1, -1.0]),
+         "depth": 1.0, "kind": "tri"},   # near
+    ]
+    ops = shade.fill_ops(faces, style)
+    assert [o["depth"] for o in ops] == [5.0, 1.0]   # far first
+    assert "d" in ops[0] and ops[0]["fill"].startswith("#")

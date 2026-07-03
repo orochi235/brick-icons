@@ -83,6 +83,33 @@ class Flat3Style(ShadingStyle):
         return self.left if nv[0] < 0 else self.right
 
 
+def _poly_d(poly):
+    cmds = [f"M {poly[0,0]:.2f} {poly[0,1]:.2f}"]
+    for p in poly[1:]:
+        cmds.append(f"L {p[0]:.2f} {p[1]:.2f}")
+    cmds.append("Z")
+    return " ".join(cmds)
+
+
+def fill_ops(faces, style):
+    """Painter-sorted (far->near) fill ops: {'d': path, 'fill': color, 'depth': z}."""
+    ops = []
+    for f in sorted(faces, key=lambda f: -f["depth"]):
+        ops.append({"d": _poly_d(f["poly"]), "fill": style.tone(f["normal"]),
+                    "depth": f["depth"]})
+    return ops
+
+
+def apply_affine_faces(faces, f, ox, oy):
+    """Remap face polygons through the same fit affine used for segments."""
+    out = []
+    for face in faces:
+        p = face["poly"]
+        q = np.stack([p[:, 0] * f + ox, p[:, 1] * f + oy], axis=1)
+        out.append({**face, "poly": q})
+    return out
+
+
 STYLES = {"flat3": Flat3Style}
 
 
