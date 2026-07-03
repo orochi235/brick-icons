@@ -131,6 +131,30 @@ def parse_hex_color(spec, default=(157, 157, 157)):
         return default
 
 
+def highlight_ops(analytic, right, up, fwd, s, cx, cy, half, strength=0.15):
+    """Very diffuse speculars on up-facing disc tops: soft radial gradient blobs."""
+    ops = []
+    for rec in analytic:
+        if rec["kind"] != "disc":
+            continue
+        R = np.asarray(rec["R"], float)
+        n = R[:, 1] / np.linalg.norm(R[:, 1])
+        if abs(n @ up) < 0.5:            # not clearly up/down facing
+            continue
+        th = np.linspace(0, 2 * math.pi, 24)
+        w = _radius_pts(rec, th, 0.0)
+        px, py, _ = _project_px(w, right, up, fwd, s, cx, cy, half)
+        cxp, cyp = float(px.mean()), float(py.mean())
+        rr = float(max(px.max() - px.min(), py.max() - py.min()) / 2.0)
+        ops.append({"cx": cxp, "cy": cyp, "r": rr, "opacity": strength})
+    return ops
+
+
+def remap_highlights(his, f, ox, oy, strength):
+    return [{"cx": h["cx"] * f + ox, "cy": h["cy"] * f + oy, "r": h["r"] * f,
+             "opacity": strength} for h in his]
+
+
 def faces_from_tris(tri, right, up, fwd, s, cx, cy, half):
     """Front-facing triangle faces as px-space polygons with view-space normals."""
     faces = []

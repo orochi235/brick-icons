@@ -322,7 +322,8 @@ def _visible_segments_analytic(out, right, up, fwd, render_px):
     faces = shade.faces_from_tris(np.array(out["tri"]), right, up, fwd, s, cx, cy, half) \
         if out["tri"] else []
     faces += shade.faces_from_analytic(analytic, right, up, fwd, s, cx, cy, half)
-    return VisResult(segs, _ops_bbox(segs), s, faces, analytic, [])
+    hi = shade.highlight_ops(analytic, right, up, fwd, s, cx, cy, half, strength=1.0)
+    return VisResult(segs, _ops_bbox(segs), s, faces, analytic, hi)
 
 
 def _resolve_input(part: str, roots: list[Path]) -> Path:

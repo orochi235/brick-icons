@@ -43,6 +43,8 @@ def _parse_args(argv):
     p.add_argument("--gamma", type=float)
     p.add_argument("--levels", type=int, nargs=2, metavar=("BLACK", "WHITE"))
     p.add_argument("--shade-style", dest="shade_style", choices=["none", "flat3", "cel", "gradient"])
+    p.add_argument("--highlights", dest="highlights", action="store_true", default=None)
+    p.add_argument("--highlight-strength", dest="highlight_strength", type=float)
     p.add_argument("--debug-dir", default=None)
     return p.parse_args(argv)
 
@@ -62,6 +64,7 @@ def _config_from_args(args) -> Config:
         "margin": args.margin, "threshold": args.threshold, "gamma": args.gamma,
         "levels": tuple(args.levels) if args.levels else None,
         "shade_style": args.shade_style,
+        "highlights": args.highlights, "highlight_strength": args.highlight_strength,
     }
     return load_config(toml_path=toml, overrides=overrides, root=args.root)
 
@@ -105,25 +108,27 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
                 pbbox = (bx0 - pad, by0 - pad, bx1 + pad, by1 + pad)
                 shifted = hlr.fit_segments(segs, pbbox, round(vb_w), round(vb_h),
                                            margin=0, scale=1.0)
-                fills = None
-                if style is not None:
-                    f, ox, oy = hlr.fit_affine(pbbox, round(vb_w), round(vb_h),
-                                               margin=0, scale=1.0)
-                    fills = shade.fill_ops(shade.apply_affine_faces(res.faces, f, ox, oy), style)
+                f, ox, oy = hlr.fit_affine(pbbox, round(vb_w), round(vb_h), margin=0, scale=1.0)
+                fills = shade.fill_ops(shade.apply_affine_faces(res.faces, f, ox, oy), style) \
+                    if style is not None else None
+                hi = shade.remap_highlights(res.highlights, f, ox, oy, cfg.highlight_strength) \
+                    if (cfg.highlights and res.highlights) else None
                 w_mm = vb_w / s * 0.4
                 h_mm = vb_h / s * 0.4
                 trace.segments_to_svg(
                     shifted, round(vb_w), round(vb_h), out_dir / f"{name}.svg",
                     physical=(w_mm, h_mm), s=s,
-                    line_mm=cfg.line_mm, sil_mm=cfg.silhouette_mm, fills=fills)
+                    line_mm=cfg.line_mm, sil_mm=cfg.silhouette_mm, fills=fills, highlights=hi)
             else:
                 fit = hlr.fit_segments(segs, bbox, cfg.width, cfg.height, cfg.margin, cfg.scale)
-                fills = None
-                if style is not None:
-                    f, ox, oy = hlr.fit_affine(bbox, cfg.width, cfg.height, cfg.margin, cfg.scale)
-                    fills = shade.fill_ops(shade.apply_affine_faces(res.faces, f, ox, oy), style)
+                f, ox, oy = hlr.fit_affine(bbox, cfg.width, cfg.height, cfg.margin, cfg.scale)
+                fills = shade.fill_ops(shade.apply_affine_faces(res.faces, f, ox, oy), style) \
+                    if style is not None else None
+                hi = shade.remap_highlights(res.highlights, f, ox, oy, cfg.highlight_strength) \
+                    if (cfg.highlights and res.highlights) else None
                 trace.segments_to_svg(fit, cfg.width, cfg.height, out_dir / f"{name}.svg",
-                                      line_px=cfg.line_width, sil_px=cfg.silhouette_width, fills=fills)
+                                      line_px=cfg.line_width, sil_px=cfg.silhouette_width,
+                                      fills=fills, highlights=hi)
         if cfg.fmt in ("png", "both"):
             if cfg.mode in ("gray", "both"):
                 gpx = max(cfg.width, cfg.height, cfg.render_px // 2)

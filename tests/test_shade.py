@@ -61,3 +61,21 @@ def test_fill_ops_painter_sorted_back_to_front():
     ops = shade.fill_ops(faces, style)
     assert [o["depth"] for o in ops] == [5.0, 1.0]   # far first
     assert "d" in ops[0] and ops[0]["fill"].startswith("#")
+
+
+def test_highlight_ops_only_for_upfacing_discs():
+    from brick_icons import shade, hlr
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    R = np.eye(3); t = np.zeros(3)
+    disc_up = {"kind": "disc", "sector": 360.0, "inner": 0, "R": R, "t": t}
+    hi = shade.highlight_ops([disc_up], right, up, fwd, s=2.0, cx=0.0, cy=0.0,
+                             half=50.0, strength=0.15)
+    assert len(hi) == 1
+    assert hi[0]["opacity"] <= 0.15 and hi[0]["cx"] is not None
+
+
+def test_remap_highlights_applies_affine_and_strength():
+    from brick_icons import shade
+    out = shade.remap_highlights([{"cx": 10.0, "cy": 20.0, "r": 5.0, "opacity": 1.0}],
+                                 f=2.0, ox=1.0, oy=3.0, strength=0.15)
+    assert out[0] == {"cx": 21.0, "cy": 43.0, "r": 10.0, "opacity": 0.15}

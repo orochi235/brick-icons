@@ -41,6 +41,8 @@ DEFAULTS = {
     "line_mm": 0.2,          # physical interior stroke width (mm)
     "silhouette_mm": 0.3,    # physical contour stroke width (mm)
     "shade_style": "none",
+    "highlights": False,
+    "highlight_strength": 0.15,
     "fmt": "png",            # png | svg | both
     "mode": "both",          # gray | mono | color | both  (png only)
     "dither": "atkinson",    # threshold | floyd | ordered | atkinson
@@ -73,6 +75,8 @@ class Config:
     line_mm: float
     silhouette_mm: float
     shade_style: str
+    highlights: bool
+    highlight_strength: float
     fmt: str
     mode: str
     dither: str
@@ -121,6 +125,8 @@ def load_config(toml_path=None, overrides=None, root="."):
         line_mm=float(data["line_mm"]),
         silhouette_mm=float(data["silhouette_mm"]),
         shade_style=str(data["shade_style"]),
+        highlights=bool(data["highlights"]),
+        highlight_strength=float(data["highlight_strength"]),
         fmt=str(data["fmt"]),
         mode=str(data["mode"]),
         dither=str(data["dither"]),

@@ -85,6 +85,14 @@ def test_segments_to_svg_writes_fill_layer(tmp_path):
     assert 'stroke="none"' in txt
 
 
+def test_segments_to_svg_writes_highlight_gradient(tmp_path):
+    segs = [("line", 0.0, 0.0, 10.0, 0.0, "edge")]
+    hi = [{"cx": 5.0, "cy": 5.0, "r": 4.0, "opacity": 0.15}]
+    out = _trace.segments_to_svg(segs, 20, 20, tmp_path / "h.svg", highlights=hi)
+    txt = out.read_text()
+    assert "radialGradient" in txt and "<ellipse" in txt
+
+
 def test_segments_to_svg_physical_mm(tmp_path):
     segs = [("line", 10.0, 10.0, 90.0, 10.0, "edge")]
     out = _trace.segments_to_svg(
