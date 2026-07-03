@@ -103,9 +103,11 @@ def test_shade_style_flat3_adds_fills(tmp_path):
     cli.main(["3001", "--format", "svg", "--shading", "outline",
               "--shade-style", "flat3", "--out", str(tmp_path)])
     txt = (tmp_path / "3001.svg").read_text()
-    assert 'stroke="none"' in txt and 'fill="#' in txt
+    # fill layer present (self-stroked group) with flat fills and gradient stud walls
+    assert '<g stroke-linejoin="round">' in txt and 'fill="#' in txt
+    assert "linearGradient" in txt
     cli.main(["3001", "--format", "svg", "--shading", "outline", "--out", str(tmp_path / "n")])
-    assert 'stroke="none"' not in (tmp_path / "n" / "3001.svg").read_text()
+    assert '<g stroke-linejoin="round">' not in (tmp_path / "n" / "3001.svg").read_text()
 
 
 @pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")

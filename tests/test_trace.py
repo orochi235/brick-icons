@@ -81,8 +81,21 @@ def test_segments_to_svg_writes_fill_layer(tmp_path):
     fills = [{"d": "M 0 0 L 10 0 L 0 10 Z", "fill": "#cccccc", "depth": 1.0}]
     out = _trace.segments_to_svg(segs, 20, 20, tmp_path / "f.svg", fills=fills)
     txt = out.read_text()
+    # fill layer precedes the stroke group (painter: fills under strokes)
     assert txt.index('fill="#cccccc"') < txt.index('<g stroke="black"')
-    assert 'stroke="none"' in txt
+    # each fill is stroked in its own color to hide antialiasing seams
+    assert 'stroke="#cccccc"' in txt
+
+
+def test_segments_to_svg_writes_gradient_fill(tmp_path):
+    segs = [("line", 0.0, 0.0, 10.0, 0.0, "edge")]
+    fills = [{"d": "M 0 0 L 10 0 L 10 10 Z", "depth": 1.0,
+              "gradient": {"x1": 0.0, "y1": 0.0, "x2": 10.0, "y2": 0.0,
+                           "stops": [(0.0, "#333333"), (1.0, "#cccccc")]}}]
+    out = _trace.segments_to_svg(segs, 20, 20, tmp_path / "g.svg", fills=fills)
+    txt = out.read_text()
+    assert "linearGradient" in txt and 'stop-color="#333333"' in txt
+    assert "url(#g0)" in txt
 
 
 def test_segments_to_svg_writes_highlight_gradient(tmp_path):

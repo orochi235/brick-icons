@@ -98,10 +98,28 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=3,
                 f'preserveAspectRatio="xMidYMid meet">')
     parts = [root, '<rect width="100%" height="100%" fill="white"/>']
     if fills:
-        parts.append('<g stroke="none">')
-        for fo in fills:
-            parts.append(f'<path d="{fo["d"]}" fill="{fo["fill"]}"/>')
-        parts.append("</g>")
+        # Each fill is stroked in its own paint (~0.8px) so antialiasing seams
+        # between abutting coplanar faces don't show; gradient fills (cylinder
+        # walls) carry a <linearGradient> def instead of a flat color.
+        defs, body = [], ['<g stroke-linejoin="round">']
+        for i, fo in enumerate(fills):
+            if "gradient" in fo:
+                g = fo["gradient"]; gid = f"g{i}"
+                stops = "".join(
+                    f'<stop offset="{o * 100:.1f}%" stop-color="{c}"/>' for o, c in g["stops"])
+                defs.append(
+                    f'<linearGradient id="{gid}" gradientUnits="userSpaceOnUse" '
+                    f'x1="{g["x1"]:.2f}" y1="{g["y1"]:.2f}" '
+                    f'x2="{g["x2"]:.2f}" y2="{g["y2"]:.2f}">{stops}</linearGradient>')
+                paint = f"url(#{gid})"
+            else:
+                paint = fo["fill"]
+            body.append(f'<path d="{fo["d"]}" fill="{paint}" stroke="{paint}" '
+                        f'stroke-width="0.8"/>')
+        body.append("</g>")
+        if defs:
+            parts.append("<defs>" + "".join(defs) + "</defs>")
+        parts += body
     if highlights:
         defs = ['<defs>']
         blobs = []
