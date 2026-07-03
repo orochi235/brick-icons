@@ -37,6 +37,9 @@ DEFAULTS = {
     "silhouette_width": 3,   # outline contour stroke, output px
     "part_color": None,      # "0xRRGGBB" or None
     "scale": 1.0,            # part fill fraction of label (0-1)
+    "scale_mode": "fit",     # fit | physical  (physical: SVG sized in mm)
+    "line_mm": 0.2,          # physical interior stroke width (mm)
+    "silhouette_mm": 0.3,    # physical contour stroke width (mm)
     "fmt": "png",            # png | svg | both
     "mode": "both",          # gray | mono | color | both  (png only)
     "dither": "atkinson",    # threshold | floyd | ordered | atkinson
@@ -65,6 +68,9 @@ class Config:
     silhouette_width: int
     part_color: str | None
     scale: float
+    scale_mode: str
+    line_mm: float
+    silhouette_mm: float
     fmt: str
     mode: str
     dither: str
@@ -109,6 +115,9 @@ def load_config(toml_path=None, overrides=None, root="."):
         silhouette_width=int(data["silhouette_width"]),
         part_color=(str(data["part_color"]) if data["part_color"] else None),
         scale=float(data["scale"]),
+        scale_mode=str(data["scale_mode"]),
+        line_mm=float(data["line_mm"]),
+        silhouette_mm=float(data["silhouette_mm"]),
         fmt=str(data["fmt"]),
         mode=str(data["mode"]),
         dither=str(data["dither"]),

@@ -85,6 +85,19 @@ HAVE_LIB = (Path("vendor/ldraw")).exists()
 
 
 @pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_physical_svg_scales_with_part(tmp_path):
+    import re
+    def mm(part, sub):
+        cli.main([part, "--format", "svg", "--shading", "outline",
+                  "--scale-mode", "physical", "--out", str(tmp_path / sub)])
+        txt = (tmp_path / sub / f"{part}.svg").read_text()
+        return float(re.search(r'width="([\d.]+)mm"', txt).group(1))
+    w_1x1 = mm("3005", "a")   # 1x1 brick
+    w_2x4 = mm("3001", "b")   # 2x4 brick
+    assert w_2x4 > w_1x1 * 1.5
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
 def test_outline_uses_hlr_not_ldview(tmp_path, monkeypatch):
     called = {"n": 0}
     def boom(*a, **k):

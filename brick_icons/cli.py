@@ -25,6 +25,9 @@ def _parse_args(argv):
     p.add_argument("--no-outline-interior", dest="outline_interior", action="store_false")
     p.add_argument("--line-width", type=int, help="outline interior stroke (output px)")
     p.add_argument("--silhouette-width", type=int, help="outline contour stroke (output px)")
+    p.add_argument("--scale-mode", dest="scale_mode", choices=["fit", "physical"])
+    p.add_argument("--line-mm", dest="line_mm", type=float)
+    p.add_argument("--silhouette-mm", dest="silhouette_mm", type=float)
     p.add_argument("--dither", choices=["threshold", "floyd", "ordered", "atkinson"])
     p.add_argument("--angle")
     p.add_argument("--part-color")
@@ -51,7 +54,9 @@ def _config_from_args(args) -> Config:
         "line_width": args.line_width, "silhouette_width": args.silhouette_width,
         "dither": args.dither, "angle": args.angle, "part_color": args.part_color,
         "curve_quality": args.curve_quality, "render_px": args.render_px,
-        "scale": args.scale, "width": args.width, "height": args.height,
+        "scale": args.scale, "scale_mode": args.scale_mode,
+        "line_mm": args.line_mm, "silhouette_mm": args.silhouette_mm,
+        "width": args.width, "height": args.height,
         "dpi": args.dpi, "label_mm": tuple(args.label_mm) if args.label_mm else None,
         "margin": args.margin, "threshold": args.threshold, "gamma": args.gamma,
         "levels": tuple(args.levels) if args.levels else None,
@@ -85,11 +90,26 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
         lat, long = render.resolve_latlong(cfg.angle)
         res = hlr.visible_segments(part, cfg.ldraw_dir, lat=lat, long=long,
                                    render_px=cfg.render_px)
-        segs, bbox = res.segs, res.bbox
+        segs, bbox, s = res.segs, res.bbox, res.s
         if cfg.fmt in ("svg", "both"):
-            fit = hlr.fit_segments(segs, bbox, cfg.width, cfg.height, cfg.margin, cfg.scale)
-            trace.segments_to_svg(fit, cfg.width, cfg.height, out_dir / f"{name}.svg",
-                                  line_px=cfg.line_width, sil_px=cfg.silhouette_width)
+            if cfg.scale_mode == "physical":
+                bx0, by0, bx1, by1 = bbox
+                pad = cfg.margin / cfg.render_px * 100 * s   # small margin in px-space
+                vb_w = (bx1 - bx0) + 2 * pad
+                vb_h = (by1 - by0) + 2 * pad
+                shifted = hlr.fit_segments(
+                    segs, (bx0 - pad, by0 - pad, bx1 + pad, by1 + pad),
+                    round(vb_w), round(vb_h), margin=0, scale=1.0)
+                w_mm = vb_w / s * 0.4
+                h_mm = vb_h / s * 0.4
+                trace.segments_to_svg(
+                    shifted, round(vb_w), round(vb_h), out_dir / f"{name}.svg",
+                    physical=(w_mm, h_mm), s=s,
+                    line_mm=cfg.line_mm, sil_mm=cfg.silhouette_mm)
+            else:
+                fit = hlr.fit_segments(segs, bbox, cfg.width, cfg.height, cfg.margin, cfg.scale)
+                trace.segments_to_svg(fit, cfg.width, cfg.height, out_dir / f"{name}.svg",
+                                      line_px=cfg.line_width, sil_px=cfg.silhouette_width)
         if cfg.fmt in ("png", "both"):
             if cfg.mode in ("gray", "both"):
                 gpx = max(cfg.width, cfg.height, cfg.render_px // 2)

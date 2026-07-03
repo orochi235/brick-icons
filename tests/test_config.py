@@ -45,3 +45,12 @@ def test_toml_used(tmp_path):
     t.write_text('dpi = 360\nshading = "outline"\ncel_levels = 6\n')
     cfg = load_config(toml_path=str(t), root="/p")
     assert cfg.dpi == 360 and cfg.shading == "outline" and cfg.cel_levels == 6
+
+
+def test_scale_mode_default_and_override(tmp_path):
+    from brick_icons.config import load_config
+    cfg = load_config(toml_path=None, overrides={}, root=".")
+    assert cfg.scale_mode == "fit"
+    assert cfg.line_mm == 0.2 and cfg.silhouette_mm == 0.3
+    cfg2 = load_config(toml_path=None, overrides={"scale_mode": "physical"}, root=".")
+    assert cfg2.scale_mode == "physical"
