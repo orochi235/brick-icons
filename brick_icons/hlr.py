@@ -1,9 +1,12 @@
 from __future__ import annotations
 import math
+from collections import namedtuple
 from pathlib import Path
 import numpy as np
 
 from . import primitives
+
+VisResult = namedtuple("VisResult", "segs bbox s faces analytic highlights")
 
 _text_cache: dict[Path, list[str]] = {}
 
@@ -196,7 +199,7 @@ def _visible_segments_faceted(out, right, up, fwd, render_px):
     tri = np.array(out["tri"]) if out["tri"] else np.zeros((0, 3, 3))
     fitpts = tri.reshape(-1, 3) if len(tri) else np.array(out["2"]).reshape(-1, 3)
     if len(fitpts) == 0:
-        return [], (0.0, 0.0, 1.0, 1.0)
+        return VisResult([], (0.0, 0.0, 1.0, 1.0), 1.0, [], [], [])
     sx, sy, _ = project(fitpts, right, up, fwd)
     minx, maxx, miny, maxy = sx.min(), sx.max(), sy.min(), sy.max()
     span = max(maxx - minx, maxy - miny) or 1.0
@@ -233,7 +236,7 @@ def _visible_segments_faceted(out, right, up, fwd, render_px):
 
     xs = [c for sg in segs for c in (sg[0], sg[2])] or [0, 1]
     ys = [c for sg in segs for c in (sg[1], sg[3])] or [0, 1]
-    return segs, (min(xs), min(ys), max(xs), max(ys))
+    return VisResult(segs, (min(xs), min(ys), max(xs), max(ys)), s, [], [], [])
 
 
 def _analytic_circle_pts(rec, n=16):
@@ -313,7 +316,7 @@ def _visible_segments_analytic(out, right, up, fwd, render_px):
                           primitives._line_depth_fn(float(z[0]), float(z[1]))))
 
     segs = primitives.visible_subops(specs, occluders, ray_origin, fwd, eps, n=64)
-    return segs, _ops_bbox(segs)
+    return VisResult(segs, _ops_bbox(segs), s, [], [], [])
 
 
 def _resolve_input(part: str, roots: list[Path]) -> Path:

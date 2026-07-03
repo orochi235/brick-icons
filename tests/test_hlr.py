@@ -100,17 +100,17 @@ def test_visible_segments_missing_dat_path_raises(tmp_path):
 def test_visible_segments_empty_geometry(tmp_path):
     d = tmp_path / "empty.dat"
     d.write_text("0 just a comment, no geometry\n")
-    segs, bbox = hlr.visible_segments(str(d), tmp_path, render_px=200)
-    assert segs == []
-    assert bbox == (0.0, 0.0, 1.0, 1.0)
+    res = hlr.visible_segments(str(d), tmp_path, render_px=200)
+    assert res.segs == []
+    assert res.bbox == (0.0, 0.0, 1.0, 1.0)
 
 
 @pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
 def test_visible_segments_on_real_part():
-    segs, bbox = hlr.visible_segments("3701", LIB, lat=30, long=45, render_px=600)
-    assert len(segs) > 50
-    assert all(s[-1] in ("edge", "sil") for s in segs)
-    assert bbox[2] > bbox[0] and bbox[3] > bbox[1]
+    res = hlr.visible_segments("3701", LIB, lat=30, long=45, render_px=600)
+    assert len(res.segs) > 50
+    assert all(s[-1] in ("edge", "sil") for s in res.segs)
+    assert res.bbox[2] > res.bbox[0] and res.bbox[3] > res.bbox[1]
 
 
 def test_dilate_zbuffer_neighborhood_max():
@@ -167,10 +167,22 @@ def test_flatten_unknown_primitive_recurses(tmp_path):
 
 @pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
 def test_visible_segments_emits_arcs_for_round_part():
-    segs, bbox = hlr.visible_segments("3941", LIB, lat=30, long=45, render_px=900)
-    assert any(o[0] == "arc" for o in segs)             # analytic curves present
-    assert any(o[0] == "line" and o[-1] == "sil" for o in segs)  # cylinder silhouette
-    assert bbox[2] > bbox[0] and bbox[3] > bbox[1]
+    res = hlr.visible_segments("3941", LIB, lat=30, long=45, render_px=900)
+    assert any(o[0] == "arc" for o in res.segs)             # analytic curves present
+    assert any(o[0] == "line" and o[-1] == "sil" for o in res.segs)  # cylinder silhouette
+    assert res.bbox[2] > res.bbox[0] and res.bbox[3] > res.bbox[1]
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_visible_segments_returns_scale_factor():
+    from brick_icons import hlr
+    res = hlr.visible_segments("3005", "vendor/ldraw", render_px=400)
+    assert res.s > 0
+    assert res.faces == [] and res.analytic == [] and res.highlights == []
+    # 3005 is a 1x1 brick: footprint 20 LDU. bbox px width / s is a few tens of LDU.
+    bx0, by0, bx1, by1 = res.bbox
+    ldu_w = (bx1 - bx0) / res.s
+    assert 10 < ldu_w < 60
 
 
 @pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
@@ -181,7 +193,8 @@ def test_3941_base_silhouette_connects_to_rim():
     # each tall body silhouette must sit on the bottom-rim arc at BOTH resolutions.
     from brick_icons import primitives as _P
     for rpx in (900, 2048):
-        segs, bbox = hlr.visible_segments("3941", LIB, lat=30, long=45, render_px=rpx)
+        res = hlr.visible_segments("3941", LIB, lat=30, long=45, render_px=rpx)
+        segs, bbox = res.segs, res.bbox
         diag = math.hypot(bbox[2] - bbox[0], bbox[3] - bbox[1])
         # arc sample cloud
         apts = []
