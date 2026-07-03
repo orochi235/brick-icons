@@ -1,0 +1,21 @@
+from brick_icons import library
+
+
+def test_parse_header_and_accept():
+    hdr = "0 Brick  2 x  4\n0 !LDRAW_ORG Part UPDATE 2004-03\n"
+    info = library.parse_header(hdr.splitlines())
+    assert info.title == "Brick  2 x  4"
+    assert info.category == "Brick"
+    assert info.org == "Part"
+    assert library.is_sortable(info) is True
+
+
+def test_reject_sticker_shortcut_moved_pattern():
+    def info(t, org="Part"):
+        return library.parse_header([f"0 {t}", f"0 !LDRAW_ORG {org} UPDATE x"])
+    assert library.is_sortable(info("Sticker 1 x 1")) is False
+    assert library.is_sortable(info("Brick 2 x 4", org="Shortcut")) is False
+    assert library.is_sortable(info("Moved to 3001")) is False
+    assert library.is_sortable(info("Tile 2 x 2 with Pattern")) is False
+    assert library.is_sortable(info("~Brick 2 x 4")) is False
+    assert library.is_sortable(info("Minifig Head")) is False
