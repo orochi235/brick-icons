@@ -66,6 +66,23 @@ def test_fill_ops_painter_sorted_back_to_front():
     assert "d" in ops[0] and ops[0]["fill"].startswith("#")
 
 
+def test_fill_ops_unified_depth_sort_across_kinds():
+    """Occlusion is by depth, NOT by flat-vs-curved. An interior curved face
+    BEHIND a flat wall (larger depth) must paint under it; a stud curved face
+    IN FRONT of a flat surface (smaller depth) must paint over it. A single
+    far->near sort across all kinds achieves both."""
+    from brick_icons import shade
+    style = shade.Flat3Style()
+    n = np.array([0.0, 1.0, -1.0])
+    faces = [
+        {"poly": np.array([[0, 0], [1, 0], [0, 1]]), "normal": n, "depth": 2.0, "kind": "tri"},   # front wall
+        {"poly": np.array([[0, 0], [1, 0], [0, 1]]), "normal": n, "depth": 5.0, "kind": "disc"},  # interior tube (far)
+        {"poly": np.array([[0, 0], [1, 0], [0, 1]]), "normal": n, "depth": 1.0, "kind": "disc"},  # stud top (near)
+    ]
+    ops = shade.fill_ops(faces, style)
+    assert [o["depth"] for o in ops] == [5.0, 2.0, 1.0]   # strictly far->near, kind-agnostic
+
+
 def test_highlight_ops_only_for_upfacing_discs():
     from brick_icons import shade, hlr
     right, up, fwd = hlr.view_basis(30.0, 45.0)
