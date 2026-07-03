@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import re
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -71,3 +73,74 @@ def is_sortable(info: PartInfo) -> bool:
     if any(sub in info.title for sub in EXCLUDE_TITLE_SUBSTR):
         return False
     return info.category in ALLOWED_CATEGORIES
+
+
+def _render_one(args):
+    part, out_dir, ldraw_dir, shade_style, highlights, force = args
+    import re as _re
+    info = parse_header(_read_header_lines(Path(ldraw_dir) / "parts" / f"{part}.dat"))
+    cat_dir = Path(out_dir) / info.category
+    svg = cat_dir / f"{part}.svg"
+    rec = {"id": part, "title": info.title, "category": info.category,
+           "width_mm": 0.0, "height_mm": 0.0, "status": "ok"}
+
+    def _measure(txt):
+        m = _re.search(r'width="([\d.]+)mm" height="([\d.]+)mm"', txt)
+        if m:
+            rec["width_mm"], rec["height_mm"] = float(m.group(1)), float(m.group(2))
+
+    if svg.exists() and not force:
+        _measure(svg.read_text())
+        return rec
+    try:
+        from .config import load_config
+        from . import cli as _cli
+        cfg = load_config(toml_path=None, root=".", overrides={
+            "fmt": "svg", "shading": "outline", "scale_mode": "physical",
+            "shade_style": shade_style, "highlights": highlights,
+            "ldraw_dir": ldraw_dir})
+        _cli.process_one(cfg, part, cat_dir)
+        if not svg.exists():
+            rec["status"] = "skipped-empty"
+        else:
+            _measure(svg.read_text())
+    except Exception as e:                       # noqa: BLE001 — batch must not abort
+        rec["status"] = f"error:{type(e).__name__}:{e}"
+    return rec
+
+
+def render_library(out_dir, ldraw_dir="vendor/ldraw", limit=None, category=None,
+                   workers=4, shade_style="flat3", highlights=False, force=False):
+    Path(out_dir).mkdir(parents=True, exist_ok=True)
+    ids = select_parts(ldraw_dir, limit=limit, category=category)
+    tasks = [(p, out_dir, ldraw_dir, shade_style, highlights, force) for p in ids]
+    if workers <= 1:
+        records = [_render_one(t) for t in tasks]
+    else:
+        with ProcessPoolExecutor(max_workers=workers) as ex:
+            records = list(ex.map(_render_one, tasks))
+    (Path(out_dir) / "manifest.json").write_text(json.dumps(records, indent=2))
+    return records
+
+
+def main(argv=None):
+    import argparse
+    p = argparse.ArgumentParser(prog="brick-icons-library")
+    p.add_argument("--out", default="out/library")
+    p.add_argument("--ldraw-dir", default="vendor/ldraw")
+    p.add_argument("--limit", type=int, default=None)
+    p.add_argument("--category", default=None)
+    p.add_argument("--workers", type=int, default=4)
+    p.add_argument("--shade-style", default="flat3",
+                   choices=["none", "flat3", "cel", "gradient"])
+    p.add_argument("--highlights", action="store_true")
+    p.add_argument("--force", action="store_true")
+    a = p.parse_args(argv)
+    recs = render_library(a.out, a.ldraw_dir, a.limit, a.category, a.workers,
+                          a.shade_style, a.highlights, a.force)
+    ok = sum(1 for r in recs if r["status"] == "ok")
+    print(f"library: {ok}/{len(recs)} ok -> {a.out}/manifest.json")
+
+
+if __name__ == "__main__":
+    main()

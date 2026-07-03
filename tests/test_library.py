@@ -1,3 +1,5 @@
+import json
+
 from brick_icons import library
 
 
@@ -27,3 +29,19 @@ def test_select_parts_finds_known_ids():
     assert "3001" in ids and "3020" in ids and "3040b" in ids
     assert all(not i.endswith(".dat") for i in ids)
     assert len(ids) > 200
+
+
+def test_render_library_small(tmp_path):
+    from brick_icons import library
+    manifest = library.render_library(
+        out_dir=str(tmp_path), ldraw_dir="vendor/ldraw",
+        limit=3, workers=1, shade_style="flat3")
+    assert (tmp_path / "manifest.json").exists()
+    data = json.loads((tmp_path / "manifest.json").read_text())
+    assert len(data) == 3
+    ok = [r for r in data if r["status"] == "ok"]
+    assert ok, "expected at least one successful render"
+    r = ok[0]
+    assert r["width_mm"] > 0 and r["height_mm"] > 0 and r["category"]
+    svg = tmp_path / r["category"] / f'{r["id"]}.svg'
+    assert svg.exists() and svg.read_text().startswith("<svg")
