@@ -83,9 +83,19 @@ def _arc_to_svg(op):
             f'{large} {sweep} {x1e:.2f} {y1e:.2f}')
 
 
-def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=3) -> Path:
-    parts = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" '
-             f'preserveAspectRatio="xMidYMid meet">',
+def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=3,
+                    physical=None, s=None, line_mm=0.2, sil_mm=0.3) -> Path:
+    if physical is not None:
+        w_mm, h_mm = physical
+        root = (f'<svg xmlns="http://www.w3.org/2000/svg" '
+                f'width="{w_mm:.2f}mm" height="{h_mm:.2f}mm" '
+                f'viewBox="0 0 {w} {h}" preserveAspectRatio="xMidYMid meet">')
+        line_px = line_mm / 0.4 * s
+        sil_px = sil_mm / 0.4 * s
+    else:
+        root = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" '
+                f'preserveAspectRatio="xMidYMid meet">')
+    parts = [root,
              '<rect width="100%" height="100%" fill="white"/>',
              '<g stroke="black" fill="none" stroke-linecap="round">']
     for op in segs:
@@ -95,10 +105,10 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=3) -> Path:
             _, x1, y1, x2, y2, kind = op
             sw = sil_px if kind == "sil" else line_px
             parts.append(f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" '
-                         f'stroke-width="{sw}"/>')
+                         f'stroke-width="{sw:.2f}"/>')
         else:
             sw = sil_px if op[-1] == "sil" else line_px
-            parts.append(f'<path d="{_arc_to_svg(op)}" stroke-width="{sw}"/>')
+            parts.append(f'<path d="{_arc_to_svg(op)}" stroke-width="{sw:.2f}"/>')
     parts += ["</g>", "</svg>"]
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)

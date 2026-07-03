@@ -42,7 +42,7 @@ def test_segments_to_svg_writes_lines(tmp_path):
     txt = out.read_text()
     assert 'viewBox="0 0 100 100"' in txt
     assert txt.count("<line") == 2
-    assert 'stroke-width="4"' in txt and 'stroke-width="2"' in txt
+    assert 'stroke-width="4.00"' in txt and 'stroke-width="2.00"' in txt
 
 
 
@@ -74,3 +74,15 @@ def test_segments_to_svg_mixed_line_and_legacy(tmp_path):
     ops = [("line", 0.0, 0.0, 10.0, 10.0, "edge"), (1.0, 1.0, 2.0, 2.0, "sil")]
     out = _trace.segments_to_svg(ops, 20, 20, tmp_path / "b.svg")
     assert out.read_text().count("<line") == 2
+
+
+def test_segments_to_svg_physical_mm(tmp_path):
+    segs = [("line", 10.0, 10.0, 90.0, 10.0, "edge")]
+    out = _trace.segments_to_svg(
+        segs, 100, 100, tmp_path / "p.svg",
+        physical=(12.8, 9.6), s=5.0, line_mm=0.2, sil_mm=0.3)
+    txt = out.read_text()
+    assert 'width="12.80mm"' in txt and 'height="9.60mm"' in txt
+    assert 'viewBox="0 0 100 100"' in txt
+    # line stroke: 0.2mm / 0.4 * 5.0 = 2.5 px
+    assert 'stroke-width="2.50"' in txt
