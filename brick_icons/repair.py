@@ -57,3 +57,55 @@ def ray_crossings(origin, direction, tris, eps=1e-7) -> int:
         if u >= -1e-9 and b >= -1e-9 and w >= -1e-9:
             count += 1
     return count
+
+
+CACHE_VERSION = 1
+
+
+def _cache_key(tris, tri_meta) -> str:
+    h = hashlib.sha1()
+    h.update(np.ascontiguousarray(tris, dtype=np.float32).tobytes())
+    flags = np.array([[m["certified"], m["invert"]] for m in tri_meta], bool)
+    h.update(flags.tobytes())
+    h.update(bytes([CACHE_VERSION]))
+    return h.hexdigest()[:16]
+
+
+def _orient(tris, tri_meta):
+    tris = np.asarray(tris, float).copy()
+    if len(tris) == 0:
+        return tris
+    for k, m in enumerate(tri_meta):
+        if m["certified"]:
+            flip = m["invert"]
+        else:                                   # ray-cast outside test
+            tri = tris[k]
+            n = np.cross(tri[1] - tri[0], tri[2] - tri[0])
+            ln = float(np.linalg.norm(n))
+            if ln < 1e-12:
+                continue                        # degenerate: leave as-is
+            n = n / ln
+            c = tri.mean(axis=0)
+            # ray_crossings jitters the direction itself, so pass the raw
+            # normal; only offset the origin just outside the surface.
+            others = np.concatenate([tris[:k], tris[k + 1:]]) if len(tris) > 1 else tris[:0]
+            flip = ray_crossings(c + 1e-5 * n, n, others) % 2 == 1
+        if flip:
+            tris[k] = tris[k][[0, 2, 1]]
+    return tris
+
+
+def repaired_tris(tris, tri_meta, cache_dir):
+    """Outward-oriented (N,3,3) tris. Cached under cache_dir/<key>.npz."""
+    tris = np.asarray(tris, float)
+    if len(tris) == 0:
+        return tris
+    cache_dir = Path(cache_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    key = _cache_key(tris, tri_meta)
+    fp = cache_dir / f"{key}.npz"
+    if fp.exists():
+        return np.load(fp)["tris"]
+    fixed = _orient(tris, tri_meta)
+    np.savez(fp, tris=np.ascontiguousarray(fixed, dtype=np.float32))
+    return fixed
