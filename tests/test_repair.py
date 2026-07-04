@@ -22,3 +22,10 @@ def test_ray_crossings_from_inside_is_odd():
     origin = np.array([0.0, 0.0, 0.0])          # centroid, inside
     direction = np.array([1.0, 0.0, 0.0])
     assert repair.ray_crossings(origin, direction, tris) % 2 == 1
+
+
+def test_ray_crossings_behind_origin_excluded():
+    tris = _unit_tetra()
+    origin = np.array([10.0, 0.0, 0.0])
+    direction = np.array([1.0, 0.0, 0.0])   # solid is behind (negative lambda)
+    assert repair.ray_crossings(origin, direction, tris) == 0

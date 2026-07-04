@@ -22,12 +22,17 @@ def ray_crossings(origin, direction, tris, eps=1e-7) -> int:
     barycentric test; degenerate/parallel hits are skipped."""
     O = np.asarray(origin, float)
     D = np.asarray(direction, float)
-    # Deterministic tiny jitter breaks exact ray/edge or ray/vertex
-    # coincidences (e.g. an axis-aligned ray through a symmetric mesh) that
-    # would otherwise double-count or drop a shared-edge crossing.
-    D = D + np.array([1.0003121e-4, 1.0007193e-4, 1.0001777e-4]) * max(
-        np.linalg.norm(D), 1.0
-    )
+    # Deterministic per-ray jitter breaks exact ray/edge or ray/vertex
+    # coincidences. LDraw geometry is heavily axis- and 45°-aligned, so a
+    # single FIXED jitter direction could stay systematically aligned with
+    # shared edges; seeding the perturbation from the ray varies its direction
+    # while staying reproducible (a pure function of the inputs).
+    digest = hashlib.sha1(
+        np.concatenate([O, D]).astype(np.float64).tobytes()).digest()
+    h = np.frombuffer(digest[:12], dtype=np.uint32).astype(float)
+    j = (h / float(np.iinfo(np.uint32).max)) * 2.0 - 1.0   # 3 signed in [-1, 1]
+    j = j / (np.linalg.norm(j) or 1.0)
+    D = D + j * 1e-4 * max(float(np.linalg.norm(D)), 1.0)
     count = 0
     for tri in tris:
         v0, v1, v2 = tri
