@@ -49,6 +49,58 @@ def test_view_basis_orthonormal():
     assert abs(r @ u) < 1e-9 and abs(r @ f) < 1e-9 and abs(u @ f) < 1e-9
 
 
+def test_flatten_populates_tri_meta_parallel_to_tri(tmp_path):
+    from brick_icons import hlr
+    import numpy as np
+    # A minimal certified part: one CCW triangle, no subfiles.
+    p = tmp_path / "cert.dat"
+    p.write_text("0 BFC CERTIFY CCW\n3 16 0 0 0 10 0 0 0 10 0\n")
+    out = {"2": [], "5": [], "tri": [], "analytic": []}
+    hlr.flatten(p, np.eye(3), np.zeros(3), out, [tmp_path])
+    assert len(out["tri"]) == 1
+    assert len(out["tri_meta"]) == 1
+    assert out["tri_meta"][0] == {"certified": True, "invert": False}
+
+
+def test_flatten_uncertified_marks_meta(tmp_path):
+    from brick_icons import hlr
+    import numpy as np
+    p = tmp_path / "plain.dat"          # no BFC line at all
+    p.write_text("3 16 0 0 0 10 0 0 0 10 0\n")
+    out = {"2": [], "5": [], "tri": [], "analytic": []}
+    hlr.flatten(p, np.eye(3), np.zeros(3), out, [tmp_path])
+    assert out["tri_meta"][0]["certified"] is False
+
+
+def test_flatten_invertnext_flips_winding_flag(tmp_path):
+    from brick_icons import hlr
+    import numpy as np
+    child = tmp_path / "child.dat"
+    child.write_text("0 BFC CERTIFY CCW\n3 16 0 0 0 10 0 0 0 10 0\n")
+    parent = tmp_path / "parent.dat"
+    parent.write_text(
+        "0 BFC CERTIFY CCW\n"
+        "0 BFC INVERTNEXT\n"
+        "1 16 0 0 0 1 0 0 0 1 0 0 0 1 child.dat\n")
+    out = {"2": [], "5": [], "tri": [], "analytic": []}
+    hlr.flatten(parent, np.eye(3), np.zeros(3), out, [tmp_path])
+    assert out["tri_meta"][0]["invert"] is True     # INVERTNEXT toggled it
+
+
+def test_flatten_negative_determinant_flips_winding_flag(tmp_path):
+    from brick_icons import hlr
+    import numpy as np
+    child = tmp_path / "child.dat"
+    child.write_text("0 BFC CERTIFY CCW\n3 16 0 0 0 10 0 0 0 10 0\n")
+    parent = tmp_path / "parent.dat"       # mirror on X: det < 0
+    parent.write_text(
+        "0 BFC CERTIFY CCW\n"
+        "1 16 0 0 0 -1 0 0 0 1 0 0 0 1 child.dat\n")
+    out = {"2": [], "5": [], "tri": [], "analytic": []}
+    hlr.flatten(parent, np.eye(3), np.zeros(3), out, [tmp_path])
+    assert out["tri_meta"][0]["invert"] is True     # reflection toggled it
+
+
 def test_conditional_same_side_predicate():
     # control points on the same side -> drawn; opposite -> not
     p1 = np.array([0.0, 0.0]); p2 = np.array([1.0, 0.0])

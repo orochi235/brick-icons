@@ -33,15 +33,48 @@ def _lines(path: Path) -> list[str]:
     return _text_cache[path]
 
 
+def _bfc_certified(ln: str) -> bool:
+    """True if a line certifies BFC winding ('0 BFC CERTIFY ...' or a bare
+    '0 BFC CW|CCW' orientation statement — either establishes trusted winding)."""
+    tok = ln.split()
+    if len(tok) >= 3 and tok[0] == "0" and tok[1] == "BFC":
+        flags = tok[2:]
+        if "NOCERTIFY" in flags:
+            return False
+        return "CERTIFY" in flags or "CW" in flags or "CCW" in flags
+    return False
+
+
 def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
-            roots: list[Path], depth: int = 0) -> None:
+            roots: list[Path], depth: int = 0,
+            inherited_invert: bool = False) -> None:
     if depth > 30:
         return
-    for ln in _lines(path):
+    out.setdefault("tri_meta", [])
+    # Reflection in the accumulated basis flips winding; combine with any
+    # INVERTNEXT inherited from the parent reference.
+    reflected = bool(np.linalg.det(R) < 0)
+    base_invert = inherited_invert ^ reflected
+    lines = _lines(path)
+    certified = any(_bfc_certified(ln) for ln in lines)
+    local_cw = False            # CCW is the LDraw default winding
+    invert_next = False
+    for ln in lines:
         tok = ln.split()
         if not tok:
             continue
         typ = tok[0]
+        if typ == "0":
+            cmd = tok[1:]
+            if len(cmd) >= 2 and cmd[0] == "BFC":
+                flags = cmd[1:]
+                if "CW" in flags:
+                    local_cw = True
+                if "CCW" in flags:
+                    local_cw = False
+                if "INVERTNEXT" in flags:
+                    invert_next = True
+            continue
         if typ == "1" and len(tok) >= 15:
             x, y, z = map(float, tok[2:5])
             a, b, c, d, e, f, g, h, i = map(float, tok[5:14])
@@ -58,7 +91,9 @@ def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
             else:
                 sub = resolve(ref, roots)
                 if sub is not None:
-                    flatten(sub, Rsub, tsub, out, roots, depth + 1)
+                    flatten(sub, Rsub, tsub, out, roots, depth + 1,
+                            inherited_invert=base_invert ^ invert_next)
+            invert_next = False
         elif typ in ("2", "5") and len(tok) >= 8:
             pts = np.array(list(map(float, tok[2:])), float).reshape(-1, 3)
             out[typ].append(pts @ R.T + t)
@@ -66,11 +101,16 @@ def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
             n = 3 if typ == "3" else 4
             if len(tok) >= 2 + 3 * n:
                 pts = np.array(list(map(float, tok[2:2 + 3 * n])), float).reshape(n, 3) @ R.T + t
+                tri_invert = base_invert ^ local_cw
+                meta = {"certified": certified, "invert": tri_invert}
                 if n == 3:
                     out["tri"].append(pts)
+                    out["tri_meta"].append(dict(meta))
                 else:
                     out["tri"].append(pts[[0, 1, 2]])
+                    out["tri_meta"].append(dict(meta))
                     out["tri"].append(pts[[0, 2, 3]])
+                    out["tri_meta"].append(dict(meta))
 
 
 SIGN_Z = -1.0          # tuned so parts face the camera (matches LDView iso)
