@@ -52,6 +52,24 @@ def test_faces_from_tris_culls_back_and_projects():
         assert f["kind"] == "tri"
 
 
+def test_faces_from_tris_culls_backface_no_flip():
+    """A triangle whose outward normal points AWAY from the camera is dropped,
+    not flipped up into a bright top tone. Winding is now trusted."""
+    import numpy as np
+    from brick_icons import shade, hlr
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    # Build a tri whose geometric normal points along +fwd (away from camera).
+    # cross(v1-v0, v2-v0) should be ~ +fwd.
+    v0 = np.zeros(3)
+    v1 = right * 10.0
+    v2 = np.cross(fwd, right) * 10.0        # so cross(v1,v2) proportional to fwd
+    tri = np.array([[v0, v1, v2]], float)
+    n = np.cross(v1 - v0, v2 - v0); n /= np.linalg.norm(n)
+    assert n @ fwd > 0.5                      # confirm it's a back-face
+    faces = shade.faces_from_tris(tri, right, up, fwd, s=2.0, cx=0, cy=0, half=50.0)
+    assert faces == []                        # culled, not flipped
+
+
 def test_flat3_tone_by_orientation():
     from brick_icons import shade
     style = shade.Flat3Style(part_color=(160, 160, 160))

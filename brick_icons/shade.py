@@ -222,20 +222,21 @@ def remap_highlights(his, f, ox, oy, strength):
 
 
 def faces_from_tris(tri, right, up, fwd, s, cx, cy, half):
-    """Front-facing triangle faces as px-space polygons with view-space normals."""
+    """Camera-facing triangle faces as px-space polygons with outward view-space
+    normals. Winding is trusted (repaired upstream): a triangle whose outward
+    normal points away from the camera (nv[2] >= 0) is a back-face and is
+    CULLED — never flipped. Flipping was the old hack that leaked bright
+    top-tone slivers from hollow parts' undersides."""
     faces = []
-    for v in tri:                       # v: (3,3) world coords
+    for v in tri:                       # v: (3,3) world coords, outward-CCW
         n = np.cross(v[1] - v[0], v[2] - v[0])
         ln = np.linalg.norm(n)
         if ln < 1e-9:
             continue
         n = n / ln
         nv = np.array([n @ right, n @ up, n @ fwd])
-        # front-facing when normal points back toward camera: nv[2] < 0. Orient + cull.
-        if nv[2] > 0:
-            n, nv = -n, -nv
         if nv[2] > -1e-6:
-            continue                    # edge-on: skip
+            continue                    # back-facing or edge-on: cull
         px, py, z = _project_px(v, right, up, fwd, s, cx, cy, half)
         poly = np.stack([px, py], axis=1)
         faces.append({"poly": poly, "normal": nv, "depth": float(np.mean(z)),

@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 
 from . import primitives
+from . import repair
 
 VisResult = namedtuple("VisResult", "segs bbox s faces analytic highlights")
 
@@ -115,6 +116,7 @@ def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
 
 
 SIGN_Z = -1.0          # tuned so parts face the camera (matches LDView iso)
+MESH_CACHE_DIR = Path(".cache/mesh")
 
 
 def view_basis(lat: float, long: float):
@@ -384,8 +386,12 @@ def _resolve_input(part: str, roots: list[Path]) -> Path:
 def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900):
     roots = default_roots(ldraw_dir)
     path = _resolve_input(part, roots)
-    out = {"2": [], "5": [], "tri": [], "analytic": []}
+    out = {"2": [], "5": [], "tri": [], "tri_meta": [], "analytic": []}
     flatten(path, np.eye(3), np.zeros(3), out, roots)
+    if out["tri"]:
+        fixed = repair.repaired_tris(np.array(out["tri"]), out["tri_meta"],
+                                     MESH_CACHE_DIR)
+        out["tri"] = [fixed[k] for k in range(len(fixed))]
     right, up, fwd = view_basis(lat, long)
     if out["analytic"]:
         return _visible_segments_analytic(out, right, up, fwd, render_px)
