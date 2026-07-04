@@ -101,6 +101,35 @@ def test_flatten_negative_determinant_flips_winding_flag(tmp_path):
     assert out["tri_meta"][0]["invert"] is True     # reflection toggled it
 
 
+def test_flatten_quad_emits_two_tri_meta_entries(tmp_path):
+    from brick_icons import hlr
+    import numpy as np
+    p = tmp_path / "quad.dat"
+    p.write_text("0 BFC CERTIFY CCW\n4 16 0 0 0 10 0 0 10 10 0 0 10 0\n")
+    out = {"2": [], "5": [], "tri": [], "analytic": []}
+    hlr.flatten(p, np.eye(3), np.zeros(3), out, [tmp_path])
+    assert len(out["tri"]) == 2
+    assert len(out["tri_meta"]) == 2
+    assert out["tri_meta"][0] == out["tri_meta"][1] == {"certified": True, "invert": False}
+
+
+def test_flatten_invertnext_does_not_leak_to_sibling(tmp_path):
+    from brick_icons import hlr
+    import numpy as np
+    child = tmp_path / "child.dat"
+    child.write_text("0 BFC CERTIFY CCW\n3 16 0 0 0 10 0 0 0 10 0\n")
+    parent = tmp_path / "parent.dat"
+    parent.write_text(
+        "0 BFC CERTIFY CCW\n"
+        "0 BFC INVERTNEXT\n"
+        "1 16 0 0 0 1 0 0 0 1 0 0 0 1 child.dat\n"    # inverted
+        "1 16 0 0 0 1 0 0 0 1 0 0 0 1 child.dat\n")   # sibling, NOT inverted
+    out = {"2": [], "5": [], "tri": [], "analytic": []}
+    hlr.flatten(parent, np.eye(3), np.zeros(3), out, [tmp_path])
+    assert out["tri_meta"][0]["invert"] is True     # first ref inverted
+    assert out["tri_meta"][1]["invert"] is False    # sibling not inverted
+
+
 def test_conditional_same_side_predicate():
     # control points on the same side -> drawn; opposite -> not
     p1 = np.array([0.0, 0.0]); p2 = np.array([1.0, 0.0])

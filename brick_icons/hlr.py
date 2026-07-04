@@ -75,24 +75,25 @@ def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
                 if "INVERTNEXT" in flags:
                     invert_next = True
             continue
-        if typ == "1" and len(tok) >= 15:
-            x, y, z = map(float, tok[2:5])
-            a, b, c, d, e, f, g, h, i = map(float, tok[5:14])
-            M = np.array([[a, b, c], [d, e, f], [g, h, i]], float)
-            T = np.array([x, y, z], float)
-            ref = " ".join(tok[14:])
-            Rsub, tsub = R @ M, R @ T + t
-            spec = primitives.parse_primitive(ref)
-            if spec is not None and "analytic" in out:
-                kind, sector, inner = spec
-                out["analytic"].append(
-                    {"kind": kind, "sector": sector, "inner": inner,
-                     "R": Rsub, "t": tsub})
-            else:
-                sub = resolve(ref, roots)
-                if sub is not None:
-                    flatten(sub, Rsub, tsub, out, roots, depth + 1,
-                            inherited_invert=base_invert ^ invert_next)
+        if typ == "1":
+            if len(tok) >= 15:
+                x, y, z = map(float, tok[2:5])
+                a, b, c, d, e, f, g, h, i = map(float, tok[5:14])
+                M = np.array([[a, b, c], [d, e, f], [g, h, i]], float)
+                T = np.array([x, y, z], float)
+                ref = " ".join(tok[14:])
+                Rsub, tsub = R @ M, R @ T + t
+                spec = primitives.parse_primitive(ref)
+                if spec is not None and "analytic" in out:
+                    kind, sector, inner = spec
+                    out["analytic"].append(
+                        {"kind": kind, "sector": sector, "inner": inner,
+                         "R": Rsub, "t": tsub})
+                else:
+                    sub = resolve(ref, roots)
+                    if sub is not None:
+                        flatten(sub, Rsub, tsub, out, roots, depth + 1,
+                                inherited_invert=base_invert ^ invert_next)
             invert_next = False
         elif typ in ("2", "5") and len(tok) >= 8:
             pts = np.array(list(map(float, tok[2:])), float).reshape(-1, 3)
