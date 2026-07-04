@@ -389,9 +389,12 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900):
     out = {"2": [], "5": [], "tri": [], "tri_meta": [], "analytic": []}
     flatten(path, np.eye(3), np.zeros(3), out, roots)
     if out["tri"]:
+        # Repair returns outward-oriented tris as float32 (cache dtype); the
+        # ~7 sig-fig precision is ample at icon scale. Keep out["tri"] a LIST
+        # of (3,3) rows — _visible_segments_* test it with `if out["tri"]:`.
         fixed = repair.repaired_tris(np.array(out["tri"]), out["tri_meta"],
                                      MESH_CACHE_DIR)
-        out["tri"] = [fixed[k] for k in range(len(fixed))]
+        out["tri"] = list(fixed)
     right, up, fwd = view_basis(lat, long)
     if out["analytic"]:
         return _visible_segments_analytic(out, right, up, fwd, render_px)
