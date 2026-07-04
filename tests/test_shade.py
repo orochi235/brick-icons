@@ -2,6 +2,63 @@ import numpy as np
 from brick_icons import shade, hlr
 
 
+def test_cull_self_depth_keeps_own_curved_face():
+    """A curved wall face must NOT cull itself: with self-depth taken from its
+    OWN occluder at the centroid (not the band mean), and the own-occluder
+    excluded from the scan, an isolated wall survives."""
+    import numpy as np
+    from brick_icons import shade
+
+    class FakeOcc:                       # returns a fixed near depth at any ray
+        def __init__(self, d): self.d = d
+        def depth(self, O, F): return np.array([self.d], float)
+
+    own = FakeOcc(1.0)                   # wall's near surface at depth 1.0
+    face = {"poly": np.array([[0, 0], [10, 0], [10, 10], [0, 10]], float),
+            "depth": 5.0, "kind": "cyli"}        # band MEAN is 5.0 (farther)
+    def ray_origin(xs, ys): return np.zeros((len(xs), 3))
+    kept = shade.cull_occluded_faces(
+        [face], occluders=[own], ray_origin=ray_origin, fwd=np.array([0, 0, 1.0]),
+        eps=1e-3, kinds=("tri", "disc", "ring", "cyli"),
+        own_occ={id(face): own})
+    assert kept == [face]               # not culled by its own near surface
+
+
+def test_cull_self_depth_removes_occluded_interior_face():
+    import numpy as np
+    from brick_icons import shade
+
+    class FakeOcc:
+        def __init__(self, d): self.d = d
+        def depth(self, O, F): return np.array([self.d], float)
+
+    own = FakeOcc(5.0)                   # interior tube near surface at 5.0
+    wall = FakeOcc(1.0)                  # outer wall nearer, at 1.0
+    face = {"poly": np.array([[0, 0], [10, 0], [10, 10], [0, 10]], float),
+            "depth": 5.0, "kind": "cyli"}
+    def ray_origin(xs, ys): return np.zeros((len(xs), 3))
+    kept = shade.cull_occluded_faces(
+        [face], occluders=[own, wall], ray_origin=ray_origin,
+        fwd=np.array([0, 0, 1.0]), eps=1e-3,
+        kinds=("tri", "disc", "ring", "cyli"), own_occ={id(face): own})
+    assert kept == []                   # outer wall occludes it -> culled
+
+
+def test_cull_passthrough_for_untested_kinds():
+    """A face whose kind is not in `kinds` passes through untouched."""
+    import numpy as np
+    from brick_icons import shade
+    class FakeOcc:
+        def depth(self, O, F): return np.array([0.0], float)   # always nearest
+    face = {"poly": np.array([[0, 0], [1, 0], [0, 1]], float),
+            "depth": 9.0, "kind": "tri"}
+    def ray_origin(xs, ys): return np.zeros((len(xs), 3))
+    kept = shade.cull_occluded_faces([face], occluders=[FakeOcc()],
+                                     ray_origin=ray_origin, fwd=np.array([0, 0, 1.0]),
+                                     eps=1e-3, kinds=("disc",))   # tri not listed
+    assert kept == [face]
+
+
 def test_faces_from_analytic_cylinder_gradient_and_disc():
     from brick_icons import shade, hlr
     right, up, fwd = hlr.view_basis(30.0, 45.0)

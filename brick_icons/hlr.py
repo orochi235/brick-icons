@@ -362,9 +362,14 @@ def _visible_segments_analytic(out, right, up, fwd, render_px):
 
     segs = primitives.visible_subops(specs, occluders, ray_origin, fwd, eps, n=64)
     from . import shade
-    faces = shade.faces_from_tris(np.array(out["tri"]), right, up, fwd, s, cx, cy, half) \
+    tri_faces = shade.faces_from_tris(np.array(out["tri"]), right, up, fwd, s, cx, cy, half) \
         if out["tri"] else []
-    faces += shade.faces_from_analytic(analytic, right, up, fwd, s, cx, cy, half)
+    an_faces = shade.faces_from_analytic(analytic, right, up, fwd, s, cx, cy, half)
+    own_occ = {id(f): rec_occ.get(id(f["rec"])) for f in an_faces
+               if rec_occ.get(id(f["rec"])) is not None}
+    faces = shade.cull_occluded_faces(
+        tri_faces + an_faces, occluders, ray_origin, fwd, eps,
+        kinds=("tri", "disc", "ring", "cyli"), own_occ=own_occ)
     hi = shade.highlight_ops(analytic, right, up, fwd, s, cx, cy, half, strength=1.0)
     return VisResult(segs, _ops_bbox(segs), s, faces, analytic, hi)
 

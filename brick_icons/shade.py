@@ -47,7 +47,8 @@ def faces_from_analytic(analytic, right, up, fwd, s, cx, cy, half):
             if nv[2] > 0:
                 nv = -nv
             faces.append({"poly": np.stack([px, py], 1), "normal": nv,
-                          "depth": float(np.mean(z)), "zs": z, "kind": kind})
+                          "depth": float(np.mean(z)), "zs": z, "kind": kind,
+                          "rec": rec})
         elif kind == "cyli":
             face = _cyl_wall_face(rec, R, sect, right, up, fwd, s, cx, cy, half)
             if face is not None:
@@ -92,7 +93,7 @@ def _cyl_wall_face(rec, R, sect, right, up, fwd, s, cx, cy, half):
         off = ((ppx[0] - p0[0]) * axis[0] + (ppy[0] - p0[1]) * axis[1]) / L2
         samples.append((float(np.clip(off, 0.0, 1.0)), nv))
     return {"poly": poly, "zs": zs, "depth": float(np.mean(zs)), "kind": "cyli",
-            "grad_axis": (p0, p1), "grad_samples": samples}
+            "rec": rec, "grad_axis": (p0, p1), "grad_samples": samples}
 
 
 def _hex(rgb):
@@ -219,6 +220,50 @@ def highlight_ops(analytic, right, up, fwd, s, cx, cy, half, strength=0.15):
 def remap_highlights(his, f, ox, oy, strength):
     return [{"cx": h["cx"] * f + ox, "cy": h["cy"] * f + oy, "r": h["r"] * f,
              "opacity": strength} for h in his]
+
+
+def cull_occluded_faces(faces, occluders, ray_origin, fwd, eps,
+                        kinds=("tri",), own_occ=None):
+    """Winding-independent hidden-surface removal for fill faces.
+
+    A face is culled when another occluder is nearer than the face's own
+    surface at its centroid (self_depth) by more than eps. self_depth is:
+      - tri faces: the stored mean depth (== centroid depth; planar, exact);
+      - analytic faces: the face's OWN occluder depth at the centroid ray
+        (a band's mean depth is not its surface depth, so the mean would make a
+        curved wall cull itself).
+    The own occluder is excluded from the 'nearer?' scan; the -eps margin keeps
+    coplanar neighbours (studs/tops sitting ON the plane) from culling a face.
+
+    `own_occ` maps id(face) -> its occluder (analytic faces only). Faces whose
+    kind is not in `kinds` pass through untouched."""
+    kept = []
+    kinds = set(kinds)
+    own_occ = own_occ or {}
+    for f in faces:
+        if f.get("kind") not in kinds:
+            kept.append(f)
+            continue
+        poly = f["poly"]
+        ox = np.array([float(poly[:, 0].mean())])
+        oy = np.array([float(poly[:, 1].mean())])
+        O = ray_origin(ox, oy)
+        mine = own_occ.get(id(f))
+        if mine is not None:
+            self_depth = float(mine.depth(O, fwd)[0])
+        else:
+            self_depth = f["depth"]
+        occluded = False
+        for occ in occluders:
+            if occ is mine:
+                continue                          # don't let a face occlude itself
+            d = float(occ.depth(O, fwd)[0])
+            if d < self_depth - eps:
+                occluded = True
+                break
+        if not occluded:
+            kept.append(f)
+    return kept
 
 
 def faces_from_tris(tri, right, up, fwd, s, cx, cy, half):
