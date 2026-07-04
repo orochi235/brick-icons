@@ -222,18 +222,49 @@ def remap_highlights(his, f, ox, oy, strength):
              "opacity": strength} for h in his]
 
 
+def _face_samples(f, inset=0.3, max_verts=8):
+    """Sample pixels for HSR: the centroid plus up to `max_verts` polygon
+    vertices pulled `inset` toward it, with matching self-depths.
+
+    The inset is load-bearing twice over: raw vertices sit ON edges shared
+    with adjacent walls (tie-depth => never occluded => hidden slivers would
+    survive), and inset points stay strictly inside curved-wall polygons so
+    the own-occluder ray still hits the surface. Self-depth per sample comes
+    from the same affine combination of the per-vertex depths `zs` (exact for
+    planar faces; a chord approximation for curved ones, refined by the own
+    occluder in the caller). Faces without aligned `zs` fall back to the mean
+    depth."""
+    poly = f["poly"]
+    c = poly.mean(axis=0)
+    idx = np.unique(np.linspace(0, len(poly) - 1,
+                                min(len(poly), max_verts)).round().astype(int))
+    pts = np.vstack([c[None, :], poly[idx] * (1 - inset) + c * inset])
+    zs = f.get("zs")
+    if zs is not None and len(zs) == len(poly):
+        zc = float(np.mean(zs))
+        ds = np.concatenate([[zc], np.asarray(zs, float)[idx] * (1 - inset) + zc * inset])
+    else:
+        ds = np.full(len(pts), f["depth"], float)
+    return pts, ds
+
+
 def cull_occluded_faces(faces, occluders, ray_origin, fwd, eps,
                         kinds=("tri",), own_occ=None):
     """Winding-independent hidden-surface removal for fill faces.
 
-    A face is culled when another occluder is nearer than the face's own
-    surface at its centroid (self_depth) by more than eps. self_depth is:
-      - tri faces: the stored mean depth (== centroid depth; planar, exact);
-      - analytic faces: the face's OWN occluder depth at the centroid ray
-        (a band's mean depth is not its surface depth, so the mean would make a
-        curved wall cull itself).
-    The own occluder is excluded from the 'nearer?' scan; the -eps margin keeps
-    coplanar neighbours (studs/tops sitting ON the plane) from culling a face.
+    A face is culled only when EVERY sample (centroid + inset vertices, see
+    `_face_samples`) has some other occluder nearer than the face's own
+    surface by more than eps. Single-sample culling is wrong in both
+    directions: a stud covering just the centroid must not cull a whole top
+    face (3001's top is two big tris whose centroids land inside stud
+    footprints), while a fully hidden underside sliver must still die.
+
+    Self-depth per sample prefers the face's OWN occluder along that ray (a
+    curved band's interpolated depth is a chord, nearer-biased mean would make
+    a wall cull itself); rays that miss the own occluder keep the interpolated
+    value. The own occluder is excluded from the 'nearer?' scan; the -eps
+    margin keeps coplanar neighbours (studs/tops sitting ON the plane) from
+    culling a face.
 
     `own_occ` maps id(face) -> its occluder (analytic faces only). Faces whose
     kind is not in `kinds` pass through untouched."""
@@ -244,24 +275,18 @@ def cull_occluded_faces(faces, occluders, ray_origin, fwd, eps,
         if f.get("kind") not in kinds:
             kept.append(f)
             continue
-        poly = f["poly"]
-        ox = np.array([float(poly[:, 0].mean())])
-        oy = np.array([float(poly[:, 1].mean())])
-        O = ray_origin(ox, oy)
+        pts, self_d = _face_samples(f)
+        O = ray_origin(pts[:, 0], pts[:, 1])
         mine = own_occ.get(id(f))
         if mine is not None:
-            self_depth = float(mine.depth(O, fwd)[0])
-        else:
-            self_depth = f["depth"]
-        occluded = False
+            d_own = np.asarray(mine.depth(O, fwd), float)
+            self_d = np.where(np.isfinite(d_own), d_own, self_d)
+        nearest = np.full(len(pts), np.inf)
         for occ in occluders:
             if occ is mine:
                 continue                          # don't let a face occlude itself
-            d = float(occ.depth(O, fwd)[0])
-            if d < self_depth - eps:
-                occluded = True
-                break
-        if not occluded:
+            nearest = np.minimum(nearest, occ.depth(O, fwd))
+        if not bool(np.all(nearest < self_d - eps)):
             kept.append(f)
     return kept
 
@@ -285,5 +310,5 @@ def faces_from_tris(tri, right, up, fwd, s, cx, cy, half):
         px, py, z = _project_px(v, right, up, fwd, s, cx, cy, half)
         poly = np.stack([px, py], axis=1)
         faces.append({"poly": poly, "normal": nv, "depth": float(np.mean(z)),
-                      "kind": "tri"})
+                      "zs": z, "kind": "tri"})
     return faces

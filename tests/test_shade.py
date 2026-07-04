@@ -193,3 +193,45 @@ def test_remap_highlights_applies_affine_and_strength():
     out = shade.remap_highlights([{"cx": 10.0, "cy": 20.0, "r": 5.0, "opacity": 1.0}],
                                  f=2.0, ox=1.0, oy=3.0, strength=0.15)
     assert out[0] == {"cx": 21.0, "cy": 43.0, "r": 10.0, "opacity": 0.15}
+
+
+def test_cull_multisample_keeps_face_with_occluded_centroid():
+    """A small near feature (stud) covering only the CENTROID of a big face
+    must not cull the whole face: 3001's top quad-tris have centroids inside
+    stud footprints. Cull requires EVERY sample occluded, not just one."""
+    import numpy as np
+    from brick_icons import shade
+
+    class StudOcc:                       # occludes only a small spot at (50,50)
+        def depth(self, O, F):
+            d = np.hypot(O[:, 0] - 50.0, O[:, 1] - 50.0)
+            return np.where(d < 10.0, 1.0, np.inf)
+
+    face = {"poly": np.array([[0, 0], [100, 0], [100, 100], [0, 100]], float),
+            "depth": 5.0, "zs": np.full(4, 5.0), "kind": "tri"}
+    def ray_origin(xs, ys):
+        return np.stack([xs, ys, np.zeros_like(xs)], axis=1)
+    kept = shade.cull_occluded_faces(
+        [face], occluders=[StudOcc()], ray_origin=ray_origin,
+        fwd=np.array([0, 0, 1.0]), eps=1e-3)
+    assert kept == [face]                # corners visible -> face survives
+
+
+def test_cull_multisample_still_removes_fully_hidden_face():
+    """All samples behind a big wall -> culled (the sliver case must not
+    regress from multi-sampling)."""
+    import numpy as np
+    from brick_icons import shade
+
+    class WallOcc:                       # nearer everywhere
+        def depth(self, O, F):
+            return np.full(O.shape[0], 1.0)
+
+    face = {"poly": np.array([[0, 0], [100, 0], [100, 100], [0, 100]], float),
+            "depth": 5.0, "zs": np.full(4, 5.0), "kind": "tri"}
+    def ray_origin(xs, ys):
+        return np.stack([xs, ys, np.zeros_like(xs)], axis=1)
+    kept = shade.cull_occluded_faces(
+        [face], occluders=[WallOcc()], ray_origin=ray_origin,
+        fwd=np.array([0, 0, 1.0]), eps=1e-3)
+    assert kept == []
