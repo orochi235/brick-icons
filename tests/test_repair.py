@@ -68,3 +68,9 @@ def test_repaired_tris_cache_hit_skips_recompute(tmp_path):
     b = repair.repaired_tris(tris, meta, cache_dir=tmp_path)   # second call
     assert np.array_equal(a, b)
     assert list(tmp_path.glob("*.npz")) == files   # no new file written
+
+
+def test_repaired_tris_empty_returns_empty(tmp_path):
+    out = repair.repaired_tris(np.empty((0, 3, 3)), [], cache_dir=tmp_path)
+    assert len(out) == 0
+    assert list(tmp_path.glob("*.npz")) == []   # nothing computed or cached

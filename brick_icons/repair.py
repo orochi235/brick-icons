@@ -106,6 +106,6 @@ def repaired_tris(tris, tri_meta, cache_dir):
     fp = cache_dir / f"{key}.npz"
     if fp.exists():
         return np.load(fp)["tris"]
-    fixed = _orient(tris, tri_meta)
-    np.savez(fp, tris=np.ascontiguousarray(fixed, dtype=np.float32))
+    fixed = np.ascontiguousarray(_orient(tris, tri_meta), dtype=np.float32)
+    np.savez(fp, tris=fixed)
     return fixed
