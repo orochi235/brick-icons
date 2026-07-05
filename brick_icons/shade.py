@@ -21,7 +21,12 @@ def _radius_pts(rec, thetas, level, radius=None):
     primitive units); default is the ring's outer radius (inner+1) or 1.0."""
     R = np.asarray(rec["R"], float); C = np.asarray(rec["t"], float)
     if radius is None:
-        radius = (rec["inner"] + 1) if rec["kind"] == "ring" else 1.0
+        if rec["kind"] == "ring":
+            radius = rec["inner"] + 1
+        elif rec["kind"] == "con":
+            radius = rec["inner"] + 1 - level      # N+1 at base -> N at top
+        else:
+            radius = 1.0
     U, A, V = R[:, 0], R[:, 1], R[:, 2]
     base = C + level * A
     return base + radius * (np.cos(thetas)[:, None] * U + np.sin(thetas)[:, None] * V)
@@ -85,6 +90,9 @@ def faces_from_analytic(analytic, right, up, fwd, s, cx, cy, half):
             faces.append(face)
         elif kind == "cyli":
             faces.extend(_cyl_wall_faces(rec, R, sect, right, up, fwd,
+                                         s, cx, cy, half))
+        elif kind == "con":
+            faces.extend(_con_wall_faces(rec, R, sect, right, up, fwd,
                                          s, cx, cy, half))
     return faces
 
@@ -159,7 +167,46 @@ def _cyl_wall_faces(rec, R, sect, right, up, fwd, s, cx, cy, half):
     return faces
 
 
-def _wall_span_face(rec, U, V, lo, hi, interior, right, up, fwd, s, cx, cy, half):
+def _con_wall_faces(rec, R, sect, right, up, fwd, s, cx, cy, half):
+    """Cone wall fills. Unlike a cylinder, the front-facing arc is NOT a half:
+    with g = R^-1 @ fwd and (A, B, C) = (g0, g2, -g1), n(theta).fwd =
+    hyp*cos(theta - phi0) - C, so the outer wall is visible on
+    (phi0+d, phi0+2pi-d) where d = acos(C/hyp) — the generator angles — and
+    the interior far wall on the complement. Axis-on view (hyp ~ 0, or
+    |C| >= hyp): every generator faces the same way, one full-circle span."""
+    Minv = np.linalg.inv(R)
+    g = Minv @ np.asarray(fwd, float)
+    A_, B_, C_ = float(g[0]), float(g[2]), float(-g[1])
+    MT = Minv.T
+
+    def normal_fn(th):
+        return MT @ np.array([math.cos(th), 1.0, math.sin(th)])
+
+    hyp = math.hypot(A_, B_)
+    if hyp < 1e-12:
+        spans = [(0.0, 2 * math.pi, float(g[1]) > 0)]
+    elif abs(C_) >= hyp:
+        spans = [(0.0, 2 * math.pi, C_ >= hyp)]
+    else:
+        phi0 = math.atan2(B_, A_)
+        d = math.acos(max(-1.0, min(1.0, C_ / hyp)))
+        spans = [(phi0 + d, phi0 + 2 * math.pi - d, False),
+                 (phi0 - d, phi0 + d, True)]
+    U, V = R[:, 0], R[:, 2]
+    faces = []
+    for start, end, interior in spans:
+        if end - start < 1e-6:
+            continue
+        for lo, hi in _arc_sector_spans(start, end - start, sect):
+            f = _wall_span_face(rec, U, V, lo, hi, interior, right, up, fwd,
+                                s, cx, cy, half, normal_fn=normal_fn)
+            if f is not None:
+                faces.append(f)
+    return faces
+
+
+def _wall_span_face(rec, U, V, lo, hi, interior, right, up, fwd, s, cx, cy, half,
+                    normal_fn=None):
     ths = np.linspace(lo, hi, 40)
     top = _radius_pts(rec, ths, 1.0)
     bot = _radius_pts(rec, ths, 0.0)
@@ -175,7 +222,11 @@ def _wall_span_face(rec, U, V, lo, hi, interior, right, up, fwd, s, cx, cy, half
     axis = np.array([p1[0] - p0[0], p1[1] - p0[1]]); L2 = float(axis @ axis) or 1.0
     samples = []
     for th in np.linspace(lo, hi, 9):
-        n = math.cos(th) * U + math.sin(th) * V; n = n / np.linalg.norm(n)
+        if normal_fn is None:
+            n = math.cos(th) * U + math.sin(th) * V
+        else:
+            n = normal_fn(th)
+        n = n / np.linalg.norm(n)
         if interior:
             n = -n                               # inward surface normal
         nv = np.array([n @ right, n @ up, n @ fwd])
@@ -183,7 +234,7 @@ def _wall_span_face(rec, U, V, lo, hi, interior, right, up, fwd, s, cx, cy, half
         ppx, ppy, _ = _project_px(p, right, up, fwd, s, cx, cy, half)
         off = ((ppx[0] - p0[0]) * axis[0] + (ppy[0] - p0[1]) * axis[1]) / L2
         samples.append((float(np.clip(off, 0.0, 1.0)), nv))
-    return {"poly": poly, "zs": zs, "depth": float(np.mean(zs)), "kind": "cyli",
+    return {"poly": poly, "zs": zs, "depth": float(np.mean(zs)), "kind": rec["kind"],
             "rec": rec, "interior": interior,
             "span_deg": math.degrees(hi - lo),
             "grad_axis": (p0, p1), "grad_samples": samples}

@@ -159,6 +159,59 @@ def test_apply_affine_remaps_holes():
     assert np.allclose(out["holes"][0][0], (3.0, 3.0))
 
 
+def _cone_rec(N=1, sector=360.0):
+    return {"kind": "con", "sector": sector, "inner": N,
+            "R": np.eye(3), "t": np.zeros(3)}
+
+
+def test_cone_wall_faces_outer_and_interior():
+    right, up = np.array([1.0, 0, 0]), np.array([0.0, 1.0, 0])
+    fwd = np.array([0.0, 0.0, -1.0])
+    faces = shade.faces_from_analytic([_cone_rec()], right, up, fwd,
+                                      1.0, 0.0, 0.0, 0.0)
+    outer = [f for f in faces if not f.get("interior")]
+    inner = [f for f in faces if f.get("interior")]
+    assert len(outer) == 1 and len(inner) == 1
+    assert abs(outer[0]["span_deg"] - 180.0) < 1e-6
+    # cone flare: every gradient-sample normal has a positive up-component
+    ups = [nv[1] for _, nv in outer[0]["grad_samples"]]
+    assert all(u > 0.5 for u in ups)            # (cos,1,sin)/sqrt2 -> up ~ .707
+
+
+def test_cone_wall_radii_taper():
+    right, up = np.array([1.0, 0, 0]), np.array([0.0, 1.0, 0])
+    fwd = np.array([0.0, 0.0, -1.0])
+    f = [x for x in shade.faces_from_analytic([_cone_rec(N=1)], right, up, fwd,
+                                              1.0, 0.0, 0.0, 0.0)
+         if not x.get("interior")][0]
+    xs = np.abs(f["poly"][:, 0])
+    assert abs(xs.max() - 2.0) < 1e-6           # base radius N+1
+
+
+def test_cone_axis_on_view_full_annulus_wall():
+    # looking straight down the axis from above the apex: the whole outer wall
+    # is visible as an annulus-like band (unlike a cylinder, which shows none).
+    right, up = np.array([1.0, 0, 0]), np.array([0.0, 0.0, 1.0])
+    fwd = np.array([0.0, -1.0, 0.0])
+    faces = shade.faces_from_analytic([_cone_rec()], right, up, fwd,
+                                      1.0, 0.0, 0.0, 0.0)
+    assert len(faces) == 1 and not faces[0].get("interior")
+
+
+def test_cylinder_wall_faces_unchanged():
+    # regression: generalizing helpers must not perturb cylinder output
+    rec = {"kind": "cyli", "sector": 360.0, "inner": 0,
+           "R": np.eye(3), "t": np.zeros(3)}
+    right, up = np.array([1.0, 0, 0]), np.array([0.0, 1.0, 0])
+    fwd = np.array([0.0, 0.0, -1.0])
+    faces = shade.faces_from_analytic([rec], right, up, fwd, 1.0, 0.0, 0.0, 0.0)
+    assert {f.get("interior", False) for f in faces} == {False, True}
+    for f in faces:
+        assert abs(f["span_deg"] - 180.0) < 1e-6
+        for _, nv in f["grad_samples"]:
+            assert abs(nv[1]) < 1e-9            # cylinder normals have no up
+
+
 def test_faces_from_tris_culls_back_and_projects():
     # a single CCW triangle in the z=0 plane (LDraw world)
     tri = np.array([[[0, 0, 0], [10, 0, 0], [0, 10, 0]]], float)
