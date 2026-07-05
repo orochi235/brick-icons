@@ -297,6 +297,39 @@ def test_cone_part_uses_analytic_cones():
 
 
 @pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_dish_top_merges_to_few_gradient_paths():
+    # 3960's dish: hundreds of seam-grouped facets must merge to a handful of
+    # fill ops (one region per smooth/coplanar surface), not one per facet.
+    from brick_icons import shade
+    res = hlr.visible_segments("3960", LIB, lat=30, long=45, render_px=900)
+    ops = shade.fill_ops(res.faces, shade.Flat3Style())
+    grads = [o for o in ops if "gradient" in o]
+    assert 0 < len(grads) < 25
+    assert len(ops) < 80
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_fragments_are_disjoint_no_hidden_fills():
+    import re as _re
+    from brick_icons import geom2d, shade
+    res = hlr.visible_segments("3005", LIB, lat=30, long=45, render_px=900)
+    ops = shade.fill_ops(res.faces, shade.Flat3Style())
+
+    def to_geom(op):
+        rings = []
+        for sub in op["d"].split("M ")[1:]:
+            pts = _re.findall(r"(-?\d+\.?\d*) (-?\d+\.?\d*)", sub)
+            rings.append(np.array(pts, float))
+        return geom2d.to_geom(rings[0], holes=rings[1:])
+
+    gs = [to_geom(o) for o in ops]
+    total = sum(geom2d.area(g) for g in gs)
+    union = geom2d.area(geom2d.union_all(gs))
+    assert union > 0
+    assert abs(total - union) < 0.01 * union      # no overdraw: disjoint fragments
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
 def test_visible_segments_emits_arcs_for_round_part():
     res = hlr.visible_segments("3941", LIB, lat=30, long=45, render_px=900)
     assert any(o[0] == "arc" for o in res.segs)             # analytic curves present
