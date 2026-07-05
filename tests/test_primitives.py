@@ -166,6 +166,42 @@ def test_visibility_keeps_unoccluded_arc_whole():
     assert len(arcs) == 1 and np.isclose(arcs[0][7], 0.0) and arcs[0][8] >= 350.0
 
 
+def test_cone_occluder_axis_aligned_hit():
+    # con0: radius 1 at y=0 -> 0 at y=1. Ray along +Z at (x=.25, y=.5):
+    # the section there has radius .5, so x^2+z^2=.25 -> z = +-sqrt(.5^2-.25^2)
+    occ = P.ConeOccluder(np.eye(3), np.zeros(3), 360.0, 0)
+    O = np.array([[0.25, 0.5, -5.0]])
+    F = np.array([0.0, 0.0, 1.0])
+    z = math.sqrt(0.5 ** 2 - 0.25 ** 2)
+    assert abs(occ.depth(O, F)[0] - (5.0 - z)) < 1e-9
+    assert abs(occ.depth_far(O, F)[0] - (5.0 + z)) < 1e-9
+
+
+def test_cone_occluder_height_and_sector_clamp():
+    occ = P.ConeOccluder(np.eye(3), np.zeros(3), 360.0, 0)
+    assert not np.isfinite(occ.depth(np.array([[0.1, 1.5, -5.0]]),
+                                     np.array([0.0, 0.0, 1.0]))[0])
+    quarter = P.ConeOccluder(np.eye(3), np.zeros(3), 90.0, 0)
+    # ray at x=+.25: near hit (z<0) is outside the [0,90] sector, far hit
+    # (z>0, theta~60deg) is inside -> nearest valid hit is the FAR wall
+    O = np.array([[0.25, 0.5, -5.0]])
+    d = quarter.depth(O, np.array([0.0, 0.0, 1.0]))[0]
+    z = math.sqrt(0.5 ** 2 - 0.25 ** 2)
+    assert abs(d - (5.0 + z)) < 1e-9
+
+
+def test_cone_occluder_scaled_transform():
+    # radius x2, height x3, translated: lambda is invariant under the linear
+    # map, so depths come back in world units.
+    R = np.diag([2.0, 3.0, 2.0])
+    t = np.array([10.0, 0.0, 0.0])
+    occ = P.ConeOccluder(R, t, 360.0, 0)
+    O = np.array([[10.5, 1.5, -9.0]])          # local (.25, .5, ...)
+    F = np.array([0.0, 0.0, 1.0])
+    z = 2.0 * math.sqrt(0.5 ** 2 - 0.25 ** 2)
+    assert abs(occ.depth(O, F)[0] - (9.0 - z)) < 1e-9
+
+
 def test_cylinder_depth_far_returns_second_hit():
     """Interior far-half wall faces need the FAR ray intersection; the near
     hit belongs to the front wall (ordering interior walls by the near hit

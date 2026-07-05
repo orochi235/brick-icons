@@ -183,6 +183,61 @@ class CylinderOccluder:
         return self._hits(O, F, clamp=clamp)[1]
 
 
+class ConeOccluder:
+    """Truncated cone: local radius (top+1) at y=0 tapering to `top` at y=1,
+    under transform R, t; optional angular sector.
+
+    Works in the primitive's LOCAL frame (Minv = R^-1) so scale and shear are
+    exact; the ray parameter lambda is invariant under the linear map, so the
+    returned depths are world units along F, same as the other occluders.
+    """
+
+    def __init__(self, R, t, sector, top):
+        self.R = np.asarray(R, float)
+        self.t = np.asarray(t, float)
+        self.Minv = np.linalg.inv(self.R)
+        self.sector = sector
+        self.top = float(top)
+
+    def _hits(self, O, F, clamp=True):
+        O = np.atleast_2d(O).astype(float)
+        o = (O - self.t) @ self.Minv.T
+        f = self.Minv @ np.asarray(F, float)
+        rb = self.top + 1.0                     # base radius, local units
+        k = rb - o[:, 1]                        # section radius at the origin's y
+        a = f[0] * f[0] + f[2] * f[2] - f[1] * f[1]
+        b = 2.0 * (o[:, 0] * f[0] + o[:, 2] * f[2] + k * f[1])
+        c = o[:, 0] * o[:, 0] + o[:, 2] * o[:, 2] - k * k
+        near = np.full(len(o), np.inf)
+        far = np.full(len(o), -np.inf)
+        if abs(a) < 1e-12:                      # ray parallel to a generator
+            with np.errstate(divide="ignore", invalid="ignore"):
+                lam = np.where(np.abs(b) > 1e-12, -c / b, np.inf)
+            roots, ok = [lam], np.abs(b) > 1e-12
+        else:
+            disc = b * b - 4 * a * c
+            ok = disc >= 0
+            sq = np.sqrt(np.where(ok, disc, 0.0))
+            roots = [(-b - sq) / (2 * a), (-b + sq) / (2 * a)]
+        for lam in roots:
+            P_ = o + lam[:, None] * f
+            y = P_[:, 1]
+            if clamp:
+                valid = (ok & np.isfinite(lam) & (y >= -1e-6) & (y <= 1 + 1e-6)
+                         & _angle_in_sector(P_[:, 0], P_[:, 2], self.sector))
+            else:
+                valid = ok & np.isfinite(lam) & (rb - y >= 0)   # not the mirror nappe
+            near = np.minimum(near, np.where(valid, lam, np.inf))
+            far = np.maximum(far, np.where(valid, lam, -np.inf))
+        return near, far
+
+    def depth(self, O, F):
+        return self._hits(O, F)[0]
+
+    def depth_far(self, O, F, clamp=True):
+        return self._hits(O, F, clamp=clamp)[1]
+
+
 class DiscOccluder:
     """Planar disc / annulus in the primitive's local XZ plane (normal = axis A)."""
 
