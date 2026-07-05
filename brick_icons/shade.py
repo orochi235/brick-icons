@@ -608,6 +608,9 @@ def faces_from_tris(tri, right, up, fwd, s, cx, cy, half, cond_edges=None):
                       "zs": z, "kind": "tri", "_verts": v})
     if cond_edges is not None and len(cond_edges):
         _attach_smooth_gradients(faces, cond_edges)
+    else:
+        # no seams, but coplanar groups still form (flat-surface merging)
+        _attach_smooth_gradients(faces, np.zeros((0, 2, 3)))
     for f in faces:
         f.pop("_verts", None)
     return faces
@@ -688,6 +691,7 @@ def _attach_smooth_gradients(faces, cond_edges, min_spread=0.002):
 
     groups = defaultdict(list)
     for k in range(len(faces)):
+        faces[k]["group"] = find(k)     # merge key for fill_ops union
         groups[find(k)].append(k)
     for ks in groups.values():
         if len(ks) < 2:

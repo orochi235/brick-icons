@@ -243,6 +243,29 @@ def test_faces_from_tris_culls_backface_no_flip():
     assert faces == []                        # culled, not flipped
 
 
+def test_group_ids_stamped_on_all_tri_faces():
+    # two coplanar tris sharing an edge + one lone off-plane tri; all three
+    # must be camera-facing so all three survive the back-face cull
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    tris = []
+    for cand in ([[0, 0, 0], [10, 0, 0], [0, 10, 0]],
+                 [[10, 0, 0], [10, 10, 0], [0, 10, 0]],
+                 [[50, 0, 10], [60, 0, 20], [50, 10, 30]]):
+        v = np.array(cand, float)
+        n = np.cross(v[1] - v[0], v[2] - v[0])
+        if np.array([n @ right, n @ up, n @ fwd])[2] > 0:
+            v = v[::-1]                          # flip to face the camera
+        tris.append(v)
+    faces = shade.faces_from_tris(np.array(tris), right, up, fwd,
+                                  1.0, 0.0, 0.0, 0.0,
+                                  cond_edges=np.zeros((0, 4, 3)))
+    assert len(faces) == 3
+    assert all("group" in f for f in faces)
+    coplanar = [faces[0], faces[1]]
+    assert coplanar[0]["group"] == coplanar[1]["group"]
+    assert faces[2]["group"] != faces[0]["group"]
+
+
 def test_flat3_tone_by_orientation():
     from brick_icons import shade
     style = shade.Flat3Style(part_color=(160, 160, 160))
