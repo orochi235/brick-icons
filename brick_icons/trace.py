@@ -83,8 +83,8 @@ def _arc_to_svg(op):
             f'{large} {sweep} {x1e:.2f} {y1e:.2f}')
 
 
-def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=3,
-                    physical=None, s=None, line_mm=0.2, sil_mm=0.3,
+def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
+                    physical=None, s=None, line_mm=0.2, sil_mm=0.2,
                     fills=None, highlights=None) -> Path:
     if physical is not None:
         w_mm, h_mm = physical

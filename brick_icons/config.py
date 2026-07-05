@@ -33,13 +33,16 @@ DEFAULTS = {
     "shading": "normal",     # normal | cel | outline
     "cel_levels": 4,         # bands for cel shading
     "outline_interior": True,# include interior edges in outline
-    "line_width": 2,         # outline interior stroke, output px
-    "silhouette_width": 3,   # outline contour stroke, output px
+    "line_width": 2,         # outline edge stroke, output px
+    "silhouette_width": 2,   # smooth-silhouette stroke (cylinder limbs,
+                             # folds), output px — match line_width so limb
+                             # lines don't read heavier than the rim arcs
+                             # and box edges they abut
     "part_color": None,      # "0xRRGGBB" or None
     "scale": 1.0,            # part fill fraction of label (0-1)
     "scale_mode": "fit",     # fit | physical  (physical: SVG sized in mm)
-    "line_mm": 0.2,          # physical interior stroke width (mm)
-    "silhouette_mm": 0.3,    # physical contour stroke width (mm)
+    "line_mm": 0.2,          # physical edge stroke width (mm)
+    "silhouette_mm": 0.2,    # physical smooth-silhouette stroke width (mm)
     "shade_style": "none",
     "highlights": False,
     "highlight_strength": 0.15,

@@ -50,7 +50,7 @@ def _silhouette_mask(rgba: Image.Image, thr: int = 16) -> Image.Image:
     return rgba.convert("RGBA").split()[-1].point(lambda p: 255 if p > thr else 0)
 
 
-def draw_segments(segs, w, h, line_px=2, sil_px=3, supersample=3):
+def draw_segments(segs, w, h, line_px=2, sil_px=2, supersample=3):
     """Anti-aliased black line-art on white. Accepts line ops and arc ops;
     'sil' segments use sil_px width. Arc ops are sampled into polylines."""
     ss = max(1, supersample)
@@ -76,7 +76,7 @@ def draw_segments(segs, w, h, line_px=2, sil_px=3, supersample=3):
     return img.resize((w, h), Image.LANCZOS)
 
 
-def segments_mono(segs, w, h, line_px=2, sil_px=3, threshold=160):
+def segments_mono(segs, w, h, line_px=2, sil_px=2, threshold=160):
     g = draw_segments(segs, w, h, line_px, sil_px)
     return g.point(lambda p: 255 if p >= threshold else 0).convert("1")
 

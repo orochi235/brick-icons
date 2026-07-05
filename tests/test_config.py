@@ -51,6 +51,6 @@ def test_scale_mode_default_and_override(tmp_path):
     from brick_icons.config import load_config
     cfg = load_config(toml_path=None, overrides={}, root=".")
     assert cfg.scale_mode == "fit"
-    assert cfg.line_mm == 0.2 and cfg.silhouette_mm == 0.3
+    assert cfg.line_mm == 0.2 and cfg.silhouette_mm == 0.2
     cfg2 = load_config(toml_path=None, overrides={"scale_mode": "physical"}, root=".")
     assert cfg2.scale_mode == "physical"
