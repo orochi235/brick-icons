@@ -27,11 +27,27 @@ def test_parse_ring_inner_radius():
 
 
 def test_unrecognized_returns_none():
-    assert P.parse_primitive("4-4ndis.dat") is None      # fallback to faceted
     assert P.parse_primitive("1-4cyls.dat") is None       # sloped cut: fallback
     assert P.parse_primitive("1-8chrd.dat") is None       # chord: straight, fallback
     assert P.parse_primitive("box.dat") is None
     assert P.parse_primitive("stud4.dat") is None
+
+
+def test_parse_cone_names():
+    assert P.parse_primitive("4-4con4.dat") == ("con", 360.0, 4)
+    assert P.parse_primitive("1-4con0.dat") == ("con", 90.0, 0)
+    assert P.parse_primitive("1-16con13.dat") == ("con", 22.5, 13)
+    assert P.parse_primitive("48\\4-4con3.dat") == ("con", 360.0, 3)
+
+
+def test_parse_ndis_names():
+    assert P.parse_primitive("4-4ndis.dat") == ("ndis", 360.0, 0)
+    assert P.parse_primitive("1-4ndis.dat") == ("ndis", 90.0, 0)
+
+
+def test_parse_still_rejects_unhandled():
+    for name in ("1-16tndis.dat", "1-4cyls.dat", "1-8chrd.dat", "4-4con.dat"):
+        assert P.parse_primitive(name) is None
 
 
 def test_project_circle_to_ellipse_basis():

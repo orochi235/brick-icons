@@ -19,15 +19,16 @@ import re
 
 import numpy as np
 
-_FRAC = re.compile(r"^(\d+)-(\d+)(edge|cyli|cylo|disc|ring)(\d*)$")
+_FRAC = re.compile(r"^(\d+)-(\d+)(edge|cyli|cylo|disc|ndis|ring|con)(\d*)$")
 
 
 def parse_primitive(name: str):
     """basename -> (kind, sector_deg, inner_radius) or None.
 
     None means "not a substitutable curved primitive" -> the caller should fall
-    back to faceted polygon recursion. kind in {'edge','cyli','disc','ring'};
-    'cylo' is aliased to 'cyli'.
+    back to faceted polygon recursion. kind in {'edge','cyli','disc','ring',
+    'con','ndis'}; 'cylo' is aliased to 'cyli'. For 'con' the third element is
+    the TOP radius N: geometry is radius N+1 at local y=0 tapering to N at y=1.
     """
     base = name.replace("\\", "/").split("/")[-1].lower()
     if base.endswith(".dat"):
@@ -40,6 +41,10 @@ def parse_primitive(name: str):
         return None
     sector = 360.0 * num / den
     kind = "cyli" if fam == "cylo" else fam
+    if kind == "con":
+        if not suffix:
+            return None            # 'conN' always carries its top radius
+        return ("con", sector, int(suffix))
     inner = int(suffix) if (kind == "ring" and suffix) else 0
     if kind == "ring" and inner == 0:
         return None

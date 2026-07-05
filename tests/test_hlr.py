@@ -236,9 +236,9 @@ def test_flatten_substitutes_known_primitive(tmp_path):
 
 def test_flatten_unknown_primitive_recurses(tmp_path):
     (tmp_path / "p").mkdir()
-    (tmp_path / "p" / "4-4ndis.dat").write_text("3 16 0 0 0  1 0 0  0 0 1\n")
+    (tmp_path / "p" / "1-16tndis.dat").write_text("3 16 0 0 0  1 0 0  0 0 1\n")
     part = tmp_path / "thing.dat"
-    part.write_text("1 16 0 0 0  1 0 0  0 1 0  0 0 1  p\\4-4ndis.dat\n")
+    part.write_text("1 16 0 0 0  1 0 0  0 1 0  0 0 1  p\\1-16tndis.dat\n")
     roots = hlr.default_roots(tmp_path)
     out = {"2": [], "5": [], "tri": [], "analytic": []}
     hlr.flatten(part, np.eye(3), np.zeros(3), out, roots)
