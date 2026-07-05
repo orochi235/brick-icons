@@ -50,27 +50,57 @@ def faces_from_analytic(analytic, right, up, fwd, s, cx, cy, half):
                           "depth": float(np.mean(z)), "zs": z, "kind": kind,
                           "rec": rec})
         elif kind == "cyli":
-            face = _cyl_wall_face(rec, R, sect, right, up, fwd, s, cx, cy, half)
-            if face is not None:
-                faces.append(face)
+            faces.extend(_cyl_wall_faces(rec, R, sect, right, up, fwd,
+                                         s, cx, cy, half))
     return faces
 
 
-def _cyl_wall_face(rec, R, sect, right, up, fwd, s, cx, cy, half):
-    """The camera-facing cylinder wall as ONE smooth arc-region polygon plus a
-    linear-gradient spec (stops sample the Lambert shading around the visible
-    span). Returns None if no wall faces the camera within the sector."""
+def _arc_sector_spans(lo, length, sect):
+    """Intersect the arc starting at `lo` (radians) of `length` with the
+    sector [0, sect] on the circle. Returns [(a, b)] spans (b > a), at most
+    two: a wrapped arc can re-enter the sector past 0. A full sector needs no
+    clamping — the raw interval is returned so a seamless single face is kept
+    even when it crosses 0/2pi (angles are plain reals downstream)."""
+    if sect >= 2 * math.pi - 1e-6:
+        return [(lo, lo + length)]
+    two = 2 * math.pi
+    lo = lo % two
+    pieces = [(lo, min(lo + length, two))]
+    if lo + length > two:
+        pieces.append((0.0, lo + length - two))
+    spans = []
+    for a, b in pieces:
+        a, b = max(a, 0.0), min(b, sect)
+        if b - a > 1e-3:
+            spans.append((a, b))
+    return spans
+
+
+def _cyl_wall_faces(rec, R, sect, right, up, fwd, s, cx, cy, half):
+    """Cylinder wall fills: the camera-facing outer half AND the far half's
+    interior surface (visible when looking into an open tube — leaving it out
+    produced 4019's white voids). Each visible span becomes one arc-region
+    polygon with a linear-gradient spec; a partial sector can split a span in
+    two where the arc wraps past 0."""
     U, A, V = R[:, 0], R[:, 1], R[:, 2]
     a = float(U @ fwd); b = float(V @ fwd)
     if a == 0.0 and b == 0.0:
-        return None                              # axis points at camera: no wall
+        return []                                # axis points at camera: no wall
     phi = math.atan2(b, a)
     theta_face = phi + math.pi                   # most camera-facing angle
-    lo, hi = theta_face - math.pi / 2, theta_face + math.pi / 2
-    if sect < 2 * math.pi - 1e-6:                # partial sector: clamp naively
-        lo = max(lo, 0.0); hi = min(hi, sect)
-        if hi - lo < 1e-3:
-            return None
+    halves = [(theta_face - math.pi / 2, False),         # outer near half
+              (theta_face + math.pi / 2, True)]          # interior far half
+    faces = []
+    for start, interior in halves:
+        for lo, hi in _arc_sector_spans(start, math.pi, sect):
+            f = _wall_span_face(rec, U, V, lo, hi, interior,
+                                right, up, fwd, s, cx, cy, half)
+            if f is not None:
+                faces.append(f)
+    return faces
+
+
+def _wall_span_face(rec, U, V, lo, hi, interior, right, up, fwd, s, cx, cy, half):
     ths = np.linspace(lo, hi, 40)
     top = _radius_pts(rec, ths, 1.0)
     bot = _radius_pts(rec, ths, 0.0)
@@ -79,7 +109,7 @@ def _cyl_wall_face(rec, R, sect, right, up, fwd, s, cx, cy, half):
     poly = np.concatenate([np.stack([tpx, tpy], 1),
                            np.stack([bpx, bpy], 1)[::-1]], axis=0)
     zs = np.concatenate([tz, bz])
-    # gradient axis: mid-height points at the two silhouette angles
+    # gradient axis: mid-height points at the span's end angles
     mid = _radius_pts(rec, np.array([lo, hi]), 0.5)
     mpx, mpy, _ = _project_px(mid, right, up, fwd, s, cx, cy, half)
     p0 = (float(mpx[0]), float(mpy[0])); p1 = (float(mpx[1]), float(mpy[1]))
@@ -87,13 +117,17 @@ def _cyl_wall_face(rec, R, sect, right, up, fwd, s, cx, cy, half):
     samples = []
     for th in np.linspace(lo, hi, 9):
         n = math.cos(th) * U + math.sin(th) * V; n = n / np.linalg.norm(n)
+        if interior:
+            n = -n                               # inward surface normal
         nv = np.array([n @ right, n @ up, n @ fwd])
         p = _radius_pts(rec, np.array([th]), 0.5)
         ppx, ppy, _ = _project_px(p, right, up, fwd, s, cx, cy, half)
         off = ((ppx[0] - p0[0]) * axis[0] + (ppy[0] - p0[1]) * axis[1]) / L2
         samples.append((float(np.clip(off, 0.0, 1.0)), nv))
     return {"poly": poly, "zs": zs, "depth": float(np.mean(zs)), "kind": "cyli",
-            "rec": rec, "grad_axis": (p0, p1), "grad_samples": samples}
+            "rec": rec, "interior": interior,
+            "span_deg": math.degrees(hi - lo),
+            "grad_axis": (p0, p1), "grad_samples": samples}
 
 
 def _hex(rgb):

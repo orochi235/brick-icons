@@ -69,10 +69,12 @@ def test_faces_from_analytic_cylinder_gradient_and_disc():
                                       s=2.0, cx=0.0, cy=0.0, half=50.0)
     kinds = [f["kind"] for f in faces]
     assert kinds.count("disc") == 1
-    assert kinds.count("cyli") == 1              # one smooth arc-region wall, not bands
+    # one smooth near wall (not bands) + one interior far wall
+    near_walls = [f for f in faces if f["kind"] == "cyli" and not f.get("interior")]
+    assert len(near_walls) == 1
     disc_face = next(f for f in faces if f["kind"] == "disc")
     assert disc_face["poly"].shape[1] == 2 and abs(np.linalg.norm(disc_face["normal"]) - 1) < 1e-6
-    cyl_face = next(f for f in faces if f["kind"] == "cyli")
+    cyl_face = near_walls[0]
     assert "grad_axis" in cyl_face and len(cyl_face["grad_samples"]) >= 2
     assert cyl_face["poly"].shape[1] == 2
 
@@ -235,3 +237,45 @@ def test_cull_multisample_still_removes_fully_hidden_face():
         [face], occluders=[WallOcc()], ray_origin=ray_origin,
         fwd=np.array([0, 0, 1.0]), eps=1e-3)
     assert kept == []
+
+
+def test_cyl_wall_partial_sector_wrapping_arc_emits_both_spans():
+    """A 270-degree tube oriented so the camera-facing arc wraps past 0 must
+    emit BOTH visible wall spans (old naive clamp lost the wrapped piece —
+    4019's void pixels traced to exactly this)."""
+    import math
+    import numpy as np
+    from brick_icons import shade, hlr
+    right, up, fwd = hlr.view_basis(0.0, 0.0)
+    g = math.radians(-30.0)          # theta_face = 270 - g = 300 degrees
+    U = np.array([math.cos(g), 0.0, math.sin(g)])
+    V = np.array([-math.sin(g), 0.0, math.cos(g)])
+    A = np.array([0.0, -1.0, 0.0])
+    R = np.stack([U, A, V], axis=1)
+    cyl = {"kind": "cyli", "sector": 270.0, "inner": 0, "R": R, "t": np.zeros(3)}
+    faces = shade.faces_from_analytic([cyl], right, up, fwd,
+                                      s=2.0, cx=0.0, cy=0.0, half=50.0)
+    near = [f for f in faces if f["kind"] == "cyli" and not f.get("interior")]
+    # visible arc [210,390] ∩ sector [0,270] = [210,270] + [0,30]
+    assert len(near) == 2
+    total = sum(f["span_deg"] for f in near)
+    assert abs(total - 90.0) < 1.0
+
+
+def test_cyl_interior_far_wall_emitted_for_open_tubes():
+    """Looking into an open tube you see its far interior wall; that half must
+    be emitted (flagged interior, camera-facing normals) instead of leaving
+    white voids (4019 hub/pin tubes)."""
+    import numpy as np
+    from brick_icons import shade, hlr
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    cyl = {"kind": "cyli", "sector": 360.0, "inner": 0, "R": np.eye(3),
+           "t": np.zeros(3)}
+    faces = shade.faces_from_analytic([cyl], right, up, fwd,
+                                      s=2.0, cx=0.0, cy=0.0, half=50.0)
+    near = [f for f in faces if f["kind"] == "cyli" and not f.get("interior")]
+    inner = [f for f in faces if f["kind"] == "cyli" and f.get("interior")]
+    assert len(near) == 1 and len(inner) == 1
+    assert abs(inner[0]["span_deg"] - 180.0) < 1.0
+    # interior gradient samples face the camera (nv z-component < 0)
+    assert all(nv[2] < 1e-6 for _, nv in inner[0]["grad_samples"])
