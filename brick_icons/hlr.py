@@ -296,11 +296,20 @@ def _visible_segments_faceted(out, right, up, fwd, render_px):
 def _analytic_circle_pts(rec, n=16):
     """World sample points on a record's primary circle(s), for the pixel fit."""
     R = np.asarray(rec["R"], float); C = np.asarray(rec["t"], float)
-    outer = (rec["inner"] + 1) if rec["kind"] == "ring" else 1.0
+    outer = (rec["inner"] + 1) if rec["kind"] in ("ring", "con") else 1.0
     ang = np.linspace(0.0, math.radians(rec["sector"]), n)
     circ = C + outer * (np.cos(ang)[:, None] * R[:, 0] + np.sin(ang)[:, None] * R[:, 2])
     if rec["kind"] == "cyli":
         return np.vstack([circ, circ + R[:, 1]])      # base + top rings
+    if rec["kind"] == "con":
+        top = (C + R[:, 1]
+               + rec["inner"] * (np.cos(ang)[:, None] * R[:, 0]
+                                 + np.sin(ang)[:, None] * R[:, 2]))
+        return np.vstack([circ, top])                 # base + top rings
+    if rec["kind"] == "ndis":
+        sq = np.array([(1, 1), (-1, 1), (-1, -1), (1, -1)], float)
+        corners = C + sq[:, 0:1] * R[:, 0] + sq[:, 1:2] * R[:, 2]
+        return np.vstack([circ, corners])             # arc + square corners
     return circ
 
 
@@ -335,11 +344,16 @@ def _visible_segments_analytic(out, right, up, fwd, render_px):
         k = rec["kind"]
         if k == "cyli":
             occ = primitives.CylinderOccluder(rec["R"], rec["t"], rec["sector"])
+        elif k == "con":
+            occ = primitives.ConeOccluder(rec["R"], rec["t"], rec["sector"],
+                                          rec["inner"])
         elif k == "disc":
             occ = primitives.DiscOccluder(rec["R"], rec["t"], rec["sector"], 0.0, 1.0)
         elif k == "ring":
             occ = primitives.DiscOccluder(rec["R"], rec["t"], rec["sector"],
                                           rec["inner"], rec["inner"] + 1)
+        elif k == "ndis":
+            occ = primitives.NdisOccluder(rec["R"], rec["t"], rec["sector"])
         else:
             occ = None                                  # edge: no surface
         if occ is not None:

@@ -290,10 +290,13 @@ class NdisOccluder:
             return out
         lam = ((self.C - O) @ self.n) / denom
         rel = O + lam[:, None] * F - self.C
+        # uhat/vhat are unit vectors, so lx/lz are WORLD-scale local coords;
+        # compare against the world-scaled unit square/disc (r), matching
+        # DiscOccluder's convention.
         lx = rel @ self.uhat
         lz = rel @ self.vhat
-        valid = ((np.maximum(np.abs(lx), np.abs(lz)) <= 1 + 1e-6)
-                 & (np.hypot(lx, lz) >= 1 - 1e-6)
+        valid = ((np.maximum(np.abs(lx), np.abs(lz)) <= self.r * (1 + 1e-6))
+                 & (np.hypot(lx, lz) >= self.r * (1 - 1e-6))
                  & _angle_in_sector(lx, lz, self.sector))
         return np.where(valid, lam, out)
 

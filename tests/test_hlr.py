@@ -246,6 +246,56 @@ def test_flatten_unknown_primitive_recurses(tmp_path):
     assert len(out["tri"]) == 1
 
 
+def test_analytic_cone_occludes_edge_behind_it():
+    # A wide con0 with a straight type-2 edge passing horizontally BEHIND its
+    # midsection: the visible edge must be split into two runs by the cone.
+    # fwd = (0,0,1): larger z = farther. Edge at z=+20 passes behind the cone
+    # midsection (world y=5, where the con0 scaled x10 has radius 5).
+    out = {"2": [np.array([[-40.0, 5.0, 20.0], [40.0, 5.0, 20.0]])],
+           "5": [], "tri": [], "tri_meta": [],
+           "analytic": [{"kind": "con", "sector": 360.0, "inner": 0,
+                         "R": np.diag([10.0, 10.0, 10.0]), "t": np.zeros(3)}]}
+    right, up, fwd = hlr.view_basis(0.0, 0.0)     # straight-on view
+    res = hlr._visible_segments_analytic(out, right, up, fwd, render_px=200)
+    edge_segs = [sg for sg in res.segs if sg[0] == "line" and sg[-1] == "edge"]
+    assert len(edge_segs) == 2                    # hidden midsection removed
+
+
+def test_analytic_ndis_occludes_edge_behind_it():
+    # ndis square spans +-10 in world x/y at z=0 (axis toward camera). The
+    # edge crosses behind at y=8: the disc's half-width there is 6, so the
+    # square-minus-disc flanks 6<=|x|<=10 hide it, leaving 3 visible runs
+    # (outside-left, through the disc hole, outside-right).
+    out = {"2": [np.array([[-40.0, 8.0, 20.0], [40.0, 8.0, 20.0]])],
+           "5": [], "tri": [], "tri_meta": [],
+           "analytic": [{"kind": "ndis", "sector": 360.0, "inner": 0,
+                         "R": np.column_stack([np.array([10.0, 0, 0]),
+                                               np.array([0.0, 0, 10.0]),
+                                               np.array([0.0, 10.0, 0])]),
+                         "t": np.zeros(3)}]}
+    right, up, fwd = hlr.view_basis(0.0, 0.0)
+    res = hlr._visible_segments_analytic(out, right, up, fwd, render_px=200)
+    edge_segs = [sg for sg in res.segs if sg[0] == "line" and sg[-1] == "edge"]
+    assert len(edge_segs) == 3
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_cone_part_uses_analytic_cones():
+    # 4589 (cone 1x1) body = 4-4con3 + 4-4con4: must arrive as analytic
+    # records with cone occluders and produce cone wall fills, not tri clouds.
+    res = hlr.visible_segments("4589", LIB, lat=30, long=45, render_px=900)
+    assert "con" in {r["kind"] for r in res.analytic}
+    con_faces = [f for f in res.faces if f.get("kind") == "con"]
+    assert con_faces
+    # fit cloud must cover the cone BASE (local radius N+1, not 1): every cone
+    # wall vertex stays inside the render canvas
+    for f in con_faces:
+        assert f["poly"].min() >= 0.0 and f["poly"].max() <= 900.0
+    # ndis substitution reaches parts too (3960's base uses 4-4ndis)
+    res2 = hlr.visible_segments("3960", LIB, lat=30, long=45, render_px=900)
+    assert "ndis" in {r["kind"] for r in res2.analytic}
+
+
 @pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
 def test_visible_segments_emits_arcs_for_round_part():
     res = hlr.visible_segments("3941", LIB, lat=30, long=45, render_px=900)
