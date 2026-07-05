@@ -202,6 +202,24 @@ def test_cone_occluder_scaled_transform():
     assert abs(occ.depth(O, F)[0] - (9.0 - z)) < 1e-9
 
 
+def test_ndis_occluder_region():
+    occ = P.NdisOccluder(np.eye(3), np.zeros(3), 360.0)
+    F = np.array([0.0, -1.0, 0.0])
+    O = np.array([[0.99, 5.0, 0.99],    # corner: in square, outside disc -> hit
+                  [0.5, 5.0, 0.5],      # inside disc -> miss
+                  [1.2, 5.0, 0.0]])     # outside square -> miss
+    d = occ.depth(O, F)
+    assert abs(d[0] - 5.0) < 1e-9
+    assert not np.isfinite(d[1]) and not np.isfinite(d[2])
+
+
+def test_ndis_occluder_sector():
+    occ = P.NdisOccluder(np.eye(3), np.zeros(3), 90.0)
+    F = np.array([0.0, -1.0, 0.0])
+    d = occ.depth(np.array([[0.99, 5.0, 0.99], [-0.99, 5.0, 0.99]]), F)
+    assert np.isfinite(d[0]) and not np.isfinite(d[1])
+
+
 def _stub_proj():
     # camera looks along -Z: A=x, B=y, depth=-z; identity pixel fit
     def to_AB(Pw):

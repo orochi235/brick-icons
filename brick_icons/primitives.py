@@ -269,6 +269,35 @@ class DiscOccluder:
         return np.where(valid, lam, out)
 
 
+class NdisOccluder:
+    """Square-minus-disc corner fill in the local XZ plane (normal = axis A):
+    inside the unit square, outside the unit disc, within the sector."""
+
+    def __init__(self, R, t, sector):
+        self.C = np.asarray(t, float)
+        self.U, self.V, self.A, self.r, _ = _local_basis(R, t)
+        self.n = self.A / (np.linalg.norm(self.A) or 1.0)
+        self.sector = sector
+        self.uhat = self.U / (self.r or 1.0)
+        self.vhat = self.V / (self.r or 1.0)
+
+    def depth(self, O, F):
+        O = np.atleast_2d(O).astype(float)
+        F = np.asarray(F, float)
+        denom = float(F @ self.n)
+        out = np.full(O.shape[0], np.inf)
+        if abs(denom) < 1e-12:
+            return out
+        lam = ((self.C - O) @ self.n) / denom
+        rel = O + lam[:, None] * F - self.C
+        lx = rel @ self.uhat
+        lz = rel @ self.vhat
+        valid = ((np.maximum(np.abs(lx), np.abs(lz)) <= 1 + 1e-6)
+                 & (np.hypot(lx, lz) >= 1 - 1e-6)
+                 & _angle_in_sector(lx, lz, self.sector))
+        return np.where(valid, lam, out)
+
+
 class TriangleOccluder:
     """Flat triangles (world coords, shape (M,3,3)) as a gridless depth source.
 
