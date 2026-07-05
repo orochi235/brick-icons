@@ -7,7 +7,7 @@ from collections import defaultdict
 import numpy as np
 from PIL import Image, ImageDraw
 
-from . import geom2d, hlr
+from . import geom2d, hlr, primitives
 
 
 def _project_px(P, right, up, fwd, s, cx, cy, half):
@@ -32,9 +32,103 @@ def _radius_pts(rec, thetas, level, radius=None):
     return base + radius * (np.cos(thetas)[:, None] * U + np.sin(thetas)[:, None] * V)
 
 
+def _merged_wall_rec(recs):
+    """One synthetic cyli/con record covering a smooth chain of wall records
+    (sections of the same infinite cylinder/cone). Returns None if the chain
+    has no clean two free rims (degenerate or looped sharing)."""
+    ends = {}
+    for rec in recs:
+        R = np.asarray(rec["R"], float); t = np.asarray(rec["t"], float)
+        A = R[:, 1]; ru = float(np.linalg.norm(R[:, 0]))
+        if rec["kind"] == "cyli":
+            pairs = [(t, ru), (t + A, ru)]
+        else:
+            N = rec["inner"]
+            pairs = [(t, (N + 1) * ru), (t + A, N * ru)]
+        for C, r in pairs:
+            key = primitives.rim_key(C, A, r)
+            if key in ends:
+                del ends[key]                    # interior joint
+            else:
+                ends[key] = (np.asarray(C, float), float(r))
+    if len(ends) != 2:
+        return None
+    (C0, r0), (C1, r1) = ends.values()
+    if r0 < r1:
+        (C0, r0), (C1, r1) = (C1, r1), (C0, r0)  # base = wide end
+    A = C1 - C0
+    ah = float(np.linalg.norm(A))
+    if ah < 1e-9:
+        return None
+    ahat = A / ah
+    U0 = np.asarray(recs[0]["R"], float)[:, 0]
+    u = U0 - float(U0 @ ahat) * ahat
+    un = float(np.linalg.norm(u))
+    if un < 1e-9:
+        return None
+    u = u / un
+    v = np.cross(u, ahat)
+    dr = r0 - r1
+    if dr < 1e-9:
+        R = np.column_stack([r0 * u, A, r0 * v])
+        return {"kind": "cyli", "sector": 360.0, "inner": 0, "R": R, "t": C0}
+    R = np.column_stack([dr * u, A, dr * v])
+    return {"kind": "con", "sector": 360.0, "inner": r1 / dr, "R": R, "t": C0}
+
+
+def merge_smooth_wall_recs(analytic):
+    """Collapse chains of full-sector cyli/con records that continue each
+    other smoothly through a shared rim — equal slope on opposite sides of
+    the rim plane, the same predicate that suppresses the rim's STROKE in
+    hlr — into one synthetic record per chain, so the wall shades as ONE
+    face with ONE gradient. Left separate, each section fits its own
+    gradient axis and the shared rim shows a tone step (4589's con3-on-con4
+    body: identical stops over different axis extents). Non-wall records,
+    partial sectors, creases, and ambiguously shared rims pass through
+    unchanged. The synthetic con's `inner` may be non-integer."""
+    walls = [i for i, r in enumerate(analytic)
+             if r["kind"] in ("cyli", "con") and r["sector"] >= 360.0 - 1e-9]
+    by_key = defaultdict(list)
+    for i in walls:
+        for key, side, slope in primitives.wall_rims(analytic[i]):
+            by_key[key].append((i, side, slope))
+    parent = {i: i for i in walls}
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for ent in by_key.values():
+        if len(ent) != 2:
+            continue                             # free rim or 3-way sharing
+        (i, si, mi), (j, sj, mj) = ent
+        if i == j or si != -sj or mi != mj:
+            continue                             # same side, or a crease
+        if analytic[i]["kind"] != analytic[j]["kind"]:
+            continue
+        parent[find(i)] = find(j)
+    groups = defaultdict(list)
+    for i in walls:
+        groups[find(i)].append(i)
+    synth_at, drop = {}, set()
+    for members in groups.values():
+        if len(members) < 2:
+            continue
+        rec = _merged_wall_rec([analytic[i] for i in members])
+        if rec is not None:
+            synth_at[min(members)] = rec
+            drop.update(members)
+    if not synth_at:
+        return list(analytic)
+    return [synth_at.get(i, rec) for i, rec in enumerate(analytic)
+            if i in synth_at or i not in drop]
+
+
 def faces_from_analytic(analytic, right, up, fwd, s, cx, cy, half):
     faces = []
-    for rec in analytic:
+    for rec in merge_smooth_wall_recs(analytic):
         kind = rec["kind"]
         if kind == "edge":
             continue

@@ -397,6 +397,20 @@ def _visible_segments_analytic(out, right, up, fwd, render_px):
                                       s, cx, cy, half, cond_edges=out["5"]) \
         if out["tri"] else []
     an_faces = shade.faces_from_analytic(analytic, right, up, fwd, s, cx, cy, half)
+    for f in an_faces:
+        rec = f["rec"]
+        if id(rec) in rec_occ:
+            continue
+        # walls merged inside faces_from_analytic carry a synthetic record:
+        # build its occluder here (own-occlusion ordering only — NOT added to
+        # the global stroke-visibility occluders, whose member surfaces
+        # already cover the same geometry)
+        if rec["kind"] == "cyli":
+            rec_occ[id(rec)] = primitives.CylinderOccluder(
+                rec["R"], rec["t"], rec["sector"])
+        elif rec["kind"] == "con":
+            rec_occ[id(rec)] = primitives.ConeOccluder(
+                rec["R"], rec["t"], rec["sector"], rec["inner"])
     own_occ = {id(f): rec_occ.get(id(f["rec"])) for f in an_faces
                if rec_occ.get(id(f["rec"])) is not None}
     # Witness-depth ordering replaces both the mean-depth painter sort and the

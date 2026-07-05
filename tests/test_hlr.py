@@ -261,6 +261,42 @@ def test_analytic_cone_occludes_edge_behind_it():
     assert len(edge_segs) == 2                    # hidden midsection removed
 
 
+def test_stacked_cones_one_wall_face_with_own_occluder_ordering():
+    # Two smooth-stacked frustums (same infinite cone): the fill pipeline
+    # merges them into ONE outer wall face, and the synthetic merged record —
+    # absent from the per-input-record occluder map — must still get an own
+    # occluder so witness ordering uses exact cone depths: the interior far
+    # wall paints before the outer near wall.
+    out = {"2": [], "5": [], "tri": [], "tri_meta": [],
+           "analytic": [{"kind": "con", "sector": 360.0, "inner": 2,
+                         "R": np.diag([10.0, 10.0, 10.0]), "t": np.zeros(3)},
+                        {"kind": "con", "sector": 360.0, "inner": 1,
+                         "R": np.diag([10.0, 10.0, 10.0]),
+                         "t": np.array([0.0, 10.0, 0.0])}]}
+    right, up, fwd = hlr.view_basis(20.0, 30.0)
+    from brick_icons import shade
+    seen = {}
+    real_order = shade.order_faces
+
+    def spy(faces, *a, own_occ=None, **kw):
+        seen.update({id(f): own_occ.get(id(f)) for f in faces
+                     if f.get("kind") in ("con", "cyli")})
+        return real_order(faces, *a, own_occ=own_occ, **kw)
+
+    shade.order_faces = spy
+    try:
+        res = hlr._visible_segments_analytic(out, right, up, fwd, render_px=200)
+    finally:
+        shade.order_faces = real_order
+    outer = [f for f in res.faces if f["kind"] == "con" and not f.get("interior")]
+    inner = [f for f in res.faces if f["kind"] == "con" and f.get("interior")]
+    assert len(outer) == 1 and len(inner) == 1
+    assert inner[0]["order"] < outer[0]["order"]
+    # exact curved ordering requires an own occluder on EVERY wall face,
+    # including ones whose merged record is synthesized inside shade
+    assert seen and all(occ is not None for occ in seen.values())
+
+
 @pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
 def test_cone_part_uses_analytic_cones():
     # 4589 (cone 1x1) body = 4-4con3 + 4-4con4: must arrive as analytic

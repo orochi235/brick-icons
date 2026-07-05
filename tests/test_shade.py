@@ -166,6 +166,77 @@ def test_cone_axis_on_view_full_annulus_wall():
     assert len(faces) == 1 and not faces[0].get("interior")
 
 
+def test_merge_smooth_wall_recs_stacked_cones_one_rec():
+    """Two full-sector frustums of the SAME infinite cone sharing a rim
+    (4589's con3-on-con4 body) merge into ONE synthetic con rec spanning
+    base to top, so the wall gets a single seamless gradient."""
+    lo = {"kind": "con", "sector": 360.0, "inner": 2,
+          "R": np.eye(3), "t": np.zeros(3)}          # r 3 -> 2 over y 0..1
+    hi = {"kind": "con", "sector": 360.0, "inner": 1,
+          "R": np.eye(3), "t": np.array([0.0, 1.0, 0.0])}  # r 2 -> 1, y 1..2
+    out = shade.merge_smooth_wall_recs([lo, hi])
+    assert len(out) == 1
+    m = out[0]
+    assert m["kind"] == "con" and m["sector"] == 360.0
+    R = np.asarray(m["R"], float)
+    ru = np.linalg.norm(R[:, 0])
+    assert abs((m["inner"] + 1) * ru - 3.0) < 1e-6   # base radius (wide end)
+    assert abs(m["inner"] * ru - 1.0) < 1e-6         # top radius (narrow end)
+    np.testing.assert_allclose(m["t"], [0.0, 0.0, 0.0], atol=1e-6)
+    np.testing.assert_allclose(R[:, 1], [0.0, 2.0, 0.0], atol=1e-6)
+
+
+def test_merge_smooth_wall_recs_keeps_creases_and_partial_sectors():
+    lo = {"kind": "con", "sector": 360.0, "inner": 2,
+          "R": np.eye(3), "t": np.zeros(3)}
+    # same shared rim (r=2 at y=1) but HALF the slope: a crease, not smooth
+    crease = {"kind": "con", "sector": 360.0, "inner": 1,
+              "R": np.diag([1.0, 2.0, 1.0]), "t": np.array([0.0, 1.0, 0.0])}
+    assert len(shade.merge_smooth_wall_recs([lo, crease])) == 2
+    # equal slope but partial sector: rim stays an edge, walls stay separate
+    part = {"kind": "con", "sector": 90.0, "inner": 1,
+            "R": np.eye(3), "t": np.array([0.0, 1.0, 0.0])}
+    assert len(shade.merge_smooth_wall_recs([lo, part])) == 2
+
+
+def test_merge_smooth_wall_recs_stacked_cylinders():
+    lo = {"kind": "cyli", "sector": 360.0, "inner": 0,
+          "R": np.eye(3), "t": np.zeros(3)}
+    hi = {"kind": "cyli", "sector": 360.0, "inner": 0,
+          "R": np.eye(3), "t": np.array([0.0, 1.0, 0.0])}
+    out = shade.merge_smooth_wall_recs([lo, hi])
+    assert len(out) == 1
+    m = out[0]
+    assert m["kind"] == "cyli"
+    R = np.asarray(m["R"], float)
+    assert abs(np.linalg.norm(R[:, 0]) - 1.0) < 1e-6
+    assert abs(np.linalg.norm(R[:, 1]) - 2.0) < 1e-6  # spans both sections
+
+
+def test_stacked_cone_walls_merge_into_single_gradient_face():
+    """faces_from_analytic on a smooth cone stack must emit ONE outer wall
+    face (one path, one gradient) covering the full height — not one strip
+    per LDraw primitive with a visible tone step at the joint."""
+    right, up = np.array([1.0, 0, 0]), np.array([0.0, 1.0, 0])
+    fwd = np.array([0.0, 0.0, -1.0])
+    lo = {"kind": "con", "sector": 360.0, "inner": 2,
+          "R": np.eye(3), "t": np.zeros(3)}
+    hi = {"kind": "con", "sector": 360.0, "inner": 1,
+          "R": np.eye(3), "t": np.array([0.0, 1.0, 0.0])}
+    faces = shade.faces_from_analytic([lo, hi], right, up, fwd,
+                                      1.0, 0.0, 0.0, 0.0)
+    outer = [f for f in faces if not f.get("interior")]
+    inner = [f for f in faces if f.get("interior")]
+    assert len(outer) == 1 and len(inner) == 1
+    f = outer[0]
+    assert np.ptp(f["poly"][:, 1]) > 2.0 - 1e-6      # full stack height
+    assert abs(np.abs(f["poly"][:, 0]).max() - 3.0) < 1e-6   # base radius
+    # one gradient, same 45-degree flare everywhere (equal slope throughout)
+    assert "grad_axis" in f
+    for _, nv in f["grad_samples"]:
+        assert abs(nv[1] - 1 / math.sqrt(2)) < 1e-6
+
+
 def test_cylinder_wall_faces_unchanged():
     # regression: generalizing helpers must not perturb cylinder output
     rec = {"kind": "cyli", "sector": 360.0, "inner": 0,
