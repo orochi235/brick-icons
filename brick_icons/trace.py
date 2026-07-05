@@ -110,15 +110,30 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=3,
                 g = fo["gradient"]
                 stops = "".join(
                     f'<stop offset="{o * 100:.1f}%" stop-color="{c}"/>' for o, c in g["stops"])
-                key = (f'{g["x1"]:.2f},{g["y1"]:.2f},{g["x2"]:.2f},{g["y2"]:.2f}', stops)
-                gid = def_ids.get(key)
-                if gid is None:
-                    gid = f"g{i}"
-                    def_ids[key] = gid
-                    defs.append(
-                        f'<linearGradient id="{gid}" gradientUnits="userSpaceOnUse" '
-                        f'x1="{g["x1"]:.2f}" y1="{g["y1"]:.2f}" '
-                        f'x2="{g["x2"]:.2f}" y2="{g["y2"]:.2f}">{stops}</linearGradient>')
+                if g.get("type") == "radial":
+                    # unit-circle gradient space mapped onto the group's
+                    # bounding ellipse; fx/fy shift the bright spot lightward
+                    tf = (f'matrix({g["r"]:.2f} 0 0 {g["r"] * g["ratio"]:.2f} '
+                          f'{g["cx"]:.2f} {g["cy"]:.2f})')
+                    key = ("radial", tf, f'{g["fx"]:.3f},{g["fy"]:.3f}', stops)
+                    gid = def_ids.get(key)
+                    if gid is None:
+                        gid = f"g{i}"
+                        def_ids[key] = gid
+                        defs.append(
+                            f'<radialGradient id="{gid}" gradientUnits="userSpaceOnUse" '
+                            f'cx="0" cy="0" r="1" fx="{g["fx"]:.3f}" fy="{g["fy"]:.3f}" '
+                            f'gradientTransform="{tf}">{stops}</radialGradient>')
+                else:
+                    key = (f'{g["x1"]:.2f},{g["y1"]:.2f},{g["x2"]:.2f},{g["y2"]:.2f}', stops)
+                    gid = def_ids.get(key)
+                    if gid is None:
+                        gid = f"g{i}"
+                        def_ids[key] = gid
+                        defs.append(
+                            f'<linearGradient id="{gid}" gradientUnits="userSpaceOnUse" '
+                            f'x1="{g["x1"]:.2f}" y1="{g["y1"]:.2f}" '
+                            f'x2="{g["x2"]:.2f}" y2="{g["y2"]:.2f}">{stops}</linearGradient>')
                 paint = f"url(#{gid})"
             else:
                 paint = fo["fill"]

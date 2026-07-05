@@ -105,6 +105,17 @@ def test_segments_to_svg_writes_gradient_fill(tmp_path):
     assert "url(#g0)" in txt
 
 
+def test_segments_to_svg_writes_radial_gradient(tmp_path):
+    fills = [{"d": "M 0 0 L 10 0 L 10 10 Z", "depth": 1.0,
+              "gradient": {"type": "radial", "cx": 5.0, "cy": 5.0, "r": 4.0,
+                           "ratio": 0.8, "fx": -0.2, "fy": -0.25,
+                           "stops": [(0.0, "#cccccc"), (1.0, "#333333")]}}]
+    out = _trace.segments_to_svg([], 20, 20, tmp_path / "r.svg", fills=fills)
+    txt = out.read_text()
+    assert "<radialGradient" in txt and "gradientTransform" in txt
+    assert 'fx="-0.200"' in txt and "url(#g0)" in txt
+
+
 def test_segments_to_svg_writes_highlight_gradient(tmp_path):
     segs = [("line", 0.0, 0.0, 10.0, 0.0, "edge")]
     hi = [{"cx": 5.0, "cy": 5.0, "r": 4.0, "opacity": 0.15}]

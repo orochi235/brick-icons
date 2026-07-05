@@ -512,6 +512,77 @@ def _curved_strip(right, up, fwd):
     return np.array(tris), seams
 
 
+def _dome_mesh(fwd):
+    """Spherical-cap tessellation (2 rings x 8 sectors + apex fan) whose
+    facet normals spread in TWO directions, with every edge seam-marked."""
+    R = 30.0
+    def ring(polar_deg):
+        p = math.radians(polar_deg)
+        return [np.array([R * math.sin(p) * math.cos(a),
+                          R * math.sin(p) * math.sin(a),
+                          R * math.cos(p)])
+                for a in np.linspace(0, 2 * math.pi, 9)[:-1]]
+    apex = np.array([0.0, 0.0, R])
+    r1, r2 = ring(20), ring(45)
+    tris, seams = [], []
+    for i in range(8):
+        j = (i + 1) % 8
+        tris.append([apex, r1[i], r1[j]])
+        tris.append([r1[i], r2[i], r2[j]])
+        tris.append([r1[i], r2[j], r1[j]])
+    out = []
+    for t in tris:
+        v = np.array(t, float)
+        n = np.cross(v[1] - v[0], v[2] - v[0])
+        if n @ fwd > 0:
+            v = v[[0, 2, 1]]
+        out.append(v)
+        for a, b in ((v[0], v[1]), (v[1], v[2]), (v[2], v[0])):
+            seams.append(np.array([a, b, a, b], float))
+    return np.array(out), seams
+
+
+def test_dome_group_gets_radial_gradient():
+    right, up = np.array([1.0, 0, 0]), np.array([0.0, 1.0, 0])
+    fwd = np.array([0.0, 0.0, -1.0])
+    tris, seams = _dome_mesh(fwd)
+    faces = shade.faces_from_tris(tris, right, up, fwd, 1.0, 0.0, 0.0, 0.0,
+                                  cond_edges=seams)
+    grads = [f for f in faces if "grad_radial" in f]
+    assert len(grads) == len(faces) and len(faces) >= 20
+    assert not any("grad_axis" in f for f in faces)
+    g = grads[0]["grad_radial"]
+    assert g["r"] > 0 and 0.5 < g["ratio"] < 2.0
+    # apex facets sample near t=0, rim facets near t=1
+    ts = [t for t, _ in grads[0]["grad_samples"]]
+    assert min(ts) < 0.35 and max(ts) > 0.7
+
+
+def test_fill_ops_radial_gradient_op():
+    spec = {"cx": 50.0, "cy": 50.0, "r": 40.0, "ratio": 0.8}
+    samples = [(0.05, np.array([0, 0.2, -0.98])), (0.5, np.array([0.5, 0.3, -0.8])),
+               (0.95, np.array([0.8, 0.2, -0.55]))]
+    f = {"poly": np.array([(10, 10), (90, 10), (90, 90), (10, 90)], float),
+         "normal": np.array([0, 0, -1.0]), "depth": 5.0, "kind": "tri",
+         "order": 0, "grad_radial": spec, "grad_samples": samples}
+    ops = shade.fill_ops([f], shade.Flat3Style())
+    assert len(ops) == 1
+    g = ops[0]["gradient"]
+    assert g["type"] == "radial" and g["r"] == 40.0
+    offs = [o for o, _ in g["stops"]]
+    assert offs[0] == 0.0 and offs[-1] == 1.0 and offs == sorted(offs)
+    assert g["fx"] < 0 and g["fy"] < 0          # focal toward upper-left light
+
+
+def test_apply_affine_remaps_radial_spec():
+    f = {"poly": np.array([(0, 0), (4, 0), (4, 4)], float), "depth": 0.0,
+         "grad_radial": {"cx": 10.0, "cy": 20.0, "r": 5.0, "ratio": 0.8},
+         "grad_samples": []}
+    out = shade.apply_affine_faces([f], 2.0, 1.0, 3.0)[0]
+    g = out["grad_radial"]
+    assert (g["cx"], g["cy"], g["r"], g["ratio"]) == (21.0, 43.0, 10.0, 0.8)
+
+
 def test_smooth_group_shares_one_gradient_across_facets():
     """Facets joined by conditional-line edges must all carry the SAME
     gradient (axis + stops) so the curve shades seamlessly; an unrelated

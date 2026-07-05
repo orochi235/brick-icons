@@ -372,6 +372,24 @@ def order_faces(faces, ray_origin=None, fwd=None, eps=1e-6, own_occ=None):
 MIN_FRAG_AREA = 0.2     # px^2: visible fragments smaller than this are noise
 
 
+def _radial_stops(samples, style, nbins=8):
+    """Binned radial stops: average the member normals per radial band, then
+    ramp the band normal. Averaging over azimuth is what makes a dome's
+    hundreds of (offset, normal) samples collapse to a few smooth stops
+    instead of high-frequency bands."""
+    bins = defaultdict(list)
+    for t, nv in samples:
+        bins[min(int(t * nbins), nbins - 1)].append(np.asarray(nv, float))
+    stops = []
+    for b in sorted(bins):
+        n = np.mean(bins[b], axis=0)
+        n = n / (np.linalg.norm(n) or 1.0)
+        stops.append(((b + 0.5) / nbins, style.ramp(n)))
+    if stops:
+        stops = [(0.0, stops[0][1])] + stops + [(1.0, stops[-1][1])]
+    return stops
+
+
 def fill_ops(faces, style):
     """Fill ops with exact visible-fragment clipping and per-surface merging.
 
@@ -423,7 +441,21 @@ def fill_ops(faces, style):
         d = geom2d.path_d(geom)
         if not d:
             continue
-        if "grad_axis" in f:
+        if "grad_radial" in f:
+            g = f["grad_radial"]
+            stops = _radial_stops(f["grad_samples"], style)
+            # focal point shifted toward the style's light: bright side of the
+            # dome sits off-center. View-space light (x right, y UP) -> screen
+            # (y down) flips the y component; unit gradient space, so the
+            # shift is a fraction of the radius.
+            L = getattr(style, "light", None)
+            fx, fy = (0.45 * float(L[0]), -0.45 * float(L[1])) if L is not None \
+                else (0.0, 0.0)
+            ops.append({"d": d, "depth": f["depth"],
+                        "gradient": {"type": "radial", "cx": g["cx"], "cy": g["cy"],
+                                     "r": g["r"], "ratio": g["ratio"],
+                                     "fx": fx, "fy": fy, "stops": stops}})
+        elif "grad_axis" in f:
             p0, p1 = f["grad_axis"]
             stops = sorted(((off, style.ramp(nv)) for off, nv in f["grad_samples"]),
                            key=lambda s: s[0])
@@ -450,6 +482,10 @@ def apply_affine_faces(faces, f, ox, oy):
             (a0, a1) = face["grad_axis"]
             nf["grad_axis"] = ((a0[0] * f + ox, a0[1] * f + oy),
                                (a1[0] * f + ox, a1[1] * f + oy))
+        if "grad_radial" in face:
+            g = face["grad_radial"]
+            nf["grad_radial"] = {**g, "cx": g["cx"] * f + ox,
+                                 "cy": g["cy"] * f + oy, "r": g["r"] * f}
         out.append(nf)
     return out
 
@@ -634,6 +670,32 @@ def _seam_edge_mask(A, B, cond_edges, tol=2e-3):
     return mask
 
 
+def _attach_radial_gradient(faces, ks, nvs):
+    """Shared radial-gradient spec for a dome-like group: unit-circle gradient
+    space mapped to the group's bounding ellipse (center c0, semi-axes r and
+    r*ratio). Samples carry each member's normal at its normalized elliptic
+    radius; fill_ops turns them into binned stops and a light-shifted focal
+    point. All members share one dict, so trace's def-dedup keeps one def."""
+    allv = np.vstack([faces[k]["poly"] for k in ks])
+    c0 = (allv.min(axis=0) + allv.max(axis=0)) / 2.0
+    w = float(allv[:, 0].max() - allv[:, 0].min()) or 1.0
+    h = float(allv[:, 1].max() - allv[:, 1].min()) or 1.0
+    ratio = h / w
+    dx = allv[:, 0] - c0[0]
+    dy = (allv[:, 1] - c0[1]) / ratio
+    r = float(np.hypot(dx, dy).max()) or 1.0
+    samples = []
+    for k, nv in zip(ks, nvs):
+        c = faces[k]["poly"].mean(axis=0)
+        t = math.hypot(c[0] - c0[0], (c[1] - c0[1]) / ratio) / r
+        samples.append((float(np.clip(t, 0.0, 1.0)), nv))
+    samples.sort(key=lambda s: s[0])
+    spec = {"cx": float(c0[0]), "cy": float(c0[1]), "r": r, "ratio": ratio}
+    for k in ks:
+        faces[k]["grad_radial"] = spec
+        faces[k]["grad_samples"] = samples
+
+
 def _attach_smooth_gradients(faces, cond_edges, min_spread=0.002):
     """Union faces across conditional-line seams; give each group one shared
     gradient (same axis + stops for every member — userSpaceOnUse gradients
@@ -688,6 +750,17 @@ def _attach_smooth_gradients(faces, cond_edges, min_spread=0.002):
         spread = max((1.0 - float(a @ b) for a in nvs for b in nvs), default=0.0)
         if spread < min_spread:
             continue                    # effectively flat: keep flat tones
+        # LINEAR gradients only fit groups whose normals vary along ONE
+        # direction (cylinder-like strips). A dome's normals spread in 2-D:
+        # projecting them onto any single axis mixes different tones at the
+        # same offset and stripes/bands (3960's dish). Detect via the normal
+        # cloud's second singular value and use a RADIAL gradient instead.
+        Nn = np.asarray(nvs, float)
+        Nc = Nn - Nn.mean(axis=0)
+        sn = np.linalg.svd(Nc, full_matrices=False, compute_uv=False)
+        if len(sn) > 1 and sn[0] > 1e-9 and sn[1] / sn[0] > 0.35:
+            _attach_radial_gradient(faces, ks, nvs)
+            continue
         # gradient axis = principal direction of centroid spread in SCREEN
         # space (silhouette-to-silhouette, like analytic cylinder walls) —
         # picking the most-divergent NORMAL pair can yield a near-degenerate
