@@ -7,7 +7,7 @@ from collections import defaultdict
 import numpy as np
 from PIL import Image, ImageDraw
 
-from . import hlr
+from . import geom2d, hlr
 
 
 def _project_px(P, right, up, fwd, s, cx, cy, half):
@@ -415,36 +415,69 @@ def order_faces(faces, ray_origin=None, fwd=None, eps=1e-6, own_occ=None):
     return [faces[i] for i in out]
 
 
-def _poly_d(poly):
-    cmds = [f"M {poly[0,0]:.2f} {poly[0,1]:.2f}"]
-    for p in poly[1:]:
-        cmds.append(f"L {p[0]:.2f} {p[1]:.2f}")
-    cmds.append("Z")
-    return " ".join(cmds)
+MIN_FRAG_AREA = 0.2     # px^2: visible fragments smaller than this are noise
 
 
 def fill_ops(faces, style):
-    """Painter-sorted (far->near) fill ops. Flat faces: {'d','fill','depth'}.
-    Gradient faces (cylinder walls): {'d','gradient','depth'} where gradient is
-    {'x1','y1','x2','y2','stops':[(offset,color),...]}."""
-    # Witness-ordered faces (order_faces stamps 'order') paint in that exact
-    # sequence; otherwise fall back to the single far->near mean-depth painter
-    # sort across ALL faces regardless of kind.
+    """Fill ops with exact visible-fragment clipping and per-surface merging.
+
+    1) paint order: witness order when stamped, else far->near mean depth;
+    2) CLIP nearest-first: each face's fragment = its polygon minus the union
+       of everything nearer — the SVG contains zero hidden geometry;
+    3) MERGE fragments sharing a facet-group id (smooth or coplanar groups
+       share one gradient/tone by construction) via polygon union — one
+       element per visually continuous surface. Union is robust to the
+       T-junction tessellations and projected self-overlap that killed
+       boundary tracing (see the 2026-07-05 spec).
+    Ops emit farthest-first; fragments are disjoint, so order only decides
+    which anti-alias stroke wins along shared boundaries.
+    Flat faces: {'d','fill','depth'}; gradient faces: {'d','gradient','depth'}
+    with gradient {'x1','y1','x2','y2','stops':[(offset,color),...]}."""
     if faces and all("order" in f for f in faces):
         ordered = sorted(faces, key=lambda f: f["order"])
     else:
         ordered = sorted(faces, key=lambda f: -f["depth"])
-    ops = []
-    for f in ordered:
+
+    frags = {}
+    cover = None
+    for idx in range(len(ordered) - 1, -1, -1):        # nearest first
+        f = ordered[idx]
+        g = geom2d.to_geom(f["poly"], f.get("holes"))
+        if g.is_empty:
+            continue
+        frag = g if cover is None else geom2d.difference(g, cover)
+        if geom2d.area(frag) >= MIN_FRAG_AREA:
+            frags[idx] = frag
+        cover = g if cover is None else geom2d.union(cover, g)
+
+    members = defaultdict(list)                        # merge key -> indices
+    for idx in sorted(frags):
+        f = ordered[idx]
+        key = f.get("group")
+        members[("g", key) if key is not None else ("i", idx)].append(idx)
+
+    ops, emitted = [], set()
+    for idx in sorted(frags):                          # farthest-first
+        if idx in emitted:
+            continue
+        f = ordered[idx]
+        key = f.get("group")
+        ks = members[("g", key) if key is not None else ("i", idx)]
+        emitted.update(ks)
+        geom = frags[ks[0]] if len(ks) == 1 else \
+            geom2d.union_all([frags[j] for j in ks])
+        d = geom2d.path_d(geom)
+        if not d:
+            continue
         if "grad_axis" in f:
             p0, p1 = f["grad_axis"]
             stops = sorted(((off, style.ramp(nv)) for off, nv in f["grad_samples"]),
                            key=lambda s: s[0])
-            ops.append({"d": _poly_d(f["poly"]), "depth": f["depth"],
+            ops.append({"d": d, "depth": f["depth"],
                         "gradient": {"x1": p0[0], "y1": p0[1], "x2": p1[0], "y2": p1[1],
                                      "stops": stops}})
         else:
-            ops.append({"d": _poly_d(f["poly"]), "fill": style.tone(f["normal"]),
+            ops.append({"d": d, "fill": style.tone(f["normal"]),
                         "depth": f["depth"]})
     return ops
 

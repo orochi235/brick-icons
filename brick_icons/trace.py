@@ -122,8 +122,8 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=3,
                 paint = f"url(#{gid})"
             else:
                 paint = fo["fill"]
-            body.append(f'<path d="{fo["d"]}" fill="{paint}" stroke="{paint}" '
-                        f'stroke-width="0.8"/>')
+            body.append(f'<path d="{fo["d"]}" fill="{paint}" fill-rule="evenodd" '
+                        f'stroke="{paint}" stroke-width="0.8"/>')
         body.append("</g>")
         if defs:
             parts.append("<defs>" + "".join(defs) + "</defs>")

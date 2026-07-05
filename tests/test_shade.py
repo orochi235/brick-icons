@@ -289,10 +289,10 @@ def test_fill_ops_painter_sorted_back_to_front():
     from brick_icons import shade
     style = shade.Flat3Style()
     faces = [
-        {"poly": np.array([[0, 0], [1, 0], [0, 1]]), "normal": np.array([0, 1, -1.0]),
-         "depth": 5.0, "kind": "tri"},   # far
-        {"poly": np.array([[0, 0], [2, 0], [0, 2]]), "normal": np.array([0, 1, -1.0]),
-         "depth": 1.0, "kind": "tri"},   # near
+        {"poly": np.array([[0, 0], [10, 0], [10, 10], [0, 10]]),
+         "normal": np.array([0, 1, -1.0]), "depth": 5.0, "kind": "tri"},   # far
+        {"poly": np.array([[5, 0], [15, 0], [15, 10], [5, 10]]),
+         "normal": np.array([0, 1, -1.0]), "depth": 1.0, "kind": "tri"},   # near
     ]
     ops = shade.fill_ops(faces, style)
     assert [o["depth"] for o in ops] == [5.0, 1.0]   # far first
@@ -300,20 +300,80 @@ def test_fill_ops_painter_sorted_back_to_front():
 
 
 def test_fill_ops_unified_depth_sort_across_kinds():
-    """Occlusion is by depth, NOT by flat-vs-curved. An interior curved face
-    BEHIND a flat wall (larger depth) must paint under it; a stud curved face
-    IN FRONT of a flat surface (smaller depth) must paint over it. A single
-    far->near sort across all kinds achieves both."""
+    """Occlusion is by depth, NOT by flat-vs-curved: emission stays a single
+    far->near sequence across all kinds (disjoint polys, so all survive)."""
     from brick_icons import shade
     style = shade.Flat3Style()
     n = np.array([0.0, 1.0, -1.0])
+
+    def poly(ox):
+        return np.array([[ox, 0], [ox + 8, 0], [ox, 8]], float)
+
     faces = [
-        {"poly": np.array([[0, 0], [1, 0], [0, 1]]), "normal": n, "depth": 2.0, "kind": "tri"},   # front wall
-        {"poly": np.array([[0, 0], [1, 0], [0, 1]]), "normal": n, "depth": 5.0, "kind": "disc"},  # interior tube (far)
-        {"poly": np.array([[0, 0], [1, 0], [0, 1]]), "normal": n, "depth": 1.0, "kind": "disc"},  # stud top (near)
+        {"poly": poly(0), "normal": n, "depth": 2.0, "kind": "tri"},
+        {"poly": poly(20), "normal": n, "depth": 5.0, "kind": "disc"},
+        {"poly": poly(40), "normal": n, "depth": 1.0, "kind": "disc"},
     ]
     ops = shade.fill_ops(faces, style)
     assert [o["depth"] for o in ops] == [5.0, 2.0, 1.0]   # strictly far->near, kind-agnostic
+
+
+def _flat_face(x0, y0, x1, y1, order, depth, normal=(0, 1, -0.5), group=None):
+    f = {"poly": np.array([(x0, y0), (x1, y0), (x1, y1), (x0, y1)], float),
+         "normal": np.array(normal, float), "depth": float(depth),
+         "order": order, "kind": "tri"}
+    if group is not None:
+        f["group"] = group
+    return f
+
+
+def test_fill_ops_drops_fully_hidden_face():
+    far = _flat_face(2, 2, 8, 8, order=0, depth=10.0)
+    near = _flat_face(0, 0, 10, 10, order=1, depth=1.0)
+    ops = shade.fill_ops([far, near], shade.Flat3Style())
+    assert len(ops) == 1 and ops[0]["depth"] == 1.0
+
+
+def test_fill_ops_clips_partial_overlap():
+    far = _flat_face(0, 0, 10, 10, order=0, depth=10.0)
+    near = _flat_face(5, 0, 15, 10, order=1, depth=1.0)
+    ops = shade.fill_ops([far, near], shade.Flat3Style())
+    assert len(ops) == 2
+    far_op = ops[0]                                # farthest emitted first
+    toks = far_op["d"].replace("M", " ").replace("L", " ").replace("Z", " ").split()
+    xs = [float(t) for t in toks[0::2]]
+    assert max(xs) <= 5.0 + 1e-6                   # clipped at the near face
+
+
+def test_fill_ops_merges_group_into_one_op():
+    kw = dict(depth=5.0, group=7)
+    fs = [_flat_face(0, 0, 4, 4, order=0, **kw),
+          _flat_face(4, 0, 8, 4, order=1, **kw),
+          _flat_face(0, 4, 8, 8, order=2, **kw)]   # T-junction against the first two
+    ops = shade.fill_ops(fs, shade.Flat3Style())
+    assert len(ops) == 1
+    assert ops[0]["d"].count("M ") == 1            # a single merged region
+
+
+def test_fill_ops_group_gradient_kept():
+    ga = ((0.0, 0.0), (8.0, 0.0))
+    samples = [(0.0, np.array([0, 0, -1.0])), (1.0, np.array([0.6, 0, -0.8]))]
+    fs = []
+    for i, (x0, x1) in enumerate([(0, 4), (4, 8)]):
+        f = _flat_face(x0, 0, x1, 4, order=i, depth=5.0, group=3)
+        f["grad_axis"] = ga
+        f["grad_samples"] = samples
+        fs.append(f)
+    ops = shade.fill_ops(fs, shade.Flat3Style())
+    assert len(ops) == 1 and "gradient" in ops[0]
+    assert len(ops[0]["gradient"]["stops"]) == 2
+
+
+def test_fill_ops_tiny_slivers_dropped():
+    far = _flat_face(0, 0, 10, 10, order=0, depth=10.0)
+    near = _flat_face(0.01, 0.01, 10, 10, order=1, depth=1.0)  # covers all but a sliver
+    ops = shade.fill_ops([far, near], shade.Flat3Style())
+    assert len(ops) == 1
 
 
 def test_highlight_ops_only_for_upfacing_discs():
@@ -454,9 +514,9 @@ def test_fill_ops_respects_stamped_order():
     from brick_icons import shade
     style = shade.Flat3Style()
     n = np.array([0.0, 1.0, -1.0])
-    a = {"poly": np.array([[0, 0], [1, 0], [0, 1]]), "normal": n,
+    a = {"poly": np.array([[0, 0], [8, 0], [0, 8]]), "normal": n,
          "depth": 1.0, "kind": "tri", "order": 0}     # near but painted FIRST
-    b = {"poly": np.array([[0, 0], [1, 0], [0, 1]]), "normal": n,
+    b = {"poly": np.array([[20, 0], [28, 0], [20, 8]]), "normal": n,
          "depth": 5.0, "kind": "tri", "order": 1}
     ops = shade.fill_ops([b, a], style)
     assert [o["depth"] for o in ops] == [1.0, 5.0]

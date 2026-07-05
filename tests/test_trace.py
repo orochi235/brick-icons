@@ -87,6 +87,13 @@ def test_segments_to_svg_writes_fill_layer(tmp_path):
     assert 'stroke="#cccccc"' in txt
 
 
+def test_fill_paths_use_evenodd(tmp_path):
+    fills = [{"d": "M 0 0 L 10 0 L 10 10 L 0 10 Z M 2 2 L 8 2 L 8 8 L 2 8 Z",
+              "fill": "#888888", "depth": 0.0}]
+    out = _trace.segments_to_svg([], 20, 20, tmp_path / "eo.svg", fills=fills)
+    assert 'fill-rule="evenodd"' in out.read_text()
+
+
 def test_segments_to_svg_writes_gradient_fill(tmp_path):
     segs = [("line", 0.0, 0.0, 10.0, 0.0, "edge")]
     fills = [{"d": "M 0 0 L 10 0 L 10 10 Z", "depth": 1.0,
