@@ -17,6 +17,11 @@
 4589    # cone 1x1 — tapered wall
 3960    # dish 4x4 inverted — large shallow curve
 
+# --- SNOT (studs not on top) ---
+4070    # headlight brick 1x1 — recessed side stud + notch
+87087   # 1x1 brick with stud on 1 side
+99781   # bracket 1x2-1x2 down — thin L profile, studs on two planes
+
 # --- Irregular / weird behavior ---
 4019    # Technic gear 16 tooth — many small tooth faces + axle hole
 3649    # Technic gear 40 tooth — dense teeth (stress case)
