@@ -1,6 +1,6 @@
 from __future__ import annotations
 import math
-from collections import namedtuple
+from collections import defaultdict, namedtuple
 from pathlib import Path
 import numpy as np
 
@@ -306,10 +306,6 @@ def _analytic_circle_pts(rec, n=16):
                + rec["inner"] * (np.cos(ang)[:, None] * R[:, 0]
                                  + np.sin(ang)[:, None] * R[:, 2]))
         return np.vstack([circ, top])                 # base + top rings
-    if rec["kind"] == "ndis":
-        sq = np.array([(1, 1), (-1, 1), (-1, -1), (1, -1)], float)
-        corners = C + sq[:, 0:1] * R[:, 0] + sq[:, 1:2] * R[:, 2]
-        return np.vstack([circ, corners])             # arc + square corners
     return circ
 
 
@@ -352,8 +348,6 @@ def _visible_segments_analytic(out, right, up, fwd, render_px):
         elif k == "ring":
             occ = primitives.DiscOccluder(rec["R"], rec["t"], rec["sector"],
                                           rec["inner"], rec["inner"] + 1)
-        elif k == "ndis":
-            occ = primitives.NdisOccluder(rec["R"], rec["t"], rec["sector"])
         else:
             occ = None                                  # edge: no surface
         if occ is not None:
@@ -361,11 +355,25 @@ def _visible_segments_analytic(out, right, up, fwd, render_px):
     if out["tri"]:
         occluders.append(primitives.TriangleOccluder(np.array(out["tri"])))
 
-    # drawn ops: analytic curves (+ a cylinder excludes itself from its silhouette)
+    # drawn ops: analytic curves (+ a cylinder excludes itself from its
+    # silhouette). A wall's rim arc is suppressed when a FULL-sector wall of
+    # equal slope continues on the other side of the circle plane (stacked
+    # cone/cylinder sections): that whole rim is a smooth joint, not an edge.
+    full_smooth = defaultdict(set)
+    for rec in analytic:
+        if rec["sector"] >= 360.0 - 1e-9:
+            for key, side, slope in primitives.wall_rims(rec):
+                full_smooth[key].add((side, slope))
+    shared_rims = set()
+    for rec in analytic:
+        for key, side, slope in primitives.wall_rims(rec):
+            if (-side, slope) in full_smooth[key]:
+                shared_rims.add((key, side))
     specs = []
     for rec in analytic:
         own = rec_occ.get(id(rec))
-        for op, dfn in primitives.drawn_with_depth(rec, to_AB, s, cx, cy, half, fwd):
+        for op, dfn in primitives.drawn_with_depth(rec, to_AB, s, cx, cy, half,
+                                                   fwd, skip_rims=shared_rims):
             specs.append((op, dfn, own if op[-1] == "sil" else None))
     # non-substituted straight edges (box edges, chords) and conditionals
     for e in out["2"]:

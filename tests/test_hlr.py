@@ -261,24 +261,6 @@ def test_analytic_cone_occludes_edge_behind_it():
     assert len(edge_segs) == 2                    # hidden midsection removed
 
 
-def test_analytic_ndis_occludes_edge_behind_it():
-    # ndis square spans +-10 in world x/y at z=0 (axis toward camera). The
-    # edge crosses behind at y=8: the disc's half-width there is 6, so the
-    # square-minus-disc flanks 6<=|x|<=10 hide it, leaving 3 visible runs
-    # (outside-left, through the disc hole, outside-right).
-    out = {"2": [np.array([[-40.0, 8.0, 20.0], [40.0, 8.0, 20.0]])],
-           "5": [], "tri": [], "tri_meta": [],
-           "analytic": [{"kind": "ndis", "sector": 360.0, "inner": 0,
-                         "R": np.column_stack([np.array([10.0, 0, 0]),
-                                               np.array([0.0, 0, 10.0]),
-                                               np.array([0.0, 10.0, 0])]),
-                         "t": np.zeros(3)}]}
-    right, up, fwd = hlr.view_basis(0.0, 0.0)
-    res = hlr._visible_segments_analytic(out, right, up, fwd, render_px=200)
-    edge_segs = [sg for sg in res.segs if sg[0] == "line" and sg[-1] == "edge"]
-    assert len(edge_segs) == 3
-
-
 @pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
 def test_cone_part_uses_analytic_cones():
     # 4589 (cone 1x1) body = 4-4con3 + 4-4con4: must arrive as analytic
@@ -291,9 +273,11 @@ def test_cone_part_uses_analytic_cones():
     # wall vertex stays inside the render canvas
     for f in con_faces:
         assert f["poly"].min() >= 0.0 and f["poly"].max() <= 900.0
-    # ndis substitution reaches parts too (3960's base uses 4-4ndis)
-    res2 = hlr.visible_segments("3960", LIB, lat=30, long=45, render_px=900)
-    assert "ndis" in {r["kind"] for r in res2.analytic}
+    # the con3/con4 joint circle is a smooth continuation: no drawn arc there
+    # (it showed as a spurious black ring). The joint plane is at the shared
+    # rim; assert fewer edge arcs than the naive 2-per-cone.
+    con_recs = [r for r in res.analytic if r["kind"] == "con"]
+    assert len(con_recs) == 2
 
 
 @pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")

@@ -112,38 +112,6 @@ def test_ring_partial_sector_keeps_concat_polygon():
     assert not f.get("holes")           # annular sector: simple valid polygon
 
 
-def _screen_plane_R():
-    # ndis/ring local XZ plane mapped into the screen: U=+x, axis=+z, V=+y
-    return np.column_stack([np.array([1.0, 0.0, 0.0]),
-                            np.array([0.0, 0.0, 1.0]),
-                            np.array([0.0, 1.0, 0.0])])
-
-
-def test_ndis_face_polygon_quarter():
-    right, up = np.array([1.0, 0, 0]), np.array([0.0, 1.0, 0])
-    fwd = np.array([0.0, 0.0, -1.0])
-    rec = {"kind": "ndis", "sector": 90.0, "inner": 0,
-           "R": _screen_plane_R(), "t": np.zeros(3)}
-    faces = shade.faces_from_analytic([rec], right, up, fwd, 1.0, 0.0, 0.0, 0.0)
-    assert len(faces) == 1
-    f = faces[0]
-    p = f["poly"]
-    area = 0.5 * abs(np.sum(p[:, 0] * np.roll(p[:, 1], -1)
-                            - np.roll(p[:, 0], -1) * p[:, 1]))
-    assert abs(area - (1 - math.pi / 4)) < 0.01
-    assert not f.get("holes")
-    assert abs(np.linalg.norm(f["normal"]) - 1) < 1e-6
-
-
-def test_ndis_face_full_sector_has_hole():
-    right, up = np.array([1.0, 0, 0]), np.array([0.0, 1.0, 0])
-    fwd = np.array([0.0, 0.0, -1.0])
-    rec = {"kind": "ndis", "sector": 360.0, "inner": 0,
-           "R": _screen_plane_R(), "t": np.zeros(3)}
-    f = shade.faces_from_analytic([rec], right, up, fwd, 1.0, 0.0, 0.0, 0.0)[0]
-    assert len(f["poly"]) == 4 and len(f.get("holes", [])) == 1
-
-
 def test_overlap_witness_respects_holes():
     outer = np.array([(0, 0), (10, 0), (10, 10), (0, 10)], float)
     hole = np.array([(2, 2), (8, 2), (8, 8), (2, 8)], float)

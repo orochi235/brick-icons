@@ -40,9 +40,12 @@ def test_parse_cone_names():
     assert P.parse_primitive("48\\4-4con3.dat") == ("con", 360.0, 3)
 
 
-def test_parse_ndis_names():
-    assert P.parse_primitive("4-4ndis.dat") == ("ndis", 360.0, 0)
-    assert P.parse_primitive("1-4ndis.dat") == ("ndis", 90.0, 0)
+def test_parse_ndis_stays_faceted():
+    # deliberate: faceted ndis tris join adjacent facet groups and inherit the
+    # group gradient (analytic ndis produced a tone-mismatched square, 3960);
+    # fill_ops' union merges the tris into one region anyway.
+    assert P.parse_primitive("4-4ndis.dat") is None
+    assert P.parse_primitive("1-4ndis.dat") is None
 
 
 def test_parse_still_rejects_unhandled():
@@ -202,24 +205,6 @@ def test_cone_occluder_scaled_transform():
     assert abs(occ.depth(O, F)[0] - (9.0 - z)) < 1e-9
 
 
-def test_ndis_occluder_region():
-    occ = P.NdisOccluder(np.eye(3), np.zeros(3), 360.0)
-    F = np.array([0.0, -1.0, 0.0])
-    O = np.array([[0.99, 5.0, 0.99],    # corner: in square, outside disc -> hit
-                  [0.5, 5.0, 0.5],      # inside disc -> miss
-                  [1.2, 5.0, 0.0]])     # outside square -> miss
-    d = occ.depth(O, F)
-    assert abs(d[0] - 5.0) < 1e-9
-    assert not np.isfinite(d[1]) and not np.isfinite(d[2])
-
-
-def test_ndis_occluder_sector():
-    occ = P.NdisOccluder(np.eye(3), np.zeros(3), 90.0)
-    F = np.array([0.0, -1.0, 0.0])
-    d = occ.depth(np.array([[0.99, 5.0, 0.99], [-0.99, 5.0, 0.99]]), F)
-    assert np.isfinite(d[0]) and not np.isfinite(d[1])
-
-
 def _stub_proj():
     # camera looks along -Z: A=x, B=y, depth=-z; identity pixel fit
     def to_AB(Pw):
@@ -250,6 +235,87 @@ def test_cone_apex_no_top_arc():
     assert len(sils) == 2
     # every generator ends at the projected apex (0, 1)
     assert all(abs(o[3]) < 1e-9 and abs(o[4] - 1.0) < 1e-9 for o in sils)
+
+
+def _smooth_shared_rims(recs):
+    """Mirror of hlr's suppression rule: a rim is skipped iff a FULL-sector
+    wall of equal slope continues on the opposite side of its plane."""
+    from collections import defaultdict
+    full_smooth = defaultdict(set)
+    for r in recs:
+        if r["sector"] >= 360.0 - 1e-9:
+            for key, side, slope in P.wall_rims(r):
+                full_smooth[key].add((side, slope))
+    skip = set()
+    for r in recs:
+        for key, side, slope in P.wall_rims(r):
+            if (-side, slope) in full_smooth[key]:
+                skip.add((key, side))
+    return skip
+
+
+def test_shared_rim_arcs_suppressed_for_stacked_cones():
+    # con1 stacked on con0: the joint circle (radius 1 at y=1) is a smooth
+    # continuation, NOT an edge — 4589 showed a spurious black ring there.
+    to_AB, fwd = _stub_proj()
+    lower = {"kind": "con", "sector": 360.0, "inner": 1, "R": np.eye(3), "t": np.zeros(3)}
+    upper = {"kind": "con", "sector": 360.0, "inner": 0, "R": np.eye(3),
+             "t": np.array([0.0, 1.0, 0.0])}
+    shared = _smooth_shared_rims([lower, upper])
+    assert len(shared) == 2                     # both sides of the one joint
+    ops_lower = [op for op, *_ in P.drawn_with_depth(
+        lower, to_AB, 1.0, 0.0, 0.0, 0.0, fwd, skip_rims=shared)]
+    ops_upper = [op for op, *_ in P.drawn_with_depth(
+        upper, to_AB, 1.0, 0.0, 0.0, 0.0, fwd, skip_rims=shared)]
+    # lower keeps only its base arc; upper (apex cone) loses its base arc
+    assert len([o for o in ops_lower if o[0] == "arc"]) == 1
+    assert len([o for o in ops_upper if o[0] == "arc"]) == 0
+    # silhouette generator lines are unaffected
+    assert [o for o in ops_lower if o[0] == "line"]
+
+
+def test_same_side_shared_rims_kept():
+    # 3941's base lip: quadrant walls END on the same circle as the body wall
+    # (same side of the plane) — that rim is real silhouette closure, not a
+    # smooth joint; suppressing it opened the historic base gap again.
+    body = {"kind": "cyli", "sector": 360.0, "inner": 0,
+            "R": np.diag([20.0, -24.0, 20.0]), "t": np.array([0.0, 24.0, 0.0])}
+    lip = {"kind": "cyli", "sector": 90.0, "inner": 0,
+           "R": np.diag([20.0, -4.0, 20.0]), "t": np.array([0.0, 24.0, 0.0])}
+    assert _smooth_shared_rims([body, lip]) == set()
+
+
+def test_partial_sector_opposite_wall_keeps_full_rim():
+    # 3941's actual joint: full body wall (y0..20) meets 45-degree lip sectors
+    # (y20..24) with cutout gaps. The lip sectors' rims vanish (the full body
+    # continues them) but the body's own rim must stay — it is a real edge
+    # across the cutouts, and the silhouette tangent lands on it.
+    body = {"kind": "cyli", "sector": 360.0, "inner": 0,
+            "R": np.diag([20.0, 20.0, 20.0]), "t": np.zeros(3)}
+    lip = {"kind": "cyli", "sector": 45.0, "inner": 0,
+           "R": np.diag([20.0, 4.0, 20.0]), "t": np.array([0.0, 20.0, 0.0])}
+    skip = _smooth_shared_rims([body, lip])
+    body_rims = P.wall_rims(body)
+    lip_rims = P.wall_rims(lip)
+    assert (lip_rims[0][0], lip_rims[0][1]) in skip        # lip base: joint
+    assert (body_rims[1][0], body_rims[1][1]) not in skip  # body top: real edge
+
+
+def test_cone_on_cylinder_crease_rim_kept():
+    # different slopes meeting at a shared circle = a real crease: keep arcs
+    cyl = {"kind": "cyli", "sector": 360.0, "inner": 0,
+           "R": np.eye(3), "t": np.zeros(3)}
+    cone = {"kind": "con", "sector": 360.0, "inner": 0,
+            "R": np.eye(3), "t": np.array([0.0, 1.0, 0.0])}
+    assert _smooth_shared_rims([cyl, cone]) == set()
+
+
+def test_unshared_rims_still_drawn():
+    to_AB, fwd = _stub_proj()
+    rec = {"kind": "con", "sector": 360.0, "inner": 1, "R": np.eye(3), "t": np.zeros(3)}
+    ops = [op for op, *_ in P.drawn_with_depth(
+        rec, to_AB, 1.0, 0.0, 0.0, 0.0, fwd, skip_rims=set())]
+    assert len([o for o in ops if o[0] == "arc"]) == 2
 
 
 def test_cone_axis_on_view_no_generators():

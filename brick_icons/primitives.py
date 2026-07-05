@@ -19,7 +19,7 @@ import re
 
 import numpy as np
 
-_FRAC = re.compile(r"^(\d+)-(\d+)(edge|cyli|cylo|disc|ndis|ring|con)(\d*)$")
+_FRAC = re.compile(r"^(\d+)-(\d+)(edge|cyli|cylo|disc|ring|con)(\d*)$")
 
 
 def parse_primitive(name: str):
@@ -27,8 +27,14 @@ def parse_primitive(name: str):
 
     None means "not a substitutable curved primitive" -> the caller should fall
     back to faceted polygon recursion. kind in {'edge','cyli','disc','ring',
-    'con','ndis'}; 'cylo' is aliased to 'cyli'. For 'con' the third element is
-    the TOP radius N: geometry is radius N+1 at local y=0 tapering to N at y=1.
+    'con'}; 'cylo' is aliased to 'cyli'. For 'con' the third element is the
+    TOP radius N: geometry is radius N+1 at local y=0 tapering to N at y=1.
+
+    'ndis' deliberately stays faceted: its tris join adjacent smooth/coplanar
+    facet groups (seam/coplanar union) and inherit the group's gradient, so
+    the seam is invisible; an analytic ndis face gets a flat tone that
+    mismatches the group ramp (3960 grew a visible square around its stud).
+    fill_ops' polygon union merges the faceted tris into one region anyway.
     """
     base = name.replace("\\", "/").split("/")[-1].lower()
     if base.endswith(".dat"):
@@ -269,38 +275,6 @@ class DiscOccluder:
         return np.where(valid, lam, out)
 
 
-class NdisOccluder:
-    """Square-minus-disc corner fill in the local XZ plane (normal = axis A):
-    inside the unit square, outside the unit disc, within the sector."""
-
-    def __init__(self, R, t, sector):
-        self.C = np.asarray(t, float)
-        self.U, self.V, self.A, self.r, _ = _local_basis(R, t)
-        self.n = self.A / (np.linalg.norm(self.A) or 1.0)
-        self.sector = sector
-        self.uhat = self.U / (self.r or 1.0)
-        self.vhat = self.V / (self.r or 1.0)
-
-    def depth(self, O, F):
-        O = np.atleast_2d(O).astype(float)
-        F = np.asarray(F, float)
-        denom = float(F @ self.n)
-        out = np.full(O.shape[0], np.inf)
-        if abs(denom) < 1e-12:
-            return out
-        lam = ((self.C - O) @ self.n) / denom
-        rel = O + lam[:, None] * F - self.C
-        # uhat/vhat are unit vectors, so lx/lz are WORLD-scale local coords;
-        # compare against the world-scaled unit square/disc (r), matching
-        # DiscOccluder's convention.
-        lx = rel @ self.uhat
-        lz = rel @ self.vhat
-        valid = ((np.maximum(np.abs(lx), np.abs(lz)) <= self.r * (1 + 1e-6))
-                 & (np.hypot(lx, lz) >= self.r * (1 - 1e-6))
-                 & _angle_in_sector(lx, lz, self.sector))
-        return np.where(valid, lam, out)
-
-
 class TriangleOccluder:
     """Flat triangles (world coords, shape (M,3,3)) as a gridless depth source.
 
@@ -370,14 +344,73 @@ def _line_depth_fn(z0, z1):
     return depth
 
 
-def drawn_with_depth(rec, to_AB, s, cx, cy, half, fwd):
+def rim_key(C, A, radius):
+    """Canonical key for a rim circle (center, axis line, radius), rounded so
+    coincident rims from different records compare equal."""
+    C = np.round(np.asarray(C, float), 3)
+    n = np.asarray(A, float)
+    ln = np.linalg.norm(n)
+    n = n / (ln or 1.0)
+    for c in n:                          # canonical axis sign
+        if abs(c) > 1e-9:
+            if c < 0:
+                n = -n
+            break
+    return (tuple(C), tuple(np.round(n, 3)), round(float(radius), 3))
+
+
+def wall_rims(rec):
+    """[(key, side, slope)] for a WALL record's rim circles (cyli/con).
+
+    `side` is which side of the circle plane the wall lies on (+-1 along the
+    key's canonical axis); `slope` is d(radius)/d(height) in that canonical
+    direction, rounded. A record's rim arc is suppressed iff a FULL-sector
+    wall with EQUAL slope lies on the OPPOSITE side (stacked cone/cylinder
+    sections, e.g. 4589's con3-on-con4 joint) — only then is the whole rim a
+    smooth joint. Same-side sharing, unequal slopes (creases), or partial-
+    sector sharers (3941's base lip: 45-degree sectors with cutout gaps, where
+    the body's rim stays a real edge) keep the arc."""
+    R = np.asarray(rec["R"], float)
+    t = np.asarray(rec["t"], float)
+    A = R[:, 1]
+    ahat = A / (np.linalg.norm(A) or 1.0)
+    ru = float(np.linalg.norm(R[:, 0]))
+    ah = float(np.linalg.norm(A)) or 1.0
+    if rec["kind"] == "cyli":
+        rate = 0.0
+        rims = [(t, ru, +1), (t + A, ru, -1)]           # (center, radius, side along +A)
+    elif rec["kind"] == "con":
+        N = rec["inner"]
+        rate = -ru / ah                                 # radius shrinks toward +A
+        rims = [(t, (N + 1) * ru, +1)]
+        if N > 0:
+            rims.append((t + A, N * ru, -1))
+    else:
+        return []
+    out = []
+    for C, radius, side in rims:
+        key = rim_key(C, A, radius)
+        aligned = float(np.dot(ahat, key[1])) > 0       # canonical axis sign
+        out.append((key,
+                    side if aligned else -side,
+                    round(rate if aligned else -rate, 3)))
+    return out
+
+
+def drawn_with_depth(rec, to_AB, s, cx, cy, half, fwd, skip_rims=None):
     """Return [(op, depth_fn)] for one analytic record.
 
     depth_fn maps an op's sample params to camera depth: degrees for arc ops,
-    t in [0,1] for line ops. Ops are pre-occlusion candidates.
-    """
+    t in [0,1] for line ops. Ops are pre-occlusion candidates. `skip_rims` is
+    a set of (rim_key, side) pairs (see wall_rims) whose base/top arcs must
+    not be emitted: rims where a full-sector wall continues smoothly on the
+    other side of the circle plane (stacked section joints)."""
     kind, sector = rec["kind"], rec["sector"]
     R, t = rec["R"], rec["t"]
+    skip_rims = skip_rims or set()
+    rims = wall_rims(rec) if skip_rims else []
+    skip_base = bool(rims) and (rims[0][0], rims[0][1]) in skip_rims
+    skip_top = len(rims) > 1 and (rims[1][0], rims[1][1]) in skip_rims
     pairs = []
     if kind in ("edge", "disc", "ring"):
         outer = (rec["inner"] + 1) if kind == "ring" else 1.0
@@ -402,8 +435,10 @@ def drawn_with_depth(rec, to_AB, s, cx, cy, half, fwd):
                 pb, pt = base.point(th), top.point(th)
                 op = ("line", float(pb[0]), float(pb[1]), float(pt[0]), float(pt[1]), "sil")
                 pairs.append((op, _line_depth_fn(base.depth(th), top.depth(th))))
-        pairs.append((_arc_op(base, 0.0, sector, "edge"), _arc_depth_fn(base)))
-        pairs.append((_arc_op(top, 0.0, sector, "edge"), _arc_depth_fn(top)))
+        if not skip_base:
+            pairs.append((_arc_op(base, 0.0, sector, "edge"), _arc_depth_fn(base)))
+        if not skip_top:
+            pairs.append((_arc_op(top, 0.0, sector, "edge"), _arc_depth_fn(top)))
     elif kind == "con":
         R = np.asarray(R, float)
         N = float(rec["inner"])
@@ -436,8 +471,9 @@ def drawn_with_depth(rec, to_AB, s, cx, cy, half, fwd):
                     op = ("line", float(pb[0]), float(pb[1]),
                           float(pt_[0]), float(pt_[1]), "sil")
                     pairs.append((op, _line_depth_fn(base.depth(th), zt)))
-        pairs.append((_arc_op(base, 0.0, sector, "edge"), _arc_depth_fn(base)))
-        if topc is not None:
+        if not skip_base:
+            pairs.append((_arc_op(base, 0.0, sector, "edge"), _arc_depth_fn(base)))
+        if topc is not None and not skip_top:
             pairs.append((_arc_op(topc, 0.0, sector, "edge"), _arc_depth_fn(topc)))
     return pairs
 

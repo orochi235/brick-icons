@@ -67,27 +67,6 @@ def faces_from_analytic(analytic, right, up, fwd, s, cx, cy, half):
                 hx, hy, _ = _project_px(hole_w, right, up, fwd, s, cx, cy, half)
                 face["holes"] = [np.stack([hx, hy], 1)]
             faces.append(face)
-        elif kind == "ndis":
-            ring2d, holes2d = _ndis_local_rings(sect)
-            U, A, V = R[:, 0], R[:, 1], R[:, 2]
-            C = np.asarray(rec["t"], float)
-
-            def world(r2):
-                return C + r2[:, 0:1] * U + r2[:, 1:2] * V
-
-            px, py, z = _project_px(world(ring2d), right, up, fwd, s, cx, cy, half)
-            n = A / np.linalg.norm(A)
-            nv = np.array([n @ right, n @ up, n @ fwd])
-            if nv[2] > 0:
-                nv = -nv
-            face = {"poly": np.stack([px, py], 1), "normal": nv,
-                    "depth": float(np.mean(z)), "zs": z, "kind": kind,
-                    "rec": rec}
-            if holes2d:
-                hx, hy, _ = _project_px(world(holes2d[0]), right, up, fwd,
-                                        s, cx, cy, half)
-                face["holes"] = [np.stack([hx, hy], 1)]
-            faces.append(face)
         elif kind == "cyli":
             faces.extend(_cyl_wall_faces(rec, R, sect, right, up, fwd,
                                          s, cx, cy, half))
@@ -95,31 +74,6 @@ def faces_from_analytic(analytic, right, up, fwd, s, cx, cy, half):
             faces.extend(_con_wall_faces(rec, R, sect, right, up, fwd,
                                          s, cx, cy, half))
     return faces
-
-
-def _square_pt(th):
-    """Point where the ray at angle `th` exits the unit square (|x|,|z| <= 1)."""
-    c, s_ = math.cos(th), math.sin(th)
-    m = max(abs(c), abs(s_))
-    return c / m, s_ / m
-
-
-def _ndis_local_rings(sect):
-    """Local 2-D (x, z) rings for square-minus-disc over [0, sect] radians.
-    Returns (outer_ring, holes). Full sector: square exterior + circular hole.
-    Partial: arc out, square boundary back (corners inserted — points between
-    corners lie on straight square edges, so corners suffice)."""
-    if sect >= 2 * math.pi - 1e-6:
-        sq = np.array([(1, 1), (-1, 1), (-1, -1), (1, -1)], float)
-        th = np.linspace(0.0, 2 * math.pi, 65)[:-1]
-        return sq, [np.stack([np.cos(th), np.sin(th)], 1)]
-    th = np.linspace(0.0, sect, 48)
-    arc = np.stack([np.cos(th), np.sin(th)], 1)
-    corners = [a for a in (math.radians(x) for x in (45, 135, 225, 315))
-               if a < sect - 1e-9]
-    back = ([_square_pt(sect)] + [_square_pt(a) for a in reversed(corners)]
-            + [_square_pt(0.0)])
-    return np.vstack([arc, np.array(back, float)]), []
 
 
 def _arc_sector_spans(lo, length, sect):
