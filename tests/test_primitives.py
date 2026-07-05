@@ -202,6 +202,48 @@ def test_cone_occluder_scaled_transform():
     assert abs(occ.depth(O, F)[0] - (9.0 - z)) < 1e-9
 
 
+def _stub_proj():
+    # camera looks along -Z: A=x, B=y, depth=-z; identity pixel fit
+    def to_AB(Pw):
+        Pw = np.atleast_2d(np.asarray(Pw, float))
+        return Pw[:, 0], Pw[:, 1], -Pw[:, 2]
+    return to_AB, np.array([0.0, 0.0, -1.0])
+
+
+def test_cone_drawn_ops_full_sector():
+    to_AB, fwd = _stub_proj()
+    rec = {"kind": "con", "sector": 360.0, "inner": 1, "R": np.eye(3), "t": np.zeros(3)}
+    pairs = P.drawn_with_depth(rec, to_AB, 1.0, 0.0, 0.0, 0.0, fwd)
+    ops = [op for op, *_ in pairs]
+    arcs = [o for o in ops if o[0] == "arc"]
+    sils = [o for o in ops if o[0] == "line" and o[-1] == "sil"]
+    assert len(arcs) == 2 and len(sils) == 2
+    # generators at theta = 0 and pi: base pts x=+-2, top pts x=+-1
+    ends = sorted((round(o[1], 6), round(o[3], 6)) for o in sils)
+    assert ends == [(-2.0, -1.0), (2.0, 1.0)]
+
+
+def test_cone_apex_no_top_arc():
+    to_AB, fwd = _stub_proj()
+    rec = {"kind": "con", "sector": 360.0, "inner": 0, "R": np.eye(3), "t": np.zeros(3)}
+    ops = [op for op, *_ in P.drawn_with_depth(rec, to_AB, 1.0, 0.0, 0.0, 0.0, fwd)]
+    assert len([o for o in ops if o[0] == "arc"]) == 1     # base rim only
+    sils = [o for o in ops if o[0] == "line"]
+    assert len(sils) == 2
+    # every generator ends at the projected apex (0, 1)
+    assert all(abs(o[3]) < 1e-9 and abs(o[4] - 1.0) < 1e-9 for o in sils)
+
+
+def test_cone_axis_on_view_no_generators():
+    def to_AB(Pw):
+        Pw = np.atleast_2d(np.asarray(Pw, float))
+        return Pw[:, 0], Pw[:, 2], -Pw[:, 1]
+    fwd = np.array([0.0, -1.0, 0.0])           # looking down the cone axis
+    rec = {"kind": "con", "sector": 360.0, "inner": 1, "R": np.eye(3), "t": np.zeros(3)}
+    ops = [op for op, *_ in P.drawn_with_depth(rec, to_AB, 1.0, 0.0, 0.0, 0.0, fwd)]
+    assert not [o for o in ops if o[0] == "line"]
+
+
 def test_cylinder_depth_far_returns_second_hit():
     """Interior far-half wall faces need the FAR ray intersection; the near
     hit belongs to the front wall (ordering interior walls by the near hit

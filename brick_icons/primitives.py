@@ -372,6 +372,41 @@ def drawn_with_depth(rec, to_AB, s, cx, cy, half, fwd):
                 pairs.append((op, _line_depth_fn(base.depth(th), top.depth(th))))
         pairs.append((_arc_op(base, 0.0, sector, "edge"), _arc_depth_fn(base)))
         pairs.append((_arc_op(top, 0.0, sector, "edge"), _arc_depth_fn(top)))
+    elif kind == "con":
+        R = np.asarray(R, float)
+        N = float(rec["inner"])
+        A3 = R[:, 1]
+        fwd = np.asarray(fwd, float)
+        base = project_circle(R, t, N + 1.0, to_AB, s, cx, cy, half)
+        topc = (project_circle(R, np.asarray(t, float) + A3, N, to_AB, s, cx, cy, half)
+                if N > 0 else None)
+        if topc is None:                        # apex: project the point itself
+            aa, bb, zz = to_AB((np.asarray(t, float) + A3)[None, :])
+            apex_xy = ((aa[0] - cx) * s + half, (bb[0] - cy) * s + half)
+            apex_z = float(zz[0])
+        # silhouette generators: local cone normal is constant along a
+        # generator, m(th) = (cos th, 1, sin th); world n.fwd = 0 reduces via
+        # g = R^-1 @ fwd to g0 cos th + g2 sin th = -g1 (0, 1, or 2 solutions).
+        g = np.linalg.inv(R) @ fwd
+        A_, B_, C_ = float(g[0]), float(g[2]), float(-g[1])
+        hyp = math.hypot(A_, B_)
+        if hyp > 1e-12 and abs(C_) <= hyp:
+            phi0 = math.atan2(B_, A_)
+            dth = math.acos(max(-1.0, min(1.0, C_ / hyp)))
+            for th in (phi0 + dth, phi0 - dth):
+                deg = math.degrees(th) % 360.0
+                if sector >= 360.0 - 1e-9 or deg <= sector + 1e-6:
+                    pb = base.point(th)
+                    if topc is not None:
+                        pt_, zt = topc.point(th), topc.depth(th)
+                    else:
+                        pt_, zt = apex_xy, apex_z
+                    op = ("line", float(pb[0]), float(pb[1]),
+                          float(pt_[0]), float(pt_[1]), "sil")
+                    pairs.append((op, _line_depth_fn(base.depth(th), zt)))
+        pairs.append((_arc_op(base, 0.0, sector, "edge"), _arc_depth_fn(base)))
+        if topc is not None:
+            pairs.append((_arc_op(topc, 0.0, sector, "edge"), _arc_depth_fn(topc)))
     return pairs
 
 
