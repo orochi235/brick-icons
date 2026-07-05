@@ -467,12 +467,17 @@ def cull_occluded_faces(faces, occluders, ray_origin, fwd, eps,
     return kept
 
 
-def faces_from_tris(tri, right, up, fwd, s, cx, cy, half):
+def faces_from_tris(tri, right, up, fwd, s, cx, cy, half, cond_edges=None):
     """Camera-facing triangle faces as px-space polygons with outward view-space
     normals. Winding is trusted (repaired upstream): a triangle whose outward
     normal points away from the camera (nv[2] >= 0) is a back-face and is
     CULLED — never flipped. Flipping was the old hack that leaked bright
-    top-tone slivers from hollow parts' undersides."""
+    top-tone slivers from hollow parts' undersides.
+
+    `cond_edges` (type-5 conditional lines; first two rows = the edge) marks
+    smooth-surface facet seams: faces joined through them get one SHARED
+    linear gradient so faceted curves (50950's slope, cone bodies) shade
+    smoothly instead of banding into flat tones."""
     faces = []
     for v in tri:                       # v: (3,3) world coords, outward-CCW
         n = np.cross(v[1] - v[0], v[2] - v[0])
@@ -486,5 +491,116 @@ def faces_from_tris(tri, right, up, fwd, s, cx, cy, half):
         px, py, z = _project_px(v, right, up, fwd, s, cx, cy, half)
         poly = np.stack([px, py], axis=1)
         faces.append({"poly": poly, "normal": nv, "depth": float(np.mean(z)),
-                      "zs": z, "kind": "tri"})
+                      "zs": z, "kind": "tri", "_verts": v})
+    if cond_edges is not None and len(cond_edges):
+        _attach_smooth_gradients(faces, cond_edges)
+    for f in faces:
+        f.pop("_verts", None)
     return faces
+
+
+def _edge_key(a, b):
+    ka, kb = tuple(np.round(a, 3)), tuple(np.round(b, 3))
+    return (ka, kb) if ka <= kb else (kb, ka)
+
+
+def _seam_edge_mask(A, B, cond_edges, tol=2e-3):
+    """Boolean per edge (A[i]->B[i]): does it LIE ON some conditional-line
+    segment? Exact endpoint matching fails in practice — part files subdivide
+    facet edges (a tri edge is often HALF of the authored cond line) and mix
+    coordinate precision — so match geometrically: both endpoints within tol
+    of the cond segment."""
+    E = len(A)
+    mask = np.zeros(E, bool)
+    for e in cond_edges:
+        p = np.asarray(e[0], float); q = np.asarray(e[1], float)
+        d = q - p
+        L2 = float(d @ d)
+        if L2 < 1e-12:
+            continue
+        todo = ~mask
+        if not todo.any():
+            break
+        for P in (A, B):
+            t = np.clip(((P - p) @ d) / L2, 0.0, 1.0)
+            close = P - (p + t[:, None] * d)
+            near = np.einsum("ij,ij->i", close, close) < tol * tol
+            todo = todo & near
+        mask |= todo
+    return mask
+
+
+def _attach_smooth_gradients(faces, cond_edges, min_spread=0.002):
+    """Union faces across conditional-line seams; give each group one shared
+    gradient (same axis + stops for every member — userSpaceOnUse gradients
+    make the facets blend seamlessly without polygon union). Groups whose
+    normals barely vary (min_spread on 1-cos) stay flat-toned."""
+    parent = list(range(len(faces)))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    by_edge = defaultdict(list)
+    edge_pts = []
+    edge_ids = []
+    for k, f in enumerate(faces):
+        v = f["_verts"]
+        for a, b in ((v[0], v[1]), (v[1], v[2]), (v[2], v[0])):
+            ek = _edge_key(a, b)
+            by_edge[ek].append(k)
+            edge_pts.append((np.asarray(a, float), np.asarray(b, float)))
+            edge_ids.append(ek)
+    if edge_pts:
+        A = np.stack([p[0] for p in edge_pts])
+        B = np.stack([p[1] for p in edge_pts])
+        on_seam = _seam_edge_mask(A, B, cond_edges)
+        seam_keys = {edge_ids[i] for i in np.flatnonzero(on_seam)}
+    else:
+        seam_keys = set()
+    for ek, ks in by_edge.items():
+        for k in ks[1:]:
+            # union across a seam always; across an ordinary shared edge only
+            # when coplanar (quad halves meet at a diagonal, which is never a
+            # conditional line) — coplanar union can't cross a real crease
+            coplanar = float(faces[ks[0]]["normal"] @ faces[k]["normal"]) > 0.9999
+            if ek not in seam_keys and not coplanar:
+                continue
+            ra, rb = find(ks[0]), find(k)
+            if ra != rb:
+                parent[rb] = ra
+
+    groups = defaultdict(list)
+    for k in range(len(faces)):
+        groups[find(k)].append(k)
+    for ks in groups.values():
+        if len(ks) < 2:
+            continue
+        nvs = [faces[k]["normal"] for k in ks]
+        cs = [faces[k]["poly"].mean(axis=0) for k in ks]
+        spread = max((1.0 - float(a @ b) for a in nvs for b in nvs), default=0.0)
+        if spread < min_spread:
+            continue                    # effectively flat: keep flat tones
+        # gradient axis = principal direction of centroid spread in SCREEN
+        # space (silhouette-to-silhouette, like analytic cylinder walls) —
+        # picking the most-divergent NORMAL pair can yield a near-degenerate
+        # or skewed screen axis on wide groups (cone bodies) and streak
+        C = np.asarray(cs, float)
+        Cc = C - C.mean(axis=0)
+        _, _, Vt = np.linalg.svd(Cc, full_matrices=False)
+        d0 = Vt[0]
+        t = Cc @ d0
+        p0 = tuple((C.mean(axis=0) + t.min() * d0).tolist())
+        p1 = tuple((C.mean(axis=0) + t.max() * d0).tolist())
+        axis = np.array([p1[0] - p0[0], p1[1] - p0[1]])
+        L2 = float(axis @ axis) or 1.0
+        samples = sorted(
+            ((float(np.clip(((c[0] - p0[0]) * axis[0] + (c[1] - p0[1]) * axis[1])
+                            / L2, 0.0, 1.0)), nv)
+             for c, nv in zip(cs, nvs)), key=lambda t: t[0])
+        ga = (p0, p1)
+        for k in ks:
+            faces[k]["grad_axis"] = ga
+            faces[k]["grad_samples"] = samples

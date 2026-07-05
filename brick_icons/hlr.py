@@ -287,7 +287,8 @@ def _visible_segments_faceted(out, right, up, fwd, render_px):
     xs = [c for sg in segs for c in (sg[0], sg[2])] or [0, 1]
     ys = [c for sg in segs for c in (sg[1], sg[3])] or [0, 1]
     from . import shade
-    faces = shade.faces_from_tris(tri, right, up, fwd, s, cx, cy, render_px / 2) if len(tri) else []
+    faces = shade.faces_from_tris(tri, right, up, fwd, s, cx, cy, render_px / 2,
+                                  cond_edges=out["5"]) if len(tri) else []
     faces = shade.order_faces(faces, eps=EDGE_BIAS * zrange)
     return VisResult(segs, (min(xs), min(ys), max(xs), max(ys)), s, faces, [], [])
 
@@ -370,7 +371,8 @@ def _visible_segments_analytic(out, right, up, fwd, render_px):
 
     segs = primitives.visible_subops(specs, occluders, ray_origin, fwd, eps, n=64)
     from . import shade
-    tri_faces = shade.faces_from_tris(np.array(out["tri"]), right, up, fwd, s, cx, cy, half) \
+    tri_faces = shade.faces_from_tris(np.array(out["tri"]), right, up, fwd,
+                                      s, cx, cy, half, cond_edges=out["5"]) \
         if out["tri"] else []
     an_faces = shade.faces_from_analytic(analytic, right, up, fwd, s, cx, cy, half)
     own_occ = {id(f): rec_occ.get(id(f["rec"])) for f in an_faces

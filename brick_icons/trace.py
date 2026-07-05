@@ -102,15 +102,23 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=3,
         # between abutting coplanar faces don't show; gradient fills (cylinder
         # walls) carry a <linearGradient> def instead of a flat color.
         defs, body = [], ['<g stroke-linejoin="round">']
+        # Smooth-group facets share one gradient object; dedupe defs by
+        # content so a 50-facet curve emits one <linearGradient>, not 50.
+        def_ids = {}
         for i, fo in enumerate(fills):
             if "gradient" in fo:
-                g = fo["gradient"]; gid = f"g{i}"
+                g = fo["gradient"]
                 stops = "".join(
                     f'<stop offset="{o * 100:.1f}%" stop-color="{c}"/>' for o, c in g["stops"])
-                defs.append(
-                    f'<linearGradient id="{gid}" gradientUnits="userSpaceOnUse" '
-                    f'x1="{g["x1"]:.2f}" y1="{g["y1"]:.2f}" '
-                    f'x2="{g["x2"]:.2f}" y2="{g["y2"]:.2f}">{stops}</linearGradient>')
+                key = (f'{g["x1"]:.2f},{g["y1"]:.2f},{g["x2"]:.2f},{g["y2"]:.2f}', stops)
+                gid = def_ids.get(key)
+                if gid is None:
+                    gid = f"g{i}"
+                    def_ids[key] = gid
+                    defs.append(
+                        f'<linearGradient id="{gid}" gradientUnits="userSpaceOnUse" '
+                        f'x1="{g["x1"]:.2f}" y1="{g["y1"]:.2f}" '
+                        f'x2="{g["x2"]:.2f}" y2="{g["y2"]:.2f}">{stops}</linearGradient>')
                 paint = f"url(#{gid})"
             else:
                 paint = fo["fill"]

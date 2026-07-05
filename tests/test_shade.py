@@ -323,3 +323,51 @@ def test_fill_ops_respects_stamped_order():
          "depth": 5.0, "kind": "tri", "order": 1}
     ops = shade.fill_ops([b, a], style)
     assert [o["depth"] for o in ops] == [1.0, 5.0]
+
+
+def _curved_strip(right, up, fwd):
+    """3 quads (6 tris) bent around the X axis + their 2 interior seam edges,
+    wound to face the camera. Mimics 50950's faceted curved top."""
+    import math
+    import numpy as np
+    thetas = [math.radians(a) for a in (0, 30, 60, 90)]
+    ring = [np.array([[x, -10 * math.cos(t), 10 * math.sin(t)] for x in (0, 20)])
+            for t in thetas]
+    tris, seams = [], []
+    for a, b in zip(ring, ring[1:]):
+        quad = [a[0], a[1], b[1], b[0]]
+        for tri in ([quad[0], quad[1], quad[2]], [quad[0], quad[2], quad[3]]):
+            v = np.array(tri, float)
+            n = np.cross(v[1] - v[0], v[2] - v[0])
+            if n @ fwd > 0:
+                v = v[[0, 2, 1]]
+            tris.append(v)
+    for mid in ring[1:-1]:
+        seams.append(np.array([mid[0], mid[1], mid[0], mid[1]], float))
+    return np.array(tris), seams
+
+
+def test_smooth_group_shares_one_gradient_across_facets():
+    """Facets joined by conditional-line edges must all carry the SAME
+    gradient (axis + stops) so the curve shades seamlessly; an unrelated
+    flat tri keeps its flat tone (no gradient)."""
+    import numpy as np
+    from brick_icons import shade, hlr
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    tris, seams = _curved_strip(right, up, fwd)
+    flat = np.array([[100, 0, 100], [110, 0, 100], [100, 0, 110]], float)
+    n = np.cross(flat[1] - flat[0], flat[2] - flat[0])
+    if n @ fwd > 0:
+        flat = flat[[0, 2, 1]]
+    allt = np.concatenate([tris, flat[None]], axis=0)
+    faces = shade.faces_from_tris(allt, right, up, fwd, s=2.0, cx=0, cy=0,
+                                  half=200.0, cond_edges=seams)
+    grads = [f for f in faces if "grad_axis" in f]
+    flats = [f for f in faces if "grad_axis" not in f]
+    assert len(grads) >= 4                      # the curved strip grouped
+    assert len(flats) >= 1                      # unrelated tri untouched
+    ax0 = grads[0]["grad_axis"]
+    assert all(g["grad_axis"] == ax0 for g in grads)          # shared axis
+    assert all(g["grad_samples"] is grads[0]["grad_samples"] for g in grads)
+    offs = [o for o, _ in grads[0]["grad_samples"]]
+    assert len(set(round(o, 3) for o in offs)) >= 2           # real ramp
