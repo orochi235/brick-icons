@@ -645,6 +645,38 @@ def _dome_mesh(fwd):
     return np.array(out), seams
 
 
+def test_smooth_group_gradient_axis_follows_normal_variation():
+    """The linear gradient axis must run along the direction the NORMALS
+    change (the curve direction), not the footprint's long axis. A wide,
+    short curved strip (cylinder section about the x-axis, 80 wide x 20
+    tall) has its footprint long axis ACROSS the rulings; shading along it
+    would put different tones at equal offsets."""
+    right, up = np.array([1.0, 0, 0]), np.array([0.0, 1.0, 0])
+    fwd = np.array([0.0, 0.0, -1.0])
+    R = 30.0
+    xs = np.linspace(0.0, 80.0, 5)
+    phis = np.radians(np.linspace(-20.0, 20.0, 3))
+    P = lambda x, ph: np.array([x, R * math.sin(ph), R * math.cos(ph)])
+    tris, seams = [], []
+    for i in range(len(xs) - 1):
+        for j in range(len(phis) - 1):
+            a, b = P(xs[i], phis[j]), P(xs[i + 1], phis[j])
+            c, d = P(xs[i + 1], phis[j + 1]), P(xs[i], phis[j + 1])
+            for t in ([a, b, c], [a, c, d]):
+                v = np.array(t, float)
+                n = np.cross(v[1] - v[0], v[2] - v[0])
+                if n @ fwd > 0:
+                    v = v[[0, 2, 1]]
+                tris.append(v)
+                for e0, e1 in ((v[0], v[1]), (v[1], v[2]), (v[2], v[0])):
+                    seams.append(np.array([e0, e1, e0, e1], float))
+    faces = shade.faces_from_tris(np.array(tris), right, up, fwd,
+                                  1.0, 0.0, 0.0, 0.0, cond_edges=seams)
+    f = next(f for f in faces if "grad_axis" in f)
+    (x0, y0), (x1, y1) = f["grad_axis"]
+    assert abs(y1 - y0) > abs(x1 - x0)   # along the curve, not the width
+
+
 def test_dome_group_gets_radial_gradient():
     right, up = np.array([1.0, 0, 0]), np.array([0.0, 1.0, 0])
     fwd = np.array([0.0, 0.0, -1.0])

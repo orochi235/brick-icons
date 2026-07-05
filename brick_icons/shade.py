@@ -967,14 +967,22 @@ def _attach_smooth_gradients(faces, cond_edges, min_spread=0.002):
         if len(sn) > 1 and sn[0] > 1e-9 and sn[1] / sn[0] > 0.35:
             _attach_radial_gradient(faces, ks, front, nvs)
             continue
-        # gradient axis = principal direction of centroid spread in SCREEN
-        # space (silhouette-to-silhouette, like analytic cylinder walls) —
-        # picking the most-divergent NORMAL pair can yield a near-degenerate
-        # or skewed screen axis on wide groups (cone bodies) and streak
+        # gradient axis = screen direction along which the NORMALS change
+        # (first left singular vector of the centroid<->normal cross-
+        # covariance): iso-tone lines on a curved strip are its straight
+        # rulings, so the axis must follow the curve. The footprint's long
+        # axis only coincides with it on narrow strips — a wide, short curve
+        # would shade ACROSS the rulings. Degenerate correlation falls back
+        # to the footprint axis.
         C = np.asarray(cs, float)
         Cc = C - C.mean(axis=0)
-        _, _, Vt = np.linalg.svd(Cc, full_matrices=False)
-        d0 = Vt[0]
+        X = Nn - Nn.mean(axis=0)
+        Uc, sc, _ = np.linalg.svd(Cc.T @ X, full_matrices=False)
+        if sc[0] > 1e-9:
+            d0 = Uc[:, 0]
+        else:
+            _, _, Vt = np.linalg.svd(Cc, full_matrices=False)
+            d0 = Vt[0]
         t = Cc @ d0
         p0 = tuple((C.mean(axis=0) + t.min() * d0).tolist())
         p1 = tuple((C.mean(axis=0) + t.max() * d0).tolist())
