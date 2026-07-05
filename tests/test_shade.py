@@ -475,6 +475,38 @@ def test_order_faces_disjoint_fall_back_to_depth():
     assert out[0] is far and out[1] is near
 
 
+def test_order_faces_cycle_break_releases_cycle_member_not_bystander():
+    """When the witness graph has a genuine paint cycle, the stall-breaker
+    must force-release a member of the blocking cycle — NOT the globally
+    deepest remaining face. Releasing a bystander violates its direct
+    constraints: 3960's far-rim dome facets were released ahead of the rim's
+    interior far wall (their mean depth exceeded the wall's) and got clipped
+    behind it, leaving a dark band with a sawtooth boundary."""
+    import numpy as np
+    from brick_icons import shade
+    n = np.array([0.0, 1.0, -1.0])
+
+    def strip(p, q, into, zlo=10.0, zhi=90.0, w=8.0):
+        p, q, into = np.asarray(p, float), np.asarray(q, float), np.asarray(into, float)
+        poly = np.array([p, q, q + w * into, p + w * into])
+        return {"poly": poly, "zs": np.array([zlo, zhi, zhi, zlo]),
+                "depth": (zlo + zhi) / 2, "kind": "tri", "normal": n}
+
+    # three strips along a triangle's sides, each near at its start corner and
+    # far at its end corner -> pairwise witness depths form a 3-cycle A>B>C>A
+    P1, P2, P3 = (0.0, 0.0), (100.0, 0.0), (50.0, 86.0)
+    A = strip(P1, P2, (0.0, 1.0))
+    B = strip(P2, P3, (-0.865, -0.503))
+    C = strip(P3, P1, (0.865, -0.503))
+    # innocent bystander: overlaps only A, locally NEARER than A (A must paint
+    # first), but with the deepest MEAN depth of all faces
+    D = {"poly": np.array([[46, 2], [54, 2], [54, 6], [46, 6]], float),
+         "zs": np.full(4, 40.0), "depth": 1000.0, "kind": "tri", "normal": n}
+    faces = [A, B, C, D]
+    shade.order_faces(faces, eps=1e-3)
+    assert A["order"] < D["order"]          # direct constraint survives the cycle
+
+
 def test_fill_ops_respects_stamped_order():
     """When faces carry an 'order' stamp (witness-ordered upstream), fill_ops
     must NOT re-sort by mean depth."""

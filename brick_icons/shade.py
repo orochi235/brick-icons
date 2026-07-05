@@ -291,6 +291,63 @@ def _overlap_witness(pa, pb, ha=(), hb=(), grid=48):
     return (x0 + xs[j] / sx, y0 + ys[j] / sy)
 
 
+def _stall_release(remaining, succ, faces):
+    """Pick the face to force-release at a topological stall: the deepest
+    member of a SOURCE strongly-connected component of the remaining
+    subgraph. At a stall every source component IS a cycle, and only its
+    members may jump the queue — releasing the globally deepest remaining
+    face instead can violate the direct constraints of faces merely blocked
+    downstream (3960's far-rim dome facets were released ahead of the rim's
+    interior far wall that way, got clipped behind it, and left a dark
+    sawtooth band along the rim)."""
+    rem = remaining if isinstance(remaining, set) else set(remaining)
+    index, low, comp_id = {}, {}, {}
+    onstk, stk, ncomp = set(), [], 0
+    for root in rem:                             # iterative Tarjan
+        if root in index:
+            continue
+        index[root] = low[root] = len(index)
+        stk.append(root); onstk.add(root)
+        work = [(root, iter(succ[root]))]
+        while work:
+            v, it = work[-1]
+            child = None
+            for w in it:
+                if w not in rem:
+                    continue
+                if w not in index:
+                    child = w
+                    break
+                if w in onstk:
+                    low[v] = min(low[v], index[w])
+            if child is not None:
+                index[child] = low[child] = len(index)
+                stk.append(child); onstk.add(child)
+                work.append((child, iter(succ[child])))
+                continue
+            work.pop()
+            if work:
+                low[work[-1][0]] = min(low[work[-1][0]], low[v])
+            if low[v] == index[v]:
+                while True:
+                    w = stk.pop(); onstk.discard(w)
+                    comp_id[w] = ncomp
+                    if w == v:
+                        break
+                ncomp += 1
+    comp_size = [0] * ncomp
+    comp_in = [0] * ncomp
+    for v in rem:
+        comp_size[comp_id[v]] += 1
+    for v in rem:
+        for w in succ[v]:
+            if w in rem and comp_id[w] != comp_id[v]:
+                comp_in[comp_id[w]] += 1
+    cand = [v for v in rem
+            if comp_in[comp_id[v]] == 0 and comp_size[comp_id[v]] > 1]
+    return max(cand or rem, key=lambda i: faces[i]["depth"])
+
+
 def order_faces(faces, ray_origin=None, fwd=None, eps=1e-6, own_occ=None):
     """Witness-depth (Newell-style) paint ordering, replacing the mean-depth
     painter sort AND the occlusion cull: for every screen-overlapping pair,
@@ -352,8 +409,8 @@ def order_faces(faces, ray_origin=None, fwd=None, eps=1e-6, own_occ=None):
     out, done = [], [False] * n
     remaining = set(range(n))
     while len(out) < n:
-        if not ready:                            # cycle: release farthest
-            k = max(remaining, key=lambda i: faces[i]["depth"])
+        if not ready:                            # cycle: release a member
+            k = _stall_release(remaining, succ, faces)
             heapq.heappush(ready, (-faces[k]["depth"], k))
             indeg[k] = 0
         _, i = heapq.heappop(ready)
