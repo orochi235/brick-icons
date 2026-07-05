@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 from brick_icons import shade, hlr
 
@@ -90,12 +92,71 @@ def test_faces_from_analytic_ring_is_annulus_not_solid_disc():
     ring = {"kind": "ring", "sector": 360.0, "inner": 2, "R": R, "t": np.zeros(3)}
     faces = shade.faces_from_analytic([ring], right, up, fwd,
                                       s=1.0, cx=0.0, cy=0.0, half=0.0)
-    poly = next(f for f in faces if f["kind"] == "ring")["poly"]
+    f = next(f for f in faces if f["kind"] == "ring")
+    # full sector: outer circle polygon + the bore as a REAL hole ring
+    poly, holes = f["poly"], f.get("holes", [])
+    assert len(holes) == 1
+    assert len(f["zs"]) == len(poly)
     c = poly.mean(axis=0)
-    rad = np.linalg.norm(poly - c, axis=1)
-    # inner arc at ~2, outer arc at ~3 -> clear inner/outer separation (ratio ~1.5).
-    # A solid disc would put every vertex at the outer radius (ratio ~1.0).
-    assert rad.max() / rad.min() > 1.3
+    r_out = np.linalg.norm(poly - c, axis=1).mean()
+    r_in = np.linalg.norm(holes[0] - c, axis=1).mean()
+    assert r_out / r_in > 1.3           # bore clearly separated from rim
+
+
+def test_ring_partial_sector_keeps_concat_polygon():
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    R = np.stack([right, -fwd, up], axis=1)
+    ring = {"kind": "ring", "sector": 90.0, "inner": 2, "R": R, "t": np.zeros(3)}
+    f = shade.faces_from_analytic([ring], right, up, fwd,
+                                  s=1.0, cx=0.0, cy=0.0, half=0.0)[0]
+    assert not f.get("holes")           # annular sector: simple valid polygon
+
+
+def _screen_plane_R():
+    # ndis/ring local XZ plane mapped into the screen: U=+x, axis=+z, V=+y
+    return np.column_stack([np.array([1.0, 0.0, 0.0]),
+                            np.array([0.0, 0.0, 1.0]),
+                            np.array([0.0, 1.0, 0.0])])
+
+
+def test_ndis_face_polygon_quarter():
+    right, up = np.array([1.0, 0, 0]), np.array([0.0, 1.0, 0])
+    fwd = np.array([0.0, 0.0, -1.0])
+    rec = {"kind": "ndis", "sector": 90.0, "inner": 0,
+           "R": _screen_plane_R(), "t": np.zeros(3)}
+    faces = shade.faces_from_analytic([rec], right, up, fwd, 1.0, 0.0, 0.0, 0.0)
+    assert len(faces) == 1
+    f = faces[0]
+    p = f["poly"]
+    area = 0.5 * abs(np.sum(p[:, 0] * np.roll(p[:, 1], -1)
+                            - np.roll(p[:, 0], -1) * p[:, 1]))
+    assert abs(area - (1 - math.pi / 4)) < 0.01
+    assert not f.get("holes")
+    assert abs(np.linalg.norm(f["normal"]) - 1) < 1e-6
+
+
+def test_ndis_face_full_sector_has_hole():
+    right, up = np.array([1.0, 0, 0]), np.array([0.0, 1.0, 0])
+    fwd = np.array([0.0, 0.0, -1.0])
+    rec = {"kind": "ndis", "sector": 360.0, "inner": 0,
+           "R": _screen_plane_R(), "t": np.zeros(3)}
+    f = shade.faces_from_analytic([rec], right, up, fwd, 1.0, 0.0, 0.0, 0.0)[0]
+    assert len(f["poly"]) == 4 and len(f.get("holes", [])) == 1
+
+
+def test_overlap_witness_respects_holes():
+    outer = np.array([(0, 0), (10, 0), (10, 10), (0, 10)], float)
+    hole = np.array([(2, 2), (8, 2), (8, 8), (2, 8)], float)
+    other = np.array([(4, 4), (6, 4), (6, 6), (4, 6)], float)  # entirely in hole
+    assert shade._overlap_witness(outer, other, ha=(hole,)) is None
+
+
+def test_apply_affine_remaps_holes():
+    f = {"poly": np.array([(0, 0), (4, 0), (4, 4)], float),
+         "holes": [np.array([(1, 1), (2, 1), (2, 2)], float)],
+         "depth": 0.0}
+    out = shade.apply_affine_faces([f], 2.0, 1.0, 1.0)[0]
+    assert np.allclose(out["holes"][0][0], (3.0, 3.0))
 
 
 def test_faces_from_tris_culls_back_and_projects():

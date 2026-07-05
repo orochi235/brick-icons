@@ -37,12 +37,17 @@ def faces_from_analytic(analytic, right, up, fwd, s, cx, cy, half):
         sect = math.radians(rec["sector"])
         if kind in ("disc", "ring"):
             th = np.linspace(0.0, sect, 64)
+            hole_w = None
             if kind == "ring":
-                # Annular band: outer arc forward, inner arc back, so the center
-                # hole (the bore) is cut out instead of filled by a solid disc.
+                # Annulus: full sector gets a REAL hole ring (the bore);
+                # a partial sector is a simple valid polygon, so keep the
+                # outer-forward / inner-back concatenation there.
                 outer = _radius_pts(rec, th, 0.0, radius=rec["inner"] + 1)
                 inner = _radius_pts(rec, th, 0.0, radius=rec["inner"])
-                w = np.concatenate([outer, inner[::-1]], axis=0)
+                if sect >= 2 * math.pi - 1e-6:
+                    w, hole_w = outer, inner
+                else:
+                    w = np.concatenate([outer, inner[::-1]], axis=0)
             else:
                 w = _radius_pts(rec, th, 0.0)
             px, py, z = _project_px(w, right, up, fwd, s, cx, cy, half)
@@ -50,13 +55,63 @@ def faces_from_analytic(analytic, right, up, fwd, s, cx, cy, half):
             nv = np.array([n @ right, n @ up, n @ fwd])
             if nv[2] > 0:
                 nv = -nv
-            faces.append({"poly": np.stack([px, py], 1), "normal": nv,
-                          "depth": float(np.mean(z)), "zs": z, "kind": kind,
-                          "rec": rec})
+            face = {"poly": np.stack([px, py], 1), "normal": nv,
+                    "depth": float(np.mean(z)), "zs": z, "kind": kind,
+                    "rec": rec}
+            if hole_w is not None:
+                hx, hy, _ = _project_px(hole_w, right, up, fwd, s, cx, cy, half)
+                face["holes"] = [np.stack([hx, hy], 1)]
+            faces.append(face)
+        elif kind == "ndis":
+            ring2d, holes2d = _ndis_local_rings(sect)
+            U, A, V = R[:, 0], R[:, 1], R[:, 2]
+            C = np.asarray(rec["t"], float)
+
+            def world(r2):
+                return C + r2[:, 0:1] * U + r2[:, 1:2] * V
+
+            px, py, z = _project_px(world(ring2d), right, up, fwd, s, cx, cy, half)
+            n = A / np.linalg.norm(A)
+            nv = np.array([n @ right, n @ up, n @ fwd])
+            if nv[2] > 0:
+                nv = -nv
+            face = {"poly": np.stack([px, py], 1), "normal": nv,
+                    "depth": float(np.mean(z)), "zs": z, "kind": kind,
+                    "rec": rec}
+            if holes2d:
+                hx, hy, _ = _project_px(world(holes2d[0]), right, up, fwd,
+                                        s, cx, cy, half)
+                face["holes"] = [np.stack([hx, hy], 1)]
+            faces.append(face)
         elif kind == "cyli":
             faces.extend(_cyl_wall_faces(rec, R, sect, right, up, fwd,
                                          s, cx, cy, half))
     return faces
+
+
+def _square_pt(th):
+    """Point where the ray at angle `th` exits the unit square (|x|,|z| <= 1)."""
+    c, s_ = math.cos(th), math.sin(th)
+    m = max(abs(c), abs(s_))
+    return c / m, s_ / m
+
+
+def _ndis_local_rings(sect):
+    """Local 2-D (x, z) rings for square-minus-disc over [0, sect] radians.
+    Returns (outer_ring, holes). Full sector: square exterior + circular hole.
+    Partial: arc out, square boundary back (corners inserted — points between
+    corners lie on straight square edges, so corners suffice)."""
+    if sect >= 2 * math.pi - 1e-6:
+        sq = np.array([(1, 1), (-1, 1), (-1, -1), (1, -1)], float)
+        th = np.linspace(0.0, 2 * math.pi, 65)[:-1]
+        return sq, [np.stack([np.cos(th), np.sin(th)], 1)]
+    th = np.linspace(0.0, sect, 48)
+    arc = np.stack([np.cos(th), np.sin(th)], 1)
+    corners = [a for a in (math.radians(x) for x in (45, 135, 225, 315))
+               if a < sect - 1e-9]
+    back = ([_square_pt(sect)] + [_square_pt(a) for a in reversed(corners)]
+            + [_square_pt(0.0)])
+    return np.vstack([arc, np.array(back, float)]), []
 
 
 def _arc_sector_spans(lo, length, sect):
@@ -193,11 +248,12 @@ def _plane_depth_fn(f):
     return lambda x, y: a_ * x + b_ * y + c_
 
 
-def _overlap_witness(pa, pb, grid=48):
+def _overlap_witness(pa, pb, ha=(), hb=(), grid=48):
     """A screen point strictly inside the overlap of two face polygons, or
     None. Rasterizes both at low res over the bbox intersection and picks a
     most-interior overlap pixel (repeated erosion), so the witness stays away
-    from shared edges where depths tie."""
+    from shared edges where depths tie. `ha`/`hb` are optional hole rings
+    (bores) punched out of the respective polygon before overlap."""
     ax0, ay0 = pa.min(axis=0); ax1, ay1 = pa.max(axis=0)
     bx0, by0 = pb.min(axis=0); bx1, by1 = pb.max(axis=0)
     x0, y0 = max(ax0, bx0), max(ay0, by0)
@@ -206,13 +262,15 @@ def _overlap_witness(pa, pb, grid=48):
         return None
     sx = (grid - 1) / (x1 - x0); sy = (grid - 1) / (y1 - y0)
 
-    def mask(p):
+    def mask(p, holes):
         im = Image.new("1", (grid, grid), 0)
-        ImageDraw.Draw(im).polygon(
-            [((q[0] - x0) * sx, (q[1] - y0) * sy) for q in p], fill=1)
+        draw = ImageDraw.Draw(im)
+        draw.polygon([((q[0] - x0) * sx, (q[1] - y0) * sy) for q in p], fill=1)
+        for h in holes:
+            draw.polygon([((q[0] - x0) * sx, (q[1] - y0) * sy) for q in h], fill=0)
         return np.array(im, bool)
 
-    m = mask(pa) & mask(pb)
+    m = mask(pa, ha) & mask(pb, hb)
     if not m.any():
         return None
     while True:                                  # erode to the interior
@@ -269,7 +327,9 @@ def order_faces(faces, ray_origin=None, fwd=None, eps=1e-6, own_occ=None):
     indeg = [0] * n
     for i in range(n):
         for j in range(i + 1, n):
-            w = _overlap_witness(faces[i]["poly"], faces[j]["poly"])
+            w = _overlap_witness(faces[i]["poly"], faces[j]["poly"],
+                                 ha=faces[i].get("holes") or (),
+                                 hb=faces[j].get("holes") or ())
             if w is None:
                 continue
             di, dj = depth_at(i, *w), depth_at(j, *w)
@@ -345,6 +405,9 @@ def apply_affine_faces(faces, f, ox, oy):
         p = face["poly"]
         q = np.stack([p[:, 0] * f + ox, p[:, 1] * f + oy], axis=1)
         nf = {**face, "poly": q}
+        if face.get("holes"):
+            nf["holes"] = [np.stack([h[:, 0] * f + ox, h[:, 1] * f + oy], axis=1)
+                           for h in face["holes"]]
         if "grad_axis" in face:
             (a0, a1) = face["grad_axis"]
             nf["grad_axis"] = ((a0[0] * f + ox, a0[1] * f + oy),
