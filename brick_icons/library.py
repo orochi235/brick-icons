@@ -76,7 +76,7 @@ def is_sortable(info: PartInfo) -> bool:
 
 
 def _render_one(args):
-    part, out_dir, ldraw_dir, shade_style, highlights, force = args
+    part, out_dir, ldraw_dir, shade_style, light, force = args
     import re as _re
     info = parse_header(_read_header_lines(Path(ldraw_dir) / "parts" / f"{part}.dat"))
     cat_dir = Path(out_dir) / info.category
@@ -97,7 +97,7 @@ def _render_one(args):
         from . import cli as _cli
         cfg = load_config(toml_path=None, root=".", overrides={
             "fmt": "svg", "shading": "outline", "scale_mode": "physical",
-            "shade_style": shade_style, "highlights": highlights,
+            "shade_style": shade_style, "light": light,
             "ldraw_dir": ldraw_dir})
         _cli.process_one(cfg, part, cat_dir)
         if not svg.exists():
@@ -110,10 +110,10 @@ def _render_one(args):
 
 
 def render_library(out_dir, ldraw_dir="vendor/ldraw", limit=None, category=None,
-                   workers=4, shade_style="flat3", highlights=False, force=False):
+                   workers=4, shade_style="flat3", light=None, force=False):
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     ids = select_parts(ldraw_dir, limit=limit, category=category)
-    tasks = [(p, out_dir, ldraw_dir, shade_style, highlights, force) for p in ids]
+    tasks = [(p, out_dir, ldraw_dir, shade_style, light, force) for p in ids]
     if workers <= 1:
         records = [_render_one(t) for t in tasks]
     else:
@@ -133,11 +133,11 @@ def main(argv=None):
     p.add_argument("--workers", type=int, default=4)
     p.add_argument("--shade-style", default="flat3",
                    choices=["none", "flat3", "cel", "gradient"])
-    p.add_argument("--highlights", action="store_true")
+    p.add_argument("--light", default=None, metavar="LAT,LONG")
     p.add_argument("--force", action="store_true")
     a = p.parse_args(argv)
     recs = render_library(a.out, a.ldraw_dir, a.limit, a.category, a.workers,
-                          a.shade_style, a.highlights, a.force)
+                          a.shade_style, a.light, a.force)
     ok = sum(1 for r in recs if r["status"] == "ok")
     print(f"library: {ok}/{len(recs)} ok -> {a.out}/manifest.json")
 

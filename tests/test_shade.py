@@ -415,22 +415,51 @@ def test_fill_ops_tiny_slivers_dropped():
     assert len(ops) == 1
 
 
-def test_highlight_ops_only_for_upfacing_discs():
-    from brick_icons import shade, hlr
-    right, up, fwd = hlr.view_basis(30.0, 45.0)
-    R = np.eye(3); t = np.zeros(3)
-    disc_up = {"kind": "disc", "sector": 360.0, "inner": 0, "R": R, "t": t}
-    hi = shade.highlight_ops([disc_up], right, up, fwd, s=2.0, cx=0.0, cy=0.0,
-                             half=50.0, strength=0.15)
-    assert len(hi) == 1
-    assert hi[0]["opacity"] <= 0.15 and hi[0]["cx"] is not None
+def test_highlights_are_gone():
+    """Highlights were removed as a feature: no ops, no CLI/config surface."""
+    from brick_icons import shade, config
+    assert not hasattr(shade, "highlight_ops")
+    assert not hasattr(shade, "remap_highlights")
+    assert "highlights" not in config.DEFAULTS
+    assert "highlight_strength" not in config.DEFAULTS
 
 
-def test_remap_highlights_applies_affine_and_strength():
-    from brick_icons import shade
-    out = shade.remap_highlights([{"cx": 10.0, "cy": 20.0, "r": 5.0, "opacity": 1.0}],
-                                 f=2.0, ox=1.0, oy=3.0, strength=0.15)
-    assert out[0] == {"cx": 21.0, "cy": 43.0, "r": 10.0, "opacity": 0.15}
+def test_light_vector_conventions():
+    """--light LAT,LONG in VIEW space: LAT = elevation above the view
+    horizon, LONG = azimuth (0 = from the viewer, positive = from the
+    viewer's left)."""
+    v = shade.light_vector("90,0")
+    assert np.allclose(v, [0.0, 1.0, 0.0], atol=1e-9)      # straight overhead
+    v = shade.light_vector("0,0")
+    assert np.allclose(v, [0.0, 0.0, -1.0], atol=1e-9)     # frontal
+    v = shade.light_vector("0,90")
+    assert np.allclose(v, [-1.0, 0.0, 0.0], atol=1e-9)     # from viewer's left
+
+
+def test_flat3_default_light_and_tones_unchanged():
+    st = shade.Flat3Style()
+    assert st.tone(np.array([0.0, 1.0, 0.0])) == st.top
+    assert st.tone(np.array([-0.7, 0.0, -0.7])) == st.left
+    assert st.tone(np.array([0.7, 0.0, -0.7])) == st.right
+    assert st.top == shade._hex([157 * 1.30] * 3)
+    assert st.left == shade._hex([157 * 0.85] * 3)          # left brighter
+    assert st.right == shade._hex([157 * 0.60] * 3)
+    assert st.light[0] < 0                                  # upper-LEFT default
+
+
+def test_flat3_light_from_right_swaps_bright_side():
+    st = shade.Flat3Style(light=shade.light_vector("37,-39"))
+    bright, dark = shade._hex([157 * 0.85] * 3), shade._hex([157 * 0.60] * 3)
+    assert st.tone(np.array([0.7, 0.0, -0.7])) == bright    # lit side now right
+    assert st.tone(np.array([-0.7, 0.0, -0.7])) == dark
+    # curved ramp follows the same light
+    assert st.ramp(np.array([0.6, 0.4, -0.6])) != shade.Flat3Style().ramp(
+        np.array([0.6, 0.4, -0.6]))
+
+
+def test_make_style_accepts_light_spec():
+    st = shade.make_style("flat3", light="0,-90")
+    assert st.light[0] > 0.99                               # from viewer's right
 
 
 def test_cull_multisample_keeps_face_with_occluded_centroid():

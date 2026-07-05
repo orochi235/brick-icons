@@ -43,8 +43,10 @@ def _parse_args(argv):
     p.add_argument("--gamma", type=float)
     p.add_argument("--levels", type=int, nargs=2, metavar=("BLACK", "WHITE"))
     p.add_argument("--shade-style", dest="shade_style", choices=["none", "flat3", "cel", "gradient"])
-    p.add_argument("--highlights", dest="highlights", action="store_true", default=None)
-    p.add_argument("--highlight-strength", dest="highlight_strength", type=float)
+    p.add_argument("--light", type=str, metavar="LAT,LONG",
+                   help="view-space light: elevation, azimuth in degrees "
+                        "(0,0 = frontal; positive azimuth = from the left; "
+                        "default ~37,39 upper-left)")
     p.add_argument("--debug-dir", default=None)
     return p.parse_args(argv)
 
@@ -63,8 +65,7 @@ def _config_from_args(args) -> Config:
         "dpi": args.dpi, "label_mm": tuple(args.label_mm) if args.label_mm else None,
         "margin": args.margin, "threshold": args.threshold, "gamma": args.gamma,
         "levels": tuple(args.levels) if args.levels else None,
-        "shade_style": args.shade_style,
-        "highlights": args.highlights, "highlight_strength": args.highlight_strength,
+        "shade_style": args.shade_style, "light": args.light,
     }
     return load_config(toml_path=toml, overrides=overrides, root=args.root)
 
@@ -98,7 +99,9 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
         segs, bbox, s = res.segs, res.bbox, res.s
         style = None
         if cfg.shade_style != "none":
-            style = shade.make_style(cfg.shade_style, part_color=shade.parse_hex_color(cfg.part_color))
+            style = shade.make_style(cfg.shade_style,
+                                     part_color=shade.parse_hex_color(cfg.part_color),
+                                     light=cfg.light)
         if cfg.fmt in ("svg", "both"):
             if cfg.scale_mode == "physical":
                 bx0, by0, bx1, by1 = bbox
@@ -111,24 +114,20 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
                 f, ox, oy = hlr.fit_affine(pbbox, round(vb_w), round(vb_h), margin=0, scale=1.0)
                 fills = shade.fill_ops(shade.apply_affine_faces(res.faces, f, ox, oy), style) \
                     if style is not None else None
-                hi = shade.remap_highlights(res.highlights, f, ox, oy, cfg.highlight_strength) \
-                    if (cfg.highlights and res.highlights) else None
                 w_mm = vb_w / s * 0.4
                 h_mm = vb_h / s * 0.4
                 trace.segments_to_svg(
                     shifted, round(vb_w), round(vb_h), out_dir / f"{name}.svg",
                     physical=(w_mm, h_mm), s=s,
-                    line_mm=cfg.line_mm, sil_mm=cfg.silhouette_mm, fills=fills, highlights=hi)
+                    line_mm=cfg.line_mm, sil_mm=cfg.silhouette_mm, fills=fills)
             else:
                 fit = hlr.fit_segments(segs, bbox, cfg.width, cfg.height, cfg.margin, cfg.scale)
                 f, ox, oy = hlr.fit_affine(bbox, cfg.width, cfg.height, cfg.margin, cfg.scale)
                 fills = shade.fill_ops(shade.apply_affine_faces(res.faces, f, ox, oy), style) \
                     if style is not None else None
-                hi = shade.remap_highlights(res.highlights, f, ox, oy, cfg.highlight_strength) \
-                    if (cfg.highlights and res.highlights) else None
                 trace.segments_to_svg(fit, cfg.width, cfg.height, out_dir / f"{name}.svg",
                                       line_px=cfg.line_width, sil_px=cfg.silhouette_width,
-                                      fills=fills, highlights=hi)
+                                      fills=fills)
         if cfg.fmt in ("png", "both"):
             if cfg.mode in ("gray", "both"):
                 gpx = max(cfg.width, cfg.height, cfg.render_px // 2)

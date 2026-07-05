@@ -299,15 +299,23 @@ class ShadingStyle:
 
 
 class Flat3Style(ShadingStyle):
-    """Flat faces: three tones by dominant orientation (top / left / right).
-    Curved faces (cylinder walls) shade with a smooth Lambert ramp via `ramp`."""
-    def __init__(self, part_color=(157, 157, 157)):
+    """Flat faces: three tones by dominant orientation (top / lit side /
+    shadow side). Curved faces (cylinder walls) shade with a smooth Lambert
+    ramp via `ramp`. `light` is a VIEW-space unit vector (see light_vector);
+    the default is upper-left, toward the viewer. The flat side tones are
+    stylized constants — the light picks WHICH side is the lit one and
+    drives the curved ramps; it does not re-derive the palette."""
+    def __init__(self, part_color=(157, 157, 157), light=None):
         self.part_color = tuple(part_color)
         self.top = _hex([c * 1.30 for c in part_color])
-        self.left = _hex([c * 0.85 for c in part_color])
-        self.right = _hex([c * 0.60 for c in part_color])
-        # view-space light: upper-left, toward the viewer (matches left>right)
-        L = np.array([-0.5, 0.6, -0.62]); self.light = L / np.linalg.norm(L)
+        bright = _hex([c * 0.85 for c in part_color])
+        dark = _hex([c * 0.60 for c in part_color])
+        if light is None:
+            light = np.array([-0.5, 0.6, -0.62])
+        L = np.asarray(light, float); self.light = L / np.linalg.norm(L)
+        lit_left = self.light[0] <= 0
+        self.left = bright if lit_left else dark
+        self.right = dark if lit_left else bright
 
     def tone(self, nv):
         if nv[1] > 0.5:
@@ -679,8 +687,22 @@ def apply_affine_faces(faces, f, ox, oy):
 STYLES = {"flat3": Flat3Style}
 
 
-def make_style(name, part_color=(157, 157, 157)):
-    return STYLES[name](part_color=part_color)
+def light_vector(spec):
+    """'LAT,LONG' (degrees, VIEW space) -> unit light direction.
+
+    LAT is elevation above the view horizon; LONG is azimuth around the view
+    axis, 0 = from the viewer, positive = from the viewer's LEFT. The default
+    style light (upper-left, toward the viewer) is roughly '37,39'."""
+    lat_s, long_s = str(spec).split(",")
+    el, az = math.radians(float(lat_s)), math.radians(float(long_s))
+    return np.array([-math.sin(az) * math.cos(el),
+                     math.sin(el),
+                     -math.cos(az) * math.cos(el)])
+
+
+def make_style(name, part_color=(157, 157, 157), light=None):
+    lv = light_vector(light) if isinstance(light, str) else light
+    return STYLES[name](part_color=part_color, light=lv)
 
 
 def parse_hex_color(spec, default=(157, 157, 157)):
@@ -695,30 +717,6 @@ def parse_hex_color(spec, default=(157, 157, 157)):
         return ((v >> 16) & 255, (v >> 8) & 255, v & 255)
     except ValueError:
         return default
-
-
-def highlight_ops(analytic, right, up, fwd, s, cx, cy, half, strength=0.15):
-    """Very diffuse speculars on up-facing disc tops: soft radial gradient blobs."""
-    ops = []
-    for rec in analytic:
-        if rec["kind"] != "disc":
-            continue
-        R = np.asarray(rec["R"], float)
-        n = R[:, 1] / np.linalg.norm(R[:, 1])
-        if abs(n @ up) < 0.5:            # not clearly up/down facing
-            continue
-        th = np.linspace(0, 2 * math.pi, 24)
-        w = _radius_pts(rec, th, 0.0)
-        px, py, _ = _project_px(w, right, up, fwd, s, cx, cy, half)
-        cxp, cyp = float(px.mean()), float(py.mean())
-        rr = float(max(px.max() - px.min(), py.max() - py.min()) / 2.0)
-        ops.append({"cx": cxp, "cy": cyp, "r": rr, "opacity": strength})
-    return ops
-
-
-def remap_highlights(his, f, ox, oy, strength):
-    return [{"cx": h["cx"] * f + ox, "cy": h["cy"] * f + oy, "r": h["r"] * f,
-             "opacity": strength} for h in his]
 
 
 def _face_samples(f, inset=0.3, max_verts=8):

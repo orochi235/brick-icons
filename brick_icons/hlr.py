@@ -7,7 +7,7 @@ import numpy as np
 from . import primitives
 from . import repair
 
-VisResult = namedtuple("VisResult", "segs bbox s faces analytic highlights")
+VisResult = namedtuple("VisResult", "segs bbox s faces analytic")
 
 _text_cache: dict[Path, list[str]] = {}
 
@@ -251,7 +251,7 @@ def _visible_segments_faceted(out, right, up, fwd, render_px):
     tri = np.array(out["tri"]) if out["tri"] else np.zeros((0, 3, 3))
     fitpts = tri.reshape(-1, 3) if len(tri) else np.array(out["2"]).reshape(-1, 3)
     if len(fitpts) == 0:
-        return VisResult([], (0.0, 0.0, 1.0, 1.0), 1.0, [], [], [])
+        return VisResult([], (0.0, 0.0, 1.0, 1.0), 1.0, [], [])
     sx, sy, _ = project(fitpts, right, up, fwd)
     minx, maxx, miny, maxy = sx.min(), sx.max(), sy.min(), sy.max()
     span = max(maxx - minx, maxy - miny) or 1.0
@@ -292,7 +292,7 @@ def _visible_segments_faceted(out, right, up, fwd, render_px):
     faces = shade.faces_from_tris(tri, right, up, fwd, s, cx, cy, render_px / 2,
                                   cond_edges=out["5"]) if len(tri) else []
     faces = shade.order_faces(faces, eps=EDGE_BIAS * zrange)
-    return VisResult(segs, (min(xs), min(ys), max(xs), max(ys)), s, faces, [], [])
+    return VisResult(segs, (min(xs), min(ys), max(xs), max(ys)), s, faces, [])
 
 
 def _analytic_circle_pts(rec, n=16):
@@ -419,8 +419,7 @@ def _visible_segments_analytic(out, right, up, fwd, render_px):
     # occlusion cull: hidden faces paint first and get covered.
     faces = shade.order_faces(tri_faces + an_faces, ray_origin, fwd, eps,
                               own_occ=own_occ)
-    hi = shade.highlight_ops(analytic, right, up, fwd, s, cx, cy, half, strength=1.0)
-    return VisResult(segs, _ops_bbox(segs), s, faces, analytic, hi)
+    return VisResult(segs, _ops_bbox(segs), s, faces, analytic)
 
 
 def _resolve_input(part: str, roots: list[Path]) -> Path:

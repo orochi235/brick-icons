@@ -85,7 +85,7 @@ def _arc_to_svg(op):
 
 def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
                     physical=None, s=None, line_mm=0.2, sil_mm=0.2,
-                    fills=None, highlights=None) -> Path:
+                    fills=None) -> Path:
     if physical is not None:
         w_mm, h_mm = physical
         root = (f'<svg xmlns="http://www.w3.org/2000/svg" '
@@ -143,21 +143,6 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
         if defs:
             parts.append("<defs>" + "".join(defs) + "</defs>")
         parts += body
-    if highlights:
-        defs = ['<defs>']
-        blobs = []
-        for i, h in enumerate(highlights):
-            gid = f"hl{i}"
-            defs.append(
-                f'<radialGradient id="{gid}">'
-                f'<stop offset="0%" stop-color="white" stop-opacity="{h["opacity"]:.3f}"/>'
-                f'<stop offset="100%" stop-color="white" stop-opacity="0"/>'
-                f'</radialGradient>')
-            blobs.append(
-                f'<ellipse cx="{h["cx"]:.2f}" cy="{h["cy"]:.2f}" '
-                f'rx="{h["r"]:.2f}" ry="{h["r"]:.2f}" fill="url(#{gid})" stroke="none"/>')
-        defs.append('</defs>')
-        parts += defs + ['<g stroke="none">'] + blobs + ['</g>']
     parts.append('<g stroke="black" fill="none" stroke-linecap="round">')
     for op in segs:
         if len(op) == 5:                              # legacy line tuple
