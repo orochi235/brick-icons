@@ -279,3 +279,47 @@ def test_cyl_interior_far_wall_emitted_for_open_tubes():
     assert abs(inner[0]["span_deg"] - 180.0) < 1.0
     # interior gradient samples face the camera (nv z-component < 0)
     assert all(nv[2] < 1e-6 for _, nv in inner[0]["grad_samples"])
+
+
+def test_order_faces_witness_depth_beats_mean_depth():
+    """The classic painter failure: a big sloped face whose MEAN depth is
+    nearer than a small stud's, but which is FARTHER at their actual overlap.
+    Witness-depth ordering must paint the big face first (multi-stud plate
+    streaks came from exactly this)."""
+    import numpy as np
+    from brick_icons import shade
+    big = {"poly": np.array([[0, 0], [100, 0], [100, 20], [0, 20]], float),
+           "zs": np.array([0.0, 10.0, 10.0, 0.0]),     # depth 0 at x=0 -> 10 at x=100
+           "depth": 5.0, "kind": "tri", "normal": np.array([0, 1, -1.0])}
+    stud = {"poly": np.array([[85, 5], [95, 5], [95, 15], [85, 15]], float),
+            "zs": np.full(4, 7.0),                     # locally NEARER than big (~9)
+            "depth": 7.0, "kind": "tri", "normal": np.array([0, 1, -1.0])}
+    out = shade.order_faces([stud, big], eps=1e-3)
+    assert out[0] is big and out[1] is stud            # farther-at-witness first
+    assert big["order"] < stud["order"]
+
+
+def test_order_faces_disjoint_fall_back_to_depth():
+    import numpy as np
+    from brick_icons import shade
+    near = {"poly": np.array([[0, 0], [10, 0], [0, 10]], float),
+            "depth": 1.0, "kind": "tri", "normal": np.array([0, 1, -1.0])}
+    far = {"poly": np.array([[50, 50], [60, 50], [50, 60]], float),
+           "depth": 9.0, "kind": "tri", "normal": np.array([0, 1, -1.0])}
+    out = shade.order_faces([near, far], eps=1e-3)
+    assert out[0] is far and out[1] is near
+
+
+def test_fill_ops_respects_stamped_order():
+    """When faces carry an 'order' stamp (witness-ordered upstream), fill_ops
+    must NOT re-sort by mean depth."""
+    import numpy as np
+    from brick_icons import shade
+    style = shade.Flat3Style()
+    n = np.array([0.0, 1.0, -1.0])
+    a = {"poly": np.array([[0, 0], [1, 0], [0, 1]]), "normal": n,
+         "depth": 1.0, "kind": "tri", "order": 0}     # near but painted FIRST
+    b = {"poly": np.array([[0, 0], [1, 0], [0, 1]]), "normal": n,
+         "depth": 5.0, "kind": "tri", "order": 1}
+    ops = shade.fill_ops([b, a], style)
+    assert [o["depth"] for o in ops] == [1.0, 5.0]

@@ -148,3 +148,19 @@ def test_visibility_keeps_unoccluded_arc_whole():
                            fwd=np.array([0, 0, 1.0]), eps=1e-6, n=60)
     arcs = [o for o in vis if o[0] == "arc"]
     assert len(arcs) == 1 and np.isclose(arcs[0][7], 0.0) and arcs[0][8] >= 350.0
+
+
+def test_cylinder_depth_far_returns_second_hit():
+    """Interior far-half wall faces need the FAR ray intersection; the near
+    hit belongs to the front wall (ordering interior walls by the near hit
+    painted them over geometry actually in front of them)."""
+    import numpy as np
+    from brick_icons import primitives as P
+    R = np.eye(3)                       # axis +Y, but occluder spans C..C+A
+    occ = P.CylinderOccluder(R, np.zeros(3), 360.0)
+    O = np.array([[0.0, 0.5, -5.0]])
+    F = np.array([0.0, 0.0, 1.0])
+    near = float(occ.depth(O, F)[0])
+    far = float(occ.depth_far(O, F)[0])
+    assert abs(near - 4.0) < 1e-9       # z=-1 wall
+    assert abs(far - 6.0) < 1e-9        # z=+1 wall

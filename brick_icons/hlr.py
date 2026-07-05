@@ -52,10 +52,15 @@ def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
     if depth > 30:
         return
     out.setdefault("tri_meta", [])
-    # Reflection in the accumulated basis flips winding; combine with any
-    # INVERTNEXT inherited from the parent reference.
-    reflected = bool(np.linalg.det(R) < 0)
-    base_invert = inherited_invert ^ reflected
+    # `inherited_invert` fully encodes ancestor mirrors + INVERTNEXTs; each
+    # reference below XORs in only its OWN matrix's reflection. Recomputing
+    # reflection from the accumulated basis here would count every ancestor
+    # mirror a second time and cancel it (lost the flip for geometry nested
+    # two+ levels under a mirrored reference: 32062's axle end, 4019's gear
+    # half). Only the root call's own basis is folded in here.
+    base_invert = inherited_invert
+    if depth == 0:
+        base_invert ^= bool(np.linalg.det(R) < 0)
     lines = _lines(path)
     certified = any(_bfc_certified(ln) for ln in lines)
     local_cw = False            # CCW is the LDraw default winding
@@ -93,8 +98,10 @@ def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
                 else:
                     sub = resolve(ref, roots)
                     if sub is not None:
+                        m_reflect = bool(np.linalg.det(M) < 0)
                         flatten(sub, Rsub, tsub, out, roots, depth + 1,
-                                inherited_invert=base_invert ^ invert_next)
+                                inherited_invert=base_invert ^ invert_next
+                                ^ m_reflect)
             invert_next = False
         elif typ in ("2", "5") and len(tok) >= 8:
             pts = np.array(list(map(float, tok[2:])), float).reshape(-1, 3)
@@ -281,6 +288,7 @@ def _visible_segments_faceted(out, right, up, fwd, render_px):
     ys = [c for sg in segs for c in (sg[1], sg[3])] or [0, 1]
     from . import shade
     faces = shade.faces_from_tris(tri, right, up, fwd, s, cx, cy, render_px / 2) if len(tri) else []
+    faces = shade.order_faces(faces, eps=EDGE_BIAS * zrange)
     return VisResult(segs, (min(xs), min(ys), max(xs), max(ys)), s, faces, [], [])
 
 
@@ -367,9 +375,10 @@ def _visible_segments_analytic(out, right, up, fwd, render_px):
     an_faces = shade.faces_from_analytic(analytic, right, up, fwd, s, cx, cy, half)
     own_occ = {id(f): rec_occ.get(id(f["rec"])) for f in an_faces
                if rec_occ.get(id(f["rec"])) is not None}
-    faces = shade.cull_occluded_faces(
-        tri_faces + an_faces, occluders, ray_origin, fwd, eps,
-        kinds=("tri", "disc", "ring", "cyli"), own_occ=own_occ)
+    # Witness-depth ordering replaces both the mean-depth painter sort and the
+    # occlusion cull: hidden faces paint first and get covered.
+    faces = shade.order_faces(tri_faces + an_faces, ray_origin, fwd, eps,
+                              own_occ=own_occ)
     hi = shade.highlight_ops(analytic, right, up, fwd, s, cx, cy, half, strength=1.0)
     return VisResult(segs, _ops_bbox(segs), s, faces, analytic, hi)
 

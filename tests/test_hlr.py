@@ -302,3 +302,23 @@ def test_fit_affine_matches_fit_segments():
     out = hlr.fit_segments([seg], bbox, 256, 170, 6, 1.0)[0]
     assert out[1] == 0.0 * f + ox and out[2] == 0.0 * f + oy
     assert abs(out[3] - (100.0 * f + ox)) < 1e-9
+
+
+def test_flatten_mirror_invert_survives_nested_reference(tmp_path):
+    """A mirror at level 1 must still flip winding for geometry at level 2+.
+    The old code recomputed reflection from the ACCUMULATED matrix while also
+    inheriting the parent's invert — every ancestor mirror XORed twice and
+    cancelled (32062's mirrored axle end, 4019's mirrored gear half)."""
+    import numpy as np
+    from brick_icons import hlr
+    leaf = tmp_path / "leaf.dat"
+    leaf.write_text("0 BFC CERTIFY CCW\n3 16 0 0 0 10 0 0 0 10 0\n")
+    mid = tmp_path / "mid.dat"          # plain pass-through reference
+    mid.write_text("0 BFC CERTIFY CCW\n"
+                   "1 16 0 0 0 1 0 0 0 1 0 0 0 1 leaf.dat\n")
+    top = tmp_path / "top.dat"          # X mirror at the TOP level
+    top.write_text("0 BFC CERTIFY CCW\n"
+                   "1 16 0 0 0 -1 0 0 0 1 0 0 0 1 mid.dat\n")
+    out = {"2": [], "5": [], "tri": [], "analytic": []}
+    hlr.flatten(top, np.eye(3), np.zeros(3), out, [tmp_path])
+    assert out["tri_meta"][0]["invert"] is True   # one mirror => flipped

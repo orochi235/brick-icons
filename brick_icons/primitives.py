@@ -136,31 +136,46 @@ class CylinderOccluder:
         self.uhat = self.U / (self.r or 1.0)
         self.vhat = self.V / (self.r or 1.0)
 
-    def depth(self, O, F):
+    def _hits(self, O, F, clamp=True):
+        """Both wall intersections per ray as (lam_near, lam_far); invalid
+        hits (out of height / sector / miss) are +inf / -inf respectively.
+        clamp=False skips the height/sector bounds — an ordering proxy for
+        rays that cross the circle where the finite wall doesn't exist."""
         O = np.atleast_2d(O).astype(float)
         F = np.asarray(F, float)
         d = F - (F @ self.ahat) * self.ahat          # ray dir minus axial part
         oc = O - self.C
         oc_perp = oc - np.outer(oc @ self.ahat, self.ahat)
         a = float(d @ d)
-        out = np.full(O.shape[0], np.inf)
+        near = np.full(O.shape[0], np.inf)
+        far = np.full(O.shape[0], -np.inf)
         if a < 1e-12:                                 # ray parallel to axis
-            return out
+            return near, far
         b = 2.0 * (oc_perp @ d)
         c = np.sum(oc_perp * oc_perp, axis=1) - self.r ** 2
         disc = b * b - 4 * a * c
         ok = disc >= 0
         sq = np.sqrt(np.where(ok, disc, 0.0))
         for lam in ((-b - sq) / (2 * a), (-b + sq) / (2 * a)):
-            P_ = O + lam[:, None] * F
-            rel = P_ - self.C
-            h = rel @ self.ahat
-            lx = rel @ self.uhat
-            lz = rel @ self.vhat
-            valid = (ok & (h >= -1e-6) & (h <= self.ah + 1e-6)
-                     & _angle_in_sector(lx, lz, self.sector))
-            out = np.minimum(out, np.where(valid, lam, np.inf))
-        return out
+            if clamp:
+                P_ = O + lam[:, None] * F
+                rel = P_ - self.C
+                h = rel @ self.ahat
+                lx = rel @ self.uhat
+                lz = rel @ self.vhat
+                valid = (ok & (h >= -1e-6) & (h <= self.ah + 1e-6)
+                         & _angle_in_sector(lx, lz, self.sector))
+            else:
+                valid = ok
+            near = np.minimum(near, np.where(valid, lam, np.inf))
+            far = np.maximum(far, np.where(valid, lam, -np.inf))
+        return near, far
+
+    def depth(self, O, F):
+        return self._hits(O, F)[0]
+
+    def depth_far(self, O, F, clamp=True):
+        return self._hits(O, F, clamp=clamp)[1]
 
 
 class DiscOccluder:

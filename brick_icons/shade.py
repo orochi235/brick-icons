@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import heapq
 import math
+from collections import defaultdict
+
 import numpy as np
+from PIL import Image, ImageDraw
 
 from . import hlr
 
@@ -163,6 +167,143 @@ class Flat3Style(ShadingStyle):
         return _hex([c * factor for c in self.part_color])
 
 
+def _plane_depth_fn(f):
+    """Screen-depth function (x, y) -> depth for a face.
+
+    Projection is orthographic, so a PLANAR face's camera depth is an affine
+    function of screen coords — recovered exactly from any 3 spread vertices
+    and their per-vertex depths `zs`. Curved bands get their chord plane
+    (callers refine with the face's own occluder when available); faces
+    without aligned zs fall back to their constant mean depth."""
+    poly, zs = f["poly"], f.get("zs")
+    d0 = float(f["depth"])
+    if zs is None or len(zs) != len(poly):
+        return lambda x, y: d0
+    p0 = poly[0]
+    i1 = int(np.argmax(np.hypot(poly[:, 0] - p0[0], poly[:, 1] - p0[1])))
+    v01 = poly[i1] - p0
+    cr = v01[0] * (poly[:, 1] - p0[1]) - v01[1] * (poly[:, 0] - p0[0])
+    i2 = int(np.argmax(np.abs(cr)))
+    M = np.array([[p0[0], p0[1], 1.0],
+                  [poly[i1, 0], poly[i1, 1], 1.0],
+                  [poly[i2, 0], poly[i2, 1], 1.0]])
+    if abs(np.linalg.det(M)) < 1e-6:
+        return lambda x, y: d0
+    a_, b_, c_ = np.linalg.solve(M, np.array([zs[0], zs[i1], zs[i2]], float))
+    return lambda x, y: a_ * x + b_ * y + c_
+
+
+def _overlap_witness(pa, pb, grid=48):
+    """A screen point strictly inside the overlap of two face polygons, or
+    None. Rasterizes both at low res over the bbox intersection and picks a
+    most-interior overlap pixel (repeated erosion), so the witness stays away
+    from shared edges where depths tie."""
+    ax0, ay0 = pa.min(axis=0); ax1, ay1 = pa.max(axis=0)
+    bx0, by0 = pb.min(axis=0); bx1, by1 = pb.max(axis=0)
+    x0, y0 = max(ax0, bx0), max(ay0, by0)
+    x1, y1 = min(ax1, bx1), min(ay1, by1)
+    if x1 - x0 < 0.5 or y1 - y0 < 0.5:
+        return None
+    sx = (grid - 1) / (x1 - x0); sy = (grid - 1) / (y1 - y0)
+
+    def mask(p):
+        im = Image.new("1", (grid, grid), 0)
+        ImageDraw.Draw(im).polygon(
+            [((q[0] - x0) * sx, (q[1] - y0) * sy) for q in p], fill=1)
+        return np.array(im, bool)
+
+    m = mask(pa) & mask(pb)
+    if not m.any():
+        return None
+    while True:                                  # erode to the interior
+        er = m & np.pad(m, 1)[:-2, 1:-1] & np.pad(m, 1)[2:, 1:-1] \
+               & np.pad(m, 1)[1:-1, :-2] & np.pad(m, 1)[1:-1, 2:]
+        if not er.any():
+            break
+        m = er
+    ys, xs = np.nonzero(m)
+    j = len(xs) // 2
+    return (x0 + xs[j] / sx, y0 + ys[j] / sy)
+
+
+def order_faces(faces, ray_origin=None, fwd=None, eps=1e-6, own_occ=None):
+    """Witness-depth (Newell-style) paint ordering, replacing the mean-depth
+    painter sort AND the occlusion cull: for every screen-overlapping pair,
+    compare surface depths AT a point inside the overlap and require the
+    farther face to paint first (topological sort). A fully hidden face
+    simply paints early and is covered; a partially visible one shows exactly
+    its uncovered part — no cull, so no over-cull.
+
+    Depth at the witness: planar faces via their affine screen-depth plane;
+    analytic faces via their OWN occluder along the witness ray (exact curved
+    surface). Ties within eps add no constraint; cycles (rare, from
+    interpenetrating LDraw subparts) break farthest-first. Stamps
+    face['order'] (respected by fill_ops) and returns faces in paint order."""
+    n = len(faces)
+    dfs = [_plane_depth_fn(f) for f in faces]
+    own_occ = own_occ or {}
+
+    def depth_at(i, x, y):
+        f = faces[i]
+        occ = own_occ.get(id(f))
+        if occ is not None and ray_origin is not None:
+            O = ray_origin(np.array([x], float), np.array([y], float))
+            # an interior far-half wall IS the far intersection; the near hit
+            # is the front wall and would order it as if it were in front
+            if f.get("interior") and hasattr(occ, "depth_far"):
+                d = float(np.asarray(occ.depth_far(O, fwd), float)[0])
+                if not np.isfinite(d):
+                    # witness ray crosses the circle above/below the finite
+                    # wall (e.g. over a stud's top disc): use the unclamped
+                    # far hit as an ordering proxy so the interior wall still
+                    # sorts behind the surfaces that cap it
+                    d = float(np.asarray(occ.depth_far(O, fwd, clamp=False),
+                                         float)[0])
+            else:
+                d = float(np.asarray(occ.depth(O, fwd), float)[0])
+            if np.isfinite(d):
+                return d
+        return dfs[i](x, y)
+
+    succ = defaultdict(set)
+    indeg = [0] * n
+    for i in range(n):
+        for j in range(i + 1, n):
+            w = _overlap_witness(faces[i]["poly"], faces[j]["poly"])
+            if w is None:
+                continue
+            di, dj = depth_at(i, *w), depth_at(j, *w)
+            if abs(di - dj) <= eps:
+                continue                         # coplanar at witness: no edge
+            a, b = (i, j) if di > dj else (j, i)  # farther paints first
+            if b not in succ[a]:
+                succ[a].add(b)
+                indeg[b] += 1
+
+    ready = [(-faces[i]["depth"], i) for i in range(n) if indeg[i] == 0]
+    heapq.heapify(ready)
+    out, done = [], [False] * n
+    remaining = set(range(n))
+    while len(out) < n:
+        if not ready:                            # cycle: release farthest
+            k = max(remaining, key=lambda i: faces[i]["depth"])
+            heapq.heappush(ready, (-faces[k]["depth"], k))
+            indeg[k] = 0
+        _, i = heapq.heappop(ready)
+        if done[i]:
+            continue
+        done[i] = True
+        out.append(i)
+        remaining.discard(i)
+        for j in succ[i]:
+            indeg[j] -= 1
+            if indeg[j] == 0 and not done[j]:
+                heapq.heappush(ready, (-faces[j]["depth"], j))
+    for k, i in enumerate(out):
+        faces[i]["order"] = k
+    return [faces[i] for i in out]
+
+
 def _poly_d(poly):
     cmds = [f"M {poly[0,0]:.2f} {poly[0,1]:.2f}"]
     for p in poly[1:]:
@@ -175,14 +316,15 @@ def fill_ops(faces, style):
     """Painter-sorted (far->near) fill ops. Flat faces: {'d','fill','depth'}.
     Gradient faces (cylinder walls): {'d','gradient','depth'} where gradient is
     {'x1','y1','x2','y2','stops':[(offset,color),...]}."""
-    # Single far->near painter sort across ALL faces regardless of kind.
-    # Occlusion is by depth: a stud protrudes toward the camera, so it is nearer
-    # than the surface it sits on and paints on top; an interior tube/cone wall
-    # sits behind its outer wall, so it is farther and paints under it. Splitting
-    # flats-vs-curved cannot tell those two curved cases apart (both are curved),
-    # and painting all curved last makes interior geometry show through walls.
+    # Witness-ordered faces (order_faces stamps 'order') paint in that exact
+    # sequence; otherwise fall back to the single far->near mean-depth painter
+    # sort across ALL faces regardless of kind.
+    if faces and all("order" in f for f in faces):
+        ordered = sorted(faces, key=lambda f: f["order"])
+    else:
+        ordered = sorted(faces, key=lambda f: -f["depth"])
     ops = []
-    for f in sorted(faces, key=lambda f: -f["depth"]):
+    for f in ordered:
         if "grad_axis" in f:
             p0, p1 = f["grad_axis"]
             stops = sorted(((off, style.ramp(nv)) for off, nv in f["grad_samples"]),
