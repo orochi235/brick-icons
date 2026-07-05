@@ -553,15 +553,72 @@ def test_dome_group_gets_radial_gradient():
     assert not any("grad_axis" in f for f in faces)
     g = grads[0]["grad_radial"]
     assert g["r"] > 0 and 0.5 < g["ratio"] < 2.0
-    # apex facets sample near t=0, rim facets near t=1
-    ts = [t for t, _ in grads[0]["grad_samples"]]
+    # apex facets sample near the center, rim facets near the unit circle
+    ts = [math.hypot(*p) for p, _ in grads[0]["grad_samples"]]
     assert min(ts) < 0.35 and max(ts) > 0.7
+
+
+def _sphere_band(*polars, R=30.0):
+    """Rings of quads (as tris) on a sphere around +z between successive
+    polar angles, wound OUTWARD, every edge listed as a seam. Facets past
+    polar 90deg are back-facing when viewed along -z."""
+    def ring(polar_deg):
+        p = math.radians(polar_deg)
+        return [np.array([R * math.sin(p) * math.cos(a),
+                          R * math.sin(p) * math.sin(a),
+                          R * math.cos(p)])
+                for a in np.linspace(0, 2 * math.pi, 9)[:-1]]
+    tris, seams = [], []
+    rings = [ring(p) for p in polars]
+    for r1, r2 in zip(rings, rings[1:]):
+        for i in range(8):
+            j = (i + 1) % 8
+            for t in ([r1[i], r2[i], r2[j]], [r1[i], r2[j], r1[j]]):
+                v = np.array(t, float)
+                n = np.cross(v[1] - v[0], v[2] - v[0])
+                if n @ v.mean(axis=0) < 0:      # outward winding
+                    v = v[[0, 2, 1]]
+                tris.append(v)
+                for a, b in ((v[0], v[1]), (v[1], v[2]), (v[2], v[0])):
+                    seams.append(np.array([a, b, a, b], float))
+    return np.array(tris), seams
+
+
+def test_backfill_extends_smooth_group_past_fold():
+    right, up = np.array([1.0, 0, 0]), np.array([0.0, 1.0, 0])
+    fwd = np.array([0.0, 0.0, -1.0])
+    # front band (polar 60..80) + back band (100..120) joined via the fold
+    # ring at 90: fold at 90deg
+    tris, seams = _sphere_band(60, 80, 100, 120)
+    faces = shade.faces_from_tris(tris, right, up, fwd, 1.0, 0.0, 0.0, 0.0,
+                                  cond_edges=seams)
+    backs = [f for f in faces if f.get("backfill")]
+    fronts = [f for f in faces if not f.get("backfill")]
+    assert backs and fronts                     # fold spillover kept
+    assert {f["group"] for f in backs} <= {f["group"] for f in fronts}
+    assert all("grad_axis" in f or "grad_radial" in f for f in backs)
+    # gradient samples come from front members only
+    g = fronts[0]
+    n_samples = len(g["grad_samples"])
+    assert n_samples == len(fronts)
+
+
+def test_all_back_group_still_dropped():
+    right, up = np.array([1.0, 0, 0]), np.array([0.0, 1.0, 0])
+    fwd = np.array([0.0, 0.0, -1.0])
+    tris, seams = _sphere_band(120, 135, 150)   # entirely past the fold
+    faces = shade.faces_from_tris(tris, right, up, fwd, 1.0, 0.0, 0.0, 0.0,
+                                  cond_edges=seams)
+    assert faces == []
 
 
 def test_fill_ops_radial_gradient_op():
     spec = {"cx": 50.0, "cy": 50.0, "r": 40.0, "ratio": 0.8}
-    samples = [(0.05, np.array([0, 0.2, -0.98])), (0.5, np.array([0.5, 0.3, -0.8])),
-               (0.95, np.array([0.8, 0.2, -0.55]))]
+    # brightest normal (facing the upper-left light) sits at (-0.6, -0.5);
+    # a dim, near-edge-on normal at (0.7, 0.6)
+    samples = [((-0.6, -0.5), np.array([-0.4, 0.5, -0.77])),
+               ((0.0, 0.0), np.array([0, 0.2, -0.98])),
+               ((0.7, 0.6), np.array([0.9, -0.3, -0.32]))]
     f = {"poly": np.array([(10, 10), (90, 10), (90, 90), (10, 90)], float),
          "normal": np.array([0, 0, -1.0]), "depth": 5.0, "kind": "tri",
          "order": 0, "grad_radial": spec, "grad_samples": samples}
@@ -571,7 +628,13 @@ def test_fill_ops_radial_gradient_op():
     assert g["type"] == "radial" and g["r"] == 40.0
     offs = [o for o, _ in g["stops"]]
     assert offs[0] == 0.0 and offs[-1] == 1.0 and offs == sorted(offs)
-    assert g["fx"] < 0 and g["fy"] < 0          # focal toward upper-left light
+    # focal pulled toward the brightest sample (upper-left), inside r=1
+    assert g["fx"] < -0.2 and g["fy"] < -0.15
+    assert math.hypot(g["fx"], g["fy"]) <= 0.7 + 1e-9
+    # darkest stop at the far end (edge-on normal), lightest near the focal
+    def lum(c):
+        return int(c[1:3], 16)
+    assert lum(g["stops"][0][1]) > lum(g["stops"][-1][1])
 
 
 def test_apply_affine_remaps_radial_spec():

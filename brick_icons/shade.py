@@ -222,9 +222,11 @@ class Flat3Style(ShadingStyle):
 
     def ramp(self, nv):
         """Continuous grey for a curved-surface normal (gradient stops)."""
-        b = max(0.0, float(np.dot(np.asarray(nv, float), self.light)))
-        factor = 0.55 + 0.85 * b
-        return _hex([c * factor for c in self.part_color])
+        return self.ramp_b(max(0.0, float(np.dot(np.asarray(nv, float), self.light))))
+
+    def ramp_b(self, b):
+        """Grey for a raw Lambert brightness (n . light, already clamped)."""
+        return _hex([c * (0.55 + 0.85 * float(b)) for c in self.part_color])
 
 
 def _plane_depth_fn(f):
@@ -372,22 +374,62 @@ def order_faces(faces, ray_origin=None, fwd=None, eps=1e-6, own_occ=None):
 MIN_FRAG_AREA = 0.2     # px^2: visible fragments smaller than this are noise
 
 
-def _radial_stops(samples, style, nbins=8):
-    """Binned radial stops: average the member normals per radial band, then
-    ramp the band normal. Averaging over azimuth is what makes a dome's
-    hundreds of (offset, normal) samples collapse to a few smooth stops
-    instead of high-frequency bands."""
+def _radial_focal_stops(samples, style, nbins=8):
+    """Focal point + binned stops for a dome group's radial gradient.
+
+    For a spherical cap, Lambert brightness is LINEAR in projected position,
+    so a least-squares fit b ~ b0 + beta.(u,v) recovers the true bright-side
+    direction and strength. The focal point goes up the fitted slope (scaled
+    by how much of the group's brightness range the slope explains), which
+    puts the FAR silhouette in the darkest stop. Without this, stops averaged
+    per concentric band mix azimuths: the dome's edge-on fold facets came out
+    too light and their faceted boundary spiked visibly against the dark rim
+    wall (3960).
+
+    Stops are parameterized exactly as SVG samples a focal radial gradient:
+    t at a point q is |q-f| over the distance from f to the unit circle
+    along the ray through q (per-sample quadratic); each stop's tone is the
+    bin's mean brightness through style.ramp_b."""
+    pts = np.array([p for p, _ in samples], float)
+    nvs = [np.asarray(n, float) for _, n in samples]
+    L = getattr(style, "light", None)
+    if L is not None and len(pts) >= 3:
+        b = np.array([max(0.0, float(n @ np.asarray(L, float))) for n in nvs])
+        A = np.column_stack([np.ones(len(pts)), pts])
+        # rcond clamps near-degenerate directions (e.g. samples lying along a
+        # line) so the fitted slope stays in the well-determined subspace
+        coef, *_ = np.linalg.lstsq(A, b, rcond=0.05)
+        beta = coef[1:]
+        rng = float(b.max() - b.min())
+        bn = float(np.hypot(*beta))
+        m = min(0.7, 1.2 * bn / (rng + 1e-9)) if rng > 1e-9 else 0.0
+        f = beta / (bn or 1.0) * m
+    else:
+        b = np.zeros(len(pts))
+        f = np.zeros(2)
+    d = pts - f
+    a = np.einsum("ij,ij->i", d, d)
+    b2 = 2.0 * (d @ f)
+    c = float(f @ f) - 1.0
+    disc = np.maximum(b2 * b2 - 4 * a * c, 0.0)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        s = np.where(a > 1e-12, (-b2 + np.sqrt(disc)) / (2 * a), np.inf)
+        ts = np.clip(np.where(s > 1e-9, 1.0 / s, 0.0), 0.0, 1.0)
+    ramp_b = getattr(style, "ramp_b", None)
     bins = defaultdict(list)
-    for t, nv in samples:
-        bins[min(int(t * nbins), nbins - 1)].append(np.asarray(nv, float))
+    for t, bv, n in zip(ts, b, nvs):
+        bins[min(int(t * nbins), nbins - 1)].append((bv, n))
     stops = []
-    for b in sorted(bins):
-        n = np.mean(bins[b], axis=0)
-        n = n / (np.linalg.norm(n) or 1.0)
-        stops.append(((b + 0.5) / nbins, style.ramp(n)))
+    for bi in sorted(bins):
+        if ramp_b is not None:
+            color = ramp_b(float(np.mean([bv for bv, _ in bins[bi]])))
+        else:
+            n = np.mean([n for _, n in bins[bi]], axis=0)
+            color = style.ramp(n / (np.linalg.norm(n) or 1.0))
+        stops.append(((bi + 0.5) / nbins, color))
     if stops:
         stops = [(0.0, stops[0][1])] + stops + [(1.0, stops[-1][1])]
-    return stops
+    return stops, (float(f[0]), float(f[1]))
 
 
 def fill_ops(faces, style):
@@ -443,14 +485,7 @@ def fill_ops(faces, style):
             continue
         if "grad_radial" in f:
             g = f["grad_radial"]
-            stops = _radial_stops(f["grad_samples"], style)
-            # focal point shifted toward the style's light: bright side of the
-            # dome sits off-center. View-space light (x right, y UP) -> screen
-            # (y down) flips the y component; unit gradient space, so the
-            # shift is a fraction of the radius.
-            L = getattr(style, "light", None)
-            fx, fy = (0.45 * float(L[0]), -0.45 * float(L[1])) if L is not None \
-                else (0.0, 0.0)
+            stops, (fx, fy) = _radial_focal_stops(f["grad_samples"], style)
             ops.append({"d": d, "depth": f["depth"],
                         "gradient": {"type": "radial", "cx": g["cx"], "cy": g["cy"],
                                      "r": g["r"], "ratio": g["ratio"],
@@ -615,6 +650,7 @@ def faces_from_tris(tri, right, up, fwd, s, cx, cy, half, cond_edges=None):
     smooth-surface facet seams: faces joined through them get one SHARED
     linear gradient so faceted curves (50950's slope, cone bodies) shade
     smoothly instead of banding into flat tones."""
+    have_seams = cond_edges is not None and len(cond_edges) > 0
     faces = []
     for v in tri:                       # v: (3,3) world coords, outward-CCW
         n = np.cross(v[1] - v[0], v[2] - v[0])
@@ -623,20 +659,31 @@ def faces_from_tris(tri, right, up, fwd, s, cx, cy, half, cond_edges=None):
             continue
         n = n / ln
         nv = np.array([n @ right, n @ up, n @ fwd])
-        if nv[2] > -1e-6:
-            continue                    # back-facing or edge-on: cull
+        back = nv[2] > -1e-6            # back-facing or edge-on
+        if back and not have_seams:
+            continue
         px, py, z = _project_px(v, right, up, fwd, s, cx, cy, half)
         poly = np.stack([px, py], axis=1)
-        faces.append({"poly": poly, "normal": nv, "depth": float(np.mean(z)),
-                      "zs": z, "kind": "tri", "_verts": v})
-    if cond_edges is not None and len(cond_edges):
-        _attach_smooth_gradients(faces, cond_edges)
-    else:
-        # no seams, but coplanar groups still form (flat-surface merging)
-        _attach_smooth_gradients(faces, np.zeros((0, 2, 3)))
+        f = {"poly": poly, "normal": nv, "depth": float(np.mean(z)),
+             "zs": z, "kind": "tri", "_verts": v}
+        if back:
+            # Provisional: kept only if a seam joins it to a front-facing
+            # smooth group (see the filter below). A facet just past the
+            # silhouette fold projects INSIDE the fold; culling it cut
+            # notches out of the group's fill (3960's far rim sawtooth).
+            f["backfill"] = True
+        faces.append(f)
+    _attach_smooth_gradients(faces, cond_edges if have_seams
+                             else np.zeros((0, 2, 3)))
+    front_groups = {f["group"] for f in faces if not f.get("backfill")}
+    kept = []
     for f in faces:
         f.pop("_verts", None)
-    return faces
+        if f.get("backfill") and not (f["group"] in front_groups
+                                      and ("grad_axis" in f or "grad_radial" in f)):
+            continue                    # hidden underside, not fold spillover
+        kept.append(f)
+    return kept
 
 
 def _edge_key(a, b):
@@ -670,12 +717,13 @@ def _seam_edge_mask(A, B, cond_edges, tol=2e-3):
     return mask
 
 
-def _attach_radial_gradient(faces, ks, nvs):
+def _attach_radial_gradient(faces, ks, front, nvs):
     """Shared radial-gradient spec for a dome-like group: unit-circle gradient
     space mapped to the group's bounding ellipse (center c0, semi-axes r and
-    r*ratio). Samples carry each member's normal at its normalized elliptic
-    radius; fill_ops turns them into binned stops and a light-shifted focal
-    point. All members share one dict, so trace's def-dedup keeps one def."""
+    r*ratio). The extent covers ALL members (backfill facets included, so the
+    gradient reaches the true fold); samples carry the FRONT members' normals
+    at their normalized elliptic radii. All members share one dict, so
+    trace's def-dedup keeps one def."""
     allv = np.vstack([faces[k]["poly"] for k in ks])
     c0 = (allv.min(axis=0) + allv.max(axis=0)) / 2.0
     w = float(allv[:, 0].max() - allv[:, 0].min()) or 1.0
@@ -684,12 +732,15 @@ def _attach_radial_gradient(faces, ks, nvs):
     dx = allv[:, 0] - c0[0]
     dy = (allv[:, 1] - c0[1]) / ratio
     r = float(np.hypot(dx, dy).max()) or 1.0
+    # samples carry each member's centroid in UNIT-ellipse coords (affine-
+    # invariant under the uniform output fit) plus its normal; fill_ops picks
+    # the focal point and stop tones from these with the style's light.
     samples = []
-    for k, nv in zip(ks, nvs):
+    for k, nv in zip(front, nvs):
         c = faces[k]["poly"].mean(axis=0)
-        t = math.hypot(c[0] - c0[0], (c[1] - c0[1]) / ratio) / r
-        samples.append((float(np.clip(t, 0.0, 1.0)), nv))
-    samples.sort(key=lambda s: s[0])
+        u = (c[0] - c0[0]) / r
+        v = (c[1] - c0[1]) / (r * ratio)
+        samples.append(((float(u), float(v)), nv))
     spec = {"cx": float(c0[0]), "cy": float(c0[1]), "r": r, "ratio": ratio}
     for k in ks:
         faces[k]["grad_radial"] = spec
@@ -743,10 +794,14 @@ def _attach_smooth_gradients(faces, cond_edges, min_spread=0.002):
         faces[k]["group"] = find(k)     # merge key for fill_ops union
         groups[find(k)].append(k)
     for ks in groups.values():
-        if len(ks) < 2:
+        # gradients are derived from FRONT members only: backfill facets
+        # (past the silhouette fold) extend the group's fill area, but their
+        # away-facing normals would poison spread, dome detection, and stops
+        front = [k for k in ks if not faces[k].get("backfill")]
+        if len(front) < 2:
             continue
-        nvs = [faces[k]["normal"] for k in ks]
-        cs = [faces[k]["poly"].mean(axis=0) for k in ks]
+        nvs = [faces[k]["normal"] for k in front]
+        cs = [faces[k]["poly"].mean(axis=0) for k in front]
         spread = max((1.0 - float(a @ b) for a in nvs for b in nvs), default=0.0)
         if spread < min_spread:
             continue                    # effectively flat: keep flat tones
@@ -759,7 +814,7 @@ def _attach_smooth_gradients(faces, cond_edges, min_spread=0.002):
         Nc = Nn - Nn.mean(axis=0)
         sn = np.linalg.svd(Nc, full_matrices=False, compute_uv=False)
         if len(sn) > 1 and sn[0] > 1e-9 and sn[1] / sn[0] > 0.35:
-            _attach_radial_gradient(faces, ks, nvs)
+            _attach_radial_gradient(faces, ks, front, nvs)
             continue
         # gradient axis = principal direction of centroid spread in SCREEN
         # space (silhouette-to-silhouette, like analytic cylinder walls) —
