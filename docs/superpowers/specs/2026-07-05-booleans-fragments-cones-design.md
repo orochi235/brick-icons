@@ -216,6 +216,14 @@ Two deviations from the design above, both found on the validation renders:
   a real edge, and its silhouette tangent lands on it (the historic base-gap
   regression test caught exactly this).
 
+- **Radial gradients for dome groups** (follow-up, same day): the dish still
+  banded — a linear gradient cannot represent a 2-D normal field; hundreds of
+  per-facet stops projected onto one axis mix tones at equal offsets. Groups
+  whose normal cloud has a significant second singular value (sn1/sn0 > 0.35)
+  now share one `radialGradient` (unit circle mapped to the group's bounding
+  ellipse, per-radial-band mean-normal stops, focal point shifted toward the
+  style light). 1-D groups (50950's strip) keep linear gradients.
+
 Element counts (paths per SVG, specimens at flat3): 3960 611→33, 3649
 2468→416, 4589 221→37, 50950 41→3, 3941 294→86, 3001 105→75. Batch render
 time is unchanged (order_faces' witness pass still dominates; booleans are
