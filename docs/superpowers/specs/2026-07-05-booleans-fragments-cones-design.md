@@ -194,6 +194,33 @@ path per surface; total element count drops sharply.
   reduction on curved parts, zero hidden elements everywhere.
 - Full specimen render sheet, eyeballed on gray masters.
 
+## Implementation notes (as built, 2026-07-05)
+
+Two deviations from the design above, both found on the validation renders:
+
+- **ndis substitution reverted.** The analytic ndis face gets a flat tone
+  (`style.tone`), but in the faceted world its tris join adjacent smooth/
+  coplanar facet groups through shared edges and inherit the group's
+  GRADIENT — the seam is invisible. Analytic 3960 grew a visible tone-
+  mismatched square around its stud (LDView truth: none). Since `fill_ops`'
+  union now merges the faceted tris into one region anyway, faceted ndis is
+  strictly better: tone continuity AND one element. `parse_primitive`
+  documents this; `NdisOccluder` was removed again.
+- **Smooth-joint rim arcs suppressed.** Stacked wall sections (4589 =
+  `con3` on `con4`) drew a spurious black ring at their shared rim circle.
+  Rule (after two refinements): a wall's synthesized base/top arc is skipped
+  iff a FULL-sector wall of EQUAL slope lies on the OPPOSITE side of the
+  circle plane (`primitives.wall_rims` + `skip_rims`). Same-side sharers,
+  creases (unequal slope), and partial-sector sharers keep their arcs —
+  3941's base rim is interrupted by cutouts (45°-sector lip walls), remains
+  a real edge, and its silhouette tangent lands on it (the historic base-gap
+  regression test caught exactly this).
+
+Element counts (paths per SVG, specimens at flat3): 3960 611→33, 3649
+2468→416, 4589 221→37, 50950 41→3, 3941 294→86, 3001 105→75. Batch render
+time is unchanged (order_faces' witness pass still dominates; booleans are
+not a bottleneck at specimen scale).
+
 ## Out of scope
 
 - Arc-exact fill outlines (fills remain dense polylines; the arc SVG output

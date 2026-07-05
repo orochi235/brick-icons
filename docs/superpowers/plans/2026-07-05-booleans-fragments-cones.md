@@ -8,6 +8,12 @@
 
 **Tech Stack:** Python 3.11, numpy, shapely 2.x (new dep), pytest. Spec: `docs/superpowers/specs/2026-07-05-booleans-fragments-cones-design.md`.
 
+**Status: EXECUTED 2026-07-05** (inline, task by task, TDD; commits a8c4087..).
+Deviations discovered during validation — see the spec's "Implementation
+notes (as built)": ndis substitution reverted (tone-continuity with facet
+groups beats analytic exactness there); smooth-joint rim arcs suppressed via
+`wall_rims`/`skip_rims` (full-sector, equal-slope, opposite-side rule).
+
 **Conventions:** venv at `.venv`; run tests as `.venv/bin/python -m pytest tests/... -q`. Vendor-gated tests follow the existing skip pattern in `tests/test_hlr.py`. Commit after every task with the trailer `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`.
 
 ---
