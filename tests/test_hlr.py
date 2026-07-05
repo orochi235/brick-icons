@@ -234,6 +234,28 @@ def test_flatten_substitutes_known_primitive(tmp_path):
     assert np.allclose(rec["R"], np.eye(3)) and np.allclose(rec["t"], 0)
 
 
+def test_flatten_aliases_stud10_to_full_stud(tmp_path):
+    """stud10 (laterally truncated stud for round 2x2 parts) must resolve as
+    a plain full stud: its faceted outward quarter (4 chord quads + 2 hard
+    vertical joint edges + chorded top rim) renders as stripes and tone bands
+    on the front stud of 3941. The truncation it models is <= 0.14 LDU —
+    invisible at icon scale — so the icon substitutes the analytic stud."""
+    (tmp_path / "p").mkdir()
+    (tmp_path / "p" / "stud10.dat").write_text(
+        "4 16 6 0 0  5.6145 0 1.9397  5.6145 -4 1.9397  6 -4 0\n")
+    (tmp_path / "p" / "stud.dat").write_text(
+        "1 16 0 0 0 6 0 0 0 -4 0 0 0 6 4-4cyli.dat\n"
+        "1 16 0 -4 0 6 0 0 0 1 0 0 0 6 4-4disc.dat\n")
+    part = tmp_path / "thing.dat"
+    part.write_text("1 16 0 0 0  1 0 0  0 1 0  0 0 1  p\\stud10.dat\n")
+    roots = hlr.default_roots(tmp_path)
+    out = {"2": [], "5": [], "tri": [], "analytic": []}
+    hlr.flatten(part, np.eye(3), np.zeros(3), out, roots)
+    kinds = sorted(r["kind"] for r in out["analytic"])
+    assert kinds == ["cyli", "disc"]          # stud.dat contents, not stud10's
+    assert out["tri"] == []                   # faceted quarter suppressed
+
+
 def test_flatten_unknown_primitive_recurses(tmp_path):
     (tmp_path / "p").mkdir()
     (tmp_path / "p" / "1-16tndis.dat").write_text("3 16 0 0 0  1 0 0  0 0 1\n")

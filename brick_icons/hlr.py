@@ -88,6 +88,8 @@ def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
                 M = np.array([[a, b, c], [d, e, f], [g, h, i]], float)
                 T = np.array([x, y, z], float)
                 ref = " ".join(tok[14:])
+                ref = primitives.ALIAS_REFS.get(
+                    ref.replace("\\", "/").split("/")[-1].lower(), ref)
                 Rsub, tsub = R @ M, R @ T + t
                 spec = primitives.parse_primitive(ref)
                 if spec is not None and "analytic" in out:

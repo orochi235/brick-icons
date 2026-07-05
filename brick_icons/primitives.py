@@ -21,6 +21,14 @@ import numpy as np
 
 _FRAC = re.compile(r"^(\d+)-(\d+)(edge|cyli|cylo|disc|ring|con)(\d*)$")
 
+# Reference aliases applied during flatten, BEFORE resolution/substitution:
+# icon-scale stand-ins for primitives whose extra detail cannot survive label
+# size. stud10 is the laterally-truncated stud of round 2x2 parts — its
+# faceted outward quarter (chord quads + hard vertical joint edges) draws as
+# stripes and tone bands on the camera-facing stud, while the truncation it
+# models is <= 0.14 LDU: substitute the plain analytic stud.
+ALIAS_REFS = {"stud10.dat": "stud.dat"}
+
 
 def parse_primitive(name: str):
     """basename -> (kind, sector_deg, inner_radius) or None.
