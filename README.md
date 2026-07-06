@@ -3,6 +3,30 @@
 Render LEGO parts from LDraw (via LDView) into monochrome/grayscale bitmaps and
 SVGs for Brother P-touch (LBX) bin labels.
 
+<table align="center">
+  <tr>
+    <td align="center"><img src="docs/gallery/3001.svg"  width="150" alt="2x4 brick, red"></td>
+    <td align="center"><img src="docs/gallery/3941.svg"  width="150" alt="2x2 round brick, translucent blue"></td>
+    <td align="center"><img src="docs/gallery/3960.svg"  width="150" alt="4x4 inverted dish, gray"></td>
+    <td align="center"><img src="docs/gallery/4589.svg"  width="150" alt="1x1 cone, yellow"></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/gallery/3040b.svg" width="150" alt="45-degree slope, green"></td>
+    <td align="center"><img src="docs/gallery/4070.svg"  width="150" alt="headlight brick, tan"></td>
+    <td align="center"><img src="docs/gallery/3649.svg"  width="150" alt="40-tooth Technic gear"></td>
+    <td align="center"><img src="docs/gallery/50950.svg" width="150" alt="3x1 curved slope, orange"></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/gallery/99781.svg" width="150" alt="1x2 bracket, azure"></td>
+    <td align="center"><img src="docs/gallery/32062.svg" width="150" alt="Technic axle 2, heavy outline"></td>
+    <td align="center"><img src="docs/gallery/87087.svg" width="150" alt="1x1 brick with side stud, white"></td>
+    <td align="center"><img src="docs/gallery/54200.svg" width="150" alt="cheese slope, pink"></td>
+  </tr>
+</table>
+
+*All twelve are SVGs rendered by `--shading outline` at assorted angles, colors,
+stroke weights, and opacities (regenerate with `scripts/render-gallery.sh`).*
+
 ## Setup (macOS)
 
     python3 -m venv .venv && .venv/bin/pip install -e .
@@ -40,6 +64,11 @@ Dither: `threshold` | `floyd` | `ordered` | `atkinson`.
 Angle: `iso` (default) | `front|back|left|right|top|bottom` | `LAT,LONG`.
 Outline weight: `--line-width N` (interior edges) and `--silhouette-width N`
 (outer contour), both in output pixels; applied to mono PNG and (scaled) SVG.
+SVG background: `--svg-bg PAINT` — a color (`white`, `#rrggbb`) or `none`
+(transparent, the default).
+Translucency: `--opacity 0-1` (default 1) sets face-fill opacity in SVG output;
+below 1 hidden-geometry culling is disabled so interior structure shows through
+the translucent body.
 Knobs: `--part-color 0xRRGGBB`, `--scale 0-1`, `--curve-quality`, `--render-px`,
 `--levels B W`, `--gamma`, `--debug-dir DIR`.
 

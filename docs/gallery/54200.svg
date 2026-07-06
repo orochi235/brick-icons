@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 170" preserveAspectRatio="xMidYMid meet">
+<defs><linearGradient id="g0" gradientUnits="userSpaceOnUse" x1="195.44" y1="134.57" x2="164.21" y2="2.43"><stop offset="0.0%" stop-color="#722c54"/><stop offset="17.3%" stop-color="#722c54"/><stop offset="32.0%" stop-color="#722c54"/><stop offset="48.4%" stop-color="#93396c"/><stop offset="50.2%" stop-color="#93396c"/><stop offset="54.9%" stop-color="#f35db1"/><stop offset="56.7%" stop-color="#f35db1"/><stop offset="72.3%" stop-color="#ff66c1"/><stop offset="85.6%" stop-color="#ff66c1"/><stop offset="99.4%" stop-color="#ff65c0"/><stop offset="100.0%" stop-color="#ff65c0"/></linearGradient></defs>
+<g stroke-linejoin="round">
+<path d="M 199.07 51.99 L 199.09 60.53 L 189.88 73.34 L 113.73 149.60 L 113.73 163.88 L 208.91 125.66 L 208.91 65.69 L 206.95 57.37 L 202.25 50.72 L 148.93 7.04 L 144.23 6.00 L 136.38 9.15 L 145.76 8.31 Z" fill="url(#g0)" fill-rule="evenodd" stroke="url(#g0)" stroke-width="0.8"/>
+<path d="M 123.23 18.75 L 47.09 95.01 L 113.73 149.60 L 189.88 73.34 L 199.09 60.53 L 199.07 51.99 L 145.76 8.31 L 136.38 9.15 Z" fill="#ff68c6" fill-rule="evenodd" stroke="#ff68c6" stroke-width="0.8"/>
+<path d="M 200.82 128.91 L 188.40 133.89 L 188.40 133.90 L 115.16 163.31 L 115.16 164.00 L 200.82 129.60 Z" fill="#7d305b" fill-rule="evenodd" stroke="#7d305b" stroke-width="0.8"/>
+<path d="M 113.73 163.88 L 113.73 149.60 L 47.09 95.01 L 47.09 109.29 Z" fill="#b14481" fill-rule="evenodd" stroke="#b14481" stroke-width="0.8"/>
+</g>
+<g stroke="black" fill="none" stroke-linecap="round">
+<line x1="208.91" y1="125.66" x2="113.73" y2="163.88" stroke-width="2.00"/>
+<line x1="47.68" y1="109.05" x2="47.09" y2="109.29" stroke-width="2.00"/>
+<line x1="47.09" y1="109.29" x2="113.73" y2="163.88" stroke-width="2.00"/>
+<line x1="113.73" y1="163.88" x2="113.73" y2="149.61" stroke-width="2.00"/>
+<line x1="113.73" y1="149.61" x2="47.09" y2="95.01" stroke-width="2.00"/>
+<line x1="47.09" y1="95.01" x2="47.09" y2="109.29" stroke-width="2.00"/>
+<line x1="200.82" y1="129.60" x2="200.45" y2="129.29" stroke-width="2.00"/>
+<line x1="115.16" y1="164.00" x2="114.29" y2="163.29" stroke-width="2.00"/>
+<line x1="115.16" y1="164.00" x2="200.82" y2="129.60" stroke-width="2.00"/>
+<line x1="200.82" y1="129.60" x2="200.45" y2="129.29" stroke-width="2.00"/>
+<line x1="114.29" y1="163.29" x2="115.16" y2="164.00" stroke-width="2.00"/>
+<line x1="115.16" y1="162.81" x2="115.16" y2="164.00" stroke-width="2.00"/>
+<line x1="200.82" y1="128.58" x2="200.82" y2="129.60" stroke-width="2.00"/>
+<line x1="199.09" y1="60.53" x2="189.88" y2="73.34" stroke-width="2.00"/>
+<line x1="206.95" y1="57.37" x2="208.91" y2="65.69" stroke-width="2.00"/>
+<line x1="199.08" y1="51.99" x2="199.09" y2="60.53" stroke-width="2.00"/>
+<line x1="206.95" y1="57.37" x2="202.25" y2="50.72" stroke-width="2.00"/>
+<line x1="136.38" y1="9.15" x2="123.23" y2="18.74" stroke-width="2.00"/>
+<line x1="144.23" y1="6.00" x2="143.99" y2="6.62" stroke-width="2.00"/>
+<line x1="145.76" y1="8.32" x2="136.38" y2="9.15" stroke-width="2.00"/>
+<line x1="144.23" y1="6.00" x2="148.93" y2="7.04" stroke-width="2.00"/>
+<line x1="148.93" y1="7.04" x2="202.25" y2="50.72" stroke-width="2.00"/>
+<line x1="145.76" y1="8.32" x2="199.08" y2="51.99" stroke-width="2.00"/>
+<line x1="208.91" y1="125.66" x2="208.54" y2="125.35" stroke-width="2.00"/>
+<line x1="208.91" y1="125.66" x2="208.91" y2="65.69" stroke-width="2.00"/>
+<line x1="123.23" y1="18.74" x2="47.09" y2="95.01" stroke-width="2.00"/>
+<line x1="113.73" y1="149.61" x2="189.88" y2="73.34" stroke-width="2.00"/>
+<line x1="144.23" y1="6.00" x2="136.38" y2="9.15" stroke-width="2.00"/>
+</g>
+</svg>
