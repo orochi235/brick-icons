@@ -520,11 +520,36 @@ def test_drawn_parity_all_kinds():
                {"kind": "con", "sector": 360.0, "inner": 1, "R": R, "t": t})
     _op_parity(P.Cone(R=R, t=t, sector=360.0, top=0.0),   # apex cone
                {"kind": "con", "sector": 360.0, "inner": 0, "R": R, "t": t})
+    _op_parity(P.Cone(R=R, t=t, sector=90.0, top=1.0),    # partial sector
+               {"kind": "con", "sector": 90.0, "inner": 1, "R": R, "t": t})
+    Rz = np.column_stack([[1.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]])
+    _op_parity(P.Cone(R=Rz, t=t, sector=360.0, top=1.0),  # axis-on: no generators
+               {"kind": "con", "sector": 360.0, "inner": 1, "R": Rz, "t": t})
+
+
+def test_axis_on_cone_emits_no_generators():
+    Rz = np.column_stack([[1.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]])
+    prim = P.Cone(R=Rz, t=np.zeros(3), sector=360.0, top=1.0)
+    ops = [op for op, *_ in prim.drawn_with_depth(_parity_proj())]
+    assert not [o for o in ops if o[0] == "line"]
 
 
 def test_drawn_parity_with_skip_rims():
     R, t = np.eye(3), np.zeros(3)
     rec = {"kind": "con", "sector": 360.0, "inner": 1, "R": R, "t": t}
     prim = P.Cone(R=R, t=t, sector=360.0, top=1.0)
-    skips = {(k, s) for k, s, _ in P.wall_rims(rec)}
-    _op_parity(prim, rec, skip_rims=skips)
+    rims = P.wall_rims(rec)
+    all_skips = {(k, s) for k, s, _ in rims}
+    base_only = {(rims[0][0], rims[0][1])}
+    top_only = {(rims[1][0], rims[1][1])}
+    for skips in (all_skips, base_only, top_only):
+        _op_parity(prim, rec, skip_rims=skips)
+    # asymmetric skips drop exactly one arc, and the right one
+    n_arcs = lambda sk: len([op for op, *_ in prim.drawn_with_depth(
+        _parity_proj(), skip_rims=sk) if op[0] == "arc"])
+    assert n_arcs(all_skips) == 0 and n_arcs(base_only) == 1 and n_arcs(top_only) == 1
+    crec = {"kind": "cyli", "sector": 360.0, "inner": 0, "R": R, "t": t}
+    cyl = P.Cylinder(R=R, t=t, sector=360.0)
+    crims = P.wall_rims(crec)
+    for skips in ({(k, s) for k, s, _ in crims}, {(crims[0][0], crims[0][1])}):
+        _op_parity(cyl, crec, skip_rims=skips)
