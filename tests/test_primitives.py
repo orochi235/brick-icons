@@ -342,3 +342,41 @@ def test_cylinder_depth_far_returns_second_hit():
     far = float(occ.depth_far(O, F)[0])
     assert abs(near - 4.0) < 1e-9       # z=-1 wall
     assert abs(far - 6.0) < 1e-9        # z=+1 wall
+
+
+def test_projection_to_AB_matches_hlr_project():
+    from brick_icons import hlr
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    proj = P.Projection(right, up, fwd, s=2.0, cx=1.0, cy=-3.0, half=100.0)
+    Pw = np.array([[1.0, 2.0, 3.0], [-4.0, 0.5, 9.0]])
+    a, b, z = proj.to_AB(Pw)
+    ea, eb, ez = hlr.project(Pw, right, up, fwd)
+    assert np.allclose(a, ea) and np.allclose(b, eb) and np.allclose(z, ez)
+
+
+def test_projection_px_roundtrip_through_ray_origin():
+    from brick_icons import hlr
+    right, up, fwd = hlr.view_basis(20.0, 60.0)
+    proj = P.Projection(right, up, fwd, s=3.0, cx=0.5, cy=1.5, half=200.0)
+    Pw = np.array([[10.0, -5.0, 2.0]])
+    px, py, _ = proj.to_px(Pw)
+    O = proj.ray_origin(px, py)
+    # the ray origin projects back to the same pixel (depth-free component)
+    px2, py2, _ = proj.to_px(O)
+    assert np.allclose(px, px2) and np.allclose(py, py2)
+
+
+def test_projection_circle_matches_project_circle():
+    from brick_icons import hlr
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    proj = P.Projection(right, up, fwd, s=2.0, cx=1.0, cy=-3.0, half=100.0)
+
+    def to_AB(Pw):
+        return hlr.project(np.atleast_2d(np.asarray(Pw, float)), right, up, fwd)
+
+    ell_old = P.project_circle(np.eye(3), np.zeros(3), 2.0, to_AB,
+                               s=2.0, cx=1.0, cy=-3.0, half=100.0)
+    ell_new = proj.circle(np.eye(3), np.zeros(3), 2.0)
+    assert np.allclose(ell_old.center, ell_new.center)
+    assert np.allclose(ell_old.u, ell_new.u) and np.allclose(ell_old.v, ell_new.v)
+    assert np.allclose(ell_old.depth_coeffs, ell_new.depth_coeffs)

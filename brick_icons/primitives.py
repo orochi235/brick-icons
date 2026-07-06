@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import math
 import re
+from collections import defaultdict
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -28,6 +30,43 @@ _FRAC = re.compile(r"^(\d+)-(\d+)(edge|cyli|cylo|disc|ring|con)(\d*)$")
 # stripes and tone bands on the camera-facing stud, while the truncation it
 # models is <= 0.14 LDU: substitute the plain analytic stud.
 ALIAS_REFS = {"stud10.dat": "stud.dat"}
+
+
+@dataclass(frozen=True, eq=False)
+class Projection:
+    """Camera + pixel-fit context for one render.
+
+    Bundles the view basis and the pixel fit so geometry code takes one
+    argument instead of seven. to_AB mirrors hlr.project (A, B image-down,
+    Z = camera depth); to_px applies the pixel fit; ray_origin inverts it
+    back to world ray origins for the occlusion oracle.
+    """
+    right: np.ndarray
+    up: np.ndarray
+    fwd: np.ndarray
+    s: float
+    cx: float
+    cy: float
+    half: float
+
+    def to_AB(self, P):
+        P = np.asarray(P, float)
+        return P @ self.right, -(P @ self.up), P @ self.fwd
+
+    def to_px(self, P):
+        a, b, z = self.to_AB(P)
+        return ((a - self.cx) * self.s + self.half,
+                (b - self.cy) * self.s + self.half, z)
+
+    def ray_origin(self, xs, ys):
+        a = (np.asarray(xs, float) - self.half) / self.s + self.cx
+        b = (np.asarray(ys, float) - self.half) / self.s + self.cy
+        return a[:, None] * self.right - b[:, None] * self.up
+
+    def circle(self, R, t, radius):
+        """Project the world circle at (R, t, radius) into pixel space."""
+        return project_circle(R, t, radius, self.to_AB,
+                              self.s, self.cx, self.cy, self.half)
 
 
 def parse_primitive(name: str):
