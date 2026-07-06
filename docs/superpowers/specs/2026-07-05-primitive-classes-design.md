@@ -1,7 +1,7 @@
 # Primitive class hierarchy — design
 
 **Date:** 2026-07-05
-**Status:** approved for planning
+**Status:** implemented (2026-07-05)
 **Predecessors:** 2026-06-28-primitive-substitution-design.md,
 2026-07-05-booleans-fragments-cones-design.md
 

@@ -847,7 +847,7 @@ def _line_depth_fn(z0, z1):
 
 def rim_key(C, A, radius):
     """Canonical key for a rim circle (center, axis line, radius), rounded so
-    coincident rims from different records compare equal."""
+    coincident rims from different primitives compare equal."""
     C = np.round(np.asarray(C, float), 3)
     n = np.asarray(A, float)
     ln = np.linalg.norm(n)

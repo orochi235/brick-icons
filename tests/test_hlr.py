@@ -286,8 +286,8 @@ def test_analytic_cone_occludes_edge_behind_it():
 
 def test_stacked_cones_one_wall_face_with_own_occluder_ordering():
     # Two smooth-stacked frustums (same infinite cone): the fill pipeline
-    # merges them into ONE outer wall face, and the synthetic merged record —
-    # absent from the per-input-record occluder map — must still get an own
+    # merges them into ONE outer wall face, and the synthetic merged primitive —
+    # absent from the per-input-primitive occluder cache — must still get an own
     # occluder so witness ordering uses exact cone depths: the interior far
     # wall paints before the outer near wall.
     out = {"2": [], "5": [], "tri": [], "tri_meta": [],
@@ -316,14 +316,14 @@ def test_stacked_cones_one_wall_face_with_own_occluder_ordering():
     assert len(outer) == 1 and len(inner) == 1
     assert inner[0]["order"] < outer[0]["order"]
     # exact curved ordering requires an own occluder on EVERY wall face,
-    # including ones whose merged record is synthesized inside shade
+    # including ones whose merged primitive is synthesized inside shade
     assert seen and all(occ is not None for occ in seen.values())
 
 
 @pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
 def test_cone_part_uses_analytic_cones():
     # 4589 (cone 1x1) body = 4-4con3 + 4-4con4: must arrive as analytic
-    # records with cone occluders and produce cone wall fills, not tri clouds.
+    # primitives with cone occluders and produce cone wall fills, not tri clouds.
     res = hlr.visible_segments("4589", LIB, lat=30, long=45, render_px=900)
     assert "con" in {p.kind for p in res.analytic}
     con_faces = [f for f in res.faces if f.get("kind") == "con"]
