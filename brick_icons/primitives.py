@@ -359,6 +359,107 @@ class TriangleOccluder:
         return out
 
 
+@dataclass(eq=False, kw_only=True)
+class Primitive:
+    """One substituted analytic primitive under world transform p -> R @ p + t.
+
+    Identity semantics (eq=False): faces reference their source primitive and
+    hlr keys ordering maps by instance, so two geometrically equal primitives
+    must stay distinct. kind is the stable string used in face dicts and SVG
+    op tags.
+    """
+    R: np.ndarray
+    t: np.ndarray
+    sector: float = 360.0
+
+    kind = None          # class attribute, overridden per subclass
+
+    def __post_init__(self):
+        self.R = np.asarray(self.R, float)
+        self.t = np.asarray(self.t, float)
+
+    @property
+    def is_full(self):
+        return self.sector >= 360.0 - 1e-9
+
+    def occluder(self):
+        """Cached analytic occlusion surface; None for stroke-only kinds.
+        Cached so every consumer (global occluder list, silhouette self-
+        exclusion, witness ordering) sees the SAME instance."""
+        try:
+            return self._occ
+        except AttributeError:
+            self._occ = self._make_occluder()
+            return self._occ
+
+    def _make_occluder(self):
+        return None
+
+
+@dataclass(eq=False, kw_only=True)
+class Edge(Primitive):
+    """Drawn circle arc; no surface."""
+    kind = "edge"
+
+
+@dataclass(eq=False, kw_only=True)
+class Disc(Primitive):
+    """Filled circle in the local XZ plane."""
+    kind = "disc"
+
+    def _make_occluder(self):
+        return DiscOccluder(self.R, self.t, self.sector, 0.0, 1.0)
+
+
+@dataclass(eq=False, kw_only=True)
+class Ring(Primitive):
+    """Annulus: inner radius `inner`, outer `inner + 1`."""
+    kind = "ring"
+    inner: int = 1
+
+    def _make_occluder(self):
+        return DiscOccluder(self.R, self.t, self.sector,
+                            self.inner, self.inner + 1)
+
+
+@dataclass(eq=False, kw_only=True)
+class Cylinder(Primitive):
+    """Wall of a finite cylinder: radius 1, axis from t to t + A."""
+    kind = "cyli"
+
+    def _make_occluder(self):
+        return CylinderOccluder(self.R, self.t, self.sector)
+
+
+@dataclass(eq=False, kw_only=True)
+class Cone(Primitive):
+    """Truncated-cone wall: local radius top+1 at y=0 tapering to `top` at
+    y=1. `top` is a float: merged smooth stacks produce non-integer values."""
+    kind = "con"
+    top: float = 0.0
+
+    def _make_occluder(self):
+        return ConeOccluder(self.R, self.t, self.sector, self.top)
+
+
+_KIND_CLASSES = {"edge": Edge, "cyli": Cylinder, "disc": Disc}
+
+
+def from_ref(name, R, t):
+    """Construct the Primitive for an LDraw subfile reference, or None to
+    fall back to faceted recursion (see parse_primitive for what is and is
+    not substitutable, and why ndis stays faceted)."""
+    spec = parse_primitive(name)
+    if spec is None:
+        return None
+    kind, sector, inner = spec
+    if kind == "ring":
+        return Ring(R=R, t=t, sector=sector, inner=inner)
+    if kind == "con":
+        return Cone(R=R, t=t, sector=sector, top=float(inner))
+    return _KIND_CLASSES[kind](R=R, t=t, sector=sector)
+
+
 def _arc_op(ell, t0_deg, t1_deg, kind):
     """Parametric arc op: ('arc', cx, cy, ux, uy, vx, vy, t0_deg, t1_deg, kind).
     The point at param t (degrees) is center + cos t*u + sin t*v — the SAME

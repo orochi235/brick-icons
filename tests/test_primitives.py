@@ -380,3 +380,48 @@ def test_projection_circle_matches_project_circle():
     assert np.allclose(ell_old.center, ell_new.center)
     assert np.allclose(ell_old.u, ell_new.u) and np.allclose(ell_old.v, ell_new.v)
     assert np.allclose(ell_old.depth_coeffs, ell_new.depth_coeffs)
+
+
+def test_from_ref_constructs_each_kind():
+    R, t = np.eye(3), np.zeros(3)
+    e = P.from_ref("1-4edge.dat", R, t)
+    assert isinstance(e, P.Edge) and e.kind == "edge" and e.sector == 90.0
+    c = P.from_ref("4-4cylo.dat", R, t)          # cylo aliases to cylinder
+    assert isinstance(c, P.Cylinder) and c.kind == "cyli" and c.is_full
+    d = P.from_ref("3-4disc.dat", R, t)
+    assert isinstance(d, P.Disc) and d.sector == 270.0
+    r = P.from_ref("4-4ring3.dat", R, t)
+    assert isinstance(r, P.Ring) and r.inner == 3
+    k = P.from_ref("1-16con13.dat", R, t)
+    assert isinstance(k, P.Cone) and k.top == 13.0 and np.isclose(k.sector, 22.5)
+    assert P.from_ref("4-4ndis.dat", R, t) is None
+    assert P.from_ref("1-4cyls.dat", R, t) is None
+
+
+def test_primitive_normalizes_arrays_and_is_full():
+    c = P.Cylinder(R=[[1, 0, 0], [0, 1, 0], [0, 0, 1]], t=[0, 0, 0], sector=360.0)
+    assert isinstance(c.R, np.ndarray) and isinstance(c.t, np.ndarray)
+    assert c.is_full
+    assert not P.Cylinder(R=np.eye(3), t=np.zeros(3), sector=90.0).is_full
+
+
+def test_occluder_types_and_caching():
+    R, t = np.eye(3), np.zeros(3)
+    assert P.Edge(R=R, t=t, sector=360.0).occluder() is None
+    d = P.Disc(R=R, t=t, sector=360.0)
+    assert isinstance(d.occluder(), P.DiscOccluder)
+    assert np.isclose(d.occluder().inner, 0.0) and np.isclose(d.occluder().outer, 1.0)
+    r = P.Ring(R=R, t=t, sector=360.0, inner=2)
+    assert np.isclose(r.occluder().inner, 2.0) and np.isclose(r.occluder().outer, 3.0)
+    c = P.Cylinder(R=R, t=t, sector=360.0)
+    assert isinstance(c.occluder(), P.CylinderOccluder)
+    k = P.Cone(R=R, t=t, sector=360.0, top=2.0)
+    assert isinstance(k.occluder(), P.ConeOccluder) and k.occluder().top == 2.0
+    # cached: same instance every call (hlr keys ordering maps off this)
+    assert c.occluder() is c.occluder()
+
+
+def test_primitive_identity_semantics():
+    a = P.Cylinder(R=np.eye(3), t=np.zeros(3), sector=360.0)
+    b = P.Cylinder(R=np.eye(3), t=np.zeros(3), sector=360.0)
+    assert a != b and len({a, b}) == 2            # eq/hash by identity
