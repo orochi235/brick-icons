@@ -321,8 +321,12 @@ def _radial_focal_stops(samples, style, nbins=8):
     return stops, (float(f[0]), float(f[1]))
 
 
-def fill_ops(faces, style):
+def fill_ops(faces, style, clip=True):
     """Fill ops with exact visible-fragment clipping and per-surface merging.
+
+    clip=False keeps every face whole (no occlusion subtraction) for
+    translucent rendering; paint order is still farthest-first so nearer
+    faces blend over deeper ones.
 
     1) paint order: witness order when stamped, else far->near mean depth;
     2) CLIP nearest-first: each face's fragment = its polygon minus the union
@@ -348,10 +352,11 @@ def fill_ops(faces, style):
         g = geom2d.to_geom(f["poly"], f.get("holes"))
         if g.is_empty:
             continue
-        frag = g if cover is None else geom2d.difference(g, cover)
+        frag = g if (cover is None or not clip) else geom2d.difference(g, cover)
         if geom2d.area(frag) >= MIN_FRAG_AREA:
             frags[idx] = frag
-        cover = g if cover is None else geom2d.union(cover, g)
+        if clip:
+            cover = g if cover is None else geom2d.union(cover, g)
 
     members = defaultdict(list)                        # merge key -> indices
     for idx in sorted(frags):

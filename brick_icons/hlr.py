@@ -243,8 +243,11 @@ def _ops_bbox(segs):
     return (min(xs), min(ys), max(xs), max(ys))
 
 
-def _visible_segments_faceted(out, right, up, fwd, render_px):
-    """Original z-buffer pipeline; used when no analytic primitives are present."""
+def _visible_segments_faceted(out, right, up, fwd, render_px, cull=True):
+    """Original z-buffer pipeline; used when no analytic primitives are present.
+    cull=False skips occlusion clipping (translucent rendering: every edge is
+    drawn); conditional-line silhouette detection still applies — it is view
+    dependence, not occlusion."""
     tri = np.array(out["tri"]) if out["tri"] else np.zeros((0, 3, 3))
     fitpts = tri.reshape(-1, 3) if len(tri) else np.array(out["2"]).reshape(-1, 3)
     if len(fitpts) == 0:
@@ -269,16 +272,24 @@ def _visible_segments_faceted(out, right, up, fwd, render_px):
     segs = []
     for e in out["2"]:
         ax, ay, az = proj.to_px(e[0:1]); bx, by, bz = proj.to_px(e[1:2])
-        segs += clip_visible((ax[0], ay[0], bx[0], by[0], "edge"), zedge, render_px,
-                             render_px, (az[0], bz[0]), EDGE_BIAS * zrange)
+        seg = (ax[0], ay[0], bx[0], by[0], "edge")
+        if cull:
+            segs += clip_visible(seg, zedge, render_px,
+                                 render_px, (az[0], bz[0]), EDGE_BIAS * zrange)
+        else:
+            segs.append(seg)
     for q in out["5"]:
         px, py, pz = proj.to_px(q)
         p1 = np.array([px[0], py[0]]); p2 = np.array([px[1], py[1]])
         if math.hypot(*(p2 - p1)) < 0.5:
             continue
         if same_side(p1, p2, np.array([px[2], py[2]]), np.array([px[3], py[3]])):
-            segs += clip_visible((px[0], py[0], px[1], py[1], "sil"), zbuf, render_px,
-                                 render_px, (pz[0], pz[1]), SIL_BIAS * zrange)
+            seg = (px[0], py[0], px[1], py[1], "sil")
+            if cull:
+                segs += clip_visible(seg, zbuf, render_px,
+                                     render_px, (pz[0], pz[1]), SIL_BIAS * zrange)
+            else:
+                segs.append(seg)
 
     xs = [c for sg in segs for c in (sg[0], sg[2])] or [0, 1]
     ys = [c for sg in segs for c in (sg[1], sg[3])] or [0, 1]
@@ -288,8 +299,9 @@ def _visible_segments_faceted(out, right, up, fwd, render_px):
     return VisResult(segs, (min(xs), min(ys), max(xs), max(ys)), s, faces, [])
 
 
-def _visible_segments_analytic(out, right, up, fwd, render_px):
-    """Exact pipeline: analytic occlusion oracle + true arc/line drawn ops."""
+def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
+    """Exact pipeline: analytic occlusion oracle + true arc/line drawn ops.
+    cull=False emits every drawn op whole (translucent rendering)."""
     analytic = out["analytic"]
     half = render_px / 2.0
 
@@ -349,8 +361,11 @@ def _visible_segments_analytic(out, right, up, fwd, render_px):
                            float(px[1]), float(py[1]), "sil"),
                           primitives._line_depth_fn(float(z[0]), float(z[1]))))
 
-    segs = primitives.visible_subops(specs, occluders, proj.ray_origin, fwd,
-                                     eps, n=64)
+    if cull:
+        segs = primitives.visible_subops(specs, occluders, proj.ray_origin, fwd,
+                                         eps, n=64)
+    else:
+        segs = [spec[0] for spec in specs]
     from . import shade
     tri_faces = shade.faces_from_tris(np.array(out["tri"]), proj,
                                       cond_edges=out["5"]) if out["tri"] else []
@@ -377,7 +392,8 @@ def _resolve_input(part: str, roots: list[Path]) -> Path:
     return path
 
 
-def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900):
+def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
+                     cull=True):
     roots = default_roots(ldraw_dir)
     path = _resolve_input(part, roots)
     out = {"2": [], "5": [], "tri": [], "tri_meta": [], "analytic": []}
@@ -391,8 +407,8 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900):
         out["tri"] = list(fixed)
     right, up, fwd = view_basis(lat, long)
     if out["analytic"]:
-        return _visible_segments_analytic(out, right, up, fwd, render_px)
-    return _visible_segments_faceted(out, right, up, fwd, render_px)
+        return _visible_segments_analytic(out, right, up, fwd, render_px, cull=cull)
+    return _visible_segments_faceted(out, right, up, fwd, render_px, cull=cull)
 
 
 def fit_affine(bbox, W, H, margin=6, scale=1.0):

@@ -116,6 +116,37 @@ def test_segments_to_svg_writes_radial_gradient(tmp_path):
     assert 'fx="-0.200"' in txt and "url(#g0)" in txt
 
 
+def test_svg_background_defaults_transparent(tmp_path):
+    segs = [("line", 0.0, 0.0, 10.0, 0.0, "edge")]
+    out = _trace.segments_to_svg(segs, 20, 20, tmp_path / "t.svg")
+    assert "<rect" not in out.read_text()
+
+
+def test_svg_background_paint(tmp_path):
+    segs = [("line", 0.0, 0.0, 10.0, 0.0, "edge")]
+    out = _trace.segments_to_svg(segs, 20, 20, tmp_path / "w.svg", bg="white")
+    assert '<rect width="100%" height="100%" fill="white"/>' in out.read_text()
+
+
+def test_fill_opacity_per_face(tmp_path):
+    fills = [{"d": "M 0 0 L 10 0 L 0 10 Z", "fill": "#cccccc", "depth": 1.0},
+             {"d": "M 0 0 L 10 0 L 10 10 Z", "fill": "#888888", "depth": 0.5}]
+    out = _trace.segments_to_svg([], 20, 20, tmp_path / "o.svg",
+                                 fills=fills, opacity=0.5)
+    txt = out.read_text()
+    # per-path opacity (unculled faces overlap and must blend individually),
+    # not group-level; line strokes stay opaque
+    assert txt.count('opacity="0.5"') == 2
+    assert 'opacity' not in txt.split('<g stroke="black"')[1]
+
+
+def test_fill_opacity_one_emits_no_attr(tmp_path):
+    fills = [{"d": "M 0 0 L 10 0 L 0 10 Z", "fill": "#cccccc", "depth": 1.0}]
+    out = _trace.segments_to_svg([], 20, 20, tmp_path / "o1.svg",
+                                 fills=fills, opacity=1.0)
+    assert "opacity" not in out.read_text()
+
+
 def test_segments_to_svg_physical_mm(tmp_path):
     segs = [("line", 10.0, 10.0, 90.0, 10.0, "edge")]
     out = _trace.segments_to_svg(

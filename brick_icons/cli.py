@@ -43,6 +43,12 @@ def _parse_args(argv):
     p.add_argument("--gamma", type=float)
     p.add_argument("--levels", type=int, nargs=2, metavar=("BLACK", "WHITE"))
     p.add_argument("--shade-style", dest="shade_style", choices=["none", "flat3", "cel", "gradient"])
+    p.add_argument("--opacity", type=float,
+                   help="face-fill opacity 0-1 for SVG output "
+                        "(translucent bricks; default 1)")
+    p.add_argument("--svg-bg", dest="svg_bg", metavar="PAINT",
+                   help='SVG background: a color ("white", "#rrggbb") or '
+                        '"none" for transparent (default none)')
     p.add_argument("--light", type=str, metavar="LAT,LONG",
                    help="view-space light: elevation, azimuth in degrees "
                         "(0,0 = frontal; positive azimuth = from the left; "
@@ -66,6 +72,7 @@ def _config_from_args(args) -> Config:
         "margin": args.margin, "threshold": args.threshold, "gamma": args.gamma,
         "levels": tuple(args.levels) if args.levels else None,
         "shade_style": args.shade_style, "light": args.light,
+        "svg_bg": args.svg_bg, "opacity": args.opacity,
     }
     return load_config(toml_path=toml, overrides=overrides, root=args.root)
 
@@ -94,8 +101,9 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
 
     if cfg.shading == "outline":
         lat, long = render.resolve_latlong(cfg.angle)
+        cull = cfg.opacity >= 1.0        # translucent: draw hidden geometry too
         res = hlr.visible_segments(part, cfg.ldraw_dir, lat=lat, long=long,
-                                   render_px=cfg.render_px)
+                                   render_px=cfg.render_px, cull=cull)
         segs, bbox, s = res.segs, res.bbox, res.s
         style = None
         if cfg.shade_style != "none":
@@ -112,22 +120,26 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
                 shifted = hlr.fit_segments(segs, pbbox, round(vb_w), round(vb_h),
                                            margin=0, scale=1.0)
                 f, ox, oy = hlr.fit_affine(pbbox, round(vb_w), round(vb_h), margin=0, scale=1.0)
-                fills = shade.fill_ops(shade.apply_affine_faces(res.faces, f, ox, oy), style) \
+                fills = shade.fill_ops(shade.apply_affine_faces(res.faces, f, ox, oy),
+                                       style, clip=cull) \
                     if style is not None else None
                 w_mm = vb_w / s * 0.4
                 h_mm = vb_h / s * 0.4
                 trace.segments_to_svg(
                     shifted, round(vb_w), round(vb_h), out_dir / f"{name}.svg",
                     physical=(w_mm, h_mm), s=s,
-                    line_mm=cfg.line_mm, sil_mm=cfg.silhouette_mm, fills=fills)
+                    line_mm=cfg.line_mm, sil_mm=cfg.silhouette_mm, fills=fills,
+                    bg=cfg.svg_bg, opacity=cfg.opacity)
             else:
                 fit = hlr.fit_segments(segs, bbox, cfg.width, cfg.height, cfg.margin, cfg.scale)
                 f, ox, oy = hlr.fit_affine(bbox, cfg.width, cfg.height, cfg.margin, cfg.scale)
-                fills = shade.fill_ops(shade.apply_affine_faces(res.faces, f, ox, oy), style) \
+                fills = shade.fill_ops(shade.apply_affine_faces(res.faces, f, ox, oy),
+                                       style, clip=cull) \
                     if style is not None else None
                 trace.segments_to_svg(fit, cfg.width, cfg.height, out_dir / f"{name}.svg",
                                       line_px=cfg.line_width, sil_px=cfg.silhouette_width,
-                                      fills=fills)
+                                      fills=fills, bg=cfg.svg_bg,
+                                      opacity=cfg.opacity)
         if cfg.fmt in ("png", "both"):
             if cfg.mode in ("gray", "both"):
                 gpx = max(cfg.width, cfg.height, cfg.render_px // 2)
@@ -152,7 +164,8 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
 
     if cfg.fmt in ("svg", "both"):
         if cfg.shading == "cel":
-            trace.cel_svg(rgba, out_dir / f"{name}.svg", levels=cfg.cel_levels)
+            trace.cel_svg(rgba, out_dir / f"{name}.svg", levels=cfg.cel_levels,
+                          bg=cfg.svg_bg, opacity=cfg.opacity)
         else:
             print(f"skip svg for {name}: --shading must be outline or cel (got {cfg.shading})")
 

@@ -34,12 +34,17 @@ def _potrace(mask_L: Image.Image) -> tuple[list[str], str, str]:
 
 
 def _write_svg(out_path: Path, viewbox: str, transform: str,
-               layers: list[tuple[list[str], str]]) -> None:
+               layers: list[tuple[list[str], str]], bg: str = "none",
+               opacity: float = 1.0) -> None:
     parts = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{viewbox}" '
-             f'preserveAspectRatio="xMidYMid meet">',
-             '<rect width="100%" height="100%" fill="white"/>']
+             f'preserveAspectRatio="xMidYMid meet">']
+    if bg != "none":
+        parts.append(f'<rect width="100%" height="100%" fill="{bg}"/>')
     if transform:
-        parts.append(f'<g transform="{transform}" stroke="none">')
+        # group-level opacity: cel layers overlap by design (cumulative
+        # dark-on-light), so the stack must composite first, then blend once
+        op = f' opacity="{opacity:g}"' if opacity < 1.0 else ""
+        parts.append(f'<g transform="{transform}" stroke="none"{op}>')
         for ds, fill in layers:
             for d in ds:
                 parts.append(f'<path d="{d}" fill="{fill}"/>')
@@ -85,7 +90,7 @@ def _arc_to_svg(op):
 
 def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
                     physical=None, s=None, line_mm=0.2, sil_mm=0.2,
-                    fills=None) -> Path:
+                    fills=None, bg: str = "none", opacity: float = 1.0) -> Path:
     if physical is not None:
         w_mm, h_mm = physical
         root = (f'<svg xmlns="http://www.w3.org/2000/svg" '
@@ -96,11 +101,18 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
     else:
         root = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" '
                 f'preserveAspectRatio="xMidYMid meet">')
-    parts = [root, '<rect width="100%" height="100%" fill="white"/>']
+    parts = [root]
+    if bg != "none":
+        parts.append(f'<rect width="100%" height="100%" fill="{bg}"/>')
     if fills:
         # Each fill is stroked in its own paint (~0.8px) so antialiasing seams
         # between abutting coplanar faces don't show; gradient fills (cylinder
         # walls) carry a <linearGradient> def instead of a flat color.
+        # Opacity is per-face: translucent renders skip occlusion clipping,
+        # so faces overlap and each must blend individually (nearer over
+        # deeper). The `opacity` attribute composites a path's own fill +
+        # seam stroke together first, so a face never double-paints itself.
+        face_op = f' opacity="{opacity:g}"' if opacity < 1.0 else ""
         defs, body = [], ['<g stroke-linejoin="round">']
         # Smooth-group facets share one gradient object; dedupe defs by
         # content so a 50-facet curve emits one <linearGradient>, not 50.
@@ -138,7 +150,7 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
             else:
                 paint = fo["fill"]
             body.append(f'<path d="{fo["d"]}" fill="{paint}" fill-rule="evenodd" '
-                        f'stroke="{paint}" stroke-width="0.8"/>')
+                        f'stroke="{paint}" stroke-width="0.8"{face_op}/>')
         body.append("</g>")
         if defs:
             parts.append("<defs>" + "".join(defs) + "</defs>")
@@ -162,7 +174,8 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
     return out_path
 
 
-def cel_svg(rgba: Image.Image, out_path: Path, levels: int = 4) -> Path:
+def cel_svg(rgba: Image.Image, out_path: Path, levels: int = 4,
+            bg: str = "none", opacity: float = 1.0) -> Path:
     rgba = rgba.convert("RGBA")
     g = process.posterize(process.to_grayscale(rgba), levels)
     arr = np.asarray(g)
@@ -183,5 +196,6 @@ def cel_svg(rgba: Image.Image, out_path: Path, levels: int = 4) -> Path:
         tf = tf or tff
         layers.append((ds, f"#{v:02x}{v:02x}{v:02x}"))
     layers.reverse()                     # lightest/largest first, darker on top
-    _write_svg(Path(out_path), vb or "0 0 1 1", tf or "", layers)
+    _write_svg(Path(out_path), vb or "0 0 1 1", tf or "", layers, bg=bg,
+               opacity=opacity)
     return Path(out_path)

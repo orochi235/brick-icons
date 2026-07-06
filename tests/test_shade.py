@@ -1,6 +1,7 @@
 import math
 
 import numpy as np
+import pytest
 from brick_icons import shade, hlr
 from brick_icons import primitives as P
 
@@ -339,6 +340,17 @@ def test_fill_ops_clips_partial_overlap():
     toks = far_op["d"].replace("M", " ").replace("L", " ").replace("Z", " ").split()
     xs = [float(t) for t in toks[0::2]]
     assert max(xs) <= 5.0 + 1e-6                   # clipped at the near face
+
+
+def test_fill_ops_clip_false_keeps_hidden_faces_far_to_near():
+    far = _flat_face(2, 2, 8, 8, order=0, depth=10.0)
+    near = _flat_face(0, 0, 10, 10, order=1, depth=1.0)
+    ops = shade.fill_ops([far, near], shade.Flat3Style(), clip=False)
+    # translucent mode: the fully-covered face survives, whole, painted first
+    assert [op["depth"] for op in ops] == [10.0, 1.0]
+    toks = ops[0]["d"].replace("M", " ").replace("L", " ").replace("Z", " ").split()
+    xs = [float(t) for t in toks[0::2]]
+    assert min(xs) == pytest.approx(2.0) and max(xs) == pytest.approx(8.0)
 
 
 def test_fill_ops_merges_group_into_one_op():

@@ -45,6 +45,8 @@ DEFAULTS = {
     "silhouette_mm": 0.2,    # physical smooth-silhouette stroke width (mm)
     "shade_style": "none",
     "light": None,           # "LAT,LONG" view-space light; None = style default
+    "svg_bg": "none",        # SVG background paint; "none" = transparent
+    "opacity": 1.0,          # face-fill opacity in SVG (translucent bricks)
     "fmt": "png",            # png | svg | both
     "mode": "both",          # gray | mono | color | both  (png only)
     "dither": "atkinson",    # threshold | floyd | ordered | atkinson
@@ -78,6 +80,8 @@ class Config:
     silhouette_mm: float
     shade_style: str
     light: str | None
+    svg_bg: str
+    opacity: float
     fmt: str
     mode: str
     dither: str
@@ -127,6 +131,8 @@ def load_config(toml_path=None, overrides=None, root="."):
         silhouette_mm=float(data["silhouette_mm"]),
         shade_style=str(data["shade_style"]),
         light=(str(data["light"]) if data["light"] else None),
+        svg_bg=str(data["svg_bg"]),
+        opacity=float(data["opacity"]),
         fmt=str(data["fmt"]),
         mode=str(data["mode"]),
         dither=str(data["dither"]),
