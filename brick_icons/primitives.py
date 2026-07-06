@@ -395,6 +395,57 @@ class Primitive:
     def _make_occluder(self):
         return None
 
+    def radius_at(self, level):
+        """Unit-circle radius (in primitive units) at `level` along the axis."""
+        return 1.0
+
+    def ring_pts(self, thetas, level, radius=None):
+        """World points on the primitive's circle at `thetas` (radians),
+        `level` along the axis (0 = base ring, 1 = top ring). `radius`
+        overrides the default radius_at(level)."""
+        if radius is None:
+            radius = self.radius_at(level)
+        U, A, V = self.R[:, 0], self.R[:, 1], self.R[:, 2]
+        base = self.t + level * A
+        return base + radius * (np.cos(thetas)[:, None] * U
+                                + np.sin(thetas)[:, None] * V)
+
+    def fit_pts(self, n=16):
+        """World sample points on the primary circle(s), for the pixel fit."""
+        ang = np.linspace(0.0, math.radians(self.sector), n)
+        return self.ring_pts(ang, 0.0)
+
+    def _rim_circles(self):
+        """([(center, radius, side)], slope) for wall kinds; ([], 0.0)
+        otherwise. side is +-1 along +A; slope is d(radius)/d(height)."""
+        return [], 0.0
+
+    def wall_rims(self):
+        """[(key, side, slope)] for a WALL's rim circles (Cylinder/Cone).
+
+        `side` is which side of the circle plane the wall lies on (+-1 along
+        the key's canonical axis); `slope` is d(radius)/d(height) in that
+        canonical direction, rounded. A rim arc is suppressed iff a FULL-
+        sector wall with EQUAL slope lies on the OPPOSITE side (stacked
+        cone/cylinder sections, e.g. 4589's con3-on-con4 joint) — only then
+        is the whole rim a smooth joint. Same-side sharing, unequal slopes
+        (creases), or partial-sector sharers (3941's base lip: 45-degree
+        sectors with cutout gaps, where the body's rim stays a real edge)
+        keep the arc."""
+        rims, rate = self._rim_circles()
+        if not rims:
+            return []
+        A = self.R[:, 1]
+        ahat = A / (np.linalg.norm(A) or 1.0)
+        out = []
+        for C, radius, side in rims:
+            key = rim_key(C, A, radius)
+            aligned = float(np.dot(ahat, key[1])) > 0
+            out.append((key,
+                        side if aligned else -side,
+                        round(rate if aligned else -rate, 3)))
+        return out
+
 
 @dataclass(eq=False, kw_only=True)
 class Edge(Primitive):
@@ -421,6 +472,9 @@ class Ring(Primitive):
         return DiscOccluder(self.R, self.t, self.sector,
                             self.inner, self.inner + 1)
 
+    def radius_at(self, level):
+        return self.inner + 1
+
 
 @dataclass(eq=False, kw_only=True)
 class Cylinder(Primitive):
@@ -429,6 +483,16 @@ class Cylinder(Primitive):
 
     def _make_occluder(self):
         return CylinderOccluder(self.R, self.t, self.sector)
+
+    def _rim_circles(self):
+        A = self.R[:, 1]
+        ru = float(np.linalg.norm(self.R[:, 0]))
+        return [(self.t, ru, +1), (self.t + A, ru, -1)], 0.0
+
+    def fit_pts(self, n=16):
+        ang = np.linspace(0.0, math.radians(self.sector), n)
+        return np.vstack([self.ring_pts(ang, 0.0),      # base + top rings
+                          self.ring_pts(ang, 1.0)])
 
 
 @dataclass(eq=False, kw_only=True)
@@ -440,6 +504,24 @@ class Cone(Primitive):
 
     def _make_occluder(self):
         return ConeOccluder(self.R, self.t, self.sector, self.top)
+
+    def radius_at(self, level):
+        return self.top + 1 - level                      # top+1 at base -> top
+
+    def _rim_circles(self):
+        A = self.R[:, 1]
+        ru = float(np.linalg.norm(self.R[:, 0]))
+        ah = float(np.linalg.norm(A)) or 1.0
+        rate = -ru / ah                                  # radius shrinks toward +A
+        rims = [(self.t, (self.top + 1) * ru, +1)]
+        if self.top > 0:
+            rims.append((self.t + A, self.top * ru, -1))
+        return rims, rate
+
+    def fit_pts(self, n=16):
+        ang = np.linspace(0.0, math.radians(self.sector), n)
+        return np.vstack([self.ring_pts(ang, 0.0),      # base + top rings
+                          self.ring_pts(ang, 1.0)])
 
 
 _KIND_CLASSES = {"edge": Edge, "cyli": Cylinder, "disc": Disc}

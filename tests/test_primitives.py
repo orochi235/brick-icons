@@ -425,3 +425,56 @@ def test_primitive_identity_semantics():
     a = P.Cylinder(R=np.eye(3), t=np.zeros(3), sector=360.0)
     b = P.Cylinder(R=np.eye(3), t=np.zeros(3), sector=360.0)
     assert a != b and len({a, b}) == 2            # eq/hash by identity
+
+
+def test_ring_pts_matches_shade_radius_pts():
+    from brick_icons import shade
+    R = np.diag([2.0, 3.0, 2.0]); t = np.array([1.0, 0.0, -1.0])
+    th = np.linspace(0.0, 2 * np.pi, 17)
+    cases = [
+        (P.Cylinder(R=R, t=t, sector=360.0),
+         {"kind": "cyli", "sector": 360.0, "inner": 0, "R": R, "t": t}),
+        (P.Ring(R=R, t=t, sector=360.0, inner=2),
+         {"kind": "ring", "sector": 360.0, "inner": 2, "R": R, "t": t}),
+        (P.Cone(R=R, t=t, sector=360.0, top=3.0),
+         {"kind": "con", "sector": 360.0, "inner": 3, "R": R, "t": t}),
+    ]
+    for prim, rec in cases:
+        for level in (0.0, 0.5, 1.0):
+            assert np.allclose(prim.ring_pts(th, level),
+                               shade._radius_pts(rec, th, level))
+        assert np.allclose(prim.ring_pts(th, 0.0, radius=0.25),
+                           shade._radius_pts(rec, th, 0.0, radius=0.25))
+
+
+def test_wall_rims_method_matches_module_function():
+    R = np.diag([20.0, -24.0, 20.0]); t = np.array([0.0, 24.0, 0.0])
+    cases = [
+        (P.Cylinder(R=R, t=t, sector=360.0),
+         {"kind": "cyli", "sector": 360.0, "inner": 0, "R": R, "t": t}),
+        (P.Cone(R=np.eye(3), t=np.zeros(3), sector=360.0, top=1.0),
+         {"kind": "con", "sector": 360.0, "inner": 1, "R": np.eye(3), "t": np.zeros(3)}),
+        (P.Cone(R=np.eye(3), t=np.zeros(3), sector=360.0, top=0.0),
+         {"kind": "con", "sector": 360.0, "inner": 0, "R": np.eye(3), "t": np.zeros(3)}),
+        (P.Ring(R=np.eye(3), t=np.zeros(3), sector=360.0, inner=2),
+         {"kind": "ring", "sector": 360.0, "inner": 2, "R": np.eye(3), "t": np.zeros(3)}),
+    ]
+    for prim, rec in cases:
+        assert prim.wall_rims() == P.wall_rims(rec)
+
+
+def test_fit_pts_matches_hlr_analytic_circle_pts():
+    from brick_icons import hlr
+    R = np.diag([10.0, 10.0, 10.0]); t = np.zeros(3)
+    cases = [
+        (P.Edge(R=R, t=t, sector=90.0),
+         {"kind": "edge", "sector": 90.0, "inner": 0, "R": R, "t": t}),
+        (P.Cylinder(R=R, t=t, sector=360.0),
+         {"kind": "cyli", "sector": 360.0, "inner": 0, "R": R, "t": t}),
+        (P.Cone(R=R, t=t, sector=360.0, top=2.0),
+         {"kind": "con", "sector": 360.0, "inner": 2, "R": R, "t": t}),
+        (P.Ring(R=R, t=t, sector=360.0, inner=3),
+         {"kind": "ring", "sector": 360.0, "inner": 3, "R": R, "t": t}),
+    ]
+    for prim, rec in cases:
+        assert np.allclose(prim.fit_pts(), hlr._analytic_circle_pts(rec))
