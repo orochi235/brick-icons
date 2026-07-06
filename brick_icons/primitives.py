@@ -616,6 +616,7 @@ class Cylinder(Primitive):
         return [(self.t, ru, +1), (self.t + A, ru, -1)], 0.0
 
     def _end_circles(self):
+        """Both end circles of the wall (for merge chain-end pairing)."""
         A = self.R[:, 1]
         ru = float(np.linalg.norm(self.R[:, 0]))
         return [(self.t, ru), (self.t + A, ru)]
@@ -699,6 +700,13 @@ class Cone(Primitive):
         return rims, rate
 
     def _end_circles(self):
+        """Both end circles INCLUDING the radius-0 apex (top == 0).
+
+        Distinct from _rim_circles, which omits the apex: an apex has no
+        rim arc to draw or suppress, but it IS a chain terminus — the
+        merge's end-pairing needs it so an apex-terminated stack still
+        resolves to exactly two free ends. Collapsing this into
+        _rim_circles breaks con*-on-con0 merges."""
         A = self.R[:, 1]
         ru = float(np.linalg.norm(self.R[:, 0]))
         return [(self.t, (self.top + 1) * ru), (self.t + A, self.top * ru)]
@@ -893,7 +901,7 @@ def wall_rims(rec):
 def _merged_wall(members):
     """One synthetic Cylinder/Cone covering a smooth chain of wall
     primitives (sections of the same infinite cylinder/cone). Returns None
-    if the chain has no clean two free rims (degenerate or looped
+    if the chain has no clean two free ends (degenerate or looped
     sharing)."""
     ends = {}
     for p in members:

@@ -649,3 +649,16 @@ def test_merge_smooth_walls_passthrough_non_walls():
     ring = P.Ring(R=np.eye(3), t=np.zeros(3), sector=360.0, inner=2)
     out = P.merge_smooth_walls([ring])
     assert out == [ring]
+
+
+def test_merge_smooth_walls_apex_terminated_chain():
+    # con1 stacked with con0 on top: the upper end is a radius-0 apex,
+    # which _rim_circles omits (no rim arc there) but _end_circles must
+    # report so the chain still has exactly two free ends.
+    out = P.merge_smooth_walls([_cone10(1), _cone10(0, ty=10.0)])
+    assert len(out) == 1
+    merged = out[0]
+    assert isinstance(merged, P.Cone) and np.isclose(merged.top, 0.0)
+    assert np.isclose(np.linalg.norm(merged.R[:, 0]), 20.0)   # dr = 20-0
+    assert np.allclose(merged.t, [0.0, 0.0, 0.0])
+    assert np.isclose(np.linalg.norm(merged.R[:, 1]), 20.0)   # full height
