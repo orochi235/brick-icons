@@ -1,7 +1,7 @@
 # brick-icons — shading/rendering test specimens (LDraw part ids)
 # The parts we render-check when iterating on shading, scale, and HLR.
 # Chosen to exercise studs, curves, gradients, and irregular geometry.
-# One id per line; whole-line '#' comments and blank lines ignored.
+# One id per line; '#' comments (whole-line or inline) and blank lines ignored.
 
 # --- Basics (studs, flat faces, plates vs bricks) ---
 3005    # 1x1 brick — single stud, box faces
