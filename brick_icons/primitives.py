@@ -615,6 +615,11 @@ class Cylinder(Primitive):
         ru = float(np.linalg.norm(self.R[:, 0]))
         return [(self.t, ru, +1), (self.t + A, ru, -1)], 0.0
 
+    def _end_circles(self):
+        A = self.R[:, 1]
+        ru = float(np.linalg.norm(self.R[:, 0]))
+        return [(self.t, ru), (self.t + A, ru)]
+
     def fit_pts(self, n=16):
         ang = np.linspace(0.0, math.radians(self.sector), n)
         return np.vstack([self.ring_pts(ang, 0.0),      # base + top rings
@@ -692,6 +697,11 @@ class Cone(Primitive):
         if self.top > 0:
             rims.append((self.t + A, self.top * ru, -1))
         return rims, rate
+
+    def _end_circles(self):
+        A = self.R[:, 1]
+        ru = float(np.linalg.norm(self.R[:, 0]))
+        return [(self.t, (self.top + 1) * ru), (self.t + A, self.top * ru)]
 
     def fit_pts(self, n=16):
         ang = np.linspace(0.0, math.radians(self.sector), n)
@@ -878,6 +888,95 @@ def wall_rims(rec):
                     side if aligned else -side,
                     round(rate if aligned else -rate, 3)))
     return out
+
+
+def _merged_wall(members):
+    """One synthetic Cylinder/Cone covering a smooth chain of wall
+    primitives (sections of the same infinite cylinder/cone). Returns None
+    if the chain has no clean two free rims (degenerate or looped
+    sharing)."""
+    ends = {}
+    for p in members:
+        A = p.R[:, 1]
+        for C, r in p._end_circles():
+            key = rim_key(C, A, r)
+            if key in ends:
+                del ends[key]                    # interior joint
+            else:
+                ends[key] = (np.asarray(C, float), float(r))
+    if len(ends) != 2:
+        return None
+    (C0, r0), (C1, r1) = ends.values()
+    if r0 < r1:
+        (C0, r0), (C1, r1) = (C1, r1), (C0, r0)  # base = wide end
+    A = C1 - C0
+    ah = float(np.linalg.norm(A))
+    if ah < 1e-9:
+        return None
+    ahat = A / ah
+    U0 = members[0].R[:, 0]
+    u = U0 - float(U0 @ ahat) * ahat
+    un = float(np.linalg.norm(u))
+    if un < 1e-9:
+        return None
+    u = u / un
+    v = np.cross(u, ahat)
+    dr = r0 - r1
+    if dr < 1e-9:
+        return Cylinder(R=np.column_stack([r0 * u, A, r0 * v]), t=C0,
+                        sector=360.0)
+    return Cone(R=np.column_stack([dr * u, A, dr * v]), t=C0,
+                sector=360.0, top=r1 / dr)
+
+
+def merge_smooth_walls(analytic):
+    """Collapse chains of full-sector Cylinder/Cone primitives that continue
+    each other smoothly through a shared rim — equal slope on opposite sides
+    of the rim plane, the same predicate that suppresses the rim's STROKE in
+    hlr — into one synthetic primitive per chain, so the wall shades as ONE
+    face with ONE gradient. Left separate, each section fits its own
+    gradient axis and the shared rim shows a tone step (4589's con3-on-con4
+    body: identical stops over different axis extents). Non-wall primitives,
+    partial sectors, creases, and ambiguously shared rims pass through
+    unchanged. The synthetic Cone's `top` may be non-integer."""
+    walls = [i for i, p in enumerate(analytic)
+             if isinstance(p, (Cylinder, Cone)) and p.is_full]
+    by_key = defaultdict(list)
+    for i in walls:
+        for key, side, slope in analytic[i].wall_rims():
+            by_key[key].append((i, side, slope))
+    parent = {i: i for i in walls}
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for ent in by_key.values():
+        if len(ent) != 2:
+            continue                             # free rim or 3-way sharing
+        (i, si, mi), (j, sj, mj) = ent
+        if i == j or si != -sj or mi != mj:
+            continue                             # same side, or a crease
+        if type(analytic[i]) is not type(analytic[j]):
+            continue
+        parent[find(i)] = find(j)
+    groups = defaultdict(list)
+    for i in walls:
+        groups[find(i)].append(i)
+    synth_at, drop = {}, set()
+    for members in groups.values():
+        if len(members) < 2:
+            continue
+        prim = _merged_wall([analytic[i] for i in members])
+        if prim is not None:
+            synth_at[min(members)] = prim
+            drop.update(members)
+    if not synth_at:
+        return list(analytic)
+    return [synth_at.get(i, p) for i, p in enumerate(analytic)
+            if i in synth_at or i not in drop]
 
 
 def drawn_with_depth(rec, to_AB, s, cx, cy, half, fwd, skip_rims=None):

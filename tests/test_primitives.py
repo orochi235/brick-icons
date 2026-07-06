@@ -607,3 +607,45 @@ def test_faces_axis_on_cylinder_no_wall():
     proj = P.Projection(right, up, fwd, s=1.0, cx=0.0, cy=0.0, half=0.0)
     R = np.column_stack([[1.0, 0, 0], [0, 0, 1.0], [0, 1.0, 0]])   # axis = +z
     assert P.Cylinder(R=R, t=np.zeros(3), sector=360.0).faces(proj) == []
+
+
+def _cone10(top, ty=0.0):
+    return P.Cone(R=np.diag([10.0, 10.0, 10.0]),
+                  t=np.array([0.0, ty, 0.0]), sector=360.0, top=float(top))
+
+
+def test_merge_smooth_walls_stacked_cones_one_prim():
+    out = P.merge_smooth_walls([_cone10(2), _cone10(1, ty=10.0)])
+    assert len(out) == 1
+    merged = out[0]
+    assert isinstance(merged, P.Cone) and merged.is_full
+    # merged frustum: base radius 30 at y=0 -> radius 10 at y=20;
+    # R scale = dr = 20, top = r1/dr = 0.5
+    assert np.isclose(np.linalg.norm(merged.R[:, 0]), 20.0)
+    assert np.isclose(merged.top, 0.5)
+    assert np.allclose(merged.t, [0.0, 0.0, 0.0])
+
+
+def test_merge_smooth_walls_stacked_cylinders():
+    a = P.Cylinder(R=np.diag([10.0, 10.0, 10.0]), t=np.zeros(3), sector=360.0)
+    b = P.Cylinder(R=np.diag([10.0, 10.0, 10.0]),
+                   t=np.array([0.0, 10.0, 0.0]), sector=360.0)
+    out = P.merge_smooth_walls([a, b])
+    assert len(out) == 1 and isinstance(out[0], P.Cylinder)
+    assert np.isclose(np.linalg.norm(out[0].R[:, 1]), 20.0)   # merged height
+
+
+def test_merge_smooth_walls_keeps_creases_and_partial_sectors():
+    lo = _cone10(2)
+    crease = P.Cylinder(R=np.diag([10.0, 10.0, 10.0]),
+                        t=np.array([0.0, 10.0, 0.0]), sector=360.0)
+    assert len(P.merge_smooth_walls([lo, crease])) == 2       # slope mismatch
+    part = P.Cone(R=np.diag([10.0, 10.0, 10.0]),
+                  t=np.array([0.0, 10.0, 0.0]), sector=90.0, top=1.0)
+    assert len(P.merge_smooth_walls([lo, part])) == 2         # partial sector
+
+
+def test_merge_smooth_walls_passthrough_non_walls():
+    ring = P.Ring(R=np.eye(3), t=np.zeros(3), sector=360.0, inner=2)
+    out = P.merge_smooth_walls([ring])
+    assert out == [ring]
