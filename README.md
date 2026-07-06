@@ -1,7 +1,6 @@
 # brick-icons
 
-Render LEGO parts from LDraw (via LDView) into monochrome/grayscale bitmaps and
-SVGs for Brother P-touch (LBX) bin labels.
+Render LEGO/LDraw parts as (optionally) lit and shaded SVG icons.
 
 <table align="center">
   <tr>
