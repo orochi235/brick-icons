@@ -9,7 +9,8 @@ def test_defaults():
     assert cfg.width == 256 and cfg.height == 170
     assert cfg.render_px == 2048 and cfg.curve_quality == 12
     assert cfg.angle == "iso" and cfg.cel_levels == 4
-    assert cfg.outline_interior is True and cfg.part_color is None
+    assert cfg.part_color is None
+    assert cfg.svg_bg == "none" and cfg.opacity == 1.0
     assert cfg.scale == 1.0
     assert cfg.ldraw_dir == Path("/proj/vendor/ldraw")
     assert cfg.ldview == Path("/proj/vendor/LDView.app/Contents/MacOS/LDView")

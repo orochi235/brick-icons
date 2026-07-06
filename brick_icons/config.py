@@ -32,7 +32,6 @@ DEFAULTS = {
     "angle": "iso",          # preset or "LAT,LONG"
     "shading": "normal",     # normal | cel | outline
     "cel_levels": 4,         # bands for cel shading
-    "outline_interior": True,# include interior edges in outline
     "line_width": 2,         # outline edge stroke, output px
     "silhouette_width": 2,   # smooth-silhouette stroke (cylinder limbs,
                              # folds), output px — match line_width so limb
@@ -70,7 +69,6 @@ class Config:
     angle: str
     shading: str
     cel_levels: int
-    outline_interior: bool
     line_width: int
     silhouette_width: int
     part_color: str | None
@@ -121,7 +119,6 @@ def load_config(toml_path=None, overrides=None, root="."):
         angle=str(data["angle"]),
         shading=str(data["shading"]),
         cel_levels=int(data["cel_levels"]),
-        outline_interior=bool(data["outline_interior"]),
         line_width=int(data["line_width"]),
         silhouette_width=int(data["silhouette_width"]),
         part_color=(str(data["part_color"]) if data["part_color"] else None),

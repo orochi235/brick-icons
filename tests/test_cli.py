@@ -55,6 +55,14 @@ def test_svg_requires_vector_shading(tmp_path, monkeypatch, capsys):
     assert "shading" in capsys.readouterr().out.lower()
 
 
+def test_shade_style_choices_track_implemented_styles():
+    from brick_icons import shade
+    cli._parse_args(["3001", "--shade-style", "flat3"])
+    with pytest.raises(SystemExit):        # only styles in shade.STYLES accepted
+        cli._parse_args(["3001", "--shade-style", "gradient"])
+    assert set(shade.STYLES) == {"flat3"}
+
+
 def test_debug_dir_saves_stages(tmp_path, monkeypatch):
     _fake_render(monkeypatch)
     dbg = tmp_path / "dbg"

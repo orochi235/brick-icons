@@ -21,8 +21,6 @@ def _parse_args(argv):
     p.add_argument("--mode", choices=["gray", "mono", "color", "both"])
     p.add_argument("--shading", choices=["normal", "cel", "outline"])
     p.add_argument("--cel-levels", type=int)
-    p.add_argument("--outline-interior", dest="outline_interior", action="store_true", default=None)
-    p.add_argument("--no-outline-interior", dest="outline_interior", action="store_false")
     p.add_argument("--line-width", type=int, help="outline interior stroke (output px)")
     p.add_argument("--silhouette-width", type=int, help="outline contour stroke (output px)")
     p.add_argument("--scale-mode", dest="scale_mode", choices=["fit", "physical"])
@@ -42,7 +40,8 @@ def _parse_args(argv):
     p.add_argument("--threshold", type=int)
     p.add_argument("--gamma", type=float)
     p.add_argument("--levels", type=int, nargs=2, metavar=("BLACK", "WHITE"))
-    p.add_argument("--shade-style", dest="shade_style", choices=["none", "flat3", "cel", "gradient"])
+    p.add_argument("--shade-style", dest="shade_style",
+                   choices=["none"] + sorted(shade.STYLES))
     p.add_argument("--opacity", type=float,
                    help="face-fill opacity 0-1 for SVG output "
                         "(translucent bricks; default 1)")
@@ -61,7 +60,7 @@ def _config_from_args(args) -> Config:
     toml = args.config or str(Path(args.root) / "labels.toml")
     overrides = {
         "fmt": args.fmt, "mode": args.mode, "shading": args.shading,
-        "cel_levels": args.cel_levels, "outline_interior": args.outline_interior,
+        "cel_levels": args.cel_levels,
         "line_width": args.line_width, "silhouette_width": args.silhouette_width,
         "dither": args.dither, "angle": args.angle, "part_color": args.part_color,
         "curve_quality": args.curve_quality, "render_px": args.render_px,
