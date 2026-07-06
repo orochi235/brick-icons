@@ -178,7 +178,7 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
 def _gather_parts(args) -> list[str]:
     if args.list:
         return [s for ln in Path(args.list).read_text().splitlines()
-                if (s := ln.strip()) and not s.startswith("#")]
+                if (s := ln.split("#")[0].strip())]
     return args.parts
 
 

@@ -73,6 +73,15 @@ def test_batch_list_file(tmp_path, monkeypatch):
     assert (tmp_path / "3001.mono.png").exists() and (tmp_path / "3002.mono.png").exists()
 
 
+def test_batch_list_strips_inline_comments(tmp_path, monkeypatch):
+    _fake_render(monkeypatch)
+    lst = tmp_path / "p.txt"
+    lst.write_text("3001    # 1x1 brick\n3002\n#   whole-line comment\n")
+    cli.main(["--list", str(lst), "--mode", "mono", "--out", str(tmp_path),
+              "--root", str(tmp_path)])
+    assert (tmp_path / "3001.mono.png").exists() and (tmp_path / "3002.mono.png").exists()
+
+
 def test_batch_list_skips_indented_comments(tmp_path, monkeypatch):
     _fake_render(monkeypatch)
     lst = tmp_path / "p.txt"; lst.write_text("3001\n   # indented comment\n3002\n")
