@@ -91,12 +91,9 @@ def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
                 ref = primitives.ALIAS_REFS.get(
                     ref.replace("\\", "/").split("/")[-1].lower(), ref)
                 Rsub, tsub = R @ M, R @ T + t
-                spec = primitives.parse_primitive(ref)
-                if spec is not None and "analytic" in out:
-                    kind, sector, inner = spec
-                    out["analytic"].append(
-                        {"kind": kind, "sector": sector, "inner": inner,
-                         "R": Rsub, "t": tsub})
+                prim = primitives.from_ref(ref, Rsub, tsub)
+                if prim is not None and "analytic" in out:
+                    out["analytic"].append(prim)
                 else:
                     sub = resolve(ref, roots)
                     if sub is not None:
@@ -257,13 +254,10 @@ def _visible_segments_faceted(out, right, up, fwd, render_px):
     span = max(maxx - minx, maxy - miny) or 1.0
     s = (render_px - 20) / span
     cx, cy = (minx + maxx) / 2, (miny + maxy) / 2
-
-    def to_px(P):
-        a, b, z = project(P, right, up, fwd)
-        return (a - cx) * s + render_px / 2, (b - cy) * s + render_px / 2, z
+    proj = primitives.Projection(right, up, fwd, s, cx, cy, render_px / 2)
 
     if len(tri):
-        tpx, tpy, tz = to_px(tri.reshape(-1, 3))
+        tpx, tpy, tz = proj.to_px(tri.reshape(-1, 3))
         tri_s = np.stack([tpx, tpy], 1).reshape(-1, 3, 2)
         tri_z = tz.reshape(-1, 3)
         zbuf = rasterize_zbuffer(tri_s, tri_z, render_px, render_px)
@@ -274,11 +268,11 @@ def _visible_segments_faceted(out, right, up, fwd, render_px):
 
     segs = []
     for e in out["2"]:
-        ax, ay, az = to_px(e[0:1]); bx, by, bz = to_px(e[1:2])
+        ax, ay, az = proj.to_px(e[0:1]); bx, by, bz = proj.to_px(e[1:2])
         segs += clip_visible((ax[0], ay[0], bx[0], by[0], "edge"), zedge, render_px,
                              render_px, (az[0], bz[0]), EDGE_BIAS * zrange)
     for q in out["5"]:
-        px, py, pz = to_px(q)
+        px, py, pz = proj.to_px(q)
         p1 = np.array([px[0], py[0]]); p2 = np.array([px[1], py[1]])
         if math.hypot(*(p2 - p1)) < 0.5:
             continue
@@ -289,26 +283,9 @@ def _visible_segments_faceted(out, right, up, fwd, render_px):
     xs = [c for sg in segs for c in (sg[0], sg[2])] or [0, 1]
     ys = [c for sg in segs for c in (sg[1], sg[3])] or [0, 1]
     from . import shade
-    faces = shade.faces_from_tris(tri, right, up, fwd, s, cx, cy, render_px / 2,
-                                  cond_edges=out["5"]) if len(tri) else []
+    faces = shade.faces_from_tris(tri, proj, cond_edges=out["5"]) if len(tri) else []
     faces = shade.order_faces(faces, eps=EDGE_BIAS * zrange)
     return VisResult(segs, (min(xs), min(ys), max(xs), max(ys)), s, faces, [])
-
-
-def _analytic_circle_pts(rec, n=16):
-    """World sample points on a record's primary circle(s), for the pixel fit."""
-    R = np.asarray(rec["R"], float); C = np.asarray(rec["t"], float)
-    outer = (rec["inner"] + 1) if rec["kind"] in ("ring", "con") else 1.0
-    ang = np.linspace(0.0, math.radians(rec["sector"]), n)
-    circ = C + outer * (np.cos(ang)[:, None] * R[:, 0] + np.sin(ang)[:, None] * R[:, 2])
-    if rec["kind"] == "cyli":
-        return np.vstack([circ, circ + R[:, 1]])      # base + top rings
-    if rec["kind"] == "con":
-        top = (C + R[:, 1]
-               + rec["inner"] * (np.cos(ang)[:, None] * R[:, 0]
-                                 + np.sin(ang)[:, None] * R[:, 2]))
-        return np.vstack([circ, top])                 # base + top rings
-    return circ
 
 
 def _visible_segments_analytic(out, right, up, fwd, render_px):
@@ -321,39 +298,19 @@ def _visible_segments_analytic(out, right, up, fwd, render_px):
         cloud.append(np.array(out["tri"]).reshape(-1, 3))
     if out["2"]:
         cloud.append(np.array(out["2"]).reshape(-1, 3))
-    for rec in analytic:
-        cloud.append(_analytic_circle_pts(rec))
+    for prim in analytic:
+        cloud.append(prim.fit_pts())
     allpts = np.vstack(cloud)
     s, cx, cy, zrange = _fit_params(allpts, right, up, fwd, render_px)
     eps = 1e-3 * zrange
+    proj = primitives.Projection(right, up, fwd, s, cx, cy, half)
 
-    def to_AB(P):
-        return project(P, right, up, fwd)
-
-    def ray_origin(xs, ys):
-        a = (xs - half) / s + cx
-        b = (ys - half) / s + cy
-        return a[:, None] * right - b[:, None] * up
-
-    # occluders: analytic surfaces + flat triangles
-    occluders = []
-    rec_occ = {}
-    for rec in analytic:
-        k = rec["kind"]
-        if k == "cyli":
-            occ = primitives.CylinderOccluder(rec["R"], rec["t"], rec["sector"])
-        elif k == "con":
-            occ = primitives.ConeOccluder(rec["R"], rec["t"], rec["sector"],
-                                          rec["inner"])
-        elif k == "disc":
-            occ = primitives.DiscOccluder(rec["R"], rec["t"], rec["sector"], 0.0, 1.0)
-        elif k == "ring":
-            occ = primitives.DiscOccluder(rec["R"], rec["t"], rec["sector"],
-                                          rec["inner"], rec["inner"] + 1)
-        else:
-            occ = None                                  # edge: no surface
-        if occ is not None:
-            occluders.append(occ); rec_occ[id(rec)] = occ
+    # occluders: analytic surfaces + flat triangles. Only ORIGINAL primitives
+    # join the stroke-visibility list; walls merged later inside
+    # faces_from_analytic build their own (cached) occluder lazily for
+    # witness ordering, and must NOT be added here — their member surfaces
+    # already cover the same geometry.
+    occluders = [p.occluder() for p in analytic if p.occluder() is not None]
     if out["tri"]:
         occluders.append(primitives.TriangleOccluder(np.array(out["tri"])))
 
@@ -362,63 +319,47 @@ def _visible_segments_analytic(out, right, up, fwd, render_px):
     # equal slope continues on the other side of the circle plane (stacked
     # cone/cylinder sections): that whole rim is a smooth joint, not an edge.
     full_smooth = defaultdict(set)
-    for rec in analytic:
-        if rec["sector"] >= 360.0 - 1e-9:
-            for key, side, slope in primitives.wall_rims(rec):
+    for prim in analytic:
+        if prim.is_full:
+            for key, side, slope in prim.wall_rims():
                 full_smooth[key].add((side, slope))
     shared_rims = set()
-    for rec in analytic:
-        for key, side, slope in primitives.wall_rims(rec):
+    for prim in analytic:
+        for key, side, slope in prim.wall_rims():
             if (-side, slope) in full_smooth[key]:
                 shared_rims.add((key, side))
     specs = []
-    for rec in analytic:
-        own = rec_occ.get(id(rec))
-        for op, dfn in primitives.drawn_with_depth(rec, to_AB, s, cx, cy, half,
-                                                   fwd, skip_rims=shared_rims):
+    for prim in analytic:
+        own = prim.occluder()
+        for op, dfn in prim.drawn_with_depth(proj, skip_rims=shared_rims):
             specs.append((op, dfn, own if op[-1] == "sil" else None))
     # non-substituted straight edges (box edges, chords) and conditionals
     for e in out["2"]:
-        a, b, z = to_AB(e)
-        px = (a - cx) * s + half; py = (b - cy) * s + half
-        specs.append((("line", float(px[0]), float(py[0]), float(px[1]), float(py[1]), "edge"),
+        px, py, z = proj.to_px(e)
+        specs.append((("line", float(px[0]), float(py[0]),
+                       float(px[1]), float(py[1]), "edge"),
                       primitives._line_depth_fn(float(z[0]), float(z[1]))))
     for q in out["5"]:
-        a, b, z = to_AB(q)
-        px = (a - cx) * s + half; py = (b - cy) * s + half
+        px, py, z = proj.to_px(q)
         p1 = np.array([px[0], py[0]]); p2 = np.array([px[1], py[1]])
         if math.hypot(*(p2 - p1)) < 0.5:
             continue
         if same_side(p1, p2, np.array([px[2], py[2]]), np.array([px[3], py[3]])):
-            specs.append((("line", float(px[0]), float(py[0]), float(px[1]), float(py[1]), "sil"),
+            specs.append((("line", float(px[0]), float(py[0]),
+                           float(px[1]), float(py[1]), "sil"),
                           primitives._line_depth_fn(float(z[0]), float(z[1]))))
 
-    segs = primitives.visible_subops(specs, occluders, ray_origin, fwd, eps, n=64)
+    segs = primitives.visible_subops(specs, occluders, proj.ray_origin, fwd,
+                                     eps, n=64)
     from . import shade
-    tri_faces = shade.faces_from_tris(np.array(out["tri"]), right, up, fwd,
-                                      s, cx, cy, half, cond_edges=out["5"]) \
-        if out["tri"] else []
-    an_faces = shade.faces_from_analytic(analytic, right, up, fwd, s, cx, cy, half)
-    for f in an_faces:
-        rec = f["rec"]
-        if id(rec) in rec_occ:
-            continue
-        # walls merged inside faces_from_analytic carry a synthetic record:
-        # build its occluder here (own-occlusion ordering only — NOT added to
-        # the global stroke-visibility occluders, whose member surfaces
-        # already cover the same geometry)
-        if rec["kind"] == "cyli":
-            rec_occ[id(rec)] = primitives.CylinderOccluder(
-                rec["R"], rec["t"], rec["sector"])
-        elif rec["kind"] == "con":
-            rec_occ[id(rec)] = primitives.ConeOccluder(
-                rec["R"], rec["t"], rec["sector"], rec["inner"])
-    own_occ = {id(f): rec_occ.get(id(f["rec"])) for f in an_faces
-               if rec_occ.get(id(f["rec"])) is not None}
+    tri_faces = shade.faces_from_tris(np.array(out["tri"]), proj,
+                                      cond_edges=out["5"]) if out["tri"] else []
+    an_faces = shade.faces_from_analytic(analytic, proj)
+    own_occ = {id(f): f["prim"].occluder() for f in an_faces
+               if f["prim"].occluder() is not None}
     # Witness-depth ordering replaces both the mean-depth painter sort and the
     # occlusion cull: hidden faces paint first and get covered.
-    faces = shade.order_faces(tri_faces + an_faces, ray_origin, fwd, eps,
-                              own_occ=own_occ)
+    faces = shade.order_faces(tri_faces + an_faces, proj, eps, own_occ=own_occ)
     return VisResult(segs, _ops_bbox(segs), s, faces, analytic)
 
 

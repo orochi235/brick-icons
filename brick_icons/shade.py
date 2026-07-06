@@ -7,285 +7,14 @@ from collections import defaultdict
 import numpy as np
 from PIL import Image, ImageDraw
 
-from . import geom2d, hlr, primitives
+from . import geom2d, primitives
 
 
-def _project_px(P, right, up, fwd, s, cx, cy, half):
-    a, b, z = hlr.project(P, right, up, fwd)
-    return (a - cx) * s + half, (b - cy) * s + half, z
-
-
-def _radius_pts(rec, thetas, level, radius=None):
-    """World points on the rec's circle at `thetas` (radians), `level` along axis
-    (0 = base ring, 1 = top ring). `radius` overrides the unit radius (in
-    primitive units); default is the ring's outer radius (inner+1) or 1.0."""
-    R = np.asarray(rec["R"], float); C = np.asarray(rec["t"], float)
-    if radius is None:
-        if rec["kind"] == "ring":
-            radius = rec["inner"] + 1
-        elif rec["kind"] == "con":
-            radius = rec["inner"] + 1 - level      # N+1 at base -> N at top
-        else:
-            radius = 1.0
-    U, A, V = R[:, 0], R[:, 1], R[:, 2]
-    base = C + level * A
-    return base + radius * (np.cos(thetas)[:, None] * U + np.sin(thetas)[:, None] * V)
-
-
-def _merged_wall_rec(recs):
-    """One synthetic cyli/con record covering a smooth chain of wall records
-    (sections of the same infinite cylinder/cone). Returns None if the chain
-    has no clean two free rims (degenerate or looped sharing)."""
-    ends = {}
-    for rec in recs:
-        R = np.asarray(rec["R"], float); t = np.asarray(rec["t"], float)
-        A = R[:, 1]; ru = float(np.linalg.norm(R[:, 0]))
-        if rec["kind"] == "cyli":
-            pairs = [(t, ru), (t + A, ru)]
-        else:
-            N = rec["inner"]
-            pairs = [(t, (N + 1) * ru), (t + A, N * ru)]
-        for C, r in pairs:
-            key = primitives.rim_key(C, A, r)
-            if key in ends:
-                del ends[key]                    # interior joint
-            else:
-                ends[key] = (np.asarray(C, float), float(r))
-    if len(ends) != 2:
-        return None
-    (C0, r0), (C1, r1) = ends.values()
-    if r0 < r1:
-        (C0, r0), (C1, r1) = (C1, r1), (C0, r0)  # base = wide end
-    A = C1 - C0
-    ah = float(np.linalg.norm(A))
-    if ah < 1e-9:
-        return None
-    ahat = A / ah
-    U0 = np.asarray(recs[0]["R"], float)[:, 0]
-    u = U0 - float(U0 @ ahat) * ahat
-    un = float(np.linalg.norm(u))
-    if un < 1e-9:
-        return None
-    u = u / un
-    v = np.cross(u, ahat)
-    dr = r0 - r1
-    if dr < 1e-9:
-        R = np.column_stack([r0 * u, A, r0 * v])
-        return {"kind": "cyli", "sector": 360.0, "inner": 0, "R": R, "t": C0}
-    R = np.column_stack([dr * u, A, dr * v])
-    return {"kind": "con", "sector": 360.0, "inner": r1 / dr, "R": R, "t": C0}
-
-
-def merge_smooth_wall_recs(analytic):
-    """Collapse chains of full-sector cyli/con records that continue each
-    other smoothly through a shared rim — equal slope on opposite sides of
-    the rim plane, the same predicate that suppresses the rim's STROKE in
-    hlr — into one synthetic record per chain, so the wall shades as ONE
-    face with ONE gradient. Left separate, each section fits its own
-    gradient axis and the shared rim shows a tone step (4589's con3-on-con4
-    body: identical stops over different axis extents). Non-wall records,
-    partial sectors, creases, and ambiguously shared rims pass through
-    unchanged. The synthetic con's `inner` may be non-integer."""
-    walls = [i for i, r in enumerate(analytic)
-             if r["kind"] in ("cyli", "con") and r["sector"] >= 360.0 - 1e-9]
-    by_key = defaultdict(list)
-    for i in walls:
-        for key, side, slope in primitives.wall_rims(analytic[i]):
-            by_key[key].append((i, side, slope))
-    parent = {i: i for i in walls}
-
-    def find(i):
-        while parent[i] != i:
-            parent[i] = parent[parent[i]]
-            i = parent[i]
-        return i
-
-    for ent in by_key.values():
-        if len(ent) != 2:
-            continue                             # free rim or 3-way sharing
-        (i, si, mi), (j, sj, mj) = ent
-        if i == j or si != -sj or mi != mj:
-            continue                             # same side, or a crease
-        if analytic[i]["kind"] != analytic[j]["kind"]:
-            continue
-        parent[find(i)] = find(j)
-    groups = defaultdict(list)
-    for i in walls:
-        groups[find(i)].append(i)
-    synth_at, drop = {}, set()
-    for members in groups.values():
-        if len(members) < 2:
-            continue
-        rec = _merged_wall_rec([analytic[i] for i in members])
-        if rec is not None:
-            synth_at[min(members)] = rec
-            drop.update(members)
-    if not synth_at:
-        return list(analytic)
-    return [synth_at.get(i, rec) for i, rec in enumerate(analytic)
-            if i in synth_at or i not in drop]
-
-
-def faces_from_analytic(analytic, right, up, fwd, s, cx, cy, half):
-    faces = []
-    for rec in merge_smooth_wall_recs(analytic):
-        kind = rec["kind"]
-        if kind == "edge":
-            continue
-        R = np.asarray(rec["R"], float)
-        sect = math.radians(rec["sector"])
-        if kind in ("disc", "ring"):
-            th = np.linspace(0.0, sect, 64)
-            hole_w = None
-            if kind == "ring":
-                # Annulus: full sector gets a REAL hole ring (the bore);
-                # a partial sector is a simple valid polygon, so keep the
-                # outer-forward / inner-back concatenation there.
-                outer = _radius_pts(rec, th, 0.0, radius=rec["inner"] + 1)
-                inner = _radius_pts(rec, th, 0.0, radius=rec["inner"])
-                if sect >= 2 * math.pi - 1e-6:
-                    w, hole_w = outer, inner
-                else:
-                    w = np.concatenate([outer, inner[::-1]], axis=0)
-            else:
-                w = _radius_pts(rec, th, 0.0)
-            px, py, z = _project_px(w, right, up, fwd, s, cx, cy, half)
-            n = R[:, 1]; n = n / np.linalg.norm(n)
-            nv = np.array([n @ right, n @ up, n @ fwd])
-            if nv[2] > 0:
-                nv = -nv
-            face = {"poly": np.stack([px, py], 1), "normal": nv,
-                    "depth": float(np.mean(z)), "zs": z, "kind": kind,
-                    "rec": rec}
-            if hole_w is not None:
-                hx, hy, _ = _project_px(hole_w, right, up, fwd, s, cx, cy, half)
-                face["holes"] = [np.stack([hx, hy], 1)]
-            faces.append(face)
-        elif kind == "cyli":
-            faces.extend(_cyl_wall_faces(rec, R, sect, right, up, fwd,
-                                         s, cx, cy, half))
-        elif kind == "con":
-            faces.extend(_con_wall_faces(rec, R, sect, right, up, fwd,
-                                         s, cx, cy, half))
-    return faces
-
-
-def _arc_sector_spans(lo, length, sect):
-    """Intersect the arc starting at `lo` (radians) of `length` with the
-    sector [0, sect] on the circle. Returns [(a, b)] spans (b > a), at most
-    two: a wrapped arc can re-enter the sector past 0. A full sector needs no
-    clamping — the raw interval is returned so a seamless single face is kept
-    even when it crosses 0/2pi (angles are plain reals downstream)."""
-    if sect >= 2 * math.pi - 1e-6:
-        return [(lo, lo + length)]
-    two = 2 * math.pi
-    lo = lo % two
-    pieces = [(lo, min(lo + length, two))]
-    if lo + length > two:
-        pieces.append((0.0, lo + length - two))
-    spans = []
-    for a, b in pieces:
-        a, b = max(a, 0.0), min(b, sect)
-        if b - a > 1e-3:
-            spans.append((a, b))
-    return spans
-
-
-def _cyl_wall_faces(rec, R, sect, right, up, fwd, s, cx, cy, half):
-    """Cylinder wall fills: the camera-facing outer half AND the far half's
-    interior surface (visible when looking into an open tube — leaving it out
-    produced 4019's white voids). Each visible span becomes one arc-region
-    polygon with a linear-gradient spec; a partial sector can split a span in
-    two where the arc wraps past 0."""
-    U, A, V = R[:, 0], R[:, 1], R[:, 2]
-    a = float(U @ fwd); b = float(V @ fwd)
-    if a == 0.0 and b == 0.0:
-        return []                                # axis points at camera: no wall
-    phi = math.atan2(b, a)
-    theta_face = phi + math.pi                   # most camera-facing angle
-    halves = [(theta_face - math.pi / 2, False),         # outer near half
-              (theta_face + math.pi / 2, True)]          # interior far half
-    faces = []
-    for start, interior in halves:
-        for lo, hi in _arc_sector_spans(start, math.pi, sect):
-            f = _wall_span_face(rec, U, V, lo, hi, interior,
-                                right, up, fwd, s, cx, cy, half)
-            if f is not None:
-                faces.append(f)
-    return faces
-
-
-def _con_wall_faces(rec, R, sect, right, up, fwd, s, cx, cy, half):
-    """Cone wall fills. Unlike a cylinder, the front-facing arc is NOT a half:
-    with g = R^-1 @ fwd and (A, B, C) = (g0, g2, -g1), n(theta).fwd =
-    hyp*cos(theta - phi0) - C, so the outer wall is visible on
-    (phi0+d, phi0+2pi-d) where d = acos(C/hyp) — the generator angles — and
-    the interior far wall on the complement. Axis-on view (hyp ~ 0, or
-    |C| >= hyp): every generator faces the same way, one full-circle span."""
-    Minv = np.linalg.inv(R)
-    g = Minv @ np.asarray(fwd, float)
-    A_, B_, C_ = float(g[0]), float(g[2]), float(-g[1])
-    MT = Minv.T
-
-    def normal_fn(th):
-        return MT @ np.array([math.cos(th), 1.0, math.sin(th)])
-
-    hyp = math.hypot(A_, B_)
-    if hyp < 1e-12:
-        spans = [(0.0, 2 * math.pi, float(g[1]) > 0)]
-    elif abs(C_) >= hyp:
-        spans = [(0.0, 2 * math.pi, C_ >= hyp)]
-    else:
-        phi0 = math.atan2(B_, A_)
-        d = math.acos(max(-1.0, min(1.0, C_ / hyp)))
-        spans = [(phi0 + d, phi0 + 2 * math.pi - d, False),
-                 (phi0 - d, phi0 + d, True)]
-    U, V = R[:, 0], R[:, 2]
-    faces = []
-    for start, end, interior in spans:
-        if end - start < 1e-6:
-            continue
-        for lo, hi in _arc_sector_spans(start, end - start, sect):
-            f = _wall_span_face(rec, U, V, lo, hi, interior, right, up, fwd,
-                                s, cx, cy, half, normal_fn=normal_fn)
-            if f is not None:
-                faces.append(f)
-    return faces
-
-
-def _wall_span_face(rec, U, V, lo, hi, interior, right, up, fwd, s, cx, cy, half,
-                    normal_fn=None):
-    ths = np.linspace(lo, hi, 40)
-    top = _radius_pts(rec, ths, 1.0)
-    bot = _radius_pts(rec, ths, 0.0)
-    tpx, tpy, tz = _project_px(top, right, up, fwd, s, cx, cy, half)
-    bpx, bpy, bz = _project_px(bot, right, up, fwd, s, cx, cy, half)
-    poly = np.concatenate([np.stack([tpx, tpy], 1),
-                           np.stack([bpx, bpy], 1)[::-1]], axis=0)
-    zs = np.concatenate([tz, bz])
-    # gradient axis: mid-height points at the span's end angles
-    mid = _radius_pts(rec, np.array([lo, hi]), 0.5)
-    mpx, mpy, _ = _project_px(mid, right, up, fwd, s, cx, cy, half)
-    p0 = (float(mpx[0]), float(mpy[0])); p1 = (float(mpx[1]), float(mpy[1]))
-    axis = np.array([p1[0] - p0[0], p1[1] - p0[1]]); L2 = float(axis @ axis) or 1.0
-    samples = []
-    for th in np.linspace(lo, hi, 9):
-        if normal_fn is None:
-            n = math.cos(th) * U + math.sin(th) * V
-        else:
-            n = normal_fn(th)
-        n = n / np.linalg.norm(n)
-        if interior:
-            n = -n                               # inward surface normal
-        nv = np.array([n @ right, n @ up, n @ fwd])
-        p = _radius_pts(rec, np.array([th]), 0.5)
-        ppx, ppy, _ = _project_px(p, right, up, fwd, s, cx, cy, half)
-        off = ((ppx[0] - p0[0]) * axis[0] + (ppy[0] - p0[1]) * axis[1]) / L2
-        samples.append((float(np.clip(off, 0.0, 1.0)), nv))
-    return {"poly": poly, "zs": zs, "depth": float(np.mean(zs)), "kind": rec["kind"],
-            "rec": rec, "interior": interior,
-            "span_deg": math.degrees(hi - lo),
-            "grad_axis": (p0, p1), "grad_samples": samples}
+def faces_from_analytic(analytic, proj):
+    """Fill faces for analytic primitives, with smooth wall chains merged to
+    single faces (see primitives.merge_smooth_walls)."""
+    return [f for prim in primitives.merge_smooth_walls(analytic)
+            for f in prim.faces(proj)]
 
 
 def _hex(rgb):
@@ -450,7 +179,7 @@ def _stall_release(remaining, succ, faces):
     return max(cand or rem, key=lambda i: faces[i]["depth"])
 
 
-def order_faces(faces, ray_origin=None, fwd=None, eps=1e-6, own_occ=None):
+def order_faces(faces, proj=None, eps=1e-6, own_occ=None):
     """Witness-depth (Newell-style) paint ordering, replacing the mean-depth
     painter sort AND the occlusion cull: for every screen-overlapping pair,
     compare surface depths AT a point inside the overlap and require the
@@ -470,21 +199,22 @@ def order_faces(faces, ray_origin=None, fwd=None, eps=1e-6, own_occ=None):
     def depth_at(i, x, y):
         f = faces[i]
         occ = own_occ.get(id(f))
-        if occ is not None and ray_origin is not None:
-            O = ray_origin(np.array([x], float), np.array([y], float))
+        if occ is not None and proj is not None:
+            O = proj.ray_origin(np.array([x], float), np.array([y], float))
             # an interior far-half wall IS the far intersection; the near hit
             # is the front wall and would order it as if it were in front
             if f.get("interior") and hasattr(occ, "depth_far"):
-                d = float(np.asarray(occ.depth_far(O, fwd), float)[0])
+                d = float(np.asarray(occ.depth_far(O, proj.fwd), float)[0])
                 if not np.isfinite(d):
                     # witness ray crosses the circle above/below the finite
                     # wall (e.g. over a stud's top disc): use the unclamped
                     # far hit as an ordering proxy so the interior wall still
                     # sorts behind the surfaces that cap it
-                    d = float(np.asarray(occ.depth_far(O, fwd, clamp=False),
+                    d = float(np.asarray(occ.depth_far(O, proj.fwd,
+                                                       clamp=False),
                                          float)[0])
             else:
-                d = float(np.asarray(occ.depth(O, fwd), float)[0])
+                d = float(np.asarray(occ.depth(O, proj.fwd), float)[0])
             if np.isfinite(d):
                 return d
         return dfs[i](x, y)
@@ -745,7 +475,7 @@ def _face_samples(f, inset=0.3, max_verts=8):
     return pts, ds
 
 
-def cull_occluded_faces(faces, occluders, ray_origin, fwd, eps,
+def cull_occluded_faces(faces, occluders, proj, eps,
                         kinds=("tri",), own_occ=None):
     """Winding-independent hidden-surface removal for fill faces.
 
@@ -773,22 +503,22 @@ def cull_occluded_faces(faces, occluders, ray_origin, fwd, eps,
             kept.append(f)
             continue
         pts, self_d = _face_samples(f)
-        O = ray_origin(pts[:, 0], pts[:, 1])
+        O = proj.ray_origin(pts[:, 0], pts[:, 1])
         mine = own_occ.get(id(f))
         if mine is not None:
-            d_own = np.asarray(mine.depth(O, fwd), float)
+            d_own = np.asarray(mine.depth(O, proj.fwd), float)
             self_d = np.where(np.isfinite(d_own), d_own, self_d)
         nearest = np.full(len(pts), np.inf)
         for occ in occluders:
             if occ is mine:
                 continue                          # don't let a face occlude itself
-            nearest = np.minimum(nearest, occ.depth(O, fwd))
+            nearest = np.minimum(nearest, occ.depth(O, proj.fwd))
         if not bool(np.all(nearest < self_d - eps)):
             kept.append(f)
     return kept
 
 
-def faces_from_tris(tri, right, up, fwd, s, cx, cy, half, cond_edges=None):
+def faces_from_tris(tri, proj, cond_edges=None):
     """Camera-facing triangle faces as px-space polygons with outward view-space
     normals. Winding is trusted (repaired upstream): a triangle whose outward
     normal points away from the camera (nv[2] >= 0) is a back-face and is
@@ -807,11 +537,11 @@ def faces_from_tris(tri, right, up, fwd, s, cx, cy, half, cond_edges=None):
         if ln < 1e-9:
             continue
         n = n / ln
-        nv = np.array([n @ right, n @ up, n @ fwd])
+        nv = np.array([n @ proj.right, n @ proj.up, n @ proj.fwd])
         back = nv[2] > -1e-6            # back-facing or edge-on
         if back and not have_seams:
             continue
-        px, py, z = _project_px(v, right, up, fwd, s, cx, cy, half)
+        px, py, z = proj.to_px(v)
         poly = np.stack([px, py], axis=1)
         f = {"poly": poly, "normal": nv, "depth": float(np.mean(z)),
              "zs": z, "kind": "tri", "_verts": v}

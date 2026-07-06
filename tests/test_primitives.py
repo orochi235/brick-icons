@@ -105,27 +105,25 @@ def test_disc_depth():
     assert np.isclose(d[0], 5.0) and np.isinf(d[1])
 
 
-def _proj_xz(Pw):   # A=x, B=z, Z=y (look along +y)
-    Pw = np.atleast_2d(Pw)
-    return Pw[:, 0], Pw[:, 2], Pw[:, 1]
+def _proj_xz():
+    # A=x, B=z, Z=y (look along +y); identity pixel fit
+    return P.Projection(np.array([1.0, 0.0, 0.0]), np.array([0.0, 0.0, -1.0]),
+                        np.array([0.0, 1.0, 0.0]), 1.0, 0.0, 0.0, 0.0)
 
 
 def test_drawn_edge_is_full_arc():
-    rec = {"kind": "edge", "sector": 360.0, "inner": 0, "R": np.eye(3), "t": np.zeros(3)}
-    ops = P.drawn_curves(rec, _proj_xz, s=1.0, cx=0.0, cy=0.0, half=0.0,
-                         fwd=np.array([0, 1.0, 0]))
+    prim = P.Edge(R=np.eye(3), t=np.zeros(3), sector=360.0)
+    ops = [op for op, *_ in prim.drawn_with_depth(_proj_xz())]
     assert len(ops) == 1 and ops[0][0] == "arc"
     assert ops[0][-1] == "edge"
 
 
 def test_drawn_cylinder_has_two_silhouette_lines():
     # cylinder axis +y; view along +z so the side silhouette is well-defined
-    def proj_z(Pw):
-        Pw = np.atleast_2d(Pw)
-        return Pw[:, 0], Pw[:, 1], Pw[:, 2]
-    rec = {"kind": "cyli", "sector": 360.0, "inner": 0, "R": np.eye(3), "t": np.zeros(3)}
-    ops = P.drawn_curves(rec, proj_z, s=1.0, cx=0.0, cy=0.0, half=0.0,
-                         fwd=np.array([0, 0, 1.0]))
+    proj_z = P.Projection(np.array([1.0, 0.0, 0.0]), np.array([0.0, -1.0, 0.0]),
+                          np.array([0.0, 0.0, 1.0]), 1.0, 0.0, 0.0, 0.0)
+    prim = P.Cylinder(R=np.eye(3), t=np.zeros(3), sector=360.0)
+    ops = [op for op, *_ in prim.drawn_with_depth(proj_z)]
     sil_lines = [o for o in ops if o[0] == "line" and o[-1] == "sil"]
     assert len(sil_lines) == 2
 
@@ -207,16 +205,13 @@ def test_cone_occluder_scaled_transform():
 
 def _stub_proj():
     # camera looks along -Z: A=x, B=y, depth=-z; identity pixel fit
-    def to_AB(Pw):
-        Pw = np.atleast_2d(np.asarray(Pw, float))
-        return Pw[:, 0], Pw[:, 1], -Pw[:, 2]
-    return to_AB, np.array([0.0, 0.0, -1.0])
+    return P.Projection(np.array([1.0, 0.0, 0.0]), np.array([0.0, -1.0, 0.0]),
+                        np.array([0.0, 0.0, -1.0]), 1.0, 0.0, 0.0, 0.0)
 
 
 def test_cone_drawn_ops_full_sector():
-    to_AB, fwd = _stub_proj()
-    rec = {"kind": "con", "sector": 360.0, "inner": 1, "R": np.eye(3), "t": np.zeros(3)}
-    pairs = P.drawn_with_depth(rec, to_AB, 1.0, 0.0, 0.0, 0.0, fwd)
+    prim = P.Cone(R=np.eye(3), t=np.zeros(3), sector=360.0, top=1.0)
+    pairs = prim.drawn_with_depth(_stub_proj())
     ops = [op for op, *_ in pairs]
     arcs = [o for o in ops if o[0] == "arc"]
     sils = [o for o in ops if o[0] == "line" and o[-1] == "sil"]
@@ -227,9 +222,8 @@ def test_cone_drawn_ops_full_sector():
 
 
 def test_cone_apex_no_top_arc():
-    to_AB, fwd = _stub_proj()
-    rec = {"kind": "con", "sector": 360.0, "inner": 0, "R": np.eye(3), "t": np.zeros(3)}
-    ops = [op for op, *_ in P.drawn_with_depth(rec, to_AB, 1.0, 0.0, 0.0, 0.0, fwd)]
+    prim = P.Cone(R=np.eye(3), t=np.zeros(3), sector=360.0, top=0.0)
+    ops = [op for op, *_ in prim.drawn_with_depth(_stub_proj())]
     assert len([o for o in ops if o[0] == "arc"]) == 1     # base rim only
     sils = [o for o in ops if o[0] == "line"]
     assert len(sils) == 2
@@ -237,18 +231,18 @@ def test_cone_apex_no_top_arc():
     assert all(abs(o[3]) < 1e-9 and abs(o[4] - 1.0) < 1e-9 for o in sils)
 
 
-def _smooth_shared_rims(recs):
+def _smooth_shared_rims(prims):
     """Mirror of hlr's suppression rule: a rim is skipped iff a FULL-sector
     wall of equal slope continues on the opposite side of its plane."""
     from collections import defaultdict
     full_smooth = defaultdict(set)
-    for r in recs:
-        if r["sector"] >= 360.0 - 1e-9:
-            for key, side, slope in P.wall_rims(r):
+    for p in prims:
+        if p.is_full:
+            for key, side, slope in p.wall_rims():
                 full_smooth[key].add((side, slope))
     skip = set()
-    for r in recs:
-        for key, side, slope in P.wall_rims(r):
+    for p in prims:
+        for key, side, slope in p.wall_rims():
             if (-side, slope) in full_smooth[key]:
                 skip.add((key, side))
     return skip
@@ -257,16 +251,15 @@ def _smooth_shared_rims(recs):
 def test_shared_rim_arcs_suppressed_for_stacked_cones():
     # con1 stacked on con0: the joint circle (radius 1 at y=1) is a smooth
     # continuation, NOT an edge — 4589 showed a spurious black ring there.
-    to_AB, fwd = _stub_proj()
-    lower = {"kind": "con", "sector": 360.0, "inner": 1, "R": np.eye(3), "t": np.zeros(3)}
-    upper = {"kind": "con", "sector": 360.0, "inner": 0, "R": np.eye(3),
-             "t": np.array([0.0, 1.0, 0.0])}
+    lower = P.Cone(R=np.eye(3), t=np.zeros(3), sector=360.0, top=1.0)
+    upper = P.Cone(R=np.eye(3), t=np.array([0.0, 1.0, 0.0]), sector=360.0,
+                   top=0.0)
     shared = _smooth_shared_rims([lower, upper])
     assert len(shared) == 2                     # both sides of the one joint
-    ops_lower = [op for op, *_ in P.drawn_with_depth(
-        lower, to_AB, 1.0, 0.0, 0.0, 0.0, fwd, skip_rims=shared)]
-    ops_upper = [op for op, *_ in P.drawn_with_depth(
-        upper, to_AB, 1.0, 0.0, 0.0, 0.0, fwd, skip_rims=shared)]
+    ops_lower = [op for op, *_ in
+                 lower.drawn_with_depth(_stub_proj(), skip_rims=shared)]
+    ops_upper = [op for op, *_ in
+                 upper.drawn_with_depth(_stub_proj(), skip_rims=shared)]
     # lower keeps only its base arc; upper (apex cone) loses its base arc
     assert len([o for o in ops_lower if o[0] == "arc"]) == 1
     assert len([o for o in ops_upper if o[0] == "arc"]) == 0
@@ -278,10 +271,10 @@ def test_same_side_shared_rims_kept():
     # 3941's base lip: quadrant walls END on the same circle as the body wall
     # (same side of the plane) — that rim is real silhouette closure, not a
     # smooth joint; suppressing it opened the historic base gap again.
-    body = {"kind": "cyli", "sector": 360.0, "inner": 0,
-            "R": np.diag([20.0, -24.0, 20.0]), "t": np.array([0.0, 24.0, 0.0])}
-    lip = {"kind": "cyli", "sector": 90.0, "inner": 0,
-           "R": np.diag([20.0, -4.0, 20.0]), "t": np.array([0.0, 24.0, 0.0])}
+    body = P.Cylinder(R=np.diag([20.0, -24.0, 20.0]),
+                      t=np.array([0.0, 24.0, 0.0]), sector=360.0)
+    lip = P.Cylinder(R=np.diag([20.0, -4.0, 20.0]),
+                     t=np.array([0.0, 24.0, 0.0]), sector=90.0)
     assert _smooth_shared_rims([body, lip]) == set()
 
 
@@ -290,41 +283,37 @@ def test_partial_sector_opposite_wall_keeps_full_rim():
     # (y20..24) with cutout gaps. The lip sectors' rims vanish (the full body
     # continues them) but the body's own rim must stay — it is a real edge
     # across the cutouts, and the silhouette tangent lands on it.
-    body = {"kind": "cyli", "sector": 360.0, "inner": 0,
-            "R": np.diag([20.0, 20.0, 20.0]), "t": np.zeros(3)}
-    lip = {"kind": "cyli", "sector": 45.0, "inner": 0,
-           "R": np.diag([20.0, 4.0, 20.0]), "t": np.array([0.0, 20.0, 0.0])}
+    body = P.Cylinder(R=np.diag([20.0, 20.0, 20.0]), t=np.zeros(3),
+                      sector=360.0)
+    lip = P.Cylinder(R=np.diag([20.0, 4.0, 20.0]),
+                     t=np.array([0.0, 20.0, 0.0]), sector=45.0)
     skip = _smooth_shared_rims([body, lip])
-    body_rims = P.wall_rims(body)
-    lip_rims = P.wall_rims(lip)
+    body_rims = body.wall_rims()
+    lip_rims = lip.wall_rims()
     assert (lip_rims[0][0], lip_rims[0][1]) in skip        # lip base: joint
     assert (body_rims[1][0], body_rims[1][1]) not in skip  # body top: real edge
 
 
 def test_cone_on_cylinder_crease_rim_kept():
     # different slopes meeting at a shared circle = a real crease: keep arcs
-    cyl = {"kind": "cyli", "sector": 360.0, "inner": 0,
-           "R": np.eye(3), "t": np.zeros(3)}
-    cone = {"kind": "con", "sector": 360.0, "inner": 0,
-            "R": np.eye(3), "t": np.array([0.0, 1.0, 0.0])}
+    cyl = P.Cylinder(R=np.eye(3), t=np.zeros(3), sector=360.0)
+    cone = P.Cone(R=np.eye(3), t=np.array([0.0, 1.0, 0.0]), sector=360.0,
+                  top=0.0)
     assert _smooth_shared_rims([cyl, cone]) == set()
 
 
 def test_unshared_rims_still_drawn():
-    to_AB, fwd = _stub_proj()
-    rec = {"kind": "con", "sector": 360.0, "inner": 1, "R": np.eye(3), "t": np.zeros(3)}
-    ops = [op for op, *_ in P.drawn_with_depth(
-        rec, to_AB, 1.0, 0.0, 0.0, 0.0, fwd, skip_rims=set())]
+    prim = P.Cone(R=np.eye(3), t=np.zeros(3), sector=360.0, top=1.0)
+    ops = [op for op, *_ in prim.drawn_with_depth(_stub_proj(), skip_rims=set())]
     assert len([o for o in ops if o[0] == "arc"]) == 2
 
 
 def test_cone_axis_on_view_no_generators():
-    def to_AB(Pw):
-        Pw = np.atleast_2d(np.asarray(Pw, float))
-        return Pw[:, 0], Pw[:, 2], -Pw[:, 1]
-    fwd = np.array([0.0, -1.0, 0.0])           # looking down the cone axis
-    rec = {"kind": "con", "sector": 360.0, "inner": 1, "R": np.eye(3), "t": np.zeros(3)}
-    ops = [op for op, *_ in P.drawn_with_depth(rec, to_AB, 1.0, 0.0, 0.0, 0.0, fwd)]
+    # A=x, B=z, Z=-y: looking down the cone axis
+    proj = P.Projection(np.array([1.0, 0.0, 0.0]), np.array([0.0, 0.0, -1.0]),
+                        np.array([0.0, -1.0, 0.0]), 1.0, 0.0, 0.0, 0.0)
+    prim = P.Cone(R=np.eye(3), t=np.zeros(3), sector=360.0, top=1.0)
+    ops = [op for op, *_ in prim.drawn_with_depth(proj)]
     assert not [o for o in ops if o[0] == "line"]
 
 
@@ -427,104 +416,10 @@ def test_primitive_identity_semantics():
     assert a != b and len({a, b}) == 2            # eq/hash by identity
 
 
-def test_ring_pts_matches_shade_radius_pts():
-    from brick_icons import shade
-    R = np.diag([2.0, 3.0, 2.0]); t = np.array([1.0, 0.0, -1.0])
-    th = np.linspace(0.0, 2 * np.pi, 17)
-    cases = [
-        (P.Cylinder(R=R, t=t, sector=360.0),
-         {"kind": "cyli", "sector": 360.0, "inner": 0, "R": R, "t": t}),
-        (P.Ring(R=R, t=t, sector=360.0, inner=2),
-         {"kind": "ring", "sector": 360.0, "inner": 2, "R": R, "t": t}),
-        (P.Cone(R=R, t=t, sector=360.0, top=3.0),
-         {"kind": "con", "sector": 360.0, "inner": 3, "R": R, "t": t}),
-    ]
-    for prim, rec in cases:
-        for level in (0.0, 0.5, 1.0):
-            assert np.allclose(prim.ring_pts(th, level),
-                               shade._radius_pts(rec, th, level))
-        assert np.allclose(prim.ring_pts(th, 0.0, radius=0.25),
-                           shade._radius_pts(rec, th, 0.0, radius=0.25))
-
-
-def test_wall_rims_method_matches_module_function():
-    R = np.diag([20.0, -24.0, 20.0]); t = np.array([0.0, 24.0, 0.0])
-    cases = [
-        (P.Cylinder(R=R, t=t, sector=360.0),
-         {"kind": "cyli", "sector": 360.0, "inner": 0, "R": R, "t": t}),
-        (P.Cone(R=np.eye(3), t=np.zeros(3), sector=360.0, top=1.0),
-         {"kind": "con", "sector": 360.0, "inner": 1, "R": np.eye(3), "t": np.zeros(3)}),
-        (P.Cone(R=np.eye(3), t=np.zeros(3), sector=360.0, top=0.0),
-         {"kind": "con", "sector": 360.0, "inner": 0, "R": np.eye(3), "t": np.zeros(3)}),
-        (P.Ring(R=np.eye(3), t=np.zeros(3), sector=360.0, inner=2),
-         {"kind": "ring", "sector": 360.0, "inner": 2, "R": np.eye(3), "t": np.zeros(3)}),
-    ]
-    for prim, rec in cases:
-        assert prim.wall_rims() == P.wall_rims(rec)
-
-
-def test_fit_pts_matches_hlr_analytic_circle_pts():
-    from brick_icons import hlr
-    R = np.diag([10.0, 10.0, 10.0]); t = np.zeros(3)
-    cases = [
-        (P.Edge(R=R, t=t, sector=90.0),
-         {"kind": "edge", "sector": 90.0, "inner": 0, "R": R, "t": t}),
-        (P.Cylinder(R=R, t=t, sector=360.0),
-         {"kind": "cyli", "sector": 360.0, "inner": 0, "R": R, "t": t}),
-        (P.Cone(R=R, t=t, sector=360.0, top=2.0),
-         {"kind": "con", "sector": 360.0, "inner": 2, "R": R, "t": t}),
-        (P.Ring(R=R, t=t, sector=360.0, inner=3),
-         {"kind": "ring", "sector": 360.0, "inner": 3, "R": R, "t": t}),
-    ]
-    for prim, rec in cases:
-        assert np.allclose(prim.fit_pts(), hlr._analytic_circle_pts(rec))
-
-
 def _parity_proj():
     # A=x, B=y, depth=-z  (to_AB: right=+x; B=-(P@up) => up=(0,-1,0); Z: fwd=(0,0,-1))
     return P.Projection(np.array([1.0, 0.0, 0.0]), np.array([0.0, -1.0, 0.0]),
                         np.array([0.0, 0.0, -1.0]), s=1.0, cx=0.0, cy=0.0, half=0.0)
-
-
-def _op_parity(prim, rec, skip_rims=None):
-    proj = _parity_proj()
-
-    def to_AB(Pw):
-        return proj.to_AB(np.atleast_2d(np.asarray(Pw, float)))
-
-    old = P.drawn_with_depth(rec, to_AB, 1.0, 0.0, 0.0, 0.0, proj.fwd,
-                             skip_rims=skip_rims)
-    new = prim.drawn_with_depth(proj, skip_rims=skip_rims)
-    assert len(old) == len(new)
-    for (op_o, fn_o), (op_n, fn_n) in zip(old, new):
-        assert op_o[0] == op_n[0] and op_o[-1] == op_n[-1]
-        assert np.allclose(op_o[1:-1], op_n[1:-1])
-        params = np.linspace(0.0, 1.0, 5) if op_o[0] == "line" \
-            else np.linspace(op_o[7], op_o[8], 5)
-        assert np.allclose(fn_o(params), fn_n(params))
-
-
-def test_drawn_parity_all_kinds():
-    R, t = np.eye(3), np.zeros(3)
-    _op_parity(P.Edge(R=R, t=t, sector=360.0),
-               {"kind": "edge", "sector": 360.0, "inner": 0, "R": R, "t": t})
-    _op_parity(P.Disc(R=R, t=t, sector=270.0),
-               {"kind": "disc", "sector": 270.0, "inner": 0, "R": R, "t": t})
-    _op_parity(P.Ring(R=R, t=t, sector=360.0, inner=2),
-               {"kind": "ring", "sector": 360.0, "inner": 2, "R": R, "t": t})
-    _op_parity(P.Cylinder(R=R, t=t, sector=360.0),
-               {"kind": "cyli", "sector": 360.0, "inner": 0, "R": R, "t": t})
-    _op_parity(P.Cylinder(R=R, t=t, sector=90.0),
-               {"kind": "cyli", "sector": 90.0, "inner": 0, "R": R, "t": t})
-    _op_parity(P.Cone(R=R, t=t, sector=360.0, top=1.0),
-               {"kind": "con", "sector": 360.0, "inner": 1, "R": R, "t": t})
-    _op_parity(P.Cone(R=R, t=t, sector=360.0, top=0.0),   # apex cone
-               {"kind": "con", "sector": 360.0, "inner": 0, "R": R, "t": t})
-    _op_parity(P.Cone(R=R, t=t, sector=90.0, top=1.0),    # partial sector
-               {"kind": "con", "sector": 90.0, "inner": 1, "R": R, "t": t})
-    Rz = np.column_stack([[1.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]])
-    _op_parity(P.Cone(R=Rz, t=t, sector=360.0, top=1.0),  # axis-on: no generators
-               {"kind": "con", "sector": 360.0, "inner": 1, "R": Rz, "t": t})
 
 
 def test_axis_on_cone_emits_no_generators():
@@ -534,70 +429,20 @@ def test_axis_on_cone_emits_no_generators():
     assert not [o for o in ops if o[0] == "line"]
 
 
-def test_drawn_parity_with_skip_rims():
-    R, t = np.eye(3), np.zeros(3)
-    rec = {"kind": "con", "sector": 360.0, "inner": 1, "R": R, "t": t}
-    prim = P.Cone(R=R, t=t, sector=360.0, top=1.0)
-    rims = P.wall_rims(rec)
+def test_skip_rims_drop_matching_arcs():
+    prim = P.Cone(R=np.eye(3), t=np.zeros(3), sector=360.0, top=1.0)
+    rims = prim.wall_rims()
     all_skips = {(k, s) for k, s, _ in rims}
     base_only = {(rims[0][0], rims[0][1])}
     top_only = {(rims[1][0], rims[1][1])}
-    for skips in (all_skips, base_only, top_only):
-        _op_parity(prim, rec, skip_rims=skips)
-    # asymmetric skips drop exactly one arc, and the right one
-    n_arcs = lambda sk: len([op for op, *_ in prim.drawn_with_depth(
+    n_arcs = lambda p, sk: len([op for op, *_ in p.drawn_with_depth(
         _parity_proj(), skip_rims=sk) if op[0] == "arc"])
-    assert n_arcs(all_skips) == 0 and n_arcs(base_only) == 1 and n_arcs(top_only) == 1
-    crec = {"kind": "cyli", "sector": 360.0, "inner": 0, "R": R, "t": t}
-    cyl = P.Cylinder(R=R, t=t, sector=360.0)
-    crims = P.wall_rims(crec)
-    for skips in ({(k, s) for k, s, _ in crims}, {(crims[0][0], crims[0][1])}):
-        _op_parity(cyl, crec, skip_rims=skips)
-
-
-def _face_parity(prim, rec):
-    from brick_icons import shade, hlr
-    right, up, fwd = hlr.view_basis(30.0, 45.0)
-    proj = P.Projection(right, up, fwd, s=2.0, cx=0.5, cy=-0.5, half=100.0)
-    old = shade.faces_from_analytic([rec], right, up, fwd,
-                                    proj.s, proj.cx, proj.cy, proj.half)
-    new = prim.faces(proj)
-    assert len(old) == len(new)
-    for fo, fn in zip(old, new):
-        assert fo["kind"] == fn["kind"]
-        assert fn["prim"] is prim
-        assert np.allclose(fo["poly"], fn["poly"])
-        assert np.allclose(fo["zs"], fn["zs"])
-        assert np.isclose(fo["depth"], fn["depth"])
-        for k in ("normal", "holes"):
-            assert (k in fo) == (k in fn)
-            if k in fo:
-                assert np.allclose(np.asarray(fo[k]), np.asarray(fn[k]))
-        assert fo.get("interior") == fn.get("interior")
-        if "grad_axis" in fo:
-            assert np.allclose(fo["grad_axis"], fn["grad_axis"])
-            assert np.isclose(fo["span_deg"], fn["span_deg"])
-            for (oo, ono), (no, nno) in zip(fo["grad_samples"], fn["grad_samples"]):
-                assert np.isclose(oo, no) and np.allclose(ono, nno)
-
-
-def test_faces_parity_all_kinds():
-    R, t = np.eye(3), np.zeros(3)
-    _face_parity(P.Edge(R=R, t=t, sector=360.0),
-                 {"kind": "edge", "sector": 360.0, "inner": 0, "R": R, "t": t})
-    _face_parity(P.Disc(R=R, t=t, sector=360.0),
-                 {"kind": "disc", "sector": 360.0, "inner": 0, "R": R, "t": t})
-    _face_parity(P.Ring(R=R, t=t, sector=360.0, inner=2),     # real bore hole
-                 {"kind": "ring", "sector": 360.0, "inner": 2, "R": R, "t": t})
-    _face_parity(P.Ring(R=R, t=t, sector=90.0, inner=2),      # partial: concat poly
-                 {"kind": "ring", "sector": 90.0, "inner": 2, "R": R, "t": t})
-    _face_parity(P.Cylinder(R=R, t=t, sector=360.0),
-                 {"kind": "cyli", "sector": 360.0, "inner": 0, "R": R, "t": t})
-    _face_parity(P.Cylinder(R=R, t=t, sector=270.0),          # wrapped spans
-                 {"kind": "cyli", "sector": 270.0, "inner": 0, "R": R, "t": t})
-    _face_parity(P.Cone(R=np.diag([10.0, 10.0, 10.0]), t=t, sector=360.0, top=2.0),
-                 {"kind": "con", "sector": 360.0, "inner": 2,
-                  "R": np.diag([10.0, 10.0, 10.0]), "t": t})
+    assert n_arcs(prim, all_skips) == 0 and n_arcs(prim, base_only) == 1 \
+        and n_arcs(prim, top_only) == 1
+    cyl = P.Cylinder(R=np.eye(3), t=np.zeros(3), sector=360.0)
+    crims = cyl.wall_rims()
+    assert n_arcs(cyl, {(k, s) for k, s, _ in crims}) == 0
+    assert n_arcs(cyl, {(crims[0][0], crims[0][1])}) == 1
 
 
 def test_faces_axis_on_cylinder_no_wall():

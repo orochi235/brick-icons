@@ -2,6 +2,13 @@ import math
 
 import numpy as np
 from brick_icons import shade, hlr
+from brick_icons import primitives as P
+
+
+def _ident_proj():
+    # A=x, B=y, Z=z with identity pixel fit: ray_origin(xs, ys) = (xs, ys, 0)
+    return P.Projection(np.array([1.0, 0.0, 0.0]), np.array([0.0, -1.0, 0.0]),
+                        np.array([0.0, 0.0, 1.0]), 1.0, 0.0, 0.0, 0.0)
 
 
 def test_cull_self_depth_keeps_own_curved_face():
@@ -18,9 +25,8 @@ def test_cull_self_depth_keeps_own_curved_face():
     own = FakeOcc(1.0)                   # wall's near surface at depth 1.0
     face = {"poly": np.array([[0, 0], [10, 0], [10, 10], [0, 10]], float),
             "depth": 5.0, "kind": "cyli"}        # band MEAN is 5.0 (farther)
-    def ray_origin(xs, ys): return np.zeros((len(xs), 3))
     kept = shade.cull_occluded_faces(
-        [face], occluders=[own], ray_origin=ray_origin, fwd=np.array([0, 0, 1.0]),
+        [face], occluders=[own], proj=_ident_proj(),
         eps=1e-3, kinds=("tri", "disc", "ring", "cyli"),
         own_occ={id(face): own})
     assert kept == [face]               # not culled by its own near surface
@@ -38,10 +44,8 @@ def test_cull_self_depth_removes_occluded_interior_face():
     wall = FakeOcc(1.0)                  # outer wall nearer, at 1.0
     face = {"poly": np.array([[0, 0], [10, 0], [10, 10], [0, 10]], float),
             "depth": 5.0, "kind": "cyli"}
-    def ray_origin(xs, ys): return np.zeros((len(xs), 3))
     kept = shade.cull_occluded_faces(
-        [face], occluders=[own, wall], ray_origin=ray_origin,
-        fwd=np.array([0, 0, 1.0]), eps=1e-3,
+        [face], occluders=[own, wall], proj=_ident_proj(), eps=1e-3,
         kinds=("tri", "disc", "ring", "cyli"), own_occ={id(face): own})
     assert kept == []                   # outer wall occludes it -> culled
 
@@ -54,9 +58,8 @@ def test_cull_passthrough_for_untested_kinds():
         def depth(self, O, F): return np.array([0.0], float)   # always nearest
     face = {"poly": np.array([[0, 0], [1, 0], [0, 1]], float),
             "depth": 9.0, "kind": "tri"}
-    def ray_origin(xs, ys): return np.zeros((len(xs), 3))
     kept = shade.cull_occluded_faces([face], occluders=[FakeOcc()],
-                                     ray_origin=ray_origin, fwd=np.array([0, 0, 1.0]),
+                                     proj=_ident_proj(),
                                      eps=1e-3, kinds=("disc",))   # tri not listed
     assert kept == [face]
 
@@ -65,10 +68,10 @@ def test_faces_from_analytic_cylinder_gradient_and_disc():
     from brick_icons import shade, hlr
     right, up, fwd = hlr.view_basis(30.0, 45.0)
     R = np.eye(3); t = np.zeros(3)
-    cyl = {"kind": "cyli", "sector": 360.0, "inner": 0, "R": R, "t": t}
-    disc = {"kind": "disc", "sector": 360.0, "inner": 0, "R": R, "t": t}
-    faces = shade.faces_from_analytic([cyl, disc], right, up, fwd,
-                                      s=2.0, cx=0.0, cy=0.0, half=50.0)
+    cyl = P.Cylinder(R=R, t=t, sector=360.0)
+    disc = P.Disc(R=R, t=t, sector=360.0)
+    faces = shade.faces_from_analytic(
+        [cyl, disc], P.Projection(right, up, fwd, 2.0, 0.0, 0.0, 50.0))
     kinds = [f["kind"] for f in faces]
     assert kinds.count("disc") == 1
     # one smooth near wall (not bands) + one interior far wall
@@ -89,9 +92,9 @@ def test_faces_from_analytic_ring_is_annulus_not_solid_disc():
     right, up, fwd = hlr.view_basis(30.0, 45.0)
     # ring axis -> camera; U=right, V=up so it projects to a true (annular) circle
     R = np.stack([right, -fwd, up], axis=1)
-    ring = {"kind": "ring", "sector": 360.0, "inner": 2, "R": R, "t": np.zeros(3)}
-    faces = shade.faces_from_analytic([ring], right, up, fwd,
-                                      s=1.0, cx=0.0, cy=0.0, half=0.0)
+    ring = P.Ring(R=R, t=np.zeros(3), sector=360.0, inner=2)
+    faces = shade.faces_from_analytic(
+        [ring], P.Projection(right, up, fwd, 1.0, 0.0, 0.0, 0.0))
     f = next(f for f in faces if f["kind"] == "ring")
     # full sector: outer circle polygon + the bore as a REAL hole ring
     poly, holes = f["poly"], f.get("holes", [])
@@ -106,9 +109,9 @@ def test_faces_from_analytic_ring_is_annulus_not_solid_disc():
 def test_ring_partial_sector_keeps_concat_polygon():
     right, up, fwd = hlr.view_basis(30.0, 45.0)
     R = np.stack([right, -fwd, up], axis=1)
-    ring = {"kind": "ring", "sector": 90.0, "inner": 2, "R": R, "t": np.zeros(3)}
-    f = shade.faces_from_analytic([ring], right, up, fwd,
-                                  s=1.0, cx=0.0, cy=0.0, half=0.0)[0]
+    ring = P.Ring(R=R, t=np.zeros(3), sector=90.0, inner=2)
+    f = shade.faces_from_analytic(
+        [ring], P.Projection(right, up, fwd, 1.0, 0.0, 0.0, 0.0))[0]
     assert not f.get("holes")           # annular sector: simple valid polygon
 
 
@@ -127,16 +130,15 @@ def test_apply_affine_remaps_holes():
     assert np.allclose(out["holes"][0][0], (3.0, 3.0))
 
 
-def _cone_rec(N=1, sector=360.0):
-    return {"kind": "con", "sector": sector, "inner": N,
-            "R": np.eye(3), "t": np.zeros(3)}
+def _cone_prim(N=1, sector=360.0):
+    return P.Cone(R=np.eye(3), t=np.zeros(3), sector=sector, top=float(N))
 
 
 def test_cone_wall_faces_outer_and_interior():
     right, up = np.array([1.0, 0, 0]), np.array([0.0, 1.0, 0])
     fwd = np.array([0.0, 0.0, -1.0])
-    faces = shade.faces_from_analytic([_cone_rec()], right, up, fwd,
-                                      1.0, 0.0, 0.0, 0.0)
+    faces = shade.faces_from_analytic(
+        [_cone_prim()], P.Projection(right, up, fwd, 1.0, 0.0, 0.0, 0.0))
     outer = [f for f in faces if not f.get("interior")]
     inner = [f for f in faces if f.get("interior")]
     assert len(outer) == 1 and len(inner) == 1
@@ -149,8 +151,8 @@ def test_cone_wall_faces_outer_and_interior():
 def test_cone_wall_radii_taper():
     right, up = np.array([1.0, 0, 0]), np.array([0.0, 1.0, 0])
     fwd = np.array([0.0, 0.0, -1.0])
-    f = [x for x in shade.faces_from_analytic([_cone_rec(N=1)], right, up, fwd,
-                                              1.0, 0.0, 0.0, 0.0)
+    f = [x for x in shade.faces_from_analytic(
+            [_cone_prim(N=1)], P.Projection(right, up, fwd, 1.0, 0.0, 0.0, 0.0))
          if not x.get("interior")][0]
     xs = np.abs(f["poly"][:, 0])
     assert abs(xs.max() - 2.0) < 1e-6           # base radius N+1
@@ -161,56 +163,9 @@ def test_cone_axis_on_view_full_annulus_wall():
     # is visible as an annulus-like band (unlike a cylinder, which shows none).
     right, up = np.array([1.0, 0, 0]), np.array([0.0, 0.0, 1.0])
     fwd = np.array([0.0, -1.0, 0.0])
-    faces = shade.faces_from_analytic([_cone_rec()], right, up, fwd,
-                                      1.0, 0.0, 0.0, 0.0)
+    faces = shade.faces_from_analytic(
+        [_cone_prim()], P.Projection(right, up, fwd, 1.0, 0.0, 0.0, 0.0))
     assert len(faces) == 1 and not faces[0].get("interior")
-
-
-def test_merge_smooth_wall_recs_stacked_cones_one_rec():
-    """Two full-sector frustums of the SAME infinite cone sharing a rim
-    (4589's con3-on-con4 body) merge into ONE synthetic con rec spanning
-    base to top, so the wall gets a single seamless gradient."""
-    lo = {"kind": "con", "sector": 360.0, "inner": 2,
-          "R": np.eye(3), "t": np.zeros(3)}          # r 3 -> 2 over y 0..1
-    hi = {"kind": "con", "sector": 360.0, "inner": 1,
-          "R": np.eye(3), "t": np.array([0.0, 1.0, 0.0])}  # r 2 -> 1, y 1..2
-    out = shade.merge_smooth_wall_recs([lo, hi])
-    assert len(out) == 1
-    m = out[0]
-    assert m["kind"] == "con" and m["sector"] == 360.0
-    R = np.asarray(m["R"], float)
-    ru = np.linalg.norm(R[:, 0])
-    assert abs((m["inner"] + 1) * ru - 3.0) < 1e-6   # base radius (wide end)
-    assert abs(m["inner"] * ru - 1.0) < 1e-6         # top radius (narrow end)
-    np.testing.assert_allclose(m["t"], [0.0, 0.0, 0.0], atol=1e-6)
-    np.testing.assert_allclose(R[:, 1], [0.0, 2.0, 0.0], atol=1e-6)
-
-
-def test_merge_smooth_wall_recs_keeps_creases_and_partial_sectors():
-    lo = {"kind": "con", "sector": 360.0, "inner": 2,
-          "R": np.eye(3), "t": np.zeros(3)}
-    # same shared rim (r=2 at y=1) but HALF the slope: a crease, not smooth
-    crease = {"kind": "con", "sector": 360.0, "inner": 1,
-              "R": np.diag([1.0, 2.0, 1.0]), "t": np.array([0.0, 1.0, 0.0])}
-    assert len(shade.merge_smooth_wall_recs([lo, crease])) == 2
-    # equal slope but partial sector: rim stays an edge, walls stay separate
-    part = {"kind": "con", "sector": 90.0, "inner": 1,
-            "R": np.eye(3), "t": np.array([0.0, 1.0, 0.0])}
-    assert len(shade.merge_smooth_wall_recs([lo, part])) == 2
-
-
-def test_merge_smooth_wall_recs_stacked_cylinders():
-    lo = {"kind": "cyli", "sector": 360.0, "inner": 0,
-          "R": np.eye(3), "t": np.zeros(3)}
-    hi = {"kind": "cyli", "sector": 360.0, "inner": 0,
-          "R": np.eye(3), "t": np.array([0.0, 1.0, 0.0])}
-    out = shade.merge_smooth_wall_recs([lo, hi])
-    assert len(out) == 1
-    m = out[0]
-    assert m["kind"] == "cyli"
-    R = np.asarray(m["R"], float)
-    assert abs(np.linalg.norm(R[:, 0]) - 1.0) < 1e-6
-    assert abs(np.linalg.norm(R[:, 1]) - 2.0) < 1e-6  # spans both sections
 
 
 def test_stacked_cone_walls_merge_into_single_gradient_face():
@@ -219,12 +174,11 @@ def test_stacked_cone_walls_merge_into_single_gradient_face():
     per LDraw primitive with a visible tone step at the joint."""
     right, up = np.array([1.0, 0, 0]), np.array([0.0, 1.0, 0])
     fwd = np.array([0.0, 0.0, -1.0])
-    lo = {"kind": "con", "sector": 360.0, "inner": 2,
-          "R": np.eye(3), "t": np.zeros(3)}
-    hi = {"kind": "con", "sector": 360.0, "inner": 1,
-          "R": np.eye(3), "t": np.array([0.0, 1.0, 0.0])}
-    faces = shade.faces_from_analytic([lo, hi], right, up, fwd,
-                                      1.0, 0.0, 0.0, 0.0)
+    lo = P.Cone(R=np.eye(3), t=np.zeros(3), sector=360.0, top=2.0)
+    hi = P.Cone(R=np.eye(3), t=np.array([0.0, 1.0, 0.0]), sector=360.0,
+                top=1.0)
+    faces = shade.faces_from_analytic(
+        [lo, hi], P.Projection(right, up, fwd, 1.0, 0.0, 0.0, 0.0))
     outer = [f for f in faces if not f.get("interior")]
     inner = [f for f in faces if f.get("interior")]
     assert len(outer) == 1 and len(inner) == 1
@@ -239,11 +193,11 @@ def test_stacked_cone_walls_merge_into_single_gradient_face():
 
 def test_cylinder_wall_faces_unchanged():
     # regression: generalizing helpers must not perturb cylinder output
-    rec = {"kind": "cyli", "sector": 360.0, "inner": 0,
-           "R": np.eye(3), "t": np.zeros(3)}
+    prim = P.Cylinder(R=np.eye(3), t=np.zeros(3), sector=360.0)
     right, up = np.array([1.0, 0, 0]), np.array([0.0, 1.0, 0])
     fwd = np.array([0.0, 0.0, -1.0])
-    faces = shade.faces_from_analytic([rec], right, up, fwd, 1.0, 0.0, 0.0, 0.0)
+    faces = shade.faces_from_analytic(
+        [prim], P.Projection(right, up, fwd, 1.0, 0.0, 0.0, 0.0))
     assert {f.get("interior", False) for f in faces} == {False, True}
     for f in faces:
         assert abs(f["span_deg"] - 180.0) < 1e-6
@@ -255,7 +209,8 @@ def test_faces_from_tris_culls_back_and_projects():
     # a single CCW triangle in the z=0 plane (LDraw world)
     tri = np.array([[[0, 0, 0], [10, 0, 0], [0, 10, 0]]], float)
     right, up, fwd = hlr.view_basis(30.0, 45.0)
-    faces = shade.faces_from_tris(tri, right, up, fwd, s=2.0, cx=0.0, cy=0.0, half=50.0)
+    faces = shade.faces_from_tris(tri, P.Projection(right, up, fwd,
+                                                    2.0, 0.0, 0.0, 50.0))
     assert len(faces) in (0, 1)
     for f in faces:
         assert f["poly"].shape == (3, 2)
@@ -278,7 +233,8 @@ def test_faces_from_tris_culls_backface_no_flip():
     tri = np.array([[v0, v1, v2]], float)
     n = np.cross(v1 - v0, v2 - v0); n /= np.linalg.norm(n)
     assert n @ fwd > 0.5                      # confirm it's a back-face
-    faces = shade.faces_from_tris(tri, right, up, fwd, s=2.0, cx=0, cy=0, half=50.0)
+    faces = shade.faces_from_tris(tri, P.Projection(right, up, fwd,
+                                                    2.0, 0.0, 0.0, 50.0))
     assert faces == []                        # culled, not flipped
 
 
@@ -295,8 +251,9 @@ def test_group_ids_stamped_on_all_tri_faces():
         if np.array([n @ right, n @ up, n @ fwd])[2] > 0:
             v = v[::-1]                          # flip to face the camera
         tris.append(v)
-    faces = shade.faces_from_tris(np.array(tris), right, up, fwd,
-                                  1.0, 0.0, 0.0, 0.0,
+    faces = shade.faces_from_tris(np.array(tris),
+                                  P.Projection(right, up, fwd,
+                                               1.0, 0.0, 0.0, 0.0),
                                   cond_edges=np.zeros((0, 4, 3)))
     assert len(faces) == 3
     assert all("group" in f for f in faces)
@@ -476,11 +433,8 @@ def test_cull_multisample_keeps_face_with_occluded_centroid():
 
     face = {"poly": np.array([[0, 0], [100, 0], [100, 100], [0, 100]], float),
             "depth": 5.0, "zs": np.full(4, 5.0), "kind": "tri"}
-    def ray_origin(xs, ys):
-        return np.stack([xs, ys, np.zeros_like(xs)], axis=1)
     kept = shade.cull_occluded_faces(
-        [face], occluders=[StudOcc()], ray_origin=ray_origin,
-        fwd=np.array([0, 0, 1.0]), eps=1e-3)
+        [face], occluders=[StudOcc()], proj=_ident_proj(), eps=1e-3)
     assert kept == [face]                # corners visible -> face survives
 
 
@@ -496,11 +450,8 @@ def test_cull_multisample_still_removes_fully_hidden_face():
 
     face = {"poly": np.array([[0, 0], [100, 0], [100, 100], [0, 100]], float),
             "depth": 5.0, "zs": np.full(4, 5.0), "kind": "tri"}
-    def ray_origin(xs, ys):
-        return np.stack([xs, ys, np.zeros_like(xs)], axis=1)
     kept = shade.cull_occluded_faces(
-        [face], occluders=[WallOcc()], ray_origin=ray_origin,
-        fwd=np.array([0, 0, 1.0]), eps=1e-3)
+        [face], occluders=[WallOcc()], proj=_ident_proj(), eps=1e-3)
     assert kept == []
 
 
@@ -517,9 +468,9 @@ def test_cyl_wall_partial_sector_wrapping_arc_emits_both_spans():
     V = np.array([-math.sin(g), 0.0, math.cos(g)])
     A = np.array([0.0, -1.0, 0.0])
     R = np.stack([U, A, V], axis=1)
-    cyl = {"kind": "cyli", "sector": 270.0, "inner": 0, "R": R, "t": np.zeros(3)}
-    faces = shade.faces_from_analytic([cyl], right, up, fwd,
-                                      s=2.0, cx=0.0, cy=0.0, half=50.0)
+    cyl = P.Cylinder(R=R, t=np.zeros(3), sector=270.0)
+    faces = shade.faces_from_analytic(
+        [cyl], P.Projection(right, up, fwd, 2.0, 0.0, 0.0, 50.0))
     near = [f for f in faces if f["kind"] == "cyli" and not f.get("interior")]
     # visible arc [210,390] ∩ sector [0,270] = [210,270] + [0,30]
     assert len(near) == 2
@@ -534,10 +485,9 @@ def test_cyl_interior_far_wall_emitted_for_open_tubes():
     import numpy as np
     from brick_icons import shade, hlr
     right, up, fwd = hlr.view_basis(30.0, 45.0)
-    cyl = {"kind": "cyli", "sector": 360.0, "inner": 0, "R": np.eye(3),
-           "t": np.zeros(3)}
-    faces = shade.faces_from_analytic([cyl], right, up, fwd,
-                                      s=2.0, cx=0.0, cy=0.0, half=50.0)
+    cyl = P.Cylinder(R=np.eye(3), t=np.zeros(3), sector=360.0)
+    faces = shade.faces_from_analytic(
+        [cyl], P.Projection(right, up, fwd, 2.0, 0.0, 0.0, 50.0))
     near = [f for f in faces if f["kind"] == "cyli" and not f.get("interior")]
     inner = [f for f in faces if f["kind"] == "cyli" and f.get("interior")]
     assert len(near) == 1 and len(inner) == 1
@@ -685,12 +635,12 @@ def test_smooth_group_gradient_axis_follows_normal_variation():
     R = 30.0
     xs = np.linspace(0.0, 80.0, 5)
     phis = np.radians(np.linspace(-20.0, 20.0, 3))
-    P = lambda x, ph: np.array([x, R * math.sin(ph), R * math.cos(ph)])
+    pt = lambda x, ph: np.array([x, R * math.sin(ph), R * math.cos(ph)])
     tris, seams = [], []
     for i in range(len(xs) - 1):
         for j in range(len(phis) - 1):
-            a, b = P(xs[i], phis[j]), P(xs[i + 1], phis[j])
-            c, d = P(xs[i + 1], phis[j + 1]), P(xs[i], phis[j + 1])
+            a, b = pt(xs[i], phis[j]), pt(xs[i + 1], phis[j])
+            c, d = pt(xs[i + 1], phis[j + 1]), pt(xs[i], phis[j + 1])
             for t in ([a, b, c], [a, c, d]):
                 v = np.array(t, float)
                 n = np.cross(v[1] - v[0], v[2] - v[0])
@@ -699,8 +649,10 @@ def test_smooth_group_gradient_axis_follows_normal_variation():
                 tris.append(v)
                 for e0, e1 in ((v[0], v[1]), (v[1], v[2]), (v[2], v[0])):
                     seams.append(np.array([e0, e1, e0, e1], float))
-    faces = shade.faces_from_tris(np.array(tris), right, up, fwd,
-                                  1.0, 0.0, 0.0, 0.0, cond_edges=seams)
+    faces = shade.faces_from_tris(np.array(tris),
+                                  P.Projection(right, up, fwd,
+                                               1.0, 0.0, 0.0, 0.0),
+                                  cond_edges=seams)
     f = next(f for f in faces if "grad_axis" in f)
     (x0, y0), (x1, y1) = f["grad_axis"]
     assert abs(y1 - y0) > abs(x1 - x0)   # along the curve, not the width
@@ -710,7 +662,8 @@ def test_dome_group_gets_radial_gradient():
     right, up = np.array([1.0, 0, 0]), np.array([0.0, 1.0, 0])
     fwd = np.array([0.0, 0.0, -1.0])
     tris, seams = _dome_mesh(fwd)
-    faces = shade.faces_from_tris(tris, right, up, fwd, 1.0, 0.0, 0.0, 0.0,
+    faces = shade.faces_from_tris(tris, P.Projection(right, up, fwd,
+                                                     1.0, 0.0, 0.0, 0.0),
                                   cond_edges=seams)
     grads = [f for f in faces if "grad_radial" in f]
     assert len(grads) == len(faces) and len(faces) >= 20
@@ -754,7 +707,8 @@ def test_backfill_extends_smooth_group_past_fold():
     # front band (polar 60..80) + back band (100..120) joined via the fold
     # ring at 90: fold at 90deg
     tris, seams = _sphere_band(60, 80, 100, 120)
-    faces = shade.faces_from_tris(tris, right, up, fwd, 1.0, 0.0, 0.0, 0.0,
+    faces = shade.faces_from_tris(tris, P.Projection(right, up, fwd,
+                                                     1.0, 0.0, 0.0, 0.0),
                                   cond_edges=seams)
     backs = [f for f in faces if f.get("backfill")]
     fronts = [f for f in faces if not f.get("backfill")]
@@ -771,7 +725,8 @@ def test_all_back_group_still_dropped():
     right, up = np.array([1.0, 0, 0]), np.array([0.0, 1.0, 0])
     fwd = np.array([0.0, 0.0, -1.0])
     tris, seams = _sphere_band(120, 135, 150)   # entirely past the fold
-    faces = shade.faces_from_tris(tris, right, up, fwd, 1.0, 0.0, 0.0, 0.0,
+    faces = shade.faces_from_tris(tris, P.Projection(right, up, fwd,
+                                                     1.0, 0.0, 0.0, 0.0),
                                   cond_edges=seams)
     assert faces == []
 
@@ -823,8 +778,9 @@ def test_smooth_group_shares_one_gradient_across_facets():
     if n @ fwd > 0:
         flat = flat[[0, 2, 1]]
     allt = np.concatenate([tris, flat[None]], axis=0)
-    faces = shade.faces_from_tris(allt, right, up, fwd, s=2.0, cx=0, cy=0,
-                                  half=200.0, cond_edges=seams)
+    faces = shade.faces_from_tris(allt, P.Projection(right, up, fwd,
+                                                     2.0, 0.0, 0.0, 200.0),
+                                  cond_edges=seams)
     grads = [f for f in faces if "grad_axis" in f]
     flats = [f for f in faces if "grad_axis" not in f]
     assert len(grads) >= 4                      # the curved strip grouped

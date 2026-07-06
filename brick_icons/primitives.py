@@ -860,44 +860,6 @@ def rim_key(C, A, radius):
     return (tuple(C), tuple(np.round(n, 3)), round(float(radius), 3))
 
 
-def wall_rims(rec):
-    """[(key, side, slope)] for a WALL record's rim circles (cyli/con).
-
-    `side` is which side of the circle plane the wall lies on (+-1 along the
-    key's canonical axis); `slope` is d(radius)/d(height) in that canonical
-    direction, rounded. A record's rim arc is suppressed iff a FULL-sector
-    wall with EQUAL slope lies on the OPPOSITE side (stacked cone/cylinder
-    sections, e.g. 4589's con3-on-con4 joint) — only then is the whole rim a
-    smooth joint. Same-side sharing, unequal slopes (creases), or partial-
-    sector sharers (3941's base lip: 45-degree sectors with cutout gaps, where
-    the body's rim stays a real edge) keep the arc."""
-    R = np.asarray(rec["R"], float)
-    t = np.asarray(rec["t"], float)
-    A = R[:, 1]
-    ahat = A / (np.linalg.norm(A) or 1.0)
-    ru = float(np.linalg.norm(R[:, 0]))
-    ah = float(np.linalg.norm(A)) or 1.0
-    if rec["kind"] == "cyli":
-        rate = 0.0
-        rims = [(t, ru, +1), (t + A, ru, -1)]           # (center, radius, side along +A)
-    elif rec["kind"] == "con":
-        N = rec["inner"]
-        rate = -ru / ah                                 # radius shrinks toward +A
-        rims = [(t, (N + 1) * ru, +1)]
-        if N > 0:
-            rims.append((t + A, N * ru, -1))
-    else:
-        return []
-    out = []
-    for C, radius, side in rims:
-        key = rim_key(C, A, radius)
-        aligned = float(np.dot(ahat, key[1])) > 0       # canonical axis sign
-        out.append((key,
-                    side if aligned else -side,
-                    round(rate if aligned else -rate, 3)))
-    return out
-
-
 def _merged_wall(members):
     """One synthetic Cylinder/Cone covering a smooth chain of wall
     primitives (sections of the same infinite cylinder/cone). Returns None
@@ -985,92 +947,6 @@ def merge_smooth_walls(analytic):
         return list(analytic)
     return [synth_at.get(i, p) for i, p in enumerate(analytic)
             if i in synth_at or i not in drop]
-
-
-def drawn_with_depth(rec, to_AB, s, cx, cy, half, fwd, skip_rims=None):
-    """Return [(op, depth_fn)] for one analytic record.
-
-    depth_fn maps an op's sample params to camera depth: degrees for arc ops,
-    t in [0,1] for line ops. Ops are pre-occlusion candidates. `skip_rims` is
-    a set of (rim_key, side) pairs (see wall_rims) whose base/top arcs must
-    not be emitted: rims where a full-sector wall continues smoothly on the
-    other side of the circle plane (stacked section joints)."""
-    kind, sector = rec["kind"], rec["sector"]
-    R, t = rec["R"], rec["t"]
-    skip_rims = skip_rims or set()
-    rims = wall_rims(rec) if skip_rims else []
-    skip_base = bool(rims) and (rims[0][0], rims[0][1]) in skip_rims
-    skip_top = len(rims) > 1 and (rims[1][0], rims[1][1]) in skip_rims
-    pairs = []
-    if kind in ("edge", "disc", "ring"):
-        outer = (rec["inner"] + 1) if kind == "ring" else 1.0
-        ell = project_circle(R, t, outer, to_AB, s, cx, cy, half)
-        pairs.append((_arc_op(ell, 0.0, sector, "edge"), _arc_depth_fn(ell)))
-        if kind == "ring" and rec["inner"] > 0:
-            elli = project_circle(R, t, rec["inner"], to_AB, s, cx, cy, half)
-            pairs.append((_arc_op(elli, 0.0, sector, "edge"), _arc_depth_fn(elli)))
-    elif kind == "cyli":
-        R = np.asarray(R, float)
-        U, V, A = R[:, 0], R[:, 2], R[:, 1]
-        fwd = np.asarray(fwd, float)
-        # silhouette generators: radial normal perpendicular to view ->
-        # cos t (U.fwd) + sin t (V.fwd) = 0  ->  t = atan2(-(U.fwd), (V.fwd)).
-        uf, vf = float(U @ fwd), float(V @ fwd)
-        theta = math.atan2(-uf, vf)
-        base = project_circle(R, t, 1.0, to_AB, s, cx, cy, half)
-        top = project_circle(R, np.asarray(t, float) + A, 1.0, to_AB, s, cx, cy, half)
-        for th in (theta, theta + math.pi):
-            deg = math.degrees(th) % 360.0
-            if sector >= 360.0 - 1e-9 or deg <= sector + 1e-6:
-                pb, pt = base.point(th), top.point(th)
-                op = ("line", float(pb[0]), float(pb[1]), float(pt[0]), float(pt[1]), "sil")
-                pairs.append((op, _line_depth_fn(base.depth(th), top.depth(th))))
-        if not skip_base:
-            pairs.append((_arc_op(base, 0.0, sector, "edge"), _arc_depth_fn(base)))
-        if not skip_top:
-            pairs.append((_arc_op(top, 0.0, sector, "edge"), _arc_depth_fn(top)))
-    elif kind == "con":
-        R = np.asarray(R, float)
-        N = float(rec["inner"])
-        A3 = R[:, 1]
-        fwd = np.asarray(fwd, float)
-        base = project_circle(R, t, N + 1.0, to_AB, s, cx, cy, half)
-        topc = (project_circle(R, np.asarray(t, float) + A3, N, to_AB, s, cx, cy, half)
-                if N > 0 else None)
-        if topc is None:                        # apex: project the point itself
-            aa, bb, zz = to_AB((np.asarray(t, float) + A3)[None, :])
-            apex_xy = ((aa[0] - cx) * s + half, (bb[0] - cy) * s + half)
-            apex_z = float(zz[0])
-        # silhouette generators: local cone normal is constant along a
-        # generator, m(th) = (cos th, 1, sin th); world n.fwd = 0 reduces via
-        # g = R^-1 @ fwd to g0 cos th + g2 sin th = -g1 (0, 1, or 2 solutions).
-        g = np.linalg.inv(R) @ fwd
-        A_, B_, C_ = float(g[0]), float(g[2]), float(-g[1])
-        hyp = math.hypot(A_, B_)
-        if hyp > 1e-12 and abs(C_) <= hyp:
-            phi0 = math.atan2(B_, A_)
-            dth = math.acos(max(-1.0, min(1.0, C_ / hyp)))
-            for th in (phi0 + dth, phi0 - dth):
-                deg = math.degrees(th) % 360.0
-                if sector >= 360.0 - 1e-9 or deg <= sector + 1e-6:
-                    pb = base.point(th)
-                    if topc is not None:
-                        pt_, zt = topc.point(th), topc.depth(th)
-                    else:
-                        pt_, zt = apex_xy, apex_z
-                    op = ("line", float(pb[0]), float(pb[1]),
-                          float(pt_[0]), float(pt_[1]), "sil")
-                    pairs.append((op, _line_depth_fn(base.depth(th), zt)))
-        if not skip_base:
-            pairs.append((_arc_op(base, 0.0, sector, "edge"), _arc_depth_fn(base)))
-        if topc is not None and not skip_top:
-            pairs.append((_arc_op(topc, 0.0, sector, "edge"), _arc_depth_fn(topc)))
-    return pairs
-
-
-def drawn_curves(rec, to_AB, s, cx, cy, half, fwd):
-    """Pre-occlusion drawn ops (tuples only) for one analytic record."""
-    return [op for op, _ in drawn_with_depth(rec, to_AB, s, cx, cy, half, fwd)]
 
 
 def _samples_for(op, n):

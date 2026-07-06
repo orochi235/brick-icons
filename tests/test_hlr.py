@@ -3,7 +3,7 @@ import shutil
 import numpy as np
 import pytest
 from pathlib import Path
-from brick_icons import hlr
+from brick_icons import hlr, primitives
 
 LIB = Path("vendor/ldraw")
 HAVE_LIB = LIB.exists()
@@ -229,9 +229,9 @@ def test_flatten_substitutes_known_primitive(tmp_path):
     out = {"2": [], "5": [], "tri": [], "analytic": []}
     hlr.flatten(part, np.eye(3), np.zeros(3), out, roots)
     assert len(out["analytic"]) == 1
-    rec = out["analytic"][0]
-    assert rec["kind"] == "edge" and rec["sector"] == 90.0
-    assert np.allclose(rec["R"], np.eye(3)) and np.allclose(rec["t"], 0)
+    prim = out["analytic"][0]
+    assert isinstance(prim, primitives.Edge) and prim.sector == 90.0
+    assert np.allclose(prim.R, np.eye(3)) and np.allclose(prim.t, 0)
 
 
 def test_flatten_aliases_stud10_to_full_stud(tmp_path):
@@ -251,7 +251,7 @@ def test_flatten_aliases_stud10_to_full_stud(tmp_path):
     roots = hlr.default_roots(tmp_path)
     out = {"2": [], "5": [], "tri": [], "analytic": []}
     hlr.flatten(part, np.eye(3), np.zeros(3), out, roots)
-    kinds = sorted(r["kind"] for r in out["analytic"])
+    kinds = sorted(p.kind for p in out["analytic"])
     assert kinds == ["cyli", "disc"]          # stud.dat contents, not stud10's
     assert out["tri"] == []                   # faceted quarter suppressed
 
@@ -275,8 +275,9 @@ def test_analytic_cone_occludes_edge_behind_it():
     # midsection (world y=5, where the con0 scaled x10 has radius 5).
     out = {"2": [np.array([[-40.0, 5.0, 20.0], [40.0, 5.0, 20.0]])],
            "5": [], "tri": [], "tri_meta": [],
-           "analytic": [{"kind": "con", "sector": 360.0, "inner": 0,
-                         "R": np.diag([10.0, 10.0, 10.0]), "t": np.zeros(3)}]}
+           "analytic": [primitives.Cone(R=np.diag([10.0, 10.0, 10.0]),
+                                        t=np.zeros(3), sector=360.0,
+                                        top=0.0)]}
     right, up, fwd = hlr.view_basis(0.0, 0.0)     # straight-on view
     res = hlr._visible_segments_analytic(out, right, up, fwd, render_px=200)
     edge_segs = [sg for sg in res.segs if sg[0] == "line" and sg[-1] == "edge"]
@@ -290,11 +291,11 @@ def test_stacked_cones_one_wall_face_with_own_occluder_ordering():
     # occluder so witness ordering uses exact cone depths: the interior far
     # wall paints before the outer near wall.
     out = {"2": [], "5": [], "tri": [], "tri_meta": [],
-           "analytic": [{"kind": "con", "sector": 360.0, "inner": 2,
-                         "R": np.diag([10.0, 10.0, 10.0]), "t": np.zeros(3)},
-                        {"kind": "con", "sector": 360.0, "inner": 1,
-                         "R": np.diag([10.0, 10.0, 10.0]),
-                         "t": np.array([0.0, 10.0, 0.0])}]}
+           "analytic": [primitives.Cone(R=np.diag([10.0, 10.0, 10.0]),
+                                        t=np.zeros(3), sector=360.0, top=2.0),
+                        primitives.Cone(R=np.diag([10.0, 10.0, 10.0]),
+                                        t=np.array([0.0, 10.0, 0.0]),
+                                        sector=360.0, top=1.0)]}
     right, up, fwd = hlr.view_basis(20.0, 30.0)
     from brick_icons import shade
     seen = {}
@@ -324,7 +325,7 @@ def test_cone_part_uses_analytic_cones():
     # 4589 (cone 1x1) body = 4-4con3 + 4-4con4: must arrive as analytic
     # records with cone occluders and produce cone wall fills, not tri clouds.
     res = hlr.visible_segments("4589", LIB, lat=30, long=45, render_px=900)
-    assert "con" in {r["kind"] for r in res.analytic}
+    assert "con" in {p.kind for p in res.analytic}
     con_faces = [f for f in res.faces if f.get("kind") == "con"]
     assert con_faces
     # fit cloud must cover the cone BASE (local radius N+1, not 1): every cone
@@ -334,8 +335,8 @@ def test_cone_part_uses_analytic_cones():
     # the con3/con4 joint circle is a smooth continuation: no drawn arc there
     # (it showed as a spurious black ring). The joint plane is at the shared
     # rim; assert fewer edge arcs than the naive 2-per-cone.
-    con_recs = [r for r in res.analytic if r["kind"] == "con"]
-    assert len(con_recs) == 2
+    con_prims = [p for p in res.analytic if isinstance(p, primitives.Cone)]
+    assert len(con_prims) == 2
 
 
 @pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
