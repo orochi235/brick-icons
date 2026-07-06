@@ -359,6 +359,27 @@ class TriangleOccluder:
         return out
 
 
+def _arc_sector_spans(lo, length, sect):
+    """Intersect the arc starting at `lo` (radians) of `length` with the
+    sector [0, sect] on the circle. Returns [(a, b)] spans (b > a), at most
+    two: a wrapped arc can re-enter the sector past 0. A full sector needs no
+    clamping — the raw interval is returned so a seamless single face is kept
+    even when it crosses 0/2pi (angles are plain reals downstream)."""
+    if sect >= 2 * math.pi - 1e-6:
+        return [(lo, lo + length)]
+    two = 2 * math.pi
+    lo = lo % two
+    pieces = [(lo, min(lo + length, two))]
+    if lo + length > two:
+        pieces.append((0.0, lo + length - two))
+    spans = []
+    for a, b in pieces:
+        a, b = max(a, 0.0), min(b, sect)
+        if b - a > 1e-3:
+            spans.append((a, b))
+    return spans
+
+
 @dataclass(eq=False, kw_only=True)
 class Primitive:
     """One substituted analytic primitive under world transform p -> R @ p + t.
@@ -463,6 +484,63 @@ class Primitive:
         circle plane (stacked section joints)."""
         raise NotImplementedError
 
+    def faces(self, proj):
+        """Fill faces (dicts) for the shading pipeline; [] for stroke-only
+        kinds. Face dicts carry pixel-space "poly", per-vertex "zs", mean
+        "depth", the source "prim", and either a view-space "normal" (flat
+        faces) or a linear-gradient spec (wall faces)."""
+        return []
+
+    def _flat_face(self, w, hole_w, proj):
+        px, py, z = proj.to_px(w)
+        n = self.R[:, 1]
+        n = n / np.linalg.norm(n)
+        nv = np.array([n @ proj.right, n @ proj.up, n @ proj.fwd])
+        if nv[2] > 0:
+            nv = -nv
+        face = {"poly": np.stack([px, py], 1), "normal": nv,
+                "depth": float(np.mean(z)), "zs": z, "kind": self.kind,
+                "prim": self}
+        if hole_w is not None:
+            hx, hy, _ = proj.to_px(hole_w)
+            face["holes"] = [np.stack([hx, hy], 1)]
+        return face
+
+    def _wall_span_face(self, lo, hi, interior, proj, normal_fn=None):
+        U, V = self.R[:, 0], self.R[:, 2]
+        ths = np.linspace(lo, hi, 40)
+        top = self.ring_pts(ths, 1.0)
+        bot = self.ring_pts(ths, 0.0)
+        tpx, tpy, tz = proj.to_px(top)
+        bpx, bpy, bz = proj.to_px(bot)
+        poly = np.concatenate([np.stack([tpx, tpy], 1),
+                               np.stack([bpx, bpy], 1)[::-1]], axis=0)
+        zs = np.concatenate([tz, bz])
+        # gradient axis: mid-height points at the span's end angles
+        mid = self.ring_pts(np.array([lo, hi]), 0.5)
+        mpx, mpy, _ = proj.to_px(mid)
+        p0 = (float(mpx[0]), float(mpy[0])); p1 = (float(mpx[1]), float(mpy[1]))
+        axis = np.array([p1[0] - p0[0], p1[1] - p0[1]])
+        L2 = float(axis @ axis) or 1.0
+        samples = []
+        for th in np.linspace(lo, hi, 9):
+            if normal_fn is None:
+                n = math.cos(th) * U + math.sin(th) * V
+            else:
+                n = normal_fn(th)
+            n = n / np.linalg.norm(n)
+            if interior:
+                n = -n                               # inward surface normal
+            nv = np.array([n @ proj.right, n @ proj.up, n @ proj.fwd])
+            p = self.ring_pts(np.array([th]), 0.5)
+            ppx, ppy, _ = proj.to_px(p)
+            off = ((ppx[0] - p0[0]) * axis[0] + (ppy[0] - p0[1]) * axis[1]) / L2
+            samples.append((float(np.clip(off, 0.0, 1.0)), nv))
+        return {"poly": poly, "zs": zs, "depth": float(np.mean(zs)),
+                "kind": self.kind, "prim": self, "interior": interior,
+                "span_deg": math.degrees(hi - lo),
+                "grad_axis": (p0, p1), "grad_samples": samples}
+
 
 @dataclass(eq=False, kw_only=True)
 class Edge(Primitive):
@@ -486,6 +564,10 @@ class Disc(Primitive):
         ell = proj.circle(self.R, self.t, 1.0)
         return [(_arc_op(ell, 0.0, self.sector, "edge"), _arc_depth_fn(ell))]
 
+    def faces(self, proj):
+        th = np.linspace(0.0, math.radians(self.sector), 64)
+        return [self._flat_face(self.ring_pts(th, 0.0), None, proj)]
+
 
 @dataclass(eq=False, kw_only=True)
 class Ring(Primitive):
@@ -505,6 +587,19 @@ class Ring(Primitive):
         inner = proj.circle(self.R, self.t, self.inner)
         return [(_arc_op(outer, 0.0, self.sector, "edge"), _arc_depth_fn(outer)),
                 (_arc_op(inner, 0.0, self.sector, "edge"), _arc_depth_fn(inner))]
+
+    def faces(self, proj):
+        sect = math.radians(self.sector)
+        th = np.linspace(0.0, sect, 64)
+        # Annulus: full sector gets a REAL hole ring (the bore); a partial
+        # sector is a simple valid polygon, so keep the outer-forward /
+        # inner-back concatenation there.
+        outer = self.ring_pts(th, 0.0, radius=self.inner + 1)
+        inner = self.ring_pts(th, 0.0, radius=self.inner)
+        if sect >= 2 * math.pi - 1e-6:
+            return [self._flat_face(outer, inner, proj)]
+        w = np.concatenate([outer, inner[::-1]], axis=0)
+        return [self._flat_face(w, None, proj)]
 
 
 @dataclass(eq=False, kw_only=True)
@@ -550,6 +645,29 @@ class Cylinder(Primitive):
             pairs.append((_arc_op(top, 0.0, self.sector, "edge"),
                           _arc_depth_fn(top)))
         return pairs
+
+    def faces(self, proj):
+        """Cylinder wall fills: the camera-facing outer half AND the far
+        half's interior surface (visible when looking into an open tube —
+        leaving it out produced 4019's white voids). Each visible span
+        becomes one arc-region polygon with a linear-gradient spec; a partial
+        sector can split a span in two where the arc wraps past 0."""
+        U, V = self.R[:, 0], self.R[:, 2]
+        a = float(U @ proj.fwd); b = float(V @ proj.fwd)
+        if a == 0.0 and b == 0.0:
+            return []                            # axis points at camera: no wall
+        phi = math.atan2(b, a)
+        theta_face = phi + math.pi               # most camera-facing angle
+        sect = math.radians(self.sector)
+        halves = [(theta_face - math.pi / 2, False),     # outer near half
+                  (theta_face + math.pi / 2, True)]      # interior far half
+        faces = []
+        for start, interior in halves:
+            for lo, hi in _arc_sector_spans(start, math.pi, sect):
+                f = self._wall_span_face(lo, hi, interior, proj)
+                if f is not None:
+                    faces.append(f)
+        return faces
 
 
 @dataclass(eq=False, kw_only=True)
@@ -619,6 +737,44 @@ class Cone(Primitive):
             pairs.append((_arc_op(topc, 0.0, self.sector, "edge"),
                           _arc_depth_fn(topc)))
         return pairs
+
+    def faces(self, proj):
+        """Cone wall fills. Unlike a cylinder, the front-facing arc is NOT a
+        half: with g = R^-1 @ fwd and (A, B, C) = (g0, g2, -g1), n(theta).fwd
+        = hyp*cos(theta - phi0) - C, so the outer wall is visible on
+        (phi0+d, phi0+2pi-d) where d = acos(C/hyp) — the generator angles —
+        and the interior far wall on the complement. Axis-on view (hyp ~ 0,
+        or |C| >= hyp): every generator faces the same way, one full-circle
+        span."""
+        Minv = np.linalg.inv(self.R)
+        g = Minv @ np.asarray(proj.fwd, float)
+        A_, B_, C_ = float(g[0]), float(g[2]), float(-g[1])
+        MT = Minv.T
+
+        def normal_fn(th):
+            return MT @ np.array([math.cos(th), 1.0, math.sin(th)])
+
+        hyp = math.hypot(A_, B_)
+        if hyp < 1e-12:
+            spans = [(0.0, 2 * math.pi, float(g[1]) > 0)]
+        elif abs(C_) >= hyp:
+            spans = [(0.0, 2 * math.pi, C_ >= hyp)]
+        else:
+            phi0 = math.atan2(B_, A_)
+            d = math.acos(max(-1.0, min(1.0, C_ / hyp)))
+            spans = [(phi0 + d, phi0 + 2 * math.pi - d, False),
+                     (phi0 - d, phi0 + d, True)]
+        sect = math.radians(self.sector)
+        faces = []
+        for start, end, interior in spans:
+            if end - start < 1e-6:
+                continue
+            for lo, hi in _arc_sector_spans(start, end - start, sect):
+                f = self._wall_span_face(lo, hi, interior, proj,
+                                         normal_fn=normal_fn)
+                if f is not None:
+                    faces.append(f)
+        return faces
 
 
 _KIND_CLASSES = {"edge": Edge, "cyli": Cylinder, "disc": Disc}

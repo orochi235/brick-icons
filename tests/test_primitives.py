@@ -553,3 +553,57 @@ def test_drawn_parity_with_skip_rims():
     crims = P.wall_rims(crec)
     for skips in ({(k, s) for k, s, _ in crims}, {(crims[0][0], crims[0][1])}):
         _op_parity(cyl, crec, skip_rims=skips)
+
+
+def _face_parity(prim, rec):
+    from brick_icons import shade, hlr
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    proj = P.Projection(right, up, fwd, s=2.0, cx=0.5, cy=-0.5, half=100.0)
+    old = shade.faces_from_analytic([rec], right, up, fwd,
+                                    proj.s, proj.cx, proj.cy, proj.half)
+    new = prim.faces(proj)
+    assert len(old) == len(new)
+    for fo, fn in zip(old, new):
+        assert fo["kind"] == fn["kind"]
+        assert fn["prim"] is prim
+        assert np.allclose(fo["poly"], fn["poly"])
+        assert np.allclose(fo["zs"], fn["zs"])
+        assert np.isclose(fo["depth"], fn["depth"])
+        for k in ("normal", "holes"):
+            assert (k in fo) == (k in fn)
+            if k in fo:
+                assert np.allclose(np.asarray(fo[k]), np.asarray(fn[k]))
+        assert fo.get("interior") == fn.get("interior")
+        if "grad_axis" in fo:
+            assert np.allclose(fo["grad_axis"], fn["grad_axis"])
+            assert np.isclose(fo["span_deg"], fn["span_deg"])
+            for (oo, ono), (no, nno) in zip(fo["grad_samples"], fn["grad_samples"]):
+                assert np.isclose(oo, no) and np.allclose(ono, nno)
+
+
+def test_faces_parity_all_kinds():
+    R, t = np.eye(3), np.zeros(3)
+    _face_parity(P.Edge(R=R, t=t, sector=360.0),
+                 {"kind": "edge", "sector": 360.0, "inner": 0, "R": R, "t": t})
+    _face_parity(P.Disc(R=R, t=t, sector=360.0),
+                 {"kind": "disc", "sector": 360.0, "inner": 0, "R": R, "t": t})
+    _face_parity(P.Ring(R=R, t=t, sector=360.0, inner=2),     # real bore hole
+                 {"kind": "ring", "sector": 360.0, "inner": 2, "R": R, "t": t})
+    _face_parity(P.Ring(R=R, t=t, sector=90.0, inner=2),      # partial: concat poly
+                 {"kind": "ring", "sector": 90.0, "inner": 2, "R": R, "t": t})
+    _face_parity(P.Cylinder(R=R, t=t, sector=360.0),
+                 {"kind": "cyli", "sector": 360.0, "inner": 0, "R": R, "t": t})
+    _face_parity(P.Cylinder(R=R, t=t, sector=270.0),          # wrapped spans
+                 {"kind": "cyli", "sector": 270.0, "inner": 0, "R": R, "t": t})
+    _face_parity(P.Cone(R=np.diag([10.0, 10.0, 10.0]), t=t, sector=360.0, top=2.0),
+                 {"kind": "con", "sector": 360.0, "inner": 2,
+                  "R": np.diag([10.0, 10.0, 10.0]), "t": t})
+
+
+def test_faces_axis_on_cylinder_no_wall():
+    from brick_icons import hlr
+    # axis pointing at the camera: U.fwd == V.fwd == 0 -> no wall face
+    right, up, fwd = np.array([1.0, 0, 0]), np.array([0, 1.0, 0]), np.array([0, 0, 1.0])
+    proj = P.Projection(right, up, fwd, s=1.0, cx=0.0, cy=0.0, half=0.0)
+    R = np.column_stack([[1.0, 0, 0], [0, 0, 1.0], [0, 1.0, 0]])   # axis = +z
+    assert P.Cylinder(R=R, t=np.zeros(3), sector=360.0).faces(proj) == []
