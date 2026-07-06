@@ -478,3 +478,53 @@ def test_fit_pts_matches_hlr_analytic_circle_pts():
     ]
     for prim, rec in cases:
         assert np.allclose(prim.fit_pts(), hlr._analytic_circle_pts(rec))
+
+
+def _parity_proj():
+    # A=x, B=y, depth=-z  (to_AB: right=+x; B=-(P@up) => up=(0,-1,0); Z: fwd=(0,0,-1))
+    return P.Projection(np.array([1.0, 0.0, 0.0]), np.array([0.0, -1.0, 0.0]),
+                        np.array([0.0, 0.0, -1.0]), s=1.0, cx=0.0, cy=0.0, half=0.0)
+
+
+def _op_parity(prim, rec, skip_rims=None):
+    proj = _parity_proj()
+
+    def to_AB(Pw):
+        return proj.to_AB(np.atleast_2d(np.asarray(Pw, float)))
+
+    old = P.drawn_with_depth(rec, to_AB, 1.0, 0.0, 0.0, 0.0, proj.fwd,
+                             skip_rims=skip_rims)
+    new = prim.drawn_with_depth(proj, skip_rims=skip_rims)
+    assert len(old) == len(new)
+    for (op_o, fn_o), (op_n, fn_n) in zip(old, new):
+        assert op_o[0] == op_n[0] and op_o[-1] == op_n[-1]
+        assert np.allclose(op_o[1:-1], op_n[1:-1])
+        params = np.linspace(0.0, 1.0, 5) if op_o[0] == "line" \
+            else np.linspace(op_o[7], op_o[8], 5)
+        assert np.allclose(fn_o(params), fn_n(params))
+
+
+def test_drawn_parity_all_kinds():
+    R, t = np.eye(3), np.zeros(3)
+    _op_parity(P.Edge(R=R, t=t, sector=360.0),
+               {"kind": "edge", "sector": 360.0, "inner": 0, "R": R, "t": t})
+    _op_parity(P.Disc(R=R, t=t, sector=270.0),
+               {"kind": "disc", "sector": 270.0, "inner": 0, "R": R, "t": t})
+    _op_parity(P.Ring(R=R, t=t, sector=360.0, inner=2),
+               {"kind": "ring", "sector": 360.0, "inner": 2, "R": R, "t": t})
+    _op_parity(P.Cylinder(R=R, t=t, sector=360.0),
+               {"kind": "cyli", "sector": 360.0, "inner": 0, "R": R, "t": t})
+    _op_parity(P.Cylinder(R=R, t=t, sector=90.0),
+               {"kind": "cyli", "sector": 90.0, "inner": 0, "R": R, "t": t})
+    _op_parity(P.Cone(R=R, t=t, sector=360.0, top=1.0),
+               {"kind": "con", "sector": 360.0, "inner": 1, "R": R, "t": t})
+    _op_parity(P.Cone(R=R, t=t, sector=360.0, top=0.0),   # apex cone
+               {"kind": "con", "sector": 360.0, "inner": 0, "R": R, "t": t})
+
+
+def test_drawn_parity_with_skip_rims():
+    R, t = np.eye(3), np.zeros(3)
+    rec = {"kind": "con", "sector": 360.0, "inner": 1, "R": R, "t": t}
+    prim = P.Cone(R=R, t=t, sector=360.0, top=1.0)
+    skips = {(k, s) for k, s, _ in P.wall_rims(rec)}
+    _op_parity(prim, rec, skip_rims=skips)

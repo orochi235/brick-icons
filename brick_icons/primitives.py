@@ -446,11 +446,32 @@ class Primitive:
                         round(rate if aligned else -rate, 3)))
         return out
 
+    def _skip_flags(self, skip_rims):
+        skip_rims = skip_rims or set()
+        rims = self.wall_rims() if skip_rims else []
+        skip_base = bool(rims) and (rims[0][0], rims[0][1]) in skip_rims
+        skip_top = len(rims) > 1 and (rims[1][0], rims[1][1]) in skip_rims
+        return skip_base, skip_top
+
+    def drawn_with_depth(self, proj, skip_rims=None):
+        """Return [(op, depth_fn)] pre-occlusion drawn-op candidates.
+
+        depth_fn maps an op's sample params to camera depth: degrees for arc
+        ops, t in [0,1] for line ops. `skip_rims` is a set of (rim_key, side)
+        pairs (see wall_rims) whose base/top arcs must not be emitted: rims
+        where a full-sector wall continues smoothly on the other side of the
+        circle plane (stacked section joints)."""
+        raise NotImplementedError
+
 
 @dataclass(eq=False, kw_only=True)
 class Edge(Primitive):
     """Drawn circle arc; no surface."""
     kind = "edge"
+
+    def drawn_with_depth(self, proj, skip_rims=None):
+        ell = proj.circle(self.R, self.t, 1.0)
+        return [(_arc_op(ell, 0.0, self.sector, "edge"), _arc_depth_fn(ell))]
 
 
 @dataclass(eq=False, kw_only=True)
@@ -460,6 +481,10 @@ class Disc(Primitive):
 
     def _make_occluder(self):
         return DiscOccluder(self.R, self.t, self.sector, 0.0, 1.0)
+
+    def drawn_with_depth(self, proj, skip_rims=None):
+        ell = proj.circle(self.R, self.t, 1.0)
+        return [(_arc_op(ell, 0.0, self.sector, "edge"), _arc_depth_fn(ell))]
 
 
 @dataclass(eq=False, kw_only=True)
@@ -474,6 +499,12 @@ class Ring(Primitive):
 
     def radius_at(self, level):
         return self.inner + 1
+
+    def drawn_with_depth(self, proj, skip_rims=None):
+        outer = proj.circle(self.R, self.t, self.inner + 1)
+        inner = proj.circle(self.R, self.t, self.inner)
+        return [(_arc_op(outer, 0.0, self.sector, "edge"), _arc_depth_fn(outer)),
+                (_arc_op(inner, 0.0, self.sector, "edge"), _arc_depth_fn(inner))]
 
 
 @dataclass(eq=False, kw_only=True)
@@ -493,6 +524,32 @@ class Cylinder(Primitive):
         ang = np.linspace(0.0, math.radians(self.sector), n)
         return np.vstack([self.ring_pts(ang, 0.0),      # base + top rings
                           self.ring_pts(ang, 1.0)])
+
+    def drawn_with_depth(self, proj, skip_rims=None):
+        skip_base, skip_top = self._skip_flags(skip_rims)
+        U, A, V = self.R[:, 0], self.R[:, 1], self.R[:, 2]
+        fwd = np.asarray(proj.fwd, float)
+        # silhouette generators: radial normal perpendicular to view ->
+        # cos t (U.fwd) + sin t (V.fwd) = 0  ->  t = atan2(-(U.fwd), (V.fwd)).
+        uf, vf = float(U @ fwd), float(V @ fwd)
+        theta = math.atan2(-uf, vf)
+        base = proj.circle(self.R, self.t, 1.0)
+        top = proj.circle(self.R, self.t + A, 1.0)
+        pairs = []
+        for th in (theta, theta + math.pi):
+            deg = math.degrees(th) % 360.0
+            if self.is_full or deg <= self.sector + 1e-6:
+                pb, pt = base.point(th), top.point(th)
+                op = ("line", float(pb[0]), float(pb[1]),
+                      float(pt[0]), float(pt[1]), "sil")
+                pairs.append((op, _line_depth_fn(base.depth(th), top.depth(th))))
+        if not skip_base:
+            pairs.append((_arc_op(base, 0.0, self.sector, "edge"),
+                          _arc_depth_fn(base)))
+        if not skip_top:
+            pairs.append((_arc_op(top, 0.0, self.sector, "edge"),
+                          _arc_depth_fn(top)))
+        return pairs
 
 
 @dataclass(eq=False, kw_only=True)
@@ -522,6 +579,46 @@ class Cone(Primitive):
         ang = np.linspace(0.0, math.radians(self.sector), n)
         return np.vstack([self.ring_pts(ang, 0.0),      # base + top rings
                           self.ring_pts(ang, 1.0)])
+
+    def drawn_with_depth(self, proj, skip_rims=None):
+        skip_base, skip_top = self._skip_flags(skip_rims)
+        N = float(self.top)
+        A3 = self.R[:, 1]
+        fwd = np.asarray(proj.fwd, float)
+        base = proj.circle(self.R, self.t, N + 1.0)
+        topc = proj.circle(self.R, self.t + A3, N) if N > 0 else None
+        if topc is None:                        # apex: project the point itself
+            pxa, pya, zz = proj.to_px((self.t + A3)[None, :])
+            apex_xy = (pxa[0], pya[0])
+            apex_z = float(zz[0])
+        pairs = []
+        # silhouette generators: local cone normal is constant along a
+        # generator, m(th) = (cos th, 1, sin th); world n.fwd = 0 reduces via
+        # g = R^-1 @ fwd to g0 cos th + g2 sin th = -g1 (0, 1, or 2 solutions).
+        g = np.linalg.inv(self.R) @ fwd
+        A_, B_, C_ = float(g[0]), float(g[2]), float(-g[1])
+        hyp = math.hypot(A_, B_)
+        if hyp > 1e-12 and abs(C_) <= hyp:
+            phi0 = math.atan2(B_, A_)
+            dth = math.acos(max(-1.0, min(1.0, C_ / hyp)))
+            for th in (phi0 + dth, phi0 - dth):
+                deg = math.degrees(th) % 360.0
+                if self.is_full or deg <= self.sector + 1e-6:
+                    pb = base.point(th)
+                    if topc is not None:
+                        pt_, zt = topc.point(th), topc.depth(th)
+                    else:
+                        pt_, zt = apex_xy, apex_z
+                    op = ("line", float(pb[0]), float(pb[1]),
+                          float(pt_[0]), float(pt_[1]), "sil")
+                    pairs.append((op, _line_depth_fn(base.depth(th), zt)))
+        if not skip_base:
+            pairs.append((_arc_op(base, 0.0, self.sector, "edge"),
+                          _arc_depth_fn(base)))
+        if topc is not None and not skip_top:
+            pairs.append((_arc_op(topc, 0.0, self.sector, "edge"),
+                          _arc_depth_fn(topc)))
+        return pairs
 
 
 _KIND_CLASSES = {"edge": Edge, "cyli": Cylinder, "disc": Disc}
