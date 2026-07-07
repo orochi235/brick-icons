@@ -120,7 +120,9 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
                                            margin=0, scale=1.0)
                 f, ox, oy = hlr.fit_affine(pbbox, round(vb_w), round(vb_h), margin=0, scale=1.0)
                 fills = shade.fill_ops(shade.apply_affine_faces(res.faces, f, ox, oy),
-                                       style, clip=cull) \
+                                       style, clip=cull,
+                                       ellipses=hlr.fit_ellipses(res.ellipses, f, ox, oy),
+                                       proj=res.proj, fit=(f, ox, oy)) \
                     if style is not None else None
                 w_mm = vb_w / s * 0.4
                 h_mm = vb_h / s * 0.4
@@ -133,7 +135,9 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
                 fit = hlr.fit_segments(segs, bbox, cfg.width, cfg.height, cfg.margin, cfg.scale)
                 f, ox, oy = hlr.fit_affine(bbox, cfg.width, cfg.height, cfg.margin, cfg.scale)
                 fills = shade.fill_ops(shade.apply_affine_faces(res.faces, f, ox, oy),
-                                       style, clip=cull) \
+                                       style, clip=cull,
+                                       ellipses=hlr.fit_ellipses(res.ellipses, f, ox, oy),
+                                       proj=res.proj, fit=(f, ox, oy)) \
                     if style is not None else None
                 trace.segments_to_svg(fit, cfg.width, cfg.height, out_dir / f"{name}.svg",
                                       line_px=cfg.line_width, sil_px=cfg.silhouette_width,

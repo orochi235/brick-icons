@@ -7,7 +7,11 @@ import numpy as np
 from . import primitives
 from . import repair
 
-VisResult = namedtuple("VisResult", "segs bbox s faces analytic")
+# ellipses: projected circles (cx,cy,ux,uy,vx,vy) of the analytic
+# primitives, px space — arc-recovery candidates for fill boundaries.
+# proj: the render's Projection (fill_ops probes exact wall depths with it).
+VisResult = namedtuple("VisResult", "segs bbox s faces analytic ellipses proj",
+                       defaults=[(), None])
 
 _text_cache: dict[Path, list[str]] = {}
 
@@ -296,7 +300,8 @@ def _visible_segments_faceted(out, right, up, fwd, render_px, cull=True):
     from . import shade
     faces = shade.faces_from_tris(tri, proj, cond_edges=out["5"]) if len(tri) else []
     faces = shade.order_faces(faces, eps=EDGE_BIAS * zrange)
-    return VisResult(segs, (min(xs), min(ys), max(xs), max(ys)), s, faces, [])
+    return VisResult(segs, (min(xs), min(ys), max(xs), max(ys)), s, faces, [],
+                     (), proj)
 
 
 def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
@@ -375,7 +380,18 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
     # Witness-depth ordering replaces both the mean-depth painter sort and the
     # occlusion cull: hidden faces paint first and get covered.
     faces = shade.order_faces(tri_faces + an_faces, proj, eps, own_occ=own_occ)
-    return VisResult(segs, _ops_bbox(segs), s, faces, analytic)
+
+    # every drawn circle (no rim suppression) is an arc-recovery candidate
+    # for the fill boundaries sampled from the same projected circles
+    ells, seen = [], set()
+    for prim in analytic:
+        for op, *_ in prim.drawn_with_depth(proj):
+            if op[0] == "arc":
+                key = tuple(round(x, 6) for x in op[1:7])
+                if key not in seen:
+                    seen.add(key)
+                    ells.append(op[1:7])
+    return VisResult(segs, _ops_bbox(segs), s, faces, analytic, ells, proj)
 
 
 def _resolve_input(part: str, roots: list[Path]) -> Path:
@@ -407,8 +423,129 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
         out["tri"] = list(fixed)
     right, up, fwd = view_basis(lat, long)
     if out["analytic"]:
-        return _visible_segments_analytic(out, right, up, fwd, render_px, cull=cull)
-    return _visible_segments_faceted(out, right, up, fwd, render_px, cull=cull)
+        res = _visible_segments_analytic(out, right, up, fwd, render_px, cull=cull)
+    else:
+        res = _visible_segments_faceted(out, right, up, fwd, render_px, cull=cull)
+    return res._replace(segs=dedupe_segments(res.segs))
+
+
+def _merge_intervals(iv, eps):
+    """Union of 1-D intervals; only overlapping/touching (gap <= eps) merge,
+    so occlusion gaps survive."""
+    iv = sorted(iv)
+    out = [list(iv[0])]
+    for a, b in iv[1:]:
+        if a <= out[-1][1] + eps:
+            out[-1][1] = max(out[-1][1], b)
+        else:
+            out.append([a, b])
+    return out
+
+
+def dedupe_segments(segs, eps=0.05):
+    """Cull redundant drawn ops: collinear line spans on the same carrier
+    line and arc spans on the same carrier ellipse are unioned per kind.
+    LDraw subparts re-draw shared edges and rim circles many times over;
+    after occlusion culling those survive as duplicate or overlapping
+    elements. Exact duplicates collapse and abutting/overlapping spans merge
+    into one op; gaps (real occlusion breaks) are never bridged."""
+    lines, arcs, out = defaultdict(list), defaultdict(list), []
+    for op in segs:
+        if len(op) == 5:
+            op = ("line",) + tuple(op)
+        if op[0] == "line":
+            _, x1, y1, x2, y2, kind = op
+            dx, dy = x2 - x1, y2 - y1
+            L = math.hypot(dx, dy)
+            if L < 1e-9:
+                continue
+            dxh, dyh = dx / L, dy / L
+            if (dxh, dyh) < (-dxh, -dyh):        # fold direction mod 180
+                dxh, dyh = -dxh, -dyh
+            c = -dyh * x1 + dxh * y1             # signed offset from origin
+            # carrier-key quanta are float-noise scale (duplicates of one
+            # world edge agree to ~1e-6 px), far tighter than the merge eps:
+            # distinct nearly-parallel lines must never share a key
+            key = (kind, round(dxh * 1e3), round(dyh * 1e3), round(c * 1e3))
+            t1, t2 = dxh * x1 + dyh * y1, dxh * x2 + dyh * y2
+            lines[key].append((min(t1, t2), max(t1, t2), dxh, dyh, c))
+        elif op[0] == "arc":
+            _, cx, cy, ux, uy, vx, vy, t0, t1, kind = op
+            M = np.array([[ux, vx], [uy, vy]])
+            det = M[0, 0] * M[1, 1] - M[0, 1] * M[1, 0]
+            if abs(det) < 1e-9:
+                out.append(op)
+                continue
+            # carrier key: center + quadratic form (M M^T)^-1, invariant to
+            # the (u, v) parametrization the drawing primitive happened to use
+            Q = np.linalg.inv(M @ M.T)
+            key = (kind, round(cx * 1e3), round(cy * 1e3),
+                   round(Q[0, 0] * 1e6), round(Q[0, 1] * 1e6), round(Q[1, 1] * 1e6))
+            # polar angles around the center are monotonic in t and frame-free
+            def polar(t_deg):
+                t = math.radians(t_deg)
+                d = math.cos(t) * np.array([ux, uy]) + math.sin(t) * np.array([vx, vy])
+                return math.degrees(math.atan2(d[1], d[0]))
+            span = abs(t1 - t0)
+            if span >= 359.9:
+                arcs[key].append((0.0, 360.0, op))
+                continue
+            p0, p1 = polar(t0), polar(t1)
+            if det * (1 if t1 >= t0 else -1) < 0:  # normalize to CCW polar
+                p0, p1 = p1, p0
+            if p1 <= p0:
+                p1 += 360.0
+            arcs[key].append((p0, p1, op))
+        else:
+            out.append(op)
+    for key, spans in lines.items():
+        kind = key[0]
+        _, _, dxh, dyh, c = spans[0]
+        for a, b in _merge_intervals([s[:2] for s in spans], eps):
+            out.append(("line", dxh * a - dyh * c, dyh * a + dxh * c,
+                        dxh * b - dyh * c, dyh * b + dxh * c, kind))
+    for key, spans in arcs.items():
+        kind = key[0]
+        ref = spans[0][2]
+        _, cx, cy, ux, uy, vx, vy, _, _, _ = ref
+        Minv = np.linalg.inv(np.array([[ux, vx], [uy, vy]]))
+
+        def param(polar_deg):
+            d = np.array([math.cos(math.radians(polar_deg)),
+                          math.sin(math.radians(polar_deg))])
+            m = Minv @ d
+            return math.degrees(math.atan2(m[1], m[0]))
+        # circular union: shift every span into [base, base+720) where base
+        # is a gap edge, then merge linearly
+        if any(b - a >= 360.0 for a, b in ((s[0], s[1]) for s in spans)):
+            out.append(("arc", cx, cy, ux, uy, vx, vy, 0.0, 360.0, kind))
+            continue
+        ivs = [(a % 360.0, a % 360.0 + (b - a)) for a, b, _ in spans]
+        merged = _merge_intervals(ivs, eps)
+        # rejoin a run that wraps past 360 onto the first run
+        if len(merged) > 1 and merged[0][0] <= (merged[-1][1] - 360.0) + eps:
+            merged[0][0] = merged[-1][0] - 360.0
+            merged.pop()
+        for a, b in merged:
+            if b - a >= 359.9:
+                out.append(("arc", cx, cy, ux, uy, vx, vy, 0.0, 360.0, kind))
+                continue
+            ta, tb = param(a), param(b)
+            det = ux * vy - uy * vx
+            if det > 0:                    # param order matching CCW polar
+                while tb <= ta:
+                    tb += 360.0
+            else:
+                while tb >= ta:
+                    tb -= 360.0
+            out.append(("arc", cx, cy, ux, uy, vx, vy, ta, tb, kind))
+    return out
+
+
+def fit_ellipses(ells, f, ox, oy):
+    """Remap projected-circle params through the fit affine (uniform f)."""
+    return [(cx * f + ox, cy * f + oy, ux * f, uy * f, vx * f, vy * f)
+            for (cx, cy, ux, uy, vx, vy) in ells]
 
 
 def fit_affine(bbox, W, H, margin=6, scale=1.0):

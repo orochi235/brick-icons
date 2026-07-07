@@ -802,3 +802,17 @@ def test_smooth_group_shares_one_gradient_across_facets():
     assert all(g["grad_samples"] is grads[0]["grad_samples"] for g in grads)
     offs = [o for o, _ in grads[0]["grad_samples"]]
     assert len(set(round(o, 3) for o in offs)) >= 2           # real ramp
+
+
+def test_refine_order_clips_restores_pass_through_victim():
+    # Two coplanar-screen squares whose scalar paint order contradicts true
+    # depth (a pass-through face gets ordered nearer): the scalar clip hands
+    # the whole overlap to the impostor; refinement gives it back.
+    near = {"poly": np.array([(0., 0.), (10., 0.), (10., 10.), (0., 10.)]),
+            "zs": np.array([-5.0] * 4), "depth": -5.0, "kind": "tri",
+            "normal": np.array([0.0, 0.0, -1.0]), "order": 0}
+    impostor = {"poly": np.array([(0., 0.), (10., 0.), (10., 10.), (0., 10.)]),
+                "zs": np.array([5.0] * 4), "depth": 5.0, "kind": "tri",
+                "normal": np.array([0.0, 0.0, -1.0]), "order": 1}
+    ops = shade.fill_ops([near, impostor], shade.Flat3Style())
+    assert len(ops) == 1 and ops[0]["depth"] == -5.0   # true front face wins

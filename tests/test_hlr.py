@@ -448,3 +448,69 @@ def test_flatten_mirror_invert_survives_nested_reference(tmp_path):
     out = {"2": [], "5": [], "tri": [], "analytic": []}
     hlr.flatten(top, np.eye(3), np.zeros(3), out, [tmp_path])
     assert out["tri_meta"][0]["invert"] is True   # one mirror => flipped
+
+
+# --- dedupe_segments --------------------------------------------------------
+
+def test_dedupe_collapses_duplicate_lines():
+    seg = ("line", 0.0, 0.0, 10.0, 0.0, "edge")
+    assert len(hlr.dedupe_segments([seg, seg, seg])) == 1
+
+
+def test_dedupe_merges_overlapping_collinear_spans():
+    a = ("line", 0.0, 0.0, 6.0, 0.0, "edge")
+    b = ("line", 4.0, 0.0, 10.0, 0.0, "edge")
+    (out,) = hlr.dedupe_segments([a, b])
+    xs = sorted([out[1], out[3]])
+    assert xs[0] == pytest.approx(0.0) and xs[1] == pytest.approx(10.0)
+
+
+def test_dedupe_preserves_occlusion_gaps():
+    a = ("line", 0.0, 0.0, 4.0, 0.0, "edge")
+    b = ("line", 6.0, 0.0, 10.0, 0.0, "edge")   # 2 px gap: a real break
+    assert len(hlr.dedupe_segments([a, b])) == 2
+
+
+def test_dedupe_keeps_distinct_parallel_lines():
+    a = ("line", 0.0, 0.0, 10.0, 0.0, "edge")
+    b = ("line", 0.0, 1.0, 10.0, 1.0, "edge")
+    assert len(hlr.dedupe_segments([a, b])) == 2
+
+
+def test_dedupe_keeps_kinds_separate():
+    a = ("line", 0.0, 0.0, 10.0, 0.0, "edge")
+    b = ("line", 0.0, 0.0, 10.0, 0.0, "sil")    # widths may differ
+    assert len(hlr.dedupe_segments([a, b])) == 2
+
+
+def test_dedupe_collapses_duplicate_full_circles():
+    c = ("arc", 50.0, 50.0, 30.0, 0.0, 0.0, 30.0, 0.0, 360.0, "edge")
+    out = hlr.dedupe_segments([c, c, c])
+    assert len(out) == 1 and abs(out[0][8] - out[0][7]) >= 359.9
+
+
+def test_dedupe_merges_same_circle_different_parametrization():
+    # same circle drawn with a rotated (u, v) frame: 90-deg phase shift
+    a = ("arc", 0.0, 0.0, 10.0, 0.0, 0.0, 10.0, 0.0, 90.0, "edge")
+    b = ("arc", 0.0, 0.0, 0.0, 10.0, -10.0, 0.0, 0.0, 90.0, "edge")  # = 90..180
+    (out,) = hlr.dedupe_segments([a, b])
+    assert abs(out[8] - out[7]) == pytest.approx(180.0, abs=0.1)
+
+
+def test_dedupe_keeps_disjoint_arcs_of_one_circle():
+    a = ("arc", 0.0, 0.0, 10.0, 0.0, 0.0, 10.0, 0.0, 45.0, "edge")
+    b = ("arc", 0.0, 0.0, 10.0, 0.0, 0.0, 10.0, 180.0, 225.0, "edge")
+    assert len(hlr.dedupe_segments([a, b])) == 2
+
+
+def test_dedupe_wraparound_arcs_merge():
+    a = ("arc", 0.0, 0.0, 10.0, 0.0, 0.0, 10.0, 300.0, 360.0, "edge")
+    b = ("arc", 0.0, 0.0, 10.0, 0.0, 0.0, 10.0, 0.0, 60.0, "edge")
+    (out,) = hlr.dedupe_segments([a, b])
+    assert abs(out[8] - out[7]) == pytest.approx(120.0, abs=0.1)
+
+
+def test_dedupe_legacy_tuples_normalized():
+    out = hlr.dedupe_segments([(0.0, 0.0, 5.0, 0.0, "edge"),
+                               (0.0, 0.0, 5.0, 0.0, "edge")])
+    assert out == [("line", 0.0, 0.0, 5.0, 0.0, "edge")]

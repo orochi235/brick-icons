@@ -321,12 +321,129 @@ def _radial_focal_stops(samples, style, nbins=8):
     return stops, (float(f[0]), float(f[1]))
 
 
-def fill_ops(faces, style, clip=True):
+def _face_depth_probe(face, proj, fit):
+    """pts(N,2) canvas px -> surface camera depth per point, or None.
+
+    Flat faces (they carry a view normal) fit an exact plane through their
+    projected vertices; wall faces query their primitive's analytic occluder
+    through the render Projection (undoing the canvas fit affine first)."""
+    poly, zs = np.asarray(face["poly"], float), np.asarray(face.get("zs", ()), float)
+    if "normal" in face and len(zs) == len(poly) and len(poly) >= 3:
+        A = np.column_stack([poly[:, 0], poly[:, 1], np.ones(len(poly))])
+        try:
+            coef, *_ = np.linalg.lstsq(A, zs, rcond=None)
+        except np.linalg.LinAlgError:
+            return None
+        resid = np.abs(A @ coef - zs)
+        if resid.max() > 1e-3 * (abs(zs).max() + 1.0):
+            return None                       # not actually planar: bail out
+        return lambda pts: pts @ coef[:2] + coef[2]
+    prim = face.get("prim")
+    occ = prim.occluder() if prim is not None else None
+    if occ is None or proj is None or fit is None:
+        return None
+    f, ox, oy = fit
+
+    def probe(pts):
+        xs = (pts[:, 0] - ox) / f
+        ys = (pts[:, 1] - oy) / f
+        return occ.depth(proj.ray_origin(xs, ys), proj.fwd)
+    return probe
+
+
+def _refine_order_clips(ordered, geoms, frags, proj, fit, step=1.2):
+    """Fix clips the scalar paint order got wrong.
+
+    A face that passes THROUGH other geometry (3673's pin barrel runs through
+    its collar) admits no correct total order: with a single scalar it
+    subtracts regions where it is actually behind. For each region a face
+    lost, grid-sample true surface depths: where EVERY covering face is
+    absent (its surface misses the ray — a wall span polygon overhangs its
+    own silhouette) or verifiably behind, hand the cells back to the front
+    face and cut them out of the impostors. The cell boundary is blocky, but
+    faces genuinely in front keep their exact fragments and paint later, so
+    they overpaint the ragged edge; order-consistent clips are untouched."""
+    if not geoms:
+        return
+    depths = [f["depth"] for f in ordered]
+    eps = 0.02 * ((max(depths) - min(depths)) or 1.0)
+    probes = {}
+
+    def probe(idx):
+        if idx not in probes:
+            probes[idx] = _face_depth_probe(ordered[idx], proj, fit)
+        return probes[idx]
+
+    import shapely as _sh
+    from shapely.geometry import box
+    for idx in sorted(geoms):
+        g = geoms[idx]
+        lost = geom2d.difference(g, frags[idx]) if idx in frags else g
+        if geom2d.area(lost) < 4 * MIN_FRAG_AREA or probe(idx) is None:
+            continue
+        x0, y0, x1, y1 = lost.bounds
+        gx = np.arange(x0 + step / 2, x1, step)
+        gy = np.arange(y0 + step / 2, y1, step)
+        if not len(gx) or not len(gy):
+            continue
+        XX, YY = np.meshgrid(gx, gy)
+        pts = np.stack([XX.ravel(), YY.ravel()], 1)
+        pts = pts[_sh.contains_xy(lost, pts[:, 0], pts[:, 1])]
+        if not len(pts):
+            continue
+        di = probe(idx)(pts)
+        exposed = np.isfinite(di)                     # no coverer in front yet
+        coverers = []
+        # scan ALL other faces: true depth is the authority here, and an
+        # impostor's real occluder sits at a LOWER paint order by definition
+        for j in sorted(geoms):
+            if j == idx or not exposed.any():
+                continue
+            inter = geom2d.intersection(lost, geoms[j])
+            if geom2d.area(inter) < MIN_FRAG_AREA:
+                continue
+            sel = _sh.contains_xy(inter, pts[:, 0], pts[:, 1])
+            pj = probe(j)
+            if pj is None:                            # can't verify: trust order
+                exposed &= ~sel
+                continue
+            if not sel.any():
+                continue
+            dj = np.full(len(pts), np.inf)
+            dj[sel] = pj(pts[sel])
+            in_front = sel & np.isfinite(dj) & (dj <= di + eps)
+            exposed &= ~in_front
+            coverers.append((j, sel))
+        if not exposed.any():
+            continue
+        cells = [box(p[0] - step / 2, p[1] - step / 2,
+                     p[0] + step / 2, p[1] + step / 2)
+                 for p in pts[exposed]]
+        # buffer past the cell lattice so no impostor frame survives along
+        # the region boundary; bleed into a true front face is harmless —
+        # it paints later and overpaints the overshoot exactly
+        take = geom2d.intersection(
+            geom2d.union_all(cells).buffer(step * 0.75), lost)
+        if geom2d.area(take) < 4 * MIN_FRAG_AREA:
+            continue
+        frags[idx] = geom2d.union(frags[idx], take) if idx in frags else take
+        for j, _ in coverers:                          # impostors lose the cells
+            if j in frags:
+                cut = geom2d.difference(frags[j], take)
+                if geom2d.area(cut) >= MIN_FRAG_AREA:
+                    frags[j] = cut
+                elif geom2d.area(geom2d.intersection(frags[j], take)) > 0:
+                    del frags[j]
+
+
+def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None):
     """Fill ops with exact visible-fragment clipping and per-surface merging.
 
     clip=False keeps every face whole (no occlusion subtraction) for
     translucent rendering; paint order is still farthest-first so nearer
     faces blend over deeper ones.
+    `ellipses` are projected circles (canvas space) for arc recovery: fill
+    boundary runs sampled from them are emitted as true SVG arcs.
 
     1) paint order: witness order when stamped, else far->near mean depth;
     2) CLIP nearest-first: each face's fragment = its polygon minus the union
@@ -340,23 +457,28 @@ def fill_ops(faces, style, clip=True):
     which anti-alias stroke wins along shared boundaries.
     Flat faces: {'d','fill','depth'}; gradient faces: {'d','gradient','depth'}
     with gradient {'x1','y1','x2','y2','stops':[(offset,color),...]}."""
+    arcs = geom2d.arc_candidates(ellipses)
     if faces and all("order" in f for f in faces):
         ordered = sorted(faces, key=lambda f: f["order"])
     else:
         ordered = sorted(faces, key=lambda f: -f["depth"])
 
-    frags = {}
+    frags, geoms = {}, {}
     cover = None
     for idx in range(len(ordered) - 1, -1, -1):        # nearest first
         f = ordered[idx]
         g = geom2d.to_geom(f["poly"], f.get("holes"))
         if g.is_empty:
             continue
+        geoms[idx] = g
         frag = g if (cover is None or not clip) else geom2d.difference(g, cover)
         if geom2d.area(frag) >= MIN_FRAG_AREA:
             frags[idx] = frag
         if clip:
             cover = g if cover is None else geom2d.union(cover, g)
+
+    if clip:
+        _refine_order_clips(ordered, geoms, frags, proj, fit)
 
     members = defaultdict(list)                        # merge key -> indices
     for idx in sorted(frags):
@@ -374,7 +496,7 @@ def fill_ops(faces, style, clip=True):
         emitted.update(ks)
         geom = frags[ks[0]] if len(ks) == 1 else \
             geom2d.union_all([frags[j] for j in ks])
-        d = geom2d.path_d(geom)
+        d = geom2d.path_d(geom, arcs, min_area=MIN_FRAG_AREA)
         if not d:
             continue
         if "grad_radial" in f:
