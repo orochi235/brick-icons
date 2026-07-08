@@ -103,3 +103,17 @@ def test_arc_endpoints_are_ring_vertices():
     # vertices so seams with neighbors and L stretches stay watertight
     ends = re.findall(r"A [\d.]+ [\d.]+ [\d.-]+ \d \d ([\d.-]+) ([\d.-]+)", d)
     assert ends and all((float(x), float(y)) in ring for x, y in ends)
+
+
+def test_candidate_step_override_recovers_coarse_arc():
+    # square whose top-right corner is a 2-chord 90 deg round (45 deg per
+    # edge, far beyond MAX_STEP): only a candidate carrying its own step
+    # (7th element, degrees) may recover it
+    r = 20.0
+    corner = circle_pts(80, 20, r, n=3, t0=-np.pi / 2, t1=0.0)  # (80,0)->(100,20)
+    ring = np.vstack([[[0, 0]], corner, [[100, 100], [0, 100]]])
+    g = geom2d.to_geom(ring)
+    coarse = [(80.0, 20.0, r, 0.0, 0.0, r, 50.0)]
+    assert " A " in geom2d.path_d(g, geom2d.arc_candidates(coarse))
+    default = [(80.0, 20.0, r, 0.0, 0.0, r)]
+    assert " A " not in geom2d.path_d(g, geom2d.arc_candidates(default))

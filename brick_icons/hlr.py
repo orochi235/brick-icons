@@ -4,6 +4,7 @@ from collections import defaultdict, namedtuple
 from pathlib import Path
 import numpy as np
 
+from . import arcfit
 from . import primitives
 from . import repair
 
@@ -308,6 +309,7 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
     """Exact pipeline: analytic occlusion oracle + true arc/line drawn ops.
     cull=False emits every drawn op whole (translucent rendering)."""
     analytic = out["analytic"]
+    fit_arcs = out.get("fit_arcs", [])
     half = render_px / 2.0
 
     cloud = []
@@ -317,6 +319,9 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
         cloud.append(np.array(out["2"]).reshape(-1, 3))
     for prim in analytic:
         cloud.append(prim.fit_pts())
+    for a in fit_arcs:
+        cloud.append(np.array([arcfit.arc_point(a, t) for t in
+                               np.linspace(a["t0"], a["t1"], 5)]))
     allpts = np.vstack(cloud)
     s, cx, cy, zrange = _fit_params(allpts, right, up, fwd, render_px)
     eps = 1e-3 * zrange
@@ -350,6 +355,25 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
         own = prim.occluder()
         for op, dfn in prim.drawn_with_depth(proj, skip_rims=shared_rims):
             specs.append((op, dfn, own if op[-1] == "sil" else None))
+    # fitted hand-faceted rounds: drawn as true arcs, but occlusion-tested
+    # along their chord path (see arcfit) via the spec's proxy element
+    fit_ells = []
+    for a in fit_arcs:
+        ell = primitives.project_circle_uv(a["C"], a["U"], a["V"], proj.to_AB,
+                                           proj.s, proj.cx, proj.cy, half)
+        cpx, cpy, cpz = proj.to_px(a["P"])
+        tv = a["tv"]
+
+        def chord_proxy(degs, cpx=cpx, cpy=cpy, cpz=cpz, tv=tv):
+            d = np.asarray(degs, float)
+            return (np.interp(d, tv, cpx), np.interp(d, tv, cpy),
+                    np.interp(d, tv, cpz))
+        specs.append((primitives._arc_op(ell, a["t0"], a["t1"], "edge"),
+                      primitives._arc_depth_fn(ell), None, chord_proxy))
+        fit_ells.append((float(ell.center[0]), float(ell.center[1]),
+                         float(ell.u[0]), float(ell.u[1]),
+                         float(ell.v[0]), float(ell.v[1]),
+                         a["step"] * 1.15 + 1.0))
     # non-substituted straight edges (box edges, chords) and conditionals
     for e in out["2"]:
         px, py, z = proj.to_px(e)
@@ -382,8 +406,9 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
     faces = shade.order_faces(tri_faces + an_faces, proj, eps, own_occ=own_occ)
 
     # every drawn circle (no rim suppression) is an arc-recovery candidate
-    # for the fill boundaries sampled from the same projected circles
-    ells, seen = [], set()
+    # for the fill boundaries sampled from the same projected circles;
+    # fitted-round ellipses join them carrying their own (coarse) max step
+    ells, seen = list(fit_ells), set()
     for prim in analytic:
         for op, *_ in prim.drawn_with_depth(proj):
             if op[0] == "arc":
@@ -421,8 +446,11 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
         fixed = repair.repaired_tris(np.array(out["tri"]), out["tri_meta"],
                                      MESH_CACHE_DIR)
         out["tri"] = list(fixed)
+    # hand-faceted rounds (condline-marked type-2 chains) become true arcs;
+    # any part that gains one needs the analytic pipeline to draw it
+    out["fit_arcs"], out["2"] = arcfit.fit_edge_arcs(out["2"], out["5"])
     right, up, fwd = view_basis(lat, long)
-    if out["analytic"]:
+    if out["analytic"] or out["fit_arcs"]:
         res = _visible_segments_analytic(out, right, up, fwd, render_px, cull=cull)
     else:
         res = _visible_segments_faceted(out, right, up, fwd, render_px, cull=cull)
@@ -543,9 +571,11 @@ def dedupe_segments(segs, eps=0.05):
 
 
 def fit_ellipses(ells, f, ox, oy):
-    """Remap projected-circle params through the fit affine (uniform f)."""
-    return [(cx * f + ox, cy * f + oy, ux * f, uy * f, vx * f, vy * f)
-            for (cx, cy, ux, uy, vx, vy) in ells]
+    """Remap projected-circle params through the fit affine (uniform f).
+    A trailing per-candidate max-step element (fitted rounds) passes through
+    unchanged — it is angular, not spatial."""
+    return [(e[0] * f + ox, e[1] * f + oy, e[2] * f, e[3] * f,
+             e[4] * f, e[5] * f, *e[6:]) for e in ells]
 
 
 def fit_affine(bbox, W, H, margin=6, scale=1.0):

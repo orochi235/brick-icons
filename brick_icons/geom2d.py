@@ -33,7 +33,9 @@ MIN_AXIS = 0.75        # px; flatter ellipses are visually straight
 
 def arc_candidates(ellipses):
     """Prepare projected circles [(cx,cy,ux,uy,vx,vy)] for path_d recovery:
-    point(t) = c + cos t*u + sin t*v. Drops degenerate (edge-on) ellipses."""
+    point(t) = c + cos t*u + sin t*v. Drops degenerate (edge-on) ellipses.
+    An optional 7th element overrides MAX_STEP (degrees) for that candidate:
+    fitted hand-faceted rounds legitimately sweep ~45 deg per edge."""
     cands = []
     for e in ellipses or []:
         c = np.array(e[:2], float)
@@ -44,7 +46,8 @@ def arc_candidates(ellipses):
         cands.append({"c": c, "Minv": np.linalg.inv(M),
                       "det": float(M[0, 0] * M[1, 1] - M[0, 1] * M[1, 0]),
                       "rx": float(S_[0]), "ry": float(S_[1]),
-                      "phi": math.degrees(math.atan2(U_[1, 0], U_[0, 0]))})
+                      "phi": math.degrees(math.atan2(U_[1, 0], U_[0, 0])),
+                      "step": math.radians(e[6]) if len(e) > 6 else MAX_STEP})
     return cands
 
 
@@ -73,7 +76,7 @@ def _assign_edges(pts, cands, tol):
             if np.isnan(ti) or np.isnan(tj):
                 continue
             dt = (tj - ti + math.pi) % (2 * math.pi) - math.pi
-            if 1e-9 < abs(dt) <= MAX_STEP:
+            if 1e-9 < abs(dt) <= cand["step"]:
                 assign[i] = (k, dt)
     return assign
 

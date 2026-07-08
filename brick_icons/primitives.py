@@ -148,9 +148,14 @@ def project_circle(R, t, radius, to_AB, s, cx, cy, half):
     angle t as Zc + cos t*Zu + sin t*Zv.
     """
     R = np.asarray(R, float)
-    C = np.asarray(t, float)
-    U = R[:, 0] * radius
-    V = R[:, 2] * radius
+    return project_circle_uv(np.asarray(t, float), R[:, 0] * radius,
+                             R[:, 2] * radius, to_AB, s, cx, cy, half)
+
+
+def project_circle_uv(C, U, V, to_AB, s, cx, cy, half):
+    """project_circle for a circle given directly by center C and in-plane
+    radius vectors U, V (world space): point(t) = C + cos t*U + sin t*V."""
+    C = np.asarray(C, float)
     pts = np.stack([C, C + U, C + V])
     A, B, Z = to_AB(pts)
     px = (A - cx) * s + half
@@ -989,19 +994,28 @@ def visible_subops(op_specs, occluders, ray_origin, fwd, eps, n=200):
     `ray_origin(xs, ys) -> (N,3)` inverts the projection to world ray origins;
     `fwd` is the view direction. A sample is visible iff its own depth
     <= nearest occluder depth + eps.
+
+    An optional 4th spec element `proxy(params) -> (xs, ys, depths)` moves the
+    visibility test onto substitute geometry (fitted rounds test along their
+    chord path, which lies on the mesh) while the emitted op stays the arc.
     """
     result = []
     for spec in op_specs:
         op, depth_fn = spec[0], spec[1]
         exclude = spec[2] if len(spec) > 2 else None
+        proxy = spec[3] if len(spec) > 3 else None
         xs, ys, params = _samples_for(op, n)
+        if proxy is not None:
+            xs, ys, sd = proxy(params)
+            sd = np.asarray(sd, float)
+        else:
+            sd = np.asarray(depth_fn(params), float)
         O = ray_origin(xs, ys)
         field = np.full(xs.shape, np.inf)
         for occ in occluders:
             if occ is exclude:
                 continue
             field = np.minimum(field, occ.depth(O, fwd))
-        sd = np.asarray(depth_fn(params), float)
         vis = sd <= field + eps
         for (i, j) in _runs(vis):
             if i == j:
