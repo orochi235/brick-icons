@@ -50,12 +50,21 @@ def _silhouette_mask(rgba: Image.Image, thr: int = 16) -> Image.Image:
     return rgba.convert("RGBA").split()[-1].point(lambda p: 255 if p > thr else 0)
 
 
-def draw_segments(segs, w, h, line_px=2, sil_px=2, supersample=3):
+def draw_segments(segs, w, h, line_px=2, sil_px=2, supersample=3,
+                  contour_rings=None, contour_px=None):
     """Anti-aliased black line-art on white. Accepts line ops and arc ops;
-    'sil' segments use sil_px width. Arc ops are sampled into polylines."""
+    'sil' segments use sil_px width. Arc ops are sampled into polylines.
+    contour_rings (closed silhouette rings, px) draw first with round
+    joints: PIL strokes are butt-capped, so outline corners are otherwise
+    left with unfilled outer wedges (notched corners)."""
     ss = max(1, supersample)
     img = Image.new("L", (w * ss, h * ss), 255)
     dr = ImageDraw.Draw(img)
+    for ring in contour_rings or []:
+        wpx = max(1, round((contour_px if contour_px is not None else sil_px) * ss))
+        pts = [(x * ss, y * ss) for x, y in ring]
+        # re-append the first two points so the seam vertex gets a joint too
+        dr.line(pts + pts[:2], fill=0, width=wpx, joint="curve")
     for op in segs:
         if len(op) == 5:                               # legacy line tuple
             op = ("line",) + tuple(op)
@@ -76,8 +85,10 @@ def draw_segments(segs, w, h, line_px=2, sil_px=2, supersample=3):
     return img.resize((w, h), Image.LANCZOS)
 
 
-def segments_mono(segs, w, h, line_px=2, sil_px=2, threshold=160):
-    g = draw_segments(segs, w, h, line_px, sil_px)
+def segments_mono(segs, w, h, line_px=2, sil_px=2, threshold=160,
+                  contour_rings=None, contour_px=None):
+    g = draw_segments(segs, w, h, line_px, sil_px,
+                      contour_rings=contour_rings, contour_px=contour_px)
     return g.point(lambda p: 255 if p >= threshold else 0).convert("1")
 
 

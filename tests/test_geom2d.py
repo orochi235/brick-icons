@@ -117,3 +117,46 @@ def test_candidate_step_override_recovers_coarse_arc():
     assert " A " in geom2d.path_d(g, geom2d.arc_candidates(coarse))
     default = [(80.0, 20.0, r, 0.0, 0.0, r)]
     assert " A " not in geom2d.path_d(g, geom2d.arc_candidates(default))
+
+
+def test_buffer_d_mitered_square():
+    # outward buffer with mitered joins: corners stay sharp (vertex at
+    # (-1,-1)) and the boundary is pure polyline
+    d = geom2d.buffer_d(geom2d.to_geom(sq(0, 0, 10, 10)), 1.0)
+    assert "-1.00 -1.00" in d and "11.00 11.00" in d
+    assert " A " not in d
+
+
+def test_buffer_d_shrinks_holes():
+    outer = geom2d.to_geom(sq(0, 0, 20, 20))
+    hole = geom2d.to_geom(sq(8, 8, 12, 12))
+    d = geom2d.buffer_d(geom2d.difference(outer, hole), 1.0)
+    assert d.count("M ") == 2                       # ring + hole survive
+    assert "9.00 9.00" in d                         # hole shrank by 1
+
+
+def test_rings_returns_exterior_and_holes():
+    g = geom2d.difference(geom2d.to_geom(sq(0, 0, 20, 20)),
+                          geom2d.to_geom(sq(8, 8, 12, 12)))
+    rs = geom2d.rings(g)
+    assert len(rs) == 2 and all(r.shape[1] == 2 for r in rs)
+
+
+def test_contour_d_dissolves_hairline_slivers():
+    # face-sampling mismatches leave hairline sliver holes along interior
+    # rims; stroked as a contour they render as ticks. contour_d must
+    # dissolve them; plain path_d keeps them (fills care about exactness)
+    outer = geom2d.to_geom(sq(0, 0, 20, 20))
+    sliver = geom2d.to_geom(np.array([(5, 10), (15, 10), (15, 10.02), (5, 10.02)], float))
+    g = geom2d.difference(outer, sliver)
+    assert geom2d.path_d(g).count("M ") == 2         # sliver hole is real
+    d = geom2d.contour_d(g)
+    assert d.count("M ") == 1                        # ...but not a contour
+    assert "0.00 0.00" in d and "20.00 20.00" in d   # outline unchanged
+
+
+def test_contour_d_drops_subpixel_rings():
+    outer = geom2d.to_geom(sq(0, 0, 20, 20))
+    dot = geom2d.to_geom(np.array([(10, 10), (10.5, 10), (10.5, 10.5), (10, 10.5)], float))
+    d = geom2d.contour_d(geom2d.difference(outer, dot))
+    assert d.count("M ") == 1

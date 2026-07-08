@@ -5,7 +5,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from . import render, process, trace, hlr, shade
+from . import render, process, trace, hlr, shade, geom2d
 from .config import load_config, Config
 
 
@@ -119,43 +119,62 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
                 shifted = hlr.fit_segments(segs, pbbox, round(vb_w), round(vb_h),
                                            margin=0, scale=1.0)
                 f, ox, oy = hlr.fit_affine(pbbox, round(vb_w), round(vb_h), margin=0, scale=1.0)
-                fills = shade.fill_ops(shade.apply_affine_faces(res.faces, f, ox, oy),
-                                       style, clip=cull,
-                                       ellipses=hlr.fit_ellipses(res.ellipses, f, ox, oy),
+                faces = shade.apply_affine_faces(res.faces, f, ox, oy)
+                ells = hlr.fit_ellipses(res.ellipses, f, ox, oy)
+                fills = shade.fill_ops(faces, style, clip=cull, ellipses=ells,
                                        proj=res.proj, fit=(f, ox, oy)) \
                     if style is not None else None
+                sil_geom = shade.silhouette_geom(faces) if faces else None
+                contour = geom2d.contour_d(sil_geom, geom2d.arc_candidates(ells)) \
+                    if sil_geom is not None else None
                 w_mm = vb_w / s * 0.4
                 h_mm = vb_h / s * 0.4
                 trace.segments_to_svg(
                     shifted, round(vb_w), round(vb_h), out_dir / f"{name}.svg",
                     physical=(w_mm, h_mm), s=s,
                     line_mm=cfg.line_mm, sil_mm=cfg.silhouette_mm, fills=fills,
-                    bg=cfg.svg_bg, opacity=cfg.opacity)
+                    bg=cfg.svg_bg, opacity=cfg.opacity,
+                    clip_geom=sil_geom, contour_d=contour)
             else:
                 fit = hlr.fit_segments(segs, bbox, cfg.width, cfg.height, cfg.margin, cfg.scale)
                 f, ox, oy = hlr.fit_affine(bbox, cfg.width, cfg.height, cfg.margin, cfg.scale)
-                fills = shade.fill_ops(shade.apply_affine_faces(res.faces, f, ox, oy),
-                                       style, clip=cull,
-                                       ellipses=hlr.fit_ellipses(res.ellipses, f, ox, oy),
+                faces = shade.apply_affine_faces(res.faces, f, ox, oy)
+                ells = hlr.fit_ellipses(res.ellipses, f, ox, oy)
+                fills = shade.fill_ops(faces, style, clip=cull, ellipses=ells,
                                        proj=res.proj, fit=(f, ox, oy)) \
                     if style is not None else None
+                sil_geom = shade.silhouette_geom(faces) if faces else None
+                contour = geom2d.contour_d(sil_geom, geom2d.arc_candidates(ells)) \
+                    if sil_geom is not None else None
                 trace.segments_to_svg(fit, cfg.width, cfg.height, out_dir / f"{name}.svg",
                                       line_px=cfg.line_width, sil_px=cfg.silhouette_width,
                                       fills=fills, bg=cfg.svg_bg,
-                                      opacity=cfg.opacity)
+                                      opacity=cfg.opacity,
+                                      clip_geom=sil_geom, contour_d=contour)
         if cfg.fmt in ("png", "both"):
+            def sil_rings(W, H, fit_segs):
+                f, ox, oy = hlr.fit_affine(bbox, W, H, cfg.margin, cfg.scale)
+                faces = shade.apply_affine_faces(res.faces, f, ox, oy)
+                if not faces:
+                    return None
+                g = geom2d.close_slivers(
+                    geom2d.union_all([shade.silhouette_geom(faces)]
+                                     + geom2d.arc_regions(fit_segs)))
+                return geom2d.rings(g, min_area=0.5)
             if cfg.mode in ("gray", "both"):
                 gpx = max(cfg.width, cfg.height, cfg.render_px // 2)
                 gfit = hlr.fit_segments(segs, bbox, gpx, gpx, cfg.margin, cfg.scale)
                 ratio = gpx / max(cfg.width, cfg.height)
                 process.draw_segments(gfit, gpx, gpx,
                                       line_px=cfg.line_width * ratio,
-                                      sil_px=cfg.silhouette_width * ratio
+                                      sil_px=cfg.silhouette_width * ratio,
+                                      contour_rings=sil_rings(gpx, gpx, gfit)
                                       ).save(out_dir / f"{name}.gray.png")
             if cfg.mode in ("mono", "both"):
                 mfit = hlr.fit_segments(segs, bbox, cfg.width, cfg.height, cfg.margin, cfg.scale)
                 process.segments_mono(mfit, cfg.width, cfg.height,
-                                      line_px=cfg.line_width, sil_px=cfg.silhouette_width
+                                      line_px=cfg.line_width, sil_px=cfg.silhouette_width,
+                                      contour_rings=sil_rings(cfg.width, cfg.height, mfit)
                                       ).save(out_dir / f"{name}.mono.png")
         return
 

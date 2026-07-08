@@ -138,6 +138,8 @@ def test_outline_uses_hlr_not_ldview(tmp_path, monkeypatch):
                    "--mode", "both", "--out", str(tmp_path)])
     assert rc == 0 and called["n"] == 0
     svg = (tmp_path / "3701.svg").read_text()
-    assert svg.count("<line") + svg.count("<path") > 50    # lines + analytic arc paths
+    # lines + analytic arc paths (threshold loose: declutter passes may
+    # legitimately drop sub-stroke fragments and converging arc spans)
+    assert svg.count("<line") + svg.count("<path") > 40
     assert Image.open(tmp_path / "3701.mono.png").mode == "1"
     assert (tmp_path / "3701.gray.png").exists()

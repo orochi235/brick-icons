@@ -519,6 +519,13 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None):
     return ops
 
 
+def silhouette_geom(faces):
+    """Union of every face polygon: the part's exact projected silhouette
+    (canvas px). Feeds the stroke-layer clip (see geom2d.buffer_d)."""
+    return geom2d.union_all([geom2d.to_geom(f["poly"], f.get("holes"))
+                             for f in faces])
+
+
 def apply_affine_faces(faces, f, ox, oy):
     """Remap face polygons (and any gradient axis) through the fit affine."""
     out = []

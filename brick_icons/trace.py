@@ -90,7 +90,8 @@ def _arc_to_svg(op):
 
 def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
                     physical=None, s=None, line_mm=0.2, sil_mm=0.2,
-                    fills=None, bg: str = "none", opacity: float = 1.0) -> Path:
+                    fills=None, bg: str = "none", opacity: float = 1.0,
+                    clip_geom=None, contour_d: str | None = None) -> Path:
     if physical is not None:
         w_mm, h_mm = physical
         root = (f'<svg xmlns="http://www.w3.org/2000/svg" '
@@ -155,17 +156,43 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
         if defs:
             parts.append("<defs>" + "".join(defs) + "</defs>")
         parts += body
-    parts.append('<g stroke="black" fill="none" stroke-linecap="round">')
+    # Clip the stroke layer to the silhouette buffered outward by half the
+    # widest stroke (mitered): round end caps otherwise poke half a width
+    # past outline corners into the background ("frayed" corners).
+    clip_attr = ""
+    if clip_geom is not None:
+        from . import geom2d
+        # grow by drawn-arc bulge regions so the clip never flattens an arc
+        clip = geom2d.union_all([clip_geom] + geom2d.arc_regions(segs))
+        cd = geom2d.buffer_d(clip, max(line_px, sil_px) / 2.0)
+        if cd:
+            parts.append(f'<defs><clipPath id="sclip">'
+                         f'<path d="{cd}" clip-rule="evenodd"/></clipPath></defs>')
+            clip_attr = ' clip-path="url(#sclip)"'
+    parts.append(f'<g stroke="black" fill="none" stroke-linecap="round"{clip_attr}>')
+    if contour_d:
+        # closed silhouette contour under the per-edge strokes: a closed path
+        # has JOINS everywhere and no caps, so mitering it renders outline
+        # corners sharp — the per-edge strokes' round vertex caps alone leave
+        # them blunted
+        parts.append(f'<path d="{contour_d}" stroke-width="{sil_px:.2f}" '
+                     f'stroke-linejoin="miter" stroke-miterlimit="5"/>')
     for op in segs:
         if len(op) == 5:                              # legacy line tuple
             op = ("line",) + tuple(op)
+        sw = sil_px if op[-1] == "sil" else line_px
+        # a fragment much shorter than its stroke renders as a bare cap dot
+        # (e.g. a near-end-on cylinder-wall silhouette sliver): pure noise
         if op[0] == "line":
             _, x1, y1, x2, y2, kind = op
-            sw = sil_px if kind == "sil" else line_px
+            if math.hypot(x2 - x1, y2 - y1) < 0.6 * sw:
+                continue
             parts.append(f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" '
                          f'stroke-width="{sw:.2f}"/>')
         else:
-            sw = sil_px if op[-1] == "sil" else line_px
+            r = (math.hypot(op[3], op[4]) + math.hypot(op[5], op[6])) / 2.0
+            if r * math.radians(abs(op[8] - op[7])) < 0.6 * sw:
+                continue
             parts.append(f'<path d="{_arc_to_svg(op)}" stroke-width="{sw:.2f}"/>')
     parts += ["</g>", "</svg>"]
     out_path = Path(out_path)

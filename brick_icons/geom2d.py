@@ -209,14 +209,89 @@ def area(g):
     return 0.0 if g is None else float(g.area)
 
 
-def path_d(g, arcs=None, tol=ARC_TOL, min_area=0.0):
+def arc_regions(segs):
+    """Circular-segment polygons (arc + closing chord) of the drawn arc ops
+    in a segment list. Face polygons follow the chords, but drawn arcs
+    (fitted rounds) legitimately bulge past them by their sagitta — union
+    these regions into the silhouette wherever it feeds strokes (clip,
+    contour) so an arc is never flattened."""
+    out = []
+    for op in segs:
+        if len(op) == 5 or op[0] == "line":
+            continue
+        _, cx, cy, ux, uy, vx, vy, t0, t1, _ = op
+        ts = np.radians(np.linspace(t0, t1, max(8, int(abs(t1 - t0) / 5) + 2)))
+        ring = np.stack([cx + np.cos(ts) * ux + np.sin(ts) * vx,
+                         cy + np.cos(ts) * uy + np.sin(ts) * vy], 1)
+        out.append(to_geom(ring))
+    return out
+
+
+def close_slivers(g, eps=0.1):
+    """Morphological closing: dissolve hairline sliver holes and seam gaps
+    (face-sampling mismatches along interior rims) without moving the real
+    boundary (mitre joins restore convex corners exactly)."""
+    if g is None or g.is_empty:
+        return g
+    try:
+        return _only_area(g.buffer(eps, join_style="mitre")
+                          .buffer(-eps, join_style="mitre"))
+    except Exception:
+        return g
+
+
+def contour_d(g, arcs=None, min_ring_area=0.5):
+    """Silhouette contour as an SVG path 'd': the cleaned outer boundary,
+    for stroking under the per-edge strokes (mitered corner joins). Unlike
+    the exact fill boundaries, hairline slivers and sub-pixel rings must NOT
+    survive here — stroked at full width they render as tick marks."""
+    g = close_slivers(g)
+    if g is None or g.is_empty:
+        return ""
+    return path_d(g, arcs, min_area=min_ring_area, min_ring_area=min_ring_area)
+
+
+def rings(g, min_area=0.0):
+    """All boundary rings (exteriors and holes) of a polygonal geometry as
+    (n,2) arrays, closing vertex dropped. Feeds raster contour drawing.
+    `min_area` drops rings below it (sliver holes render as tick marks)."""
+    out = []
+    for p in getattr(g, "geoms", [g]):
+        if p.geom_type != "Polygon" or p.is_empty or p.area < min_area:
+            continue
+        for ring in [p.exterior, *p.interiors]:
+            pts = np.asarray(ring.coords, float)[:-1]
+            if len(pts) >= 3 and (not min_area or Polygon(pts).area >= min_area
+                                  or ring is p.exterior):
+                out.append(pts)
+    return out
+
+
+def buffer_d(g, dist, mitre_limit=5.0):
+    """Outward-buffer a silhouette polygon and return it as an SVG path 'd'
+    (pure polylines, mitered corners). Used to clip the stroke layer: the
+    boundary runs exactly along the outer edge of an outline stroke, so
+    round end caps get cut flush instead of poking past silhouette corners.
+    Pair with clip-rule="evenodd" so holes stay open."""
+    if g is None or g.is_empty:
+        return ""
+    try:
+        b = g.buffer(dist, join_style="mitre", mitre_limit=mitre_limit)
+    except Exception:
+        return ""
+    return path_d(_only_area(b))
+
+
+def path_d(g, arcs=None, tol=ARC_TOL, min_area=0.0, min_ring_area=0.0):
     """Polygon/MultiPolygon -> one SVG path 'd' (one subpath per ring).
     Pair with fill-rule="evenodd" so interior rings render as holes.
     `arcs` (from arc_candidates) enables arc recovery: boundary runs lying
     on a candidate ellipse are emitted as elliptical arcs, not polylines.
     `min_area` culls component polygons below it (px^2): the booleans shed
     sub-pixel crumbs along shared boundaries that pass the whole-fragment
-    area gate by riding along with a large part."""
+    area gate by riding along with a large part. `min_ring_area` also drops
+    interior rings (holes) below it — for stroked contours, where a
+    sub-pixel hole renders as a full-width tick mark."""
     if g is None or g.is_empty:
         return ""
     polys = list(getattr(g, "geoms", [g]))
@@ -227,6 +302,9 @@ def path_d(g, arcs=None, tol=ARC_TOL, min_area=0.0):
         for ring in [p.exterior, *p.interiors]:
             pts = np.asarray(ring.coords, float)[:-1]
             if len(pts) < 3:
+                continue
+            if (min_ring_area and ring is not p.exterior
+                    and Polygon(ring).area < min_ring_area):
                 continue
             if arcs:
                 cmds.append(_ring_d(pts, arcs, tol))

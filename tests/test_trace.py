@@ -157,3 +157,74 @@ def test_segments_to_svg_physical_mm(tmp_path):
     assert 'viewBox="0 0 100 100"' in txt
     # line stroke: 0.2mm / 0.4 * 5.0 = 2.5 px
     assert 'stroke-width="2.50"' in txt
+
+
+def test_stroke_clip_from_geom(tmp_path):
+    # clip_geom: strokes are clipped to the silhouette buffered outward by
+    # half the widest stroke, with mitered corners — end caps can no longer
+    # poke past outline corners into the background
+    from brick_icons import geom2d
+    sil = geom2d.to_geom(np.array([(10, 10), (90, 10), (90, 90), (10, 90)], float))
+    segs = [(10.0, 10.0, 90.0, 10.0, "edge"), (90.0, 10.0, 90.0, 90.0, "sil")]
+    out = tmp_path / "c.svg"
+    _trace.segments_to_svg(segs, 100, 100, out, line_px=2, sil_px=4,
+                           clip_geom=sil)
+    txt = out.read_text()
+    assert "<clipPath" in txt and 'clip-path="url(#' in txt
+    assert "8.00 8.00" in txt                       # buffered by max(2,4)/2
+    # the clip applies to the stroke group, not the fills
+    assert re.search(r'<g stroke="black"[^>]*clip-path=', txt)
+
+
+def test_no_clip_without_geom(tmp_path):
+    segs = [(10.0, 10.0, 90.0, 10.0, "edge")]
+    out = tmp_path / "n.svg"
+    _trace.segments_to_svg(segs, 100, 100, out)
+    assert "<clipPath" not in out.read_text()
+
+
+def test_stroke_clip_covers_arc_bulge(tmp_path):
+    # a drawn arc legitimately bulges past the sampled fill polygon (fitted
+    # hand-faceted rounds); the clip must grow to cover it, not flatten it
+    from brick_icons import geom2d
+    sil = geom2d.to_geom(np.array([(10, 10), (90, 10), (90, 90), (10, 90)], float))
+    arc = ("arc", 10.0, 50.0, -15.0, 0.0, 0.0, 15.0, -90.0, 90.0, "edge")
+    out = tmp_path / "a.svg"
+    _trace.segments_to_svg([arc], 100, 100, out, line_px=2, sil_px=2,
+                           clip_geom=sil)
+    txt = out.read_text()
+    clip_d = re.search(r'<clipPath[^>]*><path d="([^"]+)"', txt).group(1)
+    xs = [float(v) for v in re.findall(r"[ML] ([-\d.]+)", clip_d)]
+    assert min(xs) <= -5.0                 # clip reaches the arc apex (-5,50)
+
+
+def test_contour_path_drawn_with_miter(tmp_path):
+    # the closed silhouette contour draws under the strokes with mitered
+    # joins: corners become sharp (a closed path has joins, never caps)
+    segs = [(10.0, 10.0, 90.0, 10.0, "sil")]
+    out = tmp_path / "m.svg"
+    _trace.segments_to_svg(segs, 100, 100, out, line_px=2, sil_px=4,
+                           contour_d="M 10 10 L 90 10 L 50 80 Z")
+    txt = out.read_text()
+    m = re.search(r'<g stroke="black"[^>]*>\s*<path d="M 10 10 L 90 10 L 50 80 Z"[^>]*/>', txt)
+    assert m and 'stroke-linejoin="miter"' in m.group(0)
+    assert 'stroke-width="4.00"' in m.group(0)
+
+
+def test_no_contour_by_default(tmp_path):
+    out = tmp_path / "p.svg"
+    _trace.segments_to_svg([(10.0, 10.0, 90.0, 10.0, "sil")], 100, 100, out)
+    assert "miter" not in out.read_text()
+
+
+def test_substroke_fragments_culled(tmp_path):
+    # a visible fragment much shorter than its stroke width renders as a
+    # bare round-cap dot (warts at technic-hole crescent tips) — drop it
+    segs = [(10.0, 10.0, 10.07, 10.03, "sil"),          # 0.08 px: dot
+            (20.0, 20.0, 80.0, 20.0, "edge"),           # real line
+            ("arc", 50.0, 50.0, 9.0, 0.0, 0.0, 9.0, 0.0, 2.0, "edge")]  # 0.3 px arc
+    out = tmp_path / "t.svg"
+    _trace.segments_to_svg(segs, 100, 100, out, line_px=2, sil_px=4)
+    txt = out.read_text()
+    assert txt.count("<line") == 1 and "10.07" not in txt
+    assert " A " not in txt

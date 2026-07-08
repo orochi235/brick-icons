@@ -816,3 +816,14 @@ def test_refine_order_clips_restores_pass_through_victim():
                 "normal": np.array([0.0, 0.0, -1.0]), "order": 1}
     ops = shade.fill_ops([near, impostor], shade.Flat3Style())
     assert len(ops) == 1 and ops[0]["depth"] == -5.0   # true front face wins
+
+
+def test_silhouette_geom_unions_all_faces():
+    from brick_icons import geom2d
+    faces = [{"poly": np.array([(0, 0), (10, 0), (10, 10), (0, 10)], float),
+              "depth": 0.0, "normal": 0.5},
+             {"poly": np.array([(10, 0), (20, 0), (20, 10), (10, 10)], float),
+              "depth": 1.0, "normal": 0.5}]
+    g = shade.silhouette_geom(faces)
+    assert g.geom_type == "Polygon"
+    assert abs(geom2d.area(g) - 200.0) < 1e-6

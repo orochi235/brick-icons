@@ -105,3 +105,15 @@ def test_draw_segments_renders_arc_nonblank():
     ops = [("arc", 50.0, 50.0, 40.0, 0.0, 0.0, 40.0, 0.0, 360.0, "edge")]
     img = process.draw_segments(ops, 100, 100)
     assert np.asarray(img).min() < 128
+
+
+def test_draw_segments_contour_fills_corner_notch():
+    # butt-capped strokes meeting at a corner leave the outer wedge unfilled;
+    # the closed silhouette contour ring (round joints) fills it
+    segs = [(50.0, 80.0, 10.0, 10.0, "sil"), (50.0, 80.0, 90.0, 10.0, "sil")]
+    ring = np.array([(10, 10), (90, 10), (50, 80)], float)
+    no = process.draw_segments(segs, 100, 100, sil_px=6)
+    yes = process.draw_segments(segs, 100, 100, sil_px=6,
+                                contour_rings=[ring], contour_px=6)
+    assert no.getpixel((50, 82)) > 200          # notch below the apex
+    assert yes.getpixel((50, 82)) < 100         # sealed by the contour
