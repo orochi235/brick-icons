@@ -436,7 +436,59 @@ def _refine_order_clips(ordered, geoms, frags, proj, fit, step=1.2):
                     del frags[j]
 
 
-def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None):
+def _ell_pts(op, t0, t1, step=1.0):
+    """Sample an arc op's ellipse over [t0, t1] degrees (canvas space)."""
+    n = max(3, int(abs(t1 - t0) / step) + 1)
+    ts = np.radians(np.linspace(t0, t1, n))
+    return np.stack([op[1] + np.cos(ts) * op[3] + np.sin(ts) * op[5],
+                     op[2] + np.cos(ts) * op[4] + np.sin(ts) * op[6]], axis=1)
+
+
+def refit_fill_boundaries(geoms, refits):
+    """Move fill seams onto refit separators (hlr._snap_rim_crossings pass 2).
+
+    The stroke for a counterbore's wall/annulus separator is redrawn as a
+    bore-aspect arc; the region between the old (true projected) curve and
+    the new one must swap sides so the tone boundary lands under the stroke.
+    geoms: {key: shapely geom} fill fragments, same space as the refit ops."""
+    from shapely import Point
+    out = dict(geoms)
+    for old, new, bore in refits:
+        # transfer zone: area between the two curves (bore hole excluded)
+        old_pts = _ell_pts(old, old[7], old[8])
+        new_pts = _ell_pts(new, new[7], new[8])
+        if (np.linalg.norm(old_pts[0] - new_pts[0])
+                > np.linalg.norm(old_pts[0] - new_pts[-1])):
+            new_pts = new_pts[::-1]
+        zone = geom2d.region(np.vstack([old_pts, new_pts[::-1]]))
+        zone = geom2d.difference(zone, geom2d.to_geom(_ell_pts(bore, 0, 360)))
+        if geom2d.area(zone) <= 0:
+            continue
+        disk_new = geom2d.to_geom(_ell_pts(new, 0, 360))
+        # owners: fragments just inside/outside the new arc at its apex
+        cN = np.array(new[1:3])
+        apex = _ell_pts(new, (new[7] + new[8]) / 2.0, (new[7] + new[8]) / 2.0)[0]
+        p_in, p_out = (Point(*(cN + s * (apex - cN))) for s in (0.97, 1.03))
+        ann = next((k for k, g in out.items() if g.contains(p_in)), None)
+        wal = next((k for k, g in out.items() if g.contains(p_out)), None)
+        if ann is None or wal is None or ann == wal:
+            continue
+        # the swap booleans leave pinhole rings where the zone boundary
+        # re-traces the same curves at a different sampling phase; close
+        # them at a radius-scaled eps or they bloat the SVG (tick marks)
+        r_new = (math.hypot(new[3], new[4]) + math.hypot(new[5], new[6])) / 2.0
+        eps = min(0.1, 0.002 * r_new)
+        out[ann] = geom2d.close_slivers(
+            geom2d.union(geom2d.difference(out[ann], zone),
+                         geom2d.intersection(zone, disk_new)), eps)
+        out[wal] = geom2d.close_slivers(
+            geom2d.union(geom2d.difference(out[wal], zone),
+                         geom2d.difference(zone, disk_new)), eps)
+    return out
+
+
+def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
+             refits=None):
     """Fill ops with exact visible-fragment clipping and per-surface merging.
 
     clip=False keeps every face whole (no occlusion subtraction) for
@@ -486,6 +538,13 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None):
 
     if clip:
         _refine_order_clips(ordered, geoms, frags, proj, fit)
+
+    if refits:
+        f, ox, oy = fit if fit is not None else (1.0, 0.0, 0.0)
+        mapped = [tuple(op[:1] + (op[1] * f + ox, op[2] * f + oy)
+                        + tuple(v * f for v in op[3:7]) + op[7:]
+                        for op in r) for r in refits]
+        frags = refit_fill_boundaries(frags, mapped)
 
     members = defaultdict(list)                        # merge key -> indices
     for idx in sorted(frags):

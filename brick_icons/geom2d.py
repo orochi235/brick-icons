@@ -172,6 +172,20 @@ def to_geom(poly, holes=None):
         return Polygon()
 
 
+def region(ring):
+    """Possibly SELF-INTERSECTING ring -> its full enclosed area (every lobe
+    positive). to_geom is wrong for these: set_precision on an invalid
+    polygon empties it; here make_valid resolves the crossings first."""
+    try:
+        p = np.asarray(ring, float)
+        if len(p) < 3:
+            return Polygon()
+        g = shapely.make_valid(Polygon(p))
+        return _only_area(shapely.set_precision(g, GRID))
+    except Exception:
+        return Polygon()
+
+
 def union(a, b):
     try:
         return _only_area(shapely.union(a, b))

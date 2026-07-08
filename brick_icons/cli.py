@@ -127,7 +127,8 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
                 faces = shade.apply_affine_faces(res.faces, f, ox, oy)
                 ells = hlr.fit_ellipses(res.ellipses, f, ox, oy)
                 fills = shade.fill_ops(faces, style, clip=cull, ellipses=ells,
-                                       proj=res.proj, fit=(f, ox, oy)) \
+                                       proj=res.proj, fit=(f, ox, oy),
+                                       refits=res.refits) \
                     if style is not None else None
                 sil_geom = shade.silhouette_geom(faces) if faces else None
                 contour = geom2d.contour_d(sil_geom, geom2d.arc_candidates(ells)) \
@@ -146,7 +147,8 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
                 faces = shade.apply_affine_faces(res.faces, f, ox, oy)
                 ells = hlr.fit_ellipses(res.ellipses, f, ox, oy)
                 fills = shade.fill_ops(faces, style, clip=cull, ellipses=ells,
-                                       proj=res.proj, fit=(f, ox, oy)) \
+                                       proj=res.proj, fit=(f, ox, oy),
+                                       refits=res.refits) \
                     if style is not None else None
                 sil_geom = shade.silhouette_geom(faces) if faces else None
                 contour = geom2d.contour_d(sil_geom, geom2d.arc_candidates(ells)) \

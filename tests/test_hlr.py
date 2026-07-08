@@ -561,6 +561,98 @@ def test_ring_seam_kept_across_planes():
     assert _arc_radii(res) == [1.0, 2.0, 3.0]
 
 
+def _arc_pt(op, t):
+    th = math.radians(t)
+    return np.array([op[1] + math.cos(th) * op[3] + math.sin(th) * op[5],
+                     op[2] + math.cos(th) * op[4] + math.sin(th) * op[6]])
+
+
+def _counterbore_trio():
+    # F: full opening circle. B: smaller bore arc (center within 0.35*rF of
+    # F's), visible span ending at the annulus pinch points. M: wall/annulus
+    # separator, congruent to F, visible lens inside F bulging past the bore.
+    F = ("arc", 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 360.0, "sil")
+    B = ("arc", 0.0, 0.15, 0.55, 0.0, 0.0, 0.55, 195.0, 345.0, "sil")
+    M = ("arc", 0.0, 0.30, 1.0, 0.0, 0.0, 1.0, 190.0, 350.0, "sil")
+    return F, B, M
+
+
+def test_snap_refits_separator_through_bore_pinch_points():
+    # HANDOFF item 2: the separator is re-fit as the circumcircle (in the
+    # bore's unit space) through (pinch1, pinch2, separator apex), so it
+    # reads concentric/parallel to the bore instead of congruent to the
+    # opening. Endpoints land on the bore's visible ends (pinch points).
+    F, B, M = _counterbore_trio()
+    out, refits = hlr._snap_rim_crossings([F, B, M])
+    assert out[0] == F and out[1] == B  # opening and bore untouched
+    new = out[2]
+    assert new[0] == "arc" and new != M
+    # the refit is reported so fill seams can follow the new boundary:
+    # (old separator as drawn after pass-1, replacement, bore) per refit
+    assert len(refits) == 1
+    old_rec, new_rec, bore_rec = refits[0]
+    assert old_rec[1:7] == M[1:7] and new_rec == new and bore_rec == B
+
+    p1, p2 = _arc_pt(B, B[7]), _arc_pt(B, B[8])
+    apex = _arc_pt(M, (M[7] + M[8]) / 2.0)
+    ends = [_arc_pt(new, new[7]), _arc_pt(new, new[8])]
+    assert min(np.linalg.norm(ends[0] - p1), np.linalg.norm(ends[0] - p2)) < 1e-6
+    assert min(np.linalg.norm(ends[1] - p1), np.linalg.norm(ends[1] - p2)) < 1e-6
+    assert np.linalg.norm(ends[0] - ends[1]) > 0.5  # distinct pinch points
+
+    # the drawn sweep passes through the old apex (not the complement arc)
+    ts = np.linspace(new[7], new[8], 8000)
+    d = [np.linalg.norm(_arc_pt(new, t) - apex) for t in ts]
+    assert min(d) < 1e-3
+
+    # genuinely re-fit: radius near the bore's, not the opening's
+    r_new = (math.hypot(new[3], new[4]) + math.hypot(new[5], new[6])) / 2.0
+    assert r_new < 0.8  # was 1.0 (congruent to opening)
+
+
+def test_snap_separator_refit_keeps_bore_aspect():
+    # circumcircle is fit in the BORE's unit space, so for an elliptical
+    # bore the replacement is an ellipse with the bore's aspect ratio.
+    sq = math.sqrt
+    q = 0.5  # y-squash applied to the whole scene
+    F = ("arc", 0.0, 0.0, 1.0, 0.0, 0.0, q, 0.0, 360.0, "sil")
+    B = ("arc", 0.0, 0.15 * q, 0.55, 0.0, 0.0, 0.55 * q, 195.0, 345.0, "sil")
+    M = ("arc", 0.0, 0.30 * q, 1.0, 0.0, 0.0, q, 190.0, 350.0, "sil")
+    out, _ = hlr._snap_rim_crossings([F, B, M])
+    new = out[2]
+    # actually re-fit (axes shrank toward the bore's scale) ...
+    a1 = math.hypot(new[3], new[4])
+    a2 = math.hypot(new[5], new[6])
+    assert a1 < 0.8
+    # ... with the bore's aspect ratio preserved
+    assert a2 / a1 == pytest.approx(q, rel=1e-6)
+
+
+def test_snap_no_refit_without_full_opening():
+    # trio detection requires a FULL opening circle; with F partial the
+    # separator must be left alone
+    F, B, M = _counterbore_trio()
+    F = F[:7] + (10.0, 350.0) + (F[9],)
+    out, refits = hlr._snap_rim_crossings([F, B, M])
+    # pass-1 endpoint snap may still nudge M's ends; the refit must not run:
+    # M keeps its axes (congruent to the opening, radius 1.0)
+    assert out[2][1:7] == M[1:7]
+    assert refits == []
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_3700_reports_refit_and_ellipse_candidate():
+    res = hlr.visible_segments("3700", LIB, lat=30, long=45, render_px=900)
+    assert res.refits
+    for old, new, bore in res.refits:
+        assert new in res.segs           # the refit arc is what gets drawn
+        # the new ellipse is an arc-recovery candidate so the moved fill
+        # boundary emits as a true arc
+        key = tuple(round(x, 6) for x in new[1:7])
+        assert any(tuple(round(x, 6) for x in e[:6]) == key
+                   for e in res.ellipses)
+
+
 def test_rim_candidates_admit_16gon_facet_rings():
     # face polygons around holes/studs are LDraw 16-gons (22.5 deg steps)
     # inscribed in the true circle; recovery candidates from primitive rims

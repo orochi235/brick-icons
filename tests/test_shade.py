@@ -827,3 +827,71 @@ def test_silhouette_geom_unions_all_faces():
     g = shade.silhouette_geom(faces)
     assert g.geom_type == "Polygon"
     assert abs(geom2d.area(g) - 200.0) < 1e-6
+
+
+def _ellipse_ring(op, n=360):
+    ts = np.radians(np.linspace(0.0, 360.0, n, endpoint=False))
+    return np.stack([op[1] + np.cos(ts) * op[3] + np.sin(ts) * op[5],
+                     op[2] + np.cos(ts) * op[4] + np.sin(ts) * op[6]], axis=1)
+
+
+def _refit_scene():
+    # canvas-space counterbore trio (same layout as tests/test_hlr.py):
+    # F opening, B bore, M old separator; annulus = M - B, wall = F - M
+    F = ("arc", 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 360.0, "sil")
+    B = ("arc", 0.0, 0.15, 0.55, 0.0, 0.0, 0.55, 195.0, 345.0, "sil")
+    M = ("arc", 0.0, 0.30, 1.0, 0.0, 0.0, 1.0, 190.0, 350.0, "sil")
+    (_, _, new), refits = hlr._snap_rim_crossings([F, B, M])
+    from brick_icons import geom2d
+    annulus = geom2d.difference(geom2d.to_geom(_ellipse_ring(M)),
+                                geom2d.to_geom(_ellipse_ring(B)))
+    wall = geom2d.difference(geom2d.to_geom(_ellipse_ring(F)),
+                             geom2d.to_geom(_ellipse_ring(M)))
+    return annulus, wall, refits
+
+
+def test_refit_fill_boundaries_swaps_seam_region():
+    from shapely import Point
+    from brick_icons import geom2d
+    annulus, wall, refits = _refit_scene()
+    out = shade.refit_fill_boundaries({0: annulus, 1: wall}, refits)
+
+    # tail probe: between the old separator and the refit arc — was annulus,
+    # must now shade as wall
+    th = math.radians(210.0)
+    tail = Point(0.98 * math.cos(th), 0.30 + 0.98 * math.sin(th))
+    assert annulus.contains(tail) and not wall.contains(tail)
+    assert out[1].contains(tail) and not out[0].contains(tail)
+
+    # apex-side probe inside the refit arc stays annulus
+    keep = Point(0.0, -0.645)
+    assert out[0].contains(keep) and not out[1].contains(keep)
+
+    # the swap moves area between the two regions; none is lost
+    before = geom2d.area(annulus) + geom2d.area(wall)
+    after = geom2d.area(out[0]) + geom2d.area(out[1])
+    assert after == pytest.approx(before, rel=1e-3)
+
+    # boolean seams must not leave pinhole rings (they bloat the SVG into
+    # dozens of degenerate subpaths — the tick-mark class of artifact)
+    import shapely
+    for g in out.values():
+        for p in getattr(g, "geoms", [g]):
+            assert all(abs(shapely.Polygon(r).area) > 1e-4
+                       for r in p.interiors)
+
+
+def test_fill_ops_seam_follows_refits():
+    if not hlr.Path("vendor/ldraw").exists():
+        pytest.skip("LDraw library absent")
+    res = hlr.visible_segments("3700", "vendor/ldraw", lat=30, long=45,
+                               render_px=900)
+    assert res.refits
+    style = shade.make_style("flat3")
+    base = shade.fill_ops(res.faces, style, clip=True, ellipses=res.ellipses,
+                          proj=res.proj, fit=(1.0, 0.0, 0.0))
+    moved = shade.fill_ops(res.faces, style, clip=True, ellipses=res.ellipses,
+                           proj=res.proj, fit=(1.0, 0.0, 0.0),
+                           refits=res.refits)
+    assert len(moved) == len(base)
+    assert moved != base

@@ -11,8 +11,11 @@ from . import repair
 # ellipses: projected circles (cx,cy,ux,uy,vx,vy) of the analytic
 # primitives, px space — arc-recovery candidates for fill boundaries.
 # proj: the render's Projection (fill_ops probes exact wall depths with it).
-VisResult = namedtuple("VisResult", "segs bbox s faces analytic ellipses proj",
-                       defaults=[(), None])
+# refits: (old, new, bore) arc-op triples from the separator pinch refit —
+# shade.refit_fill_boundaries moves fill seams onto the new curve.
+VisResult = namedtuple("VisResult",
+                       "segs bbox s faces analytic ellipses proj refits",
+                       defaults=[(), None, ()])
 
 _text_cache: dict[Path, list[str]] = {}
 
@@ -435,12 +438,25 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
 
 
 def _snap_rim_crossings(segs, max_snap=4.0):
-    """Counterbore/rim stroke stylization: a partial arc's endpoints move
-    onto the analytic crossing with any larger nearby circle when within
-    max_snap degrees — sampled visibility stops up to a sample short of the
-    true graze, leaving the end 'just next to' the opening stroke instead
-    of ON it. Recessed rims and bore edges then terminate ON the opening
-    circle."""
+    """Counterbore/rim stroke stylization, two passes over the final arcs.
+
+    1) SNAP: a partial arc's endpoints move onto the analytic crossing with
+       any larger nearby circle when within max_snap degrees — sampled
+       visibility stops up to a sample short of the true graze, leaving the
+       end 'just next to' the opening stroke instead of ON it.
+    2) PINCH REFIT: a counterbore's wall/annulus separator (partial arc M
+       congruent to the full opening F, drawn where it occludes the bore B)
+       is replaced by the circumcircle through (pinch1, pinch2, M's apex)
+       fit in the BORE's unit space — an ellipse with the bore's aspect —
+       so the separator reads concentric/parallel to the bore. The pinch
+       points are B's visible endpoints. (Fitting a circle CONGRUENT to F
+       through two of F's own points degenerates to F itself, hence the
+       unit-space circumcircle instead.)
+
+    Returns (segs, refits): refits records each replacement as an
+    (old, new, bore) arc-op triple so fill seams can follow the new curve.
+    """
+    refits = []
     arcs = [(i, op) for i, op in enumerate(segs) if op[0] == "arc"]
     out = list(segs)
 
@@ -452,6 +468,7 @@ def _snap_rim_crossings(segs, max_snap=4.0):
         return np.array([op[1] + math.cos(th) * op[3] + math.sin(th) * op[5],
                          op[2] + math.cos(th) * op[4] + math.sin(th) * op[6]])
 
+    # pass 1: snap partial-arc ends onto crossings with larger circles
     for i, a in arcs:
         if abs(a[8] - a[7]) >= 359.9:
             continue
@@ -486,7 +503,62 @@ def _snap_rim_crossings(segs, max_snap=4.0):
         if (t0, t1) != (a[7], a[8]):
             out[i] = a[:7] + (t0, t1) + (a[9],)
 
-    return out
+    # pass 2: refit counterbore separators through the bore's pinch points
+    arcs = [(i, op) for i, op in enumerate(out) if op[0] == "arc"]
+    full = [(i, op) for i, op in arcs if abs(op[8] - op[7]) >= 359.9]
+    part = [(i, op) for i, op in arcs if abs(op[8] - op[7]) < 359.9]
+    for _, F in full:
+        rF, cF = radius(F), np.array(F[1:3])
+
+        def sep_from_F(op):
+            return math.hypot(op[1] - cF[0], op[2] - cF[1])
+
+        emms = [(i, op) for i, op in part
+                if abs(radius(op) - rF) <= 0.01 * rF and 1e-6 < sep_from_F(op) < rF]
+        bores = [(i, op) for i, op in part
+                 if radius(op) < 0.9 * rF and sep_from_F(op) <= 0.35 * rF]
+        if not emms or not bores:
+            continue
+        mi, M = min(emms, key=lambda t: sep_from_F(t[1]))
+        _, B = min(bores, key=lambda t: sep_from_F(t[1]))
+        try:
+            Mb = np.array([[B[3], B[5]], [B[4], B[6]]], float)
+            Mbinv = np.linalg.inv(Mb)
+        except np.linalg.LinAlgError:
+            continue
+        cB = np.array(B[1:3])
+        pts = [point(B, B[7]), point(B, B[8]), point(M, (M[7] + M[8]) / 2.0)]
+        (ax_, ay_), (bx_, by_), (qx, qy) = [Mbinv @ (p - cB) for p in pts]
+        d = 2.0 * (ax_ * (by_ - qy) + bx_ * (qy - ay_) + qx * (ay_ - by_))
+        if abs(d) < 1e-9:
+            continue  # collinear in unit space: no circumcircle
+        na, nb, nq = ax_ * ax_ + ay_ * ay_, bx_ * bx_ + by_ * by_, qx * qx + qy * qy
+        uc = np.array([(na * (by_ - qy) + nb * (qy - ay_) + nq * (ay_ - by_)) / d,
+                       (na * (qx - bx_) + nb * (ax_ - qx) + nq * (bx_ - ax_)) / d])
+        rho = math.hypot(ax_ - uc[0], ay_ - uc[1])
+        if not 1e-6 < rho < 5.0:
+            continue  # near-degenerate fit; keep the authored separator
+        cN = cB + Mb @ uc
+        Mn = rho * Mb
+        Mninv = np.linalg.inv(Mn)
+
+        def angle_on(p):
+            v = Mninv @ (p - cN)
+            return math.degrees(math.atan2(v[1], v[0]))
+
+        t1a, t2a, ta = (angle_on(p) for p in pts)
+        sweep = (t2a - t1a) % 360.0
+        if (ta - t1a) % 360.0 <= sweep:
+            t0n, t1n = t1a, t1a + sweep
+        else:
+            t0n, t1n = t2a, t2a + (360.0 - sweep)
+        new = ("arc", float(cN[0]), float(cN[1]),
+               float(Mn[0, 0]), float(Mn[1, 0]),
+               float(Mn[0, 1]), float(Mn[1, 1]), t0n, t1n, M[9])
+        refits.append((out[mi], new, B))
+        out[mi] = new
+
+    return out, refits
 
 
 def _resolve_input(part: str, roots: list[Path]) -> Path:
@@ -524,7 +596,13 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
         res = _visible_segments_analytic(out, right, up, fwd, render_px, cull=cull)
     else:
         res = _visible_segments_faceted(out, right, up, fwd, render_px, cull=cull)
-    return res._replace(segs=_snap_rim_crossings(dedupe_segments(res.segs)))
+    segs, refits = _snap_rim_crossings(dedupe_segments(res.segs))
+    if refits:
+        # refit separators are arc-recovery candidates too, so the moved
+        # fill seam emits as a true arc (25 deg step, like the rim ones)
+        res = res._replace(ellipses=list(res.ellipses)
+                           + [new[1:7] + (25.0,) for _, new, _ in refits])
+    return res._replace(segs=segs, refits=refits)
 
 
 def _merge_intervals(iv, eps):
