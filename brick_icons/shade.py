@@ -467,7 +467,14 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None):
     cover = None
     for idx in range(len(ordered) - 1, -1, -1):        # nearest first
         f = ordered[idx]
-        g = geom2d.to_geom(f["poly"], f.get("holes"))
+        # coarse facet rings (16-gon hole/stud surrounds) snap onto their
+        # true circles BEFORE the booleans, so clips against neighboring
+        # analytic faces cut along the circle instead of chord chords —
+        # off-circle chord intersections defeat arc recovery and eat thin
+        # slivers (counterbore crescent tips)
+        g = geom2d.to_geom(geom2d.densify_on_arcs(f["poly"], arcs),
+                           [geom2d.densify_on_arcs(h, arcs)
+                            for h in (f.get("holes") or [])])
         if g.is_empty:
             continue
         geoms[idx] = g

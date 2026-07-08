@@ -559,3 +559,15 @@ def test_ring_seam_kept_across_planes():
                                         sector=360.0, inner=2)]}
     res = hlr._visible_segments_analytic(out, *hlr.view_basis(30, 45), 300)
     assert _arc_radii(res) == [1.0, 2.0, 3.0]
+
+
+def test_rim_candidates_admit_16gon_facet_rings():
+    # face polygons around holes/studs are LDraw 16-gons (22.5 deg steps)
+    # inscribed in the true circle; recovery candidates from primitive rims
+    # must carry a step that admits them (7th element > 22.5), else the
+    # face fill cuts chords across thin slivers (3700's crescent tips)
+    out = {"2": [], "5": [], "tri": [], "tri_meta": [],
+           "analytic": [primitives.Disc(R=np.eye(3), t=np.zeros(3), sector=360.0)]}
+    res = hlr._visible_segments_analytic(out, *hlr.view_basis(30, 45), 300)
+    assert res.ellipses
+    assert all(len(e) == 7 and e[6] > 22.5 for e in res.ellipses)

@@ -160,3 +160,26 @@ def test_contour_d_drops_subpixel_rings():
     dot = geom2d.to_geom(np.array([(10, 10), (10.5, 10), (10.5, 10.5), (10, 10.5)], float))
     d = geom2d.contour_d(geom2d.difference(outer, dot))
     assert d.count("M ") == 1
+
+
+def test_densify_on_arcs_subdivides_facet_chords():
+    # a 16-gon ring inscribed in a candidate circle (22.5 deg steps): edges
+    # on the candidate get intermediate TRUE-circle vertices so booleans cut
+    # along the circle, not the chords; off-circle edges stay untouched
+    ring = np.vstack([circle_pts(50, 50, 30, n=16), [[120, 50], [120, 120], [50, 120]]])
+    cands = geom2d.arc_candidates([(50.0, 50.0, 30.0, 0.0, 0.0, 30.0, 25.0)])
+    out = geom2d.densify_on_arcs(ring, cands)
+    assert len(out) > len(ring) + 30            # 16-gon edges subdivided
+    d = np.abs(np.hypot(out[:, 0] - 50, out[:, 1] - 50) - 30)
+    on_circle = (d < 1e-6).sum()
+    assert on_circle >= 16 + 15 * 3             # originals + 3 inserted/edge
+    # the three appended square corners survive verbatim
+    for p in [[120, 50], [120, 120], [50, 120]]:
+        assert (np.abs(out - p).sum(axis=1) < 1e-9).any()
+
+
+def test_densify_without_candidates_is_identity():
+    ring = circle_pts(50, 50, 30, n=16)
+    out = geom2d.densify_on_arcs(ring, [])
+    assert np.array_equal(out, ring)
+

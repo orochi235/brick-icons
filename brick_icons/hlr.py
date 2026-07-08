@@ -418,7 +418,11 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
 
     # every drawn circle (no rim suppression) is an arc-recovery candidate
     # for the fill boundaries sampled from the same projected circles;
-    # fitted-round ellipses join them carrying their own (coarse) max step
+    # fitted-round ellipses join them carrying their own (coarse) max step.
+    # Rim candidates carry step 25 deg: faceted faces ring holes/studs with
+    # LDraw 16-gons (22.5 deg steps) whose vertices lie ON the rim circle —
+    # under the default step their chords stay straight and the face fill
+    # cuts across thin slivers (a counterbore crescent's tips).
     ells, seen = list(fit_ells), set()
     for prim in analytic:
         for op, *_ in prim.drawn_with_depth(proj):
@@ -426,8 +430,63 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
                 key = tuple(round(x, 6) for x in op[1:7])
                 if key not in seen:
                     seen.add(key)
-                    ells.append(op[1:7])
+                    ells.append(op[1:7] + (25.0,))
     return VisResult(segs, _ops_bbox(segs), s, faces, analytic, ells, proj)
+
+
+def _snap_rim_crossings(segs, max_snap=4.0):
+    """Counterbore/rim stroke stylization: a partial arc's endpoints move
+    onto the analytic crossing with any larger nearby circle when within
+    max_snap degrees — sampled visibility stops up to a sample short of the
+    true graze, leaving the end 'just next to' the opening stroke instead
+    of ON it. Recessed rims and bore edges then terminate ON the opening
+    circle."""
+    arcs = [(i, op) for i, op in enumerate(segs) if op[0] == "arc"]
+    out = list(segs)
+
+    def radius(op):
+        return (math.hypot(op[3], op[4]) + math.hypot(op[5], op[6])) / 2.0
+
+    def point(op, t):
+        th = math.radians(t)
+        return np.array([op[1] + math.cos(th) * op[3] + math.sin(th) * op[5],
+                         op[2] + math.cos(th) * op[4] + math.sin(th) * op[6]])
+
+    for i, a in arcs:
+        if abs(a[8] - a[7]) >= 359.9:
+            continue
+        ra = radius(a)
+        t0, t1 = a[7], a[8]
+        for j, b in arcs:
+            rb = radius(b)
+            sep = math.hypot(a[1] - b[1], a[2] - b[2])
+            if j == i or rb < ra - 1e-9 or not 1e-6 < sep < 0.6 * rb:
+                continue
+            try:
+                Mbinv = np.linalg.inv(np.array([[b[3], b[5]], [b[4], b[6]]], float))
+            except np.linalg.LinAlgError:
+                continue
+            # crossings in a's param: |d + rho (cos t, sin t)| = 1 in b's
+            # unit space, d = Mb^-1 (ca - cb), rho = ra / rb
+            rho = ra / rb
+            d = Mbinv @ (np.array(a[1:3]) - np.array(b[1:3]))
+            hyp = 2.0 * rho * float(np.hypot(*d))
+            C_ = 1.0 - rho * rho - float(d @ d)
+            if hyp < 1e-12 or abs(C_) > hyp:
+                continue
+            phi = math.atan2(d[1], d[0])
+            dth = math.acos(max(-1.0, min(1.0, C_ / hyp)))
+            for cr in (math.degrees(phi + dth), math.degrees(phi - dth)):
+                d0 = ((cr - t0 + 180.0) % 360.0) - 180.0
+                d1 = ((cr - t1 + 180.0) % 360.0) - 180.0
+                if abs(d0) <= max_snap and abs(d0) <= abs(d1):
+                    t0 += d0
+                elif abs(d1) <= max_snap:
+                    t1 += d1
+        if (t0, t1) != (a[7], a[8]):
+            out[i] = a[:7] + (t0, t1) + (a[9],)
+
+    return out
 
 
 def _resolve_input(part: str, roots: list[Path]) -> Path:
@@ -465,7 +524,7 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
         res = _visible_segments_analytic(out, right, up, fwd, render_px, cull=cull)
     else:
         res = _visible_segments_faceted(out, right, up, fwd, render_px, cull=cull)
-    return res._replace(segs=dedupe_segments(res.segs))
+    return res._replace(segs=_snap_rim_crossings(dedupe_segments(res.segs)))
 
 
 def _merge_intervals(iv, eps):

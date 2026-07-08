@@ -227,6 +227,42 @@ def arc_regions(segs):
     return out
 
 
+def densify_on_arcs(pts, cands, max_step=6.0):
+    """Subdivide ring edges whose endpoints lie on a candidate ellipse,
+    inserting intermediate vertices ON the true ellipse (every <=max_step
+    degrees). Faceted faces ring holes and studs with coarse inscribed
+    polygons (LDraw 16-gons, 22.5 deg steps) whose chords sag ~0.5 px inside
+    the true circle: booleans then cut neighboring fragments along the
+    chords, the off-circle intersection vertices defeat arc recovery, and
+    thin slivers (a counterbore crescent's tips) get eaten. Densified, every
+    contested seam lies on the circle itself."""
+    pts = np.asarray(pts, float)
+    if not cands or len(pts) < 3:
+        return pts
+    assign = _assign_edges(pts, cands, ARC_TOL)
+    if not any(a is not None for a in assign):
+        return pts
+    out = []
+    n = len(pts)
+    for i in range(n):
+        out.append(pts[i])
+        a = assign[i]
+        if a is None:
+            continue
+        cand, dt = cands[a[0]], a[1]
+        k = int(math.ceil(abs(math.degrees(dt)) / max_step))
+        if k < 2:
+            continue
+        d = pts[i] - cand["c"]
+        m = cand["Minv"] @ d
+        t0 = math.atan2(m[1], m[0])
+        M = np.linalg.inv(cand["Minv"])
+        for j in range(1, k):
+            t = t0 + dt * j / k
+            out.append(cand["c"] + M @ np.array([math.cos(t), math.sin(t)]))
+    return np.array(out)
+
+
 def close_slivers(g, eps=0.1):
     """Morphological closing: dissolve hairline sliver holes and seam gaps
     (face-sampling mismatches along interior rims) without moving the real
