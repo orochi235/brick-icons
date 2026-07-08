@@ -350,6 +350,17 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
         for key, side, slope in prim.wall_rims():
             if (-side, slope) in full_smooth[key]:
                 shared_rims.add((key, side))
+    # coplanar flat seams: a circle with full-sector flat surfaces on both
+    # radial sides (concentric ring tiling) is not an edge (see flat_rims)
+    flat_full = defaultdict(set)
+    for prim in analytic:
+        if prim.is_full:
+            for key, side in prim.flat_rims():
+                flat_full[key].add(side)
+    for prim in analytic:
+        for key, side in prim.flat_rims():
+            if -side in flat_full[key]:
+                shared_rims.add(("flat", key, side))
     specs = []
     for prim in analytic:
         own = prim.occluder()

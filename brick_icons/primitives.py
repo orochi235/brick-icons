@@ -472,6 +472,17 @@ class Primitive:
                         round(rate if aligned else -rate, 3)))
         return out
 
+    def flat_rims(self):
+        """[(key, side)] for a FLAT surface's edge circles (Disc/Ring).
+
+        `side` is radial: +1 if the surface lies INSIDE the circle (the
+        circle is its outer edge), -1 if outside (inner edge). A circle
+        where full-sector flat surfaces lie on BOTH radial sides is an
+        interior seam of one continuous annulus (LDraw tiles wide flats
+        from concentric ring primitives, e.g. 4073's plate top), not an
+        edge — drawing it leaves a phantom 'collar' ring."""
+        return []
+
     def _skip_flags(self, skip_rims):
         skip_rims = skip_rims or set()
         rims = self.wall_rims() if skip_rims else []
@@ -565,7 +576,13 @@ class Disc(Primitive):
     def _make_occluder(self):
         return DiscOccluder(self.R, self.t, self.sector, 0.0, 1.0)
 
+    def flat_rims(self):
+        ru = float(np.linalg.norm(self.R[:, 0]))
+        return [(rim_key(self.t, self.R[:, 1], ru), +1)]
+
     def drawn_with_depth(self, proj, skip_rims=None):
+        if skip_rims and ("flat", *self.flat_rims()[0]) in skip_rims:
+            return []
         ell = proj.circle(self.R, self.t, 1.0)
         return [(_arc_op(ell, 0.0, self.sector, "edge"), _arc_depth_fn(ell))]
 
@@ -587,11 +604,22 @@ class Ring(Primitive):
     def radius_at(self, level):
         return self.inner + 1
 
+    def flat_rims(self):
+        ru = float(np.linalg.norm(self.R[:, 0]))
+        A = self.R[:, 1]
+        return [(rim_key(self.t, A, ru * (self.inner + 1)), +1),
+                (rim_key(self.t, A, ru * self.inner), -1)]
+
     def drawn_with_depth(self, proj, skip_rims=None):
-        outer = proj.circle(self.R, self.t, self.inner + 1)
-        inner = proj.circle(self.R, self.t, self.inner)
-        return [(_arc_op(outer, 0.0, self.sector, "edge"), _arc_depth_fn(outer)),
-                (_arc_op(inner, 0.0, self.sector, "edge"), _arc_depth_fn(inner))]
+        skip = skip_rims or set()
+        ops = []
+        for radius, rim in zip((self.inner + 1, self.inner), self.flat_rims()):
+            if ("flat", *rim) in skip:
+                continue
+            ell = proj.circle(self.R, self.t, radius)
+            ops.append((_arc_op(ell, 0.0, self.sector, "edge"),
+                        _arc_depth_fn(ell)))
+        return ops
 
     def faces(self, proj):
         sect = math.radians(self.sector)

@@ -514,3 +514,48 @@ def test_dedupe_legacy_tuples_normalized():
     out = hlr.dedupe_segments([(0.0, 0.0, 5.0, 0.0, "edge"),
                                (0.0, 0.0, 5.0, 0.0, "edge")])
     assert out == [("line", 0.0, 0.0, 5.0, 0.0, "edge")]
+
+
+def _arc_radii(res):
+    """World radii of the arc ops in a VisResult: a projected circle's major
+    semi-axis is the unforeshortened radius, in px (divide out the fit)."""
+    radii = set()
+    for op in res.segs:
+        if op[0] != "arc":
+            continue
+        M = np.array([[op[3], op[5]], [op[4], op[6]]], float)
+        radii.add(round(float(np.linalg.svd(M, compute_uv=False)[0]) / res.s, 2))
+    return sorted(radii)
+
+
+def test_coplanar_ring_seam_suppressed():
+    # two full rings tiling one flat annulus (1..2 and 2..3): their shared
+    # r=2 circle is an interior seam, not an edge — only 1 and 3 draw
+    out = {"2": [], "5": [], "tri": [], "tri_meta": [],
+           "analytic": [primitives.Ring(R=np.eye(3), t=np.zeros(3),
+                                        sector=360.0, inner=1),
+                        primitives.Ring(R=np.eye(3), t=np.zeros(3),
+                                        sector=360.0, inner=2)]}
+    res = hlr._visible_segments_analytic(out, *hlr.view_basis(30, 45), 300)
+    assert _arc_radii(res) == [1.0, 3.0]
+
+
+def test_disc_ring_seam_suppressed():
+    # a disc (r=1) continued by a ring (1..2): the r=1 circle is a seam
+    out = {"2": [], "5": [], "tri": [], "tri_meta": [],
+           "analytic": [primitives.Disc(R=np.eye(3), t=np.zeros(3), sector=360.0),
+                        primitives.Ring(R=np.eye(3), t=np.zeros(3),
+                                        sector=360.0, inner=1)]}
+    res = hlr._visible_segments_analytic(out, *hlr.view_basis(30, 45), 300)
+    assert _arc_radii(res) == [2.0]
+
+
+def test_ring_seam_kept_across_planes():
+    # same radii but different planes: r=2 is a real edge on both, kept
+    out = {"2": [], "5": [], "tri": [], "tri_meta": [],
+           "analytic": [primitives.Ring(R=np.eye(3), t=np.zeros(3),
+                                        sector=360.0, inner=1),
+                        primitives.Ring(R=np.eye(3), t=np.array([0.0, 4.0, 0.0]),
+                                        sector=360.0, inner=2)]}
+    res = hlr._visible_segments_analytic(out, *hlr.view_basis(30, 45), 300)
+    assert _arc_radii(res) == [1.0, 2.0, 3.0]
