@@ -42,6 +42,9 @@ def _parse_args(argv):
     p.add_argument("--levels", type=int, nargs=2, metavar=("BLACK", "WHITE"))
     p.add_argument("--shade-style", dest="shade_style",
                    choices=["none"] + sorted(shade.STYLES))
+    p.add_argument("--wireframe", action="store_true", default=None,
+                   help="outline strokes only with occlusion culling off "
+                        "(every edge drawn, hidden or not; no fills)")
     p.add_argument("--opacity", type=float,
                    help="face-fill opacity 0-1 for SVG output "
                         "(translucent bricks; default 1)")
@@ -72,6 +75,7 @@ def _config_from_args(args) -> Config:
         "levels": tuple(args.levels) if args.levels else None,
         "shade_style": args.shade_style, "light": args.light,
         "svg_bg": args.svg_bg, "opacity": args.opacity,
+        "wireframe": args.wireframe,
     }
     return load_config(toml_path=toml, overrides=overrides, root=args.root)
 
@@ -98,14 +102,15 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
     name = Path(part).stem if Path(part).suffix else part
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    if cfg.shading == "outline":
+    if cfg.shading == "outline" or cfg.wireframe:
         lat, long = render.resolve_latlong(cfg.angle)
-        cull = cfg.opacity >= 1.0        # translucent: draw hidden geometry too
+        # translucent or wireframe: draw hidden geometry too
+        cull = cfg.opacity >= 1.0 and not cfg.wireframe
         res = hlr.visible_segments(part, cfg.ldraw_dir, lat=lat, long=long,
                                    render_px=cfg.render_px, cull=cull)
         segs, bbox, s = res.segs, res.bbox, res.s
         style = None
-        if cfg.shade_style != "none":
+        if cfg.shade_style != "none" and not cfg.wireframe:
             style = shade.make_style(cfg.shade_style,
                                      part_color=shade.parse_hex_color(cfg.part_color),
                                      light=cfg.light)

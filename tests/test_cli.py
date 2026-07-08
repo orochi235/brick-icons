@@ -143,3 +143,19 @@ def test_outline_uses_hlr_not_ldview(tmp_path, monkeypatch):
     assert svg.count("<line") + svg.count("<path") > 40
     assert Image.open(tmp_path / "3701.mono.png").mode == "1"
     assert (tmp_path / "3701.gray.png").exists()
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_wireframe_mode_draws_hidden_edges(tmp_path):
+    # --wireframe: outline strokes only, occlusion culling off — every edge
+    # and arc drawn whole, no fills, no clip
+    rc = cli.main(["3005", "--shading", "outline", "--shade-style", "none",
+                   "--format", "svg", "--out", str(tmp_path / "n")])
+    rc2 = cli.main(["3005", "--wireframe", "--format", "svg",
+                    "--out", str(tmp_path / "w")])
+    assert rc == 0 and rc2 == 0
+    normal = (tmp_path / "n" / "3005.svg").read_text()
+    wire = (tmp_path / "w" / "3005.svg").read_text()
+    assert 'fill="url' not in wire and "linearGradient" not in wire
+    count = lambda s: s.count("<line") + s.count("<path")
+    assert count(wire) > count(normal)          # hidden geometry drawn

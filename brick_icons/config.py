@@ -46,6 +46,7 @@ DEFAULTS = {
     "light": None,           # "LAT,LONG" view-space light; None = style default
     "svg_bg": "none",        # SVG background paint; "none" = transparent
     "opacity": 1.0,          # face-fill opacity in SVG (translucent bricks)
+    "wireframe": False,      # outline strokes only, occlusion culling off
     "fmt": "png",            # png | svg | both
     "mode": "both",          # gray | mono | color | both  (png only)
     "dither": "atkinson",    # threshold | floyd | ordered | atkinson
@@ -80,6 +81,7 @@ class Config:
     light: str | None
     svg_bg: str
     opacity: float
+    wireframe: bool
     fmt: str
     mode: str
     dither: str
@@ -130,6 +132,7 @@ def load_config(toml_path=None, overrides=None, root="."):
         light=(str(data["light"]) if data["light"] else None),
         svg_bg=str(data["svg_bg"]),
         opacity=float(data["opacity"]),
+        wireframe=bool(data["wireframe"]),
         fmt=str(data["fmt"]),
         mode=str(data["mode"]),
         dither=str(data["dither"]),
