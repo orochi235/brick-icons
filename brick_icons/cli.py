@@ -48,6 +48,10 @@ def _parse_args(argv):
     p.add_argument("--opacity", type=float,
                    help="face-fill opacity 0-1 for SVG output "
                         "(translucent bricks; default 1)")
+    p.add_argument("--part-label", dest="part_label", action="store_true",
+                   default=None,
+                   help="stamp the part id in fixed small print in the "
+                        "bottom-left corner (contact sheets / test renders)")
     p.add_argument("--svg-bg", dest="svg_bg", metavar="PAINT",
                    help='SVG background: a color ("white", "#rrggbb") or '
                         '"none" for transparent (default none)')
@@ -75,7 +79,7 @@ def _config_from_args(args) -> Config:
         "levels": tuple(args.levels) if args.levels else None,
         "shade_style": args.shade_style, "light": args.light,
         "svg_bg": args.svg_bg, "opacity": args.opacity,
-        "wireframe": args.wireframe,
+        "wireframe": args.wireframe, "part_label": args.part_label,
     }
     return load_config(toml_path=toml, overrides=overrides, root=args.root)
 
@@ -101,6 +105,7 @@ def _tone(cfg: Config, rgba: Image.Image) -> Image.Image:
 def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
     name = Path(part).stem if Path(part).suffix else part
     out_dir.mkdir(parents=True, exist_ok=True)
+    label = name if cfg.part_label else None
 
     if cfg.shading == "outline" or cfg.wireframe:
         lat, long = render.resolve_latlong(cfg.angle)
@@ -143,7 +148,7 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
                     physical=(w_mm, h_mm), s=s,
                     line_mm=cfg.line_mm, sil_mm=cfg.silhouette_mm, fills=fills,
                     bg=cfg.svg_bg, opacity=cfg.opacity,
-                    clip_geom=sil_geom, contour_d=contour)
+                    clip_geom=sil_geom, contour_d=contour, label=label)
             else:
                 fit = hlr.fit_segments(segs, bbox, cfg.width, cfg.height, cfg.margin, cfg.scale)
                 f, ox, oy = hlr.fit_affine(bbox, cfg.width, cfg.height, cfg.margin, cfg.scale)
@@ -162,7 +167,8 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
                                       line_px=cfg.line_width, sil_px=cfg.silhouette_width,
                                       fills=fills, bg=cfg.svg_bg,
                                       opacity=cfg.opacity,
-                                      clip_geom=sil_geom, contour_d=contour)
+                                      clip_geom=sil_geom, contour_d=contour,
+                                      label=label)
         if cfg.fmt in ("png", "both"):
             def sil_rings(W, H, fit_segs):
                 f, ox, oy = hlr.fit_affine(bbox, W, H, cfg.margin, cfg.scale)
@@ -177,17 +183,22 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
                 gpx = max(cfg.width, cfg.height, cfg.render_px // 2)
                 gfit = hlr.fit_segments(segs, bbox, gpx, gpx, cfg.margin, cfg.scale)
                 ratio = gpx / max(cfg.width, cfg.height)
-                process.draw_segments(gfit, gpx, gpx,
-                                      line_px=cfg.line_width * ratio,
-                                      sil_px=cfg.silhouette_width * ratio,
-                                      contour_rings=sil_rings(gpx, gpx, gfit)
-                                      ).save(out_dir / f"{name}.gray.png")
+                g = process.draw_segments(gfit, gpx, gpx,
+                                          line_px=cfg.line_width * ratio,
+                                          sil_px=cfg.silhouette_width * ratio,
+                                          contour_rings=sil_rings(gpx, gpx, gfit))
+                if label:
+                    process.stamp_label(g, label)
+                g.save(out_dir / f"{name}.gray.png")
             if cfg.mode in ("mono", "both"):
                 mfit = hlr.fit_segments(segs, bbox, cfg.width, cfg.height, cfg.margin, cfg.scale)
-                process.segments_mono(mfit, cfg.width, cfg.height,
-                                      line_px=cfg.line_width, sil_px=cfg.silhouette_width,
-                                      contour_rings=sil_rings(cfg.width, cfg.height, mfit)
-                                      ).save(out_dir / f"{name}.mono.png")
+                m = process.segments_mono(mfit, cfg.width, cfg.height,
+                                          line_px=cfg.line_width,
+                                          sil_px=cfg.silhouette_width,
+                                          contour_rings=sil_rings(cfg.width, cfg.height, mfit))
+                if label:
+                    process.stamp_label(m, label)
+                m.save(out_dir / f"{name}.mono.png")
         return
 
     # --- LDView path (cel / normal / color) ---
@@ -208,14 +219,21 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
         if debug_dir:
             tone.save(_stage(debug_dir, "tone", name))
         if cfg.mode == "color":
-            process.flatten_rgb(rgba).save(out_dir / f"{name}.color.png")
+            color = process.flatten_rgb(rgba)
+            if label:
+                process.stamp_label(color, label)
+            color.save(out_dir / f"{name}.color.png")
         if cfg.mode in ("gray", "both"):
+            if label:
+                tone = process.stamp_label(tone.copy(), label)
             tone.save(out_dir / f"{name}.gray.png")
         if cfg.mode in ("mono", "both"):
             fitted = process.fit_contain(tone, cfg.width, cfg.height, cfg.margin, cfg.scale)
             mono = process.dither(fitted, cfg.dither, cfg.threshold)
             if debug_dir:
                 mono.save(_stage(debug_dir, "mono", name))
+            if label:
+                process.stamp_label(mono, label)
             mono.save(out_dir / f"{name}.mono.png")
 
     if not debug_dir and render_png.exists():

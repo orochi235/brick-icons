@@ -91,7 +91,8 @@ def _arc_to_svg(op):
 def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
                     physical=None, s=None, line_mm=0.2, sil_mm=0.2,
                     fills=None, bg: str = "none", opacity: float = 1.0,
-                    clip_geom=None, contour_d: str | None = None) -> Path:
+                    clip_geom=None, contour_d: str | None = None,
+                    label: str | None = None) -> Path:
     if physical is not None:
         w_mm, h_mm = physical
         root = (f'<svg xmlns="http://www.w3.org/2000/svg" '
@@ -194,7 +195,17 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
             if r * math.radians(abs(op[8] - op[7])) < 0.6 * sw:
                 continue
             parts.append(f'<path d="{_arc_to_svg(op)}" stroke-width="{sw:.2f}"/>')
-    parts += ["</g>", "</svg>"]
+    parts.append("</g>")
+    if label:
+        # part id in fixed small print, bottom-left corner: absolute size
+        # (2 mm physical, 8 canvas px otherwise), deliberately NOT scaled to
+        # the part — identification aid for contact sheets and test renders
+        fs = 2.0 / 0.4 * s if physical is not None else 8.0
+        pad = fs * 0.25
+        parts.append(f'<text x="{pad:.2f}" y="{h - pad:.2f}" '
+                     f'font-family="monospace" font-size="{fs:.2f}" '
+                     f'fill="black">{label}</text>')
+    parts.append("</svg>")
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(parts))

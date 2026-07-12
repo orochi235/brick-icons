@@ -92,6 +92,15 @@ def segments_mono(segs, w, h, line_px=2, sil_px=2, threshold=160,
     return g.point(lambda p: 255 if p >= threshold else 0).convert("1")
 
 
+def stamp_label(img: Image.Image, text: str) -> Image.Image:
+    """Part id in fixed small print, bottom-left corner (PIL's default bitmap
+    font). Absolute size, deliberately NOT scaled to the part — an
+    identification aid for contact sheets and test renders. In place."""
+    d = ImageDraw.Draw(img)
+    d.text((3, img.height - 14), text, fill="black")
+    return img
+
+
 _BAYER4 = np.array([[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]],
                    dtype=np.float64)
 

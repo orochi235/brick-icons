@@ -38,6 +38,20 @@ def test_mono_size(tmp_path, monkeypatch):
     assert Image.open(tmp_path / "3001.mono.png").size == (120, 80)
 
 
+def test_part_label_stamped_on_outputs(tmp_path):
+    if not Path("vendor/ldraw/parts").exists():
+        pytest.skip("LDraw library absent")
+    cli.main(["3005", "--shading", "outline", "--format", "both",
+              "--mode", "gray", "--part-label", "--out", str(tmp_path)])
+    assert ">3005</text>" in (tmp_path / "3005.svg").read_text()
+    # PNG: stamped corner differs from a blank corner (default font raster)
+    g = np.asarray(Image.open(tmp_path / "3005.gray.png").convert("L"))
+    assert (g[-14:, :40] < 128).any()               # dark label pixels bottom-left
+    cli.main(["3005", "--shading", "outline", "--format", "svg",
+              "--out", str(tmp_path / "bare")])
+    assert "<text" not in (tmp_path / "bare" / "3005.svg").read_text()
+
+
 def test_cel_mono_posterizes(tmp_path, monkeypatch):
     _fake_render(monkeypatch)
     cli.main(["3001", "--shading", "cel", "--mode", "gray",

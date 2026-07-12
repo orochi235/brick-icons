@@ -46,6 +46,17 @@ def test_segments_to_svg_writes_lines(tmp_path):
 
 
 
+def test_segments_to_svg_part_label(tmp_path):
+    # label: fixed small print in the corner — absolute size, NOT scaled to
+    # the part; absent entirely unless requested
+    segs = [(10.0, 10.0, 90.0, 10.0, "edge")]
+    out = _trace.segments_to_svg(segs, 100, 100, tmp_path / "l.svg", label="30136")
+    txt = out.read_text()
+    assert "<text" in txt and ">30136</text>" in txt
+    bare = _trace.segments_to_svg(segs, 100, 100, tmp_path / "b.svg")
+    assert "<text" not in bare.read_text()
+
+
 def test_segments_to_svg_emits_arc_path(tmp_path):
     # parametric arc: center (50,50), u=(40,0), v=(0,30), params 0..90 deg
     ops = [("arc", 50.0, 50.0, 40.0, 0.0, 0.0, 30.0, 0.0, 90.0, "edge")]
