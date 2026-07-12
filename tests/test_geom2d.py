@@ -65,10 +65,14 @@ def circle_pts(cx, cy, r, n=64, t0=0.0, t1=2 * np.pi):
 CIRCLE = [(50.0, 50.0, 30.0, 0.0, 0.0, 30.0)]      # r=30 circle at (50,50)
 
 
-def test_full_circle_ring_recovers_two_arcs():
+def test_full_circle_ring_recovers_quarter_arcs():
+    # <=90 deg chunks: near-180 spans have near-antipodal endpoints, which
+    # amplify coordinate rounding into a visible center shift when the
+    # renderer re-derives the ellipse center from the endpoints
     g = geom2d.to_geom(circle_pts(50, 50, 30))
     d = geom2d.path_d(g, geom2d.arc_candidates(CIRCLE))
-    assert d.count(" A ") == 2 and " L " not in d
+    # 4 chunks nominally; float noise at exact 90-deg boundaries may split 5
+    assert 4 <= d.count(" A ") <= 5 and " L " not in d
 
 
 def test_clipped_circle_keeps_straight_cut_as_line():

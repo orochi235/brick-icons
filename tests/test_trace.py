@@ -65,20 +65,23 @@ def test_segments_to_svg_emits_arc_path(tmp_path):
     assert "<path" in txt and " A " in txt          # elliptical-arc command
 
 
-def test_full_ellipse_arc_splits_into_two_segments(tmp_path):
-    # A 0..360 sweep (e.g. a fully-visible stud top rim). A single SVG arc whose
-    # endpoints coincide renders as nothing, so it must be split into two arcs.
+def test_full_ellipse_arc_splits_into_quarter_segments(tmp_path):
+    # A 0..360 sweep (e.g. a fully-visible stud top rim). A single SVG arc
+    # whose endpoints coincide renders as nothing — and any span near 180 has
+    # near-antipodal endpoints, which amplify the 0.01 px coordinate rounding
+    # into an O(sqrt(r*eps)) center shift when the renderer re-derives the
+    # ellipse center. So full sweeps emit as four <=90 deg sub-arcs.
     ops = [("arc", 50.0, 50.0, 40.0, 0.0, 0.0, 30.0, 0.0, 360.0, "edge")]
     out = _trace.segments_to_svg(ops, 100, 100, tmp_path / "e.svg")
     d = re.search(r'<path d="([^"]+)"', out.read_text()).group(1)
-    assert d.count(" A ") == 2                      # two sub-arcs, not one
+    assert d.count(" A ") == 4                      # quarter sub-arcs
     assert d.count("M ") == 1                        # single subpath
-    # both sub-arcs span < 180, so the large-arc flag is 0 on each
+    # every sub-arc spans <= 90, so the large-arc flag is 0 on each
     flags = re.findall(r'A [\d.]+ [\d.]+ [\d.-]+ (\d) \d', d)
-    assert flags == ["0", "0"]
-    # endpoints of the two arcs differ (a lone degenerate arc renders nothing)
-    starts = re.findall(r'([\d.]+) ([\d.]+) A', d)
-    assert starts[0] != starts[1]
+    assert flags == ["0", "0", "0", "0"]
+    # consecutive arc endpoints differ (a degenerate arc renders nothing)
+    pts = re.findall(r'(-?[\d.]+ -?[\d.]+)(?= A|$)', d)
+    assert len(set(pts)) >= 4
 
 
 def test_segments_to_svg_mixed_line_and_legacy(tmp_path):

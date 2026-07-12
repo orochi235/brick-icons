@@ -92,21 +92,21 @@ def _fmt(p):
 def _arc_cmds(pts, idxs, dts, cand):
     """A-segments through ring vertices idxs (>=2 edges) on one candidate.
     Endpoints are exact ring vertices, so seams with neighboring faces and
-    with plain L stretches stay watertight. Sweeps > 180 deg split at a
-    mid-run vertex so every emitted arc keeps large-arc-flag 0."""
+    with plain L stretches stay watertight. Runs are emitted in chunks of
+    <= 90 deg sweep (large-arc-flag always 0): spans near 180 deg have
+    near-antipodal endpoints, and the renderer's endpoint-to-center
+    derivation amplifies the 0.01 px coordinate rounding into an
+    O(sqrt(r*eps)) center shift — a visibly displaced ellipse."""
     total = sum(dts)
     sw = 1 if cand["det"] * (1 if total >= 0 else -1) > 0 else 0
     a = f'A {cand["rx"]:.2f} {cand["ry"]:.2f} {cand["phi"]:.2f} 0 {sw} '
-    if abs(total) <= math.pi:
-        return [a + _fmt(pts[idxs[-1]])]
-    cum, split = 0.0, len(idxs) // 2
+    out, cum = [], 0.0
     for j, dt in enumerate(dts):
         cum += dt
-        if abs(cum) >= abs(total) / 2:
-            split = j + 1
-            break
-    split = min(max(split, 1), len(idxs) - 2)
-    return [a + _fmt(pts[idxs[split]]), a + _fmt(pts[idxs[-1]])]
+        if j == len(dts) - 1 or abs(cum + dts[j + 1]) > math.pi / 2:
+            out.append(a + _fmt(pts[idxs[j + 1]]))
+            cum = 0.0
+    return out
 
 
 def _ring_d(pts, cands, tol):
@@ -120,7 +120,7 @@ def _ring_d(pts, cands, tol):
 
     if assign[0] is not None and all(joined(assign[i - 1], assign[i])
                                      for i in range(n)):
-        # whole ring is one closed curve: full ellipse as two half arcs
+        # whole ring is one closed curve: full ellipse in <=90 deg chunks
         idxs = list(range(n)) + [0]
         dts = [a[1] for a in assign]
         return ("M " + _fmt(pts[0]) + " "
