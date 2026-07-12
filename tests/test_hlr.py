@@ -653,6 +653,52 @@ def test_3700_reports_refit_and_ellipse_candidate():
                    for e in res.ellipses)
 
 
+def test_snap_arc_end_onto_line_crossing():
+    # HANDOFF: general endpoint snapping. A partial arc ending within
+    # max_snap degrees of its analytic crossing with a drawn LINE snaps
+    # onto the crossing, so the visibility-cut endpoint lands ON the stroke.
+    c2 = math.cos(math.radians(2.0))
+    A = ("arc", 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 90.0, 357.0, "sil")
+    L = ("line", c2, -0.5, c2, 0.5, "sil")   # vertical chord, crossings at ±2°
+    out, _ = hlr._snap_rim_crossings([A, L])
+    assert out[1] == L                        # lines are targets, never moved
+    snapped = out[0]
+    assert snapped[8] == pytest.approx(358.0)  # -2° crossing
+    end = _arc_pt(snapped, snapped[8])
+    assert end[0] == pytest.approx(c2, abs=1e-9)
+
+
+def test_no_snap_to_crossing_beyond_line_span():
+    # same carrier line, but the drawn segment stops far from the crossing
+    # point: the crossing is not on adjoining geometry, no snap
+    c2 = math.cos(math.radians(2.0))
+    A = ("arc", 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 90.0, 357.0, "sil")
+    L = ("line", c2, 5.0, c2, 6.0, "sil")
+    out, _ = hlr._snap_rim_crossings([A, L])
+    assert out[0] == A
+
+
+def test_snap_arc_end_onto_line_vertex():
+    # a line ENDPOINT lying on the arc's carrier is a junction vertex; an
+    # arc end within max_snap degrees snaps to the vertex's carrier angle
+    A = ("arc", 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 90.0, 268.0, "sil")
+    L = ("line", 0.0, -1.0, 1.5, -1.7, "sil")  # starts at (0,-1), heads away
+    out, _ = hlr._snap_rim_crossings([A, L])
+    snapped = out[0]
+    assert snapped[8] == pytest.approx(270.0)
+    end = _arc_pt(snapped, snapped[8])
+    assert np.linalg.norm(end - np.array([0.0, -1.0])) < 1e-9
+
+
+def test_no_snap_to_off_carrier_vertex():
+    # a vertex radially off the carrier is unrelated geometry: snapping the
+    # arc's angle toward it would leave the gap AND bend the arc's extent
+    A = ("arc", 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 90.0, 268.0, "sil")
+    L = ("line", 0.0, -1.4, 1.5, -2.1, "sil")  # nearest angle 270°, 0.4 off
+    out, _ = hlr._snap_rim_crossings([A, L])
+    assert out[0] == A
+
+
 def test_rim_candidates_admit_16gon_facet_rings():
     # face polygons around holes/studs are LDraw 16-gons (22.5 deg steps)
     # inscribed in the true circle; recovery candidates from primitive rims

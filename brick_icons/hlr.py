@@ -437,13 +437,17 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
     return VisResult(segs, _ops_bbox(segs), s, faces, analytic, ells, proj)
 
 
-def _snap_rim_crossings(segs, max_snap=4.0):
+def _snap_rim_crossings(segs, max_snap=4.0, vertex_tol=0.25):
     """Counterbore/rim stroke stylization, two passes over the final arcs.
 
-    1) SNAP: a partial arc's endpoints move onto the analytic crossing with
-       any larger nearby circle when within max_snap degrees — sampled
-       visibility stops up to a sample short of the true graze, leaving the
-       end 'just next to' the opening stroke instead of ON it.
+    1) SNAP: a partial arc's endpoints move onto the nearest analytic
+       junction with adjoining geometry when within max_snap degrees —
+       sampled visibility stops up to a sample short of the true graze,
+       leaving the end 'just next to' the adjoining stroke instead of ON it.
+       Junction targets: crossings with any larger nearby circle, crossings
+       with drawn lines (within the drawn span), and line endpoints lying on
+       the carrier (within vertex_tol, op units) — the shared world vertex
+       where a cut edge meets the round.
     2) PINCH REFIT: a counterbore's wall/annulus separator (partial arc M
        congruent to the full opening F, drawn where it occludes the bore B)
        is replaced by the circumcircle through (pinch1, pinch2, M's apex)
@@ -468,12 +472,21 @@ def _snap_rim_crossings(segs, max_snap=4.0):
         return np.array([op[1] + math.cos(th) * op[3] + math.sin(th) * op[5],
                          op[2] + math.cos(th) * op[4] + math.sin(th) * op[6]])
 
-    # pass 1: snap partial-arc ends onto crossings with larger circles
+    lines = [op for op in segs if op[0] == "line"]
+
+    # pass 1: snap partial-arc ends onto analytic junctions with adjoining
+    # geometry — crossings with larger circles, crossings with drawn lines,
+    # and on-carrier line endpoints (vertices)
     for i, a in arcs:
         if abs(a[8] - a[7]) >= 359.9:
             continue
         ra = radius(a)
-        t0, t1 = a[7], a[8]
+        ca = np.array(a[1:3])
+        try:
+            Mainv = np.linalg.inv(np.array([[a[3], a[5]], [a[4], a[6]]], float))
+        except np.linalg.LinAlgError:
+            continue
+        cands = []  # junction angles in a's param, degrees
         for j, b in arcs:
             rb = radius(b)
             sep = math.hypot(a[1] - b[1], a[2] - b[2])
@@ -486,20 +499,49 @@ def _snap_rim_crossings(segs, max_snap=4.0):
             # crossings in a's param: |d + rho (cos t, sin t)| = 1 in b's
             # unit space, d = Mb^-1 (ca - cb), rho = ra / rb
             rho = ra / rb
-            d = Mbinv @ (np.array(a[1:3]) - np.array(b[1:3]))
+            d = Mbinv @ (ca - np.array(b[1:3]))
             hyp = 2.0 * rho * float(np.hypot(*d))
             C_ = 1.0 - rho * rho - float(d @ d)
             if hyp < 1e-12 or abs(C_) > hyp:
                 continue
             phi = math.atan2(d[1], d[0])
             dth = math.acos(max(-1.0, min(1.0, C_ / hyp)))
-            for cr in (math.degrees(phi + dth), math.degrees(phi - dth)):
-                d0 = ((cr - t0 + 180.0) % 360.0) - 180.0
-                d1 = ((cr - t1 + 180.0) % 360.0) - 180.0
-                if abs(d0) <= max_snap and abs(d0) <= abs(d1):
-                    t0 += d0
-                elif abs(d1) <= max_snap:
-                    t1 += d1
+            cands += [math.degrees(phi + dth), math.degrees(phi - dth)]
+        for L in lines:
+            # exact, in a's own unit space: the line maps to a line, the
+            # carrier to the unit circle
+            q1 = Mainv @ (np.array(L[1:3]) - ca)
+            q2 = Mainv @ (np.array(L[3:5]) - ca)
+            dq = q2 - q1
+            qq = float(dq @ dq)
+            if qq > 1e-18:
+                half = float(q1 @ dq)
+                c0 = float(q1 @ q1) - 1.0
+                disc = half * half - qq * c0
+                if disc >= 0.0:
+                    sd = math.sqrt(disc)
+                    for s in ((-half - sd) / qq, (-half + sd) / qq):
+                        if -1e-9 <= s <= 1.0 + 1e-9:
+                            q = q1 + s * dq
+                            cands.append(math.degrees(math.atan2(q[1], q[0])))
+            for q in (q1, q2):
+                if abs(float(np.hypot(q[0], q[1])) - 1.0) * ra <= vertex_tol:
+                    cands.append(math.degrees(math.atan2(q[1], q[0])))
+        # each candidate claims the nearer endpoint; each endpoint takes its
+        # nearest claimant within max_snap
+        t0, t1 = a[7], a[8]
+        best0 = best1 = None
+        for cr in cands:
+            d0 = ((cr - t0 + 180.0) % 360.0) - 180.0
+            d1 = ((cr - t1 + 180.0) % 360.0) - 180.0
+            if abs(d0) <= max_snap and abs(d0) <= abs(d1):
+                if best0 is None or abs(d0) < abs(best0):
+                    best0 = d0
+            elif abs(d1) <= max_snap:
+                if best1 is None or abs(d1) < abs(best1):
+                    best1 = d1
+        t0 += best0 or 0.0
+        t1 += best1 or 0.0
         if (t0, t1) != (a[7], a[8]):
             out[i] = a[:7] + (t0, t1) + (a[9],)
 
