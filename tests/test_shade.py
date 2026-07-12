@@ -958,6 +958,54 @@ def test_substroke_residue_at_silhouette_drops():
     assert "-1.00" not in ops[0]["d"]
 
 
+def _tongue_face(order, depth):
+    # wide body with a sub-stroke tongue reaching into a neighbor's notch —
+    # a visible PINCH of real surface, not overlap junk
+    poly = np.array([(0.0, 0.0), (20.0, 0.0), (20.0, 9.5), (28.0, 9.5),
+                     (28.0, 10.5), (20.0, 10.5), (20.0, 20.0), (0.0, 20.0)])
+    return {"poly": poly, "normal": np.array([0.0, 0.3, -0.95]),
+            "depth": depth, "order": order, "kind": "tri"}
+
+
+def test_visible_pinch_kept_from_hidden_claimant():
+    # HANDOFF 2026-07-12 open item 3 (3941 top-face nubs): the thin pinch of
+    # a VISIBLE surface (top face squeezed between the stud stroke and the
+    # body-rim stroke) is trimmed as residue and the re-clip hands the area
+    # to a fully HIDDEN interior face, whose wrong-tone fill then pokes its
+    # self-stroke past the stroke cover (grid-edged boundary). Residue may
+    # only be trimmed when its claimant already paints adjacent to it; here
+    # the claimant is invisible, so the owner keeps its pinch.
+    owner = _tongue_face(order=1, depth=5.0)
+    # neighbor with a notch exactly around the tongue: keeps the tongue
+    # visible and covers the hidden face's right end
+    stud = {"poly": np.array([(20.0, 0.0), (40.0, 0.0), (40.0, 20.0),
+                              (20.0, 20.0), (20.0, 10.5), (28.0, 10.5),
+                              (28.0, 9.5), (20.0, 9.5)]),
+            "normal": np.array([0.0, 0.3, -0.95]), "depth": 0.0, "order": 2,
+            "kind": "tri"}
+    hidden = _flat_face(19, 8, 29, 12, order=0, depth=10.0)
+    ops = shade.fill_ops([hidden, owner, stud], shade.Flat3Style())
+    assert len(ops) == 2                      # hidden face never surfaces
+    owner_op = next(o for o in ops if o["depth"] == 5.0)
+    assert any(x > 27.9 for x, _ in _d_points(owner_op["d"]))  # tongue kept
+
+
+def test_interior_residue_with_no_claimant_kept():
+    # HANDOFF 2026-07-12 open item 3 (3941 base-rim white sliver): a
+    # sub-stroke interior strip of a visible surface with NOTHING behind it
+    # was trimmed and dropped, punching a white pinhole between fills. Only
+    # true silhouette overhangs (touching the part's outer boundary) may
+    # drop; an interior strip stays with its owner.
+    owner = _flat_face(0, 0, 20, 20, order=0, depth=10.0)
+    near1 = _flat_face(0, 0, 9.5, 20, order=1, depth=2.0)
+    near2 = _flat_face(10.5, 0, 18, 20, order=2, depth=2.0)
+    ops = shade.fill_ops([owner, near1, near2], shade.Flat3Style())
+    owner_op = next(o for o in ops if o["depth"] == 10.0)
+    xs = [x for x, _ in _d_points(owner_op["d"])]
+    assert any(9.4 < x < 9.6 for x in xs)      # slit edge kept at x=9.5
+    assert any(10.4 < x < 10.6 for x in xs)    # ...and at x=10.5
+
+
 def _d_points(d):
     """All on-path (x, y) coordinates of a path d (M/L pairs; A endpoints)."""
     import re
@@ -970,6 +1018,37 @@ def _d_points(d):
             for i in range(0, len(nums), 7):
                 pts.append((nums[i + 5], nums[i + 6]))
     return pts
+
+
+def test_3941_base_rim_strip_stays_painted():
+    # HANDOFF 2026-07-12 open item 3: the sub-stroke strip of the faceted
+    # band against the lower-right silhouette corner was residue-trimmed
+    # with no claimant beneath — an unpainted white sliver INSIDE the drawn
+    # outline (canvas ~(194.9, 135.8-138.6) at labels.toml geometry). The
+    # trim-safety guard keeps it with the band.
+    if not hlr.Path("vendor/ldraw").exists():
+        pytest.skip("LDraw library absent")
+    from shapely import Point
+    from brick_icons import geom2d
+    from brick_icons.config import load_config
+    cfg = load_config(toml_path="labels.toml", overrides={}, root=".")
+    res = hlr.visible_segments("3941", cfg.ldraw_dir, render_px=cfg.render_px)
+    f, ox, oy = hlr.fit_affine(res.bbox, cfg.width, cfg.height,
+                               cfg.margin, cfg.scale)
+    faces = shade.apply_affine_faces(res.faces, f, ox, oy)
+    ells = hlr.fit_ellipses(res.ellipses, f, ox, oy)
+    captured = []
+    orig = geom2d.path_d
+    geom2d.path_d = lambda g, a, min_area=0.0: (captured.append(g),
+                                                orig(g, a, min_area=min_area))[1]
+    try:
+        shade.fill_ops(faces, shade.make_style("flat3"), clip=True,
+                       ellipses=ells, proj=res.proj, fit=(f, ox, oy),
+                       refits=res.refits, loops=res.loops)
+    finally:
+        geom2d.path_d = orig
+    for y in (135.8, 136.5, 137.5, 138.6):
+        assert any(g.contains(Point(194.9, y)) for g in captured), y
 
 
 def _loop_circle(r=10.0, n=240):

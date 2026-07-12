@@ -541,14 +541,92 @@ def _merge_members(ordered, frags):
     return members, roots
 
 
-def _residue_trims(ordered, frags, garea):
+def _contour_region(geoms, arcs):
+    """The region the drawn silhouette contour encloses: union of every
+    face polygon, sliver-closed and with boundary runs snapped onto the
+    arc candidates — the geometry contour_d strokes. Where arc recovery
+    pulls the drawn outline inside the raw silhouette (a faceted corner
+    against a fitted arc), the difference matters: fills exist out to the
+    raw boundary but the outline stroke covers only the snapped curve."""
+    U = geom2d.close_slivers(geom2d.union_all(list(geoms.values())))
+    if U is None or U.is_empty:
+        return U
+    polys = []
+    for poly in getattr(U, "geoms", [U]):
+        if poly.geom_type != "Polygon" or poly.is_empty:
+            continue
+        sh = np.asarray(poly.exterior.coords, float)[:-1]
+        hs = [np.asarray(r.coords, float)[:-1] for r in poly.interiors]
+        polys.append(geom2d.to_geom(
+            geom2d.densify_on_arcs(sh, arcs),
+            [geom2d.densify_on_arcs(h, arcs) for h in hs]))
+    return geom2d.union_all(polys) if polys else U
+
+
+def _trim_safe(p, ks, frags, geoms, sil):
+    """May the dead (locally sub-stroke) part `p` of a visible surface be
+    trimmed away? Trimming hands the area to whatever the re-clip finds
+    beneath, or to the background — only sound when that replacement paints
+    like the surroundings. Two sound cases:
+    - silhouette overhang: nothing else covers `p` and it lies mostly
+      OUTSIDE `sil`, the region the drawn contour encloses (sliver-closed,
+      arc-snapped silhouette) — dropping it reads as background past the
+      drawn outline. A strip INSIDE the contour must stay: dropping it
+      punches a white pinhole between the fills and the outline stroke
+      (3941's base-rim sliver);
+    - absorbed by a visible neighbor: `p` is covered by deeper faces and
+      the claimant (nearest-behind, who the re-clip hands the area to)
+      already paints adjacent to `p`, so its fill continues seamlessly.
+    Anything else keeps the owner's fill — correct tone, authored
+    boundaries under the strokes. Without this, 3941's top-face pinch fell
+    to HIDDEN interior faces whose grid-edged fills nubbed past the stroke
+    cover, and a band strip with no claimant at all dropped to a white
+    pinhole."""
+    import shapely as _sh
+    others = [i for i in geoms if i not in ks and geoms[i].intersects(p)]
+    cover = geom2d.union_all([geoms[i] for i in others]) if others else None
+    ca = geom2d.area(geom2d.intersection(p, cover)) if cover is not None \
+        else 0.0
+    if ca <= 0.05 * p.area:
+        if sil is None:
+            return True
+        inside = geom2d.area(geom2d.intersection(p, sil))
+        return inside < 0.5 * p.area
+    if ca < 0.95 * p.area:
+        return False               # mixed: part of it would drop to white
+    x0, y0, x1, y1 = p.bounds
+    XX, YY = np.meshgrid(np.arange(x0 + 0.5, x1, 1.0),
+                         np.arange(y0 + 0.5, y1, 1.0))
+    pts = np.stack([XX.ravel(), YY.ravel()], 1) if XX.size else \
+        np.zeros((0, 2))
+    if len(pts):
+        pts = pts[_sh.contains_xy(p, pts[:, 0], pts[:, 1])]
+    if not len(pts):
+        rp = p.representative_point()
+        pts = np.array([[rp.x, rp.y]])
+    votes = ok = 0
+    for x, y in pts[:32]:
+        cs = [i for i in others if _sh.contains_xy(geoms[i], x, y)]
+        if not cs:
+            continue
+        votes += 1
+        fc = frags.get(max(cs))    # nearest-behind: the re-clip's claimant
+        if fc is not None and fc.distance(_sh.Point(x, y)) < 1.5:
+            ok += 1
+    return votes > 0 and ok * 2 >= votes
+
+
+def _residue_trims(ordered, frags, garea, geoms=None, sil=None):
     """Per-face residue regions: parts of each MERGED surface's visible area
     that vanish under morphological opening (locally thinner than ~2x
     RESIDUE_ERODE) and are big enough to matter. These are authored-overlap
     leftovers (a ring spanning slot mouths, plate tris overhanging a drawn
     rim), not drawable detail — LDraw parts overlap surfaces freely and rely
     on z-fighting being invisible. Tested on the merged element so a thin
-    tile FUSED into a big wall polygon never counts as residue."""
+    tile FUSED into a big wall polygon never counts as residue. With `geoms`
+    (all faces' pre-clip polygons) and `sil` (the drawn-contour region:
+    sliver-closed, arc-snapped silhouette), each candidate part must also
+    pass _trim_safe — genuine visible pinches of a surface stay with it."""
     r = RESIDUE_ERODE
     min_a = RESIDUE_MIN_AREA
     members, _ = _merge_members(ordered, frags)
@@ -572,6 +650,10 @@ def _residue_trims(ordered, frags, garea):
             dead = geom2d.difference(G, live)
             parts = [p for p in getattr(dead, "geoms", [dead])
                      if p.geom_type == "Polygon" and p.area >= min_a]
+            if geoms is not None:
+                ks_set = set(ks)
+                parts = [p for p in parts
+                         if _trim_safe(p, ks_set, frags, geoms, sil)]
             if not parts:
                 continue
             du = geom2d.union_all(parts)
@@ -685,9 +767,9 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
                 cover = g if cover is None else geom2d.union(cover, g)
         if clip:
             _refine_order_clips(ordered, geoms, frags, proj, fit)
-        return frags, garea
+        return frags, garea, geoms
 
-    frags, garea = clip_pass()
+    frags, garea, geoms = clip_pass()
     if clip:
         # iterate: absorbing residue hands the area to deeper faces, whose
         # own thin leftovers only show up on the next pass (3941: ring ->
@@ -697,7 +779,8 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
         # further rounds would chase.
         trims = {}
         for _ in range(3):
-            new = _residue_trims(ordered, frags, garea)
+            sil = _contour_region(geoms, arcs) if geoms else None
+            new = _residue_trims(ordered, frags, garea, geoms=geoms, sil=sil)
             # a re-clip (full boolean pass) only pays off when some residue
             # is SUBSTANTIVE — wide enough to survive the emission crumb
             # cull. Hairline-only rounds (most parts) stop here: emission
@@ -710,7 +793,7 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
                 break
             for j, t in new.items():
                 trims[j] = t if j not in trims else geom2d.union(trims[j], t)
-            frags, garea = clip_pass(trims)
+            frags, garea, geoms = clip_pass(trims)
 
     if refits:
         f, ox, oy = fit if fit is not None else (1.0, 0.0, 0.0)
