@@ -256,6 +256,33 @@ def _ops_bbox(segs):
     return (min(xs), min(ys), max(xs), max(ys))
 
 
+_FLAT_BINS = 720          # 0.5-degree angular bins for flat-seam coverage
+
+
+def _flat_span_bins(prim, key):
+    """Boolean mask over _FLAT_BINS angular bins: which angles of the rim
+    circle `key` the primitive's sector covers, measured in a canonical
+    in-plane frame derived from the key's axis (so rotated instances of a
+    sectored primitive land in consistent bins)."""
+    n = np.asarray(key[1], float)
+    e = np.zeros(3)
+    e[int(np.argmin(np.abs(n)))] = 1.0
+    u0 = np.cross(n, e)
+    u0 /= np.linalg.norm(u0)
+    v0 = np.cross(n, u0)
+    # sample densely (>= 2 samples per bin at a full sector) — direction
+    # and handedness of the local frame fall out of the sampling
+    th = np.linspace(0.0, math.radians(min(prim.sector, 360.0)),
+                     2 * _FLAT_BINS)
+    d = np.cos(th)[:, None] * prim.R[:, 0] + np.sin(th)[:, None] * prim.R[:, 2]
+    ang = np.arctan2(d @ v0, d @ u0)
+    idx = np.floor((ang % (2 * math.pi)) / (2 * math.pi)
+                   * _FLAT_BINS).astype(int) % _FLAT_BINS
+    mask = np.zeros(_FLAT_BINS, bool)
+    mask[idx] = True
+    return mask
+
+
 def _visible_segments_faceted(out, right, up, fwd, render_px, cull=True):
     """Original z-buffer pipeline; used when no analytic primitives are present.
     cull=False skips occlusion clipping (translucent rendering: every edge is
@@ -358,17 +385,25 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
         for key, side, slope in prim.wall_rims():
             if (-side, slope) in full_smooth[key]:
                 shared_rims.add((key, side))
-    # coplanar flat seams: a circle with full-sector flat surfaces on both
-    # radial sides (concentric ring tiling) is not an edge (see flat_rims)
-    flat_full = defaultdict(set)
-    for prim in analytic:
-        if prim.is_full:
-            for key, side in prim.flat_rims():
-                flat_full[key].add(side)
+    # coplanar flat seams: a circle stretch with flat surface on BOTH radial
+    # sides (concentric ring tiling) is an interior seam, not an edge (see
+    # flat_rims). Coverage is accumulated per angular bin so sector tilings
+    # qualify too (60474 tiles its top from 1/8 rings x 8 instances); a
+    # side's arcs are suppressed only when the OPPOSITE side covers that
+    # side's whole angular span, so tilings that stop partway keep the real
+    # edge along the uncovered stretch.
+    flat_raw = defaultdict(lambda: np.zeros(_FLAT_BINS, bool))
     for prim in analytic:
         for key, side in prim.flat_rims():
-            if -side in flat_full[key]:
-                shared_rims.add(("flat", key, side))
+            flat_raw[(key, side)] |= _flat_span_bins(prim, key)
+    for (key, side), mask in flat_raw.items():
+        opp = flat_raw.get((key, -side))
+        if opp is None:
+            continue
+        # one-bin dilation absorbs float jitter where rotated instances abut
+        opp = opp | np.roll(opp, 1) | np.roll(opp, -1)
+        if np.all(opp[mask]):
+            shared_rims.add(("flat", key, side))
     specs = []
     for prim in analytic:
         own = prim.occluder()

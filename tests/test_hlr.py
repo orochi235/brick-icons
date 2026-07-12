@@ -550,6 +550,38 @@ def test_disc_ring_seam_suppressed():
     assert _arc_radii(res) == [2.0]
 
 
+def _roty(deg):
+    c, s = math.cos(math.radians(deg)), math.sin(math.radians(deg))
+    return np.array([[c, 0.0, s], [0.0, 1.0, 0.0], [-s, 0.0, c]])
+
+
+def test_sectored_ring_seam_suppressed():
+    # one flat annulus tiled from 1/8-sector rings x 8 rotated instances
+    # (60474's top face): the shared r=2 circle is an interior seam even
+    # though no single primitive is full-sector — only 1 and 3 draw
+    out = {"2": [], "5": [], "tri": [], "tri_meta": [],
+           "analytic": [primitives.Ring(R=_roty(k * 45.0), t=np.zeros(3),
+                                        sector=45.0, inner=inner)
+                        for k in range(8) for inner in (1, 2)]}
+    res = hlr._visible_segments_analytic(out, *hlr.view_basis(30, 45), 300)
+    assert _arc_radii(res) == [1.0, 3.0]
+
+
+def test_flat_seam_kept_where_tiling_has_gap():
+    # a full ring (2..3) bordered inside by 1/8 rings (1..2) covering only
+    # half the circle: the r=2 circle stays a real edge on the full ring
+    # (its uncovered half is a genuine annulus boundary), while the partial
+    # rings' own r=2 arcs are seams (full ring covers their whole span)
+    out = {"2": [], "5": [], "tri": [], "tri_meta": [],
+           "analytic": [primitives.Ring(R=np.eye(3), t=np.zeros(3),
+                                        sector=360.0, inner=2)] +
+                       [primitives.Ring(R=_roty(k * 45.0), t=np.zeros(3),
+                                        sector=45.0, inner=1)
+                        for k in range(4)]}
+    res = hlr._visible_segments_analytic(out, *hlr.view_basis(30, 45), 300)
+    assert _arc_radii(res) == [1.0, 2.0, 3.0]
+
+
 def test_ring_seam_kept_across_planes():
     # same radii but different planes: r=2 is a real edge on both, kept
     out = {"2": [], "5": [], "tri": [], "tri_meta": [],
