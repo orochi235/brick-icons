@@ -504,6 +504,16 @@ RESIDUE_MIN_AREA = 0.8
 # matter how thin — the radius is half that. A wide-bodied thin-tipped
 # piece (counterbore crescent) survives whole: a per-piece TEST, not a trim.
 RESIDUE_CRUMB = 0.4
+# SPUR: max VISIBLE area (outside the drawn ink) of an escaped-seam spur
+# that donation may hand across the seam (see _donate_escaped_spurs).
+# Nub-class artifacts are a few px^2; bigger sub-stroke-thin regions are
+# long legitimate strips (3673's barrel lens, silhouette bands) where a
+# tone swap would be a visible regression.
+SPUR_MAX_AREA = 8.0
+# a seam exactly at the ink edge still shows: the fill's 0.8px self-stroke
+# overhangs 0.4 past its boundary, plus ~a raster pixel of AA. Coverage
+# demands the seam sit this far INSIDE the drawn stroke.
+SPUR_COVER_MARGIN = 0.5
 
 
 def _merge_members(ordered, frags):
@@ -702,8 +712,156 @@ def _loop_cut_merged(merged, loops):
                 merged[best] = geom2d.union(merged[best], piece)
 
 
+def _stroke_band(strokes, sil, line_px, sil_px):
+    """The region the drawn strokes cover (canvas space): every emitted
+    line/arc op buffered to its width, plus the silhouette contour at
+    sil width. Mirrors trace.segments_to_svg: ops shorter than 0.6x their
+    stroke are skipped there (bare cap dots) and so provide no cover."""
+    from shapely.geometry import LineString
+    parts = []
+    for op in strokes:
+        if len(op) == 5:                               # legacy line tuple
+            op = ("line",) + tuple(op)
+        sw = sil_px if op[-1] == "sil" else line_px
+        if op[0] == "line":
+            _, x1, y1, x2, y2, _k = op
+            if math.hypot(x2 - x1, y2 - y1) < 0.6 * sw:
+                continue
+            parts.append(LineString([(x1, y1), (x2, y2)]).buffer(sw / 2.0))
+        else:
+            r = (math.hypot(op[3], op[4]) + math.hypot(op[5], op[6])) / 2.0
+            if r * math.radians(abs(op[8] - op[7])) < 0.6 * sw:
+                continue
+            parts.append(
+                LineString(_ell_pts(op, op[7], op[8])).buffer(sw / 2.0))
+    if sil is not None and not sil.is_empty:
+        parts.append(sil.boundary.buffer(sil_px / 2.0))
+    if not parts:
+        return None, None
+    import shapely as _sh
+    ink = geom2d.union_all(parts)
+    # coverage = ink eroded by the self-stroke overhang: a seam must sit
+    # deep enough under the stroke that the fill's own 0.8px stroke stays
+    # covered. Erode the UNION (junction overlaps keep their interior),
+    # snapped back onto the precision grid (see geom2d.opened).
+    safe = _sh.set_precision(ink.buffer(-SPUR_COVER_MARGIN), geom2d.GRID)
+    return safe, ink
+
+
+def _donate_escaped_spurs(merged, order, strokes, sil, line_px, sil_px):
+    """Reassign fill spurs whose seam escapes the drawn strokes.
+
+    Every seam between emitted elements is meant to lie under a drawn
+    stroke or on the silhouette — the stylized drawing has no other tone
+    boundaries. Clipping against TRUE geometry still leaves violations:
+    parallax pockets between a surface's authored edge and the fitted
+    drawn arc, and _refine_order_clips cell takes, both hand a
+    later-painting element slivers past the stroke band, where its 0.8px
+    self-stroke escapes the 2px cover and paints a nub on the earlier
+    surface (3941's top-face nubs at the stud/rim tangency pinches).
+
+    For each element, sub-stroke-thin protrusions of its area outside the
+    stroke band (morphological opening; the spur may connect to the body
+    THROUGH the uncovered gap, so piece connectivity cannot find it) whose
+    border runs along the element's own boundary away from the silhouette
+    are donated to the max-contact neighbor across that seam — but only
+    when that neighbor paints EARLIER: the artifact is strictly the later
+    painter's self-stroke on the earlier fill, and the reverse donation
+    would repaint the pocket with the wrong surface's tone. Donation
+    moves the seam under the stroke band; the area cap keeps legitimate
+    thin strips (a barrel lens, a rim band) with their true surface."""
+    import shapely as _sh
+    band, ink = _stroke_band(strokes, sil, line_px, sil_px)
+    if band is None:
+        return
+    sil_b = sil.boundary.buffer(0.5) \
+        if sil is not None and not sil.is_empty else None
+
+    def near(g, bounds, pad=0.5):
+        # window a big geometry down to the work area; snap the cut back
+        # onto the precision grid (off-grid booleans: see geom2d.opened)
+        x0, y0, x1, y1 = bounds
+        c = _sh.clip_by_rect(g, x0 - pad, y0 - pad, x1 + pad, y1 + pad)
+        return _sh.set_precision(c, geom2d.GRID)
+
+    # a donation can surface the NEXT seam: the pocket handed from the wall
+    # to the top face now abuts a still-earlier junction sliver uncovered —
+    # iterate to a fixpoint (donations flow strictly later->earlier, so the
+    # area-weighted paint order decreases and this terminates; the cap is a
+    # backstop). Only elements a donation touched need re-examination.
+    dirty = set(merged)
+    for _ in range(4):
+        moved = False
+        bnds = {r: g.bounds for r, g in merged.items()}
+        for r in sorted(merged, key=order.get):        # earliest first
+            if r not in dirty:
+                continue
+            dirty.discard(r)
+            W = merged[r]
+            outside = geom2d.difference(W, near(band, W.bounds, 1.0))
+            if outside.is_empty:
+                continue
+            core = geom2d.opened(outside, 0.5 * line_px)
+            thin = geom2d.difference(outside, core)
+            pieces = [p for p in getattr(thin, "geoms", [thin])
+                      if p.geom_type == "Polygon" and p.area > 0.05]
+            if not pieces:
+                continue
+            Wb = W.boundary.buffer(0.02)
+            for p in pieces:
+                inkp = near(ink, p.bounds)
+                if geom2d.area(geom2d.difference(p, inkp)) > SPUR_MAX_AREA:
+                    continue                           # visibly large: real
+                # a fringe that meets its own element's core in the OPEN is
+                # continuous visible surface — donating it swaps tone along
+                # a live edge (3941's notch-corner ticks). A true stranded
+                # spur reaches its core only under the ink (or not at all).
+                touch = geom2d.intersection(p.buffer(0.05),
+                                            near(core, p.bounds))
+                if not touch.is_empty \
+                        and not geom2d.difference(touch, inkp).is_empty:
+                    continue
+                esc = p.boundary.intersection(near(Wb, p.bounds))
+                if sil_b is not None and not esc.is_empty:
+                    esc = esc.difference(near(sil_b, p.bounds, 1.0))
+                if esc.is_empty or esc.length < 0.5:
+                    continue
+                probe = esc.buffer(0.3)
+                # a HAIRLINE spur must go to a receiver that actually abuts
+                # it: the contact probe tolerates a 0.3 gap, and a donated
+                # sub-crumb piece separated from its receiver's fill is
+                # crumb-culled at emission — an unpainted hole where the
+                # spur used to paint. Wide-enough pieces survive on their
+                # own, so any near receiver is safe.
+                pb = p.buffer(0.05)
+                need_touch = p.buffer(-RESIDUE_CRUMB).is_empty
+                qx0, qy0, qx1, qy1 = probe.bounds
+                best, contact = None, 0.0
+                for r2, g2 in merged.items():
+                    if r2 == r:
+                        continue
+                    bx0, by0, bx1, by1 = bnds[r2]
+                    if bx1 < qx0 or bx0 > qx1 or by1 < qy0 or by0 > qy1:
+                        continue
+                    if need_touch and not pb.intersects(g2):
+                        continue
+                    c = geom2d.area(geom2d.intersection(probe, g2))
+                    if c > contact:
+                        best, contact = r2, c
+                if best is None or order[best] >= order[r]:
+                    continue                           # later side donates
+                merged[r] = geom2d.difference(merged[r], p)
+                merged[best] = geom2d.union(merged[best], p)
+                bnds[best] = merged[best].bounds
+                dirty.update((r, best))
+                moved = True
+        if not moved:
+            break
+
+
 def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
-             refits=None, loops=None):
+             refits=None, loops=None, strokes=None, line_px=2.0,
+             sil_px=2.0):
     """Fill ops with exact visible-fragment clipping and per-surface merging.
 
     clip=False keeps every face whole (no occlusion subtraction) for
@@ -816,6 +974,11 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
         _loop_cut_merged(merged, [np.stack([p[:, 0] * f_ + ox_,
                                             p[:, 1] * f_ + oy_], axis=1)
                                   for p in loops])
+    if clip and strokes and merged:
+        order = {r: min(ks) for r, ks in members.items() if r in merged}
+        _donate_escaped_spurs(merged, order, strokes,
+                              _contour_region(geoms, arcs) if geoms else None,
+                              line_px, sil_px)
 
     ops, emitted = [], set()
     for idx in sorted(frags):                          # farthest-first

@@ -1108,3 +1108,101 @@ def test_loop_cut_spares_mostly_outside_elements():
     ops = shade.fill_ops([stud], shade.Flat3Style(), loops=[_loop_circle()])
     xs = [x for x, y in _d_points(ops[0]["d"])]
     assert min(xs) < -19.9 and max(xs) > -5.05
+
+
+def test_escaped_spur_donated_to_earlier_neighbor():
+    # HANDOFF 2026-07-12 open item 1 (3941 top-face nubs): a later-painting
+    # element's thin tongue pokes past the drawn stroke separating the two
+    # surfaces; its dark self-stroke escapes the stroke cover and paints a
+    # nub on the earlier face. The tongue (a sub-stroke spur outside the
+    # stroke band whose seam is neither under a stroke nor on the
+    # silhouette) must be donated to the neighbor across the seam.
+    from shapely import Point
+    face = _flat_face(0, 0, 20, 20, order=0, depth=8.0)
+    wall = {"poly": np.array([(0.0, 19.8), (5.0, 19.8), (5.0, 18.4),
+                              (10.0, 18.4), (10.0, 19.8), (20.0, 19.8),
+                              (20.0, 30.0), (0.0, 30.0)]),
+            "normal": np.array([0.0, 1.0, -0.5]), "depth": 5.0, "order": 1,
+            "kind": "tri"}
+    strokes = [("line", 0.0, 20.0, 20.0, 20.0, "fold")]
+    from brick_icons import geom2d
+    captured = []
+    orig = geom2d.path_d
+    geom2d.path_d = lambda g, a, min_area=0.0: (captured.append(g),
+                                                orig(g, a, min_area=min_area))[1]
+    try:
+        ops = shade.fill_ops([face, wall], shade.Flat3Style(),
+                             strokes=strokes)
+    finally:
+        geom2d.path_d = orig
+    assert len(captured) == 2
+    tongue_tip = Point(7.5, 18.7)          # outside the 2px stroke band
+    assert captured[0].contains(tongue_tip)         # face absorbed it
+    assert not captured[1].contains(tongue_tip)     # wall gave it up
+    body = Point(10.0, 25.0)
+    assert captured[1].contains(body)               # wall body untouched
+
+
+def test_3941_top_face_nubs_donated():
+    # HANDOFF 2026-07-12 open item 1: dark nubs on 3941's light top face at
+    # the stud/rim tangency pinches — the interior wall's parallax pocket
+    # sliver (kept by trim-safety, canvas ~(100-106, 87.5-88)) and its
+    # refine-take tongues (~(115-118, 88-91), ~(138-143, 88-91)) escaped
+    # the drawn stroke cover, self-stroking dark over the earlier-painted
+    # top face. The escaped-spur donation must reassign those pockets: the
+    # interior wall (the cyli surface at depth ~11.3) may no longer paint
+    # at these probe points (labels.toml geometry).
+    if not hlr.Path("vendor/ldraw").exists():
+        pytest.skip("LDraw library absent")
+    from shapely import Point
+    from brick_icons import geom2d
+    from brick_icons.config import load_config
+    cfg = load_config(toml_path="labels.toml", overrides={}, root=".")
+    res = hlr.visible_segments("3941", cfg.ldraw_dir, render_px=cfg.render_px)
+    f, ox, oy = hlr.fit_affine(res.bbox, cfg.width, cfg.height,
+                               cfg.margin, cfg.scale)
+    faces = shade.apply_affine_faces(res.faces, f, ox, oy)
+    ells = hlr.fit_ellipses(res.ellipses, f, ox, oy)
+    strokes = hlr.fit_segments(res.segs, res.bbox, cfg.width, cfg.height,
+                               cfg.margin, cfg.scale)
+    captured = []
+    orig = geom2d.path_d
+    geom2d.path_d = lambda g, a, min_area=0.0: (captured.append(g),
+                                                orig(g, a, min_area=min_area))[1]
+    try:
+        fills = shade.fill_ops(faces, shade.make_style("flat3"), clip=True,
+                               ellipses=ells, proj=res.proj, fit=(f, ox, oy),
+                               refits=res.refits, loops=res.loops,
+                               strokes=strokes, line_px=cfg.line_width,
+                               sil_px=cfg.silhouette_width)
+    finally:
+        geom2d.path_d = orig
+    ops_depths = [fo["depth"] for fo in fills]
+    from shapely.geometry import box
+    arcs = geom2d.arc_candidates(ells)
+    merged = {i: g for i, g in enumerate(captured)}
+    sil = shade._contour_region(merged, arcs)
+    _, ink = shade._stroke_band(strokes, sil, cfg.line_width,
+                                cfg.silhouette_width)
+    # the nubs were the DARK elements' 0.8px self-stroke escaping the ink
+    # at the pinch pockets: the interior wall (depth ~11.3) everywhere, and
+    # the deep tri group (~-16.5, refine-take staircase) right of the
+    # e3/e23 wedge seam, must keep their stroke reach under the drawn ink.
+    # (Light-on-light hairline seams in the open wedge are a separate,
+    # visually benign issue and stay unpinned.)
+    wall_windows = [box(104.5, 87.0, 107.5, 88.0),  # left pinch tab
+                    box(139.0, 87.0, 144.0, 88.3),  # right pinch staircase
+                    box(149.0, 87.0, 151.5, 88.2)]  # right junction tick
+    deep_windows = [box(141.5, 87.4, 144.0, 88.3)]  # staircase tongue
+    for i, g in enumerate(captured):
+        d = ops_depths[i]
+        if 10.5 < d < 12.0:
+            windows = wall_windows
+        elif -17.5 < d < -15.5:
+            windows = deep_windows
+        else:
+            continue
+        reach = geom2d.difference(g.boundary.buffer(0.35), ink)
+        for w in windows:
+            a = geom2d.area(geom2d.intersection(reach, w))
+            assert a < 0.02, (i, d, w.bounds, a)
