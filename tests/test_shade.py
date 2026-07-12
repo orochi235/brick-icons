@@ -895,3 +895,38 @@ def test_fill_ops_seam_follows_refits():
                            refits=res.refits)
     assert len(moved) == len(base)
     assert moved != base
+
+
+def _flat_wall_proj():
+    right, up = np.array([1.0, 0.0, 0.0]), np.array([0.0, 1.0, 0.0])
+    fwd = np.array([0.0, 0.0, -1.0])
+    return P.Projection(right, up, fwd, 1.0, 0.0, 0.0, 0.0)
+
+
+def _quad(x0, y0, x1, y1, z=0.0):
+    a, b = np.array([x0, y0, z]), np.array([x1, y0, z])
+    c, d = np.array([x1, y1, z]), np.array([x0, y1, z])
+    return [np.array([a, b, c]), np.array([a, c, d])]
+
+
+def test_coplanar_tjunction_tiles_merge_to_one_fill():
+    # HANDOFF: coplanar merge miss. LDraw subparts tile a flat wall with
+    # mismatched subdivisions: tiles abut along collinear boundaries with NO
+    # shared edge (T-junctions), so edge-adjacency grouping can't union them
+    # and the wall emits as several same-tone fills whose antialiased joints
+    # read as faint seams at label sizes (3700's side face). Same-plane flat
+    # faces must merge into ONE fill element.
+    tris = _quad(0, 0, 10, 10) + _quad(10, 0, 20, 5) + _quad(10, 5, 20, 10)
+    faces = shade.faces_from_tris(np.array(tris), _flat_wall_proj())
+    assert len(faces) == 6
+    ops = shade.fill_ops(faces, shade.Flat3Style())
+    assert len(ops) == 1
+
+
+def test_parallel_planes_stay_separate_fills():
+    # same normal but different carrier plane = different surface: the
+    # plane-identity merge must not fuse offset parallel walls
+    tris = _quad(0, 0, 10, 10, z=0.0) + _quad(30, 0, 40, 10, z=5.0)
+    faces = shade.faces_from_tris(np.array(tris), _flat_wall_proj())
+    ops = shade.fill_ops(faces, shade.Flat3Style())
+    assert len(ops) == 2

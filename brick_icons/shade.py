@@ -546,19 +546,42 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
                         for op in r) for r in refits]
         frags = refit_fill_boundaries(frags, mapped)
 
-    members = defaultdict(list)                        # merge key -> indices
+    # merge key: facet-group id, else identity. FLAT tri faces additionally
+    # union by carrier plane — subpart tilings abut with no shared edge
+    # (T-junctions), so edge-adjacency grouping leaves one wall split into
+    # same-tone fills whose antialiased joints read as faint seams at label
+    # sizes (3700's side face). Gradient groups are excluded: their fills
+    # differ even when members share a plane.
+    parent = {}
+
+    def find(x):
+        parent.setdefault(x, x)
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    keys = {}
     for idx in sorted(frags):
         f = ordered[idx]
-        key = f.get("group")
-        members[("g", key) if key is not None else ("i", idx)].append(idx)
+        g = f.get("group")
+        keys[idx] = ("g", g) if g is not None else ("i", idx)
+        find(keys[idx])
+        if (f.get("plane") is not None and "grad_axis" not in f
+                and "grad_radial" not in f):
+            ra, rb = find(("p", f["plane"])), find(keys[idx])
+            if ra != rb:
+                parent[rb] = ra
+    members = defaultdict(list)                        # merge root -> indices
+    for idx in sorted(frags):
+        members[find(keys[idx])].append(idx)
 
     ops, emitted = [], set()
     for idx in sorted(frags):                          # farthest-first
         if idx in emitted:
             continue
         f = ordered[idx]
-        key = f.get("group")
-        ks = members[("g", key) if key is not None else ("i", idx)]
+        ks = members[find(keys[idx])]
         emitted.update(ks)
         geom = frags[ks[0]] if len(ks) == 1 else \
             geom2d.union_all([frags[j] for j in ks])
@@ -743,8 +766,13 @@ def faces_from_tris(tri, proj, cond_edges=None):
             continue
         px, py, z = proj.to_px(v)
         poly = np.stack([px, py], axis=1)
+        # carrier plane key (world normal + offset): fill_ops unions flat
+        # same-plane fragments that abut without shared edges (T-junction
+        # subpart tilings the edge-adjacency grouping below can't connect)
+        plane = (round(float(n[0]), 4), round(float(n[1]), 4),
+                 round(float(n[2]), 4), round(float(n @ v[0]), 2))
         f = {"poly": poly, "normal": nv, "depth": float(np.mean(z)),
-             "zs": z, "kind": "tri", "_verts": v}
+             "zs": z, "kind": "tri", "plane": plane, "_verts": v}
         if back:
             # Provisional: kept only if a seam joins it to a front-facing
             # smooth group (see the filter below). A facet just past the
