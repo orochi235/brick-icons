@@ -210,6 +210,20 @@ def difference(a, b):
         return a
 
 
+def opened(g, r):
+    """Morphological opening (erode then dilate by r), snapped back onto the
+    precision grid. Buffer output is off-grid; mixing it into booleans with
+    grid-snapped pipeline geometry raises topology errors (which the
+    forgiving wrappers above would silently turn into wrong results)."""
+    try:
+        o = shapely.set_precision(g.buffer(-r).buffer(r), GRID)
+        if not o.is_valid:
+            o = shapely.make_valid(o)
+        return _only_area(o)
+    except Exception:
+        return g
+
+
 def intersection(a, b):
     try:
         if not a.intersects(b):

@@ -487,71 +487,33 @@ def refit_fill_boundaries(geoms, refits):
     return out
 
 
-def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
-             refits=None):
-    """Fill ops with exact visible-fragment clipping and per-surface merging.
+# Residue thresholds are in OUTPUT px (canvas units, the space faces are in
+# when fill_ops is called): what junk is visible at label scale is set by
+# the output stroke widths (2 px edges, 0.8 px fill self-stroke), not by the
+# projection resolution — scaling these by the proj->canvas fit made the
+# gates resolution-dependent (render_px 2048 kept junk that 900 culled).
+# ERODE ~0.3x edge stroke: anything locally thinner is unreadable.
+# MIN_AREA keeps morphological-opening shavings at corners (~r^2) from
+# counting as residue and churning every boundary.
+RESIDUE_ERODE = 0.6
+RESIDUE_MIN_AREA = 0.8
+# CRUMB: at emission, per-PIECE erosion radius — booleans along
+# near-coincident boundaries shed hairline crumbs every pass, and arc
+# snapping can inflate a crumb into a visible dash. Fills are SELF-STROKED
+# 0.8 px to close AA seams, so a hairline piece paints at stroke width no
+# matter how thin — the radius is half that. A wide-bodied thin-tipped
+# piece (counterbore crescent) survives whole: a per-piece TEST, not a trim.
+RESIDUE_CRUMB = 0.4
 
-    clip=False keeps every face whole (no occlusion subtraction) for
-    translucent rendering; paint order is still farthest-first so nearer
-    faces blend over deeper ones.
-    `ellipses` are projected circles (canvas space) for arc recovery: fill
-    boundary runs sampled from them are emitted as true SVG arcs.
 
-    1) paint order: witness order when stamped, else far->near mean depth;
-    2) CLIP nearest-first: each face's fragment = its polygon minus the union
-       of everything nearer — the SVG contains zero hidden geometry;
-    3) MERGE fragments sharing a facet-group id (smooth or coplanar groups
-       share one gradient/tone by construction) via polygon union — one
-       element per visually continuous surface. Union is robust to the
-       T-junction tessellations and projected self-overlap that killed
-       boundary tracing (see the 2026-07-05 spec).
-    Ops emit farthest-first; fragments are disjoint, so order only decides
-    which anti-alias stroke wins along shared boundaries.
-    Flat faces: {'d','fill','depth'}; gradient faces: {'d','gradient','depth'}
-    with gradient {'x1','y1','x2','y2','stops':[(offset,color),...]}."""
-    arcs = geom2d.arc_candidates(ellipses)
-    if faces and all("order" in f for f in faces):
-        ordered = sorted(faces, key=lambda f: f["order"])
-    else:
-        ordered = sorted(faces, key=lambda f: -f["depth"])
-
-    frags, geoms = {}, {}
-    cover = None
-    for idx in range(len(ordered) - 1, -1, -1):        # nearest first
-        f = ordered[idx]
-        # coarse facet rings (16-gon hole/stud surrounds) snap onto their
-        # true circles BEFORE the booleans, so clips against neighboring
-        # analytic faces cut along the circle instead of chord chords —
-        # off-circle chord intersections defeat arc recovery and eat thin
-        # slivers (counterbore crescent tips)
-        g = geom2d.to_geom(geom2d.densify_on_arcs(f["poly"], arcs),
-                           [geom2d.densify_on_arcs(h, arcs)
-                            for h in (f.get("holes") or [])])
-        if g.is_empty:
-            continue
-        geoms[idx] = g
-        frag = g if (cover is None or not clip) else geom2d.difference(g, cover)
-        if geom2d.area(frag) >= MIN_FRAG_AREA:
-            frags[idx] = frag
-        if clip:
-            cover = g if cover is None else geom2d.union(cover, g)
-
-    if clip:
-        _refine_order_clips(ordered, geoms, frags, proj, fit)
-
-    if refits:
-        f, ox, oy = fit if fit is not None else (1.0, 0.0, 0.0)
-        mapped = [tuple(op[:1] + (op[1] * f + ox, op[2] * f + oy)
-                        + tuple(v * f for v in op[3:7]) + op[7:]
-                        for op in r) for r in refits]
-        frags = refit_fill_boundaries(frags, mapped)
-
-    # merge key: facet-group id, else identity. FLAT tri faces additionally
-    # union by carrier plane — subpart tilings abut with no shared edge
-    # (T-junctions), so edge-adjacency grouping leaves one wall split into
-    # same-tone fills whose antialiased joints read as faint seams at label
-    # sizes (3700's side face). Gradient groups are excluded: their fills
-    # differ even when members share a plane.
+def _merge_members(ordered, frags):
+    """Merge keying for emitted fill elements: facet-group id, else identity.
+    FLAT tri faces additionally union by carrier plane — subpart tilings abut
+    with no shared edge (T-junctions), so edge-adjacency grouping leaves one
+    wall split into same-tone fills whose antialiased joints read as faint
+    seams at label sizes (3700's side face). Gradient groups are excluded:
+    their fills differ even when members share a plane.
+    Returns (members: root -> [frag idx], roots: frag idx -> root)."""
     parent = {}
 
     def find(x):
@@ -572,19 +534,173 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
             ra, rb = find(("p", f["plane"])), find(keys[idx])
             if ra != rb:
                 parent[rb] = ra
-    members = defaultdict(list)                        # merge root -> indices
+    members, roots = defaultdict(list), {}
     for idx in sorted(frags):
-        members[find(keys[idx])].append(idx)
+        roots[idx] = find(keys[idx])
+        members[roots[idx]].append(idx)
+    return members, roots
+
+
+def _residue_trims(ordered, frags, garea):
+    """Per-face residue regions: parts of each MERGED surface's visible area
+    that vanish under morphological opening (locally thinner than ~2x
+    RESIDUE_ERODE) and are big enough to matter. These are authored-overlap
+    leftovers (a ring spanning slot mouths, plate tris overhanging a drawn
+    rim), not drawable detail — LDraw parts overlap surfaces freely and rely
+    on z-fighting being invisible. Tested on the merged element so a thin
+    tile FUSED into a big wall polygon never counts as residue."""
+    r = RESIDUE_ERODE
+    min_a = RESIDUE_MIN_AREA
+    members, _ = _merge_members(ordered, frags)
+    trims = {}
+    for ks in members.values():
+        G = frags[ks[0]] if len(ks) == 1 else \
+            geom2d.union_all([frags[j] for j in ks])
+        live = geom2d.opened(G, r)
+        if live.is_empty:
+            # the whole surface is sub-stroke. If the surface is MOSTLY
+            # VISIBLE it is thin by nature (a narrow silhouette band) —
+            # deleting it would punch a hole in the drawing, keep it. If it
+            # is the sub-stroke remnant of a mostly-hidden surface (3941's
+            # top ring surviving as crescents over the slot mouths), it is
+            # all residue.
+            full = sum(garea.get(j, 0.0) for j in ks)
+            if full <= 0.0 or geom2d.area(G) / full >= 0.5:
+                continue
+            du = G
+        else:
+            dead = geom2d.difference(G, live)
+            parts = [p for p in getattr(dead, "geoms", [dead])
+                     if p.geom_type == "Polygon" and p.area >= min_a]
+            if not parts:
+                continue
+            du = geom2d.union_all(parts)
+        for j in ks:
+            t = geom2d.intersection(frags[j], du)
+            if not t.is_empty and t.area > 0.0:
+                trims[j] = t
+    return trims
+
+
+def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
+             refits=None):
+    """Fill ops with exact visible-fragment clipping and per-surface merging.
+
+    clip=False keeps every face whole (no occlusion subtraction) for
+    translucent rendering; paint order is still farthest-first so nearer
+    faces blend over deeper ones.
+    `ellipses` are projected circles (canvas space) for arc recovery: fill
+    boundary runs sampled from them are emitted as true SVG arcs.
+
+    1) paint order: witness order when stamped, else far->near mean depth;
+    2) CLIP nearest-first: each face's fragment = its polygon minus the union
+       of everything nearer — the SVG contains zero hidden geometry;
+    3) RESIDUE: locally sub-stroke parts of a merged surface's visible area
+       (thinner than ~RESIDUE_ERODE, morphological opening test) are authored
+       overlap/near-coincidence leftovers, not drawable detail — light ticks
+       down recess walls, scallops past drawn rims (3941's axle cross). The
+       offending faces are trimmed by those regions and the clip re-runs, so
+       DEEPER surfaces absorb the area (or it drops at the silhouette);
+    4) MERGE fragments sharing a facet-group id (smooth or coplanar groups
+       share one gradient/tone by construction) via polygon union — one
+       element per visually continuous surface. Union is robust to the
+       T-junction tessellations and projected self-overlap that killed
+       boundary tracing (see the 2026-07-05 spec).
+    Ops emit farthest-first; fragments are disjoint, so order only decides
+    which anti-alias stroke wins along shared boundaries.
+    Flat faces: {'d','fill','depth'}; gradient faces: {'d','gradient','depth'}
+    with gradient {'x1','y1','x2','y2','stops':[(offset,color),...]}."""
+    arcs = geom2d.arc_candidates(ellipses)
+    if faces and all("order" in f for f in faces):
+        ordered = sorted(faces, key=lambda f: f["order"])
+    else:
+        ordered = sorted(faces, key=lambda f: -f["depth"])
+
+    g_cache = {}
+
+    def clip_pass(trims=None):
+        frags, geoms, garea = {}, {}, {}
+        cover = None
+        for idx in range(len(ordered) - 1, -1, -1):    # nearest first
+            f = ordered[idx]
+            # coarse facet rings (16-gon hole/stud surrounds) snap onto their
+            # true circles BEFORE the booleans, so clips against neighboring
+            # analytic faces cut along the circle instead of chords —
+            # off-circle chord intersections defeat arc recovery and eat thin
+            # slivers (counterbore crescent tips)
+            if idx not in g_cache:
+                g_cache[idx] = geom2d.to_geom(
+                    geom2d.densify_on_arcs(f["poly"], arcs),
+                    [geom2d.densify_on_arcs(h, arcs)
+                     for h in (f.get("holes") or [])])
+            g = g_cache[idx]
+            if trims is not None and idx in trims:
+                g = geom2d.difference(g, trims[idx])
+            if g.is_empty:
+                continue
+            geoms[idx] = g
+            garea[idx] = geom2d.area(g)
+            frag = g if (cover is None or not clip) else geom2d.difference(g, cover)
+            if geom2d.area(frag) >= MIN_FRAG_AREA:
+                frags[idx] = frag
+            if clip:
+                cover = g if cover is None else geom2d.union(cover, g)
+        if clip:
+            _refine_order_clips(ordered, geoms, frags, proj, fit)
+        return frags, garea
+
+    frags, garea = clip_pass()
+    if clip:
+        # iterate: absorbing residue hands the area to deeper faces, whose
+        # own thin leftovers only show up on the next pass (3941: ring ->
+        # plate tris -> walls, one authored layer per round). The cap trades
+        # completeness for speed — each round re-runs the boolean clip —
+        # and the emission crumb cull mops up the sub-stroke tail that
+        # further rounds would chase.
+        trims = {}
+        for _ in range(3):
+            new = _residue_trims(ordered, frags, garea)
+            # a re-clip (full boolean pass) only pays off when some residue
+            # is SUBSTANTIVE — wide enough to survive the emission crumb
+            # cull. Hairline-only rounds (most parts) stop here: emission
+            # drops those pieces and the sub-AA slits left behind are
+            # invisible, at a third of the render cost.
+            if not any(not p.buffer(-RESIDUE_CRUMB).is_empty
+                       for t in new.values()
+                       for p in getattr(t, "geoms", [t])
+                       if p.geom_type == "Polygon"):
+                break
+            for j, t in new.items():
+                trims[j] = t if j not in trims else geom2d.union(trims[j], t)
+            frags, garea = clip_pass(trims)
+
+    if refits:
+        f, ox, oy = fit if fit is not None else (1.0, 0.0, 0.0)
+        mapped = [tuple(op[:1] + (op[1] * f + ox, op[2] * f + oy)
+                        + tuple(v * f for v in op[3:7]) + op[7:]
+                        for op in r) for r in refits]
+        frags = refit_fill_boundaries(frags, mapped)
+
+    members, roots = _merge_members(ordered, frags)
 
     ops, emitted = [], set()
     for idx in sorted(frags):                          # farthest-first
         if idx in emitted:
             continue
         f = ordered[idx]
-        ks = members[find(keys[idx])]
+        ks = members[roots[idx]]
         emitted.update(ks)
         geom = frags[ks[0]] if len(ks) == 1 else \
             geom2d.union_all([frags[j] for j in ks])
+        if clip:
+            # crumb cull (see RESIDUE_CRUMB): per-piece, so thin TIPS of a
+            # wide-bodied piece are untouched
+            er = RESIDUE_CRUMB
+            pieces = [p for p in getattr(geom, "geoms", [geom])
+                      if p.geom_type == "Polygon" and not p.buffer(-er).is_empty]
+            if not pieces:
+                continue
+            geom = pieces[0] if len(pieces) == 1 else geom2d.union_all(pieces)
         d = geom2d.path_d(geom, arcs, min_area=MIN_FRAG_AREA)
         if not d:
             continue

@@ -930,3 +930,29 @@ def test_parallel_planes_stay_separate_fills():
     faces = shade.faces_from_tris(np.array(tris), _flat_wall_proj())
     ops = shade.fill_ops(faces, shade.Flat3Style())
     assert len(ops) == 2
+
+
+def test_substroke_residue_absorbed_by_deeper_face():
+    # 3941 axle-cross ticks: a face whose visible piece is a sub-stroke
+    # sliver (here a 1px strip of the mid face peeking past the near face)
+    # is invisible-detail residue. It must not emit as its own fill; the
+    # area falls THROUGH to the deeper face, which absorbs it seamlessly
+    # (no background slit).
+    near = _flat_face(0, 0, 20, 20, order=2, depth=0.0)
+    mid = _flat_face(-1, 0, 20, 20, order=1, depth=5.0)
+    deep = _flat_face(-8, -8, 28, 28, order=0, depth=10.0)
+    ops = shade.fill_ops([deep, mid, near], shade.Flat3Style())
+    assert len(ops) == 2                      # no sliver op for mid
+    d_deep = ops[0]["d"]
+    # deep's hole follows the near face's edge (x=0): the strip is deep's now
+    assert "-1.00" not in d_deep
+
+
+def test_substroke_residue_at_silhouette_drops():
+    # same residue strip but nothing behind it: it just drops (the drawn
+    # silhouette is the intent; residue past it is authored overhang)
+    near = _flat_face(0, 0, 20, 20, order=1, depth=0.0)
+    mid = _flat_face(-1, 0, 20, 20, order=0, depth=5.0)
+    ops = shade.fill_ops([mid, near], shade.Flat3Style())
+    assert len(ops) == 1
+    assert "-1.00" not in ops[0]["d"]
