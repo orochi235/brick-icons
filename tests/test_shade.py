@@ -956,3 +956,243 @@ def test_substroke_residue_at_silhouette_drops():
     ops = shade.fill_ops([mid, near], shade.Flat3Style())
     assert len(ops) == 1
     assert "-1.00" not in ops[0]["d"]
+
+
+def _d_points(d):
+    """All on-path (x, y) coordinates of a path d (M/L pairs; A endpoints)."""
+    import re
+    pts = []
+    for cmd, body in re.findall(r"([MLAZ])([^MLAZ]*)", d):
+        nums = [float(t) for t in body.replace(",", " ").split()]
+        if cmd in "ML":
+            pts.extend(zip(nums[0::2], nums[1::2]))
+        elif cmd == "A":
+            for i in range(0, len(nums), 7):
+                pts.append((nums[i + 5], nums[i + 6]))
+    return pts
+
+
+def _fold_scene(with_clips):
+    # concave notch scene (3941's X outline): the fill lives OUTSIDE the
+    # r=10 circle at the origin; the drawn fold arc spans the first
+    # quadrant. The front face intrudes to (6,6) (a legit boundary short of
+    # the arc); the backfill limb overlaps it and pokes to (1,1), far past
+    # the drawn arc.
+    spec = (0.0, 0.0, 10.0, 0.0, 0.0, 10.0, 0.0, 90.0)
+    front = {"poly": np.array([(11, 0), (24, 0), (24, 24), (0, 24), (0, 11),
+                               (6, 6)], float),
+             "normal": np.array([0.0, 0.3, -0.95]), "depth": 5.0, "order": 0,
+             "kind": "tri", "group": 7}
+    limb = {"poly": np.array([(13, 0), (1, 1), (0, 13)], float),
+            "normal": np.array([0.0, 0.3, 0.95]), "depth": 5.5, "order": 1,
+            "kind": "tri", "group": 7, "backfill": True}
+    if with_clips:
+        front["fold_clips"] = [spec]
+        limb["fold_clips"] = [spec]
+    return front, limb
+
+
+def test_fold_clip_cuts_backfill_spill_past_arc():
+    # HANDOFF: 3941 X-outline scallop spill. At a concave fold, a smooth
+    # group's kept BACKFILL facets project past the drawn fitted arc into
+    # the notch opening (background). Backfill-only area inside the arc's
+    # elliptical pie sector must be cut from the group's merged fill;
+    # front-member area is protected even inside the sector.
+    front, limb = _fold_scene(with_clips=True)
+    ops = shade.fill_ops([front, limb], shade.Flat3Style())
+    assert len(ops) == 1
+    pts = _d_points(ops[0]["d"])
+    assert min(math.hypot(x, y) for x, y in pts) > 7.0   # limb spill cut
+    assert any(math.hypot(x - 6, y - 6) < 0.05 for x, y in pts)  # front kept
+
+
+def test_backfill_spill_persists_without_fold_clips():
+    # control: absent the association, the limb pokes past the arc (this is
+    # the artifact the clip exists to remove)
+    front, limb = _fold_scene(with_clips=False)
+    ops = shade.fill_ops([front, limb], shade.Flat3Style())
+    assert len(ops) == 1
+    pts = _d_points(ops[0]["d"])
+    assert min(math.hypot(x, y) for x, y in pts) < 2.0
+
+
+def _ring_pts(polar_deg, R=30.0):
+    p = math.radians(polar_deg)
+    return np.array([[R * math.sin(p) * math.cos(a),
+                      R * math.sin(p) * math.sin(a),
+                      R * math.cos(p)]
+                     for a in np.linspace(0, 2 * math.pi, 9)[:-1]])
+
+
+def test_faces_from_tris_attaches_fold_clips_to_backfill_groups():
+    # a fold arc whose world chain vertices lie on a smooth group's facet
+    # corners tags every member of that group (backfill kept) with the
+    # arc's projected-ellipse clip spec; an unrelated arc tags nothing
+    right, up = np.array([1.0, 0, 0]), np.array([0.0, 1.0, 0])
+    fwd = np.array([0.0, 0.0, -1.0])
+    proj = P.Projection(right, up, fwd, 1.0, 0.0, 0.0, 0.0)
+    tris, seams = _sphere_band(60, 80, 100, 120)
+    near = {"P": _ring_pts(100)[:3], "ell": (0.0, 0.0, 30.0, 0.0, 0.0, 30.0),
+            "t0": 10.0, "t1": 50.0}
+    # ONE shared vertex must attach too: 3941's notch fillet arcs touch the
+    # spilling neighbor wall groups only at the chain junction vertex (the
+    # fillet wall itself is an all-backfill group that gets dropped)
+    corner = {"P": np.vstack([_ring_pts(100)[3:4],
+                              [[900.0, 0, 0], [900.0, 30, 0]]]),
+              "ell": (40.0, 0.0, 30.0, 0.0, 0.0, 30.0), "t0": 5.0, "t1": 25.0}
+    far = {"P": _ring_pts(100)[:3] + 500.0,
+           "ell": (500.0, 500.0, 30.0, 0.0, 0.0, 30.0), "t0": 0.0, "t1": 90.0}
+    faces = shade.faces_from_tris(tris, proj, cond_edges=seams,
+                                  fold_arcs=[near, corner, far])
+    backs = [f for f in faces if f.get("backfill")]
+    assert backs
+    want = [near["ell"] + (near["t0"], near["t1"]),
+            corner["ell"] + (corner["t0"], corner["t1"])]
+    for f in faces:
+        if f["group"] in {b["group"] for b in backs}:
+            assert f.get("fold_clips") == want
+
+
+def test_faces_from_tris_associates_front_only_groups():
+    # groups with no backfill members associate too: 3941's interior far
+    # wall (front-facing, seen through the axle bore) owns chain vertices
+    # of the flank arcs and its fill overshoots them (the nubs)
+    tris = _quad(0, 0, 10, 10)
+    arc = {"P": np.array([[10.0, 10.0, 0.0], [60.0, 60.0, 0.0]]),
+           "ell": (5.0, 5.0, 7.0, 0.0, 0.0, 7.0), "t0": 0.0, "t1": 45.0}
+    faces = shade.faces_from_tris(np.array(tris), _flat_wall_proj(),
+                                  fold_arcs=[arc])
+    assert faces
+    want = [arc["ell"] + (0.0, 45.0)]
+    assert all(f.get("fold_clips") == want for f in faces)
+
+
+def test_apply_affine_remaps_fold_clips():
+    face = {"poly": np.array([(0.0, 0.0), (1.0, 0.0), (1.0, 1.0)]),
+            "normal": np.array([0, 0, -1.0]),
+            "fold_clips": [(1.0, 2.0, 3.0, 0.0, 0.0, 3.0, 10.0, 80.0)]}
+    out = shade.apply_affine_faces([face], 2.0, 5.0, 7.0)
+    assert out[0]["fold_clips"] == [(7.0, 11.0, 6.0, 0.0, 0.0, 6.0,
+                                     10.0, 80.0)]
+
+
+def test_3941_backfill_groups_carry_fold_clips():
+    if not hlr.Path("vendor/ldraw").exists():
+        pytest.skip("LDraw library absent")
+    res = hlr.visible_segments("3941", "vendor/ldraw")
+    backs = [f for f in res.faces if f.get("backfill")]
+    assert backs and any(f.get("fold_clips") for f in backs)
+
+
+def _arc_pts(t0, t1, r, n=40):
+    t = np.radians(np.linspace(t0, t1, n))
+    return np.stack([r * np.cos(t), r * np.sin(t)], axis=1)
+
+
+def _band_scene(a0, a1):
+    # wide wall body (r 10.4..20) with a locally sub-stroke fringe
+    # (r 10.05..10.4) protruding toward the circle over angles a0..a1 —
+    # 3941's far-wall fill fringe hugging the outside of a drawn fitted arc,
+    # painted beyond the stroke by the fill's self-stroke
+    poly = np.vstack([_arc_pts(a0, a1, 20.0),
+                      _arc_pts(a1, a1 - 10, 10.4),
+                      _arc_pts(a1 - 10, a0 + 10, 10.05),
+                      _arc_pts(a0 + 10, a0, 10.4)])
+    return {"poly": poly, "normal": np.array([0.0, 0.3, -0.95]),
+            "depth": 5.0, "order": 0, "kind": "tri"}
+
+
+_BAND_SPEC = (0.0, 0.0, 10.0, 0.0, 0.0, 10.0, 0.0, 90.0)
+
+
+def test_fold_band_culls_group_overshoot_outside_arc():
+    # 3941 X-outline nubs: a group associated with a fitted fold arc
+    # overshoots it by a hair (wide, smooth — no thin limb to detect); its
+    # fill self-stroke then paints past the black stroke. The group's fill
+    # is shaved back to the arc within FOLD_BAND outside it, over the
+    # authored span.
+    face = _band_scene(20, 70)
+    face["fold_clips"] = [_BAND_SPEC]
+    ops = shade.fill_ops([face], shade.Flat3Style())
+    assert len(ops) == 1
+    rs = [math.hypot(x, y) for x, y in _d_points(ops[0]["d"])]
+    assert min(rs) > 10.3                      # fringe cut back past band
+
+
+def test_fold_band_only_cuts_associated_groups():
+    # fills NOT associated with the arc are never touched: covering
+    # surfaces over an occluded arc section can't be slit, and analytic
+    # rims (no arcfit chain, so no association) keep legit thin detail
+    # hugging them (3700's crescent tips)
+    ops = shade.fill_ops([_band_scene(20, 70)], shade.Flat3Style(),
+                         ellipses=[_BAND_SPEC[:6] + (30.0, 0.5)])
+    rs = [math.hypot(x, y) for x, y in _d_points(ops[0]["d"])]
+    assert min(rs) < 10.2
+
+
+def test_fold_band_respects_span():
+    # the cut applies only over the arc's authored span: the same fringe
+    # against a span elsewhere on the circle is untouched
+    face = _band_scene(20, 70)
+    face["fold_clips"] = [_BAND_SPEC[:6] + (180.0, 270.0)]
+    ops = shade.fill_ops([face], shade.Flat3Style())
+    rs = [math.hypot(x, y) for x, y in _d_points(ops[0]["d"])]
+    assert min(rs) < 10.2
+
+
+def _loop_circle(r=10.0, n=240):
+    t = np.linspace(0.0, 2.0 * math.pi, n, endpoint=False)
+    return np.stack([r * np.cos(t), r * np.sin(t)], axis=1)
+
+
+def _slot_scene():
+    # wall: mostly inside the stylized loop, its authored boundary
+    # overshooting to x=12 (3941's far wall poking past the drawn arcs);
+    # face: the surrounding surface whose authored hole (|r|<11 square-ish)
+    # is WIDER than the loop, leaving a slot the spill pokes across
+    wall = _flat_face(-8, -3, 12, 3, order=1, depth=5.0, normal=(0, 0.3, -1))
+    hole = np.array([(11.0, -11.0), (11.0, 11.0), (-11.0, 11.0),
+                     (-11.0, -11.0)])
+    face = {"poly": np.array([(-30.0, -30.0), (30.0, -30.0),
+                              (30.0, 30.0), (-30.0, 30.0)]),
+            "holes": [hole], "normal": np.array([0.0, 1.0, -0.2]),
+            "depth": 8.0, "order": 0, "kind": "tri"}
+    return wall, face
+
+
+def test_loop_cut_confines_interior_spill():
+    # HANDOFF 2026-07-12: 3941 scallop spill, junction wedges + parallax
+    # fringes. An element MOSTLY INSIDE a closed fold-arc loop is clipped
+    # to it: the authored overshoot past the stylized outline goes.
+    wall, face = _slot_scene()
+    ops = shade.fill_ops([face, wall], shade.Flat3Style(),
+                         loops=[_loop_circle()])
+    wall_op = next(o for o in ops if o["depth"] == 5.0)
+    assert max(math.hypot(x, y) for x, y in _d_points(wall_op["d"])) < 10.05
+
+
+def test_loop_cut_absorbs_spill_into_adjacent_outside_element():
+    # the cut piece is handed to the touching mostly-outside element (the
+    # top face), not dropped: dropping it leaves unpainted pinholes past
+    # the stroke where the spill used to paint (Mike's single-pixel seam
+    # defects). The face's fill must now reach the loop boundary.
+    wall, face = _slot_scene()
+    ops = shade.fill_ops([face, wall], shade.Flat3Style(),
+                         loops=[_loop_circle()])
+    face_op = next(o for o in ops if o["depth"] == 8.0)
+    tongue = [math.hypot(x, y) for x, y in _d_points(face_op["d"])
+              if abs(y) <= 3.05 and x > 0]
+    assert tongue and min(tongue) < 10.05      # hole edge pulled in to loop
+    # control: without loops the spill persists and the face stops at 11
+    ops = shade.fill_ops([face, wall], shade.Flat3Style())
+    wall_op = next(o for o in ops if o["depth"] == 5.0)
+    assert max(math.hypot(x, y) for x, y in _d_points(wall_op["d"])) > 11.5
+
+
+def test_loop_cut_spares_mostly_outside_elements():
+    # an element mostly OUTSIDE the loop that overlaps it (3941's front
+    # stud covering the post outline's bottom) is never clipped
+    stud = _flat_face(-20, -3, -5, 3, order=1, depth=5.0)
+    ops = shade.fill_ops([stud], shade.Flat3Style(), loops=[_loop_circle()])
+    xs = [x for x, y in _d_points(ops[0]["d"])]
+    assert min(xs) < -19.9 and max(xs) > -5.05

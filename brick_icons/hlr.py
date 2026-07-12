@@ -13,9 +13,14 @@ from . import repair
 # proj: the render's Projection (fill_ops probes exact wall depths with it).
 # refits: (old, new, bore) arc-op triples from the separator pinch refit —
 # shade.refit_fill_boundaries moves fill seams onto the new curve.
+# fold_ells: rounded (cx..vy) keys of the arcfit (fitted-round) ellipses —
+# marks which drawn arcs are stylized fold arcs.
+# loops: closed point loops of chained drawn fold-arc spans (op space) —
+# stylized sub-region outlines for shade.fill_ops(loops=...).
 VisResult = namedtuple("VisResult",
-                       "segs bbox s faces analytic ellipses proj refits",
-                       defaults=[(), None, ()])
+                       "segs bbox s faces analytic ellipses proj refits "
+                       "fold_ells loops",
+                       defaults=[(), None, (), (), ()])
 
 _text_cache: dict[Path, list[str]] = {}
 
@@ -372,9 +377,15 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
     # fitted hand-faceted rounds: drawn as true arcs, but occlusion-tested
     # along their chord path (see arcfit) via the spec's proxy element
     fit_ells = []
+    fold_arcs = []
     for a in fit_arcs:
         ell = primitives.project_circle_uv(a["C"], a["U"], a["V"], proj.to_AB,
                                            proj.s, proj.cx, proj.cy, half)
+        # fold-arc spec for smooth-group fill clipping (see faces_from_tris)
+        fold_arcs.append({"P": a["P"], "t0": a["t0"], "t1": a["t1"],
+                          "ell": (float(ell.center[0]), float(ell.center[1]),
+                                  float(ell.u[0]), float(ell.u[1]),
+                                  float(ell.v[0]), float(ell.v[1]))})
         cpx, cpy, cpz = proj.to_px(a["P"])
         tv = a["tv"]
 
@@ -422,7 +433,8 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
         segs = [spec[0] for spec in specs]
     from . import shade
     tri_faces = shade.faces_from_tris(np.array(out["tri"]), proj,
-                                      cond_edges=out["5"]) if out["tri"] else []
+                                      cond_edges=out["5"],
+                                      fold_arcs=fold_arcs) if out["tri"] else []
     an_faces = shade.faces_from_analytic(analytic, proj)
     own_occ = {id(f): f["prim"].occluder() for f in an_faces
                if f["prim"].occluder() is not None}
@@ -445,7 +457,9 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
                 if key not in seen:
                     seen.add(key)
                     ells.append(op[1:7] + (25.0,))
-    return VisResult(segs, _ops_bbox(segs), s, faces, analytic, ells, proj)
+    fold_keys = [tuple(round(v, 6) for v in fa["ell"]) for fa in fold_arcs]
+    return VisResult(segs, _ops_bbox(segs), s, faces, analytic, ells, proj,
+                     fold_ells=fold_keys)
 
 
 def _snap_rim_crossings(segs, max_snap=4.0, vertex_tol=0.25):
@@ -614,6 +628,64 @@ def _snap_rim_crossings(segs, max_snap=4.0, vertex_tol=0.25):
     return out, refits
 
 
+def _fold_arc_loops(segs, fold_ells, bridge_frac=0.4, step=2.0):
+    """Closed loops of drawn fitted-arc (arcfit) spans: the stylized outline
+    of a sub-region, e.g. 3941's axle-cross post. Spans chain by coincident
+    endpoints — authored junctions and pass-1 snaps land them exactly on one
+    another — and chains left open by occluded sections (the front stud over
+    the post outline's bottom) close by straight bridges. A loop only stands
+    if its bridges total under bridge_frac of its perimeter: longer jumps
+    mean unrelated fragments, not an outline. Returns sampled point loops
+    (op space) for shade.fill_ops(loops=...)."""
+    keys = {tuple(round(v, 6) for v in e[:6]) for e in fold_ells}
+    chains = []          # [pts (N,2), drawn length, bridged length]
+    for op in segs:
+        if op[0] != "arc" or abs(op[8] - op[7]) >= 359.9:
+            continue
+        if tuple(round(v, 6) for v in op[1:7]) not in keys:
+            continue
+        n = max(3, int(abs(op[8] - op[7]) / step) + 1)
+        t = np.radians(np.linspace(op[7], op[8], n))
+        pts = np.stack([op[1] + np.cos(t) * op[3] + np.sin(t) * op[5],
+                        op[2] + np.cos(t) * op[4] + np.sin(t) * op[6]],
+                       axis=1)
+        chains.append([pts, float(np.sum(np.linalg.norm(np.diff(pts, axis=0),
+                                                        axis=1))), 0.0])
+    loops = []
+    while chains:
+        # nearest end pair over all chains, self-pairs included: exact
+        # junctions (d ~ 0) always join ahead of any bridge
+        best = None                      # (dist, i, j, flip_i, flip_j)
+        for i, ci in enumerate(chains):
+            d = float(np.linalg.norm(ci[0][0] - ci[0][-1]))
+            if best is None or d < best[0]:
+                best = (d, i, i, False, False)
+            for j in range(i + 1, len(chains)):
+                cj = chains[j]
+                for fi in (False, True):       # flip i so its tail joins
+                    pi = ci[0][0] if fi else ci[0][-1]
+                    for fj in (False, True):   # flip j so its head joins
+                        pj = cj[0][-1] if fj else cj[0][0]
+                        d = float(np.linalg.norm(pi - pj))
+                        if d < best[0]:
+                            best = (d, i, j, fi, fj)
+        d, i, j, fi, fj = best
+        if i == j:                       # close the chain into a loop
+            pts, drawn, bridged = chains.pop(i)
+            bridged += d
+            perim = drawn + bridged
+            if perim > 0 and bridged <= bridge_frac * perim:
+                loops.append(pts)
+            continue
+        ci, cj = chains[i], chains[j]
+        pi = ci[0][::-1] if fi else ci[0]
+        pj = cj[0][::-1] if fj else cj[0]
+        merged = [np.vstack([pi, pj]), ci[1] + cj[1], ci[2] + cj[2] + d]
+        chains = [c for k, c in enumerate(chains) if k not in (i, j)]
+        chains.append(merged)
+    return loops
+
+
 def _resolve_input(part: str, roots: list[Path]) -> Path:
     """Resolve a part id or .dat/.ldr/.mpd path to a file, or raise a clear error."""
     s = str(part)
@@ -655,7 +727,8 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
         # fill seam emits as a true arc (25 deg step, like the rim ones)
         res = res._replace(ellipses=list(res.ellipses)
                            + [new[1:7] + (25.0,) for _, new, _ in refits])
-    return res._replace(segs=segs, refits=refits)
+    loops = _fold_arc_loops(segs, res.fold_ells) if res.fold_ells else []
+    return res._replace(segs=segs, refits=refits, loops=loops)
 
 
 def _merge_intervals(iv, eps):

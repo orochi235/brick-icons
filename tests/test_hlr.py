@@ -717,3 +717,58 @@ def test_fit_ellipses_scales_snap_tolerance():
     out = hlr.fit_ellipses([(0, 0, 1, 0, 0, 1, 25.0, 2.0)], 2.0, 5.0, 5.0)
     assert out[0][6] == 25.0
     assert out[0][7] == 4.0
+
+
+def _fold_span(cx, cy, r, t0, t1):
+    return ("arc", float(cx), float(cy), float(r), 0.0, 0.0, float(r),
+            float(t0), float(t1), "edge")
+
+
+def test_fold_arc_loops_chains_spans_and_bridges_occlusion_gap():
+    # HANDOFF: 3941 scallop spill. Drawn fitted-arc spans whose endpoints
+    # coincide (authored junctions / pass-1 snaps) chain into the stylized
+    # boundary of a sub-region (the axle-cross post outline); an occluded
+    # section (front stud) leaves a gap that is bridged by a straight jump.
+    # Lines and non-fold arcs never participate.
+    key = tuple(round(v, 6) for v in (0.0, 0.0, 10.0, 0.0, 0.0, 10.0))
+    segs = [_fold_span(0, 0, 10, 0, 120), _fold_span(0, 0, 10, 120, 240),
+            _fold_span(0, 0, 10, 240, 350),        # 10 deg occluded gap
+            ("line", 0.0, 0.0, 5.0, 5.0, "edge"),
+            _fold_span(50, 0, 10, 0, 90)]          # non-fold arc: excluded
+    loops = hlr._fold_arc_loops(segs, [key])
+    assert len(loops) == 1
+    from shapely import Point
+    from brick_icons import geom2d
+    poly = geom2d.region(loops[0])
+    assert 300.0 < geom2d.area(poly) < 315.0       # ~pi*100 less chord bite
+    assert poly.contains(Point(0.0, 0.0))
+
+
+def test_fold_arc_loops_rejects_wide_bridges():
+    # two short spans across the circle would need bridges longer than the
+    # drawn arcs themselves: that is not a stylized outline, just unrelated
+    # fragments — no loop may form
+    key = tuple(round(v, 6) for v in (0.0, 0.0, 10.0, 0.0, 0.0, 10.0))
+    segs = [_fold_span(0, 0, 10, 0, 60), _fold_span(0, 0, 10, 180, 240)]
+    assert hlr._fold_arc_loops(segs, [key]) == []
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_3941_fold_loops_close_the_post_outline():
+    # the ten axle-cross flank/notch spans chain into one closed loop (the
+    # stud-occluded bottom section bridged); every drawn fold span lies on
+    # the loop boundary
+    from shapely import Point
+    from brick_icons import geom2d
+    res = hlr.visible_segments("3941", LIB)
+    assert len(res.loops) == 1
+    poly = geom2d.region(res.loops[0])
+    spans = [op for op in res.segs if op[0] == "arc"
+             and abs(op[8] - op[7]) < 359.9
+             and tuple(round(v, 6) for v in op[1:7]) in set(res.fold_ells)]
+    assert len(spans) >= 8
+    for op in spans:
+        tm = math.radians((op[7] + op[8]) / 2.0)
+        mid = Point(op[1] + math.cos(tm) * op[3] + math.sin(tm) * op[5],
+                    op[2] + math.cos(tm) * op[4] + math.sin(tm) * op[6])
+        assert poly.exterior.distance(mid) < 0.05

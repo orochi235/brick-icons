@@ -504,6 +504,18 @@ RESIDUE_MIN_AREA = 0.8
 # matter how thin — the radius is half that. A wide-bodied thin-tipped
 # piece (counterbore crescent) survives whole: a per-piece TEST, not a trim.
 RESIDUE_CRUMB = 0.4
+# FOLD_BAND: width (output px) of the shave band just OUTSIDE a drawn
+# fitted arc, over its authored span. Hand-faceted geometry legitimately
+# projects a hair past its fitted (stylized) arc — far-wall fringes, wall
+# bands running past a two-arc pinch — and the fill self-stroke paints
+# that fringe beyond the black stroke (3941's X-outline nubs/wedge). The
+# shave applies ONLY to groups associated with the arc (they own its
+# chain vertices — see faces_from_tris), so covering surfaces over an
+# occluded arc section are never slit, and analytic rims (no arcfit
+# chain, no association) keep legit thin detail hugging them (3700's
+# counterbore crescent tips). Width stays at or under half the thinnest
+# outline stroke: a shave next to the drawn arc hides under it.
+FOLD_BAND = 0.8
 
 
 def _merge_members(ordered, frags):
@@ -582,8 +594,99 @@ def _residue_trims(ordered, frags, garea):
     return trims
 
 
+def _fold_band_strips(specs, width=None, step=2.0):
+    """Shave strips just OUTSIDE a group's own fold arcs: one band per clip
+    spec (cx, cy, ux, uy, vx, vy, t0, t1), from the ellipse out to `width`
+    px along the authored span. See FOLD_BAND."""
+    width = FOLD_BAND if width is None else width
+    bands = []
+    for spec in specs:
+        cx, cy, ux, uy, vx, vy, t0, t1 = spec
+        n = max(3, int(math.ceil((t1 - t0) / step)) + 1)
+        t = np.radians(np.linspace(t0, t1, n))
+        inner = np.stack([cx + np.cos(t) * ux + np.sin(t) * vx,
+                          cy + np.cos(t) * uy + np.sin(t) * vy], axis=1)
+        rad = inner - [cx, cy]
+        rad /= np.maximum(np.linalg.norm(rad, axis=1, keepdims=True), 1e-9)
+        outer = inner + width * rad
+        bands.append(geom2d.to_geom(np.vstack([inner, outer[::-1]])))
+    return geom2d.union_all(bands)
+
+
+def _fold_sector(spec, step=2.0):
+    """Elliptical pie sector (center + arc span) of a fold-arc clip spec
+    (cx, cy, ux, uy, vx, vy, t0, t1), sampled on the true ellipse so the cut
+    boundary lands ON the drawn arc (arc recovery re-emits it as an arc)."""
+    cx, cy, ux, uy, vx, vy, t0, t1 = spec
+    n = max(3, int(math.ceil((t1 - t0) / step)) + 1)
+    t = np.radians(np.linspace(t0, t1, n))
+    pts = np.stack([cx + np.cos(t) * ux + np.sin(t) * vx,
+                    cy + np.cos(t) * uy + np.sin(t) * vy], axis=1)
+    return geom2d.to_geom(np.vstack([[cx, cy], pts]))
+
+
+def _fold_spill(ordered, ks, geoms, clips):
+    """Spill of a merged group's BACKFILL members past its own fold arcs:
+    backfill facets are back-facing, so any of their area beyond the fold
+    (inside the fitted arc's pie sector — the concave-notch opening) is
+    fabrication, never visible surface. Front-member area is subtracted so
+    a legitimate boundary short of the arc is untouched."""
+    bf = [geoms[j] for j in ks if ordered[j].get("backfill") and j in geoms]
+    if not bf:
+        return None
+    cut = None
+    B = geom2d.union_all(bf)
+    for spec in clips:
+        c = geom2d.intersection(B, _fold_sector(spec))
+        if not c.is_empty:
+            cut = c if cut is None else geom2d.union(cut, c)
+    if cut is None:
+        return None
+    fr = [geoms[j] for j in ks
+          if not ordered[j].get("backfill") and j in geoms]
+    return geom2d.difference(cut, geom2d.union_all(fr)) if fr else cut
+
+
+def _loop_cut_merged(merged, loops):
+    """Confine mostly-inside elements to their stylized fold-arc loop.
+
+    An element whose visible area lies >= half inside a closed loop (3941's
+    far bore wall / wall bands seen through the axle opening) is clipped to
+    it: its authored boundary projects past the drawn stylized arcs (facet
+    scallops, junction wedges, parallax fringes) and the fill's self-stroke
+    paints that spill beyond the black stroke. Each cut piece is ABSORBED by
+    the touching mostly-outside element (the surrounding top face): dropping
+    it instead leaves unpainted pinholes wherever the spill reached past the
+    stroke's cover. Mostly-outside elements (a front stud overlapping the
+    loop's occluded section) are never clipped."""
+    L = geom2d.union_all([geom2d.region(p) for p in loops])
+    interior = set()
+    for r, g in merged.items():
+        a = geom2d.area(g)
+        if a > 0.0 and geom2d.area(geom2d.intersection(g, L)) / a >= 0.5:
+            interior.add(r)
+    for r in interior:
+        spill = geom2d.difference(merged[r], L)
+        if spill.is_empty:
+            continue
+        merged[r] = geom2d.intersection(merged[r], L)
+        for piece in getattr(spill, "geoms", [spill]):
+            if piece.geom_type != "Polygon" or piece.area <= 0.0:
+                continue
+            probe = piece.buffer(0.2)
+            best, contact = None, 0.0
+            for r2, g2 in merged.items():
+                if r2 in interior:
+                    continue
+                c = geom2d.area(geom2d.intersection(probe, g2))
+                if c > contact:
+                    best, contact = r2, c
+            if best is not None:
+                merged[best] = geom2d.union(merged[best], piece)
+
+
 def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
-             refits=None):
+             refits=None, loops=None):
     """Fill ops with exact visible-fragment clipping and per-surface merging.
 
     clip=False keeps every face whole (no occlusion subtraction) for
@@ -683,6 +786,19 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
 
     members, roots = _merge_members(ordered, frags)
 
+    merged = {}
+    for idx in sorted(frags):
+        r = roots[idx]
+        if r not in merged:
+            ks = members[r]
+            merged[r] = frags[ks[0]] if len(ks) == 1 else \
+                geom2d.union_all([frags[j] for j in ks])
+    if clip and loops is not None and len(loops):
+        f_, ox_, oy_ = fit if fit is not None else (1.0, 0.0, 0.0)
+        _loop_cut_merged(merged, [np.stack([p[:, 0] * f_ + ox_,
+                                            p[:, 1] * f_ + oy_], axis=1)
+                                  for p in loops])
+
     ops, emitted = [], set()
     for idx in sorted(frags):                          # farthest-first
         if idx in emitted:
@@ -690,8 +806,21 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
         f = ordered[idx]
         ks = members[roots[idx]]
         emitted.update(ks)
-        geom = frags[ks[0]] if len(ks) == 1 else \
-            geom2d.union_all([frags[j] for j in ks])
+        geom = merged[roots[idx]]
+        if clip and f.get("fold_clips"):
+            # backfill limbs past the group's own fold arc (3941's
+            # X-outline scallops); cut from the pristine member geoms so
+            # occlusion clipping can't hide protected front area
+            cut = _fold_spill(ordered, ks, g_cache, f["fold_clips"])
+            if cut is not None:
+                geom = geom2d.difference(geom, cut)
+            # and shave the group's own overshoot band (see FOLD_BAND):
+            # wide, smooth spill past the drawn arc — far-wall fringes,
+            # wall bands running past a two-arc pinch — that no thinness
+            # test can catch. Only this group's fill, only just outside
+            # its own arcs, only over their authored spans.
+            geom = geom2d.difference(geom,
+                                     _fold_band_strips(f["fold_clips"]))
         if clip:
             # crumb cull (see RESIDUE_CRUMB): per-piece, so thin TIPS of a
             # wide-bodied piece are untouched
@@ -749,6 +878,10 @@ def apply_affine_faces(faces, f, ox, oy):
             g = face["grad_radial"]
             nf["grad_radial"] = {**g, "cx": g["cx"] * f + ox,
                                  "cy": g["cy"] * f + oy, "r": g["r"] * f}
+        if "fold_clips" in face:
+            nf["fold_clips"] = [(c[0] * f + ox, c[1] * f + oy, c[2] * f,
+                                 c[3] * f, c[4] * f, c[5] * f, c[6], c[7])
+                                for c in face["fold_clips"]]
         out.append(nf)
     return out
 
@@ -857,7 +990,7 @@ def cull_occluded_faces(faces, occluders, proj, eps,
     return kept
 
 
-def faces_from_tris(tri, proj, cond_edges=None):
+def faces_from_tris(tri, proj, cond_edges=None, fold_arcs=None):
     """Camera-facing triangle faces as px-space polygons with outward view-space
     normals. Winding is trusted (repaired upstream): a triangle whose outward
     normal points away from the camera (nv[2] >= 0) is a back-face and is
@@ -867,7 +1000,13 @@ def faces_from_tris(tri, proj, cond_edges=None):
     `cond_edges` (type-5 conditional lines; first two rows = the edge) marks
     smooth-surface facet seams: faces joined through them get one SHARED
     linear gradient so faceted curves (50950's slope, cone bodies) shade
-    smoothly instead of banding into flat tones."""
+    smoothly instead of banding into flat tones.
+
+    `fold_arcs` associates fitted-round arcs (arcfit) with the smooth groups
+    whose facets they bound: [{'P': world chain vertices, 'ell': projected
+    ellipse 6-tuple, 't0', 't1'}]. A group that keeps backfill members and
+    owns >= 2 of an arc's chain vertices gets f['fold_clips'] on every
+    member — fill_ops clips the group's fill to its own fold there."""
     have_seams = cond_edges is not None and len(cond_edges) > 0
     faces = []
     for v in tri:                       # v: (3,3) world coords, outward-CCW
@@ -899,6 +1038,35 @@ def faces_from_tris(tri, proj, cond_edges=None):
     _attach_smooth_gradients(faces, cond_edges if have_seams
                              else np.zeros((0, 2, 3)))
     front_groups = {f["group"] for f in faces if not f.get("backfill")}
+    if fold_arcs:
+        # group -> fold-arc clip specs, matched on world chain vertices
+        # (arcfit vertices ARE facet corners). Front-only groups associate
+        # too: 3941's interior far wall (front-facing, seen through the
+        # axle bore) owns flank-arc chain vertices and overshoots them
+        gverts = defaultdict(list)
+        for f in faces:
+            gverts[f["group"]].append(np.asarray(f["_verts"], float))
+        clips = {}
+        for g, vs in gverts.items():
+            V = np.vstack(vs).reshape(-1, 3)
+            specs = []
+            for a in fold_arcs:
+                # even ONE shared chain vertex associates: at a concave
+                # notch the fillet's own wall group is all-backfill (fully
+                # past the fold, dropped) and the spilling NEIGHBOR walls
+                # touch the fillet chain only at its junction vertex
+                # (3941's X notch). The cut is gated on actual backfill
+                # intrusion into the pie, so a spurious touch is inert.
+                C = np.asarray(a["P"], float)
+                d2 = ((V[:, None, :] - C[None, :, :]) ** 2).sum(axis=2)
+                if bool((d2 < 1e-6).any()):
+                    specs.append(tuple(a["ell"])
+                                 + (float(a["t0"]), float(a["t1"])))
+            if specs:
+                clips[g] = specs
+        for f in faces:
+            if f["group"] in clips:
+                f["fold_clips"] = clips[f["group"]]
     kept = []
     for f in faces:
         f.pop("_verts", None)
