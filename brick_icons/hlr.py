@@ -377,15 +377,9 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
     # fitted hand-faceted rounds: drawn as true arcs, but occlusion-tested
     # along their chord path (see arcfit) via the spec's proxy element
     fit_ells = []
-    fold_arcs = []
     for a in fit_arcs:
         ell = primitives.project_circle_uv(a["C"], a["U"], a["V"], proj.to_AB,
                                            proj.s, proj.cx, proj.cy, half)
-        # fold-arc spec for smooth-group fill clipping (see faces_from_tris)
-        fold_arcs.append({"P": a["P"], "t0": a["t0"], "t1": a["t1"],
-                          "ell": (float(ell.center[0]), float(ell.center[1]),
-                                  float(ell.u[0]), float(ell.u[1]),
-                                  float(ell.v[0]), float(ell.v[1]))})
         cpx, cpy, cpz = proj.to_px(a["P"])
         tv = a["tv"]
 
@@ -433,8 +427,7 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
         segs = [spec[0] for spec in specs]
     from . import shade
     tri_faces = shade.faces_from_tris(np.array(out["tri"]), proj,
-                                      cond_edges=out["5"],
-                                      fold_arcs=fold_arcs) if out["tri"] else []
+                                      cond_edges=out["5"]) if out["tri"] else []
     an_faces = shade.faces_from_analytic(analytic, proj)
     own_occ = {id(f): f["prim"].occluder() for f in an_faces
                if f["prim"].occluder() is not None}
@@ -457,7 +450,7 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
                 if key not in seen:
                     seen.add(key)
                     ells.append(op[1:7] + (25.0,))
-    fold_keys = [tuple(round(v, 6) for v in fa["ell"]) for fa in fold_arcs]
+    fold_keys = [tuple(round(v, 6) for v in e[:6]) for e in fit_ells]
     return VisResult(segs, _ops_bbox(segs), s, faces, analytic, ells, proj,
                      fold_ells=fold_keys)
 
