@@ -1,0 +1,36 @@
+# Known-working versions of everything outside this repo that the render
+# pipeline and its verification workflow depend on. The renders are
+# CALIBRATED against these exact versions — a silent upgrade (rolling
+# LDraw snapshot, brew upgrade, new resvg AA) can shift output pixels
+# with no code change. Update this file deliberately, with a census
+# (--list parts.txt, byte-diff + rasterize + compare) against the
+# previous version.
+
+## LDraw parts library (geometry input; vendor/ldraw, gitignored)
+# complete.zip from library.ldraw.org is a ROLLING snapshot — the URL in
+# setup-ldview.sh always serves the latest parts update. Verify a local
+# copy:
+#   cd vendor/ldraw && find p parts -name "*.dat" -type f | LC_ALL=C sort \
+#     | xargs shasum -a 256 | shasum -a 256
+source: https://library.ldraw.org/library/updates/complete.zip
+fetched: 2026-06-27
+dat-files: 36067
+manifest-sha256: 87641c77573ea3ff91d0bb477799659c48ec06d0ab2166153fa727322d56aea2
+
+## LDView (reference renderer for stock-render comparisons; vendor/LDView.app)
+# setup-ldview.sh pins the 4.2.1 Universal dmg by URL.
+ldview-version: 4.2.1 (bundle 4.2.1.1)
+ldview-dmg: https://downloads.sourceforge.net/project/ldview/01.%20LDView/LDView%204.2/LDView_4.2.1_Universal.dmg
+ldview-binary-sha256: c02453f698f472d23ffbf8568b67f12eac0bfe077988575ccac596abc6b1f5c0
+
+## CLI tools (Homebrew; used by verification workflow, not the library)
+resvg: 0.47.0          # SVG -> PNG rasterizer; the AA reference for censuses
+potrace: 1.16          # bitmap tracing (setup-ldview.sh path)
+imagemagick: 7.1.2-24  # crops/compare in the verify workflow
+
+## Python (runtime; pyproject.toml declares floors, these are the pins)
+python: 3.14.5
+numpy: 2.5.0
+pillow: 12.2.0
+shapely: 2.1.2
+pytest: 9.1.1          # dev only
