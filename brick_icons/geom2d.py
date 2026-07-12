@@ -35,7 +35,10 @@ def arc_candidates(ellipses):
     """Prepare projected circles [(cx,cy,ux,uy,vx,vy)] for path_d recovery:
     point(t) = c + cos t*u + sin t*v. Drops degenerate (edge-on) ellipses.
     An optional 7th element overrides MAX_STEP (degrees) for that candidate:
-    fitted hand-faceted rounds legitimately sweep ~45 deg per edge."""
+    fitted hand-faceted rounds legitimately sweep ~45 deg per edge. An
+    optional 8th element is a per-candidate SNAP tolerance (px): fitted
+    arcs deviate from the authored facet vertices by more than ARC_TOL,
+    and vertices within it snap onto the ellipse (see densify_on_arcs)."""
     cands = []
     for e in ellipses or []:
         c = np.array(e[:2], float)
@@ -43,11 +46,12 @@ def arc_candidates(ellipses):
         U_, S_, _ = np.linalg.svd(M)
         if S_[-1] < MIN_AXIS:
             continue
-        cands.append({"c": c, "Minv": np.linalg.inv(M),
+        cands.append({"c": c, "Minv": np.linalg.inv(M), "M": M,
                       "det": float(M[0, 0] * M[1, 1] - M[0, 1] * M[1, 0]),
                       "rx": float(S_[0]), "ry": float(S_[1]),
                       "phi": math.degrees(math.atan2(U_[1, 0], U_[0, 0])),
-                      "step": math.radians(e[6]) if len(e) > 6 else MAX_STEP})
+                      "step": math.radians(e[6]) if len(e) > 6 else MAX_STEP,
+                      "tol": float(e[7]) if len(e) > 7 else None})
     return cands
 
 
@@ -68,7 +72,7 @@ def _assign_edges(pts, cands, tol):
     n = len(pts)
     assign = [None] * n
     for k, cand in enumerate(cands):
-        t = _vertex_angles(pts, cand, tol)
+        t = _vertex_angles(pts, cand, max(tol, cand.get("tol") or 0.0))
         for i in range(n):
             if assign[i] is not None:
                 continue
@@ -270,10 +274,24 @@ def densify_on_arcs(pts, cands, max_step=6.0):
     assign = _assign_edges(pts, cands, ARC_TOL)
     if not any(a is not None for a in assign):
         return pts
+
+    def on_ellipse(p, cand):
+        # radial projection onto the candidate (exact in its unit space).
+        # For tight-tol candidates this moves <= ARC_TOL (a no-op in spirit);
+        # for fitted arcs it snaps authored facet corners onto the drawn
+        # stylized curve so fills stop scalloping past the stroke.
+        m = cand["Minv"] @ (p - cand["c"])
+        n = math.hypot(m[0], m[1])
+        if n < 1e-9:
+            return p
+        return cand["c"] + cand["M"] @ (m / n)
+
     out = []
     n = len(pts)
     for i in range(n):
-        out.append(pts[i])
+        a = assign[i] if assign[i] is not None else assign[i - 1]
+        out.append(pts[i] if a is None
+                   else on_ellipse(pts[i], cands[a[0]]))
         a = assign[i]
         if a is None:
             continue
@@ -281,13 +299,11 @@ def densify_on_arcs(pts, cands, max_step=6.0):
         k = int(math.ceil(abs(math.degrees(dt)) / max_step))
         if k < 2:
             continue
-        d = pts[i] - cand["c"]
-        m = cand["Minv"] @ d
+        m = cand["Minv"] @ (pts[i] - cand["c"])
         t0 = math.atan2(m[1], m[0])
-        M = np.linalg.inv(cand["Minv"])
         for j in range(1, k):
             t = t0 + dt * j / k
-            out.append(cand["c"] + M @ np.array([math.cos(t), math.sin(t)]))
+            out.append(cand["c"] + cand["M"] @ np.array([math.cos(t), math.sin(t)]))
     return np.array(out)
 
 

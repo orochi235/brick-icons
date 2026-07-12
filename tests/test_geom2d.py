@@ -183,3 +183,37 @@ def test_densify_without_candidates_is_identity():
     out = geom2d.densify_on_arcs(ring, [])
     assert np.array_equal(out, ring)
 
+
+
+def test_densify_snaps_vertices_onto_loose_tol_candidate():
+    # A fitted-arc candidate carries a per-candidate snap tolerance (8th
+    # ellipse element): arcfit's stylized arcs deviate from the authored
+    # facet corners by more than ARC_TOL, so fills following the authored
+    # vertices scallop outside the drawn stroke (3941's X outline). Ring
+    # vertices within the tolerance snap ONTO the ellipse and the edge
+    # densifies along it.
+    import math
+    a = math.radians(22.5)
+    ring = np.array([[10.5, 0.0],
+                     [10.2 * math.cos(a), 10.2 * math.sin(a)],
+                     [2.0, 6.0]])
+    cands = geom2d.arc_candidates([(0, 0, 10, 0, 0, 10, 30.0, 1.0)])
+    out = geom2d.densify_on_arcs(ring, cands)
+    r = np.hypot(out[:, 0], out[:, 1])
+    on = np.abs(r - 10.0) < 1e-6
+    assert on.sum() >= 4                 # 2 snapped corners + inserted points
+    assert not (np.abs(out - [10.5, 0.0]).sum(axis=1) < 1e-9).any()
+    assert (np.abs(out - [2.0, 6.0]).sum(axis=1) < 1e-9).any()  # bystander
+
+
+def test_densify_tight_tol_leaves_off_arc_vertices_alone():
+    # without the 8th element the old contract holds: off-ellipse vertices
+    # (beyond ARC_TOL) are untouched
+    import math
+    a = math.radians(22.5)
+    ring = np.array([[10.5, 0.0],
+                     [10.2 * math.cos(a), 10.2 * math.sin(a)],
+                     [2.0, 6.0]])
+    cands = geom2d.arc_candidates([(0, 0, 10, 0, 0, 10, 30.0)])
+    out = geom2d.densify_on_arcs(ring, cands)
+    assert np.array_equal(out, ring)

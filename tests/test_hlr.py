@@ -709,3 +709,11 @@ def test_rim_candidates_admit_16gon_facet_rings():
     res = hlr._visible_segments_analytic(out, *hlr.view_basis(30, 45), 300)
     assert res.ellipses
     assert all(len(e) == 7 and e[6] > 22.5 for e in res.ellipses)
+
+
+def test_fit_ellipses_scales_snap_tolerance():
+    # 8th candidate element is a SPATIAL snap tolerance and must ride the
+    # fit affine; the 7th (max step) is angular and passes through
+    out = hlr.fit_ellipses([(0, 0, 1, 0, 0, 1, 25.0, 2.0)], 2.0, 5.0, 5.0)
+    assert out[0][6] == 25.0
+    assert out[0][7] == 4.0

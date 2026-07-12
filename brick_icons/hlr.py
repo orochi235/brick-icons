@@ -384,10 +384,21 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
                     np.interp(d, tv, cpz))
         specs.append((primitives._arc_op(ell, a["t0"], a["t1"], "edge"),
                       primitives._arc_depth_fn(ell), None, chord_proxy))
+        # snap tolerance (8th element) = the fitted arc's measured radial
+        # deviation from the authored chain vertices (+AA margin, capped):
+        # fills densify/snap onto the DRAWN stylized curve instead of
+        # scalloping past the stroke at facet corners (3941's X outline)
+        Me = np.array([[ell.u[0], ell.v[0]], [ell.u[1], ell.v[1]]])
+        mu = np.linalg.inv(Me) @ (np.stack([cpx, cpy], 0)
+                                  - ell.center.reshape(2, 1))
+        ru = np.hypot(mu[0], mu[1])
+        pr = np.hypot(cpx - ell.center[0], cpy - ell.center[1])
+        dev = float(np.max(np.abs(ru - 1.0) * pr / np.maximum(ru, 1e-9)))
         fit_ells.append((float(ell.center[0]), float(ell.center[1]),
                          float(ell.u[0]), float(ell.u[1]),
                          float(ell.v[0]), float(ell.v[1]),
-                         a["step"] * 1.15 + 1.0))
+                         a["step"] * 1.15 + 1.0,
+                         min(dev * 1.25 + 0.5, 6.0)))
     # non-substituted straight edges (box edges, chords) and conditionals
     for e in out["2"]:
         px, py, z = proj.to_px(e)
@@ -763,9 +774,11 @@ def dedupe_segments(segs, eps=0.05):
 def fit_ellipses(ells, f, ox, oy):
     """Remap projected-circle params through the fit affine (uniform f).
     A trailing per-candidate max-step element (fitted rounds) passes through
-    unchanged — it is angular, not spatial."""
+    unchanged — it is angular, not spatial. The optional 8th element (snap
+    tolerance, px) IS spatial and scales with f."""
     return [(e[0] * f + ox, e[1] * f + oy, e[2] * f, e[3] * f,
-             e[4] * f, e[5] * f, *e[6:]) for e in ells]
+             e[4] * f, e[5] * f, *e[6:7], *(x * f for x in e[7:8]))
+            for e in ells]
 
 
 def fit_affine(bbox, W, H, margin=6, scale=1.0):
