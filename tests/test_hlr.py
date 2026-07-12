@@ -754,6 +754,39 @@ def test_fold_arc_loops_rejects_wide_bridges():
 
 
 @pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_30136_hidden_edges_stay_hidden():
+    # 30136 (palisade/log brick): its logs are ELLIPTICAL cylinders (conjugate
+    # half-diameters (10,0,7)/(-10,0,7)). The circular-proxy occluder (mean
+    # radius) misjudged rays near the true elliptical walls and leaked
+    # fragments of the box5 underside-cavity edges — fully buried inside the
+    # logs — as floating dashes on and around the top face.
+    res = hlr.visible_segments("30136", LIB, lat=30, long=45, render_px=900)
+    hidden = [((-16.0, 4.0, 6.0), (-16.0, 4.0, -6.0)),   # cavity ceiling edges
+              ((16.0, 4.0, -6.0), (16.0, 4.0, 6.0)),
+              ((-16.0, 4.0, -6.0), (16.0, 4.0, -6.0)),
+              ((-16.0, 24.0, -6.0), (-16.0, 4.0, -6.0)),  # cavity corner post
+              ((-16.0, 24.0, -6.0), (16.0, 24.0, -6.0)),  # cavity floor edges
+              ((16.0, 24.0, -6.0), (16.0, 24.0, 6.0))]
+    for A, B in hidden:
+        (ax,), (ay,), _ = res.proj.to_px(np.array([A]))
+        (bx,), (by,), _ = res.proj.to_px(np.array([B]))
+        d = np.array([bx - ax, by - ay])
+        L = float(np.hypot(*d))
+        dh = d / L
+        for op in res.segs:
+            if len(op) == 5:
+                op = ("line",) + tuple(op)
+            if op[0] != "line":
+                continue
+            for p in (np.array(op[1:3], float), np.array(op[3:5], float)):
+                v = p - np.array([ax, ay])
+                t = float(v @ dh)
+                perp = abs(dh[0] * v[1] - dh[1] * v[0])
+                assert not (perp < 1.0 and -1.0 < t < L + 1.0), \
+                    f"hidden edge {A}->{B} leaked visible fragment {op}"
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
 def test_3941_fold_loops_close_the_post_outline():
     # the ten axle-cross flank/notch spans chain into one closed loop (the
     # stud-occluded bottom section bridged); every drawn fold span lies on

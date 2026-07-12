@@ -167,15 +167,6 @@ def project_circle_uv(C, U, V, to_AB, s, cx, cy, half):
     return Ellipse(center, u, v, depth_coeffs)
 
 
-def _local_basis(R, t):
-    """Local axes and radius/scale from a primitive transform."""
-    R = np.asarray(R, float)
-    U, A, V = R[:, 0], R[:, 1], R[:, 2]
-    r = (np.linalg.norm(U) + np.linalg.norm(V)) / 2.0
-    ah = np.linalg.norm(A)
-    return U, V, A, r, ah
-
-
 def _angle_in_sector(local_x, local_z, sector):
     """Boolean mask: do local (x,z) coords fall within [0, sector] degrees?"""
     if sector >= 360.0 - 1e-9:
@@ -185,19 +176,24 @@ def _angle_in_sector(local_x, local_z, sector):
 
 
 class CylinderOccluder:
-    """Finite cylinder: radius r, axis A from C to C+A, optional angular sector.
+    """Finite cylinder wall (unit radius, height 0..1 in the local frame)
+    under transform R, t; optional angular sector.
+
+    Works in the primitive's LOCAL frame (Minv = R^-1, like ConeOccluder) so
+    elliptical scale and shear are exact — 30136's log walls are elliptical
+    cylinders, and a circular mean-radius proxy leaked hidden edges through.
+    The ray parameter lambda is invariant under the linear map, so returned
+    depths are world units along F, same as the other occluders.
 
     `depth(O, F)` returns the nearest ray hit parameter lambda (depth along F)
     for each ray origin in O, inf on miss.
     """
 
     def __init__(self, R, t, sector):
-        self.C = np.asarray(t, float)
-        self.U, self.V, self.A, self.r, self.ah = _local_basis(R, t)
-        self.ahat = self.A / (self.ah or 1.0)
+        self.R = np.asarray(R, float)
+        self.t = np.asarray(t, float)
+        self.Minv = np.linalg.inv(self.R)
         self.sector = sector
-        self.uhat = self.U / (self.r or 1.0)
-        self.vhat = self.V / (self.r or 1.0)
 
     def _hits(self, O, F, clamp=True):
         """Both wall intersections per ray as (lam_near, lam_far); invalid
@@ -205,29 +201,24 @@ class CylinderOccluder:
         clamp=False skips the height/sector bounds — an ordering proxy for
         rays that cross the circle where the finite wall doesn't exist."""
         O = np.atleast_2d(O).astype(float)
-        F = np.asarray(F, float)
-        d = F - (F @ self.ahat) * self.ahat          # ray dir minus axial part
-        oc = O - self.C
-        oc_perp = oc - np.outer(oc @ self.ahat, self.ahat)
-        a = float(d @ d)
-        near = np.full(O.shape[0], np.inf)
-        far = np.full(O.shape[0], -np.inf)
+        o = (O - self.t) @ self.Minv.T
+        f = self.Minv @ np.asarray(F, float)
+        a = f[0] * f[0] + f[2] * f[2]
+        near = np.full(len(o), np.inf)
+        far = np.full(len(o), -np.inf)
         if a < 1e-12:                                 # ray parallel to axis
             return near, far
-        b = 2.0 * (oc_perp @ d)
-        c = np.sum(oc_perp * oc_perp, axis=1) - self.r ** 2
+        b = 2.0 * (o[:, 0] * f[0] + o[:, 2] * f[2])
+        c = o[:, 0] * o[:, 0] + o[:, 2] * o[:, 2] - 1.0
         disc = b * b - 4 * a * c
         ok = disc >= 0
         sq = np.sqrt(np.where(ok, disc, 0.0))
         for lam in ((-b - sq) / (2 * a), (-b + sq) / (2 * a)):
             if clamp:
-                P_ = O + lam[:, None] * F
-                rel = P_ - self.C
-                h = rel @ self.ahat
-                lx = rel @ self.uhat
-                lz = rel @ self.vhat
-                valid = (ok & (h >= -1e-6) & (h <= self.ah + 1e-6)
-                         & _angle_in_sector(lx, lz, self.sector))
+                P_ = o + lam[:, None] * f
+                y = P_[:, 1]
+                valid = (ok & (y >= -1e-6) & (y <= 1.0 + 1e-6)
+                         & _angle_in_sector(P_[:, 0], P_[:, 2], self.sector))
             else:
                 valid = ok
             near = np.minimum(near, np.where(valid, lam, np.inf))
@@ -297,30 +288,37 @@ class ConeOccluder:
 
 
 class DiscOccluder:
-    """Planar disc / annulus in the primitive's local XZ plane (normal = axis A)."""
+    """Planar disc / annulus spanned by the local X/Z columns (U, V).
+
+    The radial and sector tests run in unit param coords (solved through the
+    U/V Gram matrix), so an elliptically scaled disc is exact — the previous
+    mean-radius circle proxy misjudged elliptical rims. inner/outer are unit
+    multiples (a ring's bore and rim)."""
 
     def __init__(self, R, t, sector, inner, outer):
         self.C = np.asarray(t, float)
-        self.U, self.V, self.A, self.r, _ = _local_basis(R, t)
-        self.n = self.A / (np.linalg.norm(self.A) or 1.0)
-        self.inner = inner * self.r
-        self.outer = outer * self.r
+        R = np.asarray(R, float)
+        self.U, self.V = R[:, 0], R[:, 2]
+        n = np.cross(self.U, self.V)
+        self.n = n / (np.linalg.norm(n) or 1.0)
+        self.inner = float(inner)
+        self.outer = float(outer)
         self.sector = sector
-        self.uhat = self.U / (self.r or 1.0)
-        self.vhat = self.V / (self.r or 1.0)
+        G = np.array([[self.U @ self.U, self.U @ self.V],
+                      [self.U @ self.V, self.V @ self.V]])
+        self.Ginv = (np.linalg.inv(G)
+                     if abs(np.linalg.det(G)) > 1e-18 else None)
 
     def depth(self, O, F):
         O = np.atleast_2d(O).astype(float)
         F = np.asarray(F, float)
         denom = float(F @ self.n)
         out = np.full(O.shape[0], np.inf)
-        if abs(denom) < 1e-12:                        # ray parallel to plane
+        if abs(denom) < 1e-12 or self.Ginv is None:   # parallel / degenerate
             return out
         lam = ((self.C - O) @ self.n) / denom
-        Phit = O + lam[:, None] * F
-        rel = Phit - self.C
-        lx = rel @ self.uhat
-        lz = rel @ self.vhat
+        rel = O + lam[:, None] * F - self.C
+        lx, lz = self.Ginv @ np.stack([rel @ self.U, rel @ self.V])
         rad = np.hypot(lx, lz)
         valid = ((rad >= self.inner - 1e-6) & (rad <= self.outer + 1e-6)
                  & _angle_in_sector(lx, lz, self.sector))
@@ -661,12 +659,15 @@ class Cylinder(Primitive):
 
     def drawn_with_depth(self, proj, skip_rims=None):
         skip_base, skip_top = self._skip_flags(skip_rims)
-        U, A, V = self.R[:, 0], self.R[:, 1], self.R[:, 2]
+        A = self.R[:, 1]
         fwd = np.asarray(proj.fwd, float)
-        # silhouette generators: radial normal perpendicular to view ->
-        # cos t (U.fwd) + sin t (V.fwd) = 0  ->  t = atan2(-(U.fwd), (V.fwd)).
-        uf, vf = float(U @ fwd), float(V @ fwd)
-        theta = math.atan2(-uf, vf)
+        # silhouette generators: the local wall normal at param t is
+        # (cos t, 0, sin t) and normals map through R^-T, so n.fwd = 0
+        # reduces via g = R^-1 @ fwd to g0 cos t + g2 sin t = 0. For an
+        # elliptical wall (30136's logs) the RADIAL direction is not the
+        # normal, so the old radial test put the limb at the wrong angle.
+        g = np.linalg.inv(self.R) @ fwd
+        theta = math.atan2(-float(g[0]), float(g[2]))
         base = proj.circle(self.R, self.t, 1.0)
         top = proj.circle(self.R, self.t + A, 1.0)
         pairs = []
@@ -690,20 +691,31 @@ class Cylinder(Primitive):
         half's interior surface (visible when looking into an open tube —
         leaving it out produced 4019's white voids). Each visible span
         becomes one arc-region polygon with a linear-gradient spec; a partial
-        sector can split a span in two where the arc wraps past 0."""
-        U, V = self.R[:, 0], self.R[:, 2]
-        a = float(U @ proj.fwd); b = float(V @ proj.fwd)
-        if a == 0.0 and b == 0.0:
+        sector can split a span in two where the arc wraps past 0.
+
+        Like the cone, everything runs off the local frame: with
+        g = R^-1 @ fwd, n(theta).fwd = hyp*cos(theta - phi0), so the outer
+        wall faces the camera on (phi0 + pi/2, phi0 + 3pi/2) — the halves
+        split exactly at the silhouette generators even under elliptical
+        scale, and normal_fn supplies the true (R^-T) surface normals."""
+        Minv = np.linalg.inv(self.R)
+        g = Minv @ np.asarray(proj.fwd, float)
+        MT = Minv.T
+
+        def normal_fn(th):
+            return MT @ np.array([math.cos(th), 0.0, math.sin(th)])
+
+        if math.hypot(float(g[0]), float(g[2])) < 1e-12:
             return []                            # axis points at camera: no wall
-        phi = math.atan2(b, a)
-        theta_face = phi + math.pi               # most camera-facing angle
+        phi0 = math.atan2(float(g[2]), float(g[0]))
         sect = math.radians(self.sector)
-        halves = [(theta_face - math.pi / 2, False),     # outer near half
-                  (theta_face + math.pi / 2, True)]      # interior far half
+        halves = [(phi0 + math.pi / 2, False),           # outer near half
+                  (phi0 - math.pi / 2, True)]            # interior far half
         faces = []
         for start, interior in halves:
             for lo, hi in _arc_sector_spans(start, math.pi, sect):
-                f = self._wall_span_face(lo, hi, interior, proj)
+                f = self._wall_span_face(lo, hi, interior, proj,
+                                         normal_fn=normal_fn)
                 if f is not None:
                     faces.append(f)
         return faces

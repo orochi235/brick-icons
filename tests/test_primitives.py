@@ -95,6 +95,69 @@ def test_cylinder_depth_clamps_height():
     assert np.isinf(cyl.depth(O, F)[0])
 
 
+def test_cylinder_occluder_elliptical_exact():
+    # 30136's logs are elliptically scaled quarter-cylinders; the occluder
+    # must hit the true ellipse, not a mean-radius circular proxy (the proxy
+    # leaked fully hidden edges through as floating dash strokes).
+    R = np.diag([2.0, 1.0, 1.0])                  # ellipse semi-axes 2 (x), 1 (z)
+    cyl = P.CylinderOccluder(R, np.zeros(3), sector=360.0)
+    F = np.array([0.0, 0.0, 1.0])
+    O = np.array([[1.8, 0.5, -5.0],               # inside ellipse, outside r=1.5 proxy
+                  [2.2, 0.5, -5.0]])               # outside the ellipse entirely
+    d = cyl.depth(O, F)
+    z = math.sqrt(1.0 - 1.8 ** 2 / 4.0)
+    assert np.isclose(d[0], 5.0 - z, atol=1e-6)
+    assert np.isinf(d[1])
+
+
+def test_cylinder_occluder_elliptical_sector():
+    # sector clamping must use the ellipse PARAM angle (unit local frame),
+    # not the world angle warped by unequal axis scale
+    R = np.diag([2.0, 1.0, 1.0])
+    cyl = P.CylinderOccluder(R, np.zeros(3), sector=90.0)
+    F = np.array([0.0, 0.0, 1.0])
+    x = 2.0 * math.cos(math.radians(45.0))
+    z = math.sin(math.radians(45.0))
+    # near intersection (param -45deg) is outside the 0..90 sector; the far
+    # one (param +45deg) is inside, so the near valid hit is the FAR wall
+    d = cyl.depth(np.array([[x, 0.5, -5.0]]), F)
+    assert np.isclose(d[0], 5.0 + z, atol=1e-6)
+
+
+def test_drawn_cylinder_elliptical_silhouette_on_true_normal():
+    # silhouette generators sit where the TRUE surface normal is
+    # perpendicular to the view; for an elliptical wall that is not where
+    # the radial direction is perpendicular to the view
+    R = np.diag([2.0, 1.0, 1.0])
+    fwd = np.array([1.0, 0.0, 1.0]) / math.sqrt(2.0)
+    up = np.array([0.0, 1.0, 0.0])
+    right = np.cross(up, fwd)
+    proj = P.Projection(right, up, fwd, 1.0, 0.0, 0.0, 0.0)
+    prim = P.Cylinder(R=R, t=np.zeros(3), sector=360.0)
+    sils = [op for op, *_ in prim.drawn_with_depth(proj)
+            if op[0] == "line" and op[-1] == "sil"]
+    assert len(sils) == 2
+    base = proj.circle(R, np.zeros(3), 1.0)
+    Minv = np.linalg.inv(R)
+    ths = np.radians(np.arange(0.0, 360.0, 0.05))
+    pts = base.points(ths)
+    for op in sils:
+        i = int(np.argmin(np.hypot(pts[:, 0] - op[1], pts[:, 1] - op[2])))
+        n = Minv.T @ np.array([math.cos(ths[i]), 0.0, math.sin(ths[i])])
+        n /= np.linalg.norm(n)
+        assert abs(float(n @ fwd)) < 5e-3
+
+
+def test_disc_occluder_elliptical_exact():
+    R = np.diag([2.0, 1.0, 1.0])                  # elliptical disc, semi-axes 2/1
+    disc = P.DiscOccluder(R, np.zeros(3), sector=360.0, inner=0.0, outer=1.0)
+    F = np.array([0.0, 1.0, 0.0])
+    O = np.array([[1.8, -5.0, 0.0],               # inside the ellipse
+                  [2.2, -5.0, 0.0]])               # outside
+    d = disc.depth(O, F)
+    assert np.isclose(d[0], 5.0) and np.isinf(d[1])
+
+
 def test_disc_depth():
     R, t = np.eye(3), np.zeros(3)                 # disc in XZ plane at y=0, radius 1
     disc = P.DiscOccluder(R, t, sector=360.0, inner=0.0, outer=1.0)
