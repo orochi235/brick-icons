@@ -27,16 +27,59 @@
 3039
 54200
 
+# --- Slopes, hard ---  3665a=45 2x1 inv  3660b=45 2x2 inv
+# 50950=curved 3x1  4286=33 3x1
+3665a
+3660b
+50950
+4286
+
 # --- Round ---  3941=brick 2x2  4073=plate 1x1  3062b=brick 1x1
 3941
 4073
 3062b
+
+# --- Round, hard ---  4032a=plate 2x2 axlehole (plate 3941)
+# 6143=brick 2x2 reinforced  4589=cone 1x1  60474=plate 4x4 hole
+# 98138=tile 1x1 round
+4032a
+6143
+4589
+60474
+98138
+
+# --- Dishes (shallow curves, far-rim bands) ---  3960=4x4 inv
+# 4740=2x2 inv  2654a=2x2 with rim
+3960
+4740
+2654a
 
 # --- Technic ---  3700=1x2 1-hole  3701=1x4 3-hole  32062=axle 2
 3700
 3701
 32062
 
+# --- Technic, hard ---  3673=pin (barrel through collar)
+# 6541=1x1 hole  3713=bush two flanges  32000=1x2 two holes
+3673
+6541
+3713
+32000
+
 # --- SNOT / special ---  87087=1x1 stud-on-side  15573=1x2 jumper
 87087
 15573
+
+# --- SNOT / special, hard ---  4070=headlight  87580=2x2 jumper
+# 2420=plate 2x2 corner  2357=brick 2x2 corner  4162=tile 1x8
+4070
+87580
+2420
+2357
+4162
+
+# --- Textured faces (dense parallel strokes) ---  98283=masonry 1x2
+# 2412b=grille tile  30136=log brick
+98283
+2412b
+30136
