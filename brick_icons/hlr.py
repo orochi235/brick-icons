@@ -714,6 +714,141 @@ def _fold_arc_loops(segs, fold_ells, bridge_frac=0.4, step=2.0):
     return loops
 
 
+def cull_orphan_runs(segs, cap=None, tol=None, join_tol=0.75, protect=()):
+    """Stylization-level orphan cull (2654a inner-rim fraying): drop short
+    stroke runs with a free end. Every such run is CORRECT HLR of authored
+    micro-geometry — a blend edge or trough-circle fragment whose 3D
+    junction partner is sub-stroke and culled — so in the source it
+    terminates at a tiny wedge, but in the icon it visibly floats.
+
+    The stroke graph: ops are edges, coincident endpoints (post-snap
+    junctions land exactly on one another) are junction nodes. Fray is a
+    DANGLING BRANCH — peeled iteratively from any free tip, accumulating
+    peeled length, and stopping when the accumulated branch would exceed
+    `cap` or the branch reaches an anchored point. A tip is FREE when it
+    lies on no other drawn op (neither a shared endpoint nor a
+    T-junction). "Lies on" is visual, not geometric: the default anchor
+    tolerance is ~1 output px (0.4% of the drawn extent) — a gap smaller
+    than a stroke width is bridged by the ink itself, and tangent
+    continuations or sampled occlusion cuts (visible_subops n=64 stops one
+    sample short of the true graze) land within it. Silhouette-kind ops
+    never peel (a broken outline is always worse than fray), though they
+    still anchor and chain. `cap` is a safety ceiling, not the fray
+    criterion (the
+    stylization call was: drop free-ended runs regardless of length): it
+    defaults to 25% of the part's drawn extent so an anchor-detection
+    failure can never silently delete major geometry. 2654a's worst branch
+    (blend dash + blend arc, ~13% of its width) must fit under it.
+
+    Sub-stroke GHOST ops (the culled 3D junction partners themselves; they
+    never render — trace culls anything under ~0.6 stroke widths) are
+    invisible to the graph: they neither anchor a tip alive nor chain onto
+    a dash to extend its branch. Full ellipses have no ends and never
+    cull, but they do anchor strokes landing on them.
+
+    `protect` is a set of rounded 6-tuple carrier keys (fold_ells): arcs on
+    those carriers are fitted fold spans — stylized outline whose ends
+    merge TANGENTIALLY into adjoining strokes (a graze, which fitting can
+    leave slightly off) and whose removal exposes the fill seams that
+    follow them (3941/4032a stud-flank hooks). They never peel and they
+    stop a cascade."""
+    if not segs:
+        return segs
+    ops = [("line",) + tuple(op) if len(op) == 5 else op for op in segs]
+    x0, y0, x1, y1 = _ops_bbox(segs)
+    dim = max(x1 - x0, y1 - y0)
+    if cap is None:
+        cap = 0.25 * dim
+    if tol is None:
+        tol = 0.004 * dim            # ~1 output px at a 256 icon
+    ghost_len = 0.002 * dim          # ~0.5 output px at a 256 icon
+
+    # per-op polylines (anchor targets), endpoints, and lengths
+    polys, ends, lens = [], [], []
+    for op in ops:
+        if op[0] == "line":
+            pts = np.array([[op[1], op[2]], [op[3], op[4]]], float)
+        else:
+            _, cx, cy, ux, uy, vx, vy, t0, t1, _ = op
+            n = max(3, int(abs(t1 - t0) / 2.0) + 2)
+            t = np.radians(np.linspace(t0, t1, n))
+            pts = np.stack([cx + np.cos(t) * ux + np.sin(t) * vx,
+                            cy + np.cos(t) * uy + np.sin(t) * vy], axis=1)
+        polys.append(pts)
+        lens.append(float(np.sum(np.linalg.norm(np.diff(pts, axis=0), axis=1))))
+        full = op[0] == "arc" and abs(op[8] - op[7]) >= 359.9
+        ends.append(None if full else (pts[0].copy(), pts[-1].copy()))
+
+    real = [i for i in range(len(ops)) if lens[i] >= ghost_len]
+
+    # junction nodes: cluster coincident endpoints of real ops
+    node_of = {}                       # (op, slot) -> node id
+    node_pts = []
+    for i in real:
+        if ends[i] is None:
+            continue
+        for slot, p in enumerate(ends[i]):
+            for nid, q in enumerate(node_pts):
+                if abs(p[0] - q[0]) <= join_tol and abs(p[1] - q[1]) <= join_tol \
+                        and float(np.hypot(*(p - q))) <= join_tol:
+                    node_of[(i, slot)] = nid
+                    break
+            else:
+                node_of[(i, slot)] = len(node_pts)
+                node_pts.append(p)
+
+    # flat arrays of every real op's polyline segments, for T-anchor tests
+    A = np.vstack([polys[i][:-1] for i in real])
+    B = np.vstack([polys[i][1:] for i in real])
+    owner = np.concatenate([np.full(len(polys[i]) - 1, i) for i in real])
+    D = B - A
+    dd = np.maximum(np.einsum("ij,ij->i", D, D), 1e-18)
+
+    alive = set(real)
+
+    def anchored(i, P):
+        u = np.clip(np.einsum("ij,ij->i", P - A, D) / dd, 0.0, 1.0)
+        dist = np.linalg.norm(P - (A + u[:, None] * D), axis=1)
+        dist[(owner == i) | ~np.isin(owner, list(alive))] = np.inf
+        return float(dist.min()) <= max(tol, lens[i] / 63.0)
+
+    # peel dangling branches: a leaf op whose tip node holds no other
+    # living op and whose tip is unanchored is fray — remove it and carry
+    # the removed length to the ops at its far node, so a chain is only
+    # eaten back until the branch total hits the cap
+    carry = defaultdict(float)
+    changed = True
+    while changed:
+        changed = False
+        degree = defaultdict(int)
+        for i in alive:
+            if ends[i] is not None:
+                degree[node_of[(i, 0)]] += 1
+                degree[node_of[(i, 1)]] += 1
+        for i in sorted(alive, key=lambda k: lens[k]):
+            if ends[i] is None or carry[i] + lens[i] > cap \
+                    or ops[i][-1] == "sil":
+                continue
+            if ops[i][0] == "arc" and \
+                    tuple(round(v, 6) for v in ops[i][1:7]) in protect:
+                continue
+            for slot in (0, 1):
+                nid = node_of[(i, slot)]
+                if degree[nid] > 1 or anchored(i, ends[i][slot]):
+                    continue
+                alive.discard(i)
+                far = node_of[(i, 1 - slot)]
+                for j in alive:
+                    if ends[j] is not None and far in (node_of[(j, 0)],
+                                                       node_of[(j, 1)]):
+                        carry[j] = max(carry[j], carry[i] + lens[i])
+                changed = True
+                break
+
+    return [orig for i, orig in enumerate(segs)
+            if ends[i] is None or lens[i] < ghost_len or i in alive]
+
+
 def _resolve_input(part: str, roots: list[Path]) -> Path:
     """Resolve a part id or .dat/.ldr/.mpd path to a file, or raise a clear error."""
     s = str(part)
@@ -750,6 +885,8 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
     else:
         res = _visible_segments_faceted(out, right, up, fwd, render_px, cull=cull)
     segs, refits = _snap_rim_crossings(dedupe_segments(res.segs))
+    if cull:
+        segs = cull_orphan_runs(segs, protect=set(res.fold_ells or ()))
     if refits:
         # refit separators are arc-recovery candidates too, so the moved
         # fill seam emits as a true arc (25 deg step, like the rim ones)

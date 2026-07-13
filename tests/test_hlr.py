@@ -837,3 +837,114 @@ def test_3941_fold_loops_close_the_post_outline():
         mid = Point(op[1] + math.cos(tm) * op[3] + math.sin(tm) * op[5],
                     op[2] + math.cos(tm) * op[4] + math.sin(tm) * op[6])
         assert poly.exterior.distance(mid) < 0.05
+
+
+# --- orphan-run cull (2654a inner-rim fraying) ---
+
+def test_orphan_cull_drops_floating_fragment():
+    # a short line touching nothing (a trough-circle crumb's chord) is fray
+    anchor = ("line", 0.0, 0.0, 200.0, 0.0, "edge")
+    crumb = ("line", 50.0, 40.0, 55.0, 42.0, "edge")
+    assert hlr.cull_orphan_runs([anchor, crumb]) == [anchor]
+
+
+def test_orphan_cull_drops_free_ended_dash_off_a_junction():
+    # the 2654a eyesore: a stud-blend dash T-lands on the stud outline but
+    # its far end floats (the 3D junction partner is sub-stroke and culled)
+    outline = ("arc", 0.0, 0.0, 100.0, 0.0, 0.0, 100.0, 0.0, 360.0, "sil")
+    dash = ("line", 100.0, 0.0, 112.0, 0.0, "edge")  # starts ON the circle
+    assert hlr.cull_orphan_runs([outline, dash]) == [outline]
+    # a fragment chained onto the far end (the culled junction partner, or
+    # a continuing blend arc) must not anchor the dash alive: the whole
+    # dangling branch peels away
+    frag = ("line", 112.0, 0.0, 114.0, 1.5, "edge")
+    assert hlr.cull_orphan_runs([outline, dash, frag]) == [outline]
+
+
+def test_orphan_cull_keeps_run_bridging_two_anchors():
+    # both ends land on other strokes: a real junction-to-junction edge
+    a = ("line", 0.0, -50.0, 0.0, 50.0, "edge")
+    b = ("line", 40.0, -50.0, 40.0, 50.0, "edge")
+    bridge = ("line", 0.0, 0.0, 40.0, 0.0, "edge")
+    assert hlr.cull_orphan_runs([a, b, bridge]) == [a, b, bridge]
+
+
+def test_orphan_cull_keeps_long_free_ended_run():
+    # past the cap it is real geometry, not fray, even with a free end
+    long_edge = ("line", 0.0, 0.0, 300.0, 0.0, "edge")
+    assert hlr.cull_orphan_runs([long_edge]) == [long_edge]
+
+
+def test_orphan_cull_peel_stops_at_the_cap():
+    # a free-tipped chain peels from the tip, but the accumulated branch
+    # length stops at the safety ceiling: a long polyline can lose frayed
+    # tail ops yet never disappears wholesale
+    chain = [("line", float(x), 0.0, float(x + 20), 0.0, "edge")
+             for x in range(0, 100, 20)]
+    chain.append(("line", 100.0, 0.0, 110.0, 15.0, "edge"))  # bent tail
+    kept = hlr.cull_orphan_runs(list(chain), cap=30.0)
+    # both tips are free: each end peels ONE op, then the budget stops it
+    assert chain[2] in kept
+    assert len(kept) == len(chain) - 2
+
+
+def test_orphan_cull_anchored_chain_survives_whole():
+    # both chain tips land on other geometry: nothing peels
+    wall_l = ("line", 0.0, -40.0, 0.0, 40.0, "edge")
+    wall_r = ("line", 110.0, -40.0, 110.0, 40.0, "edge")
+    chain = [("line", float(x), 0.0, float(x + 22), 0.0, "edge")
+             for x in range(0, 110, 22)]
+    ops = [wall_l, wall_r] + chain
+    assert hlr.cull_orphan_runs(list(ops)) == ops
+
+
+def test_orphan_cull_full_circles_never_cull_and_do_anchor():
+    # full ellipses have no free ends; they also anchor T-landing strokes
+    ring = ("arc", 0.0, 0.0, 20.0, 0.0, 0.0, 20.0, 0.0, 360.0, "edge")
+    assert hlr.cull_orphan_runs([ring]) == [ring]
+
+
+def test_orphan_cull_subpixel_gaps_anchor():
+    # sampled occlusion cuts and tangent continuations land a hair short
+    # of the adjoining stroke; a gap under ~1 output px is bridged by the
+    # ink itself and must anchor (3713's slit end-cap arc, 60474's rim)
+    span = ("line", 0.0, 900.0, 3200.0, 900.0, "edge")   # sets the extent
+    limb_l = ("line", 0.0, -450.0, 0.0, 450.0, "sil")
+    limb_r = ("line", 220.0, -450.0, 220.0, 450.0, "sil")
+    # ends 10 off each limb: under tol = 0.4% of extent (12.8) -> anchored
+    cut = ("line", 10.0, 0.0, 210.0, 0.0, "edge")
+    kept = hlr.cull_orphan_runs([span, limb_l, limb_r, cut])
+    assert cut in kept
+    # ends 30 off (~2.3 output px): visibly detached -> culled
+    crumb = ("line", 30.0, 100.0, 190.0, 100.0, "edge")
+    kept = hlr.cull_orphan_runs([span, limb_l, limb_r, crumb])
+    assert crumb not in kept
+
+
+def test_orphan_cull_never_peels_silhouette_ops():
+    # a broken outline is always worse than fray: sil ops never peel (they
+    # still anchor and chain); the same op as an edge kind is fray
+    ring = ("arc", 0.0, 0.0, 100.0, 0.0, 0.0, 100.0, 0.0, 360.0, "edge")
+    stub_s = ("line", 130.0, 0.0, 145.0, 0.0, "sil")
+    assert hlr.cull_orphan_runs([ring, stub_s]) == [ring, stub_s]
+    stub_e = ("line", 130.0, 0.0, 145.0, 0.0, "edge")
+    assert hlr.cull_orphan_runs([ring, stub_e]) == [ring]
+
+
+def test_orphan_cull_drops_floating_arc_crumb():
+    # fragments of mostly-hidden trough circles float near the rim
+    rim = ("arc", 0.0, 0.0, 100.0, 0.0, 0.0, 100.0, 0.0, 360.0, "sil")
+    crumb = ("arc", 5.0, 5.0, 73.0, 0.0, 0.0, 73.0, 40.0, 44.0, "edge")
+    assert hlr.cull_orphan_runs([rim, crumb]) == [rim]
+
+
+def test_orphan_cull_protected_fold_spans_never_peel():
+    # fitted fold spans (arcfit) merge tangentially into other strokes and
+    # carry fill seam-following: even floating free, they must survive
+    # (3941/4032a stud-flank hooks)
+    outline = ("arc", 0.0, 0.0, 100.0, 0.0, 0.0, 100.0, 0.0, 360.0, "sil")
+    hook = ("arc", 40.0, 105.0, 12.0, 0.0, 0.0, 12.0, 10.0, 80.0, "edge")
+    key = tuple(round(v, 6) for v in hook[1:7])
+    assert hlr.cull_orphan_runs([outline, hook]) == [outline]
+    assert hlr.cull_orphan_runs([outline, hook], protect={key}) \
+        == [outline, hook]
