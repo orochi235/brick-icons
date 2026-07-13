@@ -139,7 +139,9 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
                                        sil_px=cfg.silhouette_mm / 0.4 * s) \
                     if style is not None else None
                 sil_geom = shade.silhouette_geom(faces) if faces else None
-                contour = geom2d.contour_d(sil_geom, geom2d.arc_candidates(ells)) \
+                contour = geom2d.contour_d(
+                    geom2d.union_all([sil_geom] + geom2d.arc_regions(shifted)),
+                    geom2d.arc_candidates(ells)) \
                     if sil_geom is not None else None
                 w_mm = vb_w / s * 0.4
                 h_mm = vb_h / s * 0.4
@@ -161,7 +163,9 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
                                        sil_px=cfg.silhouette_width) \
                     if style is not None else None
                 sil_geom = shade.silhouette_geom(faces) if faces else None
-                contour = geom2d.contour_d(sil_geom, geom2d.arc_candidates(ells)) \
+                contour = geom2d.contour_d(
+                    geom2d.union_all([sil_geom] + geom2d.arc_regions(fit)),
+                    geom2d.arc_candidates(ells)) \
                     if sil_geom is not None else None
                 trace.segments_to_svg(fit, cfg.width, cfg.height, out_dir / f"{name}.svg",
                                       line_px=cfg.line_width, sil_px=cfg.silhouette_width,
