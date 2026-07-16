@@ -160,6 +160,28 @@ def test_outline_uses_hlr_not_ldview(tmp_path, monkeypatch):
 
 
 @pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_svg_bytes_deterministic_across_hash_seeds(tmp_path):
+    # The census byte-diff gate needs identical input -> identical bytes.
+    # Renders in processes with different str-hash seeds shake out any
+    # set/dict iteration over string-bearing keys in the emission path;
+    # 3941 exercises the fold-arc loop-cut/absorb where jitter was seen.
+    import os
+    import subprocess
+    import sys
+    svgs = []
+    for seed in ("1", "2"):
+        d = tmp_path / seed
+        env = dict(os.environ, PYTHONHASHSEED=seed)
+        subprocess.run(
+            [sys.executable, "-m", "brick_icons.cli", "3941",
+             "--format", "svg", "--shading", "outline",
+             "--shade-style", "flat3", "--out", str(d)],
+            check=True, env=env)
+        svgs.append((d / "3941.svg").read_bytes())
+    assert svgs[0] == svgs[1]
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
 def test_wireframe_mode_draws_hidden_edges(tmp_path):
     # --wireframe: outline strokes only, occlusion culling off — every edge
     # and arc drawn whole, no fills, no clip

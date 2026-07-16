@@ -692,7 +692,11 @@ def _loop_cut_merged(merged, loops):
         a = geom2d.area(g)
         if a > 0.0 and geom2d.area(geom2d.intersection(g, L)) / a >= 0.5:
             interior.add(r)
-    for r in interior:
+    # iterate in merged's insertion order, not set order: the keys are
+    # string-bearing tuples whose set order varies with the process hash
+    # seed, and absorption below unions pieces into receivers — a
+    # seed-dependent order jitters ring start vertices in the output
+    for r in [k for k in merged if k in interior]:
         spill = geom2d.difference(merged[r], L)
         if spill.is_empty:
             continue
