@@ -1,56 +1,54 @@
-# Handoff — 2026-07-16: fill-layer byte determinism fixed, pushed
+# Handoff — 2026-07-17: stud10 truncation rendered; 4032a rim item closed
 
-Working tree on `main`, clean once this file is deleted (untracked scratch —
-delete once absorbed). 296 tests passing. All commits pushed through
-`2fc12a0`.
+Working tree on `main`, clean. 296 tests passing. All commits pushed
+through `ecf771e`.
 
-## What this session did (1 commit)
+## What this session did
 
-`2fc12a0` — **fill-layer byte nondeterminism SOLVED** (was open item 6).
-Root cause: `shade._loop_cut_merged` iterated its `interior` SET of
-merge-root keys — tuples with a string tag (`("g", n)`/`("i", n)`/
-`("p", plane)`) — so iteration followed the per-process string hash seed,
-and the absorb step unioned spill pieces in seed-dependent order, rotating
-shapely ring start vertices in the emitted fill `d`. Fix: iterate in
-`merged`'s insertion order. Verified: pixel-identical to census-J (AE=0
-at 2400px); seeds 1 vs 2 byte-equal on 3941/3713/4032a/6541/2654a/60474/
-3001; new regression test `test_svg_bytes_deterministic_across_hash_seeds`
-(subprocess renders, ~65s, needs LDraw lib). Diagnostic that cracked it:
-`PYTHONHASHSEED=0` twice → byte-equal ⇒ string-hash-order bug, not id().
-Swept the emission path: `kinds`/`emitted`/`seam_keys`/`ks_set` are
-membership-only; no other hash-ordered iteration found. Memory:
-`fill-byte-jitter-fixed`.
+- `36e2280` — committed the 2026-07-16 handoff doc.
+- `ecf771e` — **stud10 alias removed** (was `ALIAS_REFS = {"stud10.dat":
+  "stud.dat"}`, from 0ad7e47). Mike flagged that studs on round parts
+  (4032a, 3941, cones) rendered as full cylinders where the real part
+  clips them at the body's r=20 boundary. stud10 now recurses: its
+  3-4cyli/3-4edge/3-4disc substitute at true 270°, the faceted truncation
+  quads shade as facets. The stripes/tone-band artifacts that motivated
+  the alias no longer appear (absorbed by plane-merge, angular-coverage
+  seam suppression, orphan cull). Verified clean on 4032a/3941/3943b/6233
+  at 512–4200 px. Test `test_flatten_recurses_stud10_truncation` pins it.
+  Memory: `stud10-truncation-rendered`.
 
-## Byte-diff gate is HARD again
-
-Byte-diff ⇒ real change; byte-equal ⇒ no change — for renders made
-post-2fc12a0. Baselines cut PRE-fix (census-J and earlier) byte-differ vs
-post-fix renders on loop-cut parts with zero pixel change: compare against
-census-K or newer only.
+- **Open item 1 (4032a side-wall rim faceted) CLOSED — no defect.**
+  Characterization: the y=4 rim is the grip-groove top edge (4 straight
+  70.7° chords + notch-corner chord pairs — already arc-fitted where
+  appropriate); the y=0 top-face rim mixes exact 1-8cylo 45° arcs with
+  authored planar notch-chamfer cut edges (r 20→19.66→20). LDView draws
+  those same chords. Post-fix 1024 stroke parity: RMSE 0.0193 (4032a) /
+  0.0198 (3941) — at the AA floor. The old "faceted vs smooth master"
+  impression came from the aliased full-cylinder studs + comparing crisp
+  vector strokes against blurry upscaled raster masters. A
+  mixed-chain/near-circle arcfit would be stylization DIVERGING from the
+  reference (the fabrication-guard phantom-arc class) — only revisit if
+  Mike asks for smoother-than-LDView styling.
 
 ## Baselines
 
-- **census-K** (`~/.claude-msb/jobs/eb7c836f/tmp/census-K/`, 48 parts,
-  256 flat3, post-2fc12a0) is current — parts list at `census-K.parts.txt`.
-  Expected byte-diffs vs census-J on loop-cut parts are the fix
-  canonicalizing ring starts, not regressions (3941 confirmed AE=0).
-- census-J = post-bbf584b (pre-fix), census-H = post-724ab8b.
-- 1024 parity: parity-H (pre-724ab8b) in job tmp; parity-2654a has the
-  post-cull 2654a pair (RMSE 1500 ≈ AA floor).
+- **census-L** (`~/.claude-msb/jobs/eb7c836f/tmp/census-L/`, 48 parts,
+  256 flat3, post-ecf771e) is current. vs census-K: byte-diffs on exactly
+  3941 + 4032a (the stud10 fix), all 46 others byte-equal.
+- census-K = post-2fc12a0 (pre-stud10), census-J = post-bbf584b.
+- Byte-diff gate is HARD (2fc12a0): byte-diff ⇒ real change, vs census-K
+  or newer.
 
 ## Open items
 
-1. **4032a side-wall rim faceted — CHARACTERIZED**, outer contour smooth
-   (724ab8b); interior stroke chain still faceted. Full fix needs
-   mixed-chain/near-circle arcfit extension. Bigger design task; unpinned.
-2. **Residual light-on-light seam** at 3941's pinches (~0.07 px² stroke
+1. **Residual light-on-light seam** at 3941's pinches (~0.07 px² stroke
    reach, e3/e23 wedge): needs seam-following, not donation. Unchanged.
-3. **Performance**: donation pass still doubles fill_ops on hole-heavy
-   parts; suite ~17 min on a loaded machine (~8 min quiet), census ~12 min.
-   New determinism test adds ~65s (two subprocess renders of 3941).
-4. **Stock-render comparison (07-07)**: 3700 stock image never arrived.
-5. **LDraw/LDView hosted pinning**: when renderer is declared done, upload
-   the vendored snapshot as a release asset + hash-verify in
+2. **Performance**: donation pass still doubles fill_ops on hole-heavy
+   parts; suite ~17 min loaded (~8 min quiet), census ~12 min.
+   Determinism test adds ~65s.
+3. **Stock-render comparison (07-07)**: 3700 stock image never arrived.
+4. **LDraw/LDView hosted pinning**: when renderer is declared done,
+   upload the vendored snapshot as a release asset + hash-verify in
    setup-ldview.sh.
 
 ## Verification workflow
@@ -60,14 +58,14 @@ census-K or newer only.
 - One part: `.venv/bin/python -m brick_icons.cli <id> --format svg
   --shading outline --shade-style flat3 [--part-label] --out <dir>`
 - Census A/B: render `--list parts.txt` twice (defaults 256×170 + flat3
-  match baselines), byte-diff SVGs — post-2fc12a0 a byte-diff is a REAL
-  change (no more rasterize-to-confirm step against post-fix baselines).
-- 1024 parity: `--format both --mode gray --width 1024 --height 1024`
-  WITHOUT flat3 (gray masters are stroke-only; flat3 fills blow up RMSE),
-  then `parity_compare_h.sh` pattern in job tmp.
+  match baselines), byte-diff SVGs vs census-L.
+- 1024 stroke parity: `--format both --shading outline --width 1024
+  --height 1024` (NO flat3, NO --mode gray — outline mode's .gray.png is
+  the LDView line-art reference; `--mode gray` gives the SHADED
+  reference), then resvg at 1024 + `magick compare -metric RMSE`;
+  ~0.019-0.02 normalized ≈ AA floor. Script: `tmp/parity_compare_h.sh`.
 - Layer-split triage: zero out `stroke-width="0.8"` + `fill` → strokes
   layer; zero out `stroke-width="2.00"` → fills layer.
-- Probe scripts in `~/.claude-msb/jobs/eb7c836f/tmp/`: probe30/31 (2654a
-  crumb triage), probe33 (cull report + dash status), probe34 (op-graph
-  neighborhood), probe36 (production-matching cull report, any parts).
-  Hash-seed determinism probe: `tmp/nondet/probe_interior.py`.
+- Probe scripts in `~/.claude-msb/jobs/eb7c836f/tmp/`: probe33/36 (cull
+  reports), probe34 (op-graph), probe37 (4032a rim chain anatomy),
+  probe39/40 (emitted arc spans / analytic op dump per part).
