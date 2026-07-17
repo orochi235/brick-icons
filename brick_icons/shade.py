@@ -852,8 +852,27 @@ def _donate_escaped_spurs(merged, order, strokes, sil, line_px, sil_px):
                     c = geom2d.area(geom2d.intersection(probe, g2))
                     if c > contact:
                         best, contact = r2, c
-                if best is None or order[best] >= order[r]:
-                    continue                           # later side donates
+                if best is None:
+                    continue
+                if order[best] >= order[r]:
+                    # stranded-piece fallback: normally only the LATER
+                    # painter donates (the artifact is its self-stroke on
+                    # the earlier fill; the reverse donation repaints
+                    # wrong). But a piece with no open link to its own
+                    # core whose UNCOVERED seam runs along this single
+                    # later-painting receiver is a stranded island
+                    # (3941's ring-floor chips against the axle boss):
+                    # taking the receiver's tone closes the only open
+                    # seam, and no third surface can be misrepresented.
+                    # Under-ink escapes stay put — donating them would be
+                    # invisible churn.
+                    esc_open = esc.difference(inkp)
+                    if esc_open.is_empty or esc_open.length < 0.5:
+                        continue
+                    stray = esc_open.difference(
+                        near(merged[best], p.bounds).buffer(0.1))
+                    if stray.length > 0.05 * esc_open.length:
+                        continue
                 merged[r] = geom2d.difference(merged[r], p)
                 merged[best] = geom2d.union(merged[best], p)
                 bnds[best] = merged[best].bounds

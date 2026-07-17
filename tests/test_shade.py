@@ -1143,6 +1143,94 @@ def test_escaped_spur_donated_to_earlier_neighbor():
     assert captured[1].contains(body)               # wall body untouched
 
 
+def test_stranded_spur_donated_to_later_single_seam_neighbor():
+    # 3941 ring-floor chips: an EARLIER-painting element's small piece
+    # escapes the stroke band and its only open seam runs along a single
+    # LATER-painting neighbor. The earlier-receiver-only rule left such
+    # pieces stranded (light specks over the rim ink). When the piece is
+    # not continuous with its own visible core and the uncovered part of
+    # its seam lies entirely along that one receiver, donating later-ward
+    # closes the only open seam without misrepresenting a third surface.
+    from shapely import Point
+    face = {"poly": np.array([(0.0, 0.0), (20.0, 0.0), (20.0, 19.8),
+                              (9.0, 19.8), (9.0, 21.4), (7.0, 21.4),
+                              (7.0, 19.8), (0.0, 19.8)]),
+            "normal": np.array([0.0, 1.0, -0.5]), "depth": 8.0, "order": 0,
+            "kind": "tri"}
+    wall = {"poly": np.array([(0.0, 19.8), (7.0, 19.8), (7.0, 21.4),
+                              (9.0, 21.4), (9.0, 19.8), (20.0, 19.8),
+                              (20.0, 30.0), (0.0, 30.0)]),
+            "normal": np.array([0.0, 1.0, 0.5]), "depth": 5.0, "order": 1,
+            "kind": "tri"}
+    strokes = [("line", 0.0, 20.0, 20.0, 20.0, "fold")]
+    from brick_icons import geom2d
+    captured = []
+    orig = geom2d.path_d
+    geom2d.path_d = lambda g, a, min_area=0.0: (captured.append(g),
+                                                orig(g, a, min_area=min_area))[1]
+    try:
+        ops = shade.fill_ops([face, wall], shade.Flat3Style(),
+                             strokes=strokes)
+    finally:
+        geom2d.path_d = orig
+    assert len(captured) == 2
+    tab_tip = Point(8.0, 21.2)             # outside the 2px stroke band
+    assert captured[1].contains(tab_tip)            # wall absorbed it
+    assert not captured[0].contains(tab_tip)        # face gave it up
+    assert captured[0].contains(Point(10.0, 10.0))  # face body untouched
+    assert captured[1].contains(Point(10.0, 25.0))  # wall body untouched
+
+
+def test_3941_ring_floor_chips_donated():
+    # The stud10 truncation fix (ecf771e) removed the bogus full-cylinder
+    # stud ink that used to bury the front ends of 3941's y=4 ring-floor
+    # strip (the light band between the front studs, over the rim ink,
+    # under the axle boss). Those ends surfaced as two ~1.2 px² light
+    # chips whose seam against the boss wall runs in the open; the boss
+    # paints LATER, so the earlier-receiver-only donation gate stranded
+    # them. They must donate to the boss: no light-toned fill may stay
+    # visible outside the raw ink in the chip windows.
+    if not hlr.Path("vendor/ldraw").exists():
+        pytest.skip("LDraw library absent")
+    from brick_icons import geom2d
+    from brick_icons.config import load_config
+    cfg = load_config(toml_path="labels.toml", overrides={}, root=".")
+    res = hlr.visible_segments("3941", cfg.ldraw_dir, render_px=cfg.render_px)
+    f, ox, oy = hlr.fit_affine(res.bbox, cfg.width, cfg.height,
+                               cfg.margin, cfg.scale)
+    faces = shade.apply_affine_faces(res.faces, f, ox, oy)
+    ells = hlr.fit_ellipses(res.ellipses, f, ox, oy)
+    strokes = hlr.fit_segments(res.segs, res.bbox, cfg.width, cfg.height,
+                               cfg.margin, cfg.scale)
+    captured = []
+    orig = geom2d.path_d
+    geom2d.path_d = lambda g, a, min_area=0.0: (captured.append(g),
+                                                orig(g, a, min_area=min_area))[1]
+    try:
+        fills = shade.fill_ops(faces, shade.make_style("flat3"), clip=True,
+                               ellipses=ells, proj=res.proj, fit=(f, ox, oy),
+                               refits=res.refits, loops=res.loops,
+                               strokes=strokes, line_px=cfg.line_width,
+                               sil_px=cfg.silhouette_width)
+    finally:
+        geom2d.path_d = orig
+    from shapely.geometry import box
+    arcs = geom2d.arc_candidates(ells)
+    merged = {i: g for i, g in enumerate(captured)}
+    sil = shade._contour_region(merged, arcs)
+    _, ink = shade._stroke_band(strokes, sil, cfg.line_width,
+                                cfg.silhouette_width)
+    windows = [box(122.0, 88.5, 126.0, 90.0),   # left chip
+               box(130.3, 88.5, 134.2, 90.0)]   # right chip
+    for i, g in enumerate(captured):
+        if fills[i].get("fill") != "#cccccc":
+            continue
+        vis = geom2d.difference(g, ink)
+        for w in windows:
+            a = geom2d.area(geom2d.intersection(vis, w))
+            assert a < 0.05, (i, w.bounds, a)
+
+
 def test_3941_top_face_nubs_donated():
     # HANDOFF 2026-07-12 open item 1: dark nubs on 3941's light top face at
     # the stud/rim tangency pinches — the interior wall's parallax pocket
