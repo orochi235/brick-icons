@@ -234,26 +234,25 @@ def test_flatten_substitutes_known_primitive(tmp_path):
     assert np.allclose(prim.R, np.eye(3)) and np.allclose(prim.t, 0)
 
 
-def test_flatten_aliases_stud10_to_full_stud(tmp_path):
-    """stud10 (laterally truncated stud for round 2x2 parts) must resolve as
-    a plain full stud: its faceted outward quarter (4 chord quads + 2 hard
-    vertical joint edges + chorded top rim) renders as stripes and tone bands
-    on the front stud of 3941. The truncation it models is <= 0.14 LDU —
-    invisible at icon scale — so the icon substitutes the analytic stud."""
+def test_flatten_recurses_stud10_truncation(tmp_path):
+    """stud10 (laterally truncated stud for round 2x2 parts) must recurse
+    into its own content: the truncation is the plate boundary clipping the
+    stud — a real, visible feature — so the 3-4 primitives substitute at
+    their true 270-degree sector and the faceted truncation quads survive.
+    (It was formerly aliased to the full stud, which drew round studs
+    bulging past the plate wall on 3941/4032a.)"""
     (tmp_path / "p").mkdir()
     (tmp_path / "p" / "stud10.dat").write_text(
+        "1 16 0 -4 0 0 0 -6 0 4 0 6 0 0 3-4cyli.dat\n"
         "4 16 6 0 0  5.6145 0 1.9397  5.6145 -4 1.9397  6 -4 0\n")
-    (tmp_path / "p" / "stud.dat").write_text(
-        "1 16 0 0 0 6 0 0 0 -4 0 0 0 6 4-4cyli.dat\n"
-        "1 16 0 -4 0 6 0 0 0 1 0 0 0 6 4-4disc.dat\n")
     part = tmp_path / "thing.dat"
     part.write_text("1 16 0 0 0  1 0 0  0 1 0  0 0 1  p\\stud10.dat\n")
     roots = hlr.default_roots(tmp_path)
     out = {"2": [], "5": [], "tri": [], "analytic": []}
     hlr.flatten(part, np.eye(3), np.zeros(3), out, roots)
-    kinds = sorted(p.kind for p in out["analytic"])
-    assert kinds == ["cyli", "disc"]          # stud.dat contents, not stud10's
-    assert out["tri"] == []                   # faceted quarter suppressed
+    assert [p.kind for p in out["analytic"]] == ["cyli"]
+    assert out["analytic"][0].sector == 270.0  # true partial sector kept
+    assert len(out["tri"]) == 2               # truncation quad survives
 
 
 def test_flatten_unknown_primitive_recurses(tmp_path):

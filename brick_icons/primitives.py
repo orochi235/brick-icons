@@ -25,11 +25,10 @@ _FRAC = re.compile(r"^(\d+)-(\d+)(edge|cyli|cylo|disc|ring|con)(\d*)$")
 
 # Reference aliases applied during flatten, BEFORE resolution/substitution:
 # icon-scale stand-ins for primitives whose extra detail cannot survive label
-# size. stud10 is the laterally-truncated stud of round 2x2 parts — its
-# faceted outward quarter (chord quads + hard vertical joint edges) draws as
-# stripes and tone bands on the camera-facing stud, while the truncation it
-# models is <= 0.14 LDU: substitute the plain analytic stud.
-ALIAS_REFS = {"stud10.dat": "stud.dat"}
+# size. (stud10 used to be aliased to the plain stud, but the lateral
+# truncation it models is the plate boundary clipping the stud — a real,
+# visible feature on round 2x2 parts — so it now recurses normally.)
+ALIAS_REFS = {}
 
 
 @dataclass(frozen=True, eq=False)
