@@ -423,12 +423,41 @@ def test_ink_lens_pockets_reports_enclosed_white_slits():
     assert y0 >= 19.9 and y1 <= 20.6            # the slit, not the fill body
 
 
+def test_fill_ops_welds_open_notch_at_stroke_junction():
+    # a stroke terminating ON another stroke's band at a shallow angle
+    # (30137's rear-scallop arc grazing a stud cap rim) traps a thin notch
+    # between the converging bands that LEAKS into the open face region —
+    # the enclosed-pocket gates never see it, but at label scale it reads
+    # as a light chip in the junction. Thin closing-gaps within reach of a
+    # T-graze junction are welded solid.
+    f = _flat_face(0, 0, 30, 30, order=0, depth=5.0)
+    strokes = [("line", 0.0, 10.0, 30.0, 10.0, "edge"),
+               ("line", 0.0, 16.0, 16.0, 10.5, "edge")]
+    ops = shade.fill_ops([f], shade.Flat3Style(), strokes=strokes,
+                         line_px=2.0, sil_px=2.0)
+    assert any(o.get("fill") == "#000000" for o in ops)
+
+
+def test_fill_ops_no_weld_without_junction():
+    # the same shallow convergence stopping short of the other stroke (no
+    # endpoint on its band): the sub-stroke gap between the bands stays —
+    # the weld is a junction treatment, not a general gap-filler.
+    f = _flat_face(0, 0, 30, 30, order=0, depth=5.0)
+    strokes = [("line", 0.0, 10.0, 30.0, 10.0, "edge"),
+               ("line", 0.0, 16.0, 16.0, 12.6, "edge")]
+    ops = shade.fill_ops([f], shade.Flat3Style(), strokes=strokes,
+                         line_px=2.0, sil_px=2.0)
+    assert not any(o.get("fill") == "#000000" for o in ops)
+
+
 def test_fill_ops_keeps_wide_stroke_gaps_unpainted():
     # the same strokes opened wide: the gap is legitimate visible surface
-    # (a barrel lens, a rim band) — no ink pocket
+    # (a barrel lens, a rim band) — no ink pocket. The second stroke stops
+    # short of the first's band: a T-graze would weld its junction tip
+    # (see test_fill_ops_welds_open_notch_at_stroke_junction).
     f = _flat_face(0, 0, 20, 20, order=0, depth=5.0)
     strokes = [("line", 0.0, 10.0, 20.0, 10.0, "edge"),
-               ("line", 0.0, 18.0, 14.0, 10.0, "edge")]
+               ("line", 0.0, 18.0, 14.0, 12.5, "edge")]
     ops = shade.fill_ops([f], shade.Flat3Style(), strokes=strokes,
                          line_px=2.0, sil_px=2.0)
     assert not any(o.get("fill") == "#000000" for o in ops)

@@ -979,6 +979,78 @@ def _ink_lens_pockets(base, vis, strokes, sil, line_px, sil_px):
     return out, whites
 
 
+def _weld_junction_notches(strokes, base, line_px, sil_px):
+    """Thin uncovered notches at a multi-stroke T-graze junction, welded
+    solid as ink. Where a drawn stroke terminates on the INTERIOR of
+    another stroke's band (a cap graze: 30137's rear-scallop arcs and
+    separator stubs dying on the stud cap rims), the converging bands trap
+    a tapering sliver of surface that reads as a light chip in what should
+    be one solid join (the beaked-Y junction). The sliver leaks into the
+    open face region, so the enclosed-lens gates (_ink_lens_pockets)
+    never see it. Weld = morphological closing of the stroke bands at
+    half the stroke width, minus the bands: exactly the region pinched
+    between ink closer than one stroke width — a gap that thin can never
+    read as an intentional opening. Only thin pieces within reach of a
+    T-graze junction are inked, and only inside `base` (the drawn part
+    region): welding is a junction treatment, not a general gap-filler,
+    and the silhouette's outer profile is not ours to reshape.
+    Shared-vertex (V) joins do not count as junctions — every ordinary
+    face corner is one, and the wedge between its bands is surface."""
+    import shapely as _sh
+    from shapely import STRtree
+    from shapely.geometry import LineString, Point
+    bands, ends = [], []
+    for op in strokes:
+        if len(op) == 5:                               # legacy line tuple
+            op = ("line",) + tuple(op)
+        sw = sil_px if op[-1] == "sil" else line_px
+        if op[0] == "line":
+            pts = np.array([[op[1], op[2]], [op[3], op[4]]])
+            if math.hypot(pts[1, 0] - pts[0, 0],
+                          pts[1, 1] - pts[0, 1]) < 0.6 * sw:
+                continue
+            eps = [pts[0], pts[-1]]
+        else:
+            r = (math.hypot(op[3], op[4]) + math.hypot(op[5], op[6])) / 2.0
+            if r * math.radians(abs(op[8] - op[7])) < 0.6 * sw:
+                continue
+            pts = _ell_pts(op, op[7], op[8])
+            eps = [] if abs(op[8] - op[7]) >= 359.0 else [pts[0], pts[-1]]
+        bands.append(LineString(pts).buffer(sw / 2.0))
+        ends.append(eps)
+    if len(bands) < 2 or base is None or base.is_empty:
+        return []
+    tree = STRtree(bands)
+    joins = []
+    for i, eps in enumerate(ends):
+        for e in eps:
+            pt = Point(e)
+            for j in tree.query(pt, predicate="within"):
+                if j == i:
+                    continue
+                if any(np.linalg.norm(np.asarray(e2) - e) < 0.3
+                       for e2 in ends[j]):
+                    continue                           # shared vertex: V join
+                joins.append(pt)
+                break
+    if not joins:
+        return []
+    ink = geom2d.union_all(bands)
+    rc = 0.5 * line_px
+    closed = _sh.set_precision(ink.buffer(rc).buffer(-rc), geom2d.GRID)
+    gaps = geom2d.intersection(geom2d.difference(closed, ink), base)
+    reach = 3.0 * line_px
+    out = []
+    for p in getattr(gaps, "geoms", [gaps]):
+        if p.geom_type != "Polygon" or not 0.02 < p.area <= SPUR_MAX_AREA:
+            continue
+        if not geom2d.opened(p, 0.5 * line_px).is_empty:
+            continue
+        if any(pt.distance(p) <= reach for pt in joins):
+            out.append(p)
+    return out
+
+
 def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
              refits=None, loops=None, strokes=None, line_px=2.0,
              sil_px=2.0, drop=None):
@@ -1120,6 +1192,10 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
         # ink exactly over the white slit
         pockets, whites = _ink_lens_pockets(base, vis, strokes, base,
                                             line_px, sil_px)
+        # T-graze junctions (stroke dying on another stroke's band) weld
+        # solid: their notch leaks into the open face region, so the
+        # enclosed-pocket gates above never see it
+        pockets += _weld_junction_notches(strokes, base, line_px, sil_px)
         # every point of `base` (the arc-grown drawn-silhouette region) is
         # part surface: background may show only OUTSIDE the drawn contour.
         # Thin unpainted needles inside it — residue the trim rounds
