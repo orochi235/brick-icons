@@ -41,7 +41,27 @@ through `28a45f9`.
 
 ## Open items
 
-1. **30137 band-edge raggedness**: with the needles gone, the black
+1. **30137 rear-scallop cap junction (Mike-flagged, ACTIVE)**: at the
+   gallery angle (30,25), where rear-scallop arc 1 meets the 6.7° stub
+   of scallop 2 and stud 2's cap rim ellipse (svg ~(79-86, 27-34); the
+   analogous joins exist at every cap graze), the triple junction
+   renders as a beaked Y with a light notch trapped between the stroke
+   bands. Diagnosis complete: geometry is FAITHFUL (LDView gray
+   reference at 30,25 shows the same V-dip + stub, thin-line clean);
+   the mess is pure stroke weight. The notch is NOT a lens-pocket
+   candidate — it leaks into the open top-face region between the
+   diverging bands, so enclosed-lens gates never see it (verified: no
+   open_r piece, no pocket, no white near the junction). Ops involved
+   (probe, lat=30 long=25): scallop-1 arc c=(43.5,34.4) r=(37.6,25.1)
+   t 37.2→0 ending (80.94,31.04); stub c=(99.8,47.6) same r, t 90→83.3,
+   (80.93,31.04)→(85.40,30.75); cap-2 rim full ellipse c=(99.8,36.8)
+   r=(17.4,11.6). Stub end sits 0.5px inside the cap's stroke band
+   (covered). Likely treatment per the junction directive (clean look
+   beats fidelity): weld the junction solid — ink the notch between
+   converging bands within a small radius of a multi-stroke join, or
+   trim the beak lobe below the silhouette envelope. Needs a fresh
+   session; all probe commands in this handoff reproduce it.
+2. **30137 band-edge raggedness**: with the needles gone, the black
    lens-pocket inking along the back-edge band's inner edge reads
    ragged at zoom 8 (invisible at label scale). Only revisit if a part
    shows it at ≤2x.
