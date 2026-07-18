@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import heapq
 import math
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 import numpy as np
 from PIL import Image, ImageDraw
@@ -573,7 +573,7 @@ def _contour_region(geoms, arcs):
     return geom2d.union_all(polys) if polys else U
 
 
-def _trim_safe(p, ks, frags, geoms, sil):
+def _trim_safe(p, ks, frags, geoms, sil, ink=None):
     """May the dead (locally sub-stroke) part `p` of a visible surface be
     trimmed away? Trimming hands the area to whatever the re-clip finds
     beneath, or to the background — only sound when that replacement paints
@@ -615,18 +615,40 @@ def _trim_safe(p, ks, frags, geoms, sil):
         rp = p.representative_point()
         pts = np.array([[rp.x, rp.y]])
     votes = ok = 0
+    claimants = Counter()
     for x, y in pts[:32]:
         cs = [i for i in others if _sh.contains_xy(geoms[i], x, y)]
         if not cs:
             continue
         votes += 1
-        fc = frags.get(max(cs))    # nearest-behind: the re-clip's claimant
+        c = max(cs)                # nearest-behind: the re-clip's claimant
+        fc = frags.get(c)
         if fc is not None and fc.distance(_sh.Point(x, y)) < 1.5:
             ok += 1
-    return votes > 0 and ok * 2 >= votes
+            claimants[c] += 1
+    if not (votes > 0 and ok * 2 >= votes):
+        return False
+    if ink is None:
+        return True
+    show = geom2d.difference(p, ink)
+    if geom2d.area(show) <= 0.05:
+        return True                # drops under drawn ink: invisible
+    # the piece SHOWS, so the claimant must also RETAIN it: handed to a
+    # claimant on whose fragment it is again a locally sub-stroke flap
+    # (edge contact past the claimant's own boundary, not authored overlap
+    # above its surface), the next residue round trims it from the claimant
+    # with nothing beneath — two locally sound handoffs jointly baring
+    # background inside the part (30137's stud-graze strip: top face ->
+    # log-column wall -> white needle under the back-edge arc).
+    fc = frags.get(claimants.most_common(1)[0][0])
+    if fc is None:
+        return False
+    fused = geom2d.opened(geom2d.union(fc, p), RESIDUE_ERODE)
+    return geom2d.area(geom2d.difference(show, fused)) <= 0.05
 
 
-def _residue_trims(ordered, frags, garea, geoms=None, sil=None):
+def _residue_trims(ordered, frags, garea, geoms=None, sil=None,
+                   ink=None):
     """Per-face residue regions: parts of each MERGED surface's visible area
     that vanish under morphological opening (locally thinner than ~2x
     RESIDUE_ERODE) and are big enough to matter. These are authored-overlap
@@ -663,7 +685,7 @@ def _residue_trims(ordered, frags, garea, geoms=None, sil=None):
             if geoms is not None:
                 ks_set = set(ks)
                 parts = [p for p in parts
-                         if _trim_safe(p, ks_set, frags, geoms, sil)]
+                         if _trim_safe(p, ks_set, frags, geoms, sil, ink)]
             if not parts:
                 continue
             du = geom2d.union_all(parts)
@@ -1034,9 +1056,15 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
         # and the emission crumb cull mops up the sub-stroke tail that
         # further rounds would chase.
         trims = {}
+        # drawn-op ink only (no contour term: the contour of already-
+        # trimmed geometry would count as phantom cover exactly over a
+        # laundered strip) — decides whether a candidate trim SHOWS
+        _, ops_ink = _stroke_band(strokes, None, line_px, sil_px) \
+            if strokes else (None, None)
         for _ in range(3):
             sil = _contour_region(geoms, arcs) if geoms else None
-            new = _residue_trims(ordered, frags, garea, geoms=geoms, sil=sil)
+            new = _residue_trims(ordered, frags, garea, geoms=geoms,
+                                 sil=sil, ink=ops_ink)
             # a re-clip (full boolean pass) only pays off when some residue
             # is SUBSTANTIVE — wide enough to survive the emission crumb
             # cull. Hairline-only rounds (most parts) stop here: emission
@@ -1092,6 +1120,25 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
         # ink exactly over the white slit
         pockets, whites = _ink_lens_pockets(base, vis, strokes, base,
                                             line_px, sil_px)
+        # every point of `base` (the arc-grown drawn-silhouette region) is
+        # part surface: background may show only OUTSIDE the drawn contour.
+        # Thin unpainted needles inside it — residue the trim rounds
+        # laundered to background (30137's stud-graze strip: top face ->
+        # column wall -> gone, each handoff locally sound), and arc-bulge
+        # slits whose leak channel is too wide for the enclosed-hole
+        # detection above — are absorbed like the enclosed whites. Wide or
+        # large pieces are left alone: those are deliberate drops
+        # (silhouette overhangs) or a bug better seen than papered over.
+        _, inkR = _stroke_band(strokes, base, line_px, sil_px)
+        bare = geom2d.difference(
+            base, vis if inkR is None else geom2d.union(vis, inkR))
+        for p in getattr(bare, "geoms", [bare]):
+            if (p.geom_type != "Polygon"
+                    or not 0.02 < p.area <= 8 * SPUR_MAX_AREA):
+                continue
+            if not geom2d.opened(p, 0.5 * line_px).is_empty:
+                continue
+            whites.append(p)
         for p in whites:
             probe = p.buffer(0.2)
             best, contact = None, 0.0

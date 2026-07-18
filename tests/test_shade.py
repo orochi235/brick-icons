@@ -1455,3 +1455,48 @@ def test_3941_top_face_nubs_donated():
         for w in windows:
             a = geom2d.area(geom2d.intersection(reach, w))
             assert a < 0.02, (i, d, w.bounds, a)
+
+
+def test_30137_stud_graze_strip_not_bared():
+    # The sliver of 30137's top face pinched between the drawn back-edge
+    # arc and the stud-3 graze is locally sub-stroke, so the residue
+    # rounds launder it to background: trimmed from the top-plane tris
+    # (claimant: the log-column wall beneath), handed to the wall by the
+    # re-clip, then trimmed from the wall with nothing beneath — each
+    # step locally sound, jointly a bare white needle inside the part.
+    # Unreclaimed trim area inside the drawn contour must be re-absorbed:
+    # the window under the arc may contain no unpainted background.
+    if not hlr.Path("vendor/ldraw").exists():
+        pytest.skip("LDraw library absent")
+    from brick_icons import geom2d
+    from brick_icons.config import load_config
+    cfg = load_config(toml_path="labels.toml", overrides={}, root=".")
+    res = hlr.visible_segments("30137", cfg.ldraw_dir,
+                               render_px=cfg.render_px)
+    f, ox, oy = hlr.fit_affine(res.bbox, cfg.width, cfg.height,
+                               cfg.margin, cfg.scale)
+    faces = shade.apply_affine_faces(res.faces, f, ox, oy)
+    ells = hlr.fit_ellipses(res.ellipses, f, ox, oy)
+    strokes = hlr.fit_segments(res.segs, res.bbox, cfg.width, cfg.height,
+                               cfg.margin, cfg.scale)
+    captured = []
+    orig = geom2d.path_d
+    geom2d.path_d = lambda g, a, min_area=0.0: (captured.append(g),
+                                                orig(g, a, min_area=min_area))[1]
+    try:
+        shade.fill_ops(faces, shade.make_style("flat3"), clip=True,
+                       ellipses=ells, proj=res.proj, fit=(f, ox, oy),
+                       refits=res.refits, loops=res.loops,
+                       strokes=strokes, line_px=cfg.line_width,
+                       sil_px=cfg.silhouette_width)
+    finally:
+        geom2d.path_d = orig
+    from shapely.geometry import box
+    # the strip must stay with the fills: pre-fix the trims leave ~4.3 px²
+    # of fill in the window (the sag boundary), post-fix the surface
+    # reaches the drawn arc (~10.3 px²; the rest of the window is under
+    # the arc's stroke band)
+    window = box(170.5, 57.5, 176.5, 61.0)   # under the back-edge arc
+    covered = geom2d.area(geom2d.intersection(
+        geom2d.union_all(captured), window))
+    assert covered >= 8.0, covered
