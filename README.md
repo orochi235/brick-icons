@@ -45,11 +45,26 @@ Render LEGO/LDraw parts as (optionally) lit and shaded SVG icons.
       alt="brick-icons 54200 --format svg --shading outline --shade-style flat3 --part-color 0xd05098 --angle 35,55"
       title="brick-icons 54200 --format svg --shading outline --shade-style flat3 --part-color 0xd05098 --angle 35,55"></td>
   </tr>
+  <tr>
+    <td align="center"><img src="docs/gallery/98283.svg" width="150"
+      alt="brick-icons 98283 --format svg --shading outline --shade-style flat3 --part-color 0xa0bcac"
+      title="brick-icons 98283 --format svg --shading outline --shade-style flat3 --part-color 0xa0bcac"></td>
+    <td align="center"><img src="docs/gallery/30137.svg" width="150"
+      alt="brick-icons 30137 --format svg --shading outline --shade-style flat3 --part-color 0x583927 --angle 30,25"
+      title="brick-icons 30137 --format svg --shading outline --shade-style flat3 --part-color 0x583927 --angle 30,25"></td>
+    <td align="center"><img src="docs/gallery/3005.svg"  width="150"
+      alt="brick-icons 3005 --format svg --shading outline --shade-style flat3 --part-color 0xa5a5cb --opacity 0.6"
+      title="brick-icons 3005 --format svg --shading outline --shade-style flat3 --part-color 0xa5a5cb --opacity 0.6"></td>
+    <td align="center"><img src="docs/gallery/4740.svg"  width="150"
+      alt="brick-icons 4740 --format svg --shading outline --shade-style flat3 --part-color 0xf08f1c --opacity 0.55 --line-width 0 --silhouette-width 0"
+      title="brick-icons 4740 --format svg --shading outline --shade-style flat3 --part-color 0xf08f1c --opacity 0.55 --line-width 0 --silhouette-width 0"></td>
+  </tr>
 </table>
 
-*Twelve SVGs from `--shading outline` at assorted angles, colors, stroke
-weights, and opacities — hover any icon for its exact command, or regenerate
-them all with `scripts/render-gallery.sh`.*
+*Sixteen SVGs from `--shading outline` at assorted angles, colors, stroke
+weights, and opacities — including a strokeless fills-only render (zero
+stroke widths). Hover any icon for its exact command, or regenerate them
+all with `scripts/render-gallery.sh`.*
 
 ## Setup (macOS)
 

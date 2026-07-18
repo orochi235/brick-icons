@@ -1,8 +1,9 @@
 #!/bin/sh
 # Regenerate the README gallery (docs/gallery/*.svg).
-# 12 parts spanning bricks/round/slopes/SNOT/technic, varied angles, colors,
-# and render params — including one translucent tile (--opacity < 1 disables
-# hidden-geometry culling). Backgrounds are transparent (the default).
+# 16 parts spanning bricks/round/slopes/SNOT/technic/sculpted, varied angles,
+# colors, and render params — including translucent parts (--opacity < 1
+# disables hidden-geometry culling) and one strokeless fills-only render
+# (zero stroke widths). Backgrounds are transparent (the default).
 set -e
 cd "$(dirname "$0")/.."
 BI=".venv/bin/python -m brick_icons.cli"
@@ -22,3 +23,8 @@ $BI 32062 $G --part-color 0x582a12 --angle 25,65 \
           --line-width 3 --silhouette-width 3                 # axle 2, heavy line
 $BI 87087 $G --part-color 0xffffff                            # 1x1 side stud, white
 $BI 54200 $G --part-color 0xd05098 --angle 35,55              # cheese slope, pink
+$BI 98283 $G --part-color 0xa0bcac                            # masonry brick, sand green
+$BI 30137 $G --part-color 0x583927 --angle 30,25              # palisade brick, brown
+$BI 3005  $G --part-color 0xa5a5cb --opacity 0.6              # 1x1 brick, trans-purple
+$BI 4740  $G --part-color 0xf08f1c --opacity 0.55 \
+          --line-width 0 --silhouette-width 0                 # dish 2x2 inv, trans-orange, fills only
