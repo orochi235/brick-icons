@@ -1,9 +1,28 @@
-# Handoff — 2026-07-18: partial-disc pie closure; trim-laundering fixed
+# Handoff — 2026-07-18b: T-graze junction weld (30137 beaked-Y fixed)
 
-Working tree on `main`, clean. 313 tests passing. All commits pushed
-through `28a45f9`.
+Working tree on `main`, clean. 315 tests passing.
 
 ## What this session did
+
+- `349cf85` — **T-graze junction weld.** The 30137 rear-scallop cap
+  junction (open item 1, Mike-flagged, diagnosis in the previous
+  handoff below) is fixed per the junction directive: new
+  `_weld_junction_notches` in shade.py inks the thin notch pinched
+  between converging stroke bands wherever a stroke ENDPOINT dies on
+  the interior of another stroke's band (T-graze). Weld = closing(op
+  bands, 0.5·line_px) − bands, clipped to the arc-grown part region;
+  pieces must be thin under opening(0.5·line_px), 0.02 < area ≤
+  SPUR_MAX_AREA, and within 3·line_px of a junction point.
+  Shared-vertex (V) joins deliberately do NOT count — every ordinary
+  face corner is one. Fired on 46/48 census parts (66–2310 px AE at
+  zoom 4): stud limb tangencies, seam/rim T-joins, 3941's open boss
+  pinches — verified improvements or invisible at 2x on 3660b, 3941,
+  2654a, 60474; 30137 junction reads as a clean solid Y at zoom 8.
+  The old wide-gap test's strokes were themselves a T-graze; its
+  endpoint moved off the band (tip weld there is now correct
+  behavior), junction gating covered by two new tests.
+
+## Previous session (2026-07-18a)
 
 - `4b621f4` — **partial-disc phantom triangle.** A sectored analytic
   `Disc` (stud10's 270° 3-4disc cap) built its fill polygon from the arc
@@ -31,37 +50,17 @@ through `28a45f9`.
 
 ## Baselines
 
-- **census-O** (`~/.claude-msb/jobs/0bc8b81a/tmp/census-O/`, 48 parts,
-  post-03ed533) is current. vs census-N: 10 byte-diffs, 9 with AE=0 at
-  zoom 4; 2654a loses a black spur tick below its skirt notch
-  (improvement, same class as gallery 3649's hub tick).
-- census-N (same dir) = post-b207e13; census-M = post-dcceaf2.
+- **census-P** (`~/.claude-msb/jobs/0bc8b81a/tmp/census-P/`, 48 parts,
+  post-349cf85) is current. vs census-O: 46 byte-diffs, ALL real
+  (junction welds), 66–2310 px AE at zoom 4, reviewed above.
+- census-O (same dir) = post-03ed533; census-N = post-b207e13;
+  census-M = post-dcceaf2.
 - Byte-diff gate is HARD (2fc12a0): byte-diff ⇒ real change, vs
-  census-O or newer.
+  census-P or newer.
 
 ## Open items
 
-1. **30137 rear-scallop cap junction (Mike-flagged, ACTIVE)**: at the
-   gallery angle (30,25), where rear-scallop arc 1 meets the 6.7° stub
-   of scallop 2 and stud 2's cap rim ellipse (svg ~(79-86, 27-34); the
-   analogous joins exist at every cap graze), the triple junction
-   renders as a beaked Y with a light notch trapped between the stroke
-   bands. Diagnosis complete: geometry is FAITHFUL (LDView gray
-   reference at 30,25 shows the same V-dip + stub, thin-line clean);
-   the mess is pure stroke weight. The notch is NOT a lens-pocket
-   candidate — it leaks into the open top-face region between the
-   diverging bands, so enclosed-lens gates never see it (verified: no
-   open_r piece, no pocket, no white near the junction). Ops involved
-   (probe, lat=30 long=25): scallop-1 arc c=(43.5,34.4) r=(37.6,25.1)
-   t 37.2→0 ending (80.94,31.04); stub c=(99.8,47.6) same r, t 90→83.3,
-   (80.93,31.04)→(85.40,30.75); cap-2 rim full ellipse c=(99.8,36.8)
-   r=(17.4,11.6). Stub end sits 0.5px inside the cap's stroke band
-   (covered). Likely treatment per the junction directive (clean look
-   beats fidelity): weld the junction solid — ink the notch between
-   converging bands within a small radius of a multi-stroke join, or
-   trim the beak lobe below the silhouette envelope. Needs a fresh
-   session; all probe commands in this handoff reproduce it.
-2. **30137 band-edge raggedness**: with the needles gone, the black
+1. **30137 band-edge raggedness**: with the needles gone, the black
    lens-pocket inking along the back-edge band's inner edge reads
    ragged at zoom 8 (invisible at label scale). Only revisit if a part
    shows it at ≤2x.
@@ -80,14 +79,14 @@ through `28a45f9`.
 
 ## Verification workflow
 
-- Full suite: `.venv/bin/python -m pytest -q` (313, ~5 min)
+- Full suite: `.venv/bin/python -m pytest -q` (315, ~5 min)
 - Gallery: `scripts/render-gallery.sh` (16 parts, ~4 min)
 - Contact sheet (labeled): `scripts/render-contact-sheet.sh [out-dir]`
 - One part: `.venv/bin/python -m brick_icons.cli <id> --format svg
   --shading outline --shade-style flat3 [--part-label] [--opacity 0.55]
   --out <dir>`
 - Census A/B: render `--list parts.txt` twice (defaults 256×170 + flat3
-  match baselines), byte-diff SVGs vs census-O; parts list at
+  match baselines), byte-diff SVGs vs census-P; parts list at
   `~/.claude-msb/jobs/eb7c836f/tmp/census-K.parts.txt`.
 - 1024 stroke parity: `--format both --shading outline --width 1024
   --height 1024` (NO flat3, NO --mode gray — outline mode's .gray.png is
