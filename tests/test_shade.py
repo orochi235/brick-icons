@@ -377,6 +377,148 @@ def test_fill_ops_group_gradient_kept():
     assert len(ops[0]["gradient"]["stops"]) == 2
 
 
+def test_fill_ops_hairline_holes_dissolved():
+    # fills are self-stroked 0.8px to close AA seams, so a sub-stroke hole
+    # can never render as a hole — but its ring's self-stroke paints a
+    # hairline of the fill's tone across the black ink (3941's axle-cross
+    # bowties). Real holes (stud mouths) must survive exactly.
+    f = _flat_face(0, 0, 20, 20, order=0, depth=5.0)
+    f["holes"] = [np.array([(4, 4), (8, 4), (8, 8), (4, 8)], float),      # real
+                  np.array([(10, 12), (16, 12), (16, 12.05), (10, 12.05)],
+                           float)]                                        # hairline
+    ops = shade.fill_ops([f], shade.Flat3Style())
+    assert len(ops) == 1
+    assert ops[0]["d"].count("M ") == 2          # exterior + real hole only
+
+
+def test_fill_ops_inks_junction_lens_pockets():
+    # where two drawn strokes converge at a shallow angle they trap a thin
+    # uncovered lens; the tone showing in it reads as a chip in a solid-ink
+    # junction at label scale (3941's boss/stud pinches). Sub-stroke-thin,
+    # small, ink-bounded pockets are painted out as ink.
+    f = _flat_face(0, 0, 20, 20, order=0, depth=5.0)
+    strokes = [("line", 0.0, 10.0, 20.0, 10.0, "edge"),
+               ("line", 0.0, 13.4, 14.0, 10.0, "edge")]
+    ops = shade.fill_ops([f], shade.Flat3Style(), strokes=strokes,
+                         line_px=2.0, sil_px=2.0)
+    assert any(o.get("fill") == "#000000" for o in ops)
+
+
+def test_fill_ops_keeps_wide_stroke_gaps_unpainted():
+    # the same strokes opened wide: the gap is legitimate visible surface
+    # (a barrel lens, a rim band) — no ink pocket
+    f = _flat_face(0, 0, 20, 20, order=0, depth=5.0)
+    strokes = [("line", 0.0, 10.0, 20.0, 10.0, "edge"),
+               ("line", 0.0, 18.0, 14.0, 10.0, "edge")]
+    ops = shade.fill_ops([f], shade.Flat3Style(), strokes=strokes,
+                         line_px=2.0, sil_px=2.0)
+    assert not any(o.get("fill") == "#000000" for o in ops)
+
+
+def _poly_face(pts, order, depth):
+    return {"poly": np.asarray(pts, float),
+            "normal": np.array([0, 1, -0.5]), "depth": float(depth),
+            "order": order, "kind": "tri"}
+
+
+def test_silhouette_spur_trim_shaves_corner_peeking_over_stud():
+    # a plate's far corner peeks ~1.5px over the stud silhouette in front
+    # of it (3020's back corner): stroked at sil width the whole sliver is
+    # ink — a spike with notches. Sub-stroke protrusions whose base sits on
+    # a drawn carrier ellipse are trimmed so the outline follows the arc.
+    t = np.linspace(0, 2 * np.pi, 64, endpoint=False)
+    disk = _poly_face(np.stack([8 * np.cos(t), 8 * np.sin(t)], 1), 1, 1.0)
+    wedge = _poly_face([(-2.2, 5), (2.2, 5), (0, 9.3)], 0, 5.0)
+    trim = shade.silhouette_spur_trim([wedge, disk],
+                                      [(0.0, 0.0, 8.0, 0.0, 0.0, 8.0)], 2.0)
+    assert trim is not None and not trim.is_empty
+    assert 0.2 < trim.area < 3.0
+    assert trim.centroid.y > 7.9                 # the peek, not the body
+
+
+def test_silhouette_spur_trim_keeps_through_stroke_slivers():
+    # a sliver between a rim and a straight edge that CONTINUES past it
+    # (32062's flange edge grazing the lobe arc): trimming it leaves the
+    # through-going stroke poking out as a barb over a white notch — veto.
+    # The same sliver with strokes ENDING inside it (3020's corner) trims.
+    t = np.linspace(0, 2 * np.pi, 64, endpoint=False)
+    disk = _poly_face(np.stack([8 * np.cos(t), 8 * np.sin(t)], 1), 1, 1.0)
+    wedge = _poly_face([(-2.2, 5), (2.2, 5), (0, 9.3)], 0, 5.0)
+    ells = [(0.0, 0.0, 8.0, 0.0, 0.0, 8.0)]
+    through = [("line", -20.0, 8.6, 20.0, 8.6, "sil")]
+    trim = shade.silhouette_spur_trim([wedge, disk], ells, 2.0,
+                                      strokes=through)
+    assert trim is None or trim.is_empty
+    ending = [("line", -20.0, 8.6, 0.0, 9.3, "sil"),
+              ("line", 0.0, 9.3, 20.0, 8.6, "sil"),
+              ("arc", 0.0, 0.0, 8.0, 0.0, 0.0, 8.0, 0.0, 360.0, "edge")]
+    trim = shade.silhouette_spur_trim([wedge, disk], ells, 2.0,
+                                      strokes=ending)
+    assert trim is not None and not trim.is_empty
+
+
+def test_silhouette_spur_trim_keeps_bumps_inside_stroke_band():
+    # a bump that never pokes past the rim stroke's own half-width is
+    # already invisible under the drawn band; trimming it only moves the
+    # contour and bares stroke stubs (32062's lobe/flange corners)
+    t = np.linspace(0, 2 * np.pi, 64, endpoint=False)
+    disk = _poly_face(np.stack([8 * np.cos(t), 8 * np.sin(t)], 1), 1, 1.0)
+    wedge = _poly_face([(-2.2, 5), (2.2, 5), (0, 8.8)], 0, 5.0)  # rise 0.8
+    trim = shade.silhouette_spur_trim([wedge, disk],
+                                      [(0.0, 0.0, 8.0, 0.0, 0.0, 8.0)], 2.0)
+    assert trim is None or trim.is_empty
+
+
+def test_silhouette_spur_trim_needs_drawn_base():
+    # the carrier arc's drawn span must cover the piece's base: strokes
+    # terminating inside the piece get clipped at the trimmed outline, and
+    # only a drawn base stroke hides their stubs (32062's lobe-arc corner,
+    # where the arc stops mid-sliver — trimming there makes a barb)
+    t = np.linspace(0, 2 * np.pi, 64, endpoint=False)
+    disk = _poly_face(np.stack([8 * np.cos(t), 8 * np.sin(t)], 1), 1, 1.0)
+    wedge = _poly_face([(-2.2, 5), (2.2, 5), (0, 9.3)], 0, 5.0)
+    ells = [(0.0, 0.0, 8.0, 0.0, 0.0, 8.0)]
+    half_arc = [("line", -20.0, 8.6, 0.0, 9.3, "sil"),
+                ("line", 0.0, 9.3, 20.0, 8.6, "sil"),
+                ("arc", 0.0, 0.0, 8.0, 0.0, 0.0, 8.0, 90.0, 180.0, "edge")]
+    trim = shade.silhouette_spur_trim([wedge, disk], ells, 2.0,
+                                      strokes=half_arc)
+    assert trim is None or trim.is_empty
+
+
+def test_silhouette_spur_trim_keeps_tall_overhang():
+    # a corner standing WELL proud of the stud (several stroke widths) is
+    # real, readable outline — never trimmed
+    t = np.linspace(0, 2 * np.pi, 64, endpoint=False)
+    disk = _poly_face(np.stack([8 * np.cos(t), 8 * np.sin(t)], 1), 1, 1.0)
+    wedge = _poly_face([(-4.4, 5), (4.4, 5), (0, 14.0)], 0, 5.0)
+    trim = shade.silhouette_spur_trim([wedge, disk],
+                                      [(0.0, 0.0, 8.0, 0.0, 0.0, 8.0)], 2.0)
+    assert trim is None or trim.is_empty
+
+
+def test_silhouette_spur_trim_keeps_bare_sharp_corner():
+    # the same sharp tip with NO carrier at its base (a slope's pointed
+    # corner) is legitimate outline and must not be blunted
+    base = _poly_face([(-10, -10), (10, -10), (10, 5), (-10, 5)], 1, 1.0)
+    wedge = _poly_face([(-2.2, 5), (2.2, 5), (0, 9.3)], 0, 5.0)
+    trim = shade.silhouette_spur_trim([wedge, base],
+                                      [(50.0, 50.0, 8.0, 0.0, 0.0, 8.0)], 2.0)
+    assert trim is None or trim.is_empty
+
+
+def test_fill_ops_drop_subtracts_region():
+    # fills must follow a silhouette spur trim: the region is subtracted
+    # from emitted fill geometry so no unstroked tone pokes past the
+    # trimmed outline
+    from shapely.geometry import Polygon as _P
+    f = _flat_face(0, 0, 20, 20, order=0, depth=5.0)
+    ops = shade.fill_ops([f], shade.Flat3Style(),
+                         drop=_P([(8, 18), (12, 18), (12, 22), (8, 22)]))
+    assert len(ops) == 1
+    assert "8.00 18.00" in ops[0]["d"]           # boundary dips into the notch
+
+
 def test_fill_ops_tiny_slivers_dropped():
     far = _flat_face(0, 0, 10, 10, order=0, depth=10.0)
     near = _flat_face(0.01, 0.01, 10, 10, order=1, depth=1.0)  # covers all but a sliver

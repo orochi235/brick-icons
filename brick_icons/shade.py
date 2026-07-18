@@ -882,9 +882,40 @@ def _donate_escaped_spurs(merged, order, strokes, sil, line_px, sil_px):
             break
 
 
+def _ink_lens_pockets(base, strokes, sil, line_px, sil_px):
+    """Uncovered pockets trapped between converging drawn strokes, to be
+    painted out as ink. Where stylized strokes cross or graze at a shallow
+    angle they leave a thin lens neither covers; whatever tone shows in it
+    (a wall taper, a white pinhole) reads as a chip in a solid-ink junction
+    at label scale (3941's boss/stud pinches, frayed corners). A pocket is
+    inked only when it could never read as surface: sub-stroke-thin under
+    morphological opening, small, and bordered almost entirely by drawn
+    ink. Wide or large openings are legitimate visible surface (a barrel
+    lens, a rim band) and stay."""
+    import shapely as _sh
+    band, ink = _stroke_band(strokes, sil, line_px, sil_px)
+    if ink is None or ink.is_empty or base is None or base.is_empty:
+        return []                  # no drawn ink (e.g. zero-width strokes):
+                                   # nothing for a pocket to hide inside
+    open_r = geom2d.difference(base, ink)
+    out = []
+    for p in getattr(open_r, "geoms", [open_r]):
+        if p.geom_type != "Polygon" or not 0.02 < p.area <= SPUR_MAX_AREA:
+            continue
+        if not geom2d.opened(p, 0.5 * line_px).is_empty:
+            continue
+        x0, y0, x1, y1 = p.bounds
+        inkp = _sh.clip_by_rect(ink, x0 - 1, y0 - 1, x1 + 1, y1 + 1)
+        exposed = p.boundary.difference(inkp.buffer(0.1))
+        if exposed.length > 0.1 * p.boundary.length:
+            continue
+        out.append(p)
+    return out
+
+
 def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
              refits=None, loops=None, strokes=None, line_px=2.0,
-             sil_px=2.0):
+             sil_px=2.0, drop=None):
     """Fill ops with exact visible-fragment clipping and per-surface merging.
 
     clip=False keeps every face whole (no occlusion subtraction) for
@@ -997,11 +1028,15 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
         _loop_cut_merged(merged, [np.stack([p[:, 0] * f_ + ox_,
                                             p[:, 1] * f_ + oy_], axis=1)
                                   for p in loops])
+    pockets = []
     if clip and strokes and merged:
         order = {r: min(ks) for r, ks in members.items() if r in merged}
-        _donate_escaped_spurs(merged, order, strokes,
-                              _contour_region(geoms, arcs) if geoms else None,
-                              line_px, sil_px)
+        silR = _contour_region(geoms, arcs) if geoms else None
+        _donate_escaped_spurs(merged, order, strokes, silR, line_px, sil_px)
+        pockets = _ink_lens_pockets(
+            silR if silR is not None and not silR.is_empty
+            else geom2d.union_all(list(merged.values())),
+            strokes, silR, line_px, sil_px)
 
     ops, emitted = [], set()
     for idx in sorted(frags):                          # farthest-first
@@ -1011,12 +1046,30 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
         ks = members[roots[idx]]
         emitted.update(ks)
         geom = merged[roots[idx]]
+        if drop is not None:
+            # silhouette spur trim: fills follow the trimmed outline so no
+            # unstroked tone pokes past it (see silhouette_spur_trim)
+            geom = geom2d.difference(geom, drop)
+            if geom.is_empty:
+                continue
         if clip:
             # crumb cull (see RESIDUE_CRUMB): per-piece, so thin TIPS of a
             # wide-bodied piece are untouched
+            from shapely.geometry import Polygon as _Poly
             er = RESIDUE_CRUMB
-            pieces = [p for p in getattr(geom, "geoms", [geom])
-                      if p.geom_type == "Polygon" and not p.buffer(-er).is_empty]
+            pieces = []
+            for p in getattr(geom, "geoms", [geom]):
+                if p.geom_type != "Polygon" or p.buffer(-er).is_empty:
+                    continue
+                # hole counterpart of the crumb cull: a hole thinner than
+                # the 0.8px self-stroke can never render as a hole, but its
+                # ring's self-stroke paints a hairline of this fill's tone
+                # across the ink (3941's axle-cross bowties) — dissolve it
+                holes = [h for h in p.interiors
+                         if not _Poly(h).buffer(-er).is_empty]
+                if len(holes) != len(p.interiors):
+                    p = _Poly(p.exterior, holes)
+                pieces.append(p)
             if not pieces:
                 continue
             geom = pieces[0] if len(pieces) == 1 else geom2d.union_all(pieces)
@@ -1040,6 +1093,12 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
         else:
             ops.append({"d": d, "fill": style.tone(f["normal"]),
                         "depth": f["depth"]})
+    # junction-lens pockets paint LAST (over every surface fill, under the
+    # strokes): solid ink where converging strokes trap a sliver of tone
+    for g in pockets:
+        d = geom2d.path_d(g, arcs)
+        if d:
+            ops.append({"d": d, "fill": "#000000", "depth": 0.0})
     return ops
 
 
@@ -1048,6 +1107,111 @@ def silhouette_geom(faces):
     (canvas px). Feeds the stroke-layer clip (see geom2d.buffer_d)."""
     return geom2d.union_all([geom2d.to_geom(f["poly"], f.get("holes"))
                              for f in faces])
+
+
+def silhouette_spur_trim(faces, ellipses, sil_px, strokes=None):
+    """Outline bulges over a drawn rim, shallower than the outline stroke:
+    a plate's far corner peeking over the stud in front of it (3020's back
+    corner). Stroked at sil width the whole bump is ink, rendering as a
+    witch-hat spike with notches on the neighboring rim arc. A silhouette
+    piece beyond a carrier ellipse that (a) rises less than ~the stroke
+    width above the rim, (b) rides the rim for a good share of its
+    perimeter, and (c) borders the background (so trimming reads as
+    background, not a punched hole) can never read as shape. Trimmed from
+    the silhouette AND the fills (fill_ops drop=), the outline follows the
+    rim's smooth arc instead. Taller overhangs and rim-free corners are
+    real outline and stay. With `strokes` (drawn segment ops), a piece a
+    LINE stroke passes THROUGH (both endpoints beyond it) is vetoed: the
+    stroke would keep poking past the trimmed outline as a barb over a
+    white notch (32062's flange edge grazing the lobe arc); strokes that
+    END inside the bump (3020's corner) are absorbed and trim fine.
+    Returns the trim region, or None."""
+    import shapely as _sh
+    from shapely.geometry import LineString as _LS, Point as _Pt
+    from shapely.geometry import MultiLineString as _MLS
+    from shapely.geometry import Polygon as _Poly
+    sil = silhouette_geom(faces)
+    if sil is None or sil.is_empty or not ellipses:
+        return None
+    lines, drawn = [], []
+    for op in strokes or []:
+        if len(op) == 5:
+            op = ("line",) + tuple(op)
+        if op[0] == "line":
+            lines.append((float(op[1]), float(op[2]),
+                          float(op[3]), float(op[4])))
+            drawn.append(_LS([op[1:3], op[3:5]]))
+        elif op[0] == "arc":
+            pts_a = _ell_pts(op, op[7], op[8])
+            if len(pts_a) >= 2:
+                drawn.append(_LS(pts_a))
+    dmls = _MLS(drawn) if drawn else None
+    bnd = sil.boundary
+    ts = np.linspace(0.0, 2.0 * np.pi, 181)
+    out = []
+    for e in ellipses:
+        c = np.array(e[:2], float)
+        M = np.array([[e[2], e[4]], [e[3], e[5]]], float)
+        try:
+            Minv = np.linalg.inv(M)
+        except np.linalg.LinAlgError:
+            continue
+        ex, ey = abs(e[2]) + abs(e[4]), abs(e[3]) + abs(e[5])
+        x0, y0 = c[0] - ex - 3 * sil_px, c[1] - ey - 3 * sil_px
+        x1, y1 = c[0] + ex + 3 * sil_px, c[1] + ey + 3 * sil_px
+        w = _sh.clip_by_rect(sil, x0, y0, x1, y1)
+        if w.is_empty:
+            continue
+        disk = _Poly(np.stack([c[0] + np.cos(ts) * e[2] + np.sin(ts) * e[4],
+                               c[1] + np.cos(ts) * e[3] + np.sin(ts) * e[5]],
+                              axis=1))
+        outer = geom2d.difference(w, disk)
+        for p in getattr(outer, "geoms", [outer]):
+            if p.geom_type != "Polygon" or not 0.05 < p.area <= SPUR_MAX_AREA:
+                continue
+            px0, py0, px1, py1 = p.bounds
+            if (px0 <= x0 + 1e-6 or py0 <= y0 + 1e-6
+                    or px1 >= x1 - 1e-6 or py1 >= y1 - 1e-6):
+                continue                     # window-frame cut, not a bump
+            pts = np.asarray(p.exterior.coords, float)
+            m = (pts - c) @ Minv.T
+            r = np.hypot(m[:, 0], m[:, 1])
+            rise = (r - 1.0) * np.hypot(*(pts - c).T) / np.maximum(r, 1e-9)
+            if not 0.55 * sil_px < float(rise.max()) <= 1.1 * sil_px:
+                continue                     # too tall: real shape. Too flat:
+                                             # already hidden inside the rim
+                                             # stroke band — trimming only
+                                             # moves the contour and bares
+                                             # stroke stubs (32062's corners)
+            pb = p.buffer(0.25)
+            base = disk.boundary.intersection(pb).length
+            if base < max(0.5, 0.2 * p.exterior.length):
+                continue                     # incidental graze, not rim-based
+            open_edge = max(p.exterior.length - base, 0.5)
+            if bnd.intersection(pb).length < 0.3 * open_edge:
+                continue                     # interior sliver: trim = pinhole
+            grown = p.buffer(0.3)
+            if any(_LS([(lx0, ly0), (lx1, ly1)]).intersection(grown).length
+                   > 0.3
+                   and not grown.contains(_Pt(lx0, ly0))
+                   and not grown.contains(_Pt(lx1, ly1))
+                   for lx0, ly0, lx1, ly1 in lines):
+                continue                     # through-going stroke: barb
+            if dmls is not None:
+                # the carrier must be DRAWN along the piece's base: the
+                # trimmed outline inherits that stroke's ink, hiding the
+                # clipped stubs of strokes that terminate inside the piece.
+                # A base the drawn arc only partly covers (32062's lobe arc
+                # ending mid-sliver) leaves them poking past a bare outline.
+                base_line = disk.boundary.intersection(pb)
+                gx0, gy0, gx1, gy1 = pb.bounds
+                near = _sh.clip_by_rect(dmls, gx0 - 2, gy0 - 2,
+                                        gx1 + 2, gy1 + 2)
+                bare = base_line.difference(near.buffer(0.6))
+                if bare.length > max(0.3, 0.1 * base_line.length):
+                    continue                 # bare base: stubs become barbs
+            out.append(p)
+    return geom2d.union_all(out) if out else None
 
 
 def apply_affine_faces(faces, f, ox, oy):

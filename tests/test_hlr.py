@@ -947,3 +947,20 @@ def test_orphan_cull_protected_fold_spans_never_peel():
     assert hlr.cull_orphan_runs([outline, hook]) == [outline]
     assert hlr.cull_orphan_runs([outline, hook], protect={key}) \
         == [outline, hook]
+
+
+def test_refit_candidates_carry_measured_snap_tol():
+    # fill boundaries are authored along the OLD separator curve; the fill
+    # arc-candidate for the refit must carry a snap tolerance (8th element)
+    # covering the old curve's deviation from the new one, so those seams
+    # snap onto the DRAWN curve instead of opening a tone lens beside the
+    # stroke (3941's boss/rim pinch wedge)
+    old = ("arc", 0.0, 0.0, 10.0, 0.0, 0.0, 10.0, 180.0, 360.0, "sil")
+    new = ("arc", 0.0, 0.0, 11.0, 0.0, 0.0, 11.0, 180.0, 360.0, "sil")
+    bore = ("arc", 0.0, 0.0, 5.0, 0.0, 0.0, 5.0, 180.0, 360.0, "sil")
+    (cand,) = hlr._refit_candidates([(old, new, bore)])
+    assert cand[:6] == new[1:7]
+    assert cand[6] == 25.0                      # rim-style max step
+    tol = cand[7]
+    assert tol >= 1.0                           # covers the 1px deviation
+    assert tol <= 6.0                           # capped like fit_ells

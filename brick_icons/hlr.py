@@ -656,6 +656,33 @@ def _snap_rim_crossings(segs, max_snap=4.0, vertex_tol=0.25):
     return out, refits
 
 
+def _refit_candidates(refits):
+    """Fill arc-candidates for refit separators: (cx,cy,ux,uy,vx,vy, step,
+    snap_tol) 8-tuples. The snap tolerance is MEASURED (cf. fit_ells): the
+    old (authored) curve's max radial deviation from the new one over the
+    drawn span, +AA margin, capped — fill seams authored along the old
+    curve snap onto the DRAWN curve (densify_on_arcs) instead of opening a
+    tone lens beside the stroke (3941's boss/rim pinch wedge)."""
+    cands = []
+    for old, new, _bore in refits:
+        ts = np.radians(np.linspace(old[7], old[8], 33))
+        px = old[1] + np.cos(ts) * old[3] + np.sin(ts) * old[5]
+        py = old[2] + np.cos(ts) * old[4] + np.sin(ts) * old[6]
+        try:
+            Mninv = np.linalg.inv(np.array([[new[3], new[5]],
+                                            [new[4], new[6]]], float))
+        except np.linalg.LinAlgError:
+            cands.append(new[1:7] + (25.0,))
+            continue
+        mu = Mninv @ (np.stack([px, py], 0)
+                      - np.array(new[1:3], float).reshape(2, 1))
+        ru = np.hypot(mu[0], mu[1])
+        pr = np.hypot(px - new[1], py - new[2])
+        dev = float(np.max(np.abs(ru - 1.0) * pr / np.maximum(ru, 1e-9)))
+        cands.append(new[1:7] + (25.0, min(dev * 1.25 + 0.5, 6.0)))
+    return cands
+
+
 def _fold_arc_loops(segs, fold_ells, bridge_frac=0.4, step=2.0):
     """Closed loops of drawn fitted-arc (arcfit) spans: the stylized outline
     of a sub-region, e.g. 3941's axle-cross post. Spans chain by coincident
@@ -890,8 +917,9 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
     if refits:
         # refit separators are arc-recovery candidates too, so the moved
         # fill seam emits as a true arc (25 deg step, like the rim ones)
+        # and carries a measured snap tolerance for the old-curve seams
         res = res._replace(ellipses=list(res.ellipses)
-                           + [new[1:7] + (25.0,) for _, new, _ in refits])
+                           + _refit_candidates(refits))
     loops = _fold_arc_loops(segs, res.fold_ells) if res.fold_ells else []
     return res._replace(segs=segs, refits=refits, loops=loops)
 

@@ -131,14 +131,20 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
                 f, ox, oy = hlr.fit_affine(pbbox, round(vb_w), round(vb_h), margin=0, scale=1.0)
                 faces = shade.apply_affine_faces(res.faces, f, ox, oy)
                 ells = hlr.fit_ellipses(res.ellipses, f, ox, oy)
+                spurs = shade.silhouette_spur_trim(
+                    faces, ells, cfg.silhouette_mm / 0.4 * s,
+                    strokes=shifted) if faces else None
                 fills = shade.fill_ops(faces, style, clip=cull, ellipses=ells,
                                        proj=res.proj, fit=(f, ox, oy),
                                        refits=res.refits, loops=res.loops,
                                        strokes=shifted,
                                        line_px=cfg.line_mm / 0.4 * s,
-                                       sil_px=cfg.silhouette_mm / 0.4 * s) \
+                                       sil_px=cfg.silhouette_mm / 0.4 * s,
+                                       drop=spurs) \
                     if style is not None else None
                 sil_geom = shade.silhouette_geom(faces) if faces else None
+                if sil_geom is not None and spurs is not None:
+                    sil_geom = geom2d.difference(sil_geom, spurs)
                 contour = geom2d.contour_d(
                     geom2d.union_all([sil_geom] + geom2d.arc_regions(shifted)),
                     geom2d.arc_candidates(ells)) \
@@ -156,13 +162,19 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
                 f, ox, oy = hlr.fit_affine(bbox, cfg.width, cfg.height, cfg.margin, cfg.scale)
                 faces = shade.apply_affine_faces(res.faces, f, ox, oy)
                 ells = hlr.fit_ellipses(res.ellipses, f, ox, oy)
+                spurs = shade.silhouette_spur_trim(
+                    faces, ells, cfg.silhouette_width,
+                    strokes=fit) if faces else None
                 fills = shade.fill_ops(faces, style, clip=cull, ellipses=ells,
                                        proj=res.proj, fit=(f, ox, oy),
                                        refits=res.refits, loops=res.loops,
                                        strokes=fit, line_px=cfg.line_width,
-                                       sil_px=cfg.silhouette_width) \
+                                       sil_px=cfg.silhouette_width,
+                                       drop=spurs) \
                     if style is not None else None
                 sil_geom = shade.silhouette_geom(faces) if faces else None
+                if sil_geom is not None and spurs is not None:
+                    sil_geom = geom2d.difference(sil_geom, spurs)
                 contour = geom2d.contour_d(
                     geom2d.union_all([sil_geom] + geom2d.arc_regions(fit)),
                     geom2d.arc_candidates(ells)) \
