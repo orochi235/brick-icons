@@ -154,6 +154,20 @@ def test_fill_opacity_per_face(tmp_path):
     assert 'opacity' not in txt.split('<g stroke="black"')[1]
 
 
+def test_translucent_fills_have_no_self_stroke(tmp_path):
+    # the 0.8px self-stroke closes AA seams between abutting OPAQUE fills;
+    # under opacity < 1 fills overlap (no clipping) and the stroke overhang
+    # double-paints on its neighbors — concentric ghost rings on 4740's
+    # dish. Translucent fills paint fill-only.
+    fills = [{"d": "M 0 0 L 10 0 L 0 10 Z", "fill": "#cccccc", "depth": 1.0}]
+    out = _trace.segments_to_svg([], 20, 20, tmp_path / "t.svg",
+                                 fills=fills, opacity=0.5)
+    assert 'stroke-width="0.8"' not in out.read_text()
+    out2 = _trace.segments_to_svg([], 20, 20, tmp_path / "t2.svg",
+                                  fills=fills, opacity=1.0)
+    assert 'stroke-width="0.8"' in out2.read_text()
+
+
 def test_fill_opacity_one_emits_no_attr(tmp_path):
     fills = [{"d": "M 0 0 L 10 0 L 0 10 Z", "fill": "#cccccc", "depth": 1.0}]
     out = _trace.segments_to_svg([], 20, 20, tmp_path / "o1.svg",

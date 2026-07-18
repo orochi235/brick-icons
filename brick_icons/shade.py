@@ -882,7 +882,7 @@ def _donate_escaped_spurs(merged, order, strokes, sil, line_px, sil_px):
             break
 
 
-def _ink_lens_pockets(base, strokes, sil, line_px, sil_px):
+def _ink_lens_pockets(base, vis, strokes, sil, line_px, sil_px):
     """Uncovered pockets trapped between converging drawn strokes, to be
     painted out as ink. Where stylized strokes cross or graze at a shallow
     angle they leave a thin lens neither covers; whatever tone shows in it
@@ -890,8 +890,12 @@ def _ink_lens_pockets(base, strokes, sil, line_px, sil_px):
     at label scale (3941's boss/stud pinches, frayed corners). A pocket is
     inked only when it could never read as surface: sub-stroke-thin under
     morphological opening, small, and bordered almost entirely by drawn
-    ink. Wide or large openings are legitimate visible surface (a barrel
-    lens, a rim band) and stay."""
+    ink. Exception: a pocket NO fill paints (`vis` = union of emitted fill
+    geometry) is enclosed background — a white slit inside the part (the
+    drawn fold arc bowing past the authored facet chord, 30137's log
+    tops). Every border it has is already a visible seam, so it is inked
+    regardless of the ink fraction. Wide or large openings are legitimate
+    visible surface (a barrel lens, a rim band) and stay."""
     import shapely as _sh
     band, ink = _stroke_band(strokes, sil, line_px, sil_px)
     if ink is None or ink.is_empty or base is None or base.is_empty:
@@ -910,7 +914,47 @@ def _ink_lens_pockets(base, strokes, sil, line_px, sil_px):
         if exposed.length > 0.1 * p.boundary.length:
             continue
         out.append(p)
-    return out
+    whites = []
+    if vis is not None and not vis.is_empty:
+        # enclosed unpainted slits: interior HOLES of everything painted
+        # (fills + ink) — white needles where the authored surface stops
+        # short of the drawn curve (30137's log-top folds, and the shards
+        # where the rounded back edge grazes a stud: there the pocket lies
+        # outside every face polygon AND the enclosing stroke is partially
+        # clipped, so only the union's holes see it). Returned separately:
+        # the caller ABSORBS them into the max-contact fill, extending the
+        # surface to the stroke — black ink here would read as scratches.
+        # A hole thinner than the stroke can never read as an intentional
+        # opening. No SPUR_MAX_AREA cap: white has no tone to
+        # misrepresent (the 8x backstop fences off pathological failures).
+        from shapely.geometry import box as _box
+        outU = geom2d.union_all(out) if out else None
+        U = geom2d.union(vis, ink)
+        bx0, by0, bx1, by1 = U.bounds
+        comp = geom2d.difference(_box(bx0 - 2, by0 - 2, bx1 + 2, by1 + 2), U)
+        # enclosed voids = complement components that never reach the
+        # outside. The opening (0.15) severs the sub-pixel leak channels
+        # where a stroke band and a fill boundary converge without quite
+        # touching — through which a white wedge would drain into the open
+        # region and evade detection (30137's stud grazes). Slit-width
+        # voids survive the opening.
+        core = comp.buffer(-0.15).buffer(0.15)
+        for p in getattr(core, "geoms", [core]):
+            if p.geom_type != "Polygon" or p.is_empty:
+                continue
+            px0, py0, px1, py1 = p.bounds
+            if (px0 <= bx0 - 1 or py0 <= by0 - 1
+                    or px1 >= bx1 + 1 or py1 >= by1 + 1):
+                continue                     # the outside, not a void
+            void = geom2d.intersection(p.buffer(0.2), comp)
+            if not 0.02 < geom2d.area(void) <= 8 * SPUR_MAX_AREA:
+                continue
+            if not geom2d.opened(void, 0.5 * line_px).is_empty:
+                continue
+            if outU is not None and void.within(outU.buffer(0.05)):
+                continue
+            whites.append(void)
+    return out, whites
 
 
 def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
@@ -1033,10 +1077,30 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
         order = {r: min(ks) for r, ks in members.items() if r in merged}
         silR = _contour_region(geoms, arcs) if geoms else None
         _donate_escaped_spurs(merged, order, strokes, silR, line_px, sil_px)
-        pockets = _ink_lens_pockets(
-            silR if silR is not None and not silR.is_empty
-            else geom2d.union_all(list(merged.values())),
-            strokes, silR, line_px, sil_px)
+        vis = geom2d.union_all(list(merged.values()))
+        base = silR if silR is not None and not silR.is_empty else vis
+        # include drawn-arc bulge regions: a stylized arc bows past the
+        # authored facet chords, and the slit between them belongs to no
+        # face polygon at all (30137's log tops) — the contour/clip
+        # already grow by these same regions
+        arcr = geom2d.arc_regions(strokes)
+        if arcr:
+            base = geom2d.union_all([base] + arcr)
+        # pass the arc-grown region as the band's silhouette too: the raw
+        # contour region still carries the chord-vs-arc notch that the
+        # DRAWN contour absorbs, and its boundary would count as phantom
+        # ink exactly over the white slit
+        pockets, whites = _ink_lens_pockets(base, vis, strokes, base,
+                                            line_px, sil_px)
+        for p in whites:
+            probe = p.buffer(0.2)
+            best, contact = None, 0.0
+            for r2, g2 in merged.items():
+                cnt = geom2d.area(geom2d.intersection(probe, g2))
+                if cnt > contact:
+                    best, contact = r2, cnt
+            if best is not None:
+                merged[best] = geom2d.union(merged[best], p)
 
     ops, emitted = [], set()
     for idx in sorted(frags):                          # farthest-first

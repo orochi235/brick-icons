@@ -404,6 +404,25 @@ def test_fill_ops_inks_junction_lens_pockets():
     assert any(o.get("fill") == "#000000" for o in ops)
 
 
+def test_ink_lens_pockets_reports_enclosed_white_slits():
+    # a sub-stroke slit where NO fill paints (the drawn fold arc bows past
+    # the authored chord and the area between drops to background — 30137's
+    # log tops) is always a defect. It is reported separately so the caller
+    # absorbs it into the neighboring fill (black ink would read as a
+    # scratch), regardless of the ink-border fraction or the lens area cap.
+    from brick_icons import geom2d
+    base = geom2d.to_geom(np.array([(0, 0), (8, 0), (8, 22), (0, 22)], float))
+    vis = geom2d.to_geom(np.array([(0, 0), (8, 0), (8, 20), (0, 20)], float))
+    strokes = [("line", -1.0, 21.4, 9.0, 21.4, "edge"),
+               ("line", -0.5, 19.0, -0.5, 22.0, "edge"),
+               ("line", 8.5, 19.0, 8.5, 22.0, "edge")]
+    pockets, whites = shade._ink_lens_pockets(base, vis, strokes, None,
+                                              2.0, 2.0)
+    assert len(whites) == 1
+    x0, y0, x1, y1 = whites[0].bounds
+    assert y0 >= 19.9 and y1 <= 20.6            # the slit, not the fill body
+
+
 def test_fill_ops_keeps_wide_stroke_gaps_unpainted():
     # the same strokes opened wide: the gap is legitimate visible surface
     # (a barrel lens, a rim band) — no ink pocket

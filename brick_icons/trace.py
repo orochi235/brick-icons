@@ -149,8 +149,14 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
                 paint = f"url(#{gid})"
             else:
                 paint = fo["fill"]
-            body.append(f'<path d="{fo["d"]}" fill="{paint}" fill-rule="evenodd" '
-                        f'stroke="{paint}" stroke-width="0.8"{face_op}/>')
+            # translucent fills paint fill-only: the self-stroke that closes
+            # AA seams between abutting opaque fills double-paints its 0.4px
+            # overhang onto neighbors when composited at opacity < 1 —
+            # concentric ghost rings on a dish's stacked bands (4740)
+            seam = (f' stroke="{paint}" stroke-width="0.8"'
+                    if opacity >= 1.0 else "")
+            body.append(f'<path d="{fo["d"]}" fill="{paint}" '
+                        f'fill-rule="evenodd"{seam}{face_op}/>')
         body.append("</g>")
         if defs:
             parts.append("<defs>" + "".join(defs) + "</defs>")
