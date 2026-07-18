@@ -1,70 +1,82 @@
-# Handoff — 2026-07-17b: 3941 ring-floor chips donated; stranded-spur fallback
+# Handoff — 2026-07-18: partial-disc pie closure; trim-laundering fixed
 
-Working tree on `main`, clean. 298 tests passing. All commits pushed
-through `dcceaf2`.
+Working tree on `main`, clean. 313 tests passing. All commits pushed
+through `28a45f9`.
 
 ## What this session did
 
-- `dcceaf2` — **stranded single-seam spur donation.** The stud10 fix
-  (ecf771e) had exposed two ~1.2 px² light chips on 3941's rim ink band
-  between the front studs: the front ends of the y=4 ring-floor strip
-  (Ring r8→16 annulus, real surface — LDView shows it as a tapered
-  lens), previously buried under the bogus full-cylinder stud ink.
-  census-K→L comparison proved they appeared exactly at ecf771e. They
-  passed every `_donate_escaped_spurs` gate but their only seam
-  neighbor (the axle-boss wall, `('g',368)`) paints LATER, and the pass
-  only donated later→earlier. New fallback: a later-painting receiver
-  is allowed when the piece has no open link to its own core and its
-  uncovered seam (esc − raw ink, length ≥0.5) runs ≥95% along that one
-  receiver. Under-ink escapes stay put. Tests:
-  `test_stranded_spur_donated_to_later_single_seam_neighbor` (unit),
-  `test_3941_ring_floor_chips_donated` (integration, chip windows).
+- `4b621f4` — **partial-disc phantom triangle.** A sectored analytic
+  `Disc` (stud10's 270° 3-4disc cap) built its fill polygon from the arc
+  samples alone; the implicit closure chord covered a phantom triangle
+  over the quarter tiled by the primitive's hand-authored fan tris.
+  Invisible opaque (same tone painted twice), a lighter wedge on every
+  stud cap at opacity < 1 — the "weird triangle" Mike reported on
+  transparent 3941. Partial sectors now close the pie through the
+  center. NOTE: this artifact class is invisible in opaque renders —
+  verify translucent when touching sectored flat prims.
+- `03ed533` — **residue-trim laundering.** Mike's second report: white
+  needle on 30137's top face where the back-edge arc grazes stud 3 (and
+  a worse one behind stud 2). Root cause was NOT the fill sagging off
+  the arc (densify was fine): the residue rounds bared the strip in two
+  locally-sound steps (top tris → column wall → background). Fixes:
+  `_trim_safe` claimant retention (a piece that shows outside drawn-ops
+  ink may only be trimmed if it fuses thickly with the claimant's
+  fragment under opening), and the whites absorption generalized to any
+  thin bare piece of base − fills − ink (graze voids leak past the
+  0.15 channel sever, so enclosed-holes detection missed them).
+  Ops-only ink for the show test is load-bearing — a contour term
+  phantom-covers the very strip being laundered.
+- `28a45f9` — gallery regenerated (30137, 3941, 3649 visibly improved;
+  3960/54200 AE=0 jitter).
 
 ## Baselines
 
-- **census-M** (`~/.claude-msb/jobs/0bc8b81a/tmp/census-M/`, 48 parts,
-  256 flat3, post-dcceaf2) is current. vs census-L: 11 byte-diffs, all
-  inspected — 3941 (chips donated, the fix), 2654a/4589 (small dark
-  wedge notches removed, improvement), 3001/3660b/3673/87580
-  (sub-canvas-pixel neutral sliver tone swaps), 15573/32062/3713/4740
-  (AE=0 at zoom 8 — invisible under-ink ownership moves).
-- census-L = post-ecf771e (stud10), census-K = post-2fc12a0.
+- **census-O** (`~/.claude-msb/jobs/0bc8b81a/tmp/census-O/`, 48 parts,
+  post-03ed533) is current. vs census-N: 10 byte-diffs, 9 with AE=0 at
+  zoom 4; 2654a loses a black spur tick below its skirt notch
+  (improvement, same class as gallery 3649's hub tick).
+- census-N (same dir) = post-b207e13; census-M = post-dcceaf2.
 - Byte-diff gate is HARD (2fc12a0): byte-diff ⇒ real change, vs
-  census-M or newer.
+  census-O or newer.
 
 ## Open items
 
-1. **Light-on-light pinch hairlines** (3941 e3/e23 wedge, ~0.07 px²):
-   still benign/unpinned — invisible at every inspected zoom. The
-   visible artifact previously filed under this item turned out to be
-   the ring-floor chips (now fixed). Only revisit if a part shows a
-   VISIBLE uncovered light seam.
-2. **Performance**: donation pass still doubles fill_ops on hole-heavy
-   parts; suite ran 4.5 min this session (loaded), census ~10 min.
-   Determinism test adds ~65s.
-3. **Stock-render comparison (07-07)**: 3700 stock image never arrived.
-4. **LDraw/LDView hosted pinning**: when renderer is declared done,
+1. **30137 band-edge raggedness**: with the needles gone, the black
+   lens-pocket inking along the back-edge band's inner edge reads
+   ragged at zoom 8 (invisible at label scale). Only revisit if a part
+   shows it at ≤2x.
+2. **3941 translucent bottom notch**: solid black rectangle at the
+   bottom center of the transparent render (pre-existing, not
+   flagged). Verify against LDView translucent reference if it comes
+   up.
+3. **Light-on-light pinch hairlines** (3941 e3/e23 wedge): still
+   benign/unpinned.
+4. **Performance**: suite now ~5 min loaded; census ~10 min; donation
+   pass still doubles fill_ops on hole-heavy parts.
+5. **Stock-render comparison (07-07)**: 3700 stock image never arrived.
+6. **LDraw/LDView hosted pinning**: when renderer is declared done,
    upload the vendored snapshot as a release asset + hash-verify in
    setup-ldview.sh.
 
 ## Verification workflow
 
-- Full suite: `.venv/bin/python -m pytest -q` (298, ~4.5 min)
+- Full suite: `.venv/bin/python -m pytest -q` (313, ~5 min)
+- Gallery: `scripts/render-gallery.sh` (16 parts, ~4 min)
 - Contact sheet (labeled): `scripts/render-contact-sheet.sh [out-dir]`
 - One part: `.venv/bin/python -m brick_icons.cli <id> --format svg
-  --shading outline --shade-style flat3 [--part-label] --out <dir>`
+  --shading outline --shade-style flat3 [--part-label] [--opacity 0.55]
+  --out <dir>`
 - Census A/B: render `--list parts.txt` twice (defaults 256×170 + flat3
-  match baselines), byte-diff SVGs vs census-M.
+  match baselines), byte-diff SVGs vs census-O; parts list at
+  `~/.claude-msb/jobs/eb7c836f/tmp/census-K.parts.txt`.
 - 1024 stroke parity: `--format both --shading outline --width 1024
   --height 1024` (NO flat3, NO --mode gray — outline mode's .gray.png is
   the LDView line-art reference; `--mode gray` gives the SHADED
   reference), then resvg at 1024 + `magick compare -metric RMSE`;
-  ~0.019-0.02 normalized ≈ AA floor (3941 0.0198, 4032a 0.0193
-  post-fix). Script: `~/.claude-msb/jobs/eb7c836f/tmp/parity_compare_h.sh`.
+  ~0.019-0.02 normalized ≈ AA floor. Script:
+  `~/.claude-msb/jobs/eb7c836f/tmp/parity_compare_h.sh`.
 - Layer-split triage: zero out `stroke-width="0.8"` + `fill` → strokes
   layer; zero out `stroke-width="2.00"` → fills layer.
-- Probe scripts: `~/.claude-msb/jobs/eb7c836f/tmp/` probe33/36/34/37/
-  39/40 (see 07-17a handoff); `~/.claude-msb/jobs/0bc8b81a/tmp/`
-  probe_gate*.py (donation-gate trace), probe_plot.py (fill boundaries
-  vs true-width strokes overlay), probe_members.py (emitted element →
-  source faces).
+- Probe scripts: this session's in scratchpad (gone on reboot); durable
+  ones in `~/.claude-msb/jobs/0bc8b81a/tmp/` (probe_gate*, probe_plot,
+  probe_members) and `~/.claude-msb/jobs/eb7c836f/tmp/` (probe33-40).
