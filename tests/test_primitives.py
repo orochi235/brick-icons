@@ -517,6 +517,30 @@ def test_faces_axis_on_cylinder_no_wall():
     assert P.Cylinder(R=R, t=np.zeros(3), sector=360.0).faces(proj) == []
 
 
+def test_partial_disc_face_closes_through_center():
+    # stud10's cap is a 3-4disc (270 deg) tiled with hand-authored fan tris
+    # over the last quarter; a face polygon closed along the arc-end chord
+    # instead of through the center covers a phantom triangle of that
+    # quarter, double-painting the coplanar fan (visible at opacity < 1).
+    from shapely.geometry import Point, Polygon
+    right, up, fwd = (np.array([1.0, 0, 0]), np.array([0, 0, 1.0]),
+                      np.array([0, -1.0, 0]))
+    proj = P.Projection(right, up, fwd, s=1.0, cx=0.0, cy=0.0, half=0.0)
+    disc = P.Disc(R=np.eye(3), t=np.zeros(3), sector=270.0)
+    (face,) = disc.faces(proj)
+    poly = Polygon(face["poly"]).buffer(0)
+
+    def screen_pt(deg):
+        th = math.radians(deg)
+        w = np.array([[0.5 * math.cos(th), 0.0, 0.5 * math.sin(th)]])
+        px, py, _ = proj.to_px(w)
+        return Point(float(px[0]), float(py[0]))
+
+    assert not poly.contains(screen_pt(315.0))    # mid missing quarter
+    for deg in (45.0, 135.0, 225.0):              # mid covered sector
+        assert poly.contains(screen_pt(deg))
+
+
 def _cone10(top, ty=0.0):
     return P.Cone(R=np.diag([10.0, 10.0, 10.0]),
                   t=np.array([0.0, ty, 0.0]), sector=360.0, top=float(top))

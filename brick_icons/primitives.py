@@ -584,8 +584,15 @@ class Disc(Primitive):
         return [(_arc_op(ell, 0.0, self.sector, "edge"), _arc_depth_fn(ell))]
 
     def faces(self, proj):
-        th = np.linspace(0.0, math.radians(self.sector), 64)
-        return [self._flat_face(self.ring_pts(th, 0.0), None, proj)]
+        sect = math.radians(self.sector)
+        th = np.linspace(0.0, sect, 64)
+        w = self.ring_pts(th, 0.0)
+        if sect < 2 * math.pi - 1e-6:
+            # partial sector: close the pie through the center — the implicit
+            # arc-end chord otherwise fills a phantom triangle over the
+            # uncovered quarter (double-painting stud10's coplanar fan tris)
+            w = np.concatenate([w, self.t[None, :]], axis=0)
+        return [self._flat_face(w, None, proj)]
 
 
 @dataclass(eq=False, kw_only=True)
