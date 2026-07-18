@@ -995,34 +995,45 @@ def _weld_junction_notches(strokes, base, line_px, sil_px):
     region): welding is a junction treatment, not a general gap-filler,
     and the silhouette's outer profile is not ours to reshape.
     Shared-vertex (V) joins do not count as junctions — every ordinary
-    face corner is one, and the wedge between its bands is surface."""
+    face corner is one, and the wedge between its bands is surface.
+    Two gates keep this from restyling every corner in the library
+    (vetoed 2026-07-18 — stud-cylinder limb/rim corners especially):
+    the dying stroke must be a STUB (shorter than 3x its stroke width —
+    30137's 6.7 deg bridge between the scallop V and the rim; a limb
+    line or seam dying on a rim is long and keeps its corner), and the
+    notch must touch >= 3 distinct stroke bands (the arc + stub + rim
+    pile-up; a two-band tangency sliver is an ordinary corner wedge)."""
     import shapely as _sh
     from shapely import STRtree
     from shapely.geometry import LineString, Point
-    bands, ends = [], []
+    bands, ends, stub = [], [], []
     for op in strokes:
         if len(op) == 5:                               # legacy line tuple
             op = ("line",) + tuple(op)
         sw = sil_px if op[-1] == "sil" else line_px
         if op[0] == "line":
             pts = np.array([[op[1], op[2]], [op[3], op[4]]])
-            if math.hypot(pts[1, 0] - pts[0, 0],
-                          pts[1, 1] - pts[0, 1]) < 0.6 * sw:
+            length = math.hypot(pts[1, 0] - pts[0, 0], pts[1, 1] - pts[0, 1])
+            if length < 0.6 * sw:
                 continue
             eps = [pts[0], pts[-1]]
         else:
             r = (math.hypot(op[3], op[4]) + math.hypot(op[5], op[6])) / 2.0
-            if r * math.radians(abs(op[8] - op[7])) < 0.6 * sw:
+            length = r * math.radians(abs(op[8] - op[7]))
+            if length < 0.6 * sw:
                 continue
             pts = _ell_pts(op, op[7], op[8])
             eps = [] if abs(op[8] - op[7]) >= 359.0 else [pts[0], pts[-1]]
         bands.append(LineString(pts).buffer(sw / 2.0))
         ends.append(eps)
+        stub.append(length < 3.0 * sw)
     if len(bands) < 2 or base is None or base.is_empty:
         return []
     tree = STRtree(bands)
     joins = []
     for i, eps in enumerate(ends):
+        if not stub[i]:
+            continue                # only a dying STUB makes a junction
         for e in eps:
             pt = Point(e)
             for j in tree.query(pt, predicate="within"):
@@ -1046,7 +1057,10 @@ def _weld_junction_notches(strokes, base, line_px, sil_px):
             continue
         if not geom2d.opened(p, 0.5 * line_px).is_empty:
             continue
-        if any(pt.distance(p) <= reach for pt in joins):
+        if not any(pt.distance(p) <= reach for pt in joins):
+            continue
+        pb = p.buffer(0.05)
+        if len(tree.query(pb, predicate="intersects")) >= 3:
             out.append(p)
     return out
 

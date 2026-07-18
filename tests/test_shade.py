@@ -423,28 +423,30 @@ def test_ink_lens_pockets_reports_enclosed_white_slits():
     assert y0 >= 19.9 and y1 <= 20.6            # the slit, not the fill body
 
 
-def test_fill_ops_welds_open_notch_at_stroke_junction():
-    # a stroke terminating ON another stroke's band at a shallow angle
-    # (30137's rear-scallop arc grazing a stud cap rim) traps a thin notch
-    # between the converging bands that LEAKS into the open face region —
-    # the enclosed-pocket gates never see it, but at label scale it reads
-    # as a light chip in the junction. Thin closing-gaps within reach of a
-    # T-graze junction are welded solid.
+def test_fill_ops_welds_multi_stroke_graze_junction():
+    # 30137's rear-scallop cap junction: a long shallow stroke chains
+    # into a short stub that dies ON a third stroke's band, and the thin
+    # notch trapped between the converging bands LEAKS into the open face
+    # region — the enclosed-pocket gates never see it, but at label scale
+    # it reads as a light chip in what should be one solid join. A notch
+    # touching >= 3 distinct stroke bands near a dying STUB welds solid.
     f = _flat_face(0, 0, 30, 30, order=0, depth=5.0)
-    strokes = [("line", 0.0, 10.0, 30.0, 10.0, "edge"),
-               ("line", 0.0, 16.0, 16.0, 10.5, "edge")]
+    strokes = [("line", 8.0, 13.0, 24.0, 9.0, "edge"),    # landing band (graze)
+               ("line", 4.0, 3.0, 11.5, 10.0, "edge"),    # steep chain
+               ("line", 11.5, 10.0, 16.0, 10.0, "edge")]  # stub, dies on it
     ops = shade.fill_ops([f], shade.Flat3Style(), strokes=strokes,
                          line_px=2.0, sil_px=2.0)
     assert any(o.get("fill") == "#000000" for o in ops)
 
 
-def test_fill_ops_no_weld_without_junction():
-    # the same shallow convergence stopping short of the other stroke (no
-    # endpoint on its band): the sub-stroke gap between the bands stays —
-    # the weld is a junction treatment, not a general gap-filler.
+def test_fill_ops_keeps_stud_cylinder_corners():
+    # a LONG stroke dying tangentially on another band (a stud cylinder's
+    # limb line on its cap rim) keeps its corner wedge: only a dying STUB
+    # marks the beak-junction artifact class — welding plain tangent
+    # corners inks every stud cylinder in the library (vetoed 2026-07-18).
     f = _flat_face(0, 0, 30, 30, order=0, depth=5.0)
     strokes = [("line", 0.0, 10.0, 30.0, 10.0, "edge"),
-               ("line", 0.0, 16.0, 16.0, 12.6, "edge")]
+               ("line", 0.0, 16.0, 16.0, 10.5, "edge")]
     ops = shade.fill_ops([f], shade.Flat3Style(), strokes=strokes,
                          line_px=2.0, sil_px=2.0)
     assert not any(o.get("fill") == "#000000" for o in ops)
@@ -452,12 +454,10 @@ def test_fill_ops_no_weld_without_junction():
 
 def test_fill_ops_keeps_wide_stroke_gaps_unpainted():
     # the same strokes opened wide: the gap is legitimate visible surface
-    # (a barrel lens, a rim band) — no ink pocket. The second stroke stops
-    # short of the first's band: a T-graze would weld its junction tip
-    # (see test_fill_ops_welds_open_notch_at_stroke_junction).
+    # (a barrel lens, a rim band) — no ink pocket
     f = _flat_face(0, 0, 20, 20, order=0, depth=5.0)
     strokes = [("line", 0.0, 10.0, 20.0, 10.0, "edge"),
-               ("line", 0.0, 18.0, 14.0, 12.5, "edge")]
+               ("line", 0.0, 18.0, 14.0, 10.0, "edge")]
     ops = shade.fill_ops([f], shade.Flat3Style(), strokes=strokes,
                          line_px=2.0, sil_px=2.0)
     assert not any(o.get("fill") == "#000000" for o in ops)
