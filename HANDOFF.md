@@ -4,23 +4,27 @@ Working tree on `main`, clean. 315 tests passing.
 
 ## What this session did
 
-- `349cf85` — **T-graze junction weld.** The 30137 rear-scallop cap
-  junction (open item 1, Mike-flagged, diagnosis in the previous
-  handoff below) is fixed per the junction directive: new
+- `349cf85` + `6a78dc4` — **stub-bridged junction weld.** The 30137
+  rear-scallop cap junction (open item 1, Mike-flagged, diagnosis in
+  the previous handoff below) is fixed per the junction directive: new
   `_weld_junction_notches` in shade.py inks the thin notch pinched
-  between converging stroke bands wherever a stroke ENDPOINT dies on
-  the interior of another stroke's band (T-graze). Weld = closing(op
-  bands, 0.5·line_px) − bands, clipped to the arc-grown part region;
-  pieces must be thin under opening(0.5·line_px), 0.02 < area ≤
-  SPUR_MAX_AREA, and within 3·line_px of a junction point.
-  Shared-vertex (V) joins deliberately do NOT count — every ordinary
-  face corner is one. Fired on 46/48 census parts (66–2310 px AE at
-  zoom 4): stud limb tangencies, seam/rim T-joins, 3941's open boss
-  pinches — verified improvements or invisible at 2x on 3660b, 3941,
-  2654a, 60474; 30137 junction reads as a clean solid Y at zoom 8.
-  The old wide-gap test's strokes were themselves a T-graze; its
-  endpoint moved off the band (tip weld there is now correct
-  behavior), junction gating covered by two new tests.
+  between converging stroke bands at a beak junction. Weld =
+  closing(op bands, 0.5·line_px) − bands, clipped to the arc-grown
+  part region; pieces must be thin under opening(0.5·line_px), 0.02 <
+  area ≤ SPUR_MAX_AREA, and within 3·line_px of a junction point.
+  `349cf85` welded EVERY T-graze — 46/48 census parts, inking stud
+  cylinder limb/rim corners library-wide. Mike VETOED that; `6a78dc4`
+  narrowed it with two gates: the dying stroke must be a STUB
+  (< 3×sw — 30137's 6.7° bridge between scallop V and cap rim; limbs
+  and seams are long and keep their corners), and the notch must touch
+  ≥ 3 distinct stroke bands (arc + stub + rim pile-up). Shared-vertex
+  (V) joins never count — every ordinary face corner is one. Census
+  impact: 13 parts, AE 0–399 at zoom 4, all verified ticks at genuine
+  pile-ups (3941 boss pinch slivers, 2654a boss grazes, 32062 axle
+  flats); stud corners byte-identical or AE ≤ 1. 30137's junction
+  reads as a clean solid Y at zoom 8. NOTE: do not loosen the stub or
+  band-count gates without re-checking stud corners across the census
+  — the veto was specifically about those.
 
 ## Previous session (2026-07-18a)
 
@@ -50,13 +54,14 @@ Working tree on `main`, clean. 315 tests passing.
 
 ## Baselines
 
-- **census-P** (`~/.claude-msb/jobs/0bc8b81a/tmp/census-P/`, 48 parts,
-  post-349cf85) is current. vs census-O: 46 byte-diffs, ALL real
-  (junction welds), 66–2310 px AE at zoom 4, reviewed above.
-- census-O (same dir) = post-03ed533; census-N = post-b207e13;
-  census-M = post-dcceaf2.
+- **census-R** (`~/.claude-msb/jobs/0bc8b81a/tmp/census-R/`, 48 parts,
+  post-6a78dc4) is current. vs census-O: 13 byte-diffs, all stub-weld
+  ticks, AE 0–399 at zoom 4, reviewed above.
+- census-P (same dir) = post-349cf85 (the vetoed broad weld — do NOT
+  baseline against it); census-O = post-03ed533; census-N =
+  post-b207e13; census-M = post-dcceaf2.
 - Byte-diff gate is HARD (2fc12a0): byte-diff ⇒ real change, vs
-  census-P or newer.
+  census-R or newer.
 
 ## Open items
 
@@ -86,7 +91,7 @@ Working tree on `main`, clean. 315 tests passing.
   --shading outline --shade-style flat3 [--part-label] [--opacity 0.55]
   --out <dir>`
 - Census A/B: render `--list parts.txt` twice (defaults 256×170 + flat3
-  match baselines), byte-diff SVGs vs census-P; parts list at
+  match baselines), byte-diff SVGs vs census-R; parts list at
   `~/.claude-msb/jobs/eb7c836f/tmp/census-K.parts.txt`.
 - 1024 stroke parity: `--format both --shading outline --width 1024
   --height 1024` (NO flat3, NO --mode gray — outline mode's .gray.png is
