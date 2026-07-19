@@ -2,6 +2,26 @@
 
 Working tree on `main`, clean. 323 tests passing.
 
+## Addendum (later session, `1f46740`)
+
+- **Interior-landing weld gate**: V-join check is now "landing point ≥
+  2.0·sw from the landed-on stroke's endpoints" (was endpoint-to-
+  endpoint 0.5·sw). Kills 2654a's boss-lip ink knuckles; 30137
+  byte-identical (its stubs land on closed rim circles). Census-W
+  (`~/.claude-msb/jobs/0629a9a6/tmp/census-W/`) is the new baseline —
+  vs census-V: 2654a, 32062, 98283, all reviewed. 324 tests.
+- **Corner pinch notches are real geometry, not a Quick Look bug**
+  (Mike-flagged via QL/Safari): the face-colored wedge past the shared
+  cap disc at every 3-stroke corner appears in resvg/WebKit/CoreSVG
+  alike. If fixed, fix by chaining shared-endpoint strokes into
+  polyline paths (real SVG joins) — corner ink-welding is vetoed.
+- Mike wish list: (a) boss/stud back-half silhouettes on 2654a as
+  single arcs instead of chord runs; (b) truncated rim-stud faces on
+  round parts (2654a, 3941) as one arc coincident with the footprint
+  circle; (c) consider restructuring mesh repair around recognized
+  elements (studs, footprint) + boolean intersections instead of
+  px-space heuristics.
+
 ## What this session did (`9318e5e`)
 
 Four interlocking changes, all verified against census-R with Mike
