@@ -42,6 +42,10 @@ def _parse_args(argv):
     p.add_argument("--levels", type=int, nargs=2, metavar=("BLACK", "WHITE"))
     p.add_argument("--shade-style", dest="shade_style",
                    choices=["none"] + sorted(shade.STYLES))
+    p.add_argument("--weld-corners", dest="weld_corners", action="store_true",
+                   default=None,
+                   help="ink the notch at EVERY stroke T-graze junction "
+                        "(broad weld), not just stub-bridged ones")
     p.add_argument("--wireframe", action="store_true", default=None,
                    help="outline strokes only with occlusion culling off "
                         "(every edge drawn, hidden or not; no fills)")
@@ -79,7 +83,8 @@ def _config_from_args(args) -> Config:
         "levels": tuple(args.levels) if args.levels else None,
         "shade_style": args.shade_style, "light": args.light,
         "svg_bg": args.svg_bg, "opacity": args.opacity,
-        "wireframe": args.wireframe, "part_label": args.part_label,
+        "wireframe": args.wireframe, "weld_corners": args.weld_corners,
+        "part_label": args.part_label,
     }
     return load_config(toml_path=toml, overrides=overrides, root=args.root)
 
@@ -140,7 +145,8 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
                                        strokes=shifted,
                                        line_px=cfg.line_mm / 0.4 * s,
                                        sil_px=cfg.silhouette_mm / 0.4 * s,
-                                       drop=spurs) \
+                                       drop=spurs,
+                                       weld_corners=cfg.weld_corners) \
                     if style is not None else None
                 sil_geom = shade.silhouette_geom(faces) if faces else None
                 if sil_geom is not None and spurs is not None:
@@ -170,7 +176,8 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
                                        refits=res.refits, loops=res.loops,
                                        strokes=fit, line_px=cfg.line_width,
                                        sil_px=cfg.silhouette_width,
-                                       drop=spurs) \
+                                       drop=spurs,
+                                       weld_corners=cfg.weld_corners) \
                     if style is not None else None
                 sil_geom = shade.silhouette_geom(faces) if faces else None
                 if sil_geom is not None and spurs is not None:

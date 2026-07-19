@@ -979,7 +979,7 @@ def _ink_lens_pockets(base, vis, strokes, sil, line_px, sil_px):
     return out, whites
 
 
-def _weld_junction_notches(strokes, base, line_px, sil_px):
+def _weld_junction_notches(strokes, base, line_px, sil_px, broad=False):
     """Thin uncovered notches at a multi-stroke T-graze junction, welded
     solid as ink. Where a drawn stroke terminates on the INTERIOR of
     another stroke's band (a cap graze: 30137's rear-scallop arcs and
@@ -1002,11 +1002,13 @@ def _weld_junction_notches(strokes, base, line_px, sil_px):
     30137's 6.7 deg bridge between the scallop V and the rim; a limb
     line or seam dying on a rim is long and keeps its corner), and the
     notch must touch >= 3 distinct stroke bands (the arc + stub + rim
-    pile-up; a two-band tangency sliver is an ordinary corner wedge)."""
+    pile-up; a two-band tangency sliver is an ordinary corner wedge).
+    `broad=True` (opt-in --weld-corners) drops both gates and welds
+    every T-graze notch, the pre-veto census-P look."""
     import shapely as _sh
     from shapely import STRtree
     from shapely.geometry import LineString, Point
-    bands, ends, stub = [], [], []
+    bands, ends, stub, lines, sws = [], [], [], [], []
     for op in strokes:
         if len(op) == 5:                               # legacy line tuple
             op = ("line",) + tuple(op)
@@ -1024,24 +1026,43 @@ def _weld_junction_notches(strokes, base, line_px, sil_px):
                 continue
             pts = _ell_pts(op, op[7], op[8])
             eps = [] if abs(op[8] - op[7]) >= 359.0 else [pts[0], pts[-1]]
-        bands.append(LineString(pts).buffer(sw / 2.0))
+        ln = LineString(pts)
+        bands.append(ln.buffer(sw / 2.0))
+        lines.append(ln)
+        sws.append(sw)
         ends.append(eps)
         stub.append(length < 3.0 * sw)
     if len(bands) < 2 or base is None or base.is_empty:
         return []
+
     tree = STRtree(bands)
     joins = []
     for i, eps in enumerate(ends):
-        if not stub[i]:
+        if not stub[i] and not broad:
             continue                # only a dying STUB makes a junction
         for e in eps:
             pt = Point(e)
             for j in tree.query(pt, predicate="within"):
                 if j == i:
                     continue
-                if any(np.linalg.norm(np.asarray(e2) - e) < 0.3
+                # shared vertex: V join (an ordinary face corner). The
+                # tolerance is half the landed-on stroke's width — corner
+                # endpoints land inside each other's bands but chord
+                # stylization scatters them past any absolute epsilon
+                # (60474's bite corner: flank end 0.79 px from the rim
+                # chord's end)
+                if any(np.linalg.norm(np.asarray(e2) - e) < 0.5 * sws[j]
                        for e2 in ends[j]):
-                    continue                           # shared vertex: V join
+                    continue
+                # collinear twin: the stub lies (almost) entirely INSIDE
+                # the landed-on band — duplicate/split authoring of the
+                # same edge (60474's bite flank is drawn as two short
+                # pieces over a full-length twin), not a stroke arriving
+                # from outside. A genuine graze (30137) only pokes its
+                # tip in, so most of its length stays outside the band.
+                if lines[i].difference(bands[j]).length \
+                        < 0.25 * lines[i].length:
+                    continue
                 joins.append(pt)
                 break
     if not joins:
@@ -1060,14 +1081,14 @@ def _weld_junction_notches(strokes, base, line_px, sil_px):
         if not any(pt.distance(p) <= reach for pt in joins):
             continue
         pb = p.buffer(0.05)
-        if len(tree.query(pb, predicate="intersects")) >= 3:
+        if broad or len(tree.query(pb, predicate="intersects")) >= 3:
             out.append(p)
     return out
 
 
 def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
              refits=None, loops=None, strokes=None, line_px=2.0,
-             sil_px=2.0, drop=None):
+             sil_px=2.0, drop=None, weld_corners=False):
     """Fill ops with exact visible-fragment clipping and per-surface merging.
 
     clip=False keeps every face whole (no occlusion subtraction) for
@@ -1209,7 +1230,8 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
         # T-graze junctions (stroke dying on another stroke's band) weld
         # solid: their notch leaks into the open face region, so the
         # enclosed-pocket gates above never see it
-        pockets += _weld_junction_notches(strokes, base, line_px, sil_px)
+        pockets += _weld_junction_notches(strokes, base, line_px, sil_px,
+                                          broad=weld_corners)
         # every point of `base` (the arc-grown drawn-silhouette region) is
         # part surface: background may show only OUTSIDE the drawn contour.
         # Thin unpainted needles inside it — residue the trim rounds
@@ -1585,12 +1607,106 @@ def faces_from_tris(tri, proj, cond_edges=None):
     front_groups = {f["group"] for f in faces if not f.get("backfill")}
     kept = []
     for f in faces:
-        f.pop("_verts", None)
+        # "_verts" stays: absorb_wall_facets needs world coordinates to
+        # match facets against analytic wall surfaces
         if f.get("backfill") and not (f["group"] in front_groups
                                       and ("grad_axis" in f or "grad_radial" in f)):
             continue                    # hidden underside, not fold spillover
         kept.append(f)
     return kept
+
+
+def absorb_wall_facets(tri_faces, an_faces, tol=2e-3, abut_px=3.0):
+    """Authored facet faces lying ON an analytic wall's surface inherit the
+    abutting wall face's gradient and merge into its fill element.
+
+    LDraw files sometimes author short stretches of a primitive-tiled wall
+    as raw quads (60474's outer wall resumes as quads for ~6 deg beside
+    each bite). Grouped alone their normals barely spread, so they render
+    as a FLAT facet tone butted against the analytic band's gradient — a
+    visible square patch. Geometry match: every vertex of the facet group
+    within `tol` of the wall surface in the prim's local frame (unit
+    radius at the vertex's height, height in 0..1) with an outward-radial
+    world normal (interior facets seen through openings must not steal an
+    exterior band's paint). The group takes the px-nearest exterior wall
+    face's paint; past the gradient window's end the userSpaceOnUse
+    gradient clamps to its end stop, which is exactly the shared-boundary
+    tone, so the join stays continuous."""
+    from shapely.geometry import Polygon
+
+    walls = [f for f in an_faces
+             if f.get("grad_axis") is not None and f.get("prim") is not None
+             and not f.get("interior")]
+    if not walls or not tri_faces:
+        return
+
+    def poly(f):
+        p = Polygon(f["poly"])
+        return p if p.is_valid else p.buffer(0)
+
+    def on_wall(prim, v, n_world):
+        local = (np.linalg.inv(prim.R) @ (np.asarray(v, float) - prim.t).T).T
+        lvl = local[:, 1]
+        if lvl.min() < -0.02 or lvl.max() > 1.02:
+            return False
+        r_exp = prim.radius_at(lvl) if hasattr(prim, "radius_at") else 1.0
+        if np.max(np.abs(np.hypot(local[:, 0], local[:, 2]) - r_exp)) > tol:
+            return False
+        # tessellation facets span <= 22.5 deg (16-gon); a wider facet is a
+        # flat FEATURE face whose corners merely lie on the circle (30136's
+        # end face is clipped to the log profile: a chord plane, and its
+        # normal equals the radial direction at the chord's mid-angle, so
+        # the outward test below cannot reject it)
+        aa = np.arctan2(local[:, 2], local[:, 0])
+        rel = (aa - aa[0] + math.pi) % (2 * math.pi) - math.pi
+        if rel.max() - rel.min() > math.radians(25.0):
+            return False
+        # outward facing: the facet's world normal agrees with the radial
+        # direction at its centroid (in the prim's local frame)
+        c = local.mean(axis=0)
+        nl = prim.R.T @ np.asarray(n_world, float)
+        rdir = np.array([c[0], 0.0, c[2]])
+        rn = np.linalg.norm(rdir) * np.linalg.norm(nl)
+        return rn > 1e-12 and float(nl @ rdir) / rn > 0.7
+
+    by_group = defaultdict(list)
+    for tf in tri_faces:
+        if "grad_axis" in tf or "grad_radial" in tf or "_verts" not in tf:
+            continue                    # already smooth-shaded, or no coords
+        by_group[tf.get("group", id(tf))].append(tf)
+    prims = {id(f["prim"]): f["prim"] for f in walls}
+    for members in by_group.values():
+        cands = None
+        for tf in members:
+            v = tf["_verts"]
+            n = np.cross(v[1] - v[0], v[2] - v[0])
+            ln = np.linalg.norm(n)
+            if ln < 1e-9:
+                cands = set()
+                break
+            mine = {pid for pid, prim in prims.items()
+                    if on_wall(prim, v, n / ln)}
+            cands = mine if cands is None else cands & mine
+            if not cands:
+                break
+        if not cands:
+            continue                    # some member is off-surface: keep flat
+        wall_cands = [f for f in walls if id(f["prim"]) in cands]
+        gp = poly(members[0])
+        for tf in members[1:]:
+            gp = gp.union(poly(tf))
+        best, bd = None, abut_px
+        for wf in wall_cands:
+            d = gp.distance(poly(wf))
+            if d < bd:
+                best, bd = wf, d
+        if best is None:
+            continue                    # on-surface but not abutting a band
+        best.setdefault("group", ("wallgrad", id(best)))
+        for tf in members:
+            tf["group"] = best["group"]
+            tf["grad_axis"] = best["grad_axis"]
+            tf["grad_samples"] = best["grad_samples"]
 
 
 def _edge_key(a, b):

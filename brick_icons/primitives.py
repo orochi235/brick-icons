@@ -448,13 +448,14 @@ class Primitive:
 
         `side` is which side of the circle plane the wall lies on (+-1 along
         the key's canonical axis); `slope` is d(radius)/d(height) in that
-        canonical direction, rounded. A rim arc is suppressed iff a FULL-
-        sector wall with EQUAL slope lies on the OPPOSITE side (stacked
-        cone/cylinder sections, e.g. 4589's con3-on-con4 joint) — only then
-        is the whole rim a smooth joint. Same-side sharing, unequal slopes
-        (creases), or partial-sector sharers (3941's base lip: 45-degree
-        sectors with cutout gaps, where the body's rim stays a real edge)
-        keep the arc."""
+        canonical direction, rounded. A rim arc is suppressed wherever a
+        wall with EQUAL slope lies on the OPPOSITE side (stacked
+        cone/cylinder sections, e.g. 4589's con3-on-con4 joint) — coverage
+        is per angular bin (hlr.smooth_rim_skips), so a sectored sharer
+        suppresses only its own stretch and the rim survives across the
+        gaps (60474's bite-interrupted lower wall, 3941's base-lip
+        cutouts). Same-side sharing and unequal slopes (creases) keep the
+        arc."""
         rims, rate = self._rim_circles()
         if not rims:
             return []
@@ -480,12 +481,27 @@ class Primitive:
         edge — drawing it leaves a phantom 'collar' ring."""
         return []
 
-    def _skip_flags(self, skip_rims):
-        skip_rims = skip_rims or set()
-        rims = self.wall_rims() if skip_rims else []
-        skip_base = bool(rims) and (rims[0][0], rims[0][1]) in skip_rims
-        skip_top = len(rims) > 1 and (rims[1][0], rims[1][1]) in skip_rims
-        return skip_base, skip_top
+    def _rim_emit_spans(self, skip_rims):
+        """Per rim circle (in _rim_circles order: base, then top when
+        present): local-angle (deg0, deg1) spans of the rim arc that remain
+        real edges. skip_rims maps (rim_key, side) -> True (the whole rim is
+        a smooth joint) or a rim_span_bins mask (a sectored wall continues
+        on the other side over those angles only — 60474's bite-interrupted
+        lower wall). A plain set of (key, side) pairs reads as all-True."""
+        whole = [(0.0, self.sector)]
+        if not skip_rims:
+            return whole, whole
+        rims = self.wall_rims()
+        out = []
+        for i in (0, 1):
+            if i >= len(rims) or (rims[i][0], rims[i][1]) not in skip_rims:
+                out.append(whole)
+                continue
+            v = (skip_rims[(rims[i][0], rims[i][1])]
+                 if isinstance(skip_rims, dict) else True)
+            out.append([] if v is True
+                       else rim_uncovered_spans(self, rims[i][0], v))
+        return out
 
     def drawn_with_depth(self, proj, skip_rims=None):
         """Return [(op, depth_fn)] pre-occlusion drawn-op candidates.
@@ -664,7 +680,7 @@ class Cylinder(Primitive):
                           self.ring_pts(ang, 1.0)])
 
     def drawn_with_depth(self, proj, skip_rims=None):
-        skip_base, skip_top = self._skip_flags(skip_rims)
+        base_spans, top_spans = self._rim_emit_spans(skip_rims)
         A = self.R[:, 1]
         fwd = np.asarray(proj.fwd, float)
         # silhouette generators: the local wall normal at param t is
@@ -684,11 +700,11 @@ class Cylinder(Primitive):
                 op = ("line", float(pb[0]), float(pb[1]),
                       float(pt[0]), float(pt[1]), "sil")
                 pairs.append((op, _line_depth_fn(base.depth(th), top.depth(th))))
-        if not skip_base:
-            pairs.append((_arc_op(base, 0.0, self.sector, "edge"),
+        for d0, d1 in base_spans:
+            pairs.append((_arc_op(base, d0, d1, "edge"),
                           _arc_depth_fn(base)))
-        if not skip_top:
-            pairs.append((_arc_op(top, 0.0, self.sector, "edge"),
+        for d0, d1 in top_spans:
+            pairs.append((_arc_op(top, d0, d1, "edge"),
                           _arc_depth_fn(top)))
         return pairs
 
@@ -768,7 +784,7 @@ class Cone(Primitive):
                           self.ring_pts(ang, 1.0)])
 
     def drawn_with_depth(self, proj, skip_rims=None):
-        skip_base, skip_top = self._skip_flags(skip_rims)
+        base_spans, top_spans = self._rim_emit_spans(skip_rims)
         N = float(self.top)
         A3 = self.R[:, 1]
         fwd = np.asarray(proj.fwd, float)
@@ -799,12 +815,13 @@ class Cone(Primitive):
                     op = ("line", float(pb[0]), float(pb[1]),
                           float(pt_[0]), float(pt_[1]), "sil")
                     pairs.append((op, _line_depth_fn(base.depth(th), zt)))
-        if not skip_base:
-            pairs.append((_arc_op(base, 0.0, self.sector, "edge"),
+        for d0, d1 in base_spans:
+            pairs.append((_arc_op(base, d0, d1, "edge"),
                           _arc_depth_fn(base)))
-        if topc is not None and not skip_top:
-            pairs.append((_arc_op(topc, 0.0, self.sector, "edge"),
-                          _arc_depth_fn(topc)))
+        if topc is not None:
+            for d0, d1 in top_spans:
+                pairs.append((_arc_op(topc, d0, d1, "edge"),
+                              _arc_depth_fn(topc)))
         return pairs
 
     def faces(self, proj):
@@ -909,6 +926,121 @@ def rim_key(C, A, radius):
                 n = -n
             break
     return (tuple(C), tuple(np.round(n, 3)), round(float(radius), 3))
+
+
+_RIM_BINS = 720          # 0.5-degree angular bins for rim-seam coverage
+
+
+def _rim_key_frame(key):
+    """Canonical in-plane (u0, v0) frame for a rim key's axis, so every
+    primitive sharing the circle bins its angles consistently."""
+    n = np.asarray(key[1], float)
+    e = np.zeros(3)
+    e[int(np.argmin(np.abs(n)))] = 1.0
+    u0 = np.cross(n, e)
+    u0 /= np.linalg.norm(u0)
+    v0 = np.cross(n, u0)
+    return u0, v0
+
+
+def _rim_bin_idx(prim, key):
+    """(local angles, bin index per angle) sampling the primitive's sector
+    densely (>= 2 samples per bin at a full sector) — direction and
+    handedness of the local frame fall out of the sampling."""
+    th = np.linspace(0.0, math.radians(min(prim.sector, 360.0)),
+                     2 * _RIM_BINS)
+    u0, v0 = _rim_key_frame(key)
+    d = np.cos(th)[:, None] * prim.R[:, 0] + np.sin(th)[:, None] * prim.R[:, 2]
+    ang = np.arctan2(d @ v0, d @ u0)
+    idx = np.floor((ang % (2 * math.pi)) / (2 * math.pi)
+                   * _RIM_BINS).astype(int) % _RIM_BINS
+    return th, idx
+
+
+def rim_span_bins(prim, key):
+    """Boolean mask over _RIM_BINS angular bins: which angles of the rim
+    circle `key` the primitive's sector covers, in the key's canonical
+    in-plane frame (so rotated instances of a sectored primitive land in
+    consistent bins)."""
+    _, idx = _rim_bin_idx(prim, key)
+    mask = np.zeros(_RIM_BINS, bool)
+    mask[idx] = True
+    return mask
+
+
+def rim_facet_span_bins(key, side, slope, tris, rel_tol=2e-3, touch_tol=0.05,
+                        max_span_deg=25.0):
+    """Boolean mask over _RIM_BINS angular bins: which angles of the rim
+    circle `key` are covered by FACET-authored wall stretches — triangles
+    whose vertices lie on the wall surface implied by (side, slope) and
+    that abut the rim plane. LDraw files resume a primitive-tiled wall as
+    raw quads (60474: the outer wall beside each bite, half the
+    center-hole wall); those stretches must count as wall coverage in
+    hlr.smooth_rim_skips or the seam suppression leaves stub arcs over
+    them. Guards: the facet must extend AWAY from the rim plane (a cap
+    facet whose vertices merely touch the circle is not wall) and span
+    under max_span_deg (an on-circle chord facet crossing the interior is
+    not wall either — only its vertices are surface-tested). The radial
+    band is asymmetric: polygonal tessellation puts stitching vertices up
+    to a 16-gon's chord inset INSIDE the circle (60474's hole wall mixes
+    on-circle corners with mid-chord points), but never outside."""
+    mask = np.zeros(_RIM_BINS, bool)
+    if tris is None or len(tris) == 0:
+        return mask
+    C = np.asarray(key[0], float)
+    n = np.asarray(key[1], float)
+    n = n / np.linalg.norm(n)
+    r = float(key[2])
+    tol = max(rel_tol * r, 1e-3)
+    V = np.asarray(tris, float)                    # (T, 3, 3)
+    h = (V - C) @ n                                # signed height per vertex
+    sh = side * h
+    ok = np.all(sh > -touch_tol, axis=1)           # wall side of the plane
+    ok &= np.min(sh, axis=1) < touch_tol           # abuts the rim circle
+    ok &= np.max(sh, axis=1) > touch_tol           # extends off the plane
+    D = V - C - h[..., None] * n                   # radial components
+    rad = np.linalg.norm(D, axis=2)
+    exp = r + slope * h                            # wall radius at height
+    ok &= np.all(rad <= exp + tol, axis=1)
+    ok &= np.all(rad >= exp * math.cos(math.pi / 16) - tol, axis=1)
+    if not ok.any():
+        return mask
+    u0, v0 = _rim_key_frame(key)
+    ang = np.arctan2(D[ok] @ v0, D[ok] @ u0)       # (K, 3) vertex angles
+    rel = (ang - ang[:, :1] + math.pi) % (2 * math.pi) - math.pi
+    for a0, rl in zip(ang[:, 0], rel):
+        sp = float(rl.max() - rl.min())
+        if sp > math.radians(max_span_deg):
+            continue
+        th = np.linspace(a0 + rl.min(), a0 + rl.max(),
+                         2 * max(1, int(sp / (2 * math.pi) * _RIM_BINS)) + 2)
+        idx = np.floor((th % (2 * math.pi)) / (2 * math.pi)
+                       * _RIM_BINS).astype(int) % _RIM_BINS
+        mask[idx] = True
+    return mask
+
+
+def rim_uncovered_spans(prim, key, mask):
+    """Local-angle (deg0, deg1) runs of the primitive's sector NOT covered
+    by `mask` (canonical-frame bins, see rim_span_bins): the stretches of a
+    wall's rim circle where no opposite wall continues it, so the rim stays
+    a real drawn edge there."""
+    th, idx = _rim_bin_idx(prim, key)
+    keep = ~mask[idx]
+    degs = np.degrees(th)
+    spans = []
+    i, n = 0, len(keep)
+    while i < n:
+        if keep[i]:
+            j = i
+            while j + 1 < n and keep[j + 1]:
+                j += 1
+            if degs[j] - degs[i] > 0.25:         # sub-bin jitter slivers
+                spans.append((float(degs[i]), float(degs[j])))
+            i = j + 1
+        else:
+            i += 1
+    return spans
 
 
 def _merged_wall(members):

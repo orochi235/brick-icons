@@ -47,6 +47,9 @@ DEFAULTS = {
     "svg_bg": "none",        # SVG background paint; "none" = transparent
     "opacity": 1.0,          # face-fill opacity in SVG (translucent bricks)
     "wireframe": False,      # outline strokes only, occlusion culling off
+    "weld_corners": False,   # broad junction weld: ink the notch at EVERY
+                             # stroke T-graze, not just stub-bridged
+                             # junctions (restyles stud/limb corners)
     "part_label": False,     # stamp the part id in small print (test renders)
     "fmt": "png",            # png | svg | both
     "mode": "both",          # gray | mono | color | both  (png only)
@@ -83,6 +86,7 @@ class Config:
     svg_bg: str
     opacity: float
     wireframe: bool
+    weld_corners: bool
     part_label: bool
     fmt: str
     mode: str
@@ -135,6 +139,7 @@ def load_config(toml_path=None, overrides=None, root="."):
         svg_bg=str(data["svg_bg"]),
         opacity=float(data["opacity"]),
         wireframe=bool(data["wireframe"]),
+        weld_corners=bool(data["weld_corners"]),
         part_label=bool(data["part_label"]),
         fmt=str(data["fmt"]),
         mode=str(data["mode"]),

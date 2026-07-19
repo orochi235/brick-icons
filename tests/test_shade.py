@@ -452,6 +452,110 @@ def test_fill_ops_keeps_stud_cylinder_corners():
     assert not any(o.get("fill") == "#000000" for o in ops)
 
 
+def _cyl_and_surface_tris(radius=10.0, th0=100.0, th1=120.0, r_tri=None):
+    """A full analytic cylinder plus a curved quad (two tris) authored ON its
+    surface (or at r_tri if given), camera-facing under the stub projection."""
+    cyl = P.Cylinder(R=np.diag([radius, radius, radius]), t=np.zeros(3),
+                     sector=360.0)
+    r = r_tri if r_tri is not None else radius
+    A = np.array([0.0, radius, 0.0])
+
+    def pt(deg, lvl):
+        th = math.radians(deg)
+        return np.array([r * math.cos(th), 0.0, r * math.sin(th)]) + lvl * A
+    tris = np.array([
+        [pt(th0, 0.0), pt(th0, 1.0), pt(th1, 0.0)],
+        [pt(th1, 0.0), pt(th0, 1.0), pt(th1, 1.0)],
+    ])
+    return cyl, tris
+
+
+def _shade_stub_proj():
+    return P.Projection(np.array([1.0, 0.0, 0.0]), np.array([0.0, -1.0, 0.0]),
+                        np.array([0.0, 0.0, -1.0]), 1.0, 0.0, 0.0, 0.0)
+
+
+def test_absorb_wall_facets_joins_on_surface_quads():
+    # 60474's bite flanks: wall stretches authored as raw quads at the
+    # primitive's exact radius must inherit the abutting analytic band's
+    # gradient and merge group instead of flat-toning as a square patch.
+    proj = _shade_stub_proj()
+    cyl, tris = _cyl_and_surface_tris()
+    an_faces = shade.faces_from_analytic([cyl], proj)
+    tri_faces = shade.faces_from_tris(tris, proj)
+    assert tri_faces and all("grad_axis" not in f for f in tri_faces)
+    shade.absorb_wall_facets(tri_faces, an_faces)
+    walls = [f for f in an_faces if f.get("grad_axis") is not None]
+    for tf in tri_faces:
+        assert "grad_axis" in tf
+        assert any(tf["group"] == wf.get("group") and
+                   tf["grad_axis"] == wf["grad_axis"] for wf in walls)
+
+
+def test_absorb_wall_facets_rejects_chord_feature_face():
+    # 30136's end face: a FLAT face clipped to the log profile, so every
+    # corner lies exactly on the lobe cylinder and its normal matches the
+    # radial direction at the chord's mid-angle. Only its angular span
+    # (way past one 16-gon facet) betrays it — it must keep its flat tone.
+    proj = _shade_stub_proj()
+    radius = 10.0
+    cyl = P.Cylinder(R=np.diag([radius, radius, radius]), t=np.zeros(3),
+                     sector=360.0)
+    th0, th1 = 100.0, 160.0                        # 60-degree chord
+    A = np.array([0.0, radius, 0.0])
+
+    def pt(deg, lvl):
+        th = math.radians(deg)
+        return np.array([radius * math.cos(th), 0.0,
+                         radius * math.sin(th)]) + lvl * A
+    tris = np.array([
+        [pt(th0, 0.0), pt(th0, 1.0), pt(th1, 0.0)],
+        [pt(th1, 0.0), pt(th0, 1.0), pt(th1, 1.0)],
+    ])
+    an_faces = shade.faces_from_analytic([cyl], proj)
+    tri_faces = shade.faces_from_tris(tris, proj)
+    shade.absorb_wall_facets(tri_faces, an_faces)
+    assert all("grad_axis" not in f for f in tri_faces)
+
+
+def test_absorb_wall_facets_ignores_off_surface_tris():
+    proj = _shade_stub_proj()
+    cyl, tris = _cyl_and_surface_tris(r_tri=8.0)      # inside the wall
+    an_faces = shade.faces_from_analytic([cyl], proj)
+    tri_faces = shade.faces_from_tris(tris, proj)
+    shade.absorb_wall_facets(tri_faces, an_faces)
+    assert all("grad_axis" not in f for f in tri_faces)
+
+
+def test_fill_ops_no_weld_at_split_edge_corner():
+    # 60474's bite corner: the flank edge is authored as two collinear
+    # pieces OVER a full-length twin, and the rim chord's endpoint misses
+    # the corner by ~0.8 px. Internal split points land on the twin's band
+    # interior and the corner endpoint lands on the chord's interior — but
+    # neither is a T-graze junction, and the crisp L-corner must NOT be
+    # welded into an ink blob.
+    f = _flat_face(0, 0, 30, 30, order=0, depth=5.0)
+    strokes = [("line", 10.0, 10.0, 10.0, 14.2, "edge"),   # flank piece a
+               ("line", 10.0, 14.2, 10.0, 19.6, "edge"),   # flank piece b
+               ("line", 10.0, 10.0, 10.0, 19.6, "edge"),   # full-length twin
+               ("line", 10.8, 19.7, 24.0, 20.4, "edge")]   # rim chord, 0.8 off
+    ops = shade.fill_ops([f], shade.Flat3Style(), strokes=strokes,
+                         line_px=2.0, sil_px=2.0)
+    assert not any(o.get("fill") == "#000000" for o in ops)
+
+
+def test_fill_ops_weld_corners_opt_in_welds_tangent_corner():
+    # --weld-corners (broad weld, the pre-veto census-P look) drops the
+    # stub and 3-band gates: the same tangent corner that the default
+    # keeps IS welded when opted in. Off by default.
+    f = _flat_face(0, 0, 30, 30, order=0, depth=5.0)
+    strokes = [("line", 0.0, 10.0, 30.0, 10.0, "edge"),
+               ("line", 0.0, 16.0, 16.0, 10.5, "edge")]
+    ops = shade.fill_ops([f], shade.Flat3Style(), strokes=strokes,
+                         line_px=2.0, sil_px=2.0, weld_corners=True)
+    assert any(o.get("fill") == "#000000" for o in ops)
+
+
 def test_fill_ops_keeps_wide_stroke_gaps_unpainted():
     # the same strokes opened wide: the gap is legitimate visible surface
     # (a barrel lens, a rim band) — no ink pocket

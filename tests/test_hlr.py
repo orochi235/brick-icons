@@ -394,10 +394,18 @@ def test_visible_segments_returns_scale_factor():
 @pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
 def test_3941_base_silhouette_connects_to_rim():
     # The historic artifact: the body's vertical side silhouette did not connect
-    # to the bottom-rim arc (a visible gap at the tangent), and the dilation fix
-    # was resolution-fragile. With exact analytic occlusion the lower endpoint of
-    # each tall body silhouette must sit on the bottom-rim arc at BOTH resolutions.
+    # to drawn ink at its base (a visible gap at the tangent), and the dilation
+    # fix was resolution-fragile. Since the y=20 seam stopped being drawn where
+    # the base lip continues the wall (one cylinder with bites, cf. 60474), and
+    # the view's tangents land mid-cutout, the sil now ends on the part OUTLINE
+    # at the cutout's upper corner — the contour stroke closes the join. So the
+    # lower endpoint of each tall body silhouette must sit either on drawn ink
+    # (arc points) or exactly on the silhouette-region boundary, at BOTH
+    # resolutions. The boundary tolerance is tight: a genuinely dangling sil
+    # end floats px away from the boundary, an on-outline one is sub-px.
+    from shapely.geometry import Point
     from brick_icons import primitives as _P
+    from brick_icons import shade as _S
     for rpx in (900, 2048):
         res = hlr.visible_segments("3941", LIB, lat=30, long=45, render_px=rpx)
         segs, bbox = res.segs, res.bbox
@@ -409,6 +417,7 @@ def test_3941_base_silhouette_connects_to_rim():
                 p = _P.arc_ellipse(o).points(np.radians(np.linspace(o[7], o[8], 64)))
                 apts += [tuple(q) for q in p]
         apts = np.array(apts)
+        outline = _S.silhouette_geom(res.faces).boundary
         # the two longest silhouette lines are the body's left/right sides
         sils = [o for o in segs if o[0] == "line" and o[-1] == "sil"]
         sils.sort(key=lambda o: math.hypot(o[3] - o[1], o[4] - o[2]), reverse=True)
@@ -416,7 +425,9 @@ def test_3941_base_silhouette_connects_to_rim():
         for o in sils[:2]:
             low = np.array([o[1], o[2]]) if o[2] > o[4] else np.array([o[3], o[4]])
             d = np.min(np.hypot(apts[:, 0] - low[0], apts[:, 1] - low[1]))
-            assert d < 0.02 * diag, f"silhouette base gap {d:.1f}px at {rpx} (diag {diag:.0f})"
+            db = outline.distance(Point(low))
+            assert d < 0.02 * diag or db < max(1.5, 0.002 * diag), \
+                f"silhouette base gap {d:.1f}px / outline {db:.1f}px at {rpx}"
 
 
 def test_fit_affine_matches_fit_segments():

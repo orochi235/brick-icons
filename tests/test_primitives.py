@@ -295,20 +295,9 @@ def test_cone_apex_no_top_arc():
 
 
 def _smooth_shared_rims(prims):
-    """Mirror of hlr's suppression rule: a rim is skipped iff a FULL-sector
-    wall of equal slope continues on the opposite side of its plane."""
-    from collections import defaultdict
-    full_smooth = defaultdict(set)
-    for p in prims:
-        if p.is_full:
-            for key, side, slope in p.wall_rims():
-                full_smooth[key].add((side, slope))
-    skip = set()
-    for p in prims:
-        for key, side, slope in p.wall_rims():
-            if (-side, slope) in full_smooth[key]:
-                skip.add((key, side))
-    return skip
+    """hlr's suppression rule, shared with the real pipeline."""
+    from brick_icons import hlr
+    return hlr.smooth_rim_skips(prims)
 
 
 def test_shared_rim_arcs_suppressed_for_stacked_cones():
@@ -338,14 +327,15 @@ def test_same_side_shared_rims_kept():
                       t=np.array([0.0, 24.0, 0.0]), sector=360.0)
     lip = P.Cylinder(R=np.diag([20.0, -4.0, 20.0]),
                      t=np.array([0.0, 24.0, 0.0]), sector=90.0)
-    assert _smooth_shared_rims([body, lip]) == set()
+    assert not _smooth_shared_rims([body, lip])
 
 
-def test_partial_sector_opposite_wall_keeps_full_rim():
+def test_partial_sector_opposite_wall_splits_rim():
     # 3941's actual joint: full body wall (y0..20) meets 45-degree lip sectors
     # (y20..24) with cutout gaps. The lip sectors' rims vanish (the full body
-    # continues them) but the body's own rim must stay — it is a real edge
-    # across the cutouts, and the silhouette tangent lands on it.
+    # continues them); the body's own rim survives ONLY across the cutouts —
+    # where the lip continues the wall the seam is smooth, not an edge
+    # (physically one cylinder with bites, same class as 60474's side wall).
     body = P.Cylinder(R=np.diag([20.0, 20.0, 20.0]), t=np.zeros(3),
                       sector=360.0)
     lip = P.Cylinder(R=np.diag([20.0, 4.0, 20.0]),
@@ -354,7 +344,91 @@ def test_partial_sector_opposite_wall_keeps_full_rim():
     body_rims = body.wall_rims()
     lip_rims = lip.wall_rims()
     assert (lip_rims[0][0], lip_rims[0][1]) in skip        # lip base: joint
-    assert (body_rims[1][0], body_rims[1][1]) not in skip  # body top: real edge
+    assert (body_rims[1][0], body_rims[1][1]) in skip      # body top: masked
+    ops_lip = [op for op, *_ in
+               lip.drawn_with_depth(_stub_proj(), skip_rims=skip)]
+    assert not any(o[0] == "arc" and abs(o[2] - 20.0) < 1e-6 for o in ops_lip)
+    # body: top rim (projected center y = +20 under _stub_proj, y-down) keeps
+    # only the uncovered 315 degrees, base rim (y=0 -> center y 0) is whole
+    ops_body = [op for op, *_ in
+                body.drawn_with_depth(_stub_proj(), skip_rims=skip)]
+    top_arcs = [o for o in ops_body if o[0] == "arc" and o[2] > 10.0]
+    assert 312.0 < sum(o[8] - o[7] for o in top_arcs) < 316.0
+
+
+def test_bite_interrupted_wall_seam_kept_only_at_gaps():
+    # 60474's side wall: a full upper wall over a lower wall that covers only
+    # 240 degrees (the rest are "bites"). The shared circle must be drawn
+    # only across the uncovered 120 degrees; the lower wall's own rim arcs
+    # at the joint vanish entirely (the full upper wall continues them).
+    upper = P.Cylinder(R=np.diag([40.0, 4.0, 40.0]), t=np.zeros(3),
+                       sector=360.0)
+    lower = P.Cylinder(R=np.diag([40.0, 4.0, 40.0]),
+                       t=np.array([0.0, 4.0, 0.0]), sector=240.0)
+    skip = _smooth_shared_rims([upper, lower])
+    ops_up = [op for op, *_ in
+              upper.drawn_with_depth(_stub_proj(), skip_rims=skip)]
+    # upper wall: base rim (y=0) intact, seam rim (projected center y=+4)
+    # only over the bare 120 degrees the lower wall leaves uncovered
+    seam = [o for o in ops_up if o[0] == "arc" and o[2] > 2.0]
+    assert 116.0 < sum(o[8] - o[7] for o in seam) < 122.0
+    ops_lo = [op for op, *_ in
+              lower.drawn_with_depth(_stub_proj(), skip_rims=skip)]
+    assert not any(o[0] == "arc" and abs(o[2] - 4.0) < 1e-6 for o in ops_lo)
+
+
+def _wall_quad_tris(radius, y0, y1, deg0, deg1, step=6.0):
+    """Triangulated quad band ON the cylinder wall r=radius spanning heights
+    y0..y1 over world angles deg0..deg1 (facet-authored wall, like 60474's
+    stretches beside each bite)."""
+    tris = []
+    d = deg0
+    while d < deg1 - 1e-9:
+        e = min(d + step, deg1)
+        a0, a1 = math.radians(d), math.radians(e)
+        p = lambda a, y: np.array([radius * math.cos(a), y,
+                                   radius * math.sin(a)])
+        tris.append([p(a0, y0), p(a0, y1), p(a1, y0)])
+        tris.append([p(a1, y0), p(a0, y1), p(a1, y1)])
+        d = e
+    return np.array(tris)
+
+
+def test_facet_authored_wall_counts_as_seam_coverage():
+    # 60474's real authoring: the lower wall runs 240 degrees of analytic
+    # sections, then RESUMES AS RAW QUADS over part of the rest (the bites
+    # in between stay open). The quad stretch is just as smooth a joint as
+    # the analytic one — the seam must be suppressed over it, and survive
+    # only across the true gaps.
+    from brick_icons import hlr
+    upper = P.Cylinder(R=np.diag([40.0, 4.0, 40.0]), t=np.zeros(3),
+                       sector=360.0)
+    lower = P.Cylinder(R=np.diag([40.0, 4.0, 40.0]),
+                       t=np.array([0.0, 4.0, 0.0]), sector=240.0)
+    quads = _wall_quad_tris(40.0, 4.0, 8.0, 260.0, 340.0)
+    skip = hlr.smooth_rim_skips([upper, lower], quads)
+    ops_up = [op for op, *_ in
+              upper.drawn_with_depth(_stub_proj(), skip_rims=skip)]
+    # seam rim (projected center y=+4): analytic 240 + quads 80 covered,
+    # two true gaps of 20 degrees each remain
+    seam = [o for o in ops_up if o[0] == "arc" and o[2] > 2.0]
+    assert 36.0 < sum(o[8] - o[7] for o in seam) < 44.0
+
+
+def test_on_plane_cap_facets_do_not_cover_seam():
+    # a disc facet in the rim plane touches the circle with every vertex
+    # but is NOT wall surface: it must contribute no coverage (guards: no
+    # extent away from the plane; wide chords span the interior).
+    from brick_icons import hlr
+    upper = P.Cylinder(R=np.diag([40.0, 4.0, 40.0]), t=np.zeros(3),
+                       sector=360.0)
+    fan = []
+    c = np.array([0.0, 4.0, 0.0])
+    for d in range(0, 360, 30):
+        a0, a1 = math.radians(d), math.radians(d + 30)
+        p = lambda a: np.array([40.0 * math.cos(a), 4.0, 40.0 * math.sin(a)])
+        fan.append([c, p(a0), p(a1)])
+    assert not hlr.smooth_rim_skips([upper], np.array(fan))
 
 
 def test_cone_on_cylinder_crease_rim_kept():
@@ -362,7 +436,7 @@ def test_cone_on_cylinder_crease_rim_kept():
     cyl = P.Cylinder(R=np.eye(3), t=np.zeros(3), sector=360.0)
     cone = P.Cone(R=np.eye(3), t=np.array([0.0, 1.0, 0.0]), sector=360.0,
                   top=0.0)
-    assert _smooth_shared_rims([cyl, cone]) == set()
+    assert not _smooth_shared_rims([cyl, cone])
 
 
 def test_unshared_rims_still_drawn():

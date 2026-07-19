@@ -256,31 +256,63 @@ def _ops_bbox(segs):
     return (min(xs), min(ys), max(xs), max(ys))
 
 
-_FLAT_BINS = 720          # 0.5-degree angular bins for flat-seam coverage
+def smooth_rim_skips(analytic, tris=None):
+    """Rim circles whose arcs are (partly) smooth joints, not edges:
+    {(rim_key, side): True | bin mask} plus {("flat", key, side): True}.
 
+    A wall's rim arc is a smooth joint wherever a wall of EQUAL slope
+    continues on the OPPOSITE side of the circle plane (stacked
+    cone/cylinder sections). Coverage accumulates per angular bin
+    (primitives.rim_span_bins) so sectored tilings qualify too: 60474's
+    side wall stacks a full upper ring on 1/12 sections with bite gaps —
+    the seam vanishes where the lower wall continues and stays a real edge
+    across the bites (emission splits the arc via rim_uncovered_spans).
+    True means the whole circle is covered (4589's con3-on-con4 joint).
+    Facet-authored wall stretches count as coverage too (`tris`, world
+    coords): LDraw resumes a primitive-tiled wall as raw quads (60474's
+    outer wall beside each bite, half its center-hole wall) and the seam
+    is just as smooth there — see primitives.rim_facet_span_bins.
 
-def _flat_span_bins(prim, key):
-    """Boolean mask over _FLAT_BINS angular bins: which angles of the rim
-    circle `key` the primitive's sector covers, measured in a canonical
-    in-plane frame derived from the key's axis (so rotated instances of a
-    sectored primitive land in consistent bins)."""
-    n = np.asarray(key[1], float)
-    e = np.zeros(3)
-    e[int(np.argmin(np.abs(n)))] = 1.0
-    u0 = np.cross(n, e)
-    u0 /= np.linalg.norm(u0)
-    v0 = np.cross(n, u0)
-    # sample densely (>= 2 samples per bin at a full sector) — direction
-    # and handedness of the local frame fall out of the sampling
-    th = np.linspace(0.0, math.radians(min(prim.sector, 360.0)),
-                     2 * _FLAT_BINS)
-    d = np.cos(th)[:, None] * prim.R[:, 0] + np.sin(th)[:, None] * prim.R[:, 2]
-    ang = np.arctan2(d @ v0, d @ u0)
-    idx = np.floor((ang % (2 * math.pi)) / (2 * math.pi)
-                   * _FLAT_BINS).astype(int) % _FLAT_BINS
-    mask = np.zeros(_FLAT_BINS, bool)
-    mask[idx] = True
-    return mask
+    Flat coplanar seams: a circle stretch with flat surface on BOTH radial
+    sides (concentric ring tiling) is an interior seam, not an edge (see
+    flat_rims). A side's arcs are suppressed only when the OPPOSITE side
+    covers that side's whole angular span, so tilings that stop partway
+    keep the real edge along the uncovered stretch (60474 tiles its top
+    from 1/8 rings x 8 instances)."""
+    wall_cov = defaultdict(lambda: np.zeros(primitives._RIM_BINS, bool))
+    for prim in analytic:
+        for key, side, slope in prim.wall_rims():
+            wall_cov[(key, side, slope)] |= primitives.rim_span_bins(prim, key)
+    skips = {}
+    facet_cov = {}
+    for prim in analytic:
+        for key, side, slope in prim.wall_rims():
+            if (key, side) in skips:
+                continue
+            fk = (key, -side, slope)
+            if fk not in facet_cov:
+                facet_cov[fk] = primitives.rim_facet_span_bins(
+                    key, -side, slope, tris)
+            opp = wall_cov.get(fk)
+            opp = facet_cov[fk] if opp is None else opp | facet_cov[fk]
+            if not opp.any():
+                continue
+            # one-bin dilation absorbs float jitter where rotated instances
+            # abut; the tested side is NOT dilated
+            m = opp | np.roll(opp, 1) | np.roll(opp, -1)
+            skips[(key, side)] = True if m.all() else m
+    flat_raw = defaultdict(lambda: np.zeros(primitives._RIM_BINS, bool))
+    for prim in analytic:
+        for key, side in prim.flat_rims():
+            flat_raw[(key, side)] |= primitives.rim_span_bins(prim, key)
+    for (key, side), mask in flat_raw.items():
+        opp = flat_raw.get((key, -side))
+        if opp is None:
+            continue
+        opp = opp | np.roll(opp, 1) | np.roll(opp, -1)
+        if np.all(opp[mask]):
+            skips[("flat", key, side)] = True
+    return skips
 
 
 def _visible_segments_faceted(out, right, up, fwd, render_px, cull=True):
@@ -372,38 +404,11 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
         occluders.append(primitives.TriangleOccluder(np.array(out["tri"])))
 
     # drawn ops: analytic curves (+ a cylinder excludes itself from its
-    # silhouette). A wall's rim arc is suppressed when a FULL-sector wall of
-    # equal slope continues on the other side of the circle plane (stacked
-    # cone/cylinder sections): that whole rim is a smooth joint, not an edge.
-    full_smooth = defaultdict(set)
-    for prim in analytic:
-        if prim.is_full:
-            for key, side, slope in prim.wall_rims():
-                full_smooth[key].add((side, slope))
-    shared_rims = set()
-    for prim in analytic:
-        for key, side, slope in prim.wall_rims():
-            if (-side, slope) in full_smooth[key]:
-                shared_rims.add((key, side))
-    # coplanar flat seams: a circle stretch with flat surface on BOTH radial
-    # sides (concentric ring tiling) is an interior seam, not an edge (see
-    # flat_rims). Coverage is accumulated per angular bin so sector tilings
-    # qualify too (60474 tiles its top from 1/8 rings x 8 instances); a
-    # side's arcs are suppressed only when the OPPOSITE side covers that
-    # side's whole angular span, so tilings that stop partway keep the real
-    # edge along the uncovered stretch.
-    flat_raw = defaultdict(lambda: np.zeros(_FLAT_BINS, bool))
-    for prim in analytic:
-        for key, side in prim.flat_rims():
-            flat_raw[(key, side)] |= _flat_span_bins(prim, key)
-    for (key, side), mask in flat_raw.items():
-        opp = flat_raw.get((key, -side))
-        if opp is None:
-            continue
-        # one-bin dilation absorbs float jitter where rotated instances abut
-        opp = opp | np.roll(opp, 1) | np.roll(opp, -1)
-        if np.all(opp[mask]):
-            shared_rims.add(("flat", key, side))
+    # silhouette). Wall-rim seams and coplanar flat seams are suppressed
+    # (per angular bin) where a smooth surface continues across them — see
+    # smooth_rim_skips.
+    shared_rims = smooth_rim_skips(analytic,
+                                   np.array(out["tri"]) if out["tri"] else None)
     specs = []
     for prim in analytic:
         own = prim.occluder()
@@ -464,6 +469,9 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
     tri_faces = shade.faces_from_tris(np.array(out["tri"]), proj,
                                       cond_edges=out["5"]) if out["tri"] else []
     an_faces = shade.faces_from_analytic(analytic, proj)
+    # facet-authored stretches of a primitive wall (60474's bite flanks)
+    # join the abutting analytic band's gradient instead of flat-toning
+    shade.absorb_wall_facets(tri_faces, an_faces)
     own_occ = {id(f): f["prim"].occluder() for f in an_faces
                if f["prim"].occluder() is not None}
     # Witness-depth ordering replaces both the mean-depth painter sort and the
