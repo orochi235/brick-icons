@@ -15,12 +15,22 @@ Working tree on `main`, clean. 323 tests passing.
   cap disc at every 3-stroke corner appears in resvg/WebKit/CoreSVG
   alike. If fixed, fix by chaining shared-endpoint strokes into
   polyline paths (real SVG joins) — corner ink-welding is vetoed.
-- Mike wish list: (a) boss/stud back-half silhouettes on 2654a as
-  single arcs instead of chord runs; (b) truncated rim-stud faces on
-  round parts (2654a, 3941) as one arc coincident with the footprint
-  circle; (c) consider restructuring mesh repair around recognized
-  elements (studs, footprint) + boolean intersections instead of
-  px-space heuristics.
+- **Wide-pass contour arc recovery** (geom2d, contour_d-only): edges
+  missing the strict gates get a second offer at 0.25 px / 27° with a
+  ≥3-edge run gate. 2654a's dome horizon + 3941's truncated rear-stud
+  rims collapse to arcs; census contour L-commands 1229 → 557 over 48
+  parts, 9 round parts diff at AE < 0.16%. **census-X**
+  (`~/.claude-msb/jobs/0629a9a6/tmp/census-X/`) is the current
+  baseline (current tree verified byte-identical to it on 2654a/3941).
+- Mike wish list remaining: (b) truncated rim-stud faces as one arc on
+  the footprint circle — `primitives.facet_snap_rims` + one-sided snap
+  candidates are BUILT+TESTED but deliberately not emitted: fills snap
+  while chord strokes stay, opening paint slivers (3941 front-stud
+  crescent). Needs an arcfit-style drawn-chord refit onto known rim
+  circles (hook: fit_edge_arcs call site) emitted together with the
+  candidates. (c) architecture direction: grow recognized-element
+  (studs/footprint) exact-intersection layer; px-space gates stay as
+  fallback.
 
 ## What this session did (`9318e5e`)
 

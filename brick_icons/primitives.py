@@ -1020,6 +1020,32 @@ def rim_facet_span_bins(key, side, slope, tris, rel_tol=2e-3, touch_tol=0.05,
     return mask
 
 
+def facet_snap_rims(analytic, tris):
+    """Rim circles that facet-authored wall stretches hug from inside:
+    [(rim_key, snap_tol_world)]. Chord tessellation puts its stitching
+    vertices up to the 16-gon inset INSIDE the true circle (2654a's
+    boss-truncation ribbons resume the r=19 lip wall as flat rects at
+    r~18.76), so fill seams and drawn chords along those stretches sit off
+    the circle by more than any sampling tolerance. Marked circles carry a
+    snap tolerance of chord-inset order — enough to pull the tessellation
+    onto the circle, small enough not to reach neighboring authored
+    radii (concentric lip rings sit several insets apart)."""
+    if tris is None or len(tris) == 0:
+        return []
+    out, seen = [], set()
+    for prim in analytic:
+        for key, side, slope in prim.wall_rims():
+            if key in seen:
+                continue
+            if not (rim_facet_span_bins(key, side, slope, tris).any()
+                    or rim_facet_span_bins(key, -side, slope, tris).any()):
+                continue
+            seen.add(key)
+            r = float(key[2])
+            out.append((key, r * (1.0 - math.cos(math.pi / 16)) * 1.1))
+    return out
+
+
 def rim_uncovered_spans(prim, key, mask):
     """Local-angle (deg0, deg1) runs of the primitive's sector NOT covered
     by `mask` (canonical-frame bins, see rim_span_bins): the stretches of a

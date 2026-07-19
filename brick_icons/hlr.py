@@ -493,6 +493,14 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
                 if key not in seen:
                     seen.add(key)
                     ells.append(op[1:7] + (25.0,))
+    # NOTE: primitives.facet_snap_rims + the one-sided (negative) snap
+    # tolerance in geom2d are wired for pulling truncation-ribbon
+    # tessellation onto its true rim circle, but emitting those candidates
+    # here is NOT yet safe: fills snap onto the circle while the drawn
+    # chord strokes stay put, and the divergence opens paint slivers at
+    # truncation zones (3941's front stud). Emit them only together with a
+    # drawn-chord refit onto the same circles (arcfit-style, see
+    # fit_edge_arcs) so strokes and fills move in lockstep.
     fold_keys = [tuple(round(v, 6) for v in e[:6]) for e in fit_ells]
     return VisResult(segs, _ops_bbox(segs), s, faces, analytic, ells, proj,
                      fold_ells=fold_keys)

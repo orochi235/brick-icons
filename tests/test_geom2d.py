@@ -221,3 +221,80 @@ def test_densify_tight_tol_leaves_off_arc_vertices_alone():
     cands = geom2d.arc_candidates([(0, 0, 10, 0, 0, 10, 30.0)])
     out = geom2d.densify_on_arcs(ring, cands)
     assert np.array_equal(out, ring)
+
+
+# --- wide-pass arc recovery (contour silhouettes) ---------------------------
+
+def _half_disc(step_deg, r=30.0, jitter=0.0):
+    """Upper half-disc ring sampled at step_deg, closed by the diameter
+    chord. `jitter` pushes every other vertex radially outward."""
+    n = int(round(180.0 / step_deg)) + 1
+    t = np.linspace(0.0, np.pi, n)
+    rr = np.full(n, r)
+    if jitter:
+        rr[1::2] += jitter
+    return np.stack([50 + rr * np.cos(t), 50 + rr * np.sin(t)], 1)
+
+
+def test_wide_recovery_snaps_jittered_horizon_run():
+    # 2654a's dome horizon: a cone-stack silhouette whose vertices sit
+    # alternately ON the footprint circle and ~0.1 px off it (frustum seam
+    # rims project slightly inside/outside). Strict ARC_TOL fragments the
+    # run into lone edges -> all polylines; the contour's wide pass accepts
+    # the run and emits arcs.
+    g = geom2d.to_geom(_half_disc(3.0, jitter=0.1))
+    cands = geom2d.arc_candidates(CIRCLE)
+    assert " A " not in geom2d.path_d(g, cands)          # strict: fragmented
+    d = geom2d.path_d(g, cands, wide=True)
+    assert " A " in d
+    assert d.count(" L ") <= 2                           # diameter chord only
+
+
+def test_wide_recovery_accepts_facet_grade_sweeps():
+    # 3941's truncated rear studs: authored facet rims sweep ~19 deg per
+    # edge (beyond MAX_STEP) with vertices on the stud circle. The wide
+    # pass admits facet-grade steps for multi-edge runs.
+    g = geom2d.to_geom(_half_disc(18.0))
+    cands = geom2d.arc_candidates(CIRCLE)
+    assert " A " not in geom2d.path_d(g, cands)
+    d = geom2d.path_d(g, cands, wide=True)
+    assert " A " in d and d.count(" L ") <= 2
+
+
+def test_wide_recovery_keeps_coarse_polygons_faceted():
+    # a hexagon inscribed in the candidate circle has every vertex ON it —
+    # only the 60-deg sweep says it is an intentional polygon. It must
+    # survive the wide pass untouched.
+    g = geom2d.to_geom(_half_disc(60.0))
+    assert " A " not in geom2d.path_d(g, geom2d.arc_candidates(CIRCLE),
+                                      wide=True)
+
+
+def test_wide_recovery_demotes_short_wide_runs():
+    # two facet-grade edges alone (a chamfer that merely touches the
+    # circle) are not evidence of a round: wide-pass runs need >= 3 edges.
+    t = np.radians([0.0, 20.0, 40.0])
+    arc = np.stack([50 + 30 * np.cos(t), 50 + 30 * np.sin(t)], 1)
+    ring = np.vstack([arc, [[95.0, 95.0], [95.0, 40.0]]])
+    d = geom2d.path_d(geom2d.to_geom(ring), geom2d.arc_candidates(CIRCLE),
+                      wide=True)
+    assert " A " not in d
+
+
+def test_negative_snap_tol_pulls_inward_only():
+    # facet-hugged rim candidates (hlr/facet_snap_rims) snap chord
+    # tessellation onto the circle. Tessellation only ever sits INSIDE the
+    # true circle, so their tolerance is one-sided (encoded negative):
+    # an inset vertex snaps out onto the arc, while a vertex the same
+    # distance OUTSIDE the circle is untouched geometry and must not move
+    # (3941's body rim grew a white crescent when it did).
+    import math
+    a = math.radians(22.5)
+    ring = np.array([[9.6, 0.0],
+                     [9.6 * math.cos(a), 9.6 * math.sin(a)],
+                     [10.4, 8.0]])
+    cands = geom2d.arc_candidates([(0, 0, 10, 0, 0, 10, 25.0, -0.5)])
+    out = geom2d.densify_on_arcs(ring, cands)
+    r = np.hypot(out[:, 0], out[:, 1])
+    assert (np.abs(r - 10.0) < 1e-6).sum() >= 2       # inset pair snapped
+    assert (np.abs(out - [10.4, 8.0]).sum(axis=1) < 1e-9).any()  # outsider

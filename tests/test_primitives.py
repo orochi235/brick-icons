@@ -668,3 +668,26 @@ def test_merge_smooth_walls_apex_terminated_chain():
     assert np.isclose(np.linalg.norm(merged.R[:, 0]), 20.0)   # dr = 20-0
     assert np.allclose(merged.t, [0.0, 0.0, 0.0])
     assert np.isclose(np.linalg.norm(merged.R[:, 1]), 20.0)   # full height
+
+
+def test_facet_snap_rims_marks_hugged_circles():
+    # 2654a's truncation ribbons: raw quads resume a primitive wall at
+    # chord-tessellated radius (up to the 16-gon inset INSIDE the true
+    # circle). Their rim circles need a snap tolerance of that order so
+    # fill seams and drawn chords pull onto the circle.
+    cyl = P.Cylinder(R=np.diag([40.0, 4.0, 40.0]), t=np.zeros(3),
+                     sector=180.0)
+    quads = _wall_quad_tris(39.5, 0.0, 4.0, 200.0, 250.0)
+    marked = P.facet_snap_rims([cyl], quads)
+    assert len(marked) == 2                       # both rims of the wall
+    for key, tol in marked:
+        assert abs(key[2] - 40.0) < 1e-6
+        assert 0.5 < tol < 1.2                    # ~16-gon chord inset
+
+
+def test_facet_snap_rims_ignores_off_band_facets():
+    cyl = P.Cylinder(R=np.diag([40.0, 4.0, 40.0]), t=np.zeros(3),
+                     sector=180.0)
+    deep = _wall_quad_tris(35.0, 0.0, 4.0, 200.0, 250.0)   # well inside
+    assert P.facet_snap_rims([cyl], deep) == []
+    assert P.facet_snap_rims([cyl], None) == []

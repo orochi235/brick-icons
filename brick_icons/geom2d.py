@@ -29,6 +29,18 @@ MAX_STEP = math.radians(15.0)   # max per-edge sweep: sampled steps are
                                 # <=9 deg; a longer on-circle chord is a real
                                 # straight cut whose ends merely touch
 MIN_AXIS = 0.75        # px; flatter ellipses are visually straight
+# Wide pass (opt-in, contour silhouettes): geometry that only APPROXIMATES a
+# candidate still reads as that circle at stroke width — cone-stack dome
+# horizons ride ~0.1 px off the footprint circle (2654a), and facet-authored
+# stud rims sweep ~19-26 deg per edge (3941's truncated rear studs). Both
+# miss the strict gates and rendered as chord runs. The wide pass re-offers
+# unmatched edges these looser bounds, but only multi-edge runs survive
+# (WIDE_MIN_RUN): a lone straight cut or two-edge chamfer whose ends touch
+# the circle is intentional geometry, and a 60-deg-per-edge polygon
+# (hexagonal socket) stays faceted via WIDE_STEP.
+WIDE_TOL = 0.25        # px; still under half a hairline stroke
+WIDE_STEP = math.radians(27.0)  # facet grade (22.5 nominal, projected ~26)
+WIDE_MIN_RUN = 3       # edges; shorter wide runs demote back to polylines
 
 
 def arc_candidates(ellipses):
@@ -55,33 +67,56 @@ def arc_candidates(ellipses):
     return cands
 
 
-def _vertex_angles(pts, cand, tol):
-    """Ellipse param per vertex, NaN where the vertex is off the ellipse."""
+def _vertex_angles(pts, cand, tol, inward=False):
+    """Ellipse param per vertex, NaN where the vertex is off the ellipse.
+    `inward=True` makes the tolerance one-sided: only vertices INSIDE the
+    ellipse (plus ARC_TOL of sampling slack outside) qualify — chord
+    tessellation of a circle never puts vertices outside it, and genuinely
+    outside geometry must not get sucked onto the arc."""
     d = pts - cand["c"]
     m = d @ cand["Minv"].T
     r = np.hypot(m[:, 0], m[:, 1])
-    # |r-1| is unit-circle space; ||p-c||/r converts it to px radially
-    dist = np.abs(r - 1.0) * np.hypot(d[:, 0], d[:, 1]) / np.maximum(r, 1e-9)
+    # r-1 is unit-circle space; ||p-c||/r converts it to px radially
+    signed = (r - 1.0) * np.hypot(d[:, 0], d[:, 1]) / np.maximum(r, 1e-9)
     t = np.arctan2(m[:, 1], m[:, 0])
-    t[dist > tol] = np.nan
+    bad = np.abs(signed) > tol
+    if inward:
+        bad |= signed > ARC_TOL
+    t[bad] = np.nan
     return t
 
 
-def _assign_edges(pts, cands, tol):
-    """Per ring edge i -> (cand_index, signed sweep) or None."""
+def _cand_tol(cand, tol):
+    """(effective tolerance, inward-only?) for a candidate: a negative
+    per-candidate tol means one-sided (see facet_snap_rims)."""
+    ct = cand.get("tol")
+    if ct is None:
+        return tol, False
+    return max(tol, abs(ct)), ct < 0
+
+
+def _assign_edges(pts, cands, tol, wide=False):
+    """Per ring edge i -> (cand_index, signed sweep[, wide]) or None.
+    `wide=True` re-offers edges the strict pass left unmatched at
+    WIDE_TOL/WIDE_STEP; those get a third truthy element so _ring_d can
+    demote runs shorter than WIDE_MIN_RUN."""
     n = len(pts)
     assign = [None] * n
-    for k, cand in enumerate(cands):
-        t = _vertex_angles(pts, cand, max(tol, cand.get("tol") or 0.0))
-        for i in range(n):
-            if assign[i] is not None:
-                continue
-            ti, tj = t[i], t[(i + 1) % n]
-            if np.isnan(ti) or np.isnan(tj):
-                continue
-            dt = (tj - ti + math.pi) % (2 * math.pi) - math.pi
-            if 1e-9 < abs(dt) <= cand["step"]:
-                assign[i] = (k, dt)
+    passes = [(tol, None)] + ([(WIDE_TOL, WIDE_STEP)] if wide else [])
+    for ptol, pstep in passes:
+        for k, cand in enumerate(cands):
+            eff, inward = _cand_tol(cand, ptol)
+            t = _vertex_angles(pts, cand, eff, inward=inward)
+            step = max(cand["step"], pstep) if pstep else cand["step"]
+            for i in range(n):
+                if assign[i] is not None:
+                    continue
+                ti, tj = t[i], t[(i + 1) % n]
+                if np.isnan(ti) or np.isnan(tj):
+                    continue
+                dt = (tj - ti + math.pi) % (2 * math.pi) - math.pi
+                if 1e-9 < abs(dt) <= step:
+                    assign[i] = (k, dt) if pstep is None else (k, dt, True)
     return assign
 
 
@@ -109,10 +144,43 @@ def _arc_cmds(pts, idxs, dts, cand):
     return out
 
 
-def _ring_d(pts, cands, tol):
+def _ring_d(pts, cands, tol, wide=False):
     """One ring -> SVG subpath, snapping sampled runs back to true arcs."""
     n = len(pts)
-    assign = _assign_edges(pts, cands, tol) if cands and n >= 3 else [None] * n
+    assign = (_assign_edges(pts, cands, tol, wide=wide)
+              if cands and n >= 3 else [None] * n)
+    if wide and any(a is not None for a in assign):
+        # demote wide-pass runs shorter than WIDE_MIN_RUN: approximation
+        # needs corroboration; a lone touching chord or two-edge chamfer
+        # is intentional geometry (strict-pass edges lend their evidence
+        # to a mixed run, so a facet rim chaining into sampled arcs keeps
+        # its wide edges)
+        def _joined(a, b):
+            return (a is not None and b is not None and a[0] == b[0]
+                    and (a[1] >= 0) == (b[1] >= 0))
+        start = 0
+        while start < n and _joined(assign[start - 1], assign[start]):
+            start += 1                  # run boundary (n = fully joined ring)
+        if start < n:
+            run = []
+
+            def _flush():
+                if run and len(run) < WIDE_MIN_RUN \
+                        and any(len(assign[j]) > 2 for j in run):
+                    for j in run:
+                        assign[j] = None
+
+            for off in range(n):
+                e = (start + off) % n
+                if assign[e] is None:
+                    _flush()
+                    run = []
+                elif run and _joined(assign[run[-1]], assign[e]):
+                    run.append(e)
+                else:
+                    _flush()
+                    run = [e]
+            _flush()
 
     def joined(a, b):     # consecutive edges continue the same directed arc
         return (a is not None and b is not None and a[0] == b[0]
@@ -328,7 +396,8 @@ def contour_d(g, arcs=None, min_ring_area=0.5):
     g = close_slivers(g)
     if g is None or g.is_empty:
         return ""
-    return path_d(g, arcs, min_area=min_ring_area, min_ring_area=min_ring_area)
+    return path_d(g, arcs, min_area=min_ring_area,
+                  min_ring_area=min_ring_area, wide=True)
 
 
 def rings(g, min_area=0.0):
@@ -362,7 +431,8 @@ def buffer_d(g, dist, mitre_limit=5.0):
     return path_d(_only_area(b))
 
 
-def path_d(g, arcs=None, tol=ARC_TOL, min_area=0.0, min_ring_area=0.0):
+def path_d(g, arcs=None, tol=ARC_TOL, min_area=0.0, min_ring_area=0.0,
+           wide=False):
     """Polygon/MultiPolygon -> one SVG path 'd' (one subpath per ring).
     Pair with fill-rule="evenodd" so interior rings render as holes.
     `arcs` (from arc_candidates) enables arc recovery: boundary runs lying
@@ -387,7 +457,7 @@ def path_d(g, arcs=None, tol=ARC_TOL, min_area=0.0, min_ring_area=0.0):
                     and Polygon(ring).area < min_ring_area):
                 continue
             if arcs:
-                cmds.append(_ring_d(pts, arcs, tol))
+                cmds.append(_ring_d(pts, arcs, tol, wide=wide))
             else:
                 cmds.append("M " + " L ".join(f"{x:.2f} {y:.2f}" for x, y in pts)
                             + " Z")
