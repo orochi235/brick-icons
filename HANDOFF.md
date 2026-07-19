@@ -1,97 +1,93 @@
-# Handoff — 2026-07-18b: T-graze junction weld (30137 beaked-Y fixed)
+# Handoff — 2026-07-19: per-bin seams + facet coverage + weld gates
 
-Working tree on `main`, clean. 315 tests passing.
+Working tree on `main`, clean. 323 tests passing.
 
-## What this session did
+## What this session did (`9318e5e`)
 
-- `349cf85` + `6a78dc4` — **stub-bridged junction weld.** The 30137
-  rear-scallop cap junction (open item 1, Mike-flagged, diagnosis in
-  the previous handoff below) is fixed per the junction directive: new
-  `_weld_junction_notches` in shade.py inks the thin notch pinched
-  between converging stroke bands at a beak junction. Weld =
-  closing(op bands, 0.5·line_px) − bands, clipped to the arc-grown
-  part region; pieces must be thin under opening(0.5·line_px), 0.02 <
-  area ≤ SPUR_MAX_AREA, and within 3·line_px of a junction point.
-  `349cf85` welded EVERY T-graze — 46/48 census parts, inking stud
-  cylinder limb/rim corners library-wide. Mike VETOED that; `6a78dc4`
-  narrowed it with two gates: the dying stroke must be a STUB
-  (< 3×sw — 30137's 6.7° bridge between scallop V and cap rim; limbs
-  and seams are long and keep their corners), and the notch must touch
-  ≥ 3 distinct stroke bands (arc + stub + rim pile-up). Shared-vertex
-  (V) joins never count — every ordinary face corner is one. Census
-  impact: 13 parts, AE 0–399 at zoom 4, all verified ticks at genuine
-  pile-ups (3941 boss pinch slivers, 2654a boss grazes, 32062 axle
-  flats); stud corners byte-identical or AE ≤ 1. 30137's junction
-  reads as a clean solid Y at zoom 8. NOTE: do not loosen the stub or
-  band-count gates without re-checking stud corners across the census
-  — the veto was specifically about those.
+Four interlocking changes, all verified against census-R with Mike
+reviewing renders live:
 
-## Previous session (2026-07-18a)
+- **Per-bin wall-rim seam suppression.** `hlr.smooth_rim_skips` +
+  `primitives.rim_span_bins` / `rim_uncovered_spans` /
+  `_rim_emit_spans`: a sectored wall suppresses a shared rim circle
+  only over its covered angles; arc emission splits per rim into the
+  uncovered spans. 60474's side-wall seam ring, 3941/6143's base-lip
+  seams gone; true bite/cutout gaps keep their edges. The 3941 sil-base
+  test now accepts the sil ending on the part outline (the seam it used
+  to land on is no longer drawn mid-cutout).
 
-- `4b621f4` — **partial-disc phantom triangle.** A sectored analytic
-  `Disc` (stud10's 270° 3-4disc cap) built its fill polygon from the arc
-  samples alone; the implicit closure chord covered a phantom triangle
-  over the quarter tiled by the primitive's hand-authored fan tris.
-  Invisible opaque (same tone painted twice), a lighter wedge on every
-  stud cap at opacity < 1 — the "weird triangle" Mike reported on
-  transparent 3941. Partial sectors now close the pie through the
-  center. NOTE: this artifact class is invisible in opaque renders —
-  verify translucent when touching sectored flat prims.
-- `03ed533` — **residue-trim laundering.** Mike's second report: white
-  needle on 30137's top face where the back-edge arc grazes stud 3 (and
-  a worse one behind stud 2). Root cause was NOT the fill sagging off
-  the arc (densify was fine): the residue rounds bared the strip in two
-  locally-sound steps (top tris → column wall → background). Fixes:
-  `_trim_safe` claimant retention (a piece that shows outside drawn-ops
-  ink may only be trimmed if it fuses thickly with the claimant's
-  fragment under opening), and the whites absorption generalized to any
-  thin bare piece of base − fills − ink (graze voids leak past the
-  0.15 channel sever, so enclosed-holes detection missed them).
-  Ops-only ink for the show test is load-bearing — a contour term
-  phantom-covers the very strip being laundered.
-- `28a45f9` — gallery regenerated (30137, 3941, 3649 visibly improved;
-  3960/54200 AE=0 jitter).
+- **Facet-authored walls count as seam coverage.**
+  `primitives.rim_facet_span_bins`: LDraw resumes primitive-tiled walls
+  as raw quads (60474's outer wall beside each bite; HALF its
+  center-hole lower wall — the leftover seam stubs there read as nubs
+  on the front-center stud's top edge, Mike-flagged). Gates: asymmetric
+  radial band (up to 16-gon chord inset INWARD — stitching vertices sit
+  at 5.885/5.946 on the r=6 hole wall — jitter only outward), must abut
+  the rim plane, extend away from it, span < 25 deg.
+
+- **absorb_wall_facets** (shade.py, wired in
+  `_visible_segments_analytic`): facet-authored wall stretches join the
+  abutting analytic band's gradient instead of flat-toning (60474's
+  bite flanks). `faces_from_tris` keeps `_verts` for it. GOTCHA: the
+  25-deg angular-span cap is load-bearing — 30136's flat END face is a
+  chord plane whose 4 corners lie exactly ON the lobe cylinder (author
+  clipped it to the log profile) and whose normal equals the radial
+  direction at mid-angle; only the span betrays it. Without the cap it
+  absorbed and re-toned the whole face (gray 94 -> 129).
+
+- **Weld false-junction gates** (`_weld_junction_notches`): (1)
+  collinear twin — a stub lying >= 75% inside the landed-on band is
+  duplicate/split authoring of the same edge (60474's bite flank: two
+  short pieces OVER a full-length twin; internal split points read as
+  T-grazes), skip; a genuine graze only pokes its tip in. (2)
+  shared-vertex tolerance is now 0.5·sw of the landed-on stroke (was
+  absolute 0.3 px; 60474's rim chord ends 0.79 px from the flank end).
+  Kills the corner ink blobs at 60474's bites (Mike-flagged) and
+  3713's slit-end nibbles; 2654a boss-graze welds also un-weld (clean
+  Y-junctions now, reviewed OK). **30137 byte-identical** — the
+  beaked-Y weld survives all of it. Do NOT relax the containment
+  fraction or V-tolerance without re-rendering 30137 + 3713 + 60474.
+  The vetoed broad weld ships as opt-in `--weld-corners` (cli/config).
 
 ## Baselines
 
-- **census-R** (`~/.claude-msb/jobs/0bc8b81a/tmp/census-R/`, 48 parts,
-  post-6a78dc4) is current. vs census-O: 13 byte-diffs, all stub-weld
-  ticks, AE 0–399 at zoom 4, reviewed above.
-- census-P (same dir) = post-349cf85 (the vetoed broad weld — do NOT
-  baseline against it); census-O = post-03ed533; census-N =
-  post-b207e13; census-M = post-dcceaf2.
+- **census-V** (`~/.claude-msb/jobs/0629a9a6/tmp/census-V/`, 48 parts,
+  post-9318e5e) is current. vs census-R: 7 byte-diffs, all reviewed —
+  2654a (boss-base seams + un-welded boss grazes), 3660b (tube-rim
+  seam tick), 3673 (collar seam arcs), 3713 (slit-end weld gone),
+  3941/6143 (base seam per-bin), 60474 (seam ring + hole stubs +
+  corner welds). 30137 spot-checked byte-identical (not in census
+  list).
+- census-R (`~/.claude-msb/jobs/0bc8b81a/tmp/census-R/`) = pre-session;
+  census-P/O/N/M older, same dir (P is the vetoed broad weld — never
+  baseline against it).
 - Byte-diff gate is HARD (2fc12a0): byte-diff ⇒ real change, vs
-  census-R or newer.
+  census-V or newer.
 
 ## Open items
 
-1. **30137 band-edge raggedness**: with the needles gone, the black
-   lens-pocket inking along the back-edge band's inner edge reads
-   ragged at zoom 8 (invisible at label scale). Only revisit if a part
-   shows it at ≤2x.
-2. **3941 translucent bottom notch**: solid black rectangle at the
-   bottom center of the transparent render (pre-existing, not
-   flagged). Verify against LDView translucent reference if it comes
-   up.
-3. **Light-on-light pinch hairlines** (3941 e3/e23 wedge): still
-   benign/unpinned.
-4. **Performance**: suite now ~5 min loaded; census ~10 min; donation
-   pass still doubles fill_ops on hole-heavy parts.
+1. **30137 band-edge raggedness**: lens-pocket inner edge ragged at
+   zoom 8, invisible at label scale. Revisit only if a part shows it
+   at ≤2x.
+2. **3941 translucent bottom notch**: pre-existing black rectangle in
+   transparent renders; verify vs LDView if it comes up.
+3. **Light-on-light pinch hairlines** (3941 e3/e23): benign/unpinned.
+4. **Performance**: suite ~6 min; census ~7 min; facet coverage adds
+   per-key tri scans (vectorized, negligible so far).
 5. **Stock-render comparison (07-07)**: 3700 stock image never arrived.
-6. **LDraw/LDView hosted pinning**: when renderer is declared done,
-   upload the vendored snapshot as a release asset + hash-verify in
-   setup-ldview.sh.
+6. **LDraw/LDView hosted pinning**: on renderer-done, upload vendored
+   snapshot as release asset + hash-verify in setup-ldview.sh.
 
 ## Verification workflow
 
-- Full suite: `.venv/bin/python -m pytest -q` (315, ~5 min)
+- Full suite: `.venv/bin/python -m pytest -q` (323, ~6 min)
 - Gallery: `scripts/render-gallery.sh` (16 parts, ~4 min)
 - Contact sheet (labeled): `scripts/render-contact-sheet.sh [out-dir]`
 - One part: `.venv/bin/python -m brick_icons.cli <id> --format svg
   --shading outline --shade-style flat3 [--part-label] [--opacity 0.55]
   --out <dir>`
-- Census A/B: render `--list parts.txt` twice (defaults 256×170 + flat3
-  match baselines), byte-diff SVGs vs census-R; parts list at
+- Census A/B: render `--list <parts>` (defaults 256×170 + flat3 match
+  baselines), byte-diff SVGs vs census-V; parts list at
   `~/.claude-msb/jobs/eb7c836f/tmp/census-K.parts.txt`.
 - 1024 stroke parity: `--format both --shading outline --width 1024
   --height 1024` (NO flat3, NO --mode gray — outline mode's .gray.png is
@@ -101,6 +97,7 @@ Working tree on `main`, clean. 315 tests passing.
   `~/.claude-msb/jobs/eb7c836f/tmp/parity_compare_h.sh`.
 - Layer-split triage: zero out `stroke-width="0.8"` + `fill` → strokes
   layer; zero out `stroke-width="2.00"` → fills layer.
-- Probe scripts: this session's in scratchpad (gone on reboot); durable
-  ones in `~/.claude-msb/jobs/0bc8b81a/tmp/` (probe_gate*, probe_plot,
-  probe_members) and `~/.claude-msb/jobs/eb7c836f/tmp/` (probe33-40).
+- Probe scripts: durable ones in `~/.claude-msb/jobs/0bc8b81a/tmp/`
+  (probe_gate*, probe_plot, probe_members) and
+  `~/.claude-msb/jobs/eb7c836f/tmp/` (probe33-40); this session's
+  weld/seam probes in `~/.claude-msb/jobs/0629a9a6/tmp/`.
