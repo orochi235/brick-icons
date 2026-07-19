@@ -1045,13 +1045,15 @@ def _weld_junction_notches(strokes, base, line_px, sil_px, broad=False):
             for j in tree.query(pt, predicate="within"):
                 if j == i:
                     continue
-                # shared vertex: V join (an ordinary face corner). The
-                # tolerance is half the landed-on stroke's width — corner
-                # endpoints land inside each other's bands but chord
-                # stylization scatters them past any absolute epsilon
-                # (60474's bite corner: flank end 0.79 px from the rim
-                # chord's end)
-                if any(np.linalg.norm(np.asarray(e2) - e) < 0.5 * sws[j]
+                # near the landed-on stroke's own terminus: a corner, not
+                # a T-graze. A genuine graze dies in the INTERIOR of the
+                # other band (30137's bridge stubs land on closed cap-rim
+                # circles, no endpoint anywhere); landing within a couple
+                # stroke widths of the band's end is corner scatter —
+                # chord stylization spreads corner endpoints past any
+                # absolute epsilon (60474's bite flank ends 0.79 px, and
+                # 2654a's boss-lip chords 1.4-1.6 sw, from the corner)
+                if any(np.linalg.norm(np.asarray(e2) - e) < 2.0 * sws[j]
                        for e2 in ends[j]):
                     continue
                 # collinear twin: the stub lies (almost) entirely INSIDE

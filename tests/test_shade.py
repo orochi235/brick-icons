@@ -544,6 +544,23 @@ def test_fill_ops_no_weld_at_split_edge_corner():
     assert not any(o.get("fill") == "#000000" for o in ops)
 
 
+def test_fill_ops_no_weld_near_landed_stroke_end():
+    # 2654a's boss/lip junctions: a sub-stroke-width lip chord dies ON the
+    # boss wall's band, but only ~1.4 stroke widths from the wall's OWN
+    # terminus — the junction is corner scatter, not a mid-band T-graze,
+    # and welding it beads an ink knuckle onto every lip line crossing the
+    # boss. Strokes verbatim from the 2654a render (stub 15 / wall 4 /
+    # lip arc 111).
+    f = _flat_face(80, 20, 135, 95, order=0, depth=5.0)
+    strokes = [("line", 90.07, 43.91, 91.37, 43.78, "edge"),
+               ("line", 91.4, 25.44, 91.4, 46.57, "sil"),
+               ("arc", 128.0, 89.7, 37.93, -45.79, 91.58, 18.97,
+                -64.78, -45.0, "edge")]
+    ops = shade.fill_ops([f], shade.Flat3Style(), strokes=strokes,
+                         line_px=2.0, sil_px=2.0)
+    assert not any(o.get("fill") == "#000000" for o in ops)
+
+
 def test_fill_ops_weld_corners_opt_in_welds_tangent_corner():
     # --weld-corners (broad weld, the pre-veto census-P look) drops the
     # stub and 3-band gates: the same tangent corner that the default
