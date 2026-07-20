@@ -90,6 +90,53 @@ def test_segments_to_svg_mixed_line_and_legacy(tmp_path):
     assert out.read_text().count("<line") == 2
 
 
+def test_chained_corner_polyline_and_elbows(tmp_path):
+    # a 3-stroke 3D corner (two face edges + a vertical) pinches at every
+    # wedge when drawn as separate round-capped strokes — the face color
+    # pokes past where a true join would reach (Quick Look zoom makes it
+    # obvious). The sharpest adjacent pair chains into one mitered
+    # polyline; the remaining wedges get short elbow-join paths.
+    segs = [("line", 50.0, 50.0, 90.0, 10.0, "edge"),    # up-right
+            ("line", 10.0, 10.0, 50.0, 50.0, "edge"),    # up-left
+            ("line", 50.0, 50.0, 50.0, 90.0, "edge")]    # down
+    out = _trace.segments_to_svg(segs, 100, 100, tmp_path / "c.svg")
+    txt = out.read_text()
+    # the sharpest wedge pair (the two face edges, 90 deg) chains through
+    # the shared vertex with a real join
+    assert 'd="M 10.00 10.00 L 50.00 50.00 L 90.00 10.00"' in txt
+    assert 'stroke-linejoin="miter"' in txt
+    # the vertical stays a plain stroke, and its two wedges get elbows
+    assert '<line x1="50.00" y1="50.00" x2="50.00" y2="90.00"' in txt
+    elbows = [d for d in re.findall(r'<path d="(M [^"]+)"', txt)
+              if d.count("L") == 2 and "50.00 50.00" in d
+              and d != "M 10.00 10.00 L 50.00 50.00 L 90.00 10.00"]
+    assert len(elbows) == 2
+
+
+def test_chained_loop_closes_with_z(tmp_path):
+    # a closed rectangle of edges becomes one Z-closed path: joins at every
+    # corner, no caps anywhere
+    segs = [("line", 10.0, 10.0, 90.0, 10.0, "edge"),
+            ("line", 90.0, 10.0, 90.0, 60.0, "edge"),
+            ("line", 90.0, 60.0, 10.0, 60.0, "edge"),
+            ("line", 10.0, 60.0, 10.0, 10.0, "edge")]
+    out = _trace.segments_to_svg(segs, 100, 100, tmp_path / "z.svg")
+    txt = out.read_text()
+    assert "<line" not in txt
+    chains = [d for d in re.findall(r'<path d="([^"]+)"', txt) if "Z" in d]
+    assert len(chains) == 1 and chains[0].count("L") == 3
+
+
+def test_chain_only_within_equal_stroke_width(tmp_path):
+    # edge (line_px) and sil (sil_px) strokes of different widths must not
+    # chain across — a polyline has one width
+    segs = [(10.0, 10.0, 90.0, 10.0, "edge"), (10.0, 10.0, 10.0, 90.0, "sil")]
+    out = _trace.segments_to_svg(segs, 100, 100, tmp_path / "s.svg",
+                                 line_px=2, sil_px=4)
+    txt = out.read_text()
+    assert txt.count("<line") == 2
+
+
 def test_segments_to_svg_writes_fill_layer(tmp_path):
     segs = [("line", 0.0, 0.0, 10.0, 0.0, "edge")]
     fills = [{"d": "M 0 0 L 10 0 L 0 10 Z", "fill": "#cccccc", "depth": 1.0}]

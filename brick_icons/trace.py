@@ -86,6 +86,135 @@ def _arc_to_svg(op):
     return " ".join(cmds)
 
 
+def _chain_line_ops(ops, stub_len=0.0):
+    """Chain straight strokes sharing endpoints into polyline paths so SVG
+    linejoins render the corners, plus elbow-join stubs for the wedges a
+    single chain cannot cover.
+
+    Separate round-capped strokes under-cover every corner wedge: the face
+    color pokes past the shared cap disc to within cap-radius of the vertex,
+    where a true join fills the wedge to the miter point (Quick Look zoom
+    made these pinch notches obvious at every 3-stroke 3D corner). Ops must
+    share a stroke width (a path has one) and are keyed on their EMITTED
+    2-dp coordinates so joins are watertight in the output.
+
+    At each vertex, cyclically adjacent stroke pairs are paired sharpest
+    wedge first (the pinch depth grows as the wedge closes); each pairing
+    becomes a join inside one chained path. Wedges left over at 3+-degree
+    vertices get a short 2-segment elbow path over the strokes' own
+    geometry — a real join, not an ink pocket. Elbow arms are trimmed to
+    `stub_len` (~1.5 stroke widths): a full-length arm would redraw the
+    whole stroke and double-composite its antialiased fringe, visibly
+    thickening exactly the strokes that happen to end at junctions. Closed
+    chains emit `Z` so the seam corner joins too. Everything is sorted; no
+    hash-order iteration (census byte-diff gate).
+
+    ops: [(x1, y1, x2, y2)] (already culled + rounded). Returns
+    (chains, elbows, singles): chains as [[(x, y), ...], closed?],
+    elbows as [((x, y), vertex, (x, y))], singles as op indices."""
+    n = len(ops)
+    node_of = {}                                   # coord -> node id
+    incid = []                                     # node -> [(op, end)]
+    ends = []                                      # op -> (node0, node1)
+    for i, (x1, y1, x2, y2) in enumerate(ops):
+        ids = []
+        for p in ((x1, y1), (x2, y2)):
+            j = node_of.setdefault(p, len(incid))
+            if j == len(incid):
+                incid.append([])
+            ids.append(j)
+        incid[ids[0]].append((i, 0))
+        incid[ids[1]].append((i, 1))
+        ends.append(tuple(ids))
+    coords = [None] * len(incid)
+    for p, j in node_of.items():
+        coords[j] = p
+    partner = [[None, None] for _ in range(n)]     # per op end: paired op
+    elbows = []
+    for v in range(len(incid)):
+        inc = incid[v]
+        if len(inc) < 2:
+            continue
+        vx, vy = coords[v]
+        dirs = []
+        for i, e in inc:
+            ox, oy = coords[ends[i][1 - e]]
+            a = math.atan2(oy - vy, ox - vx)
+            dirs.append((a, i, e))
+        dirs.sort()
+        m = len(dirs)
+        # cyclically adjacent pairs, sharpest wedge first
+        wedges = []
+        for k in range(m):
+            a0, i0, e0 = dirs[k]
+            a1, i1, e1 = dirs[(k + 1) % m]
+            if m == 2 and k == 1:
+                break                              # one wedge pair only
+            span = (a1 - a0) % (2 * math.pi)
+            wedges.append((span, k, (i0, e0), (i1, e1)))
+        wedges.sort()
+        used = set()
+        for span, _, (i0, e0), (i1, e1) in wedges:
+            if i0 in used or i1 in used or i0 == i1:
+                joined = False
+            elif partner[i0][e0] is None and partner[i1][e1] is None:
+                # skip a 2-cycle (duplicate strokes between the same nodes)
+                two_cycle = (ends[i0] in (ends[i1], ends[i1][::-1])
+                             and partner[i0][1 - e0] == i1)
+                joined = not two_cycle
+                if joined:
+                    partner[i0][e0] = i1
+                    partner[i1][e1] = i0
+                    used.add(i0)
+                    used.add(i1)
+            else:
+                joined = False
+            if not joined and span < math.radians(170.0):
+                arms = []
+                for i, e in ((i0, e0), (i1, e1)):
+                    ox, oy = coords[ends[i][1 - e]]
+                    ln = math.hypot(ox - vx, oy - vy)
+                    f = min(1.0, stub_len / ln) if ln else 1.0
+                    arms.append((round(vx + f * (ox - vx), 2),
+                                 round(vy + f * (oy - vy), 2)))
+                elbows.append((arms[0], (vx, vy), arms[1]))
+    # walk chains
+    visited = [False] * n
+    chains, singles = [], []
+    for i in range(n):
+        if visited[i]:
+            continue
+        if partner[i][0] is None and partner[i][1] is None:
+            visited[i] = True
+            singles.append(i)
+            continue
+        # find a terminal end (or accept a cycle)
+        cur, ent = i, 0
+        seen = {i}
+        while partner[cur][ent] is not None:
+            nxt = partner[cur][ent]
+            if nxt in seen:
+                break                              # cycle
+            seen.add(nxt)
+            ent = 1 - (0 if partner[nxt][0] == cur else 1)
+            cur = nxt
+        closed = partner[cur][ent] is not None
+        pts = [coords[ends[cur][ent]]]
+        op, out_end = cur, 1 - ent
+        while True:
+            visited[op] = True
+            pts.append(coords[ends[op][out_end]])
+            nxt = partner[op][out_end]
+            if nxt is None or visited[nxt]:
+                break
+            out_end = 1 - (0 if partner[nxt][0] == op else 1)
+            op = nxt
+        if closed:
+            pts = pts[:-1]                         # Z re-closes the loop
+        chains.append((pts, closed))
+    return chains, elbows, singles
+
+
 def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
                     physical=None, s=None, line_mm=0.2, sil_mm=0.2,
                     fills=None, bg: str = "none", opacity: float = 1.0,
@@ -182,6 +311,7 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
         # them blunted
         parts.append(f'<path d="{contour_d}" stroke-width="{sil_px:.2f}" '
                      f'stroke-linejoin="miter" stroke-miterlimit="5"/>')
+    line_groups = {}                                  # sw -> [(x1,y1,x2,y2)]
     for op in segs:
         if len(op) == 5:                              # legacy line tuple
             op = ("line",) + tuple(op)
@@ -192,13 +322,31 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
             _, x1, y1, x2, y2, kind = op
             if math.hypot(x2 - x1, y2 - y1) < 0.6 * sw:
                 continue
-            parts.append(f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" '
-                         f'stroke-width="{sw:.2f}"/>')
+            line_groups.setdefault(round(sw, 2), []).append(
+                (round(x1, 2), round(y1, 2), round(x2, 2), round(y2, 2)))
         else:
             r = (math.hypot(op[3], op[4]) + math.hypot(op[5], op[6])) / 2.0
             if r * math.radians(abs(op[8] - op[7])) < 0.6 * sw:
                 continue
             parts.append(f'<path d="{_arc_to_svg(op)}" stroke-width="{sw:.2f}"/>')
+    # straight strokes sharing endpoints chain into mitered polylines, with
+    # elbow-join paths over the leftover corner wedges — separate
+    # round-capped strokes pinch every 3D corner (see _chain_line_ops)
+    joinery = ' stroke-linejoin="miter" stroke-miterlimit="5"'
+    for sw in sorted(line_groups):
+        ops = line_groups[sw]
+        chains, elbows, singles = _chain_line_ops(ops, stub_len=1.5 * sw)
+        for pts, closed in chains:
+            d = "M " + " L ".join(f"{x:.2f} {y:.2f}" for x, y in pts) \
+                + (" Z" if closed else "")
+            parts.append(f'<path d="{d}" stroke-width="{sw:.2f}"{joinery}/>')
+        for i in singles:
+            x1, y1, x2, y2 = ops[i]
+            parts.append(f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" '
+                         f'stroke-width="{sw:.2f}"/>')
+        for (ax, ay), (vx, vy), (bx, by) in elbows:
+            parts.append(f'<path d="M {ax:.2f} {ay:.2f} L {vx:.2f} {vy:.2f} '
+                         f'L {bx:.2f} {by:.2f}" stroke-width="{sw:.2f}"{joinery}/>')
     parts.append("</g>")
     if label:
         # part id in fixed small print, bottom-left corner: absolute size
