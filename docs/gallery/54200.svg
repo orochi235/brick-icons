@@ -8,23 +8,17 @@
 <defs><clipPath id="sclip"><path d="M 148.91 6.22 L 148.30 5.82 L 147.68 5.50 L 147.06 5.25 L 146.43 5.08 L 145.80 5.00 L 145.18 5.01 L 144.57 5.13 L 143.99 5.34 L 143.59 5.57 L 135.87 8.68 L 122.59 18.36 L 46.30 94.78 L 46.30 109.91 L 113.59 165.03 L 114.45 164.69 L 115.02 165.15 L 201.63 130.36 L 201.63 129.67 L 209.70 126.43 L 209.70 65.93 L 209.68 65.09 L 209.61 64.20 L 209.49 63.30 L 209.32 62.37 L 209.11 61.44 L 208.86 60.49 L 208.57 59.55 L 208.24 58.62 L 207.87 57.69 L 207.46 56.78 L 207.03 55.90 L 206.56 55.04 L 206.07 54.21 L 205.55 53.43 L 205.01 52.68 L 204.45 51.99 L 203.88 51.35 L 203.29 50.76 L 202.70 50.25 L 149.50 6.66 Z" clip-rule="evenodd"/></clipPath></defs>
 <g stroke="black" fill="none" stroke-linecap="round" clip-path="url(#sclip)">
 <path d="M 144.03 6.47 L 136.36 9.56 L 123.24 19.12 L 47.30 95.19 L 47.30 109.43 L 113.77 163.88 L 114.63 163.54 L 115.19 164.00 L 200.63 129.69 L 200.63 129.00 L 208.70 125.75 L 208.70 65.95 A 11.59 5.45 -111.88 0 0 202.60 51.49 A 11.59 5.45 -111.88 0 0 202.06 51.01 L 148.88 7.45 A 11.59 5.45 -111.88 0 0 144.03 6.47 Z" stroke-width="2.00" stroke-linejoin="miter" stroke-miterlimit="5"/>
-<line x1="113.77" y1="163.88" x2="208.70" y2="125.76" stroke-width="2.00"/>
-<line x1="47.30" y1="109.43" x2="113.77" y2="163.88" stroke-width="2.00"/>
-<line x1="113.77" y1="149.64" x2="113.77" y2="163.88" stroke-width="2.00"/>
-<line x1="47.30" y1="95.19" x2="113.77" y2="149.64" stroke-width="2.00"/>
-<line x1="47.30" y1="95.19" x2="47.30" y2="109.43" stroke-width="2.00"/>
-<line x1="115.19" y1="164.00" x2="200.63" y2="129.69" stroke-width="2.00"/>
-<line x1="189.72" y1="73.57" x2="198.91" y2="60.79" stroke-width="2.00"/>
-<line x1="198.89" y1="52.28" x2="198.91" y2="60.79" stroke-width="2.00"/>
-<line x1="123.24" y1="19.12" x2="136.36" y2="9.56" stroke-width="2.00"/>
-<line x1="136.36" y1="9.56" x2="145.71" y2="8.72" stroke-width="2.00"/>
-<line x1="148.88" y1="7.45" x2="202.06" y2="51.01" stroke-width="2.00"/>
-<line x1="145.71" y1="8.72" x2="198.89" y2="52.28" stroke-width="2.00"/>
-<line x1="208.70" y1="65.95" x2="208.70" y2="125.76" stroke-width="2.00"/>
-<line x1="47.30" y1="95.19" x2="123.24" y2="19.12" stroke-width="2.00"/>
-<line x1="113.77" y1="149.64" x2="189.72" y2="73.57" stroke-width="2.00"/>
-<line x1="136.36" y1="9.56" x2="144.19" y2="6.41" stroke-width="2.00"/>
 <path d="M 144.03 6.47 A 11.59 5.45 -111.88 0 1 148.88 7.45" stroke-width="2.00"/>
 <path d="M 202.06 51.01 A 11.59 5.45 -111.88 0 1 206.76 57.64 A 11.59 5.45 -111.88 0 1 208.70 65.95" stroke-width="2.00"/>
+<path d="M 113.77 163.88 L 208.70 125.76 L 208.70 65.95" stroke-width="2.00" stroke-linejoin="miter" stroke-miterlimit="5"/>
+<path d="M 144.19 6.41 L 136.36 9.56 L 145.71 8.72 L 198.89 52.28 L 198.91 60.79 L 189.72 73.57 L 113.77 149.64 L 47.30 95.19 L 47.30 109.43 L 113.77 163.88 L 113.77 149.64" stroke-width="2.00" stroke-linejoin="miter" stroke-miterlimit="5"/>
+<path d="M 47.30 95.19 L 123.24 19.12 L 136.36 9.56" stroke-width="2.00" stroke-linejoin="miter" stroke-miterlimit="5"/>
+<line x1="115.19" y1="164.00" x2="200.63" y2="129.69" stroke-width="2.00"/>
+<line x1="148.88" y1="7.45" x2="202.06" y2="51.01" stroke-width="2.00"/>
+<path d="M 113.77 160.88 L 113.77 163.88 L 116.55 162.76" stroke-width="2.00" stroke-linejoin="miter" stroke-miterlimit="5"/>
+<path d="M 113.77 152.64 L 113.77 149.64 L 111.45 147.74" stroke-width="2.00" stroke-linejoin="miter" stroke-miterlimit="5"/>
+<path d="M 115.89 147.52 L 113.77 149.64 L 113.77 152.64" stroke-width="2.00" stroke-linejoin="miter" stroke-miterlimit="5"/>
+<path d="M 49.42 93.07 L 47.30 95.19 L 49.62 97.09" stroke-width="2.00" stroke-linejoin="miter" stroke-miterlimit="5"/>
+<path d="M 139.35 9.29 L 136.36 9.56 L 133.94 11.33" stroke-width="2.00" stroke-linejoin="miter" stroke-miterlimit="5"/>
 </g>
 </svg>
