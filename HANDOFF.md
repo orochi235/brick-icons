@@ -2,6 +2,20 @@
 
 Working tree on `main`, clean. 336 tests passing.
 
+## Addendum 2026-07-20: chain miterlimit 5 → 1.5 (corner barbs)
+
+f15fcea's mitered chains grew spikes ("barbs") at interior junctions
+sharper than ~46° (miter ratio > 5 never occurred; the visible barbs
+were ratio 1.9–3.3 at 35–63° wedges — 98283 ledge corner, 32062 notch
+chevrons). miterlimit 1.5 on chains+elbows bevels joins sharper than
+~84°; outline corners keep their sharpness via contour_d (still 5).
+Census A/B vs census-Z: 6 parts byte-identical, 42 differ ONLY in the
+stroke-miterlimit attribute (path data identical); raster delta is
+ink-REMOVAL only (985 px @1024 across all 42), all at junction
+vertices. 336 tests pass. **census-AA**
+(`~/.claude-msb/jobs/0629a9a6/tmp/census-AA/`) is the new baseline;
+byte-diff gate hard vs census-AA.
+
 ## What this session did (`3f172bc`, `f15fcea`)
 
 - **Condline-declared smooth joints** (`3f172bc`, hlr/primitives):

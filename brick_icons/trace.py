@@ -331,8 +331,11 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
             parts.append(f'<path d="{_arc_to_svg(op)}" stroke-width="{sw:.2f}"/>')
     # straight strokes sharing endpoints chain into mitered polylines, with
     # elbow-join paths over the leftover corner wedges — separate
-    # round-capped strokes pinch every 3D corner (see _chain_line_ops)
-    joinery = ' stroke-linejoin="miter" stroke-miterlimit="5"'
+    # round-capped strokes pinch every 3D corner (see _chain_line_ops).
+    # miterlimit 1.5 bevels joins sharper than ~84°: a longer miter tip is a
+    # barb poking past the fill at interior corners (98283 ledge, 32062 notch
+    # chevrons); outline corners stay sharp via contour_d, which keeps 5
+    joinery = ' stroke-linejoin="miter" stroke-miterlimit="1.5"'
     for sw in sorted(line_groups):
         ops = line_groups[sw]
         chains, elbows, singles = _chain_line_ops(ops, stub_len=1.5 * sw)
