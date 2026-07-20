@@ -439,6 +439,55 @@ def test_cone_on_cylinder_crease_rim_kept():
     assert not _smooth_shared_rims([cyl, cone])
 
 
+def _cond_chords_on_circle(radius, y, n=16):
+    """Author-style type-5 condlines: n chords of the circle r=radius at
+    height y (control points above/below, unused by rim matching)."""
+    chords = []
+    for i in range(n):
+        a0 = 2 * math.pi * i / n
+        a1 = 2 * math.pi * (i + 1) / n
+        p = lambda a: [radius * math.cos(a), y, radius * math.sin(a)]
+        chords.append(np.array([p(a0), p(a1), [0.0, 0.0, 0.0],
+                                [0.0, 2 * y, 0.0]]))
+    return chords
+
+
+def test_condline_declared_joint_suppressed_across_slopes():
+    # 4740's dish top: stacked cone bands of DIFFERENT slopes whose shared
+    # circle the author covers with type-5 condlines — smooth by
+    # declaration, so the seam must vanish even though the equal-slope
+    # rule does not apply.
+    from brick_icons import hlr
+    lower = P.Cone(R=np.eye(3), t=np.zeros(3), sector=360.0, top=1.0)
+    upper = P.Cone(R=np.diag([1.0, 2.0, 1.0]),
+                   t=np.array([0.0, 1.0, 0.0]), sector=360.0, top=0.0)
+    # sanity: without the condlines this is a crease — rims kept
+    assert not hlr.smooth_rim_skips([lower, upper])
+    cond = _cond_chords_on_circle(1.0, 1.0)
+    skip = hlr.smooth_rim_skips([lower, upper], cond=cond)
+    assert len(skip) == 2                       # both sides of the joint
+    ops_lower = [op for op, *_ in
+                 lower.drawn_with_depth(_stub_proj(), skip_rims=skip)]
+    ops_upper = [op for op, *_ in
+                 upper.drawn_with_depth(_stub_proj(), skip_rims=skip)]
+    assert len([o for o in ops_lower if o[0] == "arc"]) == 1   # base only
+    assert len([o for o in ops_upper if o[0] == "arc"]) == 0
+
+
+def test_condline_off_circle_or_diameter_does_not_suppress():
+    # chords on a DIFFERENT circle, and full-diameter lines whose endpoints
+    # happen to lie on the rim, must contribute no coverage
+    from brick_icons import hlr
+    lower = P.Cone(R=np.eye(3), t=np.zeros(3), sector=360.0, top=1.0)
+    upper = P.Cone(R=np.diag([1.0, 2.0, 1.0]),
+                   t=np.array([0.0, 1.0, 0.0]), sector=360.0, top=0.0)
+    off = _cond_chords_on_circle(1.5, 1.0)      # wrong radius
+    assert not hlr.smooth_rim_skips([lower, upper], cond=off)
+    diam = [np.array([[1.0, 1.0, 0.0], [-1.0, 1.0, 0.0],
+                      [0.0, 0.0, 0.0], [0.0, 2.0, 0.0]])]
+    assert not hlr.smooth_rim_skips([lower, upper], cond=diam)
+
+
 def test_unshared_rims_still_drawn():
     prim = P.Cone(R=np.eye(3), t=np.zeros(3), sector=360.0, top=1.0)
     ops = [op for op, *_ in prim.drawn_with_depth(_stub_proj(), skip_rims=set())]

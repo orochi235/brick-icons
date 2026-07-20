@@ -256,7 +256,7 @@ def _ops_bbox(segs):
     return (min(xs), min(ys), max(xs), max(ys))
 
 
-def smooth_rim_skips(analytic, tris=None):
+def smooth_rim_skips(analytic, tris=None, cond=None):
     """Rim circles whose arcs are (partly) smooth joints, not edges:
     {(rim_key, side): True | bin mask} plus {("flat", key, side): True}.
 
@@ -273,6 +273,13 @@ def smooth_rim_skips(analytic, tris=None):
     outer wall beside each bite, half its center-hole wall) and the seam
     is just as smooth there — see primitives.rim_facet_span_bins.
 
+    Author-declared condlines (`cond`, type-5 world chords) on a rim circle
+    count as opposite-side coverage UNCONDITIONALLY — the declaration says
+    the joint is smooth whatever the slopes are (4740's dish stacks three
+    cone bands of different pitches and condlines every junction; real
+    creases are authored as type-2 edges) — see
+    primitives.rim_cond_span_bins.
+
     Flat coplanar seams: a circle stretch with flat surface on BOTH radial
     sides (concentric ring tiling) is an interior seam, not an edge (see
     flat_rims). A side's arcs are suppressed only when the OPPOSITE side
@@ -285,6 +292,7 @@ def smooth_rim_skips(analytic, tris=None):
             wall_cov[(key, side, slope)] |= primitives.rim_span_bins(prim, key)
     skips = {}
     facet_cov = {}
+    cond_cov = {}
     for prim in analytic:
         for key, side, slope in prim.wall_rims():
             if (key, side) in skips:
@@ -293,8 +301,11 @@ def smooth_rim_skips(analytic, tris=None):
             if fk not in facet_cov:
                 facet_cov[fk] = primitives.rim_facet_span_bins(
                     key, -side, slope, tris)
+            if key not in cond_cov:
+                cond_cov[key] = primitives.rim_cond_span_bins(key, cond)
             opp = wall_cov.get(fk)
-            opp = facet_cov[fk] if opp is None else opp | facet_cov[fk]
+            cov = facet_cov[fk] | cond_cov[key]
+            opp = cov if opp is None else opp | cov
             if not opp.any():
                 continue
             # one-bin dilation absorbs float jitter where rotated instances
@@ -408,7 +419,8 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
     # (per angular bin) where a smooth surface continues across them — see
     # smooth_rim_skips.
     shared_rims = smooth_rim_skips(analytic,
-                                   np.array(out["tri"]) if out["tri"] else None)
+                                   np.array(out["tri"]) if out["tri"] else None,
+                                   cond=out["5"])
     specs = []
     for prim in analytic:
         own = prim.occluder()

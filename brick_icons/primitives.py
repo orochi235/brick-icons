@@ -1020,6 +1020,51 @@ def rim_facet_span_bins(key, side, slope, tris, rel_tol=2e-3, touch_tol=0.05,
     return mask
 
 
+def rim_cond_span_bins(key, cond, rel_tol=2e-3, touch_tol=0.05,
+                       max_span_deg=30.0):
+    """Boolean mask over _RIM_BINS angular bins: which angles of the rim
+    circle `key` are covered by author-declared type-5 conditional lines —
+    chords whose endpoints lie ON the circle. A condline along a section
+    joint declares it smooth regardless of the slopes meeting there (4740's
+    dish stacks cone bands of three different pitches and condlines every
+    junction circle), so in hlr.smooth_rim_skips this coverage counts as an
+    opposite-side continuation unconditionally. Real creases are authored
+    as type-2 edges (4740's boss base) and contribute nothing here. Guards:
+    both endpoints must sit in the rim plane and at the rim radius, and the
+    chord must span under max_span_deg (a diameter's endpoints also lie on
+    the circle; primitive tessellation chords stay at or under 22.5 deg)."""
+    mask = np.zeros(_RIM_BINS, bool)
+    if not cond:
+        return mask
+    C = np.asarray(key[0], float)
+    n = np.asarray(key[1], float)
+    n = n / np.linalg.norm(n)
+    r = float(key[2])
+    tol = max(rel_tol * r, 1e-3)
+    E = np.asarray([np.asarray(q, float)[:2] for q in cond])   # (N, 2, 3)
+    h = (E - C) @ n
+    ok = np.all(np.abs(h) < touch_tol, axis=1)                 # in the plane
+    D = E - C - h[..., None] * n
+    rad = np.linalg.norm(D, axis=2)
+    ok &= np.all(np.abs(rad - r) < tol, axis=1)                # on the circle
+    if not ok.any():
+        return mask
+    u0, v0 = _rim_key_frame(key)
+    ang = np.arctan2(D[ok] @ v0, D[ok] @ u0)                   # (K, 2)
+    for a0, a1 in ang:
+        rel = (a1 - a0 + math.pi) % (2 * math.pi) - math.pi
+        sp = abs(float(rel))
+        if sp > math.radians(max_span_deg):
+            continue
+        lo = a0 + min(0.0, rel)
+        th = np.linspace(lo, lo + sp,
+                         2 * max(1, int(sp / (2 * math.pi) * _RIM_BINS)) + 2)
+        idx = np.floor((th % (2 * math.pi)) / (2 * math.pi)
+                       * _RIM_BINS).astype(int) % _RIM_BINS
+        mask[idx] = True
+    return mask
+
+
 def facet_snap_rims(analytic, tris):
     """Rim circles that facet-authored wall stretches hug from inside:
     [(rim_key, snap_tol_world)]. Chord tessellation puts its stitching
