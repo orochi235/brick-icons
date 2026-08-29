@@ -7,14 +7,18 @@ from collections import Counter, defaultdict
 import numpy as np
 from PIL import Image, ImageDraw
 
-from . import geom2d, primitives
+from . import colors, geom2d, primitives
 
 
 def faces_from_analytic(analytic, proj):
     """Fill faces for analytic primitives, with smooth wall chains merged to
     single faces (see primitives.merge_smooth_walls)."""
-    return [f for prim in primitives.merge_smooth_walls(analytic)
-            for f in prim.faces(proj)]
+    out = []
+    for prim in primitives.merge_smooth_walls(analytic):
+        for f in prim.faces(proj):
+            f.setdefault("color", getattr(prim, "color", 16))
+            out.append(f)
+    return out
 
 
 def _hex(rgb):
@@ -541,7 +545,8 @@ def _merge_members(ordered, frags):
         find(keys[idx])
         if (f.get("plane") is not None and "grad_axis" not in f
                 and "grad_radial" not in f):
-            ra, rb = find(("p", f["plane"])), find(keys[idx])
+            ra = find(("p", f["plane"], f.get("color", 16)))
+            rb = find(keys[idx])
             if ra != rb:
                 parent[rb] = ra
     members, roots = defaultdict(list), {}
@@ -1088,9 +1093,20 @@ def _weld_junction_notches(strokes, base, line_px, sil_px, broad=False):
     return out
 
 
+def face_fill(face, style, ldraw_dir):
+    """A face's fill: shaded part tone for body geometry (colour 16), the
+    flat LDraw colour for decoration. Decoration is print, not relief — tone
+    it and it reads as engraving, which is the bug this fixes."""
+    code = face.get("color", 16)
+    if code == 16:
+        return style.tone(face["normal"])
+    hex_str, _ = colors.resolve(str(code), ldraw_dir)
+    return "#" + hex_str[2:]
+
+
 def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
              refits=None, loops=None, strokes=None, line_px=2.0,
-             sil_px=2.0, drop=None, weld_corners=False):
+             sil_px=2.0, drop=None, weld_corners=False, ldraw_dir="vendor/ldraw"):
     """Fill ops with exact visible-fragment clipping and per-surface merging.
 
     clip=False keeps every face whole (no occlusion subtraction) for
@@ -1301,14 +1317,18 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
         d = geom2d.path_d(geom, arcs, min_area=MIN_FRAG_AREA)
         if not d:
             continue
-        if "grad_radial" in f:
+        # decoration is ink on a surface, not relief, so it takes no shading
+        # ramp — and the gradient branches never consulted the LDraw colour,
+        # which is why a printed cylinder or cone painted in body tone
+        deco = f.get("color", 16) != 16
+        if "grad_radial" in f and not deco:
             g = f["grad_radial"]
             stops, (fx, fy) = _radial_focal_stops(f["grad_samples"], style)
             ops.append({"d": d, "depth": f["depth"],
                         "gradient": {"type": "radial", "cx": g["cx"], "cy": g["cy"],
                                      "r": g["r"], "ratio": g["ratio"],
                                      "fx": fx, "fy": fy, "stops": stops}})
-        elif "grad_axis" in f:
+        elif "grad_axis" in f and not deco:
             p0, p1 = f["grad_axis"]
             stops = sorted(((off, style.ramp(nv)) for off, nv in f["grad_samples"]),
                            key=lambda s: s[0])
@@ -1316,7 +1336,7 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
                         "gradient": {"x1": p0[0], "y1": p0[1], "x2": p1[0], "y2": p1[1],
                                      "stops": stops}})
         else:
-            ops.append({"d": d, "fill": style.tone(f["normal"]),
+            ops.append({"d": d, "fill": face_fill(f, style, ldraw_dir),
                         "depth": f["depth"]})
     # junction-lens pockets paint LAST (over every surface fill, under the
     # strokes): solid ink where converging strokes trap a sliver of tone
@@ -1565,7 +1585,7 @@ def cull_occluded_faces(faces, occluders, proj, eps,
     return kept
 
 
-def faces_from_tris(tri, proj, cond_edges=None):
+def faces_from_tris(tri, proj, cond_edges=None, colors=None):
     """Camera-facing triangle faces as px-space polygons with outward view-space
     normals. Winding is trusted (repaired upstream): a triangle whose outward
     normal points away from the camera (nv[2] >= 0) is a back-face and is
@@ -1578,7 +1598,8 @@ def faces_from_tris(tri, proj, cond_edges=None):
     smoothly instead of banding into flat tones."""
     have_seams = cond_edges is not None and len(cond_edges) > 0
     faces = []
-    for v in tri:                       # v: (3,3) world coords, outward-CCW
+    for i, v in enumerate(tri):         # v: (3,3) world coords, outward-CCW
+        c = 16 if colors is None else int(colors[i])
         n = np.cross(v[1] - v[0], v[2] - v[0])
         ln = np.linalg.norm(n)
         if ln < 1e-9:
@@ -1596,7 +1617,8 @@ def faces_from_tris(tri, proj, cond_edges=None):
         plane = (round(float(n[0]), 4), round(float(n[1]), 4),
                  round(float(n[2]), 4), round(float(n @ v[0]), 2))
         f = {"poly": poly, "normal": nv, "depth": float(np.mean(z)),
-             "zs": z, "kind": "tri", "plane": plane, "_verts": v}
+             "zs": z, "kind": "tri", "plane": plane, "_verts": v,
+             "color": c}
         if back:
             # Provisional: kept only if a seam joins it to a front-facing
             # smooth group (see the filter below). A facet just past the
@@ -1804,11 +1826,21 @@ def _attach_smooth_gradients(faces, cond_edges, min_spread=0.002):
         seam_keys = set()
     for ek, ks in by_edge.items():
         for k in ks[1:]:
+            # a decal is coplanar with its carrier and shares its edges;
+            # unioning across the colour boundary is what erased flat prints
+            if faces[ks[0]].get("color", 16) != faces[k].get("color", 16):
+                continue
             # union across a seam always; across an ordinary shared edge only
             # when coplanar (quad halves meet at a diagonal, which is never a
             # conditional line) — coplanar union can't cross a real crease
             coplanar = float(faces[ks[0]]["normal"] @ faces[k]["normal"]) > 0.9999
-            if ek not in seam_keys and not coplanar:
+            # ...except decoration, which is ONE printed region however its
+            # carrier curves. 3941p01's panel is 36 hand-authored quads around
+            # a cylinder: 7.5 deg apart so never coplanar, and the part has no
+            # conditional lines to seam them, so it shattered into separately
+            # stroked fragments with the buttons splitting it into strips.
+            same_deco = faces[ks[0]].get("color", 16) != 16
+            if ek not in seam_keys and not coplanar and not same_deco:
                 continue
             ra, rb = find(ks[0]), find(k)
             if ra != rb:

@@ -149,7 +149,8 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
                                        line_px=cfg.line_mm / 0.4 * s,
                                        sil_px=cfg.silhouette_mm / 0.4 * s,
                                        drop=spurs,
-                                       weld_corners=cfg.weld_corners) \
+                                       weld_corners=cfg.weld_corners,
+                                       ldraw_dir=cfg.ldraw_dir) \
                     if style is not None else None
                 sil_geom = shade.silhouette_geom(faces) if faces else None
                 if sil_geom is not None and spurs is not None:
@@ -180,7 +181,8 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
                                        strokes=fit, line_px=cfg.line_width,
                                        sil_px=cfg.silhouette_width,
                                        drop=spurs,
-                                       weld_corners=cfg.weld_corners) \
+                                       weld_corners=cfg.weld_corners,
+                                       ldraw_dir=cfg.ldraw_dir) \
                     if style is not None else None
                 sil_geom = shade.silhouette_geom(faces) if faces else None
                 if sil_geom is not None and spurs is not None:

@@ -394,6 +394,7 @@ class Primitive:
     R: np.ndarray
     t: np.ndarray
     sector: float = 360.0
+    color: int = 16          # LDraw code; 16 = inherit the part colour
 
     kind = None          # class attribute, overridden per subclass
 
@@ -1148,9 +1149,9 @@ def _merged_wall(members):
     dr = r0 - r1
     if dr < 1e-9:
         return Cylinder(R=np.column_stack([r0 * u, A, r0 * v]), t=C0,
-                        sector=360.0)
+                        sector=360.0, color=members[0].color)
     return Cone(R=np.column_stack([dr * u, A, dr * v]), t=C0,
-                sector=360.0, top=r1 / dr)
+                sector=360.0, top=r1 / dr, color=members[0].color)
 
 
 def merge_smooth_walls(analytic):
@@ -1168,7 +1169,7 @@ def merge_smooth_walls(analytic):
     by_key = defaultdict(list)
     for i in walls:
         for key, side, slope in analytic[i].wall_rims():
-            by_key[key].append((i, side, slope))
+            by_key[key + (analytic[i].color,)].append((i, side, slope))
     parent = {i: i for i in walls}
 
     def find(i):

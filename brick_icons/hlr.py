@@ -61,7 +61,7 @@ def _bfc_certified(ln: str) -> bool:
 
 def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
             roots: list[Path], depth: int = 0,
-            inherited_invert: bool = False) -> None:
+            inherited_invert: bool = False, color: int = 16) -> None:
     if depth > 30:
         return
     out.setdefault("tri_meta", [])
@@ -83,6 +83,10 @@ def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
         if not tok:
             continue
         typ = tok[0]
+        # LDraw column 2: 16 means "inherit the referring line's colour",
+        # 24 is the edge colour. Anything else overrides.
+        own = int(tok[1]) if len(tok) > 1 and tok[1].lstrip("#").isdigit() else 16
+        cur = color if own == 16 else own
         if typ == "0":
             cmd = tok[1:]
             if len(cmd) >= 2 and cmd[0] == "BFC":
@@ -106,6 +110,7 @@ def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
                 Rsub, tsub = R @ M, R @ T + t
                 prim = primitives.from_ref(ref, Rsub, tsub)
                 if prim is not None and "analytic" in out:
+                    prim.color = cur
                     out["analytic"].append(prim)
                 else:
                     sub = resolve(ref, roots)
@@ -113,7 +118,7 @@ def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
                         m_reflect = bool(np.linalg.det(M) < 0)
                         flatten(sub, Rsub, tsub, out, roots, depth + 1,
                                 inherited_invert=base_invert ^ invert_next
-                                ^ m_reflect)
+                                ^ m_reflect, color=cur)
             invert_next = False
         elif typ in ("2", "5") and len(tok) >= 8:
             pts = np.array(list(map(float, tok[2:])), float).reshape(-1, 3)
@@ -123,7 +128,8 @@ def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
             if len(tok) >= 2 + 3 * n:
                 pts = np.array(list(map(float, tok[2:2 + 3 * n])), float).reshape(n, 3) @ R.T + t
                 tri_invert = base_invert ^ local_cw
-                meta = {"certified": certified, "invert": tri_invert}
+                meta = {"certified": certified, "invert": tri_invert,
+                        "color": cur}
                 if n == 3:
                     out["tri"].append(pts)
                     out["tri_meta"].append(dict(meta))
@@ -377,7 +383,8 @@ def _visible_segments_faceted(out, right, up, fwd, render_px, cull=True):
     xs = [c for sg in segs for c in (sg[0], sg[2])] or [0, 1]
     ys = [c for sg in segs for c in (sg[1], sg[3])] or [0, 1]
     from . import shade
-    faces = shade.faces_from_tris(tri, proj, cond_edges=out["5"]) if len(tri) else []
+    faces = shade.faces_from_tris(tri, proj, cond_edges=out["5"],
+                                  colors=out.get("tri_colors")) if len(tri) else []
     faces = shade.order_faces(faces, eps=EDGE_BIAS * zrange)
     return VisResult(segs, (min(xs), min(ys), max(xs), max(ys)), s, faces, [],
                      (), proj)
@@ -479,7 +486,8 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
         segs = [spec[0] for spec in specs]
     from . import shade
     tri_faces = shade.faces_from_tris(np.array(out["tri"]), proj,
-                                      cond_edges=out["5"]) if out["tri"] else []
+                                      cond_edges=out["5"],
+                                      colors=out.get("tri_colors")) if out["tri"] else []
     an_faces = shade.faces_from_analytic(analytic, proj)
     # facet-authored stretches of a primitive wall (60474's bite flanks)
     # join the abutting analytic band's gradient instead of flat-toning
@@ -931,6 +939,7 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
         fixed = repair.repaired_tris(np.array(out["tri"]), out["tri_meta"],
                                      MESH_CACHE_DIR)
         out["tri"] = list(fixed)
+        out["tri_colors"] = [m["color"] for m in out["tri_meta"]]
     # hand-faceted rounds (condline-marked type-2 chains) become true arcs;
     # any part that gains one needs the analytic pipeline to draw it
     out["fit_arcs"], out["2"] = arcfit.fit_edge_arcs(out["2"], out["5"])
