@@ -36,11 +36,11 @@ Render LEGO/LDraw parts as (optionally) lit and shaded SVG icons.
       alt="brick-icons 99781 --format svg --shading outline --shade-style flat3 --part-color 0x36aebf"
       title="brick-icons 99781 --format svg --shading outline --shade-style flat3 --part-color 0x36aebf"></td>
     <td align="center"><img src="docs/gallery/32062.svg" width="150"
-      alt="brick-icons 32062 --format svg --shading outline --shade-style flat3 --part-color 0x671f81 --angle 25,65 --line-width 3 --silhouette-width 3"
-      title="brick-icons 32062 --format svg --shading outline --shade-style flat3 --part-color 0x671f81 --angle 25,65 --line-width 3 --silhouette-width 3"></td>
+      alt="brick-icons 32062 --format svg --shading outline --shade-style flat3 --part-color 0x6c6e68 --angle 25,65 --line-width 3 --silhouette-width 3"
+      title="brick-icons 32062 --format svg --shading outline --shade-style flat3 --part-color 0x6c6e68 --angle 25,65 --line-width 3 --silhouette-width 3"></td>
     <td align="center"><img src="docs/gallery/87087.svg" width="150"
-      alt="brick-icons 87087 --format svg --shading outline --shade-style flat3 --part-color 0xffffff"
-      title="brick-icons 87087 --format svg --shading outline --shade-style flat3 --part-color 0xffffff"></td>
+      alt="brick-icons 87087 --format svg --shading outline --shade-style flat3 --part-color 0x671f81"
+      title="brick-icons 87087 --format svg --shading outline --shade-style flat3 --part-color 0x671f81"></td>
     <td align="center"><img src="docs/gallery/54200.svg" width="150"
       alt="brick-icons 54200 --format svg --shading outline --shade-style flat3 --part-color 0xd05098 --angle 35,55"
       title="brick-icons 54200 --format svg --shading outline --shade-style flat3 --part-color 0xd05098 --angle 35,55"></td>
