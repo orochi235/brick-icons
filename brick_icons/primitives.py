@@ -932,6 +932,35 @@ def rim_key(C, A, radius):
 _RIM_BINS = 720          # 0.5-degree angular bins for rim-seam coverage
 
 
+RIM_MERGE_TOL = 2e-3    # LDU; LDraw's authored matrix precision spreads one
+                        # circle's instances ~1e-4, only 8x under rim_key's
+                        # 1e-3 quantum, so a rim near a bin boundary splits
+
+
+def canonical_rim_keys(keys, tol=RIM_MERGE_TOL):
+    """{key: representative} merging rim keys that are the same circle.
+
+    Rounding cannot do this on its own: every grid has boundaries, and the
+    authored spread is within an order of magnitude of the quantum, so a
+    circle straddling one splits however fine the grid is. Sorted, greedy and
+    order-independent — the callers key dicts by the result.
+    """
+    canon = {}
+    reps = []
+    for key in sorted(set(keys)):
+        c, n, r = np.asarray(key[0], float), key[1], float(key[2])
+        for rep in reps:
+            rc, rn, rr = np.asarray(rep[0], float), rep[1], float(rep[2])
+            if (rn == n and abs(rr - r) <= tol
+                    and float(np.max(np.abs(rc - c))) <= tol):
+                canon[key] = rep
+                break
+        else:
+            reps.append(key)
+            canon[key] = key
+    return canon
+
+
 def _rim_key_frame(key):
     """Canonical in-plane (u0, v0) frame for a rim key's axis, so every
     primitive sharing the circle bins its angles consistently."""
