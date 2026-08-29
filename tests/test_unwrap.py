@@ -213,3 +213,75 @@ def test_the_branch_cut_does_not_move_a_decal_that_never_crosses_it():
     (_carrier, _t0, regions), = unwrap.bind_groups(tris, [4] * len(tris), [cyl])
     merged = unwrap.merge_regions(regions)
     assert len(geom2d.rings(merged[0][1])) == 1
+
+
+def test_a_16gon_fan_is_recovered_as_a_circle():
+    """3040bp08's lamps and 3941p01's buttons are 16-gon fans, not circles."""
+    th = np.linspace(0, 2 * np.pi, 17)[:-1]
+    poly = np.column_stack([3.0 + 2.0 * np.cos(th), 5.0 + 2.0 * np.sin(th)])
+    fit = unwrap.fit_circle(poly)
+    assert fit is not None
+    cx, cy, r = fit
+    assert (cx, cy) == pytest.approx((3.0, 5.0), abs=1e-6)
+    assert r == pytest.approx(2.0, rel=1e-3)
+
+
+def test_a_square_is_not_mistaken_for_a_circle():
+    square = np.array([[0.0, 0.0], [4.0, 0.0], [4.0, 4.0], [0.0, 4.0]])
+    assert unwrap.fit_circle(square) is None
+
+
+def test_a_poor_fit_is_rejected_rather_than_forced():
+    """An egg — a circle stretched 30% on one axis — must not pass."""
+    th = np.linspace(0, 2 * np.pi, 17)[:-1]
+    egg = np.column_stack([2.6 * np.cos(th), 2.0 * np.sin(th)])
+    assert unwrap.fit_circle(egg) is None
+
+
+def test_region_path_emits_arc_commands_for_a_recovered_circle():
+    th = np.linspace(0, 2 * np.pi, 17)[:-1]
+    poly = np.column_stack([3.0 + 2.0 * np.cos(th), 5.0 + 2.0 * np.sin(th)])
+    d = unwrap.region_path(geom2d.to_geom(poly))
+    assert "A" in d              # true arcs, not 16 L commands
+    assert d.count("L") <= 2
+
+
+def _rounded_rect_ring(x0, y0, x1, y1, r, n=4):
+    """A rounded rectangle drawn the way LDraw authors one: straight runs
+    joined by corner fans of `n` segments each."""
+    pts = []
+    for cx, cy, a0 in ((x1 - r, y0 + r, 270.0), (x1 - r, y1 - r, 0.0),
+                       (x0 + r, y1 - r, 90.0), (x0 + r, y0 + r, 180.0)):
+        for a in np.linspace(a0, a0 + 90.0, n + 1):
+            t = np.radians(a)
+            pts.append([cx + r * np.cos(t), cy + r * np.sin(t)])
+    return np.array(pts)
+
+
+def test_a_rounded_rectangle_is_recovered_from_its_corner_fans():
+    """3941p01's panel and 3040bp08's border are this shape, and both emit as
+    many-vertex polygons with square corners until it is recognised."""
+    ring = _rounded_rect_ring(-8.0, 2.0, 8.0, 12.0, 2.0)
+    fit = unwrap.fit_rounded_rect(ring)
+    assert fit is not None
+    assert fit == pytest.approx((-8.0, 2.0, 8.0, 12.0, 2.0), abs=1e-6)
+
+
+def test_a_plain_rectangle_reports_no_corner_radius():
+    """Four L commands is already the minimal emission; a forced rx would
+    round corners the part does not round."""
+    square = np.array([[0.0, 0.0], [4.0, 0.0], [4.0, 4.0], [0.0, 4.0]])
+    assert unwrap.fit_rounded_rect(square) is None
+
+
+def test_a_circle_is_not_mistaken_for_a_rounded_rectangle():
+    th = np.linspace(0, 2 * np.pi, 17)[:-1]
+    circle = np.column_stack([2.0 * np.cos(th), 2.0 * np.sin(th)])
+    assert unwrap.fit_rounded_rect(circle) is None
+
+
+def test_region_path_rounds_the_corners_of_a_panel():
+    ring = _rounded_rect_ring(-8.0, 2.0, 8.0, 12.0, 2.0)
+    d = unwrap.region_path(geom2d.to_geom(ring))
+    assert d.count("L") == 4          # one per straight run, not 20 chords
+    assert d.count("A") == 4          # one per corner

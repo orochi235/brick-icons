@@ -14,6 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import numpy as np
+import shapely
 
 from . import colors as _colors
 from . import geom2d
@@ -154,6 +155,28 @@ def to_xyz(uv, carrier, theta0=0.0):
             + np.outer(uv[:, 1], a))
 
 
+def _region_d(poly, x0, y1, s):
+    """Path data in canvas pixels, shapes recovered where the region is one.
+    The fit tolerance is LDU, so it scales with the canvas."""
+    if hasattr(poly, "geom_type"):
+        return region_path(_scaled(poly, x0, y1, s), tol=CIRCLE_TOL * s)
+    ring = _scaled_pts(np.asarray(poly, float), x0, y1, s)
+    return " ".join(f"{'M' if i == 0 else 'L'}{p[0]:.2f},{p[1]:.2f}"
+                    for i, p in enumerate(ring)) + " Z"
+
+
+def _scaled_pts(pts, x0, y1, s):
+    return np.column_stack([(pts[:, 0] - x0) * s, (y1 - pts[:, 1]) * s])
+
+
+def _scaled(g, x0, y1, s):
+    """Transform in place through shapely so exteriors, holes and multi-part
+    structure survive; rebuilding from a flat ring list makes a second
+    polygon's exterior into the first one's hole."""
+    return shapely.transform(
+        g, lambda a: np.column_stack([(a[:, 0] - x0) * s, (y1 - a[:, 1]) * s]))
+
+
 def _rings_of(poly):
     """Boundary rings of a merged region, or the one ring of a raw polygon."""
     if hasattr(poly, "geom_type"):
@@ -171,11 +194,7 @@ def texture_svg(carrier_uv, regions, px=900, ldraw_dir="vendor/ldraw"):
     body = []
     for code, poly in regions:
         hex_str, _ = _colors.resolve(str(code), ldraw_dir)
-        d = " ".join(
-            " ".join(f"{'M' if i == 0 else 'L'}"
-                     f"{(p[0] - x0) * s:.2f},{(y1 - p[1]) * s:.2f}"
-                     for i, p in enumerate(ring)) + " Z"
-            for ring in _rings_of(poly))
+        d = _region_d(poly, x0, y1, s)
         body.append(f'<path d="{d}" fill="#{hex_str[2:]}" '
                     f'fill-rule="evenodd"/>')
     return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{w:.0f}" '
@@ -251,3 +270,104 @@ def _drop_collinear(g):
 def region_has_hole(g) -> bool:
     return any(len(getattr(part, "interiors", ())) for part in
                (getattr(g, "geoms", None) or [g]))
+
+
+CIRCLE_TOL = 0.02       # LDU of residual; a 16-gon's own sagitta at r=2 is
+                        # 0.038, so fit the VERTICES, not the chords
+ARC_STEP = 25.0         # deg; an LDraw 16-gon steps 22.5 and the default 15
+                        # would refuse to read its vertices as one arc
+
+
+def fit_circle(poly, tol: float = CIRCLE_TOL):
+    """(cx, cy, r) when `poly`'s vertices lie on a common circle, else None.
+    Returning None is the normal outcome for a square and must stay cheap —
+    most decal regions are not circles."""
+    pts = np.asarray(poly, float)
+    if len(pts) < 8:                     # too few to distinguish from a box
+        return None
+    # Kasa: |p|^2 = 2 p.c + (r^2 - |c|^2), linear in (cx, cy, k)
+    A = np.column_stack([2 * pts, np.ones(len(pts))])
+    try:
+        cx, cy, k = np.linalg.lstsq(A, (pts ** 2).sum(axis=1), rcond=None)[0]
+    except np.linalg.LinAlgError:
+        return None
+    rsq = k + cx * cx + cy * cy
+    if rsq <= 0:
+        return None
+    r = float(np.sqrt(rsq))
+    resid = np.abs(np.hypot(pts[:, 0] - cx, pts[:, 1] - cy) - r)
+    return (float(cx), float(cy), r) if float(resid.max()) <= tol else None
+
+
+def fit_rounded_rect(poly, tol: float = CIRCLE_TOL):
+    """(x0, y0, x1, y1, r) when `poly` is an axis-aligned rectangle with four
+    equal-radius corner arcs, else None.
+
+    Solve r from each corner vertex rather than from where the straight runs
+    end: an arc runs within tol of its own tangent line for several vertices
+    either side of the tangency, so a run measured that way reads long and r
+    reads short (3941p01's panel: 1.087 against a true 1.261)."""
+    pts = np.asarray(poly, float)
+    if len(pts) < 8:
+        return None
+    x0, y0 = pts.min(axis=0)
+    x1, y1 = pts.max(axis=0)
+    w, h = x1 - x0, y1 - y0
+    if min(w, h) <= 2 * tol:
+        return None
+    mx, my = (x0 + x1) / 2, (y0 + y1) / 2
+    radii = []
+    for ex, ey in ((x0, y0), (x0, y1), (x1, y0), (x1, y1)):
+        quad = pts[((pts[:, 0] < mx) == (ex == x0))
+                   & ((pts[:, 1] < my) == (ey == y0))]
+        a, b = np.abs(quad[:, 0] - ex), np.abs(quad[:, 1] - ey)
+        on_arc = (a > tol) & (b > tol)
+        if not np.any(on_arc):
+            return None                  # a square corner, or no corner at all
+        a, b = a[on_arc], b[on_arc]
+        radii.append(np.median(a + b + np.sqrt(2 * a * b)))
+    r = float(np.median(radii))
+    if r <= tol or max(abs(v - r) for v in radii) > tol:
+        return None
+    if r >= min(w, h) / 2 - tol:
+        return None                      # no straight run left: that's a circle
+    inner = np.clip(pts, [x0 + r, y0 + r], [x1 - r, y1 - r])
+    if float(np.abs(np.linalg.norm(pts - inner, axis=1) - r).max()) > tol:
+        return None
+    return (float(x0), float(y0), float(x1), float(y1), r)
+
+
+def _rounded_rect_d(x0, y0, x1, y1, r):
+    """One subpath, four arcs. Emitted directly rather than through path_d's
+    candidate matching: a corner sweeps exactly 90 deg, which lands on the
+    wrong side of that emitter's 90 deg chunk boundary by one float bit and
+    doubles every corner."""
+    def f(v):
+        return f"{v:.2f}"
+    a = f"A {f(r)} {f(r)} 0 0 1 "
+    return (f"M {f(x0 + r)} {f(y0)} L {f(x1 - r)} {f(y0)} "
+            + a + f"{f(x1)} {f(y0 + r)} "
+            + f"L {f(x1)} {f(y1 - r)} " + a + f"{f(x1 - r)} {f(y1)} "
+            + f"L {f(x0 + r)} {f(y1)} " + a + f"{f(x0)} {f(y1 - r)} "
+            + f"L {f(x0)} {f(y0 + r)} " + a + f"{f(x0 + r)} {f(y0)} Z")
+
+
+def region_path(g, tol=CIRCLE_TOL):
+    """SVG path data for a UV region, with recovered shapes as A commands.
+    Rounded rectangles are tried before circles: it is the commonest decal
+    shape, and a circle fit would reject it anyway."""
+    parts = []
+    for ring in geom2d.rings(g):
+        rr = fit_rounded_rect(ring, tol)
+        if rr is not None:
+            parts.append(_rounded_rect_d(*rr))
+            continue
+        cands = []
+        c = fit_circle(ring, tol)
+        if c is not None:
+            cx, cy, r = c
+            cands = [(cx, cy, r, 0.0, 0.0, r, ARC_STEP, tol)]
+        parts.append(geom2d.path_d(
+            geom2d.to_geom(ring),
+            arcs=geom2d.arc_candidates(cands) if cands else None))
+    return " ".join(x for x in parts if x)
