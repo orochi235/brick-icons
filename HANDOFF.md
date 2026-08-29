@@ -3,8 +3,13 @@
 All on **`main`**, working tree clean. 473 tests pass.
 
 The golden baseline the engine swap needs is **done and merged** — see "The
-regression gate: answered" below. The next step is the OCCT adoption design,
-which is no longer blocked.
+regression gate: answered" below.
+
+**The OCCT port is already underway in another session, in its own worktree —
+do not start a second one.** First slice is hidden-line removal only, no
+fills, behind `--engine occt`, gating on the `outline` combo added in
+`88e1ffd`. Check with that session before touching `hlr.py` or
+`primitives.py`.
 `docs/superpowers/plans/2026-08-28-decal-unwrap.md` is still the durable record
 of phase 2; this covers what landed on top of it.
 
@@ -110,7 +115,7 @@ converts only the runs that follow one.
 
 ---
 
-# OpenCASCADE spike — complete, port not started
+# OpenCASCADE spike — complete, port underway elsewhere
 
 Lives on **`occt-spike`** (4 commits, branched off `1f65166`, nothing merged
 to `main`). The durable record is the spec:
@@ -172,8 +177,13 @@ What it changes for the port:
   move is the suspicious one.
 
 Both seams are frozen, since the CLI touches the engine at exactly two points:
-the render path (31 cases) and extraction via `hlr.part_geometry` (600 parts,
-21,035 SVGs, one hash per part, 0 exceptions).
+the render path (now 54 cases) and extraction via `hlr.part_geometry` (600
+parts, 21,035 SVGs, one hash per part, 0 exceptions).
+
+**The `outline` combo is the HLR gate** (23 cases, added `88e1ffd`): strokes
+only, occlusion on. `wireframe` sets `cull=False` and is the one combo that
+does not exercise occlusion at all; `outline-flat3` does, but its fills take
+3001's arc count from 58 to 192 and drown the arc/line signal.
 
 Three things found while freezing:
 
