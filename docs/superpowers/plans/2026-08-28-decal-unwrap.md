@@ -1083,6 +1083,15 @@ triangles, `3040bp08`'s border is 68 facets. Unioned in UV they become one
 path each, and every interior facet edge disappears with the union. That is
 what stops a print reading as a mesh.
 
+**A border is a frame, so it needs a hole.** `3040bp08`'s border is not a
+filled rectangle: it is an outer rounded rectangle minus an inner one, and its
+68 facets must union into ONE path with ONE interior ring, not into a solid
+slab or a ring of separate bars. Shapely's union produces that hole for free
+when the facets genuinely enclose an empty middle; the work is carrying the
+interior ring through to the emitted path data rather than keeping only the
+exterior. The `test_a_hole_survives_the_merge` case below pins exactly this,
+and `region_path` in Task 12 must emit the hole as a second subpath.
+
 - [ ] **Step 1: Write the failing test**
 
 Append to `tests/test_unwrap.py`:
