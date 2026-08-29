@@ -173,10 +173,32 @@ Surface fills for `outline` SVGs (default `none` = line art only). `flat3`
 paints each face: three stylized tones for flat faces by orientation, smooth
 Lambert gradients for curved surfaces.
 
-#### `--part-color 0xRRGGBB`
+#### `--part-color SPEC`
 
 Part color (default a neutral gray). Tints LDView renders and drives the
-`--shade-style` palette.
+`--shade-style` palette. `SPEC` is any of:
+
+| form | example | meaning |
+|---|---|---|
+| hex | `0xc91a09`, `#c91a09`, `c91a09` | a literal color |
+| LDraw code | `4`, `71` | Red, Light Bluish Grey |
+| color name | `red`, `light_bluish_grey`, `light bluish gray` | case, `_`/`-`/space and the gray/grey spelling all fold |
+
+Six hex digits are read as hex, so `000016` is a color and `16` is LDraw code
+16. `--list-colors` prints the whole palette.
+
+A translucent color supplies `--opacity` from its LDConfig `ALPHA` unless you
+pass `--opacity` yourself, so `--part-color trans_red` is a one-flag trans
+brick.
+
+Codes resolve against the vendored `vendor/ldraw/LDConfig.ldr`, whose values
+track current LDraw and differ from the hexes in the gallery above — code `4`
+is `#B40000`, not the `0xc91a09` used by the red brick.
+
+#### `--list-colors`
+
+Print every LDraw color as `code  name  hex` (plus `alpha NNN` for translucent
+ones) and exit.
 
 #### `--opacity 0-1`
 
