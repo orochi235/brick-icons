@@ -1,11 +1,9 @@
 # Handoff — printed parts, phase 2 complete
 
-Phase 2 is merged to **`main`** (unpushed). One unmerged branch,
-**`glyph-orientation`**, holds the decal orientation fix and is fully gated —
-see `6372ffd`, whose message and `tests/test_orientation.py` carry the whole
-diagnosis. Only flat carriers move: the 18 unprinted specimens stay
-byte-identical, the curved printed ones are untouched, the two flat ones are
-visually identical.
+Phase 2 and the decal orientation fix are both on **`main`**. Nothing is
+unmerged. 432 tests pass. `6372ffd`'s message and `tests/test_orientation.py`
+carry the orientation diagnosis; only flat carriers moved, so the 18 unprinted
+specimens stayed byte-identical.
 
 **The durable record is the plan:**
 `docs/superpowers/plans/2026-08-28-decal-unwrap.md`. Its Status block lists
