@@ -74,10 +74,17 @@ own parameter space and re-emit it on the exact analytic surface the wall
 already uses. The two are then coincident by construction and the seam cannot
 open.
 
-**Carriers.** Cylinders and cones only — the surfaces already modeled as
-`Cylinder` and `Cone` primitives. Flat carriers (tile prints) pass through
-untouched: they are coplanar with their face already and have no seam. Spheres
-(minifig heads) are out of scope.
+**Carriers.** Cylinders and cones for the unwrap — the surfaces already modeled
+as `Cylinder` and `Cone` primitives. Spheres (minifig heads) are out of scope.
+
+Flat carriers need no unwrap, but they are not free, and they are the worst case
+today: a flat decal is coplanar with its face, so the coplanar plane-merge
+unions it into the face and the print vanishes outright. Measured across a
+13-part sample, `3001p01`, `3004p01`, `3068bp00`, `3069bp01`, `3960p01`,
+`4740p01` and `6141p01` render pixel-identical to undecorated bricks, while only
+the curved carriers show anything at all. Keying that merge by (carrier, color)
+rather than by plane alone is therefore what makes flat prints appear, and it is
+the single highest-value piece of phase 2 by part count.
 
 **Assignment.** A decal facet group binds to a carrier when its vertices lie
 within tolerance of an existing analytic surface in the same part — same axis,
@@ -135,6 +142,12 @@ enough values to unpack (expected 2, got 0)` at `shade.py:1230`, where
 `_ink_lens_pockets` returns empty instead of a 2-tuple. `4740` with the same
 flags still renders, so it is the pattern geometry reaching an unguarded
 return, not a general regression.
+
+A second crash, unfixed and not yet diagnosed: `4740p03` dies with
+`shapely.errors.GEOSException: TopologyException: side location conflict`
+during a normal outline render. It was the only failure in a 13-part printed
+sample, so it is rare rather than systemic, but printed geometry evidently
+reaches states the fill pipeline does not.
 
 ## Testing
 
