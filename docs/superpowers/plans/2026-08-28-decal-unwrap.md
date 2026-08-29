@@ -14,11 +14,12 @@
 
 ---
 
-## Status: Tasks 1-6c are done, on branch `decal-unwrap`
+## Status: DONE — all tasks landed, branch `decal-uv`
 
-All four printed specimens now paint their print in the right LDraw colours.
-378 tests pass; the 18 unprinted specimens are byte-identical to
-`debug/unwrap/before.sha`, so every change so far is gated on `color != 16`.
+413 tests pass. The 18 unprinted specimens are byte-identical to `main`, and
+all four printed specimens match LDView structurally. `3941p01`'s panel emits
+as ONE path where it was six separately stroked fragments; `3068bp00` is back
+to its baseline 2,676 bytes with the arrow as a single path.
 
 | task | commit |
 |---|---|
@@ -29,9 +30,51 @@ All four printed specimens now paint their print in the right LDraw colours.
 | 6 paint decoration flat | `9ad2e0b` |
 | 6b colour on analytic primitives | `ca33697` |
 | 6c decoration skips gradients | `c970622` |
-| — decoration unions across curvature | `ba688d5` |
+| 8 bind to a carrier | `a1d4ba4` |
+| 9 the unwrap maps | `8a38ec9` |
+| 10 texture artifact | `05ce6f4` |
+| 11 union in UV | `0e1288d` |
+| 12 rounded rects and circles | `260c0f8` |
+| 13-14 re-project + gates | `9cd08a0` |
 
-**Start at Task 8.** Task 7's gate is folded into the numbers above.
+### Where this plan was wrong, and what the data said
+
+Each of these was written into a task above and would have shipped silently.
+
+- **A sector bounds what a primitive DRAWS, not where its surface is.** Task 8
+  gated the bind on it; `3941p01`'s r=20 wall is substituted over two 90 deg
+  sectors while the panel sits at 125 deg, so nothing bound. Same axis, same
+  radius and an overlapping height is the same surface of revolution.
+- **A primitive with no HEIGHT bound is infinite.** Panel facets bound to stud
+  cylinders 794 LDU away. Measure the gap in the primitive's own frame, where
+  the wall is the unit circle — that bounds the extent and makes a cone's
+  taper exact instead of matching only where its radius equals `|R[:,0]|`.
+- **`arcfit._fit_circle` returns `(C, U, V, t_deg, n_anchors)` on (m,3)
+  points**, not `(cx, cy, r)`. Task 12's `fit[0], fit[1], fit[2]` would have
+  read vectors as scalars. UV has no camera, so a direct 2-D Kasa fit is both
+  simpler and exact; arcfit's terminal anchoring exists for projected chains.
+- **Corner radius cannot be measured from where the straight runs end.** An arc
+  runs within tolerance of its own tangent line for several vertices either
+  side of tangency, reading `3941p01`'s corners as 1.087 against a true 1.261.
+  Solve r from each corner vertex: r = a + b + sqrt(2ab).
+- **LDraw 0 Black is `#1b2a34`,** not the `#05131d` Task 14 asserts.
+- **A decal straddling theta = +-pi splits in two.** Put the branch cut in the
+  widest angular gap the decal leaves empty, or `3941p01`'s second panel can
+  never merge, fit as one shape, or stroke as one boundary.
+
+### Found by testing, not in the plan at all
+
+- **The cone round trip was not identity** — `to_xyz` mapped every point back
+  at the base radius, putting a cone's decal on a cylinder.
+- **A plane needs no densification.** Its unwrap is the identity and projection
+  is linear, so a straight edge stays straight; densifying anyway inflated
+  `3068bp00` from 2,676 to 10,978 bytes.
+- **A curved carrier must outrank a plane.** The wall under a decal is
+  hand-faceted wherever no primitive was substituted, and each such facet is a
+  plane the decoration sits exactly on at gap 0 — matching one would beat the
+  cylinder and flatten the curvature the unwrap exists to dissolve.
+- **`absorb_wall_facets`' missing colour guard is moot for bound decals:** the
+  unwrap runs first and a bound decal is already its own region.
 
 ---
 
