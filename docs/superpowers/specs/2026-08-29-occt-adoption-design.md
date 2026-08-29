@@ -39,7 +39,7 @@ triangles.
 `H*` variants supply hidden edges, so the `--wireframe` and `--opacity`
 draw-everything path is served by the same code rather than by a second one.
 
-**`edges_to_segments(edges)`** — lines pass through; `Geom_Circle` and
+**`edges_to_ops(edges)`** — lines pass through; `Geom_Circle` and
 `Geom_Ellipse` are read off the curve into our ellipse records. Nothing is
 refitted. This is the component that makes `arcfit.py` redundant, and it is
 the one to look at first if arcs come out wrong.
