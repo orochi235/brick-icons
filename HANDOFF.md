@@ -99,12 +99,14 @@ converts only the runs that follow one.
   dominant-only, or leave it is an undecided product call.
 - `SNAP_TOL = 0.4` LDU is the loosest constant added, tuned to the 0.345 stray.
   Extraction only; the render path passes no snap tolerance.
-- **Evaluate Skia / `skpathops` for the 2D path booleans.** The adoption
-  sketch below keeps shapely, which flattens arcs through every boolean and is
-  what makes arc recovery necessary downstream. If `skpathops` preserves
-  conics it competes with that whole step, not just with shapely. Open
-  questions: the Python binding (`skia-python` vs the standalone `pathops`
-  wheel), and whether it also answers the `4740p03`-class `TopologyException`.
+- **`skia-pathops` for the 2D booleans: settled — adopt, but inside the OCCT
+  port, not before it.** Conics survive its booleans exactly (8 conics out of
+  a two-circle union, 4e-7 area error), so it does delete `geom2d`'s arc
+  recovery — but only once true circles reach it, and today every polygon is
+  pre-flattened by facet tessellation. It also does not replace shapely: no
+  polygon offset, which `opened()`, `close_slivers()` and `buffer_d()` need.
+  Robustness is not a differentiator. Measurements and the four binding traps:
+  `docs/superpowers/specs/2026-08-29-pathops-evaluation.md`.
 
 ---
 
