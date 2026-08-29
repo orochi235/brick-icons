@@ -91,6 +91,25 @@ within tolerance of an existing analytic surface in the same part — same axis,
 radius within tolerance. On no match, the geometry is left as authored, so an
 unrecognized construction degrades to today's output rather than breaking.
 
+`scripts/measure-decal-offsets.py` settles the tolerance. Across curved
+carriers the decal sits essentially *on* its surface: `3960p01` 0.001,
+`3062bp01` 0.006, `3626bp01` 0.011, `3941p01` 0.074, `4740p01` 0.150,
+`3040bp08` 0.345 LDU. **0.5 LDU binds every observed case** with an order of
+magnitude of headroom under the smallest real feature (a stud is 12 LDU
+across). No bimodality, so one tolerance suffices.
+
+This also corrects an earlier reading of `3941p01` as a decal at radius 19.65
+against a wall at 20, which implied the unwrap must snap geometry outward.
+19.65 is a *body* radius too; decal and carrier are already co-radial to within
+0.074 LDU. There is no snap, and consequently no risk of the snap pushing a
+near-limb region across the silhouette.
+
+The flat-carrier case needs a different measurement. Distance from the part
+axis records position *along* a flat face rather than offset *from* it, which
+is why `6141p01` and `3001p01` report 6.5 and 2.0 LDU. Those are artifacts of
+the metric, not standoffs; a plane-offset measure is needed before the flat
+path is tuned.
+
 **Unwrap and re-emit.** For a cylinder of radius `r`, each vertex maps to
 (θ, h) in the primitive's local frame; the exact `R^-1` local frame built for
 elliptical primitives is reused rather than recomputed. The boundary is
