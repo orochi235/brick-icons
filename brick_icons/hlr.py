@@ -430,7 +430,11 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
                                    np.array(out["tri"]) if out["tri"] else None,
                                    cond=out["5"])
     specs = []
+    from . import shade
+    ink = shade.ink_prims(analytic, out.get("tri"), out.get("tri_colors"))
     for prim in analytic:
+        if id(prim) in ink:
+            continue                    # print, not relief: no crease to draw
         own = prim.occluder()
         for op, dfn in prim.drawn_with_depth(proj, skip_rims=shared_rims):
             specs.append((op, dfn, own if op[-1] == "sil" else None))

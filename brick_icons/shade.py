@@ -1640,6 +1640,55 @@ def faces_from_tris(tri, proj, cond_edges=None, colors=None):
     return kept
 
 
+def ink_prims(analytic, tris, tri_colors):
+    """Primitives that are print rather than relief, by id.
+
+    Decoration is ink on a surface: its boundary is not a crease, so it must
+    not stroke. A substituted primitive draws its rim like any physical edge,
+    which is what ringed 3040bp08's lamps and scattered black arcs over
+    3942bp01's stripes.
+    """
+    ink = {id(p) for p in analytic if getattr(p, "color", 16) != 16}
+    if tris is None or tri_colors is None:
+        return ink
+    from shapely.geometry import MultiPoint, Polygon
+
+    regions = unwrap.decorate(tris, tri_colors, analytic)
+    if not regions:
+        return ink
+    # A decal is a stack of nested regions: 3941p01's buttons are LDraw 16
+    # discs lying flush INSIDE the black panel, so they are print too and
+    # colour cannot tell them from the part's own geometry. They are the
+    # panel's holes, so test against each region with its holes filled.
+    filled = [(carrier, theta0, _filled(g)) for _c, carrier, theta0, g in regions]
+    for prim in analytic:
+        if id(prim) in ink:
+            continue
+        try:
+            pts = np.asarray(prim.fit_pts(), float)
+        except Exception:
+            continue
+        for carrier, theta0, outline in filled:
+            if unwrap.bind(pts, [carrier]) is not carrier:
+                continue
+            uv = unwrap.to_uv(pts, carrier, theta0)
+            if outline.contains(MultiPoint([tuple(q) for q in uv])):
+                ink.add(id(prim))
+                break
+    return ink
+
+
+def _filled(g):
+    """The region with its holes filled — a hole IS where a nested piece of
+    the print sits, so an enclosed primitive is inside the outline, not the
+    polygon."""
+    from shapely.geometry import Polygon
+
+    parts = [Polygon(p.exterior) for p in getattr(g, "geoms", [g])
+             if p.geom_type == "Polygon" and not p.is_empty]
+    return geom2d.union_all(parts) if parts else g
+
+
 def _body_planes(faces):
     """A Plane per distinct body-face plane. Planes are not primitives, so a
     flat carrier has to be derived from the geometry that sits on it."""
