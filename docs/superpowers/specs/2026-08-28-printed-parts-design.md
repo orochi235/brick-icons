@@ -95,12 +95,33 @@ of the current arc/polygon mix.
 fills flat, with interior facet edges inside a region suppressed — otherwise
 every facet boundary inks and the print reads as a mesh.
 
-**Rejected: raster textures.** LDraw ships bitmaps only for the 124 `!TEXMAP`
-parts (PNGs vendored in `parts/textures/`); the other ~4,750 printed parts have
-geometry alone, so there is nothing to apply. Laying a bitmap on a curved wall
-in SVG also needs per-strip `<image>` elements with seams between them, against
-the one-element-per-surface rule. TEXMAP parts already degrade safely — the
-parser skips `0 !:` lines and takes the `!TEXMAP FALLBACK` geometry.
+**Clipping.** The silhouette limb is an exact θ — where the outward normal
+turns perpendicular to the view — so it clips as a half-plane in UV space,
+applied before projection. A decal circle straddling it is a restriction of the
+parameter interval (visible where `cos t <= (θ_limb - θc)·R/ρ`): emit the arc
+over that interval and close with a chord at constant θ, which projects to a
+straight generator line. No `<clipPath>` element and no extra paths — the
+emitted data is already clipped. Occlusion by studs and bosses continues to go
+through the existing HLR pass.
+
+**Rejected: raster textures via affine strips.** Under orthographic projection
+the cylinder map is separable — the axial direction is a pure translation
+independent of θ — so a strip's quad is an exact parallelogram (measured corner
+closure 0.000000 px) and SVG's affine `matrix()` lands all four corners with no
+geometric seam. The approach is therefore viable on cylinders, with interior
+error falling as Δθ²: 7.01 px at 4 strips, 0.44 px at 16, 0.11 px at 32.
+
+It fails on cones. Separability requires constant radius; once radius varies
+with height the quad is no longer a parallelogram and one 29° strip mismatches
+by 44 px on a 20→12 taper, 88 px on 20→4. Printed cones (`3942bp01`) are in
+scope. On the same decal the vector route also measures better on every axis —
+16 elements, 7.0 KB, 0.023 px max curve error, against 16 `<image>` elements,
+28.9 KB and 0.44 px — and stays resolution-independent.
+
+Independently, there is nothing to apply: LDraw ships bitmaps only for the 124
+`!TEXMAP` parts (vendored in `parts/textures/`), and the other ~4,750 printed
+parts have geometry alone. TEXMAP parts already degrade safely — the parser
+skips `0 !:` lines and takes the `!TEXMAP FALLBACK` geometry.
 
 ## Incidental fix
 
