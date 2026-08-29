@@ -72,6 +72,18 @@ def flatten(path, M, t, colour, out, depth=0):
                 out.append((c, p @ M.T + t))
 
 
+def _quad(polys):
+    """The carrier as ONE rectangle. Drawing every body facet leaves the
+    backdrop ragged with stud and notch silhouettes; the surface a decal sits
+    on is a quad, so draw that."""
+    if not polys:
+        return []
+    allp = np.vstack(polys)
+    x0, y0 = allp.min(axis=0)
+    x1, y1 = allp.max(axis=0)
+    return [(16, np.array([[x0, y0], [x1, y0], [x1, y1], [x0, y1]]))]
+
+
 def _unwrap(deco, body):
     """(polys, kind) in carrier parameter space, LDU on both axes.
 
@@ -80,9 +92,13 @@ def _unwrap(deco, body):
     axis is Y in LDraw. Radius spread across the decal picks between them.
     """
     pts = np.vstack([p for _, p in deco])
+    # planarity decides, not radius spread: a 45-degree slope face has a tight
+    # radius spread about the part axis and was being unwrapped as a cylinder,
+    # which skews its rectangular border into a trapezoid
+    c = pts.mean(axis=0)
+    normal = np.linalg.svd(pts - c)[2][2]
+    curved = float(np.abs((pts - c) @ normal).max()) > 0.5
     r = np.hypot(pts[:, 0], pts[:, 2])
-    ys = pts[:, 1]
-    curved = r.std() < 0.35 * max(r.mean(), 1e-6) and r.mean() > 1.0 and np.ptp(ys) > 0.5
     if curved:
         rr = max(r.mean(), 1e-6)
         out = []
@@ -91,9 +107,18 @@ def _unwrap(deco, body):
             if np.ptp(th) > math.pi:
                 th = np.where(th < 0, th + 2 * math.pi, th)
             out.append((c, np.column_stack([rr * th, p[:, 1]])))
-        carrier = [(16, np.column_stack([
-            rr * np.arctan2(p[:, 2], p[:, 0]), p[:, 1]]))
-            for _, p in body] if body else []
+        # only body facets ON the decal's own surface: studs and underside
+        # notches otherwise make the backdrop ragged, and the carrier is a
+        # quad by construction
+        # a cone's radius varies with height, so a single mean radius catches
+        # only a thin band of its wall; fit radius(h) from the decal and test
+        # body facets against that
+        hs, rs = pts[:, 1], np.hypot(pts[:, 0], pts[:, 2])
+        k, b = (np.polyfit(hs, rs, 1) if np.ptp(hs) > 1e-6 else (0.0, rr))
+        on = [p for _, p in body
+              if np.all(np.abs(np.hypot(p[:, 0], p[:, 2]) - (k * p[:, 1] + b)) < 0.8)]
+        carrier = _quad([np.column_stack(
+            [rr * np.arctan2(q[:, 2], q[:, 0]), q[:, 1]]) for q in on])
         return out, carrier, "curved"
     big = max(deco, key=lambda cp: np.linalg.norm(
         np.cross(cp[1][1] - cp[1][0], cp[1][2] - cp[1][0])))[1]
@@ -105,31 +130,43 @@ def _unwrap(deco, body):
     u /= np.linalg.norm(u)
     v = np.cross(n, u)
     flat = [(c, np.column_stack([p @ u, p @ v])) for c, p in deco]
-    carrier = [(16, np.column_stack([p @ u, p @ v])) for _, p in body
-               if abs(np.cross(p[1] - p[0], p[2] - p[0]) @ n) > 1e-6
-               and np.all(np.abs(p @ n - d0) < 0.6)]
+    carrier = _quad([np.column_stack([p @ u, p @ v]) for _, p in body
+                     if abs(np.cross(p[1] - p[0], p[2] - p[0]) @ n) > 1e-6
+                     and np.all(np.abs(p @ n - d0) < 0.6)])
     return flat, carrier, "flat"
 
 
-def decal_svg(deco, carrier, px=560, pad=10):
-    """One uniform scale, canvas set by the carrier — independent x/y scaling
-    warps the decal and turns round lamps into ellipses."""
-    ref = carrier if carrier else deco
-    allp = np.vstack([p for _, p in ref])
+def decal_svg(deco, carrier, px=560, pad=10, margin=0.12):
+    """Cropped to the decal, with the carrier's edge dashed.
+
+    A cylinder's carrier spans its whole circumference, so framing on the
+    carrier letterboxes the decal into a sliver of mostly blank wall. Frame on
+    the decal instead and draw the carrier boundary dashed: where it shows,
+    the decal stops short of the edge; where it does not, the carrier runs on
+    past the crop. One uniform scale throughout — scaling x and y
+    independently warps the decal and turns a round lamp into an ellipse.
+    """
+    allp = np.vstack([p for _, p in deco])
     x0, y0 = allp.min(axis=0)
     x1, y1 = allp.max(axis=0)
+    m = margin * max(x1 - x0, y1 - y0, 1e-9)
+    x0, y0, x1, y1 = x0 - m, y0 - m, x1 + m, y1 + m
     s = px / max(x1 - x0, y1 - y0, 1e-9)
     w, h = (x1 - x0) * s + 2 * pad, (y1 - y0) * s + 2 * pad
 
-    def d(p):
-        q = np.column_stack([(p[:, 0] - x0) * s + pad, (y1 - p[:, 1]) * s + pad])
-        return " ".join(f"{'M' if i == 0 else 'L'}{a:.2f},{b:.2f}"
-                        for i, (a, b) in enumerate(q)) + " Z"
+    def xy(p):
+        return np.column_stack([(p[:, 0] - x0) * s + pad, (y1 - p[:, 1]) * s + pad])
 
-    body = [f'<path d="{d(p)}" fill="#efefef" stroke="none"/>' for _, p in carrier]
+    def d(p):
+        return " ".join(f"{'M' if i == 0 else 'L'}{a:.2f},{b:.2f}"
+                        for i, (a, b) in enumerate(xy(p))) + " Z"
+
+    body = [f'<path d="{d(p)}" fill="#f2f2f2" stroke="none"/>' for _, p in carrier]
     body += [f'<path d="{d(p)}" fill="'
              f'{PAL[c].hex.replace("0x", "#") if c in PAL else "#888"}" '
              f'stroke="none"/>' for c, p in deco]
+    body += [f'<path d="{d(p)}" fill="none" stroke="#b0b0b0" '
+             f'stroke-width="1.4" stroke-dasharray="6 4"/>' for _, p in carrier]
     return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{w:.0f}" '
             f'height="{h:.0f}"><rect width="{w:.0f}" height="{h:.0f}" '
             f'fill="#ffffff"/>' + "".join(body) + "</svg>")
