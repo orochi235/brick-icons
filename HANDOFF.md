@@ -40,27 +40,15 @@ command in the plan's header, into `debug/colorcodes/specimens-new`.
   Affine strips work on cylinders (the map is separable) but fail on cones by
   44–88 px, and no texture asset exists for the ~4,750 non-TEXMAP printed parts.
 
-## Phase 2 is ready to plan
+## Phase 2 is planned
 
-Its plan was deliberately held until real carrier-offset numbers existed. They
-do now — 0.5 LDU binds every curved carrier (`scripts/measure-decal-offsets.py`).
-The spec's phase 2 section can be turned into tasks as-is.
+`docs/superpowers/plans/2026-08-28-decal-unwrap.md` — 14 tasks, not started.
+Its "Established before writing this plan" section holds the measured facts;
+don't re-derive them.
 
-One thing has to land before any of it: `flatten()` must carry the LDraw colour
-code (`tri_meta` is the natural place), and the coplanar plane-merge must re-key
-on (plane, colour). Until then decoration is indistinguishable from its carrier
-and there is nothing to unwrap.
-
-**Every printed part goes through the unwrap stage — no bypass for flat
-carriers.** A planar carrier's unwrap is the identity map, a degenerate case of
-the general one, not a shortcut around it. Two reasons: one code path means flat
-cannot drift into a special case, and the standalone texture the stage emits is
-the artifact worth testing, being 2-D and camera-independent.
-
-Flat prints are the largest class by part count and the one
-`scripts/measure-decal-offsets.py` cannot size, because distance-from-axis is
-the wrong metric for a flat face. A planar carrier binds by plane distance
-instead; that tolerance still needs picking.
+Task 7 is the checkpoint worth reviewing at: every print appears in its own
+colour, still at the authored faceting. Tasks 8-14 put it on the exact carrier
+and recover shapes from the meshes.
 
 ## Open, none of it planned
 
