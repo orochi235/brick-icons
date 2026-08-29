@@ -95,14 +95,19 @@ of the current arc/polygon mix.
 fills flat, with interior facet edges inside a region suppressed — otherwise
 every facet boundary inks and the print reads as a mesh.
 
-**Clipping.** The silhouette limb is an exact θ — where the outward normal
-turns perpendicular to the view — so it clips as a half-plane in UV space,
-applied before projection. A decal circle straddling it is a restriction of the
-parameter interval (visible where `cos t <= (θ_limb - θc)·R/ρ`): emit the arc
-over that interval and close with a chord at constant θ, which projects to a
-straight generator line. No `<clipPath>` element and no extra paths — the
-emitted data is already clipped. Occlusion by studs and bosses continues to go
-through the existing HLR pass.
+**Clipping is mostly not needed.** Decal facets are ordinary geometry, so the
+existing HLR occlusion pass already clips them at the silhouette and behind
+studs — visible today in `3941p01`, whose leftmost buttons are cut by the
+brick's contour with no decal-specific code.
+
+The one case the unwrap itself creates: snapping a decal from its authored
+radius to the carrier's (19.65 → 20 on `3941p01`) moves it outward, which near
+the limb can push a region across a silhouette it previously sat inside. The
+limb is an exact θ, so this clips as a half-plane in UV before projection — for
+a decal circle, a restriction of the parameter interval to `cos t <=
+(θ_limb - θc)·R/ρ`, closed with a chord at constant θ that projects to a
+straight generator line. It emits pre-clipped path data, needing no
+`<clipPath>` and no extra elements. Treat it as a guard, not a phase.
 
 **Rejected: raster textures via affine strips.** Under orthographic projection
 the cylinder map is separable — the axial direction is a pure translation
