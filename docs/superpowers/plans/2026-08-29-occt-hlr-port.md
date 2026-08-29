@@ -35,23 +35,29 @@ The corpus has no combo that tests occlusion without also testing fills. `--wire
 - Consumes: `brick_icons.goldens.summarize_svg`, `scripts/freeze-goldens.py`, `scripts/compare-goldens.py` (all on `main` as of `86cd5b2`).
 - Produces: golden case ids `outline__<part>` under `tests/goldens/render/`, and rows in `tests/goldens/hashes.txt`.
 
-- [ ] **Step 1: Add the combo to the manifest**
+**Status: the row landed externally.** The session that owns the corpus added
+it and re-froze on `main`:
 
 ```toml
 [combo.outline]
-# The HLR gate: occlusion ON, strokes only, no fills. `outline-flat3` also
-# exercises occlusion but every case carries fills, and summarize_svg does not
-# separate stroke paths from filled ones -- gating on it would make the engine
-# answerable for the fill path too. `wireframe` sets cull=False and draws
-# hidden geometry, so it cannot gate hidden-line removal at all.
 parts = "all"
 args = ["--format", "svg", "--shading", "outline"]
 ```
 
-- [ ] **Step 2: Freeze it**
+`all` is 23 parts, not the 8-part `spread` — plain outline is cheap (no fill
+computation) and an HLR swap is the highest-risk change in the tree, so the
+coverage is worth the freeze time.
 
-Run: `.venv/bin/python scripts/freeze-goldens.py`
-Expected: one progress line per case; new `outline__*.json` / `outline__*.png` files appear under `tests/goldens/render/`.
+- [ ] **Step 1: Confirm the freeze landed and the pre-existing cases held**
+
+Do not gate against `tests/goldens/` until the corpus owner confirms the 31
+pre-existing cases are unmoved. If they moved, that is a bug in the freeze, not
+in this port, and it must be settled first.
+
+- [ ] **Step 2: Rebase this worktree onto the commit carrying the combo**
+
+Run: `git -C . fetch . main && git rebase main`
+Expected: `tests/goldens/render/outline__*.json` present, 23 of them.
 
 - [ ] **Step 3: Verify the new cases carry no fills**
 
@@ -571,6 +577,8 @@ Stage `scripts/compare-engines.py` and the design doc, with the message: `compar
 
 ## Not in this plan
 
-Fills and `--shade-style`, replacing `shapely`, decal carrier binding via `ShapeAnalysis_Surface`, deleting `arcfit.py`, and extracting an `engines/` protocol. Each needs its own plan, and the first two are entangled with a Skia PathOps evaluation running separately.
+Fills and `--shade-style`, replacing `shapely`, decal carrier binding via `ShapeAnalysis_Surface`, deleting `arcfit.py`, and extracting an `engines/` protocol. Each needs its own plan.
+
+Skia PathOps is **downstream of this port, not competing with it**: its booleans preserve conics exactly but never invent them — polyline in, polyline out. So it can only pay off once something upstream emits real curves, which is what this slice does. See `docs/superpowers/specs/2026-08-29-pathops-evaluation.md` on `main`.
 
 `arcfit` in particular may not be removable at all: hand-faceted rounds are condline-marked triangle chains rather than primitives, so the kernel has no exact curve to report for them. Task 7's run is the first real evidence either way.

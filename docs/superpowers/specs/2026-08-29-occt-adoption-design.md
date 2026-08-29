@@ -69,9 +69,10 @@ The frozen combos cannot serve. `--wireframe` sets `cull=False` (`cli.py`,
 "translucent or wireframe: draw hidden geometry too"): on `3001` it draws 46
 paths against plain outline's 26, the extra 20 being what occlusion removes,
 so it cannot gate hidden-line removal. `outline-flat3` does exercise
-occlusion, but every case carries fills, and `summarize_svg` does not separate
-stroke paths from filled ones — gating on it would make this slice answerable
-for the fill path too.
+occlusion, but its `commands` counts aggregate across every path: turning
+fills on takes `3001` from `A` 58 to 192 and `L` 32 to 273. The arc/line split
+is exactly the signal that reads as kernel intent, so fills drown it. (The
+`fills` field itself stays separable — it is `commands` that mixes.)
 
 Success is not byte-identity, which is why the summary exists: `bbox`,
 `viewBox` and the fill palette hold still while `A` rises and `L` falls on
