@@ -24,8 +24,14 @@ printed specimens structurally matching LDView, `3941p01` emitting exactly one
 
 ## Open, and diagnosed but unfixed
 
-Two artifacts on the cone's top stud, **both present on the UNPRINTED `3942b`**
-and absent on `4589`, so neither has anything to do with decoration:
+The cone's stripes read correctly once the rim seams went: the horizontal
+arcs were cutting across them, not the stripe geometry. `_wall_span_face`
+samples any span with 40 points (1.9 deg for a 75 deg stripe), so
+under-sampling was never in it.
+
+What remains is two artifacts on the cone's top stud, **both present on the
+UNPRINTED `3942b`** and absent on `4589`, so neither has anything to do with
+decoration:
 
 - **Ragged bore.** The bore wall is an analytic `cyli r=4` (an exact circle);
   the bore floor is 56 flat triangles at y=4 spanning r=3.536-6.0 (a polygon).
@@ -37,15 +43,6 @@ and absent on `4589`, so neither has anything to do with decoration:
   NOT safe alone: fills snap to the circle while drawn chords stay put, which
   opens slivers. A fix needs the drawn-chord refit too.
 - **Debris on the stud's bottom seam**, same region, not separately diagnosed.
-
-- **Cone stripes look wrong at the limb — possibly not a bug.** Each stripe
-  tapers to a wedge with a grey band between its tip and the outline. A
-  stripe's end boundary is a generator, which near the limb runs nearly
-  parallel to the silhouette generator, so a thin wedge is what correct
-  projection gives; the grey band is the 15 deg gap sector foreshortened.
-  Settle it against LDView at the limb before touching anything —
-  `_wall_span_face` already samples any span with 40 points (1.9 deg for a 75
-  deg stripe), so under-sampling is ruled out.
 
 - **`4740p03`** dies with `shapely.errors.GEOSException: TopologyException`.
 - **Linear gradient stops are uncapped** (`shade.py`), so `3960p01` carries 640.
