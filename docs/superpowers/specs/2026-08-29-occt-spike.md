@@ -157,12 +157,25 @@ face per region drops coverage hard, and the free-edge measurement says why:
 on `2412b` it barely changes the face count (35 -> 33) but drives free edges
 8 -> 24 and free-edge length 3.4% -> 46.9%. Merging a plane in isolation
 strips the intermediate vertices that the adjacent non-coplanar faces still
-carry, manufacturing the T-junctions it was meant to remove. Keeping the
-normal's sign and feeding it repaired outward winding changes nothing.
+carry, manufacturing the T-junctions it was meant to remove.
 `ShapeUpgrade_UnifySameDomain` is the right mechanism precisely because it
-works on topology and preserves shared vertices -- and it already runs after
-the sew. **This rules out the obvious route to raising coverage, not every
-route.**
+works on topology and preserves shared vertices.
+
+**`BOPAlgo_MakerVolume` does raise coverage: 62% -> 92%.** It takes a pile of
+arbitrary faces and builds the solids they enclose, which is the right shape
+of tool for interpenetrating LDraw geometry. With `SetIntersect(True)`,
+`SetAvoidInternalShapes(True)` and a fuzzy value of 1e-3 (the knee: 71% at
+1e-4, 90% at 5e-4, flat at 92% from 1e-3 up), 44 of 48 parts reach >=80%
+closed-solid area, in about 10s for the whole survey. `3001`, `4589` and
+`3942b` render correctly from the resulting solids.
+
+**Its failure class is heavily faceted open surfaces.** `3649` yields 102
+valid solids covering only 55% of the area, and the render shows why: the
+interior cylinders become solids while the gear's faceted outer disc and
+teeth never enclose a volume and vanish. This is identical at fuzzy 0, 1e-4
+and 1e-3, so it is not a tolerance question. Note that the area metric alone
+called this part a partial success -- only the render showed the body was
+gone, which is the sheet-is-not-the-renderer trap in a new place.
 
 ### Verdict
 
@@ -171,12 +184,15 @@ current renderer on four parts, arc recovery is free, and seam dedupe follows
 from shared topology. Those are the bulk of `hlr.py`, `arcfit.py` and
 `primitives.py`. Nothing in the measurements argues against it.
 
-**No on the boolean track.** The ragged bore needs `BRepAlgoAPI_Cut`, which
-needs solids, and coverage sits at 62% with the obvious way of raising it now
-measured and rejected. The bore keeps a bespoke fix; the HLR track alone
-carries the dependency. Reopening this means finding a different route to
-watertightness (per-primitive solids fused pairwise, or `ShapeFix_Shell`),
-which is its own investigation and not a prerequisite for the HLR port.
+**The boolean track is open, not closed.** `BOPAlgo_MakerVolume` clears the
+80% bar on 92% of parts, so `BRepAlgoAPI_Cut` is available for the majority
+and the ragged bore is reachable. What it does not have yet is an answer for
+heavily faceted parts like `3649`, and no measurement here has yet shown the
+bore actually fixed -- that needs the cut performed and compared against the
+current renderer's tab. Both belong in the adoption design rather than in
+this spike.
+
+`ShapeFix_Shell`/`ShapeFix_Solid` were also tried and changed nothing (62%).
 
 ### Not answered by this probe
 
