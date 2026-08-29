@@ -1565,7 +1565,7 @@ def cull_occluded_faces(faces, occluders, proj, eps,
     return kept
 
 
-def faces_from_tris(tri, proj, cond_edges=None):
+def faces_from_tris(tri, proj, cond_edges=None, colors=None):
     """Camera-facing triangle faces as px-space polygons with outward view-space
     normals. Winding is trusted (repaired upstream): a triangle whose outward
     normal points away from the camera (nv[2] >= 0) is a back-face and is
@@ -1578,7 +1578,8 @@ def faces_from_tris(tri, proj, cond_edges=None):
     smoothly instead of banding into flat tones."""
     have_seams = cond_edges is not None and len(cond_edges) > 0
     faces = []
-    for v in tri:                       # v: (3,3) world coords, outward-CCW
+    for i, v in enumerate(tri):         # v: (3,3) world coords, outward-CCW
+        c = 16 if colors is None else int(colors[i])
         n = np.cross(v[1] - v[0], v[2] - v[0])
         ln = np.linalg.norm(n)
         if ln < 1e-9:
@@ -1596,7 +1597,8 @@ def faces_from_tris(tri, proj, cond_edges=None):
         plane = (round(float(n[0]), 4), round(float(n[1]), 4),
                  round(float(n[2]), 4), round(float(n @ v[0]), 2))
         f = {"poly": poly, "normal": nv, "depth": float(np.mean(z)),
-             "zs": z, "kind": "tri", "plane": plane, "_verts": v}
+             "zs": z, "kind": "tri", "plane": plane, "_verts": v,
+             "color": c}
         if back:
             # Provisional: kept only if a seam joins it to a front-facing
             # smooth group (see the filter below). A facet just past the

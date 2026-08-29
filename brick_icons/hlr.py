@@ -382,7 +382,8 @@ def _visible_segments_faceted(out, right, up, fwd, render_px, cull=True):
     xs = [c for sg in segs for c in (sg[0], sg[2])] or [0, 1]
     ys = [c for sg in segs for c in (sg[1], sg[3])] or [0, 1]
     from . import shade
-    faces = shade.faces_from_tris(tri, proj, cond_edges=out["5"]) if len(tri) else []
+    faces = shade.faces_from_tris(tri, proj, cond_edges=out["5"],
+                                  colors=out.get("tri_colors")) if len(tri) else []
     faces = shade.order_faces(faces, eps=EDGE_BIAS * zrange)
     return VisResult(segs, (min(xs), min(ys), max(xs), max(ys)), s, faces, [],
                      (), proj)
@@ -484,7 +485,8 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
         segs = [spec[0] for spec in specs]
     from . import shade
     tri_faces = shade.faces_from_tris(np.array(out["tri"]), proj,
-                                      cond_edges=out["5"]) if out["tri"] else []
+                                      cond_edges=out["5"],
+                                      colors=out.get("tri_colors")) if out["tri"] else []
     an_faces = shade.faces_from_analytic(analytic, proj)
     # facet-authored stretches of a primitive wall (60474's bite flanks)
     # join the abutting analytic band's gradient instead of flat-toning
@@ -936,6 +938,7 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
         fixed = repair.repaired_tris(np.array(out["tri"]), out["tri_meta"],
                                      MESH_CACHE_DIR)
         out["tri"] = list(fixed)
+        out["tri_colors"] = [m["color"] for m in out["tri_meta"]]
     # hand-faceted rounds (condline-marked type-2 chains) become true arcs;
     # any part that gains one needs the analytic pipeline to draw it
     out["fit_arcs"], out["2"] = arcfit.fit_edge_arcs(out["2"], out["5"])
