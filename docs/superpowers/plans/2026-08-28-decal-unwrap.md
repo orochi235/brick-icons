@@ -20,6 +20,10 @@ Numbers here are measured, not assumed. Don't re-derive them.
 
 - **Root cause:** `hlr.py:62` `flatten()` parses type 1/2/3/4/5 lines and never reads `tok[1]`. Decoration therefore arrives geometrically identical to its carrier. Confirmed against LDView on all four printed specimens: none renders its print.
 - **`repair._orient` preserves triangle order and count** (in-place flip per index, `repair.py:74-95`), so an index-parallel color array survives `repaired_tris`. Its cache key hashes only geometry plus `certified`/`invert` — **do not add color to `_cache_key`**; color cannot affect orientation and the change would invalidate every cached mesh.
+- **Suite counts here are absolute and start from 363.** Each task's expected
+  count includes every test added by earlier tasks: 365, 367, 369, 371, 372,
+  then the `test_unwrap.py` additions to 392. If a count is off by exactly the
+  number of tests an earlier task added, trust the delta and fix the plan.
 - **Whole-dict assertions break when you add a key.** `tests/test_hlr.py`
   compares `tri_meta` entries with `==`, and other suites do the same to face
   dicts. Before adding a key to any shared dict, grep for equality assertions
@@ -343,7 +347,7 @@ Run: `.venv/bin/python -m pytest tests/test_shade_color.py -q`
 Expected: 2 passed
 
 Run: `.venv/bin/python -m pytest -q`
-Expected: 367 passed
+Expected: 369 passed
 
 - [ ] **Step 7: Commit**
 
@@ -429,7 +433,7 @@ Run: `.venv/bin/python -m pytest tests/test_shade_color.py -q`
 Expected: 4 passed
 
 Run: `.venv/bin/python -m pytest -q`
-Expected: 369 passed
+Expected: 371 passed
 
 - [ ] **Step 6: See it on a real part**
 
@@ -522,7 +526,7 @@ Run: `.venv/bin/python -m pytest tests/test_shade_color.py -q`
 Expected: 5 passed
 
 Run: `.venv/bin/python -m pytest -q`
-Expected: 370 passed
+Expected: 372 passed
 
 - [ ] **Step 6: Look at it**
 
@@ -1219,7 +1223,7 @@ no returned group pass through exactly as today.
 - [ ] **Step 5: Run the suite**
 
 Run: `.venv/bin/python -m pytest -q`
-Expected: 379 passed
+Expected: 391 passed
 
 - [ ] **Step 6: Commit**
 
@@ -1294,7 +1298,7 @@ Expected: non-zero — the lamps emit arc commands rather than 16-gon polylines.
 - [ ] **Step 5: Full suite and commit**
 
 Run: `.venv/bin/python -m pytest -q`
-Expected: 380 passed
+Expected: 392 passed
 
 ```bash
 git add tests/test_unwrap.py
