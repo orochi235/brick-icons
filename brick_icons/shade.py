@@ -921,7 +921,7 @@ def _ink_lens_pockets(base, vis, strokes, sil, line_px, sil_px):
     import shapely as _sh
     band, ink = _stroke_band(strokes, sil, line_px, sil_px)
     if ink is None or ink.is_empty or base is None or base.is_empty:
-        return []                  # no drawn ink (e.g. zero-width strokes):
+        return [], []              # no drawn ink (e.g. zero-width strokes):
                                    # nothing for a pocket to hide inside
     open_r = geom2d.difference(base, ink)
     out = []

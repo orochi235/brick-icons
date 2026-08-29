@@ -1650,3 +1650,13 @@ def test_30137_stud_graze_strip_not_bared():
     covered = geom2d.area(geom2d.intersection(
         geom2d.union_all(captured), window))
     assert covered >= 8.0, covered
+
+
+def test_ink_lens_pockets_returns_a_pair_when_there_is_no_ink():
+    # zero-width strokes leave no ink for a pocket to hide inside. The only
+    # caller unpacks two values, so the early return must be a pair --
+    # returning a bare [] crashed every opaque part rendered with
+    # --line-width 0 --silhouette-width 0.
+    got = shade._ink_lens_pockets(None, None, [], None, 0, 0)
+    assert isinstance(got, tuple) and len(got) == 2
+    assert got == ([], [])
