@@ -195,3 +195,25 @@ def test_wireframe_mode_draws_hidden_edges(tmp_path):
     assert 'fill="url' not in wire and "linearGradient" not in wire
     count = lambda s: s.count("<line") + s.count("<path")
     assert count(wire) > count(normal)          # hidden geometry drawn
+
+
+def test_list_colors_prints_table_and_exits_ok(capsys):
+    from brick_icons import cli
+    assert cli.main(["--list-colors", "--root", "."]) == 0
+    out = capsys.readouterr().out
+    assert "0xb40000" in out and "Red" in out
+    assert "Trans_Red" in out and "alpha 128" in out
+    assert out.splitlines()[0].split()[0] == "0"      # sorted by code
+
+
+def test_list_colors_needs_no_parts():
+    from brick_icons import cli
+    # without --list-colors this would return 2 ("no parts given")
+    assert cli.main(["--list-colors", "--root", "."]) == 0
+
+
+def test_list_colors_survives_a_bad_part_color(capsys):
+    from brick_icons import cli
+    # the listing is how you look up a name, so a typo must not block it
+    assert cli.main(["--list-colors", "--root", ".", "--part-color", "chartreuse"]) == 0
+    assert "Red" in capsys.readouterr().out

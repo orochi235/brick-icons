@@ -29,6 +29,9 @@ def _parse_args(argv):
     p.add_argument("--dither", choices=["threshold", "floyd", "ordered", "atkinson"])
     p.add_argument("--angle")
     p.add_argument("--part-color")
+    p.add_argument("--list-colors", dest="list_colors", action="store_true",
+                   default=False,
+                   help="print the LDraw palette (code, name, hex) and exit")
     p.add_argument("--curve-quality", type=int)
     p.add_argument("--render-px", type=int)
     p.add_argument("--scale", type=float)
@@ -272,6 +275,16 @@ def _gather_parts(args) -> list[str]:
 
 def main(argv=None) -> int:
     args = _parse_args(argv)
+    if args.list_colors:
+        from . import colors
+        args.part_color = None      # the listing is how you look up a name;
+                                    # a bad spec must not block it
+        pal = colors.load_palette(_config_from_args(args).ldraw_dir)
+        for code in sorted(pal.by_code):
+            c = pal.by_code[code]
+            tail = "" if c.alpha == 255 else f"  alpha {c.alpha}"
+            print(f"{c.code:<4} {c.name:<34} {c.hex}{tail}")
+        return 0
     cfg = _config_from_args(args)
     parts = _gather_parts(args)
     if not parts:
