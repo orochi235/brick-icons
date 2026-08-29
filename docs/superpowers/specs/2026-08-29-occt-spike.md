@@ -177,6 +177,21 @@ and 1e-3, so it is not a tolerance question. Note that the area metric alone
 called this part a partial success -- only the render showed the body was
 gone, which is the sheet-is-not-the-renderer trap in a new place.
 
+**The bore, tested directly.** Rendering `3942b` with `--line-width 0
+--silhouette-width 0` shows the artifact plainly: square tabs breaking the
+bore's inner rim where the floor's chords fall inside the wall's true circle.
+After `BOPAlgo_MakerVolume`, the same bore is a cylindrical face of radius
+exactly 4.000 whose boundary edges are exact circles of radius 4.000 -- the
+chord-versus-circle mismatch that produces the tab does not exist in that
+representation.
+
+That is structural evidence, not a rendered before/after. The probe emits
+edges only, so proving the tab is gone on screen needs fills on the OCCT
+path, which is the port rather than the spike. The edge on which the wall and
+floor meet is shared by 6-8 faces rather than 2, because MakerVolume returns
+many solids that all touch it; whether that needs a fuse before cutting is an
+open question.
+
 ### Verdict
 
 **Go on the HLR track.** Occlusion is demonstrated visually against the
