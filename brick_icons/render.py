@@ -36,7 +36,10 @@ def build_argv(cfg: Config, part_file: Path, out_png: Path) -> list[str]:
     lat, long = resolve_latlong(cfg.angle)
     argv = [
         *cfg.ldview_launcher, str(cfg.ldview), str(part_file),
-        f"-LDrawDir={cfg.ldraw_dir}",
+        # absolute: LDView resolves this against its own cwd, and a relative
+        # one leaves LDConfig.ldr unread — extended codes (Metallic_Silver 80
+        # on 14769pt*) then fall back to a gray matching their own background
+        f"-LDrawDir={cfg.ldraw_dir.resolve()}",
         f"-SaveSnapshot={out_png}",
         f"-SaveWidth={cfg.render_px}", f"-SaveHeight={cfg.render_px}",
         "-AutoCrop=1", "-SaveAlpha=1", "-EdgeLines=1",

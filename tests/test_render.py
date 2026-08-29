@@ -47,7 +47,7 @@ def test_build_argv_has_fidelity_lighting_angle():
                  "-AutoCrop=1", "-SaveAlpha=1", "-EdgeLines=1",
                  "-CurveQuality=12", "-HiResPrimitives=1", "-AllowPrimitiveSubstitution=1",
                  "-Lighting=1", "-UseQualityLighting=1", "-LightVector=-1,1,2",
-                 "-DefaultLatLong=30.0,45.0", f"-LDrawDir={cfg.ldraw_dir}"]:
+                 "-DefaultLatLong=30.0,45.0", f"-LDrawDir={cfg.ldraw_dir.resolve()}"]:
         assert flag in argv
 
 
@@ -71,3 +71,16 @@ def test_render_part_live(tmp_path):
     render.render_part(cfg, "3001", out)
     im = Image.open(out)
     assert im.mode == "RGBA" and im.width > 0
+
+
+def test_build_argv_ldraw_dir_is_absolute(tmp_path, monkeypatch):
+    """LDView resolves -LDrawDir against its own notion of cwd, not ours. Given
+    a relative one it silently skips LDConfig.ldr and falls back to its built-in
+    palette, which has no extended codes: 14769pt*'s Metallic_Silver (80) then
+    renders in the same neutral gray as the black field it is printed on and the
+    letterform disappears."""
+    monkeypatch.chdir(tmp_path)
+    cfg = load_config(root=".")
+    argv = render.build_argv(cfg, Path("/p/3001.dat"), Path("/o/3001.png"))
+    flag = next(a for a in argv if a.startswith("-LDrawDir="))
+    assert Path(flag.split("=", 1)[1]).is_absolute(), flag
