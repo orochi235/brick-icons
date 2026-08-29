@@ -14,6 +14,27 @@
 
 ---
 
+## Status: Tasks 1-6c are done, on branch `decal-unwrap`
+
+All four printed specimens now paint their print in the right LDraw colours.
+378 tests pass; the 18 unprinted specimens are byte-identical to
+`debug/unwrap/before.sha`, so every change so far is gated on `color != 16`.
+
+| task | commit |
+|---|---|
+| 2 colour through `flatten` | `7283a36` |
+| 3 repair order/cache key pinned | `5014eac` |
+| 4 colour on face dicts | `24aaaaf` |
+| 5 both `shade.py` merges colour-aware | `10b1e1a` |
+| 6 paint decoration flat | `9ad2e0b` |
+| 6b colour on analytic primitives | `ca33697` |
+| 6c decoration skips gradients | `c970622` |
+| — decoration unions across curvature | `ba688d5` |
+
+**Start at Task 8.** Task 7's gate is folded into the numbers above.
+
+---
+
 ## Established before writing this plan
 
 Numbers here are measured, not assumed. Don't re-derive them.
@@ -684,90 +705,33 @@ git commit -m "carry the LDraw colour onto analytic primitives"
 
 ---
 
-### Task 6c: Stop wall absorption crossing a color boundary
+### Task 6c: Decoration takes no shading ramp — DONE (`c970622`)
 
-**Files:**
-- Modify: `brick_icons/shade.py` (`absorb_wall_facets`)
-- Test: `tests/test_shade_color.py` (append)
+**Recorded because the original text of this task was wrong.** It claimed
+`3942bp01`'s cone showed no red because `absorb_wall_facets` swallowed its 160
+stripe facets into the carrier wall's gradient. That diagnosis was false: the
+stripes reach the pipeline as `Cone` PRIMITIVES, not facets. `48\5-24co10.dat`
+is a `~Moved to` redirect, which `flatten` follows, inheriting colour 4 through
+it, so `hlr.flatten` yields 16 `Cone` primitives at colour 4 and ZERO decoration
+triangles. There was nothing for wall absorption to absorb.
 
-**Why this task exists:** `3942bp01`'s cone renders with **zero** red — its whole output
-is 2 fill paths. The 16 red stripes are `48\5-24co*.dat`, which
-`primitives.from_ref` does NOT recognize, so they fall through to the triangle path and
-DO carry their colour. They are then absorbed: `absorb_wall_facets` matches any facet
-lying on an analytic wall's surface and merges it into that wall's gradient fill. The
-stripes sit exactly on the carrier cone at the same radii, each sub-facet spans 7.5 deg
-(under the 25 deg cap), and their normals are outward-radial — so every geometric test
-passes and all 160 are swallowed.
+The real cause: `fill_ops` has three emission branches, and only the flat `else`
+called `face_fill`. Both gradient branches — `grad_radial` via
+`_radial_focal_stops`, and `grad_axis` via the inline `style.ramp(nv)` sort —
+tone from the body part colour and never read `face["color"]`. Every curved
+surface shades with a gradient, so ALL decoration on a cylinder or cone painted
+in body tone. The fix routes decoration to the flat branch: a print is ink on a
+surface, not relief, so it takes no shading ramp.
 
-- [ ] **Step 1: Write the failing test**
+A follow-on landed with it (`ba688d5`): the edge-adjacency union required
+coplanarity or a conditional-line seam, and `3941p01`'s panel is 36
+hand-authored quads around a cylinder — 7.5 deg apart, and the part carries only
+10 type-5 lines — so neither fired and the panel shattered into separately
+stroked fragments. Decoration now unions across curvature.
 
-Append to `tests/test_shade_color.py`:
-
-```python
-def test_wall_absorption_does_not_cross_a_colour_boundary():
-    """3942bp01's stripes lie exactly on the carrier cone and pass every
-    geometric test absorb_wall_facets applies, so only colour distinguishes
-    them. Absorbed, the cone renders with no red at all."""
-    wall = {"grad_axis": (0.0, 0.0, 1.0, 1.0), "prim": _UnitCylinder(),
-            "poly": np.array([[0.0, 0.0], [10.0, 0.0], [10.0, 10.0],
-                              [0.0, 10.0]]), "color": 16,
-            "normal": np.array([0.0, 0.0, -1.0])}
-    deco = {"poly": np.array([[1.0, 1.0], [2.0, 1.0], [2.0, 2.0], [1.0, 2.0]]),
-            "_verts": np.array([[1.0, 0.0, 0.0], [1.0, 0.5, 0.0],
-                                [0.99, 0.5, 0.14]]),
-            "color": 4, "normal": np.array([1.0, 0.0, 0.0])}
-    shade.absorb_wall_facets([deco], [wall])
-    assert "grad_axis" not in deco, "a red stripe must not join the grey wall"
-```
-
-You will need a minimal `_UnitCylinder` stub in the test module exposing `R`
-(identity-scaled), `t` (origin) and `radius_at(lvl)` returning 1.0, matching what
-`on_wall` calls. Build it to fit the real code — read `absorb_wall_facets` first and
-make the stub satisfy its geometric tests so the ONLY thing that can reject the facet
-is colour. If you cannot construct a stub that the geometry accepts, say so and report
-NEEDS_CONTEXT rather than writing a test that passes for the wrong reason.
-
-- [ ] **Step 2: Run it to verify it fails**
-
-Run: `.venv/bin/python -m pytest tests/test_shade_color.py -k absorption -q`
-Expected: FAIL — the facet is absorbed and gains `grad_axis`.
-
-- [ ] **Step 3: Add the colour guard**
-
-In `absorb_wall_facets`, skip any candidate facet whose colour differs from the wall
-face it would join. Put the check where a facet group is matched against a wall, before
-the group takes the wall's paint:
-
-```python
-        if tf.get("color", 16) != best.get("color", 16):
-            continue        # a print is not a stretch of the wall it sits on
-```
-
-Match the surrounding naming — read the function and place the guard where the chosen
-wall face is known.
-
-- [ ] **Step 4: Run the targeted tests**
-
-Run: `.venv/bin/python -m pytest tests/test_shade_color.py tests/test_shade.py tests/test_hlr.py tests/test_hlr_color.py -q`
-Expected: all pass. `absorb_wall_facets` has existing coverage (60474's bite flanks,
-30136's chord face) that MUST keep passing — those are same-colour absorptions and the
-guard must not touch them.
-
-- [ ] **Step 5: Look at it**
-
-```bash
-.venv/bin/python scripts/render-references.py 3942bp01 --out out/t6c
-grep -o 'fill="#[0-9a-fA-F]*"' out/t6c/ours/3942bp01.svg | sort | uniq -c
-```
-
-Expected: `#b40000` (LDraw Red) now appears. Report the counts. Do NOT run `open`.
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add brick_icons/shade.py tests/test_shade_color.py
-git commit -m "keep wall absorption from swallowing decoration"
-```
+**The `absorb_wall_facets` colour guard was never implemented.** It remains a
+genuine fourth colour-blind merge, but no part is known to hit it. Add it only
+with a part that demonstrates the bug; do not add it on this plan's say-so.
 
 ---
 
