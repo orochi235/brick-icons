@@ -1276,6 +1276,21 @@ git commit -m "union same-colour decal facets into one region in UV"
 - Modify: `brick_icons/unwrap.py`
 - Test: `tests/test_unwrap.py` (append)
 
+**Fit rounded rectangles first, then circles.** A rounded rectangle is the most
+common decal shape by far — panels, borders, fields, plaques — and recognising
+one collapses dozens of facets plus four corner fans into a single `rect` with
+an `rx`, which is both exact and tiny. Test for it before the circle fit: four
+axis-aligned straight runs joined by four equal-radius quarter arcs. `3941p01`'s
+panel and `3040bp08`'s border are both this shape, and both currently emit as
+many-vertex polygons with square corners.
+
+**Subtract enclosed regions rather than tiling around them.** `3941p01`'s eight
+buttons and `3040bp08`'s frame interior are holes in their region, not gaps
+between neighbouring pieces. Unioning the facets and subtracting the enclosed
+shape yields ONE path with interior rings; letting the enclosed shape split the
+region instead produces the strips of separately-stroked fragments seen before
+this task.
+
 Fitting circles is markedly easier here than in projected space, and the reason
 is worth stating: UV has no camera. The existing `arcfit` fights foreshortening
 (a circle projects to an ellipse) and chord-proxy occlusion. In UV a decal
