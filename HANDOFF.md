@@ -23,11 +23,19 @@ command in the plan's header, into `debug/colorcodes/specimens-new`.
 - **Hex is canonicalized to lowercase**, which changed the `-DefaultColor3`
   flag's case and required updating `test_build_argv_part_color_optional`.
   LDView hex is case-insensitive, so renders are unaffected.
-- **The four printed specimens are a baseline, not a demo.** One per carrier
-  shape phase 2 must unwrap. Today only `3941p01` inks a full print;
-  `3942bp01` and `3040bp08` ink fragments, and `3068bp00` renders as a plain
-  tile. The flat carrier is in the set precisely so the gate trips when phase 2
-  makes it draw. Keep them out of `docs/gallery/` and the README until then.
+- **The four printed specimens are a baseline, not a demo.** None of them
+  renders its print. `hlr.py:62` `flatten()` never reads column 2, the LDraw
+  colour code, so decoration reaches the pipeline geometrically identical to
+  its carrier. What little shows is accidental: the cone's stripes are
+  `5-24co*` patches at the carrier's own radii, so only their seams survive;
+  the flat prints are coplanar and the plane-merge unions them away; the three
+  circles on `3040bp08` survive only as `4-4disc` primitives; and `3941p01`'s
+  black dots are ink-pocket fill, not the panel — the real part is the inverse
+  (black panel, white buttons). Keep them out of `docs/gallery/` and the README
+  until phase 2 lands.
+- **LDView renders the same parts in LDraw's own colours**, at the same angle,
+  with no new dependency — `render.py` already drives it. That is the phase-2
+  target, and it is cheaper and more diffable than a photograph.
 - **Raster textures were considered and rejected for phase 2** — see the spec.
   Affine strips work on cylinders (the map is separable) but fail on cones by
   44–88 px, and no texture asset exists for the ~4,750 non-TEXMAP printed parts.
@@ -38,9 +46,21 @@ Its plan was deliberately held until real carrier-offset numbers existed. They
 do now — 0.5 LDU binds every curved carrier (`scripts/measure-decal-offsets.py`).
 The spec's phase 2 section can be turned into tasks as-is.
 
-Flat prints are the largest class by part count and the one the measurement
-cannot size, because distance-from-axis is the wrong metric for a flat face.
-Settle that tolerance first.
+One thing has to land before any of it: `flatten()` must carry the LDraw colour
+code (`tri_meta` is the natural place), and the coplanar plane-merge must re-key
+on (plane, colour). Until then decoration is indistinguishable from its carrier
+and there is nothing to unwrap.
+
+**Every printed part goes through the unwrap stage — no bypass for flat
+carriers.** A planar carrier's unwrap is the identity map, a degenerate case of
+the general one, not a shortcut around it. Two reasons: one code path means flat
+cannot drift into a special case, and the standalone texture the stage emits is
+the artifact worth testing, being 2-D and camera-independent.
+
+Flat prints are the largest class by part count and the one
+`scripts/measure-decal-offsets.py` cannot size, because distance-from-axis is
+the wrong metric for a flat face. A planar carrier binds by plane distance
+instead; that tolerance still needs picking.
 
 ## Open, none of it planned
 
@@ -54,5 +74,3 @@ Settle that tolerance first.
   plain dish's 28). Binning linear stops the same way would shrink every part.
 - **`4740p03`** dies with `shapely.errors.GEOSException: TopologyException:
   side location conflict` on a normal outline render. Undiagnosed.
-- **`3040bp08` shows light triangular artifacts** at the slope's lower corners
-  in the specimen render. Noticed while adding it; not investigated.
