@@ -1,31 +1,21 @@
-# Handoff — 2026-08-28: LDraw color codes + printed parts
+# Handoff — printed parts, phase 2
 
-Working tree on `main`, clean. 359 tests passing.
+Working tree on `main`, clean. 363 tests passing.
 
 **Read these first, in order — they carry the design, not this file:**
 - `docs/superpowers/specs/2026-08-28-printed-parts-design.md` — both phases
 - `docs/superpowers/plans/2026-08-28-ldraw-color-codes.md` — phase 1 tasks
 
-## Where phase 1 stands
+## Phase 1 is done
 
-Done and committed (Tasks 2–6, 8–10): `brick_icons/colors.py` resolves
-`--part-color` as hex, LDraw code, or color name against the vendored
-LDConfig; `load_config` resolves once so nothing downstream changed;
-`--list-colors`; README; the `_ink_lens_pockets` crash fix; and
-`scripts/measure-decal-offsets.py`.
+Every task in the plan is committed, including the byte-diff gate and the
+printed specimens. `--part-color` takes hex, an LDraw code, or a color name.
 
-**Task 7 (byte-diff gate) was in flight when this was written** and is the one
-thing to confirm before trusting the phase. A true pre-change baseline renders
-from a worktree at `28f895e` (the last docs-only commit), because the in-repo
-`debug/colorcodes/baseline` was regenerated *after* the code changes and is an
-after-shot. Compare that worktree's specimen SVGs against
-`debug/colorcodes/baseline`; expect byte-identical, since specimens pass no
-`--part-color`.
+The gate now baselines to `debug/colorcodes/baseline-v2.sha` (22 specimens),
+which supersedes the 18-part Task 1 baseline. Regenerate it with the render
+command in the plan's header, into `debug/colorcodes/specimens-new`.
 
-Task 11 (adding printed parts to `specimens.txt`) is deliberately unstarted —
-it needs a human to pick which of the 12 rendered samples to carry.
-
-## Decisions made in conversation that the code does not show
+## Decisions the code does not show
 
 - **Codes and names raise; hex keeps its silent gray fallback.** Deliberate:
   a malformed hex string stays backward-compatible, a typo'd name should not
@@ -33,12 +23,26 @@ it needs a human to pick which of the 12 rendered samples to carry.
 - **Hex is canonicalized to lowercase**, which changed the `-DefaultColor3`
   flag's case and required updating `test_build_argv_part_color_optional`.
   LDView hex is case-insensitive, so renders are unaffected.
+- **The four printed specimens are a baseline, not a demo.** One per carrier
+  shape phase 2 must unwrap. Today only `3941p01` inks a full print;
+  `3942bp01` and `3040bp08` ink fragments, and `3068bp00` renders as a plain
+  tile. The flat carrier is in the set precisely so the gate trips when phase 2
+  makes it draw. Keep them out of `docs/gallery/` and the README until then.
 - **Raster textures were considered and rejected for phase 2** — see the spec.
-  The short version is that affine strips work on cylinders (the map is
-  separable) but fail on cones by 44–88 px, and no texture asset exists for the
-  ~4,750 non-TEXMAP printed parts anyway.
+  Affine strips work on cylinders (the map is separable) but fail on cones by
+  44–88 px, and no texture asset exists for the ~4,750 non-TEXMAP printed parts.
 
-## Open, none of it planned yet
+## Phase 2 is ready to plan
+
+Its plan was deliberately held until real carrier-offset numbers existed. They
+do now — 0.5 LDU binds every curved carrier (`scripts/measure-decal-offsets.py`).
+The spec's phase 2 section can be turned into tasks as-is.
+
+Flat prints are the largest class by part count and the one the measurement
+cannot size, because distance-from-axis is the wrong metric for a flat face.
+Settle that tolerance first.
+
+## Open, none of it planned
 
 - **Ink pockets the user does not want** in `docs/gallery`: `30137` (4 black
   paths, three of them one-per-log-top), `98283` (5, reading as ragged
@@ -50,12 +54,5 @@ it needs a human to pick which of the 12 rendered samples to carry.
   plain dish's 28). Binning linear stops the same way would shrink every part.
 - **`4740p03`** dies with `shapely.errors.GEOSException: TopologyException:
   side location conflict` on a normal outline render. Undiagnosed.
-- **Flat prints render as nothing at all** — the largest phase 2 item by part
-  count, and the measurement script cannot yet size its tolerance because
-  distance-from-axis is the wrong metric for a flat face.
-
-## Phase 2
-
-Not planned yet, by choice: its plan was to wait on real carrier-offset
-numbers, which now exist (0.5 LDU binds every curved carrier). The spec's
-phase 2 section is ready to turn into tasks.
+- **`3040bp08` shows light triangular artifacts** at the slope's lower corners
+  in the specimen render. Noticed while adding it; not investigated.
