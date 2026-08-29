@@ -1,5 +1,7 @@
-from brick_icons.colors import (Color, load_palette, normalize_name,
-                                parse_ldconfig)
+import pytest
+
+from brick_icons.colors import (Color, UnknownColorError, load_palette,
+                                normalize_name, parse_ldconfig, resolve)
 
 LDCFG = """\
 0 LDraw.org Configuration File
@@ -59,6 +61,50 @@ def test_load_palette_is_cached(tmp_path):
 
 
 def test_load_palette_missing_file_raises(tmp_path):
-    import pytest
     with pytest.raises(FileNotFoundError):
         load_palette(tmp_path / "nope")
+
+
+@pytest.fixture
+def ld(tmp_path):
+    (tmp_path / "LDConfig.ldr").write_text(LDCFG)
+    return tmp_path
+
+
+def test_resolve_hex_forms_pass_through(ld):
+    for spec in ("0xc91a09", "#c91a09", "c91a09", "0xC91A09"):
+        assert resolve(spec, ld) == ("0xc91a09", None)
+
+
+def test_resolve_code(ld):
+    assert resolve("4", ld) == ("0xb40000", None)
+    assert resolve("71", ld) == ("0x969696", None)
+
+
+def test_resolve_code_carries_alpha(ld):
+    assert resolve("36", ld) == ("0xc91a09", 128)
+
+
+def test_resolve_name(ld):
+    assert resolve("red", ld) == ("0xb40000", None)
+    assert resolve("Light Bluish Gray", ld) == ("0x969696", None)
+    assert resolve("trans_red", ld) == ("0xc91a09", 128)
+
+
+def test_six_digits_is_hex_but_short_digits_are_a_code(ld):
+    # the precedence rule that keeps pre-existing 0xRRGGBB configs working
+    assert resolve("000016", ld) == ("0x000016", None)   # hex, not code 16
+    assert resolve("0x16", ld) == ("0x000016", None)     # explicit hex
+    assert resolve("4", ld) == ("0xb40000", None)        # code, not hex 0x04
+
+
+def test_unknown_code_and_name_raise(ld):
+    with pytest.raises(UnknownColorError, match="999"):
+        resolve("999", ld)
+    with pytest.raises(UnknownColorError, match="chartreuse"):
+        resolve("chartreuse", ld)
+
+
+def test_malformed_hex_raises(ld):
+    with pytest.raises(UnknownColorError):
+        resolve("0xzzzzzz", ld)

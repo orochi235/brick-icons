@@ -69,3 +69,39 @@ def _palette_for(path_str: str) -> Palette:
 def load_palette(ldraw_dir) -> Palette:
     """Colors from <ldraw_dir>/LDConfig.ldr, cached per path."""
     return _palette_for(str(Path(ldraw_dir) / "LDConfig.ldr"))
+
+
+_HEX6 = re.compile(r"[0-9a-f]{6}")
+_HEXANY = re.compile(r"[0-9a-f]{1,6}")
+_CODE = re.compile(r"\d{1,3}")
+
+
+class UnknownColorError(ValueError):
+    """A --part-color spec that is neither hex, an LDraw code, nor a name."""
+
+
+def resolve(spec, ldraw_dir) -> tuple:
+    """Any color spec -> ('0xrrggbb', alpha or None).
+
+    Precedence matters: a bare '16' is LDraw code 16, but '000016' is hex, so
+    configs written before codes existed keep their meaning.
+    """
+    s = str(spec).strip()
+    low = s.lower()
+    explicit = low.startswith("0x") or low.startswith("#")
+    body = low[2:] if low.startswith("0x") else low[1:] if explicit else low
+    if (explicit or _HEX6.fullmatch(body)) and _HEXANY.fullmatch(body):
+        return "0x%06x" % int(body, 16), None
+
+    pal = load_palette(ldraw_dir)
+    if _CODE.fullmatch(s):
+        c = pal.by_code.get(int(s))
+        if c is None:
+            raise UnknownColorError(f"no LDraw color with code {s}")
+    else:
+        c = pal.by_name.get(normalize_name(s))
+        if c is None:
+            raise UnknownColorError(
+                f"unknown color {spec!r}: expected 0xRRGGBB, an LDraw code, "
+                f"or a color name (see --list-colors)")
+    return c.hex, (c.alpha if c.alpha != 255 else None)
