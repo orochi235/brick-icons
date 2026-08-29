@@ -20,6 +20,10 @@ Numbers here are measured, not assumed. Don't re-derive them.
 
 - **Root cause:** `hlr.py:62` `flatten()` parses type 1/2/3/4/5 lines and never reads `tok[1]`. Decoration therefore arrives geometrically identical to its carrier. Confirmed against LDView on all four printed specimens: none renders its print.
 - **`repair._orient` preserves triangle order and count** (in-place flip per index, `repair.py:74-95`), so an index-parallel color array survives `repaired_tris`. Its cache key hashes only geometry plus `certified`/`invert` — **do not add color to `_cache_key`**; color cannot affect orientation and the change would invalidate every cached mesh.
+- **Whole-dict assertions break when you add a key.** `tests/test_hlr.py`
+  compares `tri_meta` entries with `==`, and other suites do the same to face
+  dicts. Before adding a key to any shared dict, grep for equality assertions
+  on it — the plan's expected test counts assume you fixed them in the same task.
 - **Two merge paths must both learn about color.** `_attach_smooth_gradients` (`shade.py:1810`) unions faces across a shared edge when their normals agree to 0.9999; `_merge_members` (`shade.py:518`) additionally unions flat faces by `plane` key (`shade.py:1595`). A decal quad is coplanar with its carrier and shares edges with it, so today both fire.
 - **Binding tolerance is 0.5 LDU** for curved carriers, from `scripts/measure-decal-offsets.py`: `3960p01` 0.001, `3062bp01` 0.006, `3626bp01` 0.011, `3941p01` 0.074, `4740p01` 0.150, `3040bp08` 0.345. No bimodality. There is no outward snap — decal and carrier are already co-radial.
 - **The unwrap dissolves authored faceting.** `3941p01`'s panel is 36 hand-written quads forming a 16-gon at r=20 (cos(π/N) = 19.616/20 → N=16); in (θ, h) it is one rounded rectangle. `3942bp01`'s 160 decoration facets are 16 clean rectangles. Prototyped and rendered.
@@ -161,15 +165,31 @@ In the `typ in ("3", "4")` branch, record it in the meta dict:
 Run: `.venv/bin/python -m pytest tests/test_hlr_color.py -q`
 Expected: 2 passed
 
-- [ ] **Step 5: Confirm nothing else broke**
+- [ ] **Step 5: Update the two assertions the new key breaks**
+
+`tests/test_hlr.py` compares whole `tri_meta` entries for equality, so both
+of these fail on the added key. Add `"color": 16` to each expected dict (both
+fixtures use colour 16); the other `tri_meta` assertions index by key and are
+unaffected.
+
+```python
+    assert out["tri_meta"][0] == {"certified": True, "invert": False,
+                                  "color": 16}
+```
+```python
+    assert out["tri_meta"][0] == out["tri_meta"][1] == {
+        "certified": True, "invert": False, "color": 16}
+```
+
+- [ ] **Step 6: Confirm nothing else broke**
 
 Run: `.venv/bin/python -m pytest -q`
 Expected: 365 passed
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add brick_icons/hlr.py tests/test_hlr_color.py
+git add brick_icons/hlr.py tests/test_hlr_color.py tests/test_hlr.py
 git commit -m "carry the LDraw colour code through flatten"
 ```
 
