@@ -18,9 +18,9 @@ Render LEGO/LDraw parts as (optionally) lit and shaded SVG icons.
       title="brick-icons 4589 --format svg --shading outline --shade-style flat3 --part-color 0xf2cd37"></td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/gallery/3040b.svg" width="150"
-      alt="brick-icons 3040b --format svg --shading outline --shade-style flat3 --part-color 0x237841 --angle 30,20"
-      title="brick-icons 3040b --format svg --shading outline --shade-style flat3 --part-color 0x237841 --angle 30,20"></td>
+    <td align="center"><img src="docs/gallery/3040bp08.svg" width="150"
+      alt="brick-icons 3040bp08 --format svg --shading outline --shade-style flat3 --part-color 0x1b2a34 --angle 30,25"
+      title="brick-icons 3040bp08 --format svg --shading outline --shade-style flat3 --part-color 0x1b2a34 --angle 30,25"></td>
     <td align="center"><img src="docs/gallery/4070.svg"  width="150"
       alt="brick-icons 4070 --format svg --shading outline --shade-style flat3 --part-color 0xe4cd9e"
       title="brick-icons 4070 --format svg --shading outline --shade-style flat3 --part-color 0xe4cd9e"></td>
@@ -62,8 +62,8 @@ Render LEGO/LDraw parts as (optionally) lit and shaded SVG icons.
 </table>
 
 *Sixteen SVGs from `--shading outline` at assorted angles, colors, stroke
-weights, and opacities — including a strokeless fills-only render (zero
-stroke widths). Hover any icon for its exact command, or regenerate them
+weights, and opacities — including a printed part, whose decoration keeps its
+own LDraw colors, and a strokeless fills-only render (zero stroke widths). Hover any icon for its exact command, or regenerate them
 all with `scripts/render-gallery.sh`.*
 
 ## Setup (macOS)
