@@ -59,7 +59,8 @@ def test_flatten_populates_tri_meta_parallel_to_tri(tmp_path):
     hlr.flatten(p, np.eye(3), np.zeros(3), out, [tmp_path])
     assert len(out["tri"]) == 1
     assert len(out["tri_meta"]) == 1
-    assert out["tri_meta"][0] == {"certified": True, "invert": False}
+    assert out["tri_meta"][0] == {"certified": True, "invert": False,
+                                  "color": 16}
 
 
 def test_flatten_uncertified_marks_meta(tmp_path):
@@ -110,7 +111,8 @@ def test_flatten_quad_emits_two_tri_meta_entries(tmp_path):
     hlr.flatten(p, np.eye(3), np.zeros(3), out, [tmp_path])
     assert len(out["tri"]) == 2
     assert len(out["tri_meta"]) == 2
-    assert out["tri_meta"][0] == out["tri_meta"][1] == {"certified": True, "invert": False}
+    assert out["tri_meta"][0] == out["tri_meta"][1] == {
+        "certified": True, "invert": False, "color": 16}
 
 
 def test_flatten_invertnext_does_not_leak_to_sibling(tmp_path):

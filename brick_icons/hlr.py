@@ -61,7 +61,7 @@ def _bfc_certified(ln: str) -> bool:
 
 def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
             roots: list[Path], depth: int = 0,
-            inherited_invert: bool = False) -> None:
+            inherited_invert: bool = False, color: int = 16) -> None:
     if depth > 30:
         return
     out.setdefault("tri_meta", [])
@@ -83,6 +83,10 @@ def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
         if not tok:
             continue
         typ = tok[0]
+        # LDraw column 2: 16 means "inherit the referring line's colour",
+        # 24 is the edge colour. Anything else overrides.
+        own = int(tok[1]) if len(tok) > 1 and tok[1].lstrip("#").isdigit() else 16
+        cur = color if own == 16 else own
         if typ == "0":
             cmd = tok[1:]
             if len(cmd) >= 2 and cmd[0] == "BFC":
@@ -113,7 +117,7 @@ def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
                         m_reflect = bool(np.linalg.det(M) < 0)
                         flatten(sub, Rsub, tsub, out, roots, depth + 1,
                                 inherited_invert=base_invert ^ invert_next
-                                ^ m_reflect)
+                                ^ m_reflect, color=cur)
             invert_next = False
         elif typ in ("2", "5") and len(tok) >= 8:
             pts = np.array(list(map(float, tok[2:])), float).reshape(-1, 3)
@@ -123,7 +127,8 @@ def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
             if len(tok) >= 2 + 3 * n:
                 pts = np.array(list(map(float, tok[2:2 + 3 * n])), float).reshape(n, 3) @ R.T + t
                 tri_invert = base_invert ^ local_cw
-                meta = {"certified": certified, "invert": tri_invert}
+                meta = {"certified": certified, "invert": tri_invert,
+                        "color": cur}
                 if n == 3:
                     out["tri"].append(pts)
                     out["tri_meta"].append(dict(meta))
