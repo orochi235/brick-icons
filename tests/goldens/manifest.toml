@@ -30,9 +30,23 @@ spread = ["3005", "3001", "3941", "4589", "3960", "4070", "3649", "32062"]
 parts = "all"
 args = ["--format", "svg", "--shading", "outline", "--shade-style", "flat3"]
 
+[combo.outline]
+# Strokes only, occlusion ON — the isolated hidden-line-removal gate. This is
+# the combo an HLR engine swap answers to: no fills, so the arc/line command
+# counts move only when the kernel changes what it hides or how it curves.
+# `outline-flat3` covers the same edges but mixes fill geometry into those
+# counts (3001: A 58 -> 192), which is why it cannot serve.
+parts = "all"
+args = ["--format", "svg", "--shading", "outline"]
+
 [combo.wireframe]
-# Occlusion culling off: every edge drawn, hidden or not. The one combo that
-# shows what HLR decided to hide rather than only what it kept.
+# Occlusion culling OFF: every edge drawn, hidden or not (cli.process_one sets
+# cull = opacity >= 1.0 and not wireframe). This pins the draw-everything path
+# that `--opacity` also takes, and nothing else.
+#
+# It is NOT an HLR gate — it is the one combo that does not exercise occlusion
+# at all. Difference it against `outline` to see the hidden set (3001: 46 paths
+# against 26); on its own it only proves the kernel enumerates edges.
 parts = "spread"
 args = ["--format", "svg", "--shading", "outline", "--wireframe"]
 
