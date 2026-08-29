@@ -361,11 +361,21 @@ two points: `hlr.visible_segments` (the view path) and `hlr.part_geometry`
 (decal extraction, no view).
 
 ```
+python scripts/select-decal-corpus.py               # pick the extraction corpus
 python scripts/freeze-goldens.py                    # render seam -> tests/goldens/
-python scripts/freeze-goldens.py --seam extraction  # decal seam, 600 parts
+python scripts/freeze-goldens.py --seam extraction  # decal seam
 python scripts/freeze-goldens.py --out /tmp/new     # a run to compare
 python scripts/compare-goldens.py /tmp/new --out report.md
 ```
+
+**The extraction corpus is filtered to parts that have a surface to print on.**
+A decal binds to a *carrier* — a plane, cylinder, cone or disc it lies on. A
+sculpted part has none: a Marge Simpson head is thousands of tiny triangles, so
+every facet becomes its own carrier and the print shatters across 772 of them,
+no one holding more than 3% of it. `select-decal-corpus.py` keeps a part only
+if it has between 1 and 4 carriers at least as big as a 1x1 round tile's face,
+writing `decal-corpus.txt` from `decal-candidates.txt`. Exceptions go in
+`corpus-overrides.toml`, never in the generated file.
 
 Cases live in `tests/goldens/manifest.toml` as data — a part list crossed with
 a flag combo — so adding one is a row, not a code change. There is deliberately

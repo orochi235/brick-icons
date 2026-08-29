@@ -174,10 +174,25 @@ Three things found while freezing:
 - **`4740p03` no longer throws `TopologyException`** — not on either seam and
   not in the proof sheet. It is an ordinary decal-heavy specimen in the corpus
   now, so the older handoff's entry for it is stale.
-- **The 600-part decal corpus is pinned in `tests/goldens/decal-corpus.txt`.**
-  The full printed set is 11,220 parts; the slice the decal work reported
-  against (11,855 SVGs) was never recorded, and this one yields 21,035, so it
-  is a different 600. Pinned rather than re-enumerated so an LDraw update
-  cannot move it silently.
+- **The extraction corpus is filtered to parts that have a surface to print
+  on**, by `scripts/select-decal-corpus.py`: keep a part with 1..4 carriers at
+  least as big as a 1x1 round tile's face. 358 of 600 candidates survive,
+  carrying 3,841 SVGs instead of 21,035. Sculpted parts — Friends legs,
+  minidolls, Simpsons heads — score zero big carriers and drop out; wheel-and-
+  tyre assemblies score dozens and also drop. Exceptions belong in
+  `corpus-overrides.toml`; `decal-corpus.txt` is generated, so do not edit it.
+
+  **Measuring a carrier's area has three traps, all of which silently dropped
+  printed round tiles — the class the corpus most needs.** A disc is flat, so
+  the wrap-by-height extent a curved carrier reports is zero for one. A flat
+  primitive contributes a plane with no facets behind it, so `face.area` comes
+  back self-cancelling — 61.9 across a full 40 LDU span on a 2x2 round tile —
+  which is why the measure takes the convex hull. And a discretized circle
+  measures ~1% under the circle it approximates, so an r=9 carrier misses a
+  pi*81 threshold by 0.85%; hence the 5% margin.
+
+  `decal-candidates.txt` is the unfiltered pool: the first 600 printed parts of
+  11,220. The slice the decal work reported against (11,855 SVGs) was never
+  recorded and this pool yields 21,035, so it is a different 600.
 - **Golden rasters are calibrated against the pinned `resvg` 0.47.0.**
   Upgrading it moves every PNG with no engine change; re-freeze deliberately.

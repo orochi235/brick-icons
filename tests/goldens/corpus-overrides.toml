@@ -1,0 +1,10 @@
+# Hand overrides for scripts/select-decal-corpus.py, for the cases the
+# carrier-area rule gets wrong. Part ids live here rather than in
+# brick_icons/, which holds none.
+
+# Forced into the corpus despite scoring outside 1..MAX_BIG big carriers.
+keep = []
+
+# Forced out despite scoring inside it. A sculpted part can present exactly one
+# tile-sized carrier and still shatter its print across hundreds of facets.
+drop = []
