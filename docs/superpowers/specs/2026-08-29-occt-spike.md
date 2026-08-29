@@ -145,15 +145,24 @@ structural, not numerical.
 
 **The solid problem, and what it actually is.** LDraw parts are assemblies of
 *interpenetrating* primitives, not one watertight surface: 3001 sews to 15
-separate shells. That is fine — all 15 are closed, each makes a valid solid,
-and `BRepAlgoAPI_Fuse` merges them into **one valid solid in 0.04s**. But
-coverage across the survey is only **65% of parts reaching >=80% closed-solid
-area, and 42% fusing to a single solid** (0 fuse errors). The weak parts are
-the faceted ones — `87087` 24%, `4070` 26%, `30136` 13% — where the probe
-emits one planar face per triangle and never merges coplanar neighbours
-before sewing, so T-junctions leave the shell open. That is very likely a
-probe artifact rather than a kernel limit, but it is not proven, and it is
-the one thing standing between here and the ragged-bore fix.
+separate shells. That is fine -- all 15 are closed, each makes a valid solid,
+and `BRepAlgoAPI_Fuse` merges them into one valid solid in 0.04s, with zero
+fuse errors anywhere in the survey. With sector faces implemented and the
+cone/ring radii and extrusion direction fixed, the baseline is **62% of parts
+reaching >=80% closed-solid area and 71% fusing to exactly one solid.**
+
+**Coplanar pre-merge was tried, and it makes things worse: 62% -> 19%.**
+Grouping triangles by supporting plane, unioning them in 2D and emitting one
+face per region drops coverage hard, and the free-edge measurement says why:
+on `2412b` it barely changes the face count (35 -> 33) but drives free edges
+8 -> 24 and free-edge length 3.4% -> 46.9%. Merging a plane in isolation
+strips the intermediate vertices that the adjacent non-coplanar faces still
+carry, manufacturing the T-junctions it was meant to remove. Keeping the
+normal's sign and feeding it repaired outward winding changes nothing.
+`ShapeUpgrade_UnifySameDomain` is the right mechanism precisely because it
+works on topology and preserves shared vertices -- and it already runs after
+the sew. **This rules out the obvious route to raising coverage, not every
+route.**
 
 ### Verdict
 
@@ -162,11 +171,12 @@ current renderer on four parts, arc recovery is free, and seam dedupe follows
 from shared topology. Those are the bulk of `hlr.py`, `arcfit.py` and
 `primitives.py`. Nothing in the measurements argues against it.
 
-**Not yet on the boolean track.** The ragged bore needs `BRepAlgoAPI_Cut`,
-which needs solids, and solid coverage is 65%. Before adoption, one more
-question has to be answered: does merging coplanar triangles *before* sewing
-lift coverage above 90%? If yes, the boolean claims stand. If no, the bore
-keeps a bespoke fix and only the HLR track is worth the dependency.
+**No on the boolean track.** The ragged bore needs `BRepAlgoAPI_Cut`, which
+needs solids, and coverage sits at 62% with the obvious way of raising it now
+measured and rejected. The bore keeps a bespoke fix; the HLR track alone
+carries the dependency. Reopening this means finding a different route to
+watertightness (per-primitive solids fused pairwise, or `ShapeFix_Shell`),
+which is its own investigation and not a prerequisite for the HLR port.
 
 ### Not answered by this probe
 

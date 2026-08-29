@@ -134,6 +134,86 @@ def occt_faces(prim):
     return []
 
 
+# --- coplanar pre-merge (spike step 5: does it lift solid coverage?) ------
+PLANE_TOL = 1e-6
+
+
+def _plane_key(p, q):
+    """Canonical (normal, offset) key for a triangle's supporting plane."""
+    n = np.cross(p[1] - p[0], p[2] - p[0])
+    ln = np.linalg.norm(n)
+    if ln < 1e-12:
+        return None, None, None
+    n = n / ln
+    # Keep the normal's SIGN: two coplanar faces pointing opposite ways are
+    # different surfaces, and folding them together dissolves the shell.
+    d = float(n @ p[0])
+    return (tuple(np.round(n / q, 0).astype(int)), int(round(d / q))), n, d
+
+
+def _plane_basis(n):
+    a = np.array([1.0, 0.0, 0.0]) if abs(n[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
+    e1 = np.cross(n, a); e1 /= np.linalg.norm(e1)
+    return e1, np.cross(n, e1)
+
+
+def merged_planar_faces(tris, quant=1e-4):
+    """One face per connected coplanar region instead of one per triangle.
+
+    Unions each plane's triangles in 2D so an interior T-junction vertex ends
+    up on a real wire rather than leaving a free edge behind.
+    """
+    from shapely.geometry import Polygon
+    from shapely.ops import unary_union
+    groups = {}
+    for t in tris:
+        t = np.asarray(t, float)
+        key, n, d = _plane_key(t, quant)
+        if key is None:
+            continue
+        groups.setdefault(key, (n, d, []))[2].append(t)
+
+    faces, degenerate = [], 0
+    for n, d, ts in groups.values():
+        e1, e2 = _plane_basis(n)
+        o = n * d
+        polys = []
+        for t in ts:
+            r = t - o
+            polys.append(Polygon([(float(v @ e1), float(v @ e2)) for v in r]))
+        try:
+            u = unary_union([q.buffer(0) for q in polys])
+        except Exception:
+            degenerate += len(ts); continue
+        geoms = getattr(u, "geoms", [u])
+        for g in geoms:
+            if g.is_empty or g.geom_type != "Polygon" or g.area < 1e-9:
+                continue
+            def wire(coords):
+                w = BRepBuilderAPI_MakePolygon()
+                for (a, b) in list(coords)[:-1]:
+                    pt = o + a * e1 + b * e2
+                    w.Add(gp_Pnt(*map(float, pt)))
+                w.Close()
+                return w.Wire() if w.IsDone() else None
+            ow = wire(g.exterior.coords)
+            if ow is None:
+                degenerate += 1; continue
+            try:
+                mf = BRepBuilderAPI_MakeFace(ow, True)
+                for ring in g.interiors:
+                    iw = wire(ring.coords)
+                    if iw is not None:
+                        mf.Add(iw.Reversed())
+                if mf.IsDone():
+                    faces.append(mf.Face())
+                else:
+                    degenerate += 1
+            except Exception:
+                degenerate += 1
+    return faces, degenerate
+
+
 def tri_face(p):
     poly = BRepBuilderAPI_MakePolygon()
     for row in p:
@@ -156,7 +236,7 @@ def count(shape, kind):
     return n
 
 
-def build(part, ldraw_dir, tol=None):
+def build(part, ldraw_dir, tol=None, merge_coplanar=False):
     roots = hlr.default_roots(ldraw_dir)
     path = hlr._resolve_input(part, roots)
     out = {"2": [], "5": [], "tri": [], "tri_meta": [], "analytic": []}
@@ -171,11 +251,22 @@ def build(part, ldraw_dir, tol=None):
         for f in occt_faces(prim):
             sew.Add(f)
             n_prim += 1
-    for p in out["tri"]:
-        f = tri_face(np.asarray(p, float))
-        if f is not None:
+    if merge_coplanar:
+        tris = out["tri"]
+        if tris:
+            from brick_icons import repair
+            tris = list(repair.repaired_tris(np.array(tris), out["tri_meta"],
+                                             hlr.MESH_CACHE_DIR))
+        mfaces, _bad = merged_planar_faces(tris)
+        for f in mfaces:
             sew.Add(f)
             n_tri += 1
+    else:
+        for p in out["tri"]:
+            f = tri_face(np.asarray(p, float))
+            if f is not None:
+                sew.Add(f)
+                n_tri += 1
     sew.Perform()
     shape = sew.SewedShape()
     t_sew = time.time() - t0
