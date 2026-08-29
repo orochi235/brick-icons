@@ -103,3 +103,24 @@ def test_body_geometry_on_a_curved_wall_still_shades_as_a_gradient():
                              (1.0, np.array([0.0, 0.0, -1.0]))]}
     ops = shade.fill_ops([body], style, clip=False, ldraw_dir="vendor/ldraw")
     assert ops and "gradient" in ops[0]
+
+
+def test_decoration_facets_union_across_a_curved_carrier():
+    """A print is ONE region however its carrier curves. 3941p01's panel is 36
+    hand-authored quads wrapping a cylinder: adjacent facets sit 7.5 degrees
+    apart so they are not coplanar, and the part carries no conditional lines
+    to seam them, so the panel shattered into separately-stroked fragments."""
+    a = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
+    # shares edge (1,0,0)-(0,1,0), tilted well past the coplanarity threshold
+    b = np.array([[1.0, 0.0, 0.0], [1.0, 1.0, 0.4], [0.0, 1.0, 0.0]])
+    faces = shade.faces_from_tris(np.array([a, b]), FakeProj(), colors=[4, 4])
+    assert len(faces) == 2, "both facets should survive culling"
+    assert faces[0]["group"] == faces[1]["group"]
+
+
+def test_body_facets_still_need_coplanarity_or_a_seam_to_union():
+    a = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
+    b = np.array([[1.0, 0.0, 0.0], [1.0, 1.0, 0.4], [0.0, 1.0, 0.0]])
+    faces = shade.faces_from_tris(np.array([a, b]), FakeProj(), colors=[16, 16])
+    assert len(faces) == 2
+    assert faces[0]["group"] != faces[1]["group"]

@@ -1834,7 +1834,13 @@ def _attach_smooth_gradients(faces, cond_edges, min_spread=0.002):
             # when coplanar (quad halves meet at a diagonal, which is never a
             # conditional line) — coplanar union can't cross a real crease
             coplanar = float(faces[ks[0]]["normal"] @ faces[k]["normal"]) > 0.9999
-            if ek not in seam_keys and not coplanar:
+            # ...except decoration, which is ONE printed region however its
+            # carrier curves. 3941p01's panel is 36 hand-authored quads around
+            # a cylinder: 7.5 deg apart so never coplanar, and the part has no
+            # conditional lines to seam them, so it shattered into separately
+            # stroked fragments with the buttons splitting it into strips.
+            same_deco = faces[ks[0]].get("color", 16) != 16
+            if ek not in seam_keys and not coplanar and not same_deco:
                 continue
             ra, rb = find(ks[0]), find(k)
             if ra != rb:
