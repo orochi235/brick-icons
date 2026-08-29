@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from . import colors as _colors
+from . import geom2d
 
 BIND_TOL = 0.5          # LDU; see the plan's measured table
 
@@ -62,6 +63,27 @@ def _radial_gap(pts, prim) -> float:
     return float(np.max(np.abs(np.hypot(p[:, 0], p[:, 2]) - want)) * r)
 
 
+def _wrap(th):
+    return (np.asarray(th, float) + np.pi) % (2 * np.pi) - np.pi
+
+
+def _seam_origin(pts, carrier) -> float:
+    """Put the branch cut in the widest angular gap the decal leaves empty.
+    A fixed cut splits any decal that straddles it into two regions that can
+    never merge, fit as one shape, or stroke as one boundary."""
+    if isinstance(carrier, Plane):
+        return 0.0
+    o, a, r, e1, e2 = _circle_frame(carrier)
+    d = np.asarray(pts, float).reshape(-1, 3) - o
+    perp = d - np.outer(d @ a, a)
+    th = np.sort(np.mod(np.arctan2(perp @ e2, perp @ e1), 2 * np.pi))
+    if len(th) < 2:
+        return 0.0
+    gaps = np.diff(np.concatenate([th, th[:1] + 2 * np.pi]))
+    i = int(np.argmax(gaps))
+    return float(th[i] + gaps[i] / 2 - np.pi)
+
+
 def _gap(pts, carrier) -> float:
     """Distance from `pts` to the carrier surface, by carrier kind. A planar
     carrier measures offset FROM the face; a radial metric would report
@@ -104,9 +126,9 @@ class Plane:
         return self._basis
 
 
-def to_uv(pts, carrier):
+def to_uv(pts, carrier, theta0=0.0):
     """Carrier parameter space, in LDU on both axes so one uniform scale
-    keeps the texture isometric."""
+    keeps the texture isometric. `theta0` places the branch cut."""
     pts = np.asarray(pts, float)
     if isinstance(carrier, Plane):
         n, u, v = carrier.basis()
@@ -115,10 +137,11 @@ def to_uv(pts, carrier):
     d = pts - o
     height = d @ a
     perp = d - np.outer(height, a)
-    return np.column_stack([r * np.arctan2(perp @ e2, perp @ e1), height])
+    th = np.arctan2(perp @ e2, perp @ e1) - theta0
+    return np.column_stack([r * _wrap(th), height])
 
 
-def to_xyz(uv, carrier):
+def to_xyz(uv, carrier, theta0=0.0):
     """Back onto the EXACT surface — this is where the sagitta closes."""
     uv = np.asarray(uv, float)
     if isinstance(carrier, Plane):
@@ -126,9 +149,16 @@ def to_xyz(uv, carrier):
         return (np.outer(uv[:, 0], u) + np.outer(uv[:, 1], v)
                 + carrier.offset * n)
     o, a, r, e1, e2 = _circle_frame(carrier)
-    th = uv[:, 0] / r
+    th = uv[:, 0] / r + theta0
     return (o + np.outer(r * np.cos(th), e1) + np.outer(r * np.sin(th), e2)
             + np.outer(uv[:, 1], a))
+
+
+def _rings_of(poly):
+    """Boundary rings of a merged region, or the one ring of a raw polygon."""
+    if hasattr(poly, "geom_type"):
+        return geom2d.rings(poly)
+    return [np.asarray(poly, float)]
 
 
 def texture_svg(carrier_uv, regions, px=900, ldraw_dir="vendor/ldraw"):
@@ -141,11 +171,13 @@ def texture_svg(carrier_uv, regions, px=900, ldraw_dir="vendor/ldraw"):
     body = []
     for code, poly in regions:
         hex_str, _ = _colors.resolve(str(code), ldraw_dir)
-        pts = np.asarray(poly, float)
         d = " ".join(
-            f"{'M' if i == 0 else 'L'}{(p[0] - x0) * s:.2f},{(y1 - p[1]) * s:.2f}"
-            for i, p in enumerate(pts))
-        body.append(f'<path d="{d} Z" fill="#{hex_str[2:]}"/>')
+            " ".join(f"{'M' if i == 0 else 'L'}"
+                     f"{(p[0] - x0) * s:.2f},{(y1 - p[1]) * s:.2f}"
+                     for i, p in enumerate(ring)) + " Z"
+            for ring in _rings_of(poly))
+        body.append(f'<path d="{d}" fill="#{hex_str[2:]}" '
+                    f'fill-rule="evenodd"/>')
     return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{w:.0f}" '
             f'height="{h:.0f}"><rect width="{w:.0f}" height="{h:.0f}" '
             f'fill="#ffffff"/>' + "".join(body) + "</svg>")
@@ -168,9 +200,9 @@ def carrier_extent(carrier, uv=None):
 
 
 def bind_groups(tris, tri_colors, carriers):
-    """[(carrier, [(code, uv_poly)])] for every decoration triangle that binds.
-    Triangles binding to nothing are dropped, and their caller leaves the
-    authored geometry alone."""
+    """[(carrier, theta0, [(code, uv_poly)])] for every decoration triangle
+    that binds. Triangles binding to nothing are dropped, and their caller
+    leaves the authored geometry alone."""
     groups = {}
     for tri, code in zip(np.asarray(tris, float), tri_colors):
         if code == 16:
@@ -178,6 +210,44 @@ def bind_groups(tris, tri_colors, carriers):
         carrier = bind(tri, carriers)
         if carrier is None:
             continue
-        groups.setdefault(id(carrier), (carrier, []))[1].append(
-            (code, to_uv(tri, carrier)))
-    return list(groups.values())
+        groups.setdefault(id(carrier), (carrier, []))[1].append((code, tri))
+    out = []
+    for carrier, members in groups.values():
+        pts = np.vstack([t for _, t in members])
+        theta0 = _seam_origin(pts, carrier)
+        out.append((carrier, theta0,
+                    [(code, to_uv(t, carrier, theta0)) for code, t in members]))
+    return out
+
+
+def merge_regions(regions, holes=None):
+    """Union same-colour facets in UV. Interior facet edges vanish with the
+    union — a decal is one region, not a mesh."""
+    by_code = {}
+    for code, poly in regions:
+        by_code.setdefault(code, []).append(
+            geom2d.to_geom(np.asarray(poly, float)))
+    cut = [geom2d.to_geom(np.asarray(h, float)) for h in (holes or [])]
+    out = []
+    for code, geoms in by_code.items():
+        g = geom2d.union_all(geoms)
+        for h in cut:
+            g = geom2d.difference(g, h)
+        out.append((code, _drop_collinear(g)))
+    return out
+
+
+def _drop_collinear(g):
+    """A union leaves a vertex wherever a facet edge used to meet the boundary.
+    They are no longer corners, and every one of them rides through the fit and
+    into the emitted path."""
+    try:
+        s = g.simplify(geom2d.GRID, preserve_topology=True)
+        return s if not s.is_empty else g
+    except Exception:
+        return g
+
+
+def region_has_hole(g) -> bool:
+    return any(len(getattr(part, "interiors", ())) for part in
+               (getattr(g, "geoms", None) or [g]))

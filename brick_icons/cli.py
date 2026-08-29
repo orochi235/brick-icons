@@ -105,10 +105,11 @@ def _emit_unwrap(debug_dir, name, res, cfg) -> None:
     groups = unwrap.bind_groups(res.tri, res.tri_colors, res.analytic)
     d = Path(debug_dir)
     d.mkdir(parents=True, exist_ok=True)
-    for i, (carrier, regions) in enumerate(groups):
+    for i, (carrier, _theta0, regions) in enumerate(groups):
         ext = unwrap.carrier_extent(
             carrier, np.vstack([p for _, p in regions]))
-        svg = unwrap.texture_svg(ext, regions, ldraw_dir=cfg.ldraw_dir)
+        svg = unwrap.texture_svg(ext, unwrap.merge_regions(regions),
+                                 ldraw_dir=cfg.ldraw_dir)
         tag = "" if len(groups) == 1 else f".{i}"
         (d / f"{name}.unwrap{tag}.svg").write_text(svg)
 

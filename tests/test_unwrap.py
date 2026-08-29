@@ -152,3 +152,64 @@ def test_a_cone_binds_on_its_taper_not_on_one_radius():
     # 20 LDU is the cone's radius only halfway up, not at the base
     off = np.array([[20.0, 0.0, 0.0], [19.6, 0.0, 4.0], [20.0, 1.0, 0.0]])
     assert unwrap.bind(off, [cone]) is None
+
+
+def test_two_facets_sharing_an_edge_merge_to_one_four_corner_region():
+    a = np.array([[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]])
+    b = np.array([[2.0, 0.0], [4.0, 0.0], [4.0, 2.0], [2.0, 2.0]])
+    merged = unwrap.merge_regions([(4, a), (4, b)])
+    assert len(merged) == 1
+    code, g = merged[0]
+    assert code == 4
+    rings = geom2d.rings(g)
+    assert len(rings) == 1
+    assert len(rings[0]) == 4                  # the shared edge is gone
+
+
+def test_different_colours_stay_separate_regions():
+    a = np.array([[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]])
+    b = np.array([[2.0, 0.0], [4.0, 0.0], [4.0, 2.0], [2.0, 2.0]])
+    assert len(unwrap.merge_regions([(4, a), (14, b)])) == 2
+
+
+def test_a_hole_survives_the_merge():
+    """3941p01's buttons are body-coloured discs INSIDE the black panel: the
+    panel region must keep them as holes, not swallow them."""
+    outer = np.array([[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]])
+    merged = unwrap.merge_regions([(0, outer)],
+                                  holes=[np.array([[4.0, 4.0], [6.0, 4.0],
+                                                   [6.0, 6.0], [4.0, 6.0]])])
+    assert len(merged) == 1
+    assert unwrap.region_has_hole(merged[0][1])
+
+
+def _wall_quads(cyl, a0_deg, a1_deg, v0, v1, step=10):
+    """Triangles tiling a patch of a cylinder wall between two angles."""
+    r = float(np.linalg.norm(cyl.R[:, 0]))
+    tris = []
+    edges = np.radians(np.arange(a0_deg, a1_deg + step, step))
+    for t0, t1 in zip(edges[:-1], edges[1:]):
+        c = [(np.array([r * np.cos(t), v, r * np.sin(t)]))
+             for t in (t0, t1) for v in (v0, v1)]
+        tris += [np.array([c[0], c[2], c[3]]), np.array([c[0], c[3], c[1]])]
+    return tris
+
+
+def test_a_decal_straddling_the_branch_cut_stays_one_region():
+    """3941p01's second panel sits across theta = +-pi. Cutting the cylinder
+    at a fixed angle splits it into two regions that can never merge, fit as
+    one rounded rectangle, or stroke as one boundary."""
+    cyl = FakeCylinder(r=20.0, h=24.0)
+    tris = _wall_quads(cyl, 160, 200, 4.0, 8.0)
+    (_carrier, _t0, regions), = unwrap.bind_groups(tris, [4] * len(tris), [cyl])
+    merged = unwrap.merge_regions(regions)
+    assert len(merged) == 1
+    assert len(geom2d.rings(merged[0][1])) == 1
+
+
+def test_the_branch_cut_does_not_move_a_decal_that_never_crosses_it():
+    cyl = FakeCylinder(r=20.0, h=24.0)
+    tris = _wall_quads(cyl, 10, 50, 4.0, 8.0)
+    (_carrier, _t0, regions), = unwrap.bind_groups(tris, [4] * len(tris), [cyl])
+    merged = unwrap.merge_regions(regions)
+    assert len(geom2d.rings(merged[0][1])) == 1
