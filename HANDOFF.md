@@ -1,105 +1,61 @@
-# Handoff — 2026-07-19 (late): condline smooth joints + corner join chaining
+# Handoff — 2026-08-28: LDraw color codes + printed parts
 
-Working tree on `main`, clean. 336 tests passing.
+Working tree on `main`, clean. 359 tests passing.
 
-## Addendum 2026-07-20: chain miterlimit 5 → 1.5 (corner barbs)
+**Read these first, in order — they carry the design, not this file:**
+- `docs/superpowers/specs/2026-08-28-printed-parts-design.md` — both phases
+- `docs/superpowers/plans/2026-08-28-ldraw-color-codes.md` — phase 1 tasks
 
-f15fcea's mitered chains grew spikes ("barbs") at interior junctions
-sharper than ~46° (miter ratio > 5 never occurred; the visible barbs
-were ratio 1.9–3.3 at 35–63° wedges — 98283 ledge corner, 32062 notch
-chevrons). miterlimit 1.5 on chains+elbows bevels joins sharper than
-~84°; outline corners keep their sharpness via contour_d (still 5).
-Census A/B vs census-Z: 6 parts byte-identical, 42 differ ONLY in the
-stroke-miterlimit attribute (path data identical); raster delta is
-ink-REMOVAL only (985 px @1024 across all 42), all at junction
-vertices. 336 tests pass. **census-AA**
-(`~/.claude-msb/jobs/0629a9a6/tmp/census-AA/`) is the new baseline;
-byte-diff gate hard vs census-AA.
+## Where phase 1 stands
 
-## What this session did (`3f172bc`, `f15fcea`)
+Done and committed (Tasks 2–6, 8–10): `brick_icons/colors.py` resolves
+`--part-color` as hex, LDraw code, or color name against the vendored
+LDConfig; `load_config` resolves once so nothing downstream changed;
+`--list-colors`; README; the `_ink_lens_pockets` crash fix; and
+`scripts/measure-decal-offsets.py`.
 
-- **Condline-declared smooth joints** (`3f172bc`, hlr/primitives):
-  4740's "extra concentric seams" were the r=12/r=16 cone-band junction
-  circles — the author condlines exactly those circles (smooth joint),
-  but `smooth_rim_skips` only suppressed equal-slope wall stacks and the
-  dish's bands pitch differently (15.8/21.8/29.9 deg). New
-  `primitives.rim_cond_span_bins`: authored type-5 chords lying ON a rim
-  circle count as opposite-side coverage UNCONDITIONALLY (real creases
-  are type-2 authored — 4740's boss base keeps its ring; guards: chords
-  must sit in-plane at radius, span < 30 deg so diameters don't count).
-  NOT a regression fix: opaque flat3 has drawn these rings since at
-  least census-H; b207e13 removed their translucent hairline cousins,
-  which is why they stood out "again". Census diff: 4740 (rings gone) +
-  2654a (dome-base seam arcs gone, plus a knock-on: the slit-V weld
-  pocket vanished because the seam remnant that triggered it is gone —
-  reviewed, cleaner). 30137 spot-checked byte-identical.
+**Task 7 (byte-diff gate) was in flight when this was written** and is the one
+thing to confirm before trusting the phase. A true pre-change baseline renders
+from a worktree at `28f895e` (the last docs-only commit), because the in-repo
+`debug/colorcodes/baseline` was regenerated *after* the code changes and is an
+after-shot. Compare that worktree's specimen SVGs against
+`debug/colorcodes/baseline`; expect byte-identical, since specimens pass no
+`--part-color`.
 
-- **Corner pinch notches SOLVED by path chaining** (`f15fcea`, trace):
-  the QL/WebKit "leaking corners" (real geometry in every renderer, see
-  memory corner-pinch-notch) are fixed the sanctioned way —
-  `trace._chain_line_ops` chains shared-endpoint same-width line
-  strokes into mitered polyline paths (sharpest wedge pairs first,
-  cyclic-adjacent pairing per vertex; closed chains emit Z) and covers
-  leftover wedges at 3+-degree vertices with 2-segment elbow-join
-  paths. GOTCHA: elbow arms are trimmed to 1.5·sw — full-length arms
-  double-composite the AA fringe of every junction stroke (first
-  attempt showed red edge-length diffs on 2412b). Endpoint keys are the
-  emitted 2-dp coords; iteration fully sorted (byte-jitter gate).
-  Verified in resvg AND CoreSVG (`sips`): census-Z vs Y is corner-ink
-  additions only on 41 boxy parts; 7 pure-round parts byte-identical.
+Task 11 (adding printed parts to `specimens.txt`) is deliberately unstarted —
+it needs a human to pick which of the 12 rendered samples to carry.
 
-## Baselines
+## Decisions made in conversation that the code does not show
 
-- **census-Z** (`~/.claude-msb/jobs/0629a9a6/tmp/census-Z/`, 48 parts,
-  post-f15fcea) is current. Every boxy part byte-differs from census-Y
-  (stroke layer restructured into chained paths) — reviewed at PIXEL
-  level instead: rasterize + AE + directionality (ink added at corners
-  only, none removed).
-- census-Y (same dir, post-3f172bc) = condline fix only; diffs vs
-  census-X: 4740, 2654a (both reviewed).
-- census-X (same dir) and older: see git history of this file.
-- Byte-diff gate stays HARD vs census-Z or newer.
+- **Codes and names raise; hex keeps its silent gray fallback.** Deliberate:
+  a malformed hex string stays backward-compatible, a typo'd name should not
+  silently render gray.
+- **Hex is canonicalized to lowercase**, which changed the `-DefaultColor3`
+  flag's case and required updating `test_build_argv_part_color_optional`.
+  LDView hex is case-insensitive, so renders are unaffected.
+- **Raster textures were considered and rejected for phase 2** — see the spec.
+  The short version is that affine strips work on cylinders (the map is
+  separable) but fail on cones by 44–88 px, and no texture asset exists for the
+  ~4,750 non-TEXMAP printed parts anyway.
 
-## Open items
+## Open, none of it planned yet
 
-1. **LDView flags not applying in this environment**: `--mode gray
-   --shading normal` renders come back faceted (hex boss) with NO edge
-   lines despite `-EdgeLines=1 -CurveQuality=12 -HiResPrimitives=1` —
-   observed on direct invocation AND through `render.render_part`. The
-   outline path never calls LDView, so current pipeline is unaffected,
-   but shaded-reference calibration is broken until diagnosed (prefs
-   file? snapshot arg order? Rosetta?).
-2. Mike wish list: (b) truncated rim-stud faces as one arc on the
-   footprint circle — `primitives.facet_snap_rims` BUILT+TESTED, not
-   emitted; needs drawn-chord refit onto known rim circles (hook:
-   fit_edge_arcs call site). (c) grow recognized-element
-   exact-intersection layer; px-space gates stay fallback.
-3. 30137 band-edge raggedness at zoom 8 (invisible at label scale).
-4. 3941 translucent bottom notch (pre-existing; verify vs LDView).
-5. Performance: suite ~6 min; census ~7 min.
-6. LDraw/LDView hosted pinning (upload vendored snapshot on
-   renderer-done).
+- **Ink pockets the user does not want** in `docs/gallery`: `30137` (4 black
+  paths, three of them one-per-log-top), `98283` (5, reading as ragged
+  corners), `32062` (1). Cannot simply be disabled — that inking is what closed
+  the graze-shard and pinhole classes. Needs its own task with a byte-diff gate.
+- **Linear gradient stops are uncapped.** `shade.py:1313` emits one stop per
+  `grad_sample`; radial gradients bin to 8 via `_radial_focal_stops`. Hence
+  `3960p01` carrying twelve 48-stop linear gradients (640 stops against the
+  plain dish's 28). Binning linear stops the same way would shrink every part.
+- **`4740p03`** dies with `shapely.errors.GEOSException: TopologyException:
+  side location conflict` on a normal outline render. Undiagnosed.
+- **Flat prints render as nothing at all** — the largest phase 2 item by part
+  count, and the measurement script cannot yet size its tolerance because
+  distance-from-axis is the wrong metric for a flat face.
 
-## Verification workflow
+## Phase 2
 
-- Full suite: `.venv/bin/python -m pytest -q` (336, ~6 min)
-- Gallery: `scripts/render-gallery.sh` (16 parts, ~4 min)
-- Contact sheet (labeled): `scripts/render-contact-sheet.sh [out-dir]`
-- One part: `.venv/bin/python -m brick_icons.cli <id> --format svg
-  --shading outline --shade-style flat3 [--part-label] [--opacity 0.55]
-  --out <dir>`
-- Census A/B: render `--list
-  ~/.claude-msb/jobs/eb7c836f/tmp/census-K.parts.txt` (defaults 256×170
-  + flat3 match baselines), byte-diff SVGs vs census-Z; where strokes
-  restructure, fall back to raster AE + directionality (see this
-  session's zcmp workflow in `~/.claude-msb/jobs/0629a9a6/tmp/`).
-- WebKit/CoreSVG check for corner-class issues: `sips -s format png -Z
-  2048 <svg> --out <png>` (QL preview is WebKit; sips is CoreSVG).
-- 1024 stroke parity: `--format both --shading outline --width 1024
-  --height 1024`, resvg + `magick compare -metric RMSE`; ~0.019-0.02
-  normalized ≈ AA floor. NOTE: outline-mode `.gray.png` is OUR OWN
-  rasterized segments, not LDView (cli.py:205) — don't use it as an
-  external reference; `--mode gray --shading normal` is the LDView path
-  (currently broken, see open item 1).
-- Layer-split triage: zero out `stroke-width="0.8"` + `fill` → strokes
-  layer; zero out `stroke-width="2.00"` → fills layer.
+Not planned yet, by choice: its plan was to wait on real carrier-offset
+numbers, which now exist (0.5 LDU binds every curved carrier). The spec's
+phase 2 section is ready to turn into tasks.
