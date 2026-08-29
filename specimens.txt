@@ -28,3 +28,9 @@
 6589    # Technic gear 12 tooth bevel — angled teeth
 3673    # Technic pin — small round connector
 32062   # Technic axle 2 notched — cross-section extrusion
+
+# --- Printed decoration (phase 2 baseline: these render as embossing today) ---
+3941p01  # 2x2 round brick — print on a cylinder wall (only full print today)
+3942bp01 # cone 2x2x2 — print on a tapered wall
+3068bp00 # tile 2x2 — flat carrier; renders undecorated until phase 2
+3040bp08 # 45 slope 2x1 — print on a sloped flat face, partially inked
