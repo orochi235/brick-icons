@@ -1,6 +1,10 @@
-# Handoff — decal extraction as a first-class feature
+# Handoff — decal extraction, then the conformance baseline
 
-Merged to **`main`**. 462 tests pass.
+All on **`main`**, working tree clean. 473 tests pass.
+
+The golden baseline the engine swap needs is **done and merged** — see "The
+regression gate: answered" below. The next step is the OCCT adoption design,
+which is no longer blocked.
 `docs/superpowers/plans/2026-08-28-decal-unwrap.md` is still the durable record
 of phase 2; this covers what landed on top of it.
 
