@@ -49,11 +49,13 @@ decoration:
 - **White decals are invisible** in the proof sheet — the cell background is
   also white (`10049p01`, `26603p01`). The prints may be fine; nobody can
   tell.
-- **Organic bodies mis-bind.** Minifig legs and shields classify as
-  cone/cylinder carriers and unwrap into slivers. The carrier set is
-  plane/cylinder/cone/sphere; a surface that is none of them still finds a
-  nearest one and binds to it. High-poly figures — minidolls above all —
-  are the hard case, and nothing in the current model fits them.
+- **Organic bodies have no single carrier.** Fixed in the proof sheet: it
+  binds per facet and labels what fell off (`3/672 facets · 669
+  off-carrier`), so the old slivers are gone. But 183 of the 189 plane cells
+  in `out/proof-300.pdf` put under half their facets on the dominant plane —
+  a Friends leg is faceted into thousands of one-facet planes and is neither
+  a plane nor one curve. The renders are fine; it is the sheet's
+  one-carrier-per-part model that cannot describe this class.
 - **`4740p03`** dies with `shapely.errors.GEOSException: TopologyException`.
 - **Linear gradient stops are uncapped** (`shade.py`), so `3960p01` carries 640.
 - **Ink pockets** on `30137`, `98283`, `32062` that the user does not want.
@@ -61,6 +63,17 @@ decoration:
   the spec.
 
 ## Traps
+
+- **The proof sheet is not the renderer.** `scripts/proof-decals.py` fits its
+  own carrier from raw geometry; `brick_icons/` binds per facet against
+  analytic primitives and `shade._body_planes`. A wrong cell is a sheet bug
+  until an actual render disagrees — every minifig torso read as a squashed
+  cylinder in the sheet while `--shading outline --shade-style flat3` drew
+  them correctly. Render before believing the sheet.
+- **Decoration only reaches SVG with a shade style.** Plain
+  `--shading outline` emits strokes and no fills, so two differently printed
+  parts come out byte-identical and it looks like binding failed. Add
+  `--shade-style flat3`.
 
 - **Rendering with `--line-width 0 --silhouette-width 0` is the fastest way to
   tell a stroke artifact from a fill artifact.** It is what proved 3942bp01's

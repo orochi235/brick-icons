@@ -18,9 +18,9 @@ re-run only redoes what is missing; `--jobs` renders in parallel (LDView
 dominates the wall clock); `--start`/`--limit` page through a large set. About
 4,700 printed parts exist, so batch it.
 
-The unwrap is deliberately standalone so this runs against any checkout. When
-`brick_icons/unwrap.py` lands, replace `_unwrap` with a call into it rather
-than letting the two drift.
+The fitting is standalone so this runs against any checkout, but carrier
+binding goes through `brick_icons.unwrap` so the sheet cannot disagree with
+the renderer about what a decal sits on.
 
 Needs: resvg, imagemagick (see scripts/external-deps.lock)
 """
@@ -126,8 +126,39 @@ def _cone(p, k, b):
     return np.column_stack([rho * np.sin(phi), -rho * np.cos(phi)])
 
 
+CURVE_TOL = 0.8         # LDU a decal may stand off its fitted cylinder/cone.
+                        # Measured: 3941p01 0.242 and 3942bp01 0.001 really do
+                        # lie on one; every minifig torso reads 6.6 or worse.
+
+
+def _dominant(deco, inside):
+    """(carrier, on-carrier facets, stray facets), grouped by the planes the
+    DECAL spans — an organic shell is faceted into thousands of one-facet
+    planes, and matching the body's costs minutes a part to say the same
+    thing. Most facets wins, not most area: 973p11's back is three big quads
+    against 126 small ones of artwork."""
+    planes = unwrap.planes_from([p for _c, p in deco], inside=inside)
+    groups = {}
+    for c, p in deco:
+        carrier = unwrap.bind(p, planes)
+        if carrier is None:
+            continue
+        groups.setdefault(id(carrier), (carrier, []))[1].append((c, p))
+
+    def area(members):
+        return sum(float(np.linalg.norm(np.cross(p[1] - p[0], p[2] - p[0])))
+                   for _c, p in members)
+
+    if not groups:
+        return None, [], list(deco)
+    carrier, members = max(groups.values(),
+                           key=lambda g: (len(g[1]), area(g[1])))
+    keep = {id(p) for _c, p in members}
+    return carrier, members, [(c, p) for c, p in deco if id(p) not in keep]
+
+
 def _unwrap(deco, body):
-    """(decal, carrier, kind) laid flat, LDU on both axes."""
+    """(decal, carrier, kind, ghosts) laid flat, LDU on both axes."""
     pts = np.vstack([p for _, p in deco])
     # planarity decides, not radius spread: a 45-degree slope face has a tight
     # radius spread about the part axis and would unwrap as a cylinder, which
@@ -147,21 +178,41 @@ def _unwrap(deco, body):
         carrier = _quad([np.column_stack([p @ u, p @ v]) for _, p in body
                          if abs(np.cross(p[1] - p[0], p[2] - p[0]) @ n) > 1e-6
                          and np.all(np.abs(p @ n - d0) < 0.6)])
-        return flat, carrier, "flat"
+        return flat, carrier, "flat", []
 
     r = np.hypot(pts[:, 0], pts[:, 2])
     rr = max(r.mean(), 1e-6)
     hs = pts[:, 1]
     k, b = (np.polyfit(hs, r, 1) if np.ptp(hs) > 1e-6 else (0.0, rr))
-    tapered = abs(k) > 0.05
-    fn = (lambda q: _cone(q, k, b)) if tapered else (lambda q: _cyl(q, rr))
-    on = [p for _, p in body
-          if np.all(np.abs(np.hypot(p[:, 0], p[:, 2]) - (k * p[:, 1] + b)) < 0.8)]
-    if tapered:
-        # the carrier is an annular band, not a box; keep its real outline
-        carrier = [(16, fn(q)) for q in on]
-        return [(c, fn(p)) for c, p in deco], carrier, "cone"
-    return ([(c, fn(p)) for c, p in deco], _quad([fn(q) for q in on]), "cylinder")
+    if float(np.abs(r - (k * hs + b)).max()) <= CURVE_TOL:
+        tapered = abs(k) > 0.05
+        fn = (lambda q: _cone(q, k, b)) if tapered else (lambda q: _cyl(q, rr))
+        on = [p for _, p in body
+              if np.all(np.abs(np.hypot(p[:, 0], p[:, 2]) - (k * p[:, 1] + b)) < 0.8)]
+        if tapered:
+            # the carrier is an annular band, not a box; keep its real outline
+            return [(c, fn(p)) for c, p in deco], [(16, fn(q)) for q in on], "cone", []
+        return ([(c, fn(p)) for c, p in deco], _quad([fn(q) for q in on]),
+                "cylinder", [])
+
+    # Neither one plane nor one curve. Strays project onto the bound plane as
+    # ghosts: visible, without pretending to share its surface.
+    inside = np.vstack([p for _, p in body]).mean(axis=0) if body else ctr
+    plane, members, strays = _dominant(deco, inside)
+    if plane is None:
+        plane = unwrap.Plane(normal=normal, offset=float(normal @ ctr))
+        members, strays = list(deco), []
+    n, u, v = plane.basis()
+    d0 = plane.offset
+
+    def proj(q):
+        return np.column_stack([q @ u, q @ v])
+
+    carrier = _quad([proj(p) for _, p in body
+                     if abs(np.cross(p[1] - p[0], p[2] - p[0]) @ n) > 1e-6
+                     and np.all(np.abs(p @ n - d0) < 0.6)])
+    return ([(c, proj(p)) for c, p in members], carrier, "plane",
+            [(c, proj(p)) for c, p in strays])
 
 
 def _union(polys):
@@ -180,13 +231,13 @@ def _union(polys):
     return list(getattr(u, "geoms", [u]))
 
 
-def cell_svg(pid, title, deco, carrier, kind, ref_png, margin=0.12):
+def cell_svg(pid, title, deco, carrier, kind, ref_png, ghosts=(), margin=0.12):
     """One grid cell: LDView render, flat decal, label strip.
 
     The label is drawn in SVG rather than composited by ImageMagick, whose
     montage labeller has no usable font in this environment.
     """
-    allp = np.vstack([p for _, p in deco])
+    allp = np.vstack([p for _, p in deco] + [p for _, p in ghosts])
     x0, y0 = allp.min(axis=0)
     x1, y1 = allp.max(axis=0)
     m = margin * max(x1 - x0, y1 - y0, 1e-9)
@@ -225,6 +276,14 @@ def cell_svg(pid, title, deco, carrier, kind, ref_png, margin=0.12):
         by_colour.setdefault(c, []).append(p)
     body += [f'<path d="{region_d(g)}" fill="#f2f2f2" stroke="none"/>'
              for g in _union([p for _, p in carrier])] if carrier else []
+    by_ghost = {}
+    for c, p in ghosts:
+        by_ghost.setdefault(c, []).append(p)
+    for c in sorted(by_ghost):
+        col = PAL[c].hex.replace("0x", "#") if c in PAL else "#888888"
+        body += [f'<path d="{region_d(g)}" fill="{col}" fill-rule="evenodd" '
+                 f'fill-opacity="0.22" stroke="none"/>'
+                 for g in _union(by_ghost[c])]
     for c in sorted(by_colour):                      # authored order: later on top
         col = PAL[c].hex.replace("0x", "#") if c in PAL else "#888888"
         body += [f'<path d="{region_d(g)}" fill="{col}" fill-rule="evenodd" '
@@ -240,7 +299,9 @@ def cell_svg(pid, title, deco, carrier, kind, ref_png, margin=0.12):
              f'{escape(title[:76])}</text>',
              f'<text x="10" y="{CELL + 39}" font-family="Helvetica,Arial" '
              f'font-size="12" fill="#777">{kind} carrier &#183; '
-             f'{len(deco)} facets &#183; {escape(names)}</text>']
+             f'{len(deco)}{f"/{len(deco) + len(ghosts)}" if ghosts else ""} facets'
+             f'{f" &#183; {len(ghosts)} off-carrier" if ghosts else ""} &#183; '
+             f'{escape(names)}</text>']
     return (f'<svg xmlns="http://www.w3.org/2000/svg" '
             f'xmlns:xlink="http://www.w3.org/1999/xlink" width="{w}" '
             f'height="{h}">' + "".join(body) + "</svg>")
@@ -276,17 +337,18 @@ def build_cell(pid, cfg, work, force=False):
     if not deco:
         return None, "no decoration"
     body = [(c, p) for c, p in polys if c == 16]
-    flat, carrier, kind = _unwrap(deco, body)
+    flat, carrier, kind, ghosts = _unwrap(deco, body)
     ref = work / f"{pid}.ldview.png"
     if not ref.exists():
         subprocess.run(render.build_argv(cfg, src, ref), check=True,
                        capture_output=True)
     title = src.read_text(errors="replace").splitlines()[0][2:].strip()
     svg = work / f"{pid}.cell.svg"
-    svg.write_text(cell_svg(pid, title, flat, carrier, kind, ref))
+    svg.write_text(cell_svg(pid, title, flat, carrier, kind, ref, ghosts))
     subprocess.run(["resvg", "--background", "white", str(svg), str(cell)],
                    check=True, capture_output=True)
-    return cell, f"{kind}, {len(deco)} facets"
+    return cell, (f"{kind}, {len(flat)} facets"
+                  + (f", {len(ghosts)} off-carrier" if ghosts else ""))
 
 
 def main() -> int:

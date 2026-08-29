@@ -423,3 +423,41 @@ def densify(ring, step=0.25):
         n = max(1, int(np.ceil(np.linalg.norm(b - a) / step)))
         out.append(a + np.outer(np.arange(n) / n, b - a))
     return np.vstack(out)
+
+
+PLANE_COS = 0.9994      # ~2 deg; an LDraw 16-gon steps 22.5, so merging this
+                        # tightly cannot flatten a faceted wall into one plane
+
+
+def planes_from(polys, inside=None):
+    """A `Plane` per distinct facet plane, normals pointing away from `inside`.
+
+    Winding is not trustworthy in raw LDraw geometry, so the outward sense
+    comes from the part's own interior rather than the cross product's sign —
+    an inward normal would hand `up_aligned` a mirrored frame.
+    """
+    inside = np.zeros(3) if inside is None else np.asarray(inside, float)
+    norms, offs, out = np.empty((0, 3)), np.empty(0), []
+    for p in polys:
+        p = np.asarray(p, float)
+        if len(p) < 3:
+            continue
+        n = np.cross(p[1] - p[0], p[2] - p[0])
+        ln = float(np.linalg.norm(n))
+        if ln < 1e-9:
+            continue
+        n = n / ln
+        d = float(n @ p[0])
+        if float(n @ inside) > d:
+            n, d = -n, -d
+        # matched by proximity, not by a rounded key: two facets of one face
+        # differ in the 4th decimal, and a grid splits them whenever that
+        # noise straddles a boundary — 10049p01's front came out as four
+        # planes and took the decal's dominant group down with it
+        if len(out) and np.any((norms @ n > PLANE_COS)
+                               & (np.abs(offs - d) <= 0.05)):
+            continue
+        out.append(Plane(normal=n, offset=d))
+        norms = np.vstack([norms, n])
+        offs = np.append(offs, d)
+    return out
