@@ -353,6 +353,54 @@ extraction [`decal`](#decal-extraction) performs, on a white ground, which is
 the only way to check that decoration bound to the right carrier without
 reading projected output.
 
+## Golden conformance corpus
+
+The baseline the engine swap is measured against, frozen from the current
+renderer. Two seams are covered, because the CLI touches the engine at exactly
+two points: `hlr.visible_segments` (the view path) and `hlr.part_geometry`
+(decal extraction, no view).
+
+```
+python scripts/freeze-goldens.py                    # render seam -> tests/goldens/
+python scripts/freeze-goldens.py --seam extraction  # decal seam, 600 parts
+python scripts/freeze-goldens.py --out /tmp/new     # a run to compare
+python scripts/compare-goldens.py /tmp/new --out report.md
+```
+
+Cases live in `tests/goldens/manifest.toml` as data — a part list crossed with
+a flag combo — so adding one is a row, not a code change. There is deliberately
+no `cel` case: `--shading cel` is routed to `trace.cel_svg`, which posterizes
+the LDView raster and traces the bands, so it never reaches the engine and
+cannot gate a change to it. Each render case
+freezes three artifacts:
+
+| artifact | what it is for |
+|---|---|
+| a line in `hashes.txt` | exact drift lock on **this** engine |
+| `render/<case>.json` | structural summary: path and command counts, fill palette, gradient stops, bbox |
+| `render/<case>.png` | `resvg` raster at a fixed width |
+
+**The hash is not a cross-engine check.** A BRep kernel reads a circle off the
+edge where this renderer refits a polyline onto a guessed arc, so a correct new
+engine misses every hash by construction. `compare-goldens.py` deliberately
+ignores them and diffs the raster and the summary instead. Read the arc/line
+split as intent: on round parts `A` rising while `L` falls is the swap working,
+and a round part whose `A` count does not move is the suspicious one.
+
+**Tolerances default to zero because the noise floor is zero.** Two
+independent full freezes of the unchanged engine agree exactly — every hash
+identical, raster RMSE 0.000, no summary field moved. So a nonzero difference
+is signal, and `--rmse-tol` / `--bbox-tol` exist to absorb a *deliberate*
+change, not measurement jitter.
+
+`tests/test_goldens.py` holds the drift gate, skipped by default because it
+needs LDView and minutes. `BRICK_GOLDENS=1` runs a fast subset, `=full` runs
+the manifest.
+
+Rasters are calibrated against the pinned `resvg` in
+[`scripts/external-deps.lock`](scripts/external-deps.lock); upgrading it moves
+every golden with no engine change.
+
 ## Notes
 
 - `gray` output is saved at full render resolution — a high-res master for the

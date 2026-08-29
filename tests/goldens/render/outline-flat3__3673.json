@@ -1,0 +1,27 @@
+{
+  "bbox": [
+    16.2,
+    7.57,
+    239.8,
+    162.48
+  ],
+  "commands": {
+    "A": 155,
+    "L": 1015,
+    "M": 91,
+    "Z": 45
+  },
+  "fills": {
+    "#5e5e5e": 9,
+    "#858585": 6,
+    "#cccccc": 1,
+    "gradient": 16,
+    "none": 47
+  },
+  "gradient_stops": 144,
+  "gradients": 16,
+  "lines": 13,
+  "paths": 79,
+  "transforms": 0,
+  "viewBox": "0 0 256 170"
+}

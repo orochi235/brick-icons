@@ -1,0 +1,47 @@
+# Golden conformance corpus for the engine swap.
+#
+# Cases are data: adding one is a row here, not a change to the harness.
+# `scripts/freeze-goldens.py` writes the artifacts, `scripts/compare-goldens.py`
+# diffs a fresh run against them.
+#
+# Part ids stay in this manifest and out of `brick_icons/` — the library holds
+# no part numbers.
+
+[parts]
+# specimens.txt, which already curates studs, curves, gradients, gears and
+# SNOT, plus the four printed parts the decal gates use.
+#
+# 4740p03 is here rather than in a recorded-failure list: the handoff's
+# TopologyException does not reproduce on either seam or in the proof sheet,
+# so it is an ordinary decal-heavy specimen now.
+all = ["3005", "3024", "3001", "3020", "3040b", "3941", "6143", "50950",
+       "4589", "3960", "4070", "87087", "99781", "4019", "3649", "6589",
+       "3673", "32062", "3941p01", "3942bp01", "3068bp00", "3040bp08",
+       "4740p03"]
+
+# Enough spread to catch a combo-specific regression without paying for the
+# whole list three times: flat faces, curves, a dish, SNOT, the gear stress
+# case and an extruded cross-section.
+spread = ["3005", "3001", "3941", "4589", "3960", "4070", "3649", "32062"]
+
+[combo.outline-flat3]
+# The primary combo, and the only one where decoration reaches SVG at all —
+# plain `--shading outline` emits strokes and no fills.
+parts = "all"
+args = ["--format", "svg", "--shading", "outline", "--shade-style", "flat3"]
+
+[combo.wireframe]
+# Occlusion culling off: every edge drawn, hidden or not. The one combo that
+# shows what HLR decided to hide rather than only what it kept.
+parts = "spread"
+args = ["--format", "svg", "--shading", "outline", "--wireframe"]
+
+# There is deliberately no cel combo. `--shading cel` never reaches the engine:
+# cli.process_one routes it to trace.cel_svg, which posterizes the LDView raster
+# and potraces the gray bands. Those cases pin LDView, potrace and PIL — swap the
+# geometry kernel and they come back byte-identical, so they cannot gate it.
+# Pinning that path is a separate gate with a separate rationale.
+
+[raster]
+# resvg is a dev tool, like LDView — see scripts/external-deps.lock.
+width = 512

@@ -25,6 +25,9 @@ ldview-binary-sha256: c02453f698f472d23ffbf8568b67f12eac0bfe077988575ccac596abc6
 
 ## CLI tools (Homebrew; used by verification workflow, not the library)
 resvg: 0.47.0          # SVG -> PNG rasterizer; the AA reference for censuses
+                       # and for tests/goldens/render/*.png. Upgrading it moves
+                       # every golden raster without any engine change, so
+                       # re-freeze deliberately rather than accepting the diff.
 potrace: 1.16          # bitmap tracing (setup-ldview.sh path)
 imagemagick: 7.1.2-24  # crops/compare in the verify workflow
 
