@@ -19,8 +19,8 @@ from . import repair
 # stylized sub-region outlines for shade.fill_ops(loops=...).
 VisResult = namedtuple("VisResult",
                        "segs bbox s faces analytic ellipses proj refits "
-                       "fold_ells loops",
-                       defaults=[(), None, (), (), ()])
+                       "fold_ells loops tri tri_colors",
+                       defaults=[(), None, (), (), (), (), ()])
 
 _text_cache: dict[Path, list[str]] = {}
 
@@ -958,7 +958,8 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
         res = res._replace(ellipses=list(res.ellipses)
                            + _refit_candidates(refits))
     loops = _fold_arc_loops(segs, res.fold_ells) if res.fold_ells else []
-    return res._replace(segs=segs, refits=refits, loops=loops)
+    return res._replace(segs=segs, refits=refits, loops=loops,
+                        tri=out["tri"], tri_colors=out.get("tri_colors", ()))
 
 
 def _merge_intervals(iv, eps):

@@ -6,9 +6,25 @@ from brick_icons import geom2d, unwrap
 
 class FakeCylinder:
     """Stand-in for primitives.Cylinder: unit circle in R's x/z, axis R[:,1]."""
-    def __init__(self, r=20.0, h=24.0):
+    sector = 360.0
+
+    def __init__(self, r=20.0, h=24.0, sector=360.0):
         self.R = np.diag([r, h, r]).astype(float)
         self.t = np.zeros(3)
+        self.sector = sector
+
+    def radius_at(self, level):
+        return 1.0
+
+
+class FakeCone(FakeCylinder):
+    """primitives.Cone's law: local radius top+1 at the base, top at the top."""
+    def __init__(self, r=20.0, h=24.0, top=0.5, sector=360.0):
+        super().__init__(r=r, h=h, sector=sector)
+        self.top = float(top)
+
+    def radius_at(self, level):
+        return self.top + 1 - level
 
 
 def test_binds_a_facet_on_the_wall_to_its_cylinder():
@@ -70,3 +86,69 @@ def test_planar_unwrap_is_the_identity_in_the_face_basis():
     pts = np.array([[3.0, 2.0, 5.0], [-1.0, 2.0, 4.0]])
     back = unwrap.to_xyz(unwrap.to_uv(pts, plane), plane)
     assert back == pytest.approx(pts, abs=1e-9)
+
+
+def test_texture_canvas_comes_from_the_carrier_not_the_decal():
+    """Scaling the decal's own bbox to a fixed canvas warps it — round lamps
+    become ellipses. The carrier's extent and ONE scale factor fix that."""
+    carrier_uv = np.array([[0.0, 0.0], [40.0, 0.0], [40.0, 20.0], [0.0, 20.0]])
+    decal_uv = [np.array([[10.0, 8.0], [14.0, 8.0], [14.0, 12.0], [10.0, 12.0]])]
+    svg = unwrap.texture_svg(carrier_uv, [(4, decal_uv[0])], px=400)
+    assert 'width="400"' in svg and 'height="200"' in svg   # 40:20, not 1:1
+
+
+def test_texture_paints_each_region_in_its_ldraw_colour():
+    carrier_uv = np.array([[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]])
+    region = np.array([[2.0, 2.0], [8.0, 2.0], [8.0, 8.0], [2.0, 8.0]])
+    svg = unwrap.texture_svg(carrier_uv, [(14, region)], px=100)
+    assert "#fac80a" in svg.lower()      # LDraw 14, Yellow
+
+
+def test_curved_carrier_supplies_its_own_canvas_extent():
+    """A cylinder's canvas is its full wrap by its full height, so the decal
+    sits where it really lies on the part rather than filling the frame."""
+    ext = unwrap.carrier_extent(FakeCylinder(r=20.0, h=24.0))
+    assert ext[:, 0].min() == pytest.approx(-20.0 * np.pi)
+    assert ext[:, 0].max() == pytest.approx(20.0 * np.pi)
+    assert (ext[:, 1].min(), ext[:, 1].max()) == pytest.approx((0.0, 24.0))
+
+
+def test_a_plane_falls_back_to_the_decal_bounds():
+    plane = unwrap.Plane(normal=np.array([0.0, 1.0, 0.0]), offset=0.0)
+    uv = np.array([[1.0, 2.0], [5.0, 2.0], [5.0, 9.0]])
+    ext = unwrap.carrier_extent(plane, uv)
+    assert (ext[:, 0].min(), ext[:, 0].max()) == pytest.approx((1.0, 5.0))
+    assert (ext[:, 1].min(), ext[:, 1].max()) == pytest.approx((2.0, 9.0))
+
+
+def test_a_cylinder_does_not_bind_past_its_own_ends():
+    """A cylinder's radial gap alone is an INFINITE cylinder: 3941p01's panel
+    facets sat at stud radius far below the studs and bound to them, landing
+    at v = -794 LDU on the texture."""
+    cyl = FakeCylinder(r=20.0, h=24.0)
+    below = np.array([[20.0, -60.0, 0.0], [19.6, -60.0, 4.0],
+                      [20.0, -56.0, 0.0]])
+    assert unwrap.bind(below, [cyl]) is None
+
+
+def test_a_sector_bounds_what_a_primitive_draws_not_where_its_surface_is():
+    """3941p01's r=20 wall is substituted only over two 90 deg sectors; the
+    rest is hand-authored facets, and the panel sits at 125 deg. Same axis,
+    same radius and an overlapping height IS the same surface of revolution,
+    so the drawn sector must not gate the bind or no panel binds at all."""
+    quarter_wall = FakeCylinder(r=20.0, h=24.0, sector=90.0)
+    off_sector = np.array([[-20.0, 1.0, 0.0], [-19.6, 1.0, -4.0],
+                           [-20.0, 5.0, 0.0]])
+    assert unwrap.bind(off_sector, [quarter_wall]) is quarter_wall
+
+
+def test_a_cone_binds_on_its_taper_not_on_one_radius():
+    """3942bp01's stripes ride a cone, whose radius is 30 LDU at the base and
+    10 at the top. Measuring against the single radius |R[:,0]| = 20 binds
+    neither ring; the taper law binds both."""
+    cone = FakeCone(r=20.0, h=24.0, top=0.5)
+    base = np.array([[30.0, 0.0, 0.0], [29.4, 0.0, 6.0], [29.6, 1.0, 0.0]])
+    assert unwrap.bind(base, [cone]) is cone
+    # 20 LDU is the cone's radius only halfway up, not at the base
+    off = np.array([[20.0, 0.0, 0.0], [19.6, 0.0, 4.0], [20.0, 1.0, 0.0]])
+    assert unwrap.bind(off, [cone]) is None

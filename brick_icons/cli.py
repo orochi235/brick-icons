@@ -3,9 +3,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import numpy as np
 from PIL import Image
 
-from . import render, process, trace, hlr, shade, geom2d
+from . import render, process, trace, hlr, shade, geom2d, unwrap
 from .config import load_config, Config
 
 
@@ -98,6 +99,20 @@ def _stage(debug_dir, stage, name) -> Path:
     return d / f"{name}.png"
 
 
+def _emit_unwrap(debug_dir, name, res, cfg) -> None:
+    """The decal laid flat on its carrier — the only way to see whether a
+    carrier bound correctly without reading projected output."""
+    groups = unwrap.bind_groups(res.tri, res.tri_colors, res.analytic)
+    d = Path(debug_dir)
+    d.mkdir(parents=True, exist_ok=True)
+    for i, (carrier, regions) in enumerate(groups):
+        ext = unwrap.carrier_extent(
+            carrier, np.vstack([p for _, p in regions]))
+        svg = unwrap.texture_svg(ext, regions, ldraw_dir=cfg.ldraw_dir)
+        tag = "" if len(groups) == 1 else f".{i}"
+        (d / f"{name}.unwrap{tag}.svg").write_text(svg)
+
+
 def _tone(cfg: Config, rgba: Image.Image) -> Image.Image:
     """The styled grayscale ('L') image per shading (normal/cel). Not for outline."""
     g = process.to_grayscale(rgba)
@@ -122,6 +137,8 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
         res = hlr.visible_segments(part, cfg.ldraw_dir, lat=lat, long=long,
                                    render_px=cfg.render_px, cull=cull)
         segs, bbox, s = res.segs, res.bbox, res.s
+        if debug_dir:
+            _emit_unwrap(debug_dir, name, res, cfg)
         style = None
         if cfg.shade_style != "none" and not cfg.wireframe:
             style = shade.make_style(cfg.shade_style,
