@@ -37,6 +37,12 @@ Numbers here are measured, not assumed. Don't re-derive them.
 - **Binding tolerance is 0.5 LDU** for curved carriers, from `scripts/measure-decal-offsets.py`: `3960p01` 0.001, `3062bp01` 0.006, `3626bp01` 0.011, `3941p01` 0.074, `4740p01` 0.150, `3040bp08` 0.345. No bimodality. There is no outward snap — decal and carrier are already co-radial.
 - **The unwrap dissolves authored faceting.** `3941p01`'s panel is 36 hand-written quads forming a 16-gon at r=20 (cos(π/N) = 19.616/20 → N=16); in (θ, h) it is one rounded rectangle. `3942bp01`'s 160 decoration facets are 16 clean rectangles. Prototyped and rendered.
 - **The carrier defines the texture canvas, at one uniform scale.** Scaling the decal's own bounding box to a fixed canvas warps it — round lamps become ellipses. Use the carrier's parameter extent and a single scale factor. For a cylinder that means arc length `θ·r`, not degrees.
+- **There are TWO geometry paths, and both need every change.** Facet triangles go
+  through `hlr.flatten` -> `tri_meta` -> `faces_from_tris`; substituted primitives go
+  through `out["analytic"]` -> `faces_from_analytic`. A decal routinely uses both at
+  once — `3941p01`'s panel is 36 quads AND 24 primitive pieces — so a change wired to
+  only one path yields a half-painted print. Task 6b exists because Tasks 2-6 wired
+  only the triangle path.
 - **Nothing in LDraw is a curve or a region.** A decal is a mesh: `3068bp00`'s arrow is 11 triangles, `3040bp08`'s border 68 facets, and every "circle" is a 16-gon fan. Both recoveries — union facets into a region, fit a polygon fan back to a circle — belong in UV, because UV has no camera. The existing `arcfit` fights foreshortening (a circle projects to an ellipse) and chord-proxy occlusion; neither exists in UV, so `arcfit._fit_circle` becomes an exact fit rather than a best-effort one.
 - **LDView is the reference, structurally not numerically.** `-AllowPrimitiveSubstitution` gates `-CurveQuality` and matches on primitive *filename*, so LDView renders one part at two fidelities — smooth where a stock primitive was referenced, faceted where the author wrote quads. Never pixel-gate against it.
 
@@ -478,7 +484,7 @@ def test_decoration_fills_use_the_ldraw_colour(tmp_path):
     own LDraw colour, so a print reads as print rather than as engraving."""
     face_body = {"normal": np.array([0.0, 0.0, -1.0]), "color": 16}
     face_deco = {"normal": np.array([0.0, 0.0, -1.0]), "color": 4}
-    style = shade.Flat3Style(base=(157, 157, 157))
+    style = shade.Flat3Style(part_color=(157, 157, 157))
     assert shade.face_fill(face_body, style, "vendor/ldraw") == \
         style.tone(face_body["normal"])
     assert shade.face_fill(face_deco, style, "vendor/ldraw").lower() == "#b40000"
@@ -523,7 +529,7 @@ At line 1319, replace `style.tone(f["normal"])`:
             ops.append({"d": d, "fill": face_fill(f, style, ldraw_dir),
 ```
 
-Then pass `ldraw_dir=cfg.ldraw_dir` from the `fill_ops` call site in `brick_icons/cli.py` (find it with `grep -n "fill_ops" brick_icons/cli.py`).
+Then pass `ldraw_dir=cfg.ldraw_dir` at BOTH `fill_ops` call sites in `brick_icons/cli.py` (lines ~145 and ~177 — one per render path). `cfg` is in scope at each.
 
 - [ ] **Step 5: Run the tests**
 
@@ -547,6 +553,125 @@ Expected: `3068bp00` now shows a yellow arrow and `3040bp08` a yellow border wit
 ```bash
 git add brick_icons/shade.py brick_icons/cli.py tests/test_shade_color.py
 git commit -m "paint decoration in its own LDraw colour"
+```
+
+---
+
+### Task 6b: Carry the color onto analytic primitives
+
+**Files:**
+- Modify: `brick_icons/primitives.py`, `brick_icons/hlr.py`, `brick_icons/shade.py`
+- Test: `tests/test_shade_color.py` (append)
+
+**Why this task exists:** Tasks 2-6 wired the TRIANGLE path only. Decoration built from
+substituted primitives still paints in body tone, which is measurable in the Task 6
+render: `3941p01`'s panel comes out as scattered black patches because its 36 quads
+paint but its 8 `1-4chrd` and 16 `4-4ndis` pieces do not; `3942bp01`'s stripes
+(`48\5-24co*`) and `3040bp08`'s lamps (`4-4disc`, colour 14) do not paint at all.
+`hlr.flatten` computes the colour and then drops it at
+`out["analytic"].append(prim)`, and `faces_from_analytic` never sets one.
+
+- [ ] **Step 1: Write the failing test**
+
+Append to `tests/test_shade_color.py`:
+
+```python
+def test_analytic_faces_carry_the_primitive_colour():
+    from brick_icons import hlr, primitives as P
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    proj = P.Projection(right, up, fwd, 2.0, 0.0, 0.0, 50.0)
+    disc = P.Disc(R=np.diag([4.0, 1.0, 4.0]), t=np.zeros(3), color=14)
+    faces = shade.faces_from_analytic([disc], proj)
+    assert faces, "the disc should produce at least one face"
+    assert all(f["color"] == 14 for f in faces)
+
+
+def test_analytic_primitives_default_to_the_part_colour():
+    from brick_icons import hlr, primitives as P
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    proj = P.Projection(right, up, fwd, 2.0, 0.0, 0.0, 50.0)
+    disc = P.Disc(R=np.diag([4.0, 1.0, 4.0]), t=np.zeros(3))
+    faces = shade.faces_from_analytic([disc], proj)
+    assert all(f["color"] == 16 for f in faces)
+```
+
+- [ ] **Step 2: Run it to verify it fails**
+
+Run: `.venv/bin/python -m pytest tests/test_shade_color.py -k analytic -q`
+Expected: FAIL — `Disc` takes no `color` argument.
+
+- [ ] **Step 3: Give `Primitive` a colour field**
+
+In `brick_icons/primitives.py`, add to the `Primitive` dataclass beside `sector`:
+
+```python
+    sector: float = 360.0
+    color: int = 16          # LDraw code; 16 = inherit the part colour
+```
+
+It is `kw_only=True`, so a defaulted field is safe to add and every subclass inherits it.
+
+- [ ] **Step 4: Attach it in the loader**
+
+In `brick_icons/hlr.py`'s `flatten`, the type-1 branch already computes `cur`. Set it
+on the primitive before appending:
+
+```python
+                prim = primitives.from_ref(ref, Rsub, tsub)
+                if prim is not None and "analytic" in out:
+                    prim.color = cur
+                    out["analytic"].append(prim)
+```
+
+- [ ] **Step 5: Stamp it on the faces**
+
+In `brick_icons/shade.py`:
+
+```python
+def faces_from_analytic(analytic, proj):
+    """Fill faces for analytic primitives, with smooth wall chains merged to
+    single faces (see primitives.merge_smooth_walls)."""
+    out = []
+    for prim in primitives.merge_smooth_walls(analytic):
+        for f in prim.faces(proj):
+            f.setdefault("color", getattr(prim, "color", 16))
+            out.append(f)
+    return out
+```
+
+- [ ] **Step 6: Keep the wall merge from crossing a colour boundary**
+
+`merge_smooth_walls` collapses chains of full-sector cylinders/cones into one synthetic
+primitive. Add the colour to its `by_key` grouping key so a coloured wall never merges
+into a body one — the same rule Task 5 applied to the other two merges. Find the
+`by_key[...]` line and append `p.color` to the key tuple. The synthetic primitive it
+builds must carry that colour too.
+
+Note: this is a guard, not a fix for a part we have — `3942bp01`'s stripes are
+5/24 sectors, so `is_full` is False and they never reach this merge. Add it anyway;
+leaving a third colour-blind merge in place is how this class of bug returns.
+
+- [ ] **Step 7: Run the targeted tests**
+
+Run: `.venv/bin/python -m pytest tests/test_shade_color.py tests/test_shade.py tests/test_hlr.py tests/test_hlr_color.py tests/test_primitives.py -q`
+Expected: all pass.
+
+- [ ] **Step 8: Look at it**
+
+```bash
+.venv/bin/python scripts/render-references.py 3941p01 3942bp01 3040bp08 --out out/t6b
+```
+
+Expected: `3941p01`'s panel is now a solid black region rather than patches;
+`3942bp01` shows red stripes; `3040bp08`'s lamps are yellow rather than empty circles.
+Report the script's final lines. Do NOT run `open`.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add brick_icons/primitives.py brick_icons/hlr.py brick_icons/shade.py \
+        tests/test_shade_color.py
+git commit -m "carry the LDraw colour onto analytic primitives"
 ```
 
 ---
