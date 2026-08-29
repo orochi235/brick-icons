@@ -1,104 +1,91 @@
-# Handoff — printed parts, phase 2 complete
+# Handoff — decal extraction as a first-class feature
 
-Phase 2 and the decal orientation fix are both on **`main`**. Nothing is
-unmerged. 432 tests pass. `6372ffd`'s message and `tests/test_orientation.py`
-carry the orientation diagnosis; only flat carriers moved, so the 18 unprinted
-specimens stayed byte-identical.
+Merged to **`main`**. 462 tests pass.
+`docs/superpowers/plans/2026-08-28-decal-unwrap.md` is still the durable record
+of phase 2; this covers what landed on top of it.
 
-**The durable record is the plan:**
-`docs/superpowers/plans/2026-08-28-decal-unwrap.md`. Its Status block lists
-every task with its commit, and a section on where the plan was wrong — read
-that before trusting any instruction in the task bodies, which are historical.
-The spec is `docs/superpowers/specs/2026-08-28-printed-parts-design.md`.
+**Next up is an engine swap.** The seam is narrower than it looks: the CLI
+touches the engine only through `hlr.visible_segments` (view path) and
+`hlr.part_geometry` (extraction, no view). Keep the naive engine on `main`
+behind an `--engine` selector rather than on a long-lived branch — a branch
+stops being exercised and rots. Freeze golden outputs from the naive engine
+first, so drift is detectable: the specimen gates plus the 600-part decal
+corpus run are already most of a conformance suite.
 
-## What works now
+## What shipped
 
-Decoration binds to the analytic carrier it lies on, unwraps into that
-carrier's parameter space, unions and recovers its shape there, and
-re-projects onto the exact surface. `3941p01`'s panel is one path with eight
-holes and round corners; `3068bp00`'s arrow is one path; `3040bp08`'s border
-is one frame with an interior ring; `3942bp01`'s stripes ride the cone.
+**`brick-icons decal PARTS...`** — extracts printed decoration as a flat SVG
+laid out on the face it came from. Dispatched on `argv[0]` alone, so every
+existing invocation parses unchanged (pinned by a test). Documented in the
+README under "Decal extraction"; flags are `--out`, `--list`, `--root`,
+`--config`, `--texture-px`, `--svg-bg` (transparent by default).
 
-Gates, all green: 18 unprinted specimens byte-identical to `main`, four
-printed specimens structurally matching LDView, `3941p01` emitting exactly one
-`#1b2a34` path. `<part>.unwrap.svg` in `--debug-dir` shows the decal laid flat
-— the only way to check a bind without reading projected output.
+Extraction was emitting **nothing** for every part checked before this. Four
+causes, all now fixed and tested:
 
-## Open, and diagnosed but unfixed
+- Carriers were analytic primitives only, so flat prints bound to nothing.
+  Body planes now join them (`planes_from`).
+- Discs and rings were used as *curved* carriers. `to_uv` sends every
+  non-`Plane` carrier through the cylindrical map, where a flat surface has one
+  constant height — a round tile's print unwrapped to a zero-area line.
+- A round tile's top face **is** a disc primitive, so it has no facets and
+  contributed no plane. Flat primitives now contribute theirs.
+- Decoration authored as coloured *primitives* was ignored entirely.
+  `3942bp01` is 16 cone sectors and zero coloured facets.
 
-The cone's stripes read correctly once the rim seams went: the horizontal
-arcs were cutting across them, not the stripe geometry. `_wall_span_face`
-samples any span with 40 points (1.9 deg for a 75 deg stripe), so
-under-sampling was never in it.
+Also: stacked wall sections merge into one spanning carrier (`span_carrier`),
+carrier faces union **all** coplanar facets including the print, groups sort by
+print area so `.0` is the real print, and `hlr.part_geometry()` skips the view
+pipeline (99s → 0.04s on a high-poly torso, byte-identical output, pinned).
 
-What remains is two artifacts on the cone's top stud, **both present on the
-UNPRINTED `3942b`** and absent on `4589`, so neither has anything to do with
-decoration:
+**Corpus: 600 parts, 11,855 SVGs, 0 errors.**
 
-- **Ragged bore.** The bore wall is an analytic `cyli r=4` (an exact circle);
-  the bore floor is 56 flat triangles at y=4 spanning r=3.536-6.0 (a polygon).
-  The wall's fill is bounded by the true circle and the floor's by chords, so
-  where a chord falls inside the circle the floor does not reach the wall and
-  the wall's darker fill shows through as a tab. This is the ring-floor chip
-  class. `facet_snap_rims` exists for exactly this but the note at
-  `hlr.py`'s `_visible_segments_analytic` says emitting those candidates is
-  NOT safe alone: fills snap to the circle while drawn chords stay put, which
-  opens slivers. A fix needs the drawn-chord refit too.
-- **Debris on the stud's bottom seam**, same region, not separately diagnosed.
+## Two deliberate behaviours
 
-- **White decals are invisible** in the proof sheet — the cell background is
-  also white (`10049p01`, `26603p01`). The prints may be fine; nobody can
-  tell.
-- **Organic bodies have no single carrier.** Fixed in the proof sheet: it
-  binds per facet and labels what fell off (`3/672 facets · 669
-  off-carrier`), so the old slivers are gone. But 183 of the 189 plane cells
-  in `out/proof-300.pdf` put under half their facets on the dominant plane —
-  a Friends leg is faceted into thousands of one-facet planes and is neither
-  a plane nor one curve. The renders are fine; it is the sheet's
-  one-carrier-per-part model that cannot describe this class.
-- **`4740p03`** dies with `shapely.errors.GEOSException: TopologyException`.
-- **Linear gradient stops are uncapped** (`shade.py`), so `3960p01` carries 640.
-- **Ink pockets** on `30137`, `98283`, `32062` that the user does not want.
-- **Spheres** (`3626bp01`) bind to no carrier and pass through unchanged, per
-  the spec.
+**The minifig neck mark is dropped from decals only.** LDraw authors a neck as
+a 270-degree body cylinder plus a 90-degree one in black; the head covers it.
+It is authored exactly as real print is — `3942bp01`'s stripes partition their
+wall into coloured and colour-16 sectors summing to 360 the same way — so it is
+caught by position *and* size together: protrudes past the body **and** covers
+no more than a quarter of its ring. Either condition alone admits `29030p01`'s
+head print and `53983p01`'s turbine case. Renders keep the band, by request.
+`scripts/sweep-marker-prims.py` re-derives this over the corpus.
+
+**Circle recovery is per-run, not per-ring.** `fit_circle` asks "is this whole
+ring one circle", which a decal boundary usually is not — a union leaves the
+coarser polygon's chord midpoints 0.345 LDU inside the rim. `circle_candidates`
+clusters vertex radii, **refits each cluster and verifies it**, then `path_d`
+converts only the runs that follow one.
 
 ## Traps
 
-- **The proof sheet is not the renderer.** `scripts/proof-decals.py` fits its
-  own carrier from raw geometry; `brick_icons/` binds per facet against
-  analytic primitives and `shade._body_planes`. A wrong cell is a sheet bug
-  until an actual render disagrees — every minifig torso read as a squashed
-  cylinder in the sheet while `--shading outline --shade-style flat3` drew
-  them correctly. Render before believing the sheet.
-- **Decoration only reaches SVG with a shade style.** Plain
-  `--shading outline` emits strokes and no fills, so two differently printed
-  parts come out byte-identical and it looks like binding failed. Add
-  `--shade-style flat3`.
+- **The cluster refit is load-bearing.** Without it, an arch-shaped boundary
+  (`14769px2`) fits a meaningless whole-ring centre, invents circles, and
+  throws a stray arc outside the silhouette.
+- **Never give decal arc candidates a snap tolerance in the render path.**
+  Pulling vertices onto the candidate destroyed `14769p0a`'s clock face —
+  underside ribs showed through. `shade._decal_arc_candidates` emits the
+  candidate only. This is the same hazard as the rim-candidate `NOTE` in
+  `hlr._visible_segments_analytic`.
+- **`30260p01`'s octagon is the guard for circle recovery** — its 8 vertices
+  share a radius, so a circle fits them exactly. Only `ARC_STEP` (45 deg a step
+  is too coarse) keeps it a sign. Test pins it.
+- **Don't `cd` out of the repo in the same command as a `git stash pop`** — the
+  pop fails and the work sits in the stash looking lost.
+- Everything from the previous handoff's Traps still applies: `cmd | tail`
+  buffers, subagents park on long commands, LDView colour is not evidence.
 
-- **Rendering with `--line-width 0 --silhouette-width 0` is the fastest way to
-  tell a stroke artifact from a fill artifact.** It is what proved 3942bp01's
-  horizontal band lines were strokes rather than tonal steps, and it surfaces
-  ragged fill boundaries the outline would hide.
-- **Regenerating the specimen baseline costs ~8 minutes.** `debug/` is
-  gitignored, so `before.sha` does not survive. Rebuild it with a worktree at
-  `main` and symlink `vendor/` in. `3649` alone takes 5 of those minutes.
-- **LDView's colour output is not evidence.** `6636p0c` uses code 85, which
-  `LDConfig.ldr` defines as `Medium_Lilac #441A91`; LDView, pointed at that
-  same file, paints `#f53193` — a value that appears nowhere in the palette,
-  so its internal table is overriding the file it was given. Our colour is
-  the one that matches LDraw. (The real Friends tile probably is pink, so
-  upstream LDraw is likely the wrong one — but that is not something to
-  resolve by reading pixels.) "LDView is structural, not numerical" covers
-  colour too.
-- **No part IDs live in `brick_icons/`** — they appear only as comment
-  witnesses and test fixtures. Every fix so far generalized; a part number
-  reaching library code means one did not.
-- **`cmd | tail` buffers the whole run**, so a backgrounded suite or render
-  looks hung until it exits. Redirect to a log and tail the file.
-- **Subagents park on long commands.** Give them only fast targeted tests.
-- **`~Moved to` redirect files:** `from_ref` returns None for `48\5-24co10.dat`
-  though `flatten` follows the redirect to a real primitive.
-- **Whole-dict equality assertions** break when a key is added to `tri_meta` or
-  a face dict. Grep before adding one.
-- **Test triangles must be wound CCW** or `faces_from_tris` culls them and the
-  test dies on an index error rather than its assertion.
+## Open
+
+- **`14769p0a`'s `XI` and `XII` render thinner than `IIII` and `III`.**
+  Confirmed present at baseline, cause NOT diagnosed. User's hypothesis: they
+  sit farther from the camera. Note they read thinner rather than lighter,
+  which foreshortening alone does not explain on a flat top face.
+- **`14769px2` throws a stray arc outside its silhouette.** Pre-existing —
+  verified identical before and after this work. Unrelated to circle recovery.
+- **A quarter of printed parts emit 21+ textures**, nearly all slivers (a
+  modern torso: 58, of which `.0` and `.1` are front and back). Ordering makes
+  the right one first; whether to add a minimum-area threshold, go
+  dominant-only, or leave it is an undecided product call.
+- `SNAP_TOL = 0.4` LDU is the loosest constant added, tuned to the 0.345 stray.
+  Extraction only; the render path passes no snap tolerance.

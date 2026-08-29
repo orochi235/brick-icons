@@ -511,7 +511,9 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
     an_faces = shade.faces_from_analytic(analytic, proj)
     # before absorb_wall_facets, which is colour-blind: a decal that binds is
     # already its own region and must not be swallowed into the wall it sits on
-    tri_faces = shade.unwrap_decoration(tri_faces, analytic, proj)
+    decal_ells = []
+    tri_faces = shade.unwrap_decoration(tri_faces, analytic, proj,
+                                        ellipses_out=decal_ells)
     # facet-authored stretches of a primitive wall (60474's bite flanks)
     # join the abutting analytic band's gradient instead of flat-toning
     shade.absorb_wall_facets(tri_faces, an_faces)
@@ -528,7 +530,9 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
     # LDraw 16-gons (22.5 deg steps) whose vertices lie ON the rim circle —
     # under the default step their chords stay straight and the face fill
     # cuts across thin slivers (a counterbore crescent's tips).
-    ells, seen = list(fit_ells), set()
+    # a printed disc's boundary is a polygon in UV and projects to one:
+    # recovered here so it reads as smoothly as the analytic rim beside it
+    ells, seen = list(fit_ells) + decal_ells, set()
     for prim in analytic:
         for op, *_ in prim.drawn_with_depth(proj):
             if op[0] == "arc":
@@ -947,6 +951,26 @@ def _resolve_input(part: str, roots: list[Path]) -> Path:
     if path is None:
         raise FileNotFoundError(f"could not resolve part {part!r} under {[str(r) for r in roots]}")
     return path
+
+
+def part_geometry(part: str, ldraw_dir):
+    """(tri, tri_colors, analytic) — everything a decal needs, and nothing a
+    view does.
+
+    Decoration binds in world space, so extraction needs no projection,
+    z-buffer or occlusion pass. Going through visible_segments for it costs
+    99 seconds on a high-poly torso against 0.04 here.
+    """
+    roots = default_roots(ldraw_dir)
+    path = _resolve_input(part, roots)
+    out = {"2": [], "5": [], "tri": [], "tri_meta": [], "analytic": []}
+    flatten(path, np.eye(3), np.zeros(3), out, roots)
+    if not out["tri"]:
+        return [], [], out["analytic"]
+    fixed = repair.repaired_tris(np.array(out["tri"]), out["tri_meta"],
+                                 MESH_CACHE_DIR)
+    return (list(fixed), [m["color"] for m in out["tri_meta"]],
+            out["analytic"])
 
 
 def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,

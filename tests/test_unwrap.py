@@ -364,3 +364,215 @@ def test_decal_paints_its_ldraw_colour_as_one_element(tmp_path):
               "--out", str(out)])
     svg = (out / "3941p01.svg").read_text()
     assert len(re.findall(r'fill="#1b2a34"', svg)) == 1     # LDraw 0, Black
+
+
+# --- extraction: the `decal` subcommand's pipeline ---------------------------
+
+def _quad_tris(corners):
+    """Two CCW triangles for a planar quad, as faces_from_tris expects."""
+    p = np.asarray(corners, float)
+    return [p[[0, 1, 2]], p[[0, 2, 3]]]
+
+
+def test_a_flat_print_binds_to_its_face_not_a_nearby_primitive():
+    """890p01's stop sign sits on a flat octagon, but the only carriers the
+    extraction offered were analytic PRIMITIVES, so it snapped to a disc of
+    the clip behind it and unwrapped through a circle frame."""
+    from brick_icons import primitives
+
+    face = _quad_tris([[-20, 0, -10], [20, 0, -10], [20, 40, -10], [-20, 40, -10]])
+    print_ = _quad_tris([[-5, 10, -10], [5, 10, -10], [5, 20, -10], [-5, 20, -10]])
+    disc = primitives.Disc(R=np.diag([6.0, 1.0, 6.0]), t=np.array([0.0, 0.0, -9.0]),
+                           sector=360.0, color=16)
+    tris = face + print_
+    colors = [16, 16, 4, 4]
+    groups = unwrap.decal_groups(tris, colors, [disc])
+    assert len(groups) == 1
+    carrier, _theta0, regions, _face = groups[0]
+    assert isinstance(carrier, unwrap.Plane)
+    assert len(regions) == 1
+
+
+def test_the_carrier_face_is_the_whole_face_print_included():
+    """The print REPLACES the body facets under it, so unioning colour 16
+    alone leaves the strips around a torso's stripes, not the torso's front."""
+    left = _quad_tris([[-20, 0, 0], [-5, 0, 0], [-5, 40, 0], [-20, 40, 0]])
+    right = _quad_tris([[5, 0, 0], [20, 0, 0], [20, 40, 0], [5, 40, 0]])
+    stripe = _quad_tris([[-5, 0, 0], [5, 0, 0], [5, 40, 0], [-5, 40, 0]])
+    tris = left + right + stripe
+    colors = [16, 16, 16, 16, 4, 4]
+    groups = unwrap.decal_groups(tris, colors, [])
+    assert len(groups) == 1
+    face = groups[0][3]
+    assert face is not None
+    # one rectangle spanning both body strips AND the print between them
+    assert face.area == pytest.approx(40.0 * 40.0)
+
+
+def test_stacked_wall_sections_extract_as_one_texture():
+    """LDraw tiles a tall cone as stacked sections — 3942bp01's is four. Left
+    as separate carriers a stripe running down them becomes four textures."""
+    from brick_icons import primitives
+
+    lower = primitives.Cylinder(R=np.diag([10.0, 12.0, 10.0]),
+                                t=np.zeros(3), sector=360.0, color=16)
+    upper = primitives.Cylinder(R=np.diag([10.0, 12.0, 10.0]),
+                                t=np.array([0.0, 12.0, 0.0]),
+                                sector=360.0, color=16)
+    assert unwrap._wall_family(lower) == unwrap._wall_family(upper)
+    span = unwrap.span_carrier([lower, upper])
+    assert float(np.linalg.norm(span.R[:, 1])) == pytest.approx(24.0)
+    assert float(np.linalg.norm(span.R[:, 0])) == pytest.approx(10.0)
+
+
+def test_a_cylinder_family_does_not_become_a_needle_cone():
+    """Every radius in a cylinder family is identical and its heights repeat,
+    which is ill-conditioned enough that a least-squares slope comes back at
+    ~1e-6 — and the wall spans a radius of 8e-5 instead of 20."""
+    from brick_icons import primitives
+
+    secs = [primitives.Cylinder(R=np.diag([20.0, 4.0, 20.0]),
+                                t=np.array([0.0, y, 0.0]),
+                                sector=360.0, color=16)
+            for y in (0.0, 4.0, 8.0)]
+    span = unwrap.span_carrier(secs)
+    assert span.kind == "cyli"
+    assert float(np.linalg.norm(span.R[:, 0])) == pytest.approx(20.0)
+
+
+def test_a_connector_marking_is_not_extracted():
+    """LDraw authors a minifig neck as a 270-degree colour-16 cylinder plus a
+    90-degree one in black. The head covers it, and nothing in its authoring
+    tells it from print."""
+    from brick_icons import primitives
+
+    body = _quad_tris([[-19, 0, -10], [19, 0, -10], [19, 32, -10], [-19, 32, -10]])
+    neck = primitives.Cylinder(R=np.diag([6.0, -8.0, 6.0]),
+                               t=np.array([0.0, -4.0, 0.0]),
+                               sector=270.0, color=16)
+    mark = primitives.Cylinder(R=np.diag([6.0, -8.0, 6.0]),
+                               t=np.array([0.0, -4.0, 0.0]),
+                               sector=90.0, color=0)
+    marks = unwrap.marker_prims([neck, mark], body, [16, 16])
+    assert id(mark) in marks and id(neck) not in marks
+
+
+def test_a_print_on_the_body_survives_the_marker_filter():
+    """3942bp01's stripes partition their wall into coloured and colour-16
+    sectors summing to 360 exactly as the neck does — only position separates
+    them, so a share test alone would drop real print."""
+    from brick_icons import primitives
+
+    body = _quad_tris([[-20, 0, -10], [20, 0, -10], [20, 40, -10], [-20, 40, -10]])
+    wall = primitives.Cylinder(R=np.diag([10.0, 8.0, 10.0]),
+                               t=np.array([0.0, 10.0, 0.0]),
+                               sector=270.0, color=16)
+    stripe = primitives.Cylinder(R=np.diag([10.0, 8.0, 10.0]),
+                                 t=np.array([0.0, 10.0, 0.0]),
+                                 sector=90.0, color=4)
+    assert unwrap.marker_prims([wall, stripe], body, [16, 16]) == set()
+
+
+def test_an_unmeasurable_part_keeps_its_decoration():
+    """With no body triangles there is nothing to measure clearance against,
+    so the filter must abstain rather than guess."""
+    from brick_icons import primitives
+
+    mark = primitives.Cylinder(R=np.diag([6.0, -8.0, 6.0]),
+                               t=np.array([0.0, -4.0, 0.0]),
+                               sector=90.0, color=0)
+    assert unwrap.marker_prims([mark], [], []) == set()
+
+
+def test_decoration_authored_as_primitives_is_extracted():
+    """3942bp01 is 16 coloured cone sectors and NO coloured facets, so a
+    triangle-only extraction emits an empty texture for it."""
+    from brick_icons import primitives
+
+    body = _quad_tris([[-20, 0, -10], [20, 0, -10], [20, 40, -10], [-20, 40, -10]])
+    wall = primitives.Cylinder(R=np.diag([10.0, 8.0, 10.0]),
+                               t=np.array([0.0, 10.0, 0.0]),
+                               sector=360.0, color=16)
+    stripe = primitives.Cylinder(R=np.diag([10.0, 8.0, 10.0]),
+                                 t=np.array([0.0, 10.0, 0.0]),
+                                 sector=90.0, color=4)
+    groups = unwrap.decal_groups(body, [16, 16], [wall, stripe])
+    assert any(any(code == 4 for code, _g in regions)
+               for _c, _t, regions, _f in groups)
+
+
+def test_the_texture_background_is_optional():
+    """A decal is a texture; a white ground makes a white print invisible."""
+    carrier_uv = np.array([[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]])
+    region = np.array([[2.0, 2.0], [8.0, 2.0], [8.0, 8.0], [2.0, 8.0]])
+    assert "<rect" not in unwrap.texture_svg(carrier_uv, [(15, region)],
+                                             px=100, bg=None)
+    assert "<rect" in unwrap.texture_svg(carrier_uv, [(15, region)],
+                                         px=100, bg="#ffffff")
+
+
+def test_extraction_needs_no_view_pipeline():
+    """Decoration binds in world space, so a decal needs flatten + repair and
+    nothing a camera does. Going through visible_segments for it costs 99
+    seconds on a high-poly torso against 0.04 — but only if the geometry it
+    hands over is the same geometry."""
+    from brick_icons import hlr
+    from brick_icons.config import load_config
+
+    cfg = load_config()
+    res = hlr.visible_segments("3941p01", cfg.ldraw_dir, render_px=400)
+    tri, tri_colors, analytic = hlr.part_geometry("3941p01", cfg.ldraw_dir)
+    assert (unwrap.decal_svgs(tri, tri_colors, analytic,
+                              ldraw_dir=cfg.ldraw_dir)
+            == unwrap.decal_svgs(res.tri, res.tri_colors, res.analytic,
+                                 ldraw_dir=cfg.ldraw_dir))
+
+
+def test_circle_candidates_finds_concentric_rings():
+    """An emblem is often several concentric arcs joined by straight runs, so
+    'is this whole ring one circle' is the wrong question to ask of it."""
+    th = np.linspace(0, 2 * np.pi, 33)[:-1]
+    ring = np.vstack([np.column_stack([r * np.cos(th), r * np.sin(th)])
+                      for r in (6.0, 18.0)])
+    radii = sorted(round(r, 2) for _cx, _cy, r in unwrap.circle_candidates(ring))
+    assert radii == pytest.approx([6.0, 18.0], abs=0.05)
+
+
+def test_a_ring_with_strays_still_recovers_its_circle():
+    """Unioning a 48-gon with a 16-gon leaves the coarser one's chord
+    midpoints 0.345 LDU inside the rim (14769pt1's emblem), which is 17x
+    CIRCLE_TOL — enough to make a whole-ring fit refuse a true circle."""
+    th = np.linspace(0, 2 * np.pi, 49)[:-1]
+    pts = np.column_stack([18 * np.cos(th), 18 * np.sin(th)])
+    pts[::6] *= 17.655 / 18.0                    # the coarse polygon's midpoints
+    assert unwrap.fit_circle(pts) is None        # whole-ring fit refuses it
+    cands = unwrap.circle_candidates(pts)
+    assert cands and cands[0][2] == pytest.approx(18.0, abs=0.15)
+
+
+def test_an_octagon_is_not_rounded_into_a_circle():
+    """30260p01's stop sign has 8 vertices on a common radius, so a circle fit
+    matches it exactly. ARC_STEP is what keeps it a sign: 45 degrees a step is
+    too coarse to read as an arc."""
+    th = np.linspace(0, 2 * np.pi, 9)[:-1] + np.pi / 8
+    octagon = np.column_stack([20 * np.cos(th), 20 * np.sin(th)])
+    d = unwrap.region_path(geom2d.to_geom(octagon))
+    assert "A" not in d
+    assert d.count("L") == 8         # 7 edges plus the closing one
+
+
+def test_a_round_tile_binds_its_print_to_the_face_not_the_disc():
+    """to_uv sends every non-Plane carrier through the cylindrical map, where
+    a flat surface has ONE height — so a print on a round tile's top, which is
+    a disc primitive, unwrapped to a zero-area line and vanished entirely."""
+    from brick_icons import primitives
+
+    disc = primitives.Disc(R=np.diag([20.0, 1.0, 20.0]), t=np.zeros(3),
+                           sector=360.0, color=16)
+    th = np.linspace(0, 2 * np.pi, 25)[:-1]
+    rim = np.column_stack([18 * np.cos(th), np.zeros(len(th)), 18 * np.sin(th)])
+    tris = [np.array([rim[i], rim[(i + 1) % len(rim)], [0.0, 0.0, 0.0]])
+            for i in range(len(rim))]
+    groups = unwrap.decal_groups(tris, [4] * len(tris), [disc])
+    assert groups, "a flat print on a disc must not unwrap to nothing"
+    assert sum(r.area for _c, r in groups[0][2]) > 100.0

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -101,16 +102,15 @@ def _stage(debug_dir, stage, name) -> Path:
 
 def _emit_unwrap(debug_dir, name, res, cfg) -> None:
     """The decal laid flat on its carrier — the only way to see whether a
-    carrier bound correctly without reading projected output."""
-    groups = unwrap.bind_groups(res.tri, res.tri_colors, res.analytic)
+    carrier bound correctly without reading projected output. Same extraction
+    the `decal` subcommand runs, on a white ground because this one is read
+    against a render rather than composited."""
+    svgs = unwrap.decal_svgs(res.tri, res.tri_colors, res.analytic,
+                             ldraw_dir=cfg.ldraw_dir, bg="#ffffff")
     d = Path(debug_dir)
     d.mkdir(parents=True, exist_ok=True)
-    for i, (carrier, _theta0, regions) in enumerate(groups):
-        ext = unwrap.carrier_extent(
-            carrier, np.vstack([p for _, p in regions]))
-        svg = unwrap.texture_svg(ext, unwrap.merge_regions(regions),
-                                 ldraw_dir=cfg.ldraw_dir)
-        tag = "" if len(groups) == 1 else f".{i}"
+    for i, svg in enumerate(svgs):
+        tag = "" if len(svgs) == 1 else f".{i}"
         (d / f"{name}.unwrap{tag}.svg").write_text(svg)
 
 
@@ -293,7 +293,76 @@ def _gather_parts(args) -> list[str]:
     return args.parts
 
 
+def _parse_decal_args(argv):
+    p = argparse.ArgumentParser(
+        prog="brick-icons decal",
+        description="Extract a part's printed decoration as a flat SVG "
+                    "texture, laid out on the face it is printed on.")
+    p.add_argument("parts", nargs="*", help="part ids or .dat/.ldr paths")
+    p.add_argument("--list", help="file with one part per line (overrides positional)")
+    p.add_argument("--out", default="out")
+    p.add_argument("--root", default=".")
+    p.add_argument("--config", default=None)
+    p.add_argument("--texture-px", dest="texture_px", type=int, default=900,
+                   help="longer edge of the texture canvas (default 900)")
+    p.add_argument("--svg-bg", dest="svg_bg", metavar="PAINT", default="none",
+                   help='background: a color ("white", "#rrggbb") or "none" '
+                        'for transparent (default none)')
+    return p.parse_args(argv)
+
+
+def decal_one(cfg, part: str, out_dir: Path, px: int, bg: str) -> list[Path]:
+    """Write one SVG per carrier the part carries a decal on."""
+    name = Path(part).stem if Path(part).suffix else part
+    tri, tri_colors, analytic = hlr.part_geometry(part, cfg.ldraw_dir)
+    svgs = unwrap.decal_svgs(tri, tri_colors, analytic, px=px,
+                             ldraw_dir=cfg.ldraw_dir, bg=bg)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    written = []
+    for i, svg in enumerate(svgs):
+        tag = "" if len(svgs) == 1 else f".{i}"
+        path = out_dir / f"{name}.decal{tag}.svg"
+        path.write_text(svg)
+        written.append(path)
+    return written
+
+
+def _decal_main(argv) -> int:
+    args = _parse_decal_args(argv)
+    toml = args.config or str(Path(args.root) / "labels.toml")
+    cfg = load_config(toml_path=toml, overrides={}, root=args.root)
+    parts = _gather_parts(args)
+    if not parts:
+        print("no parts given")
+        return 2
+    out_dir = Path(args.out)
+    missing = []
+    for i, part in enumerate(parts, 1):
+        try:
+            written = decal_one(cfg, part, out_dir, args.texture_px, args.svg_bg)
+        except Exception as e:                  # long lists: never abort
+            missing.append(part)
+            print(f"[{i}/{len(parts)}] {part}: {type(e).__name__}: {e}",
+                  flush=True)
+            continue
+        if not written:
+            missing.append(part)
+            print(f"[{i}/{len(parts)}] {part}: no decal", flush=True)
+        else:
+            head = written[0].name
+            more = ("" if len(written) == 1
+                    else f" (+{len(written) - 1} more surfaces)")
+            print(f"[{i}/{len(parts)}] {part} -> {head}{more}", flush=True)
+    if missing:
+        print(f"{len(missing)}/{len(parts)} yielded no decal")
+        return 1
+    return 0
+
+
 def main(argv=None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "decal":
+        return _decal_main(argv[1:])
     args = _parse_args(argv)
     if args.list_colors:
         from . import colors

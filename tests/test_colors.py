@@ -108,3 +108,15 @@ def test_unknown_code_and_name_raise(ld):
 def test_malformed_hex_raises(ld):
     with pytest.raises(UnknownColorError):
         resolve("0xzzzzzz", ld)
+
+
+def test_ldraw_codes_above_999_resolve():
+    """LDConfig defines 118 of them; a 3-digit cap made every one unreachable
+    and took u9496p01's whole decal down with it."""
+    assert resolve("20015", "vendor/ldraw")[0] == "0xf4f4f4"
+
+
+def test_six_digits_is_still_hex_not_a_code():
+    """'000016' is hex, '16' is LDraw code 16 — widening the code pattern must
+    not eat the hex form."""
+    assert resolve("000016", "vendor/ldraw")[0] == "0x000016"

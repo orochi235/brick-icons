@@ -101,6 +101,60 @@ ships as `parts.txt`:
     .venv/bin/python -m brick_icons.cli --list parts.txt --format both \
         --shading outline --mode both --out out
 
+Printed parts can also have their decoration lifted off as a flat texture:
+
+    .venv/bin/python -m brick_icons.cli decal 3941p01 --out out
+
+## Decal extraction
+
+    brick-icons decal PARTS... [--out DIR] [--svg-bg PAINT] [--texture-px N]
+
+`decal` writes a part's printed decoration as a standalone SVG, unwrapped off
+the surface it is printed on and laid flat: `out/<part>.decal.svg`, or
+`<part>.decal.0.svg`, `.1.svg` … for a part printed on more than one surface,
+biggest print first. The numbering earns its keep on a high-poly part, where
+the print scatters across dozens of small facet planes: a modern minifig torso
+emits `.0` and `.1` as its front and back, then 56 slivers.
+The texture is drawn on the outline of the face it came from — a road sign's
+print on its octagon, a torso's on the torso's trapezoid — at one uniform
+scale in LDU, so the print stays isometric with the part.
+
+A decal has no viewpoint, so none of the view, sizing or stroke flags apply.
+
+    # a batch, on a white ground so the SVGs can be eyeballed directly
+    brick-icons decal --list printed.txt --out decals --svg-bg white
+
+Parts carrying no bindable decoration are reported, and the run exits `1`:
+
+    $ brick-icons decal 3941p01 3001
+    [1/2] 3941p01 -> out/3941p01.decal.svg
+    [2/2] 3001: no decal
+    1/2 yielded no decal
+
+#### `--texture-px N`
+
+Longer edge of the texture canvas in px (default 900). The aspect comes from
+the carrier, not from the decal's own bounds.
+
+#### `--svg-bg PAINT`
+
+`none` (default) for a transparent ground, or a color. Note that a white print
+is invisible on the white one.
+
+### The minifig neck mark
+
+One thing is dropped deliberately. LDraw authors a minifig neck as a
+270-degree body cylinder plus a 90-degree one in black — `973.dat` calls it the
+"neck mark" — which an assembled minifig's head covers. It is authored exactly
+as real print is, so it is caught by position and size together: a coloured
+primitive standing proud of the part's body and covering no more than a
+quarter of its surface's ring. Across all 11,220 printed parts that is 1,388
+torso necks and nothing else; `scripts/sweep-marker-prims.py` re-derives it
+against the vendored LDraw tree.
+
+Renders are unaffected — the band is on the real part, so `--shading outline`
+still draws it.
+
 ## CLI reference
 
 Defaults shown come from `labels.toml` overriding the built-ins in
@@ -294,7 +348,10 @@ are exact and ignore this.
 #### `--debug-dir DIR`
 
 Save intermediate stages (`render/`, `tone/`, `mono/`) instead of deleting
-them.
+them. On the outline path it also writes `<part>.unwrap.svg` — the same
+extraction [`decal`](#decal-extraction) performs, on a white ground, which is
+the only way to check that decoration bound to the right carrier without
+reading projected output.
 
 ## Notes
 

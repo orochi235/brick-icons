@@ -73,7 +73,9 @@ def load_palette(ldraw_dir) -> Palette:
 
 _HEX6 = re.compile(r"[0-9a-f]{6}")
 _HEXANY = re.compile(r"[0-9a-f]{1,6}")
-_CODE = re.compile(r"\d{1,3}")
+# up to 5 digits: LDConfig defines 118 codes above 999 (u9496p01 prints in
+# 20015, Canvas_White). Six stays hex, which is what keeps '000016' hex.
+_CODE = re.compile(r"\d{1,5}")
 
 
 class UnknownColorError(ValueError):

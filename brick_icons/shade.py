@@ -1702,7 +1702,7 @@ def _body_planes(faces):
     return list(seen.values())
 
 
-def unwrap_decoration(faces, carriers, proj, step=0.25):
+def unwrap_decoration(faces, carriers, proj, step=0.25, ellipses_out=None):
     """Replace bound decoration facets with one face per merged UV region.
 
     Only faces that survived culling are unwrapped, so what is visible does
@@ -1739,7 +1739,8 @@ def unwrap_decoration(faces, carriers, proj, step=0.25):
         for _code, g in unwrap.merge_regions(polys):
             for pi, part in enumerate(getattr(g, "geoms", [g])):
                 face = _region_face(part, carrier, theta0, members, proj, step,
-                                    tag=(gi, code, pi))
+                                    tag=(gi, code, pi),
+                                    ellipses_out=ellipses_out)
                 if face is not None:
                     made.append(face)
         drop.update(id(f) for f in members)
@@ -1748,7 +1749,39 @@ def unwrap_decoration(faces, carriers, proj, step=0.25):
     return [f for f in faces if id(f) not in drop] + made
 
 
-def _region_face(part, carrier, theta0, members, proj, step, tag):
+def _decal_arc_candidates(part, carrier, theta0, proj, out):
+    """Projected circles for a flat decal's circular boundary runs.
+
+    A plane's unwrap is the identity, so a printed disc stays a polygon in UV
+    and projects to a polygon on canvas — the tile rim beside it is analytic
+    and smooth, which is what makes the decal's chords read as a defect. A
+    circle in the carrier plane projects to an ellipse, so the run can be
+    recovered exactly rather than densified into more chords.
+
+    Safe here where the rim-candidate note in hlr is not: a decal boundary is
+    ink, not a crease, so nothing strokes it and no drawn chord can diverge
+    from the snapped fill.
+    """
+    _n, u, v = carrier.basis()
+    for ring in geom2d.rings(part):
+        for cx, cy, r in unwrap.circle_candidates(ring):
+            C = unwrap.to_xyz(np.array([[cx, cy]]), carrier, theta0)[0]
+            ell = primitives.project_circle_uv(C, u * r, v * r, proj.to_AB,
+                                               proj.s, proj.cx, proj.cy,
+                                               proj.half)
+            # NO snap tolerance: pulling vertices onto the candidate is what
+            # the rim-candidate note in hlr warns about, and on a decal with
+            # many small regions (14769p0a's clock face) it dragged unrelated
+            # boundary runs onto these circles and destroyed the print. Emit
+            # the candidate only — path_d converts the runs already on it.
+            out.append((float(ell.center[0]), float(ell.center[1]),
+                        float(ell.u[0]), float(ell.u[1]),
+                        float(ell.v[0]), float(ell.v[1]),
+                        unwrap.ARC_STEP))
+
+
+def _region_face(part, carrier, theta0, members, proj, step, tag,
+                 ellipses_out=None):
     """One merged UV region as a face, its boundary back on the exact carrier.
     A fresh group and plane key keep it a region of its own: sharing either
     would merge it back into whatever it was cut out of."""
@@ -1756,6 +1789,8 @@ def _region_face(part, carrier, theta0, members, proj, step, tag):
         return None
 
     flat = isinstance(carrier, unwrap.Plane)
+    if flat and ellipses_out is not None:
+        _decal_arc_candidates(part, carrier, theta0, proj, ellipses_out)
 
     def px_ring(ring):
         uv = np.asarray(ring.coords, float)[:-1]

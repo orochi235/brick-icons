@@ -21,6 +21,18 @@ from . import geom2d
 
 BIND_TOL = 0.5          # LDU; see the plan's measured table
 
+# A connector marking: LDraw authors a minifig neck as a 270-degree colour-16
+# cylinder plus a 90-degree one in black, and the head covers that quarter on
+# an assembled figure. Nothing in its authoring distinguishes it from print —
+# 3942bp01's cone stripes partition their wall into coloured and colour-16
+# sectors summing to 360 the same way — so it is caught by position and size
+# together. Swept over all 11,220 printed parts (scripts/sweep-marker-prims.py):
+# the two conditions isolate 1,388 torso necks, at clearance +4.0 and share
+# 0.250 exactly, from 2,160 on-body prints at clearance <= 0. Either condition
+# alone admits 29030p01's head print and 53983p01's turbine case.
+MARKER_CLEARANCE = 0.05     # LDU it must stand proud of the body
+MARKER_SHARE = 0.25 + 1e-6  # fraction of its surface's ring it may cover
+
 
 def _axis_frame(prim):
     """(origin, axis unit vector, radius) for a cylinder/cone-like primitive."""
@@ -211,22 +223,32 @@ def _rings_of(poly):
     return [np.asarray(poly, float)]
 
 
-def texture_svg(carrier_uv, regions, px=900, ldraw_dir="vendor/ldraw"):
-    """The decal laid flat, canvas set by the carrier at ONE uniform scale."""
+def texture_svg(carrier_uv, regions, px=900, ldraw_dir="vendor/ldraw",
+                face=None, bg="#ffffff"):
+    """The decal laid flat, canvas set by the carrier at ONE uniform scale.
+
+    `face` is the carrier's own outline, drawn under the decal so the texture
+    carries the shape it was lifted from — 30260p01's octagon, a torso's
+    trapezoid — rather than reading as a print floating on a rectangle.
+    """
     cu = np.asarray(carrier_uv, float)
     x0, y0 = cu.min(axis=0)
     x1, y1 = cu.max(axis=0)
     s = px / max(x1 - x0, y1 - y0, 1e-9)
     w, h = (x1 - x0) * s, (y1 - y0) * s
     body = []
+    if bg and bg != "none":
+        body.append(f'<rect width="{w:.0f}" height="{h:.0f}" fill="{bg}"/>')
+    if face is not None and not face.is_empty:
+        body.append(f'<path d="{_region_d(face, x0, y1, s)}" '
+                    f'fill="#f2f2f2" fill-rule="evenodd"/>')
     for code, poly in regions:
         hex_str, _ = _colors.resolve(str(code), ldraw_dir)
         d = _region_d(poly, x0, y1, s)
         body.append(f'<path d="{d}" fill="#{hex_str[2:]}" '
                     f'fill-rule="evenodd"/>')
     return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{w:.0f}" '
-            f'height="{h:.0f}"><rect width="{w:.0f}" height="{h:.0f}" '
-            f'fill="#ffffff"/>' + "".join(body) + "</svg>")
+            f'height="{h:.0f}">' + "".join(body) + "</svg>")
 
 
 def carrier_extent(carrier, uv=None):
@@ -389,14 +411,17 @@ def region_path(g, tol=CIRCLE_TOL):
         if rr is not None:
             parts.append(_rounded_rect_d(*rr))
             continue
-        cands = []
         c = fit_circle(ring, tol)
         if c is not None:
             cx, cy, r = c
-            cands = [(cx, cy, r, 0.0, 0.0, r, ARC_STEP, tol)]
-        parts.append(geom2d.path_d(
-            geom2d.to_geom(ring),
-            arcs=geom2d.arc_candidates(cands) if cands else None))
+            arcs = geom2d.arc_candidates([(cx, cy, r, 0.0, 0.0, r,
+                                           ARC_STEP, tol)])
+        else:
+            # the whole ring is not one circle, but parts of it may still
+            # follow one — a union leaves strays, and an emblem can be several
+            # concentric arcs joined by straight runs
+            arcs = _circle_arcs(ring, max(tol, SNAP_TOL * tol / CIRCLE_TOL))
+        parts.append(geom2d.path_d(geom2d.to_geom(ring), arcs=arcs))
     return " ".join(x for x in parts if x)
 
 
@@ -461,3 +486,374 @@ def planes_from(polys, inside=None):
         norms = np.vstack([norms, n])
         offs = np.append(offs, d)
     return out
+
+
+def _surface_key(prim, tol=0.01):
+    """The surface a primitive lies on, independent of the sector of it that
+    the primitive covers and of its colour."""
+    q = lambda v: tuple(np.round(np.asarray(v, float) / tol).astype(np.int64))
+    return (prim.kind, q(prim.t), q(prim.R[:, 1]),
+            int(round(float(np.linalg.norm(prim.R[:, 0])) / tol)))
+
+
+def marker_prims(analytic, tris=None, tri_colors=None):
+    """ids of coloured primitives that mark a connector rather than print it.
+
+    See MARKER_CLEARANCE. Returns an empty set when the part has no body
+    triangles to measure against, so an unmeasurable part keeps its geometry.
+    """
+    body = None
+    if tris is not None and tri_colors is not None and len(tris):
+        tris = np.asarray(tris, float)
+        keep = np.asarray(tri_colors) == 16
+        if keep.any():
+            body = tris[keep]
+    if body is None or not len(body):
+        return set()
+    top = float(body[..., 1].min())      # LDraw up is -y
+
+    by_surface = {}
+    for p in analytic:
+        by_surface.setdefault(_surface_key(p), []).append(p)
+
+    out = set()
+    for prims in by_surface.values():
+        if not any(getattr(p, "color", 16) == 16 for p in prims):
+            continue
+        total = sum(p.sector for p in prims)
+        for c in {getattr(p, "color", 16) for p in prims} - {16}:
+            members = [p for p in prims if getattr(p, "color", 16) == c]
+            if sum(p.sector for p in members) / max(total, 1e-9) > MARKER_SHARE:
+                continue
+            pts = np.vstack([np.asarray(p.fit_pts(), float) for p in members])
+            if top - float(pts[:, 1].max()) > MARKER_CLEARANCE:
+                out.update(id(p) for p in members)
+    return out
+
+
+def prim_loop(prim, n=48):
+    """The world-space boundary of a primitive's own surface, as one loop.
+
+    A wall is bounded by its two end rings, a flat kind by its rim; either way
+    the decal a coloured primitive paints IS that surface, so its outline is
+    the primitive's own extent rather than anything fitted.
+    """
+    th = np.linspace(0.0, np.radians(prim.sector), n)
+    inner = getattr(prim, "inner", None)
+    if inner is not None:                       # ring: rim out, rim back in
+        outer = prim.ring_pts(th, 0.0, radius=inner + 1)
+        return np.vstack([outer, prim.ring_pts(th[::-1], 0.0, radius=inner)])
+    if prim.kind in ("cyli", "con"):            # wall: base ring, top ring back
+        return np.vstack([prim.ring_pts(th, 0.0),
+                          prim.ring_pts(th[::-1], 1.0)])
+    rim = prim.ring_pts(th, 0.0)                # disc: rim, closed at the axis
+    return rim if prim.is_full else np.vstack([rim, prim.t[None, :]])
+
+
+def prim_regions(analytic, carriers, skip=()):
+    """[(colour, carrier, pts)] for every coloured primitive that binds.
+
+    Decoration is not all triangles: 3942bp01's stripes are 16 coloured cone
+    sectors and no coloured facets at all, so a triangle-only extraction
+    emits an empty texture for it.
+    """
+    out = []
+    for p in analytic:
+        code = getattr(p, "color", 16)
+        if code == 16 or id(p) in skip:
+            continue
+        pts = prim_loop(p)
+        carrier = bind(pts, carriers)
+        if carrier is not None:
+            out.append((code, carrier, pts))
+    return out
+
+
+def carrier_face(carrier, tris, theta0=0.0, contains=None, extra=()):
+    """The carrier's own face in UV — the surface the decal is printed on.
+
+    A plane's face is the union of every facet lying in it, PRINT INCLUDED:
+    decoration replaces the body facets under it, so unioning colour 16 alone
+    leaves the leftover strips around 973p01's stripes instead of the torso's
+    front. `contains` picks the component the decal sits in, since a part
+    usually has other geometry in the same plane (30260p01 has 13 further
+    coplanar scraps besides its octagon).
+    """
+    if not isinstance(carrier, Plane):
+        return None
+    tris = np.asarray(tris, float)
+    if not len(tris):
+        return None
+    n = carrier.basis()[0]
+    # one pass over every facet, not one per carrier: a high-poly torso is 58
+    # carriers over 2,000 facets, and the per-triangle Python test dominated
+    on = np.abs(tris @ n - carrier.offset).max(axis=1) <= BIND_TOL
+    # `extra` carries the outlines of flat primitives lying in this plane. A
+    # round tile's top face is a disc, so the facets alone describe only the
+    # print on it, and the face came out as the emblem's own 48-gon instead of
+    # the tile — faceted, where the primitive knows the true circle.
+    src = [to_uv(t, carrier, theta0) for t in tris[on]]
+    src += [to_uv(np.asarray(e, float), carrier, theta0) for e in extra
+            if np.abs(np.asarray(e, float) @ n - carrier.offset).max() <= BIND_TOL]
+    polys = []
+    for uv in src:
+        g = shapely.geometry.Polygon(uv)
+        if not g.is_valid:
+            g = g.buffer(0)
+        if not g.is_empty:
+            polys.append(g)
+    if not polys:
+        return None
+    face = geom2d.union_all(polys)
+    parts = list(getattr(face, "geoms", [face]))
+    if contains is not None and len(parts) > 1:
+        probe = shapely.geometry.MultiPoint(
+            np.asarray(contains, float).reshape(-1, 2)).centroid
+        parts.sort(key=lambda g: (not g.contains(probe), -g.area))
+    else:
+        parts.sort(key=lambda g: -g.area)
+    return parts[0]
+
+
+def decal_groups(tris, tri_colors, analytic):
+    """[(carrier, theta0, regions, face)] for every decal a part carries.
+
+    Decoration reaches here two ways — coloured facets and coloured
+    primitives — and both have to be collected or a part extracts to an empty
+    texture: 3942bp01 is 16 coloured cone sectors and no coloured facets at
+    all, 973p01 is six facets and one primitive.
+
+    Carriers are BODY surfaces only. Binding to a decoration primitive would
+    make every one of 3942bp01's stripes its own carrier and its own texture,
+    where they are four bands on one cone.
+    """
+    tris = np.asarray(tris, float) if len(tris) else np.empty((0, 3, 3))
+    tri_colors = np.asarray(tri_colors)
+    # only WALLS are curved carriers. A disc or ring is flat, but to_uv sends
+    # every non-Plane carrier through the cylindrical map, where a flat
+    # surface has one constant height — so a round tile's print, which sits on
+    # a disc coincident with its top face, unwrapped to a zero-area line and
+    # vanished. The plane over those same facets is the carrier it wants.
+    body_prims = [p for p in analytic
+                  if getattr(p, "color", 16) == 16 and p.kind in ("cyli", "con")]
+    inside = tris.reshape(-1, 3).mean(axis=0) if len(tris) else None
+    # a flat primitive contributes its plane: a round tile's top face IS a
+    # disc, so it has no facets of its own and the only planes the triangles
+    # could offer were the rim's 51 vertical ones — 146 of 14769pt1's 162
+    # decoration facets bound to nothing at all
+    flat = [prim_loop(p) for p in analytic
+            if getattr(p, "color", 16) == 16 and p.kind in ("disc", "ring")]
+    planes = planes_from([t for t, c in zip(tris, tri_colors) if c == 16]
+                         + flat, inside=inside)
+    skip = marker_prims(analytic, tris, tri_colors)
+
+    families = {}         # surface -> every body section on it
+    for p in body_prims:
+        fam = _wall_family(p)
+        if fam is not None:
+            families.setdefault(fam, []).append(p)
+
+    members = {}          # surface -> (carrier, [(code, world pts)])
+
+    def add(carrier, code, pts):
+        key = _group_key(carrier)
+        if key in members:
+            members[key][1].append((code, pts))
+            return
+        sections = families.get(key)
+        span = (span_carrier(sections) if sections and len(sections) > 1
+                else carrier)
+        members[key] = (span, [(code, pts)])
+
+    for t, code in zip(tris, tri_colors):
+        if code == 16:
+            continue
+        carrier = bind(t, body_prims) or bind(t, planes)
+        if carrier is not None:
+            add(carrier, code, t)
+    for code, carrier, pts in prim_regions(analytic, body_prims + planes, skip):
+        add(carrier, code, pts)
+
+    out = []
+    for carrier, group in members.values():
+        pts = np.vstack([p for _, p in group])
+        theta0 = _seam_origin(pts, carrier)
+        uv = [(code, to_uv(p, carrier, theta0)) for code, p in group]
+        regions = merge_regions(uv)
+        if not regions:
+            continue
+        face = carrier_face(carrier, tris, theta0,
+                            contains=np.vstack([p for _, p in uv]),
+                            extra=flat)
+        if face is not None:
+            face = _drop_collinear(face)
+        out.append((carrier, theta0, regions, face))
+    # biggest print first, so `<part>.decal.0.svg` is the one worth looking at:
+    # a high-poly torso scatters across dozens of small facet planes and the
+    # authored order buries its front among them
+    out.sort(key=lambda g: -sum(r.area for _c, r in g[2]))
+    return out
+
+
+def decal_svgs(tris, tri_colors, analytic, px=900, ldraw_dir="vendor/ldraw",
+               bg=None):
+    """[svg] one per carrier the part carries a decal on."""
+    svgs = []
+    for carrier, _theta0, regions, face in decal_groups(tris, tri_colors,
+                                                        analytic):
+        # a merged region can come back with no ring at all — a sliver that
+        # collapses to a line, which is not something to draw or to size a
+        # canvas from
+        rings = [r for _c, g in regions for r in _rings_of(g) if len(r)]
+        if not rings:
+            continue
+        uv = np.vstack([np.asarray(r) for r in rings])
+        ext = carrier_extent(carrier, uv if face is None
+                             else np.asarray(face.exterior.coords))
+        svgs.append(texture_svg(ext, regions, px=px, ldraw_dir=ldraw_dir,
+                                face=face, bg=bg))
+    return svgs
+
+
+def _wall_family(prim, tol=0.01):
+    """The infinite surface a wall section lies on, or None if not a wall.
+
+    LDraw tiles a tall cone as stacked sections — 3942bp01's is four — and each
+    is a separate primitive. They are one surface to a decal that runs down
+    them, so grouping by primitive identity would cut its stripes into four
+    textures. Keyed by the axis LINE, the taper, and the radius extrapolated to
+    a datum shared by every section, so height along the axis drops out.
+    """
+    if prim.kind not in ("cyli", "con"):
+        return None
+    A = np.asarray(prim.R[:, 1], float)
+    h = float(np.linalg.norm(A))
+    if h < 1e-9:
+        return None
+    a = A / h
+    if a[np.argmax(np.abs(a))] < 0:          # canonical: the line, not its sense
+        a = -a
+    t = np.asarray(prim.t, float)
+    perp = t - a * float(t @ a)
+    r = float(np.linalg.norm(prim.R[:, 0]))
+    # both ends measured along the CANONICAL axis: taking the radii from the
+    # primitive's own direction while measuring position along the flipped one
+    # gives each section of a cone a different apex, and none of them merge
+    s0, s1 = float(t @ a), float((t + A) @ a)
+    r0, r1 = r * prim.radius_at(0.0), r * prim.radius_at(1.0)
+    slope = (r1 - r0) / (s1 - s0) if abs(s1 - s0) > 1e-9 else 0.0
+    q = lambda v: tuple(np.round(np.asarray(v, float) / tol).astype(np.int64))
+    return (prim.kind, q(a), q(perp), int(round(slope / tol)),
+            int(round((r0 - slope * s0) / tol)))
+
+
+def _group_key(carrier):
+    fam = _wall_family(carrier) if not isinstance(carrier, Plane) else None
+    return fam if fam is not None else id(carrier)
+
+
+def span_carrier(prims):
+    """One primitive covering every section in a wall family.
+
+    Merging sections but keeping one section's frame is not enough: `to_uv`
+    scales arc length by the radius the cone's taper predicts at that height,
+    so a point four sections away extrapolates past the apex and lands
+    thousands of LDU off canvas. The spanning carrier makes those heights
+    interior to its own extent.
+    """
+    from . import primitives
+
+    ref = prims[0]
+    A = np.asarray(ref.R[:, 1], float)
+    a = A / np.linalg.norm(A)
+    if a[np.argmax(np.abs(a))] < 0:
+        a = -a
+    ss, radii = [], []
+    for p in prims:
+        Ap = np.asarray(p.R[:, 1], float)
+        rp = float(np.linalg.norm(p.R[:, 0]))
+        for lvl, s in ((0.0, float(p.t @ a)), (1.0, float((p.t + Ap) @ a))):
+            ss.append(s)
+            radii.append(rp * p.radius_at(lvl))
+    ss, radii = np.asarray(ss, float), np.asarray(radii, float)
+    smin, smax = float(ss.min()), float(ss.max())
+    if smax - smin < 1e-9:
+        return ref
+    # the two end radii, not a least-squares line: every radius on a cylinder
+    # family is identical and the s values repeat, which is ill-conditioned
+    # enough that polyfit returns a ~1e-6 slope and turns the wall into a
+    # needle-thin cone
+    rb = float(radii[np.isclose(ss, smin)].mean())
+    rt = float(radii[np.isclose(ss, smax)].mean())
+
+    _o, a_ref, _r, e1, e2, _h = _circle_frame(ref)
+    if float(a_ref @ a) < 0:        # keep theta running the same way about `a`
+        e2 = -e2
+    t = np.asarray(ref.t, float)
+    origin = t - a * float(t @ a) + a * smin
+    H = smax - smin
+    if abs(rt - rb) < 1e-6 * max(rb, 1.0):
+        R = np.column_stack([e1 * rb, a * H, e2 * rb])
+        return primitives.Cylinder(R=R, t=origin, sector=360.0, color=16)
+    ru = rb - rt
+    R = np.column_stack([e1 * ru, a * H, e2 * ru])
+    return primitives.Cone(R=R, t=origin, sector=360.0, color=16,
+                           top=rt / ru)
+
+
+SNAP_TOL = 0.4          # LDU a vertex may sit off a recovered circle. The
+                        # union of a 48-gon with a 16-gon leaves the coarser
+                        # one's chord midpoints 0.345 inside the true rim
+                        # (14769pt1), and those are on the intended circle.
+
+
+def circle_candidates(ring, tol=SNAP_TOL, min_pts=6):
+    """Circles the ring's vertices lie on, for per-run arc recovery.
+
+    fit_circle answers "is this whole ring one circle", which a decal boundary
+    usually is not: a union leaves strays, and a shape can be several
+    concentric arcs joined by straight runs. Clustering radii about a common
+    centre finds each circle present, and path_d converts only the runs that
+    genuinely follow one — so an octagon, whose 8 vertices do share a radius,
+    is still refused on ARC_STEP.
+    """
+    pts = np.asarray(ring, float)
+    if len(pts) < min_pts:
+        return []
+    A = np.column_stack([2 * pts, np.ones(len(pts))])
+    try:
+        cx, cy, _k = np.linalg.lstsq(A, (pts ** 2).sum(axis=1), rcond=None)[0]
+    except np.linalg.LinAlgError:
+        return []
+    rad = np.hypot(pts[:, 0] - cx, pts[:, 1] - cy)
+    out, order = [], np.argsort(rad)
+    start = 0
+    for i in range(1, len(order) + 1):
+        if i < len(order) and rad[order[i]] - rad[order[start]] <= tol:
+            continue
+        members = order[start:i]
+        start_prev, start = start, i
+        if len(members) < min_pts:
+            continue
+        # The centre above is fitted to the WHOLE ring, which is only
+        # meaningful when the ring is concentric. On an arch (14769px2) it is
+        # nowhere near the real arc centres, so a radius cluster there groups
+        # unrelated vertices and invents a circle; snapping a run onto it
+        # threw a stray arc clean outside the part's silhouette. Refit to the
+        # cluster alone and keep it only if its own points truly lie on it.
+        fit = fit_circle(pts[members], tol)
+        if fit is None:
+            continue
+        fcx, fcy, fr = fit
+        res = np.abs(np.hypot(pts[members, 0] - fcx,
+                              pts[members, 1] - fcy) - fr).max()
+        if res <= tol:
+            out.append((fcx, fcy, fr))
+    return out
+
+
+def _circle_arcs(ring, tol):
+    """arc_candidates for every circle `ring` follows, widest first."""
+    cands = [(cx, cy, r, 0.0, 0.0, r, ARC_STEP, tol)
+             for cx, cy, r in circle_candidates(ring, tol)]
+    return geom2d.arc_candidates(sorted(cands, key=lambda c: -c[2])) or None

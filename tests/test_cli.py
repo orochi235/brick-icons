@@ -217,3 +217,35 @@ def test_list_colors_survives_a_bad_part_color(capsys):
     # the listing is how you look up a name, so a typo must not block it
     assert cli.main(["--list-colors", "--root", ".", "--part-color", "chartreuse"]) == 0
     assert "Red" in capsys.readouterr().out
+
+
+def test_decal_subcommand_writes_a_texture(tmp_path):
+    assert cli.main(["decal", "3941p01", "--out", str(tmp_path)]) == 0
+    svg = (tmp_path / "3941p01.decal.svg").read_text()
+    assert svg.startswith("<svg") and "<path" in svg
+
+
+def test_decal_defaults_to_a_transparent_ground(tmp_path):
+    """A white print on a white ground is invisible, and a decal is a texture
+    meant to be composited."""
+    cli.main(["decal", "3941p01", "--out", str(tmp_path)])
+    assert "<rect" not in (tmp_path / "3941p01.decal.svg").read_text()
+
+
+def test_decal_honours_svg_bg(tmp_path):
+    cli.main(["decal", "3941p01", "--out", str(tmp_path), "--svg-bg", "white"])
+    assert '<rect' in (tmp_path / "3941p01.decal.svg").read_text()
+
+
+def test_decal_reports_a_part_with_no_print_and_exits_nonzero(tmp_path, capsys):
+    assert cli.main(["decal", "3001", "--out", str(tmp_path)]) == 1
+    assert "no decal" in capsys.readouterr().out
+
+
+def test_decal_does_not_shadow_a_part_named_in_the_render_path(tmp_path, monkeypatch):
+    """The subcommand is dispatched on argv[0] alone, so every existing
+    invocation has to keep parsing exactly as it did."""
+    _fake_render(monkeypatch)
+    assert cli.main(["3001", "--mode", "gray", "--out", str(tmp_path),
+                     "--root", str(tmp_path)]) == 0
+    assert (tmp_path / "3001.gray.png").exists()
