@@ -20,6 +20,11 @@ Numbers here are measured, not assumed. Don't re-derive them.
 
 - **Root cause:** `hlr.py:62` `flatten()` parses type 1/2/3/4/5 lines and never reads `tok[1]`. Decoration therefore arrives geometrically identical to its carrier. Confirmed against LDView on all four printed specimens: none renders its print.
 - **`repair._orient` preserves triangle order and count** (in-place flip per index, `repair.py:74-95`), so an index-parallel color array survives `repaired_tris`. Its cache key hashes only geometry plus `certified`/`invert` — **do not add color to `_cache_key`**; color cannot affect orientation and the change would invalidate every cached mesh.
+- **Test triangles must be wound CCW or they vanish.** `faces_from_tris` culls
+  back-faces and never flips them, so a fixture triangle written clockwise is
+  dropped and the test dies on an index error rather than the assertion it was
+  written for. With `FakeProj`'s `fwd = (0, 0, -1)`, CCW in the XY plane means a
+  +z normal.
 - **Suite counts here are absolute and start from 363.** Each task's expected
   count includes every test added by earlier tasks: 365, 367, 369, 371, 372,
   then the `test_unwrap.py` additions to 392. If a count is off by exactly the
@@ -376,7 +381,7 @@ def test_coplanar_faces_of_different_colours_do_not_union():
     Unioning them is what erases flat prints today."""
     tri = np.array([
         [[0, 0, 0], [1, 0, 0], [0, 1, 0]],      # carrier
-        [[1, 0, 0], [0, 1, 0], [1, 1, 0]],      # decal, shares an edge
+        [[1, 0, 0], [1, 1, 0], [0, 1, 0]],      # decal, shares an edge
     ], float)
     faces = shade.faces_from_tris(tri, FakeProj(), colors=[16, 14])
     assert faces[0]["group"] != faces[1]["group"]
@@ -385,7 +390,7 @@ def test_coplanar_faces_of_different_colours_do_not_union():
 def test_coplanar_faces_of_the_same_colour_still_union():
     tri = np.array([
         [[0, 0, 0], [1, 0, 0], [0, 1, 0]],
-        [[1, 0, 0], [0, 1, 0], [1, 1, 0]],
+        [[1, 0, 0], [1, 1, 0], [0, 1, 0]],
     ], float)
     faces = shade.faces_from_tris(tri, FakeProj(), colors=[16, 16])
     assert faces[0]["group"] == faces[1]["group"]
