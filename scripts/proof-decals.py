@@ -36,6 +36,8 @@ from pathlib import Path
 from xml.sax.saxutils import escape
 
 import numpy as np
+from shapely.geometry import Polygon
+from shapely.ops import unary_union
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -49,6 +51,7 @@ PARTS = LDRAW / "parts"
 PAL = {c.code: c for c in parse_ldconfig(open(LDRAW / "LDConfig.ldr", errors="replace"))}
 CELL = 460
 LABEL_H = 46
+INSET = 34        # breathing room around each half-cell
 
 
 def _resolve(ref: str):
@@ -160,6 +163,22 @@ def _unwrap(deco, body):
     return ([(c, fn(p)) for c, p in deco], _quad([fn(q) for q in on]), "cylinder")
 
 
+def _union(polys):
+    """Same-colour facets unioned into whole regions.
+
+    LDraw has no regions: a stripe is 10 abutting quads, a border 68 facets.
+    Drawn as separate fills they leave an antialiased hairline along every
+    shared edge — the grey scoring that reads as if the part were scored.
+    Unioning also produces the holes a frame needs.
+    """
+    geoms = []
+    for p in polys:
+        g = Polygon(p)
+        geoms.append(g if g.is_valid else g.buffer(0))
+    u = unary_union(geoms)
+    return list(getattr(u, "geoms", [u]))
+
+
 def cell_svg(pid, title, deco, carrier, kind, ref_png, margin=0.12):
     """One grid cell: LDView render, flat decal, label strip.
 
@@ -171,9 +190,10 @@ def cell_svg(pid, title, deco, carrier, kind, ref_png, margin=0.12):
     x1, y1 = allp.max(axis=0)
     m = margin * max(x1 - x0, y1 - y0, 1e-9)
     x0, y0, x1, y1 = x0 - m, y0 - m, x1 + m, y1 + m
-    s = min(CELL / max(x1 - x0, 1e-9), CELL / max(y1 - y0, 1e-9))
-    ox = (CELL - (x1 - x0) * s) / 2
-    oy = (CELL - (y1 - y0) * s) / 2
+    inner = CELL - 2 * INSET
+    s = min(inner / max(x1 - x0, 1e-9), inner / max(y1 - y0, 1e-9))
+    ox = INSET + (inner - (x1 - x0) * s) / 2
+    oy = INSET + (inner - (y1 - y0) * s) / 2
 
     def d(p):
         # LDraw's Y points DOWN and so does SVG's, so pass it straight through
@@ -188,15 +208,27 @@ def cell_svg(pid, title, deco, carrier, kind, ref_png, margin=0.12):
                       for c in codes[:4]) + (" ..." if len(codes) > 4 else "")
     w, h = 2 * CELL, CELL + LABEL_H
     body = [f'<rect width="{w}" height="{h}" fill="#ffffff"/>',
-            f'<image x="0" y="0" width="{CELL}" height="{CELL}" '
+            f'<image x="{INSET}" y="{INSET}" width="{CELL - 2 * INSET}" '
+            f'height="{CELL - 2 * INSET}" '
             f'preserveAspectRatio="xMidYMid meet" '
             f'xlink:href="data:image/png;base64,{png}"/>']
-    body += [f'<path d="{d(p)}" fill="#f2f2f2" stroke="none"/>' for _, p in carrier]
-    body += [f'<path d="{d(p)}" fill="'
-             f'{PAL[c].hex.replace("0x", "#") if c in PAL else "#888888"}" '
-             f'stroke="none"/>' for c, p in deco]
-    body += [f'<path d="{d(p)}" fill="none" stroke="#b8b8b8" '
-             f'stroke-width="1.6" stroke-dasharray="7 5"/>' for _, p in carrier]
+    def region_d(g):
+        rings = [np.asarray(g.exterior.coords)] + \
+                [np.asarray(r.coords) for r in g.interiors]
+        return " ".join(d(r[:-1]) for r in rings)
+
+    by_colour = {}
+    for c, p in deco:
+        by_colour.setdefault(c, []).append(p)
+    body += [f'<path d="{region_d(g)}" fill="#f2f2f2" stroke="none"/>'
+             for g in _union([p for _, p in carrier])] if carrier else []
+    for c in sorted(by_colour):                      # authored order: later on top
+        col = PAL[c].hex.replace("0x", "#") if c in PAL else "#888888"
+        body += [f'<path d="{region_d(g)}" fill="{col}" fill-rule="evenodd" '
+                 f'stroke="none"/>' for g in _union(by_colour[c])]
+    body += [f'<path d="{region_d(g)}" fill="none" stroke="#b8b8b8" '
+             f'stroke-width="1.6" stroke-dasharray="7 5"/>'
+             for g in _union([p for _, p in carrier])] if carrier else []
     body += [f'<line x1="0" y1="{CELL}" x2="{w}" y2="{CELL}" stroke="#dddddd"/>',
              f'<text x="10" y="{CELL + 20}" font-family="Helvetica,Arial" '
              f'font-size="17" font-weight="bold" fill="#111">{escape(pid)}</text>',
