@@ -55,8 +55,10 @@ def test_build_argv_part_color_optional():
     base = load_config(root=".")
     assert not any(a.startswith("-DefaultColor3") for a in
                    render.build_argv(base, Path("/p/x.dat"), Path("/o/x.png")))
+    # resolve() canonicalizes to lowercase 0xrrggbb; LDView hex is
+    # case-insensitive, so this changes the flag text, not the render
     colored = load_config(root=".", overrides={"part_color": "0xCC0000"})
-    assert "-DefaultColor3=0xCC0000" in render.build_argv(colored, Path("/p/x.dat"), Path("/o/x.png"))
+    assert "-DefaultColor3=0xcc0000" in render.build_argv(colored, Path("/p/x.dat"), Path("/o/x.png"))
 
 
 LDVIEW = Path("vendor/LDView.app/Contents/MacOS/LDView")

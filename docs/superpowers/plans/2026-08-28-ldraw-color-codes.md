@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.11+, numpy, pytest, shapely. Spec: `docs/superpowers/specs/2026-08-28-printed-parts-design.md`.
 
-**Commands:** run tests with `.venv/bin/python -m pytest -q` (single test with `-k`). Render specimens with `.venv/bin/brick-icons --list specimens.txt --root . --format svg --out <dir>`.
+**Commands:** run tests with `.venv/bin/python -m pytest -q` (single test with `-k`). Render specimens with `.venv/bin/brick-icons --list specimens.txt --root . --format svg --shading outline --shade-style flat3 --out <dir>`.
 
 **Scope:** This plan is phase 1 of the spec plus two adjacent items — the `_ink_lens_pockets` crash, and the measurement that unblocks phase 2. Phase 2 (decal unwrap) gets its own plan once Task 9 produces real carrier-offset numbers; its central tolerance cannot be chosen honestly before then.
 
@@ -32,7 +32,7 @@ Expected: all tests pass (336 at time of writing). If not, STOP and report — t
 
 ```bash
 mkdir -p debug/colorcodes
-.venv/bin/brick-icons --list specimens.txt --root . --format svg --out debug/colorcodes/baseline
+.venv/bin/brick-icons --list specimens.txt --root . --format svg --shading outline --shade-style flat3 --out debug/colorcodes/baseline
 ```
 
 Expected: one `.svg` per specimen id in `debug/colorcodes/baseline/`.
@@ -40,7 +40,7 @@ Expected: one `.svg` per specimen id in `debug/colorcodes/baseline/`.
 - [ ] **Step 3: Verify the renderer is deterministic**
 
 ```bash
-.venv/bin/brick-icons --list specimens.txt --root . --format svg --out debug/colorcodes/baseline2
+.venv/bin/brick-icons --list specimens.txt --root . --format svg --shading outline --shade-style flat3 --out debug/colorcodes/baseline2
 cd debug/colorcodes
 find baseline  -name '*.svg' -exec shasum -a 256 {} + | sed 's/baseline\///'  | sort > baseline.sha
 find baseline2 -name '*.svg' -exec shasum -a 256 {} + | sed 's/baseline2\///' | sort > baseline2.sha
@@ -612,7 +612,7 @@ git commit -m "add --list-colors to print the LDraw palette"
 - [ ] **Step 1: Re-render the specimens**
 
 ```bash
-.venv/bin/brick-icons --list specimens.txt --root . --format svg --out debug/colorcodes/after
+.venv/bin/brick-icons --list specimens.txt --root . --format svg --shading outline --shade-style flat3 --out debug/colorcodes/after
 ```
 
 - [ ] **Step 2: Diff against the Task 1 baseline**
@@ -731,7 +731,7 @@ Expected: `done: 3941p01`, and `debug/colorcodes/nostroke/3941p01.svg` exists.
 - [ ] **Step 6: Confirm the byte-diff gate still holds**
 
 ```bash
-.venv/bin/brick-icons --list specimens.txt --root . --format svg --out debug/colorcodes/after9
+.venv/bin/brick-icons --list specimens.txt --root . --format svg --shading outline --shade-style flat3 --out debug/colorcodes/after9
 cd debug/colorcodes
 find after9 -name '*.svg' -exec shasum -a 256 {} + | sed 's/after9\///' | sort > after9.sha
 diff baseline.sha after9.sha && echo "BYTE-IDENTICAL"
@@ -869,7 +869,7 @@ Replace these ids with whichever the reviewer picked.
 
 - [ ] **Step 2: Confirm they render**
 
-Run: `.venv/bin/brick-icons --list specimens.txt --root . --format svg --out debug/colorcodes/specimens-new`
+Run: `.venv/bin/brick-icons --list specimens.txt --root . --format svg --shading outline --shade-style flat3 --out debug/colorcodes/specimens-new`
 Expected: one `.svg` per id including the new ones, no traceback.
 
 - [ ] **Step 3: Re-baseline the byte-diff gate**

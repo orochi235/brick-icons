@@ -102,6 +102,14 @@ of the current arc/polygon mix.
 fills flat, with interior facet edges inside a region suppressed — otherwise
 every facet boundary inks and the print reads as a mesh.
 
+**Dump the unwrap as its own stage.** The unwrapped decal — the decal laid flat
+in (θ, h) before re-projection — is written as an SVG under `--debug-dir`,
+alongside the existing per-stage PNGs that `cli._stage` emits. It earns its
+place twice over: it is the only way to see whether a carrier bound correctly
+without reading projected output, and being 2-D and camera-independent it is
+far easier to assert on in tests than a rendered view. Test the unwrap against
+this artifact; test the projection separately.
+
 **Clipping is mostly not needed.** Decal facets are ordinary geometry, so the
 existing HLR occlusion pass already clips them at the silhouette and behind
 studs — visible today in `3941p01`, whose leftmost buttons are cut by the

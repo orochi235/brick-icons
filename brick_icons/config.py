@@ -5,6 +5,8 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import colors
+
 MM_PER_INCH = 25.4
 
 
@@ -98,17 +100,30 @@ class Config:
 
 def load_config(toml_path=None, overrides=None, root="."):
     data = dict(DEFAULTS)
+    explicit = set()            # keys the caller actually set: a translucent
+                                # color supplies opacity only if they did not
     if toml_path and Path(toml_path).exists():
         with open(toml_path, "rb") as f:
-            data.update(tomllib.load(f))
+            from_toml = tomllib.load(f)
+        data.update(from_toml)
+        explicit |= set(from_toml)
     if overrides:
-        data.update({k: v for k, v in overrides.items() if v is not None})
+        given = {k: v for k, v in overrides.items() if v is not None}
+        data.update(given)
+        explicit |= set(given)
 
     root = Path(root)
     if data.get("label_mm"):
         w_mm, h_mm = data["label_mm"]
         data["width"] = round(w_mm / MM_PER_INCH * data["dpi"])
         data["height"] = round(h_mm / MM_PER_INCH * data["dpi"])
+
+    ldraw_dir = root / data["ldraw_dir"]
+    if data["part_color"]:
+        hex_str, alpha = colors.resolve(data["part_color"], ldraw_dir)
+        data["part_color"] = hex_str
+        if alpha is not None and "opacity" not in explicit:
+            data["opacity"] = alpha / 255.0
 
     launcher = data["ldview_launcher"]
     if launcher is None:
@@ -117,7 +132,7 @@ def load_config(toml_path=None, overrides=None, root="."):
     return Config(
         ldview=root / data["ldview"],
         ldview_launcher=tuple(launcher),
-        ldraw_dir=root / data["ldraw_dir"],
+        ldraw_dir=ldraw_dir,
         dpi=int(data["dpi"]),
         width=int(data["width"]),
         height=int(data["height"]),
