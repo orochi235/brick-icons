@@ -11,8 +11,8 @@ Render LEGO/LDraw parts as (optionally) lit and shaded SVG icons.
       alt="brick-icons 3941 --format svg --shading outline --shade-style flat3 --part-color 0x0055bf --opacity 0.55"
       title="brick-icons 3941 --format svg --shading outline --shade-style flat3 --part-color 0x0055bf --opacity 0.55"></td>
     <td align="center"><img src="docs/gallery/3960.svg"  width="150"
-      alt="brick-icons 3960 --format svg --shading outline --shade-style flat3 --part-color 0x9ba19d"
-      title="brick-icons 3960 --format svg --shading outline --shade-style flat3 --part-color 0x9ba19d"></td>
+      alt="brick-icons 3960 --format svg --shading outline --shade-style flat3 --part-color 0x00852b"
+      title="brick-icons 3960 --format svg --shading outline --shade-style flat3 --part-color 0x00852b"></td>
     <td align="center"><img src="docs/gallery/4589.svg"  width="150"
       alt="brick-icons 4589 --format svg --shading outline --shade-style flat3 --part-color 0xf2cd37"
       title="brick-icons 4589 --format svg --shading outline --shade-style flat3 --part-color 0xf2cd37"></td>
@@ -36,8 +36,8 @@ Render LEGO/LDraw parts as (optionally) lit and shaded SVG icons.
       alt="brick-icons 99781 --format svg --shading outline --shade-style flat3 --part-color 0x36aebf"
       title="brick-icons 99781 --format svg --shading outline --shade-style flat3 --part-color 0x36aebf"></td>
     <td align="center"><img src="docs/gallery/32062.svg" width="150"
-      alt="brick-icons 32062 --format svg --shading outline --shade-style flat3 --part-color 0x582a12 --angle 25,65 --line-width 3 --silhouette-width 3"
-      title="brick-icons 32062 --format svg --shading outline --shade-style flat3 --part-color 0x582a12 --angle 25,65 --line-width 3 --silhouette-width 3"></td>
+      alt="brick-icons 32062 --format svg --shading outline --shade-style flat3 --part-color 0x671f81 --angle 25,65 --line-width 3 --silhouette-width 3"
+      title="brick-icons 32062 --format svg --shading outline --shade-style flat3 --part-color 0x671f81 --angle 25,65 --line-width 3 --silhouette-width 3"></td>
     <td align="center"><img src="docs/gallery/87087.svg" width="150"
       alt="brick-icons 87087 --format svg --shading outline --shade-style flat3 --part-color 0xffffff"
       title="brick-icons 87087 --format svg --shading outline --shade-style flat3 --part-color 0xffffff"></td>
