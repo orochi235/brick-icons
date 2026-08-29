@@ -541,7 +541,8 @@ def _merge_members(ordered, frags):
         find(keys[idx])
         if (f.get("plane") is not None and "grad_axis" not in f
                 and "grad_radial" not in f):
-            ra, rb = find(("p", f["plane"])), find(keys[idx])
+            ra = find(("p", f["plane"], f.get("color", 16)))
+            rb = find(keys[idx])
             if ra != rb:
                 parent[rb] = ra
     members, roots = defaultdict(list), {}
@@ -1806,6 +1807,10 @@ def _attach_smooth_gradients(faces, cond_edges, min_spread=0.002):
         seam_keys = set()
     for ek, ks in by_edge.items():
         for k in ks[1:]:
+            # a decal is coplanar with its carrier and shares its edges;
+            # unioning across the colour boundary is what erased flat prints
+            if faces[ks[0]].get("color", 16) != faces[k].get("color", 16):
+                continue
             # union across a seam always; across an ordinary shared edge only
             # when coplanar (quad halves meet at a diagonal, which is never a
             # conditional line) — coplanar union can't cross a real crease
