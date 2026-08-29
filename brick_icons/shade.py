@@ -7,7 +7,7 @@ from collections import Counter, defaultdict
 import numpy as np
 from PIL import Image, ImageDraw
 
-from . import colors, geom2d, primitives
+from . import colors, geom2d, primitives, unwrap
 
 
 def faces_from_analytic(analytic, proj):
@@ -1638,6 +1638,96 @@ def faces_from_tris(tri, proj, cond_edges=None, colors=None):
             continue                    # hidden underside, not fold spillover
         kept.append(f)
     return kept
+
+
+def _body_planes(faces):
+    """A Plane per distinct body-face plane. Planes are not primitives, so a
+    flat carrier has to be derived from the geometry that sits on it."""
+    seen = {}
+    for f in faces:
+        k = f.get("plane")
+        if k is None or k in seen or f.get("color", 16) != 16:
+            continue
+        seen[k] = unwrap.Plane(normal=np.array(k[:3], float),
+                               offset=float(k[3]))
+    return list(seen.values())
+
+
+def unwrap_decoration(faces, carriers, proj, step=0.25):
+    """Replace bound decoration facets with one face per merged UV region.
+
+    Only faces that survived culling are unwrapped, so what is visible does
+    not change — the union, the shape recovery and the boundary just stop
+    happening in projected space, where a panel is 36 mutually non-coplanar
+    facets seen through a camera and in UV is one rounded rectangle.
+    """
+    deco = [f for f in faces
+            if f.get("color", 16) != 16 and f.get("_verts") is not None]
+    if not deco:
+        return faces
+    planes = _body_planes(faces)
+    groups = {}
+    for f in deco:
+        # a curved carrier outranks a plane: the body wall under a decal is
+        # hand-faceted where no primitive was substituted, and each of those
+        # facets is a plane the decoration sits exactly on — matching one
+        # would flatten the very curvature the unwrap exists to dissolve
+        carrier = unwrap.bind(f["_verts"], carriers)
+        if carrier is None:
+            carrier = unwrap.bind(f["_verts"], planes)
+        if carrier is None:
+            continue
+        groups.setdefault((id(carrier), f["color"]),
+                          (carrier, f["color"], []))[2].append(f)
+    if not groups:
+        return faces
+    drop, made = set(), []
+    for gi, (carrier, code, members) in enumerate(groups.values()):
+        theta0 = unwrap._seam_origin(
+            np.vstack([f["_verts"] for f in members]), carrier)
+        polys = [(code, unwrap.to_uv(f["_verts"], carrier, theta0))
+                 for f in members]
+        for _code, g in unwrap.merge_regions(polys):
+            for pi, part in enumerate(getattr(g, "geoms", [g])):
+                face = _region_face(part, carrier, theta0, members, proj, step,
+                                    tag=(gi, code, pi))
+                if face is not None:
+                    made.append(face)
+        drop.update(id(f) for f in members)
+    if not made:
+        return faces
+    return [f for f in faces if id(f) not in drop] + made
+
+
+def _region_face(part, carrier, theta0, members, proj, step, tag):
+    """One merged UV region as a face, its boundary back on the exact carrier.
+    A fresh group and plane key keep it a region of its own: sharing either
+    would merge it back into whatever it was cut out of."""
+    if part.geom_type != "Polygon" or part.is_empty:
+        return None
+
+    flat = isinstance(carrier, unwrap.Plane)
+
+    def px_ring(ring):
+        uv = np.asarray(ring.coords, float)[:-1]
+        # a plane's unwrap is the identity and projection is linear, so a
+        # straight edge stays straight: only a curve re-projected through a
+        # camera needs to carry its own resolution across
+        if not flat:
+            uv = unwrap.densify(uv, step)
+        x, y, z = proj.to_px(unwrap.to_xyz(uv, carrier, theta0))
+        return np.stack([x, y], axis=1), z
+
+    poly, zs = px_ring(part.exterior)
+    if len(poly) < 3:
+        return None
+    f = {**members[0], "poly": poly, "zs": zs,
+         "holes": [px_ring(h)[0] for h in part.interiors],
+         "depth": float(np.mean(zs)), "group": ("uv",) + tag,
+         "plane": ("uv",) + tag}
+    for k in ("_verts", "grad_axis", "grad_radial", "grad_samples", "backfill"):
+        f.pop(k, None)
+    return f
 
 
 def absorb_wall_facets(tri_faces, an_faces, tol=2e-3, abut_px=3.0):

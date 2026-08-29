@@ -39,7 +39,7 @@ def _circle_frame(prim):
     e2 = np.cross(e1, a)
     if float(e2 @ prim.R[:, 2]) < 0:
         e2 = -e2
-    return o, a, r, e1, e2
+    return o, a, r, e1, e2, float(np.linalg.norm(prim.R[:, 1])) or 1.0
 
 
 def _local(pts, prim):
@@ -64,6 +64,13 @@ def _radial_gap(pts, prim) -> float:
     return float(np.max(np.abs(np.hypot(p[:, 0], p[:, 2]) - want)) * r)
 
 
+def _radius(prim, level, r):
+    """World radius at each level along the axis. Constant for a cylinder,
+    tapering for a cone — mapping a cone back at its base radius would put
+    every point on a cylinder instead."""
+    return r * np.array([prim.radius_at(float(v)) for v in np.atleast_1d(level)])
+
+
 def _wrap(th):
     return (np.asarray(th, float) + np.pi) % (2 * np.pi) - np.pi
 
@@ -74,7 +81,7 @@ def _seam_origin(pts, carrier) -> float:
     never merge, fit as one shape, or stroke as one boundary."""
     if isinstance(carrier, Plane):
         return 0.0
-    o, a, r, e1, e2 = _circle_frame(carrier)
+    o, a, r, e1, e2, _h = _circle_frame(carrier)
     d = np.asarray(pts, float).reshape(-1, 3) - o
     perp = d - np.outer(d @ a, a)
     th = np.sort(np.mod(np.arctan2(perp @ e2, perp @ e1), 2 * np.pi))
@@ -134,12 +141,12 @@ def to_uv(pts, carrier, theta0=0.0):
     if isinstance(carrier, Plane):
         n, u, v = carrier.basis()
         return np.column_stack([pts @ u, pts @ v])
-    o, a, r, e1, e2 = _circle_frame(carrier)
+    o, a, r, e1, e2, h = _circle_frame(carrier)
     d = pts - o
     height = d @ a
     perp = d - np.outer(height, a)
     th = np.arctan2(perp @ e2, perp @ e1) - theta0
-    return np.column_stack([r * _wrap(th), height])
+    return np.column_stack([_radius(carrier, height / h, r) * _wrap(th), height])
 
 
 def to_xyz(uv, carrier, theta0=0.0):
@@ -149,10 +156,11 @@ def to_xyz(uv, carrier, theta0=0.0):
         n, u, v = carrier.basis()
         return (np.outer(uv[:, 0], u) + np.outer(uv[:, 1], v)
                 + carrier.offset * n)
-    o, a, r, e1, e2 = _circle_frame(carrier)
-    th = uv[:, 0] / r + theta0
-    return (o + np.outer(r * np.cos(th), e1) + np.outer(r * np.sin(th), e2)
-            + np.outer(uv[:, 1], a))
+    o, a, r, e1, e2, h = _circle_frame(carrier)
+    rad = _radius(carrier, uv[:, 1] / h, r)
+    th = uv[:, 0] / rad + theta0
+    return (o + np.outer(rad * np.cos(th), e1)
+            + np.outer(rad * np.sin(th), e2) + np.outer(uv[:, 1], a))
 
 
 def _region_d(poly, x0, y1, s):
@@ -371,3 +379,28 @@ def region_path(g, tol=CIRCLE_TOL):
             geom2d.to_geom(ring),
             arcs=geom2d.arc_candidates(cands) if cands else None))
     return " ".join(x for x in parts if x)
+
+
+def decorate(tris, tri_colors, carriers):
+    """[(code, carrier, theta0, region)] for every decoration group that binds.
+    Triangles binding to no carrier are omitted, and their caller leaves the
+    authored geometry alone."""
+    out = []
+    for carrier, theta0, members in bind_groups(tris, tri_colors, carriers):
+        for code, g in merge_regions(members):
+            if not g.is_empty:
+                out.append((code, carrier, theta0, g))
+    return out
+
+
+def densify(ring, step=0.25):
+    """Resample a UV ring so its chords stay under `step` LDU. A curve
+    recovered in UV re-projects through a camera, where it is no longer a
+    circle, so the boundary has to carry its own resolution across."""
+    pts = np.asarray(ring, float)
+    closed = np.vstack([pts, pts[:1]])
+    out = []
+    for a, b in zip(closed[:-1], closed[1:]):
+        n = max(1, int(np.ceil(np.linalg.norm(b - a) / step)))
+        out.append(a + np.outer(np.arange(n) / n, b - a))
+    return np.vstack(out)

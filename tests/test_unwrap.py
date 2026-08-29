@@ -285,3 +285,82 @@ def test_region_path_rounds_the_corners_of_a_panel():
     d = unwrap.region_path(geom2d.to_geom(ring))
     assert d.count("L") == 4          # one per straight run, not 20 chords
     assert d.count("A") == 4          # one per corner
+
+
+def test_reprojection_closes_the_sagitta_gap():
+    """3941p01's panel is authored as a 16-gon inscribed in the r=20 wall, so
+    its chord midpoints fall 0.384 LDU inside the cylinder and open a white
+    seam. After the round trip every point is ON the wall."""
+    cyl = FakeCylinder(r=20.0)
+    th = np.linspace(0, 2 * np.pi, 17)[:-1]
+    verts = np.column_stack([20.0 * np.cos(th), np.zeros(16),
+                             20.0 * np.sin(th)])
+    mids = (verts + np.roll(verts, -1, axis=0)) / 2
+    assert np.hypot(mids[:, 0], mids[:, 2]).min() < 19.7          # the gap
+    fixed = unwrap.to_xyz(unwrap.to_uv(mids, cyl), cyl)
+    assert np.hypot(fixed[:, 0], fixed[:, 2]) == pytest.approx(20.0, abs=1e-9)
+
+
+def test_geometry_binding_to_no_carrier_is_untouched():
+    """4,764 printed parts, most never eyeballed: an unrecognized
+    construction must degrade to today's output, not raise."""
+    weird = np.array([[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]])
+    assert unwrap.decorate(weird, [4], carriers=[]) == []
+
+
+def test_decorate_returns_one_region_per_colour_on_a_carrier():
+    cyl = FakeCylinder(r=20.0, h=24.0)
+    tris = _wall_quads(cyl, 10, 50, 4.0, 8.0)
+    out = unwrap.decorate(tris, [4] * len(tris), [cyl])
+    assert len(out) == 1
+    code, carrier, _theta0, g = out[0]
+    assert code == 4 and carrier is cyl
+    assert len(geom2d.rings(g)) == 1
+
+
+def test_decorate_leaves_body_geometry_alone():
+    cyl = FakeCylinder(r=20.0, h=24.0)
+    tris = _wall_quads(cyl, 10, 50, 4.0, 8.0)
+    assert unwrap.decorate(tris, [16] * len(tris), [cyl]) == []
+
+
+def test_a_reprojected_region_lands_back_on_the_wall():
+    """The whole point: the boundary comes back on the exact carrier, which
+    is what closes the sagitta seam under the print."""
+    cyl = FakeCylinder(r=20.0, h=24.0)
+    tris = _wall_quads(cyl, 10, 50, 4.0, 8.0)
+    code, carrier, theta0, g = unwrap.decorate(tris, [4] * len(tris), [cyl])[0]
+    ring = geom2d.rings(g)[0]
+    back = unwrap.to_xyz(ring, carrier, theta0)
+    assert np.hypot(back[:, 0], back[:, 2]) == pytest.approx(20.0, abs=1e-6)
+
+
+def test_cone_unwrap_round_trips_on_the_taper():
+    """A cone's radius varies with height, so mapping back at the base radius
+    puts every point on a cylinder instead — 3942bp01's stripes would land off
+    the wall, further out the higher they sit."""
+    cone = FakeCone(r=20.0, h=24.0, top=0.5)
+    pts = []
+    for level in (0.0, 0.4, 1.0):
+        rad = 20.0 * (0.5 + 1 - level)
+        for th in (0.3, 2.0, -1.7):
+            pts.append([rad * np.cos(th), level * 24.0, rad * np.sin(th)])
+    pts = np.array(pts)
+    back = unwrap.to_xyz(unwrap.to_uv(pts, cone), cone)
+    assert back == pytest.approx(pts, abs=1e-9)
+
+
+def test_decal_paints_its_ldraw_colour_as_one_element(tmp_path):
+    """The panel never painted at all before the colour rode out of flatten,
+    and painted as six separately-stroked fragments before the union moved to
+    UV. One path in the part's own black is both fixes at once."""
+    import re
+
+    from brick_icons import cli
+
+    out = tmp_path / "o"
+    cli.main(["3941p01", "--root", ".", "--format", "svg",
+              "--shading", "outline", "--shade-style", "flat3",
+              "--out", str(out)])
+    svg = (out / "3941p01.svg").read_text()
+    assert len(re.findall(r'fill="#1b2a34"', svg)) == 1     # LDraw 0, Black

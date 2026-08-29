@@ -385,6 +385,7 @@ def _visible_segments_faceted(out, right, up, fwd, render_px, cull=True):
     from . import shade
     faces = shade.faces_from_tris(tri, proj, cond_edges=out["5"],
                                   colors=out.get("tri_colors")) if len(tri) else []
+    faces = shade.unwrap_decoration(faces, [], proj)
     faces = shade.order_faces(faces, eps=EDGE_BIAS * zrange)
     return VisResult(segs, (min(xs), min(ys), max(xs), max(ys)), s, faces, [],
                      (), proj)
@@ -489,6 +490,9 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
                                       cond_edges=out["5"],
                                       colors=out.get("tri_colors")) if out["tri"] else []
     an_faces = shade.faces_from_analytic(analytic, proj)
+    # before absorb_wall_facets, which is colour-blind: a decal that binds is
+    # already its own region and must not be swallowed into the wall it sits on
+    tri_faces = shade.unwrap_decoration(tri_faces, analytic, proj)
     # facet-authored stretches of a primitive wall (60474's bite flanks)
     # join the abutting analytic band's gradient instead of flat-toning
     shade.absorb_wall_facets(tri_faces, an_faces)
