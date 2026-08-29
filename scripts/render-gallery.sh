@@ -1,6 +1,6 @@
 #!/bin/sh
 # Regenerate the README gallery (docs/gallery/*.svg).
-# 16 parts spanning bricks/round/slopes/SNOT/technic/sculpted, varied angles,
+# 16 parts spanning bricks/round/slopes/SNOT/technic/sculpted/printed, varied angles,
 # colors, and render params — including translucent parts (--opacity < 1
 # disables hidden-geometry culling) and one strokeless fills-only render
 # (zero stroke widths). Backgrounds are transparent (the default).
@@ -14,7 +14,7 @@ $BI 3001  $G --part-color 0xc91a09                            # 2x4 brick, red
 $BI 3941  $G --part-color 0x0055bf --opacity 0.55             # 2x2 round, trans-blue
 $BI 3960  $G --part-color 0x9ba19d                            # dish 4x4 inverted
 $BI 4589  $G --part-color 0xf2cd37                            # cone 1x1, yellow
-$BI 3040b $G --part-color 0x237841 --angle 30,20              # slope 45, green
+$BI 3040bp08 $G --part-color 0x1b2a34 --angle 30,25           # slope 45 printed, black
 $BI 4070  $G --part-color 0xe4cd9e                            # headlight brick, tan
 $BI 3649  $G --part-color 0xa0a5a9 --angle 55,15              # gear 40t
 $BI 50950 $G --part-color 0xfe8a18                            # curved slope, orange
