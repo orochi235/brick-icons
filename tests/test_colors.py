@@ -1,4 +1,5 @@
-from brick_icons.colors import Color, parse_ldconfig
+from brick_icons.colors import (Color, load_palette, normalize_name,
+                                parse_ldconfig)
 
 LDCFG = """\
 0 LDraw.org Configuration File
@@ -32,3 +33,32 @@ def test_color_hex_is_canonical_lowercase():
 
 def test_parse_ldconfig_ignores_comments_and_legoid_lines():
     assert len(parse_ldconfig(["0 // not a colour", "0 // LEGOID 26 - Black"])) == 0
+
+
+def test_normalize_name_folds_case_separators_and_gray():
+    assert normalize_name("Light_Bluish_Grey") == "lightbluishgrey"
+    assert normalize_name("light-bluish-gray") == "lightbluishgrey"
+    assert normalize_name("Light Bluish Gray") == "lightbluishgrey"
+    assert normalize_name("RED") == "red"
+
+
+def test_load_palette_indexes_both_ways(tmp_path):
+    (tmp_path / "LDConfig.ldr").write_text(LDCFG)
+    pal = load_palette(tmp_path)
+    assert pal.by_code[4].name == "Red"
+    assert pal.by_name["red"].code == 4
+    assert pal.by_name["lightbluishgrey"].code == 71
+    # by_name is keyed by normalized names; callers normalize their lookup,
+    # which is what folds the American spelling onto LDConfig's British one
+    assert pal.by_name[normalize_name("Light Bluish Gray")].code == 71
+
+
+def test_load_palette_is_cached(tmp_path):
+    (tmp_path / "LDConfig.ldr").write_text(LDCFG)
+    assert load_palette(tmp_path) is load_palette(tmp_path)
+
+
+def test_load_palette_missing_file_raises(tmp_path):
+    import pytest
+    with pytest.raises(FileNotFoundError):
+        load_palette(tmp_path / "nope")

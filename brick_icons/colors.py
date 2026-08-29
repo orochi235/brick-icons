@@ -41,3 +41,31 @@ def parse_ldconfig(lines) -> list[Color]:
                          rgb=((v >> 16) & 255, (v >> 8) & 255, v & 255),
                          alpha=int(a.group(1)) if a else 255))
     return out
+
+
+@dataclass(frozen=True)
+class Palette:
+    by_code: dict = field(default_factory=dict)
+    by_name: dict = field(default_factory=dict)
+
+
+def normalize_name(name: str) -> str:
+    """Fold case, separators, and the gray/grey split. LDConfig spells it
+    British; both spellings must resolve."""
+    s = str(name).strip().lower()
+    for ch in "_- ":
+        s = s.replace(ch, "")
+    return s.replace("gray", "grey")
+
+
+@lru_cache(maxsize=8)
+def _palette_for(path_str: str) -> Palette:
+    path = Path(path_str)
+    colors = parse_ldconfig(path.read_text(errors="replace").splitlines())
+    return Palette(by_code={c.code: c for c in colors},
+                   by_name={normalize_name(c.name): c for c in colors})
+
+
+def load_palette(ldraw_dir) -> Palette:
+    """Colors from <ldraw_dir>/LDConfig.ldr, cached per path."""
+    return _palette_for(str(Path(ldraw_dir) / "LDConfig.ldr"))
