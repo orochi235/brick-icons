@@ -13,8 +13,12 @@ from . import colors, geom2d, primitives
 def faces_from_analytic(analytic, proj):
     """Fill faces for analytic primitives, with smooth wall chains merged to
     single faces (see primitives.merge_smooth_walls)."""
-    return [f for prim in primitives.merge_smooth_walls(analytic)
-            for f in prim.faces(proj)]
+    out = []
+    for prim in primitives.merge_smooth_walls(analytic):
+        for f in prim.faces(proj):
+            f.setdefault("color", getattr(prim, "color", 16))
+            out.append(f)
+    return out
 
 
 def _hex(rgb):

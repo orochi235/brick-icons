@@ -110,6 +110,7 @@ def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
                 Rsub, tsub = R @ M, R @ T + t
                 prim = primitives.from_ref(ref, Rsub, tsub)
                 if prim is not None and "analytic" in out:
+                    prim.color = cur
                     out["analytic"].append(prim)
                 else:
                     sub = resolve(ref, roots)

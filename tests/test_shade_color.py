@@ -56,3 +56,22 @@ def test_decoration_fills_use_the_ldraw_colour():
     assert shade.face_fill(face_body, style, "vendor/ldraw") == \
         style.tone(face_body["normal"])
     assert shade.face_fill(face_deco, style, "vendor/ldraw").lower() == "#b40000"
+
+
+def test_analytic_faces_carry_the_primitive_colour():
+    from brick_icons import hlr, primitives as P
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    proj = P.Projection(right, up, fwd, 2.0, 0.0, 0.0, 50.0)
+    disc = P.Disc(R=np.diag([4.0, 1.0, 4.0]), t=np.zeros(3), color=14)
+    faces = shade.faces_from_analytic([disc], proj)
+    assert faces, "the disc should produce at least one face"
+    assert all(f["color"] == 14 for f in faces)
+
+
+def test_analytic_primitives_default_to_the_part_colour():
+    from brick_icons import hlr, primitives as P
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    proj = P.Projection(right, up, fwd, 2.0, 0.0, 0.0, 50.0)
+    disc = P.Disc(R=np.diag([4.0, 1.0, 4.0]), t=np.zeros(3))
+    faces = shade.faces_from_analytic([disc], proj)
+    assert all(f["color"] == 16 for f in faces)
