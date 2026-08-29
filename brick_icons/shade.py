@@ -7,7 +7,7 @@ from collections import Counter, defaultdict
 import numpy as np
 from PIL import Image, ImageDraw
 
-from . import geom2d, primitives
+from . import colors, geom2d, primitives
 
 
 def faces_from_analytic(analytic, proj):
@@ -1089,9 +1089,20 @@ def _weld_junction_notches(strokes, base, line_px, sil_px, broad=False):
     return out
 
 
+def face_fill(face, style, ldraw_dir):
+    """A face's fill: shaded part tone for body geometry (colour 16), the
+    flat LDraw colour for decoration. Decoration is print, not relief — tone
+    it and it reads as engraving, which is the bug this fixes."""
+    code = face.get("color", 16)
+    if code == 16:
+        return style.tone(face["normal"])
+    hex_str, _ = colors.resolve(str(code), ldraw_dir)
+    return "#" + hex_str[2:]
+
+
 def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
              refits=None, loops=None, strokes=None, line_px=2.0,
-             sil_px=2.0, drop=None, weld_corners=False):
+             sil_px=2.0, drop=None, weld_corners=False, ldraw_dir="vendor/ldraw"):
     """Fill ops with exact visible-fragment clipping and per-surface merging.
 
     clip=False keeps every face whole (no occlusion subtraction) for
@@ -1317,7 +1328,7 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
                         "gradient": {"x1": p0[0], "y1": p0[1], "x2": p1[0], "y2": p1[1],
                                      "stops": stops}})
         else:
-            ops.append({"d": d, "fill": style.tone(f["normal"]),
+            ops.append({"d": d, "fill": face_fill(f, style, ldraw_dir),
                         "depth": f["depth"]})
     # junction-lens pockets paint LAST (over every surface fill, under the
     # strokes): solid ink where converging strokes trap a sliver of tone

@@ -45,3 +45,14 @@ def test_coplanar_faces_of_the_same_colour_still_union():
     ], float)
     faces = shade.faces_from_tris(tri, FakeProj(), colors=[16, 16])
     assert faces[0]["group"] == faces[1]["group"]
+
+
+def test_decoration_fills_use_the_ldraw_colour():
+    """Colour 16 takes the part colour and shades; anything else paints its
+    own LDraw colour, so a print reads as print rather than as engraving."""
+    face_body = {"normal": np.array([0.0, 0.0, -1.0]), "color": 16}
+    face_deco = {"normal": np.array([0.0, 0.0, -1.0]), "color": 4}
+    style = shade.Flat3Style(part_color=(157, 157, 157))
+    assert shade.face_fill(face_body, style, "vendor/ldraw") == \
+        style.tone(face_body["normal"])
+    assert shade.face_fill(face_deco, style, "vendor/ldraw").lower() == "#b40000"
