@@ -42,7 +42,7 @@ from shapely.ops import unary_union
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from brick_icons import render  # noqa: E402
+from brick_icons import render, unwrap  # noqa: E402
 from brick_icons.colors import parse_ldconfig  # noqa: E402
 from brick_icons.config import load_config  # noqa: E402
 
@@ -101,7 +101,9 @@ def _cyl(p, rr):
     th = np.arctan2(p[:, 2], p[:, 0])
     if np.ptp(th) > math.pi:
         th = np.where(th < 0, th + 2 * math.pi, th)
-    return np.column_stack([rr * th, p[:, 1]])
+    # LDraw +y is DOWN, so height must be negated or every wrapped print
+    # lays out upside down
+    return np.column_stack([rr * th, -p[:, 1]])
 
 
 def _cone(p, k, b):
@@ -138,10 +140,9 @@ def _unwrap(deco, body):
         n = np.cross(big[1] - big[0], big[2] - big[0])
         n = n / np.linalg.norm(n)
         d0 = float(n @ big[0])
-        seed = np.array([0.0, 0.0, 1.0]) if abs(n[2]) < 0.9 else np.array([1.0, 0.0, 0.0])
-        u = np.cross(n, seed)
-        u /= np.linalg.norm(u)
-        v = np.cross(n, u)
+        # the part's up, not a seeded axis: seeding leaves the rotation
+        # arbitrary and lays half the prints on their side or upside down
+        u, v = unwrap.up_aligned(n)
         flat = [(c, np.column_stack([p @ u, p @ v])) for c, p in deco]
         carrier = _quad([np.column_stack([p @ u, p @ v]) for _, p in body
                          if abs(np.cross(p[1] - p[0], p[2] - p[0]) @ n) > 1e-6
@@ -196,9 +197,11 @@ def cell_svg(pid, title, deco, carrier, kind, ref_png, margin=0.12):
     oy = INSET + (inner - (y1 - y0) * s) / 2
 
     def d(p):
-        # LDraw's Y points DOWN and so does SVG's, so pass it straight through
+        # (u, v) is right-handed about the OUTWARD normal, so v is up as seen
+        # from outside the surface; SVG's y is down, so it has to be flipped
+        # or every print lays out mirrored about its baseline
         q = np.column_stack([(p[:, 0] - x0) * s + ox + CELL,
-                             (p[:, 1] - y0) * s + oy])
+                             (y1 - p[:, 1]) * s + oy])
         return " ".join(f"{'M' if i == 0 else 'L'}{a:.2f},{b:.2f}"
                         for i, (a, b) in enumerate(q)) + " Z"
 

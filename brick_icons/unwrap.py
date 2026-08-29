@@ -116,6 +116,29 @@ def bind(pts, carriers, tol: float = BIND_TOL):
     return best
 
 
+LDRAW_UP = np.array([0.0, -1.0, 0.0])
+
+
+def up_aligned(n):
+    """(u, v) in the plane of `n`, with v the part's up.
+
+    Seeding off a fixed axis instead leaves the rotation arbitrary — a decal
+    on 3040bp08's slope unwrapped with v pointing DOWN the part, so its print
+    laid flat upside down. u = v x n keeps the frame right-handed about the
+    OUTWARD normal, which is what stops glyphs mirroring.
+    """
+    v = LDRAW_UP - n * float(LDRAW_UP @ n)
+    if float(np.linalg.norm(v)) < 1e-6:
+        # a top or bottom face has no up to inherit. +Z is where LDraw
+        # authors put the top of a glyph on one — measured, not assumed:
+        # 2431pt2's "Octan" and 3068bpfi's "FABULAND" lay out 180 deg off
+        # under -Z
+        alt = np.array([0.0, 0.0, 1.0])
+        v = alt - n * float(alt @ n)
+    v = v / np.linalg.norm(v)
+    return np.cross(v, n), v
+
+
 @dataclass
 class Plane:
     """A flat carrier. Its unwrap is the identity in the face's own basis."""
@@ -126,11 +149,7 @@ class Plane:
     def basis(self):
         if self._basis is None:
             n = self.normal / np.linalg.norm(self.normal)
-            seed = np.array([0.0, 0.0, 1.0]) if abs(n[2]) < 0.9 \
-                else np.array([1.0, 0.0, 0.0])
-            u = np.cross(n, seed)
-            u /= np.linalg.norm(u)
-            self._basis = (n, u, np.cross(n, u))
+            self._basis = (n,) + up_aligned(n)
         return self._basis
 
 
