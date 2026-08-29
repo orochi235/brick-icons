@@ -1,7 +1,7 @@
 # Handoff — printed parts, phase 2 complete
 
-On branch **`decal-uv`**, 6 commits ahead of `main`, clean. 413 tests pass.
-Not merged, no PR.
+Phase 2 is merged to **`main`** (unpushed). 421 tests pass. One unmerged
+branch, **`rim-key-merge`**, holds the rim-seam fix and is fully gated.
 
 **The durable record is the plan:**
 `docs/superpowers/plans/2026-08-28-decal-unwrap.md`. Its Status block lists
@@ -22,11 +22,31 @@ printed specimens structurally matching LDView, `3941p01` emitting exactly one
 `#1b2a34` path. `<part>.unwrap.svg` in `--debug-dir` shows the decal laid flat
 — the only way to check a bind without reading projected output.
 
-## What is still open
+## Open, and diagnosed but unfixed
 
-- **Strokes still ring `3040bp08`'s lamps and `3941p01`'s buttons.** Both are
-  real geometry (analytic discs), not decoration, so they stroke as relief.
-  Deciding they should not is a spec question, not a bug in the unwrap.
+Two artifacts on the cone's top stud, **both present on the UNPRINTED `3942b`**
+and absent on `4589`, so neither has anything to do with decoration:
+
+- **Ragged bore.** The bore wall is an analytic `cyli r=4` (an exact circle);
+  the bore floor is 56 flat triangles at y=4 spanning r=3.536-6.0 (a polygon).
+  The wall's fill is bounded by the true circle and the floor's by chords, so
+  where a chord falls inside the circle the floor does not reach the wall and
+  the wall's darker fill shows through as a tab. This is the ring-floor chip
+  class. `facet_snap_rims` exists for exactly this but the note at
+  `hlr.py`'s `_visible_segments_analytic` says emitting those candidates is
+  NOT safe alone: fills snap to the circle while drawn chords stay put, which
+  opens slivers. A fix needs the drawn-chord refit too.
+- **Debris on the stud's bottom seam**, same region, not separately diagnosed.
+
+- **Cone stripes look wrong at the limb — possibly not a bug.** Each stripe
+  tapers to a wedge with a grey band between its tip and the outline. A
+  stripe's end boundary is a generator, which near the limb runs nearly
+  parallel to the silhouette generator, so a thin wedge is what correct
+  projection gives; the grey band is the 15 deg gap sector foreshortened.
+  Settle it against LDView at the limb before touching anything —
+  `_wall_span_face` already samples any span with 40 points (1.9 deg for a 75
+  deg stripe), so under-sampling is ruled out.
+
 - **`4740p03`** dies with `shapely.errors.GEOSException: TopologyException`.
 - **Linear gradient stops are uncapped** (`shade.py`), so `3960p01` carries 640.
 - **Ink pockets** on `30137`, `98283`, `32062` that the user does not want.
@@ -35,6 +55,10 @@ printed specimens structurally matching LDView, `3941p01` emitting exactly one
 
 ## Traps
 
+- **Rendering with `--line-width 0 --silhouette-width 0` is the fastest way to
+  tell a stroke artifact from a fill artifact.** It is what proved 3942bp01's
+  horizontal band lines were strokes rather than tonal steps, and it surfaces
+  ragged fill boundaries the outline would hide.
 - **Regenerating the specimen baseline costs ~8 minutes.** `debug/` is
   gitignored, so `before.sha` does not survive. Rebuild it with a worktree at
   `main` and symlink `vendor/` in. `3649` alone takes 5 of those minutes.

@@ -292,15 +292,27 @@ def smooth_rim_skips(analytic, tris=None, cond=None):
     covers that side's whole angular span, so tilings that stop partway
     keep the real edge along the uncovered stretch (60474 tiles its top
     from 1/8 rings x 8 instances)."""
+    # One physical circle can arrive as several keys: LDraw's authored matrix
+    # precision spreads a sub-part's instances by ~1e-4, and a rim sitting near
+    # rim_key's 1e-3 bin boundary lands on both sides of it. Unmerged, half of
+    # 3942bp01's band counts as coverage and the seam draws across the print.
+    canon = primitives.canonical_rim_keys(
+        [k for prim in analytic for k, _s, _sl in prim.wall_rims()])
+    members = defaultdict(list)
+    for key, rep in canon.items():
+        members[rep].append(key)
+
     wall_cov = defaultdict(lambda: np.zeros(primitives._RIM_BINS, bool))
     for prim in analytic:
         for key, side, slope in prim.wall_rims():
-            wall_cov[(key, side, slope)] |= primitives.rim_span_bins(prim, key)
+            wall_cov[(canon[key], side, slope)] |= primitives.rim_span_bins(
+                prim, key)
     skips = {}
     facet_cov = {}
     cond_cov = {}
     for prim in analytic:
-        for key, side, slope in prim.wall_rims():
+        for okey, side, slope in prim.wall_rims():
+            key = canon[okey]
             if (key, side) in skips:
                 continue
             fk = (key, -side, slope)
@@ -317,7 +329,10 @@ def smooth_rim_skips(analytic, tris=None, cond=None):
             # one-bin dilation absorbs float jitter where rotated instances
             # abut; the tested side is NOT dilated
             m = opp | np.roll(opp, 1) | np.roll(opp, -1)
-            skips[(key, side)] = True if m.all() else m
+            val = True if m.all() else m
+            # every member key, because the drawing side looks up its own
+            for mk in members[key]:
+                skips[(mk, side)] = val
     flat_raw = defaultdict(lambda: np.zeros(primitives._RIM_BINS, bool))
     for prim in analytic:
         for key, side in prim.flat_rims():
