@@ -75,3 +75,31 @@ def test_analytic_primitives_default_to_the_part_colour():
     disc = P.Disc(R=np.diag([4.0, 1.0, 4.0]), t=np.zeros(3))
     faces = shade.faces_from_analytic([disc], proj)
     assert all(f["color"] == 16 for f in faces)
+
+
+def test_decoration_on_a_curved_wall_paints_flat_not_gradient():
+    """A print is ink on a surface, not relief, so it does not catch a
+    shading ramp. 3942bp01's stripes are Cone primitives, and every curved
+    face shades with a gradient — which ignored the LDraw colour entirely,
+    so the cone rendered with no red at all."""
+    style = shade.Flat3Style(part_color=(157, 157, 157))
+    deco = {"poly": np.array([[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]]),
+            "normal": np.array([0.0, 0.0, -1.0]), "depth": 1.0, "color": 4,
+            "grad_axis": ((0.0, 0.0), (10.0, 10.0)),
+            "grad_samples": [(0.0, np.array([0.0, 0.0, -1.0])),
+                             (1.0, np.array([0.0, 0.0, -1.0]))]}
+    ops = shade.fill_ops([deco], style, clip=False, ldraw_dir="vendor/ldraw")
+    assert ops, "the face should emit an op"
+    assert "gradient" not in ops[0], "decoration must not shade as a gradient"
+    assert ops[0]["fill"].lower() == "#b40000"
+
+
+def test_body_geometry_on_a_curved_wall_still_shades_as_a_gradient():
+    style = shade.Flat3Style(part_color=(157, 157, 157))
+    body = {"poly": np.array([[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]]),
+            "normal": np.array([0.0, 0.0, -1.0]), "depth": 1.0, "color": 16,
+            "grad_axis": ((0.0, 0.0), (10.0, 10.0)),
+            "grad_samples": [(0.0, np.array([0.0, 0.0, -1.0])),
+                             (1.0, np.array([0.0, 0.0, -1.0]))]}
+    ops = shade.fill_ops([body], style, clip=False, ldraw_dir="vendor/ldraw")
+    assert ops and "gradient" in ops[0]

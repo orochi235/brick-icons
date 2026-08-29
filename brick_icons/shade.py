@@ -1317,14 +1317,18 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
         d = geom2d.path_d(geom, arcs, min_area=MIN_FRAG_AREA)
         if not d:
             continue
-        if "grad_radial" in f:
+        # decoration is ink on a surface, not relief, so it takes no shading
+        # ramp — and the gradient branches never consulted the LDraw colour,
+        # which is why a printed cylinder or cone painted in body tone
+        deco = f.get("color", 16) != 16
+        if "grad_radial" in f and not deco:
             g = f["grad_radial"]
             stops, (fx, fy) = _radial_focal_stops(f["grad_samples"], style)
             ops.append({"d": d, "depth": f["depth"],
                         "gradient": {"type": "radial", "cx": g["cx"], "cy": g["cy"],
                                      "r": g["r"], "ratio": g["ratio"],
                                      "fx": fx, "fy": fy, "stops": stops}})
-        elif "grad_axis" in f:
+        elif "grad_axis" in f and not deco:
             p0, p1 = f["grad_axis"]
             stops = sorted(((off, style.ramp(nv)) for off, nv in f["grad_samples"]),
                            key=lambda s: s[0])
