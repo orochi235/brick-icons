@@ -100,6 +100,13 @@ converts only the runs that follow one.
 - **`30260p01`'s octagon is the guard for circle recovery** — its 8 vertices
   share a radius, so a circle fits them exactly. Only `ARC_STEP` (45 deg a step
   is too coarse) keeps it a sign. Test pins it.
+- **Never `git add -A` in a worktree.** `vendor/` in `.gitignore` matches a
+  directory, not the convenience symlink a fresh worktree needs, so `-A`
+  commits the link; merging it then checks the symlink out over the real
+  directory and a later `reset --hard` deletes the library. That is how the
+  pinned 2026-06-27 LDraw snapshot was lost — `complete.zip` serves only the
+  latest, so it is gone for good. `/vendor` is now in `.gitignore`; stage
+  explicit paths regardless.
 - **Don't `cd` out of the repo in the same command as a `git stash pop`** — the
   pop fails and the work sits in the stash looking lost.
 - Everything from the previous handoff's Traps still applies: `cmd | tail`
@@ -119,10 +126,23 @@ converts only the runs that follow one.
   and the `NOTE` in `hlr._visible_segments_analytic`: analytic rim candidates.
   Pinned by `KNOWN_STRAY` in `tests/test_goldens.py`, which fails if a new
   part joins it *or* if this one gets fixed without the note being updated.
-- **A quarter of printed parts emit 21+ textures**, nearly all slivers (a
-  modern torso: 58, of which `.0` and `.1` are front and back). Ordering makes
-  the right one first; whether to add a minimum-area threshold, go
-  dominant-only, or leave it is an undecided product call.
+- **Sliver policy: settled.** `unwrap.significant_groups` now carries three
+  part-level rules — the sliver ratio, the shatter share, and `MAX_DECALS = 4`,
+  which returns nothing when a part still resolves to more than a few textures.
+  Sited by eye over the corpus, not by the count alone: above the cap a part is
+  always ONE decoration cut across faces, never several prints. `20460p09`'s
+  five are panels of the same striped garment; `6580ac01`'s six are one band
+  cut four ways. The cap counts SURVIVORS, not raw groups — counting raw would
+  silence 52 parts whose single print is intact.
+- **The extraction seam has no gate.** `tests/goldens/decal-hashes.txt` is
+  written by `scripts/freeze-goldens.py --seam extraction` and read by NO test.
+  `test_frozen_hashes_still_reproduce` reads only the render seam's
+  `hashes.txt`, and under `BRICK_GOLDENS=1` it re-freezes a single part
+  (`--only 3005`); `=full` covers all 54 render cases and still never opens the
+  decal hashes. So half the conformance corpus the engine swap is meant to be
+  judged on is frozen but unchecked — the cap silenced 19 parts and the suite
+  stayed green. Closing this is a test that diffs the extraction seam the way
+  the render one is diffed.
 - `SNAP_TOL = 0.4` LDU is the loosest constant added, tuned to the 0.345 stray.
   Extraction only; the render path passes no snap tolerance.
 - **`skia-pathops` for the 2D booleans: settled — adopt, but inside the OCCT
