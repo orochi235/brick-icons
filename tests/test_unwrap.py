@@ -576,3 +576,68 @@ def test_a_round_tile_binds_its_print_to_the_face_not_the_disc():
     groups = unwrap.decal_groups(tris, [4] * len(tris), [disc])
     assert groups, "a flat print on a disc must not unwrap to nothing"
     assert sum(r.area for _c, r in groups[0][2]) > 100.0
+
+
+def _group(area):
+    """A decal_groups tuple whose only load-bearing field is its print area."""
+    class _R:
+        def __init__(self, a): self.area = a
+    return (None, 0.0, [(4, _R(area))], None)
+
+
+def test_slivers_below_a_fraction_of_the_main_print_are_dropped():
+    """A torso scatters one print across dozens of facet planes: 16360pd1d
+    emits 59 groups of which only .0 is the garment. The rest are shards a
+    tenth the size or less and nothing renders them usefully."""
+    groups = [_group(100.0), _group(30.0), _group(9.0), _group(0.4)]
+    kept = unwrap.significant_groups(groups)
+    assert [g[2][0][1].area for g in kept] == [100.0, 30.0]
+
+
+def test_a_shattered_print_yields_nothing_rather_than_its_biggest_shard():
+    """10128p01 splits one decoration across 156 carriers, the largest holding
+    8.7% of the printed area. Its .0 and .1 are both structureless fragments,
+    so emitting the biggest would hand back a shard dressed as a decal."""
+    groups = [_group(10.0), _group(8.0)] + [_group(7.0)] * 12
+    assert unwrap.significant_groups(groups) == []
+
+
+def test_a_dominant_print_survives_alongside_a_real_second_face():
+    """The gate keys on the LARGEST group's share of total print area, so a
+    part with a front and a back print keeps both — the failure to avoid is
+    mistaking two-sided decoration for shatter."""
+    groups = [_group(100.0), _group(80.0)]
+    kept = unwrap.significant_groups(groups)
+    assert [g[2][0][1].area for g in kept] == [100.0, 80.0]
+
+
+def test_a_part_that_stays_a_pile_after_filtering_yields_nothing():
+    """Third part-level verdict, after slivers and shatter. 22472p01 keeps 18
+    groups and 1023000p02 keeps 12: each survivor clears the sliver bar and the
+    dominant clears the shatter bar, so neither existing rule fires. What comes
+    out is one decoration cut across faces, not many prints -- 20460p09's five
+    are the panels of a single striped garment -- so emitting the pile dresses
+    the failure up as a result.
+    """
+    groups = [_group(100.0)] * (unwrap.MAX_DECALS + 1)
+    assert unwrap.significant_groups(groups) == []
+
+
+def test_the_cap_counts_survivors_not_raw_groups():
+    """The cap is on what a part EMITS, not on how finely decal_groups cut it.
+    A clean dominant print surrounded by dust is a success the sliver rule
+    already handles -- counting raw groups instead would silence 52 corpus
+    parts whose single print is intact, a torso among them."""
+    groups = [_group(100.0)] + [_group(0.1)] * 40
+    kept = unwrap.significant_groups(groups)
+    assert [g[2][0][1].area for g in kept] == [100.0]
+
+
+def test_a_part_at_the_cap_still_emits():
+    groups = [_group(100.0)] * unwrap.MAX_DECALS
+    assert len(unwrap.significant_groups(groups)) == unwrap.MAX_DECALS
+
+
+def test_a_single_print_is_never_treated_as_shatter():
+    groups = [_group(12.0)]
+    assert unwrap.significant_groups(groups) == groups

@@ -695,12 +695,52 @@ def decal_groups(tris, tri_colors, analytic):
     return out
 
 
+SLIVER_FRAC = 0.10      # drop a group below this share of the biggest print
+SHATTER_SHARE = 0.10    # below this, the biggest print is itself a shard
+MAX_DECALS = 4          # above this many survivors, one decoration cut across faces
+
+
+def _print_area(group):
+    return float(sum(r.area for _c, r in group[2]))
+
+
+def significant_groups(groups):
+    """Drop decoration that is not a usable decal, from `decal_groups` output.
+
+    A print bound to facet planes rather than one carrier splits across them:
+    a torso yields 59 groups where one is the garment, and a sculpted part
+    yields hundreds of shards of a single decoration. Three different failures,
+    so three rules. Slivers go by their share of the biggest print. Shatter is a
+    part-level verdict: when even the biggest group holds almost none of the
+    printed area, nothing survived intact and returning its largest shard
+    would dress a fragment up as a decal. The count cap is the third, and neither
+    ratio catches it: every survivor can clear the sliver bar while the
+    dominant clears the shatter bar. Inspected across the corpus, a part above
+    the cap is always ONE decoration split over faces rather than several
+    prints -- 20460p09's five are panels of the same striped garment.
+
+    Ratios, not absolute areas — measured over the extraction corpus, a real
+    second print runs as low as 0.069 of its dominant while shards reach 0.82,
+    so neither bound separates them alone. `scripts/measure-decal-slivers.py`
+    re-derives both numbers.
+    """
+    areas = [_print_area(g) for g in groups]
+    total = sum(areas)
+    if not groups or total <= 0:
+        return []
+    top = max(areas)
+    if top / total < SHATTER_SHARE:
+        return []
+    kept = [g for g, a in zip(groups, areas) if a >= top * SLIVER_FRAC]
+    return [] if len(kept) > MAX_DECALS else kept
+
+
 def decal_svgs(tris, tri_colors, analytic, px=900, ldraw_dir="vendor/ldraw",
                bg=None):
     """[svg] one per carrier the part carries a decal on."""
     svgs = []
-    for carrier, _theta0, regions, face in decal_groups(tris, tri_colors,
-                                                        analytic):
+    for carrier, _theta0, regions, face in significant_groups(
+            decal_groups(tris, tri_colors, analytic)):
         # a merged region can come back with no ring at all — a sliver that
         # collapses to a line, which is not something to draw or to size a
         # canvas from

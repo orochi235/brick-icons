@@ -21,6 +21,13 @@ is `4-4disc` scaled by 9, so r=9 LDU. Count the carriers at least that big:
 Measured over a stratified sample of the 600-part printed corpus: every clean
 part scored exactly 1, the shattered class scored 0 (bar two), and wheel/tyre
 assemblies scored 32 and 42.
+
+Carrier size is only a proxy, and it let 14 parts through that still shatter
+into nothing usable. So the part must ALSO survive `unwrap.significant_groups`
+— the same filter the CLI emits through, which asks the question directly: can
+a decal actually be got off this part? Repetition of a common shape is fine
+and wanted; a 2x2 round tile is worth many rows. What does not belong is a
+part no engine could extract from.
 """
 from __future__ import annotations
 
@@ -85,16 +92,18 @@ def carrier_area(carrier, face, regions=()) -> float:
     return 2.0 * math.pi * r * h          # cyli
 
 
-def carrier_areas(part: str, ldraw_dir: str) -> list[float]:
+def carrier_areas(part: str, ldraw_dir: str):
+    """(carrier areas, groups that survive the CLI's own sliver filter)."""
     tris, tri_colors, analytic = hlr.part_geometry(part, ldraw_dir)[:3]
-    return [carrier_area(carrier, face, regions)
-            for carrier, _t0, regions, face
-            in unwrap.decal_groups(tris, tri_colors, analytic)]
+    groups = unwrap.decal_groups(tris, tri_colors, analytic)
+    areas = [carrier_area(carrier, face, regions)
+             for carrier, _t0, regions, face in groups]
+    return areas, unwrap.significant_groups(groups)
 
 
-def verdict(areas: list[float]) -> tuple[bool, int]:
+def verdict(areas: list[float], usable) -> tuple[bool, int]:
     big = sum(1 for a in areas if a >= TILE_AREA)
-    return (1 <= big <= MAX_BIG), big
+    return bool(1 <= big <= MAX_BIG and usable), big
 
 
 def main(argv=None):
@@ -120,19 +129,20 @@ def main(argv=None):
     kept, dropped, failed = [], [], []
     for i, part in enumerate(cand, 1):
         try:
-            areas = carrier_areas(part, args.ldraw_dir)
+            areas, usable = carrier_areas(part, args.ldraw_dir)
         except Exception as e:
             failed.append((part, f"{type(e).__name__}: {e}"))
             print(f"{i}/{len(cand)} {part:<14} ERROR {type(e).__name__}",
                   flush=True)
             continue
-        ok, big = verdict(areas)
+        ok, big = verdict(areas, usable)
         if part in force_keep:
             ok, why = True, "override"
         elif part in force_drop:
             ok, why = False, "override"
         else:
-            why = f"{big} big of {len(areas)}"
+            why = (f"{big} big of {len(areas)}" if usable
+                   else f"{big} big of {len(areas)}, nothing extractable")
         (kept if ok else dropped).append(part)
         print(f"{i}/{len(cand)} {part:<14} {'keep' if ok else 'drop':<4} {why}",
               flush=True)

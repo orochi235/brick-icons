@@ -13,9 +13,15 @@
 #   cd vendor/ldraw && find p parts -name "*.dat" -type f | LC_ALL=C sort \
 #     | xargs shasum -a 256 | shasum -a 256
 source: https://library.ldraw.org/library/updates/complete.zip
-fetched: 2026-06-27
-dat-files: 36067
-manifest-sha256: 87641c77573ea3ff91d0bb477799659c48ec06d0ab2166153fa727322d56aea2
+fetched: 2026-08-30
+dat-files: 36603
+manifest-sha256: 5f855079307f7c1326aa6df05ce63b118e88364233d7eb3fb6ee637bc70e38fb
+# Re-fetched after the local copy was lost. The previous snapshot (2026-06-27,
+# 36067 files, 87641c77...) is NOT retrievable: complete.zip only ever serves
+# the latest. Of 54 render cases only 50950 moved, because LDraw's Official
+# Update 2026-06 landed 2026-06-28 -- one day after that fetch -- and subfiled
+# the part with corrected curvature, which the engine now reads as 3 arcs
+# instead of a 41-segment polyline. The other 53 are byte-identical.
 
 ## LDView (reference renderer for stock-render comparisons; vendor/LDView.app)
 # setup-ldview.sh pins the 4.2.1 Universal dmg by URL.

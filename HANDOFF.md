@@ -116,14 +116,47 @@ separate two coincident strokes, and how you check an edge that vanishes at
 - **A clipPath is not ink.** Counting it put naive's silhouette outset in my
   extent measurement and produced a phantom constant inset on all 23 parts,
   including ones where the engines agree byte-for-byte.
+All on **`main`**, working tree clean. 477 tests pass (`BRICK_GOLDENS=1`: 13).
+`docs/superpowers/plans/2026-08-28-decal-unwrap.md` is the durable record of
+phase 2; this covers what landed on top of it.
 
-**Next up is an engine swap.** The seam is narrower than it looks: the CLI
-touches the engine only through `hlr.visible_segments` (view path) and
-`hlr.part_geometry` (extraction, no view). Keep the naive engine on `main`
-behind an `--engine` selector rather than on a long-lived branch — a branch
-stops being exercised and rots. Freeze golden outputs from the naive engine
-first, so drift is detectable: the specimen gates plus the 600-part decal
-corpus run are already most of a conformance suite.
+**The OCCT port is underway in another session, in its own worktree — do not
+start a second one.** First slice is hidden-line removal only, no fills,
+behind `--engine occt`, gating on the `outline` combo (`88e1ffd`). Check with
+that session before touching `hlr.py` or `primitives.py`. Its first run: 23
+parts, 0 render failures, but it does NOT pass — wins where geometry resolves
+to analytic primitives, regresses 3x or worse on 9 parts that fall through to
+raw triangle facets (`4740p03` 2 -> 13359 lines), and `6589` loses visible
+geometry outright. Cause measured as unmerged coplanar facets, not seam edges.
+
+**Do not fix the stray-geometry Open items below.** `14769p0a`'s thin
+numerals, `14769px2`'s stray arc and `4019`'s stray ellipse all live in
+`hlr._visible_segments_analytic`, which the port replaces — the port session
+confirms `4019`'s ellipse disappears under OCCT. Fixing them now is thrown-away
+work that collides with that tree.
+
+**Two gates that looked finished turned out to be holes, both found by
+review rather than by the tests.** Wireframe cannot gate hidden-line removal
+because it sets `cull=False`; the extraction corpus could not catch a
+regression in any classic brick, plate or tile because its candidate pool was
+an alphabetical prefix containing none. Both are fixed. The lesson worth
+carrying: a gate that runs green is not evidence it observes what you think.
+Ask what a gate would MISS before trusting it.
+
+## What shipped this session
+
+- `0980599` **skia-pathops evaluated** — adopt, but inside the OCCT port, not
+  before it. Conics survive its booleans exactly; it never invents them, so
+  the win is unlocked BY the port. Does not replace shapely (no polygon
+  offset). Spec: `docs/superpowers/specs/2026-08-29-pathops-evaluation.md`.
+- `88e1ffd` **`outline` combo** — 23 strokes-only cases, the isolated HLR gate.
+- `b4a89b4` **`outline__4019` added to `KNOWN_STRAY`** — the combo brought the
+  part in and the exemption list did not follow, so `main` failed its own
+  goldens under `BRICK_GOLDENS=1`. Both 4019 entries retire together.
+- `90be857` **decals emit only what is worth looking at** —
+  `unwrap.significant_groups`. A torso went 59 SVGs to 1.
+- `ced5da9` **candidate pool sampled, not truncated** —
+  `scripts/select-decal-candidates.py`.
 
 ## What shipped
 
@@ -183,6 +216,13 @@ converts only the runs that follow one.
 - **`30260p01`'s octagon is the guard for circle recovery** — its 8 vertices
   share a radius, so a circle fits them exactly. Only `ARC_STEP` (45 deg a step
   is too coarse) keeps it a sign. Test pins it.
+- **Never `git add -A` in a worktree.** `vendor/` in `.gitignore` matches a
+  directory, not the convenience symlink a fresh worktree needs, so `-A`
+  commits the link; merging it then checks the symlink out over the real
+  directory and a later `reset --hard` deletes the library. That is how the
+  pinned 2026-06-27 LDraw snapshot was lost — `complete.zip` serves only the
+  latest, so it is gone for good. `/vendor` is now in `.gitignore`; stage
+  explicit paths regardless.
 - **Don't `cd` out of the repo in the same command as a `git stash pop`** — the
   pop fails and the work sits in the stash looking lost.
 - Everything from the previous handoff's Traps still applies: `cmd | tail`
@@ -202,10 +242,23 @@ converts only the runs that follow one.
   and the `NOTE` in `hlr._visible_segments_analytic`: analytic rim candidates.
   Pinned by `KNOWN_STRAY` in `tests/test_goldens.py`, which fails if a new
   part joins it *or* if this one gets fixed without the note being updated.
-- **A quarter of printed parts emit 21+ textures**, nearly all slivers (a
-  modern torso: 58, of which `.0` and `.1` are front and back). Ordering makes
-  the right one first; whether to add a minimum-area threshold, go
-  dominant-only, or leave it is an undecided product call.
+- **Sliver policy: settled.** `unwrap.significant_groups` now carries three
+  part-level rules — the sliver ratio, the shatter share, and `MAX_DECALS = 4`,
+  which returns nothing when a part still resolves to more than a few textures.
+  Sited by eye over the corpus, not by the count alone: above the cap a part is
+  always ONE decoration cut across faces, never several prints. `20460p09`'s
+  five are panels of the same striped garment; `6580ac01`'s six are one band
+  cut four ways. The cap counts SURVIVORS, not raw groups — counting raw would
+  silence 52 parts whose single print is intact.
+- **The extraction seam has no gate.** `tests/goldens/decal-hashes.txt` is
+  written by `scripts/freeze-goldens.py --seam extraction` and read by NO test.
+  `test_frozen_hashes_still_reproduce` reads only the render seam's
+  `hashes.txt`, and under `BRICK_GOLDENS=1` it re-freezes a single part
+  (`--only 3005`); `=full` covers all 54 render cases and still never opens the
+  decal hashes. So half the conformance corpus the engine swap is meant to be
+  judged on is frozen but unchecked — the cap silenced 19 parts and the suite
+  stayed green. Closing this is a test that diffs the extraction seam the way
+  the render one is diffed.
 - `SNAP_TOL = 0.4` LDU is the loosest constant added, tuned to the 0.345 stray.
   Extraction only; the render path passes no snap tolerance.
 - **`skia-pathops` for the 2D booleans: settled — adopt, but inside the OCCT
@@ -296,11 +349,20 @@ Three things found while freezing:
   now, so the older handoff's entry for it is stale.
 - **The extraction corpus is filtered to parts that have a surface to print
   on**, by `scripts/select-decal-corpus.py`: keep a part with 1..4 carriers at
-  least as big as a 1x1 round tile's face. 358 of 600 candidates survive,
-  carrying 3,841 SVGs instead of 21,035. Sculpted parts — Friends legs,
-  minidolls, Simpsons heads — score zero big carriers and drop out; wheel-and-
-  tyre assemblies score dozens and also drop. Exceptions belong in
+  least as big as a 1x1 round tile's face, and that also yields something
+  through `unwrap.significant_groups`. 393 of 600 candidates survive, carrying
+  626 SVGs, every one extracting at least one decal. Sculpted parts — Friends
+  legs, minidolls, Simpsons heads — score zero big carriers and drop out;
+  wheel-and-tyre assemblies score dozens and also drop. Exceptions belong in
   `corpus-overrides.toml`; `decal-corpus.txt` is generated, so do not edit it.
+
+  **The candidate pool is now sampled, not truncated.** It used to be the first
+  600 printed parts in sorted order, so every id started 00-15 and no classic
+  brick, plate or tile was in the corpus at all.
+  `scripts/select-decal-candidates.py` now takes every-Nth across all 11,220,
+  which moved the corpus from 217 distinct shapes to 242 and broke up a single
+  shape holding 26% of it. Nothing recorded how the old 600 were chosen, which
+  is why the truncation went unnoticed; the pool is a generated file now.
 
   **Measuring a carrier's area has three traps, all of which silently dropped
   printed round tiles — the class the corpus most needs.** A disc is flat, so
