@@ -274,3 +274,22 @@ deliberately not merged.
   6.28-degree sliver, which reads as "broken arcs", not as a units bug.
 - **Five tests on this branch could not fail** before review caught them. When
   adding a guard here, mutate the code and watch it go red before believing it.
+
+## Ready-made stress list for the facet-fallthrough regression
+
+From the extraction side (`brick-icons-ac`, 2026-08-30): these 15 parts were
+dropped from the decal corpus because their geometry never resolves to analytic
+primitives and they shatter into nothing extractable. That is the SAME
+population that regresses 3x or worse under the OCCT kernel, so it is a named
+stress set for the coplanar-facet merge problem rather than something to
+re-derive:
+
+    1006030p01 1006030p02 1011297p04 10128p01 10128p01c01 10128p02
+    1022657p03 1023000p03 1023000p04 1023035p04 10830p01 11391p01
+    11435p02 13809p02 13809p03
+
+Also: `tests/goldens/decal-hashes.txt` was re-frozen at `90be857` (358 parts /
+3842 SVGs -> 343 / 511, every row a new hash, a deliberate output change from
+sliver suppression). The RENDER seam is untouched — the 23 `outline__` cases and
+their hashes are unchanged. But any later slice touching `hlr.part_geometry`
+must gate against the new decal baseline, not an earlier copy.
