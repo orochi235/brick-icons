@@ -172,8 +172,22 @@ against `3941` 324→340 and `3941p01` 1257→1270. `6589` itself goes 67→257 
 the recovered bore interior arrives tessellated — mechanism #2 above, now
 reaching a part that was previously hiding it.
 
-**Still open: `6589`'s bbox x-min shift is unchanged at 13.93** (61.34 naive,
-75.27 OCCT), before and after. It never was the axle hole — an interior
-feature cannot move a bbox — so the two symptoms in the same part were
-unrelated and only the notch is resolved. `4589` carries the same signature at
-1.54, also unchanged. Undiagnosed.
+**`6589`'s bbox x-min shift was mostly the metric, not the geometry.**
+`goldens.summarize_svg` builds `bbox` from path ENDPOINTS, and an arc's
+extreme normally falls between its endpoints — so re-splitting one ellipse
+into a different number of arcs moves the reported number without moving any
+ink. Measured against the swept curve by `scripts/compare-extents.py`, the
+13.93 shift is 1.22 of real ink; `4589`'s 1.54 and `4740p03`'s 4.66 are
+artifact in full, at 0.00 and 0.07. `4019`'s 17.08 is real (18.67 swept), so
+the stray-ellipse win stands.
+
+What remains on `6589` is 1.22 in the opposite direction to the one assumed:
+naive reaches FURTHER out than OCCT on every side, and its y-min of 4.83
+overruns the 6.00 frame margin that OCCT sits exactly on. The outer rim
+ellipse is the same under both (80.13 x 49.07 naive, 80.10 x 49.05 OCCT); they
+differ only in how much of it each draws. Undiagnosed, but small, and pointing
+at naive rather than at the port.
+
+**This makes every `bbox` in `tests/goldens/render/` blind to arc sweep**, so
+a bbox delta is not on its own evidence that geometry moved. Fixing the
+measure re-freezes all of those goldens, which is why it is not done here.
