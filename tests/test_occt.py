@@ -125,10 +125,56 @@ def test_orientation_is_verified_against_a_chiral_part(ldraw_dir, tmp_path):
 
 def test_circle_edges_become_arc_ops_not_polylines(ldraw_dir):
     """The whole point of the port: a projected stud rim arrives as a curve,
-    so nothing has to guess a circle back out of a chord polygon."""
+    so nothing has to guess a circle back out of a chord polygon. A weak
+    `any(op[0] == "arc")` check would still pass if U/V collapsed to unit
+    vectors, so this also checks the ops are radius-scaled and that the
+    parametric ellipse reconstructs the real edge endpoints."""
+    import math
+
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.GeomAbs import GeomAbs_CurveType
+    from OCP.TopAbs import TopAbs_ShapeEnum
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
     shape = occt.build_shape(occt.flatten_part("3941", ldraw_dir))
-    ops = occt.edges_to_ops(occt.hlr_edges(shape, *hlr.view_basis(30.0, 45.0)))
+    edges = occt.hlr_edges(shape, *hlr.view_basis(30.0, 45.0))
+    ops = occt.edges_to_ops(edges)
     assert any(op[0] == "arc" for op in ops)
+
+    for comp in edges.values():
+        if comp is None:
+            continue
+        ex = TopExp_Explorer(comp, TopAbs_ShapeEnum.TopAbs_EDGE)
+        while ex.More():
+            edge = TopoDS.Edge_s(ex.Current())
+            c = BRepAdaptor_Curve(edge)
+            curve_type = c.GetType()
+            if curve_type == GeomAbs_CurveType.GeomAbs_Circle:
+                r_maj = r_min = c.Circle().Radius()
+            elif curve_type == GeomAbs_CurveType.GeomAbs_Ellipse:
+                r_maj, r_min = c.Ellipse().MajorRadius(), c.Ellipse().MinorRadius()
+            else:
+                ex.Next()
+                continue
+
+            op = occt._edge_ops(edge, "line")[0]
+            assert op[0] == "arc"
+            _, cx, cy, ux, uy, vx, vy, t0, t1, _kind = op
+
+            # Radius-scaled, not unit vectors -- this is the check a bare
+            # `op[0] == "arc"` cannot make: unit U/V would still tag "arc".
+            assert math.hypot(ux, uy) == pytest.approx(r_maj, rel=1e-6)
+            assert math.hypot(vx, vy) == pytest.approx(r_min, rel=1e-6)
+
+            for t in (t0, t1):
+                x = cx + ux * math.cos(t) + vx * math.sin(t)
+                y = cy + uy * math.cos(t) + vy * math.sin(t)
+                p = c.Value(t)
+                assert x == pytest.approx(p.X(), abs=1e-6)
+                assert y == pytest.approx(p.Y(), abs=1e-6)
+            return
+    pytest.fail("no circle/ellipse edge found in HLR output for 3941")
 
 
 def test_outline_compound_edges_are_silhouette_kind(ldraw_dir):
