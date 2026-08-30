@@ -159,8 +159,7 @@ hard part (unwrapping a curved carrier to UV) is needed.
 
 ## Where it stands on the unprinted corpus
 
-**16 of 17 match naive's shape.** The one holdout is `50950`, and it is the
-elliptical-cylinder gap below — unrelated to everything else here.
+**17 of 17 match naive's shape.**
 
 `3941`, `6143` and `4589` were broken all day and were fixed by the stud fix,
 not by anything aimed at them: their rings carried the same coincidence
@@ -186,14 +185,38 @@ start there.
 1e-6 — float noise off accumulated subpart transforms. A rejected primitive
 builds no face, so `3942bp01` lost 32 of its 52 surfaces and its cone wall was
 cracks. Both are now `1e-4` (`ORTHO_TOL`, `ROUND_TOL`); a genuinely elliptical
-cylinder sits at a ratio of 0.80, five orders clear.
+cylinder sits at a ratio of 0.80, five orders clear. `ROUND_TOL` no longer
+rejects anything — it only chooses circle or ellipse — so the cost of getting
+it wrong is now a slightly-off wall rather than no wall.
 
 This is the `occt_faces` trap the spike named, reached by a different road: the
 function returns `[]` for "not representable" and `[]` for "my tolerance was
-too tight", and nothing distinguishes them. **`50950` is the real instance of
-the first** — its cylinder measures ru=68.3 against rv=84.9, a true ellipse
-that `BRepPrimAPI_MakeCylinder` cannot express. That part needs an elliptical
-surface, not a looser tolerance.
+too tight", and nothing distinguishes them. `50950` was the real instance of
+the first — ru=68.3 against rv=84.9 at an orthogonality residual of exactly 0,
+so no tolerance could ever have reached it. `frame()` now returns both radii
+and rejects only shear, and `cyli` extrudes a `gp_Elips`, since no
+`BRepPrimAPI` maker builds an elliptical cylinder. `con`, `disc` and `ring`
+still return `[]` when the radii differ: no part measured so far pins what
+they should be, and a guess is worse than the empty.
+
+**Two things the ellipse then exposed, both engine-wide rather than 50950's:**
+
+- **HLR returns a projected ellipse as a BSpline approximation** — only a
+  projected CIRCLE comes back as a conic. The wall drew as 31 straight
+  segments. `locus_arc` re-reads the fragment against the exact projected
+  conic `select_authored` already matched it to.
+- **The stroke layer had no silhouette contour under it.** The engine returned
+  `faces=()`, so `sil_geom` was `None` and `cli` emitted neither the closed
+  mitered contour nor the clip — and that contour is the only thing making an
+  outline corner sharp, so per-edge round caps barbed at every acute vertex.
+  `face_polys` + `VisResult.sil_polys` now carry the shape's projected
+  tessellation, wired to `silhouette_geom` and nothing else so fills and spur
+  trimming stay off. Kept per-face, not pre-unioned, because those polygons
+  are what the fills slice will attribute colour and depth to.
+
+  Diagnose this class by stubbing `shade.apply_affine_faces` to `[]` on the
+  NAIVE engine: it reproduced the barb pixel for pixel, which is what told the
+  two apart. Two plausible causes read identically at a glance.
 
 ## The crease rule: two wrong answers before the measured one
 

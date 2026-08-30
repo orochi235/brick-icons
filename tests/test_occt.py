@@ -425,3 +425,73 @@ def test_analytic_crease_skips_the_parametric_seam(ldraw_dir):
     assert kinds, "4740's dish rim must survive as a crease"
     assert all(k == GeomAbs_CurveType.GeomAbs_Circle for k in kinds), (
         "a straight crease here is the cylinder seam, which is not an edge")
+
+
+def _ellipse_perimeter(a, b):
+    """Ramanujan's approximation; good to ~1e-9 at these axis ratios."""
+    h = ((a - b) / (a + b)) ** 2
+    return math.pi * (a + b) * (1 + 3 * h / (10 + math.sqrt(4 - 3 * h)))
+
+
+def test_elliptical_cylinder_builds_a_wall():
+    """ru != rv is an ellipse, not shear -- 50950's wall measures 68.28 by
+    84.85 at an orthogonality residual of exactly 0, so no shear tolerance can
+    reach it. Rejected, it built no face, and the slope rendered with no
+    occluder at all: you saw its underside through the top. No BRepPrimAPI
+    maker builds an elliptical cylinder, so this extrudes a gp_Elips, and area
+    is what tells a real wall from a circular one at either radius.
+    """
+    prim = P("cyli", np.diag([4.0, 10.0, 5.0]), np.zeros(3))
+    faces = occt.occt_faces(prim)
+    assert len(faces) == 1
+    assert _face_area(faces[0]) == pytest.approx(
+        _ellipse_perimeter(5.0, 4.0) * 10.0, rel=1e-6)
+
+
+def test_elliptical_cone_is_not_guessed_at():
+    """occt_faces returning [] is the honest answer where no measured part
+    pins what the shape should be -- see CLAUDE.md on silent []."""
+    assert occt.occt_faces(P("con", np.diag([4.0, 10.0, 5.0]), np.zeros(3))) == []
+
+
+def test_50950_wall_is_elliptical_and_reaches_the_shape(ldraw_dir):
+    """The part-level consequence, not just the face builder."""
+    from OCP.GeomAbs import GeomAbs_SurfaceType
+    out = occt.flatten_part("50950", ldraw_dir)
+    cylis = [p for p in out["analytic"] if p.kind == "cyli"]
+    assert cylis, "50950 is expected to carry a cyli primitive"
+    assert not any(occt.is_round(*occt.frame(p)[4:6]) for p in cylis)
+    assert GeomAbs_SurfaceType.GeomAbs_SurfaceOfExtrusion in _surface_types(
+        occt.build_shape(out))
+
+
+def _occt_render(part, ldraw_dir):
+    out = occt.flatten_part(part, ldraw_dir)
+    return occt.visible_segments(out, *hlr.view_basis(30.0, 45.0)[:2], 1024)
+
+
+def test_50950_wall_draws_as_one_arc(ldraw_dir):
+    """HLR hands a projected ELLIPSE back as a BSpline approximation -- only a
+    projected circle survives as a conic -- so the wall drew as 31 straight
+    segments. locus_arc re-reads the fragment against the exact projected
+    conic it was matched to. Both rims of the wall are one arc each, and a
+    BSpline approximation emits no arc op at all, so the count is the test.
+    """
+    res = _occt_render("50950", ldraw_dir)
+    assert sum(1 for op in res.segs if op[0] == "arc") == 2
+
+
+def test_silhouette_polys_cover_the_drawn_ink(ldraw_dir):
+    """The stroke layer's closed contour comes from these, and it is the only
+    thing mitering an outline corner sharp -- without it the per-edge round
+    caps barb at an acute vertex. An empty or degenerate silhouette fails
+    silently, drawing nothing, so assert it actually contains the drawing.
+    """
+    from brick_icons import geom2d
+    res = _occt_render("50950", ldraw_dir)
+    assert res.sil_polys
+    g = geom2d.union_all([geom2d.to_geom(np.asarray(q, float))
+                          for q in res.sil_polys])
+    x0, y0, x1, y1 = res.bbox
+    gx0, gy0, gx1, gy1 = g.bounds
+    assert (gx0, gy0, gx1, gy1) == pytest.approx((x0, y0, x1, y1), abs=0.5)
