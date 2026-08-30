@@ -25,8 +25,13 @@ its uncommitted `occt.py` (recovered on branch `wip/occt-authored-edges`,
 `7c8cfaa` — delete once that session has compared it). Measure on `main`, in
 this tree.
 
-That session has no message channel to a `main` session. The protocol is a
-commit to that worktree's `HANDOFF.md`.
+**There is no message channel between the two, and the reason is structural:**
+that session runs under the `~/.claude-pw` harness while this one runs under
+`~/.claude-msb`, and peer registries are per-config-dir, so neither appears in
+the other's `ListAgents` and neither can address the other. The protocol is a
+commit to that worktree's `HANDOFF.md`, which works — it read and kept the
+first one. (Worth noting the port is being worked in the *work* harness on a
+personal repo, so it carries work skills and memories, not this project's.)
 
 ## The OCCT engine, as merged
 
