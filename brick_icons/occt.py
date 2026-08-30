@@ -21,6 +21,8 @@ from OCP.TopoDS import TopoDS_Shape
 from OCP.TopAbs import TopAbs_ShapeEnum
 from OCP.TopExp import TopExp_Explorer
 from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
+from OCP.HLRBRep import HLRBRep_Algo, HLRBRep_HLRToShape
+from OCP.HLRAlgo import HLRAlgo_Projector
 
 from . import hlr
 
@@ -186,6 +188,38 @@ def count_faces(shape: TopoDS_Shape) -> int:
         n += 1
         ex.Next()
     return n
+
+
+def projector_axes(right, up):
+    """OCCT sets image Y = Z x X, so pick Z = right x up (= fwd) and X = right
+    to land Y on `up`: fwd x right = up for this basis's handedness."""
+    return np.cross(right, up), np.asarray(right, float)
+
+
+def hlr_edges(shape, right, up, fwd, cull=True):
+    """Exact hidden-line removal, keyed 'sharp'/'smooth'/'outline' -> a
+    TopoDS_Compound or None. With cull=False also '..._hidden' compounds."""
+    z, x = projector_axes(right, up)
+    a = ax2((0.0, 0.0, 0.0), z, x)
+    algo = HLRBRep_Algo()
+    algo.Add(shape)
+    algo.Projector(HLRAlgo_Projector(a))
+    algo.Update()
+    algo.Hide()
+    hs = HLRBRep_HLRToShape(algo)
+    wanted = [("sharp", hs.VCompound), ("smooth", hs.Rg1LineVCompound),
+              ("outline", hs.OutLineVCompound)]
+    if not cull:
+        wanted += [("sharp_hidden", hs.HCompound),
+                   ("smooth_hidden", hs.Rg1LineHCompound),
+                   ("outline_hidden", hs.OutLineHCompound)]
+    got = {}
+    for name, fn in wanted:
+        try:
+            got[name] = fn()
+        except Exception:
+            got[name] = None
+    return got
 
 
 def visible_segments(out, right, up, fwd, render_px, cull=True):
