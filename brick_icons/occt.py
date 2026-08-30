@@ -249,7 +249,16 @@ def hlr_edges(shape, right, up, fwd, cull=True):
 
 def _edge_ops(edge, kind):
     """Segment ops for one edge, reading its analytic curve type rather than
-    discretizing -- HLR hands back real circles and ellipses to read off."""
+    discretizing -- HLR hands back real circles and ellipses to read off.
+
+    OCCT's FirstParameter/LastParameter are radians; every downstream
+    consumer of an 'arc' op (trace._arc_to_svg, process.draw_segments, and
+    the naive engine's own arc emission in hlr.fit_ellipses) takes t0/t1 in
+    DEGREES. Left unconverted, a full circle (0..2*pi radians) reads as a
+    ~6-degree sliver -- the "broken partial arc" symptom (task-6 fix round
+    2): stud rims came back as tiny chevrons, not because HLR sub-divided
+    them, but because the sweep the SVG/raster path drew was 6 degrees wide
+    instead of 360."""
     c = BRepAdaptor_Curve(edge)
     t0, t1 = c.FirstParameter(), c.LastParameter()
     t = c.GetType()
@@ -272,7 +281,7 @@ def _edge_ops(edge, kind):
     u, v = ax.XDirection(), ax.YDirection()
     return [("arc", ctr.X(), ctr.Y(),
              u.X() * r_maj, u.Y() * r_maj, v.X() * r_min, v.Y() * r_min,
-             t0, t1, kind)]
+             math.degrees(t0), math.degrees(t1), kind)]
 
 
 def _negate_y(ops):

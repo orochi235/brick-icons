@@ -1,4 +1,5 @@
 import importlib.util
+import math
 import shutil
 import subprocess
 import sys
@@ -188,7 +189,10 @@ def test_circle_edges_become_arc_ops_not_polylines(ldraw_dir):
             assert math.hypot(ux, uy) == pytest.approx(r_maj, rel=1e-6)
             assert math.hypot(vx, vy) == pytest.approx(r_min, rel=1e-6)
 
-            for t in (t0, t1):
+            # op's t0/t1 are DEGREES (the SVG/raster consumers' convention);
+            # c.Value() wants OCCT's native radians.
+            for t_deg in (t0, t1):
+                t = math.radians(t_deg)
                 x = cx + ux * math.cos(t) + vx * math.sin(t)
                 y = cy + uy * math.cos(t) + vy * math.sin(t)
                 p = c.Value(t)
@@ -196,6 +200,30 @@ def test_circle_edges_become_arc_ops_not_polylines(ldraw_dir):
                 assert y == pytest.approx(p.Y(), abs=1e-6)
             return
     pytest.fail("no circle/ellipse edge found in HLR output for 3941")
+
+
+def test_unoccluded_stud_rims_sweep_a_full_360_not_fragments(ldraw_dir):
+    """task-6 fix round 2: OCCT's FirstParameter/LastParameter are radians,
+    and every 'arc' op consumer (trace._arc_to_svg, process.draw_segments)
+    reads t0/t1 as degrees. Unconverted, a full circle's 0..2*pi span reads
+    as a ~6-degree sliver -- rims rendered as tiny disconnected chevrons
+    instead of closed circles, while `any(op[0] == "arc")` and even the
+    radius/endpoint checks above stayed green throughout, because both
+    checks hold regardless of what units t0/t1 are in. A count- or
+    existence-based assertion cannot catch this; only the actual angular
+    span can. 3001's 8 stud top rims are unoccluded by construction (a
+    stud's own top-rim silhouette can't be hidden by anything shorter than
+    itself), so each must come back as ONE continuous 360-degree arc, not
+    several fragments summing to something else.
+    """
+    shape = occt.build_shape(occt.flatten_part("3001", ldraw_dir))
+    edges = occt.hlr_edges(shape, *hlr.view_basis(30.0, 45.0))
+    ops = occt.edges_to_ops(edges)
+    rim_r = 6.0    # stud rim radius in the part's own primitive units
+    full_rims = [op for op in ops if op[0] == "arc"
+                and math.hypot(op[3], op[4]) == pytest.approx(rim_r, rel=1e-3)
+                and abs(abs(op[8] - op[7]) - 360.0) < 1e-6]
+    assert len(full_rims) == 8
 
 
 def test_outline_compound_edges_are_silhouette_kind(ldraw_dir):
