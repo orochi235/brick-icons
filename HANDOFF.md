@@ -6,9 +6,12 @@ is the durable record; this covers what changed after it.
 
 **This worktree is not exclusively yours.** A session working `main` committed
 `57d56d1` (a merge of main) into it, and the checkout destroyed uncommitted
-work in `brick_icons/occt.py` — no stash, no dangling blob, nothing to recover
-from git. Commit early here, and check `git log -1` before assuming the tree is
-where you left it. That session re-freezes goldens, so also do not land
+work in `brick_icons/occt.py`. **It was recoverable after all** — that session
+saved it first as `git stash create` and parked it on branch
+`wip/occt-authored-edges` (`7c8cfaa`), which is the `occt.py` you lost, and it
+diffs against `e003722` at 40 insertions / 43 deletions. Delete that branch once
+you have compared them. Commit early here regardless, and check `git log -1`
+before assuming the tree is where you left it. That session re-freezes goldens, so also do not land
 anything that moves `tests/goldens/` without checking with it.
 
 ## The facet explosion is fixed at its cause
