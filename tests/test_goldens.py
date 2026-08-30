@@ -200,7 +200,11 @@ KNOWN_STRAY = {
     # part itself, pushing bbox y-min to -11.08 against a "0 0 256 170" box.
     # Analytic rim candidates in hlr._visible_segments_analytic — the same class
     # as 14769px2's stray arc and the NOTE there, not a new one.
+    #
+    # Both combos carry the same defect from the same code, so they retire
+    # together: drop one alone and the other silently stops being watched.
     "outline-flat3__4019",
+    "outline__4019",
 }
 
 
