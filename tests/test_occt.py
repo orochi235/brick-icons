@@ -30,9 +30,12 @@ def _load_compare_goldens():
 raster_delta = _load_compare_goldens().raster_delta
 
 
-def _render_svg(part: str, engine: str, out: Path) -> Path | None:
-    """Render `part` with `engine` via the real CLI, rasterize it with resvg,
-    and return the PNG path -- or None if either step is unavailable."""
+def _render_svg(part: str, engine: str, out: Path) -> Path:
+    """Render `part` with `engine` via the real CLI and rasterize it with
+    resvg. Raises RuntimeError on a genuine CLI failure -- callers should
+    let that fail the test, not skip it, since a silent skip would blind
+    the suite to the engine breaking outright. Skip only for a missing
+    `resvg` binary, which callers check for themselves."""
     out.mkdir(parents=True, exist_ok=True)
     proc = subprocess.run(
         [sys.executable, "-m", "brick_icons.cli", part, "--engine", engine,
@@ -40,14 +43,16 @@ def _render_svg(part: str, engine: str, out: Path) -> Path | None:
         capture_output=True, text=True, cwd=ROOT)
     svgs = sorted(out.glob("*.svg"))
     if proc.returncode != 0 or not svgs:
-        return None
-    if not shutil.which("resvg"):
-        return None
+        raise RuntimeError(
+            f"CLI render of {part!r} with --engine {engine} failed "
+            f"(exit {proc.returncode}):\n{proc.stderr}")
     png = out / "render.png"
     rproc = subprocess.run(
         ["resvg", "--background", "white", "--width", "512", str(svgs[0]), str(png)],
         capture_output=True, text=True)
-    return png if rproc.returncode == 0 else None
+    if rproc.returncode != 0:
+        raise RuntimeError(f"resvg failed on {svgs[0]}:\n{rproc.stderr}")
+    return png
 
 
 def _mirrored(png: Path, mode=Image.FLIP_LEFT_RIGHT) -> Path:
@@ -101,9 +106,13 @@ def test_projector_axis_puts_image_y_on_up():
     before that compensation, which comes out as +up for this Z.
 
     cross(cross(right, up), right) == up holds for ANY orthonormal pair by
-    the triple-product identity regardless of which way Z points, so it is a
-    tautology that can't catch a flipped Z on its own -- it only pins down
-    the pipeline's net convention when read together with _negate_y.
+    the triple-product identity regardless of which way Z points, so a
+    flipped Z alone still fails this (Z's sign changes which side X x Z
+    lands on). What it can't catch is Z and X flipping TOGETHER, since that
+    combination preserves the identity -- that's the failure mode this test
+    and test_orientation_is_verified_against_a_chiral_part are complementary
+    on: between them, neither flip escapes both checks, but neither test
+    alone catches both.
     """
     right, up, fwd = hlr.view_basis(30.0, 45.0)
     z, x = occt.projector_axes(right, up)
@@ -122,15 +131,15 @@ def test_orientation_is_verified_against_a_chiral_part(ldraw_dir, tmp_path):
     (stud on top, notch on the bottom face), so a direct-vs-naive match is
     real evidence and not an artifact of near-symmetry.
     """
+    if not shutil.which("resvg"):
+        pytest.skip("resvg binary not installed")
     naive = _render_svg("4070", "naive", tmp_path / "n")
     ported = _render_svg("4070", "occt", tmp_path / "o")
-    if naive is None or ported is None:
-        pytest.skip("CLI render unavailable (missing resvg or render failed)")
     rmse_direct, _, note_direct = raster_delta(ported, naive)
     rmse_lr, _, note_lr = raster_delta(ported, _mirrored(naive, Image.FLIP_LEFT_RIGHT))
     rmse_tb, _, note_tb = raster_delta(ported, _mirrored(naive, Image.FLIP_TOP_BOTTOM))
     if rmse_direct is None or rmse_lr is None or rmse_tb is None:
-        pytest.skip(note_direct or note_lr or note_tb or "raster comparison unavailable")
+        pytest.fail(note_direct or note_lr or note_tb or "raster comparison unavailable")
     assert rmse_direct < rmse_lr
     assert rmse_direct < rmse_tb
 
@@ -160,7 +169,7 @@ def test_circle_edges_become_arc_ops_not_polylines(ldraw_dir):
     from OCP.TopoDS import TopoDS
 
     shape = occt.build_shape(occt.flatten_part("3941", ldraw_dir))
-    edges = occt.hlr_edges(shape, *hlr.view_basis(30.0, 45.0))
+    edges = occt.hlr_edges(shape, *hlr.view_basis(30.0, 45.0)[:2])
     ops = occt.edges_to_ops(edges)
     assert any(op[0] == "arc" for op in ops)
 
@@ -217,7 +226,7 @@ def test_unoccluded_stud_rims_sweep_a_full_360_not_fragments(ldraw_dir):
     several fragments summing to something else.
     """
     shape = occt.build_shape(occt.flatten_part("3001", ldraw_dir))
-    edges = occt.hlr_edges(shape, *hlr.view_basis(30.0, 45.0))
+    edges = occt.hlr_edges(shape, *hlr.view_basis(30.0, 45.0)[:2])
     ops = occt.edges_to_ops(edges)
     rim_r = 6.0    # stud rim radius in the part's own primitive units
     full_rims = [op for op in ops if op[0] == "arc"
@@ -231,6 +240,6 @@ def test_outline_compound_edges_are_silhouette_kind(ldraw_dir):
     reports the sharp/smooth/silhouette split directly, so this is kernel
     output rather than the inference the naive engine does."""
     shape = occt.build_shape(occt.flatten_part("3941", ldraw_dir))
-    edges = occt.hlr_edges(shape, *hlr.view_basis(30.0, 45.0))
+    edges = occt.hlr_edges(shape, *hlr.view_basis(30.0, 45.0)[:2])
     ops = occt.edges_to_ops({"outline": edges["outline"]})
     assert ops and all(op[-1] == "sil" for op in ops)

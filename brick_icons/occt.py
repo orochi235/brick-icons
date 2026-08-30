@@ -161,6 +161,11 @@ def flatten_part(part: str, ldraw_dir) -> dict:
     path = hlr._resolve_input(part, roots)
     out = {"2": [], "5": [], "tri": [], "tri_meta": [], "analytic": []}
     hlr.flatten(path, np.eye(3), np.zeros(3), out, roots)
+    if out["tri"]:
+        from . import repair
+        fixed = repair.repaired_tris(np.array(out["tri"]), out["tri_meta"],
+                                     hlr.MESH_CACHE_DIR)
+        out["tri"] = list(fixed)
     return out
 
 
@@ -220,7 +225,7 @@ def projector_axes(right, up):
     return np.cross(right, up), np.asarray(right, float)
 
 
-def hlr_edges(shape, right, up, fwd, cull=True):
+def hlr_edges(shape, right, up, cull=True):
     """Exact hidden-line removal, keyed 'sharp'/'smooth'/'outline' -> a
     TopoDS_Compound or None. With cull=False also '..._hidden' compounds."""
     z, x = projector_axes(right, up)
@@ -314,10 +319,10 @@ def edges_to_ops(compounds):
     return _negate_y(ops)
 
 
-def visible_segments(out, right, up, fwd, render_px, cull=True):
+def visible_segments(out, right, up, render_px, cull=True):
     from .hlr import VisResult, _ops_bbox
     shape = build_shape(out)
-    ops = edges_to_ops(hlr_edges(shape, right, up, fwd, cull=cull))
+    ops = edges_to_ops(hlr_edges(shape, right, up, cull=cull))
     if not ops:
         raise RuntimeError("OCCT engine produced no edges")
     bbox = _ops_bbox(ops)

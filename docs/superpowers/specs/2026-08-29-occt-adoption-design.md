@@ -1,6 +1,7 @@
 # Design: adopting OCCT for hidden-line removal
 
-**Status:** approved 2026-08-29, not yet implemented.
+**Status:** implemented 2026-08-29. `BRICK_GOLDENS=1 pytest tests/test_goldens.py`
+passes 14; `--engine occt` ships behind an explicit flag, naive stays default.
 
 **Reader:** whoever implements or reviews the port. Assumes
 `2026-08-29-occt-spike.md` has been read — this spends its words on what to
@@ -47,10 +48,21 @@ matters for hand-faceted geometry `occt_faces` never recognizes. This
 component is the one to look at first if a recognized primitive's arcs come
 out wrong.
 
-Three corrections from the spike are implementation contract rather than
-background — the projector frame, sector sweep by x-direction rotation, and
-verifying orientation against a chiral feature. The spike's Findings section
-carries the detail and the evidence.
+`hlr.visible_segments` still computes `out["fit_arcs"]` via `arcfit` before
+dispatching to either engine, but `occt.build_shape` reads only
+`out["analytic"]` and `out["tri"]` — the fitted arcs are computed and then
+discarded on the OCCT path. That is why `32062` loses all 19 of its arcs (see
+`## Open`). Feeding those already-computed `fit_arcs` ops into the OCCT
+result alongside the kernel's own edges is a cheap follow-up that would
+recover them.
+
+The spike's projector frame does not carry over unchanged: it read
+`Z = right x up, X = -right`, but empirical enumeration during the port
+found the opposite X sign is what matches the naive engine (`Z = right x up,
+X = +right`, plus a Y negation) — see `occt.projector_axes`'s docstring for
+the authoritative frame and how it was found. The sector-sweep-by-rotation
+fix and chiral-feature verification carried over as the spike described them;
+the projector frame did not.
 
 ## A failed part raises
 
@@ -95,13 +107,15 @@ table). Both predictions above are now measured, not open:
 
 - **`arcfit` is not removable.** On parts whose geometry matches a recognized
   primitive (`3001`, `3020`, `4589`, `4070`, `87087`) arcs rise and lines fall
-  as designed. On everything else it stays load-bearing: `3941`'s hand-faceted
-  rim detail, the two LDraw dishes (`3960`, `4740p03` — spherical caps with no
-  primitive in `occt_faces`), and `32062`'s axle (a "+"-profile extrusion,
-  also unmatched) get no analytic curve at all, and `32062` loses every one of
-  its 19 arcs because its whole body is unrecognized triangles. `arcfit`
-  would only retire once `occt_faces` grows a dish/sphere and an
-  extruded-profile primitive.
+  as designed. On everything else it stays load-bearing, but the shortfall
+  varies by part rather than uniformly zeroing out: the two LDraw dishes
+  (`3960`, `4740p03` — spherical-cap BODIES with no matching primitive in
+  `occt_faces`) still gain arcs from other recognized features on the same
+  part (21→30 and 25→28), `3941`'s hand-faceted rim detail holds flat at 48,
+  and only `32062`'s axle (a "+"-profile extrusion, also unmatched) truly
+  zeroes — it loses every one of its 19 arcs because its whole body is
+  unrecognized triangles. `arcfit` would only retire once `occt_faces` grows
+  a dish/sphere and an extruded-profile primitive.
 - **`4019`'s stray ellipse is gone**, as predicted, though not for free: bbox
   moves from `[60.77, -11.08, 195.23, 164.0]` (the known arc-recovery
   artifact, against viewBox `0 0 256 170`) to `[60.77, 6.0, 195.23, 164.0]` —

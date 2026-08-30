@@ -973,8 +973,14 @@ def part_geometry(part: str, ldraw_dir):
             out["analytic"])
 
 
+VALID_ENGINES = ("naive", "occt")
+
+
 def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
                      cull=True, engine="naive"):
+    if engine not in VALID_ENGINES:
+        raise ValueError(
+            f"unrecognized engine {engine!r}; must be one of {VALID_ENGINES}")
     roots = default_roots(ldraw_dir)
     path = _resolve_input(part, roots)
     out = {"2": [], "5": [], "tri": [], "tri_meta": [], "analytic": []}
@@ -993,7 +999,7 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
     right, up, fwd = view_basis(lat, long)
     if engine == "occt":
         from . import occt
-        return occt.visible_segments(out, right, up, fwd, render_px, cull=cull)
+        return occt.visible_segments(out, right, up, render_px, cull=cull)
     if out["analytic"] or out["fit_arcs"]:
         res = _visible_segments_analytic(out, right, up, fwd, render_px, cull=cull)
     else:

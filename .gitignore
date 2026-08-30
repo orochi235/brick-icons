@@ -4,6 +4,7 @@ __pycache__/
 out/
 debug/
 vendor/
+vendor
 .pytest_cache/
 .cache/
 *.egg-info/
