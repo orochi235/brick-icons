@@ -86,9 +86,35 @@ separately against Skia PathOps; this slice must not pre-empt it.
 
 ## Open
 
-- **Whether `arcfit` can be skipped on the OCCT path.** Hand-faceted rounds
-  are condline-marked triangle chains, not primitives, so the kernel has no
-  exact curve to report for them. They may still need refitting.
-- **Whether the spike's four corrections are the whole set.** They came from
-  four parts. `4019`'s stray ellipse is predicted to disappear with arc
-  recovery, but that is a prediction to check, not a promise.
+Task 7 ran `scripts/compare-engines.py` over all 23 `outline` cases
+(`.superpowers/sdd/2026-08-29-occt-hlr-port/task-7-report.md` has the full
+table). Both predictions above are now measured, not open:
+
+- **`arcfit` is not removable.** On parts whose geometry matches a recognized
+  primitive (`3001`, `3020`, `4589`, `4070`, `87087`, `99781`) arcs rise and
+  lines fall as designed. On everything else it stays load-bearing: `3941`'s
+  hand-faceted rim detail, the two LDraw dishes (`3960`, `4740p03` — spherical
+  caps with no primitive in `occt_faces`), and `32062`'s axle (a "+"-profile
+  extrusion, also unmatched) get no analytic curve at all, and `32062` loses
+  every one of its 19 arcs because its whole body is unrecognized triangles.
+  `arcfit` would only retire once `occt_faces` grows a dish/sphere and an
+  extruded-profile primitive.
+- **`4019`'s stray ellipse is gone**, as predicted. Frozen baseline bbox is
+  `[60.77, -11.08, 195.23, 164.0]` against viewBox `0 0 256 170` (the known
+  arc-recovery artifact); under OCCT it is `[60.77, 6.0, 195.23, 164.0]` — the
+  same top margin every well-behaved part in the corpus gets.
+
+New finding the spike didn't cover: parts with no matching primitive don't
+fail gracefully, they explode. `UnifySameDomain` correctly declines to merge
+triangle facets that approximate real curvature (they aren't actually
+coplanar), so every facet boundary comes out as a genuine HLR edge — `L` goes
+2→13359 on `4740p03` and 2→1898 on `3960`. Cylinder seam edges, the effect
+this task set out to quantify, turn out to be real but minor: `3941`
+(A held exactly at 48, `L` 70→324) has 5 seam edges across 13 cylinder faces,
+upper-bounding their contribution at roughly 5 of the 254 added lines — the
+line explosion is facet tessellation, not seams. The naive engine hid this
+because its arcfit/fold-arc/dedupe path collapses a hand-faceted dome to a
+couple of silhouette lines; OCCT has no equivalent collapse for
+unrecognized curvature. Closing this needs either a broader primitive set
+(sphere/dish, extruded-profile) or a facet-collapse pass — both out of scope
+for this port.
