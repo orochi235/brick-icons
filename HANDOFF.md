@@ -1,25 +1,46 @@
 # Handoff — decal extraction, then the conformance baseline
 
-All on **`main`**, working tree clean. 473 tests pass.
+All on **`main`**, working tree clean. 477 tests pass (`BRICK_GOLDENS=1`: 13).
+`docs/superpowers/plans/2026-08-28-decal-unwrap.md` is the durable record of
+phase 2; this covers what landed on top of it.
 
-The golden baseline the engine swap needs is **done and merged** — see "The
-regression gate: answered" below.
+**The OCCT port is underway in another session, in its own worktree — do not
+start a second one.** First slice is hidden-line removal only, no fills,
+behind `--engine occt`, gating on the `outline` combo (`88e1ffd`). Check with
+that session before touching `hlr.py` or `primitives.py`. Its first run: 23
+parts, 0 render failures, but it does NOT pass — wins where geometry resolves
+to analytic primitives, regresses 3x or worse on 9 parts that fall through to
+raw triangle facets (`4740p03` 2 -> 13359 lines), and `6589` loses visible
+geometry outright. Cause measured as unmerged coplanar facets, not seam edges.
 
-**The OCCT port is already underway in another session, in its own worktree —
-do not start a second one.** First slice is hidden-line removal only, no
-fills, behind `--engine occt`, gating on the `outline` combo added in
-`88e1ffd`. Check with that session before touching `hlr.py` or
-`primitives.py`.
-`docs/superpowers/plans/2026-08-28-decal-unwrap.md` is still the durable record
-of phase 2; this covers what landed on top of it.
+**Do not fix the stray-geometry Open items below.** `14769p0a`'s thin
+numerals, `14769px2`'s stray arc and `4019`'s stray ellipse all live in
+`hlr._visible_segments_analytic`, which the port replaces — the port session
+confirms `4019`'s ellipse disappears under OCCT. Fixing them now is thrown-away
+work that collides with that tree.
 
-**Next up is an engine swap.** The seam is narrower than it looks: the CLI
-touches the engine only through `hlr.visible_segments` (view path) and
-`hlr.part_geometry` (extraction, no view). Keep the naive engine on `main`
-behind an `--engine` selector rather than on a long-lived branch — a branch
-stops being exercised and rots. Freeze golden outputs from the naive engine
-first, so drift is detectable: the specimen gates plus the 600-part decal
-corpus run are already most of a conformance suite.
+**Two gates that looked finished turned out to be holes, both found by
+review rather than by the tests.** Wireframe cannot gate hidden-line removal
+because it sets `cull=False`; the extraction corpus could not catch a
+regression in any classic brick, plate or tile because its candidate pool was
+an alphabetical prefix containing none. Both are fixed. The lesson worth
+carrying: a gate that runs green is not evidence it observes what you think.
+Ask what a gate would MISS before trusting it.
+
+## What shipped this session
+
+- `0980599` **skia-pathops evaluated** — adopt, but inside the OCCT port, not
+  before it. Conics survive its booleans exactly; it never invents them, so
+  the win is unlocked BY the port. Does not replace shapely (no polygon
+  offset). Spec: `docs/superpowers/specs/2026-08-29-pathops-evaluation.md`.
+- `88e1ffd` **`outline` combo** — 23 strokes-only cases, the isolated HLR gate.
+- `b4a89b4` **`outline__4019` added to `KNOWN_STRAY`** — the combo brought the
+  part in and the exemption list did not follow, so `main` failed its own
+  goldens under `BRICK_GOLDENS=1`. Both 4019 entries retire together.
+- `90be857` **decals emit only what is worth looking at** —
+  `unwrap.significant_groups`. A torso went 59 SVGs to 1.
+- `ced5da9` **candidate pool sampled, not truncated** —
+  `scripts/select-decal-candidates.py`.
 
 ## What shipped
 
