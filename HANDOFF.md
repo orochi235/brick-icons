@@ -238,23 +238,32 @@ deliberately not merged.
 
 ## What to do next, in this order
 
-1. **`6589` loses visible ink** — bbox x-min moves 13.93 LDU, so geometry present
-   under naive is absent under OCCT. Chase this *before* the line counts:
-   missing geometry is a different severity from noisy geometry, and it is the
-   class that read as partial success in the spike's own coverage metric while
-   the render showed a gear's body gone.
-2. **The line explosion** on 9 of 23 parts. Measured cause is unmerged coplanar
-   triangle facets reaching output — `ShapeUpgrade_UnifySameDomain` declining to
-   merge. NOT cylinder seams: those were quantified at ~5 of 254 added lines on
-   `3941`, so that hypothesis is dead. `tests/goldens/corpus-overrides.toml` and
-   the carrier-count measure in `scripts/select-decal-corpus.py` already separate
-   the facet-heavy population — same split, different symptom.
-3. **Cheap win available:** `out["fit_arcs"]` is computed at `hlr.py:992` and then
+1. **The line explosion** on 9 of 23 parts, now the whole of the gap. Measured
+   cause is unmerged coplanar triangle facets reaching output —
+   `ShapeUpgrade_UnifySameDomain` declining to merge. NOT cylinder seams: those
+   were quantified at ~5 of 254 added lines on `3941`, so that hypothesis is
+   dead. `tests/goldens/corpus-overrides.toml` and the carrier-count measure in
+   `scripts/select-decal-corpus.py` already separate the facet-heavy population
+   — same split, different symptom.
+2. **Cheap win available:** `out["fit_arcs"]` is computed at `hlr.py:992` and then
    discarded on the OCCT path. Injecting those ops into the result would likely
    recover `32062`'s 19 lost arcs for almost nothing.
+3. **`6589`'s bbox x-min shift (13.93), and `4589`'s (1.54).** Both unchanged by
+   the bore fix and both undiagnosed. Lower severity than they read in the
+   task-7 report, which wrongly tied 6589's to the missing axle hole.
+
+`6589`'s lost bore geometry — item 1 in the previous version of this list — is
+fixed: capped-solid cylinders and never-built ring faces, both silent. The
+design doc's `## Open` carries it.
 
 ## Traps that are not in the specs
 
+- **`occt_faces` catches every exception and returns `[]`.** That is why two
+  separate defects lost whole surfaces for the life of the port with no error
+  anywhere, and it will hide the next one too: a primitive that raises is
+  indistinguishable from one that is deliberately unrepresentable. When
+  touching that function, re-run it with the `except` removed before believing
+  a `[]`.
 - **The frame was settled by enumeration, not derivation.** Three separate
   derivations each looked correct and were wrong. Shipped is
   `Z = +cross(right, up)`, `X = +right`, **Y negated** — a configuration none of
@@ -288,8 +297,25 @@ re-derive:
     1022657p03 1023000p03 1023000p04 1023035p04 10830p01 11391p01
     11435p02 13809p02 13809p03
 
-Also: `tests/goldens/decal-hashes.txt` was re-frozen at `90be857` (358 parts /
-3842 SVGs -> 343 / 511, every row a new hash, a deliberate output change from
-sliver suppression). The RENDER seam is untouched — the 23 `outline__` cases and
-their hashes are unchanged. But any later slice touching `hlr.part_geometry`
-must gate against the new decal baseline, not an earlier copy.
+Also: `tests/goldens/decal-hashes.txt` was re-frozen twice on 2026-08-30, ending
+at **`ced5da9`** (393 parts / 626 SVGs). Gate against that one, not `90be857`
+and not an earlier copy. The RENDER seam is untouched throughout — the 23
+`outline__` cases and their hashes are unchanged — but any later slice touching
+`hlr.part_geometry` must use the current decal baseline.
+
+**The lesson in that second re-freeze is worth more than the hash.** The decal
+candidate pool had been the first 600 printed parts in SORTED order — a prefix
+of the id space, not a sample. Every id began 00-15, so the library's largest
+printed families were absent entirely (`30xxx` alone carries 1,440 printed parts,
+none of them included), the corpus contained no classic brick, plate or tile, and
+one shape was 26% of it. A kernel swap gated on that baseline would have left
+whole families of geometry unobserved while reporting coverage.
+
+That is the third gate-shaped-hole found in one day, after the cel combo that
+could not move under an engine swap and the wireframe combo that cannot test
+hidden-line removal. The pattern is the point: **a gate that looks like coverage
+is not evidence of coverage until you check what is actually in it.** The
+resampled corpus (242 distinct shapes, 41 torsos, printed tiles present) now
+spans both the analytic-primitive parts this kernel wins on and the facet-heavy
+parts it regresses on, so it is also a better before/after set for the
+coplanar-facet merge work than anything derived earlier.
