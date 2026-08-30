@@ -253,7 +253,7 @@ def _edge_ops(edge, kind):
 
     OCCT's FirstParameter/LastParameter are radians; every downstream
     consumer of an 'arc' op (trace._arc_to_svg, process.draw_segments, and
-    the naive engine's own arc emission in hlr.fit_ellipses) takes t0/t1 in
+    the naive engine's own arc emission in hlr.dedupe_segments) takes t0/t1 in
     DEGREES. Left unconverted, a full circle (0..2*pi radians) reads as a
     ~6-degree sliver -- the "broken partial arc" symptom (task-6 fix round
     2): stud rims came back as tiny chevrons, not because HLR sub-divided
