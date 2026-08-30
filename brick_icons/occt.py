@@ -89,12 +89,15 @@ def annulus_face(origin, ah, uh, r_in, r_out, ang):
     return mf.Face()
 
 
-def cone_radii(prim):
+def _cone_radii(r, n):
     """(r_base, r_top) for a conN primitive: N+1 tapering to N, scaled by r."""
+    return (n + 1.0) * r, n * r
+
+
+def cone_radii(prim):
     f = frame(prim)
     r = f[4] if f is not None else np.linalg.norm(prim.R[:, 0])
-    n = float(prim.top)
-    return (n + 1.0) * r, n * r
+    return _cone_radii(r, float(prim.top))
 
 
 def occt_faces(prim):
@@ -120,9 +123,9 @@ def occt_faces(prim):
         if k == "con":
             # conN: radius N+1 at the base tapering to N at the top, both in
             # primitive units, so the matrix scale r multiplies BOTH.
-            n = float(prim.top)
+            r_base, r_top = _cone_radii(r, float(prim.top))
             return [BRepPrimAPI_MakeCone(ax2(o, zdir, uh),
-                                         (n + 1.0) * r, n * r, h, ang).Shape()]
+                                         r_base, r_top, h, ang).Shape()]
         if k == "disc":
             return [annulus_face(o, zdir, uh, 0.0, r, ang)]
         if k == "ring":
