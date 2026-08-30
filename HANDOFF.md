@@ -61,23 +61,126 @@ different pitches and are smooth only by declaration. The G1 tagging that
 preceded this (`BRep_Builder::Continuity` + `Rg1LineVCompound`) is retired; it
 could not reach a one-face edge at all, of which `3960` has 326 and `3673` 234.
 
-Against naive at 30/45, the seven parts checked by eye — `3001`, `3040b`,
-`3960`, `4740`, `4740p03`, `6589`, `32062` — now match its shape. The only
-occt-only ink on `4740` is described under Open defects.
+## The premise, and where it now lives
+
+`CLAUDE.md` (new, at the repo root on this branch — **it should reach `main`**)
+carries the standing rules this port kept re-learning: LDraw parts are
+defective and a rule that assumes a sound shape is wrong by construction;
+declarations are the only source of truth; unprinted parts only; a small pixel
+diff is not agreement; a silent `[]` is not "unrepresentable". Read it first
+and do not repeat it here.
+
+The one thing that belongs here rather than there: the honest counter-case is
+that a cracked shell could leak sight-lines and break occlusion, since HLR
+needs solidity to hide things. Measured, it does not — `3941` renders correctly
+with 319 of its 478 edges unpaired — but that is a measurement, not a
+guarantee, so a future occlusion bug is the one place to reconsider sewing.
+
+## READ FIRST: test on UNPRINTED parts only
+
+Part ids with a `p` are out of the engine loop until the decal work is
+deliberately picked up. A printed part carries decoration that fails for its
+own reasons and drags engine debugging onto the wrong problem — on 2026-08-30
+chasing `3942bp01` and `4740p03` produced a crease rule whose only
+justification was a printed part, and that rule then broke unprinted ones. The
+unprinted outline corpus is `3005 3024 3001 3020 3040b 3941 6143 50950 4589
+3960 4070 87087 99781 4019 3649 6589 3673 32062`.
+
+**Read the part id to gate the decal stage.** LDraw's numbering is authored
+metadata — `4740p03` declares itself printed exactly as a type-2 line declares
+an edge — so branching on it is the same doctrine the engine already runs on,
+not a shortcut. Two consequences: the base part (`4740p03` -> `4740`) usually
+exists in the library and is the same geometry minus decoration, which gives
+the stripping stage a real oracle over hundreds of parts with nothing to label;
+and the id only says decoration EXISTS, so it gates the stage while colour and
+`tri_meta` still choose the facets. Watch the other suffixes (`pr` codes,
+stickers like `3069bpr0001`) and parts with no unprinted twin.
+
+**The decal layer wants filtering out before `build_shape`, not handling.** A
+decal is decoration lying ON a carrier surface, so it sews in as faces that
+fight the surface underneath. On a flat top face you could catch it as
+coplanar-and-inside; on `4740`'s dish the carrier is a CONE and no geometric
+test in the pipeline sees it as anything but more surface — which is why that
+part's rim came back as a one-face edge. `tri_meta` already carries each
+facet's colour, so the filter is identification-on-arrival rather than
+geometry. The render path only needs to DROP decoration; none of extraction's
+hard part (unwrapping a curved carrier to UV) is needed.
+
+## Where it stands on the unprinted corpus
+
+**16 of 17 match naive's shape.** The one holdout is `50950`, and it is the
+elliptical-cylinder gap below — unrelated to everything else here.
+
+`3941`, `6143` and `4589` were broken all day and were fixed by the stud fix,
+not by anything aimed at them: their rings carried the same coincidence
+signature. **That retires the "sewing is the blocker" theory written here
+earlier.** `3941` still has 319 one-face edges of 478 and now renders
+correctly; `6589` has 366 of 604 and always did. Cracks are everywhere and cost
+nothing on their own — what cost was feeding them to a crease rule. Closing
+them is optional cleanup, not the critical path.
+
+For the record on how to look: measured on the sewn shape, one-face edges are
+`4740` 0, `3960` 326 of 1515, `6589` 366 of 604, `3673` 332 of 638, `3941` 319
+of 478, `6143` 391 of 633 — and the render quality does not track any of it.
+
+**The sector finding still stands and still matters for sewing work:** `3941`'s
+outer wall is four `cyli` sectors of 45 degrees (180 in total, the rest
+arriving as 384 triangles), not a cylinder. Whoever closes the cracks should
+start there.
+
+## Two silent tolerances were deleting whole walls
+
+`frame()` rejected a primitive as sheared on a radius-ratio residual of
+**8.9e-6** and an orthogonality residual of **1.2e-6**, against thresholds of
+1e-6 — float noise off accumulated subpart transforms. A rejected primitive
+builds no face, so `3942bp01` lost 32 of its 52 surfaces and its cone wall was
+cracks. Both are now `1e-4` (`ORTHO_TOL`, `ROUND_TOL`); a genuinely elliptical
+cylinder sits at a ratio of 0.80, five orders clear.
+
+This is the `occt_faces` trap the spike named, reached by a different road: the
+function returns `[]` for "not representable" and `[]` for "my tolerance was
+too tight", and nothing distinguishes them. **`50950` is the real instance of
+the first** — its cylinder measures ru=68.3 against rv=84.9, a true ellipse
+that `BRepPrimAPI_MakeCylinder` cannot express. That part needs an elliptical
+surface, not a looser tolerance.
+
+## The crease rule: two wrong answers before the measured one
+
+- **A condline does not declare its junction smooth.** LDraw's condlines on a
+  cone run ALONG the surface, endpoints on two different rings, so a
+  "both endpoints on this circle" test almost never fires — every band seam of
+  a stacked cone became an edge and `3942bp01` drew as a stack of hoops.
+- **"Both faces curved" is not continuation.** It reads a dish's outer rim
+  (cone meeting cylinder) as the wall carrying on, and deletes the dish.
+- **Shipped: tangency, with the threshold in a measured gap.** Over `4740`,
+  `3942bp01`, `4589` and `3941` every smooth band seam lands at 0-12 degrees
+  and every real edge at 60-90, with nothing between; `TANGENT_DEG = 30` sits
+  in that empty band. `scripts/measure-crease-angles.py` re-derives it.
+  A dihedral test is safe HERE and nowhere else, because the population is
+  junctions between exact surfaces rather than facets of a tessellation.
 
 ## Open defects, measured
 
-- **Tangent slivers at a stud base.** A stud's base circle lies exactly on its
-  own cylinder, so HLR keeps a short rear arc visible either side of the
-  silhouette tangent where naive hides it. It is the only occt-only ink on
-  `4740` and it is the "noise in the studs" a reader notices first. There is no
-  tolerance knob on `HLRBRep_Algo` to turn down, so a fix means filtering short
-  visible fragments of a mostly-hidden circle — a threshold, so measure before
-  picking one.
-- **Doubled ink.** Two 3-point polylines sharing one of their two segments, so
-  that leg is drawn twice — `3005`/`3001`/`3040b` at the stud annulus.
-  Invisible at full opacity; only the x-ray below shows it. Expected to be gone
-  now that authored lines are unique by construction — unverified.
+- **Stud rings: fixed, and the fix changed the engine's shape.** A stud's base
+  circle added as an isolated edge-shape is coincident with its own cylinder,
+  and HLR breaks that tie VISIBLE — it keeps a full 360-degree fragment where
+  the same edge inside the sewn shape splits into 45/45/135/135/180. Not a
+  tangency limit, not a threshold: the cost of handing HLR duplicate geometry.
+
+  So nothing is added to `HLRBRep_Algo` but the shape. HLR runs on the faces
+  alone, and `select_authored` keeps only those visible fragments that lie on
+  an authored 2D locus (`authored_loci`). HLR splits an edge without reshaping
+  its curve, so a fragment of an authored edge still lies exactly on that
+  edge's projection. `4740`'s largest occt-only pixel component went from 115
+  to **7** — fringe scale, nothing structural.
+
+  `HLRBRep_HLRToShape.VCompound(edge)` on a sub-edge is a dead end; it returns
+  nothing, because HLR reports per *added shape*. Hence matching in 2D.
+
+  **The screen frame is X = right, Y = cross(z, x)**, pinned empirically the
+  way `projector_axes` was: `4740`'s 3D centre (0,-4,0) lands at (0, 3.464) and
+  HLR reports that ellipse at (0, 3.460). Do not re-derive it.
+
 - **Sliver faces.** `3673` has 77 of 112 paths >60% covered by another,
   including closed micro-triangles; `3941` 56 of 166 retraced, `3649` 66 of
   985. Degenerate faces reaching HLR.
@@ -93,6 +196,12 @@ cells touched by 2+ paths, 0.3-unit grid): `3068b` 54.9%, `3005` 54.5%,
 `3040b` 53.7%, `4740` 43.8%, against OCCT's 1–5%. On `4740` it inks 4735 cells
 to OCCT's 1575 for a simpler drawing. Converge on naive's *shape*, not its
 stroke count, and expect to beat it on duplicates.
+
+## Later, not now
+
+Extend the translucent-stroke overlap technique to FACES as well as strokes,
+on a separate colour channel, so face coverage and stroke coverage can be read
+off one image independently.
 
 ## The lab (next project, spans two repos)
 

@@ -28,11 +28,15 @@ from OCP.HLRBRep import HLRBRep_Algo, HLRBRep_HLRToShape
 from OCP.HLRAlgo import HLRAlgo_Projector
 from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
 from OCP.GeomAbs import GeomAbs_CurveType, GeomAbs_SurfaceType
+from OCP.GeomLProp import GeomLProp_SLProps
+from OCP.GeomAPI import GeomAPI_ProjectPointOnSurf
 from OCP.GCPnts import GCPnts_QuasiUniformDeflection
 
 from . import hlr
 
 TOL = 1e-4
+ORTHO_TOL = 1e-4     # see frame(); measured noise floors are 1.2e-6 and 8.9e-6
+ROUND_TOL = 1e-4
 
 
 def frame(prim):
@@ -42,8 +46,14 @@ def frame(prim):
     if min(ru, rv, h) < 1e-9:
         return None
     uh, vh, ah = U / ru, V / rv, A / h
-    orth = (abs(uh @ ah) < 1e-6 and abs(vh @ ah) < 1e-6 and abs(uh @ vh) < 1e-6)
-    uniform = abs(ru - rv) < 1e-6 * max(ru, rv)
+    # At 1e-6 both tests rejected 32 of 3942bp01's cones on residuals of 1.2e-6
+    # and 8.9e-6 -- float noise off accumulated subpart transforms, not shear.
+    # They then built no face, so its wall was cracks and every band drew as a
+    # hoop. A genuinely elliptical cylinder (50950) has a radius ratio of 0.80,
+    # five orders clear of these tolerances.
+    orth = (abs(uh @ ah) < ORTHO_TOL and abs(vh @ ah) < ORTHO_TOL
+            and abs(uh @ vh) < ORTHO_TOL)
+    uniform = abs(ru - rv) < ROUND_TOL * max(ru, rv)
     if not (orth and uniform):
         return None
     rh = float(np.cross(uh, vh) @ ah) > 0
@@ -203,6 +213,47 @@ def _line_edge(a, c):
         return None
 
 
+def _curve_key(edge):
+    """Identity of an edge's underlying curve, for dropping a duplicate.
+
+    A stud rim is authored as an `edge` primitive AND arrives again as the
+    junction between its cylinder and the disc above it. Fed to HLR twice, the
+    two copies are hidden-line-removed independently and disagree where the
+    circle grazes its own cylinder, so one draws a rear arc the other hides --
+    doubled ink plus a stray sliver at every stud base.
+    """
+    c = BRepAdaptor_Curve(edge)
+    t = c.GetType()
+    if t == GeomAbs_CurveType.GeomAbs_Circle:
+        g = c.Circle()
+        o, ax = g.Location(), g.Axis().Direction()
+        d = (ax.X(), ax.Y(), ax.Z())
+        if d < (0.0, 0.0, 0.0):                # axis sign is not identity
+            d = tuple(-v for v in d)
+        return ("circle", round(g.Radius(), 3), tuple(round(v, 3) for v in
+                (o.X(), o.Y(), o.Z())), tuple(round(v, 3) for v in d))
+    a, b = c.Value(c.FirstParameter()), c.Value(c.LastParameter())
+    ka = tuple(round(v, 3) for v in (a.X(), a.Y(), a.Z()))
+    kb = tuple(round(v, 3) for v in (b.X(), b.Y(), b.Z()))
+    return ("line",) + (ka, kb) if ka <= kb else ("line",) + (kb, ka)
+
+
+def dedupe_edges(edges):
+    """Edges with one entry per distinct curve, first occurrence winning."""
+    seen, out = set(), []
+    for e in edges:
+        try:
+            k = _curve_key(e)
+        except Exception:
+            out.append(e)
+            continue
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(e)
+    return out
+
+
 def authored_edges(out: dict, right, up):
     """(hard, conditional) compounds of the edges LDraw actually states.
 
@@ -256,64 +307,56 @@ CURVED = (GeomAbs_SurfaceType.GeomAbs_Cylinder, GeomAbs_SurfaceType.GeomAbs_Cone
           GeomAbs_SurfaceType.GeomAbs_Sphere, GeomAbs_SurfaceType.GeomAbs_Torus)
 
 
-def _cond_points(out: dict):
-    pts = [np.asarray(q, float)[:2] for q in out.get("5", ())]
-    return np.array(pts, float).reshape(-1, 2, 3) if pts else np.zeros((0, 2, 3))
+TANGENT_DEG = 30.0     # measured gap is 12 to 60; see analytic_creases
 
 
-def _declared_smooth(edge, cond_pts) -> bool:
-    """True if a condline's endpoints both lie on this edge's circle.
-
-    A condline declares its junction smooth, which is how a dish's band seams
-    are told apart from its outer rim: both are exact junctions between two
-    cone bands, and only the rim is a crease. Endpoint keys cannot do this --
-    the junction reaches OCCT as one full circle whose two ends are the same
-    seam point -- so the match is by the circle the endpoints lie on.
-    """
-    if len(cond_pts) == 0:
-        return False
+def _face_normal(face, edge):
     try:
-        ad = BRepAdaptor_Curve(edge)
-        if ad.GetType() != GeomAbs_CurveType.GeomAbs_Circle:
-            return False
-        c = ad.Circle()
-        o = np.array([c.Location().X(), c.Location().Y(), c.Location().Z()])
-        ax = np.array([c.Axis().Direction().X(), c.Axis().Direction().Y(),
-                       c.Axis().Direction().Z()])
-        r = c.Radius()
+        c = BRepAdaptor_Curve(edge)
+        pt = c.Value((c.FirstParameter() + c.LastParameter()) / 2.0)
+        surf = BRep_Tool.Surface_s(TopoDS.Face_s(face))
+        proj = GeomAPI_ProjectPointOnSurf(pt, surf)
+        if proj.NbPoints() < 1:
+            return None
+        u, v = proj.LowerDistanceParameters()
+        props = GeomLProp_SLProps(surf, u, v, 1, 1e-6)
+        if not props.IsNormalDefined():
+            return None
+        n = props.Normal()
+        return np.array([n.X(), n.Y(), n.Z()])
     except Exception:
-        return False
-    d = cond_pts - o
-    along = d @ ax
-    radial = np.linalg.norm(d - along[..., None] * ax, axis=-1)
-    on = (np.abs(along) < 1e-3) & (np.abs(radial - r) < 1e-3)
-    return bool(on.all(axis=1).any())
+        return None
 
 
 def analytic_creases(shape: TopoDS_Shape, out: dict) -> TopoDS_Shape:
-    """Junctions of exact curved surfaces that no condline declares smooth --
-    a dish's outer rim, a cone's base. LDraw authors neither as an edge.
+    """Junctions of exact curved surfaces that are not tangent -- a dish's
+    outer rim, a cone's base. LDraw authors neither as an edge.
 
-    Triangles cannot reach here: both their faces are planes, so the
-    tessellation a mesh interior is made of is never a candidate. That is why
-    this is a crease rule and not a dihedral-angle threshold, which would draw
-    every band of a dish that LDraw declares smooth.
+    A dihedral test is safe HERE and nowhere else, because the population is
+    junctions between exact surfaces rather than facets of a tessellation.
+    Measured over 4740, 3942bp01, 4589 and 3941, every band seam of a smooth
+    wall lands at 0-12 degrees and every real edge at 60-90, with nothing in
+    between; TANGENT_DEG sits in that empty gap. Re-measure with
+    scripts/measure-crease-angles.py before moving it. Applying the same test
+    to triangles instead would draw the whole tessellation, which is the
+    explosion this engine exists to avoid -- and they cannot reach here, since
+    both their faces are planes.
 
-    A curved face's free boundary counts too. A printed dish replaces its top
-    with decoration triangles that sewing often does not stitch to the band
-    below, and its outer rim is then an edge with one face -- the rim is real
-    whether or not the crack closed.
+    A one-face edge is NOT a crease. It is a sewing crack, and 3942bp01's 120
+    of them drew as 120 hoops. Accepting them was motivated only by a printed
+    dish whose decoration triangles never stitched to the band below, which is
+    the decal problem rather than this one.
     """
-    cond_pts = _cond_points(out)
     amap = TopTools_IndexedDataMapOfShapeListOfShape()
     TopExp.MapShapesAndAncestors_s(shape, TopAbs_ShapeEnum.TopAbs_EDGE,
                                    TopAbs_ShapeEnum.TopAbs_FACE, amap)
+    cos_tol = math.cos(math.radians(TANGENT_DEG))
     keep = []
     for i in range(1, amap.Extent() + 1):
         faces = list(amap.FindFromIndex(i))
-        if len(faces) > 2:
-            continue
-        if len(faces) == 2 and faces[0].IsSame(faces[1]):
+        if len(faces) != 2:
+            continue          # a crack has no junction; see the docstring
+        if faces[0].IsSame(faces[1]):
             continue          # a closed surface's parametric seam, not a crease
         try:
             kinds = [BRepAdaptor_Surface(TopoDS.Face_s(f)).GetType()
@@ -323,8 +366,14 @@ def analytic_creases(shape: TopoDS_Shape, out: dict) -> TopoDS_Shape:
         if not any(k in CURVED for k in kinds):
             continue
         edge = TopoDS.Edge_s(amap.FindKey(i))
-        if _declared_smooth(edge, cond_pts):
+        a, b = _face_normal(faces[0], edge), _face_normal(faces[1], edge)
+        if a is None or b is None:
             continue
+        na, nb = np.linalg.norm(a), np.linalg.norm(b)
+        if na < 1e-9 or nb < 1e-9:
+            continue
+        if abs(float(a @ b)) / (na * nb) > cos_tol:
+            continue          # the wall carries on through: not where it ends
         keep.append(edge)
     return _compound(keep)
 
@@ -385,6 +434,137 @@ def projector_axes(right, up):
     nothing else is close.
     """
     return np.cross(right, up), np.asarray(right, float)
+
+
+MATCH_TOL = 1e-3       # 2D LDU; a fragment lies exactly on its own curve
+
+
+def _screen_axes(right, up):
+    """The projector's 2D frame. Pinned empirically, like projector_axes: for
+    4740 the 3D centre (0,-4,0) lands at (0, 3.464) and HLR reports that
+    ellipse at (0, 3.460). Do not re-derive."""
+    z, x = projector_axes(right, up)
+    return np.asarray(x, float), np.cross(z, x)
+
+
+def _proj2(P, ax, ay):
+    P = np.atleast_2d(np.asarray(P, float))
+    return np.stack([P @ ax, P @ ay], axis=-1)
+
+
+def _seg_locus(a, b, kind, ax, ay):
+    p, q = _proj2([a, b], ax, ay)
+    return ("seg", p, q, kind)
+
+
+def _circ_locus(o, u, v, r, kind, ax, ay):
+    c = _proj2([o], ax, ay)[0]
+    A = _proj2([np.asarray(o, float) + r * np.asarray(u, float)], ax, ay)[0] - c
+    B = _proj2([np.asarray(o, float) + r * np.asarray(v, float)], ax, ay)[0] - c
+    M = np.stack([A, B], axis=1)
+    if abs(np.linalg.det(M)) < 1e-12:
+        return None                      # edge-on: the circle projects to a line
+    return ("ell", c, np.linalg.inv(M), kind)
+
+
+def _on_locus(pts, locus) -> bool:
+    if locus[0] == "seg":
+        _, a, b, _ = locus
+        d = b - a
+        n = np.linalg.norm(d)
+        if n < 1e-12:
+            return False
+        w = pts - a
+        cross = np.abs(w[:, 0] * d[1] - w[:, 1] * d[0]) / n
+        t = (w @ d) / (n * n)
+        return bool(np.all(cross < MATCH_TOL)
+                    and np.all(t > -1e-3) and np.all(t < 1 + 1e-3))
+    _, c, Minv, _ = locus
+    cs = (pts - c) @ Minv.T
+    return bool(np.all(np.abs(np.linalg.norm(cs, axis=1) - 1.0) < MATCH_TOL))
+
+
+def authored_loci(shape, out, right, up):
+    """2D loci every drawable edge must lie on: type-2 lines, `edge`
+    primitives, analytic creases, and condlines that read as a silhouette."""
+    ax, ay = _screen_axes(right, up)
+    loci = []
+    for e in out.get("2", ()):
+        seg = np.asarray(e, float)
+        if np.linalg.norm(seg[0] - seg[1]) > 1e-7:
+            loci.append(_seg_locus(seg[0], seg[1], "line", ax, ay))
+    for prim in out["analytic"]:
+        if prim.kind != "edge":
+            continue
+        f = frame(prim)
+        if f is None:
+            continue
+        o, uh, ah, vh, r, _h, _rh = f
+        loc = _circ_locus(o, uh, vh, float(r), "line", ax, ay)
+        if loc is not None:
+            loci.append(loc)
+    for e in _edges_of(analytic_creases(shape, out)):
+        try:
+            a = BRepAdaptor_Curve(e)
+            if a.GetType() != GeomAbs_CurveType.GeomAbs_Circle:
+                continue
+            g = a.Circle()
+            pos = g.Position()
+            o = np.array([g.Location().X(), g.Location().Y(), g.Location().Z()])
+            u = np.array([pos.XDirection().X(), pos.XDirection().Y(),
+                          pos.XDirection().Z()])
+            v = np.array([pos.YDirection().X(), pos.YDirection().Y(),
+                          pos.YDirection().Z()])
+        except Exception:
+            continue
+        loc = _circ_locus(o, u, v, g.Radius(), "line", ax, ay)
+        if loc is not None:
+            loci.append(loc)
+    for q in out.get("5", ()):
+        pts = np.asarray(q, float)
+        sx, sy, _ = hlr.project(pts, right, up, np.zeros(3))
+        if not hlr.same_side(np.array([sx[0], sy[0]]), np.array([sx[1], sy[1]]),
+                             np.array([sx[2], sy[2]]), np.array([sx[3], sy[3]])):
+            continue
+        if np.linalg.norm(pts[0] - pts[1]) > 1e-7:
+            loci.append(_seg_locus(pts[0], pts[1], "sil", ax, ay))
+    return [l for l in loci if l is not None]
+
+
+def _fragment_points(edge):
+    c = BRepAdaptor_Curve(edge)
+    t0, t1 = c.FirstParameter(), c.LastParameter()
+    ts = np.linspace(t0, t1, 5)
+    out = []
+    for t in ts:
+        p = c.Value(float(t))
+        out.append((p.X(), p.Y()))
+    return np.array(out, float)
+
+
+def select_authored(comp, loci):
+    """(edge, kind) for every fragment lying on an authored locus.
+
+    HLR splits an edge into visible pieces but does not reshape its curve, so a
+    fragment of an authored edge still lies exactly on that edge's projection.
+    Selecting from the SHAPE's own fragments is what keeps occlusion right:
+    added as a separate edge-shape, a stud's base circle is coincident with its
+    own cylinder and HLR breaks the tie visible, keeping a full 360-degree
+    fragment where the same edge inside the shape splits into 45/45/135/135/180.
+    """
+    got = []
+    if comp is None:
+        return got
+    for e in _edges_of(comp):
+        try:
+            pts = _fragment_points(e)
+        except Exception:
+            continue
+        for locus in loci:
+            if _on_locus(pts, locus):
+                got.append((e, locus[-1]))
+                break
+    return got
 
 
 def hlr_edges(shape, right, up, cull=True, edges=None, cond=None):
@@ -505,11 +685,21 @@ def edges_to_ops(compounds):
 def visible_segments(out, right, up, render_px, cull=True):
     from .hlr import VisResult, _ops_bbox
     shape = build_shape(out)
-    hard, cond = authored_edges(out, right, up)
-    hard = _compound(list(_edges_of(hard))
-                     + list(_edges_of(analytic_creases(shape, out))))
-    ops = edges_to_ops(hlr_edges(shape, right, up, cull=cull,
-                                 edges=hard, cond=cond))
+    comps = hlr_edges(shape, right, up, cull=cull)
+    loci = authored_loci(shape, out, right, up)
+    picked = select_authored(comps.get("sharp"), loci)
+    if not cull:
+        picked += select_authored(comps.get("sharp_hidden"), loci)
+    ops = []
+    for edge, kind in picked:
+        ops += _edge_ops(edge, kind)
+    for name in ("outline", "outline_hidden"):
+        comp = comps.get(name)
+        if comp is None:
+            continue
+        for edge in _edges_of(comp):
+            ops += _edge_ops(edge, "sil")
+    ops = _negate_y(ops)
     if not ops:
         raise RuntimeError("OCCT engine produced no edges")
     bbox = _ops_bbox(ops)
