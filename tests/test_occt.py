@@ -47,10 +47,11 @@ def _render_svg(part: str, engine: str, out: Path) -> Path | None:
     return png if rproc.returncode == 0 else None
 
 
-def _mirrored(png: Path) -> Path:
-    flipped = png.with_name(png.stem + "-mirrored" + png.suffix)
-    Image.open(png).transpose(Image.FLIP_LEFT_RIGHT).save(flipped)
-    return flipped
+def _mirrored(png: Path, mode=Image.FLIP_LEFT_RIGHT) -> Path:
+    tag = "mirrored" if mode is Image.FLIP_LEFT_RIGHT else "flipped"
+    out = png.with_name(f"{png.stem}-{tag}{png.suffix}")
+    Image.open(png).transpose(mode).save(out)
+    return out
 
 
 class P:
@@ -88,10 +89,17 @@ def test_3001_builds_and_sews(ldraw_dir):
 
 def test_projector_axis_puts_image_y_on_up():
     """OCCT derives image Y as Z x X. Feeding view_basis's `fwd` and `right`
-    directly pitches the whole render 90 degrees."""
+    directly pitches the whole render 90 degrees.
+
+    Asserted against -up, not up: cross(cross(right, up), right) == up holds
+    for ANY orthonormal pair by the triple-product identity, regardless of
+    which way Z points, so it is a tautology that can't catch a flipped Z.
+    -up is hlr.project's actual screen-Y convention and is what pins the
+    frame down.
+    """
     right, up, fwd = hlr.view_basis(30.0, 45.0)
     z, x = occt.projector_axes(right, up)
-    assert np.allclose(np.cross(z, x), up, atol=1e-9)
+    assert np.allclose(np.cross(z, x), -up, atol=1e-9)
 
 
 @pytest.mark.xfail(reason="needs Task 6's render path", strict=False)
@@ -107,7 +115,9 @@ def test_orientation_is_verified_against_a_chiral_part(ldraw_dir, tmp_path):
     if naive is None or ported is None:
         pytest.skip("CLI render unavailable (missing resvg or render failed)")
     rmse_direct, _, note_direct = raster_delta(ported, naive)
-    rmse_mirror, _, note_mirror = raster_delta(ported, _mirrored(naive))
-    if rmse_direct is None or rmse_mirror is None:
-        pytest.skip(note_direct or note_mirror or "raster comparison unavailable")
-    assert rmse_direct < rmse_mirror
+    rmse_lr, _, note_lr = raster_delta(ported, _mirrored(naive, Image.FLIP_LEFT_RIGHT))
+    rmse_tb, _, note_tb = raster_delta(ported, _mirrored(naive, Image.FLIP_TOP_BOTTOM))
+    if rmse_direct is None or rmse_lr is None or rmse_tb is None:
+        pytest.skip(note_direct or note_lr or note_tb or "raster comparison unavailable")
+    assert rmse_direct < rmse_lr
+    assert rmse_direct < rmse_tb

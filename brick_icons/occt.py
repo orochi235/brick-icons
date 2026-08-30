@@ -191,9 +191,10 @@ def count_faces(shape: TopoDS_Shape) -> int:
 
 
 def projector_axes(right, up):
-    """OCCT sets image Y = Z x X, so pick Z = right x up (= fwd) and X = right
-    to land Y on `up`: fwd x right = up for this basis's handedness."""
-    return np.cross(right, up), np.asarray(right, float)
+    """hlr.view_basis builds up = right x forward, so right x up = -forward,
+    and hlr.project's screen-Y is -up. OCCT's image Y = Z x X, so solving
+    Z x right = -up gives Z = forward = -(right x up); X = right."""
+    return -np.cross(right, up), np.asarray(right, float)
 
 
 def hlr_edges(shape, right, up, fwd, cull=True):
@@ -216,7 +217,8 @@ def hlr_edges(shape, right, up, fwd, cull=True):
     got = {}
     for name, fn in wanted:
         try:
-            got[name] = fn()
+            shp = fn()
+            got[name] = None if shp is None or shp.IsNull() else shp
         except Exception:
             got[name] = None
     return got
