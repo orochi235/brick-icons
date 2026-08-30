@@ -826,4 +826,17 @@ def visible_segments(out, right, up, render_px, cull=True):
     # Sub-pixel, or the contour under an exact arc stroke reads as a polygon
     # and its chords poke out from behind it.
     polys = face_polys(shape, right, up, span / render_px * 0.25)
-    return VisResult(ops, bbox, s, faces=(), analytic=(), sil_polys=polys)
+    # The drawn arcs ARE the contour's arc candidates -- an arc op's fields
+    # 1..6 are already the (cx, cy, ux, uy, vx, vy) arc_candidates takes.
+    # Without them contour_d traces the raw tessellation and 3005's silhouette
+    # came out as 147 path commands against naive's 21.
+    ells, seen = [], set()
+    for op in ops:
+        if op[0] != "arc":
+            continue
+        k = tuple(round(v, 4) for v in op[1:7])
+        if k not in seen:
+            seen.add(k)
+            ells.append(tuple(op[1:7]))
+    return VisResult(ops, bbox, s, faces=(), analytic=(),
+                     ellipses=tuple(ells), sil_polys=polys)
