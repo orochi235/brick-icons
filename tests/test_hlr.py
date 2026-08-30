@@ -977,3 +977,10 @@ def test_refit_candidates_carry_measured_snap_tol():
     tol = cand[7]
     assert tol >= 1.0                           # covers the 1px deviation
     assert tol <= 6.0                           # capped like fit_ells
+
+
+def test_unrecognized_engine_raises_rather_than_silently_rendering():
+    """labels.toml has no engine validation of its own, so a typo like
+    engine = "OCCT" must not silently fall through to the naive path."""
+    with pytest.raises(ValueError, match="occt"):
+        hlr.visible_segments("3001", "vendor/ldraw", engine="OCCT")

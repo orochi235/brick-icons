@@ -233,3 +233,17 @@ def test_drawings_stay_inside_their_own_viewbox():
         f"{sorted(fixed)} no longer draws outside its viewBox — drop it from "
         f"KNOWN_STRAY and say what fixed it")
 
+
+def test_outline_combo_is_strokes_only():
+    """The HLR gate must not also test the fill path.
+
+    A fill entering these cases would make an engine swap answerable for
+    shading too, which is a separate track (Skia PathOps, evaluated
+    elsewhere).
+    """
+    files = list((GOLDENS / "render").glob("outline__*.json"))
+    assert files, "No outline golden cases found; corpus missing or mislocated"
+    for p in files:
+        fills = json.loads(p.read_text())["fills"]
+        assert set(fills) <= {"none"}, f"{p.name} has fills: {fills}"
+

@@ -249,3 +249,8 @@ def test_decal_does_not_shadow_a_part_named_in_the_render_path(tmp_path, monkeyp
     assert cli.main(["3001", "--mode", "gray", "--out", str(tmp_path),
                      "--root", str(tmp_path)]) == 0
     assert (tmp_path / "3001.gray.png").exists()
+
+
+def test_unknown_engine_is_rejected():
+    with pytest.raises(SystemExit):
+        cli._parse_args(["3001", "--engine", "raytrace"])

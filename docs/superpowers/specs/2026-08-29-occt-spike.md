@@ -1,5 +1,8 @@
 # Spike: replace the hand-rolled geometry with OCCT
 
+> **Superseded:** this spike's projector frame (`Z = right x up, X = -right`) was overturned by empirical measurement during the port -- the shipped frame mirrors X. See `2026-08-29-occt-adoption-design.md` and `occt.projector_axes`'s docstring for the frame actually in use.
+
+
 **Status:** probe complete, 2026-08-29. **Verdict: go for the HLR track; the boolean track is unproven.** Findings at the bottom.
 
 **Question:** can an exact BRep kernel take over everything downstream of

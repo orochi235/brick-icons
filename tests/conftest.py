@@ -1,6 +1,17 @@
+from pathlib import Path
+
 import numpy as np
 import pytest
 from PIL import Image
+
+
+@pytest.fixture
+def ldraw_dir():
+    """Path to the vendored LDraw parts library; skips if not present."""
+    path = Path(__file__).resolve().parent.parent / "vendor" / "ldraw"
+    if not path.exists():
+        pytest.skip("vendor/ldraw not present")
+    return path
 
 
 @pytest.fixture
