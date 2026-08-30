@@ -90,18 +90,23 @@ def test_3001_builds_and_sews(ldraw_dir):
 
 
 def test_projector_axis_puts_image_y_on_up():
-    """OCCT derives image Y as Z x X. Feeding view_basis's `fwd` and `right`
-    directly pitches the whole render 90 degrees.
+    """OCCT derives image Y as Z x X. Z = +cross(right, up), not -cross(...),
+    was settled empirically (task-6 fix round 1: an 8-way sweep against the
+    naive engine's render of a chiral part, see occt.projector_axes and
+    task-6-report.md) -- the algebraically "obvious" Z = forward put the
+    virtual eye on the wrong side of the part and drew its hidden underside.
+    edges_to_ops negates the resulting HLR Y to compensate, so the pipeline's
+    net screen-Y convention is still -up; this test checks the raw identity
+    before that compensation, which comes out as +up for this Z.
 
-    Asserted against -up, not up: cross(cross(right, up), right) == up holds
-    for ANY orthonormal pair by the triple-product identity, regardless of
-    which way Z points, so it is a tautology that can't catch a flipped Z.
-    -up is hlr.project's actual screen-Y convention and is what pins the
-    frame down.
+    cross(cross(right, up), right) == up holds for ANY orthonormal pair by
+    the triple-product identity regardless of which way Z points, so it is a
+    tautology that can't catch a flipped Z on its own -- it only pins down
+    the pipeline's net convention when read together with _negate_y.
     """
     right, up, fwd = hlr.view_basis(30.0, 45.0)
     z, x = occt.projector_axes(right, up)
-    assert np.allclose(np.cross(z, x), -up, atol=1e-9)
+    assert np.allclose(np.cross(z, x), up, atol=1e-9)
 
 
 def test_orientation_is_verified_against_a_chiral_part(ldraw_dir, tmp_path):

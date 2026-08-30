@@ -194,10 +194,30 @@ def count_faces(shape: TopoDS_Shape) -> int:
 
 
 def projector_axes(right, up):
-    """hlr.view_basis builds up = right x forward, so right x up = -forward,
-    and hlr.project's screen-Y is -up. OCCT's image Y = Z x X, so solving
-    Z x right = -up gives Z = forward = -(right x up); X = right."""
-    return -np.cross(right, up), np.asarray(right, float)
+    """Settled empirically (task-6 fix round 1), not by re-deriving the
+    algebra: Z = +cross(right, up), X = +right, with the resulting HLR
+    edge Y negated in edges_to_ops. Three prior derivations -- the frame's
+    own docstring (Z = -cross(right, up) = forward), the numeric box-corner
+    check ((1,2,3) -> (2.8284271, 1.0249440) under both hlr.project and this
+    formula), and a from-scratch review of both -- each verified the 2D
+    screen-mapping identity image-Y = Z x X = -up and were each still wrong,
+    because that identity holds for any of the 8 sign/negation combinations
+    of (Z, X, screen-Y) and says nothing about which side of Z the HLR
+    algorithm treats as the visible one. Z = forward (this frame's original
+    choice) put the virtual eye on the FAR side of the part, so HLRBRep_Algo
+    drew the hidden underside (anti-stud tubes visible, no studs on top) --
+    confirmed by rendering part 3001 and comparing to the naive engine by
+    eye, not by algebra.
+
+    All 8 configurations were rendered for real (part 4070, the naive engine
+    as ground truth) and scored by RMSE against the naive render, direct vs.
+    mirrored both ways -- see task-6-report.md for the full table. Direct
+    RMSE for this configuration is 37.95 against mirrors of 61-63 (a >20-point
+    margin); every other configuration's direct RMSE lands in the 45-88
+    range indistinguishable from its own mirrors. This one wins by a lot;
+    nothing else is close.
+    """
+    return np.cross(right, up), np.asarray(right, float)
 
 
 def hlr_edges(shape, right, up, fwd, cull=True):
@@ -255,6 +275,21 @@ def _edge_ops(edge, kind):
              t0, t1, kind)]
 
 
+def _negate_y(ops):
+    """The winning configuration (see projector_axes) needs HLR's raw Y
+    negated to match hlr.project's screen convention -- settled by the same
+    8-way empirical sweep, not re-derived."""
+    out = []
+    for op in ops:
+        if op[0] == "line":
+            _, x1, y1, x2, y2, k = op
+            out.append(("line", x1, -y1, x2, -y2, k))
+        else:
+            _, cx, cy, ux, uy, vx, vy, t0, t1, k = op
+            out.append(("arc", cx, -cy, ux, -uy, vx, -vy, t0, t1, k))
+    return out
+
+
 def edges_to_ops(compounds):
     """Segment ops for every edge in `compounds` (as returned by hlr_edges),
     keeping kind='sil' for anything from an 'outline*' compound."""
@@ -267,7 +302,7 @@ def edges_to_ops(compounds):
         while ex.More():
             ops += _edge_ops(TopoDS.Edge_s(ex.Current()), kind)
             ex.Next()
-    return ops
+    return _negate_y(ops)
 
 
 def visible_segments(out, right, up, fwd, render_px, cull=True):
