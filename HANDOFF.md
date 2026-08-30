@@ -41,13 +41,25 @@ edges LDraw states, which is what keeps a faceted part from exploding: an
 unauthored tessellation boundary is never a candidate, rather than a candidate
 filtered out.
 
-**Four defect classes remain, across six of the 23 `outline` parts**, all
-visible at a glance in a side-by-side: `3942bp01` draws its cone as a stack of
-rings, `4589` loses the cone body, `50950` mangles the slope, and `3941`,
-`3941p01` and `6143` carry stray dashes on the round wall. `32062` and `50950`
-lose every arc. The rest match naive's shape, several with markedly cleaner
-ink, and drawn line count falls on 21 of 23 — it rises only on `6143` and
-`50950`.
+**Three defect classes remain across the 21 `outline` parts.** `4589` and
+`3942c` both lose geometry at a cone's base ring; `50950` mangles its curved
+slope and loses all 3 of its arcs; `3941` and `6143` draw a band around the
+wall and render their truncated studs whole. `32062` also loses every arc. The
+rest match naive's shape, and several are markedly cleaner — `3649`, `4019`,
+`6589`, `3673` and `32062` each draw less ink for the same drawing.
+
+All three are measured and handed to `occt-port`, whose handoff carries the
+evidence and, for the stud, which causes are already ruled out.
+
+**The gate is unprinted parts only**, because a print is authored as ordinary
+geometry and a strokes-only combo cannot tell it from the part; printed parts
+gate `outline-flat3` instead. `tests/goldens/manifest.toml` has the reasoning
+and the substitutions.
+
+**Review renders at 0.65 stroke opacity**, not full — `scripts/compare-engines.py
+--sheet OUT.png` emits the naive|occt pairs that way. Single strokes read gray
+against doubled ink's black, which is how naive's 30–55% duplicate ink becomes
+visible at all.
 
 **Do not trust any per-part table you find written down, including that one.**
 Every recorded table in this repo has gone stale within a day of being
