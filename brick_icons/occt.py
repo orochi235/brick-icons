@@ -271,4 +271,12 @@ def edges_to_ops(compounds):
 
 
 def visible_segments(out, right, up, fwd, render_px, cull=True):
-    raise NotImplementedError("OCCT engine lands in Task 6")
+    from .hlr import VisResult, _ops_bbox
+    shape = build_shape(out)
+    ops = edges_to_ops(hlr_edges(shape, right, up, fwd, cull=cull))
+    if not ops:
+        raise RuntimeError("OCCT engine produced no edges")
+    bbox = _ops_bbox(ops)
+    span = max(bbox[2] - bbox[0], bbox[3] - bbox[1]) or 1.0
+    s = (render_px - 20) / span
+    return VisResult(ops, bbox, s, faces=(), analytic=())

@@ -10,7 +10,9 @@ from PIL import Image
 
 occt = pytest.importorskip("brick_icons.occt", reason="needs the [occt] extra")
 
-from brick_icons import hlr  # noqa: E402
+from brick_icons import hlr, goldens  # noqa: E402
+from brick_icons.cli import process_one  # noqa: E402
+from brick_icons.config import load_config  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -33,7 +35,7 @@ def _render_svg(part: str, engine: str, out: Path) -> Path | None:
     out.mkdir(parents=True, exist_ok=True)
     proc = subprocess.run(
         [sys.executable, "-m", "brick_icons.cli", part, "--engine", engine,
-         "--out", str(out)],
+         "--format", "svg", "--shading", "outline", "--out", str(out)],
         capture_output=True, text=True, cwd=ROOT)
     svgs = sorted(out.glob("*.svg"))
     if proc.returncode != 0 or not svgs:
@@ -102,16 +104,20 @@ def test_projector_axis_puts_image_y_on_up():
     assert np.allclose(np.cross(z, x), -up, atol=1e-9)
 
 
-@pytest.mark.xfail(reason="needs Task 6's render path", strict=False)
 def test_orientation_is_verified_against_a_chiral_part(ldraw_dir, tmp_path):
     """A 180-degree 'rotation' that appears to fix orientation is a
     reflection: it measured RMSE 0.003 against the MIRROR of the render and
-    0.344 against the render itself. Symmetric parts (brick, cone, round
-    brick) cannot reveal this -- it took a gear's spokes. Hence 4019, and a
-    comparison against the naive engine rather than against its own mirror.
+    0.344 against the render itself. A gear (4019) was tried first and was
+    INCONCLUSIVE -- 0.0458 direct vs 0.0504 mirrored, inside the noise,
+    because a 16-tooth gear is nearly invariant under the very reflection
+    being tested (a part chiral to the eye need not be chiral to the RMSE
+    metric). 4070 (the headlight brick) is asymmetric under BOTH a
+    left-right flip (recessed stud is off-center) and a top-bottom flip
+    (stud on top, notch on the bottom face), so a direct-vs-naive match is
+    real evidence and not an artifact of near-symmetry.
     """
-    naive = _render_svg("4019", "naive", tmp_path / "n")
-    ported = _render_svg("4019", "occt", tmp_path / "o")
+    naive = _render_svg("4070", "naive", tmp_path / "n")
+    ported = _render_svg("4070", "occt", tmp_path / "o")
     if naive is None or ported is None:
         pytest.skip("CLI render unavailable (missing resvg or render failed)")
     rmse_direct, _, note_direct = raster_delta(ported, naive)
@@ -121,6 +127,16 @@ def test_orientation_is_verified_against_a_chiral_part(ldraw_dir, tmp_path):
         pytest.skip(note_direct or note_lr or note_tb or "raster comparison unavailable")
     assert rmse_direct < rmse_lr
     assert rmse_direct < rmse_tb
+
+
+def test_3001_renders_through_the_occt_engine(tmp_path):
+    cfg = load_config(toml_path="labels.toml", root=".",
+                      overrides={"fmt": "svg", "shading": "outline",
+                                 "engine": "occt"})
+    process_one(cfg, "3001", tmp_path)
+    s = goldens.summarize_svg((tmp_path / "3001.svg").read_text())
+    assert s["paths"] > 0
+    assert s["fills"] == {"none": s["paths"]}    # strokes only, no fills
 
 
 def test_circle_edges_become_arc_ops_not_polylines(ldraw_dir):
