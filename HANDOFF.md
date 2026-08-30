@@ -4,15 +4,21 @@ On **`occt-port`**, in the worktree at `.claude/worktrees/occt-port`. HEAD
 `e003722`. `docs/superpowers/specs/2026-08-29-occt-adoption-design.md`
 is the durable record; this covers what changed after it.
 
-**This worktree is not exclusively yours.** A session working `main` committed
-`57d56d1` (a merge of main) into it, and the checkout destroyed uncommitted
-work in `brick_icons/occt.py`. **It was recoverable after all** — that session
-saved it first as `git stash create` and parked it on branch
-`wip/occt-authored-edges` (`7c8cfaa`), which is the `occt.py` you lost, and it
-diffs against `e003722` at 40 insertions / 43 deletions. Delete that branch once
-you have compared them. Commit early here regardless, and check `git log -1`
-before assuming the tree is where you left it. That session re-freezes goldens, so also do not land
-anything that moves `tests/goldens/` without checking with it.
+**A `main` session (`brick-icons-ab`) is driving this branch home — it owns the
+merge to `main` from 2026-08-30 12:40 onward.** Split of work: this branch owns
+the OCCT engine, that session owns integration (merge, goldens gate, README,
+`main`'s handoff). It has no message channel to you, so this paragraph is the
+protocol: if you are resuming engine work, say so here in a commit and it will
+stand down. Otherwise assume `occt-port` is being merged as it stands and
+branch off `main` afterwards rather than committing here.
+
+**The worktree collision, resolved.** That session committed `57d56d1` (a merge
+of main) into this tree and the checkout destroyed uncommitted work in
+`brick_icons/occt.py` — but it was recoverable: saved first via `git stash
+create` and parked on branch `wip/occt-authored-edges` (`7c8cfaa`), 40
+insertions / 43 deletions from `e003722`. Delete that branch once you have
+compared them. Commit early here regardless, and check `git log -1` before
+assuming the tree is where you left it.
 
 ## The facet explosion is fixed at its cause
 
