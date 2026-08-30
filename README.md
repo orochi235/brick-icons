@@ -377,10 +377,17 @@ if it has between 1 and 4 carriers at least as big as a 1x1 round tile's face
 **and** yields something through `unwrap.significant_groups`, writing
 `decal-corpus.txt` from `decal-candidates.txt`. Carrier size alone is a proxy
 and passed 15 parts that still shattered into nothing usable; the second test
-asks the question directly. 343 of 600 candidates survive, carrying 511 SVGs,
+asks the question directly. 393 of 600 candidates survive, carrying 626 SVGs,
 and every one of them extracts at least one decal. Repeated common shapes are
-wanted — `14769` alone holds 92 rows. Exceptions go in
+wanted — 41 of the rows are minifig torsos. Exceptions go in
 `corpus-overrides.toml`, never in the generated file.
+
+`decal-candidates.txt` is the pool it filters, written by
+`select-decal-candidates.py`: 600 parts sampled every-Nth across all 11,220
+printed parts, so the pool spans the id space. Taking a prefix instead — which
+is what it used to be — stopped at `15525` and left the corpus with no classic
+brick, plate or tile. Sampling keeps the library's proportions, so a shape
+carrying many prints contributes many rows; that is coverage, not waste.
 
 Cases live in `tests/goldens/manifest.toml` as data — a part list crossed with
 a flag combo — so adding one is a row, not a code change. There is deliberately
