@@ -236,9 +236,31 @@ where geometry resolves to analytic primitives, and regresses by up to 6679x in
 line count where it falls through to raw triangle facets. Not a clean pass, and
 deliberately not merged.
 
+## READ FIRST: the corpus measurement is STALE
+
+`0aead88` fixed two silent geometry defects found AFTER the corpus run, so every
+number in the design doc's `## Open` and in the task-7 report was measured
+against broken geometry. **Re-run `scripts/compare-engines.py` and replace those
+figures before planning anything off them** (~6 min; `3649` dominates). Both
+defects push the same direction as the regression that was measured — phantom
+caps add edges and occlude, missing rings remove surface — so the line explosion
+and the arc losses are all suspect, not only `6589`.
+
+- `occt_faces` built `cyli`/`con` as CAPPED SOLIDS. `MakeCylinder(...).Shape()`
+  is a solid; LDraw's `cyli`/`con` are open lateral surfaces. Ten phantom caps on
+  `6589` alone, and a bore cylinder's cap sealed the axle hole, so HLR correctly
+  hid geometry behind material the part never had. `.Face()` is the fix.
+- No full-circle `ring` ever produced a face. `TopoDS_Wire.Reversed()` is typed
+  `TopoDS_Shape`, which `MakeFace.Add` refuses, and the `TypeError` was swallowed
+  by `occt_faces`'s blanket `except Exception: return []`. Every full ring in
+  every part silently contributed nothing. The bounded-sector path was
+  unaffected, which is why it hid so well — and it is a standing argument for
+  narrowing that bare `except`.
+
 ## What to do next, in this order
 
-1. **The line explosion** on 9 of 23 parts, now the whole of the gap. Measured
+1. **The line explosion** on 9 of 23 parts — but re-measure first, per the note
+   above; this ranking predates the fix. Previously-measured
    cause is unmerged coplanar triangle facets reaching output —
    `ShapeUpgrade_UnifySameDomain` declining to merge. NOT cylinder seams: those
    were quantified at ~5 of 254 added lines on `3941`, so that hypothesis is
