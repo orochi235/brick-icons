@@ -4,6 +4,10 @@ On **`occt-port`**, in the worktree at `.claude/worktrees/occt-port`. HEAD
 `e003722`. `docs/superpowers/specs/2026-08-29-occt-adoption-design.md`
 is the durable record; this covers what changed after it.
 
+**Engine work RESUMED here on 2026-08-30 13:30** (`c8ef950`..`7a5cef9`) and
+touches `hlr.py` (`VisResult` gains `sil_polys`) and `cli.py` (the shared
+`sil_geom` line) as well as `occt.py`. Re-read those three before merging.
+
 **A `main` session (`brick-icons-ab`) is driving this branch home — it owns the
 merge to `main` from 2026-08-30 12:40 onward.** Split of work: this branch owns
 the OCCT engine, that session owns integration (merge, goldens gate, README,
@@ -217,6 +221,23 @@ they should be, and a guess is worse than the empty.
   Diagnose this class by stubbing `shade.apply_affine_faces` to `[]` on the
   NAIVE engine: it reproduced the barb pixel for pixel, which is what told the
   two apart. Two plausible causes read identically at a glance.
+
+  **The contour turned out to carry outline the strokes never had**, which the
+  barb hid: without it `6143`'s barrel wall silhouette and `99781`'s left edge
+  came out broken. Ink naive has and occt misses drops from 537 to 378
+  (`99781`), 335 to 119 (`6143`) and 391 to 233 (`3941`), with spurious ink
+  flat. `contour_d` re-fits arcs from `res.ellipses`, which the OCCT engine
+  left empty, so it first traced the raw tessellation — 3005's SVG went 21
+  path commands to 147. An arc op's fields 1..6 ARE the tuple
+  `arc_candidates` takes, so the drawn arcs are now the candidates.
+
+  **Still open, and the reason `L` counts sit above naive's** (`99781` 109
+  against 29, `3942bp01` 129 against 27): a silhouette that is a curved
+  SURFACE profile has no drawn arc to snap to, so the contour stays polygonal
+  there. Cosmetic — SVG size, not ink — and it should evaporate when fills
+  supplies real faces. Do not chase it with a coarser mesh; the deflection is
+  a quarter pixel because a coarser contour's chords poke out from behind an
+  exact arc stroke.
 
 ## The crease rule: two wrong answers before the measured one
 
