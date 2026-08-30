@@ -145,15 +145,35 @@ faces, upper-bounding their contribution at roughly 5 of the 254 added lines
 a broader primitive set (sphere/dish, extruded-profile) or a facet-collapse
 pass — both out of scope for this port.
 
-`6589` (Technic Gear 12 Tooth Bevel) loses geometry outright, not just arcs:
-bbox x-min moves from 61.34 to 75.27, and the naive render's cross-shaped
-axle-hole notch inside the bore is entirely absent from the OCCT render —
-confirmed not an occlusion artifact (`hlr.visible_segments(..., cull=False)`
-reports the identical bbox extremes as `cull=True`, so the missing ink isn't
-hidden geometry becoming visible, it was never built). The likely cause:
-`occt_faces` recognizes a `ring` primitive for the bore's flat web as a
-perfect annulus, which cannot represent the true non-circular cutout — the
-same "no primitive for a non-circular hole" gap as `32062`'s axle profile,
-here manifesting as lost material instead of lost arcs. `4740p03`'s smaller
-4.66 bbox shift, by contrast, looks like ordinary facet-vs-analytic silhouette
-noise on the dome, not missing geometry — not confirmed further.
+`6589`'s missing bore geometry is **fixed**; the diagnosis above it in
+task-7-report.md (a `ring` annulus papering over the non-circular cutout) was
+wrong, and so was "the geometry was never built" — it was built and correctly
+hidden. Two independent defects, both silent:
+
+- **`occt_faces` built cylinders and cones as capped solids.**
+  `BRepPrimAPI_MakeCylinder(...).Shape()` is a solid; LDraw's `cyli` and `con`
+  are open lateral surfaces. Each one added two phantom planar caps — 10 of
+  them on `6589` — and the r=9 bore cylinder's cap sealed the axle hole, so
+  HLR hid the cross behind material the part does not have. `.Face()` on the
+  shared `BRepPrimAPI_MakeOneAxis` base is the lateral surface alone.
+- **No full-circle `ring` ever produced a face.** `TopoDS_Wire.Reversed()` is
+  typed `TopoDS_Shape`, which `BRepBuilderAPI_MakeFace.Add` refuses; the
+  `TypeError` went into `occt_faces`'s blanket `except Exception: return []`.
+  All four of `6589`'s rings, and every full ring in every part, silently
+  contributed no surface. The bounded-sector path never hit this — it builds
+  its inner boundary from edges, not a reversed wire.
+
+Both are pinned by area assertions in `tests/test_occt.py`, which separate
+"no face", "face without its hole", and "capped solid" from the correct
+result; a count or existence check distinguishes none of them.
+
+Corpus effect is small and mixed: `3673` 311→260 and `3649` 2730→2318 lines,
+against `3941` 324→340 and `3941p01` 1257→1270. `6589` itself goes 67→257 as
+the recovered bore interior arrives tessellated — mechanism #2 above, now
+reaching a part that was previously hiding it.
+
+**Still open: `6589`'s bbox x-min shift is unchanged at 13.93** (61.34 naive,
+75.27 OCCT), before and after. It never was the axle hole — an interior
+feature cannot move a bbox — so the two symptoms in the same part were
+unrelated and only the notch is resolved. `4589` carries the same signature at
+1.54, also unchanged. Undiagnosed.

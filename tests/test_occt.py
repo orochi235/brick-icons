@@ -1,3 +1,4 @@
+import collections
 import importlib.util
 import math
 import shutil
@@ -211,7 +212,7 @@ def test_circle_edges_become_arc_ops_not_polylines(ldraw_dir):
     pytest.fail("no circle/ellipse edge found in HLR output for 3941")
 
 
-def test_unoccluded_stud_rims_sweep_a_full_360_not_fragments(ldraw_dir):
+def test_unoccluded_stud_rims_sweep_a_full_360(ldraw_dir):
     """task-6 fix round 2: OCCT's FirstParameter/LastParameter are radians,
     and every 'arc' op consumer (trace._arc_to_svg, process.draw_segments)
     reads t0/t1 as degrees. Unconverted, a full circle's 0..2*pi span reads
@@ -222,17 +223,30 @@ def test_unoccluded_stud_rims_sweep_a_full_360_not_fragments(ldraw_dir):
     existence-based assertion cannot catch this; only the actual angular
     span can. 3001's 8 stud top rims are unoccluded by construction (a
     stud's own top-rim silhouette can't be hidden by anything shorter than
-    itself), so each must come back as ONE continuous 360-degree arc, not
-    several fragments summing to something else.
+    itself), so each must be swept exactly once end to end.
+
+    Sewing splits a rim circle where the abutting faces' seams land, so the
+    sweep arrives as several arcs about one centre; summing per centre is
+    what makes this independent of that split. Asserting a single 360-degree
+    op instead passed only while cylinders were built as capped solids,
+    where the phantom cap's boundary circle laid a duplicate full rim over
+    the fragments -- the assertion was reading the artifact, not the rim.
     """
     shape = occt.build_shape(occt.flatten_part("3001", ldraw_dir))
     edges = occt.hlr_edges(shape, *hlr.view_basis(30.0, 45.0)[:2])
     ops = occt.edges_to_ops(edges)
     rim_r = 6.0    # stud rim radius in the part's own primitive units
-    full_rims = [op for op in ops if op[0] == "arc"
-                and math.hypot(op[3], op[4]) == pytest.approx(rim_r, rel=1e-3)
-                and abs(abs(op[8] - op[7]) - 360.0) < 1e-6]
-    assert len(full_rims) == 8
+    sweeps = collections.defaultdict(float)
+    for op in ops:
+        if op[0] != "arc":
+            continue
+        if math.hypot(op[3], op[4]) != pytest.approx(rim_r, rel=1e-3):
+            continue
+        sweeps[(round(op[1], 3), round(op[2], 3))] += abs(op[8] - op[7])
+    full = [c for c, deg in sweeps.items() if deg == pytest.approx(360.0, abs=1e-6)]
+    assert len(full) == 8, dict(sweeps)
+    # the other 8 are the stud BASE rims, half-hidden behind their own stud
+    assert sorted(round(d, 6) for d in sweeps.values()) == [180.0] * 8 + [360.0] * 8
 
 
 def test_outline_compound_edges_are_silhouette_kind(ldraw_dir):
@@ -243,3 +257,112 @@ def test_outline_compound_edges_are_silhouette_kind(ldraw_dir):
     edges = occt.hlr_edges(shape, *hlr.view_basis(30.0, 45.0)[:2])
     ops = occt.edges_to_ops({"outline": edges["outline"]})
     assert ops and all(op[-1] == "sil" for op in ops)
+
+
+def _face_area(face):
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+    g = GProp_GProps()
+    BRepGProp.SurfaceProperties_s(face, g)
+    return g.Mass()
+
+
+def test_full_ring_face_has_its_hole():
+    """ringN at 360 degrees must come out as an annulus, not a disc and not
+    nothing. `TopoDS_Wire.Reversed()` returns a TopoDS_SHAPE, which
+    `BRepBuilderAPI_MakeFace.Add` rejects outright -- and `occt_faces` catches
+    every exception and returns [], so the ring vanished from the sewn solid
+    with no error anywhere. Area is what separates the three outcomes: an
+    empty list, a disc (pi*r_out^2), and the annulus.
+    """
+    prim = P("ring", np.diag([3.0, 1.0, 3.0]), np.zeros(3), inner=3)
+    faces = occt.occt_faces(prim)
+    assert len(faces) == 1
+    # inner 3*3 = 9, outer (3+1)*3 = 12
+    assert _face_area(faces[0]) == pytest.approx(math.pi * (144 - 81), rel=1e-6)
+
+
+def test_ring_sector_face_has_its_hole():
+    """The bounded-sector path builds the inner boundary from real edges
+    rather than a reversed wire, so it never hit the bug above -- pinned so a
+    shared refactor of annulus_face can't regress it silently."""
+    prim = P("ring", np.diag([3.0, 1.0, 3.0]), np.zeros(3), sector=90.0, inner=3)
+    faces = occt.occt_faces(prim)
+    assert len(faces) == 1
+    assert _face_area(faces[0]) == pytest.approx(math.pi * (144 - 81) / 4, rel=1e-6)
+
+
+def test_6589_bore_geometry_survives_into_the_shape(ldraw_dir):
+    """6589's hub is four ring webs; with them dropped the axle-hole geometry
+    behind them lost its surround and the render came back a blank disc.
+    Guards the part-level consequence, not just the face builder."""
+    out = occt.flatten_part("6589", ldraw_dir)
+    rings = [p for p in out["analytic"] if p.kind == "ring"]
+    assert rings, "6589 is expected to carry ring primitives"
+    assert all(occt.occt_faces(p) for p in rings)
+
+
+def _surface_types(shape):
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.TopoDS import TopoDS
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopAbs import TopAbs_ShapeEnum
+    out = []
+    ex = TopExp_Explorer(shape, TopAbs_ShapeEnum.TopAbs_FACE)
+    while ex.More():
+        out.append(BRepAdaptor_Surface(TopoDS.Face_s(ex.Current())).GetType())
+        ex.Next()
+    return out
+
+
+def test_cylinder_is_an_open_tube_not_a_capped_solid():
+    """LDraw's `cyli` is the lateral surface alone -- open at both ends.
+    `BRepPrimAPI_MakeCylinder(...).Shape()` hands back a SOLID, whose two
+    planar end caps are material the part never had. On 6589 the r=9 bore
+    cylinder's cap sealed the axle hole and HLR correctly hid the cross
+    behind it, which read as "OCCT lost the geometry"."""
+    from OCP.GeomAbs import GeomAbs_SurfaceType
+    prim = P("cyli", np.diag([9.0, 3.0, 9.0]), np.zeros(3))
+    faces = occt.occt_faces(prim)
+    assert len(faces) == 1
+    kinds = _surface_types(faces[0])
+    assert kinds == [GeomAbs_SurfaceType.GeomAbs_Cylinder], f"got {kinds}"
+    assert _face_area(faces[0]) == pytest.approx(2 * math.pi * 9.0 * 3.0, rel=1e-6)
+
+
+def test_cone_is_an_open_skirt_not_a_capped_solid():
+    """Same cap trap as the cylinder, via the shared BRepPrimAPI_MakeOneAxis
+    base: `.Shape()` is a solid, `.Face()` is the lateral surface."""
+    from OCP.GeomAbs import GeomAbs_SurfaceType
+    prim = P("con", np.diag([2.0, 2.5, 2.0]), np.zeros(3), top=5)
+    faces = occt.occt_faces(prim)
+    assert len(faces) == 1
+    kinds = _surface_types(faces[0])
+    assert kinds == [GeomAbs_SurfaceType.GeomAbs_Cone], f"got {kinds}"
+    r_base, r_top = occt.cone_radii(prim)          # 12 and 10
+    slant = math.hypot(r_base - r_top, 2.5)
+    assert _face_area(faces[0]) == pytest.approx(
+        math.pi * (r_base + r_top) * slant, rel=1e-6)
+
+
+def test_cylinder_sector_keeps_its_sweep_without_caps():
+    prim = P("cyli", np.diag([9.0, 3.0, 9.0]), np.zeros(3), sector=90.0)
+    faces = occt.occt_faces(prim)
+    assert len(faces) == 1
+    assert _face_area(faces[0]) == pytest.approx(2 * math.pi * 9.0 * 3.0 / 4, rel=1e-6)
+
+
+def test_no_analytic_primitive_of_6589_contributes_a_cap(ldraw_dir):
+    """Part-level guard: every face 6589's recognized primitives contribute is
+    a curved surface or an annulus wire-bounded plane -- never a full disc
+    sealing the bore."""
+    from OCP.GeomAbs import GeomAbs_SurfaceType
+    out = occt.flatten_part("6589", ldraw_dir)
+    caps = []
+    for p in out["analytic"]:
+        if p.kind not in ("cyli", "con"):
+            continue
+        for f in occt.occt_faces(p):
+            caps += [t for t in _surface_types(f)
+                     if t == GeomAbs_SurfaceType.GeomAbs_Plane]
+    assert caps == [], f"{len(caps)} phantom cap face(s) on 6589"

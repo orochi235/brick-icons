@@ -90,7 +90,9 @@ def annulus_face(origin, ah, uh, r_in, r_out, ang):
     if r_in > 1e-9:
         inner = BRepBuilderAPI_MakeEdge(gp_Circ(a, r_in)).Edge()
         wi = BRepBuilderAPI_MakeWire(inner).Wire()
-        mf.Add(wi.Reversed())
+        # Reversed() is typed TopoDS_Shape, which MakeFace.Add refuses; without
+        # the downcast every full ring raised and occt_faces swallowed it.
+        mf.Add(TopoDS.Wire_s(wi.Reversed()))
     return mf.Face()
 
 
@@ -123,14 +125,17 @@ def occt_faces(prim):
     if not rh:
         uh = math.cos(-ang) * np.asarray(uh, float) + math.sin(-ang) * np.cross(ah, uh)
     try:
+        # .Face() is the LATERAL surface; .Shape() would be a capped solid, and
+        # LDraw's cyli/con are open tubes and skirts -- the caps are material
+        # the part never had, and they occlude whatever sits inside the tube.
         if k == "cyli":
-            return [BRepPrimAPI_MakeCylinder(ax2(o, zdir, uh), r, h, ang).Shape()]
+            return [BRepPrimAPI_MakeCylinder(ax2(o, zdir, uh), r, h, ang).Face()]
         if k == "con":
             # conN: radius N+1 at the base tapering to N at the top, both in
             # primitive units, so the matrix scale r multiplies BOTH.
             r_base, r_top = _cone_radii(r, float(prim.top))
             return [BRepPrimAPI_MakeCone(ax2(o, zdir, uh),
-                                         r_base, r_top, h, ang).Shape()]
+                                         r_base, r_top, h, ang).Face()]
         if k == "disc":
             return [annulus_face(o, zdir, uh, 0.0, r, ang)]
         if k == "ring":
