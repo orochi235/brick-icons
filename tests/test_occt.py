@@ -366,3 +366,39 @@ def test_no_analytic_primitive_of_6589_contributes_a_cap(ldraw_dir):
             caps += [t for t in _surface_types(f)
                      if t == GeomAbs_SurfaceType.GeomAbs_Plane]
     assert caps == [], f"{len(caps)} phantom cap face(s) on 6589"
+
+
+def test_authored_condlines_are_tagged_smooth(ldraw_dir):
+    """A type-5 conditional line declares its edge INTERIOR to one smooth
+    surface. Untagged, every tessellation boundary reaches HLR as a hard edge
+    and draws — 3941's wall goes 70 lines to 324."""
+    out = occt.flatten_part("3941", ldraw_dir)
+    assert out["5"], "3941 must author condlines for this test to mean anything"
+    shape = occt.build_shape(out)
+    edges = occt.hlr_edges(shape, np.array([1.0, 0, 0]), np.array([0, 1.0, 0]))
+    smooth = edges.get("smooth")
+    assert smooth is not None and not smooth.IsNull(), (
+        "condline edges must land in the smooth (Rg1Line) compound")
+
+
+def test_smooth_edges_are_not_drawn(ldraw_dir):
+    """LDraw's rule: a conditional line is invisible until it IS the
+    silhouette. The silhouette still arrives via the outline compound, so
+    dropping the smooth compound is that rule, not a loss."""
+    out = occt.flatten_part("3941", ldraw_dir)
+    shape = occt.build_shape(out)
+    comps = occt.hlr_edges(shape, np.array([1.0, 0, 0]), np.array([0, 1.0, 0]))
+    assert comps.get("smooth") is not None
+    from OCP.TopAbs import TopAbs_ShapeEnum
+    from OCP.TopExp import TopExp_Explorer
+    ex, n_smooth = TopExp_Explorer(comps["smooth"],
+                                   TopAbs_ShapeEnum.TopAbs_EDGE), 0
+    while ex.More():
+        n_smooth += 1
+        ex.Next()
+    assert n_smooth, "fixture must actually have smooth edges"
+    drawn = occt.edges_to_ops(comps)
+    without = occt.edges_to_ops(
+        {k: v for k, v in comps.items() if k != "smooth"})
+    assert len(drawn) == len(without), (
+        "smooth edges must not contribute drawn ops")

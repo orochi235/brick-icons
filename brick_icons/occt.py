@@ -19,7 +19,10 @@ from OCP.BRepBuilderAPI import (BRepBuilderAPI_MakePolygon, BRepBuilderAPI_MakeF
                                 BRepBuilderAPI_Sewing)
 from OCP.TopoDS import TopoDS_Shape, TopoDS
 from OCP.TopAbs import TopAbs_ShapeEnum
-from OCP.TopExp import TopExp_Explorer
+from OCP.TopExp import TopExp_Explorer, TopExp
+from OCP.TopTools import TopTools_IndexedDataMapOfShapeListOfShape
+from OCP.BRep import BRep_Builder, BRep_Tool
+from OCP.GeomAbs import GeomAbs_Shape
 from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
 from OCP.HLRBRep import HLRBRep_Algo, HLRBRep_HLRToShape
 from OCP.HLRAlgo import HLRAlgo_Projector
@@ -174,6 +177,95 @@ def flatten_part(part: str, ldraw_dir) -> dict:
     return out
 
 
+def _seg_key(a, b):
+    ka = tuple(np.round(np.asarray(a, float), 3))
+    kb = tuple(np.round(np.asarray(b, float), 3))
+    return (ka, kb) if ka <= kb else (kb, ka)
+
+
+def _authored_circles(out: dict):
+    """(centre, axis, radius) for every `edge` primitive.
+
+    A stud rim is authored as a 4-4edge primitive, not as type-2 lines, so it
+    reaches here as an analytic prim contributing no surface. It is still an
+    authored edge, and matching it by endpoints cannot work — a full circle's
+    two ends are the same seam point.
+    """
+    out_ = []
+    for prim in out["analytic"]:
+        if prim.kind != "edge":
+            continue
+        f = frame(prim)
+        if f is None:
+            continue
+        o, _uh, ah, _vh, r, _h, _rh = f
+        out_.append((np.asarray(o, float), np.asarray(ah, float), float(r)))
+    return out_
+
+
+def _on_authored_circle(edge, circles) -> bool:
+    if not circles:
+        return False
+    try:
+        ad = BRepAdaptor_Curve(edge)
+        if ad.GetType() != GeomAbs_CurveType.GeomAbs_Circle:
+            return False
+        c = ad.Circle()
+        loc = np.array([c.Location().X(), c.Location().Y(), c.Location().Z()])
+        ax = np.array([c.Axis().Direction().X(), c.Axis().Direction().Y(),
+                       c.Axis().Direction().Z()])
+        r = c.Radius()
+    except Exception:
+        return False
+    for o, ah, rr in circles:
+        if (abs(r - rr) < 1e-3 and np.linalg.norm(loc - o) < 1e-3
+                and abs(abs(float(ax @ ah)) - 1.0) < 1e-3):
+            return True
+    return False
+
+
+def tag_smooth_edges(shape: TopoDS_Shape, out: dict) -> int:
+    """Mark every sewn edge NOT authored as a real edge G1, so HLR files it
+    as smooth and it is drawn only where it becomes the silhouette.
+
+    LDraw states its edges rather than implying them: type-2 lines (and the
+    `edge` primitives that carry a rim circle) are the creases, and everything
+    else in a mesh interior is tessellation. Untagged, each interior boundary
+    defaults to C0 and HLR reports it as a crease — which is the whole facet
+    explosion, 4740p03 at 2 lines naive against 13359.
+
+    Declaration, not angle: 4740p03 authors NO type-2 edges at all, and its
+    stacked cone bands meet at genuinely different pitches, so any dihedral
+    threshold draws them and every one of them is wrong.
+    """
+    keys = {_seg_key(np.asarray(e, float)[0], np.asarray(e, float)[1])
+            for e in out.get("2", ())}
+    circles = _authored_circles(out)
+    amap = TopTools_IndexedDataMapOfShapeListOfShape()
+    TopExp.MapShapesAndAncestors_s(shape, TopAbs_ShapeEnum.TopAbs_EDGE,
+                                   TopAbs_ShapeEnum.TopAbs_FACE, amap)
+    builder, tagged = BRep_Builder(), 0
+    for i in range(1, amap.Extent() + 1):
+        edge = TopoDS.Edge_s(amap.FindKey(i))
+        v = []
+        ex = TopExp_Explorer(edge, TopAbs_ShapeEnum.TopAbs_VERTEX)
+        while ex.More():
+            p = BRep_Tool.Pnt_s(TopoDS.Vertex_s(ex.Current()))
+            v.append((p.X(), p.Y(), p.Z()))
+            ex.Next()
+        if len(v) >= 2 and _seg_key(v[0], v[-1]) in keys:
+            continue                  # authored as a real edge: keep it sharp
+        if _on_authored_circle(edge, circles):
+            continue
+        faces = list(amap.FindFromIndex(i))
+        if len(faces) != 2:
+            continue                  # a boundary edge has no joint to smooth
+        builder.Continuity(edge, TopoDS.Face_s(faces[0]),
+                           TopoDS.Face_s(faces[1]), GeomAbs_Shape.GeomAbs_G1)
+        tagged += 1
+    return tagged
+
+
 def build_shape(out: dict) -> TopoDS_Shape:
     sew = BRepBuilderAPI_Sewing(TOL)
     for prim in out["analytic"]:
@@ -192,6 +284,7 @@ def build_shape(out: dict) -> TopoDS_Shape:
         shape = u.Shape()
     except Exception:
         pass
+    tag_smooth_edges(shape, out)
     return shape
 
 
@@ -311,10 +404,15 @@ def _negate_y(ops):
 
 def edges_to_ops(compounds):
     """Segment ops for every edge in `compounds` (as returned by hlr_edges),
-    keeping kind='sil' for anything from an 'outline*' compound."""
+    keeping kind='sil' for anything from an 'outline*' compound.
+
+    Smooth (Rg1Line) edges are NOT drawn: they are interior to one surface,
+    and where such an edge does read as an outline the projector already
+    emits it in the outline compound. That is LDraw's conditional line.
+    """
     ops = []
     for name, comp in compounds.items():
-        if comp is None:
+        if comp is None or name.startswith("smooth"):
             continue
         kind = "sil" if name.startswith("outline") else "line"
         ex = TopExp_Explorer(comp, TopAbs_ShapeEnum.TopAbs_EDGE)
