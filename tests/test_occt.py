@@ -368,37 +368,60 @@ def test_no_analytic_primitive_of_6589_contributes_a_cap(ldraw_dir):
     assert caps == [], f"{len(caps)} phantom cap face(s) on 6589"
 
 
-def test_authored_condlines_are_tagged_smooth(ldraw_dir):
-    """A type-5 conditional line declares its edge INTERIOR to one smooth
-    surface. Untagged, every tessellation boundary reaches HLR as a hard edge
-    and draws — 3941's wall goes 70 lines to 324."""
-    out = occt.flatten_part("3941", ldraw_dir)
-    assert out["5"], "3941 must author condlines for this test to mean anything"
-    shape = occt.build_shape(out)
-    edges = occt.hlr_edges(shape, np.array([1.0, 0, 0]), np.array([0, 1.0, 0]))
-    smooth = edges.get("smooth")
-    assert smooth is not None and not smooth.IsNull(), (
-        "condline edges must land in the smooth (Rg1Line) compound")
-
-
-def test_smooth_edges_are_not_drawn(ldraw_dir):
-    """LDraw's rule: a conditional line is invisible until it IS the
-    silhouette. The silhouette still arrives via the outline compound, so
-    dropping the smooth compound is that rule, not a loss."""
-    out = occt.flatten_part("3941", ldraw_dir)
-    shape = occt.build_shape(out)
-    comps = occt.hlr_edges(shape, np.array([1.0, 0, 0]), np.array([0, 1.0, 0]))
-    assert comps.get("smooth") is not None
+def _n_edges(comp):
     from OCP.TopAbs import TopAbs_ShapeEnum
     from OCP.TopExp import TopExp_Explorer
-    ex, n_smooth = TopExp_Explorer(comps["smooth"],
-                                   TopAbs_ShapeEnum.TopAbs_EDGE), 0
+    ex, n = TopExp_Explorer(comp, TopAbs_ShapeEnum.TopAbs_EDGE), 0
     while ex.More():
-        n_smooth += 1
+        n += 1
         ex.Next()
-    assert n_smooth, "fixture must actually have smooth edges"
-    drawn = occt.edges_to_ops(comps)
-    without = occt.edges_to_ops(
-        {k: v for k, v in comps.items() if k != "smooth"})
-    assert len(drawn) == len(without), (
-        "smooth edges must not contribute drawn ops")
+    return n
+
+
+def test_only_authored_edges_are_candidates(ldraw_dir):
+    """LDraw states its edges; it does not imply them. Feeding the faces to
+    HLR for occlusion only, and the authored edges as edge-shapes, makes an
+    unauthored facet boundary structurally undrawable -- 4740p03 authors no
+    type-2 lines at all and drew 13359 when every sewn edge was a candidate."""
+    out = occt.flatten_part("4740p03", ldraw_dir)
+    assert not out["2"], "4740p03 must author no type-2 lines for this to mean anything"
+    right, up = np.array([1.0, 0, 0]), np.array([0, 1.0, 0])
+    shape = occt.build_shape(out)
+    hard, cond = occt.authored_edges(out, right, up)
+    every = occt.hlr_edges(shape, right, up)
+    only = occt.hlr_edges(shape, right, up, edges=hard, cond=cond)
+    assert _n_edges(every["sharp"]) > 1000, "fixture must have a facet explosion to suppress"
+    assert _n_edges(only["sharp"]) < 50
+
+
+def test_condline_is_drawn_only_when_it_reads_as_silhouette(ldraw_dir):
+    """A type-5 conditional line is invisible until it IS the silhouette --
+    which is what a tessellated dish has instead of one, since HLR's outline
+    compound reports the true silhouette of an analytic surface only."""
+    out = occt.flatten_part("3960", ldraw_dir)
+    assert out["5"], "3960 must author condlines for this test to mean anything"
+    right, up = np.array([1.0, 0, 0]), np.array([0, 1.0, 0])
+    _hard, cond = occt.authored_edges(out, right, up)
+    assert 0 < _n_edges(cond) < len(out["5"]) // 10, (
+        "a condline must be drawn only where its control points agree")
+
+
+def test_analytic_crease_skips_the_parametric_seam(ldraw_dir):
+    """A closed surface's seam has the same face on both sides. Kept, it draws
+    a radial line from 4740's stud to its rim that no edge of the part has."""
+    out = occt.flatten_part("4740", ldraw_dir)
+    shape = occt.build_shape(out)
+    creases = occt.analytic_creases(shape, out)
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.GeomAbs import GeomAbs_CurveType
+    from OCP.TopoDS import TopoDS
+    from OCP.TopAbs import TopAbs_ShapeEnum
+    from OCP.TopExp import TopExp_Explorer
+    ex = TopExp_Explorer(creases, TopAbs_ShapeEnum.TopAbs_EDGE)
+    kinds = []
+    while ex.More():
+        kinds.append(BRepAdaptor_Curve(TopoDS.Edge_s(ex.Current())).GetType())
+        ex.Next()
+    assert kinds, "4740's dish rim must survive as a crease"
+    assert all(k == GeomAbs_CurveType.GeomAbs_Circle for k in kinds), (
+        "a straight crease here is the cylinder seam, which is not an edge")
