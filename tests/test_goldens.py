@@ -241,7 +241,9 @@ def test_outline_combo_is_strokes_only():
     shading too, which is a separate track (Skia PathOps, evaluated
     elsewhere).
     """
-    for p in (GOLDENS / "render").glob("outline__*.json"):
+    files = list((GOLDENS / "render").glob("outline__*.json"))
+    assert files, "No outline golden cases found; corpus missing or mislocated"
+    for p in files:
         fills = json.loads(p.read_text())["fills"]
         assert set(fills) <= {"none"}, f"{p.name} has fills: {fills}"
 
