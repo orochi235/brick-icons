@@ -1,17 +1,121 @@
-# Handoff — decal extraction, then the conformance baseline
+# Handoff — OCCT hidden-line port
 
-All on **`main`**, working tree clean. 473 tests pass.
+On **`occt-port`**, in the worktree at `.claude/worktrees/occt-port`. HEAD
+`e76596a`, tree clean, 497 passed / 3 skipped. `docs/superpowers/specs/2026-08-29-occt-adoption-design.md`
+is the durable record; this covers what changed after it.
 
-The golden baseline the engine swap needs is **done and merged** — see "The
-regression gate: answered" below.
+**The session that started this port is gone** (its transcript stops at 02:16,
+no process holds the worktree). This worktree is unowned — take it. A separate
+live session works decal/library restore on `main`; it re-freezes goldens, so
+do not land anything that moves `tests/goldens/` without checking with it.
 
-**The OCCT port is already underway in another session, in its own worktree —
-do not start a second one.** First slice is hidden-line removal only, no
-fills, behind `--engine occt`, gating on the `outline` combo added in
-`88e1ffd`. Check with that session before touching `hlr.py` or
-`primitives.py`.
-`docs/superpowers/plans/2026-08-28-decal-unwrap.md` is still the durable record
-of phase 2; this covers what landed on top of it.
+## The facet explosion is fixed at its cause
+
+`build_shape` sewed one face per triangle and drew whatever HLR called sharp,
+so every tessellation boundary became a crease — `4740p03` drew 13359 lines
+against naive's 2.
+
+**LDraw states its edges; it does not imply them.** Type-2 lines and the `edge`
+primitives that carry a rim circle are the creases. Everything else in a mesh
+interior is tessellation. Every sewn edge without that backing is now tagged
+G1 (`BRep_Builder::Continuity`), which files it under `Rg1LineVCompound`, and
+`edges_to_ops` does not draw that compound. An edge that genuinely reads as an
+outline still arrives via `OutLineVCompound` — which is exactly what a
+conditional line means.
+
+Use the **positive** declaration (type-2), not type-5. `4740p03` authors NO
+type-2 edges and naive draws it in 2 lines; tagging from condlines instead
+reaches only 5 of its 2401 edges. And never infer from dihedral angle: that
+part's cone bands meet at genuinely different pitches and are smooth only by
+declaration.
+
+Unprinted parts, drawn L-commands, naive vs occt: `4740` 6/4, `3040b` 41/32,
+`3068b` 31/21, `3001` 52/41, `32062` 142/79, `3960` 6/56, `3673` 103/186.
+
+## Next: draw authored edges + silhouette, nothing else
+
+The G1 route has a structural limit — `Continuity` needs TWO faces, and an
+edge on one face cannot be tagged, so it defaults to sharp and draws. `3960`
+has 326 such edges, `3673` 234. They are unmerged coincident edges the sewing
+never stitched; raising `TOL` to a reckless 0.05 LDU only takes 326 to 147.
+
+So stop drawing HLR's `sharp` compound at all. Feed faces to HLR **for
+occlusion**, and draw only the authored edges (added to `HLRBRep_Algo` as
+edge-shapes, so they are hidden-line-removed against the faces) plus
+`OutLineVCompound`. That is naive's model with exact occlusion and exact
+curves, and it makes the explosion structurally impossible rather than
+filtered: an unauthored boundary is never a candidate, so it cannot leak
+through a tagging gap, a sewing crack, or a 1-face edge. `_seg_key` and
+`_authored_circles` carry over as the edge source; the G1 tagging retires.
+
+It also kills the doubled ink below, since authored lines are unique by
+construction.
+
+## Open defects, measured
+
+- **Doubled ink.** Two 3-point polylines sharing one of their two segments, so
+  that leg is drawn twice — `3005`/`3001`/`3040b` at the stud annulus.
+  Invisible at full opacity; only the x-ray below shows it.
+- **Sliver faces.** `3673` has 77 of 112 paths >60% covered by another,
+  including closed micro-triangles; `3941` 56 of 166 retraced, `3649` 66 of
+  985. Degenerate faces reaching HLR.
+- **`32062` loses every arc** (naive 19, occt 0): a "+"-profile extrusion no
+  primitive matches.
+- **`3673`'s notch is under-drawn by NAIVE.** Occlusion removes 66 of its 136
+  segments. Not a port bug — a place not to match naive.
+
+## Naive is the reference, but it is not ground truth
+
+It lays down **30–55% duplicate ink** on almost every part (share of inked
+cells touched by 2+ paths, 0.3-unit grid): `3068b` 54.9%, `3005` 54.5%,
+`3040b` 53.7%, `4740` 43.8%, against OCCT's 1–5%. On `4740` it inks 4735 cells
+to OCCT's 1575 for a simpler drawing. Converge on naive's *shape*, not its
+stroke count, and expect to beat it on duplicates.
+
+## The lab (next project, spans two repos)
+
+Marking regions and paths right/wrong, built on `~/src/weasel` +
+`packages/labkit` (weasel gives path hit-testing, area-select and compound
+paths; labkit gives `CanvasStack` pan/zoom, `ControlPanel`, `state`
+persistence, `trial`/`instrument`). It answers the blocker the spike named:
+goldens assert bytes and all go red when output changes by design, whereas a
+label asserts geometry and survives an engine change.
+
+**It needs provenance from brick-icons first, or it can only mark pixels.**
+Emit a sidecar JSON per render, one row per drawn op: source compound
+(`sharp`/`smooth`/`outline`), what backs it (type-2 index, `edge` prim
+centre+radius, or silhouette), 3D endpoints, SVG element index. `_edge_ops`
+already knows all of this and discards it. Then a label reads "the type-2 edge
+p1->p2 is drawn twice" — true of the part, checkable against any engine,
+surviving any arc re-split.
+
+The 3D pivot minimap wants NO 3D engine: the thing to pivot is a wireframe of
+authored edges, whose 3D endpoints the sidecar already carries, so project
+them in JS and draw them as weasel paths. Selection then works identically in
+both views against the same anchor, and nothing shades over the edges you are
+marking. It matters because HLR bugs are view-dependent — pivoting is how you
+separate two coincident strokes, and how you check an edge that vanishes at
+30/45 reappears when it should.
+
+## Traps
+
+- **`goldens.summarize_svg`'s bbox is built from path ENDPOINTS** and never
+  samples an arc's sweep, so re-splitting arcs moves it with no ink moving.
+  91% of `6589`'s recorded 13.93 x-min shift was this; `4589`'s 1.54 and
+  `4740p03`'s 4.66 were artifact in full. `scripts/compare-extents.py` reports
+  reported-vs-swept. Every `tests/goldens/render/*.json` stores the endpoint
+  bbox, so correcting the measure re-freezes all of them.
+- **Inlining several rendered SVGs into one HTML page cross-clips them.**
+  `trace.py:303` hard-codes `id="sclip"`, so every duplicate after the first
+  resolves to the first card's silhouette. Namespace ids per card. The repo's
+  own gallery scripts are safe (separate files, rasterized), but a consumer
+  embedding an icon set inline is not.
+- **Look at overlap with translucent strokes + `mix-blend-mode: multiply`.**
+  One stroke reads pale, two read twice as dark. Every duplicate found today
+  was invisible at full opacity.
+- **A clipPath is not ink.** Counting it put naive's silhouette outset in my
+  extent measurement and produced a phantom constant inset on all 23 parts,
+  including ones where the engines agree byte-for-byte.
 
 **Next up is an engine swap.** The seam is narrower than it looks: the CLI
 touches the engine only through `hlr.visible_segments` (view path) and
