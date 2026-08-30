@@ -17,12 +17,15 @@ from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder, BRepPrimAPI_MakeCone
 from OCP.BRepBuilderAPI import (BRepBuilderAPI_MakePolygon, BRepBuilderAPI_MakeFace,
                                 BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeWire,
                                 BRepBuilderAPI_Sewing)
-from OCP.TopoDS import TopoDS_Shape
+from OCP.TopoDS import TopoDS_Shape, TopoDS
 from OCP.TopAbs import TopAbs_ShapeEnum
 from OCP.TopExp import TopExp_Explorer
 from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
 from OCP.HLRBRep import HLRBRep_Algo, HLRBRep_HLRToShape
 from OCP.HLRAlgo import HLRAlgo_Projector
+from OCP.BRepAdaptor import BRepAdaptor_Curve
+from OCP.GeomAbs import GeomAbs_CurveType
+from OCP.GCPnts import GCPnts_QuasiUniformDeflection
 
 from . import hlr
 
@@ -222,6 +225,49 @@ def hlr_edges(shape, right, up, fwd, cull=True):
         except Exception:
             got[name] = None
     return got
+
+
+def _edge_ops(edge, kind):
+    """Segment ops for one edge, reading its analytic curve type rather than
+    discretizing -- HLR hands back real circles and ellipses to read off."""
+    c = BRepAdaptor_Curve(edge)
+    t0, t1 = c.FirstParameter(), c.LastParameter()
+    t = c.GetType()
+    if t == GeomAbs_CurveType.GeomAbs_Line:
+        p, q = c.Value(t0), c.Value(t1)
+        return [("line", p.X(), p.Y(), q.X(), q.Y(), kind)]
+    if t == GeomAbs_CurveType.GeomAbs_Circle:
+        g = c.Circle()
+        r_maj = r_min = g.Radius()
+    elif t == GeomAbs_CurveType.GeomAbs_Ellipse:
+        g = c.Ellipse()
+        r_maj, r_min = g.MajorRadius(), g.MinorRadius()
+    else:
+        d = GCPnts_QuasiUniformDeflection(c, 0.05)
+        pts = [c.Value(d.Parameter(i + 1)) for i in range(d.NbPoints())]
+        return [("line", a.X(), a.Y(), b.X(), b.Y(), kind)
+                for a, b in zip(pts, pts[1:])]
+    ctr = g.Location()
+    ax = g.Position()
+    u, v = ax.XDirection(), ax.YDirection()
+    return [("arc", ctr.X(), ctr.Y(),
+             u.X() * r_maj, u.Y() * r_maj, v.X() * r_min, v.Y() * r_min,
+             t0, t1, kind)]
+
+
+def edges_to_ops(compounds):
+    """Segment ops for every edge in `compounds` (as returned by hlr_edges),
+    keeping kind='sil' for anything from an 'outline*' compound."""
+    ops = []
+    for name, comp in compounds.items():
+        if comp is None:
+            continue
+        kind = "sil" if name.startswith("outline") else "line"
+        ex = TopExp_Explorer(comp, TopAbs_ShapeEnum.TopAbs_EDGE)
+        while ex.More():
+            ops += _edge_ops(TopoDS.Edge_s(ex.Current()), kind)
+            ex.Next()
+    return ops
 
 
 def visible_segments(out, right, up, fwd, render_px, cull=True):

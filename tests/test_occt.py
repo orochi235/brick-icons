@@ -121,3 +121,21 @@ def test_orientation_is_verified_against_a_chiral_part(ldraw_dir, tmp_path):
         pytest.skip(note_direct or note_lr or note_tb or "raster comparison unavailable")
     assert rmse_direct < rmse_lr
     assert rmse_direct < rmse_tb
+
+
+def test_circle_edges_become_arc_ops_not_polylines(ldraw_dir):
+    """The whole point of the port: a projected stud rim arrives as a curve,
+    so nothing has to guess a circle back out of a chord polygon."""
+    shape = occt.build_shape(occt.flatten_part("3941", ldraw_dir))
+    ops = occt.edges_to_ops(occt.hlr_edges(shape, *hlr.view_basis(30.0, 45.0)))
+    assert any(op[0] == "arc" for op in ops)
+
+
+def test_outline_compound_edges_are_silhouette_kind(ldraw_dir):
+    """`kind == 'sil'` selects --silhouette-width downstream. The kernel
+    reports the sharp/smooth/silhouette split directly, so this is kernel
+    output rather than the inference the naive engine does."""
+    shape = occt.build_shape(occt.flatten_part("3941", ldraw_dir))
+    edges = occt.hlr_edges(shape, *hlr.view_basis(30.0, 45.0))
+    ops = occt.edges_to_ops({"outline": edges["outline"]})
+    assert ops and all(op[-1] == "sil" for op in ops)
