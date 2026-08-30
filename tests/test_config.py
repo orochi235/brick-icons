@@ -102,3 +102,11 @@ def test_unknown_color_raises():
     from brick_icons.colors import UnknownColorError
     with pytest.raises(UnknownColorError):
         load_config(overrides={"part_color": "chartreuse"}, root=".")
+
+
+def test_engine_defaults_to_naive():
+    assert load_config(root=".").engine == "naive"
+
+
+def test_engine_override():
+    assert load_config(root=".", overrides={"engine": "occt"}).engine == "occt"

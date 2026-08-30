@@ -33,6 +33,7 @@ DEFAULTS = {
     "curve_quality": 12,     # LDView curve subdivision (max)
     "angle": "iso",          # preset or "LAT,LONG"
     "shading": "normal",     # normal | cel | outline
+    "engine": "naive",       # naive | occt  (occt needs the [occt] extra)
     "cel_levels": 4,         # bands for cel shading
     "line_width": 2,         # outline edge stroke, output px
     "silhouette_width": 2,   # smooth-silhouette stroke (cylinder limbs,
@@ -75,6 +76,7 @@ class Config:
     curve_quality: int
     angle: str
     shading: str
+    engine: str
     cel_levels: int
     line_width: int
     silhouette_width: int
@@ -141,6 +143,7 @@ def load_config(toml_path=None, overrides=None, root="."):
         curve_quality=int(data["curve_quality"]),
         angle=str(data["angle"]),
         shading=str(data["shading"]),
+        engine=str(data["engine"]),
         cel_levels=int(data["cel_levels"]),
         line_width=int(data["line_width"]),
         silhouette_width=int(data["silhouette_width"]),

@@ -974,7 +974,7 @@ def part_geometry(part: str, ldraw_dir):
 
 
 def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
-                     cull=True):
+                     cull=True, engine="naive"):
     roots = default_roots(ldraw_dir)
     path = _resolve_input(part, roots)
     out = {"2": [], "5": [], "tri": [], "tri_meta": [], "analytic": []}
@@ -991,6 +991,9 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
     # any part that gains one needs the analytic pipeline to draw it
     out["fit_arcs"], out["2"] = arcfit.fit_edge_arcs(out["2"], out["5"])
     right, up, fwd = view_basis(lat, long)
+    if engine == "occt":
+        from . import occt
+        return occt.visible_segments(out, right, up, fwd, render_px, cull=cull)
     if out["analytic"] or out["fit_arcs"]:
         res = _visible_segments_analytic(out, right, up, fwd, render_px, cull=cull)
     else:

@@ -22,6 +22,8 @@ def _parse_args(argv):
     p.add_argument("--format", dest="fmt", choices=["png", "svg", "both"])
     p.add_argument("--mode", choices=["gray", "mono", "color", "both"])
     p.add_argument("--shading", choices=["normal", "cel", "outline"])
+    p.add_argument("--engine", choices=["naive", "occt"], default=None,
+                   help="geometry engine for outline/wireframe renders")
     p.add_argument("--cel-levels", type=int)
     p.add_argument("--line-width", type=int, help="outline interior stroke (output px)")
     p.add_argument("--silhouette-width", type=int, help="outline contour stroke (output px)")
@@ -76,6 +78,7 @@ def _config_from_args(args) -> Config:
     toml = args.config or str(Path(args.root) / "labels.toml")
     overrides = {
         "fmt": args.fmt, "mode": args.mode, "shading": args.shading,
+        "engine": args.engine,
         "cel_levels": args.cel_levels,
         "line_width": args.line_width, "silhouette_width": args.silhouette_width,
         "dither": args.dither, "angle": args.angle, "part_color": args.part_color,
@@ -136,7 +139,7 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
         # translucent or wireframe: draw hidden geometry too
         cull = cfg.opacity >= 1.0 and not cfg.wireframe
         res = hlr.visible_segments(part, cfg.ldraw_dir, lat=lat, long=long,
-                                   render_px=cfg.render_px, cull=cull)
+                                   render_px=cfg.render_px, cull=cull, engine=cfg.engine)
         segs, bbox, s = res.segs, res.bbox, res.s
         if debug_dir:
             _emit_unwrap(debug_dir, name, res, cfg)
