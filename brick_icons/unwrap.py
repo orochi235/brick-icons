@@ -697,6 +697,7 @@ def decal_groups(tris, tri_colors, analytic):
 
 SLIVER_FRAC = 0.10      # drop a group below this share of the biggest print
 SHATTER_SHARE = 0.10    # below this, the biggest print is itself a shard
+MAX_DECALS = 4          # above this many survivors, one decoration cut across faces
 
 
 def _print_area(group):
@@ -708,11 +709,15 @@ def significant_groups(groups):
 
     A print bound to facet planes rather than one carrier splits across them:
     a torso yields 59 groups where one is the garment, and a sculpted part
-    yields hundreds of shards of a single decoration. Two different failures,
-    so two rules. Slivers go by their share of the biggest print. Shatter is a
+    yields hundreds of shards of a single decoration. Three different failures,
+    so three rules. Slivers go by their share of the biggest print. Shatter is a
     part-level verdict: when even the biggest group holds almost none of the
     printed area, nothing survived intact and returning its largest shard
-    would dress a fragment up as a decal.
+    would dress a fragment up as a decal. The count cap is the third, and neither
+    ratio catches it: every survivor can clear the sliver bar while the
+    dominant clears the shatter bar. Inspected across the corpus, a part above
+    the cap is always ONE decoration split over faces rather than several
+    prints -- 20460p09's five are panels of the same striped garment.
 
     Ratios, not absolute areas — measured over the extraction corpus, a real
     second print runs as low as 0.069 of its dominant while shards reach 0.82,
@@ -726,7 +731,8 @@ def significant_groups(groups):
     top = max(areas)
     if top / total < SHATTER_SHARE:
         return []
-    return [g for g, a in zip(groups, areas) if a >= top * SLIVER_FRAC]
+    kept = [g for g, a in zip(groups, areas) if a >= top * SLIVER_FRAC]
+    return [] if len(kept) > MAX_DECALS else kept
 
 
 def decal_svgs(tris, tri_colors, analytic, px=900, ldraw_dir="vendor/ldraw",

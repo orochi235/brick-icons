@@ -8,3 +8,4 @@ vendor/
 .cache/
 *.egg-info/
 .DS_Store
+/vendor
