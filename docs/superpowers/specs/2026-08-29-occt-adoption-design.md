@@ -41,8 +41,11 @@ draw-everything path is served by the same code rather than by a second one.
 
 **`edges_to_ops(edges)`** — lines pass through; `Geom_Circle` and
 `Geom_Ellipse` are read off the curve into our ellipse records. Nothing is
-refitted. This is the component that makes `arcfit.py` redundant, and it is
-the one to look at first if arcs come out wrong.
+refitted. On a recognized primitive this makes `arcfit.py`'s own refitting
+redundant — measured in `## Open` below, `arcfit` still runs and still
+matters for hand-faceted geometry `occt_faces` never recognizes. This
+component is the one to look at first if a recognized primitive's arcs come
+out wrong.
 
 Three corrections from the spike are implementation contract rather than
 background — the projector frame, sector sweep by x-direction rotation, and
@@ -91,30 +94,52 @@ Task 7 ran `scripts/compare-engines.py` over all 23 `outline` cases
 table). Both predictions above are now measured, not open:
 
 - **`arcfit` is not removable.** On parts whose geometry matches a recognized
-  primitive (`3001`, `3020`, `4589`, `4070`, `87087`, `99781`) arcs rise and
-  lines fall as designed. On everything else it stays load-bearing: `3941`'s
-  hand-faceted rim detail, the two LDraw dishes (`3960`, `4740p03` — spherical
-  caps with no primitive in `occt_faces`), and `32062`'s axle (a "+"-profile
-  extrusion, also unmatched) get no analytic curve at all, and `32062` loses
-  every one of its 19 arcs because its whole body is unrecognized triangles.
-  `arcfit` would only retire once `occt_faces` grows a dish/sphere and an
+  primitive (`3001`, `3020`, `4589`, `4070`, `87087`) arcs rise and lines fall
+  as designed. On everything else it stays load-bearing: `3941`'s hand-faceted
+  rim detail, the two LDraw dishes (`3960`, `4740p03` — spherical caps with no
+  primitive in `occt_faces`), and `32062`'s axle (a "+"-profile extrusion,
+  also unmatched) get no analytic curve at all, and `32062` loses every one of
+  its 19 arcs because its whole body is unrecognized triangles. `arcfit`
+  would only retire once `occt_faces` grows a dish/sphere and an
   extruded-profile primitive.
-- **`4019`'s stray ellipse is gone**, as predicted. Frozen baseline bbox is
-  `[60.77, -11.08, 195.23, 164.0]` against viewBox `0 0 256 170` (the known
-  arc-recovery artifact); under OCCT it is `[60.77, 6.0, 195.23, 164.0]` — the
-  same top margin every well-behaved part in the corpus gets.
+- **`4019`'s stray ellipse is gone**, as predicted, though not for free: bbox
+  moves from `[60.77, -11.08, 195.23, 164.0]` (the known arc-recovery
+  artifact, against viewBox `0 0 256 170`) to `[60.77, 6.0, 195.23, 164.0]` —
+  the same top margin every well-behaved part gets — but its own arc count
+  falls too, 74→64. The win on the stray is real; it is not an unqualified
+  win on this part.
 
-New finding the spike didn't cover: parts with no matching primitive don't
-fail gracefully, they explode. `UnifySameDomain` correctly declines to merge
-triangle facets that approximate real curvature (they aren't actually
-coplanar), so every facet boundary comes out as a genuine HLR edge — `L` goes
-2→13359 on `4740p03` and 2→1898 on `3960`. Cylinder seam edges, the effect
-this task set out to quantify, turn out to be real but minor: `3941`
-(A held exactly at 48, `L` 70→324) has 5 seam edges across 13 cylinder faces,
-upper-bounding their contribution at roughly 5 of the 254 added lines — the
-line explosion is facet tessellation, not seams. The naive engine hid this
-because its arcfit/fold-arc/dedupe path collapses a hand-faceted dome to a
-couple of silhouette lines; OCCT has no equivalent collapse for
-unrecognized curvature. Closing this needs either a broader primitive set
-(sphere/dish, extruded-profile) or a facet-collapse pass — both out of scope
-for this port.
+New findings the spike didn't cover:
+
+Parts with no matching primitive don't fail gracefully, they explode — and
+this is 9 of the 23 parts, not a couple: `L` rises at least 3x on `4740p03`
+(2→13359, x6680), `3960` (2→1898, x949), `3941p01` (74→1257, x17),
+`3040bp08` (38→485, x12.8), `3941` (70→324, x4.6), `6143` (59→228, x3.9),
+`3673` (90→311, x3.5), `32062` (140→440, x3.1) and `3649` (917→2730, x3.0).
+All nine share one mechanism: `UnifySameDomain` correctly declines to merge
+triangle facets that approximate real curvature or fine tessellated detail
+(they aren't actually coplanar, or don't fully reduce even when they are —
+merge rates measured directly range from 1.5% on `4740p03`'s dome to 83% on
+`3040bp08`'s print), so every surviving facet boundary comes out as a genuine
+HLR edge that the naive engine's arcfit/fold-arc/dedupe path used to collapse
+to a handful of silhouette lines. OCCT has no equivalent collapse for
+unrecognized curvature. Cylinder seam edges, the effect this task originally
+set out to quantify, turn out to be real but minor by comparison: `3941`
+(`A` held exactly at 48, `L` 70→324) has 5 seam edges across 13 cylinder
+faces, upper-bounding their contribution at roughly 5 of the 254 added lines
+— the explosion is facet tessellation, not seams. Closing this needs either
+a broader primitive set (sphere/dish, extruded-profile) or a facet-collapse
+pass — both out of scope for this port.
+
+`6589` (Technic Gear 12 Tooth Bevel) loses geometry outright, not just arcs:
+bbox x-min moves from 61.34 to 75.27, and the naive render's cross-shaped
+axle-hole notch inside the bore is entirely absent from the OCCT render —
+confirmed not an occlusion artifact (`hlr.visible_segments(..., cull=False)`
+reports the identical bbox extremes as `cull=True`, so the missing ink isn't
+hidden geometry becoming visible, it was never built). The likely cause:
+`occt_faces` recognizes a `ring` primitive for the bore's flat web as a
+perfect annulus, which cannot represent the true non-circular cutout — the
+same "no primitive for a non-circular hole" gap as `32062`'s axle profile,
+here manifesting as lost material instead of lost arcs. `4740p03`'s smaller
+4.66 bbox shift, by contrast, looks like ordinary facet-vs-analytic silhouette
+noise on the dome, not missing geometry — not confirmed further.

@@ -105,18 +105,20 @@ def main(argv=None):
         occt_svg, occt_err = render(part, cli_args, "occt", work)
         occt_summary = {"error": occt_err} if occt_err else goldens.summarize_svg(occt_svg)
 
+        if naive_err:
+            failures.append((part, "naive", naive_err))
         if occt_err:
-            failures.append((part, occt_err))
+            failures.append((part, "occt", occt_err))
 
         results.append({"part": part, "naive": naive_summary, "occt": occt_summary})
         dt = time.time() - t0
         print(f"{i}/{len(parts)} {part}  {dt:5.1f}s  {line_for(part, naive_summary, occt_summary)}",
               flush=True)
 
-    print(f"\n{len(parts)} parts, {len(failures)} OCCT failures")
+    print(f"\n{len(parts)} parts, {len(failures)} render failures")
     if failures:
-        for part, err in failures:
-            print(f"  FAILED {part}: {err}")
+        for part, engine, err in failures:
+            print(f"  FAILED {part} ({engine}): {err}")
 
     if args.out:
         Path(args.out).write_text(json.dumps(results, indent=2, sort_keys=True) + "\n")
