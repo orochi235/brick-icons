@@ -192,11 +192,19 @@ Three things found while freezing:
   now, so the older handoff's entry for it is stale.
 - **The extraction corpus is filtered to parts that have a surface to print
   on**, by `scripts/select-decal-corpus.py`: keep a part with 1..4 carriers at
-  least as big as a 1x1 round tile's face. 358 of 600 candidates survive,
-  carrying 3,841 SVGs instead of 21,035. Sculpted parts — Friends legs,
-  minidolls, Simpsons heads — score zero big carriers and drop out; wheel-and-
-  tyre assemblies score dozens and also drop. Exceptions belong in
+  least as big as a 1x1 round tile's face, and that also yields something
+  through `unwrap.significant_groups`. 343 of 600 candidates survive, carrying
+  511 SVGs, every one extracting at least one decal. Sculpted parts — Friends
+  legs, minidolls, Simpsons heads — score zero big carriers and drop out;
+  wheel-and-tyre assemblies score dozens and also drop. Exceptions belong in
   `corpus-overrides.toml`; `decal-corpus.txt` is generated, so do not edit it.
+
+  **The candidate pool is alphabetically truncated and should be resampled.**
+  `decal-candidates.txt` is the first 600 printed parts of 8,957, so every id
+  starts 00-15 and the largest printed families are absent entirely — `30xxx`
+  alone has 1,440. The corpus therefore contains no classic brick, plate or
+  tile. Repetition of a common shape is fine and wanted; the truncation is the
+  defect.
 
   **Measuring a carrier's area has three traps, all of which silently dropped
   printed round tiles — the class the corpus most needs.** A disc is flat, so

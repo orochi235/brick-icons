@@ -373,8 +373,13 @@ A decal binds to a *carrier* — a plane, cylinder, cone or disc it lies on. A
 sculpted part has none: a Marge Simpson head is thousands of tiny triangles, so
 every facet becomes its own carrier and the print shatters across 772 of them,
 no one holding more than 3% of it. `select-decal-corpus.py` keeps a part only
-if it has between 1 and 4 carriers at least as big as a 1x1 round tile's face,
-writing `decal-corpus.txt` from `decal-candidates.txt`. Exceptions go in
+if it has between 1 and 4 carriers at least as big as a 1x1 round tile's face
+**and** yields something through `unwrap.significant_groups`, writing
+`decal-corpus.txt` from `decal-candidates.txt`. Carrier size alone is a proxy
+and passed 15 parts that still shattered into nothing usable; the second test
+asks the question directly. 343 of 600 candidates survive, carrying 511 SVGs,
+and every one of them extracts at least one decal. Repeated common shapes are
+wanted — `14769` alone holds 92 rows. Exceptions go in
 `corpus-overrides.toml`, never in the generated file.
 
 Cases live in `tests/goldens/manifest.toml` as data — a part list crossed with
