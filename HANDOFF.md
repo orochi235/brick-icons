@@ -51,6 +51,22 @@ parts are out of `outline` and stay in `outline-flat3`, with `4740`, `3068b`
 and `3942c` substituted in — see the `unprinted` list in
 `tests/goldens/manifest.toml`. Merge `main` and re-freeze before comparing.
 
+**Truncated studs come out whole, and both inputs are already correct.**
+`3941`/`6143` use `stud10` ("Stud Truncated Laterally Curved 40D for Round 2x2
+Parts"): a `3-4cyli`, a `3-4disc` and two `3-4edge`, plus 4 tris and 4 quads
+forming the curved lateral cut. Occt draws the stud rim as a smooth closed
+ellipse where naive shows the cut. Both obvious causes are ruled out by
+measurement: `authored_edges` builds 8 circular edges of exactly 270 deg at
+r=6, two per stud, and every stud `cyli`/`disc` carries `sector=270` and
+returns one face from `occt_faces`. So the truncation is lost between those
+inputs and the drawn output — in the sewing, or in HLR's silhouette of a
+sector face — not in sector decoding. Start there.
+
+**Naive's version of that cut is also wrong, differently.** The primitive is
+truncated laterally *curved*, and naive draws it as two straight facets
+meeting at an outward-pointing vertex. Another "do not match naive" case
+alongside `3673`'s notch.
+
 Review renders at **0.65 stroke opacity**, not full: `scripts/compare-engines.py
 --sheet OUT.png` emits the naive|occt pairs that way, and single strokes read
 gray against doubled ink's black.
