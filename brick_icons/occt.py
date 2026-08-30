@@ -12,8 +12,9 @@ except ImportError as e:                      # pragma: no cover
         "--engine occt needs the OCCT extra: pip install -e '.[occt]'"
     ) from e
 
-from OCP.gp import gp_Pnt, gp_Dir, gp_Ax2, gp_Circ
-from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder, BRepPrimAPI_MakeCone
+from OCP.gp import gp_Pnt, gp_Dir, gp_Vec, gp_Ax2, gp_Circ, gp_Elips
+from OCP.BRepPrimAPI import (BRepPrimAPI_MakeCylinder, BRepPrimAPI_MakeCone,
+                             BRepPrimAPI_MakePrism)
 from OCP.BRepBuilderAPI import (BRepBuilderAPI_MakePolygon, BRepBuilderAPI_MakeFace,
                                 BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeWire,
                                 BRepBuilderAPI_Sewing)
@@ -31,6 +32,8 @@ from OCP.GeomAbs import GeomAbs_CurveType, GeomAbs_SurfaceType
 from OCP.GeomLProp import GeomLProp_SLProps
 from OCP.GeomAPI import GeomAPI_ProjectPointOnSurf
 from OCP.GCPnts import GCPnts_QuasiUniformDeflection
+from OCP.BRepMesh import BRepMesh_IncrementalMesh
+from OCP.TopLoc import TopLoc_Location
 
 from . import hlr
 
@@ -40,24 +43,62 @@ ROUND_TOL = 1e-4
 
 
 def frame(prim):
-    """(origin, u_hat, a_hat, v_hat, radius, height, right_handed) or None if sheared."""
+    """(origin, u_hat, a_hat, v_hat, radius_u, radius_v, height, right_handed),
+    or None if sheared.
+
+    ru != rv is an ellipse, not shear -- 50950's wall measures 68.3 x 84.9 at
+    an orthogonality residual of exactly 0. Callers decide what to do with it;
+    `is_round` is the test.
+    """
     U, A, V = prim.R[:, 0], prim.R[:, 1], prim.R[:, 2]
     ru, rv, h = np.linalg.norm(U), np.linalg.norm(V), np.linalg.norm(A)
     if min(ru, rv, h) < 1e-9:
         return None
     uh, vh, ah = U / ru, V / rv, A / h
-    # At 1e-6 both tests rejected 32 of 3942bp01's cones on residuals of 1.2e-6
-    # and 8.9e-6 -- float noise off accumulated subpart transforms, not shear.
-    # They then built no face, so its wall was cracks and every band drew as a
-    # hoop. A genuinely elliptical cylinder (50950) has a radius ratio of 0.80,
-    # five orders clear of these tolerances.
-    orth = (abs(uh @ ah) < ORTHO_TOL and abs(vh @ ah) < ORTHO_TOL
-            and abs(uh @ vh) < ORTHO_TOL)
-    uniform = abs(ru - rv) < ROUND_TOL * max(ru, rv)
-    if not (orth and uniform):
+    # At 1e-6 this rejected 32 of 3942bp01's cones on residuals of 1.2e-6 --
+    # float noise off accumulated subpart transforms, not shear. They then
+    # built no face, so its wall was cracks and every band drew as a hoop.
+    if not (abs(uh @ ah) < ORTHO_TOL and abs(vh @ ah) < ORTHO_TOL
+            and abs(uh @ vh) < ORTHO_TOL):
         return None
     rh = float(np.cross(uh, vh) @ ah) > 0
-    return prim.t, uh, ah, vh, ru, h, rh
+    return prim.t, uh, ah, vh, ru, rv, h, rh
+
+
+def is_round(ru, rv):
+    return abs(ru - rv) < ROUND_TOL * max(ru, rv)
+
+
+def ellipse_axes(o, uh, vh, ru, rv):
+    """(gp_Ax2, major, minor, phase) for o + ru*cos(t)*uh + rv*sin(t)*vh.
+
+    gp_Elips measures its parameter from the MAJOR axis and OCCT refuses a
+    minor radius larger than the major, so when rv wins the frame turns a
+    quarter turn and the LDraw sector angle rides along in `phase`. Taking the
+    ellipse's own normal as the Z direction also makes the sweep run u -> v
+    whatever the primitive's handedness, so no start-angle correction is
+    needed here.
+    """
+    w = np.cross(np.asarray(uh, float), np.asarray(vh, float))
+    if ru >= rv:
+        return ax2(o, w, uh), ru, rv, 0.0
+    return ax2(o, w, vh), rv, ru, -math.pi / 2
+
+
+def ellipse_edge(o, uh, vh, ru, rv, ang):
+    a, maj, minr, ph = ellipse_axes(o, uh, vh, ru, rv)
+    el = gp_Elips(a, float(maj), float(minr))
+    if ang >= 2 * math.pi - 1e-9:
+        return BRepBuilderAPI_MakeEdge(el).Edge()
+    return BRepBuilderAPI_MakeEdge(el, float(ph), float(ph + ang)).Edge()
+
+
+def elliptic_wall(o, uh, ah, vh, ru, rv, h, ang):
+    """The lateral surface of an elliptical cylinder, which no BRepPrimAPI
+    maker builds -- extrude the ellipse instead."""
+    v = gp_Vec(*(float(x) for x in np.asarray(ah, float) * h))
+    prism = BRepPrimAPI_MakePrism(ellipse_edge(o, uh, vh, ru, rv, ang), v)
+    return TopoDS.Face_s(prism.Shape())
 
 
 def ax2(origin, zdir, xdir):
@@ -128,8 +169,18 @@ def occt_faces(prim):
     f = frame(prim)
     if f is None:
         return []
-    o, uh, ah, vh, r, h, rh = f
+    o, uh, ah, vh, ru, rv, h, rh = f
     ang = sector_rad(prim)
+    if not is_round(ru, rv):
+        # Only cyli has a measured elliptical instance (50950). The rest would
+        # be guesswork, and occt_faces returning [] is the honest answer.
+        if k != "cyli":
+            return []
+        try:
+            return [elliptic_wall(o, uh, ah, vh, ru, rv, h, ang)]
+        except Exception:
+            return []
+    r = ru
     # The axis sets the EXTRUSION direction, so it must always be +ah --
     # negating it to fix a left-handed sector sweep builds the cone/cylinder
     # backwards off its base plane, which reads as a gap between subparts.
@@ -281,10 +332,13 @@ def authored_edges(out: dict, right, up):
         f = frame(prim)
         if f is None:
             continue
-        o, uh, ah, _vh, r, _h, _rh = f
+        o, uh, ah, vh, ru, rv, _h, _rh = f
         ang = sector_rad(prim)
         try:
-            circ = gp_Circ(ax2(o, ah, uh), float(r))
+            if not is_round(ru, rv):
+                hard.append(ellipse_edge(o, uh, vh, ru, rv, ang))
+                continue
+            circ = gp_Circ(ax2(o, ah, uh), float(ru))
             hard.append(BRepBuilderAPI_MakeEdge(circ).Edge()
                         if ang >= 2 * math.pi - 1e-9
                         else BRepBuilderAPI_MakeEdge(circ, 0.0, ang).Edge())
@@ -457,10 +511,12 @@ def _seg_locus(a, b, kind, ax, ay):
     return ("seg", p, q, kind)
 
 
-def _circ_locus(o, u, v, r, kind, ax, ay):
+def _ell_locus(o, u, v, ru, rv, kind, ax, ay):
+    """The 2D locus of o + ru*cos(t)*u + rv*sin(t)*v. An ellipse projects to an
+    ellipse, so the pair of projected semi-axes is the whole conic."""
     c = _proj2([o], ax, ay)[0]
-    A = _proj2([np.asarray(o, float) + r * np.asarray(u, float)], ax, ay)[0] - c
-    B = _proj2([np.asarray(o, float) + r * np.asarray(v, float)], ax, ay)[0] - c
+    A = _proj2([np.asarray(o, float) + ru * np.asarray(u, float)], ax, ay)[0] - c
+    B = _proj2([np.asarray(o, float) + rv * np.asarray(v, float)], ax, ay)[0] - c
     M = np.stack([A, B], axis=1)
     if abs(np.linalg.det(M)) < 1e-12:
         return None                      # edge-on: the circle projects to a line
@@ -499,8 +555,8 @@ def authored_loci(shape, out, right, up):
         f = frame(prim)
         if f is None:
             continue
-        o, uh, ah, vh, r, _h, _rh = f
-        loc = _circ_locus(o, uh, vh, float(r), "line", ax, ay)
+        o, uh, ah, vh, ru, rv, _h, _rh = f
+        loc = _ell_locus(o, uh, vh, float(ru), float(rv), "line", ax, ay)
         if loc is not None:
             loci.append(loc)
     for e in _edges_of(analytic_creases(shape, out)):
@@ -517,7 +573,7 @@ def authored_loci(shape, out, right, up):
                           pos.YDirection().Z()])
         except Exception:
             continue
-        loc = _circ_locus(o, u, v, g.Radius(), "line", ax, ay)
+        loc = _ell_locus(o, u, v, g.Radius(), g.Radius(), "line", ax, ay)
         if loc is not None:
             loci.append(loc)
     for q in out.get("5", ()):
@@ -562,9 +618,37 @@ def select_authored(comp, loci):
             continue
         for locus in loci:
             if _on_locus(pts, locus):
-                got.append((e, locus[-1]))
+                got.append((e, locus))
                 break
     return got
+
+
+def locus_arc(edge, locus, kind):
+    """The fragment re-read as an arc of its locus ellipse, or None.
+
+    HLR returns a projected ELLIPSE as a BSpline approximation -- only a
+    projected circle comes back as a conic -- so 50950's elliptical wall drew
+    as 31 straight segments and the miter where the last one met the outline
+    barbed past the corner. The locus is the exact projected conic the
+    fragment was matched against, so its parameters are all that is missing.
+    """
+    if locus[0] != "ell":
+        return None
+    c = BRepAdaptor_Curve(edge)
+    if c.GetType() in (GeomAbs_CurveType.GeomAbs_Line,
+                       GeomAbs_CurveType.GeomAbs_Circle,
+                       GeomAbs_CurveType.GeomAbs_Ellipse):
+        return None                       # already exact; leave it alone
+    _, ctr, Minv, _ = locus
+    try:
+        pts = _fragment_points(edge)
+        M = np.linalg.inv(Minv)           # columns are the projected semi-axes
+    except Exception:
+        return None
+    cs = (pts - ctr) @ Minv.T
+    th = np.unwrap(np.arctan2(cs[:, 1], cs[:, 0]))
+    return ("arc", ctr[0], ctr[1], M[0, 0], M[1, 0], M[0, 1], M[1, 1],
+            math.degrees(th[0]), math.degrees(th[-1]), kind)
 
 
 def hlr_edges(shape, right, up, cull=True, edges=None, cond=None):
@@ -682,6 +766,38 @@ def edges_to_ops(compounds):
     return _negate_y(ops)
 
 
+def face_polys(shape, right, up, deflection):
+    """Every face of `shape` as a projected polygon in op space (Y already
+    negated, like the segment ops).
+
+    Built for the silhouette contour, which needs only their union -- but the
+    per-face split is what the fills slice will attribute colour and depth to,
+    so it stays per-face rather than pre-unioned.
+    """
+    ax, ay = _screen_axes(right, up)
+    BRepMesh_IncrementalMesh(shape, float(deflection), False, 0.5, True)
+    polys = []
+    ex = TopExp_Explorer(shape, TopAbs_ShapeEnum.TopAbs_FACE)
+    while ex.More():
+        face = TopoDS.Face_s(ex.Current())
+        ex.Next()
+        loc = TopLoc_Location()
+        tri = BRep_Tool.Triangulation_s(face, loc)
+        if tri is None:
+            continue
+        trsf = loc.Transformation()
+        nodes = []
+        for i in range(1, tri.NbNodes() + 1):
+            pnt = tri.Node(i).Transformed(trsf)
+            nodes.append((pnt.X(), pnt.Y(), pnt.Z()))
+        P = _proj2(np.array(nodes, float), ax, ay)
+        P[:, 1] *= -1.0                       # op space; see _negate_y
+        for i in range(1, tri.NbTriangles() + 1):
+            a, b, c = tri.Triangle(i).Get()
+            polys.append(P[[a - 1, b - 1, c - 1]])
+    return polys
+
+
 def visible_segments(out, right, up, render_px, cull=True):
     from .hlr import VisResult, _ops_bbox
     shape = build_shape(out)
@@ -691,8 +807,10 @@ def visible_segments(out, right, up, render_px, cull=True):
     if not cull:
         picked += select_authored(comps.get("sharp_hidden"), loci)
     ops = []
-    for edge, kind in picked:
-        ops += _edge_ops(edge, kind)
+    for edge, locus in picked:
+        kind = locus[-1]
+        arc = locus_arc(edge, locus, kind)
+        ops += [arc] if arc is not None else _edge_ops(edge, kind)
     for name in ("outline", "outline_hidden"):
         comp = comps.get(name)
         if comp is None:
@@ -705,4 +823,7 @@ def visible_segments(out, right, up, render_px, cull=True):
     bbox = _ops_bbox(ops)
     span = max(bbox[2] - bbox[0], bbox[3] - bbox[1]) or 1.0
     s = (render_px - 20) / span
-    return VisResult(ops, bbox, s, faces=(), analytic=())
+    # Sub-pixel, or the contour under an exact arc stroke reads as a polygon
+    # and its chords poke out from behind it.
+    polys = face_polys(shape, right, up, span / render_px * 0.25)
+    return VisResult(ops, bbox, s, faces=(), analytic=(), sil_polys=polys)

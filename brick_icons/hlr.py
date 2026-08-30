@@ -19,8 +19,8 @@ from . import repair
 # stylized sub-region outlines for shade.fill_ops(loops=...).
 VisResult = namedtuple("VisResult",
                        "segs bbox s faces analytic ellipses proj refits "
-                       "fold_ells loops tri tri_colors",
-                       defaults=[(), None, (), (), (), (), ()])
+                       "fold_ells loops tri tri_colors sil_polys",
+                       defaults=[(), None, (), (), (), (), (), ()])
 
 _text_cache: dict[Path, list[str]] = {}
 

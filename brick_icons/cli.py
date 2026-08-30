@@ -129,6 +129,15 @@ def _tone(cfg: Config, rgba: Image.Image) -> Image.Image:
     return g
 
 
+
+def _sil_faces(res, f, ox, oy):
+    """Silhouette-only stand-in for `res.faces`, from an engine that projects
+    its faces but does not yet shade them (occt). It reaches `silhouette_geom`
+    and nothing else, so fills and spur trimming stay off."""
+    return shade.apply_affine_faces(
+        [{"poly": np.asarray(q, float)} for q in (res.sil_polys or ())],
+        f, ox, oy)
+
 def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
     name = Path(part).stem if Path(part).suffix else part
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -173,7 +182,8 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
                                        weld_corners=cfg.weld_corners,
                                        ldraw_dir=cfg.ldraw_dir) \
                     if style is not None else None
-                sil_geom = shade.silhouette_geom(faces) if faces else None
+                sil_geom = shade.silhouette_geom(
+                    faces or _sil_faces(res, f, ox, oy)) or None
                 if sil_geom is not None and spurs is not None:
                     sil_geom = geom2d.difference(sil_geom, spurs)
                 contour = geom2d.contour_d(
@@ -205,7 +215,8 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
                                        weld_corners=cfg.weld_corners,
                                        ldraw_dir=cfg.ldraw_dir) \
                     if style is not None else None
-                sil_geom = shade.silhouette_geom(faces) if faces else None
+                sil_geom = shade.silhouette_geom(
+                    faces or _sil_faces(res, f, ox, oy)) or None
                 if sil_geom is not None and spurs is not None:
                     sil_geom = geom2d.difference(sil_geom, spurs)
                 contour = geom2d.contour_d(
@@ -221,7 +232,8 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
         if cfg.fmt in ("png", "both"):
             def sil_rings(W, H, fit_segs):
                 f, ox, oy = hlr.fit_affine(bbox, W, H, cfg.margin, cfg.scale)
-                faces = shade.apply_affine_faces(res.faces, f, ox, oy)
+                faces = (shade.apply_affine_faces(res.faces, f, ox, oy)
+                         or _sil_faces(res, f, ox, oy))
                 if not faces:
                     return None
                 g = geom2d.close_slivers(
