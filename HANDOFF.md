@@ -212,3 +212,65 @@ Three things found while freezing:
   recorded and this pool yields 21,035, so it is a different 600.
 - **Golden rasters are calibrated against the pinned `resvg` 0.47.0.**
   Upgrading it moves every PNG with no engine change; re-freeze deliberately.
+
+---
+
+# OCCT hidden-line port — slice 1 complete, does not pass cleanly
+
+Lives on **`occt-port`** (19 commits, rebased onto `main` at `b4a89b4`, nothing
+merged). Durable records, both on that branch:
+
+- `docs/superpowers/specs/2026-08-29-occt-adoption-design.md` — the design, and
+  a `## Open` section carrying the measured outcome.
+- `docs/superpowers/plans/2026-08-29-occt-hlr-port.md` — the seven-task plan.
+- `docs/superpowers/specs/2026-08-29-occt-spike.md` — the spike, copied here
+  because it existed on no other ref, with its projector-frame finding marked
+  superseded.
+
+Read the design doc's `## Open` first; nothing below repeats it.
+
+## The verdict in one line
+
+`--engine occt` renders all 23 corpus parts with zero failures, wins outright
+where geometry resolves to analytic primitives, and regresses by up to 6679x in
+line count where it falls through to raw triangle facets. Not a clean pass, and
+deliberately not merged.
+
+## What to do next, in this order
+
+1. **`6589` loses visible ink** — bbox x-min moves 13.93 LDU, so geometry present
+   under naive is absent under OCCT. Chase this *before* the line counts:
+   missing geometry is a different severity from noisy geometry, and it is the
+   class that read as partial success in the spike's own coverage metric while
+   the render showed a gear's body gone.
+2. **The line explosion** on 9 of 23 parts. Measured cause is unmerged coplanar
+   triangle facets reaching output — `ShapeUpgrade_UnifySameDomain` declining to
+   merge. NOT cylinder seams: those were quantified at ~5 of 254 added lines on
+   `3941`, so that hypothesis is dead. `tests/goldens/corpus-overrides.toml` and
+   the carrier-count measure in `scripts/select-decal-corpus.py` already separate
+   the facet-heavy population — same split, different symptom.
+3. **Cheap win available:** `out["fit_arcs"]` is computed at `hlr.py:992` and then
+   discarded on the OCCT path. Injecting those ops into the result would likely
+   recover `32062`'s 19 lost arcs for almost nothing.
+
+## Traps that are not in the specs
+
+- **The frame was settled by enumeration, not derivation.** Three separate
+  derivations each looked correct and were wrong. Shipped is
+  `Z = +cross(right, up)`, `X = +right`, **Y negated** — a configuration none of
+  them proposed. `occt.projector_axes`'s docstring is the authority; the spike's
+  `X = -right` is superseded. If you change it, re-run the 8-configuration
+  enumeration rather than reasoning about it.
+- **The projector test and the chirality test are complementary.** Neither alone
+  catches both failure modes: a Z-only flip escapes the chirality test, a
+  simultaneous Z+X flip escapes the projector test. Do not delete either as
+  redundant.
+- **`BRICK_GOLDENS=1` or the gate does not run.** A plain suite reports
+  "N passed, 3 skipped" and those 3 skips are the drift tests. Two sessions
+  independently mistook that for verification. Gated: 491 passed, 0 skipped.
+- **Arc parameters are DEGREES** across this codebase (`hlr.dedupe_segments`
+  emits them, `trace._arc_to_svg` and `process.draw_segments` consume them).
+  OCCT reports radians. A missing `math.degrees` draws a full circle as a
+  6.28-degree sliver, which reads as "broken arcs", not as a units bug.
+- **Five tests on this branch could not fail** before review caught them. When
+  adding a guard here, mutate the code and watch it go red before believing it.
