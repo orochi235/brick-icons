@@ -20,6 +20,41 @@ insertions / 43 deletions from `e003722`. Delete that branch once you have
 compared them. Commit early here regardless, and check `git log -1` before
 assuming the tree is where you left it.
 
+## From `main`, 2026-08-30: three findings and a corpus change
+
+**The round-brick wall band is a same-cylinder seam, not a crease.** `3941`'s
+outer wall is one r=20 h=20 cylinder at y=0 plus four r=20 h=4 quarter-sectors
+at y=20 — same axis, same radius, tangent-continuous. `6143` is identical. So
+the band drawn around both walls is the junction between two pieces of one
+cylinder, and a tangent-continuity test (same surface type, same axis, same
+radius) drops it without touching `4740p03`'s rim, which joins two cones of
+different pitch.
+
+**`3941`'s bottom notch draws as three boxes.** Occt keeps the two rim faces
+either side of the cutout that naive merges into the larger surface, and the
+notch stops reading as a notch. Called justified for naive on inspection —
+those faces are indistinguishable on the real part. Same shape as the
+`fill_ops` coplanar plane-merge already on the naive path.
+
+**`4589` is the odd one out and probably not a rule problem.** It resolves
+entirely to primitives — 6 `cyli`, 2 `con`, 4 `ring` — yet draws zero L
+commands against naive's 6 and loses its base ring to a detached arc. A fully
+recognized part should not lose a ring; that reads like the full-ring
+`MakeFace` class rather than crease selection.
+
+**The `outline` gate is 21 cases now, not 23.** A print is authored as ordinary
+geometry, so on a strokes-only combo it is indistinguishable from the part:
+`3942bp01` carries 38 `con` primitives against unprinted `3942c`'s 2, and
+`4740p03` carries 3530 triangles against `4740`'s 0. Two of the four defect
+classes read off that corpus were therefore decoration, not geometry. Printed
+parts are out of `outline` and stay in `outline-flat3`, with `4740`, `3068b`
+and `3942c` substituted in — see the `unprinted` list in
+`tests/goldens/manifest.toml`. Merge `main` and re-freeze before comparing.
+
+Review renders at **0.65 stroke opacity**, not full: `scripts/compare-engines.py
+--sheet OUT.png` emits the naive|occt pairs that way, and single strokes read
+gray against doubled ink's black.
+
 ## The facet explosion is fixed at its cause
 
 `build_shape` sewed one face per triangle and drew whatever HLR called sharp,
