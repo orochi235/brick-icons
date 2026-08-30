@@ -1,13 +1,15 @@
 # Handoff — OCCT hidden-line port
 
 On **`occt-port`**, in the worktree at `.claude/worktrees/occt-port`. HEAD
-`e76596a`, tree clean, 497 passed / 3 skipped. `docs/superpowers/specs/2026-08-29-occt-adoption-design.md`
+`e003722`. `docs/superpowers/specs/2026-08-29-occt-adoption-design.md`
 is the durable record; this covers what changed after it.
 
-**The session that started this port is gone** (its transcript stops at 02:16,
-no process holds the worktree). This worktree is unowned — take it. A separate
-live session works decal/library restore on `main`; it re-freezes goldens, so
-do not land anything that moves `tests/goldens/` without checking with it.
+**This worktree is not exclusively yours.** A session working `main` committed
+`57d56d1` (a merge of main) into it, and the checkout destroyed uncommitted
+work in `brick_icons/occt.py` — no stash, no dangling blob, nothing to recover
+from git. Commit early here, and check `git log -1` before assuming the tree is
+where you left it. That session re-freezes goldens, so also do not land
+anything that moves `tests/goldens/` without checking with it.
 
 ## The facet explosion is fixed at its cause
 
@@ -15,47 +17,58 @@ do not land anything that moves `tests/goldens/` without checking with it.
 so every tessellation boundary became a crease — `4740p03` drew 13359 lines
 against naive's 2.
 
-**LDraw states its edges; it does not imply them.** Type-2 lines and the `edge`
-primitives that carry a rim circle are the creases. Everything else in a mesh
-interior is tessellation. Every sewn edge without that backing is now tagged
-G1 (`BRep_Builder::Continuity`), which files it under `Rg1LineVCompound`, and
-`edges_to_ops` does not draw that compound. An edge that genuinely reads as an
-outline still arrives via `OutLineVCompound` — which is exactly what a
-conditional line means.
+**LDraw states its edges; it does not imply them.** The faces now go to
+`HLRBRep_Algo` purely as occluders, and the drawn candidates are added
+separately as edge-shapes (`hlr_edges(..., edges=, cond=)`), so an unauthored
+boundary is never a candidate rather than a candidate filtered out. That is
+what makes it structural: it cannot leak through a tagging gap, a sewing crack
+or a one-face edge.
 
-Use the **positive** declaration (type-2), not type-5. `4740p03` authors NO
-type-2 edges and naive draws it in 2 lines; tagging from condlines instead
-reaches only 5 of its 2401 edges. And never infer from dihedral angle: that
-part's cone bands meet at genuinely different pitches and are smooth only by
-declaration.
+Three declared sources, in `authored_edges` and `analytic_creases`:
 
-Unprinted parts, drawn L-commands, naive vs occt: `4740` 6/4, `3040b` 41/32,
-`3068b` 31/21, `3001` 52/41, `32062` 142/79, `3960` 6/56, `3673` 103/186.
+- type-2 lines and `edge` primitives, unconditionally;
+- type-5 condlines where the control points agree in screen space
+  (`hlr.same_side`) — a tessellated dish has no analytic silhouette for
+  `OutLineVCompound` to report, so without these `3960` and `32062` lose their
+  profiles entirely;
+- junctions between two exact curved surfaces that no condline declares
+  smooth. `4740p03`'s dish rim is authored as neither a type-2 line nor an
+  `edge`; it exists only as the junction between two cone bands, and the only
+  thing separating it from the smooth band seams beside it is that they carry
+  condlines and it does not. Naive draws 5 arcs there and this rule finds the
+  same 5.
 
-## Next: draw authored edges + silhouette, nothing else
+Two traps inside that last rule, both of which drew visible wrong ink:
 
-The G1 route has a structural limit — `Continuity` needs TWO faces, and an
-edge on one face cannot be tagged, so it defaults to sharp and draws. `3960`
-has 326 such edges, `3673` 234. They are unmerged coincident edges the sewing
-never stitched; raising `TOL` to a reckless 0.05 LDU only takes 326 to 147.
+- **A closed surface's parametric seam has the same face on both sides.** Kept,
+  it draws a radial line from `4740`'s stud across the dish that no edge of the
+  part has. `faces[0].IsSame(faces[1])`.
+- **A curved face's free boundary still counts.** A printed dish replaces its
+  top with decoration triangles that sewing does not stitch to the band below,
+  so `4740p03`'s rim is a one-face edge — and dropping it lost the entire dish.
 
-So stop drawing HLR's `sharp` compound at all. Feed faces to HLR **for
-occlusion**, and draw only the authored edges (added to `HLRBRep_Algo` as
-edge-shapes, so they are hidden-line-removed against the faces) plus
-`OutLineVCompound`. That is naive's model with exact occlusion and exact
-curves, and it makes the explosion structurally impossible rather than
-filtered: an unauthored boundary is never a candidate, so it cannot leak
-through a tagging gap, a sewing crack, or a 1-face edge. `_seg_key` and
-`_authored_circles` carry over as the edge source; the G1 tagging retires.
+Never infer from dihedral angle: `4740p03`'s cone bands meet at genuinely
+different pitches and are smooth only by declaration. The G1 tagging that
+preceded this (`BRep_Builder::Continuity` + `Rg1LineVCompound`) is retired; it
+could not reach a one-face edge at all, of which `3960` has 326 and `3673` 234.
 
-It also kills the doubled ink below, since authored lines are unique by
-construction.
+Against naive at 30/45, the seven parts checked by eye — `3001`, `3040b`,
+`3960`, `4740`, `4740p03`, `6589`, `32062` — now match its shape. The only
+occt-only ink on `4740` is described under Open defects.
 
 ## Open defects, measured
 
+- **Tangent slivers at a stud base.** A stud's base circle lies exactly on its
+  own cylinder, so HLR keeps a short rear arc visible either side of the
+  silhouette tangent where naive hides it. It is the only occt-only ink on
+  `4740` and it is the "noise in the studs" a reader notices first. There is no
+  tolerance knob on `HLRBRep_Algo` to turn down, so a fix means filtering short
+  visible fragments of a mostly-hidden circle — a threshold, so measure before
+  picking one.
 - **Doubled ink.** Two 3-point polylines sharing one of their two segments, so
   that leg is drawn twice — `3005`/`3001`/`3040b` at the stud annulus.
-  Invisible at full opacity; only the x-ray below shows it.
+  Invisible at full opacity; only the x-ray below shows it. Expected to be gone
+  now that authored lines are unique by construction — unverified.
 - **Sliver faces.** `3673` has 77 of 112 paths >60% covered by another,
   including closed micro-triangles; `3941` 56 of 166 retraced, `3649` 66 of
   985. Degenerate faces reaching HLR.
