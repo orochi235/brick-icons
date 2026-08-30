@@ -1,7 +1,9 @@
 # Design: adopting OCCT for hidden-line removal
 
-**Status:** implemented 2026-08-29. `BRICK_GOLDENS=1 pytest tests/test_goldens.py`
-passes 14; `--engine occt` ships behind an explicit flag, naive stays default.
+**Status:** merged to `main` 2026-08-30 (`7543479`), 508 tests passing under
+`BRICK_GOLDENS=1`. `--engine occt` ships behind an explicit flag; naive stays
+the default and its output is byte-unchanged. Engine work continues on
+`occt-port`.
 
 **Reader:** whoever implements or reviews the port. Assumes
 `2026-08-29-occt-spike.md` has been read — this spends its words on what to
@@ -125,25 +127,21 @@ table). Both predictions above are now measured, not open:
 
 New findings the spike didn't cover:
 
-Parts with no matching primitive don't fail gracefully, they explode — and
-this is 9 of the 23 parts, not a couple: `L` rises at least 3x on `4740p03`
-(2→13359, x6680), `3960` (2→1898, x949), `3941p01` (74→1257, x17),
-`3040bp08` (38→485, x12.8), `3941` (70→324, x4.6), `6143` (59→228, x3.9),
-`3673` (90→311, x3.5), `32062` (140→440, x3.1) and `3649` (917→2730, x3.0).
-All nine share one mechanism: `UnifySameDomain` correctly declines to merge
-triangle facets that approximate real curvature or fine tessellated detail
-(they aren't actually coplanar, or don't fully reduce even when they are —
-merge rates measured directly range from 1.5% on `4740p03`'s dome to 83% on
-`3040bp08`'s print), so every surviving facet boundary comes out as a genuine
-HLR edge that the naive engine's arcfit/fold-arc/dedupe path used to collapse
-to a handful of silhouette lines. OCCT has no equivalent collapse for
-unrecognized curvature. Cylinder seam edges, the effect this task originally
-set out to quantify, turn out to be real but minor by comparison: `3941`
-(`A` held exactly at 48, `L` 70→324) has 5 seam edges across 13 cylinder
-faces, upper-bounding their contribution at roughly 5 of the 254 added lines
-— the explosion is facet tessellation, not seams. Closing this needs either
-a broader primitive set (sphere/dish, extruded-profile) or a facet-collapse
-pass — both out of scope for this port.
+**The facet explosion this section measured is fixed, and its stated cause was
+wrong.** The numbers here — `L` rising at least 3x on 9 of 23 parts, `4740p03`
+2→13359 — were measured while `build_shape` sewed one face per triangle and
+drew whatever HLR called sharp, so every tessellation boundary became a crease.
+It was read as `UnifySameDomain` declining to merge coplanar facets, and the
+proposed fixes were a broader primitive set or a facet-collapse pass. Neither
+was needed: LDraw states its edges rather than implying them, so the faces now
+serve as occluders only and the drawn candidates are the authored edges alone.
+An unauthored boundary is not a candidate to be filtered — it is never a
+candidate. Cylinder seam edges were correctly ruled out as minor (~5 of 254
+added lines on `3941`); that half stands.
+
+Every per-part figure below and in `task-7-report.md` therefore predates two
+rounds of change and should not be planned against. `scripts/compare-engines.py`
+re-derives the current table across the `outline` corpus in ~10 minutes.
 
 `6589`'s missing bore geometry is **fixed**; the diagnosis above it in
 task-7-report.md (a `ring` annulus papering over the non-circular cutout) was
