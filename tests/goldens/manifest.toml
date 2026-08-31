@@ -19,6 +19,21 @@ all = ["3005", "3024", "3001", "3020", "3040b", "3941", "6143", "50950",
        "3673", "32062", "3941p01", "3942bp01", "3068bp00", "3040bp08",
        "4740p03"]
 
+# `all` minus every printed part, with an unprinted sibling substituted where
+# that would otherwise drop a shape: 4740 for 4740p03, 3068b for 3068bp00,
+# 3942c for 3942bp01. 3941 and 3040b were already present, so 3941p01 and
+# 3040bp08 simply go.
+#
+# A print is authored as ordinary geometry, so on a strokes-only combo it is
+# indistinguishable from the part: 3942bp01 carries 38 `con` primitives against
+# 3942c's 2, and 4740p03 carries 3530 triangles against 4740's 0. That is
+# decoration dominating a hidden-line gate. These parts belong here once decal
+# extraction reaches the render path — until then they gate `outline-flat3`,
+# where decoration is the point.
+unprinted = ["3005", "3024", "3001", "3020", "3040b", "3941", "6143", "50950",
+             "4589", "3960", "4070", "87087", "99781", "4019", "3649", "6589",
+             "3673", "32062", "4740", "3068b", "3942c"]
+
 # Enough spread to catch a combo-specific regression without paying for the
 # whole list three times: flat faces, curves, a dish, SNOT, the gear stress
 # case and an extruded cross-section.
@@ -36,7 +51,10 @@ args = ["--format", "svg", "--shading", "outline", "--shade-style", "flat3"]
 # counts move only when the kernel changes what it hides or how it curves.
 # `outline-flat3` covers the same edges but mixes fill geometry into those
 # counts (3001: A 58 -> 192), which is why it cannot serve.
-parts = "all"
+#
+# Unprinted parts only — see the `unprinted` list for why a print confounds
+# this gate specifically.
+parts = "unprinted"
 args = ["--format", "svg", "--shading", "outline"]
 
 [combo.wireframe]

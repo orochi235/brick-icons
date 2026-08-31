@@ -345,6 +345,21 @@ outline renderer (default 2048).
 LDView curve subdivision (default 12). The outline renderer's analytic curves
 are exact and ignore this.
 
+#### `--engine naive|occt`
+
+Which geometry engine performs hidden-line removal (default `naive`). `occt`
+runs OpenCASCADE's exact BRep kernel: recognized LDraw primitives become real
+cylinders, cones and annular faces, occlusion is exact, and arcs are read off
+the curve rather than refitted from a polyline. It needs the optional extra —
+`pip install -e '.[occt]'`, which is ~935MB — and raises rather than silently
+falling back to `naive`, so a part it cannot draw fails loudly.
+
+It is not the default yet: a body no primitive matches still arrives as raw
+triangles and loses the arcs `arcfit` recovers on the naive path (`32062`, all
+19), and several parts carry known artifacts. `scripts/compare-engines.py`
+re-derives the current per-part deltas across the `outline` corpus; the
+`occt-port` branch's handoff lists what is still open.
+
 #### `--debug-dir DIR`
 
 Save intermediate stages (`render/`, `tone/`, `mono/`) instead of deleting

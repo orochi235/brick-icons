@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import time
@@ -80,12 +81,50 @@ def line_for(part: str, naive: dict, occt: dict) -> str:
     return "  ".join(bits)
 
 
+SHEET_ALPHA = "0.65"
+SHEET_FONT = "/System/Library/Fonts/Helvetica.ttc"
+
+
+def contact_sheet(parts: list[str], work: Path, out: Path) -> None:
+    """Rasterize both engines' SVGs side by side, strokes at 0.65 alpha.
+
+    `stroke-opacity` on the group inherits per path, so two coincident strokes
+    composite darker and doubled ink becomes visible; a group `opacity` would
+    flatten the group first and hide exactly that. Reviewing at full opacity
+    is how every duplicate found so far stayed invisible.
+    """
+    # Its own directory: the faded copies must not land where the next run's
+    # glob would pick them up and fade them twice.
+    staging = work / "_sheet"
+    staging.mkdir(exist_ok=True)
+    tiles = []
+    for part in parts:
+        for engine in ("naive", "occt"):
+            svgs = sorted((work / f"{part}-{engine}").glob("*.svg"))
+            if not svgs:
+                continue
+            src = staging / f"{part}-{engine}.svg"
+            src.write_text(re.sub(r"<g ", f'<g stroke-opacity="{SHEET_ALPHA}" ',
+                                  svgs[0].read_text(), count=1))
+            # montage's %t label is the basename, so it must carry the engine
+            png = staging / f"{part}-{engine}.png"
+            subprocess.run(["resvg", "--width", "700", str(src), str(png)],
+                           check=True, capture_output=True)
+            tiles.append(str(png))
+    subprocess.run(["montage", "-label", "%t", "-font", SHEET_FONT, *tiles,
+                    "-tile", "4x", "-geometry", "440x440+8+8",
+                    "-background", "white", "-fill", "black",
+                    "-pointsize", "22", str(out)], check=True)
+    print(f"wrote {out}")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--manifest", default=str(MANIFEST))
     ap.add_argument("--only", help="substring filter on the part id")
     ap.add_argument("--out", help="write full per-part JSON results here")
     ap.add_argument("--work", default=None, help="scratch dir (default: temp under /tmp)")
+    ap.add_argument("--sheet", help="write a naive|occt contact sheet PNG here")
     args = ap.parse_args(argv)
 
     parts, cli_args = load_outline_parts(Path(args.manifest))
@@ -123,6 +162,9 @@ def main(argv=None):
     if args.out:
         Path(args.out).write_text(json.dumps(results, indent=2, sort_keys=True) + "\n")
         print(f"wrote {args.out}")
+
+    if args.sheet:
+        contact_sheet(parts, work, Path(args.sheet))
     return 1 if failures else 0
 
 

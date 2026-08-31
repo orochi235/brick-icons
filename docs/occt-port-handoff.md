@@ -1,0 +1,735 @@
+# Handoff — OCCT hidden-line port
+
+On **`occt-port`**, in the worktree at `.claude/worktrees/occt-port`. HEAD
+`e003722`. `docs/superpowers/specs/2026-08-29-occt-adoption-design.md`
+is the durable record; this covers what changed after it.
+
+**Engine work RESUMED here on 2026-08-30 13:30** (`c8ef950`..`7a5cef9`) and
+touches `hlr.py` (`VisResult` gains `sil_polys`) and `cli.py` (the shared
+`sil_geom` line) as well as `occt.py`. Re-read those three before merging.
+
+**A `main` session (`brick-icons-ab`) is driving this branch home — it owns the
+merge to `main` from 2026-08-30 12:40 onward.** Split of work: this branch owns
+the OCCT engine, that session owns integration (merge, goldens gate, README,
+`main`'s handoff). It has no message channel to you, so this paragraph is the
+protocol: if you are resuming engine work, say so here in a commit and it will
+stand down. Otherwise assume `occt-port` is being merged as it stands and
+branch off `main` afterwards rather than committing here.
+
+**The worktree collision, resolved.** That session committed `57d56d1` (a merge
+of main) into this tree and the checkout destroyed uncommitted work in
+`brick_icons/occt.py` — but it was recoverable: saved first via `git stash
+create` and parked on branch `wip/occt-authored-edges` (`7c8cfaa`), 40
+insertions / 43 deletions from `e003722`. Delete that branch once you have
+compared them. Commit early here regardless, and check `git log -1` before
+assuming the tree is where you left it.
+
+## From `main`, 2026-08-30: three findings and a corpus change
+
+**The round-brick wall band is a same-cylinder seam, not a crease.** `3941`'s
+outer wall is one r=20 h=20 cylinder at y=0 plus four r=20 h=4 quarter-sectors
+at y=20 — same axis, same radius, tangent-continuous. `6143` is identical. So
+the band drawn around both walls is the junction between two pieces of one
+cylinder, and a tangent-continuity test (same surface type, same axis, same
+radius) drops it without touching `4740p03`'s rim, which joins two cones of
+different pitch.
+
+**`3941`'s bottom notch draws as three boxes.** Occt keeps the two rim faces
+either side of the cutout that naive merges into the larger surface, and the
+notch stops reading as a notch. Called justified for naive on inspection —
+those faces are indistinguishable on the real part. Same shape as the
+`fill_ops` coplanar plane-merge already on the naive path.
+
+**`4589` is the odd one out and probably not a rule problem.** It resolves
+entirely to primitives — 6 `cyli`, 2 `con`, 4 `ring` — yet draws zero L
+commands against naive's 6 and loses its base ring to a detached arc. A fully
+recognized part should not lose a ring; that reads like the full-ring
+`MakeFace` class rather than crease selection.
+
+**The `outline` gate is 21 cases now, not 23.** A print is authored as ordinary
+geometry, so on a strokes-only combo it is indistinguishable from the part:
+`3942bp01` carries 38 `con` primitives against unprinted `3942c`'s 2, and
+`4740p03` carries 3530 triangles against `4740`'s 0. Two of the four defect
+classes read off that corpus were therefore decoration, not geometry. Printed
+parts are out of `outline` and stay in `outline-flat3`, with `4740`, `3068b`
+and `3942c` substituted in — see the `unprinted` list in
+`tests/goldens/manifest.toml`. Merge `main` and re-freeze before comparing.
+
+**Truncated studs come out whole, and both inputs are already correct.**
+`3941`/`6143` use `stud10` ("Stud Truncated Laterally Curved 40D for Round 2x2
+Parts"): a `3-4cyli`, a `3-4disc` and two `3-4edge`, plus 4 tris and 4 quads
+forming the curved lateral cut. Occt draws the stud rim as a smooth closed
+ellipse where naive shows the cut. Both obvious causes are ruled out by
+measurement: `authored_edges` builds 8 circular edges of exactly 270 deg at
+r=6, two per stud, and every stud `cyli`/`disc` carries `sector=270` and
+returns one face from `occt_faces`. So the truncation is lost between those
+inputs and the drawn output — in the sewing, or in HLR's silhouette of a
+sector face — not in sector decoding. Start there.
+
+**Naive's version of that cut is also wrong, differently.** The primitive is
+truncated laterally *curved*, and naive draws it as two straight facets
+meeting at an outward-pointing vertex. Another "do not match naive" case
+alongside `3673`'s notch.
+
+Review renders at **0.65 stroke opacity**, not full: `scripts/compare-engines.py
+--sheet OUT.png` emits the naive|occt pairs that way, and single strokes read
+gray against doubled ink's black.
+
+## The facet explosion is fixed at its cause
+
+`build_shape` sewed one face per triangle and drew whatever HLR called sharp,
+so every tessellation boundary became a crease — `4740p03` drew 13359 lines
+against naive's 2.
+
+**LDraw states its edges; it does not imply them.** The faces now go to
+`HLRBRep_Algo` purely as occluders, and the drawn candidates are added
+separately as edge-shapes (`hlr_edges(..., edges=, cond=)`), so an unauthored
+boundary is never a candidate rather than a candidate filtered out. That is
+what makes it structural: it cannot leak through a tagging gap, a sewing crack
+or a one-face edge.
+
+Three declared sources, in `authored_edges` and `analytic_creases`:
+
+- type-2 lines and `edge` primitives, unconditionally;
+- type-5 condlines where the control points agree in screen space
+  (`hlr.same_side`) — a tessellated dish has no analytic silhouette for
+  `OutLineVCompound` to report, so without these `3960` and `32062` lose their
+  profiles entirely;
+- junctions between two exact curved surfaces that no condline declares
+  smooth. `4740p03`'s dish rim is authored as neither a type-2 line nor an
+  `edge`; it exists only as the junction between two cone bands, and the only
+  thing separating it from the smooth band seams beside it is that they carry
+  condlines and it does not. Naive draws 5 arcs there and this rule finds the
+  same 5.
+
+Two traps inside that last rule, both of which drew visible wrong ink:
+
+- **A closed surface's parametric seam has the same face on both sides.** Kept,
+  it draws a radial line from `4740`'s stud across the dish that no edge of the
+  part has. `faces[0].IsSame(faces[1])`.
+- **A curved face's free boundary still counts.** A printed dish replaces its
+  top with decoration triangles that sewing does not stitch to the band below,
+  so `4740p03`'s rim is a one-face edge — and dropping it lost the entire dish.
+
+Never infer from dihedral angle: `4740p03`'s cone bands meet at genuinely
+different pitches and are smooth only by declaration. The G1 tagging that
+preceded this (`BRep_Builder::Continuity` + `Rg1LineVCompound`) is retired; it
+could not reach a one-face edge at all, of which `3960` has 326 and `3673` 234.
+
+## The premise, and where it now lives
+
+`CLAUDE.md` (new, at the repo root on this branch — **it should reach `main`**)
+carries the standing rules this port kept re-learning: LDraw parts are
+defective and a rule that assumes a sound shape is wrong by construction;
+declarations are the only source of truth; unprinted parts only; a small pixel
+diff is not agreement; a silent `[]` is not "unrepresentable". Read it first
+and do not repeat it here.
+
+The one thing that belongs here rather than there: the honest counter-case is
+that a cracked shell could leak sight-lines and break occlusion, since HLR
+needs solidity to hide things. Measured, it does not — `3941` renders correctly
+with 319 of its 478 edges unpaired — but that is a measurement, not a
+guarantee, so a future occlusion bug is the one place to reconsider sewing.
+
+## READ FIRST: test on UNPRINTED parts only
+
+Part ids with a `p` are out of the engine loop until the decal work is
+deliberately picked up. A printed part carries decoration that fails for its
+own reasons and drags engine debugging onto the wrong problem — on 2026-08-30
+chasing `3942bp01` and `4740p03` produced a crease rule whose only
+justification was a printed part, and that rule then broke unprinted ones. The
+unprinted outline corpus is `3005 3024 3001 3020 3040b 3941 6143 50950 4589
+3960 4070 87087 99781 4019 3649 6589 3673 32062`.
+
+**Read the part id to gate the decal stage.** LDraw's numbering is authored
+metadata — `4740p03` declares itself printed exactly as a type-2 line declares
+an edge — so branching on it is the same doctrine the engine already runs on,
+not a shortcut. Two consequences: the base part (`4740p03` -> `4740`) usually
+exists in the library and is the same geometry minus decoration, which gives
+the stripping stage a real oracle over hundreds of parts with nothing to label;
+and the id only says decoration EXISTS, so it gates the stage while colour and
+`tri_meta` still choose the facets. Watch the other suffixes (`pr` codes,
+stickers like `3069bpr0001`) and parts with no unprinted twin.
+
+**The decal layer wants filtering out before `build_shape`, not handling.** A
+decal is decoration lying ON a carrier surface, so it sews in as faces that
+fight the surface underneath. On a flat top face you could catch it as
+coplanar-and-inside; on `4740`'s dish the carrier is a CONE and no geometric
+test in the pipeline sees it as anything but more surface — which is why that
+part's rim came back as a one-face edge. `tri_meta` already carries each
+facet's colour, so the filter is identification-on-arrival rather than
+geometry. The render path only needs to DROP decoration; none of extraction's
+hard part (unwrapping a curved carrier to UV) is needed.
+
+## Where it stands on the unprinted corpus
+
+**17 of 17 match naive's shape.**
+
+`3941`, `6143` and `4589` were broken all day and were fixed by the stud fix,
+not by anything aimed at them: their rings carried the same coincidence
+signature. **That retires the "sewing is the blocker" theory written here
+earlier.** `3941` still has 319 one-face edges of 478 and now renders
+correctly; `6589` has 366 of 604 and always did. Cracks are everywhere and cost
+nothing on their own — what cost was feeding them to a crease rule. Closing
+them is optional cleanup, not the critical path.
+
+For the record on how to look: measured on the sewn shape, one-face edges are
+`4740` 0, `3960` 326 of 1515, `6589` 366 of 604, `3673` 332 of 638, `3941` 319
+of 478, `6143` 391 of 633 — and the render quality does not track any of it.
+
+**The sector finding still stands and still matters for sewing work:** `3941`'s
+outer wall is four `cyli` sectors of 45 degrees (180 in total, the rest
+arriving as 384 triangles), not a cylinder. Whoever closes the cracks should
+start there.
+
+## Two silent tolerances were deleting whole walls
+
+`frame()` rejected a primitive as sheared on a radius-ratio residual of
+**8.9e-6** and an orthogonality residual of **1.2e-6**, against thresholds of
+1e-6 — float noise off accumulated subpart transforms. A rejected primitive
+builds no face, so `3942bp01` lost 32 of its 52 surfaces and its cone wall was
+cracks. Both are now `1e-4` (`ORTHO_TOL`, `ROUND_TOL`); a genuinely elliptical
+cylinder sits at a ratio of 0.80, five orders clear. `ROUND_TOL` no longer
+rejects anything — it only chooses circle or ellipse — so the cost of getting
+it wrong is now a slightly-off wall rather than no wall.
+
+This is the `occt_faces` trap the spike named, reached by a different road: the
+function returns `[]` for "not representable" and `[]` for "my tolerance was
+too tight", and nothing distinguishes them. `50950` was the real instance of
+the first — ru=68.3 against rv=84.9 at an orthogonality residual of exactly 0,
+so no tolerance could ever have reached it. `frame()` now returns both radii
+and rejects only shear, and `cyli` extrudes a `gp_Elips`, since no
+`BRepPrimAPI` maker builds an elliptical cylinder. `con`, `disc` and `ring`
+still return `[]` when the radii differ: no part measured so far pins what
+they should be, and a guess is worse than the empty.
+
+**Two things the ellipse then exposed, both engine-wide rather than 50950's:**
+
+- **HLR returns a projected ellipse as a BSpline approximation** — only a
+  projected CIRCLE comes back as a conic. The wall drew as 31 straight
+  segments. `locus_arc` re-reads the fragment against the exact projected
+  conic `select_authored` already matched it to.
+- **The stroke layer had no silhouette contour under it.** The engine returned
+  `faces=()`, so `sil_geom` was `None` and `cli` emitted neither the closed
+  mitered contour nor the clip — and that contour is the only thing making an
+  outline corner sharp, so per-edge round caps barbed at every acute vertex.
+  `face_polys` + `VisResult.sil_polys` now carry the shape's projected
+  tessellation, wired to `silhouette_geom` and nothing else so fills and spur
+  trimming stay off. Kept per-face, not pre-unioned, because those polygons
+  are what the fills slice will attribute colour and depth to.
+
+  Diagnose this class by stubbing `shade.apply_affine_faces` to `[]` on the
+  NAIVE engine: it reproduced the barb pixel for pixel, which is what told the
+  two apart. Two plausible causes read identically at a glance.
+
+  **The contour turned out to carry outline the strokes never had**, which the
+  barb hid: without it `6143`'s barrel wall silhouette and `99781`'s left edge
+  came out broken. Ink naive has and occt misses drops from 537 to 378
+  (`99781`), 335 to 119 (`6143`) and 391 to 233 (`3941`), with spurious ink
+  flat. `contour_d` re-fits arcs from `res.ellipses`, which the OCCT engine
+  left empty, so it first traced the raw tessellation — 3005's SVG went 21
+  path commands to 147. An arc op's fields 1..6 ARE the tuple
+  `arc_candidates` takes, so the drawn arcs are now the candidates.
+
+  **Still open, and the reason `L` counts sit above naive's** (`99781` 109
+  against 29, `3942bp01` 129 against 27): a silhouette that is a curved
+  SURFACE profile has no drawn arc to snap to, so the contour stays polygonal
+  there. Cosmetic — SVG size, not ink — and it should evaporate when fills
+  supplies real faces. Do not chase it with a coarser mesh; the deflection is
+  a quarter pixel because a coarser contour's chords poke out from behind an
+  exact arc stroke.
+
+## The crease rule: two wrong answers before the measured one
+
+- **A condline does not declare its junction smooth.** LDraw's condlines on a
+  cone run ALONG the surface, endpoints on two different rings, so a
+  "both endpoints on this circle" test almost never fires — every band seam of
+  a stacked cone became an edge and `3942bp01` drew as a stack of hoops.
+- **"Both faces curved" is not continuation.** It reads a dish's outer rim
+  (cone meeting cylinder) as the wall carrying on, and deletes the dish.
+- **Shipped: tangency, with the threshold in a measured gap.** Over `4740`,
+  `3942bp01`, `4589` and `3941` every smooth band seam lands at 0-12 degrees
+  and every real edge at 60-90, with nothing between; `TANGENT_DEG = 30` sits
+  in that empty band. `scripts/measure-crease-angles.py` re-derives it.
+  A dihedral test is safe HERE and nowhere else, because the population is
+  junctions between exact surfaces rather than facets of a tessellation.
+
+## Open defects, measured
+
+- **Stud rings: fixed, and the fix changed the engine's shape.** A stud's base
+  circle added as an isolated edge-shape is coincident with its own cylinder,
+  and HLR breaks that tie VISIBLE — it keeps a full 360-degree fragment where
+  the same edge inside the sewn shape splits into 45/45/135/135/180. Not a
+  tangency limit, not a threshold: the cost of handing HLR duplicate geometry.
+
+  So nothing is added to `HLRBRep_Algo` but the shape. HLR runs on the faces
+  alone, and `select_authored` keeps only those visible fragments that lie on
+  an authored 2D locus (`authored_loci`). HLR splits an edge without reshaping
+  its curve, so a fragment of an authored edge still lies exactly on that
+  edge's projection. `4740`'s largest occt-only pixel component went from 115
+  to **7** — fringe scale, nothing structural.
+
+  `HLRBRep_HLRToShape.VCompound(edge)` on a sub-edge is a dead end; it returns
+  nothing, because HLR reports per *added shape*. Hence matching in 2D.
+
+  **The screen frame is X = right, Y = cross(z, x)**, pinned empirically the
+  way `projector_axes` was: `4740`'s 3D centre (0,-4,0) lands at (0, 3.464) and
+  HLR reports that ellipse at (0, 3.460). Do not re-derive it.
+
+- **Sliver faces.** `3673` has 77 of 112 paths >60% covered by another,
+  including closed micro-triangles; `3941` 56 of 166 retraced, `3649` 66 of
+  985. Degenerate faces reaching HLR.
+- **`32062` loses every arc** (naive 19, occt 0): a "+"-profile extrusion no
+  primitive matches.
+- **`3673`'s notch is under-drawn by NAIVE.** Occlusion removes 66 of its 136
+  segments. Not a port bug — a place not to match naive.
+
+## Naive is the reference, but it is not ground truth
+
+It lays down **30–55% duplicate ink** on almost every part (share of inked
+cells touched by 2+ paths, 0.3-unit grid): `3068b` 54.9%, `3005` 54.5%,
+`3040b` 53.7%, `4740` 43.8%, against OCCT's 1–5%. On `4740` it inks 4735 cells
+to OCCT's 1575 for a simpler drawing. Converge on naive's *shape*, not its
+stroke count, and expect to beat it on duplicates.
+
+## Later, not now
+
+Extend the translucent-stroke overlap technique to FACES as well as strokes,
+on a separate colour channel, so face coverage and stroke coverage can be read
+off one image independently.
+
+## The lab (next project, spans two repos)
+
+Marking regions and paths right/wrong, built on `~/src/weasel` +
+`packages/labkit` (weasel gives path hit-testing, area-select and compound
+paths; labkit gives `CanvasStack` pan/zoom, `ControlPanel`, `state`
+persistence, `trial`/`instrument`). It answers the blocker the spike named:
+goldens assert bytes and all go red when output changes by design, whereas a
+label asserts geometry and survives an engine change.
+
+**It needs provenance from brick-icons first, or it can only mark pixels.**
+Emit a sidecar JSON per render, one row per drawn op: source compound
+(`sharp`/`smooth`/`outline`), what backs it (type-2 index, `edge` prim
+centre+radius, or silhouette), 3D endpoints, SVG element index. `_edge_ops`
+already knows all of this and discards it. Then a label reads "the type-2 edge
+p1->p2 is drawn twice" — true of the part, checkable against any engine,
+surviving any arc re-split.
+
+The 3D pivot minimap wants NO 3D engine: the thing to pivot is a wireframe of
+authored edges, whose 3D endpoints the sidecar already carries, so project
+them in JS and draw them as weasel paths. Selection then works identically in
+both views against the same anchor, and nothing shades over the edges you are
+marking. It matters because HLR bugs are view-dependent — pivoting is how you
+separate two coincident strokes, and how you check an edge that vanishes at
+30/45 reappears when it should.
+
+## Traps
+
+- **`goldens.summarize_svg`'s bbox is built from path ENDPOINTS** and never
+  samples an arc's sweep, so re-splitting arcs moves it with no ink moving.
+  91% of `6589`'s recorded 13.93 x-min shift was this; `4589`'s 1.54 and
+  `4740p03`'s 4.66 were artifact in full. `scripts/compare-extents.py` reports
+  reported-vs-swept. Every `tests/goldens/render/*.json` stores the endpoint
+  bbox, so correcting the measure re-freezes all of them.
+- **Inlining several rendered SVGs into one HTML page cross-clips them.**
+  `trace.py:303` hard-codes `id="sclip"`, so every duplicate after the first
+  resolves to the first card's silhouette. Namespace ids per card. The repo's
+  own gallery scripts are safe (separate files, rasterized), but a consumer
+  embedding an icon set inline is not.
+- **Look at overlap with translucent strokes + `mix-blend-mode: multiply`.**
+  One stroke reads pale, two read twice as dark. Every duplicate found today
+  was invisible at full opacity.
+- **A clipPath is not ink.** Counting it put naive's silhouette outset in my
+  extent measurement and produced a phantom constant inset on all 23 parts,
+  including ones where the engines agree byte-for-byte.
+All on **`main`**, working tree clean. 477 tests pass (`BRICK_GOLDENS=1`: 13).
+`docs/superpowers/plans/2026-08-28-decal-unwrap.md` is the durable record of
+phase 2; this covers what landed on top of it.
+
+**The OCCT port is underway in another session, in its own worktree — do not
+start a second one.** First slice is hidden-line removal only, no fills,
+behind `--engine occt`, gating on the `outline` combo (`88e1ffd`). Check with
+that session before touching `hlr.py` or `primitives.py`. Its first run: 23
+parts, 0 render failures, but it does NOT pass — wins where geometry resolves
+to analytic primitives, regresses 3x or worse on 9 parts that fall through to
+raw triangle facets (`4740p03` 2 -> 13359 lines), and `6589` loses visible
+geometry outright. Cause measured as unmerged coplanar facets, not seam edges.
+
+**Do not fix the stray-geometry Open items below.** `14769p0a`'s thin
+numerals, `14769px2`'s stray arc and `4019`'s stray ellipse all live in
+`hlr._visible_segments_analytic`, which the port replaces — the port session
+confirms `4019`'s ellipse disappears under OCCT. Fixing them now is thrown-away
+work that collides with that tree.
+
+**Two gates that looked finished turned out to be holes, both found by
+review rather than by the tests.** Wireframe cannot gate hidden-line removal
+because it sets `cull=False`; the extraction corpus could not catch a
+regression in any classic brick, plate or tile because its candidate pool was
+an alphabetical prefix containing none. Both are fixed. The lesson worth
+carrying: a gate that runs green is not evidence it observes what you think.
+Ask what a gate would MISS before trusting it.
+
+## What shipped this session
+
+- `0980599` **skia-pathops evaluated** — adopt, but inside the OCCT port, not
+  before it. Conics survive its booleans exactly; it never invents them, so
+  the win is unlocked BY the port. Does not replace shapely (no polygon
+  offset). Spec: `docs/superpowers/specs/2026-08-29-pathops-evaluation.md`.
+- `88e1ffd` **`outline` combo** — 23 strokes-only cases, the isolated HLR gate.
+- `b4a89b4` **`outline__4019` added to `KNOWN_STRAY`** — the combo brought the
+  part in and the exemption list did not follow, so `main` failed its own
+  goldens under `BRICK_GOLDENS=1`. Both 4019 entries retire together.
+- `90be857` **decals emit only what is worth looking at** —
+  `unwrap.significant_groups`. A torso went 59 SVGs to 1.
+- `ced5da9` **candidate pool sampled, not truncated** —
+  `scripts/select-decal-candidates.py`.
+
+## What shipped
+
+**`brick-icons decal PARTS...`** — extracts printed decoration as a flat SVG
+laid out on the face it came from. Dispatched on `argv[0]` alone, so every
+existing invocation parses unchanged (pinned by a test). Documented in the
+README under "Decal extraction"; flags are `--out`, `--list`, `--root`,
+`--config`, `--texture-px`, `--svg-bg` (transparent by default).
+
+Extraction was emitting **nothing** for every part checked before this. Four
+causes, all now fixed and tested:
+
+- Carriers were analytic primitives only, so flat prints bound to nothing.
+  Body planes now join them (`planes_from`).
+- Discs and rings were used as *curved* carriers. `to_uv` sends every
+  non-`Plane` carrier through the cylindrical map, where a flat surface has one
+  constant height — a round tile's print unwrapped to a zero-area line.
+- A round tile's top face **is** a disc primitive, so it has no facets and
+  contributed no plane. Flat primitives now contribute theirs.
+- Decoration authored as coloured *primitives* was ignored entirely.
+  `3942bp01` is 16 cone sectors and zero coloured facets.
+
+Also: stacked wall sections merge into one spanning carrier (`span_carrier`),
+carrier faces union **all** coplanar facets including the print, groups sort by
+print area so `.0` is the real print, and `hlr.part_geometry()` skips the view
+pipeline (99s → 0.04s on a high-poly torso, byte-identical output, pinned).
+
+**Corpus: 600 parts, 11,855 SVGs, 0 errors.**
+
+## Two deliberate behaviours
+
+**The minifig neck mark is dropped from decals only.** LDraw authors a neck as
+a 270-degree body cylinder plus a 90-degree one in black; the head covers it.
+It is authored exactly as real print is — `3942bp01`'s stripes partition their
+wall into coloured and colour-16 sectors summing to 360 the same way — so it is
+caught by position *and* size together: protrudes past the body **and** covers
+no more than a quarter of its ring. Either condition alone admits `29030p01`'s
+head print and `53983p01`'s turbine case. Renders keep the band, by request.
+`scripts/sweep-marker-prims.py` re-derives this over the corpus.
+
+**Circle recovery is per-run, not per-ring.** `fit_circle` asks "is this whole
+ring one circle", which a decal boundary usually is not — a union leaves the
+coarser polygon's chord midpoints 0.345 LDU inside the rim. `circle_candidates`
+clusters vertex radii, **refits each cluster and verifies it**, then `path_d`
+converts only the runs that follow one.
+
+## Traps
+
+- **The cluster refit is load-bearing.** Without it, an arch-shaped boundary
+  (`14769px2`) fits a meaningless whole-ring centre, invents circles, and
+  throws a stray arc outside the silhouette.
+- **Never give decal arc candidates a snap tolerance in the render path.**
+  Pulling vertices onto the candidate destroyed `14769p0a`'s clock face —
+  underside ribs showed through. `shade._decal_arc_candidates` emits the
+  candidate only. This is the same hazard as the rim-candidate `NOTE` in
+  `hlr._visible_segments_analytic`.
+- **`30260p01`'s octagon is the guard for circle recovery** — its 8 vertices
+  share a radius, so a circle fits them exactly. Only `ARC_STEP` (45 deg a step
+  is too coarse) keeps it a sign. Test pins it.
+- **Never `git add -A` in a worktree.** `vendor/` in `.gitignore` matches a
+  directory, not the convenience symlink a fresh worktree needs, so `-A`
+  commits the link; merging it then checks the symlink out over the real
+  directory and a later `reset --hard` deletes the library. That is how the
+  pinned 2026-06-27 LDraw snapshot was lost — `complete.zip` serves only the
+  latest, so it is gone for good. `/vendor` is now in `.gitignore`; stage
+  explicit paths regardless.
+- **Don't `cd` out of the repo in the same command as a `git stash pop`** — the
+  pop fails and the work sits in the stash looking lost.
+- Everything from the previous handoff's Traps still applies: `cmd | tail`
+  buffers, subagents park on long commands, LDView colour is not evidence.
+
+## Open
+
+- **`14769p0a`'s `XI` and `XII` render thinner than `IIII` and `III`.**
+  Confirmed present at baseline, cause NOT diagnosed. User's hypothesis: they
+  sit farther from the camera. Note they read thinner rather than lighter,
+  which foreshortening alone does not explain on a flat top face.
+- **`14769px2` throws a stray arc outside its silhouette.** Pre-existing —
+  verified identical before and after this work. Unrelated to circle recovery.
+- **`4019` draws a stray ellipse outside its own viewBox.** Radii 83.79 x
+  51.31 across 5 stroke-only paths — larger than the ~134-unit part — pushing
+  bbox y-min to -11.08 against `0 0 256 170`. Same class as `14769px2` above
+  and the `NOTE` in `hlr._visible_segments_analytic`: analytic rim candidates.
+  Pinned by `KNOWN_STRAY` in `tests/test_goldens.py`, which fails if a new
+  part joins it *or* if this one gets fixed without the note being updated.
+- **Sliver policy: settled.** `unwrap.significant_groups` now carries three
+  part-level rules — the sliver ratio, the shatter share, and `MAX_DECALS = 4`,
+  which returns nothing when a part still resolves to more than a few textures.
+  Sited by eye over the corpus, not by the count alone: above the cap a part is
+  always ONE decoration cut across faces, never several prints. `20460p09`'s
+  five are panels of the same striped garment; `6580ac01`'s six are one band
+  cut four ways. The cap counts SURVIVORS, not raw groups — counting raw would
+  silence 52 parts whose single print is intact.
+- **The extraction seam has no gate.** `tests/goldens/decal-hashes.txt` is
+  written by `scripts/freeze-goldens.py --seam extraction` and read by NO test.
+  `test_frozen_hashes_still_reproduce` reads only the render seam's
+  `hashes.txt`, and under `BRICK_GOLDENS=1` it re-freezes a single part
+  (`--only 3005`); `=full` covers all 54 render cases and still never opens the
+  decal hashes. So half the conformance corpus the engine swap is meant to be
+  judged on is frozen but unchecked — the cap silenced 19 parts and the suite
+  stayed green. Closing this is a test that diffs the extraction seam the way
+  the render one is diffed.
+- `SNAP_TOL = 0.4` LDU is the loosest constant added, tuned to the 0.345 stray.
+  Extraction only; the render path passes no snap tolerance.
+- **`skia-pathops` for the 2D booleans: settled — adopt, but inside the OCCT
+  port, not before it.** Conics survive its booleans exactly (8 conics out of
+  a two-circle union, 4e-7 area error), so it does delete `geom2d`'s arc
+  recovery — but only once true circles reach it, and today every polygon is
+  pre-flattened by facet tessellation. It also does not replace shapely: no
+  polygon offset, which `opened()`, `close_slivers()` and `buffer_d()` need.
+  Robustness is not a differentiator. Measurements and the four binding traps:
+  `docs/superpowers/specs/2026-08-29-pathops-evaluation.md`.
+
+---
+
+# OpenCASCADE spike — complete, port underway elsewhere
+
+Lives on **`occt-spike`** (4 commits, branched off `1f65166`, nothing merged
+to `main`). The durable record is the spec:
+`docs/superpowers/specs/2026-08-29-occt-spike.md` **on that branch** — it
+carries every measurement, the verdict, and the traps. Read it first; nothing
+below repeats it.
+
+Verdict in one line: adopt OCCT for hidden-line removal, and the boolean
+track is viable too via `BOPAlgo_MakerVolume`.
+
+## What to do next, and why not the port
+
+**The port is blocked on a question that has nothing to do with OCCT: what
+replaces the regression gate?** The net today is 18 specimens byte-identical
+to `main`, which stops working the moment output changes by design — every
+specimen goes red and none of them tell you whether it broke. Until that has
+an answer, a rewrite of `hlr.py` + `primitives.py` cannot distinguish
+"different because exact" from "different because wrong". Settle it before
+writing port code; it is answerable without OCCT installed.
+
+Then the adoption design. It is smaller than it first looked: replace
+occlusion in `hlr.py` and `primitives.py`, delete `arcfit.py`, keep shapely
+and `geom2d.py`.
+
+## Traps that are not in the spec
+
+- **`scripts/spike-occt.py` imports `brick_icons.hlr` and `.repair`**, so it
+  is pinned to `occt-spike`'s copy of them — now behind `main` by the decal
+  commit. Rebase before trusting a re-run.
+- **The scratch venv was in a temp dir and is gone.** Recreate with
+  `pip install cadquery-ocp` into a throwaway venv; it is ~800 MB with the
+  VTK it drags in, so keep it out of `.venv`.
+- **`pip` needs `PIP_CONFIG_FILE=/dev/null`** here. A global
+  `extra-index-url` points at `us-python.pkg.dev` and prompts for auth, which
+  kills any non-interactive install.
+- **Coverage numbers need a render behind them.** `BOPAlgo_MakerVolume`
+  scored `3649` at 55% area — a partial success by the metric — while the
+  render showed the gear's entire body missing. Same class as the existing
+  "proof sheet is not the renderer" trap.
+
+## The regression gate: answered
+
+`tests/goldens/` is the replacement, frozen from `main` before any port code.
+The reference is the README's **Golden conformance corpus** section — how to
+run it, what each artifact is for, and the case manifest. Not repeated here.
+
+What it changes for the port:
+
+- **Judge the port on `scripts/compare-goldens.py`, never on `hashes.txt`.** A
+  hash miss is expected and carries no information once output changes by
+  design; the comparator ignores hashes and diffs the raster and the
+  structural summary instead.
+- **Any nonzero delta is real.** Two full freezes of the unchanged engine
+  agree exactly — every hash identical, raster RMSE 0.000, no summary field
+  moved. The engine is deterministic, so the zero-tolerance defaults hold and
+  there is no jitter to explain away.
+- **Read the arc/line split as intent.** On round parts `A` rising while `L`
+  falls is the kernel doing its job. A round part whose `A` count does *not*
+  move is the suspicious one.
+
+Both seams are frozen, since the CLI touches the engine at exactly two points:
+the render path (now 54 cases) and extraction via `hlr.part_geometry` (600
+parts, 21,035 SVGs, one hash per part, 0 exceptions).
+
+**The `outline` combo is the HLR gate** (23 cases, added `88e1ffd`): strokes
+only, occlusion on. `wireframe` sets `cull=False` and is the one combo that
+does not exercise occlusion at all; `outline-flat3` does, but its fills take
+3001's arc count from 58 to 192 and drown the arc/line signal.
+
+Three things found while freezing:
+
+- **`4740p03` no longer throws `TopologyException`** — not on either seam and
+  not in the proof sheet. It is an ordinary decal-heavy specimen in the corpus
+  now, so the older handoff's entry for it is stale.
+- **The extraction corpus is filtered to parts that have a surface to print
+  on**, by `scripts/select-decal-corpus.py`: keep a part with 1..4 carriers at
+  least as big as a 1x1 round tile's face, and that also yields something
+  through `unwrap.significant_groups`. 393 of 600 candidates survive, carrying
+  626 SVGs, every one extracting at least one decal. Sculpted parts — Friends
+  legs, minidolls, Simpsons heads — score zero big carriers and drop out;
+  wheel-and-tyre assemblies score dozens and also drop. Exceptions belong in
+  `corpus-overrides.toml`; `decal-corpus.txt` is generated, so do not edit it.
+
+  **The candidate pool is now sampled, not truncated.** It used to be the first
+  600 printed parts in sorted order, so every id started 00-15 and no classic
+  brick, plate or tile was in the corpus at all.
+  `scripts/select-decal-candidates.py` now takes every-Nth across all 11,220,
+  which moved the corpus from 217 distinct shapes to 242 and broke up a single
+  shape holding 26% of it. Nothing recorded how the old 600 were chosen, which
+  is why the truncation went unnoticed; the pool is a generated file now.
+
+  **Measuring a carrier's area has three traps, all of which silently dropped
+  printed round tiles — the class the corpus most needs.** A disc is flat, so
+  the wrap-by-height extent a curved carrier reports is zero for one. A flat
+  primitive contributes a plane with no facets behind it, so `face.area` comes
+  back self-cancelling — 61.9 across a full 40 LDU span on a 2x2 round tile —
+  which is why the measure takes the convex hull. And a discretized circle
+  measures ~1% under the circle it approximates, so an r=9 carrier misses a
+  pi*81 threshold by 0.85%; hence the 5% margin.
+
+  `decal-candidates.txt` is the unfiltered pool: the first 600 printed parts of
+  11,220. The slice the decal work reported against (11,855 SVGs) was never
+  recorded and this pool yields 21,035, so it is a different 600.
+- **Golden rasters are calibrated against the pinned `resvg` 0.47.0.**
+  Upgrading it moves every PNG with no engine change; re-freeze deliberately.
+
+---
+
+# OCCT hidden-line port — slice 1 complete, does not pass cleanly
+
+Lives on **`occt-port`** (19 commits, rebased onto `main` at `b4a89b4`, nothing
+merged). Durable records, both on that branch:
+
+- `docs/superpowers/specs/2026-08-29-occt-adoption-design.md` — the design, and
+  a `## Open` section carrying the measured outcome.
+- `docs/superpowers/plans/2026-08-29-occt-hlr-port.md` — the seven-task plan.
+- `docs/superpowers/specs/2026-08-29-occt-spike.md` — the spike, copied here
+  because it existed on no other ref, with its projector-frame finding marked
+  superseded.
+
+Read the design doc's `## Open` first; nothing below repeats it.
+
+## The verdict in one line
+
+`--engine occt` renders all 23 corpus parts with zero failures, wins outright
+where geometry resolves to analytic primitives, and regresses by up to 6679x in
+line count where it falls through to raw triangle facets. Not a clean pass, and
+deliberately not merged.
+
+## READ FIRST: the corpus measurement is STALE
+
+`0aead88` fixed two silent geometry defects found AFTER the corpus run, so every
+number in the design doc's `## Open` and in the task-7 report was measured
+against broken geometry. **Re-run `scripts/compare-engines.py` and replace those
+figures before planning anything off them** (~6 min; `3649` dominates). Both
+defects push the same direction as the regression that was measured — phantom
+caps add edges and occlude, missing rings remove surface — so the line explosion
+and the arc losses are all suspect, not only `6589`.
+
+- `occt_faces` built `cyli`/`con` as CAPPED SOLIDS. `MakeCylinder(...).Shape()`
+  is a solid; LDraw's `cyli`/`con` are open lateral surfaces. Ten phantom caps on
+  `6589` alone, and a bore cylinder's cap sealed the axle hole, so HLR correctly
+  hid geometry behind material the part never had. `.Face()` is the fix.
+- No full-circle `ring` ever produced a face. `TopoDS_Wire.Reversed()` is typed
+  `TopoDS_Shape`, which `MakeFace.Add` refuses, and the `TypeError` was swallowed
+  by `occt_faces`'s blanket `except Exception: return []`. Every full ring in
+  every part silently contributed nothing. The bounded-sector path was
+  unaffected, which is why it hid so well — and it is a standing argument for
+  narrowing that bare `except`.
+
+## What to do next, in this order
+
+1. **The line explosion** on 9 of 23 parts — but re-measure first, per the note
+   above; this ranking predates the fix. Previously-measured
+   cause is unmerged coplanar triangle facets reaching output —
+   `ShapeUpgrade_UnifySameDomain` declining to merge. NOT cylinder seams: those
+   were quantified at ~5 of 254 added lines on `3941`, so that hypothesis is
+   dead. `tests/goldens/corpus-overrides.toml` and the carrier-count measure in
+   `scripts/select-decal-corpus.py` already separate the facet-heavy population
+   — same split, different symptom.
+2. **Cheap win available:** `out["fit_arcs"]` is computed at `hlr.py:992` and then
+   discarded on the OCCT path. Injecting those ops into the result would likely
+   recover `32062`'s 19 lost arcs for almost nothing.
+3. **`6589`'s bbox x-min shift (13.93), and `4589`'s (1.54).** Both unchanged by
+   the bore fix and both undiagnosed. Lower severity than they read in the
+   task-7 report, which wrongly tied 6589's to the missing axle hole.
+
+`6589`'s lost bore geometry — item 1 in the previous version of this list — is
+fixed: capped-solid cylinders and never-built ring faces, both silent. The
+design doc's `## Open` carries it.
+
+## Traps that are not in the specs
+
+- **`occt_faces` catches every exception and returns `[]`.** That is why two
+  separate defects lost whole surfaces for the life of the port with no error
+  anywhere, and it will hide the next one too: a primitive that raises is
+  indistinguishable from one that is deliberately unrepresentable. When
+  touching that function, re-run it with the `except` removed before believing
+  a `[]`.
+- **The frame was settled by enumeration, not derivation.** Three separate
+  derivations each looked correct and were wrong. Shipped is
+  `Z = +cross(right, up)`, `X = +right`, **Y negated** — a configuration none of
+  them proposed. `occt.projector_axes`'s docstring is the authority; the spike's
+  `X = -right` is superseded. If you change it, re-run the 8-configuration
+  enumeration rather than reasoning about it.
+- **The projector test and the chirality test are complementary.** Neither alone
+  catches both failure modes: a Z-only flip escapes the chirality test, a
+  simultaneous Z+X flip escapes the projector test. Do not delete either as
+  redundant.
+- **`BRICK_GOLDENS=1` or the gate does not run.** A plain suite reports
+  "N passed, 3 skipped" and those 3 skips are the drift tests. Two sessions
+  independently mistook that for verification. Gated: 491 passed, 0 skipped.
+- **Arc parameters are DEGREES** across this codebase (`hlr.dedupe_segments`
+  emits them, `trace._arc_to_svg` and `process.draw_segments` consume them).
+  OCCT reports radians. A missing `math.degrees` draws a full circle as a
+  6.28-degree sliver, which reads as "broken arcs", not as a units bug.
+- **Five tests on this branch could not fail** before review caught them. When
+  adding a guard here, mutate the code and watch it go red before believing it.
+
+## Ready-made stress list for the facet-fallthrough regression
+
+From the extraction side (`brick-icons-ac`, 2026-08-30): these 15 parts were
+dropped from the decal corpus because their geometry never resolves to analytic
+primitives and they shatter into nothing extractable. That is the SAME
+population that regresses 3x or worse under the OCCT kernel, so it is a named
+stress set for the coplanar-facet merge problem rather than something to
+re-derive:
+
+    1006030p01 1006030p02 1011297p04 10128p01 10128p01c01 10128p02
+    1022657p03 1023000p03 1023000p04 1023035p04 10830p01 11391p01
+    11435p02 13809p02 13809p03
+
+Also: `tests/goldens/decal-hashes.txt` was re-frozen twice on 2026-08-30, ending
+at **`ced5da9`** (393 parts / 626 SVGs). Gate against that one, not `90be857`
+and not an earlier copy. The RENDER seam is untouched throughout — the 23
+`outline__` cases and their hashes are unchanged — but any later slice touching
+`hlr.part_geometry` must use the current decal baseline.
+
+**The lesson in that second re-freeze is worth more than the hash.** The decal
+candidate pool had been the first 600 printed parts in SORTED order — a prefix
+of the id space, not a sample. Every id began 00-15, so the library's largest
+printed families were absent entirely (`30xxx` alone carries 1,440 printed parts,
+none of them included), the corpus contained no classic brick, plate or tile, and
+one shape was 26% of it. A kernel swap gated on that baseline would have left
+whole families of geometry unobserved while reporting coverage.
+
+That is the third gate-shaped-hole found in one day, after the cel combo that
+could not move under an engine swap and the wireframe combo that cannot test
+hidden-line removal. The pattern is the point: **a gate that looks like coverage
+is not evidence of coverage until you check what is actually in it.** The
+resampled corpus (242 distinct shapes, 41 torsos, printed tiles present) now
+spans both the analytic-primitive parts this kernel wins on and the facet-heavy
+parts it regresses on, so it is also a better before/after set for the
+coplanar-facet merge work than anything derived earlier.
