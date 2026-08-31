@@ -1,0 +1,33 @@
+/* Over the panes, not in flow with them: a dialog in flow would resize every
+   render beside it, which is the one thing a defect view must not do. */
+.file-defect {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 20rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--lk-border, #3a3a3a);
+  border-radius: 6px;
+  background: var(--lk-panel, #202020);
+  box-shadow: 0 8px 32px rgb(0 0 0 / 45%);
+  font-size: 0.8125rem;
+}
+
+.file-defect h3 { margin: 0; font-size: 0.875rem; }
+.file-defect label { display: flex; flex-direction: column; gap: 0.25rem; }
+.file-defect fieldset {
+  display: flex;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0.25rem 0.5rem 0.5rem;
+  border: 1px solid var(--lk-border, #3a3a3a);
+  border-radius: 4px;
+}
+.file-defect fieldset label { flex-direction: row; align-items: center; }
+.file-defect textarea { min-height: 3rem; resize: vertical; }
+.file-defect-actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
