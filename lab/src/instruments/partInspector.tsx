@@ -16,6 +16,8 @@ import { FileDefectDialog } from '@lab/defects/FileDefectDialog';
 import { DefectCard } from '@lab/defects/DefectCard';
 import { buildDefect, useDefects } from '@lab/defects/useDefects';
 import type { Mark } from '@lab/defects/geometry';
+import { ThreePane } from '@lab/panes/ThreePane';
+import { useReference } from '@lab/panes/useReference';
 
 export interface InspectorState {
   renders: Partial<Record<SourceId, RenderResult>>;
@@ -46,39 +48,71 @@ function Panes({ ctx, client }: { ctx: any; client: LabClient }) {
   const [pendingMark, setPendingMark] = useState<Mark | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
 
+  const angle = String(config.angle ?? 'iso');
+  const referencePane = useReference(client, part, angle,
+                                     config.part_color as string | undefined);
+
   const engineIds = sources.filter((s) => s.kind === 'engine').map((s) => s.id);
   const marking = Boolean(config.marking);
   const shown = defects.find((d) => d.id === selected);
 
   return (
     <div className={`panes panes-${layout}`}>
-      {sources.map((source) => (
-        <SourcePane
-          key={source.id}
-          source={source.id === 'diff'
-            ? { ...source,
-                caveat: diffWarning(config)
-                  ?? (diffCaption(diff.result) || source.caveat) }
-            : source}
-          state={source.id === 'diff'
-            ? diff.pane
-            : paneState(source.id, ctx.state as InspectorState, markup)}
-          camera={camera}
-          onCamera={(next) => ctx.trial.setView(next)}
-          onBox={(box) => setBoxes((prev) => ({ ...prev, [source.id]: box }))}
-          overlay={
-            <MarkLayer
-              defects={defects.filter((d) => d.engines.includes(source.id))}
-              box={boxes[source.id] ?? { width: 1, height: 1 }}
+      {sources.map((source) => {
+        // The 3D pane owns its own camera, so it ignores the shared 2D one and
+        // its only control is the orbit that writes --angle.
+        if (source.kind === '3d') {
+          return (
+            <SourcePane
+              key={source.id}
+              source={source}
+              state={{ kind: 'idle' }}
               camera={camera}
-              config={config}
-              armed={marking}
-              onDraw={setPendingMark}
-              onSelect={setSelected}
+              onCamera={() => {}}
+              overlay={
+                <ThreePane
+                  part={part}
+                  angle={angle}
+                  onSettle={(next) => ctx.setConfig('angle', next)}
+                />
+              }
             />
-          }
-        />
-      ))}
+          );
+        }
+        if (source.kind === 'reference') {
+          return (
+            <SourcePane key={source.id} source={source} state={referencePane}
+              camera={camera} onCamera={(next) => ctx.trial.setView(next)} />
+          );
+        }
+        return (
+          <SourcePane
+            key={source.id}
+            source={source.id === 'diff'
+              ? { ...source,
+                  caveat: diffWarning(config)
+                    ?? (diffCaption(diff.result) || source.caveat) }
+              : source}
+            state={source.id === 'diff'
+              ? diff.pane
+              : paneState(source.id, ctx.state as InspectorState, markup)}
+            camera={camera}
+            onCamera={(next) => ctx.trial.setView(next)}
+            onBox={(box) => setBoxes((prev) => ({ ...prev, [source.id]: box }))}
+            overlay={
+              <MarkLayer
+                defects={defects.filter((d) => d.engines.includes(source.id))}
+                box={boxes[source.id] ?? { width: 1, height: 1 }}
+                camera={camera}
+                config={config}
+                armed={marking}
+                onDraw={setPendingMark}
+                onSelect={setSelected}
+              />
+            }
+          />
+        );
+      })}
       {pendingMark ? (
         <FileDefectDialog
           part={part}
