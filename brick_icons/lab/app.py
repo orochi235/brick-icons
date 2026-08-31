@@ -5,6 +5,7 @@ server, and nothing here decides anything about rendering.
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
@@ -81,6 +82,18 @@ def create_app(root: Path | str = ".",
 
         return {"job": app.state.jobs.start("render", [argv], work),
                 "argv": argv, "command": " ".join(["brick-icons", *argv])}
+
+    @app.get("/api/command")
+    def get_command(part: str, config: str = "{}"):
+        try:
+            parsed = json.loads(config)
+        except json.JSONDecodeError as e:
+            raise HTTPException(400, f"bad config JSON: {e}") from None
+        try:
+            argv = schema.to_argv(part, parsed)
+        except KeyError as e:
+            raise HTTPException(400, str(e)) from None
+        return {"argv": argv, "command": " ".join(["brick-icons", *argv])}
 
     @app.get("/api/jobs/{job_id}")
     def get_job(job_id: str):

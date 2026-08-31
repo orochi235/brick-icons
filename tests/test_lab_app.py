@@ -187,3 +187,23 @@ def test_batch_starts_one_job_for_the_list(client, ldraw_dir):
     assert done["total"] == 2
     assert done["done"] == 2
     assert [e["index"] for e in done["events"]] == [1, 2]
+
+
+def test_command_route_returns_argv_without_rendering(client):
+    body = client.get("/api/command", params={
+        "part": "3941",
+        "config": '{"engine": "occt", "shading": "outline"}',
+    }).json()
+    assert body["argv"] == ["3941", "--shading", "outline", "--engine", "occt"]
+    assert body["command"] == "brick-icons 3941 --shading outline --engine occt"
+
+
+def test_command_route_rejects_an_unknown_key(client):
+    r = client.get("/api/command", params={"part": "3941",
+                                           "config": '{"not_a_flag": 1}'})
+    assert r.status_code == 400
+
+
+def test_command_route_rejects_unparseable_config(client):
+    r = client.get("/api/command", params={"part": "3941", "config": "{oops"})
+    assert r.status_code == 400
