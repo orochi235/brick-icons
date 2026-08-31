@@ -234,6 +234,88 @@ def test_drawings_stay_inside_their_own_viewbox():
         f"KNOWN_STRAY and say what fixed it")
 
 
+# --- extraction seam --------------------------------------------------------
+#
+# The render gate above locks `hashes.txt`. This one locks the other half of
+# the corpus, `decal-hashes.txt`, which was frozen by `freeze-goldens.py
+# --seam extraction` and read by no test at all: the MAX_DECALS cap silenced
+# 19 parts and the suite stayed green.
+
+
+def _frozen_decals() -> dict[str, tuple[str, int]]:
+    path = GOLDENS / "decal-hashes.txt"
+    if not path.exists():
+        return {}
+    out = {}
+    for line in path.read_text().splitlines():
+        fields = line.split()
+        if len(fields) == 3:
+            out[fields[1]] = (fields[0], int(fields[2]))
+    return out
+
+
+def _corpus_parts() -> list[str]:
+    text = (GOLDENS / "decal-corpus.txt").read_text()
+    return [s for ln in text.splitlines() if (s := ln.split("#")[0].strip())]
+
+
+def _decal_subset(frozen: dict[str, tuple[str, int]], per_class: int = 3):
+    """Sample every decal-COUNT class, not the alphabet.
+
+    The count is what the sliver ratio, the shatter share and MAX_DECALS all
+    move, and the classes are lopsided — 310 parts yield one decal, 20 yield
+    none. A stride sample over 393 sorted ids would miss both edges, which is
+    where the cap does its silencing.
+    """
+    by_count: dict[int, list[str]] = {}
+    for part, (_, n) in sorted(frozen.items()):
+        by_count.setdefault(n, []).append(part)
+    picked = [p for n in sorted(by_count) for p in by_count[n][:per_class]]
+    return sorted(picked)
+
+
+def test_every_corpus_part_has_a_frozen_decal_hash():
+    """Cheap enough to run unconditionally: it opens no LDraw file. A part in
+    the corpus with no row is one a partial re-freeze dropped, and nothing
+    downstream would notice it had stopped being watched."""
+    frozen = _frozen_decals()
+    assert frozen, "no decal goldens: freeze-goldens.py --seam extraction"
+    missing = [p for p in _corpus_parts() if p not in frozen]
+    assert not missing, f"corpus parts with no frozen hash: {missing}"
+
+
+@drift
+def test_frozen_decal_hashes_still_reproduce(tmp_path):
+    """The extraction seam's drift lock, mirroring the render seam's.
+
+    `BRICK_GOLDENS=1` re-extracts one part per decal-count class; `=full` does
+    the whole 393-part corpus, which costs about six minutes.
+    """
+    frozen = _frozen_decals()
+    assert frozen, "no decal goldens: freeze-goldens.py --seam extraction"
+
+    cmd = [sys.executable, str(ROOT / "scripts" / "freeze-goldens.py"),
+           "--seam", "extraction", "--out", str(tmp_path)]
+    subset = None
+    if MODE != "full":
+        subset = _decal_subset(frozen)
+        cmd += ["--only", ",".join(subset)]
+    subprocess.run(cmd, check=True, cwd=ROOT)
+
+    fresh = {}
+    for line in (tmp_path / "decal-hashes.txt").read_text().splitlines():
+        fields = line.split()
+        if len(fields) == 3:
+            fresh[fields[1]] = (fields[0], int(fields[2]))
+
+    assert set(fresh) == set(subset or frozen), (
+        "the run did not cover the parts asked for")
+    drifted = {p: (frozen.get(p), got) for p, got in fresh.items()
+               if frozen.get(p) != got}
+    assert not drifted, (
+        "extraction moved on: " + ", ".join(sorted(drifted)))
+
+
 def test_outline_combo_is_strokes_only():
     """The HLR gate must not also test the fill path.
 
