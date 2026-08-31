@@ -10,11 +10,12 @@ second thread to coordinate with — `.claude/worktrees/occt-port` is an
 ordinary worktree on the same commit, and the two-workstream protocol below is
 history.
 
-**Your uncommitted `brick_icons/cli.py` is the one collision.** The merge
-changed the `sil_geom` line in `process_one` and added `_sil_faces` above it,
-so re-read that function before committing. The fast-forward preserved your
-edits and nothing was lost; `test_cli.py`, `scripts/freeze-goldens.py` and
-`tests/test_goldens.py` were not touched by the merge.
+**`cli.py` took edits from both sides and auto-merged clean.** `--debug-colors`
+and the render label sit alongside `_sil_faces` and the two `sil_geom` lines in
+`process_one`; nothing was dropped, and the suite is green on the result. It
+merged only because both sides had committed — the merge that landed the engine
+went in while those edits were still uncommitted, and survived on luck plus a
+fast-forward, not on anything structural.
 
 Landed: `50950`'s elliptical wall, arcs read off the projected conic rather
 than HLR's BSpline approximation, and a silhouette contour for the OCCT
