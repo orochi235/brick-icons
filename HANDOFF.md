@@ -1,8 +1,9 @@
 # Handoff — `main`, with the OCCT engine landed
 
-On **`main`**, even with `origin/main` — nothing is local-only. 525 tests pass
-under `BRICK_GOLDENS=full` (~27 min). A plain `pytest` skips the drift tests,
-and `BRICK_GOLDENS=1` renders only `3005` — neither is verification.
+On **`main`**. 531 tests pass under `BRICK_GOLDENS=full` (~22 min); the render
+goldens were re-frozen for the arcfit changes below. A plain `pytest` skips the
+drift tests, and `BRICK_GOLDENS=1` renders only `3005` — neither is
+verification.
 
 ## Read first: there is one thread now
 
@@ -16,67 +17,77 @@ Landed: `50950`'s elliptical wall, arcs read off the projected conic rather
 than HLR's BSpline approximation, and a silhouette contour for the OCCT
 engine. The defect list below is rewritten against the merged corpus.
 
-## Corpus review 2026-08-31 — defects found by eye, none diagnosed
+## Corpus review 2026-08-31 — the acute-angle family, diagnosed and fixed
 
-**HIGHEST PRIORITY: `3941` and `6143` still render their borehole wrong, in
-BOTH engines.** Between the four studs each draws a cross/star artifact —
-naive a scalloped cross, occt four thin spikes.
+One cause explained the boreholes, every gear centre, and the axle's notch
+pockets: **`arcfit.fit_edge_arcs` MOVES a fitted chain out of `out["2"]`, and
+`occt.authored_loci` built its loci from `out["2"]` alone.** Every chain arcfit
+claimed was therefore structurally undrawable in `occt` — silently, because a
+locus that matches nothing is not an error. It is the chains at acute junctions
+that arcfit claims, which is why the symptom picked out axle holes, gear hubs
+and notch pockets and left plain boxes alone. `3941` lost 40 of its 120 type-2
+edges that way; `3649` lost 200.
 
-Earlier in that same session I called 3941 "a red herring, no visible axle hole,
-correctly hidden" on the strength of an LDView thumbnail plus an edge-coverage
-tally. **That call is disputed and should be treated as wrong until re-checked
-against a large render**, not a thumbnail: the user, looking at the render, reads
-the borehole as unfixed. Re-derive from the picture before re-using any of that
-reasoning.
+Three fixes, all in `occt.py`:
 
+- fitted chains reach `authored_loci` through `out["fit_arcs"]`, matched as the
+  authored chords (the shape's own fragments ARE those chords and miss the arc
+  by the sagitta);
+- a matched chord fragment is re-read against the fitted circle, so `occt`
+  stylizes the chain the way `naive` does instead of drawing two chords meeting
+  at a point;
+- collinear seg loci merge before matching. `ShapeUpgrade_UnifySameDomain`
+  welds collinear edges across subparts, so one fragment can span several
+  authored segments and lie inside none of them — `32062` authors its axial
+  ridge in five pieces (three `axlehol8` sections plus the two notch spans) and
+  gets back one edge running the whole axle.
 
-Found by reviewing `naive|occt` pair sheets of the 21 unprinted parts. **These
-are observations, not diagnoses** — only the counts below were measured. The
-sheets are reproducible: render each part `--shading outline --part-label` under
-both engines and montage them in pairs.
+**`3941`'s naive borehole was never wrong.** The disputed "red herring" call was
+right, for a reason nobody had written down: what it draws IS the authored
+axle-hole rim — verified edge by edge against the projected type-2 lines, and
+against LDView at matched elevation. The near lip is hidden because the front
+stud stands 4 LDU proud and, at 30 degrees, its shadow reaches past the lip
+(clearing it needs 6.93 LDU of horizontal run against the 4.60 available). Only
+`occt` was drawing it wrong, and it drew nothing at all. Re-deriving this costs
+an hour; do not re-open it on the strength of the render looking odd.
 
-Drawn-op counts at `30,45` (`hlr.visible_segments`, this is the measured part):
+Two `arcfit` changes, both on the NAIVE path, both re-frozen into the goldens
+(12 of 52 cases moved; `A` rises and `L` falls in every one):
 
-| part | naive L | occt L | naive A | occt A |
-|---|---|---|---|---|
-| 4070 | 22 | 38 | 5 | 13 |
-| 32062 | 84 | 83 | **14** | **0** |
-| 3673 | 48 | 66 | 22 | 27 |
-| 4019 | 276 | 288 | 34 | 22 |
+- **A neighbouring chord is not a tangent.** It lies half its own sweep off its
+  circle's tangent, so on 16-gon tessellation (11.25 degrees against
+  `ANCHOR_ANG`'s 15) it reads as a continuation of whatever chain it touches.
+  On `3941`'s stud truncation that anchored the fit onto r=4.7 where the chain's
+  own vertices sit at 6.8, the residual gate then rejected the chain, and the
+  whole truncated quarter drew as a kinked polyline beside the smooth
+  270-degree arc. `_fit_circle` now falls back to the unanchored fit when the
+  anchored one fails its own residual — and reports zero anchors, so the
+  lopsided-chain gate below still applies.
+- **`SYM_RATIO` 1.25 -> 3.0.** A real round authored on a slanted plane
+  projects to an ELLIPSE, so its sweeps are unequal however evenly it was
+  faceted — `54200`'s inner corner is 1.57:1 and drew a 38-degree kink beside
+  its own smooth outer ridge. Sited by measurement over the specimen list: real
+  rounds run to 2.66, and the first fabricated fit is `32062`'s axle end at
+  4.16, which balloons each end into a blob reaching r=6.59 on a part whose
+  profile radius is 6.0. Both sides are pinned by tests.
 
-**occt draws MORE lines than naive on three of the four** while visibly missing
-specific edges, so it is not dropping lines globally — it drops particular ones
-and adds silhouette fragments. Any theory that explains only a deficit is wrong.
+### Still open from that review
 
-- **`4070` (occt): the base ledge's top-front edge is gone**, leaving one short
-  stub. naive draws it whole. The cleanest reproduction of the dropped-edge
-  class — a long straight edge on a simple, fast part.
-- **`32062` (occt): the central-axis line and the notch cut lines are missing.**
-  Its zero arc count is the already-known "loses every arc" defect; the rounded
-  notch-end pockets ARE those arcs, which is what visibly disappears.
-- **`3673` (naive): only the front notch has its rounded end pocket**; the other
-  three notches lack it. Same rounded-pocket geometry as 32062's, so these two
-  are probably one bug seen from two sides.
-- **`6589` (occt): the centre is missing geometry everywhere.** naive reads well
-  EXCEPT a misaligned halo — a halo on naive is the signature of the
-  counterbore separator refit fixed for 4019 (`SEP_REFIT_MAX_GROWTH`), so check
-  whether 6589 has a refit sitting under the 10x cap.
-- **`4019` (occt): broken through the middle. So are `3649` and `6589` — every
-  gear in the corpus is wrong in its centre**, which is exactly where each has
-  its axle hole. That is one defect seen three times, and it is the strongest
-  lead here.
-
-  A previous session (this one) measured occt's bore edge coverage on 4019 and
-  concluded the occlusion was "broadly correct" (25/28 front-half edges drawn,
-  24/28 back-half hidden). **Do not trust that as a clean bill of health**: it
-  counted whether an authored edge was drawn at all, which says nothing about
-  whether the result LOOKS right, and the first pass of it measured the wrong
-  axis entirely (the hole runs along Z; the tally was taken around Y).
+- **`4019`'s hub rim.** naive draws a 278.8-degree sweep on a conic of
+  semi-axes 13.79 x 10.67; `occt` has that locus, matches one of the eight, and
+  draws a different conic (14.88 x 9.11) instead. **Not** `UnifySameDomain` —
+  building the shape without it changes neither the sharp-fragment count (481)
+  nor the match (1 of 8). Undiagnosed.
+- **`4070` (occt): the base ledge's top-front edge is gone.** `4070` has ZERO
+  arcfit-claimed edges, so it is not the family above. Still the cleanest
+  reproduction of a dropped edge on a simple, fast part.
+- **`3673` (naive): only the front notch has its rounded end pocket.** Also
+  zero arcfit-claimed edges. The earlier guess that this and `32062` were one
+  bug is dead — `32062`'s was the locus gap, and `3673` has no chains at all.
 - **`99781`: a vertical line right of the hollow SNOT studs is missing.**
-
-Not yet established: whether the occt cases share one cause. They look like the
-dropped-edge class (a whole authored segment drawn or not, all-or-nothing),
-which is also what the axle-bore stubs looked like.
+- **`6589`'s misaligned halo on the naive path** — a halo is the signature of
+  the counterbore separator refit fixed for `4019` (`SEP_REFIT_MAX_GROWTH`), so
+  check whether `6589` has a refit sitting under the 10x cap.
 
 ## Read this before calling the port nearly done
 
@@ -153,12 +164,12 @@ edges LDraw states, which is what keeps a faceted part from exploding: an
 unauthored tessellation boundary is never a candidate, rather than a candidate
 filtered out.
 
-**Two defects remain across the 21 `outline` parts**, down from three.
-
-- **`32062` loses every arc** (naive 19, occt 0): a "+"-profile extrusion no
-  primitive matches.
-- **`3941` and `6143` render their truncated studs whole.** The band around
-  the wall those two also drew is gone.
+Both defects this section used to list were the locus gap above, not what they
+looked like. `32062` "losing every arc" was never a missing primitive — its
+arcs are arcfit chains, and `occt` had no locus for them. `3941`/`6143`
+"rendering their truncated studs whole" was the arcfit anchor bug: the
+truncation chain was rejected, so the cut drew as chords. Both fixed; see the
+corpus review above.
 
 `50950` is fixed: its wall is a true ellipse, which `frame()` rejected as
 shear, so no face was built and the slope had no occluder at all. It now draws
@@ -320,19 +331,10 @@ converts only the runs that follow one.
   split is NOT independent evidence of a naive defect — an orthographic
   argument says equal-height edges project equally, but the two notch corner
   edges sit at different depths and only part of one is unoccluded.
-- **`3941`/`6143` draw `stud10`'s lateral cut as a point, on the naive path.**
-  The primitive is truncated laterally *curved*, but the cut is drawn as
-  straight runs meeting at an outward vertex, while the stud's own circle is
-  correct arcs:
-
-      M(61.9,34.3) A(92.4,34.3) A(92.4,49.6) A(61.9,49.6)   stud circle, arcs
-      M(56.0,42.0) L(57.9,37.3) L(61.9,34.3)                the cut, straight
-      M(57.2,39.2) L(56.0,42.0) L(57.2,44.8)                the point
-
-  The cut is a cylinder-cylinder intersection, which LDraw approximates with 4
-  tris and 4 quads; the render draws those facet boundaries verbatim. Intended
-  fix (user's, 2026-08-30): replace the runs that are NOT part of the stud
-  circle with a single arc, leaving the `A` commands alone.
+- **`3941`/`6143`'s `stud10` lateral cut: FIXED** — see the arcfit anchor
+  fallback in the corpus review. The cut is a cylinder-cylinder intersection
+  LDraw approximates with 4 tris and 4 quads; the chain now fits one arc
+  through its authored vertices (r=6.8) rather than drawing the chords.
 - `SNAP_TOL = 0.4` LDU is the loosest constant added, tuned to the 0.345 stray.
   Extraction only; the render path passes no snap tolerance.
 - **`skia-pathops` for the 2D booleans: settled — adopt, but inside the OCCT

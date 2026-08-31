@@ -843,12 +843,19 @@ def test_3941_fold_loops_close_the_post_outline():
     spans = [op for op in res.segs if op[0] == "arc"
              and abs(op[8] - op[7]) < 359.9
              and tuple(round(v, 6) for v in op[1:7]) in set(res.fold_ells)]
-    assert len(spans) >= 8
-    for op in spans:
+
+    def midpoint(op):
         tm = math.radians((op[7] + op[8]) / 2.0)
-        mid = Point(op[1] + math.cos(tm) * op[3] + math.sin(tm) * op[5],
-                    op[2] + math.cos(tm) * op[4] + math.sin(tm) * op[6])
-        assert poly.exterior.distance(mid) < 0.05
+        return Point(op[1] + math.cos(tm) * op[3] + math.sin(tm) * op[5],
+                     op[2] + math.cos(tm) * op[4] + math.sin(tm) * op[6])
+
+    # The truncated studs fit arcs of their own (see arcfit's SYM_RATIO), and
+    # those are fold arcs too, so the post's spans are the ones near it --
+    # nothing lands in between, which is what keeps this a real partition.
+    d = sorted(poly.exterior.distance(midpoint(op)) for op in spans)
+    post = [x for x in d if x < 20.0]
+    assert len(post) >= 8 and max(post) < 0.05, "a post span left its outline"
+    assert min(d[len(post):]) > 100.0, "a stray span sits ON the post outline"
 
 
 # --- orphan-run cull (2654a inner-rim fraying) ---

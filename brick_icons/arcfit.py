@@ -30,11 +30,16 @@ ANCHOR_RTOL = 0.15      # both-end tangency estimates must agree to this * r
 _ANCHOR_PLANE = 0.09    # ~5 deg; anchor directions must lie in-plane
 MIN_FREE_EDGES = 3      # unanchored chains need this many edges (so the
                         # residual gate has teeth) ...
-SYM_RATIO = 1.25        # ... unless a 2-edge chain is uniformly subdivided
-                        # (sweep ratio within this): authors facet real
-                        # rounds in equal steps, while a fabricated fit (two
-                        # chords of DIFFERENT true arcs meeting smoothly at a
-                        # condline) comes out lopsided
+SYM_RATIO = 3.0         # ... unless a 2-edge chain's sweeps are within this
+                        # ratio. A fabricated fit (two chords of DIFFERENT
+                        # true arcs meeting smoothly at a condline) comes out
+                        # lopsided -- but so does a real round authored on a
+                        # slanted plane, which projects to an ELLIPSE and so
+                        # is unequal in sweep however evenly it was faceted
+                        # (54200's inner corner, 1.57). Measured over the
+                        # specimen list: the rounds run to 2.66, and the first
+                        # fabricated fit is 32062's axle end at 4.16, which
+                        # balloons its bevels into blobs.
 
 
 def arc_point(arc, t_deg):
@@ -136,11 +141,28 @@ def _fit_circle(P, tang=((), ())):
             anchors.append(best[0])
     if len(anchors) == 2 and abs(anchors[0] - anchors[1]) > ANCHOR_RTOL * r0:
         return None                     # ends disagree: not one true round
-    s = float(np.mean(anchors)) if anchors else s0
-    c2 = M + s * nb
-    r = float(np.hypot(*(a2 - c2)))
-    if float(np.abs(np.hypot(*(xy - c2).T) - r).max()) > FIT_RTOL * extent:
-        return None                     # smooth but not circular
+
+    def circle(s):
+        c2 = M + s * nb
+        r = float(np.hypot(*(a2 - c2)))
+        return c2, r, float(np.abs(np.hypot(*(xy - c2).T) - r).max())
+
+    c2, r, resid = circle(float(np.mean(anchors)) if anchors else s0)
+    if resid > FIT_RTOL * extent:
+        # A neighbouring CHORD lies half its own sweep off its circle's
+        # tangent, so on 16-gon tessellation (11.25 deg against ANCHOR_ANG's
+        # 15) it reads as a tangent continuation of whatever chain it touches.
+        # When the tangency it implies throws the chain's OWN vertices off the
+        # circle, it was a crease: 3941's stud truncation meets the stud
+        # circle at one, and anchoring to it drove r from 6.8 to 4.7. Keep the
+        # unanchored fit, and report no anchors so the lopsided-chain gate
+        # below still has teeth.
+        if not anchors:
+            return None                 # smooth but not circular
+        c2, r, resid = circle(s0)
+        if resid > FIT_RTOL * extent:
+            return None
+        anchors = []
     C = c0 + c2[0] * e1 + c2[1] * e2
     rel = P - C
     u_hat = rel[0] / np.linalg.norm(rel[0])
