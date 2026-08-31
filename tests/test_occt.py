@@ -495,3 +495,51 @@ def test_silhouette_polys_cover_the_drawn_ink(ldraw_dir):
     x0, y0, x1, y1 = res.bbox
     gx0, gy0, gx1, gy1 = g.bounds
     assert (gx0, gy0, gx1, gy1) == pytest.approx((x0, y0, x1, y1), abs=0.5)
+
+
+def _arcfit_split(part, ldraw_dir):
+    """`out` as the engine really receives it: arcfit has already MOVED every
+    fitted chain out of out["2"] into out["fit_arcs"]."""
+    from brick_icons import arcfit
+    out = occt.flatten_part(part, ldraw_dir)
+    out["fit_arcs"], out["2"] = arcfit.fit_edge_arcs(out["2"], out["5"])
+    return out
+
+
+def test_arcfit_chains_still_reach_the_authored_loci(ldraw_dir):
+    """arcfit claims a hand-faceted chain by REMOVING it from out["2"], so a
+    locus set built from out["2"] alone has no entry for it and every fragment
+    on it fails select_authored. On 3941 that is the whole axle-hole rim: 40
+    of its 120 type-2 edges, drawn by naive and by nothing in occt."""
+    out = _arcfit_split("3941", ldraw_dir)
+    assert out["fit_arcs"], "3941 must yield fitted chains for this to mean anything"
+    right, up = hlr.view_basis(30.0, 45.0)[:2]
+    loci = occt.authored_loci(occt.build_shape(out), out, right, up)
+    for a in out["fit_arcs"]:
+        P = np.asarray(a["P"], float)
+        for p, q in zip(P[:-1], P[1:]):
+            pts = occt._proj2(np.linspace(p, q, 5), *occt._screen_axes(right, up))
+            assert any(occt._on_locus(pts, l) for l in loci), \
+                f"chain chord {p} -> {q} lies on no authored locus"
+
+
+def test_3941_bore_rim_is_drawn_by_the_occt_engine(ldraw_dir):
+    """The rim of the axle hole, end to end. Before the chains were added to
+    the loci this counted 0 -- occt drew only the four condline bore verticals,
+    which is the 'four thin spikes' the corpus review saw."""
+    out = _arcfit_split("3941", ldraw_dir)
+    res = occt.visible_segments(out, *hlr.view_basis(30.0, 45.0)[:2], 1024)
+    from brick_icons import primitives
+    near = []
+    for op in res.segs:
+        if op[-1] == "sil":
+            continue        # occt tags an authored line "line", not "edge"
+        xs, ys, _ = primitives._samples_for(op, 5)
+        if np.all(np.hypot(xs, ys) < 7.0):
+            near.append(op)
+    assert len(near) >= 10, f"axle-hole rim ops drawn: {len(near)}"
+    # ... and re-read against the fitted circle, not left as the chords the
+    # BRep fragments actually are: chords draw the rounded corner between two
+    # teeth as two segments meeting at a point.
+    assert any(op[0] == "arc" for op in near), \
+        "chain fragments must emit as arcs, like the naive engine's"

@@ -1,6 +1,7 @@
 """OCCT-backed hidden-line removal. The only module that imports OCP."""
 from __future__ import annotations
 import math
+from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
@@ -506,9 +507,11 @@ def _proj2(P, ax, ay):
     return np.stack([P @ ax, P @ ay], axis=-1)
 
 
-def _seg_locus(a, b, kind, ax, ay):
+def _seg_locus(a, b, kind, ax, ay, ell=None):
+    """`ell` is the projected conic a matched fragment should be RE-READ
+    against while still being MATCHED as this chord -- see locus_arc."""
     p, q = _proj2([a, b], ax, ay)
-    return ("seg", p, q, kind)
+    return ("seg", p, q, kind, ell)
 
 
 def _ell_locus(o, u, v, ru, rv, kind, ax, ay):
@@ -525,7 +528,7 @@ def _ell_locus(o, u, v, ru, rv, kind, ax, ay):
 
 def _on_locus(pts, locus) -> bool:
     if locus[0] == "seg":
-        _, a, b, _ = locus
+        a, b = locus[1], locus[2]
         d = b - a
         n = np.linalg.norm(d)
         if n < 1e-12:
@@ -535,20 +538,98 @@ def _on_locus(pts, locus) -> bool:
         t = (w @ d) / (n * n)
         return bool(np.all(cross < MATCH_TOL)
                     and np.all(t > -1e-3) and np.all(t < 1 + 1e-3))
-    _, c, Minv, _ = locus
+    c, Minv = locus[1], locus[2]
     cs = (pts - c) @ Minv.T
     return bool(np.all(np.abs(np.linalg.norm(cs, axis=1) - 1.0) < MATCH_TOL))
 
 
+def _merge_collinear(loci, tol=MATCH_TOL):
+    """Collinear seg loci that abut, joined end to end.
+
+    ShapeUpgrade_UnifySameDomain merges collinear edges across subparts, so one
+    HLR fragment can span several authored segments and lie inside none of
+    them -- 32062 authors its axial ridge in five pieces (three axlehol8
+    sections plus the two notch spans) and gets back one edge running the whole
+    axle, which the containment test in _on_locus then rejected. Merging first
+    keeps that test, so nothing undeclared is still nothing drawn.
+    """
+    keep, groups = [], defaultdict(list)
+    for l in loci:
+        if l[0] != "seg" or (len(l) > 4 and l[4] is not None):
+            keep.append(l)               # ell loci, and chords of a fitted arc
+            continue
+        p, q = l[1], l[2]
+        d = q - p
+        n = float(np.hypot(d[0], d[1]))
+        if n < 1e-12:
+            keep.append(l)
+            continue
+        u = d / n
+        if u[0] < -1e-12 or (abs(u[0]) <= 1e-12 and u[1] < 0):
+            u = -u                       # one direction per line, not two
+        groups[(l[3], round(float(u[0]), 6), round(float(u[1]), 6))].append(
+            (float(p @ u), float(q @ u), float(p[0] * -u[1] + p[1] * u[0]), l))
+    for (kind, ux, uy), items in groups.items():
+        u = np.array([ux, uy])
+        nrm = np.array([-uy, ux])
+        for _off, run in _by_offset(items):
+            spans = sorted((min(a, b), max(a, b)) for a, b, _o, _l in run)
+            lo, hi = spans[0]
+            for s0, s1 in spans[1:]:
+                if s0 <= hi + tol:
+                    hi = max(hi, s1)
+                    continue
+                keep.append(("seg", lo * u + _off * nrm, hi * u + _off * nrm,
+                             kind, None))
+                lo, hi = s0, s1
+            keep.append(("seg", lo * u + _off * nrm, hi * u + _off * nrm,
+                         kind, None))
+    return keep
+
+
+def _by_offset(items, tol=1e-9):
+    """(offset, rows) clusters of items sharing a perpendicular offset.
+
+    Float-noise scale, NOT MATCH_TOL: truly collinear authored segments agree
+    exactly, and the merged locus is rebuilt at the cluster's mean offset, so a
+    loose tolerance here would shift the line by as much as the match tolerance
+    and drop fragments that lay on the original. The loose tolerance belongs to
+    the SPAN join, where abutting ends really do disagree.
+    """
+    out = []
+    for it in sorted(items, key=lambda r: r[2]):
+        if out and it[2] - out[-1][1][-1][2] <= tol:
+            out[-1][1].append(it)
+        else:
+            out.append((it[2], [it]))
+    return [(np.mean([r[2] for r in rows]), rows) for _o, rows in out]
+
+
 def authored_loci(shape, out, right, up):
-    """2D loci every drawable edge must lie on: type-2 lines, `edge`
-    primitives, analytic creases, and condlines that read as a silhouette."""
+    """2D loci every drawable edge must lie on: type-2 lines (including the
+    chains arcfit claimed), `edge` primitives, analytic creases, and condlines
+    that read as a silhouette."""
     ax, ay = _screen_axes(right, up)
     loci = []
     for e in out.get("2", ()):
         seg = np.asarray(e, float)
         if np.linalg.norm(seg[0] - seg[1]) > 1e-7:
             loci.append(_seg_locus(seg[0], seg[1], "line", ax, ay))
+    # arcfit MOVES a fitted chain out of out["2"], so its edges reach here only
+    # through fit_arcs. Without this every axle-hole and gear-hub rim went
+    # undrawn. Matched as the authored chords -- the shape's own fragments ARE
+    # those chords and miss the fitted arc by the sagitta -- but re-read
+    # against the arc, so occt stylizes the chain the way naive does instead
+    # of drawing two chords meeting at a point.
+    for a in out.get("fit_arcs", ()):
+        P = np.asarray(a["P"], float)
+        U, V = np.asarray(a["U"], float), np.asarray(a["V"], float)
+        ru, rv = float(np.linalg.norm(U)), float(np.linalg.norm(V))
+        ell = (_ell_locus(a["C"], U / ru, V / rv, ru, rv, "line", ax, ay)
+               if min(ru, rv) > 1e-9 else None)
+        for p, q in zip(P[:-1], P[1:]):
+            if np.linalg.norm(p - q) > 1e-7:
+                loci.append(_seg_locus(p, q, "line", ax, ay, ell))
     for prim in out["analytic"]:
         if prim.kind != "edge":
             continue
@@ -584,7 +665,7 @@ def authored_loci(shape, out, right, up):
             continue
         if np.linalg.norm(pts[0] - pts[1]) > 1e-7:
             loci.append(_seg_locus(pts[0], pts[1], "sil", ax, ay))
-    return [l for l in loci if l is not None]
+    return _merge_collinear([l for l in loci if l is not None])
 
 
 def _fragment_points(edge):
@@ -632,14 +713,19 @@ def locus_arc(edge, locus, kind):
     barbed past the corner. The locus is the exact projected conic the
     fragment was matched against, so its parameters are all that is missing.
     """
-    if locus[0] != "ell":
+    if locus[0] == "seg":
+        locus = locus[4] if len(locus) > 4 else None
+        if locus is None:
+            return None                   # a plain authored line stays a line
+    elif locus[0] != "ell":
         return None
-    c = BRepAdaptor_Curve(edge)
-    if c.GetType() in (GeomAbs_CurveType.GeomAbs_Line,
-                       GeomAbs_CurveType.GeomAbs_Circle,
-                       GeomAbs_CurveType.GeomAbs_Ellipse):
-        return None                       # already exact; leave it alone
-    _, ctr, Minv, _ = locus
+    else:
+        c = BRepAdaptor_Curve(edge)
+        if c.GetType() in (GeomAbs_CurveType.GeomAbs_Line,
+                           GeomAbs_CurveType.GeomAbs_Circle,
+                           GeomAbs_CurveType.GeomAbs_Ellipse):
+            return None                   # already exact; leave it alone
+    ctr, Minv = locus[1], locus[2]
     try:
         pts = _fragment_points(edge)
         M = np.linalg.inv(Minv)           # columns are the projected semi-axes
@@ -808,7 +894,7 @@ def visible_segments(out, right, up, render_px, cull=True):
         picked += select_authored(comps.get("sharp_hidden"), loci)
     ops = []
     for edge, locus in picked:
-        kind = locus[-1]
+        kind = locus[3]
         arc = locus_arc(edge, locus, kind)
         ops += [arc] if arc is not None else _edge_ops(edge, kind)
     for name in ("outline", "outline_hidden"):
