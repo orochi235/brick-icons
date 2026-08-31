@@ -141,6 +141,8 @@ def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
 
 
 SIGN_Z = -1.0          # tuned so parts face the camera (matches LDView iso)
+SEP_REFIT_MAX_GROWTH = 10.0  # every refit in the corpus grows 1.3-4.6x; only
+                             # 4019's complement-flipped sliver reaches 43x.
 MESH_CACHE_DIR = Path(".cache/mesh")
 
 
@@ -710,6 +712,10 @@ def _snap_rim_crossings(segs, max_snap=4.0, vertex_tol=0.25):
             t0n, t1n = t1a, t1a + sweep
         else:
             t0n, t1n = t2a, t2a + (360.0 - sweep)
+        if abs(t1n - t0n) > SEP_REFIT_MAX_GROWTH * abs(M[8] - M[7]):
+            # A refit reshapes the separator; a sliver whose apex barely leaves
+            # its chord fits an arbitrary circumcircle. 4019: 7.2 deg -> 310.8.
+            continue
         new = ("arc", float(cN[0]), float(cN[1]),
                float(Mn[0, 0]), float(Mn[1, 0]),
                float(Mn[0, 1]), float(Mn[1, 1]), t0n, t1n, M[9])

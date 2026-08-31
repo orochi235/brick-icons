@@ -984,3 +984,20 @@ def test_unrecognized_engine_raises_rather_than_silently_rendering():
     engine = "OCCT" must not silently fall through to the naive path."""
     with pytest.raises(ValueError, match="occt"):
         hlr.visible_segments("3001", "vendor/ldraw", engine="OCCT")
+
+
+def test_snap_keeps_a_sliver_separator_rather_than_refitting_it():
+    """4019's halo: the refit re-emitted a 7.2-degree separator as its
+    310.8-degree complement, an ellipse larger than the part and outside the
+    viewBox. A sliver's apex barely leaves its own chord, so the circumcircle
+    through it is ill-conditioned and the sweep-direction test has nothing to
+    stand on. Bound the growth and keep the authored arc instead."""
+    F, B, _ = _counterbore_trio()
+    wide = ("arc", 0.0, 0.30, 1.0, 0.0, 0.0, 1.0, 250.0, 290.0, "sil")
+    out, refits = hlr._snap_rim_crossings([F, B, wide])
+    assert len(refits) == 1, "a substantial separator must still be re-fit"
+
+    sliver = ("arc", 0.0, 0.30, 1.0, 0.0, 0.0, 1.0, 266.0, 274.0, "sil")
+    out, refits = hlr._snap_rim_crossings([F, B, sliver])
+    assert not refits, "an 8-degree sliver must not be re-fit"
+    assert out[2] == sliver, "the authored separator is kept verbatim"

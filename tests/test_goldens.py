@@ -195,17 +195,11 @@ def test_every_frozen_case_has_a_summary():
 # Cases whose frozen output is known to violate a structural invariant. These
 # are goldens too: the swap is expected to fix them, and a silent pass needs
 # the note updated rather than absorbing quietly.
-KNOWN_STRAY = {
-    # A 83.79 x 51.31 ellipse in 5 stroke-only paths, larger than the ~134-unit
-    # part itself, pushing bbox y-min to -11.08 against a "0 0 256 170" box.
-    # Analytic rim candidates in hlr._visible_segments_analytic — the same class
-    # as 14769px2's stray arc and the NOTE there, not a new one.
-    #
-    # Both combos carry the same defect from the same code, so they retire
-    # together: drop one alone and the other silently stops being watched.
-    "outline-flat3__4019",
-    "outline__4019",
-}
+# 4019's stray ellipse (both combos) retired here: it was NOT an analytic rim
+# candidate as recorded, but _snap_rim_crossings' counterbore separator refit
+# re-emitting a 7.2-degree arc as its 310.8-degree complement. Guarded by
+# hlr.SEP_REFIT_MAX_GROWTH.
+KNOWN_STRAY: set[str] = set()
 
 
 @drift
