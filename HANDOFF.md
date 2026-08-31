@@ -16,7 +16,19 @@ Landed: `50950`'s elliptical wall, arcs read off the projected conic rather
 than HLR's BSpline approximation, and a silhouette contour for the OCCT
 engine. The defect list below is rewritten against the merged corpus.
 
-## Corpus review 2026-08-31 — six defects found by eye, none diagnosed
+## Corpus review 2026-08-31 — defects found by eye, none diagnosed
+
+**HIGHEST PRIORITY: `3941` and `6143` still render their borehole wrong, in
+BOTH engines.** Between the four studs each draws a cross/star artifact —
+naive a scalloped cross, occt four thin spikes.
+
+Earlier in that same session I called 3941 "a red herring, no visible axle hole,
+correctly hidden" on the strength of an LDView thumbnail plus an edge-coverage
+tally. **That call is disputed and should be treated as wrong until re-checked
+against a large render**, not a thumbnail: the user, looking at the render, reads
+the borehole as unfixed. Re-derive from the picture before re-using any of that
+reasoning.
+
 
 Found by reviewing `naive|occt` pair sheets of the 21 unprinted parts. **These
 are observations, not diagnoses** — only the counts below were measured. The
