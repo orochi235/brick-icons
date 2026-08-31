@@ -1,7 +1,7 @@
 # Handoff — `main`, with the OCCT engine landed
 
-On **`main`**, pushed. `origin/main` is at `f869d5a`, and 520 tests pass under
-`BRICK_GOLDENS=1` (a plain `pytest` skips the drift tests and is not
+On **`main`**, even with `origin/main` — nothing is local-only. 520 tests pass
+under `BRICK_GOLDENS=1` (a plain `pytest` skips the drift tests and is not
 verification).
 
 ## Read first: there is one thread now
