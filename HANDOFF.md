@@ -16,8 +16,31 @@ Landed: `50950`'s elliptical wall, arcs read off the projected conic rather
 than HLR's BSpline approximation, and a silhouette contour for the OCCT
 engine. The defect list below is rewritten against the merged corpus.
 
-One open decision, not urgent: the contour's polygonal case, which fills
-should absorb rather than fix.
+## Read this before calling the port nearly done
+
+**`occt` draws strokes and nothing else.** `occt.visible_segments` returns
+`faces=()` and `analytic=()`, so `shade.fill_ops` gets nothing and every filled
+mode silently degrades to an outline. It is not "landed with two defects" — it
+implements half the renderer:
+
+| mode | naive | occt |
+|---|---|---|
+| `--shading outline` | yes | yes |
+| `--wireframe` | yes | yes |
+| `--shade-style flat3` (shaded faces) | yes | **no — no faces** |
+| `--opacity` below 1 (transparency) | yes | **no — needs fills** |
+
+Nothing errors when you ask `occt` for a filled render; it just comes back
+stroked, which is why this stayed invisible. **Fills is the next body of work,
+and `occt` cannot be the default until it exists** — that is a project, not the
+two arc defects listed below.
+
+`tests/goldens/hashes.txt` locks the NAIVE engine by construction ("a different
+engine fails it by construction"), so `occt` has no corpus gate at all —
+`tests/test_occt.py` is the whole of its coverage.
+
+One further open decision, not urgent: the contour's polygonal case, which
+fills should absorb rather than fix.
 
 Durable records, none of which this file repeats:
 
@@ -137,12 +160,16 @@ number worth quoting.
 
 ## The decision the merge creates
 
-The three stray-geometry defects under **Open** all live in
+The stray-geometry defects under **Open** live in
 `hlr._visible_segments_analytic`. The standing instruction was not to fix them
 because the port would replace that code — but the port has landed *behind a
-flag*, so the naive path is still what ships, and it still draws them. Either
-fix them on the naive path or make `occt` the default; the second is not
-available until the defects above are.
+flag*, so the naive path is still what ships, and it still draws them.
+
+Fix them on the naive path. "Make `occt` the default instead" is not an option
+on this timescale: it has no fills, so it cannot render shaded faces or
+transparency at all (see the capability table at the top). The naive path is
+the only complete engine, and everything filled will keep running on it until
+`occt` grows faces.
 
 ## What shipped
 
