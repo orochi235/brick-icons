@@ -73,6 +73,10 @@
 /* The titlebar's action strip and the toolbar both size to their content, so a
    contribution declaring `end` lands beside its neighbours rather than at the
    edge. Letting them fill the row is what makes `end` mean the far edge. */
+/* Not for `end` -- `.lk-trial__titlebar-actions` already has `margin-left:
+   auto`, so `end` reaches the right edge on its own. This makes the span fill
+   the row so a consumer contribution can sit at the LEFT of it, which is where
+   the part title belongs. */
 .lk-trial__titlebar-actions { flex: 1; }
 .part-title { order: -1; margin-right: auto; }
 .lk-trial__toolbar { width: 100%; }
