@@ -1,7 +1,32 @@
 # Handoff — `main`, with the OCCT engine landed
 
-On **`main`**, working tree clean. 513 tests pass under `BRICK_GOLDENS=1`
-(a plain `pytest` skips the three drift tests and is not verification).
+On **`main`**. 513 tests pass under `BRICK_GOLDENS=1` (a plain `pytest` skips
+the three drift tests and is not verification).
+
+## Read first: the two threads are now one, and `cli.py` moved under you
+
+`occt-port` is merged. Both branches sit at `6fd3aec`, so there is no longer a
+second thread to coordinate with — `.claude/worktrees/occt-port` is an
+ordinary worktree on the same commit, and the two-workstream protocol below is
+history.
+
+**Your uncommitted `brick_icons/cli.py` is the one collision.** The merge
+changed the `sil_geom` line in `process_one` and added `_sil_faces` above it,
+so re-read that function before committing. The fast-forward preserved your
+edits and nothing was lost; `test_cli.py`, `scripts/freeze-goldens.py` and
+`tests/test_goldens.py` were not touched by the merge.
+
+Landed: `50950`'s elliptical wall, arcs read off the projected conic rather
+than HLR's BSpline approximation, and a silhouette contour for the OCCT
+engine. The defect list below is rewritten against the merged corpus.
+
+Three open decisions, none of them urgent:
+
+- the worktree at `.claude/worktrees/occt-port`, left in place because fills
+  is next and wants it;
+- `wip/occt-authored-edges` (`7c8cfaa`), the `occt.py` recovered from the
+  morning's collision and long superseded;
+- the contour's polygonal case, which fills should absorb rather than fix.
 
 Durable records, none of which this file repeats:
 
@@ -17,23 +42,26 @@ Durable records, none of which this file repeats:
   `occt-port`, which is this file's path on `main`: one path, two different
   documents, so every merge either conflicted or clobbered one of them.
 
-## Two workstreams share this repo
+## If you ever split this repo across two sessions again
 
-`occt-port`, in the worktree at `.claude/worktrees/occt-port`, owns the OCCT
-engine. `main` owns integration. **Do not run anything inside that worktree.**
-Its tree is live: three separate measurements taken there moved under me
-mid-run today and had to be thrown away, and merging `main` into it destroyed
-its uncommitted `occt.py` (recovered on branch `wip/occt-authored-edges`,
-`7c8cfaa` — delete once that session has compared it). Measure on `main`, in
-this tree.
+It cost real work twice today, both times the same way: a tree that another
+session has checked out will move under you mid-task. Uncommitted `occt.py`
+was destroyed by a merge (recovered on `wip/occt-authored-edges`, `7c8cfaa`)
+and three separate measurements had to be thrown away because HEAD changed
+between the render and the reading. Check `git log -1` before trusting a tree
+you did not just commit to, and commit early in one you share.
 
-**There is no message channel between the two, and the reason is structural:**
-that session runs under the `~/.claude-pw` harness while this one runs under
-`~/.claude-msb`, and peer registries are per-config-dir, so neither appears in
-the other's `ListAgents` and neither can address the other. The protocol is a
-commit to that worktree's `HANDOFF.md`, which works — it read and kept the
-first one. (Worth noting the port is being worked in the *work* harness on a
-personal repo, so it carries work skills and memories, not this project's.)
+**Merge toward the shared branch, never into the other session's checkout.**
+Merging `main` INTO the feature branch first turns the final step into a
+fast-forward — a pointer move that touches no working tree, so the other
+session's uncommitted files survive. That is how this one landed.
+
+**There is no message channel between two sessions here, and the reason is
+structural:** peer registries are per-config-dir, so a `~/.claude-pw` session
+and a `~/.claude-msb` one never appear in each other's `ListAgents`. The
+protocol is a commit to the handoff the other side reads — which works, but
+only at commit latency. Give the two documents different paths up front; one
+path holding two handoffs conflicted on every single merge.
 
 ## The OCCT engine, as merged
 
