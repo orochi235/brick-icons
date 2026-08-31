@@ -1,0 +1,16 @@
+.defect-list { display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.8125rem; }
+.defect-list > label { display: flex; align-items: center; gap: 0.375rem; }
+.defect-list ul {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-height: 22rem;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.defect-list li { display: flex; align-items: center; gap: 0.5rem; }
+.defect-row { flex: 1; min-width: 0; cursor: pointer; }
+.defect-row:hover { text-decoration: underline; }
+.defect-list-empty { margin: 0; opacity: 0.7; }
