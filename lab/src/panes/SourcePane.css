@@ -34,3 +34,8 @@
 
 .pane-stage svg,
 .pane-stage img { width: 100%; height: 100%; }
+
+/* An SVG with a viewBox already letterboxes itself (preserveAspectRatio
+   defaults to `meet`); a raster does not, so the diff would stretch while the
+   engine panes beside it did not. */
+.pane-stage img { object-fit: contain; }
