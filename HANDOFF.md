@@ -92,6 +92,12 @@ and the substitutions.
 against doubled ink's black, which is how naive's 30–55% duplicate ink becomes
 visible at all.
 
+**`--debug-colors` gives every drawn element its own colour** from a 12-hue
+cycle, in emission order (`trace.DEBUG_PALETTE`). Use it to ask which element
+owns a vertex — a black outline cannot say. It already shows the outer
+silhouette is not one contour but many fragments, with the colour changing at
+each tangent jog. Opt-in; the goldens do not pass it.
+
 **`--part-label` stamps the whole render tag**, not just the part id:
 `3941  naive  30,45  outline` (`cli.render_tag` — part, engine, angle,
 shading/style, `opacity=` below 1). Engine and angle print even at their

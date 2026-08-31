@@ -54,6 +54,7 @@ DEFAULTS = {
                              # stroke T-graze, not just stub-bridged
                              # junctions (restyles stud/limb corners)
     "part_label": False,     # stamp the part id in small print (test renders)
+    "debug_colors": False,   # one colour per drawn element, in emission order
     "fmt": "png",            # png | svg | both
     "mode": "both",          # gray | mono | color | both  (png only)
     "dither": "atkinson",    # threshold | floyd | ordered | atkinson
@@ -92,6 +93,7 @@ class Config:
     wireframe: bool
     weld_corners: bool
     part_label: bool
+    debug_colors: bool
     fmt: str
     mode: str
     dither: str
@@ -159,6 +161,7 @@ def load_config(toml_path=None, overrides=None, root="."):
         wireframe=bool(data["wireframe"]),
         weld_corners=bool(data["weld_corners"]),
         part_label=bool(data["part_label"]),
+        debug_colors=bool(data["debug_colors"]),
         fmt=str(data["fmt"]),
         mode=str(data["mode"]),
         dither=str(data["dither"]),

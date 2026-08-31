@@ -284,3 +284,24 @@ def test_render_tag_reports_the_shade_style_when_there_is_one():
                                                  "shade_style": "flat3"},
                       root=".")
     assert "outline/flat3" in render_tag(cfg, "3005")
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_debug_colors_gives_each_element_its_own_stroke(tmp_path):
+    """One colour per drawn element, in emission order — it answers "which
+    element owns this vertex", which a black outline cannot."""
+    import re
+    cli.main(["3941", "--format", "svg", "--shading", "outline",
+              "--debug-colors", "--out", str(tmp_path)])
+    svg = (tmp_path / "3941.svg").read_text()
+    used = set(re.findall(r'stroke="(#[0-9a-f]{6})"', svg))
+    from brick_icons.trace import DEBUG_PALETTE
+    assert used == set(DEBUG_PALETTE), used
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_debug_colors_is_off_by_default_so_goldens_cannot_move(tmp_path):
+    cli.main(["3941", "--format", "svg", "--shading", "outline",
+              "--out", str(tmp_path)])
+    svg = (tmp_path / "3941.svg").read_text()
+    assert 'stroke="#' not in svg

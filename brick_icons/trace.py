@@ -215,11 +215,34 @@ def _chain_line_ops(ops, stub_len=0.0):
     return chains, elbows, singles
 
 
+# 12 hues at fixed saturation/lightness, for --debug-colors. Adjacent entries
+# are 30 degrees apart so consecutive elements never read as the same colour.
+DEBUG_PALETTE = ("#e6194b", "#f58231", "#ffe119", "#bfef45", "#3cb44b",
+                 "#42d4f4", "#4363d8", "#911eb4", "#f032e6", "#a9a9a9",
+                 "#9a6324", "#469990")
+
+
+def _colorize(parts, start):
+    """Give every drawn element after `start` its own colour, in emission
+    order. Answers "which element owns this vertex", which one black outline
+    cannot."""
+    n = 0
+    for i in range(start + 1, len(parts)):
+        el = parts[i]
+        if not (el.startswith("<path") or el.startswith("<line")):
+            continue
+        colour = DEBUG_PALETTE[n % len(DEBUG_PALETTE)]
+        parts[i] = el.replace("/>", f' stroke="{colour}"/>', 1)
+        n += 1
+    return n
+
+
 def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
                     physical=None, s=None, line_mm=0.2, sil_mm=0.2,
                     fills=None, bg: str = "none", opacity: float = 1.0,
                     clip_geom=None, contour_d: str | None = None,
-                    label: str | None = None) -> Path:
+                    label: str | None = None,
+                    debug_colors: bool = False) -> Path:
     if physical is not None:
         w_mm, h_mm = physical
         root = (f'<svg xmlns="http://www.w3.org/2000/svg" '
@@ -303,6 +326,7 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
             parts.append(f'<defs><clipPath id="sclip">'
                          f'<path d="{cd}" clip-rule="evenodd"/></clipPath></defs>')
             clip_attr = ' clip-path="url(#sclip)"'
+    stroke_g = len(parts)
     parts.append(f'<g stroke="black" fill="none" stroke-linecap="round"{clip_attr}>')
     if contour_d:
         # closed silhouette contour under the per-edge strokes: a closed path
@@ -350,6 +374,8 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
         for (ax, ay), (vx, vy), (bx, by) in elbows:
             parts.append(f'<path d="M {ax:.2f} {ay:.2f} L {vx:.2f} {vy:.2f} '
                          f'L {bx:.2f} {by:.2f}" stroke-width="{sw:.2f}"{joinery}/>')
+    if debug_colors:
+        _colorize(parts, stroke_g)
     parts.append("</g>")
     if label:
         # render tag in fixed small print, tucked into the bottom-left corner:
