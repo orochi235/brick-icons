@@ -121,6 +121,18 @@ it was handed through the CLI's own parse-config-render path — so a flag the
 CLI grows appears in the lab with no other change, and the two cannot disagree
 about what a parameter does.
 
+The frontend lives in `lab/`:
+
+```sh
+cd lab && npm install
+npm run dev            # http://localhost:5178, proxying /api to the server
+```
+
+Type a part id in the title bar to open a trial. Its control panel is built
+from `/api/schema` at boot, so it is the CLI's flag set; the command in the
+status bar is the argv the server ran, and running it yourself gives the same
+SVG the pane shows.
+
 ## Decal extraction
 
     brick-icons decal PARTS... [--out DIR] [--svg-bg PAINT] [--texture-px N]
