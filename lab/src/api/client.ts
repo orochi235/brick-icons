@@ -87,6 +87,13 @@ export function createClient({ base = '', fetchImpl = fetch }: ClientOptions = {
       });
     },
 
+    async reference(part: string, angle: string, partColor?: string) {
+      const params = new URLSearchParams({ part, angle });
+      if (partColor) params.set('part_color', partColor);
+      return json<{ url: string; cached: boolean }>(
+        fetchImpl, at(`/api/reference?${params}`));
+    },
+
     async goldens(part: string) {
       return json<{ part: string; cases: Record<string, string>; known: boolean }>(
         fetchImpl, at(`/api/goldens?part=${encodeURIComponent(part)}`));
