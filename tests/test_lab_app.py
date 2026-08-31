@@ -235,3 +235,26 @@ def test_diff_route_reports_a_size_mismatch_as_400(client, tmp_path):
         "a_key": "cccc3333", "a_name": "p.png",
         "b_key": "dddd4444", "b_name": "p.png"})
     assert r.status_code == 400
+
+
+def test_reference_route_reports_a_bad_angle(client):
+    r = client.get("/api/reference", params={"part": "3005", "angle": "nope"})
+    assert r.status_code == 400
+
+
+def test_reference_route_returns_a_url_when_it_can_render(client, ldraw_dir):
+    from brick_icons.lab import reference
+    if not reference.available("."):
+        pytest.skip("LDView not installed")
+    body = client.get("/api/reference",
+                      params={"part": "3005", "angle": "30,25"}).json()
+    assert body["url"].startswith("/api/reference-artifact/")
+    assert client.get(body["url"]).status_code == 200
+
+
+def test_reference_route_says_when_ldview_is_missing(client, monkeypatch):
+    from brick_icons.lab import reference
+    monkeypatch.setattr(reference, "available", lambda root: False)
+    r = client.get("/api/reference", params={"part": "3005", "angle": "30,25"})
+    assert r.status_code == 503
+    assert "setup-ldview" in r.json()["detail"]

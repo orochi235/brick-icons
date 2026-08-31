@@ -16,7 +16,7 @@ from pydantic import BaseModel
 
 from ..config import load_config
 from . import (cache, corpus, defects, diff, goldens_status, jobs, partindex,
-               runner, schema)
+               reference, runner, schema)
 
 
 class RenderRequest(BaseModel):
@@ -43,6 +43,7 @@ def create_app(root: Path | str = ".",
     app.state.jobs = jobs.Registry()
     app.state.defects_path = Path(defects_path) if defects_path else (
         root / defects.DEFAULT_PATH)
+    app.state.reference_root = Path(cache_root) / "reference"
 
     def index() -> dict:
         if app.state.index is None:
@@ -137,6 +138,26 @@ def create_app(root: Path | str = ".",
         except ValueError as e:
             raise HTTPException(400, str(e)) from None
         return {**result, "url": f"/api/artifact/{a_key}/{vis.name}"}
+
+    @app.get("/api/reference")
+    def get_reference(part: str, angle: str, render_px: int | None = None,
+                      part_color: str | None = None):
+        got = reference.render_reference(
+            part, angle, root=root, cache_root=app.state.reference_root,
+            render_px=render_px, part_color=part_color)
+        if not got["ok"]:
+            code = 503 if "not installed" in (got["error"] or "") else 400
+            raise HTTPException(code, got["error"])
+        return {**got, "url": f"/api/reference-artifact/{got['key']}/{got['name']}"}
+
+    @app.get("/api/reference-artifact/{key}/{name}")
+    def get_reference_artifact(key: str, name: str):
+        if not key.isalnum() or "/" in name or ".." in name:
+            raise HTTPException(400, "bad artifact path")
+        path = app.state.reference_root / key / name
+        if not path.is_file():
+            raise HTTPException(404, "no such reference")
+        return FileResponse(path)
 
     @app.get("/api/defects")
     def get_defects(part: str | None = None, status: str | None = None):
