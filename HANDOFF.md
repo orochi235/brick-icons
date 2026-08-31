@@ -1,11 +1,80 @@
-# Handoff — `main`, with the OCCT engine landed
+# Handoff — `main`: the corpus lab, and the OCCT engine
 
 On **`main`**. 531 tests pass under `BRICK_GOLDENS=full` (~22 min); the render
 goldens were re-frozen for the arcfit changes below. A plain `pytest` skips the
 drift tests, and `BRICK_GOLDENS=1` renders only `3005` — neither is
 verification.
 
-## Read first: there is one thread now
+## Read first: there are two threads now
+
+The **corpus lab** — a local web app for inspecting renders and tracking
+defects — is the active one. The engine thread below it is unchanged and still
+true; skip to it if you are here for `occt`.
+
+### The lab, and what is left of it
+
+Design: `docs/superpowers/specs/2026-08-31-corpus-lab-design.md`.
+Five plans in `docs/superpowers/plans/`, all written:
+
+| plan | file | state |
+|---|---|---|
+| 1 | `2026-08-31-lab-server.md` | **done** — `brick_icons/lab/`, 615 tests |
+| 2 | `2026-08-31-lab-part-inspector.md` | **done** — `lab/`, 89 frontend tests |
+| 3 | `2026-08-31-lab-defects.md` | not started |
+| 4 | `2026-08-31-lab-reference-and-3d.md` | not started |
+| 5 | `2026-08-31-lab-contact-sheet.md` | not started |
+
+Run it: `.venv/bin/python -m brick_icons.lab` and `cd lab && npm run dev`, then
+open `http://localhost:5178`. Gates are `.venv/bin/pytest -q` and, in `lab/`,
+`npx vitest run && npm run typecheck`.
+
+### Fix these two plan defects before executing 3, 4 or 5
+
+Both are places where a plan asserts something the code has since disproved.
+Executing them as written produces failing tests and a wrong diagnosis.
+
+- **Plans 3 and 5 assume `layers` gives working source toggles.** It does not.
+  labkit's `layers` capability writes labkit's own layer state, not the
+  instrument's `sources` config, so the five checkboxes were inert. The
+  capability is gone; the toggles now live in `PoseBar` and write
+  `config.sources`. Anywhere a plan says "the pane exists as a toggle", it
+  means that.
+- **Plan 5 describes `/api/diff` as PIL-comparing two artifacts.** PIL cannot
+  open an SVG, which is what both engines emit. The route now rasterizes an SVG
+  side with `resvg` (`diff.as_raster`) and returns a visualization URL beside
+  the counts. The diff pane is already built and wired — plan 5 should be cut
+  down to the contact sheet and golden status, which are genuinely absent.
+
+### Traps
+
+- **Two of the five pane toggles are dead buttons.** `ref` and `3D` enable
+  sources with no implementation; that is plan 4's job. They look broken
+  because they are unfinished, not because they regressed.
+- **Port 8792.** 8765 is taken by brainhouse and 8791 by an unrelated
+  `http.server`; the default moved twice. `lab/vite.config.ts` proxies to
+  whatever `brick_icons/lab/__main__.py` defaults to — change both together.
+- **Never `sed -i` a file with non-ASCII in it.** macOS sed corrupts multibyte
+  characters; it silently mangled a plan mid-session. Use Python or Edit.
+- **`cli._config_from_args` still maps args to overrides by hand.** A new CLI
+  flag needs a line there as well as its `add_argument`, and
+  `tests/test_lab_schema.py` will not catch the omission — it derives from the
+  parser, not from the override dict.
+- **Two CSS rules reach into labkit internals**, both commented with what
+  deletes them: `.lk-trial__title` is hidden so the part title can lead, and
+  `.lk-trial__titlebar-actions` is stretched so a contribution can sit at its
+  left. labkit is about to move Clone and Reset into that same span, which will
+  make the ordering worse before an upstream fix makes it better.
+
+### Upstream, already filed
+
+Six asks are with the weasel session, recorded in weasel's
+`docs/handoffs/2026-08-30-labkit-consumer-asks.md`: `addTrial(name, {config})`,
+an instrument-settable trial title, a leading slot in the titlebar, toolbar
+`end` reaching the edge, collapsible sections, `onActivate` context, and a
+density option on `ControlPanel`. None implemented. Do not wait on them — every
+one has a working local workaround.
+
+## The engine thread: one checkout, no branches
 
 `occt-port` is merged and both its branch and its worktree are deleted, so
 this is a single-checkout repo again and the two-workstream protocol below is
