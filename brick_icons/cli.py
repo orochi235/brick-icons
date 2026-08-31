@@ -59,6 +59,9 @@ def _parse_args(argv):
     p.add_argument("--opacity", type=float,
                    help="face-fill opacity 0-1 for SVG output "
                         "(translucent bricks; default 1)")
+    p.add_argument("--debug-colors", dest="debug_colors", action="store_true",
+                   default=False,
+                   help="one colour per drawn element, in emission order")
     p.add_argument("--part-label", dest="part_label", action="store_true",
                    default=None,
                    help="stamp the part id in fixed small print in the "
@@ -93,6 +96,7 @@ def _config_from_args(args) -> Config:
         "svg_bg": args.svg_bg, "opacity": args.opacity,
         "wireframe": args.wireframe, "weld_corners": args.weld_corners,
         "part_label": args.part_label,
+        "debug_colors": args.debug_colors,
     }
     return load_config(toml_path=toml, overrides=overrides, root=args.root)
 
@@ -138,10 +142,27 @@ def _sil_faces(res, f, ox, oy):
         [{"poly": np.asarray(q, float)} for q in (res.sil_polys or ())],
         f, ox, oy)
 
+def render_tag(cfg: Config, name: str) -> str:
+    """The part id plus the settings that change what the drawing shows.
+
+    Engine and angle are always stamped even at their defaults: a review sheet
+    is read after the command that made it has scrolled away.
+    """
+    bits = [name, cfg.engine, cfg.angle]
+    if cfg.wireframe:
+        bits.append("wireframe")
+    else:
+        bits.append(cfg.shading if cfg.shade_style == "none"
+                    else f"{cfg.shading}/{cfg.shade_style}")
+    if cfg.opacity < 1.0:
+        bits.append(f"opacity={cfg.opacity:g}")
+    return "  ".join(bits)
+
+
 def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
     name = Path(part).stem if Path(part).suffix else part
     out_dir.mkdir(parents=True, exist_ok=True)
-    label = name if cfg.part_label else None
+    label = render_tag(cfg, name) if cfg.part_label else None
 
     if cfg.shading == "outline" or cfg.wireframe:
         lat, long = render.resolve_latlong(cfg.angle)
@@ -197,7 +218,8 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
                     physical=(w_mm, h_mm), s=s,
                     line_mm=cfg.line_mm, sil_mm=cfg.silhouette_mm, fills=fills,
                     bg=cfg.svg_bg, opacity=cfg.opacity,
-                    clip_geom=sil_geom, contour_d=contour, label=label)
+                    clip_geom=sil_geom, contour_d=contour, label=label,
+                    debug_colors=cfg.debug_colors)
             else:
                 fit = hlr.fit_segments(segs, bbox, cfg.width, cfg.height, cfg.margin, cfg.scale)
                 f, ox, oy = hlr.fit_affine(bbox, cfg.width, cfg.height, cfg.margin, cfg.scale)
@@ -228,7 +250,8 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
                                       fills=fills, bg=cfg.svg_bg,
                                       opacity=cfg.opacity,
                                       clip_geom=sil_geom, contour_d=contour,
-                                      label=label)
+                                      label=label,
+                                      debug_colors=cfg.debug_colors)
         if cfg.fmt in ("png", "both"):
             def sil_rings(W, H, fit_segs):
                 f, ox, oy = hlr.fit_affine(bbox, W, H, cfg.margin, cfg.scale)

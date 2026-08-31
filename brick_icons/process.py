@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 
 import numpy as np
-from PIL import Image, ImageOps, ImageDraw
+from PIL import Image, ImageOps, ImageDraw, ImageFont
 
 
 def flatten_rgb(rgba: Image.Image) -> Image.Image:
@@ -93,11 +93,12 @@ def segments_mono(segs, w, h, line_px=2, sil_px=2, threshold=160,
 
 
 def stamp_label(img: Image.Image, text: str) -> Image.Image:
-    """Part id in fixed small print, bottom-left corner (PIL's default bitmap
-    font). Absolute size, deliberately NOT scaled to the part — an
-    identification aid for contact sheets and test renders. In place."""
+    """Render tag in fixed small print, tucked into the bottom-left corner.
+    Absolute size, deliberately NOT scaled to the part — an identification aid
+    for review renders. In place."""
     d = ImageDraw.Draw(img)
-    d.text((3, img.height - 14), text, fill="black")
+    font = ImageFont.load_default(size=7)
+    d.text((2, img.height - 9), text, fill="black", font=font)
     return img
 
 

@@ -120,6 +120,20 @@ and the substitutions.
 against doubled ink's black, which is how naive's 30–55% duplicate ink becomes
 visible at all.
 
+**`--debug-colors` gives every drawn element its own colour** from a 12-hue
+cycle, in emission order (`trace.DEBUG_PALETTE`). Use it to ask which element
+owns a vertex — a black outline cannot say. It already shows the outer
+silhouette is not one contour but many fragments, with the colour changing at
+each tangent jog. Opt-in; the goldens do not pass it.
+
+**`--part-label` stamps the whole render tag**, not just the part id:
+`3941  naive  30,45  outline` (`cli.render_tag` — part, engine, angle,
+shading/style, `opacity=` below 1). Engine and angle print even at their
+defaults, because a sheet is read after its command has scrolled away. Pass it
+on every render meant for human eyes; it is opt-in and the goldens do not pass
+it, so it cannot move the byte-diff gate. `compare-engines.py --sheet` needs it
+not — montage already labels tiles `{part}-{engine}`.
+
 **Do not trust any per-part table you find written down, including that one.**
 Every recorded table in this repo has gone stale within a day of being
 measured — the design doc's, the task-7 report's, and three of mine.
@@ -202,15 +216,39 @@ converts only the runs that follow one.
   five are panels of the same striped garment; `6580ac01`'s six are one band
   cut four ways. The cap counts SURVIVORS, not raw groups — counting raw would
   silence 52 parts whose single print is intact.
-- **The extraction seam has no gate.** `tests/goldens/decal-hashes.txt` is
-  written by `scripts/freeze-goldens.py --seam extraction` and read by NO test.
-  `test_frozen_hashes_still_reproduce` reads only the render seam's
-  `hashes.txt`, and under `BRICK_GOLDENS=1` it re-freezes a single part
-  (`--only 3005`); `=full` covers all 54 render cases and still never opens the
-  decal hashes. So half the conformance corpus the engine swap is meant to be
-  judged on is frozen but unchecked — the cap silenced 19 parts and the suite
-  stayed green. Closing this is a test that diffs the extraction seam the way
-  the render one is diffed.
+- **The extraction seam has a gate now.** `test_frozen_decal_hashes_still_reproduce`
+  diffs `decal-hashes.txt` the way the render seam is diffed; a companion test
+  fails if a corpus part has no frozen row. `BRICK_GOLDENS=1` re-extracts one
+  part per decal-COUNT class (~8s), `=full` the whole 393-part corpus (~6 min).
+  Sampling by count class, not alphabetically, is load-bearing: 310 parts yield
+  one decal and 20 yield none, so an alphabetical sample misses both edges —
+  which is where `MAX_DECALS` does its silencing.
+- **The rim veers down where a notch meets the silhouette, in BOTH engines.**
+  On `3941` at `30,65` the outline climbs the notch ceiling, detours to a
+  spurious low vertex, then rises to the silhouette:
+  `L(193.8,131.7) -> L(198.0,136.3) -> L(201.0,126.7)`. Naive and occt emit
+  that same `(198.0, 136.3)` point, so it is NOT an HLR defect — it comes from
+  the stage they share (`geom2d.contour_d` / `shade.silhouette_geom`). Fixing
+  it there fixes both. Reproduce with `--angle 30,65 --part-label`.
+  Two things this explains, so nobody re-chases them: the tangent notch walls
+  measure 9.2px against the front notch's 11.8px, and the outline carries a
+  visible barb at the tangent. Both appear in both engines. The 9.2-vs-11.8
+  split is NOT independent evidence of a naive defect — an orthographic
+  argument says equal-height edges project equally, but the two notch corner
+  edges sit at different depths and only part of one is unoccluded.
+- **`3941`/`6143` draw `stud10`'s lateral cut as a point, on the naive path.**
+  The primitive is truncated laterally *curved*, but the cut is drawn as
+  straight runs meeting at an outward vertex, while the stud's own circle is
+  correct arcs:
+
+      M(61.9,34.3) A(92.4,34.3) A(92.4,49.6) A(61.9,49.6)   stud circle, arcs
+      M(56.0,42.0) L(57.9,37.3) L(61.9,34.3)                the cut, straight
+      M(57.2,39.2) L(56.0,42.0) L(57.2,44.8)                the point
+
+  The cut is a cylinder-cylinder intersection, which LDraw approximates with 4
+  tris and 4 quads; the render draws those facet boundaries verbatim. Intended
+  fix (user's, 2026-08-30): replace the runs that are NOT part of the stud
+  circle with a single arc, leaving the `A` commands alone.
 - `SNAP_TOL = 0.4` LDU is the loosest constant added, tuned to the 0.345 stray.
   Extraction only; the render path passes no snap tolerance.
 - **`skia-pathops` for the 2D booleans: settled — adopt, but inside the OCCT

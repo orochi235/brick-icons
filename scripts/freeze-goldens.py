@@ -53,6 +53,19 @@ def read_hashes(path: Path) -> dict[str, str]:
     return out
 
 
+def read_decal_hashes(path: Path) -> dict[str, tuple[str, int]]:
+    """`sha  part  n` — the count is part of the golden, not a comment: a part
+    dropping from 2 decals to 1 is drift even when the surviving SVG matches."""
+    if not path.exists():
+        return {}
+    out = {}
+    for line in path.read_text().splitlines():
+        fields = line.split()
+        if len(fields) == 3:
+            out[fields[1]] = (fields[0], int(fields[2]))
+    return out
+
+
 def run_case(case, work: Path) -> tuple[str | None, str | None]:
     """Render one case. Returns (svg_text, error)."""
     out = work / case["id"]
@@ -79,7 +92,7 @@ def rasterize(svg: Path, png: Path, width: int) -> str | None:
     return None
 
 
-def freeze_extraction(out: Path, corpus: Path) -> int:
+def freeze_extraction(out: Path, corpus: Path, only: str | None) -> int:
     """The `decal` seam: `hlr.part_geometry`, no view pipeline.
 
     One hash per part covering all of its decals, not one per SVG — a corpus
@@ -89,15 +102,25 @@ def freeze_extraction(out: Path, corpus: Path) -> int:
     parts = [ln.split("#")[0].strip()
              for ln in corpus.read_text().splitlines()]
     parts = [p for p in parts if p]
+    if only:
+        wanted = set(only.split(","))
+        parts = [p for p in parts if p in wanted]
+        if not parts:
+            print(f"no corpus part matches --only {only}")
+            return 2
     work = out / ".work-decal"
     shutil.rmtree(work, ignore_errors=True)
     work.mkdir(parents=True)
 
     # One invocation, not 600: interpreter startup dominates a seam that costs
     # 0.04s of actual work per part. The CLI prints its own [i/N] progress.
+    # The CLI gets the FILTERED list, not the corpus: filtering only the rows
+    # we hash still extracts all 393 parts, which is the whole cost.
+    listing = work / "parts.txt"
+    listing.write_text("".join(f"{p}\n" for p in parts))
     proc = subprocess.run(
         [sys.executable, "-m", "brick_icons.cli", "decal",
-         "--list", str(corpus), "--out", str(work)],
+         "--list", str(listing), "--out", str(work)],
         text=True, cwd=ROOT)
 
     svgs = sorted(work.glob("*.decal*.svg"))
@@ -112,8 +135,12 @@ def freeze_extraction(out: Path, corpus: Path) -> int:
         rows.append((part, goldens.sha256(blob), len(got)))
     shutil.rmtree(work, ignore_errors=True)
 
+    # Merge, never overwrite — same reason as the render seam: an --only run
+    # must not drop the parts it did not rebuild.
+    merged = read_decal_hashes(out / "decal-hashes.txt")
+    merged.update({p: (h, n) for p, h, n in rows})
     (out / "decal-hashes.txt").write_text(
-        "".join(f"{h}  {p}  {n}\n" for p, h, n in rows))
+        "".join(f"{h}  {p}  {n}\n" for p, (h, n) in sorted(merged.items())))
     empty = sum(1 for _, _, n in rows if not n)
     # The decal CLI exits 1 whenever any part yields nothing, which is a normal
     # census result rather than a failure — plenty of printed parts carry no
@@ -126,7 +153,9 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out", default=str(ROOT / "tests" / "goldens"))
     ap.add_argument("--manifest", default=str(MANIFEST))
-    ap.add_argument("--only", help="substring filter on the case id")
+    ap.add_argument("--only",
+                    help="render seam: substring filter on the case id. "
+                         "extraction seam: comma-separated exact part ids")
     ap.add_argument("--seam", choices=["render", "extraction"],
                     default="render")
     args = ap.parse_args(argv)
@@ -134,7 +163,8 @@ def main(argv=None):
     if args.seam == "extraction":
         out = Path(args.out)
         out.mkdir(parents=True, exist_ok=True)
-        return freeze_extraction(out, out / "decal-corpus.txt")
+        return freeze_extraction(out, ROOT / "tests" / "goldens"
+                                 / "decal-corpus.txt", args.only)
 
     cases, width = load_cases(Path(args.manifest))
     if args.only:
