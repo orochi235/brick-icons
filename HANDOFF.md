@@ -1,6 +1,6 @@
 # Handoff — `main`, with the OCCT engine landed
 
-On **`main`**, working tree clean. 508 tests pass under `BRICK_GOLDENS=1`
+On **`main`**, working tree clean. 513 tests pass under `BRICK_GOLDENS=1`
 (a plain `pytest` skips the three drift tests and is not verification).
 
 Durable records, none of which this file repeats:
@@ -48,15 +48,39 @@ edges LDraw states, which is what keeps a faceted part from exploding: an
 unauthored tessellation boundary is never a candidate, rather than a candidate
 filtered out.
 
-**Three defect classes remain across the 21 `outline` parts.** `4589` and
-`3942c` both lose geometry at a cone's base ring; `50950` mangles its curved
-slope and loses all 3 of its arcs; `3941` and `6143` draw a band around the
-wall and render their truncated studs whole. `32062` also loses every arc. The
-rest match naive's shape, and several are markedly cleaner — `3649`, `4019`,
-`6589`, `3673` and `32062` each draw less ink for the same drawing.
+**Two defects remain across the 21 `outline` parts**, down from three.
 
-All three are measured and handed to `occt-port`, whose handoff carries the
-evidence and, for the stud, which causes are already ruled out.
+- **`32062` loses every arc** (naive 19, occt 0): a "+"-profile extrusion no
+  primitive matches.
+- **`3941` and `6143` render their truncated studs whole.** The band around
+  the wall those two also drew is gone.
+
+`50950` is fixed: its wall is a true ellipse, which `frame()` rejected as
+shear, so no face was built and the slope had no occluder at all. It now draws
+3 arcs against naive's 3 and matches naive's shape, closing the unprinted
+corpus at 17 of 17.
+
+**`4589` and `3942c` no longer reproduce the cone-base-ring loss** — the ring
+is present in both engines and `4589` draws MORE arcs than naive (23 -> 27),
+which is not the signature of losing one. Neither was measured the way `50950`
+was, so treat this as a symptom that stopped rather than a cause that was
+found; `3942c` sitting 4 arcs BELOW naive (32 -> 28) is the loose end.
+
+The rest match naive's shape, and several are markedly cleaner — `3649`,
+`4019`, `6589`, `3673` and `32062` each draw less ink for the same drawing.
+
+**`L` counts now run above naive's on curved parts** (`99781` 109 against 29,
+`3942c` 56 against 27). That is the silhouette contour, which the OCCT engine
+gained this round and which re-fits arcs only where a DRAWN arc exists to snap
+to; a curved surface's profile has none. It is SVG size, not ink — the contour
+carries outline the per-edge strokes never had, cutting ink naive has and occt
+misses from 537 to 378 on `99781` and 335 to 119 on `6143`. It should
+evaporate when fills supplies real faces. Do not chase it with a coarser mesh:
+the deflection is a quarter pixel because coarser chords poke out from behind
+an exact arc stroke.
+
+Evidence for the open two lives in `docs/occt-port-handoff.md`, which also
+records, for the stud, which causes are already ruled out.
 
 **The gate is unprinted parts only**, because a print is authored as ordinary
 geometry and a strokes-only combo cannot tell it from the part; printed parts
