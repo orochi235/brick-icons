@@ -81,3 +81,7 @@
 .part-title { order: -1; margin-right: auto; }
 .lk-trial__toolbar { width: 100%; }
 .pose-bar { flex: 1; }
+
+/* The compact rows' controls: full width of the row's control column, so an
+   inline label and its input read as one line. */
+.row-input { width: 100%; min-width: 0; font-size: 0.75rem; }

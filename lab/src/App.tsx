@@ -2,6 +2,7 @@ import { Lab, useLabContext } from '@weasel-js/labkit';
 import type { Instrument, TrialContribution } from '@weasel-js/labkit';
 import type { LabClient } from '@lab/api/client';
 import { PartSearch } from '@lab/chrome/PartSearch';
+import { COMPACT_ROWS } from '@lab/config/rows';
 import '@lab/app.css';
 
 // `<Lab>` renders the shell, the workspace and a `<Trial>` per record itself,
@@ -57,6 +58,7 @@ export function App({ instrument, client }:
       storageKey="brick-icons-lab"
       title="brick-icons lab"
       chrome={TRIAL_CHROME}
+      controls={COMPACT_ROWS}
       suppress={['snapshot']}
     >
       <TitleBar client={client} />

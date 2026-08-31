@@ -46,6 +46,17 @@ const SECTIONS: Record<string, string> = {
 
 const sectionOf = (key: string) => SECTIONS[key] ?? 'Other';
 
+/** Apply the shared annotations every leaf gets.
+ *
+ * No `.pair()` here, though the couples are obvious (width/height,
+ * dpi/margin): `ControlPanel` renders its leaves into a `PropertyList` at the
+ * default `pack="auto-color"`, which pairs colour rows and nothing else, so a
+ * pair annotation on any other kind is silently inert. */
+function decorate<T extends { section: (s: string) => T; describe: (d: string) => T }>(
+    node: T, field: SchemaField): T {
+  return node.section(sectionOf(field.key)).describe(field.help);
+}
+
 export function buildSchema(fields: SchemaField[]) {
   const nodes: Record<string, unknown> = {};
   for (const field of fields) {
@@ -54,21 +65,17 @@ export function buildSchema(fields: SchemaField[]) {
       const seed = typeof field.effective === 'string'
         && field.choices.includes(field.effective)
         ? field.effective : field.choices[0]!;
-      nodes[field.key] = f.enum(seed, field.choices)
-        .section(sectionOf(field.key)).describe(field.help);
+      nodes[field.key] = decorate(f.enum(seed, field.choices), field);
     } else if (field.type === 'bool') {
-      nodes[field.key] = f.boolean(false)
-        .section(sectionOf(field.key)).describe(field.help);
+      nodes[field.key] = decorate(f.boolean(false), field);
     } else if (field.type === 'int' || field.type === 'float') {
       const seed = typeof field.effective === 'number' ? field.effective
         : (typeof field.default === 'number' ? field.default : 0);
-      nodes[field.key] = f.number(seed)
-        .section(sectionOf(field.key)).describe(field.help);
+      nodes[field.key] = decorate(f.number(seed), field);
     } else {
       const seed = typeof field.effective === 'string' ? field.effective
         : (typeof field.default === 'string' ? field.default : '');
-      nodes[field.key] = f.string(seed)
-        .section(sectionOf(field.key)).describe(field.help);
+      nodes[field.key] = decorate(f.string(seed), field);
     }
   }
   return { ...nodes, ...labNodes() } as Record<string, unknown>;
