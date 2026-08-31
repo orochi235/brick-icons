@@ -1,8 +1,8 @@
 # Handoff — `main`, with the OCCT engine landed
 
-On **`main`**, even with `origin/main` — nothing is local-only. 520 tests pass
-under `BRICK_GOLDENS=1` (a plain `pytest` skips the drift tests and is not
-verification).
+On **`main`**, even with `origin/main` — nothing is local-only. 525 tests pass
+under `BRICK_GOLDENS=full` (~27 min). A plain `pytest` skips the drift tests,
+and `BRICK_GOLDENS=1` renders only `3005` — neither is verification.
 
 ## Read first: there is one thread now
 
@@ -112,9 +112,12 @@ and the substitutions.
 against doubled ink's black, which is how naive's 30–55% duplicate ink becomes
 visible at all.
 
-**`--debug-colors` gives every drawn element its own colour** from a 12-hue
-cycle, in emission order (`trace.DEBUG_PALETTE`). Use it to ask which element
-owns a vertex — a black outline cannot say. It already shows the outer
+**`--debug-colors` gives every drawn element its own colour** in emission
+order. Bare, it is a 12-hue cycle (`trace.DEBUG_PALETTE`) — use it to ask which
+element owns a vertex, which a black outline cannot say. `ramp` instead fades
+light to dark across 6 elements then steps the hue, so position within a run
+and which run both read at once; `ramp=N` sets the run length, and `ramp=100`
+trades adjacent-step contrast for coarse structure. It already shows the outer
 silhouette is not one contour but many fragments, with the colour changing at
 each tangent jog. Opt-in; the goldens do not pass it.
 
@@ -194,12 +197,12 @@ converts only the runs that follow one.
   which foreshortening alone does not explain on a flat top face.
 - **`14769px2` throws a stray arc outside its silhouette.** Pre-existing —
   verified identical before and after this work. Unrelated to circle recovery.
-- **`4019` draws a stray ellipse outside its own viewBox.** Radii 83.79 x
-  51.31 across 5 stroke-only paths — larger than the ~134-unit part — pushing
-  bbox y-min to -11.08 against `0 0 256 170`. Same class as `14769px2` above
-  and the `NOTE` in `hlr._visible_segments_analytic`: analytic rim candidates.
-  Pinned by `KNOWN_STRAY` in `tests/test_goldens.py`, which fails if a new
-  part joins it *or* if this one gets fixed without the note being updated.
+- **`4019`'s stray ellipse: FIXED, and it was not what this file said.** It
+  was never an analytic rim candidate — it was `_snap_rim_crossings`'
+  counterbore separator refit re-emitting a 7.2-degree arc as its 310.8-degree
+  complement. `hlr.SEP_REFIT_MAX_GROWTH` bounds the growth; `KNOWN_STRAY` is
+  now empty. **`14769px2` above is therefore not "the same class"** — nothing
+  has been shown to connect them, so treat it as undiagnosed.
 - **Sliver policy: settled.** `unwrap.significant_groups` now carries three
   part-level rules — the sliver ratio, the shatter share, and `MAX_DECALS = 4`,
   which returns nothing when a part still resolves to more than a few textures.
@@ -272,9 +275,15 @@ converts only the runs that follow one.
   pinned 2026-06-27 LDraw snapshot was lost — `complete.zip` serves only the
   latest, so it is gone for good. `/vendor` is now in `.gitignore`; stage
   explicit paths regardless.
-- **`BRICK_GOLDENS=1` or the gate does not run.** A plain suite reports
-  "N passed, 3 skipped" and those 3 skips are the drift tests. Two sessions
-  independently mistook that for verification.
+- **`BRICK_GOLDENS=1` or the gate does not run — and `=1` is still not the
+  gate.** A plain suite reports "N passed, 3 skipped" and those 3 skips are the
+  drift tests; two sessions independently mistook that for verification. But
+  `=1` renders `3005` ALONE (`--only 3005` in
+  `test_frozen_hashes_still_reproduce`), so it passes green through any change
+  to any other part. Only `=full` re-renders the 52-case manifest, and it takes
+  ~27 minutes. A naive-path change is unverified until `=full` is green.
+  `test_drawings_stay_inside_their_own_viewbox` reads the FROZEN json, not a
+  fresh render, so it cannot see a fix either until the goldens are re-frozen.
 - **`goldens.summarize_svg`'s `bbox` is built from path ENDPOINTS** and never
   samples an arc's sweep, so re-splitting arcs moves it with no ink moving. A
   bbox delta is not on its own evidence that geometry moved;

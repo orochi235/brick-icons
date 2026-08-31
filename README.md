@@ -431,8 +431,9 @@ is signal, and `--rmse-tol` / `--bbox-tol` exist to absorb a *deliberate*
 change, not measurement jitter.
 
 `tests/test_goldens.py` holds the drift gate, skipped by default because it
-needs LDView and minutes. `BRICK_GOLDENS=1` runs a fast subset, `=full` runs
-the manifest.
+needs LDView and minutes. `BRICK_GOLDENS=1` re-renders `3005` and nothing else,
+so it passes green through a change to any other part; `=full` re-renders the
+whole manifest (~27 min) and is the only run that verifies an engine change.
 
 Rasters are calibrated against the pinned `resvg` in
 [`scripts/external-deps.lock`](scripts/external-deps.lock); upgrading it moves
