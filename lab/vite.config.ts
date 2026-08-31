@@ -14,5 +14,12 @@ export default defineConfig({
     proxy: { '/api': API, '/ldraw': API },
   },
   build: { outDir: 'dist' },
-  test: { environment: 'jsdom', globals: true, setupFiles: ['./src/test-setup.ts'] },
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test-setup.ts'],
+    // The 3D pane needs a WebGL context jsdom does not have. Everything about
+    // it that can be tested without one lives in panes/orbit.ts.
+    exclude: ['**/node_modules/**', '**/ThreePane*'],
+  },
 });

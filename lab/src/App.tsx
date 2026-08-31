@@ -9,10 +9,12 @@ import type { Defect, DefectStatus } from '@lab/defects/useDefects';
 import { setPendingPart } from '@lab/config/pending';
 import '@lab/app.css';
 
-// `FloatingPanel` captures the pointer on pointerdown to drag itself, which
-// retargets mouseup to the panel -- so the browser synthesizes no `click` on
-// whatever was under the cursor and every control inside it is dead to a real
-// mouse. Controls stop the drag; the title bar stays a handle.
+// `FloatingPanel` captures the pointer to drag itself, exempting only
+// `input, button, a, select, textarea, [data-no-drag]` by element name. A
+// `div`/`span` with `role="button"` is NOT on that list, so it is captured,
+// mouseup retargets to the panel, and no `click` is ever synthesized on the
+// row -- it is simply dead to a real mouse while a programmatic `.click()`
+// still works. The list's rows are spans, hence this.
 const stopDrag = (e: { stopPropagation: () => void }) => e.stopPropagation();
 
 // `FloatingPanel` is a positioned box and nothing else -- it carries neither a
@@ -39,8 +41,7 @@ function AllDefects({ client }: { client: LabClient }) {
       className="defects-panel">
       <div className="defects-panel-head">
         <strong>Defects</strong>
-        <button type="button" aria-label="Close defects"
-          onPointerDown={stopDrag} onClick={() => setOpen(false)}>
+        <button type="button" aria-label="Close defects" onClick={() => setOpen(false)}>
           x
         </button>
       </div>
