@@ -29,7 +29,31 @@
 .part-search-hits li > span { display: block; padding: 0.15rem 0.5rem; cursor: pointer; }
 .part-search-hits li > span:hover { background: var(--wzl-surface-hover); }
 
+.command { position: relative; }
 .command-line { cursor: pointer; font-size: 0.75rem; }
+
+/* Above the status bar, not in it: the full argv is twenty flags, and letting
+   it into the bar is what made the bar three lines tall. */
+.command-callout {
+  position: absolute;
+  z-index: 4;
+  bottom: calc(100% + 0.375rem);
+  left: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  width: max-content;
+  max-width: min(48rem, 90vw);
+  padding: 0.5rem 0.625rem;
+  border: 1px solid var(--wzl-border);
+  border-radius: 5px;
+  background: var(--wzl-surface-raised);
+  color: var(--wzl-fg);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 35%);
+}
+
+.command-full { flex: 1; font-size: 0.75rem; white-space: pre-wrap; word-break: break-word; }
+.command-copy { flex: none; }
 
 .pose-bar { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
 .pose-bar-group { display: flex; align-items: center; gap: 0.15rem; }

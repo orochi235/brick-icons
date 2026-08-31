@@ -7,13 +7,20 @@ export interface CommandLineProps {
   config: Record<string, unknown>;
 }
 
-/** The CLI command this trial is equivalent to, always on screen.
+/** The CLI command this trial is equivalent to, collapsed to the part id.
  *
  * The argv comes from the server, which builds it with the same function the
  * render uses. Building it here instead would be a second answer to what a
- * flag means. */
+ * flag means.
+ *
+ * Only the part shows: at the lab's defaults the argv is twenty flags and
+ * wraps the status bar to three lines. Hover opens the rest; a click pins it,
+ * because a touch screen never hovers and the copy button has to be reachable.
+ */
 export function CommandLine({ client, part, config }: CommandLineProps) {
   const [command, setCommand] = useState('');
+  const [hovered, setHovered] = useState(false);
+  const [pinned, setPinned] = useState(false);
   const signature = `${part} ${JSON.stringify(config)}`;
 
   useEffect(() => {
@@ -30,18 +37,40 @@ export function CommandLine({ client, part, config }: CommandLineProps) {
 
   if (!part.trim()) return <code className="command-line">no part chosen</code>;
 
+  const open = (hovered || pinned) && command !== '';
+
   return (
-    <code
-      className="command-line"
-      title="click to copy"
-      role="button"
-      tabIndex={0}
-      onClick={() => navigator.clipboard?.writeText(command)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') navigator.clipboard?.writeText(command);
-      }}
+    <span
+      className="command"
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
+      onKeyDown={(e) => { if (e.key === 'Escape') setPinned(false); }}
     >
-      {command}
-    </code>
+      <code
+        className="command-line"
+        title={command}
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        onClick={() => setPinned((was) => !was)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') setPinned((was) => !was);
+        }}
+      >
+        {part}
+      </code>
+      {open ? (
+        <span className="command-callout">
+          <code className="command-full">{command}</code>
+          <button
+            type="button"
+            className="command-copy"
+            onClick={() => { void navigator.clipboard?.writeText(command); }}
+          >
+            Copy
+          </button>
+        </span>
+      ) : null}
+    </span>
   );
 }
