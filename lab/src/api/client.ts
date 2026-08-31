@@ -75,6 +75,18 @@ export function createClient({ base = '', fetchImpl = fetch }: ClientOptions = {
       return (await json<{ defects: unknown[] }>(fetchImpl, url)).defects;
     },
 
+    async addDefect(record: unknown) {
+      return json<unknown>(fetchImpl, at('/api/defects'), post('/api/defects', record));
+    },
+
+    async patchDefect(id: string, changes: Record<string, unknown>) {
+      return json<unknown>(fetchImpl, at(`/api/defects/${id}`), {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(changes),
+      });
+    },
+
     async goldens(part: string) {
       return json<{ part: string; cases: Record<string, string>; known: boolean }>(
         fetchImpl, at(`/api/goldens?part=${encodeURIComponent(part)}`));
