@@ -8,10 +8,19 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from PIL import Image
+from pydantic import BaseModel
 
 from ..config import load_config
-from . import cache, corpus, goldens_status, partindex, schema
+from . import cache, corpus, diff, goldens_status, jobs, partindex, runner, schema
+
+
+class RenderRequest(BaseModel):
+    part: str
+    config: dict = {}
+    force: bool = False
 
 
 def create_app(root: Path | str = ".",
@@ -22,6 +31,7 @@ def create_app(root: Path | str = ".",
     app.state.cache_root = Path(cache_root)
     app.state.ldraw_dir = load_config(root=str(root)).ldraw_dir
     app.state.index = None
+    app.state.jobs = jobs.Registry()
 
     def index() -> dict:
         if app.state.index is None:
@@ -43,6 +53,59 @@ def create_app(root: Path | str = ".",
     @app.get("/api/goldens")
     def get_goldens(part: str):
         return goldens_status.status(root / goldens_status.DEFAULT_PATH, part)
+
+    @app.post("/api/render")
+    def post_render(req: RenderRequest):
+        try:
+            argv = schema.to_argv(req.part, req.config)
+        except KeyError as e:
+            raise HTTPException(400, str(e)) from None
+
+        def work(item, emit):
+            result = runner.render(item, root=app.state.cache_root,
+                                   force=req.force)
+            emit(f"{req.part}: {'cached' if result['cached'] else 'rendered'}")
+            if not result["ok"]:
+                raise RuntimeError(result["error"])
+            return result
+
+        return {"job": app.state.jobs.start("render", [argv], work),
+                "argv": argv, "command": " ".join(["brick-icons", *argv])}
+
+    @app.get("/api/jobs/{job_id}")
+    def get_job(job_id: str):
+        record = app.state.jobs.get(job_id)
+        if record is None:
+            raise HTTPException(404, "no such job")
+        return record
+
+    @app.post("/api/jobs/{job_id}/cancel")
+    def post_cancel(job_id: str):
+        return {"cancelled": app.state.jobs.cancel(job_id)}
+
+    def _artifact_path(key: str, name: str) -> Path:
+        if not key.isalnum() or "/" in name or ".." in name:
+            raise HTTPException(400, "bad artifact path")
+        return app.state.cache_root / key / name
+
+    @app.get("/api/artifact/{key}/{name}")
+    def get_artifact(key: str, name: str):
+        path = _artifact_path(key, name)
+        if not path.is_file():
+            raise HTTPException(404, "no such artifact")
+        return FileResponse(path)
+
+    @app.get("/api/diff")
+    def get_diff(a_key: str, a_name: str, b_key: str, b_name: str,
+                 min_size: int = 4):
+        paths = [_artifact_path(a_key, a_name), _artifact_path(b_key, b_name)]
+        if not all(p.is_file() for p in paths):
+            raise HTTPException(404, "no such artifact")
+        try:
+            images = [Image.open(p) for p in paths]
+            return diff.compare(*images, min_size=min_size)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from None
 
     ldraw = app.state.ldraw_dir
     if Path(ldraw).is_dir():
