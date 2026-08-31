@@ -6,11 +6,11 @@
 .mark {
   position: absolute;
   pointer-events: auto;
-  border: 1px solid var(--lk-danger, #d05098);
-  background: color-mix(in srgb, var(--lk-danger, #d05098) 12%, transparent);
+  border: 1px solid var(--wzl-danger);
+  background: color-mix(in srgb, var(--wzl-danger) 12%, transparent);
   cursor: pointer;
 }
 
 .mark-stale { opacity: 0.35; border-style: dashed; }
-.mark-fixed { border-color: var(--lk-ok, #58ab41); }
+.mark-fixed { border-color: var(--wzl-success); }
 .mark-drawing { position: absolute; border: 1px dashed currentColor; }

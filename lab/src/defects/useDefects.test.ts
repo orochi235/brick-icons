@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest';
-import { buildDefect } from '@lab/defects/useDefects';
+import { describe, expect, it, vi } from 'vitest';
+import { renderHook, waitFor, act } from '@testing-library/react';
+import { buildDefect, useDefects } from '@lab/defects/useDefects';
+import type { LabClient } from '@lab/api/client';
 
 describe('buildDefect', () => {
   const args = {
@@ -39,5 +41,66 @@ describe('buildDefect', () => {
 
   it('refuses an untitled defect, which nothing could later find', () => {
     expect(() => buildDefect({ ...args, title: '   ' })).toThrow(/title/i);
+  });
+});
+
+const record = buildDefect({
+  part: '3941', engines: ['occt'], title: 'a', notes: '',
+  mark: { x: 0, y: 0, w: 1, h: 1 }, config: {}, existing: [], today: '2026-08-31',
+});
+
+function fakeClient() {
+  const rows: unknown[] = [];
+  return {
+    rows,
+    client: {
+      defects: vi.fn(async () => [...rows]),
+      addDefect: vi.fn(async (r: unknown) => { rows.push(r); return r; }),
+      patchDefect: vi.fn(async () => ({})),
+    } as unknown as LabClient,
+  };
+}
+
+describe('useDefects', () => {
+  it('loads the part it was given', async () => {
+    const { client } = fakeClient();
+    const { result } = renderHook(() => useDefects(client, '3941'));
+    await waitFor(() => expect(client.defects).toHaveBeenCalledWith('3941'));
+    expect(result.current.defects).toEqual([]);
+  });
+
+  it('asks for nothing when no part is chosen', async () => {
+    const { client } = fakeClient();
+    renderHook(() => useDefects(client, '   '));
+    await waitFor(() => expect(client.defects).not.toHaveBeenCalled());
+  });
+
+  // The status bar and the panes each hold their own hook. A file in one that
+  // the other never sees is a count that reads `no defects` beside a drawn mark.
+  it('refreshes every hook on the same part when one files', async () => {
+    const { client } = fakeClient();
+    const a = renderHook(() => useDefects(client, '3941'));
+    const b = renderHook(() => useDefects(client, '3941'));
+    await waitFor(() => expect(a.result.current.defects).toEqual([]));
+
+    await act(async () => { await a.result.current.file(record); });
+
+    await waitFor(() => expect(b.result.current.defects).toHaveLength(1));
+  });
+
+  it('leaves a hook on another part alone', async () => {
+    const { client } = fakeClient();
+    const a = renderHook(() => useDefects(client, '3941'));
+    const other = renderHook(() => useDefects(client, '4070'));
+    await waitFor(() => expect(a.result.current.defects).toEqual([]));
+    const before = (client.defects as ReturnType<typeof vi.fn>).mock.calls.length;
+
+    await act(async () => { await a.result.current.file(record); });
+
+    // one reload for the filer itself, none for the other part
+    await waitFor(() => expect(a.result.current.defects).toHaveLength(1));
+    expect((client.defects as ReturnType<typeof vi.fn>).mock.calls
+      .slice(before).filter(([p]) => p === '4070')).toEqual([]);
+    expect(other.result.current.defects).toEqual([]);
   });
 });

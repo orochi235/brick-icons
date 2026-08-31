@@ -91,6 +91,16 @@ describe('MarkLayer', () => {
     expect(container.querySelector('.mark-layer-armed')).toBeNull();
   });
 
+  it('keeps a press on a mark off the pane beneath it', () => {
+    const onPointerDown = vi.fn();
+    const { container } = render(
+      <div onPointerDown={onPointerDown}>
+        <MarkLayer {...props} armed={false} defects={[defect()]} />
+      </div>);
+    fireEvent.pointerDown(container.querySelector('.mark')!, { clientX: 60, clientY: 40 });
+    expect(onPointerDown).not.toHaveBeenCalled();
+  });
+
   it('keeps a drag off the pane beneath it', () => {
     const onPointerDown = vi.fn();
     const { container } = render(

@@ -2,7 +2,7 @@
   position: relative;
   min-width: 0;
   min-height: 0;
-  border: 1px solid var(--lk-border, #3a3a3a);
+  border: 1px solid var(--wzl-border);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -32,7 +32,7 @@
   left: 0;
   right: 0;
   z-index: 2;
-  color: var(--lk-danger, #d05098);
+  color: var(--wzl-danger);
   padding: 0.5rem;
   font-size: 0.75rem;
   pointer-events: none;

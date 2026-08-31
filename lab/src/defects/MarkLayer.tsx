@@ -64,6 +64,9 @@ export function MarkLayer({ defects, box, camera, config, armed = false,
             tabIndex={0}
             style={{ left: `${rect.left}px`, top: `${rect.top}px`,
                      width: `${rect.width}px`, height: `${rect.height}px` }}
+            // The pane body captures the pointer to pan, which retargets
+            // mouseup and leaves the browser synthesizing no click here at all.
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => { e.stopPropagation(); onSelect(d.id); }}
             onKeyDown={(e) => { if (e.key === 'Enter') onSelect(d.id); }}
           />

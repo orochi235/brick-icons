@@ -10,9 +10,10 @@
   gap: 0.375rem;
   max-width: 20rem;
   padding: 0.5rem 0.75rem;
-  border: 1px solid var(--lk-border, #3a3a3a);
+  border: 1px solid var(--wzl-border);
   border-radius: 6px;
-  background: var(--lk-panel, #202020);
+  background: var(--wzl-surface-raised);
+  color: var(--wzl-fg);
   box-shadow: 0 6px 24px rgb(0 0 0 / 40%);
   font-size: 0.75rem;
 }

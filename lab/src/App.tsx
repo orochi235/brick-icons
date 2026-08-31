@@ -9,6 +9,12 @@ import type { Defect, DefectStatus } from '@lab/defects/useDefects';
 import { setPendingPart } from '@lab/config/pending';
 import '@lab/app.css';
 
+// `FloatingPanel` captures the pointer on pointerdown to drag itself, which
+// retargets mouseup to the panel -- so the browser synthesizes no `click` on
+// whatever was under the cursor and every control inside it is dead to a real
+// mouse. Controls stop the drag; the title bar stays a handle.
+const stopDrag = (e: { stopPropagation: () => void }) => e.stopPropagation();
+
 // `FloatingPanel` is a positioned box and nothing else -- it carries neither a
 // title nor a dismissal, so both are written here as its first child.
 function AllDefects({ client }: { client: LabClient }) {
@@ -33,18 +39,21 @@ function AllDefects({ client }: { client: LabClient }) {
       className="defects-panel">
       <div className="defects-panel-head">
         <strong>Defects</strong>
-        <button type="button" aria-label="Close defects" onClick={() => setOpen(false)}>
+        <button type="button" aria-label="Close defects"
+          onPointerDown={stopDrag} onClick={() => setOpen(false)}>
           x
         </button>
       </div>
-      <DefectList
-        defects={defects}
-        onOpen={(part) => { setPendingPart(part); addTrial('part-inspector'); }}
-        onStatus={async (id: string, status: DefectStatus) => {
-          await client.patchDefect(id, { status });
-          setDefects((await client.defects()) as Defect[]);
-        }}
-      />
+      <div onPointerDown={stopDrag}>
+        <DefectList
+          defects={defects}
+          onOpen={(part) => { setPendingPart(part); addTrial('part-inspector'); }}
+          onStatus={async (id: string, status: DefectStatus) => {
+            await client.patchDefect(id, { status });
+            setDefects((await client.defects()) as Defect[]);
+          }}
+        />
+      </div>
     </FloatingPanel>
   );
 }
