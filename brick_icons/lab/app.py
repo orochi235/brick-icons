@@ -124,11 +124,19 @@ def create_app(root: Path | str = ".",
         paths = [_artifact_path(a_key, a_name), _artifact_path(b_key, b_name)]
         if not all(p.is_file() for p in paths):
             raise HTTPException(404, "no such artifact")
+        # The engines emit SVG and the differ needs pixels, so an SVG side is
+        # rasterized with resvg -- the project's antialias reference -- into
+        # the same cache directory the artifact came from.
         try:
-            images = [Image.open(p) for p in paths]
-            return diff.compare(*images, min_size=min_size)
+            rasters = [diff.as_raster(p, p.parent) for p in paths]
+            vis = app.state.cache_root / a_key / f"diff-{b_key}.png"
+            result = diff.compare(*[Image.open(r) for r in rasters],
+                                  min_size=min_size, out_png=vis)
+        except RuntimeError as e:
+            raise HTTPException(400, str(e)) from None
         except ValueError as e:
             raise HTTPException(400, str(e)) from None
+        return {**result, "url": f"/api/artifact/{a_key}/{vis.name}"}
 
     @app.get("/api/defects")
     def get_defects(part: str | None = None, status: str | None = None):

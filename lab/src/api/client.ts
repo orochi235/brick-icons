@@ -59,6 +59,13 @@ export function createClient({ base = '', fetchImpl = fetch }: ClientOptions = {
       await json(fetchImpl, at(`/api/jobs/${id}/cancel`), post('', {}));
     },
 
+    async diff(aKey: string, aName: string, bKey: string, bName: string) {
+      const params = new URLSearchParams({ a_key: aKey, a_name: aName,
+                                           b_key: bKey, b_name: bName });
+      return json<{ components: number; sizes: number[]; pixels: number; url: string }>(
+        fetchImpl, at(`/api/diff?${params}`));
+    },
+
     artifactUrl(key: string, name: string): string {
       return at(`/api/artifact/${key}/${name}`);
     },

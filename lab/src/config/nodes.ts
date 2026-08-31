@@ -24,7 +24,7 @@ function usable(field: SchemaField): boolean {
 /** The lab's own fields, which no CLI flag corresponds to. */
 function labNodes() {
   return {
-    layout: f.enum('split', ['split', 'stack']).section('Panes'),
+    layout: f.enum('grid', ['grid', 'split', 'stack']).section('Panes'),
     sources: f.value<SourceId[]>(['naive', 'occt']).section('Panes'),
   };
 }
@@ -88,7 +88,7 @@ export const OPENING_COMBO: Record<string, unknown> = {
 };
 
 export function defaultsFor(fields: SchemaField[]): Record<string, unknown> {
-  const out: Record<string, unknown> = { part: '', layout: 'split',
+  const out: Record<string, unknown> = { part: '', layout: 'grid',
                                          sources: ['naive', 'occt'] };
   for (const field of fields) {
     if (!usable(field)) continue;

@@ -1,5 +1,13 @@
 .panes { display: flex; gap: 0.5rem; width: 100%; height: 100%; }
 .panes-split > .pane { flex: 1 1 0; }
+
+/* Grid, the default: with three or more panes a single row makes each one too
+   narrow to read, and these are drawings. */
+.panes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-auto-rows: minmax(0, 1fr);
+}
 .panes-stack { display: grid; }
 .panes-stack > .pane { grid-area: 1 / 1; }
 

@@ -64,7 +64,7 @@ describe('defaultsFor', () => {
   it('carries the part and the lab-only fields', () => {
     const d = defaultsFor([field({ key: 'engine', choices: ['naive', 'occt'] })]);
     expect(d.part).toBe('');
-    expect(d.layout).toBe('split');
+    expect(d.layout).toBe('grid');
     expect(d.sources).toContain('occt');
   });
 });

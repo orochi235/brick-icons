@@ -6,6 +6,7 @@ count and the component sizes are the answer; `pixels` is a footnote.
 """
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -48,3 +49,37 @@ def compare(a: Image.Image, b: Image.Image, threshold: int = 16,
         Image.fromarray(vis, "L").save(out_png)
     return {"components": len(sizes), "sizes": sizes[:max_listed],
             "pixels": int(mask.sum())}
+
+
+RASTER_WIDTH = 900
+
+
+def rasterize(svg_path: Path | str, png_path: Path | str,
+              width: int = RASTER_WIDTH) -> Path:
+    """Render an SVG to a PNG with resvg, skipping the work when it is current.
+
+    resvg is the project's antialias reference -- the same rasterizer the
+    contact sheet and the census use -- so a diff taken here matches what those
+    compare, rather than introducing a second AA behaviour.
+    """
+    svg_path, png_path = Path(svg_path), Path(png_path)
+    if png_path.exists() and png_path.stat().st_mtime_ns >= svg_path.stat().st_mtime_ns:
+        return png_path
+    png_path.parent.mkdir(parents=True, exist_ok=True)
+    proc = subprocess.run(
+        ["resvg", "--background", "white", "--width", str(width),
+         str(svg_path), str(png_path)],
+        capture_output=True, text=True)
+    if proc.returncode != 0 or not png_path.exists():
+        raise RuntimeError(f"resvg failed on {svg_path.name}: "
+                           f"{(proc.stderr or proc.stdout).strip()[:200]}")
+    return png_path
+
+
+def as_raster(path: Path | str, cache_dir: Path | str,
+              width: int = RASTER_WIDTH) -> Path:
+    """The comparable raster for an artifact: a PNG as-is, an SVG rasterized."""
+    path = Path(path)
+    if path.suffix.lower() != ".svg":
+        return path
+    return rasterize(path, Path(cache_dir) / f"{path.stem}.{width}.png", width)

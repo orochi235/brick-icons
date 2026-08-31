@@ -19,7 +19,16 @@ export const QUICK_OPTIONS: { key: string; label: string; values: string[] }[] =
   { key: 'engine', label: 'engine', values: ['naive', 'occt'] },
   { key: 'shading', label: 'shading', values: ['outline', 'cel', 'normal'] },
   { key: 'shade_style', label: 'fill', values: ['flat3', 'none'] },
-  { key: 'layout', label: 'layout', values: ['split', 'stack'] },
+  { key: 'layout', label: 'layout', values: ['grid', 'split', 'stack'] },
+];
+
+/** The panes that can be shown, in the order they are laid out. */
+export const SOURCE_TOGGLES: { id: string; label: string }[] = [
+  { id: 'naive', label: 'naive' },
+  { id: 'occt', label: 'occt' },
+  { id: 'reference', label: 'ref' },
+  { id: '3d', label: '3D' },
+  { id: 'diff', label: 'diff' },
 ];
 
 export interface PoseBarProps {
@@ -29,6 +38,10 @@ export interface PoseBarProps {
 }
 
 export function PoseBar({ angle, config, setConfig }: PoseBarProps) {
+  const sources = (config.sources as string[]) ?? [];
+  const toggle = (id: string) => setConfig('sources',
+    sources.includes(id) ? sources.filter((s) => s !== id) : [...sources, id]);
+
   return (
     <div className="pose-bar">
       <div className="pose-bar-group" role="group" aria-label="Pose">
@@ -41,6 +54,19 @@ export function PoseBar({ angle, config, setConfig }: PoseBarProps) {
             onClick={() => setConfig('angle', pose.id)}
           >
             {pose.label}
+          </button>
+        ))}
+      </div>
+      <div className="pose-bar-group" role="group" aria-label="Panes">
+        {SOURCE_TOGGLES.map((source) => (
+          <button
+            key={source.id}
+            type="button"
+            className={sources.includes(source.id) ? 'pose is-on' : 'pose'}
+            aria-pressed={sources.includes(source.id)}
+            onClick={() => toggle(source.id)}
+          >
+            {source.label}
           </button>
         ))}
       </div>

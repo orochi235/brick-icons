@@ -207,3 +207,31 @@ def test_command_route_rejects_an_unknown_key(client):
 def test_command_route_rejects_unparseable_config(client):
     r = client.get("/api/command", params={"part": "3941", "config": "{oops"})
     assert r.status_code == 400
+
+
+def test_diff_route_compares_two_svg_renders(client, tmp_path):
+    """The engines emit SVG; the differ needs rasters. The route bridges it."""
+    svg = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">'
+           '<rect x="{x}" y="2" width="4" height="4" fill="black"/></svg>')
+    for key, x in (("aaaa1111", 1), ("bbbb2222", 5)):
+        d = tmp_path / key
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "p.svg").write_text(svg.format(x=x))
+    body = client.get("/api/diff", params={
+        "a_key": "aaaa1111", "a_name": "p.svg",
+        "b_key": "bbbb2222", "b_name": "p.svg"}).json()
+    assert body["components"] >= 1
+    assert body["url"].startswith("/api/artifact/")
+
+
+def test_diff_route_reports_a_size_mismatch_as_400(client, tmp_path):
+    import numpy as np
+    from PIL import Image
+    for key, size in (("cccc3333", (16, 16)), ("dddd4444", (32, 32))):
+        d = tmp_path / key
+        d.mkdir(parents=True, exist_ok=True)
+        Image.fromarray(np.full(size, 255, np.uint8), "L").save(d / "p.png")
+    r = client.get("/api/diff", params={
+        "a_key": "cccc3333", "a_name": "p.png",
+        "b_key": "dddd4444", "b_name": "p.png"})
+    assert r.status_code == 400

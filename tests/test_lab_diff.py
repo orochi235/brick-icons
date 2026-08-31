@@ -57,3 +57,46 @@ def test_writes_a_visualisation(tmp_path):
     out = tmp_path / "d.png"
     diff.compare(_img(), _img(boxes=[(10, 10, 20, 20)]), out_png=out)
     assert out.exists()
+
+
+def test_rasterize_writes_a_png(tmp_path):
+    svg = tmp_path / "a.svg"
+    svg.write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">'
+                   '<rect x="2" y="2" width="6" height="6" fill="black"/></svg>')
+    out = tmp_path / "a.png"
+    assert diff.rasterize(svg, out, width=64) == out
+    assert out.exists()
+    assert Image.open(out).size[0] == 64
+
+
+def test_rasterize_is_skipped_when_the_png_is_current(tmp_path):
+    svg = tmp_path / "a.svg"
+    svg.write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"/>')
+    out = tmp_path / "a.png"
+    diff.rasterize(svg, out, width=32)
+    first = out.stat().st_mtime_ns
+    diff.rasterize(svg, out, width=32)
+    assert out.stat().st_mtime_ns == first
+
+
+def test_rasterize_reports_a_bad_svg(tmp_path):
+    import pytest
+    bad = tmp_path / "bad.svg"
+    bad.write_text("not an svg at all")
+    with pytest.raises(RuntimeError):
+        diff.rasterize(bad, tmp_path / "bad.png", width=32)
+
+
+def test_as_raster_passes_a_png_through(tmp_path):
+    png = tmp_path / "a.png"
+    Image.new("L", (8, 8), 255).save(png)
+    assert diff.as_raster(png, tmp_path, width=64) == png
+
+
+def test_as_raster_rasterizes_an_svg_beside_it(tmp_path):
+    svg = tmp_path / "a.svg"
+    svg.write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">'
+                   '<rect width="10" height="10" fill="black"/></svg>')
+    got = diff.as_raster(svg, tmp_path, width=48)
+    assert got.suffix == ".png"
+    assert got.exists()

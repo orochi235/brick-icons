@@ -5,10 +5,11 @@ import { takePendingPart } from '@lab/config/pending';
 import { CommandLine } from '@lab/chrome/CommandLine';
 import { SourcePane, type PaneState } from '@lab/panes/SourcePane';
 import { readView } from '@lab/panes/camera';
-import { SOURCES, enabledSources } from '@lab/panes/sources';
+import { enabledSources } from '@lab/panes/sources';
 import { runRenders, type SourceRender } from '@lab/instruments/renderJob';
 import { useArtifactSvg } from '@lab/panes/useArtifactSvg';
 import { PartTitle, PoseBar } from '@lab/chrome/PoseBar';
+import { diffCaption, diffWarning, useDiff } from '@lab/panes/useDiff';
 
 export interface InspectorState {
   renders: Partial<Record<SourceId, RenderResult>>;
@@ -28,16 +29,24 @@ function Panes({ ctx, client }: { ctx: any; client: LabClient }) {
   const config = ctx.config as Record<string, unknown>;
   const camera = readView(ctx.trial.view);
   const sources = enabledSources((config.sources as SourceId[]) ?? []);
-  const markup = useArtifactSvg(client, (ctx.state as InspectorState).renders);
-  const stack = config.layout === 'stack';
+  const renders = (ctx.state as InspectorState).renders;
+  const markup = useArtifactSvg(client, renders);
+  const diff = useDiff(client, renders);
+  const layout = String(config.layout ?? 'grid');
 
   return (
-    <div className={stack ? 'panes panes-stack' : 'panes panes-split'}>
+    <div className={`panes panes-${layout}`}>
       {sources.map((source) => (
         <SourcePane
           key={source.id}
-          source={source}
-          state={paneState(source.id, ctx.state as InspectorState, markup)}
+          source={source.id === 'diff'
+            ? { ...source,
+                caveat: diffWarning(config)
+                  ?? (diffCaption(diff.result) || source.caveat) }
+            : source}
+          state={source.id === 'diff'
+            ? diff.pane
+            : paneState(source.id, ctx.state as InspectorState, markup)}
           camera={camera}
           onCamera={(next) => ctx.trial.setView(next)}
         />
@@ -62,8 +71,6 @@ export function createPartInspector(fields: SchemaField[], client: LabClient) {
     defaultConfig: () => ({ ...defaults, part: takePendingPart() }),
 
     initialState: () => ({ renders: {}, errors: {} }),
-
-    layers: { ids: Object.values(SOURCES).map((s) => s.id) },
 
     chrome: [
       {
