@@ -1,9 +1,53 @@
-import { Lab, useLabContext } from '@weasel-js/labkit';
+import { useEffect, useState } from 'react';
+import { FloatingPanel, Lab, useLabContext } from '@weasel-js/labkit';
 import type { Instrument, TrialContribution } from '@weasel-js/labkit';
 import type { LabClient } from '@lab/api/client';
 import { PartSearch } from '@lab/chrome/PartSearch';
 import { COMPACT_ROWS } from '@lab/config/rows';
+import { DefectList } from '@lab/defects/DefectList';
+import type { Defect, DefectStatus } from '@lab/defects/useDefects';
+import { setPendingPart } from '@lab/config/pending';
 import '@lab/app.css';
+
+// `FloatingPanel` is a positioned box and nothing else -- it carries neither a
+// title nor a dismissal, so both are written here as its first child.
+function AllDefects({ client }: { client: LabClient }) {
+  const { addTrial } = useLabContext();
+  const [defects, setDefects] = useState<Defect[]>([]);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (open) void client.defects().then((rows) => setDefects(rows as Defect[]));
+  }, [open, client]);
+
+  if (!open) {
+    return (
+      <button type="button" className="defects-open" onClick={() => setOpen(true)}>
+        Defects
+      </button>
+    );
+  }
+
+  return (
+    <FloatingPanel anchor="bottom-right" storageKey="brick-icons-lab.defects"
+      className="defects-panel">
+      <div className="defects-panel-head">
+        <strong>Defects</strong>
+        <button type="button" aria-label="Close defects" onClick={() => setOpen(false)}>
+          x
+        </button>
+      </div>
+      <DefectList
+        defects={defects}
+        onOpen={(part) => { setPendingPart(part); addTrial('part-inspector'); }}
+        onStatus={async (id: string, status: DefectStatus) => {
+          await client.patchDefect(id, { status });
+          setDefects((await client.defects()) as Defect[]);
+        }}
+      />
+    </FloatingPanel>
+  );
+}
 
 // `<Lab>` renders the shell, the workspace and a `<Trial>` per record itself,
 // and puts its children in the shell's header beside the built-in controls.
@@ -12,7 +56,12 @@ function TitleBar({ client }: { client: LabClient }) {
   const { addTrial } = useLabContext();
   // `addTrial` reads the pending part through the instrument's defaultConfig;
   // see src/config/pending.ts.
-  return <PartSearch client={client} onOpen={() => addTrial('part-inspector')} />;
+  return (
+    <>
+      <PartSearch client={client} onOpen={() => addTrial('part-inspector')} />
+      <AllDefects client={client} />
+    </>
+  );
 }
 
 function CameraIcon({ size = 16 }: { size?: number }) {
