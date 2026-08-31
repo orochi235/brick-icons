@@ -24,10 +24,27 @@ function usable(field: SchemaField): boolean {
 /** The lab's own fields, which no CLI flag corresponds to. */
 function labNodes() {
   return {
-    layout: f.enum('split', ['split', 'stack']),
-    sources: f.value<SourceId[]>(['naive', 'occt']),
+    layout: f.enum('split', ['split', 'stack']).section('Panes'),
+    sources: f.value<SourceId[]>(['naive', 'occt']).section('Panes'),
   };
 }
+
+/** Which heading each flag lives under. A key absent here falls to `Other`,
+ *  so a flag the CLI grows still appears -- just not filed. */
+const SECTIONS: Record<string, string> = {
+  engine: 'Render', shading: 'Render', shade_style: 'Render', angle: 'Render',
+  wireframe: 'Render', weld_corners: 'Render', opacity: 'Render',
+  part_color: 'Colour', light: 'Colour', svg_bg: 'Colour', mode: 'Colour',
+  line_width: 'Strokes', silhouette_width: 'Strokes', line_mm: 'Strokes',
+  silhouette_mm: 'Strokes',
+  fmt: 'Output', render_px: 'Output', curve_quality: 'Output',
+  scale: 'Output', scale_mode: 'Output', width: 'Output', height: 'Output',
+  dpi: 'Output', margin: 'Output',
+  dither: 'Bitmap', threshold: 'Bitmap', gamma: 'Bitmap', cel_levels: 'Bitmap',
+  debug_colors: 'Debug',
+};
+
+const sectionOf = (key: string) => SECTIONS[key] ?? 'Other';
 
 export function buildSchema(fields: SchemaField[]) {
   const nodes: Record<string, unknown> = {};
@@ -37,17 +54,21 @@ export function buildSchema(fields: SchemaField[]) {
       const seed = typeof field.effective === 'string'
         && field.choices.includes(field.effective)
         ? field.effective : field.choices[0]!;
-      nodes[field.key] = f.enum(seed, field.choices);
+      nodes[field.key] = f.enum(seed, field.choices)
+        .section(sectionOf(field.key)).describe(field.help);
     } else if (field.type === 'bool') {
-      nodes[field.key] = f.boolean(false);
+      nodes[field.key] = f.boolean(false)
+        .section(sectionOf(field.key)).describe(field.help);
     } else if (field.type === 'int' || field.type === 'float') {
       const seed = typeof field.effective === 'number' ? field.effective
         : (typeof field.default === 'number' ? field.default : 0);
-      nodes[field.key] = f.number(seed);
+      nodes[field.key] = f.number(seed)
+        .section(sectionOf(field.key)).describe(field.help);
     } else {
       const seed = typeof field.effective === 'string' ? field.effective
         : (typeof field.default === 'string' ? field.default : '');
-      nodes[field.key] = f.string(seed);
+      nodes[field.key] = f.string(seed)
+        .section(sectionOf(field.key)).describe(field.help);
     }
   }
   return { ...nodes, ...labNodes() } as Record<string, unknown>;

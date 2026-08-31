@@ -44,3 +44,28 @@
 
 .quick-option { display: flex; align-items: center; gap: 0.25rem; font-size: 0.7rem; }
 .part-title { font-weight: 700; }
+
+/* labkit renders the instrument name as a fixed span before the titlebar
+   contributions, with no prop to replace it. Hiding it lets the part title
+   lead instead. Remove once labkit takes a trial title from the instrument. */
+.lk-trial__title { display: none; }
+
+.toolbar-icon {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  cursor: pointer;
+  color: inherit;
+}
+.toolbar-icon:hover { border-color: var(--lk-border, #3a3a3a); }
+
+/* The titlebar's action strip and the toolbar both size to their content, so a
+   contribution declaring `end` lands beside its neighbours rather than at the
+   edge. Letting them fill the row is what makes `end` mean the far edge. */
+.lk-trial__titlebar-actions { flex: 1; }
+.part-title { order: -1; margin-right: auto; }
+.lk-trial__toolbar { width: 100%; }
+.pose-bar { flex: 1; }
