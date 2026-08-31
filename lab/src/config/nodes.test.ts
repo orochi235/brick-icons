@@ -4,7 +4,7 @@ import type { SchemaField } from '@lab/api/types';
 
 const field = (over: Partial<SchemaField>): SchemaField => ({
   key: 'engine', flag: '--engine', type: 'str', choices: null,
-  help: '', nargs: null, default: null, ...over,
+  help: '', nargs: null, default: null, effective: null, ...over,
 });
 
 /** `buildSchema` also adds the lab's own fields; these tests are about the
@@ -49,9 +49,11 @@ describe('defaultsFor', () => {
     expect(d.render_px).toBe(900);
   });
 
-  it('takes the first choice when the default is null', () => {
+  it('leaves a choice unset when nothing resolved one', () => {
+    // Not choices[0]: guessing would put the lab on a setting the CLI never
+    // uses. Unset means labels.toml decides, which is what the CLI does.
     const d = defaultsFor([field({ key: 'engine', choices: ['naive', 'occt'] })]);
-    expect(d.engine).toBe('naive');
+    expect(d.engine).toBeNull();
   });
 
   it('defaults a switch to false', () => {
@@ -91,5 +93,51 @@ describe('renderConfig', () => {
 
   it('keeps a false switch, which is a real value', () => {
     expect(renderConfig({ weld_corners: false })).toEqual({ weld_corners: false });
+  });
+});
+
+
+describe('defaultsFor and the effective value', () => {
+  it('prefers what labels.toml resolved over argparse\'s None', () => {
+    const d = defaultsFor([field({ key: 'render_px', type: 'int',
+                                   default: null, effective: 2048 })]);
+    expect(d.render_px).toBe(2048);
+  });
+
+  it('prefers the effective choice over the first one listed', () => {
+    const d = defaultsFor([field({ key: 'dither',
+                                   choices: ['threshold', 'floyd', 'atkinson'],
+                                   effective: 'atkinson' })]);
+    expect(d.dither).toBe('atkinson');
+  });
+
+  it('opens on the SVG outline combo, since a pane shows an SVG', () => {
+    const d = defaultsFor([field({ key: 'fmt', choices: ['png', 'svg'],
+                                   effective: 'png' })]);
+    expect(d.fmt).toBe('svg');
+    expect(d.shading).toBe('outline');
+    expect(d.shade_style).toBe('flat3');
+  });
+
+  it('leaves a flag with no effective value unset rather than zero', () => {
+    const d = defaultsFor([field({ key: 'part_color', type: 'str' })]);
+    expect(d.part_color).toBeNull();
+  });
+});
+
+describe('a non-switch flag resolved to false', () => {
+  it('is left unset, not passed as the string "False"', () => {
+    // --debug-colors takes 'cycle' | 'ramp' | 'ramp=N'; its Config value is a
+    // bool when off. Passing it through is an argparse error that fails the
+    // entire render.
+    const d = defaultsFor([field({ key: 'debug_colors', type: 'str',
+                                   effective: false as unknown as null })]);
+    expect(d.debug_colors).toBeNull();
+  });
+
+  it('still keeps a real switch false', () => {
+    const d = defaultsFor([field({ key: 'weld_corners', type: 'bool',
+                                   effective: false as unknown as null })]);
+    expect(d.weld_corners).toBe(false);
   });
 });

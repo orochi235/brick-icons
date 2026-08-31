@@ -51,7 +51,7 @@ def create_app(root: Path | str = ".",
 
     @app.get("/api/schema")
     def get_schema():
-        return {"fields": schema.config_schema()}
+        return {"fields": schema.config_schema(root=root)}
 
     @app.get("/api/lists")
     def get_lists():

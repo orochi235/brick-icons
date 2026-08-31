@@ -8,6 +8,7 @@ import { readView } from '@lab/panes/camera';
 import { SOURCES, enabledSources } from '@lab/panes/sources';
 import { runRenders, type SourceRender } from '@lab/instruments/renderJob';
 import { useArtifactSvg } from '@lab/panes/useArtifactSvg';
+import { PartTitle, PoseBar } from '@lab/chrome/PoseBar';
 
 export interface InspectorState {
   renders: Partial<Record<SourceId, RenderResult>>;
@@ -65,6 +66,31 @@ export function createPartInspector(fields: SchemaField[], client: LabClient) {
     layers: { ids: Object.values(SOURCES).map((s) => s.id) },
 
     chrome: [
+      {
+        id: 'part-title',
+        region: 'titlebar',
+        render: (ctx) => (
+          <PartTitle
+            client={client}
+            part={String((ctx.config as Record<string, unknown>).part ?? '')}
+          />
+        ),
+      },
+      {
+        id: 'pose-bar',
+        region: 'toolbar',
+        group: 'pose',
+        render: (ctx) => {
+          const config = ctx.config as Record<string, unknown>;
+          return (
+            <PoseBar
+              angle={String(config.angle ?? '')}
+              config={config}
+              setConfig={(key, value) => ctx.setConfig(key, value)}
+            />
+          );
+        },
+      },
       {
         id: 'command-line',
         region: 'status',

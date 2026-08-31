@@ -74,3 +74,25 @@ def test_an_unknown_key_is_rejected_rather_than_dropped():
     import pytest
     with pytest.raises(KeyError):
         schema.to_argv("3001", {"not_a_flag": 1})
+
+
+def test_every_field_carries_the_config_s_effective_default():
+    """argparse defaults to None for most flags; the value the CLI actually
+    uses comes from labels.toml, and a lab that guesses instead diverges."""
+    from brick_icons.config import load_config
+    cfg = load_config(root=".")
+    fields = {f["key"]: f for f in schema.config_schema(root=".")}
+    for key in ("fmt", "mode", "shading", "engine", "shade_style", "render_px",
+                "curve_quality", "angle", "line_width", "opacity", "dither"):
+        assert fields[key]["effective"] == getattr(cfg, key), key
+
+
+def test_a_flag_with_no_config_field_has_no_effective_value():
+    fields = {f["key"]: f for f in schema.config_schema(root=".")}
+    assert fields["out"]["effective"] is None
+    assert fields["debug_dir"]["effective"] is None
+
+
+def test_paths_are_stringified_so_the_schema_is_json_safe():
+    import json
+    json.dumps(schema.config_schema(root="."))

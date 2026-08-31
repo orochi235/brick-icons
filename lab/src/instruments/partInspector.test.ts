@@ -6,9 +6,10 @@ import type { SchemaField } from '@lab/api/types';
 
 const FIELDS: SchemaField[] = [
   { key: 'engine', flag: '--engine', type: 'str', choices: ['naive', 'occt'],
-    help: '', nargs: null, default: null },
+    help: '', nargs: null, default: null, effective: 'naive' },
   { key: 'shading', flag: '--shading', type: 'str',
-    choices: ['normal', 'cel', 'outline'], help: '', nargs: null, default: null },
+    choices: ['normal', 'cel', 'outline'], help: '', nargs: null,
+    default: null, effective: 'normal' },
 ];
 
 const client = {} as LabClient;
@@ -30,7 +31,9 @@ describe('createPartInspector', () => {
   it('takes its config keys from the schema it was given', () => {
     const config = createPartInspector(FIELDS, client).defaultConfig();
     expect(config.engine).toBe('naive');
-    expect(config.shading).toBe('normal');
+    // The lab's opening combo overrides the CLI default here: a pane shows an
+    // SVG, and `--shading normal` produces none. See OPENING_COMBO.
+    expect(config.shading).toBe('outline');
   });
 
   it('declares the sources as layers', () => {
@@ -52,7 +55,7 @@ describe('createPartInspector', () => {
     const base = { ...instrument.defaultConfig(), part: '3941' };
     const state = instrument.initialState(base);
     expect(instrument.job!.key!(base, state))
-      .not.toEqual(instrument.job!.key!({ ...base, shading: 'outline' }, state));
+      .not.toEqual(instrument.job!.key!({ ...base, shading: 'cel' }, state));
   });
 
   it('does not re-run the job when only the layout changes', () => {

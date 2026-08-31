@@ -2,7 +2,7 @@ import { fileURLToPath, URL } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 
-const API = 'http://127.0.0.1:8791';
+const API = 'http://127.0.0.1:8792';
 
 export default defineConfig({
   plugins: [react()],

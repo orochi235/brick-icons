@@ -34,34 +34,62 @@ export function buildSchema(fields: SchemaField[]) {
   for (const field of fields) {
     if (!usable(field)) continue;
     if (field.choices && field.choices.length > 0) {
-      nodes[field.key] = f.enum(field.choices[0]!, field.choices);
+      const seed = typeof field.effective === 'string'
+        && field.choices.includes(field.effective)
+        ? field.effective : field.choices[0]!;
+      nodes[field.key] = f.enum(seed, field.choices);
     } else if (field.type === 'bool') {
       nodes[field.key] = f.boolean(false);
     } else if (field.type === 'int' || field.type === 'float') {
-      nodes[field.key] = f.number(typeof field.default === 'number' ? field.default : 0);
+      const seed = typeof field.effective === 'number' ? field.effective
+        : (typeof field.default === 'number' ? field.default : 0);
+      nodes[field.key] = f.number(seed);
     } else {
-      nodes[field.key] = f.string(typeof field.default === 'string' ? field.default : '');
+      const seed = typeof field.effective === 'string' ? field.effective
+        : (typeof field.default === 'string' ? field.default : '');
+      nodes[field.key] = f.string(seed);
     }
   }
   return { ...nodes, ...labNodes() } as Record<string, unknown>;
 }
+
+/** What the lab opens on, over and above the CLI's own defaults.
+ *
+ * A pane displays the render's SVG, and the CLI's default is a PNG with no
+ * hidden-line pass -- so at the CLI's defaults every pane is empty and the
+ * lab looks broken. These three flags are the lab's opinion about what it is
+ * for, and they show in the command line like any other choice.
+ */
+export const OPENING_COMBO: Record<string, unknown> = {
+  fmt: 'svg',
+  shading: 'outline',
+  shade_style: 'flat3',
+};
 
 export function defaultsFor(fields: SchemaField[]): Record<string, unknown> {
   const out: Record<string, unknown> = { part: '', layout: 'split',
                                          sources: ['naive', 'occt'] };
   for (const field of fields) {
     if (!usable(field)) continue;
-    if (field.default !== null && field.default !== undefined) {
+    // `effective` is what labels.toml resolved to; argparse's own default is
+    // None for nearly every flag, and guessing from `choices` puts the lab on
+    // settings the CLI would never use.
+    if (field.effective === false && field.type !== 'bool') {
+      // A non-switch flag whose resolved value is `false` means "off", not the
+      // string "False": `--debug-colors False` is a parse error, and the whole
+      // render fails on a flag nobody asked for.
+      out[field.key] = null;
+    } else if (field.effective !== null && field.effective !== undefined) {
+      out[field.key] = field.effective;
+    } else if (field.default !== null && field.default !== undefined) {
       out[field.key] = field.default;
-    } else if (field.choices && field.choices.length > 0) {
-      out[field.key] = field.choices[0];
     } else if (field.type === 'bool') {
       out[field.key] = false;
     } else {
       out[field.key] = null;
     }
   }
-  return out;
+  return { ...out, ...OPENING_COMBO };
 }
 
 /** The subset of a trial's config that is a CLI flag: what goes to the server

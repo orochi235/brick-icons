@@ -7,6 +7,9 @@ export interface SchemaField {
   help: string;
   nargs: number | null;
   default: unknown;
+  /** What `load_config` resolves this flag to — the value the CLI actually
+   *  uses. Null for a flag with no Config field (--out, --debug-dir). */
+  effective: unknown;
 }
 
 export interface PartHit {

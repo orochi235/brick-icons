@@ -113,7 +113,7 @@ A local server for inspecting renders and filing defects:
 
 ```sh
 pip install -e '.[lab]'
-python -m brick_icons.lab       # http://127.0.0.1:8791
+python -m brick_icons.lab       # http://127.0.0.1:8792
 ```
 
 Its config schema is read off `cli.build_parser()`, and a render runs the argv
