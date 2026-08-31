@@ -7,6 +7,7 @@ import { SourcePane, type PaneState } from '@lab/panes/SourcePane';
 import { readView } from '@lab/panes/camera';
 import { SOURCES, enabledSources } from '@lab/panes/sources';
 import { runRenders, type SourceRender } from '@lab/instruments/renderJob';
+import { useArtifactSvg } from '@lab/panes/useArtifactSvg';
 
 export interface InspectorState {
   renders: Partial<Record<SourceId, RenderResult>>;
@@ -20,6 +21,28 @@ function paneState(source: SourceId, state: InspectorState,
   if (markup) return { kind: 'svg', markup };
   if (state.renders[source]) return { kind: 'running' };
   return { kind: 'idle' };
+}
+
+function Panes({ ctx, client }: { ctx: any; client: LabClient }) {
+  const config = ctx.config as Record<string, unknown>;
+  const camera = readView(ctx.trial.view);
+  const sources = enabledSources((config.sources as SourceId[]) ?? []);
+  const markup = useArtifactSvg(client, (ctx.state as InspectorState).renders);
+  const stack = config.layout === 'stack';
+
+  return (
+    <div className={stack ? 'panes panes-stack' : 'panes panes-split'}>
+      {sources.map((source) => (
+        <SourcePane
+          key={source.id}
+          source={source}
+          state={paneState(source.id, ctx.state as InspectorState, markup)}
+          camera={camera}
+          onCamera={(next) => ctx.trial.setView(next)}
+        />
+      ))}
+    </div>
+  );
 }
 
 export function createPartInspector(fields: SchemaField[], client: LabClient) {
@@ -80,25 +103,6 @@ export function createPartInspector(fields: SchemaField[], client: LabClient) {
       }),
     },
 
-    render: (ctx) => {
-      const config = ctx.config as Record<string, unknown>;
-      const camera = readView(ctx.trial.view);
-      const sources = enabledSources((config.sources as SourceId[]) ?? []);
-      const stack = config.layout === 'stack';
-
-      return (
-        <div className={stack ? 'panes panes-stack' : 'panes panes-split'}>
-          {sources.map((source) => (
-            <SourcePane
-              key={source.id}
-              source={source}
-              state={paneState(source.id, ctx.state, {})}
-              camera={camera}
-              onCamera={(next) => ctx.trial.setView(next)}
-            />
-          ))}
-        </div>
-      );
-    },
+    render: (ctx) => <Panes ctx={ctx} client={client} />,
   });
 }
