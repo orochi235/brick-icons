@@ -303,3 +303,47 @@ def test_substroke_fragments_culled(tmp_path):
     txt = out.read_text()
     assert txt.count("<line") == 1 and "10.07" not in txt
     assert " A " not in txt
+
+
+# --- --debug-colors ramp modes ---------------------------------------------
+
+def test_ramp_darkens_within_a_run_then_steps_the_hue():
+    """Lightness carries position in the run, hue carries which run — so a
+    long emission order stays readable where the flat 12-cycle repeats."""
+    def lum(hexc):
+        r, g, b = (int(hexc[i:i + 2], 16) for i in (1, 3, 5))
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+
+    run = [_trace.ramp_color(i) for i in range(_trace.RAMP_LEN)]
+    lums = [lum(c) for c in run]
+    assert lums == sorted(lums, reverse=True), "run must go light to dark"
+    assert lums[0] - lums[-1] > 120, "adjacent steps must be starkly apart"
+    # the next element restarts light in a DIFFERENT hue
+    nxt = _trace.ramp_color(_trace.RAMP_LEN)
+    assert lum(nxt) > lums[-1] and nxt != run[0]
+
+
+def test_ramp_length_is_settable():
+    """ramp=N trades adjacent-step contrast for coarse structure."""
+    assert _trace.ramp_color(0, 100) == _trace.ramp_color(0)      # both start light
+    # with N=100 the hue holds across the whole first hundred, then steps
+    first = _trace.ramp_color(0, 100)
+    assert _trace.ramp_color(99, 100) != first
+    assert _trace.parse_debug_mode("ramp=100") == ("ramp", 100)
+    assert _trace.ramp_color(6, 100) != _trace.ramp_color(6)      # 6 ends a default run
+
+
+def test_debug_mode_rejects_nonsense():
+    assert _trace.parse_debug_mode("ramp") == ("ramp", _trace.RAMP_LEN)
+    assert _trace.parse_debug_mode("cycle") == ("cycle", 0)
+    for bad in ("ramp=0", "ramp=-3", "ramp=x", "bogus", "ramp=1.5"):
+        with pytest.raises(ValueError):
+            _trace.parse_debug_mode(bad)
+
+
+def test_colorize_uses_the_requested_mode(tmp_path):
+    segs = [(float(i), 10.0, float(i) + 5.0, 90.0, "edge") for i in range(10, 90, 8)]
+    out = tmp_path / "c.svg"
+    _trace.segments_to_svg(segs, 100, 100, out, debug_colors="ramp")
+    txt = out.read_text()
+    assert _trace.ramp_color(0) in txt and _trace.DEBUG_PALETTE[0] not in txt

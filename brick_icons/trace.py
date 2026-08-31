@@ -222,16 +222,70 @@ DEBUG_PALETTE = ("#e6194b", "#f58231", "#ffe119", "#bfef45", "#3cb44b",
                  "#9a6324", "#469990")
 
 
-def _colorize(parts, start):
+RAMP_LEN = 6           # elements per light-to-dark ramp
+RAMP_HUE_STEP = 41.0   # degrees between ramps; coprime-ish with 360 so the
+                       # first repeat is far away, not one ramp later
+
+
+def _hsl_hex(h, s, ll):
+    def ch(n):
+        k = (n + h / 30.0) % 12.0
+        a = s * min(ll, 1.0 - ll)
+        return round(255 * (ll - a * max(-1.0, min(k - 3.0, 9.0 - k, 1.0))))
+    return f"#{ch(0):02x}{ch(8):02x}{ch(4):02x}"
+
+
+def ramp_color(n, ramp_len=RAMP_LEN):
+    """Emission-order colour that reads as BOTH position and group: `n` runs
+    light to dark inside one hue for `ramp_len` elements, then the hue steps.
+
+    The flat cycle answers "which element owns this vertex" but not "how far
+    along is it" -- past a dozen elements every colour has been used already.
+    Here the lightness gives the position within a run and the hue gives the
+    run. A short run (the default 6) reads adjacent elements apart; a long one
+    (ramp=100) trades that for coarse structure -- which hundred a segment
+    falls in, and where the run boundaries land.
+    """
+    ramp_len = max(1, int(ramp_len))
+    ramp, i = divmod(n, ramp_len)
+    h = (ramp * RAMP_HUE_STEP) % 360.0
+    ll = 0.80 - 0.66 * (i / max(1, ramp_len - 1))
+    return _hsl_hex(h, 0.78, ll)
+
+
+def parse_debug_mode(mode):
+    """Validate a --debug-colors value; return ("cycle"|"ramp", ramp_len)."""
+    mode = (mode or "cycle").strip()
+    if mode == "cycle":
+        return "cycle", 0
+    if mode == "ramp":
+        return "ramp", RAMP_LEN
+    if mode.startswith("ramp="):
+        n = mode.split("=", 1)[1]
+        if not n.isdigit() or int(n) < 1:
+            raise ValueError(f"ramp length must be a positive integer: {mode!r}")
+        return "ramp", int(n)
+    raise ValueError(f"expected 'cycle', 'ramp' or 'ramp=N', got {mode!r}")
+
+
+def debug_color(n, mode):
+    kind, ramp_len = parse_debug_mode(mode)
+    if kind == "ramp":
+        return ramp_color(n, ramp_len)
+    return DEBUG_PALETTE[n % len(DEBUG_PALETTE)]
+
+
+def _colorize(parts, start, mode="cycle"):
     """Give every drawn element after `start` its own colour, in emission
     order. Answers "which element owns this vertex", which one black outline
-    cannot."""
+    cannot. `mode` is "cycle" (12 distinct hues), "ramp", or "ramp=N" for a
+    run of N elements per hue (see ramp_color)."""
     n = 0
     for i in range(start + 1, len(parts)):
         el = parts[i]
         if not (el.startswith("<path") or el.startswith("<line")):
             continue
-        colour = DEBUG_PALETTE[n % len(DEBUG_PALETTE)]
+        colour = debug_color(n, mode)
         parts[i] = el.replace("/>", f' stroke="{colour}"/>', 1)
         n += 1
     return n
@@ -375,7 +429,8 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
             parts.append(f'<path d="M {ax:.2f} {ay:.2f} L {vx:.2f} {vy:.2f} '
                          f'L {bx:.2f} {by:.2f}" stroke-width="{sw:.2f}"{joinery}/>')
     if debug_colors:
-        _colorize(parts, stroke_g)
+        _colorize(parts, stroke_g,
+                  debug_colors if isinstance(debug_colors, str) else "cycle")
     parts.append("</g>")
     if label:
         # render tag in fixed small print, tucked into the bottom-left corner:

@@ -59,9 +59,12 @@ def _parse_args(argv):
     p.add_argument("--opacity", type=float,
                    help="face-fill opacity 0-1 for SVG output "
                         "(translucent bricks; default 1)")
-    p.add_argument("--debug-colors", dest="debug_colors", action="store_true",
-                   default=False,
-                   help="one colour per drawn element, in emission order")
+    p.add_argument("--debug-colors", dest="debug_colors", nargs="?",
+                   const="cycle", default=None, type=_debug_mode,
+                   metavar="cycle|ramp|ramp=N",
+                   help="one colour per drawn element, in emission order; "
+                        "'ramp' fades light-to-dark within a hue then steps "
+                        "the hue every 6 elements, 'ramp=N' every N")
     p.add_argument("--part-label", dest="part_label", action="store_true",
                    default=None,
                    help="stamp the part id in fixed small print in the "
@@ -329,6 +332,15 @@ def _gather_parts(args) -> list[str]:
         return [s for ln in Path(args.list).read_text().splitlines()
                 if (s := ln.split("#")[0].strip())]
     return args.parts
+
+
+def _debug_mode(value):
+    """argparse type for --debug-colors: 'cycle', 'ramp' or 'ramp=N'."""
+    try:
+        trace.parse_debug_mode(value)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(str(e)) from None
+    return value
 
 
 def _parse_decal_args(argv):
