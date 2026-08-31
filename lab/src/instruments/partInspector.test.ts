@@ -36,10 +36,12 @@ describe('createPartInspector', () => {
     expect(config.shading).toBe('outline');
   });
 
-  it('declares the sources as layers', () => {
-    const ids = createPartInspector(FIELDS, client).layers?.ids ?? [];
-    expect(ids).toContain('naive');
-    expect(ids).toContain('occt');
+  // Not `layers`: labkit's layer capability writes labkit's own state, not the
+  // instrument's config, so the toggles it drew were inert. The panes are
+  // driven by `config.sources`, which PoseBar writes.
+  it('opens with the two engine panes enabled', () => {
+    const config = createPartInspector(FIELDS, client).defaultConfig();
+    expect(config.sources).toEqual(['naive', 'occt']);
   });
 
   it('re-runs the job when the part changes', () => {
