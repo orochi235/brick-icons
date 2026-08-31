@@ -107,6 +107,20 @@ Printed parts can also have their decoration lifted off as a flat texture:
 
     .venv/bin/python -m brick_icons.cli decal 3941p01 --out out
 
+## Lab server
+
+A local server for inspecting renders and filing defects:
+
+```sh
+pip install -e '.[lab]'
+python -m brick_icons.lab       # http://127.0.0.1:8765
+```
+
+Its config schema is read off `cli.build_parser()`, and a render runs the argv
+it was handed through the CLI's own parse-config-render path — so a flag the
+CLI grows appears in the lab with no other change, and the two cannot disagree
+about what a parameter does.
+
 ## Decal extraction
 
     brick-icons decal PARTS... [--out DIR] [--svg-bg PAINT] [--texture-px N]

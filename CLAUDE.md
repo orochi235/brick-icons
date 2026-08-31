@@ -62,3 +62,11 @@ problem. A fix motivated only by a printed part is not yet motivated.
   "no exact surface exists" and "my tolerance was too tight", and two tolerance
   constants once deleted whole walls with no error anywhere. Remove the
   `except` and look before believing it.
+
+## The lab must not fork the CLI
+
+`brick_icons/lab/` derives its config schema from `cli.build_parser()` and runs
+renders through `_config_from_args` + `process_one`. Never add a lab-side
+parameter table, and never re-implement a render path there: a parameter the
+lab knows and the CLI does not is a bug by construction, and
+`tests/test_lab_schema.py` fails on it.
