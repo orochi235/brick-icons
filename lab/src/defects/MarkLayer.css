@@ -1,0 +1,16 @@
+/* Unarmed the layer is invisible to the pointer, so a drag reaches the pane
+   body beneath it and pans. Marks stay clickable either way. */
+.mark-layer { position: absolute; inset: 0; pointer-events: none; }
+.mark-layer-armed { pointer-events: auto; cursor: crosshair; }
+
+.mark {
+  position: absolute;
+  pointer-events: auto;
+  border: 1px solid var(--lk-danger, #d05098);
+  background: color-mix(in srgb, var(--lk-danger, #d05098) 12%, transparent);
+  cursor: pointer;
+}
+
+.mark-stale { opacity: 0.35; border-style: dashed; }
+.mark-fixed { border-color: var(--lk-ok, #58ab41); }
+.mark-drawing { position: absolute; border: 1px dashed currentColor; }

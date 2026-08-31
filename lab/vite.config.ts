@@ -14,5 +14,5 @@ export default defineConfig({
     proxy: { '/api': API, '/ldraw': API },
   },
   build: { outDir: 'dist' },
-  test: { environment: 'jsdom', globals: true },
+  test: { environment: 'jsdom', globals: true, setupFiles: ['./src/test-setup.ts'] },
 });
