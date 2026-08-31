@@ -1,33 +1,23 @@
 # Handoff — `main`, with the OCCT engine landed
 
-On **`main`**. 513 tests pass under `BRICK_GOLDENS=1` (a plain `pytest` skips
-the three drift tests and is not verification).
+On **`main`**, pushed. `origin/main` is at `f869d5a`, and 520 tests pass under
+`BRICK_GOLDENS=1` (a plain `pytest` skips the drift tests and is not
+verification).
 
-## Read first: the two threads are now one, and `cli.py` moved under you
+## Read first: there is one thread now
 
-`occt-port` is merged. Both branches sit at `6fd3aec`, so there is no longer a
-second thread to coordinate with — `.claude/worktrees/occt-port` is an
-ordinary worktree on the same commit, and the two-workstream protocol below is
-history.
-
-**`cli.py` took edits from both sides and auto-merged clean.** `--debug-colors`
-and the render label sit alongside `_sil_faces` and the two `sil_geom` lines in
-`process_one`; nothing was dropped, and the suite is green on the result. It
-merged only because both sides had committed — the merge that landed the engine
-went in while those edits were still uncommitted, and survived on luck plus a
-fast-forward, not on anything structural.
+`occt-port` is merged and both its branch and its worktree are deleted, so
+this is a single-checkout repo again and the two-workstream protocol below is
+history — kept because the lesson still applies if the repo is ever split
+again. The port's task briefs, reports and review diffs survive under
+`.superpowers/sdd/` (gitignored), moved out of the worktree before removal.
 
 Landed: `50950`'s elliptical wall, arcs read off the projected conic rather
 than HLR's BSpline approximation, and a silhouette contour for the OCCT
 engine. The defect list below is rewritten against the merged corpus.
 
-Three open decisions, none of them urgent:
-
-- the worktree at `.claude/worktrees/occt-port`, left in place because fills
-  is next and wants it;
-- `wip/occt-authored-edges` (`7c8cfaa`), the `occt.py` recovered from the
-  morning's collision and long superseded;
-- the contour's polygonal case, which fills should absorb rather than fix.
+One open decision, not urgent: the contour's polygonal case, which fills
+should absorb rather than fix.
 
 Durable records, none of which this file repeats:
 
@@ -38,19 +28,20 @@ Durable records, none of which this file repeats:
   question, settled.
 - README, **Golden conformance corpus** — how to run the gates and what each
   artifact is for.
-- `docs/occt-port-handoff.md` — the OCCT engine's own open defects,
-  maintained by the session working that branch. It lived at `HANDOFF.md` on
+- `docs/occt-port-handoff.md` — the OCCT engine's own open defects, and which
+  causes are already ruled out for each. It lived at `HANDOFF.md` on
   `occt-port`, which is this file's path on `main`: one path, two different
-  documents, so every merge either conflicted or clobbered one of them.
+  documents, so every merge either conflicted or clobbered one of them. It
+  keeps its own path now.
 
 ## If you ever split this repo across two sessions again
 
-It cost real work twice today, both times the same way: a tree that another
-session has checked out will move under you mid-task. Uncommitted `occt.py`
-was destroyed by a merge (recovered on `wip/occt-authored-edges`, `7c8cfaa`)
-and three separate measurements had to be thrown away because HEAD changed
-between the render and the reading. Check `git log -1` before trusting a tree
-you did not just commit to, and commit early in one you share.
+It cost real work twice, both times the same way: a tree that another session
+has checked out will move under you mid-task. Uncommitted `occt.py` was
+destroyed by a merge, and three separate measurements had to be thrown away
+because HEAD changed between the render and the reading. Check `git log -1`
+before trusting a tree you did not just commit to, and commit early in one you
+share.
 
 **Merge toward the shared branch, never into the other session's checkout.**
 Merging `main` INTO the feature branch first turns the final step into a
