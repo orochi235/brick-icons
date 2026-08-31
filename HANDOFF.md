@@ -346,6 +346,15 @@ converts only the runs that follow one.
 
 ## Open
 
+Filed from the lab; regenerate with `python scripts/defects-to-handoff.py`.
+A hand edit between the markers is overwritten — edit the store instead.
+
+<!-- defects:begin -->
+
+No defects filed.
+
+<!-- defects:end -->
+
 - **`14769p0a`'s `XI` and `XII` render thinner than `IIII` and `III`.**
   Confirmed present at baseline, cause NOT diagnosed. User's hypothesis: they
   sit farther from the camera. Note they read thinner rather than lighter,
