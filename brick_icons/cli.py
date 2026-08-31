@@ -138,10 +138,27 @@ def _sil_faces(res, f, ox, oy):
         [{"poly": np.asarray(q, float)} for q in (res.sil_polys or ())],
         f, ox, oy)
 
+def render_tag(cfg: Config, name: str) -> str:
+    """The part id plus the settings that change what the drawing shows.
+
+    Engine and angle are always stamped even at their defaults: a review sheet
+    is read after the command that made it has scrolled away.
+    """
+    bits = [name, cfg.engine, cfg.angle]
+    if cfg.wireframe:
+        bits.append("wireframe")
+    else:
+        bits.append(cfg.shading if cfg.shade_style == "none"
+                    else f"{cfg.shading}/{cfg.shade_style}")
+    if cfg.opacity < 1.0:
+        bits.append(f"opacity={cfg.opacity:g}")
+    return "  ".join(bits)
+
+
 def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
     name = Path(part).stem if Path(part).suffix else part
     out_dir.mkdir(parents=True, exist_ok=True)
-    label = name if cfg.part_label else None
+    label = render_tag(cfg, name) if cfg.part_label else None
 
     if cfg.shading == "outline" or cfg.wireframe:
         lat, long = render.resolve_latlong(cfg.angle)

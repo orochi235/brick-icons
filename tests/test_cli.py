@@ -43,7 +43,8 @@ def test_part_label_stamped_on_outputs(tmp_path):
         pytest.skip("LDraw library absent")
     cli.main(["3005", "--shading", "outline", "--format", "both",
               "--mode", "gray", "--part-label", "--out", str(tmp_path)])
-    assert ">3005</text>" in (tmp_path / "3005.svg").read_text()
+    svg = (tmp_path / "3005.svg").read_text()
+    assert ">3005  naive  iso  outline</text>" in svg
     # PNG: stamped corner differs from a blank corner (default font raster)
     g = np.asarray(Image.open(tmp_path / "3005.gray.png").convert("L"))
     assert (g[-14:, :40] < 128).any()               # dark label pixels bottom-left
@@ -254,3 +255,32 @@ def test_decal_does_not_shadow_a_part_named_in_the_render_path(tmp_path, monkeyp
 def test_unknown_engine_is_rejected():
     with pytest.raises(SystemExit):
         cli._parse_args(["3001", "--engine", "raytrace"])
+
+
+def test_render_tag_names_the_engine_and_angle_even_at_defaults():
+    """A review sheet is read long after its command scrolled away, so the two
+    settings that silently change the drawing are always stamped."""
+    from brick_icons.cli import render_tag
+    cfg = cli.load_config(toml_path=None, overrides={}, root=".")
+    tag = render_tag(cfg, "3941")
+    assert tag.startswith("3941")
+    assert "naive" in tag and cfg.angle in tag
+
+
+def test_render_tag_distinguishes_two_renders_of_one_part():
+    """The whole point: same part, different engine/angle, different tag."""
+    from brick_icons.cli import render_tag
+    a = cli.load_config(toml_path=None, overrides={"engine": "occt",
+                                               "angle": "30,65"}, root=".")
+    b = cli.load_config(toml_path=None, overrides={"engine": "naive",
+                                               "angle": "30,45"}, root=".")
+    assert render_tag(a, "3941") != render_tag(b, "3941")
+    assert "occt" in render_tag(a, "3941") and "30,65" in render_tag(a, "3941")
+
+
+def test_render_tag_reports_the_shade_style_when_there_is_one():
+    from brick_icons.cli import render_tag
+    cfg = cli.load_config(toml_path=None, overrides={"shading": "outline",
+                                                 "shade_style": "flat3"},
+                      root=".")
+    assert "outline/flat3" in render_tag(cfg, "3005")
