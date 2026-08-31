@@ -352,11 +352,11 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
                          f'L {bx:.2f} {by:.2f}" stroke-width="{sw:.2f}"{joinery}/>')
     parts.append("</g>")
     if label:
-        # part id in fixed small print, bottom-left corner: absolute size
-        # (2 mm physical, 8 canvas px otherwise), deliberately NOT scaled to
-        # the part — identification aid for contact sheets and test renders
-        fs = 2.0 / 0.4 * s if physical is not None else 8.0
-        pad = fs * 0.25
+        # render tag in fixed small print, tucked into the bottom-left corner:
+        # absolute size (1.2 mm physical, 4.8 canvas px otherwise), deliberately
+        # NOT scaled to the part — identification aid for review renders
+        fs = 1.2 / 0.4 * s if physical is not None else 4.8
+        pad = fs * 0.15
         parts.append(f'<text x="{pad:.2f}" y="{h - pad:.2f}" '
                      f'font-family="monospace" font-size="{fs:.2f}" '
                      f'fill="black">{label}</text>')
