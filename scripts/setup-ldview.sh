@@ -4,12 +4,18 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 VENDOR="$PWD/vendor"; mkdir -p "$VENDOR"
 
-DMG_URL="https://downloads.sourceforge.net/project/ldview/01.%20LDView/LDView%204.2/LDView_4.2.1_Universal.dmg?viasf=1"
+DMG_URL="https://github.com/tcobbs/ldview/releases/download/v4.7/LDView_4.7.dmg"
+DMG_SHA256="100806f260cf7217f22dc6b461224d7fd2e05f6ca3cb236394a63103c6730cf7"
 LDRAW_URL="https://library.ldraw.org/library/updates/complete.zip"
 
 if [ ! -x "$VENDOR/LDView.app/Contents/MacOS/LDView" ]; then
   echo "Downloading LDView dmg..."
   curl -sL -o "$VENDOR/LDView.dmg" "$DMG_URL"
+  GOT=$(shasum -a 256 "$VENDOR/LDView.dmg" | cut -d' ' -f1)
+  if [ "$GOT" != "$DMG_SHA256" ]; then
+    echo "LDView dmg sha256 mismatch: got $GOT, want $DMG_SHA256" >&2
+    rm -f "$VENDOR/LDView.dmg"; exit 1
+  fi
   MNT="$VENDOR/.ldview-mnt"; mkdir -p "$MNT"
   hdiutil attach "$VENDOR/LDView.dmg" -nobrowse -noverify -mountpoint "$MNT" >/dev/null
   rm -rf "$VENDOR/LDView.app"; cp -R "$MNT/LDView.app" "$VENDOR/LDView.app"

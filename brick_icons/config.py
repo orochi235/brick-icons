@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import platform as _platform
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,19 +9,10 @@ from . import colors
 MM_PER_INCH = 25.4
 
 
-def default_ldview_launcher(system: str | None = None, machine: str | None = None) -> list[str]:
-    """Prefix args to launch LDView. macOS ships only an x86_64 build, so run it
-    under Rosetta on Apple Silicon; everywhere else, run the binary directly."""
-    system = system or _platform.system()
-    machine = machine or _platform.machine()
-    if system == "Darwin" and machine == "arm64":
-        return ["arch", "-x86_64"]
-    return []
-
-
 DEFAULTS = {
     "ldview": "vendor/LDView.app/Contents/MacOS/LDView",
-    "ldview_launcher": None,   # None -> default_ldview_launcher(); [] to force direct
+    "ldview_launcher": [],     # argv prefix for LDView; a platform that needs
+                               # one (an emulator, a wrapper) sets it in the config
     "ldraw_dir": "vendor/ldraw",
     "dpi": 180,
     "label_mm": None,        # (w_mm, h_mm) or None
@@ -130,9 +120,7 @@ def load_config(toml_path=None, overrides=None, root="."):
         if alpha is not None and "opacity" not in explicit:
             data["opacity"] = alpha / 255.0
 
-    launcher = data["ldview_launcher"]
-    if launcher is None:
-        launcher = default_ldview_launcher()
+    launcher = data["ldview_launcher"] or []
 
     return Config(
         ldview=root / data["ldview"],

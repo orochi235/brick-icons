@@ -71,13 +71,15 @@ all with `scripts/render-gallery.sh`.*
     python3 -m venv .venv && .venv/bin/pip install -e .
     ./scripts/setup-ldview.sh        # vendor/LDView.app + vendor/ldraw + potrace
 
-LDView is x86_64-only on macOS; it runs under Rosetta automatically.
+LDView 4.7 is a universal binary, so it runs native on both Apple Silicon and
+Intel. The pinned dmg and its sha256 live in `scripts/external-deps.lock`.
 
 ### Porting to Linux/Windows
 
 Only the LDView invocation is platform-specific. Install LDView + potrace via your
-package manager, then in `labels.toml` set `ldview = "/path/to/ldview"` and
-`ldview_launcher = []`. No code changes needed; `setup-ldview.sh` is macOS-only.
+package manager, then in `labels.toml` set `ldview = "/path/to/ldview"`. No code
+changes needed; `setup-ldview.sh` is macOS-only. `ldview_launcher` is an argv
+prefix for LDView, empty by default — set it if your platform needs a wrapper.
 
 ## Usage
 

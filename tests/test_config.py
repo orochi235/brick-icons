@@ -17,14 +17,8 @@ def test_defaults():
     assert cfg.scale == 1.0
     assert cfg.ldraw_dir == Path("/proj/vendor/ldraw")
     assert cfg.ldview == Path("/proj/vendor/LDView.app/Contents/MacOS/LDView")
-    assert isinstance(cfg.ldview_launcher, tuple)   # platform-detected prefix
-
-
-def test_default_launcher_by_platform():
-    from brick_icons.config import default_ldview_launcher
-    assert default_ldview_launcher("Darwin", "arm64") == ["arch", "-x86_64"]
-    assert default_ldview_launcher("Darwin", "x86_64") == []
-    assert default_ldview_launcher("Linux", "x86_64") == []
+    # LDView 4.7 is a universal binary, so no argv prefix on any platform
+    assert cfg.ldview_launcher == ()
 
 
 def test_launcher_override():

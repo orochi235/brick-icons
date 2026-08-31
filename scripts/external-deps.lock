@@ -24,10 +24,27 @@ manifest-sha256: 5f855079307f7c1326aa6df05ce63b118e88364233d7eb3fb6ee637bc70e38f
 # instead of a 41-segment polyline. The other 53 are byte-identical.
 
 ## LDView (reference renderer for stock-render comparisons; vendor/LDView.app)
-# setup-ldview.sh pins the 4.2.1 Universal dmg by URL.
-ldview-version: 4.2.1 (bundle 4.2.1.1)
-ldview-dmg: https://downloads.sourceforge.net/project/ldview/01.%20LDView/LDView%204.2/LDView_4.2.1_Universal.dmg
-ldview-binary-sha256: c02453f698f472d23ffbf8568b67f12eac0bfe077988575ccac596abc6b1f5c0
+# setup-ldview.sh pins the 4.7 dmg by URL and verifies its sha256. Note 4.7
+# is published on GitHub releases; 4.2.1 came from SourceForge.
+ldview-version: 4.7 (bundle 33)
+ldview-dmg: https://github.com/tcobbs/ldview/releases/download/v4.7/LDView_4.7.dmg
+ldview-dmg-sha256: 100806f260cf7217f22dc6b461224d7fd2e05f6ca3cb236394a63103c6730cf7
+ldview-binary-sha256: 8eb3d1ab5864525bc828fb247c3151451e5423a72da3176093b54dee0750337a
+# 4.7 is a true universal binary (x86_64 + arm64, minos 11.0), so it runs
+# native on Apple Silicon and ldview_launcher is now [] everywhere. 4.2.1 was
+# "Universal" in the i386+x86_64 sense and needed `arch -x86_64`.
+#
+# Census, 4.2.1 -> 4.7, 50 parts (parts.txt + two 14769pt letter tiles),
+# 1024px stock renders, same flags: 23 byte-identical, median 0.00% of pixels
+# differing, mean 0.48%. Only round geometry moves, and in two distinct ways:
+#   - smoother curves: 14769pt* 3.40%, 2654a 1.76%, 3673's autocrop 699->702px.
+#     The 4.2.1 round tile is a visible ~14-gon; 4.7 draws a circle.
+#   - a LIGHTING change: 30136 15.15% (maxdiff 44) is one side face shading
+#     darker, not a geometry fix. Expect gray/mono dither to shift on parts
+#     with large flat side faces.
+# No frozen golden moves: every case in tests/goldens/manifest.toml is
+# --shading outline, which reads .dat directly and never invokes LDView
+# (asserted by tests/test_cli.py::test_outline_uses_hlr_not_ldview).
 
 ## CLI tools (Homebrew; used by verification workflow, not the library)
 resvg: 0.47.0          # SVG -> PNG rasterizer; the AA reference for censuses
