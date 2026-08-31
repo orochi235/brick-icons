@@ -70,6 +70,17 @@ export function PoseBar({ angle, config, setConfig }: PoseBarProps) {
           </button>
         ))}
       </div>
+      <div className="pose-bar-group" role="group" aria-label="Defects">
+        <button
+          type="button"
+          className={config.marking ? 'pose is-on' : 'pose'}
+          aria-pressed={Boolean(config.marking)}
+          title="Drag on a pane to mark a defect. Off, a drag pans."
+          onClick={() => setConfig('marking', !config.marking)}
+        >
+          mark
+        </button>
+      </div>
       <div className="pose-bar-group" role="group" aria-label="Render options">
         {QUICK_OPTIONS.map((option) => (
           <label key={option.key} className="quick-option">

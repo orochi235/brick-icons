@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildSchema, defaultsFor, RENDER_KEYS } from '@lab/config/nodes';
+import { buildSchema, defaultsFor, LAB_ONLY, RENDER_KEYS } from '@lab/config/nodes';
 import type { SchemaField } from '@lab/api/types';
 
 const field = (over: Partial<SchemaField>): SchemaField => ({
@@ -10,7 +10,7 @@ const field = (over: Partial<SchemaField>): SchemaField => ({
 /** `buildSchema` also adds the lab's own fields; these tests are about the
  *  CLI-derived ones. */
 const cliKeys = (schema: Record<string, unknown>) =>
-  Object.keys(schema).filter((k) => k !== 'layout' && k !== 'sources');
+  Object.keys(schema).filter((k) => !LAB_ONLY.has(k));
 
 describe('buildSchema', () => {
   it('turns a choices field into an enum node', () => {
@@ -40,6 +40,7 @@ describe('buildSchema', () => {
     const s = buildSchema([field({ key: 'engine', choices: ['naive', 'occt'] })]);
     expect(s).toHaveProperty('layout');
     expect(s).toHaveProperty('sources');
+    expect(s).toHaveProperty('marking');
   });
 });
 
@@ -66,6 +67,7 @@ describe('defaultsFor', () => {
     expect(d.part).toBe('');
     expect(d.layout).toBe('grid');
     expect(d.sources).toContain('occt');
+    expect(d.marking).toBe(false);
   });
 });
 
@@ -82,7 +84,7 @@ import { renderConfig } from '@lab/config/nodes';
 describe('renderConfig', () => {
   it('drops the lab-only fields', () => {
     const got = renderConfig({ part: '3941', layout: 'split',
-                               sources: ['occt'], engine: 'occt' });
+                               sources: ['occt'], marking: true, engine: 'occt' });
     expect(got).toEqual({ engine: 'occt' });
   });
 

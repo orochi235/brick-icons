@@ -21,11 +21,16 @@ function usable(field: SchemaField): boolean {
   return RENDER_KEYS.has(field.key) && field.nargs === null;
 }
 
-/** The lab's own fields, which no CLI flag corresponds to. */
+/** The lab's own fields, which no CLI flag corresponds to. Named once so
+ *  `renderConfig` cannot forget one and send it to the CLI as a flag. */
+export const LAB_ONLY = new Set(['part', 'layout', 'sources', 'marking']);
+
 function labNodes() {
   return {
     layout: f.enum('grid', ['grid', 'split', 'stack']).section('Panes'),
     sources: f.value<SourceId[]>(['naive', 'occt']).section('Panes'),
+    marking: f.boolean(false).section('Panes')
+      .describe('A drag on a pane draws a defect mark instead of panning'),
   };
 }
 
@@ -96,7 +101,8 @@ export const OPENING_COMBO: Record<string, unknown> = {
 
 export function defaultsFor(fields: SchemaField[]): Record<string, unknown> {
   const out: Record<string, unknown> = { part: '', layout: 'grid',
-                                         sources: ['naive', 'occt'] };
+                                         sources: ['naive', 'occt'],
+                                         marking: false };
   for (const field of fields) {
     if (!usable(field)) continue;
     // `effective` is what labels.toml resolved to; argparse's own default is
@@ -125,7 +131,7 @@ export function defaultsFor(fields: SchemaField[]): Record<string, unknown> {
 export function renderConfig(config: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(config)) {
-    if (key === 'part' || key === 'layout' || key === 'sources') continue;
+    if (LAB_ONLY.has(key)) continue;
     if (value === null || value === '') continue;
     out[key] = value;
   }

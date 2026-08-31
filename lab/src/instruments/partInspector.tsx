@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { defineInstrument, f } from '@weasel-js/labkit';
 import type { LabClient, RenderResult, SchemaField } from '@lab/api/client';
 import { buildSchema, defaultsFor, renderConfig, type SourceId } from '@lab/config/nodes';
@@ -10,6 +11,11 @@ import { runRenders, type SourceRender } from '@lab/instruments/renderJob';
 import { useArtifactSvg } from '@lab/panes/useArtifactSvg';
 import { PartTitle, PoseBar } from '@lab/chrome/PoseBar';
 import { diffCaption, diffWarning, useDiff } from '@lab/panes/useDiff';
+import { MarkLayer } from '@lab/defects/MarkLayer';
+import { FileDefectDialog } from '@lab/defects/FileDefectDialog';
+import { DefectCard } from '@lab/defects/DefectCard';
+import { buildDefect, useDefects } from '@lab/defects/useDefects';
+import type { Mark } from '@lab/defects/geometry';
 
 export interface InspectorState {
   renders: Partial<Record<SourceId, RenderResult>>;
@@ -34,6 +40,16 @@ function Panes({ ctx, client }: { ctx: any; client: LabClient }) {
   const diff = useDiff(client, renders);
   const layout = String(config.layout ?? 'grid');
 
+  const part = String(config.part ?? '');
+  const { defects, file, setStatus } = useDefects(client, part);
+  const [boxes, setBoxes] = useState<Record<string, { width: number; height: number }>>({});
+  const [pendingMark, setPendingMark] = useState<Mark | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+
+  const engineIds = sources.filter((s) => s.kind === 'engine').map((s) => s.id);
+  const marking = Boolean(config.marking);
+  const shown = defects.find((d) => d.id === selected);
+
   return (
     <div className={`panes panes-${layout}`}>
       {sources.map((source) => (
@@ -49,10 +65,49 @@ function Panes({ ctx, client }: { ctx: any; client: LabClient }) {
             : paneState(source.id, ctx.state as InspectorState, markup)}
           camera={camera}
           onCamera={(next) => ctx.trial.setView(next)}
+          onBox={(box) => setBoxes((prev) => ({ ...prev, [source.id]: box }))}
+          overlay={
+            <MarkLayer
+              defects={defects.filter((d) => d.engines.includes(source.id))}
+              box={boxes[source.id] ?? { width: 1, height: 1 }}
+              camera={camera}
+              config={config}
+              armed={marking}
+              onDraw={setPendingMark}
+              onSelect={setSelected}
+            />
+          }
         />
       ))}
+      {pendingMark ? (
+        <FileDefectDialog
+          part={part}
+          mark={pendingMark}
+          engines={engineIds}
+          onCancel={() => setPendingMark(null)}
+          onFile={async (fields) => {
+            await file(buildDefect({
+              part, engines: fields.engines, title: fields.title, notes: fields.notes,
+              mark: pendingMark, config,
+              existing: defects.map((d) => d.id),
+              today: new Date().toISOString().slice(0, 10),
+            }));
+            setPendingMark(null);
+          }}
+        />
+      ) : null}
+      {shown ? (
+        <DefectCard defect={shown} onStatus={setStatus} onClose={() => setSelected(null)} />
+      ) : null}
     </div>
   );
+}
+
+function DefectCount({ client, part }: { client: LabClient; part: string }) {
+  const { defects } = useDefects(client, part);
+  const open = defects.filter((d) => d.status === 'open').length;
+  if (defects.length === 0) return <span>no defects</span>;
+  return <span>{open} open / {defects.length} filed</span>;
 }
 
 export function createPartInspector(fields: SchemaField[], client: LabClient) {
@@ -97,6 +152,16 @@ export function createPartInspector(fields: SchemaField[], client: LabClient) {
             />
           );
         },
+      },
+      {
+        id: 'defect-count',
+        region: 'status',
+        render: (ctx) => (
+          <DefectCount
+            client={client}
+            part={String((ctx.config as Record<string, unknown>).part ?? '')}
+          />
+        ),
       },
       {
         id: 'command-line',

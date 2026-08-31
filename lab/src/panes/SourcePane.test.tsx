@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { SourcePane } from '@lab/panes/SourcePane';
 import { HOME } from '@lab/panes/camera';
 import { SOURCES } from '@lab/panes/sources';
@@ -51,5 +51,19 @@ describe('SourcePane', () => {
   it('says so while a render is in flight', () => {
     render(<SourcePane {...props} source={SOURCES.naive} state={{ kind: 'running' }} />);
     expect(screen.getByText(/rendering/i)).toBeTruthy();
+  });
+
+  it('renders an overlay when one is given', () => {
+    const { container } = render(
+      <SourcePane {...props} source={SOURCES.naive} state={{ kind: 'idle' }}
+        overlay={<div className="probe" />} />);
+    expect(container.querySelector('.probe')).toBeTruthy();
+  });
+
+  it('reports its body size so an overlay can place marks', () => {
+    const onBox = vi.fn();
+    render(<SourcePane {...props} source={SOURCES.naive} state={{ kind: 'idle' }}
+      onBox={onBox} />);
+    expect(onBox).toHaveBeenCalled();
   });
 });

@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { type ReactNode, useEffect, useRef } from 'react';
 import { type Camera, cssTransform, panBy, zoomAt } from '@lab/panes/camera';
 import type { Source } from '@lab/panes/sources';
 import '@lab/panes/SourcePane.css';
@@ -15,10 +15,31 @@ export interface SourcePaneProps {
   state: PaneState;
   camera: Camera;
   onCamera: (next: Camera) => void;
+  /** Drawn above the stage, in body coordinates. */
+  overlay?: ReactNode;
+  /** The body's pixel size, reported when it is measured or changes. */
+  onBox?: (box: { width: number; height: number }) => void;
 }
 
-export function SourcePane({ source, state, camera, onCamera }: SourcePaneProps) {
+export function SourcePane({ source, state, camera, onCamera, overlay,
+                             onBox }: SourcePaneProps) {
   const dragging = useRef(false);
+  const body = useRef<HTMLDivElement | null>(null);
+  // The callback goes through a ref so the effect does not re-subscribe when
+  // the caller passes a fresh arrow each render -- which it will, because it
+  // is written inline inside a map over the sources.
+  const report = useRef(onBox);
+  report.current = onBox;
+
+  useEffect(() => {
+    const el = body.current;
+    if (!el) return;
+    const emit = () => report.current?.({ width: el.clientWidth, height: el.clientHeight });
+    emit();
+    const observer = new ResizeObserver(emit);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <section className="pane">
@@ -29,6 +50,7 @@ export function SourcePane({ source, state, camera, onCamera }: SourcePaneProps)
       {state.kind === 'error' ? <p className="pane-error">{state.message}</p> : null}
       <div
         className="pane-body"
+        ref={body}
         onPointerDown={(e) => {
           dragging.current = true;
           e.currentTarget.setPointerCapture(e.pointerId);
@@ -51,6 +73,7 @@ export function SourcePane({ source, state, camera, onCamera }: SourcePaneProps)
           {state.kind === 'image' ? <img src={state.src} alt={source.label} /> : null}
           {state.kind === 'running' ? <p>rendering…</p> : null}
         </div>
+        {overlay}
       </div>
     </section>
   );
