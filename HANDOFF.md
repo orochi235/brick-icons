@@ -91,32 +91,18 @@ Two `arcfit` changes, both on the NAIVE path, both re-frozen into the goldens
 
 ## Read this before calling the port nearly done
 
-**`occt` draws strokes and nothing else.** `occt.visible_segments` returns
-`faces=()` and `analytic=()`, so `shade.fill_ops` gets nothing and every filled
-mode silently degrades to an outline. It is not "landed with two defects" — it
-implements half the renderer:
+**`occt` implements half the renderer.** `occt.visible_segments` returns
+`faces=()`, so every filled mode silently degrades to strokes — nothing errors,
+which is why it stayed invisible. It cannot be the default until fills exist,
+and that is a project, not a defect.
 
-| mode | naive | occt |
-|---|---|---|
-| `--shading outline` | yes | yes |
-| `--wireframe` | yes | yes |
-| `--shade-style flat3` (shaded faces) | yes | **no — no faces** |
-| `--opacity` below 1 (transparency) | yes | **no — needs fills** |
-
-Nothing errors when you ask `occt` for a filled render; it just comes back
-stroked, which is why this stayed invisible. **Fills is the next body of work,
-and `occt` cannot be the default until it exists** — that is a project, not the
-two arc defects listed below.
-
-`tests/goldens/hashes.txt` locks the NAIVE engine by construction ("a different
-engine fails it by construction"), so `occt` has no corpus gate at all —
-`tests/test_occt.py` is the whole of its coverage.
-
-One further open decision, not urgent: the contour's polygonal case, which
-fills should absorb rather than fix.
+`OCCT-MIGRATION.md` is the roadmap: what is in scope, what the face contract
+is, the ordered work, and the gate `occt` still has no version of.
 
 Durable records, none of which this file repeats:
 
+- `OCCT-MIGRATION.md` — what has to exist before `--engine occt` can be the
+  default, and what is out of scope.
 - `docs/superpowers/specs/2026-08-29-occt-adoption-design.md` — where the OCCT
   engine attaches and what gates it.
 - `docs/superpowers/plans/2026-08-28-decal-unwrap.md` — decal extraction.
