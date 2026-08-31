@@ -35,3 +35,31 @@ def config_schema() -> list[dict]:
             "default": a.default,
         })
     return out
+
+
+def to_argv(part: str, config: dict) -> list[str]:
+    """`part` plus one flag per set config key, in schema order.
+
+    A None value means "leave it to the config file", so it is omitted rather
+    than passed as an empty string. A false switch is likewise absent: argparse
+    store_true flags have no negative form.
+    """
+    fields = {f["key"]: f for f in config_schema()}
+    unknown = set(config) - set(fields)
+    if unknown:
+        raise KeyError(f"not CLI flags: {sorted(unknown)}")
+    argv = [part]
+    for key, field in fields.items():
+        if key not in config:
+            continue
+        value = config[key]
+        if value is None:
+            continue
+        if field["type"] == "bool":
+            if value:
+                argv.append(field["flag"])
+            continue
+        argv.append(field["flag"])
+        values = value if isinstance(value, (list, tuple)) else [value]
+        argv.extend(str(v) for v in values)
+    return argv
