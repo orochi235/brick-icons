@@ -305,3 +305,16 @@ def test_debug_colors_is_off_by_default_so_goldens_cannot_move(tmp_path):
               "--out", str(tmp_path)])
     svg = (tmp_path / "3941.svg").read_text()
     assert 'stroke="#' not in svg
+
+
+def test_build_parser_is_the_parser_parse_args_uses():
+    p = cli.build_parser()
+    dests = {a.dest for a in p._actions}
+    assert {"parts", "engine", "shading", "shade_style", "angle"} <= dests
+
+
+def test_parse_args_still_reads_a_command():
+    args = cli._parse_args(["3001", "--engine", "occt", "--angle", "30,25"])
+    assert args.parts == ["3001"]
+    assert args.engine == "occt"
+    assert args.angle == "30,25"

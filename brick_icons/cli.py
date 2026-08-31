@@ -11,7 +11,7 @@ from . import render, process, trace, hlr, shade, geom2d, unwrap
 from .config import load_config, Config
 
 
-def _parse_args(argv):
+def build_parser():
     p = argparse.ArgumentParser(prog="brick-icons",
                                 description="Render LEGO parts into bin-label assets.")
     p.add_argument("parts", nargs="*", help="part ids or .dat/.ldr paths")
@@ -77,7 +77,11 @@ def _parse_args(argv):
                         "(0,0 = frontal; positive azimuth = from the left; "
                         "default ~37,39 upper-left)")
     p.add_argument("--debug-dir", default=None)
-    return p.parse_args(argv)
+    return p
+
+
+def _parse_args(argv):
+    return build_parser().parse_args(argv)
 
 
 def _config_from_args(args) -> Config:
