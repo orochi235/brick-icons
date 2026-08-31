@@ -16,6 +16,46 @@ Landed: `50950`'s elliptical wall, arcs read off the projected conic rather
 than HLR's BSpline approximation, and a silhouette contour for the OCCT
 engine. The defect list below is rewritten against the merged corpus.
 
+## Corpus review 2026-08-31 — six defects found by eye, none diagnosed
+
+Found by reviewing `naive|occt` pair sheets of the 21 unprinted parts. **These
+are observations, not diagnoses** — only the counts below were measured. The
+sheets are reproducible: render each part `--shading outline --part-label` under
+both engines and montage them in pairs.
+
+Drawn-op counts at `30,45` (`hlr.visible_segments`, this is the measured part):
+
+| part | naive L | occt L | naive A | occt A |
+|---|---|---|---|---|
+| 4070 | 22 | 38 | 5 | 13 |
+| 32062 | 84 | 83 | **14** | **0** |
+| 3673 | 48 | 66 | 22 | 27 |
+| 4019 | 276 | 288 | 34 | 22 |
+
+**occt draws MORE lines than naive on three of the four** while visibly missing
+specific edges, so it is not dropping lines globally — it drops particular ones
+and adds silhouette fragments. Any theory that explains only a deficit is wrong.
+
+- **`4070` (occt): the base ledge's top-front edge is gone**, leaving one short
+  stub. naive draws it whole. The cleanest reproduction of the dropped-edge
+  class — a long straight edge on a simple, fast part.
+- **`32062` (occt): the central-axis line and the notch cut lines are missing.**
+  Its zero arc count is the already-known "loses every arc" defect; the rounded
+  notch-end pockets ARE those arcs, which is what visibly disappears.
+- **`3673` (naive): only the front notch has its rounded end pocket**; the other
+  three notches lack it. Same rounded-pocket geometry as 32062's, so these two
+  are probably one bug seen from two sides.
+- **`6589` (occt): the centre is missing geometry everywhere.** naive reads well
+  EXCEPT a misaligned halo — a halo on naive is the signature of the
+  counterbore separator refit fixed for 4019 (`SEP_REFIT_MAX_GROWTH`), so check
+  whether 6589 has a refit sitting under the 10x cap.
+- **`4019` (occt): broken through the middle.**
+- **`99781`: a vertical line right of the hollow SNOT studs is missing.**
+
+Not yet established: whether the occt cases share one cause. They look like the
+dropped-edge class (a whole authored segment drawn or not, all-or-nothing),
+which is also what the axle-bore stubs looked like.
+
 ## Read this before calling the port nearly done
 
 **`occt` draws strokes and nothing else.** `occt.visible_segments` returns
