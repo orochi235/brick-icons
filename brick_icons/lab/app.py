@@ -14,7 +14,8 @@ from PIL import Image
 from pydantic import BaseModel
 
 from ..config import load_config
-from . import cache, corpus, diff, goldens_status, jobs, partindex, runner, schema
+from . import (cache, corpus, defects, diff, goldens_status, jobs, partindex,
+               runner, schema)
 
 
 class RenderRequest(BaseModel):
@@ -23,8 +24,15 @@ class RenderRequest(BaseModel):
     force: bool = False
 
 
+class BatchRequest(BaseModel):
+    parts: list[str]
+    config: dict = {}
+    force: bool = False
+
+
 def create_app(root: Path | str = ".",
-               cache_root: Path | str = cache.DEFAULT_ROOT) -> FastAPI:
+               cache_root: Path | str = cache.DEFAULT_ROOT,
+               defects_path: Path | str | None = None) -> FastAPI:
     root = Path(root)
     app = FastAPI(title="brick-icons lab")
     app.state.root = root
@@ -32,6 +40,8 @@ def create_app(root: Path | str = ".",
     app.state.ldraw_dir = load_config(root=str(root)).ldraw_dir
     app.state.index = None
     app.state.jobs = jobs.Registry()
+    app.state.defects_path = Path(defects_path) if defects_path else (
+        root / defects.DEFAULT_PATH)
 
     def index() -> dict:
         if app.state.index is None:
@@ -106,6 +116,50 @@ def create_app(root: Path | str = ".",
             return diff.compare(*images, min_size=min_size)
         except ValueError as e:
             raise HTTPException(400, str(e)) from None
+
+    @app.get("/api/defects")
+    def get_defects(part: str | None = None, status: str | None = None):
+        rows = defects.load(app.state.defects_path)
+        if part:
+            rows = [d for d in rows if d["part"] == part]
+        if status:
+            rows = [d for d in rows if d["status"] == status]
+        return {"defects": rows}
+
+    @app.post("/api/defects")
+    def post_defect(record: dict):
+        try:
+            return defects.add(app.state.defects_path, record)
+        except ValueError as e:
+            code = 409 if "already exists" in str(e) else 400
+            raise HTTPException(code, str(e)) from None
+
+    @app.patch("/api/defects/{defect_id}")
+    def patch_defect(defect_id: str, changes: dict):
+        try:
+            return defects.update(app.state.defects_path, defect_id, changes)
+        except KeyError:
+            raise HTTPException(404, f"no defect {defect_id!r}") from None
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from None
+
+    @app.post("/api/batch")
+    def post_batch(req: BatchRequest):
+        try:
+            argvs = [schema.to_argv(p, req.config) for p in req.parts]
+        except KeyError as e:
+            raise HTTPException(400, str(e)) from None
+
+        def work(item, emit):
+            result = runner.render(item, root=app.state.cache_root,
+                                   force=req.force)
+            emit(f"{item[0]}: {'cached' if result['cached'] else 'rendered'}")
+            if not result["ok"]:
+                raise RuntimeError(result["error"])
+            return result
+
+        return {"job": app.state.jobs.start("batch", argvs, work),
+                "count": len(argvs)}
 
     ldraw = app.state.ldraw_dir
     if Path(ldraw).is_dir():

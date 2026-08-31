@@ -126,3 +126,64 @@ def test_diff_of_a_missing_artifact_is_404(client):
         "a_key": "aaaa1111", "a_name": "gone.png",
         "b_key": "bbbb2222", "b_name": "gone.png"})
     assert r.status_code == 404
+
+
+DEFECT = {
+    "id": "3941-occt-borehole", "part": "3941", "engines": ["occt"],
+    "status": "open", "title": "borehole rim not drawn",
+    "mark": {"x": 0.42, "y": 0.55, "w": 0.11, "h": 0.09},
+    "seen": {"angle": "30,25", "shading": "outline", "shade_style": "flat3"},
+    "filed": "2026-08-31", "notes": "",
+}
+
+
+@pytest.fixture
+def defect_client(tmp_path):
+    return TestClient(lab_app.create_app(cache_root=tmp_path / "cache",
+                                         defects_path=tmp_path / "defects.toml"))
+
+
+def test_defects_start_empty(defect_client):
+    assert defect_client.get("/api/defects").json()["defects"] == []
+
+
+def test_a_posted_defect_comes_back(defect_client):
+    assert defect_client.post("/api/defects", json=DEFECT).status_code == 200
+    got = defect_client.get("/api/defects").json()["defects"]
+    assert got[0]["id"] == DEFECT["id"]
+    assert got[0]["mark"]["x"] == 0.42
+
+
+def test_a_duplicate_defect_is_a_409(defect_client):
+    defect_client.post("/api/defects", json=DEFECT)
+    assert defect_client.post("/api/defects", json=DEFECT).status_code == 409
+
+
+def test_a_defect_status_can_be_patched(defect_client):
+    defect_client.post("/api/defects", json=DEFECT)
+    r = defect_client.patch(f"/api/defects/{DEFECT['id']}",
+                            json={"status": "fixed"})
+    assert r.json()["status"] == "fixed"
+
+
+def test_patching_an_unknown_defect_is_404(defect_client):
+    assert defect_client.patch("/api/defects/nope",
+                               json={"status": "fixed"}).status_code == 404
+
+
+def test_a_bad_status_is_a_400(defect_client):
+    defect_client.post("/api/defects", json=DEFECT)
+    r = defect_client.patch(f"/api/defects/{DEFECT['id']}",
+                            json={"status": "maybe"})
+    assert r.status_code == 400
+
+
+def test_batch_starts_one_job_for_the_list(client, ldraw_dir):
+    body = client.post("/api/batch", json={
+        "parts": ["3005", "3024"],
+        "config": {"fmt": "svg", "shading": "outline"},
+    }).json()
+    done = _finish(client, body["job"], timeout=180)
+    assert done["total"] == 2
+    assert done["done"] == 2
+    assert [e["index"] for e in done["events"]] == [1, 2]
