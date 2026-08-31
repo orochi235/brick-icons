@@ -49,7 +49,17 @@ and adds silhouette fragments. Any theory that explains only a deficit is wrong.
   EXCEPT a misaligned halo — a halo on naive is the signature of the
   counterbore separator refit fixed for 4019 (`SEP_REFIT_MAX_GROWTH`), so check
   whether 6589 has a refit sitting under the 10x cap.
-- **`4019` (occt): broken through the middle.**
+- **`4019` (occt): broken through the middle. So are `3649` and `6589` — every
+  gear in the corpus is wrong in its centre**, which is exactly where each has
+  its axle hole. That is one defect seen three times, and it is the strongest
+  lead here.
+
+  A previous session (this one) measured occt's bore edge coverage on 4019 and
+  concluded the occlusion was "broadly correct" (25/28 front-half edges drawn,
+  24/28 back-half hidden). **Do not trust that as a clean bill of health**: it
+  counted whether an authored edge was drawn at all, which says nothing about
+  whether the result LOOKS right, and the first pass of it measured the wrong
+  axis entirely (the hole runs along Z; the tally was taken around Y).
 - **`99781`: a vertical line right of the hollow SNOT studs is missing.**
 
 Not yet established: whether the occt cases share one cause. They look like the
