@@ -48,7 +48,9 @@ describe('runRenders', () => {
   });
 
   it('pins each render to its own engine', async () => {
-    const startRender = vi.fn(async () => ({ job: 'j1', argv: [], command: '' }));
+    const startRender = vi.fn(
+      async (_part: string, _config: Record<string, unknown>) =>
+        ({ job: 'j1', argv: [], command: '' }));
     await collect(runRenders({
       client: fakeClient({ startRender }), part: '3941',
       config: { shading: 'outline' }, sources: ['naive', 'occt'],
@@ -103,7 +105,9 @@ describe('runRenders', () => {
   });
 
   it('skips a non-engine source, which does not render through the CLI', async () => {
-    const startRender = vi.fn(async () => ({ job: 'j1', argv: [], command: '' }));
+    const startRender = vi.fn(
+      async (_part: string, _config: Record<string, unknown>) =>
+        ({ job: 'j1', argv: [], command: '' }));
     await collect(runRenders({
       client: fakeClient({ startRender }), part: '3941', config: {},
       sources: ['naive', '3d'], signal: new AbortController().signal, pollMs: 0,
