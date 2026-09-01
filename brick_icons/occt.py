@@ -884,6 +884,15 @@ def face_polys(shape, right, up, deflection):
     return polys
 
 
+def _union_bbox(bbox, polys):
+    """`bbox` grown to hold every projected polygon."""
+    if not len(polys):
+        return bbox
+    P = np.vstack([np.asarray(p, float) for p in polys])
+    return (min(bbox[0], P[:, 0].min()), min(bbox[1], P[:, 1].min()),
+            max(bbox[2], P[:, 0].max()), max(bbox[3], P[:, 1].max()))
+
+
 def visible_segments(out, right, up, render_px, cull=True):
     from .hlr import VisResult, _ops_bbox
     shape = build_shape(out)
@@ -908,10 +917,16 @@ def visible_segments(out, right, up, render_px, cull=True):
         raise RuntimeError("OCCT engine produced no edges")
     bbox = _ops_bbox(ops)
     span = max(bbox[2] - bbox[0], bbox[3] - bbox[1]) or 1.0
-    s = (render_px - 20) / span
     # Sub-pixel, or the contour under an exact arc stroke reads as a polygon
     # and its chords poke out from behind it.
     polys = face_polys(shape, right, up, span / render_px * 0.25)
+    # The faces are drawn too -- they are the silhouette contour, which is this
+    # engine's stand-in for fills. Framing on the edges alone cropped 4740 at
+    # `front` to the 14 LDU its edges span, throwing away 26 LDU of dish that
+    # only the contour draws.
+    bbox = _union_bbox(bbox, polys)
+    span = max(bbox[2] - bbox[0], bbox[3] - bbox[1]) or 1.0
+    s = (render_px - 20) / span
     # The drawn arcs ARE the contour's arc candidates -- an arc op's fields
     # 1..6 are already the (cx, cy, ux, uy, vx, vy) arc_candidates takes.
     # Without them contour_d traces the raw tessellation and 3005's silhouette

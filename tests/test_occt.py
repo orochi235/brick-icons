@@ -543,3 +543,19 @@ def test_3941_bore_rim_is_drawn_by_the_occt_engine(ldraw_dir):
     # teeth as two segments meeting at a point.
     assert any(op[0] == "arc" for op in near), \
         "chain fragments must emit as arcs, like the naive engine's"
+
+
+def test_the_frame_holds_a_dish_whose_edges_span_a_third_of_it(ldraw_dir):
+    """4740 seen from the front: HLR reports edges over 14 LDU of a part that
+    is 40 wide, because the rest of the dish is drawn by the silhouette
+    contour and by no edge at all. Framing on the ops alone put 26 LDU outside
+    the viewBox, where it was clipped away."""
+    out = occt.flatten_part("4740", ldraw_dir)
+    right, up = hlr.view_basis(0.0, 0.0)[:2]
+    res = occt.visible_segments(out, right, up, 1024)
+    P = np.vstack([np.asarray(q, float) for q in res.sil_polys])
+    x0, y0, x1, y1 = res.bbox
+    assert (x0, y0, x1, y1) == pytest.approx(
+        (min(x0, P[:, 0].min()), min(y0, P[:, 1].min()),
+         max(x1, P[:, 0].max()), max(y1, P[:, 1].max())), abs=1e-6)
+    assert x1 - x0 > 30.0, f"the dish is 40 LDU wide; framed {x1 - x0:.1f}"
