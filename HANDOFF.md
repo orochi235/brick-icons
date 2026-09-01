@@ -93,21 +93,18 @@ declared once, `sheetJob` calling `svgArtifactName`, a rect-to-style helper in
 `partInspector.tsx`, `renderJob.ts`, `SourcePane.tsx` and `sources.ts` in this
 same checkout at the time.
 
-**That session's work started from these commits, so it does not conflict — but
-it does change the shape of two items below.** It fans `runRenders` out
-concurrently, adds `renderSignature` and a `stamps` field so a pane can show
-its previous drawing dimmed while a new render is in flight, and moves pane
-state into a new `panes/engineState.ts`. Most relevant here: **`caveat` is gone
-from the `Source` type**, replaced by a `note?: string` prop on `SourcePane`
-that diff and decal pass their captions through. Anything below that mentions
-`caveat` means `note` once that lands. Check `git log lab/src/panes/sources.ts`
-before starting.
+**That session's work has since landed** (`7ef1d08..c43b1ed`): `runRenders`
+fans out concurrently, `renderSignature` plus a `stamps` field let a pane hold
+its previous drawing dimmed (`.pane-waiting`) while a replacement renders, and
+pane state moved into `panes/engineState.ts`. `caveat` is gone from the
+`Source` type — a pane carries a bare label and an optional `note`. Do not
+reintroduce it.
 
-- **`useReference` and `useDecal` fetch when their panes are off.** Both are
-  called unconditionally in `Panes`, so opening any part spawns an LDView
-  subprocess and a full `hlr.part_geometry` decal extraction for output nothing
-  renders — and the LDView one re-fires per settled angle. Gate the fetch on
-  the source being in `config.sources`. This is the one with a real cost.
+The one defect on this list has since been fixed: `useReference` and `useDecal`
+now take an `enabled` flag off `config.sources`, so a pane that is off spawns
+no LDView subprocess and no decal extraction. What remains below is quality
+work, not defects.
+
 - **`_artifact_path`'s traversal guard is now written three times** in
   `app.py` — once in the helper, once in `get_reference_artifact`, once in
   `get_decal_artifact`. Parameterize the helper by root and call it.
