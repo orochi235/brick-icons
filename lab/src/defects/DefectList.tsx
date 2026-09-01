@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import type { Defect, DefectStatus } from '@lab/defects/useDefects';
+import { STATUSES, type Defect, type DefectStatus } from '@lab/defects/useDefects';
 import '@lab/defects/DefectList.css';
 
 const RANK: Record<DefectStatus, number> = { open: 0, wontfix: 1, fixed: 2, notabug: 3 };
-const STATUSES: DefectStatus[] = ['open', 'fixed', 'wontfix', 'notabug'];
 
 export function sortDefects(defects: Defect[]): Defect[] {
   return [...defects].sort((a, b) =>

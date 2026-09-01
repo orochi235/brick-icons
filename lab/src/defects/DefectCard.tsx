@@ -1,7 +1,5 @@
-import type { Defect, DefectStatus } from '@lab/defects/useDefects';
+import { STATUSES, type Defect, type DefectStatus } from '@lab/defects/useDefects';
 import '@lab/defects/DefectCard.css';
-
-const STATUSES: DefectStatus[] = ['open', 'fixed', 'wontfix', 'notabug'];
 
 export interface DefectCardProps {
   defect: Defect;

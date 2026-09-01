@@ -22,6 +22,12 @@ export function MarkLayer({ defects, box, camera, config, armed = false,
   const start = useRef<{ x: number; y: number } | null>(null);
   const [drawing, setDrawing] = useState<Mark | null>(null);
 
+  const boxStyle = (mark: Mark) => {
+    const r = markToScreen(mark, box, camera);
+    return { left: `${r.left}px`, top: `${r.top}px`,
+             width: `${r.width}px`, height: `${r.height}px` };
+  };
+
   const local = (e: { clientX: number; clientY: number; currentTarget: Element }) => {
     const rect = e.currentTarget.getBoundingClientRect();
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
@@ -51,7 +57,6 @@ export function MarkLayer({ defects, box, camera, config, armed = false,
       }}
     >
       {defects.map((d) => {
-        const rect = markToScreen(d.mark, box, camera);
         const stale = !seenMatches(d.seen, config);
         const classes = ['mark', stale ? 'mark-stale' : '',
                          d.status === 'fixed' ? 'mark-fixed' : ''].filter(Boolean);
@@ -62,8 +67,7 @@ export function MarkLayer({ defects, box, camera, config, armed = false,
             title={stale ? `${d.title} (seen at other settings)` : d.title}
             role="button"
             tabIndex={0}
-            style={{ left: `${rect.left}px`, top: `${rect.top}px`,
-                     width: `${rect.width}px`, height: `${rect.height}px` }}
+            style={boxStyle(d.mark)}
             // The pane body captures the pointer to pan, which retargets
             // mouseup and leaves the browser synthesizing no click here at all.
             onPointerDown={(e) => e.stopPropagation()}
@@ -72,14 +76,7 @@ export function MarkLayer({ defects, box, camera, config, armed = false,
           />
         );
       })}
-      {drawing ? (
-        <div className="mark-drawing"
-          style={(() => {
-            const r = markToScreen(drawing, box, camera);
-            return { left: `${r.left}px`, top: `${r.top}px`,
-                     width: `${r.width}px`, height: `${r.height}px` };
-          })()} />
-      ) : null}
+      {drawing ? <div className="mark-drawing" style={boxStyle(drawing)} /> : null}
     </div>
   );
 }

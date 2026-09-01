@@ -1,4 +1,5 @@
 import type { LabClient, RenderResult } from '@lab/api/client';
+import { svgArtifactName } from '@lab/panes/useArtifactSvg';
 
 export interface SheetCell {
   part: string;
@@ -23,12 +24,10 @@ export interface RunSheetArgs {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function cellFrom(part: string, result: RenderResult): SheetCell {
-  const svg = result.artifacts.find((a) => a.name.endsWith('.svg')
-    && !a.name.includes('.unwrap.') && !a.name.includes('.decal.'));
   return {
     part,
     key: result.key,
-    svg: svg ? svg.name : null,
+    svg: svgArtifactName(result.artifacts),
     error: result.ok ? null : (result.error ?? 'render failed'),
     seconds: result.seconds,
   };

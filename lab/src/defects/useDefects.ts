@@ -5,6 +5,9 @@ import { defectId, seenFrom, type Seen } from '@lab/defects/identity';
 
 export type DefectStatus = 'open' | 'fixed' | 'wontfix' | 'notabug';
 
+/** Beside the type, so a new status cannot reach one dropdown and not the other. */
+export const STATUSES: DefectStatus[] = ['open', 'fixed', 'wontfix', 'notabug'];
+
 export interface Defect {
   id: string;
   part: string;
