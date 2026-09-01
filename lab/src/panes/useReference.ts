@@ -19,17 +19,18 @@ export function referenceState(status: ReferenceStatus): PaneState {
 
 /** One LDView frame for the current part and angle.
  *
- * Keyed on the settled angle rather than on the live orbit: LDView is a
- * subprocess per frame, so asking on every pointer move would queue hundreds.
+ * Keyed on the settled angle rather than on the live orbit, and gated on the
+ * pane being shown: LDView is a subprocess per frame, so asking on every
+ * pointer move -- or with the pane switched off -- queues runs for nothing.
  */
 export function useReference(client: LabClient, part: string, angle: string,
-                             partColor?: string): PaneState {
+                             partColor?: string, enabled = true): PaneState {
   const [status, setStatus] = useState<ReferenceStatus>({
     part, url: null, error: null, loading: false,
   });
 
   useEffect(() => {
-    if (!part.trim() || !angle.trim()) {
+    if (!enabled || !part.trim() || !angle.trim()) {
       setStatus({ part, url: null, error: null, loading: false });
       return;
     }
@@ -43,7 +44,7 @@ export function useReference(client: LabClient, part: string, angle: string,
         if (live) setStatus({ part, url: null, error: e.message, loading: false });
       });
     return () => { live = false; };
-  }, [client, part, angle, partColor]);
+  }, [client, part, angle, partColor, enabled]);
 
   return referenceState(status);
 }

@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { renderHook, waitFor } from '@testing-library/react';
+import type { LabClient } from '@lab/api/client';
+import { useReference } from '@lab/panes/useReference';
 import { referenceState } from '@lab/panes/useReference';
 
 describe('referenceState', () => {
@@ -28,5 +31,21 @@ describe('referenceState', () => {
   it('prefers the error over a stale frame', () => {
     expect(referenceState({ part: '3941', url: '/old.png', error: 'boom', loading: false }).kind)
       .toBe('error');
+  });
+});
+
+describe('useReference gating', () => {
+  it('fetches nothing when the reference pane is off', async () => {
+    const client = { reference: vi.fn(async () => ({ url: '/r.png', cached: false })) };
+    renderHook(() => useReference(client as unknown as LabClient, '3941', 'iso',
+                                  undefined, false));
+    await waitFor(() => expect(client.reference).not.toHaveBeenCalled());
+  });
+
+  it('fetches once the pane is on', async () => {
+    const client = { reference: vi.fn(async () => ({ url: '/r.png', cached: false })) };
+    renderHook(() => useReference(client as unknown as LabClient, '3941', 'iso',
+                                  undefined, true));
+    await waitFor(() => expect(client.reference).toHaveBeenCalled());
   });
 });

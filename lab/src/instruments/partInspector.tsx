@@ -46,9 +46,11 @@ function Panes({ ctx, client }: { ctx: any; client: LabClient }) {
   const [selected, setSelected] = useState<string | null>(null);
 
   const angle = String(config.angle ?? 'iso');
+  const shows = (kind: string) => sources.some((s) => s.kind === kind);
   const referencePane = useReference(client, part, angle,
-                                     config.part_color as string | undefined);
-  const decal = useDecal(client, part);
+                                     config.part_color as string | undefined,
+                                     shows('reference'));
+  const decal = useDecal(client, part, shows('decal'));
 
   const engineIds = sources.filter((s) => s.kind === 'engine').map((s) => s.id);
   // What every engine pane compares its own render against: the run on screen.

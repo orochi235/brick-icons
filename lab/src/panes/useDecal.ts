@@ -28,9 +28,10 @@ export function decalCaption(urls: string[]): string {
 /** The decoration of a printed part, unwrapped flat onto the face it came from.
  *
  * The first URL is the largest print: `decal_one` sorts by print area, so `.0`
- * is the real decoration and the rest are usually offcuts of it.
+ * is the real decoration and the rest are usually offcuts of it. Gated on the
+ * pane being shown: extraction re-parses and tessellates the whole part.
  */
-export function useDecal(client: LabClient, part: string): {
+export function useDecal(client: LabClient, part: string, enabled = true): {
   pane: PaneState; urls: string[];
 } {
   const [status, setStatus] = useState<DecalStatus>({
@@ -38,7 +39,7 @@ export function useDecal(client: LabClient, part: string): {
   });
 
   useEffect(() => {
-    if (!part.trim()) {
+    if (!enabled || !part.trim()) {
       setStatus({ part, urls: [], error: null, loading: false });
       return;
     }
@@ -52,7 +53,7 @@ export function useDecal(client: LabClient, part: string): {
         if (live) setStatus({ part, urls: [], error: e.message, loading: false });
       });
     return () => { live = false; };
-  }, [client, part]);
+  }, [client, part, enabled]);
 
   return { pane: decalState(status), urls: status.urls };
 }
