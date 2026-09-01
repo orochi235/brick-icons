@@ -139,15 +139,15 @@ work, not defects.
   refactor from this side rather than piecemeal from theirs; their
   `enginePaneState` call makes the engine branch a single line, which is what
   makes it tractable.
-- **`SOURCE_TOGGLES` in `PoseBar` duplicates `SOURCES` + `ORDER`** and has
-  already diverged (`ref` against `LDView`). Adding `decal` took edits in four
-  parallel lists; a fifth pane will reach three of them and appear everywhere
-  but the toggle bar, with no type error. **Do this one first.** `cadquery` is
-  a third engine on `main` now and is selectable in the settings panel and
-  `QUICK_OPTIONS` for free — `/api/schema` derives choices from the parser —
-  but it has no pane, deliberately, because adding one costs four edits today
-  and one after the dedup. `QUICK_OPTIONS` also hard-codes
-  `values: ['naive', 'occt']`, so it lists two of the three engines.
+- ~~**`SOURCE_TOGGLES` in `PoseBar` duplicates `SOURCES` + `ORDER`**~~ Done.
+  `panes/sources.ts` holds one `CATALOG`; `SourceId`, `SOURCES`,
+  `SOURCE_ORDER` and the toggle bar all derive from it, and `SourceId` now
+  comes from there rather than `config/nodes.ts`. The `ref`/`LDView`
+  divergence resolved to `LDView`. A pane is one entry. `cadquery` is that
+  entry, so the third engine has a pane now. `QUICK_OPTIONS` became
+  `quickOptions(fields)`, reading each control's values from the CLI's own
+  `choices` — only `layout` names its own, being the lab's flag, and it names
+  them once as `LAYOUTS` in `config/nodes.ts`.
 - **three.js is a static import**, so ~1MB ships in the startup chunk for a
   pane that is off by default. `lazy()` + `Suspense` in the `3d` branch.
 - **`SourcePane` starts a pan on any pointerdown in its body, including inside

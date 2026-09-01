@@ -1,4 +1,6 @@
-import type { LabClient, PartHit } from '@lab/api/client';
+import type { LabClient, PartHit, SchemaField } from '@lab/api/client';
+import { LAYOUTS } from '@lab/config/nodes';
+import { SOURCE_ORDER } from '@lab/panes/sources';
 import { useEffect, useState } from 'react';
 
 /** The `--angle` presets `brick_icons/render.py` names, in a viewing order
@@ -14,31 +16,35 @@ export const POSES: { id: string; label: string }[] = [
 ];
 
 /** Render options worth a click, rather than a trip into the settings panel.
- *  Each names a config key and the values it cycles between. */
-export const QUICK_OPTIONS: { key: string; label: string; values: string[] }[] = [
-  { key: 'engine', label: 'engine', values: ['naive', 'occt'] },
-  { key: 'shading', label: 'shading', values: ['outline', 'cel', 'normal'] },
-  { key: 'shade_style', label: 'fill', values: ['flat3', 'none'] },
-  { key: 'layout', label: 'layout', values: ['grid', 'split', 'stack'] },
+ *  Each names a config key; the values it cycles between are the CLI's own
+ *  `choices`, so a flag that grows a value grows this control too. */
+const QUICK_KEYS: { key: string; label: string; values?: readonly string[] }[] = [
+  { key: 'engine', label: 'engine' },
+  { key: 'shading', label: 'shading' },
+  { key: 'shade_style', label: 'fill' },
+  { key: 'layout', label: 'layout', values: LAYOUTS },
 ];
 
-/** The panes that can be shown, in the order they are laid out. */
-export const SOURCE_TOGGLES: { id: string; label: string }[] = [
-  { id: 'naive', label: 'naive' },
-  { id: 'occt', label: 'occt' },
-  { id: 'reference', label: 'ref' },
-  { id: '3d', label: '3D' },
-  { id: 'decal', label: 'decal' },
-  { id: 'diff', label: 'diff' },
-];
+export interface QuickOption { key: string; label: string; values: readonly string[] }
+
+/** A key the CLI no longer offers drops its control rather than drawing an
+ *  empty select. */
+export function quickOptions(fields: SchemaField[]): QuickOption[] {
+  const choices = new Map(fields.map((field) => [field.key, field.choices ?? []]));
+  return QUICK_KEYS
+    .map(({ key, label, values }) =>
+      ({ key, label, values: values ?? choices.get(key) ?? [] }))
+    .filter((option) => option.values.length > 0);
+}
 
 export interface PoseBarProps {
   angle: string;
   config: Record<string, unknown>;
+  fields: SchemaField[];
   setConfig: (key: string, value: unknown) => void;
 }
 
-export function PoseBar({ angle, config, setConfig }: PoseBarProps) {
+export function PoseBar({ angle, config, fields, setConfig }: PoseBarProps) {
   const sources = (config.sources as string[]) ?? [];
   const toggle = (id: string) => setConfig('sources',
     sources.includes(id) ? sources.filter((s) => s !== id) : [...sources, id]);
@@ -59,7 +65,7 @@ export function PoseBar({ angle, config, setConfig }: PoseBarProps) {
         ))}
       </div>
       <div className="pose-bar-group" role="group" aria-label="Panes">
-        {SOURCE_TOGGLES.map((source) => (
+        {SOURCE_ORDER.map((source) => (
           <button
             key={source.id}
             type="button"
@@ -83,7 +89,7 @@ export function PoseBar({ angle, config, setConfig }: PoseBarProps) {
         </button>
       </div>
       <div className="pose-bar-group" role="group" aria-label="Render options">
-        {QUICK_OPTIONS.map((option) => (
+        {quickOptions(fields).map((option) => (
           <label key={option.key} className="quick-option">
             <span>{option.label}</span>
             <select

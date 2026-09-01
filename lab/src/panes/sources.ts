@@ -1,26 +1,39 @@
-import type { SourceId } from '@lab/config/nodes';
+export type SourceKind = 'engine' | 'reference' | '3d' | 'decal' | 'diff';
+
+/** Every pane the lab can show, in the order they are laid out. The pane's
+ *  id, its `SourceId` type, the toggle bar and the render fan-out all derive
+ *  from this list, so a new pane is one entry here and nothing else. */
+const CATALOG = [
+  { id: 'naive', label: 'naive', kind: 'engine' },
+  { id: 'occt', label: 'occt', kind: 'engine' },
+  { id: 'cadquery', label: 'cadquery', kind: 'engine' },
+  { id: 'reference', label: 'LDView', kind: 'reference' },
+  { id: '3d', label: '3D', kind: '3d' },
+  { id: 'decal', label: 'decal', kind: 'decal' },
+  { id: 'diff', label: 'diff', kind: 'diff' },
+] as const satisfies readonly { id: string; label: string; kind: SourceKind }[];
+
+export type SourceId = (typeof CATALOG)[number]['id'];
 
 export interface Source {
   id: SourceId;
   label: string;
   /** `engine` sources render through the CLI with `--engine` pinned. */
-  kind: 'engine' | 'reference' | '3d' | 'decal' | 'diff';
+  kind: SourceKind;
 }
 
-export const SOURCES: Record<SourceId, Source> = {
-  naive: { id: 'naive', label: 'naive', kind: 'engine' },
-  occt: { id: 'occt', label: 'occt', kind: 'engine' },
-  reference: { id: 'reference', label: 'LDView', kind: 'reference' },
-  '3d': { id: '3d', label: '3D', kind: '3d' },
-  decal: { id: 'decal', label: 'decal', kind: 'decal' },
-  diff: { id: 'diff', label: 'diff', kind: 'diff' },
-};
+export const SOURCE_ORDER: readonly Source[] = CATALOG;
 
-const ORDER: SourceId[] = ['naive', 'occt', 'reference', '3d', 'decal', 'diff'];
+export const SOURCES = Object.fromEntries(
+  CATALOG.map((source) => [source.id, source as Source]),
+) as Record<SourceId, Source>;
+
+/** Which panes a new trial opens with. */
+export const DEFAULT_SOURCES: readonly SourceId[] = ['naive', 'occt'];
 
 export function enabledSources(ids: readonly SourceId[]): Source[] {
-  const wanted = new Set(ids);
-  return ORDER.filter((id) => wanted.has(id)).map((id) => SOURCES[id]);
+  const wanted = new Set<string>(ids);
+  return SOURCE_ORDER.filter((source) => wanted.has(source.id));
 }
 
 /** The render config for one source: an engine source pins `--engine` to

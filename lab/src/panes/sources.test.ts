@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { SOURCES, enabledSources, sourceConfig } from '@lab/panes/sources';
+import {
+  DEFAULT_SOURCES, SOURCES, SOURCE_ORDER, enabledSources, sourceConfig,
+} from '@lab/panes/sources';
 
 describe('SOURCES', () => {
   it('declares naive and occt as engine sources', () => {
@@ -9,6 +11,14 @@ describe('SOURCES', () => {
 
   it('labels every source', () => {
     for (const source of Object.values(SOURCES)) expect(source.label).toBeTruthy();
+  });
+
+  it('keys every ordered source and nothing else', () => {
+    expect(Object.keys(SOURCES)).toEqual(SOURCE_ORDER.map((s) => s.id));
+  });
+
+  it('opens on sources that exist', () => {
+    for (const id of DEFAULT_SOURCES) expect(SOURCES[id]).toBeDefined();
   });
 });
 

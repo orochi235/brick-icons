@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { LabClient, RenderResult } from '@lab/api/client';
-import type { SourceId } from '@lab/config/nodes';
+import type { SourceId } from '@lab/panes/sources';
 import type { PaneState } from '@lab/panes/SourcePane';
 import { svgArtifactName } from '@lab/panes/useArtifactSvg';
 

@@ -1,13 +1,11 @@
 import { f } from '@weasel-js/labkit';
 import type { SchemaField } from '@lab/api/types';
+import { DEFAULT_SOURCES, type SourceId } from '@lab/panes/sources';
 
 /** Flags that arrange a run rather than change what is drawn. They are the
  *  lab's own business: it decides where output goes and which part to draw. */
 const PLUMBING = new Set(['out', 'root', 'config', 'list', 'debug_dir',
                           'list_colors', 'part_label']);
-
-export const SOURCE_IDS = ['naive', 'occt', 'reference', '3d', 'decal', 'diff'] as const;
-export type SourceId = (typeof SOURCE_IDS)[number];
 
 export const RENDER_KEYS = {
   has(key: string) {
@@ -30,10 +28,14 @@ function usable(field: SchemaField): boolean {
  * `FileNotFoundError: 'manifest:spread'`. */
 export const LAB_ONLY = new Set(['part', 'layout', 'sources', 'marking', 'list']);
 
+/** How the panes are arranged. The lab's own flag, so unlike every other
+ *  enum its values have no CLI `choices` to come from. */
+export const LAYOUTS = ['grid', 'split', 'stack'] as const;
+
 function labNodes() {
   return {
-    layout: f.enum('grid', ['grid', 'split', 'stack']).section('Panes'),
-    sources: f.value<SourceId[]>(['naive', 'occt']).section('Panes'),
+    layout: f.enum(LAYOUTS[0], [...LAYOUTS]).section('Panes'),
+    sources: f.value<SourceId[]>([...DEFAULT_SOURCES]).section('Panes'),
     marking: f.boolean(false).section('Panes')
       .describe('A drag on a pane draws a defect mark instead of panning'),
   };
@@ -106,7 +108,7 @@ export const OPENING_COMBO: Record<string, unknown> = {
 
 export function defaultsFor(fields: SchemaField[]): Record<string, unknown> {
   const out: Record<string, unknown> = { part: '', layout: 'grid',
-                                         sources: ['naive', 'occt'],
+                                         sources: [...DEFAULT_SOURCES],
                                          marking: false };
   for (const field of fields) {
     if (!usable(field)) continue;

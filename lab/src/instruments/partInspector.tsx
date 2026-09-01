@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { defineInstrument, f } from '@weasel-js/labkit';
 import type { LabClient, RenderResult, SchemaField } from '@lab/api/client';
-import { buildSchema, defaultsFor, renderConfig, type SourceId } from '@lab/config/nodes';
+import { buildSchema, defaultsFor, renderConfig } from '@lab/config/nodes';
 import { takePendingPart } from '@lab/config/pending';
 import { CommandLine } from '@lab/chrome/CommandLine';
 import { GoldenStatus } from '@lab/chrome/GoldenStatus';
 import { SourcePane, type PaneState } from '@lab/panes/SourcePane';
 import { readView } from '@lab/panes/camera';
-import { enabledSources } from '@lab/panes/sources';
+import { enabledSources, type SourceId } from '@lab/panes/sources';
 import { renderSignature, runRenders, type SourceRender } from '@lab/instruments/renderJob';
 import { enginePaneState } from '@lab/panes/engineState';
 import { useArtifactSvg } from '@lab/panes/useArtifactSvg';
@@ -200,6 +200,7 @@ export function createPartInspector(fields: SchemaField[], client: LabClient) {
             <PoseBar
               angle={String(config.angle ?? '')}
               config={config}
+              fields={fields}
               setConfig={(key, value) => ctx.setConfig(key, value)}
             />
           );

@@ -1,6 +1,5 @@
 import type { LabClient, RenderResult } from '@lab/api/client';
-import type { SourceId } from '@lab/config/nodes';
-import { SOURCES, sourceConfig } from '@lab/panes/sources';
+import { SOURCES, sourceConfig, type SourceId } from '@lab/panes/sources';
 
 /** One finished render, tagged with the pane it belongs to and with the run
  *  that asked for it. The signature is what tells a pane whether the drawing

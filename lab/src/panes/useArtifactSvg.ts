@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Artifact, LabClient, RenderResult } from '@lab/api/client';
-import type { SourceId } from '@lab/config/nodes';
+import type { SourceId } from '@lab/panes/sources';
 
 /** The render's own SVG. `.unwrap.svg` and `.decal.svg` are debug output from
  *  other stages and are not what the pane shows. */

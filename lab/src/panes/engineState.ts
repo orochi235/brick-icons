@@ -1,5 +1,5 @@
 import type { RenderResult } from '@lab/api/client';
-import type { SourceId } from '@lab/config/nodes';
+import type { SourceId } from '@lab/panes/sources';
 import type { PaneState } from '@lab/panes/SourcePane';
 
 /** What the instrument has collected from the render job so far. */
