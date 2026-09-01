@@ -305,6 +305,43 @@ def test_substroke_fragments_culled(tmp_path):
     assert " A " not in txt
 
 
+def test_a_short_fragment_among_long_strokes_is_still_culled(tmp_path):
+    # 6589's crescent tips: a sliver sharing endpoints with full-length
+    # strokes is a wart, not a curve. Chaining alone cannot tell the two
+    # apart, which is why the run gate is on the fragments themselves.
+    segs = [(10.0, 50.0, 50.0, 50.0, "edge"),          # long
+            (50.0, 50.0, 50.3, 50.0, "edge"),          # 0.3 px wart between
+            (50.3, 50.0, 90.0, 50.0, "edge")]          # long
+    out = tmp_path / "wart.svg"
+    _trace.segments_to_svg(segs, 100, 100, out, line_px=2, sil_px=2)
+    txt = out.read_text()
+    # dropped, so the two long strokes no longer meet and stay separate
+    assert txt.count("<line") == 2 and "<path" not in txt
+
+
+def test_two_touching_slivers_are_not_a_run(tmp_path):
+    segs = [(50.0, 50.0, 50.3, 50.0, "edge"), (50.3, 50.0, 50.6, 50.0, "edge")]
+    out = tmp_path / "pair.svg"
+    _trace.segments_to_svg(segs, 100, 100, out, line_px=2, sil_px=2)
+    txt = out.read_text()
+    assert "<path" not in txt and "<line" not in txt
+
+
+def test_a_chained_run_of_short_chords_is_not_culled(tmp_path):
+    # The same length that is a cap dot on its own is one link of a
+    # discretized curve when it shares endpoints: an engine that emits
+    # polylines instead of arcs (cadquery) drew nothing but its box edges
+    # while the cull ran before chaining.
+    step = 0.3
+    segs = [(50.0 + i * step, 50.0, 50.0 + (i + 1) * step, 50.0, "edge")
+            for i in range(20)]
+    out = tmp_path / "chain.svg"
+    _trace.segments_to_svg(segs, 100, 100, out, line_px=2, sil_px=2)
+    txt = out.read_text()
+    assert txt.count("<path") == 1, "the run must chain into one path"
+    assert txt.count(" L ") == 20
+
+
 # --- --debug-colors ramp modes ---------------------------------------------
 
 def test_ramp_darkens_within_a_run_then_steps_the_hue():

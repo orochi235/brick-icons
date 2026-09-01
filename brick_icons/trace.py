@@ -86,6 +86,49 @@ def _arc_to_svg(op):
     return " ".join(cmds)
 
 
+def _drop_sliver_noise(ops, min_len, run=3):
+    """Ops with the fragments shorter than `min_len` dropped -- one renders as
+    a bare round-cap dot (the warts at 6589's crescent tips).
+
+    A fragment joined end to end with at least `run - 1` others that short is
+    kept: that is one link of a discretized curve, not a dot. cadquery's
+    exporter emits nothing but such links, at ~0.3 px against a 1.2 px
+    threshold, so culling on length alone erased every curve it drew.
+
+    ops: [(x1, y1, x2, y2)], already rounded. Order is preserved and no
+    iteration is hash-ordered (census byte-diff gate).
+    """
+    short = [i for i, (x1, y1, x2, y2) in enumerate(ops)
+             if math.hypot(x2 - x1, y2 - y1) < min_len]
+    if not short:
+        return ops
+    at = {}
+    for i in short:
+        x1, y1, x2, y2 = ops[i]
+        at.setdefault((x1, y1), []).append(i)
+        at.setdefault((x2, y2), []).append(i)
+    parent = {i: i for i in short}
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for point in sorted(at):
+        members = at[point]
+        for j in members[1:]:
+            a, b = find(members[0]), find(j)
+            if a != b:
+                parent[max(a, b)] = min(a, b)
+    size = {}
+    for i in short:
+        size[find(i)] = size.get(find(i), 0) + 1
+    keep = {i for i in short if size[find(i)] >= run}
+    drop = set(short) - keep
+    return [op for i, op in enumerate(ops) if i not in drop]
+
+
 def _chain_line_ops(ops, stub_len=0.0):
     """Chain straight strokes sharing endpoints into polyline paths so SVG
     linejoins render the corners, plus elbow-join stubs for the wedges a
@@ -394,12 +437,8 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
         if len(op) == 5:                              # legacy line tuple
             op = ("line",) + tuple(op)
         sw = sil_px if op[-1] == "sil" else line_px
-        # a fragment much shorter than its stroke renders as a bare cap dot
-        # (e.g. a near-end-on cylinder-wall silhouette sliver): pure noise
         if op[0] == "line":
             _, x1, y1, x2, y2, kind = op
-            if math.hypot(x2 - x1, y2 - y1) < 0.6 * sw:
-                continue
             line_groups.setdefault(round(sw, 2), []).append(
                 (round(x1, 2), round(y1, 2), round(x2, 2), round(y2, 2)))
         else:
@@ -415,7 +454,7 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
     # chevrons); outline corners stay sharp via contour_d, which keeps 5
     joinery = ' stroke-linejoin="miter" stroke-miterlimit="1.5"'
     for sw in sorted(line_groups):
-        ops = line_groups[sw]
+        ops = _drop_sliver_noise(line_groups[sw], 0.6 * sw)
         chains, elbows, singles = _chain_line_ops(ops, stub_len=1.5 * sw)
         for pts, closed in chains:
             d = "M " + " L ".join(f"{x:.2f} {y:.2f}" for x, y in pts) \
