@@ -42,6 +42,18 @@ combo and compares each sha256 against `tests/goldens/hashes.txt`.
   different drawing. Route `seenMatches` through it and bumping `line_width`
   dims every mark on the pane, none of which moved. "Is this the same drawing"
   and "is this mark's geometry still valid" are two questions.
+- **`segments_to_svg`'s short-fragment cull: do not "fix" it by moving it after
+  `_chain_line_ops`.** The cull drops a line shorter than 0.6 stroke widths as
+  a cap dot, which erased every curve the cadquery engine draws (2463 ops in,
+  21 line commands out) because a discretized curve is nothing but such
+  fragments. The fix that landed keeps a fragment that is one link of a RUN of
+  three or more joined end to end. Moving the cull after chaining is the
+  obvious alternative and is wrong: measured, it closes two pinch notches on
+  `32062` but reintroduces a 46px wart on a `6589` stroke — the exact thing the
+  cull exists to remove — and drifts 18 of the 52 golden cases. A wart chains
+  happily to the long strokes either side of it, so chaining cannot separate
+  noise from curve; the run can. Landed in `466c8ac` by the cadquery session,
+  not re-derived here.
 - **The API server does not reload.** `python -m brick_icons.lab` serves the
   routes it started with, so a route added mid-session 404s until you restart
   it — which reads exactly like the frontend being wrong. Three separate
