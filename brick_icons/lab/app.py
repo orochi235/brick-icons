@@ -25,6 +25,10 @@ class RenderRequest(BaseModel):
     force: bool = False
 
 
+class GoldenCheckRequest(BaseModel):
+    part: str
+
+
 class BatchRequest(BaseModel):
     parts: list[str]
     config: dict = {}
@@ -66,6 +70,26 @@ def create_app(root: Path | str = ".",
     @app.get("/api/goldens")
     def get_goldens(part: str):
         return goldens_status.status(root / goldens_status.DEFAULT_PATH, part)
+
+    @app.get("/api/combos")
+    def get_combos():
+        return {"combos": corpus.combos(root=root)}
+
+    @app.post("/api/goldens/check")
+    def post_goldens_check(req: GoldenCheckRequest):
+        frozen = goldens_status.frozen(root / goldens_status.DEFAULT_PATH)
+        digests = frozen.get(req.part, {})
+        cases = goldens_status.cases_for(root, req.part)
+
+        def work(case, emit):
+            result = runner.render(case["argv"], root=app.state.cache_root)
+            svg = app.state.cache_root / result["key"] / f"{req.part}.svg"
+            compared = goldens_status.compare_case(svg, digests.get(case["combo"]))
+            emit(f"{case['case']}: {compared['state']}")
+            return {"case": case["case"], "combo": case["combo"], **compared}
+
+        return {"job": app.state.jobs.start("goldens", cases, work),
+                "count": len(cases)}
 
     @app.post("/api/render")
     def post_render(req: RenderRequest):

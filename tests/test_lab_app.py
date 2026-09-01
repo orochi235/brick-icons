@@ -275,3 +275,31 @@ def test_decal_route_says_an_unprinted_part_has_none(client, ldraw_dir):
 def test_decal_route_reports_a_part_it_cannot_read(client, ldraw_dir):
     r = client.get("/api/decal", params={"part": "no-such-part-9999"})
     assert r.status_code == 400
+
+
+def test_combos_route_lists_them(client):
+    body = client.get("/api/combos").json()
+    assert any(c["name"] == "outline-flat3" for c in body["combos"])
+
+
+def test_goldens_check_starts_a_job_over_the_parts_cases(client, ldraw_dir):
+    """`3005` is in three combos and its goldens are frozen, so a check that
+    reports nothing -- or reports `missing` -- is the route not working. A
+    bare `states <= {...}` passes on an empty result and observes neither."""
+    body = client.post("/api/goldens/check", json={"part": "3005"}).json()
+    assert body["count"] == 3
+    done = _finish(client, body["job"], timeout=600)
+    assert done["state"] == "done"
+    assert [r["state"] for r in done["results"]] == ["match"] * 3
+
+
+def test_goldens_check_names_each_case(client, ldraw_dir):
+    body = client.post("/api/goldens/check", json={"part": "3005"}).json()
+    done = _finish(client, body["job"], timeout=600)
+    assert all(r["case"].endswith("__3005") for r in done["results"])
+
+
+def test_goldens_check_on_a_part_with_no_cases_is_an_empty_job(client):
+    body = client.post("/api/goldens/check", json={"part": "not-a-part"}).json()
+    done = _finish(client, body["job"])
+    assert done["total"] == 0
