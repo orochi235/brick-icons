@@ -90,10 +90,18 @@ Not re-derivable from a green suite, and each cost real time:
 
 Weasel has fixed the `FloatingPanel` capture (movement threshold) and written
 the styling contract into labkit's `RECIPES.md`; both are on
-`labkit/consumer-asks`, unpushed. The `.pair()`-vs-`pack` question and the
-leading titlebar slot are filed and open. Sidebar sections can now be torn out
-into workspace tiles (`undockAs`) — worth considering for the settings panel's
-38 flags. Do not wait on any of it; every item has a working local workaround.
+`labkit/consumer-asks`, unpushed and unreleased — so the two workarounds above
+are delete-when-it-ships, not delete-on-a-date. The `.pair()`-vs-`pack`
+question and the leading titlebar slot are filed and open.
+
+Sidebar sections can now be torn out into workspace tiles (`undockAs`), but a
+section undocks WHOLE, as one panel: our six settings sections would become six
+tear-out controls and six panels. Putting the render and colour flags in one
+tile means making them one `sidebar` contribution with both groups inside it,
+not two contributions — so this is a restructure of the panel, not an
+annotation on it.
+
+Do not wait on any of it; every item has a working local workaround.
 
 ## The engine thread: one checkout, no branches
 
