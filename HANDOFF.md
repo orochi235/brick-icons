@@ -4,6 +4,17 @@ On **`main`**. The render goldens were re-frozen for the arcfit changes below.
 A plain `pytest` skips the drift tests, and `BRICK_GOLDENS=1` renders only
 `3005` — neither is verification; only `BRICK_GOLDENS=full` (~22 min) is.
 
+**`=full` HAS NOT BEEN RUN on the current merged tree — run it first.** Two
+attempts were killed externally mid-run in one session (one at 51%, one at
+11%, the second with the machine to itself, so contention is not the cause).
+What is verified: the 52-case byte gate and 202 tests on the cadquery session's
+tree *before* the lab commits landed; a 680-passed plain run *before* `466c8ac`
+and `8433f88` landed; 234 frontend tests and typecheck on the merged tree. What
+is not: the whole Python suite, together, since the cadquery engine and the
+`trace.py` cull change went in. Nothing on the lab side imports the render
+path, so it should be clean — but that is an argument, not a measurement, and
+the argument is exactly what this file tells you not to accept.
+
 ## Read first: there are two threads now
 
 The **corpus lab** — a local web app for inspecting renders and tracking
