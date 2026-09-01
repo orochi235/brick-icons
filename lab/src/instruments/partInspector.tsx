@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { defineInstrument, f } from '@weasel-js/labkit';
 import type { LabClient, RenderResult, SchemaField } from '@lab/api/client';
 import { buildSchema, defaultsFor, renderConfig } from '@lab/config/nodes';
@@ -18,9 +18,14 @@ import { FileDefectDialog } from '@lab/defects/FileDefectDialog';
 import { DefectCard } from '@lab/defects/DefectCard';
 import { buildDefect, useDefects } from '@lab/defects/useDefects';
 import type { Mark } from '@lab/defects/geometry';
-import { ThreePane } from '@lab/panes/ThreePane';
 import { useReference } from '@lab/panes/useReference';
 import { decalCaption, useDecal } from '@lab/panes/useDecal';
+
+/** three.js and its loaders are around a megabyte, and the 3D pane is off by
+ *  default, so the code for it is fetched the first time a pane asks to draw
+ *  one rather than at startup. */
+const ThreePane = lazy(() => import('@lab/panes/ThreePane')
+  .then((module) => ({ default: module.ThreePane })));
 
 export interface InspectorState {
   renders: Partial<Record<SourceId, RenderResult>>;
@@ -68,8 +73,12 @@ function Panes({ ctx, client }: { ctx: any; client: LabClient }) {
     // pans and zooms it but no angle applies.
     decal: { pane: decal.pane, note: decalCaption(decal.urls) },
     diff: { pane: diff.pane, note: diffWarning(config) ?? diffCaption(diff.result) },
-    three: <ThreePane part={part} angle={angle}
-             onSettle={(next) => ctx.setConfig('angle', next)} />,
+    three: (
+      <Suspense fallback={<div className="pane-note">loading 3D…</div>}>
+        <ThreePane part={part} angle={angle}
+          onSettle={(next) => ctx.setConfig('angle', next)} />
+      </Suspense>
+    ),
   };
 
   return (
