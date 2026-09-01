@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { runRenders } from '@lab/instruments/renderJob';
+import { renderSignature, runRenders } from '@lab/instruments/renderJob';
 import type { LabClient, RenderResult } from '@lab/api/client';
 
 function result(over: Partial<RenderResult> = {}): RenderResult {
@@ -102,6 +102,55 @@ describe('runRenders', () => {
       signal: controller.signal, pollMs: 0,
     }));
     expect(events.filter((e) => e.kind === 'item')).toEqual([]);
+  });
+
+  it('starts every engine before any of them has finished', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const startRender = vi.fn(async () => ({ job: 'j1', argv: [], command: '' }));
+    const client = fakeClient({
+      startRender,
+      job: vi.fn(async () => {
+        await gate;
+        return { id: 'j1', kind: 'render', state: 'done' as const, total: 1,
+                 done: 1, failed: 0, events: [], results: [result()] };
+      }),
+    } as never);
+    const events = collect(runRenders({
+      client, part: '3941', config: {}, sources: ['naive', 'occt'],
+      signal: new AbortController().signal, pollMs: 0,
+    }));
+    await vi.waitFor(() => expect(startRender).toHaveBeenCalledTimes(2));
+    release();
+    expect((await events).filter((e) => e.kind === 'item')).toHaveLength(2);
+  });
+
+  it('stamps each item with the signature of the run that made it', async () => {
+    const events = await collect(runRenders({
+      client: fakeClient(), part: '3941', config: { shading: 'outline' },
+      sources: ['naive'], signal: new AbortController().signal, pollMs: 0,
+    }));
+    const item = events.find((e) => e.kind === 'item') as
+      { item: { signature: string } };
+    expect(item.item.signature).toBe(renderSignature('3941', { shading: 'outline' }));
+  });
+
+  it('keeps one engine\'s failure off the other panes', async () => {
+    const client = fakeClient({
+      startRender: vi.fn(async (_part: string, config: Record<string, unknown>) => {
+        if (config.engine === 'naive') throw new Error('server said no');
+        return { job: 'j1', argv: [], command: '' };
+      }),
+    } as never);
+    const events = await collect(runRenders({
+      client, part: '3941', config: {}, sources: ['naive', 'occt'],
+      signal: new AbortController().signal, pollMs: 0,
+    }));
+    const items = events.filter((e) => e.kind === 'item') as
+      { item: { source: string; result: RenderResult } }[];
+    expect(items.find((e) => e.item.source === 'naive')?.item.result.error)
+      .toBe('server said no');
+    expect(items.find((e) => e.item.source === 'occt')?.item.result.ok).toBe(true);
   });
 
   it('skips a non-engine source, which does not render through the CLI', async () => {

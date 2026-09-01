@@ -15,14 +15,19 @@ export interface SourcePaneProps {
   state: PaneState;
   camera: Camera;
   onCamera: (next: Camera) => void;
+  /** A measurement this pane reports, shown beside its label. Not a caption
+   *  about the source: only a pane with something to say passes one. */
+  note?: string;
+  /** A newer render is in flight; what is drawn is the previous one. */
+  busy?: boolean;
   /** Drawn above the stage, in body coordinates. */
   overlay?: ReactNode;
   /** The body's pixel size, reported when it is measured or changes. */
   onBox?: (box: { width: number; height: number }) => void;
 }
 
-export function SourcePane({ source, state, camera, onCamera, overlay,
-                             onBox }: SourcePaneProps) {
+export function SourcePane({ source, state, camera, onCamera, note, busy,
+                             overlay, onBox }: SourcePaneProps) {
   const dragging = useRef(false);
   const body = useRef<HTMLDivElement | null>(null);
   // The callback goes through a ref so the effect does not re-subscribe when
@@ -45,7 +50,8 @@ export function SourcePane({ source, state, camera, onCamera, overlay,
     <section className="pane">
       <header className="pane-head">
         <strong>{source.label}</strong>
-        {source.caveat ? <span className="pane-caveat">{source.caveat}</span> : null}
+        {note ? <span className="pane-note">{note}</span> : null}
+        {busy ? <span className="pane-busy">rendering…</span> : null}
       </header>
       {state.kind === 'error' ? <p className="pane-error">{state.message}</p> : null}
       <div
@@ -65,7 +71,8 @@ export function SourcePane({ source, state, camera, onCamera, overlay,
           onCamera(zoomAt(camera, factor, e.clientX - box.left, e.clientY - box.top));
         }}
       >
-        <div className="pane-stage" style={{ transform: cssTransform(camera) }}>
+        <div className={`pane-stage${busy ? ' pane-waiting' : ''}`}
+          style={{ transform: cssTransform(camera) }}>
           {state.kind === 'svg' ? (
             // The SVG is the artifact under test; a raster of it would be a proxy.
             <div dangerouslySetInnerHTML={{ __html: state.markup }} />

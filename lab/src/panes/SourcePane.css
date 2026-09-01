@@ -7,7 +7,7 @@
   overflow: hidden;
 }
 
-/* Out of flow on purpose: a caveat that wraps to two lines would otherwise
+/* Out of flow on purpose: a note that wraps to two lines would otherwise
    push its own render down while the pane beside it stayed put, so the two
    drawings no longer line up. */
 .pane-head {
@@ -24,7 +24,14 @@
   pointer-events: none;
 }
 
-.pane-caveat { opacity: 0.7; font-style: italic; }
+.pane-note { opacity: 0.7; }
+.pane-busy { opacity: 0.7; }
+
+/* The previous drawing, held while its replacement renders: dimmed so the
+   pane never blanks between two renders of the same part. Not `stale` --
+   `.mark-stale` already means a mark whose geometry no longer applies, and
+   the two show on one pane at once. */
+.pane-waiting { opacity: 0.35; }
 
 .pane-error {
   position: absolute;

@@ -72,8 +72,9 @@ describe('createPartInspector', () => {
     const instrument = createPartInspector(FIELDS, client);
     const state = instrument.initialState(instrument.defaultConfig());
     const next = instrument.job!.onItem(
-      { source: 'occt', result: { ok: false, cached: false, argv: [], command: '',
-        key: '', artifacts: [], seconds: 0, error: 'TopologyException' } },
+      { source: 'occt', signature: 'sig',
+        result: { ok: false, cached: false, argv: [], command: '',
+                  key: '', artifacts: [], seconds: 0, error: 'TopologyException' } },
       state);
     expect(next.errors.occt).toBe('TopologyException');
   });
@@ -82,11 +83,23 @@ describe('createPartInspector', () => {
     const instrument = createPartInspector(FIELDS, client);
     const state = instrument.initialState(instrument.defaultConfig());
     const next = instrument.job!.onItem(
-      { source: 'occt', result: { ok: true, cached: false, argv: [], command: '',
-        key: 'k1', artifacts: [{ name: '3941.svg', bytes: 1 }], seconds: 2,
-        error: null } },
+      { source: 'occt', signature: 'sig',
+        result: { ok: true, cached: false, argv: [], command: '',
+                  key: 'k1', artifacts: [{ name: '3941.svg', bytes: 1 }], seconds: 2,
+                  error: null } },
       state);
     expect(next.renders.occt?.key).toBe('k1');
+  });
+
+  it('stamps a render with the run it came from, so a pane can spot a stale one', () => {
+    const instrument = createPartInspector(FIELDS, client);
+    const state = instrument.initialState(instrument.defaultConfig());
+    const next = instrument.job!.onItem(
+      { source: 'occt', signature: 'sig',
+        result: { ok: true, cached: false, argv: [], command: '', key: 'k1',
+                  artifacts: [], seconds: 2, error: null } },
+      state);
+    expect(next.stamps.occt).toBe('sig');
   });
 
   it('contributes the command line to the chrome', () => {

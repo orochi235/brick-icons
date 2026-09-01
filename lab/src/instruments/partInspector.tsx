@@ -8,7 +8,8 @@ import { GoldenStatus } from '@lab/chrome/GoldenStatus';
 import { SourcePane, type PaneState } from '@lab/panes/SourcePane';
 import { readView } from '@lab/panes/camera';
 import { enabledSources } from '@lab/panes/sources';
-import { runRenders, type SourceRender } from '@lab/instruments/renderJob';
+import { renderSignature, runRenders, type SourceRender } from '@lab/instruments/renderJob';
+import { enginePaneState } from '@lab/panes/engineState';
 import { useArtifactSvg } from '@lab/panes/useArtifactSvg';
 import { PartTitle, PoseBar } from '@lab/chrome/PoseBar';
 import { diffCaption, diffWarning, useDiff } from '@lab/panes/useDiff';
@@ -24,15 +25,9 @@ import { decalCaption, useDecal } from '@lab/panes/useDecal';
 export interface InspectorState {
   renders: Partial<Record<SourceId, RenderResult>>;
   errors: Partial<Record<SourceId, string>>;
-}
-
-function paneState(source: SourceId, state: InspectorState,
-                   svg: Partial<Record<SourceId, string>>): PaneState {
-  if (state.errors[source]) return { kind: 'error', message: state.errors[source]! };
-  const markup = svg[source];
-  if (markup) return { kind: 'svg', markup };
-  if (state.renders[source]) return { kind: 'running' };
-  return { kind: 'idle' };
+  /** Which run each pane's render came from, so a pane can tell its own
+   *  drawing from the one before it. */
+  stamps: Partial<Record<SourceId, string>>;
 }
 
 function Panes({ ctx, client }: { ctx: any; client: LabClient }) {
@@ -56,6 +51,9 @@ function Panes({ ctx, client }: { ctx: any; client: LabClient }) {
   const decal = useDecal(client, part);
 
   const engineIds = sources.filter((s) => s.kind === 'engine').map((s) => s.id);
+  // What every engine pane compares its own render against: the run on screen.
+  const run = { signature: renderSignature(part, renderConfig(config)),
+                running: ctx.job?.status === 'running' };
   const marking = Boolean(config.marking);
   const shown = defects.find((d) => d.id === selected);
 
@@ -88,7 +86,8 @@ function Panes({ ctx, client }: { ctx: any; client: LabClient }) {
           return (
             <SourcePane
               key={source.id}
-              source={{ ...source, caveat: decalCaption(decal.urls) || source.caveat }}
+              source={source}
+              note={decalCaption(decal.urls)}
               state={decal.pane}
               camera={camera}
               onCamera={(next) => ctx.trial.setView(next)}
@@ -101,17 +100,18 @@ function Panes({ ctx, client }: { ctx: any; client: LabClient }) {
               camera={camera} onCamera={(next) => ctx.trial.setView(next)} />
           );
         }
+        const engine = source.kind === 'engine'
+          ? enginePaneState(source.id, ctx.state as InspectorState, markup, run)
+          : null;
         return (
           <SourcePane
             key={source.id}
-            source={source.id === 'diff'
-              ? { ...source,
-                  caveat: diffWarning(config)
-                    ?? (diffCaption(diff.result) || source.caveat) }
-              : source}
-            state={source.id === 'diff'
-              ? diff.pane
-              : paneState(source.id, ctx.state as InspectorState, markup)}
+            source={source}
+            note={source.id === 'diff'
+              ? (diffWarning(config) ?? diffCaption(diff.result))
+              : undefined}
+            state={engine ? engine.pane : diff.pane}
+            busy={engine?.busy}
             camera={camera}
             onCamera={(next) => ctx.trial.setView(next)}
             onBox={(box) => setBoxes((prev) => ({ ...prev, [source.id]: box }))}
@@ -175,7 +175,7 @@ export function createPartInspector(fields: SchemaField[], client: LabClient) {
     // walkthrough is what confirms this at runtime.
     defaultConfig: () => ({ ...defaults, part: takePendingPart() }),
 
-    initialState: () => ({ renders: {}, errors: {} }),
+    initialState: () => ({ renders: {}, errors: {}, stamps: {} }),
 
     chrome: [
       {
@@ -241,8 +241,7 @@ export function createPartInspector(fields: SchemaField[], client: LabClient) {
       // Only what changes a render: the layout toggle rearranges panes that
       // are already drawn, and re-running on it would throw them away.
       key: (config) => [
-        config.part,
-        JSON.stringify(renderConfig(config)),
+        renderSignature(String(config.part ?? ''), renderConfig(config)),
         (config.sources as SourceId[]).join(','),
       ],
       run: ({ config, signal }) => runRenders({
@@ -258,6 +257,7 @@ export function createPartInspector(fields: SchemaField[], client: LabClient) {
           ...state.errors,
           [item.source]: item.result.ok ? undefined : (item.result.error ?? 'render failed'),
         },
+        stamps: { ...state.stamps, [item.source]: item.signature },
       }),
     },
 

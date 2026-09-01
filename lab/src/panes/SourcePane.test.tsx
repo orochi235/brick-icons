@@ -12,9 +12,26 @@ describe('SourcePane', () => {
     expect(screen.getByText('naive')).toBeTruthy();
   });
 
-  it('shows the caveat when the source has one', () => {
-    render(<SourcePane {...props} source={SOURCES.occt} state={{ kind: 'idle' }} />);
-    expect(screen.getByText(/strokes only/)).toBeTruthy();
+  it('carries nothing but the label when the pane reports nothing', () => {
+    const { container } = render(
+      <SourcePane {...props} source={SOURCES.occt} state={{ kind: 'idle' }} />);
+    expect(container.querySelector('.pane-note')).toBeNull();
+    expect(container.textContent).toBe('occt');
+  });
+
+  it('shows a note the pane measured', () => {
+    render(<SourcePane {...props} source={SOURCES.diff} note="3 components"
+      state={{ kind: 'idle' }} />);
+    expect(screen.getByText('3 components')).toBeTruthy();
+  });
+
+  it('holds the last drawing, dimmed, while the next render runs', () => {
+    const { container } = render(
+      <SourcePane {...props} source={SOURCES.naive} busy
+        state={{ kind: 'svg', markup: '<svg viewBox="0 0 4 4"></svg>' }} />);
+    expect(container.querySelector('svg')).toBeTruthy();
+    expect(container.querySelector('.pane-waiting')).toBeTruthy();
+    expect(screen.getByText(/rendering/i)).toBeTruthy();
   });
 
   it('renders the SVG inline rather than as an image', () => {
