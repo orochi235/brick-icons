@@ -258,3 +258,20 @@ def test_reference_route_says_when_ldview_is_missing(client, monkeypatch):
     r = client.get("/api/reference", params={"part": "3005", "angle": "30,25"})
     assert r.status_code == 503
     assert "setup-ldview" in r.json()["detail"]
+
+
+def test_decal_route_returns_urls_for_a_printed_part(client, ldraw_dir):
+    body = client.get("/api/decal", params={"part": "3005p01"}).json()
+    assert body["urls"], body
+    assert body["urls"][0].startswith("/api/decal-artifact/")
+    assert client.get(body["urls"][0]).status_code == 200
+
+
+def test_decal_route_says_an_unprinted_part_has_none(client, ldraw_dir):
+    body = client.get("/api/decal", params={"part": "3005"}).json()
+    assert body["urls"] == []
+
+
+def test_decal_route_reports_a_part_it_cannot_read(client, ldraw_dir):
+    r = client.get("/api/decal", params={"part": "no-such-part-9999"})
+    assert r.status_code == 400

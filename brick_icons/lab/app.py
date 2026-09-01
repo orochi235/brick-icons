@@ -15,8 +15,8 @@ from PIL import Image
 from pydantic import BaseModel
 
 from ..config import load_config
-from . import (cache, corpus, defects, diff, goldens_status, jobs, partindex,
-               reference, runner, schema)
+from . import (cache, corpus, decal, defects, diff, goldens_status, jobs,
+               partindex, reference, runner, schema)
 
 
 class RenderRequest(BaseModel):
@@ -44,6 +44,7 @@ def create_app(root: Path | str = ".",
     app.state.defects_path = Path(defects_path) if defects_path else (
         root / defects.DEFAULT_PATH)
     app.state.reference_root = Path(cache_root) / "reference"
+    app.state.decal_root = Path(cache_root) / "decal"
 
     def index() -> dict:
         if app.state.index is None:
@@ -157,6 +158,25 @@ def create_app(root: Path | str = ".",
         path = app.state.reference_root / key / name
         if not path.is_file():
             raise HTTPException(404, "no such reference")
+        return FileResponse(path)
+
+    @app.get("/api/decal")
+    def get_decal(part: str, texture_px: int = decal.DEFAULT_PX,
+                  svg_bg: str = decal.DEFAULT_BG):
+        got = decal.extract(part, root=root, cache_root=app.state.decal_root,
+                            texture_px=texture_px, svg_bg=svg_bg)
+        if not got["ok"]:
+            raise HTTPException(400, got["error"])
+        return {**got, "urls": [f"/api/decal-artifact/{got['key']}/{n}"
+                                for n in got["names"]]}
+
+    @app.get("/api/decal-artifact/{key}/{name}")
+    def get_decal_artifact(key: str, name: str):
+        if not key.isalnum() or "/" in name or ".." in name:
+            raise HTTPException(400, "bad artifact path")
+        path = app.state.decal_root / key / name
+        if not path.is_file():
+            raise HTTPException(404, "no such decal")
         return FileResponse(path)
 
     @app.get("/api/defects")
