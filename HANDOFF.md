@@ -552,6 +552,17 @@ No defects filed.
   ~27 minutes. A naive-path change is unverified until `=full` is green.
   `test_drawings_stay_inside_their_own_viewbox` reads the FROZEN json, not a
   fresh render, so it cannot see a fix either until the goldens are re-frozen.
+
+  **And the opposite misread, which cost two sessions an hour of duplicate
+  rendering:** `=full` is not "the golden gate" that needs the rest of the
+  suite run beside it. `BRICK_GOLDENS` gates `tests/test_goldens.py` and
+  nothing else — one `skipif`, confirmed by `grep -rn BRICK_GOLDENS tests/
+  scripts/ brick_icons/`. So `BRICK_GOLDENS=full pytest -q` IS the whole suite,
+  the same collection a plain run makes, with the drift tests un-skipped rather
+  than skipped. There is no "everything except the goldens" run to pair with
+  it, and splitting the work that way is pure duplication on a shared machine.
+  The variable's scope is one grep; both misreads happened because neither
+  session ran it.
 - **`goldens.summarize_svg`'s `bbox` is built from path ENDPOINTS** and never
   samples an arc's sweep, so re-splitting arcs moves it with no ink moving. A
   bbox delta is not on its own evidence that geometry moved;
