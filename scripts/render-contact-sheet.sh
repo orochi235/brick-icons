@@ -4,6 +4,9 @@
 # part id in small print (--part-label) so artifacts can be traced back to a
 # part without counting grid cells.
 #
+# The lab's contact-sheet instrument does this interactively, with clickable
+# cells: python -m brick_icons.lab. This script remains the headless path.
+#
 # Usage: scripts/render-contact-sheet.sh [out-dir]   (default: out/contact-sheet)
 # Needs: resvg, imagemagick (see scripts/external-deps.lock)
 set -e

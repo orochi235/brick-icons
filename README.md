@@ -129,9 +129,22 @@ npm run dev            # http://localhost:5178, proxying /api to the server
 ```
 
 Type a part id in the title bar to open a trial. Its control panel is built
-from `/api/schema` at boot, so it is the CLI's flag set; the command in the
-status bar is the argv the server ran, and running it yourself gives the same
-SVG the pane shows.
+from `/api/schema` at boot, so it is the CLI's flag set; the status bar shows
+the part id, and hovering it reveals the argv the server ran — running that
+yourself gives the same SVG the pane shows.
+
+A trial draws each enabled source as its own pane: the two engines, LDView as
+reference, an orbitable 3D view whose camera writes `--angle` for everything
+else, a printed part's extracted decal, and a pixel diff. Drag on a pane with
+`mark` armed to file a defect against what you are looking at;
+`python scripts/defects-to-handoff.py` regenerates the handoff's list from the
+store, so the two cannot disagree.
+
+The contact-sheet instrument renders a whole corpus list and opens any cell as
+a trial; `scripts/render-contact-sheet.sh` remains the headless equivalent.
+"check goldens" re-renders a part once per combo it appears in and compares
+each SVG's sha256 against `tests/goldens/hashes.txt` — the same comparison the
+pytest gate makes.
 
 ## Decal extraction
 
