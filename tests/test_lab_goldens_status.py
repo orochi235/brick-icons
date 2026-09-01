@@ -42,3 +42,52 @@ def test_reads_the_repos_own_frozen_hashes():
     rows = goldens_status.frozen(ROOT / "tests/goldens/hashes.txt")
     assert set(rows["3001"]) >= {"outline", "outline-flat3", "wireframe"}
     assert all(len(h) == 64 for h in rows["3001"].values())
+
+
+def test_cases_for_pairs_a_part_with_each_combos_argv():
+    cases = goldens_status.cases_for(ROOT, "3941")
+    names = {c["case"] for c in cases}
+    assert "outline-flat3__3941" in names
+    one = next(c for c in cases if c["case"] == "outline-flat3__3941")
+    assert one["argv"][0] == "3941"
+    assert "--shade-style" in one["argv"]
+
+
+def test_cases_for_an_unknown_part_is_empty():
+    assert goldens_status.cases_for(ROOT, "not-a-part") == []
+
+
+def test_compare_case_reports_match_when_the_digest_is_equal(tmp_path):
+    svg = tmp_path / "3005.svg"
+    svg.write_text("<svg/>")
+    from brick_icons import goldens
+    got = goldens_status.compare_case(svg, goldens.sha256("<svg/>"))
+    assert got == {"state": "match", "frozen": goldens.sha256("<svg/>"),
+                   "fresh": goldens.sha256("<svg/>")}
+
+
+def test_compare_case_reports_moved_when_it_is_not(tmp_path):
+    svg = tmp_path / "3005.svg"
+    svg.write_text("<svg/>")
+    assert goldens_status.compare_case(svg, "deadbeef")["state"] == "moved"
+
+
+def test_compare_case_reports_a_missing_render(tmp_path):
+    assert goldens_status.compare_case(tmp_path / "gone.svg", "deadbeef")["state"] \
+        == "missing"
+
+
+def test_compare_case_reports_a_case_that_was_never_frozen(tmp_path):
+    svg = tmp_path / "3005.svg"
+    svg.write_text("<svg/>")
+    assert goldens_status.compare_case(svg, None)["state"] == "unfrozen"
+
+
+def test_summarize_counts_the_states():
+    got = goldens_status.summarize([
+        {"state": "match"}, {"state": "match"}, {"state": "moved"}])
+    assert got == {"total": 3, "match": 2, "moved": 1, "missing": 0, "unfrozen": 0}
+
+
+def test_summarize_of_nothing_is_all_zero():
+    assert goldens_status.summarize([])["total"] == 0
