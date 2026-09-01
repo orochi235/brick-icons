@@ -127,3 +127,9 @@
 }
 
 .golden-status { display: inline-flex; align-items: center; gap: 0.375rem; }
+
+/* Trials are opened by the part search and the defects list, both of which
+   carry the part with them. labkit's own control adds an empty one, and
+   renders as a dropdown whenever the lab registers more than one instrument. */
+.lk-lab-header__add,
+.lk-lab-header__add-select { display: none; }
