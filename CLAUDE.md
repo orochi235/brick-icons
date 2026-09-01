@@ -1,7 +1,8 @@
 # brick-icons
 
-Renders LDraw parts as line-drawing icons. Two engines behind `--engine`:
-`naive` (z-buffer, the reference) and `occt` (OpenCASCADE hidden-line removal).
+Renders LDraw parts as line-drawing icons. Three engines behind `--engine`:
+`naive` (z-buffer, the reference), `occt` (OpenCASCADE hidden-line removal),
+and `cadquery` (cadquery's stock SVG exporter, for comparison only).
 
 ## LDraw parts are defective, and the engine must not care
 

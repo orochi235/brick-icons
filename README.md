@@ -386,7 +386,7 @@ outline renderer (default 2048).
 LDView curve subdivision (default 12). The outline renderer's analytic curves
 are exact and ignore this.
 
-#### `--engine naive|occt`
+#### `--engine naive|occt|cadquery`
 
 Which geometry engine performs hidden-line removal (default `naive`). `occt`
 runs OpenCASCADE's exact BRep kernel: recognized LDraw primitives become real
@@ -394,6 +394,15 @@ cylinders, cones and annular faces, occlusion is exact, and arcs are read off
 the curve rather than refitted from a polyline. It needs the optional extra —
 `pip install -e '.[occt]'`, which is ~935MB — and raises rather than silently
 falling back to `naive`, so a part it cannot draw fails loudly.
+
+`cadquery` is a yardstick rather than a candidate: it calls cadquery's own
+`getSVG` on the same sewn shape `occt` builds and parses the paths back into
+ops, so what you see is what a stock BRep-to-drawing exporter makes of these
+parts. It needs `pip install -e '.[cadquery]'`. Three limits are inherent, not
+bugs to fix: every edge is discretized, so there are no arcs; the exporter
+concatenates sharp, smooth and outline edges into one group, so nothing can be
+weighted as a silhouette; and it draws every edge the shape has, tessellation
+included. It reports no faces, so fills and `--shade-style` do nothing.
 
 It is not the default yet: a body no primitive matches still arrives as raw
 triangles and loses the arcs `arcfit` recovers on the naive path (`32062`, all

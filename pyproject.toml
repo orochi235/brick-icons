@@ -10,6 +10,7 @@ brick-icons = "brick_icons.cli:main"
 
 [project.optional-dependencies]
 occt = ["cadquery-ocp>=7.9.3"]
+cadquery = ["cadquery>=2.8"]
 lab = ["fastapi>=0.110", "uvicorn>=0.27", "httpx>=0.27"]
 
 [build-system]

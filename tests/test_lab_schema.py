@@ -14,7 +14,7 @@ def test_every_optional_flag_appears():
 def test_carries_flag_choices_and_help():
     fields = {f["key"]: f for f in schema.config_schema()}
     assert fields["engine"]["flag"] == "--engine"
-    assert fields["engine"]["choices"] == ["naive", "occt"]
+    assert fields["engine"]["choices"] == ["naive", "occt", "cadquery"]
     assert fields["shade_style"]["flag"] == "--shade-style"
     assert "outline" in fields["shading"]["choices"]
     assert fields["opacity"]["help"]

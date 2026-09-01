@@ -23,7 +23,7 @@ DEFAULTS = {
     "curve_quality": 12,     # LDView curve subdivision (max)
     "angle": "iso",          # preset or "LAT,LONG"
     "shading": "normal",     # normal | cel | outline
-    "engine": "naive",       # naive | occt  (occt needs the [occt] extra)
+    "engine": "naive",       # naive | occt | cadquery (each needs its extra)
     "cel_levels": 4,         # bands for cel shading
     "line_width": 2,         # outline edge stroke, output px
     "silhouette_width": 2,   # smooth-silhouette stroke (cylinder limbs,

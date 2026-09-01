@@ -22,7 +22,7 @@ def build_parser():
     p.add_argument("--format", dest="fmt", choices=["png", "svg", "both"])
     p.add_argument("--mode", choices=["gray", "mono", "color", "both"])
     p.add_argument("--shading", choices=["normal", "cel", "outline"])
-    p.add_argument("--engine", choices=["naive", "occt"], default=None,
+    p.add_argument("--engine", choices=["naive", "occt", "cadquery"], default=None,
                    help="geometry engine for outline/wireframe renders")
     p.add_argument("--cel-levels", type=int)
     p.add_argument("--line-width", type=int, help="outline interior stroke (output px)")

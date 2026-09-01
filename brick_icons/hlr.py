@@ -979,7 +979,7 @@ def part_geometry(part: str, ldraw_dir):
             out["analytic"])
 
 
-VALID_ENGINES = ("naive", "occt")
+VALID_ENGINES = ("naive", "occt", "cadquery")
 
 
 def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
@@ -1006,6 +1006,9 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
     if engine == "occt":
         from . import occt
         return occt.visible_segments(out, right, up, render_px, cull=cull)
+    if engine == "cadquery":
+        from . import cqsvg
+        return cqsvg.visible_segments(out, right, up, render_px, cull=cull)
     if out["analytic"] or out["fit_arcs"]:
         res = _visible_segments_analytic(out, right, up, fwd, render_px, cull=cull)
     else:
