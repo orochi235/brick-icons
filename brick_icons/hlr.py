@@ -475,11 +475,16 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
         # fills densify/snap onto the DRAWN stylized curve instead of
         # scalloping past the stroke at facet corners (3941's X outline)
         Me = np.array([[ell.u[0], ell.v[0]], [ell.u[1], ell.v[1]]])
-        mu = np.linalg.inv(Me) @ (np.stack([cpx, cpy], 0)
-                                  - ell.center.reshape(2, 1))
-        ru = np.hypot(mu[0], mu[1])
-        pr = np.hypot(cpx - ell.center[0], cpy - ell.center[1])
-        dev = float(np.max(np.abs(ru - 1.0) * pr / np.maximum(ru, 1e-9)))
+        try:
+            mu = np.linalg.inv(Me) @ (np.stack([cpx, cpy], 0)
+                                      - ell.center.reshape(2, 1))
+            ru = np.hypot(mu[0], mu[1])
+            pr = np.hypot(cpx - ell.center[0], cpy - ell.center[1])
+            dev = float(np.max(np.abs(ru - 1.0) * pr / np.maximum(ru, 1e-9)))
+        except np.linalg.LinAlgError:
+            # edge-on: the ellipse has collapsed onto the chord path itself,
+            # so there is no radial gap between drawn curve and vertices.
+            dev = 0.0
         fit_ells.append((float(ell.center[0]), float(ell.center[1]),
                          float(ell.u[0]), float(ell.u[1]),
                          float(ell.v[0]), float(ell.v[1]),

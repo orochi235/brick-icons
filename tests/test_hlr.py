@@ -3,7 +3,7 @@ import shutil
 import numpy as np
 import pytest
 from pathlib import Path
-from brick_icons import hlr, primitives
+from brick_icons import arcfit, hlr, primitives
 
 LIB = Path("vendor/ldraw")
 HAVE_LIB = LIB.exists()
@@ -761,6 +761,26 @@ def test_fit_ellipses_scales_snap_tolerance():
     out = hlr.fit_ellipses([(0, 0, 1, 0, 0, 1, 25.0, 2.0)], 2.0, 5.0, 5.0)
     assert out[0][6] == 25.0
     assert out[0][7] == 4.0
+
+
+def test_edge_on_fitted_arc_renders_rather_than_raising():
+    # A fitted chain whose circle is seen edge-on projects to a SEGMENT, so
+    # its two projected radius vectors are parallel and the snap-tolerance
+    # affine is singular. Every round part at lat=0 has such a rim, which is
+    # four of the pose bar's seven buttons; inverting unguarded raised
+    # LinAlgError and lost the whole render.
+    t = np.linspace(0.0, 90.0, 5)
+    arc = {"C": np.zeros(3), "U": np.array([10.0, 0.0, 0.0]),
+           "V": np.array([0.0, 0.0, 10.0]), "t0": 0.0, "t1": 90.0,
+           "step": float(np.diff(t).max())}
+    arc["P"] = np.array([arcfit.arc_point(arc, v) for v in t])
+    arc["tv"] = t
+    out = {"2": [], "5": [], "tri": [], "tri_meta": [], "analytic": [],
+           "fit_arcs": [arc]}
+    res = hlr._visible_segments_analytic(out, *hlr.view_basis(0, 0), 300)
+    (ell,) = res.ellipses
+    assert (ell[4], ell[5]) == (0.0, 0.0)   # v collapsed: this IS the edge-on
+    assert ell[7] == 0.5                    # the dev=0 floor, not a nan
 
 
 def _fold_span(cx, cy, r, t0, t1):
