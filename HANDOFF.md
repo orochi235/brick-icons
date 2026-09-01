@@ -557,6 +557,13 @@ No defects filed.
   file into six groups of a few minutes each. A killed run leaves a truncated
   progress bar and no summary line, which looks exactly like a run still going
   — check for the exit line before believing either.
+
+  Chunking costs you the ability to say "one run covered this commit", so
+  recover it with mtimes: `stat -f '%Sm' -t '%H:%M:%S' <file>` against the run's
+  start time proves which bytes a chunk actually exercised, and a clean tree
+  proves those bytes are the ones committed. That is what established the 52
+  cases ran on the merged render path when the two halves were committed half
+  an hour apart.
 - **`BRICK_GOLDENS=1` or the gate does not run — and `=1` is still not the
   gate.** A plain suite reports "N passed, 3 skipped" and those 3 skips are the
   drift tests; two sessions independently mistook that for verification. But
