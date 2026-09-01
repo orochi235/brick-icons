@@ -133,12 +133,18 @@ work, not defects.
 - **`GoldenStatus` polls past unmount** — its `while (state.state ===
   'running')` loop has no abort. `renderJob.ts` and `sheetJob.ts` are a second
   and third copy of start-poll-drain, each with its own interval.
-- **The `sources.map` if-chain wants to be a per-kind pane spec** so every
-  pane gets the same props — today `onBox` and `overlay` reach only the engine
-  branch and `diff` is tested by id inside it. Agreed to land as one deliberate
-  refactor from this side rather than piecemeal from theirs; their
-  `enginePaneState` call makes the engine branch a single line, which is what
-  makes it tractable.
+- ~~**The `sources.map` if-chain wants to be a per-kind pane spec**~~ Done.
+  `panes/paneSpec.ts` switches on `kind` and returns what one pane needs —
+  `state`, `busy`, `note`, its own `overlay`, and two flags: `marks` and
+  `followsCamera`. `partInspector` is one `SourcePane` call, so every pane
+  gets `onBox` and an overlay slot, and nothing is tested by id. It is a pure
+  function: the caller runs the hooks and passes what they produced, which is
+  what lets `paneSpec.test.ts` cover all five kinds without React.
+  **`followsCamera` is about writing, not reading** — the 3D pane was always
+  handed the shared camera and still is; what it must not do is write back,
+  because it owns its own. Verified in a real browser: five panes at once,
+  a pan moves all of them, only `engine` and `diff` carry a mark layer, and
+  a drag on one still opens the file dialog.
 - ~~**`SOURCE_TOGGLES` in `PoseBar` duplicates `SOURCES` + `ORDER`**~~ Done.
   `panes/sources.ts` holds one `CATALOG`; `SourceId`, `SOURCES`,
   `SOURCE_ORDER` and the toggle bar all derive from it, and `SourceId` now

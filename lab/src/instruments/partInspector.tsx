@@ -9,7 +9,7 @@ import { SourcePane, type PaneState } from '@lab/panes/SourcePane';
 import { readView } from '@lab/panes/camera';
 import { enabledSources, type SourceId } from '@lab/panes/sources';
 import { renderSignature, runRenders, type SourceRender } from '@lab/instruments/renderJob';
-import { enginePaneState } from '@lab/panes/engineState';
+import { paneSpec, type PaneDeps } from '@lab/panes/paneSpec';
 import { useArtifactSvg } from '@lab/panes/useArtifactSvg';
 import { PartTitle, PoseBar } from '@lab/chrome/PoseBar';
 import { diffCaption, diffWarning, useDiff } from '@lab/panes/useDiff';
@@ -59,74 +59,48 @@ function Panes({ ctx, client }: { ctx: any; client: LabClient }) {
   const marking = Boolean(config.marking);
   const shown = defects.find((d) => d.id === selected);
 
+  const deps: PaneDeps = {
+    engines: ctx.state as InspectorState,
+    markup,
+    run,
+    reference: referencePane,
+    // The decal is flat, not a view of the part, so the shared camera still
+    // pans and zooms it but no angle applies.
+    decal: { pane: decal.pane, note: decalCaption(decal.urls) },
+    diff: { pane: diff.pane, note: diffWarning(config) ?? diffCaption(diff.result) },
+    three: <ThreePane part={part} angle={angle}
+             onSettle={(next) => ctx.setConfig('angle', next)} />,
+  };
+
   return (
     <div className={`panes panes-${layout}`}>
       {sources.map((source) => {
-        // The 3D pane owns its own camera, so it ignores the shared 2D one and
-        // its only control is the orbit that writes --angle.
-        if (source.kind === '3d') {
-          return (
-            <SourcePane
-              key={source.id}
-              source={source}
-              state={{ kind: 'idle' }}
-              camera={camera}
-              onCamera={() => {}}
-              overlay={
-                <ThreePane
-                  part={part}
-                  angle={angle}
-                  onSettle={(next) => ctx.setConfig('angle', next)}
-                />
-              }
-            />
-          );
-        }
-        if (source.kind === 'decal') {
-          // The decal is flat, not a view of the part, so the shared camera
-          // still pans and zooms it but no angle applies.
-          return (
-            <SourcePane
-              key={source.id}
-              source={source}
-              note={decalCaption(decal.urls)}
-              state={decal.pane}
-              camera={camera}
-              onCamera={(next) => ctx.trial.setView(next)}
-            />
-          );
-        }
-        if (source.kind === 'reference') {
-          return (
-            <SourcePane key={source.id} source={source} state={referencePane}
-              camera={camera} onCamera={(next) => ctx.trial.setView(next)} />
-          );
-        }
-        const engine = source.kind === 'engine'
-          ? enginePaneState(source.id, ctx.state as InspectorState, markup, run)
-          : null;
+        const spec = paneSpec(source, deps);
         return (
           <SourcePane
             key={source.id}
             source={source}
-            note={source.id === 'diff'
-              ? (diffWarning(config) ?? diffCaption(diff.result))
-              : undefined}
-            state={engine ? engine.pane : diff.pane}
-            busy={engine?.busy}
+            note={spec.note}
+            state={spec.state}
+            busy={spec.busy}
             camera={camera}
-            onCamera={(next) => ctx.trial.setView(next)}
+            onCamera={spec.followsCamera ? (next) => ctx.trial.setView(next) : () => {}}
             onBox={(box) => setBoxes((prev) => ({ ...prev, [source.id]: box }))}
             overlay={
-              <MarkLayer
-                defects={defects.filter((d) => d.engines.includes(source.id))}
-                box={boxes[source.id] ?? { width: 1, height: 1 }}
-                camera={camera}
-                config={config}
-                armed={marking}
-                onDraw={setPendingMark}
-                onSelect={setSelected}
-              />
+              <>
+                {spec.overlay}
+                {spec.marks ? (
+                  <MarkLayer
+                    defects={defects.filter((d) => d.engines.includes(source.id))}
+                    box={boxes[source.id] ?? { width: 1, height: 1 }}
+                    camera={camera}
+                    config={config}
+                    armed={marking}
+                    onDraw={setPendingMark}
+                    onSelect={setSelected}
+                  />
+                ) : null}
+              </>
             }
           />
         );
