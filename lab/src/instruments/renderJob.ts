@@ -1,4 +1,5 @@
 import type { LabClient, RenderResult } from '@lab/api/client';
+import { settledJob } from '@lab/api/jobPoll';
 import { SOURCES, sourceConfig, type SourceId } from '@lab/panes/sources';
 
 /** One finished render, tagged with the pane it belongs to and with the run
@@ -32,8 +33,6 @@ export function renderSignature(part: string,
   return JSON.stringify([part.trim(), config]);
 }
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
 function failedResult(error: string): RenderResult {
   return { ok: false, cached: false, argv: [], command: '', key: '',
            artifacts: [], seconds: 0, error };
@@ -64,14 +63,8 @@ async function renderOne(
     if (signal.aborted) return [];
     const started = await client.startRender(part, sourceConfig(SOURCES[source]!, config));
 
-    let state = await client.job(started.job);
-    while (state.state === 'running') {
-      if (signal.aborted) return [];
-      await sleep(pollMs);
-      if (signal.aborted) return [];
-      state = await client.job(started.job);
-    }
-    if (signal.aborted) return [];
+    const state = await settledJob(client, started.job, { signal, pollMs });
+    if (!state) return [];
 
     const result = state.results[0]
       ?? failedResult('the job finished without a result');

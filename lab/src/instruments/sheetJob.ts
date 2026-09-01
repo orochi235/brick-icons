@@ -1,4 +1,5 @@
 import type { LabClient, RenderResult } from '@lab/api/client';
+import { jobStates } from '@lab/api/jobPoll';
 import { svgArtifactName } from '@lab/panes/useArtifactSvg';
 
 export interface SheetCell {
@@ -21,8 +22,6 @@ export interface RunSheetArgs {
   pollMs?: number;
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
 function cellFrom(part: string, result: RenderResult): SheetCell {
   return {
     part,
@@ -43,19 +42,13 @@ export async function* runSheet(
 
   const started = await client.startBatch(parts, config);
   let seen = 0;
-  let state = await client.job(started.job);
 
-  for (;;) {
-    if (signal.aborted) return;
+  for await (const state of jobStates(client, started.job, { signal, pollMs })) {
     while (seen < state.results.length) {
       const part = parts[seen];
       const result = state.results[seen];
       if (part && result) yield { kind: 'item', item: cellFrom(part, result) };
       seen += 1;
     }
-    if (state.state !== 'running') return;
-    await sleep(pollMs);
-    if (signal.aborted) return;
-    state = await client.job(started.job);
   }
 }

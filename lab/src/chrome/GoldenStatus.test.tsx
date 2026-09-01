@@ -52,4 +52,20 @@ describe('GoldenStatus', () => {
     render(<GoldenStatus client={client([])} part="" />);
     expect(screen.queryByText(/check goldens/i)).toBeNull();
   });
+
+  it('stops polling when it is unmounted mid-check', async () => {
+    const api = {
+      checkGoldens: vi.fn(async () => ({ job: 'j1', count: 1 })),
+      job: vi.fn(async () => ({ id: 'j1', kind: 'goldens', state: 'running',
+                                total: 1, done: 0, failed: 0, events: [],
+                                results: [] })),
+    } as unknown as LabClient;
+    const view = render(<GoldenStatus client={api} part="3941" />);
+    fireEvent.click(screen.getByText(/check goldens/i));
+    await waitFor(() => expect(api.job).toHaveBeenCalled());
+    view.unmount();
+    const after = (api.job as ReturnType<typeof vi.fn>).mock.calls.length;
+    await new Promise((r) => setTimeout(r, 400));
+    expect((api.job as ReturnType<typeof vi.fn>).mock.calls.length).toBe(after);
+  });
 });

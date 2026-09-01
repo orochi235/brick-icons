@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { LabClient } from '@lab/api/client';
+import { settledJob } from '@lab/api/jobPoll';
 
 export interface CaseResult {
   state: string;
@@ -22,31 +23,37 @@ export function summarizeGoldens(results: CaseResult[]): string {
 export function GoldenStatus({ client, part }: { client: LabClient; part: string }) {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const check = useRef<AbortController | null>(null);
+
+  // A verdict belongs to the part it was checked for, so leaving that part
+  // both stops the poll and drops what it said.
+  useEffect(() => {
+    setText('');
+    return () => check.current?.abort();
+  }, [part]);
 
   if (!part.trim()) return null;
 
-  async function check() {
+  async function run() {
+    check.current?.abort();
+    const { signal } = (check.current = new AbortController());
     setBusy(true);
     setText('checking…');
     try {
       const started = await client.checkGoldens(part);
-      let state = await client.job(started.job);
-      while (state.state === 'running') {
-        await new Promise((r) => setTimeout(r, 250));
-        state = await client.job(started.job);
-      }
-      setText(summarizeGoldens(state.results as unknown as CaseResult[]));
+      const state = await settledJob(client, started.job, { signal });
+      if (state) setText(summarizeGoldens(state.results as unknown as CaseResult[]));
     } catch (e) {
-      setText(`goldens: ${(e as Error).message}`);
+      if (!signal.aborted) setText(`goldens: ${(e as Error).message}`);
     } finally {
-      setBusy(false);
+      if (!signal.aborted) setBusy(false);
     }
   }
 
   return (
     <span className="golden-status">
       {text ? <span>{text}</span> : null}
-      <button type="button" disabled={busy} onClick={() => void check()}>
+      <button type="button" disabled={busy} onClick={() => void run()}>
         check goldens
       </button>
     </span>
