@@ -40,3 +40,29 @@ def lists(root: Path | str = ".") -> list[dict]:
             out.append({"name": f"manifest:{name}", "source": _MANIFEST,
                         "parts": list(parts)})
     return out
+
+
+def combos(root: Path | str = ".") -> list[dict]:
+    """The manifest's combos: name, argument list, and the parts they cover.
+
+    A combo names a parts list rather than repeating its ids, so the list is
+    resolved here -- the manifest stays the one place a case is declared.
+    """
+    manifest = Path(root) / _MANIFEST
+    if not manifest.exists():
+        return []
+    data = tomllib.loads(manifest.read_text())
+    lists = data.get("parts", {})
+    out = []
+    for name, spec in data.get("combo", {}).items():
+        parts = spec.get("parts")
+        resolved = (list(lists.get(parts, [])) if isinstance(parts, str)
+                    else list(parts or []))
+        out.append({"name": name, "args": list(spec.get("args", [])),
+                    "parts": resolved})
+    return out
+
+
+def combos_for(root: Path | str, part: str) -> list[dict]:
+    """The combos a part is actually a case in."""
+    return [c for c in combos(root) if part in c["parts"]]
