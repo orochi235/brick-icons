@@ -32,6 +32,16 @@ combo and compares each sha256 against `tests/goldens/hashes.txt`.
 
 ### Traps
 
+- **`seen` and `renderSignature` answer different questions — do not merge
+  them.** Both ask "is what I am looking at still the run this belongs to", and
+  merging them looks obviously right. It is not. `identity.ts`'s `SEEN_KEYS` is
+  the three flags a mark's POSITION depends on (`angle`, `shading`,
+  `shade_style`), and it excludes `--render-px` on purpose because a fractional
+  mark does not move with resolution. `renderSignature` is the part plus every
+  flag `renderConfig` passes — about thirty — because any of them makes a
+  different drawing. Route `seenMatches` through it and bumping `line_width`
+  dims every mark on the pane, none of which moved. "Is this the same drawing"
+  and "is this mark's geometry still valid" are two questions.
 - **The API server does not reload.** `python -m brick_icons.lab` serves the
   routes it started with, so a route added mid-session 404s until you restart
   it — which reads exactly like the frontend being wrong. Three separate
