@@ -1,9 +1,8 @@
 # Handoff — `main`: the corpus lab, and the OCCT engine
 
-On **`main`**. 531 tests pass under `BRICK_GOLDENS=full` (~22 min); the render
-goldens were re-frozen for the arcfit changes below. A plain `pytest` skips the
-drift tests, and `BRICK_GOLDENS=1` renders only `3005` — neither is
-verification.
+On **`main`**. The render goldens were re-frozen for the arcfit changes below.
+A plain `pytest` skips the drift tests, and `BRICK_GOLDENS=1` renders only
+`3005` — neither is verification; only `BRICK_GOLDENS=full` (~22 min) is.
 
 ## Read first: there are two threads now
 
@@ -11,45 +10,52 @@ The **corpus lab** — a local web app for inspecting renders and tracking
 defects — is the active one. The engine thread below it is unchanged and still
 true; skip to it if you are here for `occt`.
 
-### The lab, and what is left of it
+### The lab, and what is in it
 
-Design: `docs/superpowers/specs/2026-08-31-corpus-lab-design.md`.
-Five plans in `docs/superpowers/plans/`, all written:
-
-| plan | file | state |
-|---|---|---|
-| 1 | `2026-08-31-lab-server.md` | **done** — `brick_icons/lab/`, 615 tests |
-| 2 | `2026-08-31-lab-part-inspector.md` | **done** — `lab/`, 89 frontend tests |
-| 3 | `2026-08-31-lab-defects.md` | not started |
-| 4 | `2026-08-31-lab-reference-and-3d.md` | not started |
-| 5 | `2026-08-31-lab-contact-sheet.md` | not started |
+Design: `docs/superpowers/specs/2026-08-31-corpus-lab-design.md`. All five
+plans in `docs/superpowers/plans/` are executed and their walkthroughs run.
 
 Run it: `.venv/bin/python -m brick_icons.lab` and `cd lab && npm run dev`, then
 open `http://localhost:5178`. Gates are `.venv/bin/pytest -q` and, in `lab/`,
-`npx vitest run && npm run typecheck`.
+`npx vitest run && npm run typecheck` (218 frontend tests).
 
-### Fix these two plan defects before executing 3, 4 or 5
+Two instruments. **Part inspector**: a pane per enabled source — `naive`,
+`occt`, LDView, an orbitable 3D view, a printed part's decal, and a pixel diff
+— sharing one 2D camera, with the pose bar's toggles writing `config.sources`.
+**Contact sheet**: a corpus list rendered as one batch job, cells appearing as
+they finish, clicking one opens it as a trial.
 
-Both are places where a plan asserts something the code has since disproved.
-Executing them as written produces failing tests and a wrong diagnosis.
-
-- **Plans 3 and 5 assume `layers` gives working source toggles.** It does not.
-  labkit's `layers` capability writes labkit's own layer state, not the
-  instrument's `sources` config, so the five checkboxes were inert. The
-  capability is gone; the toggles now live in `PoseBar` and write
-  `config.sources`. Anywhere a plan says "the pane exists as a toggle", it
-  means that.
-- **Plan 5 describes `/api/diff` as PIL-comparing two artifacts.** PIL cannot
-  open an SVG, which is what both engines emit. The route now rasterizes an SVG
-  side with `resvg` (`diff.as_raster`) and returns a visualization URL beside
-  the counts. The diff pane is already built and wired — plan 5 should be cut
-  down to the contact sheet and golden status, which are genuinely absent.
+Also: drag on a pane with `mark` armed to file a defect against what is on
+screen (`tests/goldens/defects.toml`, regenerated into this file's Open section
+by `scripts/defects-to-handoff.py`); "check goldens" re-renders a part once per
+combo and compares each sha256 against `tests/goldens/hashes.txt`.
 
 ### Traps
 
-- **Two of the five pane toggles are dead buttons.** `ref` and `3D` enable
-  sources with no implementation; that is plan 4's job. They look broken
-  because they are unfinished, not because they regressed.
+- **The API server does not reload.** `python -m brick_icons.lab` serves the
+  routes it started with, so a route added mid-session 404s until you restart
+  it — which reads exactly like the frontend being wrong. Three separate
+  bugs this session were this. Vite hot-reloads; the Python side does not.
+- **labkit's design tokens are `--wzl-*`; only its DOM classes are `lk-*`.**
+  Every `var(--lk-border, …)` in this repo silently took its fallback, so
+  panels rendered dark-on-dark in the light theme. A `var()` fallback makes
+  this fail silently by construction — there is no error to see. Fixed
+  throughout; weasel now documents the split in labkit's `RECIPES.md`.
+- **A `role="button"` span inside a `FloatingPanel` is dead to a real mouse.**
+  The panel captures the pointer on pointerdown and exempts only
+  `input, button, a, select, textarea, [data-no-drag]` by element NAME, so a
+  span is captured, mouseup retargets to the panel, and no `click` is
+  synthesized. A programmatic `.click()` still works, which is how it hides.
+  `App.tsx` stops the drag on the panel body; delete that when labkit's
+  movement-threshold fix ships. The same shape bit the mark layer over
+  `.pane-body`, which captures to pan — `MarkLayer` stops it there too.
+- **`jsdom` synthesizes a click whether or not the pointer was captured**, so a
+  test asserting "the handler fired" passes against both the broken and the
+  fixed code. Neither bug above is unit-testable that way; both were found by
+  driving a real browser.
+- **`--list` names a FILE of part ids.** The contact sheet's `list` config is
+  the lab's own field and must stay in `LAB_ONLY`; leaking it renders every
+  part with `--list manifest:spread` and fails the whole sheet.
 - **Port 8792.** 8765 is taken by brainhouse and 8791 by an unrelated
   `http.server`; the default moved twice. `lab/vite.config.ts` proxies to
   whatever `brick_icons/lab/__main__.py` defaults to — change both together.
@@ -62,17 +68,32 @@ Executing them as written produces failing tests and a wrong diagnosis.
 - **Two CSS rules reach into labkit internals**, both commented with what
   deletes them: `.lk-trial__title` is hidden so the part title can lead, and
   `.lk-trial__titlebar-actions` is stretched so a contribution can sit at its
-  left. labkit is about to move Clone and Reset into that same span, which will
-  make the ordering worse before an upstream fix makes it better.
+  left. labkit has now moved Clone and Reset into that same span, so the
+  ordering is worse until the leading-slot fix ships.
+- **`LDrawLoader` searches `parts/`, `p/`, `models/` before trying a name as
+  is**, so its 404s in the console are its normal search and not a failure. It
+  also needs `setConditionalLineMaterial` since three 0.170, and rewrites an
+  `s/…` reference to `parts/s/…` itself.
 
-### Upstream, already filed
+### What the walkthroughs actually established
 
-Six asks are with the weasel session, recorded in weasel's
-`docs/handoffs/2026-08-30-labkit-consumer-asks.md`: `addTrial(name, {config})`,
-an instrument-settable trial title, a leading slot in the titlebar, toolbar
-`end` reaching the edge, collapsible sections, `onActivate` context, and a
-density option on `ControlPanel`. None implemented. Do not wait on them — every
-one has a working local workaround.
+Not re-derivable from a green suite, and each cost real time:
+
+- `3001`'s studs point up in the 3D pane, and `top`/`left` agree across all
+  four panes — the LDraw Y-flip and the longitude sign are both right.
+- Orbiting fires exactly one LDView render per settle, not one per pointer move.
+- The lab's `outline-flat3__3941` digest is `d53feb17…`, byte-identical to an
+  independent `shasum` of a fresh CLI render and to `hashes.txt`. The lab's
+  golden answer means what pytest's means.
+
+### Upstream
+
+Weasel has fixed the `FloatingPanel` capture (movement threshold) and written
+the styling contract into labkit's `RECIPES.md`; both are on
+`labkit/consumer-asks`, unpushed. The `.pair()`-vs-`pack` question and the
+leading titlebar slot are filed and open. Sidebar sections can now be torn out
+into workspace tiles (`undockAs`) — worth considering for the settings panel's
+38 flags. Do not wait on any of it; every item has a working local workaround.
 
 ## The engine thread: one checkout, no branches
 
