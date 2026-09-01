@@ -99,6 +99,26 @@ export function createClient({ base = '', fetchImpl = fetch }: ClientOptions = {
         fetchImpl, at(`/api/decal?part=${encodeURIComponent(part)}`));
     },
 
+    async checkGoldens(part: string) {
+      return json<{ job: string; count: number }>(
+        fetchImpl, at('/api/goldens/check'), post('/api/goldens/check', { part }));
+    },
+
+    async combos() {
+      return (await json<{ combos: { name: string; args: string[]; parts: string[] }[] }>(
+        fetchImpl, at('/api/combos'))).combos;
+    },
+
+    async startBatch(parts: string[], config: Record<string, unknown>, force = false) {
+      return json<{ job: string; count: number }>(
+        fetchImpl, at('/api/batch'), post('/api/batch', { parts, config, force }));
+    },
+
+    async lists() {
+      return (await json<{ lists: { name: string; source: string; parts: string[] }[] }>(
+        fetchImpl, at('/api/lists'))).lists;
+    },
+
     async goldens(part: string) {
       return json<{ part: string; cases: Record<string, string>; known: boolean }>(
         fetchImpl, at(`/api/goldens?part=${encodeURIComponent(part)}`));

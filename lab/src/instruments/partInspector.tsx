@@ -4,6 +4,7 @@ import type { LabClient, RenderResult, SchemaField } from '@lab/api/client';
 import { buildSchema, defaultsFor, renderConfig, type SourceId } from '@lab/config/nodes';
 import { takePendingPart } from '@lab/config/pending';
 import { CommandLine } from '@lab/chrome/CommandLine';
+import { GoldenStatus } from '@lab/chrome/GoldenStatus';
 import { SourcePane, type PaneState } from '@lab/panes/SourcePane';
 import { readView } from '@lab/panes/camera';
 import { enabledSources } from '@lab/panes/sources';
@@ -207,6 +208,16 @@ export function createPartInspector(fields: SchemaField[], client: LabClient) {
         region: 'status',
         render: (ctx) => (
           <DefectCount
+            client={client}
+            part={String((ctx.config as Record<string, unknown>).part ?? '')}
+          />
+        ),
+      },
+      {
+        id: 'golden-status',
+        region: 'status',
+        render: (ctx) => (
+          <GoldenStatus
             client={client}
             part={String((ctx.config as Record<string, unknown>).part ?? '')}
           />
