@@ -4,16 +4,12 @@ On **`main`**. The render goldens were re-frozen for the arcfit changes below.
 A plain `pytest` skips the drift tests, and `BRICK_GOLDENS=1` renders only
 `3005` — neither is verification; only `BRICK_GOLDENS=full` (~22 min) is.
 
-**`=full` HAS NOT BEEN RUN on the current merged tree — run it first.** Two
-attempts were killed externally mid-run in one session (one at 51%, one at
-11%, the second with the machine to itself, so contention is not the cause).
-What is verified: the 52-case byte gate and 202 tests on the cadquery session's
-tree *before* the lab commits landed; a 680-passed plain run *before* `466c8ac`
-and `8433f88` landed; 234 frontend tests and typecheck on the merged tree. What
-is not: the whole Python suite, together, since the cadquery engine and the
-`trace.py` cull change went in. Nothing on the lab side imports the render
-path, so it should be clean — but that is an argument, not a measurement, and
-the argument is exactly what this file tells you not to accept.
+**The merged tree is verified, but not by one process.** `=full` ran on the
+merged render path — 16 passed, the 52 cases byte-clean — and the rest of the
+suite ran beside it in chunks: 640 tests plus the goldens against 696
+collected, every file in `tests/` accounted for. The honest limit: that was six
+processes rather than one, so it cannot catch cross-suite state leakage a
+single run would. Nothing here suggests such a coupling.
 
 ## Read first: there are two threads now
 
@@ -554,6 +550,13 @@ No defects filed.
   pinned 2026-06-27 LDraw snapshot was lost — `complete.zip` serves only the
   latest, so it is gone for good. `/vendor` is now in `.gitignore`; stage
   explicit paths regardless.
+- **A long test run does not survive in this environment — chunk it.** Four
+  separate runs were killed externally in one session, at 11%, 51% and twice
+  more, under different loads and with the machine to itself; every run short
+  enough to finish inside a tool timeout completed. The suite splits cleanly by
+  file into six groups of a few minutes each. A killed run leaves a truncated
+  progress bar and no summary line, which looks exactly like a run still going
+  — check for the exit line before believing either.
 - **`BRICK_GOLDENS=1` or the gate does not run — and `=1` is still not the
   gate.** A plain suite reports "N passed, 3 skipped" and those 3 skips are the
   drift tests; two sessions independently mistook that for verification. But
