@@ -81,7 +81,17 @@ A cleanup pass over the lab diff found these. Three were applied (`STATUSES`
 declared once, `sheetJob` calling `svgArtifactName`, a rect-to-style helper in
 `MarkLayer`); the rest were NOT, because a second session was editing
 `partInspector.tsx`, `renderJob.ts`, `SourcePane.tsx` and `sources.ts` in this
-same checkout at the time. Check `git log` on those files before starting.
+same checkout at the time.
+
+**That session's work started from these commits, so it does not conflict — but
+it does change the shape of two items below.** It fans `runRenders` out
+concurrently, adds `renderSignature` and a `stamps` field so a pane can show
+its previous drawing dimmed while a new render is in flight, and moves pane
+state into a new `panes/engineState.ts`. Most relevant here: **`caveat` is gone
+from the `Source` type**, replaced by a `note?: string` prop on `SourcePane`
+that diff and decal pass their captions through. Anything below that mentions
+`caveat` means `note` once that lands. Check `git log lab/src/panes/sources.ts`
+before starting.
 
 - **`useReference` and `useDecal` fetch when their panes are off.** Both are
   called unconditionally in `Panes`, so opening any part spawns an LDView
@@ -97,6 +107,12 @@ same checkout at the time. Check `git log` on those files before starting.
 - **`GoldenStatus` polls past unmount** — its `while (state.state ===
   'running')` loop has no abort. `renderJob.ts` and `sheetJob.ts` are a second
   and third copy of start-poll-drain, each with its own interval.
+- **The `sources.map` if-chain wants to be a per-kind pane spec** so every
+  pane gets the same props — today `onBox` and `overlay` reach only the engine
+  branch and `diff` is tested by id inside it. Agreed to land as one deliberate
+  refactor from this side rather than piecemeal from theirs; their
+  `enginePaneState` call makes the engine branch a single line, which is what
+  makes it tractable.
 - **`SOURCE_TOGGLES` in `PoseBar` duplicates `SOURCES` + `ORDER`** and has
   already diverged (`ref` against `LDView`). Adding `decal` took edits in four
   parallel lists; a fifth pane will reach three of them and appear everywhere
