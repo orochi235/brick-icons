@@ -75,6 +75,39 @@ combo and compares each sha256 against `tests/goldens/hashes.txt`.
   also needs `setConditionalLineMaterial` since three 0.170, and rewrites an
   `s/…` reference to `parts/s/…` itself.
 
+### Left undone, deliberately
+
+A cleanup pass over the lab diff found these. Three were applied (`STATUSES`
+declared once, `sheetJob` calling `svgArtifactName`, a rect-to-style helper in
+`MarkLayer`); the rest were NOT, because a second session was editing
+`partInspector.tsx`, `renderJob.ts`, `SourcePane.tsx` and `sources.ts` in this
+same checkout at the time. Check `git log` on those files before starting.
+
+- **`useReference` and `useDecal` fetch when their panes are off.** Both are
+  called unconditionally in `Panes`, so opening any part spawns an LDView
+  subprocess and a full `hlr.part_geometry` decal extraction for output nothing
+  renders — and the LDView one re-fires per settled angle. Gate the fetch on
+  the source being in `config.sources`. This is the one with a real cost.
+- **`_artifact_path`'s traversal guard is now written three times** in
+  `app.py` — once in the helper, once in `get_reference_artifact`, once in
+  `get_decal_artifact`. Parameterize the helper by root and call it.
+- **`goldens_status.summarize()` has no caller.** `GoldenStatus.tsx` counts the
+  states in TS instead. Delete one of the two; the counting-and-precedence is a
+  judgement about golden state and should not exist twice.
+- **`GoldenStatus` polls past unmount** — its `while (state.state ===
+  'running')` loop has no abort. `renderJob.ts` and `sheetJob.ts` are a second
+  and third copy of start-poll-drain, each with its own interval.
+- **`SOURCE_TOGGLES` in `PoseBar` duplicates `SOURCES` + `ORDER`** and has
+  already diverged (`ref` against `LDView`). Adding `decal` took edits in four
+  parallel lists; a fifth pane will reach three of them and appear everywhere
+  but the toggle bar, with no type error.
+- **three.js is a static import**, so ~1MB ships in the startup chunk for a
+  pane that is off by default. `lazy()` + `Suspense` in the `3d` branch.
+- **`SourcePane` starts a pan on any pointerdown in its body, including inside
+  `overlay`**, so every overlay child defends itself individually. Same shape:
+  labkit exposes `[data-no-drag]`, which `DefectList`'s rows should carry
+  instead of `App.tsx` wrapping them.
+
 ### What the walkthroughs actually established
 
 Not re-derivable from a green suite, and each cost real time:
