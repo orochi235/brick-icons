@@ -18,6 +18,7 @@ import { buildDefect, useDefects } from '@lab/defects/useDefects';
 import type { Mark } from '@lab/defects/geometry';
 import { ThreePane } from '@lab/panes/ThreePane';
 import { useReference } from '@lab/panes/useReference';
+import { decalCaption, useDecal } from '@lab/panes/useDecal';
 
 export interface InspectorState {
   renders: Partial<Record<SourceId, RenderResult>>;
@@ -51,6 +52,7 @@ function Panes({ ctx, client }: { ctx: any; client: LabClient }) {
   const angle = String(config.angle ?? 'iso');
   const referencePane = useReference(client, part, angle,
                                      config.part_color as string | undefined);
+  const decal = useDecal(client, part);
 
   const engineIds = sources.filter((s) => s.kind === 'engine').map((s) => s.id);
   const marking = Boolean(config.marking);
@@ -76,6 +78,19 @@ function Panes({ ctx, client }: { ctx: any; client: LabClient }) {
                   onSettle={(next) => ctx.setConfig('angle', next)}
                 />
               }
+            />
+          );
+        }
+        if (source.kind === 'decal') {
+          // The decal is flat, not a view of the part, so the shared camera
+          // still pans and zooms it but no angle applies.
+          return (
+            <SourcePane
+              key={source.id}
+              source={{ ...source, caveat: decalCaption(decal.urls) || source.caveat }}
+              state={decal.pane}
+              camera={camera}
+              onCamera={(next) => ctx.trial.setView(next)}
             />
           );
         }

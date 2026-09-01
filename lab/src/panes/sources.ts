@@ -4,7 +4,7 @@ export interface Source {
   id: SourceId;
   label: string;
   /** `engine` sources render through the CLI with `--engine` pinned. */
-  kind: 'engine' | 'reference' | '3d' | 'diff';
+  kind: 'engine' | 'reference' | '3d' | 'decal' | 'diff';
   /** Shown on the pane. Names a way the pane can look wrong while being right. */
   caveat?: string;
 }
@@ -20,10 +20,14 @@ export const SOURCES: Record<SourceId, Source> = {
     id: '3d', label: '3D', kind: '3d',
     caveat: 'LDrawLoader’s own parse — not the engine’s geometry, not LDView',
   },
+  decal: {
+    id: 'decal', label: 'decal', kind: 'decal',
+    caveat: 'the print unwrapped flat — a part with none says so',
+  },
   diff: { id: 'diff', label: 'diff', kind: 'diff' },
 };
 
-const ORDER: SourceId[] = ['naive', 'occt', 'reference', '3d', 'diff'];
+const ORDER: SourceId[] = ['naive', 'occt', 'reference', '3d', 'decal', 'diff'];
 
 export function enabledSources(ids: readonly SourceId[]): Source[] {
   const wanted = new Set(ids);

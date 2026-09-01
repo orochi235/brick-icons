@@ -28,6 +28,7 @@ export const SOURCE_TOGGLES: { id: string; label: string }[] = [
   { id: 'occt', label: 'occt' },
   { id: 'reference', label: 'ref' },
   { id: '3d', label: '3D' },
+  { id: 'decal', label: 'decal' },
   { id: 'diff', label: 'diff' },
 ];
 

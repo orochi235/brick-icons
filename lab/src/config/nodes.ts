@@ -6,7 +6,7 @@ import type { SchemaField } from '@lab/api/types';
 const PLUMBING = new Set(['out', 'root', 'config', 'list', 'debug_dir',
                           'list_colors', 'part_label']);
 
-export const SOURCE_IDS = ['naive', 'occt', 'reference', '3d', 'diff'] as const;
+export const SOURCE_IDS = ['naive', 'occt', 'reference', '3d', 'decal', 'diff'] as const;
 export type SourceId = (typeof SOURCE_IDS)[number];
 
 export const RENDER_KEYS = {

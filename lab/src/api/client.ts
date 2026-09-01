@@ -94,6 +94,11 @@ export function createClient({ base = '', fetchImpl = fetch }: ClientOptions = {
         fetchImpl, at(`/api/reference?${params}`));
     },
 
+    async decal(part: string) {
+      return json<{ urls: string[]; names: string[]; cached: boolean }>(
+        fetchImpl, at(`/api/decal?part=${encodeURIComponent(part)}`));
+    },
+
     async goldens(part: string) {
       return json<{ part: string; cases: Record<string, string>; known: boolean }>(
         fetchImpl, at(`/api/goldens?part=${encodeURIComponent(part)}`));
