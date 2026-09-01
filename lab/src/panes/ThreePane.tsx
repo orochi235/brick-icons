@@ -1,18 +1,32 @@
-import { Suspense, useEffect, useMemo, useRef } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
 import { Canvas, useLoader, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { LDrawLoader } from 'three/examples/jsm/loaders/LDrawLoader.js';
+import { LDrawConditionalLineMaterial }
+  from 'three/examples/jsm/materials/LDrawConditionalLineMaterial.js';
 import * as THREE from 'three';
 import { angleFromOrbit, formatAngle, orbitFromAngle, parseAngle } from '@lab/panes/orbit';
 
+// A fixed camera distance frames one part size and misframes every other, so
+// the distance comes from the model's own bounding sphere.
+const FILL = 2.6;
 const RADIUS = 240;
+const LIBRARY = '/ldraw/';
+const PARTS = `${LIBRARY}parts/`;
 
-function Part({ part }: { part: string }) {
-  const model = useLoader(LDrawLoader, `/ldraw/parts/${part}.dat`, (loader) => {
-    // LDrawLoader resolves subfile references against this root. Not in its
-    // published typings, so the cast is the only way to reach it.
+function Part({ part, onRadius }: { part: string; onRadius: (r: number) => void }) {
+  // A BARE filename against `path`, never a path against the library root: a
+  // subfile reference is resolved relative to its parent's name, so any
+  // directory in the name is folded into the child's and then doubled by the
+  // loader's own `parts/` search (`/ldraw/parts/parts/s/3001s01.dat`).
+  const model = useLoader(LDrawLoader, `${part}.dat`, (loader) => {
+    // Required since three 0.170: without it the loader throws on the first
+    // !COLOUR directive it meets.
+    loader.setConditionalLineMaterial(LDrawConditionalLineMaterial);
+    loader.setPath(PARTS);
+    // The subfile search root, and not in the published typings.
     (loader as unknown as { setPartsLibraryPath: (p: string) => void })
-      .setPartsLibraryPath('/ldraw/');
+      .setPartsLibraryPath(LIBRARY);
   });
 
   const object = useMemo(() => {
@@ -23,22 +37,25 @@ function Part({ part }: { part: string }) {
     const box = new THREE.Box3().setFromObject(group);
     const centre = box.getCenter(new THREE.Vector3());
     group.position.sub(centre);
-    return group;
+    return { group, radius: box.getSize(new THREE.Vector3()).length() / 2 };
   }, [model]);
 
-  return <primitive object={object} />;
+  useEffect(() => { onRadius(object.radius); }, [object, onRadius]);
+
+  return <primitive object={object.group} />;
 }
 
-function Camera({ angle, onSettle }: { angle: string; onSettle: (a: string) => void }) {
+function Camera({ angle, radius, onSettle }:
+                { angle: string; radius: number; onSettle: (a: string) => void }) {
   const { camera } = useThree();
 
   useEffect(() => {
     const parsed = parseAngle(angle);
     if (!parsed) return;
-    const p = orbitFromAngle(parsed, RADIUS);
+    const p = orbitFromAngle(parsed, radius);
     camera.position.set(p.x, p.y, p.z);
     camera.lookAt(0, 0, 0);
-  }, [angle, camera]);
+  }, [angle, radius, camera]);
 
   return (
     <OrbitControls
@@ -56,15 +73,16 @@ export interface ThreePaneProps {
 }
 
 export function ThreePane({ part, angle, onSettle }: ThreePaneProps) {
+  const [radius, setRadius] = useState(RADIUS);
   if (!part.trim()) return <p className="three-empty">no part chosen</p>;
   return (
-    <Canvas camera={{ fov: 35, near: 1, far: 4000 }}>
+    <Canvas camera={{ fov: 35, near: 1, far: 20000 }}>
       <ambientLight intensity={0.7} />
       <directionalLight position={[-1, 1, 2]} intensity={1.2} />
       <Suspense fallback={null}>
-        <Part part={part} />
+        <Part part={part} onRadius={(r) => setRadius(Math.max(1, r) * FILL)} />
       </Suspense>
-      <Camera angle={angle} onSettle={onSettle} />
+      <Camera angle={angle} radius={radius} onSettle={onSettle} />
     </Canvas>
   );
 }
