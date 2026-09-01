@@ -104,65 +104,24 @@ combo and compares each sha256 against `tests/goldens/hashes.txt`.
   also needs `setConditionalLineMaterial` since three 0.170, and rewrites an
   `s/…` reference to `parts/s/…` itself.
 
-### Left undone, deliberately
+### Traps the cleanup pass left behind
 
-A cleanup pass over the lab diff found these. Three were applied (`STATUSES`
-declared once, `sheetJob` calling `svgArtifactName`, a rect-to-style helper in
-`MarkLayer`); the rest were NOT, because a second session was editing
-`partInspector.tsx`, `renderJob.ts`, `SourcePane.tsx` and `sources.ts` in this
-same checkout at the time.
+The lab's cleanup list is finished. What is worth carrying forward is not
+what was done but the three places where the obvious reading is wrong:
 
-**That session's work has since landed** (`7ef1d08..c43b1ed`): `runRenders`
-fans out concurrently, `renderSignature` plus a `stamps` field let a pane hold
-its previous drawing dimmed (`.pane-waiting`) while a replacement renders, and
-pane state moved into `panes/engineState.ts`. `caveat` is gone from the
-`Source` type — a pane carries a bare label and an optional `note`. Do not
-reintroduce it.
-
-The one defect on this list has since been fixed: `useReference` and `useDecal`
-now take an `enabled` flag off `config.sources`, so a pane that is off spawns
-no LDView subprocess and no decal extraction. What remains below is quality
-work, not defects.
-
-- ~~**`_artifact_path`'s traversal guard is now written three times**~~ Done.
-  It is a module-level helper taking its root, and all four call sites pass
-  theirs. `test_an_artifact_outside_the_cache_is_refused` was passing on a 404
-  from the router — starlette leaves a `%2F` encoded, so no URL carrying one
-  ever reached the guard — and the guard itself was untested. It is tested
-  directly now, and the route test says what it actually proves.
-- ~~**`goldens_status.summarize()` has no caller**~~ Done, deleted, along with
-  the two tests that were its only callers. `summarizeGoldens` in
-  `GoldenStatus.tsx` is the one place golden state is judged.
-- **`GoldenStatus` polls past unmount** — its `while (state.state ===
-  'running')` loop has no abort. `renderJob.ts` and `sheetJob.ts` are a second
-  and third copy of start-poll-drain, each with its own interval.
-- ~~**The `sources.map` if-chain wants to be a per-kind pane spec**~~ Done.
-  `panes/paneSpec.ts` switches on `kind` and returns what one pane needs —
-  `state`, `busy`, `note`, its own `overlay`, and two flags: `marks` and
-  `followsCamera`. `partInspector` is one `SourcePane` call, so every pane
-  gets `onBox` and an overlay slot, and nothing is tested by id. It is a pure
-  function: the caller runs the hooks and passes what they produced, which is
-  what lets `paneSpec.test.ts` cover all five kinds without React.
-  **`followsCamera` is about writing, not reading** — the 3D pane was always
-  handed the shared camera and still is; what it must not do is write back,
-  because it owns its own. Verified in a real browser: five panes at once,
-  a pan moves all of them, only `engine` and `diff` carry a mark layer, and
-  a drag on one still opens the file dialog.
-- ~~**`SOURCE_TOGGLES` in `PoseBar` duplicates `SOURCES` + `ORDER`**~~ Done.
-  `panes/sources.ts` holds one `CATALOG`; `SourceId`, `SOURCES`,
-  `SOURCE_ORDER` and the toggle bar all derive from it, and `SourceId` now
-  comes from there rather than `config/nodes.ts`. The `ref`/`LDView`
-  divergence resolved to `LDView`. A pane is one entry. `cadquery` is that
-  entry, so the third engine has a pane now. `QUICK_OPTIONS` became
-  `quickOptions(fields)`, reading each control's values from the CLI's own
-  `choices` — only `layout` names its own, being the lab's flag, and it names
-  them once as `LAYOUTS` in `config/nodes.ts`.
-- **three.js is a static import**, so ~1MB ships in the startup chunk for a
-  pane that is off by default. `lazy()` + `Suspense` in the `3d` branch.
-- **`SourcePane` starts a pan on any pointerdown in its body, including inside
-  `overlay`**, so every overlay child defends itself individually. Same shape:
-  labkit exposes `[data-no-drag]`, which `DefectList`'s rows should carry
-  instead of `App.tsx` wrapping them.
+- **`caveat` is gone from the `Source` type** — a pane carries a bare label
+  and an optional `note`, which is a measurement it made, not a standing
+  remark about the source. Do not reintroduce it.
+- **A `%2F` in a path never reaches a route handler.** Starlette leaves it
+  encoded, so `/api/artifact/{key}/{name}` does not match and the caller gets
+  a 404 from the router. A traversal test written against that URL passes
+  whether or not the guard exists — `_artifact_path` is tested directly for
+  that reason.
+- **`[data-no-drag]` says "do not drag me", which is not the same as "this
+  press is mine".** Marking `MarkLayer`'s marks stopped the pane panning under
+  them, but a press on one still reached the armed layer beneath and started a
+  fresh mark. A layer that both draws and holds targets has to start its draw
+  on itself, not on whatever was pressed.
 
 ### What the walkthroughs actually established
 

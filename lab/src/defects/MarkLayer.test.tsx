@@ -63,6 +63,19 @@ describe('MarkLayer', () => {
     expect(onDraw).toHaveBeenCalledWith({ x: 0.1, y: 0.1, w: 0.2, h: 0.2 });
   });
 
+  it('selects a mark pressed while armed instead of drawing over it', () => {
+    const onDraw = vi.fn();
+    const onSelect = vi.fn();
+    const { container } = render(
+      <MarkLayer {...props} onDraw={onDraw} onSelect={onSelect} defects={[defect()]} />);
+    const mark = container.querySelector('.mark')!;
+    fireEvent.pointerDown(mark, { clientX: 60, clientY: 40 });
+    fireEvent.pointerUp(mark, { clientX: 90, clientY: 60 });
+    fireEvent.click(mark);
+    expect(onDraw).not.toHaveBeenCalled();
+    expect(onSelect).toHaveBeenCalledWith('d1');
+  });
+
   it('ignores a click that drew nothing', () => {
     const onDraw = vi.fn();
     const { container } = render(
@@ -91,24 +104,19 @@ describe('MarkLayer', () => {
     expect(container.querySelector('.mark-layer-armed')).toBeNull();
   });
 
-  it('keeps a press on a mark off the pane beneath it', () => {
-    const onPointerDown = vi.fn();
+  it('marks a defect as taking the pointer, so a press on it is not a pan', () => {
     const { container } = render(
-      <div onPointerDown={onPointerDown}>
-        <MarkLayer {...props} armed={false} defects={[defect()]} />
-      </div>);
-    fireEvent.pointerDown(container.querySelector('.mark')!, { clientX: 60, clientY: 40 });
-    expect(onPointerDown).not.toHaveBeenCalled();
+      <MarkLayer {...props} armed={false} defects={[defect()]} />);
+    expect(container.querySelector('.mark')!.hasAttribute('data-no-drag')).toBe(true);
   });
 
-  it('keeps a drag off the pane beneath it', () => {
-    const onPointerDown = vi.fn();
-    const { container } = render(
-      <div onPointerDown={onPointerDown}>
-        <MarkLayer {...props} defects={[]} />
-      </div>);
-    fireEvent.pointerDown(container.querySelector('.mark-layer')!,
-      { clientX: 20, clientY: 10 });
-    expect(onPointerDown).not.toHaveBeenCalled();
+  it('takes the pointer for the whole layer only while it is armed', () => {
+    const armed = render(<MarkLayer {...props} defects={[]} />);
+    expect(armed.container.querySelector('.mark-layer')!
+      .hasAttribute('data-no-drag')).toBe(true);
+
+    const idle = render(<MarkLayer {...props} armed={false} defects={[]} />);
+    expect(idle.container.querySelector('.mark-layer')!
+      .hasAttribute('data-no-drag')).toBe(false);
   });
 });

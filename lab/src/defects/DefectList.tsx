@@ -39,6 +39,11 @@ export function DefectList({ defects, onOpen, onStatus }: DefectListProps) {
                 className="defect-row"
                 role="button"
                 tabIndex={0}
+                // A span with role=button is not on the list of elements
+                // `FloatingPanel` exempts from its own drag, so without this
+                // the panel captures the pointer, mouseup retargets to it and
+                // no click is ever synthesized here.
+                data-no-drag=""
                 onClick={() => onOpen(d.part, d.id)}
                 onKeyDown={(e) => { if (e.key === 'Enter') onOpen(d.part, d.id); }}
               >

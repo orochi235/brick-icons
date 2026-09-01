@@ -9,14 +9,6 @@ import type { Defect, DefectStatus } from '@lab/defects/useDefects';
 import { setPendingPart } from '@lab/config/pending';
 import '@lab/app.css';
 
-// `FloatingPanel` captures the pointer to drag itself, exempting only
-// `input, button, a, select, textarea, [data-no-drag]` by element name. A
-// `div`/`span` with `role="button"` is NOT on that list, so it is captured,
-// mouseup retargets to the panel, and no `click` is ever synthesized on the
-// row -- it is simply dead to a real mouse while a programmatic `.click()`
-// still works. The list's rows are spans, hence this.
-const stopDrag = (e: { stopPropagation: () => void }) => e.stopPropagation();
-
 // `FloatingPanel` is a positioned box and nothing else -- it carries neither a
 // title nor a dismissal, so both are written here as its first child.
 function AllDefects({ client }: { client: LabClient }) {
@@ -45,16 +37,14 @@ function AllDefects({ client }: { client: LabClient }) {
           x
         </button>
       </div>
-      <div onPointerDown={stopDrag}>
-        <DefectList
-          defects={defects}
-          onOpen={(part) => { setPendingPart(part); addTrial('part-inspector'); }}
-          onStatus={async (id: string, status: DefectStatus) => {
-            await client.patchDefect(id, { status });
-            setDefects((await client.defects()) as Defect[]);
-          }}
-        />
-      </div>
+      <DefectList
+        defects={defects}
+        onOpen={(part) => { setPendingPart(part); addTrial('part-inspector'); }}
+        onStatus={async (id: string, status: DefectStatus) => {
+          await client.patchDefect(id, { status });
+          setDefects((await client.defects()) as Defect[]);
+        }}
+      />
     </FloatingPanel>
   );
 }

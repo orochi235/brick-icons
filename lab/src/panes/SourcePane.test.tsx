@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { SourcePane } from '@lab/panes/SourcePane';
 import { HOME } from '@lab/panes/camera';
@@ -82,5 +82,30 @@ describe('SourcePane', () => {
     render(<SourcePane {...props} source={SOURCES.naive} state={{ kind: 'idle' }}
       onBox={onBox} />);
     expect(onBox).toHaveBeenCalled();
+  });
+
+  it('pans on a drag across its body', () => {
+    const onCamera = vi.fn();
+    const { container } = render(
+      <SourcePane {...props} onCamera={onCamera} source={SOURCES.naive}
+        state={{ kind: 'idle' }} />);
+    const body = container.querySelector('.pane-body')!;
+    body.setPointerCapture = () => {};
+    fireEvent.pointerDown(body, { pointerId: 1 });
+    fireEvent.pointerMove(body, { movementX: 10, movementY: 4 });
+    expect(onCamera).toHaveBeenCalled();
+  });
+
+  it('leaves the drag alone when the press landed on a no-drag child', () => {
+    const onCamera = vi.fn();
+    const { container } = render(
+      <SourcePane {...props} onCamera={onCamera} source={SOURCES.naive}
+        state={{ kind: 'idle' }}
+        overlay={<div data-no-drag="" className="taker" />} />);
+    const body = container.querySelector('.pane-body')!;
+    body.setPointerCapture = () => {};
+    fireEvent.pointerDown(container.querySelector('.taker')!, { pointerId: 1 });
+    fireEvent.pointerMove(body, { movementX: 10, movementY: 4 });
+    expect(onCamera).not.toHaveBeenCalled();
   });
 });

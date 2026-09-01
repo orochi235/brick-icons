@@ -26,6 +26,14 @@ export interface SourcePaneProps {
   onBox?: (box: { width: number; height: number }) => void;
 }
 
+/** A press inside an overlay child that wants the pointer for itself -- a
+ *  mark to click, a drag that draws one -- must not also pan the pane.
+ *  `data-no-drag` is the attribute labkit's own panels honour, so an overlay
+ *  says it once instead of stopping the event on every child. */
+function startsPan(target: EventTarget | null): boolean {
+  return !(target instanceof Element) || !target.closest('[data-no-drag]');
+}
+
 export function SourcePane({ source, state, camera, onCamera, note, busy,
                              overlay, onBox }: SourcePaneProps) {
   const dragging = useRef(false);
@@ -58,6 +66,7 @@ export function SourcePane({ source, state, camera, onCamera, note, busy,
         className="pane-body"
         ref={body}
         onPointerDown={(e) => {
+          if (!startsPan(e.target)) return;
           dragging.current = true;
           e.currentTarget.setPointerCapture(e.pointerId);
         }}

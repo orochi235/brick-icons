@@ -36,10 +36,13 @@ export function MarkLayer({ defects, box, camera, config, armed = false,
   return (
     <div
       className={armed ? 'mark-layer mark-layer-armed' : 'mark-layer'}
+      // Armed, a drag draws instead of panning; unarmed, the layer is
+      // transparent to the pane's own drag.
+      data-no-drag={armed ? '' : undefined}
       onPointerDown={(e) => {
-        if (!armed) return;
-        // The pane body beneath owns the pan; a drag that draws must not do both.
-        e.stopPropagation();
+        // A draw starts on bare canvas. A press on a mark already drawn is a
+        // press on that mark, armed or not.
+        if (!armed || e.target !== e.currentTarget) return;
         start.current = local(e);
         e.currentTarget.setPointerCapture(e.pointerId);
       }}
@@ -51,7 +54,6 @@ export function MarkLayer({ defects, box, camera, config, armed = false,
         start.current = null;
         setDrawing(null);
         if (!from) return;
-        e.stopPropagation();
         const mark = normalizeMark(markFromDrag(from, local(e), box, camera));
         if (mark) onDraw(mark);
       }}
@@ -68,10 +70,8 @@ export function MarkLayer({ defects, box, camera, config, armed = false,
             role="button"
             tabIndex={0}
             style={boxStyle(d.mark)}
-            // The pane body captures the pointer to pan, which retargets
-            // mouseup and leaves the browser synthesizing no click here at all.
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => { e.stopPropagation(); onSelect(d.id); }}
+            data-no-drag=""
+            onClick={() => onSelect(d.id)}
             onKeyDown={(e) => { if (e.key === 'Enter') onSelect(d.id); }}
           />
         );
