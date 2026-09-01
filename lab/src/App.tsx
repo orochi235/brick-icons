@@ -108,11 +108,11 @@ const TRIAL_CHROME: TrialContribution[] = [
   },
 ];
 
-export function App({ instrument, client }:
-                    { instrument: Instrument<any, any, any>; client: LabClient }) {
+export function App({ instruments, client }:
+                    { instruments: Instrument<any, any, any>[]; client: LabClient }) {
   return (
     <Lab
-      instruments={[instrument]}
+      instruments={instruments}
       defaultInstrument="part-inspector"
       storageKey="brick-icons-lab"
       title="brick-icons lab"
