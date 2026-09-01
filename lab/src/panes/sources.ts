@@ -5,25 +5,14 @@ export interface Source {
   label: string;
   /** `engine` sources render through the CLI with `--engine` pinned. */
   kind: 'engine' | 'reference' | '3d' | 'decal' | 'diff';
-  /** Shown on the pane. Names a way the pane can look wrong while being right. */
-  caveat?: string;
 }
 
 export const SOURCES: Record<SourceId, Source> = {
   naive: { id: 'naive', label: 'naive', kind: 'engine' },
-  occt: {
-    id: 'occt', label: 'occt', kind: 'engine',
-    caveat: 'strokes only — every filled mode degrades to an outline',
-  },
+  occt: { id: 'occt', label: 'occt', kind: 'engine' },
   reference: { id: 'reference', label: 'LDView', kind: 'reference' },
-  '3d': {
-    id: '3d', label: '3D', kind: '3d',
-    caveat: 'LDrawLoader’s own parse — not the engine’s geometry, not LDView',
-  },
-  decal: {
-    id: 'decal', label: 'decal', kind: 'decal',
-    caveat: 'the print unwrapped flat — a part with none says so',
-  },
+  '3d': { id: '3d', label: '3D', kind: '3d' },
+  decal: { id: 'decal', label: 'decal', kind: 'decal' },
   diff: { id: 'diff', label: 'diff', kind: 'diff' },
 };
 

@@ -10,14 +10,6 @@ describe('SOURCES', () => {
   it('labels every source', () => {
     for (const source of Object.values(SOURCES)) expect(source.label).toBeTruthy();
   });
-
-  it('warns that occt draws no fills', () => {
-    expect(SOURCES.occt.caveat).toMatch(/outline/i);
-  });
-
-  it('warns that the 3D pane is an independent parse', () => {
-    expect(SOURCES['3d'].caveat).toMatch(/not the engine/i);
-  });
 });
 
 describe('enabledSources', () => {
