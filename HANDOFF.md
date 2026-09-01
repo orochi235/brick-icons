@@ -417,6 +417,17 @@ No defects filed.
 
 <!-- defects:end -->
 
+- **A round part at any side elevation crashes the naive engine.**
+  `3941 --angle front` raises `numpy.linalg.LinAlgError: Singular matrix` at
+  `hlr.py:478`, where `np.linalg.inv(Me)` inverts the ellipse matrix: seen
+  edge-on a circle projects to a degenerate ellipse and `Me` goes singular.
+  Measured, not inferred — `3941`, `4589` and `3960` all fail at `front`,
+  `back`, `left` and `right`; the same parts are fine at `top`, `bottom`, `iso`
+  and `30,5`, and boxy `3005`/`3001` are fine at `front`. So it is the round
+  cross-section going edge-on, not the pose. This is four of the pose bar's
+  seven buttons on any round part, which is how the lab surfaces it: the pane
+  goes 500. Found by the session working on `engineState`; reproduced here.
+
 - **`14769p0a`'s `XI` and `XII` render thinner than `IIII` and `III`.**
   Confirmed present at baseline, cause NOT diagnosed. User's hypothesis: they
   sit farther from the camera. Note they read thinner rather than lighter,
