@@ -59,10 +59,3 @@ def compare_case(svg_path: Path | str, frozen_digest: str | None) -> dict:
     state = "match" if fresh == frozen_digest else "moved"
     return {"state": state, "frozen": frozen_digest, "fresh": fresh}
 
-
-def summarize(results: list[dict]) -> dict:
-    counts = {"total": len(results), "match": 0, "moved": 0,
-              "missing": 0, "unfrozen": 0}
-    for result in results:
-        counts[result["state"]] += 1
-    return counts

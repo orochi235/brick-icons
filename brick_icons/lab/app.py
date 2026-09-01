@@ -19,6 +19,17 @@ from . import (cache, corpus, decal, defects, diff, goldens_status, jobs,
                partindex, reference, runner, schema)
 
 
+def _artifact_path(root: Path, key: str, name: str) -> Path:
+    """A cached file under `root`, or a 400.
+
+    Every artifact route serves a caller-supplied key and name off a cache
+    root, so the traversal guard belongs here rather than at each of them.
+    """
+    if not key.isalnum() or "/" in name or ".." in name:
+        raise HTTPException(400, "bad artifact path")
+    return root / key / name
+
+
 class RenderRequest(BaseModel):
     part: str
     config: dict = {}
@@ -132,14 +143,9 @@ def create_app(root: Path | str = ".",
     def post_cancel(job_id: str):
         return {"cancelled": app.state.jobs.cancel(job_id)}
 
-    def _artifact_path(key: str, name: str) -> Path:
-        if not key.isalnum() or "/" in name or ".." in name:
-            raise HTTPException(400, "bad artifact path")
-        return app.state.cache_root / key / name
-
     @app.get("/api/artifact/{key}/{name}")
     def get_artifact(key: str, name: str):
-        path = _artifact_path(key, name)
+        path = _artifact_path(app.state.cache_root, key, name)
         if not path.is_file():
             raise HTTPException(404, "no such artifact")
         return FileResponse(path)
@@ -147,7 +153,8 @@ def create_app(root: Path | str = ".",
     @app.get("/api/diff")
     def get_diff(a_key: str, a_name: str, b_key: str, b_name: str,
                  min_size: int = 4):
-        paths = [_artifact_path(a_key, a_name), _artifact_path(b_key, b_name)]
+        paths = [_artifact_path(app.state.cache_root, a_key, a_name),
+                 _artifact_path(app.state.cache_root, b_key, b_name)]
         if not all(p.is_file() for p in paths):
             raise HTTPException(404, "no such artifact")
         # The engines emit SVG and the differ needs pixels, so an SVG side is
@@ -177,9 +184,7 @@ def create_app(root: Path | str = ".",
 
     @app.get("/api/reference-artifact/{key}/{name}")
     def get_reference_artifact(key: str, name: str):
-        if not key.isalnum() or "/" in name or ".." in name:
-            raise HTTPException(400, "bad artifact path")
-        path = app.state.reference_root / key / name
+        path = _artifact_path(app.state.reference_root, key, name)
         if not path.is_file():
             raise HTTPException(404, "no such reference")
         return FileResponse(path)
@@ -196,9 +201,7 @@ def create_app(root: Path | str = ".",
 
     @app.get("/api/decal-artifact/{key}/{name}")
     def get_decal_artifact(key: str, name: str):
-        if not key.isalnum() or "/" in name or ".." in name:
-            raise HTTPException(400, "bad artifact path")
-        path = app.state.decal_root / key / name
+        path = _artifact_path(app.state.decal_root, key, name)
         if not path.is_file():
             raise HTTPException(404, "no such decal")
         return FileResponse(path)

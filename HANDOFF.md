@@ -124,12 +124,15 @@ now take an `enabled` flag off `config.sources`, so a pane that is off spawns
 no LDView subprocess and no decal extraction. What remains below is quality
 work, not defects.
 
-- **`_artifact_path`'s traversal guard is now written three times** in
-  `app.py` — once in the helper, once in `get_reference_artifact`, once in
-  `get_decal_artifact`. Parameterize the helper by root and call it.
-- **`goldens_status.summarize()` has no caller.** `GoldenStatus.tsx` counts the
-  states in TS instead. Delete one of the two; the counting-and-precedence is a
-  judgement about golden state and should not exist twice.
+- ~~**`_artifact_path`'s traversal guard is now written three times**~~ Done.
+  It is a module-level helper taking its root, and all four call sites pass
+  theirs. `test_an_artifact_outside_the_cache_is_refused` was passing on a 404
+  from the router — starlette leaves a `%2F` encoded, so no URL carrying one
+  ever reached the guard — and the guard itself was untested. It is tested
+  directly now, and the route test says what it actually proves.
+- ~~**`goldens_status.summarize()` has no caller**~~ Done, deleted, along with
+  the two tests that were its only callers. `summarizeGoldens` in
+  `GoldenStatus.tsx` is the one place golden state is judged.
 - **`GoldenStatus` polls past unmount** — its `while (state.state ===
   'running')` loop has no abort. `renderJob.ts` and `sheetJob.ts` are a second
   and third copy of start-poll-drain, each with its own interval.

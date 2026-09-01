@@ -1,5 +1,6 @@
 import pytest
 
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from brick_icons.lab import app as lab_app
@@ -81,9 +82,27 @@ def test_an_artifact_is_served_back(client, ldraw_dir):
     assert r.text.startswith("<svg")
 
 
-def test_an_artifact_outside_the_cache_is_refused(client):
+def test_an_encoded_traversal_never_reaches_a_route(client):
+    """A 404 from the router, not a 400 from the guard: starlette leaves the
+    %2F encoded, so no path with one in it matches `/{key}/{name}`."""
     r = client.get("/api/artifact/abc123/..%2F..%2Fpyproject.toml")
-    assert r.status_code in (400, 404)
+    assert r.status_code == 404
+
+
+@pytest.mark.parametrize("key,name", [
+    ("abc123", "../pyproject.toml"),
+    ("abc123", "sub/3005.svg"),
+    ("../..", "3005.svg"),
+])
+def test_the_artifact_guard_refuses_a_path_out_of_its_root(tmp_path, key, name):
+    with pytest.raises(HTTPException) as raised:
+        lab_app._artifact_path(tmp_path, key, name)
+    assert raised.value.status_code == 400
+
+
+def test_the_artifact_guard_joins_under_the_root_it_is_given(tmp_path):
+    assert lab_app._artifact_path(tmp_path, "abc123", "3005.svg") == (
+        tmp_path / "abc123" / "3005.svg")
 
 
 def test_an_unknown_config_key_is_a_400(client):

@@ -82,12 +82,3 @@ def test_compare_case_reports_a_case_that_was_never_frozen(tmp_path):
     svg.write_text("<svg/>")
     assert goldens_status.compare_case(svg, None)["state"] == "unfrozen"
 
-
-def test_summarize_counts_the_states():
-    got = goldens_status.summarize([
-        {"state": "match"}, {"state": "match"}, {"state": "moved"}])
-    assert got == {"total": 3, "match": 2, "moved": 1, "missing": 0, "unfrozen": 0}
-
-
-def test_summarize_of_nothing_is_all_zero():
-    assert goldens_status.summarize([])["total"] == 0
