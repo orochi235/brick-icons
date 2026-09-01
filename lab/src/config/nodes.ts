@@ -22,8 +22,13 @@ function usable(field: SchemaField): boolean {
 }
 
 /** The lab's own fields, which no CLI flag corresponds to. Named once so
- *  `renderConfig` cannot forget one and send it to the CLI as a flag. */
-export const LAB_ONLY = new Set(['part', 'layout', 'sources', 'marking']);
+ *  `renderConfig` cannot forget one and send it to the CLI as a flag.
+ *
+ * `list` is the contact sheet's corpus list. The CLI does have a `--list`, but
+ * it names a FILE of part ids -- so leaking this one through renders every
+ * part with `--list manifest:spread` and fails the whole sheet with
+ * `FileNotFoundError: 'manifest:spread'`. */
+export const LAB_ONLY = new Set(['part', 'layout', 'sources', 'marking', 'list']);
 
 function labNodes() {
   return {

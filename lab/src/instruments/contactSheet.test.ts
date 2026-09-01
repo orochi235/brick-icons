@@ -68,3 +68,14 @@ describe('createContactSheet', () => {
     expect(createContactSheet(FIELDS, LISTS, client).job!.auto).toBe(false);
   });
 });
+
+describe('the contact sheet and the CLI', () => {
+  it('does not send its corpus list to the CLI as --list', () => {
+    // `--list` names a FILE of part ids, so `--list manifest:spread` fails
+    // every render in the sheet with FileNotFoundError.
+    const instrument = createContactSheet(FIELDS, LISTS, client);
+    const key = instrument.job!.key!(instrument.defaultConfig(),
+                                     instrument.initialState(instrument.defaultConfig()));
+    expect(JSON.stringify(key)).not.toContain('"list"');
+  });
+});

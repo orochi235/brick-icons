@@ -15,6 +15,26 @@ export interface SheetState {
   cells: SheetCell[];
 }
 
+/** Run lives here, not in the trial toolbar: labkit puts `job` on the render
+ *  context and not on `TrialChromeContext`, and it draws no start control of
+ *  its own -- so `auto: false` without this leaves no way to run the sheet. */
+function RunBar({ ctx, list }: { ctx: any; list?: CorpusList }) {
+  const job = ctx.job;
+  const running = job?.status === 'running';
+  return (
+    <div className="sheet-bar">
+      <button type="button" className="pose"
+        onClick={() => (running ? job.cancel() : job.start())}>
+        {running ? 'Cancel' : 'Run'}
+      </button>
+      <span>
+        {list ? `${list.parts.length} parts in ${list.name}` : 'no list'}
+        {running ? ` — ${job.done}/${job.total ?? '?'}` : ''}
+      </span>
+    </div>
+  );
+}
+
 function Sheet({ ctx, client, lists }:
                { ctx: any; client: LabClient; lists: CorpusList[] }) {
   const { addTrial } = useLabContext();
@@ -22,16 +42,12 @@ function Sheet({ ctx, client, lists }:
   const list = lists.find((l) => l.name === ctx.config.list);
   const open = (part: string) => { setPendingPart(part); addTrial('part-inspector'); };
 
-  if (cells.length === 0) {
-    return (
-      <p className="sheet-empty">
-        {list ? `${list.parts.length} parts in ${list.name}` : 'no list'}
-        {' — press Run to render the sheet.'}
-      </p>
-    );
-  }
-
   return (
+    <div className="sheet-wrap">
+      <RunBar ctx={ctx} list={list} />
+      {cells.length === 0 ? (
+        <p className="sheet-empty">press Run to render the sheet.</p>
+      ) : (
     <div className="sheet">
       {cells.map((cell) => (
         <figure
@@ -48,6 +64,8 @@ function Sheet({ ctx, client, lists }:
           <figcaption>{cell.part}</figcaption>
         </figure>
       ))}
+    </div>
+      )}
     </div>
   );
 }

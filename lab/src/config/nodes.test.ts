@@ -83,8 +83,9 @@ import { renderConfig } from '@lab/config/nodes';
 
 describe('renderConfig', () => {
   it('drops the lab-only fields', () => {
-    const got = renderConfig({ part: '3941', layout: 'split',
-                               sources: ['occt'], marking: true, engine: 'occt' });
+    const got = renderConfig({ part: '3941', layout: 'split', sources: ['occt'],
+                               marking: true, list: 'manifest:spread',
+                               engine: 'occt' });
     expect(got).toEqual({ engine: 'occt' });
   });
 
