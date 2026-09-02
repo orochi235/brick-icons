@@ -1040,15 +1040,17 @@ def _span_face(point, normal, ua, ub, v0, v1, proj, step_deg=BOUNDARY_STEP_DEG):
     p1 = (float(mpx[1]), float(mpy[1]))
     axis = np.array([p1[0] - p0[0], p1[1] - p0[1]])
     L2 = float(axis @ axis) or 1.0
-    samples = []
+    ring = []
     for th in np.linspace(ua, ub, 9):
         nw = normal(th)
         nw = nw / np.linalg.norm(nw)
         nv = np.array([nw @ proj.right, nw @ proj.up, nw @ proj.fwd])
         p = point(np.array([th]), (v0 + v1) / 2.0)
         ppx, ppy, _ = proj.to_px(p)
-        off = ((ppx[0] - p0[0]) * axis[0] + (ppy[0] - p0[1]) * axis[1]) / L2
-        samples.append((float(np.clip(off, 0.0, 1.0)), nv))
+        ring.append((float(ppx[0]), float(ppy[0]), nv))
+    samples = [(float(np.clip(((x - p0[0]) * axis[0]
+                               + (y - p0[1]) * axis[1]) / L2, 0.0, 1.0)), nv)
+               for x, y, nv in ring]
 
     mid_n = normal((ua + ub) / 2.0)
     mid_n = mid_n / np.linalg.norm(mid_n)
@@ -1058,13 +1060,39 @@ def _span_face(point, normal, ua, ub, v0, v1, proj, step_deg=BOUNDARY_STEP_DEG):
     # other branch falls back to an affine plane through a curved sheet, and
     # on 4740 that mis-sorts the dish into a dark crescent over its own top.
     full_turn = abs(ub - ua) > 2 * math.pi - 1e-6
-    return {"poly": poly, "zs": zs, "depth": float(np.mean(zs)),
-            "kind": "occt-wall", "color": 16,
-            # the far half of a wall: order_faces takes its depth from the
-            # occluder's FAR hit, which is what `interior` selects
-            "interior": True if full_turn else bool(mid_n @ proj.fwd > 0),
-            "span_deg": abs(math.degrees(ub - ua)),
-            "grad_axis": (p0, p1), "grad_samples": samples}
+    f = {"poly": poly, "zs": zs, "depth": float(np.mean(zs)),
+         "kind": "occt-wall", "color": 16,
+         # the far half of a wall: order_faces takes its depth from the
+         # occluder's FAR hit, which is what `interior` selects
+         "interior": True if full_turn else bool(mid_n @ proj.fwd > 0),
+         "span_deg": abs(math.degrees(ub - ua))}
+    if full_turn:
+        f["grad_radial"], f["grad_samples"] = _turn_gradient(poly, ring)
+    else:
+        f["grad_axis"], f["grad_samples"] = (p0, p1), samples
+    return f
+
+
+def _turn_gradient(poly, ring):
+    """Radial gradient spec and samples for a span that closes on itself.
+
+    A full turn starts and ends at the same point, so `grad_axis` would be
+    zero-length and SVG paints such a gradient as its LAST stop -- 4740's dish
+    came out at #aaaaaa against naive's #565656, picked by sample order rather
+    than by any tone decision. Brightness across the projected ring runs
+    across it, not along a chord, so the shape it wants is the dome gradient
+    shade._attach_radial_gradient builds.
+    """
+    c0 = (poly.min(axis=0) + poly.max(axis=0)) / 2.0
+    w = float(poly[:, 0].max() - poly[:, 0].min()) or 1.0
+    h = float(poly[:, 1].max() - poly[:, 1].min()) or 1.0
+    ratio = h / w
+    r = float(np.hypot(poly[:, 0] - c0[0],
+                       (poly[:, 1] - c0[1]) / ratio).max()) or 1.0
+    samples = [(((x - c0[0]) / r, (y - c0[1]) / (r * ratio)), nv)
+               for x, y, nv in ring]
+    return ({"cx": float(c0[0]), "cy": float(c0[1]), "r": r, "ratio": ratio},
+            samples)
 
 
 def _unwrap(u, u0):

@@ -786,8 +786,12 @@ def test_a_span_carries_the_gradient_fields_fill_ops_reads(ldraw_dir):
     faces, _ = _curved_of("4740", ldraw_dir)
     assert faces
     for f in faces:
-        assert set(f) >= {"poly", "zs", "depth", "grad_axis", "grad_samples",
-                          "span_deg", "color"}
+        assert set(f) >= {"poly", "zs", "depth", "grad_samples", "span_deg",
+                          "color"}
+        # a full turn takes the radial gradient, a limb-cut span the linear one
+        assert ("grad_axis" in f) != ("grad_radial" in f)
+        if "grad_axis" not in f:
+            continue
         offs = [o for o, _ in f["grad_samples"]]
         assert offs == sorted(offs)
         assert all(0.0 <= o <= 1.0 for o in offs)
@@ -1001,3 +1005,51 @@ def test_plane_grouping_unions_only_what_the_part_declares(ldraw_dir):
     n_with = len({f["group"] for f in with_seams if f["kind"] == "occt-plane"})
     n_bare = len({f["group"] for f in bare if f["kind"] == "occt-plane"})
     assert n_bare > n_with * 5, f"seams changed nothing: {n_bare} vs {n_with}"
+
+
+def test_wire_points_follow_the_wire_when_an_edge_runs_backwards():
+    """A sector's inner arc is a REVERSED edge. Walking it in curve order
+    instead of wire order jumps the loop across the sector and the polygon
+    self-intersects -- which radius and corner assertions cannot see."""
+    face = occt.sector_face(np.zeros(3), np.array([0.0, 1.0, 0.0]),
+                            np.array([1.0, 0.0, 0.0]), 3.0, 6.0, math.pi / 2)
+    pts = occt._wire_points(occt.BRepTools.OuterWire_s(face))
+    step = np.linalg.norm(np.diff(np.vstack([pts, pts[:1]]), axis=0), axis=1)
+    assert step.max() < 3.5      # the radial legs; a wrong-order jump is 4.24
+
+
+def test_a_grazing_surface_yields_one_cut_not_two_coincident_ones():
+    """At exact tangency both root formulas land on the same parameter, and a
+    duplicated cut would be a zero-width span."""
+    fwd = np.array([0.0, 0.0, 1.0])
+    a = np.array([0.0, 0.0, 1.0]); b = np.array([0.0, 1.0, 0.0])
+    c = np.array([0.0, 0.0, -1.0])
+    assert occt._limb_params(a, b, c, fwd) == [0.0]
+
+
+def _spans_of(part, ldraw_dir, lat=30.0, long=45.0):
+    shape = occt.build_shape(occt.flatten_part(part, ldraw_dir))
+    right, up, fwd = hlr.view_basis(lat, long)
+    return occt.curved_faces(shape, occt.op_projection(right, up, fwd))
+
+
+def test_a_full_turn_span_gets_a_radial_gradient(ldraw_dir):
+    """Its two ends are the same point, so a linear axis is zero-length and
+    SVG paints the last stop: 4740's dish came out #aaaaaa against naive's
+    #565656, chosen by sample order rather than by tone."""
+    full = [f for f in _spans_of("4740", ldraw_dir) if f["span_deg"] > 359.9]
+    assert len(full) == 5
+    for f in full:
+        assert "grad_axis" not in f
+        assert f["grad_radial"]["r"] > 1.0
+        us = [u for (u, _), _ in f["grad_samples"]]
+        assert max(us) - min(us) > 0.5      # samples span the ring, not a point
+
+
+def test_a_limb_cut_span_keeps_its_linear_gradient(ldraw_dir):
+    cut = [f for f in _spans_of("4740", ldraw_dir) if f["span_deg"] < 359.9]
+    assert cut
+    for f in cut:
+        assert "grad_radial" not in f
+        p0, p1 = f["grad_axis"]
+        assert math.hypot(p1[0] - p0[0], p1[1] - p0[1]) > 1e-6
