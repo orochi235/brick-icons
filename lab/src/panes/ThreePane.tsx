@@ -1,5 +1,5 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { Canvas, useLoader, useThree } from '@react-three/fiber';
+import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber';
 import { OrbitControls, OrthographicCamera } from '@react-three/drei';
 import { LDrawLoader } from 'three/examples/jsm/loaders/LDrawLoader.js';
 import { LDrawConditionalLineMaterial }
@@ -21,6 +21,10 @@ const FILL = 1.3;
 const RADIUS = 240;
 const LIBRARY = '/ldraw/';
 const PARTS = `${LIBRARY}parts/`;
+// Enough backing store for the loupe to magnify. `frameloop="demand"` is what
+// pays for it: at this dpr a frame is expensive, and the scene only changes on
+// a pose, a part, a style or the shared camera.
+const SUPERSAMPLE = 3;
 
 interface Framing {
   radius: number;
@@ -163,6 +167,33 @@ function Rig({ angle, fit, box, view, style, framing, lines, onSettle }: RigProp
   );
 }
 
+/** Reads the canvas back for the loupe when the scene has changed, and not on
+ *  the pointer moves in between. */
+function Snapshot({ token, onSnapshot }:
+                  { token: string; onSnapshot: (url: string | null) => void }) {
+  const { gl, scene, camera } = useThree();
+  const invalidate = useThree((state) => state.invalidate);
+  const pending = useRef(false);
+
+  useEffect(() => {
+    pending.current = true;
+    invalidate();
+  }, [token, invalidate]);
+
+  useFrame(() => {
+    if (!pending.current) return;
+    pending.current = false;
+    gl.render(scene, camera);
+    try {
+      onSnapshot(gl.domElement.toDataURL('image/png'));
+    } catch {
+      onSnapshot(null);
+    }
+  });
+
+  return null;
+}
+
 export interface ThreePaneProps {
   part: string;
   angle: string;
@@ -172,10 +203,12 @@ export interface ThreePaneProps {
   box: Box;
   view: Camera;
   style: ThreeStyle;
+  /** The pane's drawing as an image, for the loupe to magnify. */
+  onSnapshot?: (url: string | null) => void;
   onSettle: (angle: string) => void;
 }
 
-export function ThreePane({ part, angle, fit, box, view, style,
+export function ThreePane({ part, angle, fit, box, view, style, onSnapshot,
                             onSettle }: ThreePaneProps) {
   const [framing, setFraming] = useState<Framing>({ radius: RADIUS, centre: [0, 0, 0] });
   const [lines, setLines] = useState<LineMaterial[]>([]);
@@ -185,7 +218,8 @@ export function ThreePane({ part, angle, fit, box, view, style,
   const registered = fit && box.width >= 1 && box.height >= 1 ? fit : null;
   const sun = lightPosition(registered, Math.max(1, framing.radius) * 8);
   return (
-    <Canvas>
+    <Canvas dpr={SUPERSAMPLE} frameloop="demand"
+      gl={{ preserveDrawingBuffer: true }}>
       {style.background ? <color attach="background" args={[style.background]} /> : null}
       <OrthographicCamera makeDefault near={0.1} far={20000} />
       <ambientLight intensity={0.7} />
@@ -196,6 +230,12 @@ export function ThreePane({ part, angle, fit, box, view, style,
       </Suspense>
       <Rig angle={angle} fit={registered} box={box} view={view} style={style}
         framing={framing} lines={lines} onSettle={onSettle} />
+      {onSnapshot ? (
+        <Snapshot onSnapshot={onSnapshot}
+          token={[part, angle, box.width, box.height, view.zoom,
+                  view.pan.x, view.pan.y, style.lineWidth, style.opacity,
+                  JSON.stringify(registered)].join('|')} />
+      ) : null}
     </Canvas>
   );
 }
