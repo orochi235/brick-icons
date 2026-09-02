@@ -1,14 +1,10 @@
 import { type ReactNode, useEffect, useRef } from 'react';
-import { type Camera, cssTransform, panBy, zoomAt } from '@lab/panes/camera';
+import { type Camera, panBy, zoomAt } from '@lab/panes/camera';
+import { PaneStage, type PaneState } from '@lab/panes/PaneStage';
 import type { Source } from '@lab/panes/sources';
 import '@lab/panes/SourcePane.css';
 
-export type PaneState =
-  | { kind: 'idle' }
-  | { kind: 'running' }
-  | { kind: 'svg'; markup: string }
-  | { kind: 'image'; src: string }
-  | { kind: 'error'; message: string };
+export type { PaneState };
 
 export interface SourcePaneProps {
   source: Source;
@@ -82,15 +78,7 @@ export function SourcePane({ source, state, camera, onCamera, note, busy,
           onCamera(zoomAt(camera, factor, e.clientX - box.left, e.clientY - box.top));
         }}
       >
-        <div className={`pane-stage${busy ? ' pane-waiting' : ''}`}
-          style={{ transform: cssTransform(camera) }}>
-          {state.kind === 'svg' ? (
-            // The SVG is the artifact under test; a raster of it would be a proxy.
-            <div dangerouslySetInnerHTML={{ __html: state.markup }} />
-          ) : null}
-          {state.kind === 'image' ? <img src={state.src} alt={source.label} /> : null}
-          {state.kind === 'running' ? <p>rendering…</p> : null}
-        </div>
+        <PaneStage state={state} camera={camera} label={source.label} busy={busy} />
         {overlay}
       </div>
     </section>
