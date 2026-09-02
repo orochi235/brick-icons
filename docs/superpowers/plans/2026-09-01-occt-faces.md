@@ -32,7 +32,7 @@ Nothing in the naive path is touched, so `tests/goldens/hashes.txt` must not mov
 - Modify: `brick_icons/hlr.py:1011-1013`
 - Test: `tests/test_occt.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_op_projection_matches_the_space_the_ops_are_written_in():
@@ -66,12 +66,12 @@ def test_forward_is_the_negated_projector_axis():
     assert np.allclose(-z / np.linalg.norm(z), fwd)
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `.venv/bin/pytest tests/test_occt.py -k op_projection -v`
 Expected: FAIL, `AttributeError: module 'brick_icons.occt' has no attribute 'op_projection'`
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 In `brick_icons/occt.py`, extend the local import:
 
@@ -118,12 +118,12 @@ with, as its first body line:
         fwd = -z / np.linalg.norm(z)
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `.venv/bin/pytest tests/test_occt.py -k "op_projection or forward_is_the_negated" -v`
 Expected: 3 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add brick_icons/occt.py brick_icons/hlr.py tests/test_occt.py

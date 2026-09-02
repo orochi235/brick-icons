@@ -559,3 +559,34 @@ def test_the_frame_holds_a_dish_whose_edges_span_a_third_of_it(ldraw_dir):
         (min(x0, P[:, 0].min()), min(y0, P[:, 1].min()),
          max(x1, P[:, 0].max()), max(y1, P[:, 1].max())), abs=1e-6)
     assert x1 - x0 > 30.0, f"the dish is 40 LDU wide; framed {x1 - x0:.1f}"
+
+
+def test_op_projection_matches_the_space_the_ops_are_written_in():
+    """apply_affine_faces applies the canvas fit later, so the projection
+    handed to order_faces carries the identity pixel fit."""
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    ax, ay = occt._screen_axes(right, up)
+    P = np.array([[1.0, 2.0, 3.0], [-4.0, 5.0, 6.0], [0.0, 0.0, 0.0]])
+    raw = occt._proj2(P, ax, ay)
+    raw[:, 1] *= -1.0                      # _negate_y, applied to points
+    proj = occt.op_projection(right, up, fwd)
+    x, y, _ = proj.to_px(P)
+    assert np.allclose(np.stack([x, y], 1), raw)
+
+
+def test_op_projection_ray_origin_inverts_it():
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    proj = occt.op_projection(right, up, fwd)
+    P = np.array([[7.0, -2.0, 4.0]])
+    x, y, _ = proj.to_px(P)
+    O = proj.ray_origin(x, y)
+    # the ray origin differs from P only along the view direction
+    assert np.allclose(np.cross(P[0] - O[0], fwd), 0.0, atol=1e-9)
+
+
+def test_forward_is_the_negated_projector_axis():
+    """occt takes fwd from the caller. Anyone recomputing it locally has to
+    get this sign, or every depth comparison runs backwards."""
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    z, _ = occt.projector_axes(right, up)
+    assert np.allclose(-z / np.linalg.norm(z), fwd)

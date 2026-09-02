@@ -36,7 +36,7 @@ from OCP.GCPnts import GCPnts_QuasiUniformDeflection
 from OCP.BRepMesh import BRepMesh_IncrementalMesh
 from OCP.TopLoc import TopLoc_Location
 
-from . import hlr
+from . import hlr, primitives
 
 TOL = 1e-4
 ORTHO_TOL = 1e-4     # see frame(); measured noise floors are 1.2e-6 and 8.9e-6
@@ -502,6 +502,19 @@ def _screen_axes(right, up):
     return np.asarray(x, float), np.cross(z, x)
 
 
+def op_projection(right, up, fwd):
+    """The render camera in OP space -- the (A, -B) coordinates every op and
+    face polygon of this engine is written in.
+
+    The identity pixel fit is not a placeholder: cli.apply_affine_faces maps
+    op space to the canvas afterwards, exactly as it does for the ops.
+    """
+    return primitives.Projection(np.asarray(right, float),
+                                 np.asarray(up, float),
+                                 np.asarray(fwd, float),
+                                 s=1.0, cx=0.0, cy=0.0, half=0.0)
+
+
 def _proj2(P, ax, ay):
     P = np.atleast_2d(np.asarray(P, float))
     return np.stack([P @ ax, P @ ay], axis=-1)
@@ -893,8 +906,11 @@ def _union_bbox(bbox, polys):
             max(bbox[2], P[:, 0].max()), max(bbox[3], P[:, 1].max()))
 
 
-def visible_segments(out, right, up, render_px, cull=True):
+def visible_segments(out, right, up, render_px, cull=True, fwd=None):
     from .hlr import VisResult, _ops_bbox
+    if fwd is None:
+        z, _ = projector_axes(right, up)
+        fwd = -z / np.linalg.norm(z)
     shape = build_shape(out)
     comps = hlr_edges(shape, right, up, cull=cull)
     loci = authored_loci(shape, out, right, up)

@@ -1010,7 +1010,8 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
     right, up, fwd = view_basis(lat, long)
     if engine == "occt":
         from . import occt
-        return occt.visible_segments(out, right, up, render_px, cull=cull)
+        return occt.visible_segments(out, right, up, render_px, cull=cull,
+                                     fwd=fwd)
     if engine == "cadquery":
         from . import cqsvg
         return cqsvg.visible_segments(out, right, up, render_px, cull=cull)
