@@ -22,8 +22,7 @@ const RADIUS = 240;
 const LIBRARY = '/ldraw/';
 const PARTS = `${LIBRARY}parts/`;
 // Enough backing store for the loupe to magnify. `frameloop="demand"` is what
-// pays for it: at this dpr a frame is expensive, and the scene only changes on
-// a pose, a part, a style or the shared camera.
+// pays for the dpr, and the readback only happens while the loupe is up.
 const SUPERSAMPLE = 3;
 
 interface Framing {
@@ -237,6 +236,7 @@ export function ThreePane({ part, angle, fit, box, view, style, onSnapshot,
           // without it snapshots the empty scene and caches that.
           token={[part, angle, box.width, box.height, view.zoom,
                   view.pan.x, view.pan.y, style.lineWidth, style.opacity,
+                  style.background,
                   JSON.stringify(registered), JSON.stringify(framing)].join('|')} />
       ) : null}
     </Canvas>

@@ -89,7 +89,7 @@ function Panes({ ctx, client }: { ctx: any; client: LabClient }) {
         <Suspense fallback={<div className="pane-note">loading 3D…</div>}>
           <ThreePane part={part} angle={angle} fit={fit} style={threeStyle(config)}
             box={boxes['3d'] ?? { width: 0, height: 0 }} view={camera}
-            onSnapshot={setThreeSnapshot}
+            onSnapshot={loupe.live ? setThreeSnapshot : undefined}
             onSettle={(next) => ctx.setConfig('angle', next)} />
         </Suspense>
       ),
