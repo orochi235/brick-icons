@@ -232,9 +232,12 @@ export function ThreePane({ part, angle, fit, box, view, style, onSnapshot,
         framing={framing} lines={lines} onSettle={onSettle} />
       {onSnapshot ? (
         <Snapshot onSnapshot={onSnapshot}
+          // `framing` is the term that says the model has ARRIVED: the part
+          // loads through Suspense long after its name settles, so a token
+          // without it snapshots the empty scene and caches that.
           token={[part, angle, box.width, box.height, view.zoom,
                   view.pan.x, view.pan.y, style.lineWidth, style.opacity,
-                  JSON.stringify(registered)].join('|')} />
+                  JSON.stringify(registered), JSON.stringify(framing)].join('|')} />
       ) : null}
     </Canvas>
   );
