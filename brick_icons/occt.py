@@ -1107,6 +1107,7 @@ def _merge_turn_gradients(faces):
         spec, samples = _turn_gradient(poly, ring)
         for f in members:
             f["grad_radial"], f["grad_samples"] = spec, samples
+            f["grad_exact"] = True            # an analytic dome ramps linearly
             f.pop("grad_axis", None)          # the group's ramp, not the band's
             f.pop("_turn_ring", None)
     for f in faces:

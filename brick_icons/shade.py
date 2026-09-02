@@ -267,7 +267,7 @@ def order_faces(faces, proj=None, eps=1e-6, own_occ=None):
 MIN_FRAG_AREA = 0.2     # px^2: visible fragments smaller than this are noise
 
 
-def _radial_focal_stops(samples, style, nbins=8):
+def _radial_focal_stops(samples, style, nbins=8, exact=False):
     """Focal point + binned stops for a dome group's radial gradient.
 
     For a spherical cap, Lambert brightness is LINEAR in projected position,
@@ -309,6 +309,35 @@ def _radial_focal_stops(samples, style, nbins=8):
         s = np.where(a > 1e-12, (-b2 + np.sqrt(disc)) / (2 * a), np.inf)
         ts = np.clip(np.where(s > 1e-9, 1.0 / s, 0.0), 0.0, 1.0)
     ramp_b = getattr(style, "ramp_b", None)
+    if exact and ramp_b is not None and L is not None and len(ts) >= 2:
+        # Lambert brightness is linear in t (the premise the focal fit already
+        # rests on), so an EXACT surface's ramp is two stops. Binning means
+        # instead lets sampling noise through as ripples across the dome:
+        # 4740's stops ran 202, 203, 180, 188, 172 and each reversal drew an arc.
+        # The surface's OWN extremes and its OWN brightest point, not fits
+        # through them. A radial gradient carries one value per ring, so a fit
+        # over samples that mix azimuths at the same radius pulls the stops
+        # toward the middle (4740 lost a third of its range) and the focal cap
+        # of 0.7 cannot put a highlight where a dome's actually is -- on the
+        # edge. LDView puts 4740's at radius 1.17; the fit reached 0.97.
+        # A convex dome's highlight is where its normal meets the light, which
+        # projects along the LIGHT's own screen direction -- no fit, and it
+        # tracks the light to any angle. The least-squares slope drifted 71
+        # degrees off it on 4740, and its 0.7 cap could not reach the edge
+        # where a dome's highlight actually sits. Unit-ellipse space is y-down,
+        # so the view-space light's Y flips.
+        # Pushed to the rim, not to hypot(Lx, Ly): that is where the highlight
+        # sits on a SPHERE, whose normals span a hemisphere. A dish's tilt only
+        # a little from its axis, so the normal closest to the light is the one
+        # at its outer edge -- measured against LDView on 4740, the sphere
+        # radius put the highlight at 0.60 against a true 1.18, and the rim at
+        # 1.14.
+        Lv = np.asarray(L, float)
+        d = np.array([Lv[0], -Lv[1]], float)
+        n = float(np.hypot(*d))
+        fx, fy = (d / n * 0.95) if n > 1e-9 else (0.0, 0.0)
+        return ([(0.0, ramp_b(float(b.max()))), (1.0, ramp_b(float(b.min())))],
+                (float(fx), float(fy)))
     bins = defaultdict(list)
     for t, bv, n in zip(ts, b, nvs):
         bins[min(int(t * nbins), nbins - 1)].append((bv, n))
@@ -1323,7 +1352,8 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
         deco = f.get("color", 16) != 16
         if "grad_radial" in f and not deco:
             g = f["grad_radial"]
-            stops, (fx, fy) = _radial_focal_stops(f["grad_samples"], style)
+            stops, (fx, fy) = _radial_focal_stops(
+                f["grad_samples"], style, exact=f.get("grad_exact", False))
             ops.append({"d": d, "depth": f["depth"],
                         "gradient": {"type": "radial", "cx": g["cx"], "cy": g["cy"],
                                      "r": g["r"], "ratio": g["ratio"],
