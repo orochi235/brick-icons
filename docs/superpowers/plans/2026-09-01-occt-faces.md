@@ -396,7 +396,7 @@ git commit -m "build fill faces for the sewn shape's planes"
 - Modify: `brick_icons/occt.py:896-943` (`visible_segments`)
 - Test: `tests/test_occt.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_visible_segments_returns_faces_and_a_projection(ldraw_dir):
@@ -429,12 +429,12 @@ def test_the_fit_sidecar_still_composes_under_occt(ldraw_dir):
     assert hlr.canvas_affine(res, 3.0, 5.0, 7.0) == (3.0, 5.0, 7.0)
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `.venv/bin/pytest tests/test_occt.py -k "returns_faces_and_a_projection or actually_fills or fit_sidecar_still" -v`
 Expected: FAIL — `assert res.faces` on an empty tuple.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 In `visible_segments`, replace the final return with:
 
@@ -445,12 +445,12 @@ In `visible_segments`, replace the final return with:
                      ellipses=tuple(ells), proj=proj, sil_polys=polys)
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `.venv/bin/pytest tests/test_occt.py -k "returns_faces_and_a_projection or actually_fills or fit_sidecar_still" -v`
 Expected: 3 passed
 
-- [ ] **Step 5: Look at it**
+- [x] **Step 5: Look at it**
 
 ```bash
 .venv/bin/python -m brick_icons.cli 32062 --engine occt --format svg \
@@ -461,7 +461,7 @@ open /tmp/occtfaces/32062.png
 
 Expected: a filled part, not an outline. Compare against the same command with `--engine naive`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add brick_icons/occt.py tests/test_occt.py

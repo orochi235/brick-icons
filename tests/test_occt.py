@@ -675,3 +675,33 @@ def test_back_faces_are_culled_without_losing_visible_area(ldraw_dir):
     a = unary_union([geom2d.to_geom(f["poly"], f.get("holes") or []) for f in kept])
     b = unary_union([geom2d.to_geom(f["poly"], f.get("holes") or []) for f in every])
     assert b.difference(a).area <= 0.01 * b.area
+
+
+def test_visible_segments_returns_faces_and_a_projection(ldraw_dir):
+    out = occt.flatten_part("32062", ldraw_dir)
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    res = occt.visible_segments(out, right, up, 512, cull=True, fwd=fwd)
+    assert res.faces
+    assert res.proj is not None
+
+
+def test_a_flat_part_actually_fills_under_occt(tmp_path, ldraw_dir):
+    """The whole point: flat3 emitted strokes and no fills for the life of
+    the port, and nothing errored."""
+    from brick_icons.cli import build_parser, _config_from_args, process_one
+    args = build_parser().parse_args(
+        ["32062", "--engine", "occt", "--format", "svg",
+         "--shading", "outline", "--shade-style", "flat3",
+         "--out", str(tmp_path)])
+    process_one(_config_from_args(args), "32062", tmp_path)
+    svg = (tmp_path / "32062.svg").read_text()
+    assert svg.count("fill=\"#") > 1
+
+
+def test_the_fit_sidecar_still_composes_under_occt(ldraw_dir):
+    """occt's Projection has an identity pixel fit, so canvas_affine must
+    still return the canvas fit unchanged -- the sidecar reads it."""
+    out = occt.flatten_part("32062", ldraw_dir)
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    res = occt.visible_segments(out, right, up, 512, cull=True, fwd=fwd)
+    assert hlr.canvas_affine(res, 3.0, 5.0, 7.0) == (3.0, 5.0, 7.0)

@@ -1050,5 +1050,7 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None):
         if k not in seen:
             seen.add(k)
             ells.append(tuple(op[1:7]))
-    return VisResult(ops, bbox, s, faces=(), analytic=(),
-                     ellipses=tuple(ells), sil_polys=polys)
+    proj = op_projection(right, up, fwd)
+    faces = plane_faces(shape, proj)
+    return VisResult(ops, bbox, s, faces=faces, analytic=(),
+                     ellipses=tuple(ells), proj=proj, sil_polys=polys)
