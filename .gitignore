@@ -10,3 +10,4 @@ vendor/
 .DS_Store
 /vendor
 .playwright-mcp/
+.superpowers/
