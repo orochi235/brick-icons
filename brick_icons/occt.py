@@ -932,6 +932,14 @@ def _faces_of_type(shape, want):
             yield face
 
 
+CURVED_SURFACES = (GeomAbs_SurfaceType.GeomAbs_Cylinder,
+                   GeomAbs_SurfaceType.GeomAbs_Cone,
+                   # 50950's elliptical wall: elliptic_wall extrudes an
+                   # ellipse, and no BRepPrimAPI maker builds one, so it
+                   # reaches HLR as an extrusion rather than a cylinder.
+                   GeomAbs_SurfaceType.GeomAbs_SurfaceOfExtrusion)
+
+
 def _curved_frame(face):
     """(point(u, v), normal(u), a, b, c) for a cylinder or cone face.
 
@@ -940,6 +948,33 @@ def _curved_frame(face):
     """
     s = BRepAdaptor_Surface(face)
     kind = s.GetType()
+    flip0 = -1.0 if face.Orientation() == TopAbs_Orientation.TopAbs_REVERSED else 1.0
+    if kind == GeomAbs_SurfaceType.GeomAbs_SurfaceOfExtrusion:
+        el = s.BasisCurve().Ellipse()
+        pos = el.Position()
+        o = np.array([pos.Location().X(), pos.Location().Y(), pos.Location().Z()])
+        X = np.array([pos.XDirection().X(), pos.XDirection().Y(), pos.XDirection().Z()])
+        Y = np.array([pos.YDirection().X(), pos.YDirection().Y(), pos.YDirection().Z()])
+        d = s.Direction()
+        D = np.array([d.X(), d.Y(), d.Z()], float)
+        maj, minr = el.MajorRadius(), el.MinorRadius()
+
+        def point(u, v):
+            u = np.atleast_1d(np.asarray(u, float))
+            return (o + maj * np.cos(u)[:, None] * X + minr * np.sin(u)[:, None] * Y
+                    + np.asarray(v, float).reshape(-1, 1) * D)
+
+        # n(u) = C'(u) x D with C'(u) = -maj sin u X + minr cos u Y, so the
+        # normal keeps the cos/sin form _limb_params solves.
+        a = flip0 * minr * np.cross(Y, D)
+        b = flip0 * -maj * np.cross(X, D)
+        c = np.zeros(3)
+
+        def normal(u):
+            return math.cos(u) * a + math.sin(u) * b + c
+
+        return point, normal, a, b, c
+
     g = s.Cylinder() if kind == GeomAbs_SurfaceType.GeomAbs_Cylinder else s.Cone()
     pos = g.Position()
     o = np.array([pos.Location().X(), pos.Location().Y(), pos.Location().Z()])
@@ -1044,6 +1079,25 @@ def _face_occluder(face):
     """
     s = BRepAdaptor_Surface(face)
     kind = s.GetType()
+    if kind == GeomAbs_SurfaceType.GeomAbs_SurfaceOfExtrusion:
+        el = s.BasisCurve().Ellipse()
+        pos = el.Position()
+        o = np.array([pos.Location().X(), pos.Location().Y(), pos.Location().Z()])
+        X = np.array([pos.XDirection().X(), pos.XDirection().Y(), pos.XDirection().Z()])
+        Y = np.array([pos.YDirection().X(), pos.YDirection().Y(), pos.YDirection().Z()])
+        d = s.Direction()
+        D = np.array([d.X(), d.Y(), d.Z()], float)
+        maj, minr = el.MajorRadius(), el.MinorRadius()
+        u0, u1, v0, v1 = BRepTools.UVBounds_s(face)
+        # CylinderOccluder measures its sector from LOCAL angle 0, and R^-1
+        # already carries the ellipse to a unit circle -- so the re-basing
+        # rotation is applied to that circle, where it is a rotation, rather
+        # than to the ellipse, where it would not be.
+        A = math.cos(u0) * maj * X + math.sin(u0) * minr * Y
+        C = -math.sin(u0) * maj * X + math.cos(u0) * minr * Y
+        R = np.column_stack([A, (v1 - v0) * D, C])
+        return primitives.CylinderOccluder(R, o + v0 * D,
+                                           math.degrees(u1 - u0))
     if kind not in (GeomAbs_SurfaceType.GeomAbs_Cylinder,
                     GeomAbs_SurfaceType.GeomAbs_Cone):
         return None
@@ -1108,8 +1162,7 @@ def _faces_for(face, proj, cull_back=True, step_deg=BOUNDARY_STEP_DEG):
         if cull_back and f["normal"][2] > -1e-6:
             return []
         return [f] if len(f["poly"]) >= 3 else []
-    if kind not in (GeomAbs_SurfaceType.GeomAbs_Cylinder,
-                    GeomAbs_SurfaceType.GeomAbs_Cone):
+    if kind not in CURVED_SURFACES:
         return []
     point, normal, a, b, c = _curved_frame(face)
     u0, u1, v0, v1 = BRepTools.UVBounds_s(face)

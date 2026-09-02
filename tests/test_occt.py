@@ -880,3 +880,55 @@ def test_a_full_turn_span_is_marked_interior(ldraw_dir):
     full = [f for f in faces if f["span_deg"] > 359.999]
     assert full
     assert all(f["interior"] for f in full)
+
+
+def test_an_elliptical_wall_produces_a_fill_span(ldraw_dir):
+    """50950's wall is an extruded ellipse -- no BRepPrimAPI maker builds one,
+    so it reaches HLR as a surface of extrusion rather than a cylinder. It was
+    the one face kind in the corpus that contributed nothing, and contributed
+    it silently: the slope's whole curved top drew as unfilled ribs."""
+    out = occt.flatten_part("50950", ldraw_dir)
+    shape = occt.build_shape(out)
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    proj = occt.op_projection(right, up, fwd)
+    face = next(occt._faces_of_type(
+        shape, occt.GeomAbs_SurfaceType.GeomAbs_SurfaceOfExtrusion))
+    spans = occt._faces_for(face, proj)
+    assert len(spans) == 1
+    assert spans[0]["span_deg"] == pytest.approx(45.0, abs=0.5)
+
+
+def test_an_elliptical_wall_occluder_reports_the_surface_depth(ldraw_dir):
+    """The occluder's sector is measured from local angle 0, so the face's
+    parameter range has to be re-based. Doing that to the ELLIPSE would shear
+    it; it is done to the unit circle R^-1 already maps the ellipse onto."""
+    out = occt.flatten_part("50950", ldraw_dir)
+    shape = occt.build_shape(out)
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    proj = occt.op_projection(right, up, fwd)
+    face = next(occt._faces_of_type(
+        shape, occt.GeomAbs_SurfaceType.GeomAbs_SurfaceOfExtrusion))
+    point, _, _, _, _ = occt._curved_frame(face)
+    u0, u1, v0, v1 = occt.BRepTools.UVBounds_s(face)
+    occ = occt._face_occluder(face)
+    P = point(np.linspace(u0, u1, 25), (v0 + v1) / 2.0)
+    x, y, z = proj.to_px(P)
+    d = np.asarray(occ.depth(proj.ray_origin(x, y), proj.fwd), float)
+    assert np.isfinite(d).all()
+    assert np.abs(d - z).max() < 1e-6
+
+
+def test_every_corpus_surface_kind_is_one_the_face_producer_handles(ldraw_dir):
+    """A kind _faces_for does not know contributes no fill and raises nothing.
+    That is how 50950's wall stayed empty; this fails when the next one
+    appears instead of waiting for someone to look at a render."""
+    import tomllib
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    cfg = tomllib.loads((ROOT / "tests" / "goldens" / "manifest.toml").read_text())
+    seen = set()
+    for part in cfg["parts"]["unprinted"]:
+        shape = occt.build_shape(occt.flatten_part(part, ldraw_dir))
+        for face in occt._shape_faces(shape):
+            seen.add(BRepAdaptor_Surface(face).GetType())
+    handled = set(occt.CURVED_SURFACES) | {occt.GeomAbs_SurfaceType.GeomAbs_Plane}
+    assert seen <= handled, f"unhandled surface kinds: {seen - handled}"
