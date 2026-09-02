@@ -746,3 +746,58 @@ def test_a_limb_parameter_really_is_edge_on():
     for u in us:
         n = math.cos(u) * a + math.sin(u) * b + c
         assert abs(float(n @ fwd)) < 1e-9
+
+
+def _curved_of(part, ldraw_dir, lat=30.0, long=45.0):
+    out = occt.flatten_part(part, ldraw_dir)
+    shape = occt.build_shape(out)
+    right, up, fwd = hlr.view_basis(lat, long)
+    proj = occt.op_projection(right, up, fwd)
+    return occt.curved_faces(shape, proj), proj
+
+
+def test_a_cylinder_splits_into_spans_at_its_limbs(ldraw_dir):
+    """3005 sews exactly one cylinder (its stud), and a stud seen from an
+    iso view shows a front half and a back half."""
+    faces, _ = _curved_of("3005", ldraw_dir)
+    assert len(faces) == 2
+    assert sum(1 for f in faces if f.get("interior")) == 1
+
+
+def test_a_span_carries_the_gradient_fields_fill_ops_reads(ldraw_dir):
+    faces, _ = _curved_of("4740", ldraw_dir)
+    assert faces
+    for f in faces:
+        assert set(f) >= {"poly", "zs", "depth", "grad_axis", "grad_samples",
+                          "span_deg", "color"}
+        offs = [o for o, _ in f["grad_samples"]]
+        assert offs == sorted(offs)
+        assert all(0.0 <= o <= 1.0 for o in offs)
+
+
+def test_a_span_boundary_lies_on_the_true_projected_ellipse(ldraw_dir):
+    """The point of the exact route: boundary points sit ON the conic, so
+    arc recovery reads the run back as an arc instead of a chord fan."""
+    out = occt.flatten_part("3005", ldraw_dir)
+    shape = occt.build_shape(out)
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    proj = occt.op_projection(right, up, fwd)
+    ax, ay = occt._screen_axes(right, up)
+    cyl = [f for f in occt._faces_of_type(shape, occt.GeomAbs_SurfaceType.GeomAbs_Cylinder)]
+    surf = occt.BRepAdaptor_Surface(cyl[0]).Cylinder()
+    o = surf.Position().Location()
+    o = np.array([o.X(), o.Y(), o.Z()])
+    xd, yd = surf.Position().XDirection(), surf.Position().YDirection()
+    u = np.array([xd.X(), xd.Y(), xd.Z()]) * surf.Radius()
+    v = np.array([yd.X(), yd.Y(), yd.Z()]) * surf.Radius()
+    loc = occt._ell_locus(o, u, v, 1.0, 1.0, "sil", ax, ay)
+    span = occt.curved_faces(shape, proj)[0]
+    on = span["poly"].copy()
+    on[:, 1] *= -1.0                     # back out of op space into locus space
+    hits = sum(1 for p in on if occt._on_locus(p[None, :], loc))
+    assert hits >= len(on) // 3          # the two arc runs, not the two limbs
+
+
+def test_a_span_does_not_wrap_past_its_own_limb(ldraw_dir):
+    faces, _ = _curved_of("3005", ldraw_dir)
+    assert all(f["span_deg"] <= 180.0 + 1e-6 for f in faces)

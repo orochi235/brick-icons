@@ -555,7 +555,7 @@ git commit -m "solve for a curved face's limb generators"
 - Modify: `brick_icons/occt.py`
 - Test: `tests/test_occt.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def _curved_of(part, ldraw_dir, lat=30.0, long=45.0):
@@ -613,12 +613,12 @@ def test_a_span_does_not_wrap_past_its_own_limb(ldraw_dir):
     assert all(f["span_deg"] <= 180.0 + 1e-6 for f in faces)
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `.venv/bin/pytest tests/test_occt.py -k "splits_into_spans or gradient_fields or true_projected_ellipse or wrap_past" -v`
 Expected: FAIL, `AttributeError: module 'brick_icons.occt' has no attribute 'curved_faces'`
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```python
 def _faces_of_type(shape, want):
@@ -745,12 +745,12 @@ def _unwrap(u, u0):
     return u0 + (u - u0) % (2 * math.pi)
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `.venv/bin/pytest tests/test_occt.py -k "splits_into_spans or gradient_fields or true_projected_ellipse or wrap_past" -v`
 Expected: 4 passed
 
-- [ ] **Step 5: Wire them in and look**
+- [x] **Step 5: Wire them in and look**
 
 In `visible_segments`, change the face line to:
 
@@ -767,7 +767,7 @@ open /tmp/occtfaces/4740.png
 
 Expected: the dish's walls carry a gradient, not a flat tone, and no band crosses a silhouette.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add brick_icons/occt.py tests/test_occt.py

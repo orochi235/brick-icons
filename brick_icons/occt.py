@@ -946,6 +946,139 @@ def plane_faces(shape, proj, cull_back=True):
     return out
 
 
+def _faces_of_type(shape, want):
+    ex = TopExp_Explorer(shape, TopAbs_ShapeEnum.TopAbs_FACE)
+    while ex.More():
+        face = TopoDS.Face_s(ex.Current())
+        ex.Next()
+        if BRepAdaptor_Surface(face).GetType() == want:
+            yield face
+
+
+def _curved_frame(face):
+    """(point(u, v), normal(u), a, b, c) for a cylinder or cone face.
+
+    `point` and `normal` are callables in the surface's own parameters;
+    (a, b, c) are the normal's cos/sin/constant vectors for _limb_params.
+    """
+    s = BRepAdaptor_Surface(face)
+    kind = s.GetType()
+    g = s.Cylinder() if kind == GeomAbs_SurfaceType.GeomAbs_Cylinder else s.Cone()
+    pos = g.Position()
+    o = np.array([pos.Location().X(), pos.Location().Y(), pos.Location().Z()])
+    X = np.array([pos.XDirection().X(), pos.XDirection().Y(), pos.XDirection().Z()])
+    Y = np.array([pos.YDirection().X(), pos.YDirection().Y(), pos.YDirection().Z()])
+    Z = np.array([pos.Direction().X(), pos.Direction().Y(), pos.Direction().Z()])
+    flip = -1.0 if face.Orientation() == TopAbs_Orientation.TopAbs_REVERSED else 1.0
+
+    if kind == GeomAbs_SurfaceType.GeomAbs_Cylinder:
+        r = g.Radius()
+
+        def point(u, v):
+            u = np.atleast_1d(np.asarray(u, float))
+            return (o + r * (np.cos(u)[:, None] * X + np.sin(u)[:, None] * Y)
+                    + np.asarray(v, float).reshape(-1, 1) * Z)
+
+        a, b, c = flip * X, flip * Y, np.zeros(3)
+    else:
+        r0, semi = g.RefRadius(), g.SemiAngle()
+
+        def point(u, v):
+            u = np.atleast_1d(np.asarray(u, float))
+            v = np.asarray(v, float).reshape(-1, 1)
+            rad = r0 + v * math.sin(semi)
+            return (o + rad * (np.cos(u)[:, None] * X + np.sin(u)[:, None] * Y)
+                    + v * math.cos(semi) * Z)
+
+        a = flip * math.cos(semi) * X
+        b = flip * math.cos(semi) * Y
+        c = flip * -math.sin(semi) * Z
+
+    def normal(u):
+        return math.cos(u) * a + math.sin(u) * b + c
+
+    return point, normal, a, b, c
+
+
+def _span_face(point, normal, ua, ub, v0, v1, proj, step_deg=BOUNDARY_STEP_DEG):
+    """One limb-to-limb span of a curved face, as a fill_ops face dict.
+
+    Boundary order is top arc, limb generator, bottom arc, limb generator --
+    the arcs sampled on the true circle, the generators straight because they
+    are straight. Same field set as primitives._wall_span_face, which is what
+    shade's gradient machinery reads.
+    """
+    n = max(2, int(math.ceil(abs(math.degrees(ub - ua)) / step_deg)) + 1)
+    us = np.linspace(ua, ub, n)
+    top = point(us, v1)
+    bot = point(us, v0)
+    tpx, tpy, tz = proj.to_px(top)
+    bpx, bpy, bz = proj.to_px(bot)
+    poly = np.concatenate([np.stack([tpx, tpy], 1),
+                           np.stack([bpx, bpy], 1)[::-1]], axis=0)
+    zs = np.concatenate([tz, bz])
+
+    mid = point(np.array([ua, ub]), (v0 + v1) / 2.0)
+    mpx, mpy, _ = proj.to_px(mid)
+    p0 = (float(mpx[0]), float(mpy[0]))
+    p1 = (float(mpx[1]), float(mpy[1]))
+    axis = np.array([p1[0] - p0[0], p1[1] - p0[1]])
+    L2 = float(axis @ axis) or 1.0
+    samples = []
+    for th in np.linspace(ua, ub, 9):
+        nw = normal(th)
+        nw = nw / np.linalg.norm(nw)
+        nv = np.array([nw @ proj.right, nw @ proj.up, nw @ proj.fwd])
+        p = point(np.array([th]), (v0 + v1) / 2.0)
+        ppx, ppy, _ = proj.to_px(p)
+        off = ((ppx[0] - p0[0]) * axis[0] + (ppy[0] - p0[1]) * axis[1]) / L2
+        samples.append((float(np.clip(off, 0.0, 1.0)), nv))
+
+    mid_n = normal((ua + ub) / 2.0)
+    mid_n = mid_n / np.linalg.norm(mid_n)
+    return {"poly": poly, "zs": zs, "depth": float(np.mean(zs)),
+            "kind": "occt-wall", "color": 16,
+            # the far half of a wall: order_faces takes its depth from the
+            # occluder's FAR hit, which is what `interior` selects
+            "interior": bool(mid_n @ proj.fwd > 0),
+            "span_deg": abs(math.degrees(ub - ua)),
+            "grad_axis": (p0, p1), "grad_samples": samples}
+
+
+def _unwrap(u, u0):
+    """`u` lifted into [u0, u0 + 2*pi) -- UV bounds are not always [0, 2*pi)."""
+    return u0 + (u - u0) % (2 * math.pi)
+
+
+def curved_faces(shape, proj, step_deg=BOUNDARY_STEP_DEG):
+    """Cylinder and cone faces, cut at their limbs into spans."""
+    out = []
+    for want in (GeomAbs_SurfaceType.GeomAbs_Cylinder,
+                 GeomAbs_SurfaceType.GeomAbs_Cone):
+        for face in _faces_of_type(shape, want):
+            point, normal, a, b, c = _curved_frame(face)
+            u0, u1, v0, v1 = BRepTools.UVBounds_s(face)
+            limbs = _limb_params(a, b, c, proj.fwd)
+            if u1 - u0 > 2 * math.pi - 1e-9 and limbs:
+                # A closed face has no boundary at u0: cutting there as well
+                # splits the near half at the parametric seam, and each piece
+                # then runs its own 0..1 gradient ramp with a tone break where
+                # they meet. Spans run limb to limb, the last wrapping round.
+                cut = sorted(_unwrap(u, u0) for u in limbs)
+                edges = cut + [cut[0] + 2 * math.pi]
+            else:
+                cuts = [u for u in limbs
+                        if u0 + 1e-9 < _unwrap(u, u0) < u1 - 1e-9]
+                edges = sorted({u0, u1} | {_unwrap(u, u0) for u in cuts})
+            for ua, ub in zip(edges, edges[1:]):
+                if ub - ua < 1e-9:
+                    continue
+                f = _span_face(point, normal, ua, ub, v0, v1, proj, step_deg)
+                if len(f["poly"]) >= 3:
+                    out.append(f)
+    return out
+
+
 def _negate_y(ops):
     """The winning configuration (see projector_axes) needs HLR's raw Y
     negated to match hlr.project's screen convention -- settled by the same
@@ -1072,6 +1205,6 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None):
             seen.add(k)
             ells.append(tuple(op[1:7]))
     proj = op_projection(right, up, fwd)
-    faces = plane_faces(shape, proj)
+    faces = plane_faces(shape, proj) + curved_faces(shape, proj)
     return VisResult(ops, bbox, s, faces=faces, analytic=(),
                      ellipses=tuple(ells), proj=proj, sil_polys=polys)
