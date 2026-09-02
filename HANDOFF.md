@@ -37,6 +37,13 @@ screen (`tests/goldens/defects.toml`, regenerated into this file's Open section
 by `scripts/defects-to-handoff.py`); "check goldens" re-renders a part once per
 combo and compares each sha256 against `tests/goldens/hashes.txt`.
 
+**The loupe**: hold Alt over a pane for a magnifier that follows the cursor
+without moving the shared camera; Alt+wheel sets how much. The pose bar's
+`loupe` button makes it stick without the key and `all panes` mirrors it onto
+every pane sharing the render fit — the engines and the diff, not LDView or the
+decal, which are framed differently. Design:
+`docs/superpowers/specs/2026-09-01-loupe-design.md`.
+
 ### Traps
 
 - **`seen` and `renderSignature` answer different questions — do not merge
