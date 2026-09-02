@@ -64,3 +64,22 @@
 .pane-stage svg,
 .pane-stage img { width: 100%; height: 100%; }
 .pane-stage img { object-fit: contain; }
+
+/* Never takes the pointer: the pan, the wheel and the mark layer all act on
+   what is underneath it. */
+.pane-loupe {
+  position: absolute;
+  z-index: 3;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  overflow: hidden;
+  pointer-events: none;
+  border: 2px solid var(--wzl-accent);
+  background: var(--wzl-surface);
+  box-shadow: 0 2px 12px rgb(0 0 0 / 35%);
+}
+
+.pane-loupe-inner {
+  position: absolute;
+  overflow: hidden;
+}

@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SourcePane } from '@lab/panes/SourcePane';
 import { HOME } from '@lab/panes/camera';
 import { SOURCES } from '@lab/panes/sources';
@@ -7,6 +7,13 @@ import { SOURCES } from '@lab/panes/sources';
 const props = { camera: HOME, onCamera: () => {} };
 
 describe('SourcePane', () => {
+  beforeEach(() => {
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth',
+      { configurable: true, value: 400 });
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight',
+      { configurable: true, value: 300 });
+  });
+
   it('labels itself with the source', () => {
     render(<SourcePane {...props} source={SOURCES.naive} state={{ kind: 'idle' }} />);
     expect(screen.getByText('naive')).toBeTruthy();
@@ -107,5 +114,54 @@ describe('SourcePane', () => {
     fireEvent.pointerDown(container.querySelector('.taker')!, { pointerId: 1 });
     fireEvent.pointerMove(body, { movementX: 10, movementY: 4 });
     expect(onCamera).not.toHaveBeenCalled();
+  });
+
+  it('draws no bubble when the loupe is not over it', () => {
+    const { container } = render(
+      <SourcePane {...props} source={SOURCES.naive} state={{ kind: 'idle' }} />);
+    expect(container.querySelector('.pane-loupe')).toBeNull();
+  });
+
+  it('draws the bubble at the cursor, magnifying the same drawing', () => {
+    const { container } = render(
+      <SourcePane {...props} source={SOURCES.naive}
+        state={{ kind: 'svg', markup: '<svg viewBox="0 0 4 4"></svg>' }}
+        loupe={{ at: { x: 120, y: 80 }, factor: 4 }} />);
+    const bubble = container.querySelector('.pane-loupe') as HTMLElement;
+    expect(bubble.style.left).toBe('120px');
+    expect(bubble.style.top).toBe('80px');
+    // Two stages now: the pane's own and the magnified one.
+    expect(container.querySelectorAll('.pane-stage').length).toBe(2);
+    expect(container.querySelectorAll('svg').length).toBe(2);
+  });
+
+  it('magnifies by the factor off the shared camera', () => {
+    const { container } = render(
+      <SourcePane {...props} camera={{ zoom: 2, pan: { x: 0, y: 0 } }}
+        source={SOURCES.naive} state={{ kind: 'idle' }}
+        loupe={{ at: { x: 0, y: 0 }, factor: 4 }} />);
+    const stages = container.querySelectorAll('.pane-stage');
+    expect((stages[1] as HTMLElement).style.transform)
+      .toBe('translate(0px, 0px) scale(8)');
+  });
+
+  it('shows a supplied image instead of the stage, for a pane it cannot clone', () => {
+    const { container } = render(
+      <SourcePane {...props} source={SOURCES['3d']} state={{ kind: 'idle' }}
+        loupe={{ at: { x: 10, y: 10 }, factor: 4, image: 'data:image/png;base64,AA' }} />);
+    const img = container.querySelector('.pane-loupe img') as HTMLImageElement;
+    expect(img.getAttribute('src')).toBe('data:image/png;base64,AA');
+  });
+
+  it('reports where the pointer is, so a sibling pane can mirror it', () => {
+    const onHover = vi.fn();
+    const { container } = render(
+      <SourcePane {...props} source={SOURCES.naive} state={{ kind: 'idle' }}
+        onHover={onHover} />);
+    const body = container.querySelector('.pane-body')!;
+    fireEvent.pointerMove(body, { clientX: 30, clientY: 20 });
+    expect(onHover).toHaveBeenCalledWith({ x: 30, y: 20 });
+    fireEvent.pointerLeave(body);
+    expect(onHover).toHaveBeenLastCalledWith(null);
   });
 });
