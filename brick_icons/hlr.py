@@ -1167,6 +1167,22 @@ def fit_affine(bbox, W, H, margin=6, scale=1.0):
     return f, ox, oy
 
 
+def canvas_affine(res, f, ox, oy):
+    """World A/B -> canvas viewBox as a uniform scale and offset.
+
+    Composes the pixel fit with the canvas fit. The naive engine draws in
+    pixel space (VisResult.proj carries that fit); occt and cadquery draw in
+    projected units and carry no proj, so for them the canvas fit is the whole
+    map.
+    """
+    if res.proj is None:
+        return f, ox, oy
+    p = res.proj
+    return (p.s * f,
+            (p.half - p.cx * p.s) * f + ox,
+            (p.half - p.cy * p.s) * f + oy)
+
+
 def fit_segments(segs, bbox, W, H, margin=6, scale=1.0):
     f, ox, oy = fit_affine(bbox, W, H, margin, scale)
     out = []

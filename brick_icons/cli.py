@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -112,6 +113,29 @@ def _stage(debug_dir, stage, name) -> Path:
     d = Path(debug_dir) / stage
     d.mkdir(parents=True, exist_ok=True)
     return d / f"{name}.png"
+
+
+def _emit_fit(out_dir: Path, name: str, res, right, up, fwd,
+              f: float, ox: float, oy: float, w: int, h: int, style=None) -> None:
+    """The render's world->viewBox map, beside the SVG it describes.
+
+    The lab's 3D pane frames and lights itself with this, so it shows the
+    engine's own projection and tones rather than ones it derived a second
+    time. `light` is the style's VIEW-space direction (cf. shade.light_vector)
+    and is absent for a render with no style to ask.
+    """
+    k, kx, ky = hlr.canvas_affine(res, f, ox, oy)
+    fit = {
+        "right": [float(v) for v in right],
+        "up": [float(v) for v in up],
+        "fwd": [float(v) for v in fwd],
+        "k": float(k), "kx": float(kx), "ky": float(ky),
+        "width": int(w), "height": int(h),
+    }
+    if style is not None:
+        fit["light"] = [float(v) for v in style.light]
+        fit["part_color"] = [int(v) for v in style.part_color]
+    (out_dir / f"{name}.fit.json").write_text(json.dumps(fit))
 
 
 def _emit_unwrap(debug_dir, name, res, cfg) -> None:
@@ -227,6 +251,8 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
                     bg=cfg.svg_bg, opacity=cfg.opacity,
                     clip_geom=sil_geom, contour_d=contour, label=label,
                     debug_colors=cfg.debug_colors)
+                _emit_fit(out_dir, name, res, *hlr.view_basis(lat, long),
+                          f, ox, oy, round(vb_w), round(vb_h), style)
             else:
                 fit = hlr.fit_segments(segs, bbox, cfg.width, cfg.height, cfg.margin, cfg.scale)
                 f, ox, oy = hlr.fit_affine(bbox, cfg.width, cfg.height, cfg.margin, cfg.scale)
@@ -259,6 +285,8 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
                                       clip_geom=sil_geom, contour_d=contour,
                                       label=label,
                                       debug_colors=cfg.debug_colors)
+                _emit_fit(out_dir, name, res, *hlr.view_basis(lat, long),
+                          f, ox, oy, cfg.width, cfg.height, style)
         if cfg.fmt in ("png", "both"):
             def sil_rings(W, H, fit_segs):
                 f, ox, oy = hlr.fit_affine(bbox, W, H, cfg.margin, cfg.scale)

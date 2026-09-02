@@ -4,14 +4,20 @@ import type { ControlRenderer } from '@weasel-js/labkit';
 /**
  * Compact rows for the settings panel.
  *
- * `ControlPanel` draws every leaf as a `PropertyRow` at its default
- * `layout="block"` — label stacked above control — and exposes no way to ask
- * for `layout="inline"`. With 38 CLI flags that is a very long panel, so these
- * re-declare one row per leaf kind with the label beside the control instead.
+ * `@weasel-js/ui`'s rows take a `layout`, but `ControlPanel` never threads one,
+ * so every leaf draws at the default `layout="block"` — label stacked above
+ * control. With 38 CLI flags that is a very long panel, so these re-declare one
+ * row per leaf kind with the label beside the control instead.
  *
  * They are keyed by kind rather than by config path, so a flag the CLI grows
- * picks up the compact row without being named here. Delete the lot if labkit
- * gains a density option on `ControlPanel`.
+ * picks up the compact row without being named here.
+ *
+ * A density option on `ControlPanel` would retire most of this but NOT the
+ * boolean row: `PropertyRow` applies its inline class only for
+ * `variant === 'default'`, and ui's `CheckboxRow` and `ColorRow` render other
+ * variants and accept no `layout` at all. Ours goes inline precisely because it
+ * builds a plain `PropertyRow` around a raw checkbox instead of using
+ * `CheckboxRow`.
  */
 
 /** What a resolved leaf carries that a row needs. `ToolPrefLeaf` is a union

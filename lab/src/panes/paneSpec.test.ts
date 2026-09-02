@@ -9,7 +9,7 @@ const DEPS: PaneDeps = {
   reference: { kind: 'running' },
   decal: { pane: { kind: 'image', src: '/d.png' }, note: '2 decals' },
   diff: { pane: { kind: 'image', src: '/diff.png' }, note: '3 components' },
-  three: 'the orbit view',
+  three: { node: 'the orbit view' },
 };
 
 describe('paneSpec', () => {
@@ -40,14 +40,16 @@ describe('paneSpec', () => {
     expect(paneSpec(SOURCES['3d'], DEPS).marks).toBe(false);
   });
 
-  it('leaves the 3D pane out of the shared camera and gives it the orbit', () => {
-    const spec = paneSpec(SOURCES['3d'], DEPS);
-    expect(spec.followsCamera).toBe(false);
+  it('gives the 3D pane the orbit view and what it says about registering', () => {
+    const spec = paneSpec(SOURCES['3d'],
+                          { ...DEPS, three: { node: 'the orbit view', note: 'unregistered' } });
     expect(spec.overlay).toBe('the orbit view');
+    expect(spec.note).toBe('unregistered');
   });
 
-  it('puts every other pane on the shared camera', () => {
-    for (const source of [SOURCES.naive, SOURCES.diff, SOURCES.reference, SOURCES.decal]) {
+  it('puts every pane on the shared camera, the 3D one included', () => {
+    for (const source of [SOURCES.naive, SOURCES.diff, SOURCES.reference,
+                          SOURCES.decal, SOURCES['3d']]) {
       expect(paneSpec(source, DEPS).followsCamera).toBe(true);
     }
   });

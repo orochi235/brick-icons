@@ -1,20 +1,39 @@
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useLoader, useThree } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
+import { OrbitControls, OrthographicCamera } from '@react-three/drei';
 import { LDrawLoader } from 'three/examples/jsm/loaders/LDrawLoader.js';
 import { LDrawConditionalLineMaterial }
   from 'three/examples/jsm/materials/LDrawConditionalLineMaterial.js';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import * as THREE from 'three';
+import type { Camera } from '@lab/panes/camera';
 import { angleFromOrbit, formatAngle, orbitFromAngle, parseAngle } from '@lab/panes/orbit';
+import { fattenLines, paint } from '@lab/panes/threeModel';
+import {
+  frustum, lightPosition, partColorHex, strokePx, toThree,
+  type Box, type RenderFit, type ThreeStyle, type Vec3Tuple,
+} from '@lab/panes/viewport';
 
-// A fixed camera distance frames one part size and misframes every other, so
-// the distance comes from the model's own bounding sphere.
-const FILL = 2.6;
+// The engines project orthographically, so this pane does too -- there is no
+// perspective mode, because there is nothing for one to be compared against.
+// FILL frames the unregistered fallback; a fit frames everything else.
+const FILL = 1.3;
 const RADIUS = 240;
 const LIBRARY = '/ldraw/';
 const PARTS = `${LIBRARY}parts/`;
 
-function Part({ part, onRadius }: { part: string; onRadius: (r: number) => void }) {
+interface Framing {
+  radius: number;
+  centre: Vec3Tuple;
+}
+
+function Part({ part, color, opacity, onFraming, onLines }: {
+  part: string;
+  color: number | null;
+  opacity: number;
+  onFraming: (f: Framing) => void;
+  onLines: (materials: LineMaterial[]) => void;
+}) {
   // A BARE filename against `path`, never a path against the library root: a
   // subfile reference is resolved relative to its parent's name, so any
   // directory in the name is folded into the child's and then doubled by the
@@ -31,36 +50,114 @@ function Part({ part, onRadius }: { part: string; onRadius: (r: number) => void 
 
   const object = useMemo(() => {
     const group = model.clone();
-    // LDraw's Y axis points down: studs are at negative Y. Without this flip
-    // the part hangs upside down and every angle reads inverted.
+    // LDraw's Y axis points down: studs are at negative Y. `viewport.toThree`
+    // undoes this turn for anything the fit hands over, so the part must stay
+    // where the part file put it -- recentring it here would slide it out of
+    // the frame the render fit describes.
     group.rotation.x = Math.PI;
+    group.updateMatrixWorld(true);
+    const lines = fattenLines(group);
     const box = new THREE.Box3().setFromObject(group);
     const centre = box.getCenter(new THREE.Vector3());
-    group.position.sub(centre);
-    return { group, radius: box.getSize(new THREE.Vector3()).length() / 2 };
+    return {
+      group,
+      lines,
+      framing: {
+        radius: box.getSize(new THREE.Vector3()).length() / 2,
+        centre: [centre.x, centre.y, centre.z] as Vec3Tuple,
+      },
+    };
   }, [model]);
 
-  useEffect(() => { onRadius(object.radius); }, [object, onRadius]);
+  useEffect(() => { paint(object.group, color, opacity); }, [object, color, opacity]);
+  useEffect(() => { onFraming(object.framing); onLines(object.lines); }, [object]);
 
   return <primitive object={object.group} />;
 }
 
-function Camera({ angle, radius, onSettle }:
-                { angle: string; radius: number; onSettle: (a: string) => void }) {
+interface RigProps {
+  angle: string;
+  fit: RenderFit | null;
+  box: Box;
+  view: Camera;
+  style: ThreeStyle;
+  framing: Framing;
+  lines: LineMaterial[];
+  onSettle: (angle: string) => void;
+}
+
+/** Points the camera at the pose `--angle` names and frames it the way the
+ *  render did.
+ *
+ *  Direction comes from the angle rather than from the fit: after a drag the
+ *  angle is current and the fit is a render behind, and taking the direction
+ *  from the stale one would snap the part back to the previous pose. The
+ *  framing lags by that one render, which is all registration promises. */
+function Rig({ angle, fit, box, view, style, framing, lines, onSettle }: RigProps) {
   const { camera } = useThree();
+  const controls = useRef<{ target: THREE.Vector3; update: () => void } | null>(null);
 
   useEffect(() => {
+    const ortho = camera as THREE.OrthographicCamera;
     const parsed = parseAngle(angle);
-    if (!parsed) return;
-    const p = orbitFromAngle(parsed, radius);
-    camera.position.set(p.x, p.y, p.z);
-    camera.lookAt(0, 0, 0);
-  }, [angle, radius, camera]);
+    const dir = orbitFromAngle(parsed ?? { lat: 30, long: 45 }, 1);
+    const radius = Math.max(1, framing.radius);
+    // The eye sits on the view axis through the WORLD origin, which is the
+    // point the engine projects about; the bounds carry the pan and the zoom,
+    // so aiming it at the framed centre would apply that offset twice.
+    const back = radius * 4 + 1;
+    ortho.position.set(dir.x * back, dir.y * back, dir.z * back);
+    ortho.near = 0.1;
+    ortho.far = back + radius * 4;
+
+    if (fit) {
+      const bounds = frustum(fit, box, view);
+      const up = toThree(fit.up);
+      ortho.up.set(up[0], up[1], up[2]);
+      ortho.left = bounds.left;
+      ortho.right = bounds.right;
+      ortho.top = bounds.top;
+      ortho.bottom = bounds.bottom;
+    } else {
+      // No render to register against: frame the part by its own size, which
+      // is off-centre for a part whose origin is not its middle. That is what
+      // the pane's `unregistered` note is warning about.
+      const aspect = box.height >= 1 ? box.width / box.height : 1;
+      const half = radius * FILL;
+      ortho.up.set(0, 1, 0);
+      ortho.left = -half * aspect;
+      ortho.right = half * aspect;
+      ortho.top = half;
+      ortho.bottom = -half;
+    }
+
+    ortho.lookAt(0, 0, 0);
+    ortho.updateProjectionMatrix();
+    controls.current?.target.set(0, 0, 0);
+    controls.current?.update();
+  }, [angle, fit, box.width, box.height, view, framing, camera]);
+
+  useEffect(() => {
+    const width = strokePx(fit, box, view, style.lineWidth);
+    for (const material of lines) {
+      material.linewidth = width;
+      // The line shader works in clip space, so it has to be told the pixels.
+      material.resolution.set(Math.max(1, box.width), Math.max(1, box.height));
+    }
+  }, [lines, fit, box.width, box.height, view, style.lineWidth]);
 
   return (
     <OrbitControls
+      // Everything but rotation is the shared camera's: a dolly or a pan of
+      // this camera alone would put the pane back out of register.
+      ref={controls as never}
       enablePan={false}
-      // `end` fires when the drag stops, which is when LDView is worth firing.
+      enableZoom={false}
+      // An undefined button is one OrbitControls does nothing with, which is
+      // how the left drag is left to the shared camera.
+      mouseButtons={{ LEFT: undefined, MIDDLE: THREE.MOUSE.ROTATE,
+                      RIGHT: THREE.MOUSE.ROTATE }}
+      // `end` fires when the drag stops, which is when a re-render is worth it.
       onEnd={() => onSettle(formatAngle(angleFromOrbit(camera.position)))}
     />
   );
@@ -69,20 +166,36 @@ function Camera({ angle, radius, onSettle }:
 export interface ThreePaneProps {
   part: string;
   angle: string;
+  /** The render's world -> viewBox map, or null while none has landed. */
+  fit: RenderFit | null;
+  /** The pane body, in pixels: what the frustum has to cover. */
+  box: Box;
+  view: Camera;
+  style: ThreeStyle;
   onSettle: (angle: string) => void;
 }
 
-export function ThreePane({ part, angle, onSettle }: ThreePaneProps) {
-  const [radius, setRadius] = useState(RADIUS);
+export function ThreePane({ part, angle, fit, box, view, style,
+                            onSettle }: ThreePaneProps) {
+  const [framing, setFraming] = useState<Framing>({ radius: RADIUS, centre: [0, 0, 0] });
+  const [lines, setLines] = useState<LineMaterial[]>([]);
   if (!part.trim()) return <p className="three-empty">no part chosen</p>;
+  // A frustum needs a measured pane; before the first ResizeObserver callback
+  // there is nothing to fit into and the fit would divide by zero.
+  const registered = fit && box.width >= 1 && box.height >= 1 ? fit : null;
+  const sun = lightPosition(registered, Math.max(1, framing.radius) * 8);
   return (
-    <Canvas camera={{ fov: 35, near: 1, far: 20000 }}>
+    <Canvas>
+      {style.background ? <color attach="background" args={[style.background]} /> : null}
+      <OrthographicCamera makeDefault near={0.1} far={20000} />
       <ambientLight intensity={0.7} />
-      <directionalLight position={[-1, 1, 2]} intensity={1.2} />
+      <directionalLight position={sun ?? [-1, 1, 2]} intensity={1.2} />
       <Suspense fallback={null}>
-        <Part part={part} onRadius={(r) => setRadius(Math.max(1, r) * FILL)} />
+        <Part part={part} color={partColorHex(registered)} opacity={style.opacity}
+          onFraming={setFraming} onLines={setLines} />
       </Suspense>
-      <Camera angle={angle} radius={radius} onSettle={onSettle} />
+      <Rig angle={angle} fit={registered} box={box} view={view} style={style}
+        framing={framing} lines={lines} onSettle={onSettle} />
     </Canvas>
   );
 }

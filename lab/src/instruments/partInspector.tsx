@@ -19,6 +19,8 @@ import { DefectCard } from '@lab/defects/DefectCard';
 import { buildDefect, useDefects } from '@lab/defects/useDefects';
 import type { Mark } from '@lab/defects/geometry';
 import { useReference } from '@lab/panes/useReference';
+import { useRenderFit } from '@lab/panes/useRenderFit';
+import { threeStyle } from '@lab/panes/viewport';
 import { decalCaption, useDecal } from '@lab/panes/useDecal';
 
 /** three.js and its loaders are around a megabyte, and the 3D pane is off by
@@ -56,6 +58,7 @@ function Panes({ ctx, client }: { ctx: any; client: LabClient }) {
                                      config.part_color as string | undefined,
                                      shows('reference'));
   const decal = useDecal(client, part, shows('decal'));
+  const fit = useRenderFit(client, renders);
 
   const engineIds = sources.filter((s) => s.kind === 'engine').map((s) => s.id);
   // What every engine pane compares its own render against: the run on screen.
@@ -73,12 +76,18 @@ function Panes({ ctx, client }: { ctx: any; client: LabClient }) {
     // pans and zooms it but no angle applies.
     decal: { pane: decal.pane, note: decalCaption(decal.urls) },
     diff: { pane: diff.pane, note: diffWarning(config) ?? diffCaption(diff.result) },
-    three: (
-      <Suspense fallback={<div className="pane-note">loading 3D…</div>}>
-        <ThreePane part={part} angle={angle}
-          onSettle={(next) => ctx.setConfig('angle', next)} />
-      </Suspense>
-    ),
+    three: {
+      // Until a render lands there is no fit to frame by. Say so: an
+      // unregistered pane looks exactly like a mis-registered one.
+      note: fit ? undefined : 'unregistered',
+      node: (
+        <Suspense fallback={<div className="pane-note">loading 3D…</div>}>
+          <ThreePane part={part} angle={angle} fit={fit} style={threeStyle(config)}
+            box={boxes['3d'] ?? { width: 0, height: 0 }} view={camera}
+            onSettle={(next) => ctx.setConfig('angle', next)} />
+        </Suspense>
+      ),
+    },
   };
 
   return (

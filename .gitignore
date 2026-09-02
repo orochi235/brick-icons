@@ -9,3 +9,4 @@ vendor/
 *.egg-info/
 .DS_Store
 /vendor
+.playwright-mcp/

@@ -66,7 +66,9 @@ export function SourcePane({ source, state, camera, onCamera, note, busy,
         className="pane-body"
         ref={body}
         onPointerDown={(e) => {
-          if (!startsPan(e.target)) return;
+          // Secondary and middle drags belong to whatever the overlay does
+          // with them -- on the 3D pane, orbiting.
+          if (e.button !== 0 || !startsPan(e.target)) return;
           dragging.current = true;
           e.currentTarget.setPointerCapture(e.pointerId);
         }}

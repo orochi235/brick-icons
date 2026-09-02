@@ -13,8 +13,9 @@ export interface PaneDeps {
   reference: PaneState;
   decal: { pane: PaneState; note?: string };
   diff: { pane: PaneState; note?: string };
-  /** The 3D pane's orbit control, built by the caller because it is JSX. */
-  three: ReactNode;
+  /** The 3D pane's orbit view, built by the caller because it is JSX, and
+   *  what it has to say about how far it is registered with the rest. */
+  three: { node: ReactNode; note?: string };
 }
 
 export interface PaneSpec {
@@ -27,8 +28,7 @@ export interface PaneSpec {
   /** A mark is a fraction of the render it was drawn on, so it belongs only
    *  on a pane showing that render at the shared camera. */
   marks: boolean;
-  /** The 3D pane owns its camera, so the shared one neither reads nor writes
-   *  it. */
+  /** Whether the shared camera reads and writes this pane. */
   followsCamera: boolean;
 }
 
@@ -47,7 +47,7 @@ export function paneSpec(source: Source, deps: PaneDeps): PaneSpec {
       return { state: deps.decal.pane, busy: false, note: deps.decal.note,
                marks: false, followsCamera: true };
     case '3d':
-      return { state: { kind: 'idle' }, busy: false, overlay: deps.three,
-               marks: false, followsCamera: false };
+      return { state: { kind: 'idle' }, busy: false, overlay: deps.three.node,
+               note: deps.three.note, marks: false, followsCamera: true };
   }
 }
