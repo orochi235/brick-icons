@@ -990,7 +990,7 @@ git commit -m "order occt's faces by their own surfaces"
 - Modify: `scripts/compare-engines.py:36-42` (`load_outline_parts`) and its `main`
 - Test: `tests/test_occt.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 def test_compare_engines_can_select_a_combo():
@@ -1006,12 +1006,12 @@ def test_compare_engines_can_select_a_combo():
     assert len(parts) == 21
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_occt.py -k compare_engines_can_select -v`
 Expected: FAIL, `AttributeError: module 'compare_engines' has no attribute 'load_combo_parts'`
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Replace `load_outline_parts` in `scripts/compare-engines.py`:
 
@@ -1045,12 +1045,12 @@ and in `main`, add the arguments and use them:
 
 Update every remaining `load_outline_parts` call site the same way.
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `.venv/bin/pytest tests/test_occt.py -k compare_engines_can_select -v`
 Expected: 1 passed
 
-- [ ] **Step 5: Run the parity measurement**
+- [x] **Step 5: Run the parity measurement**
 
 ```bash
 .venv/bin/python scripts/compare-engines.py --combo outline-flat3 \
@@ -1059,7 +1059,7 @@ Expected: 1 passed
 
 Expected: one progress line per part as it finishes (21 of them), then a summary. Read the fill palette and element counts naive against occt; a part whose occt fill count is 0 is a face producer failure, not a shading difference.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add scripts/compare-engines.py tests/test_occt.py
@@ -1074,25 +1074,25 @@ git commit -m "compare the engines on the combo that has fills"
 - Modify: `HANDOFF.md`
 - Modify: `OCCT-MIGRATION.md`
 
-- [ ] **Step 1: Run the full suite outside the goldens**
+- [x] **Step 1: Run the full suite outside the goldens**
 
 Run: `.venv/bin/pytest -q`
 Expected: all pass. A bare run reports skips for the three drift tests — that is not verification, which is why the next step exists.
 
-- [ ] **Step 2: Run the drift gate**
+- [x] **Step 2: Run the drift gate**
 
 Run: `BRICK_GOLDENS=1 .venv/bin/pytest tests/test_goldens.py -q`
 Expected: passes, 0 skipped. Nothing on the naive path changed, so `tests/goldens/hashes.txt` must be untouched — confirm with `git status tests/goldens/`, which must report no modification.
 
-- [ ] **Step 3: Update the migration roadmap**
+- [x] **Step 3: Update the migration roadmap**
 
 In `OCCT-MIGRATION.md`, replace the `## The blocker: occt.visible_segments returns faces=()` section with what is now true, and strike items 1 and 2 from `## Ordered work` — item 2 landed with item 1, deliberately. Leave items 3, 4 and 5 as they stand.
 
-- [ ] **Step 4: Record the parity numbers**
+- [x] **Step 4: Record the parity numbers**
 
 In `HANDOFF.md`, add what `compare-engines.py --combo outline-flat3` reported: which parts fill, which diverge from naive and by how much. Numbers only, from the run in Task 8 — a claim about a part nobody rendered is the thing this file exists to prevent.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add HANDOFF.md OCCT-MIGRATION.md

@@ -19,39 +19,35 @@ Decal extraction is not part of it either: `hlr.part_geometry` is a flatten
 plus `repair.repaired_tris`, with no projection, z-buffer or occlusion pass —
 it never reaches an engine, and `brick-icons decal` takes no `--engine`.
 
-## The blocker: `occt.visible_segments` returns `faces=()`
+## Faces, and what they carry
 
-That single empty field is the whole gap. Everything below follows from it,
-and none of it errors — `fill_ops` returns nothing, `trace.segments_to_svg`
-emits strokes, and the render comes back looking plausible.
-
-| what silently disappears | why |
-|---|---|
-| `--shade-style flat3` (the only style in `shade.STYLES`) | `fill_ops` gets an empty face list |
-| `--opacity` below 1 | translucency is painted fills; the unculled strokes still draw |
-| `shade.silhouette_spur_trim` | guarded by `if faces` |
-| witness-order paint sort | `shade.order_faces` has nothing to order |
-
-`cli._sil_faces` substitutes `res.sil_polys` so the silhouette contour still
-draws, which is why the hole was invisible for the life of the port.
+`occt.visible_segments` returns fill faces: one per planar face of the sewn
+shape, and one per limb-cut span of each cylinder, cone and elliptical wall.
+`--shade-style flat3` and `--opacity` work under `occt`.
 
 **What a face has to carry.** `fill_ops` reads `poly` (canvas-space `(N,2)`),
 `normal` (view space), `depth`, `zs`, `plane`, `color`, `group`, `holes` and
 `prim`, plus the gradient fields a curved surface needs (`grad_axis`,
 `grad_radial`, `grad_samples`). `shade.faces_from_tris` and
-`faces_from_analytic` are the two existing producers — read them as the
-contract. OCCT already holds these surfaces exactly; the work is projecting
-each to a polygon with holes and carrying the grouping metadata, not
-recovering geometry.
+`faces_from_analytic` are the two existing producers -- read them as the
+contract, and `occt._faces_for` as the third.
+
+What is still empty under `occt`: `refits`, `loops` and `fold_ells` (item 3),
+`tri` and `tri_colors` (item 4). Every face is colour 16, because sewing drops
+LDraw colour.
+
+**A surface kind the producer does not handle contributes no fill and raises
+nothing.** That is how 50950's elliptical wall stayed empty. `CURVED_SURFACES`
+plus `Plane` is the handled set, and
+`test_every_corpus_surface_kind_is_one_the_face_producer_handles` fails when
+the corpus grows one the producer does not know.
 
 ## Ordered work
 
-1. **Faces.** Project the sewn shape's faces to `fill_ops`'s contract. Done
-   when `--shading outline --shade-style flat3` fills under `occt`.
-2. **`proj`.** `occt` returns `proj=None`. `order_faces` and
-   `_face_depth_probe` use it to probe a face's own occluder along the witness
-   ray, which is what makes the depth exact on a CURVED surface; without it
-   both fall back to the face's affine screen-depth plane.
+1. **Faces. DONE.**
+2. **`proj`. DONE**, with item 1 rather than after it: a curved face bows
+   toward the camera between its edges, which is exactly where it overlaps a
+   neighbour, so a flat depth is wrong at the point that decides the order.
 3. **Decide about the naive stylizations.** `refits` (the counterbore
    separator refit), `loops` and `fold_ells` (fold-arc sub-region outlines) are
    all empty under `occt`. Either port them or establish that exact faces make

@@ -244,13 +244,51 @@ Two `arcfit` changes, both on the NAIVE path, both re-frozen into the goldens
 
 ## Read this before calling the port nearly done
 
-**`occt` implements half the renderer.** `occt.visible_segments` returns
-`faces=()`, so every filled mode silently degrades to strokes — nothing errors,
-which is why it stayed invisible. It cannot be the default until fills exist,
-and that is a project, not a defect.
+**`occt` has fills now.** `occt.visible_segments` returns one face per planar
+face of the sewn shape and one per limb-cut span of each cylinder, cone and
+elliptical wall, ordered by `shade.order_faces` against each curved face's own
+exact surface. `--engine occt --shade-style flat3` fills all 21 parts of the
+`unprinted` corpus with 0 render failures:
 
-`OCCT-MIGRATION.md` is the roadmap: what is in scope, what the face contract
-is, the ordered work, and the gate `occt` still has no version of.
+    .venv/bin/python scripts/compare-engines.py --combo outline-flat3 \
+      --parts unprinted --sheet /tmp/sheet.png
+
+`OCCT-MIGRATION.md` is still the roadmap. Items 1 and 2 are done; 3, 4 and 5
+are not, and `occt` is still not the default.
+
+### One cause explains most of the remaining gap
+
+Structure agrees across the corpus; tone and element counts do not. **Where
+LDraw authors a curve as facets, `occt` sews N planes and flat-tones each,
+while `naive` substitutes one analytic primitive and gives the group one
+gradient.** Measured on that run:
+
+- `3960`'s dome emits **194 same-colour fills against naive's 1**, and reads as
+  a flat disc rather than a dome.
+- `32062` loses every gradient (naive 16, occt 0): 178 planes, no curved
+  surface at all.
+- `4740` and `3942c` are flatter and differently toned for the same reason.
+- `L` moves both ways — 32062 435->1631, 4070 110->983, 4589 90->496,
+  3960 451->1232, against 3942c 1428->1051, 6589 1752->1426, 4740 350->156.
+  `A` **falls** on nearly every round part (4019 360->257, 3649 1124->765),
+  which is the opposite of what `OCCT-MIGRATION.md` predicts. Whoever picks
+  this up should decide whether that prediction or the engine is wrong.
+
+Two things a face-level fix would have to reach: a smooth-group merge keyed
+the way `shade._attach_smooth_gradients` keys naive's (type-5 conditional
+lines), and boundary conics joining the arc-recovery list — the design calls
+for the latter and it was not built.
+
+### occt-only defects found by that run
+
+- **`4070`: an unfilled wedge on the right face.** Visible on the contact
+  sheet, occt only. Its base-ledge edge was already open (below); this is a
+  fill hole, not the same symptom.
+- **bbox shifts**: `3941` 1.18, `6589` 4.84. Every other part is under 1.0.
+- **`3649` costs 384s** for the naive+occt pair the comparison renders (the
+  script does not split them). `order_faces` is O(faces^2) in witness tests
+  and 3649 sews 846 faces; ordering 3960's 828 faces alone measured 5.3s, so
+  the sort is not the whole 384s. Not a blocker; it sets the corpus's pace.
 
 Durable records, none of which this file repeats:
 
@@ -377,11 +415,9 @@ The stray-geometry defects under **Open** live in
 because the port would replace that code — but the port has landed *behind a
 flag*, so the naive path is still what ships, and it still draws them.
 
-Fix them on the naive path. "Make `occt` the default instead" is not an option
-on this timescale: it has no fills, so it cannot render shaded faces or
-transparency at all (see the capability table at the top). The naive path is
-the only complete engine, and everything filled will keep running on it until
-`occt` grows faces.
+Fix them on the naive path. `occt` has fills now, but it flat-tones every
+facet group naive gradients (see above), so it is not a drop-in for anything
+filled and cannot take the default on that basis alone.
 
 ## What shipped
 
