@@ -801,3 +801,58 @@ def test_a_span_boundary_lies_on_the_true_projected_ellipse(ldraw_dir):
 def test_a_span_does_not_wrap_past_its_own_limb(ldraw_dir):
     faces, _ = _curved_of("3005", ldraw_dir)
     assert all(f["span_deg"] <= 180.0 + 1e-6 for f in faces)
+
+
+def test_a_cylinder_span_occluder_reports_the_surface_depth(ldraw_dir):
+    """The reason this slice pulls migration item 2 in: a flat depth is
+    wrong in the middle of the span, which is where it overlaps a neighbour."""
+    out = occt.flatten_part("3005", ldraw_dir)
+    shape = occt.build_shape(out)
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    proj = occt.op_projection(right, up, fwd)
+    face = next(occt._faces_of_type(shape, occt.GeomAbs_SurfaceType.GeomAbs_Cylinder))
+    occ = occt._face_occluder(face)
+    point, _, _, _, _ = occt._curved_frame(face)
+    u0, u1, v0, v1 = occt.BRepTools.UVBounds_s(face)
+    # the occluder reports the NEAREST hit, so probe the front-most point:
+    # taking mid-u would land on the back half half the time and compare the
+    # near surface against the far one
+    us = np.linspace(u0, u1, 181)
+    P = point(us, (v0 + v1) / 2.0)
+    x, y, z = proj.to_px(P)
+    i = int(np.argmin(z))
+    d = occ.depth(proj.ray_origin(x[i:i + 1], y[i:i + 1]), proj.fwd)
+    assert np.isfinite(d).all()
+    assert abs(float(d[0]) - float(z[i])) < 1e-6
+
+
+def test_a_flat_face_gets_no_occluder(ldraw_dir):
+    """Its depth is affine, so _plane_depth_fn is already exact and an
+    occluder would be a slower way to get the same number."""
+    out = occt.flatten_part("32062", ldraw_dir)
+    shape = occt.build_shape(out)
+    face = next(occt._faces_of_type(shape, occt.GeomAbs_SurfaceType.GeomAbs_Plane))
+    assert occt._face_occluder(face) is None
+
+
+def test_faces_come_back_in_paint_order(ldraw_dir):
+    out = occt.flatten_part("3005", ldraw_dir)
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    res = occt.visible_segments(out, right, up, 512, cull=True, fwd=fwd)
+    assert all("order" in f for f in res.faces)
+    assert [f["order"] for f in res.faces] == sorted(f["order"] for f in res.faces)
+
+
+def test_the_stud_paints_over_the_top_face_it_sits_on(ldraw_dir):
+    """A near surface ordering behind a far one is the failure this whole
+    task exists to prevent, and it is invisible in a field-set check."""
+    out = occt.flatten_part("3005", ldraw_dir)
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    res = occt.visible_segments(out, right, up, 512, cull=True, fwd=fwd)
+    walls = [f for f in res.faces if f["kind"] == "occt-wall"]
+    flats = [f for f in res.faces if f["kind"] == "occt-plane"]
+    assert walls and flats
+    nearest_wall = min(walls, key=lambda f: f["depth"])
+    nearest_flat = min(flats, key=lambda f: f["depth"])
+    if nearest_wall["depth"] < nearest_flat["depth"]:
+        assert nearest_wall["order"] > nearest_flat["order"]

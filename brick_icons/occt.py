@@ -923,29 +923,6 @@ def _plane_face(face, proj, step_deg=BOUNDARY_STEP_DEG):
     return f
 
 
-def plane_faces(shape, proj, cull_back=True):
-    """Every planar face of `shape`, camera-facing ones only by default.
-
-    Culling matches faces_from_tris: winding is trusted (repair.repaired_tris
-    fixed it upstream) and a face pointing away is never visible on a closed
-    part. It is a cost decision, not a correctness one -- order_faces is
-    O(faces^2) in witness tests and 3649 sews 846 of them.
-    """
-    out = []
-    ex = TopExp_Explorer(shape, TopAbs_ShapeEnum.TopAbs_FACE)
-    while ex.More():
-        face = TopoDS.Face_s(ex.Current())
-        ex.Next()
-        if BRepAdaptor_Surface(face).GetType() != GeomAbs_SurfaceType.GeomAbs_Plane:
-            continue
-        f = _plane_face(face, proj)
-        if cull_back and f["normal"][2] > -1e-6:
-            continue
-        if len(f["poly"]) >= 3:
-            out.append(f)
-    return out
-
-
 def _faces_of_type(shape, want):
     ex = TopExp_Explorer(shape, TopAbs_ShapeEnum.TopAbs_FACE)
     while ex.More():
@@ -1050,33 +1027,133 @@ def _unwrap(u, u0):
     return u0 + (u - u0) % (2 * math.pi)
 
 
+def _face_occluder(face):
+    """The exact surface behind a curved face, as one of the occluder classes
+    the naive engine already probes along a witness ray.
+
+    They take a LOCAL frame whose columns are (U, axis, V) with unit radius
+    and height 0..1, so the frame is built to carry the face's own radius and
+    height. A plane gets None: its depth is affine and _plane_depth_fn
+    recovers it exactly.
+    """
+    s = BRepAdaptor_Surface(face)
+    kind = s.GetType()
+    if kind not in (GeomAbs_SurfaceType.GeomAbs_Cylinder,
+                    GeomAbs_SurfaceType.GeomAbs_Cone):
+        return None
+    g = s.Cylinder() if kind == GeomAbs_SurfaceType.GeomAbs_Cylinder else s.Cone()
+    pos = g.Position()
+    o = np.array([pos.Location().X(), pos.Location().Y(), pos.Location().Z()])
+    X = np.array([pos.XDirection().X(), pos.XDirection().Y(), pos.XDirection().Z()])
+    Y = np.array([pos.YDirection().X(), pos.YDirection().Y(), pos.YDirection().Z()])
+    Z = np.array([pos.Direction().X(), pos.Direction().Y(), pos.Direction().Z()])
+    u0, u1, v0, v1 = BRepTools.UVBounds_s(face)
+    # the occluders measure their sector from local angle 0
+    Xs = math.cos(u0) * X + math.sin(u0) * Y
+    Ys = -math.sin(u0) * X + math.cos(u0) * Y
+    sector = math.degrees(u1 - u0)
+    h = v1 - v0
+
+    if kind == GeomAbs_SurfaceType.GeomAbs_Cylinder:
+        r = g.Radius()
+        R = np.column_stack([r * Xs, h * Z, r * Ys])
+        return primitives.CylinderOccluder(R, o + v0 * Z, sector)
+
+    semi = g.SemiAngle()
+    rb = g.RefRadius() + v0 * math.sin(semi)
+    rt = g.RefRadius() + v1 * math.sin(semi)
+    if abs(rb - rt) < 1e-9:
+        return None                      # degenerate cone: no exact taper
+    # ConeOccluder is radius (top+1) at y=0 tapering to top at y=1
+    scale = rb - rt
+    top = rt / scale
+    R = np.column_stack([scale * Xs, h * math.cos(semi) * Z, scale * Ys])
+    return primitives.ConeOccluder(R, o + v0 * Z, sector, top)
+
+
+def _shape_faces(shape):
+    ex = TopExp_Explorer(shape, TopAbs_ShapeEnum.TopAbs_FACE)
+    while ex.More():
+        face = TopoDS.Face_s(ex.Current())
+        ex.Next()
+        yield face
+
+
+def _span_edges(u0, u1, limbs):
+    """The u values a curved face is cut at, in order.
+
+    A CLOSED face has no boundary at u0, so it is cut at its limbs only:
+    cutting the seam as well splits the near half in two, and each piece then
+    runs its own 0..1 gradient ramp with a tone break where they meet.
+    """
+    if u1 - u0 > 2 * math.pi - 1e-9 and limbs:
+        cut = sorted(_unwrap(u, u0) for u in limbs)
+        return cut + [cut[0] + 2 * math.pi]
+    return sorted({u0, u1} | {u for u in (_unwrap(v, u0) for v in limbs)
+                              if u0 + 1e-9 < u < u1 - 1e-9})
+
+
+def _faces_for(face, proj, cull_back=True, step_deg=BOUNDARY_STEP_DEG):
+    """Every fill face one OCCT face contributes: one for a plane, one per
+    limb-cut span for a cylinder or cone."""
+    kind = BRepAdaptor_Surface(face).GetType()
+    if kind == GeomAbs_SurfaceType.GeomAbs_Plane:
+        f = _plane_face(face, proj, step_deg)
+        if cull_back and f["normal"][2] > -1e-6:
+            return []
+        return [f] if len(f["poly"]) >= 3 else []
+    if kind not in (GeomAbs_SurfaceType.GeomAbs_Cylinder,
+                    GeomAbs_SurfaceType.GeomAbs_Cone):
+        return []
+    point, normal, a, b, c = _curved_frame(face)
+    u0, u1, v0, v1 = BRepTools.UVBounds_s(face)
+    edges = _span_edges(u0, u1, _limb_params(a, b, c, proj.fwd))
+    out = []
+    for ua, ub in zip(edges, edges[1:]):
+        if ub - ua < 1e-9:
+            continue
+        f = _span_face(point, normal, ua, ub, v0, v1, proj, step_deg)
+        if len(f["poly"]) >= 3:
+            out.append(f)
+    return out
+
+
+def plane_faces(shape, proj, cull_back=True):
+    """Every planar face of `shape`, camera-facing ones only by default.
+
+    Culling matches faces_from_tris: winding is trusted (repair.repaired_tris
+    fixed it upstream) and a face pointing away is never visible on a closed
+    part. It is a cost decision, not a correctness one -- order_faces is
+    O(faces^2) in witness tests and 3649 sews 846 of them.
+    """
+    return [f for face in _shape_faces(shape)
+            for f in _faces_for(face, proj, cull_back=cull_back)
+            if f["kind"] == "occt-plane"]
+
+
 def curved_faces(shape, proj, step_deg=BOUNDARY_STEP_DEG):
     """Cylinder and cone faces, cut at their limbs into spans."""
-    out = []
-    for want in (GeomAbs_SurfaceType.GeomAbs_Cylinder,
-                 GeomAbs_SurfaceType.GeomAbs_Cone):
-        for face in _faces_of_type(shape, want):
-            point, normal, a, b, c = _curved_frame(face)
-            u0, u1, v0, v1 = BRepTools.UVBounds_s(face)
-            limbs = _limb_params(a, b, c, proj.fwd)
-            if u1 - u0 > 2 * math.pi - 1e-9 and limbs:
-                # A closed face has no boundary at u0: cutting there as well
-                # splits the near half at the parametric seam, and each piece
-                # then runs its own 0..1 gradient ramp with a tone break where
-                # they meet. Spans run limb to limb, the last wrapping round.
-                cut = sorted(_unwrap(u, u0) for u in limbs)
-                edges = cut + [cut[0] + 2 * math.pi]
-            else:
-                cuts = [u for u in limbs
-                        if u0 + 1e-9 < _unwrap(u, u0) < u1 - 1e-9]
-                edges = sorted({u0, u1} | {_unwrap(u, u0) for u in cuts})
-            for ua, ub in zip(edges, edges[1:]):
-                if ub - ua < 1e-9:
-                    continue
-                f = _span_face(point, normal, ua, ub, v0, v1, proj, step_deg)
-                if len(f["poly"]) >= 3:
-                    out.append(f)
-    return out
+    return [f for face in _shape_faces(shape)
+            for f in _faces_for(face, proj, step_deg=step_deg)
+            if f["kind"] == "occt-wall"]
+
+
+def ordered_faces(shape, proj):
+    """Every fill face of `shape`, in paint order, each curved one depth-probed
+    against its own exact surface."""
+    from . import shade
+    faces, own_occ = [], {}
+    for face in _shape_faces(shape):
+        occ = _face_occluder(face)
+        for f in _faces_for(face, proj):
+            faces.append(f)
+            if occ is not None:
+                own_occ[id(f)] = occ
+    if not faces:
+        return []
+    zs = np.concatenate([f["zs"] for f in faces])
+    zrange = float(zs.max() - zs.min()) or 1.0
+    return shade.order_faces(faces, proj, 1e-3 * zrange, own_occ=own_occ)
 
 
 def _negate_y(ops):
@@ -1205,6 +1282,6 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None):
             seen.add(k)
             ells.append(tuple(op[1:7]))
     proj = op_projection(right, up, fwd)
-    faces = plane_faces(shape, proj) + curved_faces(shape, proj)
+    faces = ordered_faces(shape, proj)
     return VisResult(ops, bbox, s, faces=faces, analytic=(),
                      ellipses=tuple(ells), proj=proj, sil_polys=polys)

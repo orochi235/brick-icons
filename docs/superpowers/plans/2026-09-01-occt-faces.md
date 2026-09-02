@@ -782,7 +782,7 @@ git commit -m "cut curved faces at their limbs into fill spans"
 - Modify: `brick_icons/occt.py`
 - Test: `tests/test_occt.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_a_cylinder_span_occluder_reports_the_surface_depth(ldraw_dir):
@@ -840,12 +840,12 @@ def test_the_stud_paints_over_the_top_face_it_sits_on(ldraw_dir):
         assert nearest_wall["order"] > nearest_flat["order"]
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `.venv/bin/pytest tests/test_occt.py -k "occluder or paint_order or paints_over" -v`
 Expected: FAIL, `AttributeError: module 'brick_icons.occt' has no attribute '_face_occluder'`
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```python
 def _face_occluder(face):
@@ -961,19 +961,19 @@ def curved_faces(shape, proj, step_deg=BOUNDARY_STEP_DEG):
             if f["kind"] == "occt-wall"]
 ```
 
-- [ ] **Step 4: Run the whole occt suite**
+- [x] **Step 4: Run the whole occt suite**
 
 Run: `.venv/bin/pytest tests/test_occt.py -q`
 Expected: all pass, 0 failed
 
-- [ ] **Step 5: Mutate the occluder and watch the depth test fail**
+- [x] **Step 5: Mutate the occluder and watch the depth test fail**
 
 Temporarily return `None` from `_face_occluder` for cylinders. Run the depth test and confirm it fails; revert.
 
 Run: `.venv/bin/pytest tests/test_occt.py -k occluder_reports_the_surface_depth -v`
 Expected while mutated: FAIL. After revert: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add brick_icons/occt.py tests/test_occt.py
