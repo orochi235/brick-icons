@@ -47,6 +47,15 @@ describe('zoomAt', () => {
     const there = zoomAt(HOME, 2, 40, 40);
     expect(zoomAt(there, 0.5, 40, 40)).toEqual(HOME);
   });
+
+  it('takes a ceiling above its own, for the loupe', () => {
+    expect(zoomAt(HOME, 1000, 0, 0, 1024).zoom).toBe(1000);
+    expect(zoomAt({ zoom: 32, pan: { x: 0, y: 0 } }, 8, 0, 0, 1024).zoom).toBe(256);
+  });
+
+  it('still keeps the cursor point fixed under a raised ceiling', () => {
+    expect(zoomAt(HOME, 4, 100, 50, 1024).pan).toEqual({ x: -300, y: -150 });
+  });
 });
 
 describe('cssTransform', () => {
