@@ -590,3 +590,31 @@ def test_forward_is_the_negated_projector_axis():
     right, up, fwd = hlr.view_basis(30.0, 45.0)
     z, _ = occt.projector_axes(right, up)
     assert np.allclose(-z / np.linalg.norm(z), fwd)
+
+
+def test_wire_points_of_a_circle_lie_on_that_circle():
+    o = np.array([0.0, 0.0, 0.0])
+    face = occt.annulus_face(o, np.array([0.0, 1.0, 0.0]),
+                             np.array([1.0, 0.0, 0.0]), 0.0, 6.0,
+                             2 * math.pi)
+    pts = occt._wire_points(occt.BRepTools.OuterWire_s(face))
+    r = np.linalg.norm(pts - o, axis=1)
+    assert np.allclose(r, 6.0, atol=1e-9)
+    assert len(pts) >= 40           # 9-degree step over a full turn
+
+
+def test_wire_points_of_a_polygon_are_its_corners():
+    p = np.array([[0.0, 0.0, 0.0], [10.0, 0.0, 0.0], [10.0, 0.0, 4.0]])
+    pts = occt._wire_points(occt.BRepTools.OuterWire_s(occt.tri_face(p)))
+    assert len(pts) == 3
+    for corner in p:
+        assert np.min(np.linalg.norm(pts - corner, axis=1)) < 1e-9
+
+
+def test_wire_points_do_not_repeat_the_shared_vertex():
+    """Consecutive edges share an endpoint; emitting it twice puts a
+    zero-length segment in the polygon, which shapely reads as invalid."""
+    p = np.array([[0.0, 0.0, 0.0], [10.0, 0.0, 0.0], [10.0, 0.0, 4.0]])
+    pts = occt._wire_points(occt.BRepTools.OuterWire_s(occt.tri_face(p)))
+    d = np.linalg.norm(np.diff(np.vstack([pts, pts[:1]]), axis=0), axis=1)
+    assert d.min() > 1e-6

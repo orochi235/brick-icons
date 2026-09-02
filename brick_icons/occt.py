@@ -20,7 +20,7 @@ from OCP.BRepBuilderAPI import (BRepBuilderAPI_MakePolygon, BRepBuilderAPI_MakeF
                                 BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeWire,
                                 BRepBuilderAPI_Sewing)
 from OCP.TopoDS import TopoDS_Shape, TopoDS_Compound, TopoDS
-from OCP.TopAbs import TopAbs_ShapeEnum
+from OCP.TopAbs import TopAbs_ShapeEnum, TopAbs_Orientation
 from OCP.TopExp import TopExp_Explorer, TopExp
 from OCP.TopTools import TopTools_IndexedDataMapOfShapeListOfShape
 from OCP.BRep import BRep_Builder, BRep_Tool
@@ -35,6 +35,7 @@ from OCP.GeomAPI import GeomAPI_ProjectPointOnSurf
 from OCP.GCPnts import GCPnts_QuasiUniformDeflection
 from OCP.BRepMesh import BRepMesh_IncrementalMesh
 from OCP.TopLoc import TopLoc_Location
+from OCP.BRepTools import BRepTools, BRepTools_WireExplorer
 
 from . import hlr, primitives
 
@@ -828,6 +829,45 @@ def _edge_ops(edge, kind):
     return [("arc", ctr.X(), ctr.Y(),
              u.X() * r_maj, u.Y() * r_maj, v.X() * r_min, v.Y() * r_min,
              math.degrees(t0), math.degrees(t1), kind)]
+
+
+BOUNDARY_STEP_DEG = 9.0    # naive samples a wall span at 40 points; matched
+
+
+def _edge_points(edge, step_deg=BOUNDARY_STEP_DEG):
+    """World points along one edge, ON its own curve.
+
+    A line contributes its endpoints. A circle or ellipse is sampled, because
+    fill_ops takes a polygon -- but every sample sits exactly on the conic, so
+    geom2d.arc_candidates reads the run back as the arc it came from.
+    """
+    c = BRepAdaptor_Curve(edge)
+    t0, t1 = c.FirstParameter(), c.LastParameter()
+    if c.GetType() == GeomAbs_CurveType.GeomAbs_Line:
+        ts = [t0, t1]
+    else:
+        span = abs(math.degrees(t1 - t0))
+        ts = np.linspace(t0, t1, max(2, int(math.ceil(span / step_deg)) + 1))
+    P = np.array([[p.X(), p.Y(), p.Z()]
+                  for p in (c.Value(float(t)) for t in ts)], float)
+    if edge.Orientation() == TopAbs_Orientation.TopAbs_REVERSED:
+        P = P[::-1]
+    return P
+
+
+def _wire_points(wire, step_deg=BOUNDARY_STEP_DEG):
+    """A wire as one closed loop of world points, in wire order."""
+    loop = []
+    ex = BRepTools_WireExplorer(wire)
+    while ex.More():
+        P = _edge_points(ex.Current(), step_deg)
+        ex.Next()
+        if loop and np.linalg.norm(P[0] - loop[-1]) < TOL:
+            P = P[1:]
+        loop.extend(P)
+    if len(loop) > 1 and np.linalg.norm(loop[0] - loop[-1]) < TOL:
+        loop = loop[:-1]
+    return np.array(loop, float)
 
 
 def _negate_y(ops):

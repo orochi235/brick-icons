@@ -140,7 +140,7 @@ Face boundaries are sampled ON their own curves. `_edge_ops` cannot be reused: i
 - Modify: `brick_icons/occt.py`
 - Test: `tests/test_occt.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_wire_points_of_a_circle_lie_on_that_circle():
@@ -171,12 +171,12 @@ def test_wire_points_do_not_repeat_the_shared_vertex():
     assert d.min() > 1e-6
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `.venv/bin/pytest tests/test_occt.py -k wire_points -v`
 Expected: FAIL, `AttributeError: module 'brick_icons.occt' has no attribute '_wire_points'`
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Add to the imports in `brick_icons/occt.py`:
 
@@ -227,12 +227,12 @@ def _wire_points(wire, step_deg=BOUNDARY_STEP_DEG):
     return np.array(loop, float)
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `.venv/bin/pytest tests/test_occt.py -k wire_points -v`
 Expected: 3 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add brick_icons/occt.py tests/test_occt.py
