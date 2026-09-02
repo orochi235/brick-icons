@@ -153,6 +153,18 @@ describe('SourcePane', () => {
     expect(img.getAttribute('src')).toBe('data:image/png;base64,AA');
   });
 
+  it('does not re-apply the camera to a drawing that already has it', () => {
+    const { container } = render(
+      <SourcePane {...props} camera={{ zoom: 2, pan: { x: 100, y: 0 } }}
+        source={SOURCES['3d']} state={{ kind: 'idle' }}
+        loupe={{ at: { x: 0, y: 0 }, factor: 4, image: 'data:image/png;base64,AA' }} />);
+    const stages = container.querySelectorAll('.pane-stage');
+    // scale(4), not scale(8): the 3D snapshot is rendered at the shared camera
+    // already, so the bubble magnifies it and nothing more.
+    expect((stages[1] as HTMLElement).style.transform)
+      .toBe('translate(0px, 0px) scale(4)');
+  });
+
   it('reports where the pointer is, so a sibling pane can mirror it', () => {
     const onHover = vi.fn();
     const { container } = render(

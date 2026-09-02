@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { HOME, MAX_ZOOM } from '@lab/panes/camera';
 import {
   DEFAULT_FACTOR, MAX_FACTOR, MIN_FACTOR,
-  bubbleDiameter, clampFactor, loupeCamera, showsLoupe, stageOffset,
+  bubbleDiameter, clampFactor, loupeCamera, loupeCameraForImage, showsLoupe,
+  stageOffset,
 } from '@lab/panes/loupe';
 import { SOURCES } from '@lab/panes/sources';
 
@@ -35,6 +36,17 @@ describe('loupeCamera', () => {
 
   it('multiplies the shared zoom rather than replacing it', () => {
     expect(loupeCamera({ zoom: 3, pan: { x: 0, y: 0 } }, 4, { x: 0, y: 0 }).zoom).toBe(12);
+  });
+});
+
+describe('loupeCameraForImage', () => {
+  it('magnifies by the factor alone, whatever the shared camera', () => {
+    expect(loupeCameraForImage(4, { x: 0, y: 0 }).zoom).toBe(4);
+  });
+
+  it('keeps the point under the cursor under the cursor', () => {
+    const next = loupeCameraForImage(4, { x: 100, y: 50 });
+    expect(next.pan).toEqual({ x: -300, y: -150 });
   });
 });
 

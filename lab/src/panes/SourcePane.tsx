@@ -1,8 +1,8 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { type Camera, panBy, zoomAt } from '@lab/panes/camera';
 import { PaneStage, type PaneState } from '@lab/panes/PaneStage';
-import { bubbleDiameter, loupeCamera, stageOffset, type Point }
-  from '@lab/panes/loupe';
+import { bubbleDiameter, loupeCamera, loupeCameraForImage, stageOffset,
+  type Point } from '@lab/panes/loupe';
 import type { Source } from '@lab/panes/sources';
 import '@lab/panes/SourcePane.css';
 
@@ -126,7 +126,9 @@ export function SourcePane({ source, state, camera, onCamera, note, busy,
               }}>
               <PaneStage
                 state={loupe.image ? { kind: 'image', src: loupe.image } : state}
-                camera={loupeCamera(camera, loupe.factor, loupe.at)}
+                camera={loupe.image
+                  ? loupeCameraForImage(loupe.factor, loupe.at)
+                  : loupeCamera(camera, loupe.factor, loupe.at)}
                 label={source.label} />
             </div>
           </div>

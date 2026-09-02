@@ -4,7 +4,7 @@
  * under the cursor is the point at the bubble's centre is then checked by a
  * test rather than by eye.
  */
-import { type Camera, zoomAt } from '@lab/panes/camera';
+import { HOME, type Camera, zoomAt } from '@lab/panes/camera';
 import type { Source, SourceKind } from '@lab/panes/sources';
 
 export const MIN_FACTOR = 2;
@@ -33,6 +33,14 @@ export function clampFactor(factor: number): number {
 
 export function loupeCamera(camera: Camera, factor: number, at: Point): Camera {
   return zoomAt(camera, clampFactor(factor), at.x, at.y, MAX_LOUPE_ZOOM);
+}
+
+/** The bubble's camera for content that already has the shared camera in it.
+ *  The 3D pane renders into its frustum rather than being transformed by CSS,
+ *  so composing the camera again magnifies by zoom x factor and points at the
+ *  wrong place. */
+export function loupeCameraForImage(factor: number, at: Point): Camera {
+  return zoomAt(HOME, clampFactor(factor), at.x, at.y, MAX_LOUPE_ZOOM);
 }
 
 export function bubbleDiameter(box: Box): number {
