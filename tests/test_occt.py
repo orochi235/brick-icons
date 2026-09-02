@@ -932,3 +932,23 @@ def test_every_corpus_surface_kind_is_one_the_face_producer_handles(ldraw_dir):
             seen.add(BRepAdaptor_Surface(face).GetType())
     handled = set(occt.CURVED_SURFACES) | {occt.GeomAbs_SurfaceType.GeomAbs_Plane}
     assert seen <= handled, f"unhandled surface kinds: {seen - handled}"
+
+
+def test_boundary_conics_cover_rims_no_drawn_arc_reports(ldraw_dir):
+    """The drawn arc ops are already arc-recovery candidates, so this function
+    earns its place only through the rims HLR reports as HIDDEN -- which still
+    bound a fill, and whose boundary would otherwise re-emit as a fan of
+    9-degree chords. 4740's fill fell from 156 L commands to 16."""
+    out = occt.flatten_part("4740", ldraw_dir)
+    shape = occt.build_shape(out)
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    res = occt.visible_segments(out, right, up, 512, cull=True, fwd=fwd)
+    proj = occt.op_projection(right, up, fwd)
+
+    def key(t):
+        return tuple(round(v, 4) for v in t[:6])
+
+    drawn = {key(op[1:7]) for op in res.segs if op[0] == "arc"}
+    conics = {key(c) for c in occt._boundary_conics(shape, proj)}
+    assert conics - drawn, "every boundary conic is already a drawn arc"
+    assert conics <= {key(e) for e in res.ellipses}

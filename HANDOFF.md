@@ -274,10 +274,13 @@ gradient.** Measured on that run:
   which is the opposite of what `OCCT-MIGRATION.md` predicts. Whoever picks
   this up should decide whether that prediction or the engine is wrong.
 
-Two things a face-level fix would have to reach: a smooth-group merge keyed
-the way `shade._attach_smooth_gradients` keys naive's (type-5 conditional
-lines), and boundary conics joining the arc-recovery list — the design calls
-for the latter and it was not built.
+Boundary conics now join the arc-recovery list, which is what the design
+asked for and the plan left out: `4740` fell from 156 `L` to 16 and `3942c`
+from 1051 to 775, with `4589`, `3960` and `32062` unmoved (`32062` authors no
+conic edge at all). What is still missing is a smooth-group merge keyed the
+way `shade._attach_smooth_gradients` keys naive's, on type-5 conditional
+lines — that is what would collapse `3960`'s 194 fills and give the dome its
+gradient back.
 
 ### occt-only defects found by that run
 

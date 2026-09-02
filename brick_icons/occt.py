@@ -1196,6 +1196,47 @@ def curved_faces(shape, proj, step_deg=BOUNDARY_STEP_DEG):
             if f["kind"] == "occt-wall"]
 
 
+def _boundary_conics(shape, proj):
+    """Every circular or elliptical edge of `shape` as a projected conic in op
+    space, for geom2d.arc_candidates.
+
+    The drawn arc ops are already candidates, but they cover only the edges
+    HLR reports as VISIBLE. A rim that is hidden still bounds a fill, and its
+    boundary -- sampled at BOUNDARY_STEP_DEG on the true curve -- then re-emits
+    as a fan of chords instead of one arc.
+    """
+    out, seen = [], set()
+    ex = TopExp_Explorer(shape, TopAbs_ShapeEnum.TopAbs_EDGE)
+    while ex.More():
+        edge = TopoDS.Edge_s(ex.Current())
+        ex.Next()
+        c = BRepAdaptor_Curve(edge)
+        t = c.GetType()
+        if t == GeomAbs_CurveType.GeomAbs_Circle:
+            g = c.Circle()
+            ru = rv = g.Radius()
+        elif t == GeomAbs_CurveType.GeomAbs_Ellipse:
+            g = c.Ellipse()
+            ru, rv = g.MajorRadius(), g.MinorRadius()
+        else:
+            continue
+        pos = g.Position()
+        o = np.array([pos.Location().X(), pos.Location().Y(), pos.Location().Z()])
+        X = np.array([pos.XDirection().X(), pos.XDirection().Y(), pos.XDirection().Z()])
+        Y = np.array([pos.YDirection().X(), pos.YDirection().Y(), pos.YDirection().Z()])
+        cx, cy, _ = proj.to_px(o[None, :])
+        ux, uy, _ = proj.to_px((o + ru * X)[None, :])
+        vx, vy, _ = proj.to_px((o + rv * Y)[None, :])
+        cand = (float(cx[0]), float(cy[0]),
+                float(ux[0] - cx[0]), float(uy[0] - cy[0]),
+                float(vx[0] - cx[0]), float(vy[0] - cy[0]))
+        key = tuple(round(v, 4) for v in cand)
+        if key not in seen:
+            seen.add(key)
+            out.append(cand)
+    return out
+
+
 def ordered_faces(shape, proj):
     """Every fill face of `shape`, in paint order, each curved one depth-probed
     against its own exact surface."""
@@ -1341,5 +1382,10 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None):
             ells.append(tuple(op[1:7]))
     proj = op_projection(right, up, fwd)
     faces = ordered_faces(shape, proj)
+    for cand in _boundary_conics(shape, proj):
+        k = tuple(round(v, 4) for v in cand)
+        if k not in seen:
+            seen.add(k)
+            ells.append(cand)
     return VisResult(ops, bbox, s, faces=faces, analytic=(),
                      ellipses=tuple(ells), proj=proj, sil_polys=polys)
