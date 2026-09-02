@@ -258,22 +258,21 @@ are not, and `occt` is still not the default.
 
 ### Where it still differs
 
-Structure agrees across the corpus and the fills now shade like naive's:
-faceted curves union across their declared type-5 seams and share one
-gradient, and face-boundary conics are arc-recovery candidates. Gradient
-counts land near naive's (`6589` 21 against 21, `3649` 93 against 87, `3941`
-12 against 14) and `L` falls below naive's on most parts (`3649`
-21889 -> 16164, `4740` 350 -> 16, `99781` 152 -> 75, `3960` 451 -> 391).
-`A` rises on the round parts, which is what `OCCT-MIGRATION.md` predicts.
+Structure agrees across the corpus and the fills shade like naive's: faceted
+curves union across their declared type-5 seams and share one gradient, and
+face-boundary conics are arc-recovery candidates. `A` rises on the round parts
+— which is what `OCCT-MIGRATION.md` predicts — and `L` lands at or below
+naive's on 18 of 21 (`3649` 21889 -> 16000, `4019` 3733 -> 2421, `3942c`
+1428 -> 402, `4740` 350 -> 16, `99781` 152 -> 75).
 
-Three parts still diverge, all in the same direction — occt draws far more
-line commands than naive:
+Three parts still draw far more line commands than naive, and nothing so far
+explains them:
 
-- **`4070` `L` 110 -> 935** (measured before the cull fix below; re-measure).
-- **`32062` `L` 435 -> 1333.** It sews as 178 planes with no curved surface at
-  all, so nothing groups it but coplanarity; naive substitutes analytic rounds
-  for the axle ends and gets 16 gradients where occt gets 13.
-- **`4589` `L` 90 -> 496**, unmoved by either fill change.
+- **`4589` `L` 90 -> 498**, unmoved by any of the three fill changes.
+- **`4070` `L` 110 -> 719.**
+- **`32062` `L` 435 -> 1377.** It sews as 178 planes with no curved surface at
+  all, so only coplanarity groups it, while naive substitutes analytic rounds
+  for the axle ends — 16 gradients against occt's 13.
 
 ### occt-only defects
 
@@ -286,13 +285,13 @@ line commands than naive:
   toward the camera the way `primitives._flat_face` does. Do not reinstate a
   cull keyed on orientation, and do not orient the shell first: that assumes
   a closed solid, which LDraw parts are not.
-- **bbox shifts**: `3941` 1.18, `6589` 4.84. Every other part is under 1.0.
-- **`3649` costs 392s** for the naive+occt pair the comparison renders (the
+- **bbox shifts**: `3941` 1.18, `6589` 5.11. Every other part is under 1.0.
+- **`3649` costs 408s** for the naive+occt pair the comparison renders (the
   script does not split them). `order_faces` is O(faces^2) in witness tests
   and 3649 sews 846 faces; ordering 3960's 828 faces alone measured 5.3s, so
   the sort is not the whole of it. Not a blocker; it sets the corpus's pace.
 
-Durable records, none of which this file repeats:Durable records, none of which this file repeats:
+Durable records, none of which this file repeats:
 
 - `OCCT-MIGRATION.md` — what has to exist before `--engine occt` can be the
   default, and what is out of scope.
