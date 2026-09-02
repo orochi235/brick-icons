@@ -952,3 +952,34 @@ def test_boundary_conics_cover_rims_no_drawn_arc_reports(ldraw_dir):
     conics = {key(c) for c in occt._boundary_conics(shape, proj)}
     assert conics - drawn, "every boundary conic is already a drawn arc"
     assert conics <= {key(e) for e in res.ellipses}
+
+
+def test_a_faceted_dome_shades_as_one_surface(ldraw_dir):
+    """3960 sews 822 planes. Toned one at a time they read flat and emit one
+    fill element each -- 194 same-colour fills against naive's 1, and a dome
+    that draws as a disc."""
+    out = occt.flatten_part("3960", ldraw_dir)
+    shape = occt.build_shape(out)
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    proj = occt.op_projection(right, up, fwd)
+    faces = occt.ordered_faces(shape, proj, out)
+    planes = [f for f in faces if f["kind"] == "occt-plane"]
+    assert len(planes) > 100
+    groups = {f["group"] for f in planes}
+    assert len(groups) * 10 < len(planes), f"{len(groups)} groups of {len(planes)}"
+    assert any("grad_axis" in f or "grad_radial" in f for f in planes)
+
+
+def test_plane_grouping_unions_only_what_the_part_declares(ldraw_dir):
+    """Declared type-5 lines and exact coplanarity, never a dihedral angle:
+    an angle test over tessellation is the line explosion this engine exists
+    to avoid. Passing no conditional lines must leave the dome shattered."""
+    out = occt.flatten_part("3960", ldraw_dir)
+    shape = occt.build_shape(out)
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    proj = occt.op_projection(right, up, fwd)
+    with_seams = occt.ordered_faces(shape, proj, out)
+    bare = occt.ordered_faces(shape, proj, dict(out, **{"5": []}))
+    n_with = len({f["group"] for f in with_seams if f["kind"] == "occt-plane"})
+    n_bare = len({f["group"] for f in bare if f["kind"] == "occt-plane"})
+    assert n_bare > n_with * 5, f"seams changed nothing: {n_bare} vs {n_with}"

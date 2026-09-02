@@ -2020,10 +2020,25 @@ def _attach_smooth_gradients(faces, cond_edges, min_spread=0.002):
             if ra != rb:
                 parent[rb] = ra
 
-    groups = defaultdict(list)
     for k in range(len(faces)):
         faces[k]["group"] = find(k)     # merge key for fill_ops union
-        groups[find(k)].append(k)
+    attach_group_gradients(faces, min_spread)
+
+
+def attach_group_gradients(faces, min_spread=0.002):
+    """One shared gradient per face['group'] (same axis + stops for every
+    member -- userSpaceOnUse gradients make the facets blend seamlessly
+    without polygon union). Groups whose normals barely vary (min_spread on
+    1-cos) stay flat-toned. Faces carrying no group are left alone.
+
+    Split out of _attach_smooth_gradients so a producer that knows its own
+    face adjacency -- occt reads it off the sewn shape's topology rather than
+    off triangle edges -- can stamp `group` itself and still shade like naive.
+    """
+    groups = defaultdict(list)
+    for k, f in enumerate(faces):
+        if f.get("group") is not None:
+            groups[f["group"]].append(k)
     for ks in groups.values():
         # gradients are derived from FRONT members only: backfill facets
         # (past the silhouette fold) extend the group's fill area, but their

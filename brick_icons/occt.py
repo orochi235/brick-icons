@@ -22,7 +22,8 @@ from OCP.BRepBuilderAPI import (BRepBuilderAPI_MakePolygon, BRepBuilderAPI_MakeF
 from OCP.TopoDS import TopoDS_Shape, TopoDS_Compound, TopoDS
 from OCP.TopAbs import TopAbs_ShapeEnum, TopAbs_Orientation
 from OCP.TopExp import TopExp_Explorer, TopExp
-from OCP.TopTools import TopTools_IndexedDataMapOfShapeListOfShape
+from OCP.TopTools import (TopTools_IndexedDataMapOfShapeListOfShape,
+                          TopTools_IndexedMapOfShape)
 from OCP.BRep import BRep_Builder, BRep_Tool
 from OCP.GeomAbs import GeomAbs_Shape
 from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
@@ -1237,19 +1238,89 @@ def _boundary_conics(shape, proj):
     return out
 
 
-def ordered_faces(shape, proj):
-    """Every fill face of `shape`, in paint order, each curved one depth-probed
-    against its own exact surface."""
+def _group_planes(shape, out, plane_by_idx):
+    """Union planar faces across DECLARED conditional-line seams, and stamp
+    face['group'] so shade.attach_group_gradients shades each group as one
+    surface -- the way naive shades a facet group.
+
+    A hand-faceted curve sews as hundreds of planes. Toned one by one they
+    read flat and emit one fill element each: 3960's dome came out as 194
+    same-colour fills against naive's 1. The union is DECLARED-only (type-5
+    lines, plus exactly coplanar neighbours, which is naive's rule) -- a
+    dihedral test over tessellation is the explosion this engine exists to
+    avoid.
+    """
     from . import shade
-    faces, own_occ = [], {}
+    fmap = TopTools_IndexedMapOfShape()
+    TopExp.MapShapes_s(shape, TopAbs_ShapeEnum.TopAbs_FACE, fmap)
+    amap = TopTools_IndexedDataMapOfShapeListOfShape()
+    TopExp.MapShapesAndAncestors_s(shape, TopAbs_ShapeEnum.TopAbs_EDGE,
+                                   TopAbs_ShapeEnum.TopAbs_FACE, amap)
+    pairs, A, B = [], [], []
+    for i in range(1, amap.Extent() + 1):
+        fs = list(amap.FindFromIndex(i))
+        if len(fs) != 2 or fs[0].IsSame(fs[1]):
+            continue
+        fa = plane_by_idx.get(fmap.FindIndex(fs[0]))
+        fb = plane_by_idx.get(fmap.FindIndex(fs[1]))
+        if fa is None or fb is None:
+            continue
+        c = BRepAdaptor_Curve(TopoDS.Edge_s(amap.FindKey(i)))
+        if c.GetType() != GeomAbs_CurveType.GeomAbs_Line:
+            continue
+        p, q = c.Value(c.FirstParameter()), c.Value(c.LastParameter())
+        pairs.append((fa, fb))
+        A.append([p.X(), p.Y(), p.Z()])
+        B.append([q.X(), q.Y(), q.Z()])
+    if not pairs:
+        return
+    seam = shade._seam_edge_mask(np.array(A, float), np.array(B, float),
+                                 out.get("5") or [])
+
+    parent = {}
+
+    def find(x):
+        parent.setdefault(x, x)
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    for (fa, fb), on_seam in zip(pairs, seam):
+        coplanar = float(np.asarray(fa["normal"]) @ np.asarray(fb["normal"])) > 0.9999
+        if not on_seam and not coplanar:
+            continue
+        ra, rb = find(id(fa)), find(id(fb))
+        if ra != rb:
+            parent[rb] = ra
+    for f in plane_by_idx.values():
+        f["group"] = find(id(f))
+
+
+def ordered_faces(shape, proj, out=None):
+    """Every fill face of `shape`, in paint order, each curved one depth-probed
+    against its own exact surface.
+
+    `out` (the flattened part) supplies the type-5 conditional lines the
+    planar-face grouping is keyed on; without it every plane tones alone.
+    """
+    from . import shade
+    fmap = TopTools_IndexedMapOfShape()
+    TopExp.MapShapes_s(shape, TopAbs_ShapeEnum.TopAbs_FACE, fmap)
+    faces, own_occ, plane_by_idx = [], {}, {}
     for face in _shape_faces(shape):
         occ = _face_occluder(face)
         for f in _faces_for(face, proj):
             faces.append(f)
+            if f["kind"] == "occt-plane":
+                plane_by_idx[fmap.FindIndex(face)] = f
             if occ is not None:
                 own_occ[id(f)] = occ
     if not faces:
         return []
+    if out is not None and plane_by_idx:
+        _group_planes(shape, out, plane_by_idx)
+        shade.attach_group_gradients(faces)
     zs = np.concatenate([f["zs"] for f in faces])
     zrange = float(zs.max() - zs.min()) or 1.0
     return shade.order_faces(faces, proj, 1e-3 * zrange, own_occ=own_occ)
@@ -1381,7 +1452,7 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None):
             seen.add(k)
             ells.append(tuple(op[1:7]))
     proj = op_projection(right, up, fwd)
-    faces = ordered_faces(shape, proj)
+    faces = ordered_faces(shape, proj, out)
     for cand in _boundary_conics(shape, proj):
         k = tuple(round(v, 4) for v in cand)
         if k not in seen:
