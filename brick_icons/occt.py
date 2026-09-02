@@ -1016,7 +1016,8 @@ def _curved_frame(face):
     return point, normal, a, b, c
 
 
-def _span_face(point, normal, ua, ub, v0, v1, proj, step_deg=BOUNDARY_STEP_DEG):
+def _span_face(point, normal, ua, ub, v0, v1, proj, step_deg=BOUNDARY_STEP_DEG,
+               axis_key=None):
     """One limb-to-limb span of a curved face, as a fill_ops face dict.
 
     Boundary order is top arc, limb generator, bottom arc, limb generator --
@@ -1060,17 +1061,56 @@ def _span_face(point, normal, ua, ub, v0, v1, proj, step_deg=BOUNDARY_STEP_DEG):
     # other branch falls back to an affine plane through a curved sheet, and
     # on 4740 that mis-sorts the dish into a dark crescent over its own top.
     full_turn = abs(ub - ua) > 2 * math.pi - 1e-6
+    away = bool(mid_n @ proj.fwd > 0)
     f = {"poly": poly, "zs": zs, "depth": float(np.mean(zs)),
          "kind": "occt-wall", "color": 16,
+         "normal": np.array([mid_n @ proj.right, mid_n @ proj.up,
+                             mid_n @ proj.fwd]),
          # the far half of a wall: order_faces takes its depth from the
          # occluder's FAR hit, which is what `interior` selects
-         "interior": True if full_turn else bool(mid_n @ proj.fwd > 0),
+         "interior": True if full_turn else away,
          "span_deg": abs(math.degrees(ub - ua))}
     if full_turn:
         f["grad_radial"], f["grad_samples"] = _turn_gradient(poly, ring)
+        f["_turn_ring"] = ring
+        if axis_key is not None:
+            # a dome is authored as a coaxial STACK, and each band ramping on
+            # its own reads as onion rings (4740's dish). The group makes them
+            # one fill element; _merge_turn_gradients gives them one ramp.
+            f["group"] = ("turn", axis_key, away)
     else:
         f["grad_axis"], f["grad_samples"] = (p0, p1), samples
     return f
+
+
+def _merge_turn_gradients(faces):
+    """One ramp across a coaxial stack of full-turn spans.
+
+    attach_group_gradients reads ONE representative normal per face, so a
+    stack's azimuthal spread is invisible to it and it fits a linear ramp
+    along the stack instead of a radial one across it. A closed turn about an
+    axis is a dome by construction, so the group takes the radial gradient
+    without being asked -- pooling every span's ring samples rather than one
+    centroid each, which is what the focal fit has to work from.
+    """
+    groups = defaultdict(list)
+    for f in faces:
+        if "_turn_ring" in f and f.get("group") is not None:
+            groups[f["group"]].append(f)
+    for members in groups.values():
+        if len(members) < 2:
+            for f in members:
+                f.pop("_turn_ring", None)
+            continue
+        poly = np.vstack([f["poly"] for f in members])
+        ring = [s for f in members for s in f["_turn_ring"]]
+        spec, samples = _turn_gradient(poly, ring)
+        for f in members:
+            f["grad_radial"], f["grad_samples"] = spec, samples
+            f.pop("grad_axis", None)          # the group's ramp, not the band's
+            f.pop("_turn_ring", None)
+    for f in faces:
+        f.pop("_turn_ring", None)
 
 
 def _turn_gradient(poly, ring):
@@ -1201,10 +1241,36 @@ def _faces_for(face, proj, step_deg=BOUNDARY_STEP_DEG):
     for ua, ub in zip(edges, edges[1:]):
         if ub - ua < 1e-9:
             continue
-        f = _span_face(point, normal, ua, ub, v0, v1, proj, step_deg)
+        f = _span_face(point, normal, ua, ub, v0, v1, proj, step_deg,
+                       axis_key=_axis_key(face))
         if len(f["poly"]) >= 3:
             out.append(f)
     return out
+
+
+def _axis_key(face):
+    """The surface's axis LINE, as a hashable key.
+
+    A dome is authored as a stack of coaxial cones, and each one shades
+    independently unless something says they are one surface. Sharing the axis
+    is that something -- see the group stamped in _span_face.
+    """
+    s = BRepAdaptor_Surface(face)
+    kind = s.GetType()
+    if kind == GeomAbs_SurfaceType.GeomAbs_Cylinder:
+        pos = s.Cylinder().Position()
+    elif kind == GeomAbs_SurfaceType.GeomAbs_Cone:
+        pos = s.Cone().Position()
+    else:
+        return None            # an extruded ellipse has no axis to share
+    d = pos.Direction()
+    o = pos.Location()
+    Z = np.array([d.X(), d.Y(), d.Z()], float)
+    P = np.array([o.X(), o.Y(), o.Z()], float)
+    if Z[np.argmax(np.abs(Z))] < 0:            # a flipped axis is one axis
+        Z = -Z
+    foot = P - (P @ Z) * Z                     # the axis line's closest point
+    return (tuple(np.round(Z, 4)), tuple(np.round(foot, 3)))
 
 
 def plane_faces(shape, proj):
@@ -1368,7 +1434,8 @@ def ordered_faces(shape, proj, out=None):
         return []
     if out is not None and plane_by_idx:
         _group_planes(shape, out, plane_by_idx)
-        shade.attach_group_gradients(faces)
+    shade.attach_group_gradients(faces)
+    _merge_turn_gradients(faces)
     zs = np.concatenate([f["zs"] for f in faces])
     zrange = float(zs.max() - zs.min()) or 1.0
     return shade.order_faces(faces, proj, 1e-3 * zrange, own_occ=own_occ)

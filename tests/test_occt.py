@@ -1053,3 +1053,24 @@ def test_a_limb_cut_span_keeps_its_linear_gradient(ldraw_dir):
         assert "grad_radial" not in f
         p0, p1 = f["grad_axis"]
         assert math.hypot(p1[0] - p0[0], p1[1] - p0[1]) > 1e-6
+
+
+def test_a_coaxial_stack_of_full_turns_shares_one_ramp(ldraw_dir):
+    """A dome is authored as a stack of cones, and a band that ramps on its
+    own reads as an onion ring: 4740's dish stepped 215->198->212 across one
+    boundary where LDView falls smoothly from 175 to 143."""
+    out = occt.flatten_part("4740", ldraw_dir)
+    shape = occt.build_shape(out)
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    faces = occt.ordered_faces(shape, occt.op_projection(right, up, fwd), out)
+    turns = [f for f in faces if f.get("span_deg", 0) > 359.9]
+    stacks = collections.Counter(f["group"] for f in turns if f.get("group"))
+    assert any(n > 1 for n in stacks.values())
+    for group, n in stacks.items():
+        if n < 2:
+            continue
+        members = [f for f in turns if f.get("group") == group]
+        # one shared dict, so trace's def-dedup emits one <radialGradient>
+        assert len({id(f["grad_radial"]) for f in members}) == 1
+        assert all("grad_axis" not in f for f in members)
+    assert all("_turn_ring" not in f for f in faces)
