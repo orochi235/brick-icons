@@ -164,4 +164,29 @@ describe('SourcePane', () => {
     fireEvent.pointerLeave(body);
     expect(onHover).toHaveBeenLastCalledWith(null);
   });
+
+  it('zooms the shared camera on a plain wheel', () => {
+    const onCamera = vi.fn();
+    const onFactor = vi.fn();
+    const { container } = render(
+      <SourcePane {...props} onCamera={onCamera} onFactor={onFactor}
+        source={SOURCES.naive} state={{ kind: 'idle' }} />);
+    fireEvent.wheel(container.querySelector('.pane-body')!, { deltaY: -1 });
+    expect(onCamera).toHaveBeenCalled();
+    expect(onFactor).not.toHaveBeenCalled();
+  });
+
+  it('sets the loupe factor on an Alt wheel, leaving the camera alone', () => {
+    const onCamera = vi.fn();
+    const onFactor = vi.fn();
+    const { container } = render(
+      <SourcePane {...props} onCamera={onCamera} onFactor={onFactor}
+        source={SOURCES.naive} state={{ kind: 'idle' }} />);
+    const body = container.querySelector('.pane-body')!;
+    fireEvent.wheel(body, { deltaY: -1, altKey: true });
+    expect(onFactor).toHaveBeenCalledWith(1);
+    fireEvent.wheel(body, { deltaY: 1, altKey: true });
+    expect(onFactor).toHaveBeenLastCalledWith(-1);
+    expect(onCamera).not.toHaveBeenCalled();
+  });
 });

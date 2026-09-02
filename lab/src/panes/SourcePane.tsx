@@ -36,6 +36,8 @@ export interface SourcePaneProps {
   /** Where the pointer is in this pane's body, and null when it leaves.
    *  Passed only while the loupe is live -- it fires on every move. */
   onHover?: (at: Point | null) => void;
+  /** One notch of the wheel while Alt is down: +1 in, -1 out. */
+  onFactor?: (steps: number) => void;
 }
 
 /** A press inside an overlay child that wants the pointer for itself -- a
@@ -47,7 +49,7 @@ function startsPan(target: EventTarget | null): boolean {
 }
 
 export function SourcePane({ source, state, camera, onCamera, note, busy,
-                             overlay, onBox, loupe, onHover }: SourcePaneProps) {
+                             overlay, onBox, loupe, onHover, onFactor }: SourcePaneProps) {
   const dragging = useRef(false);
   const body = useRef<HTMLDivElement | null>(null);
   // The callback goes through a ref so the effect does not re-subscribe when
@@ -100,6 +102,10 @@ export function SourcePane({ source, state, camera, onCamera, note, busy,
         }}
         onPointerLeave={() => onHover?.(null)}
         onWheel={(e) => {
+          if (e.altKey && onFactor) {
+            onFactor(e.deltaY < 0 ? 1 : -1);
+            return;
+          }
           const box = e.currentTarget.getBoundingClientRect();
           const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
           onCamera(zoomAt(camera, factor, e.clientX - box.left, e.clientY - box.top));
