@@ -856,3 +856,27 @@ def test_the_stud_paints_over_the_top_face_it_sits_on(ldraw_dir):
     nearest_flat = min(flats, key=lambda f: f["depth"])
     if nearest_wall["depth"] < nearest_flat["depth"]:
         assert nearest_wall["order"] > nearest_flat["order"]
+
+
+def test_compare_engines_can_select_a_combo():
+    spec = importlib.util.spec_from_file_location(
+        "compare_engines", ROOT / "scripts" / "compare-engines.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    parts, args = mod.load_combo_parts(
+        ROOT / "tests" / "goldens" / "manifest.toml", "outline-flat3",
+        "unprinted")
+    assert "--shade-style" in args and "flat3" in args
+    assert "3068bp00" not in parts          # printed parts stay out
+    assert len(parts) == 21
+
+
+def test_a_full_turn_span_is_marked_interior(ldraw_dir):
+    """It never turned edge-on, so it has no near half and no far half. The
+    interior branch is the one whose depth probe falls back to the unclamped
+    surface hit rather than to an affine plane through a curved sheet --
+    4740's dish sorts into a dark crescent over its own top without it."""
+    faces, _ = _curved_of("4740", ldraw_dir)
+    full = [f for f in faces if f["span_deg"] > 359.999]
+    assert full
+    assert all(f["interior"] for f in full)

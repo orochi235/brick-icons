@@ -1013,11 +1013,17 @@ def _span_face(point, normal, ua, ub, v0, v1, proj, step_deg=BOUNDARY_STEP_DEG):
 
     mid_n = normal((ua + ub) / 2.0)
     mid_n = mid_n / np.linalg.norm(mid_n)
+    # A span covering the whole turn never turned edge-on, so it has no near
+    # and far half to choose between; it is marked interior because that is
+    # the branch whose probe falls back to the UNCLAMPED surface hit. The
+    # other branch falls back to an affine plane through a curved sheet, and
+    # on 4740 that mis-sorts the dish into a dark crescent over its own top.
+    full_turn = abs(ub - ua) > 2 * math.pi - 1e-6
     return {"poly": poly, "zs": zs, "depth": float(np.mean(zs)),
             "kind": "occt-wall", "color": 16,
             # the far half of a wall: order_faces takes its depth from the
             # occluder's FAR hit, which is what `interior` selects
-            "interior": bool(mid_n @ proj.fwd > 0),
+            "interior": True if full_turn else bool(mid_n @ proj.fwd > 0),
             "span_deg": abs(math.degrees(ub - ua)),
             "grad_axis": (p0, p1), "grad_samples": samples}
 

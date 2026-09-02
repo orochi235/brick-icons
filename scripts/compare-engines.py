@@ -33,10 +33,17 @@ ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / "tests" / "goldens" / "manifest.toml"
 
 
-def load_outline_parts(manifest: Path) -> tuple[list[str], list[str]]:
+def load_combo_parts(manifest: Path, combo: str,
+                     parts_key: str | None = None) -> tuple[list[str], list[str]]:
+    """(parts, args) for one manifest combo.
+
+    `parts_key` overrides the combo's own part list -- `outline-flat3` names
+    `all`, which carries printed parts, and a print is out of the engine loop
+    until decal extraction reaches the render path.
+    """
     cfg = tomllib.loads(manifest.read_text())
-    spec = cfg["combo"]["outline"]
-    names = spec["parts"]
+    spec = cfg["combo"][combo]
+    names = parts_key or spec["parts"]
     parts = cfg["parts"][names] if isinstance(names, str) else names
     return parts, spec["args"]
 
@@ -125,9 +132,14 @@ def main(argv=None):
     ap.add_argument("--out", help="write full per-part JSON results here")
     ap.add_argument("--work", default=None, help="scratch dir (default: temp under /tmp)")
     ap.add_argument("--sheet", help="write a naive|occt contact sheet PNG here")
+    ap.add_argument("--combo", default="outline",
+                    help="manifest combo to render (outline, outline-flat3)")
+    ap.add_argument("--parts", default=None,
+                    help="manifest parts key to use instead of the combo's own")
     args = ap.parse_args(argv)
 
-    parts, cli_args = load_outline_parts(Path(args.manifest))
+    parts, cli_args = load_combo_parts(Path(args.manifest), args.combo,
+                                       args.parts)
     if args.only:
         parts = [p for p in parts if args.only in p]
 
