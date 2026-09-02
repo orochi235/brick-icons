@@ -13,18 +13,14 @@ export interface LoupeControl {
   bumpFactor: (steps: number) => void;
 }
 
-/** Alt state and the loupe's settings, held once for every pane so they agree
- *  on whether the bubble is up and where. */
-export function useLoupe(config: Record<string, unknown>,
-                         setConfig: (key: string, value: unknown) => void): LoupeControl {
+/** True while Alt is held. A window that loses focus never sees the keyup, so
+ *  the blur listener is what stops the loupe hanging up until the next press. */
+export function useAltHeld(): boolean {
   const [alt, setAlt] = useState(false);
-  const [hover, setHover] = useState<{ id: SourceId; at: Point } | null>(null);
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => { if (e.key === 'Alt') setAlt(true); };
     const up = (e: KeyboardEvent) => { if (e.key === 'Alt') setAlt(false); };
-    // A window that loses focus never sees the keyup, so the bubble would hang
-    // there until Alt was pressed and released again.
     const blur = () => setAlt(false);
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
@@ -36,8 +32,20 @@ export function useLoupe(config: Record<string, unknown>,
     };
   }, []);
 
+  return alt;
+}
+
+/** Alt state and the loupe's settings, held once for every pane so they agree
+ *  on whether the bubble is up and where. */
+export function useLoupe(config: Record<string, unknown>,
+                         setConfig: (key: string, value: unknown) => void): LoupeControl {
+  const alt = useAltHeld();
+  const [hover, setHover] = useState<{ id: SourceId; at: Point } | null>(null);
+
   const factor = clampFactor(Number(config.loupe_factor ?? DEFAULT_FACTOR));
   const live = alt || Boolean(config.loupe_sticky);
+
+  useEffect(() => { if (!live) setHover(null); }, [live]);
 
   return {
     live,

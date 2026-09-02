@@ -5,9 +5,9 @@ import { buildSchema, defaultsFor, renderConfig } from '@lab/config/nodes';
 import { takePendingPart } from '@lab/config/pending';
 import { CommandLine } from '@lab/chrome/CommandLine';
 import { GoldenStatus } from '@lab/chrome/GoldenStatus';
-import { SourcePane, type PaneState } from '@lab/panes/SourcePane';
+import { SourcePane, type LoupeView, type PaneState } from '@lab/panes/SourcePane';
 import { readView } from '@lab/panes/camera';
-import { enabledSources, SOURCES, type SourceId } from '@lab/panes/sources';
+import { enabledSources, SOURCES, type Source, type SourceId } from '@lab/panes/sources';
 import { renderSignature, runRenders, type SourceRender } from '@lab/instruments/renderJob';
 import { paneSpec, type PaneDeps } from '@lab/panes/paneSpec';
 import { useArtifactSvg } from '@lab/panes/useArtifactSvg';
@@ -72,6 +72,14 @@ function Panes({ ctx, client }: { ctx: any; client: LabClient }) {
   const marking = Boolean(config.marking);
   const shown = defects.find((d) => d.id === selected);
 
+  const loupeFor = (source: Source): LoupeView | null => {
+    if (!loupe.at || !showsLoupe(source, over, loupe.allPanes)) return null;
+    if (source.kind !== '3d') return { at: loupe.at, factor: loupe.factor };
+    return threeSnapshot
+      ? { at: loupe.at, factor: loupe.factor, image: threeSnapshot }
+      : null;
+  };
+
   const deps: PaneDeps = {
     engines: ctx.state as InspectorState,
     markup,
@@ -108,10 +116,7 @@ function Panes({ ctx, client }: { ctx: any; client: LabClient }) {
             state={spec.state}
             busy={spec.busy}
             camera={camera}
-            loupe={showsLoupe(source, over, loupe.allPanes) && loupe.at
-              ? { at: loupe.at, factor: loupe.factor,
-                  image: source.kind === '3d' ? threeSnapshot : null }
-              : null}
+            loupe={loupeFor(source)}
             onHover={loupe.live ? (at) => loupe.onHover(source.id, at) : undefined}
             onFactor={loupe.bumpFactor}
             onCamera={spec.followsCamera ? (next) => ctx.trial.setView(next) : () => {}}

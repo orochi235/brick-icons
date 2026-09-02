@@ -50,6 +50,15 @@ describe('useLoupe', () => {
     expect(hook.result.current.over).toBeNull();
   });
 
+  it('forgets where the pointer was when it goes dead', () => {
+    const { hook } = setup();
+    alt('keydown');
+    act(() => hook.result.current.onHover('naive', { x: 4, y: 5 }));
+    alt('keyup');
+    alt('keydown');
+    expect(hook.result.current.over).toBeNull();
+  });
+
   it('reads the factor from the config, clamped', () => {
     expect(setup({ loupe_factor: 9 }).hook.result.current.factor).toBe(9);
     expect(setup({ loupe_factor: 500 }).hook.result.current.factor).toBe(16);

@@ -1,6 +1,7 @@
 import type { LabClient, PartHit, SchemaField } from '@lab/api/client';
 import { LAYOUTS } from '@lab/config/nodes';
 import { SOURCE_ORDER } from '@lab/panes/sources';
+import { useAltHeld } from '@lab/panes/useLoupe';
 import { useEffect, useState } from 'react';
 
 /** The `--angle` presets `brick_icons/render.py` names, in a viewing order
@@ -46,6 +47,7 @@ export interface PoseBarProps {
 
 export function PoseBar({ angle, config, fields, setConfig }: PoseBarProps) {
   const sources = (config.sources as string[]) ?? [];
+  const loupeLive = useAltHeld() || Boolean(config.loupe_sticky);
   const toggle = (id: string) => setConfig('sources',
     sources.includes(id) ? sources.filter((s) => s !== id) : [...sources, id]);
 
@@ -91,8 +93,8 @@ export function PoseBar({ angle, config, fields, setConfig }: PoseBarProps) {
       <div className="pose-bar-group" role="group" aria-label="Loupe">
         <button
           type="button"
-          className={config.loupe_sticky ? 'pose is-on' : 'pose'}
-          aria-pressed={Boolean(config.loupe_sticky)}
+          className={loupeLive ? 'pose is-on' : 'pose'}
+          aria-pressed={loupeLive}
           title="Hold Alt over a pane to magnify; Alt+wheel sets how much. Click to keep it up."
           onClick={() => setConfig('loupe_sticky', !config.loupe_sticky)}
         >

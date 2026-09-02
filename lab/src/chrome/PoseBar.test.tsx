@@ -48,6 +48,14 @@ describe('the loupe buttons', () => {
     expect(screen.getAllByText('loupe')[1]!.getAttribute('aria-pressed')).toBe('true');
   });
 
+  it('lights while Alt is held, without being sticky', () => {
+    bar({});
+    fireEvent.keyDown(window, { key: 'Alt' });
+    expect(screen.getByText('loupe').getAttribute('aria-pressed')).toBe('true');
+    fireEvent.keyUp(window, { key: 'Alt' });
+    expect(screen.getByText('loupe').getAttribute('aria-pressed')).toBe('false');
+  });
+
   it('makes the loupe sticky on a click', () => {
     const setConfig = vi.fn();
     bar({}, setConfig);
