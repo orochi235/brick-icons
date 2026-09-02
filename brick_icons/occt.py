@@ -911,8 +911,12 @@ def _plane_face(face, proj, step_deg=BOUNDARY_STEP_DEG):
             continue
         hx, hy, _ = proj.to_px(_wire_points(w, step_deg))
         holes.append(np.stack([hx, hy], 1))
+    nv = np.array([n @ proj.right, n @ proj.up, n @ proj.fwd])
+    if nv[2] > 0:
+        nv = -nv                  # see plane_faces: the sewn orientation is
+                                  # not a reliable statement about facing
     f = {"poly": np.stack([px, py], 1),
-         "normal": np.array([n @ proj.right, n @ proj.up, n @ proj.fwd]),
+         "normal": nv,
          "depth": float(np.mean(z)), "zs": z, "kind": "occt-plane",
          # carrier plane key: fill_ops unions same-plane fragments that abut
          # without a shared edge, which is what UnifySameDomain declined to do
@@ -1153,14 +1157,12 @@ def _span_edges(u0, u1, limbs):
                               if u0 + 1e-9 < u < u1 - 1e-9})
 
 
-def _faces_for(face, proj, cull_back=True, step_deg=BOUNDARY_STEP_DEG):
+def _faces_for(face, proj, step_deg=BOUNDARY_STEP_DEG):
     """Every fill face one OCCT face contributes: one for a plane, one per
     limb-cut span for a cylinder or cone."""
     kind = BRepAdaptor_Surface(face).GetType()
     if kind == GeomAbs_SurfaceType.GeomAbs_Plane:
         f = _plane_face(face, proj, step_deg)
-        if cull_back and f["normal"][2] > -1e-6:
-            return []
         return [f] if len(f["poly"]) >= 3 else []
     if kind not in CURVED_SURFACES:
         return []
@@ -1177,16 +1179,20 @@ def _faces_for(face, proj, cull_back=True, step_deg=BOUNDARY_STEP_DEG):
     return out
 
 
-def plane_faces(shape, proj, cull_back=True):
-    """Every planar face of `shape`, camera-facing ones only by default.
+def plane_faces(shape, proj):
+    """Every planar face of `shape`. There is NO back-face cull.
 
-    Culling matches faces_from_tris: winding is trusted (repair.repaired_tris
-    fixed it upstream) and a face pointing away is never visible on a closed
-    part. It is a cost decision, not a correctness one -- order_faces is
-    O(faces^2) in witness tests and 3649 sews 846 of them.
+    faces_from_tris culls one because repair.repaired_tris fixed the winding
+    it reads. Sewing does not: 4070's near right wall comes back oriented away
+    from the camera while its far twin comes back facing it, so an
+    orientation-keyed cull drops a wall that is plainly visible and the
+    brick's hollow interior draws through the hole. Orienting the shell first
+    would assume a closed solid, which LDraw parts are not. order_faces covers
+    a genuinely hidden face by painting it early; the cost is 3649's ordering
+    at 5.4s against 1.9s, on a render that takes ~200s either way.
     """
     return [f for face in _shape_faces(shape)
-            for f in _faces_for(face, proj, cull_back=cull_back)
+            for f in _faces_for(face, proj)
             if f["kind"] == "occt-plane"]
 
 
@@ -1238,6 +1244,21 @@ def _boundary_conics(shape, proj):
     return out
 
 
+def _same_plane(fa, fb, tol=0.02):
+    """Do two planar faces lie in the same WORLD plane?
+
+    Not a dot of the view normals: those are flipped toward the camera (see
+    _plane_face), so a thin wall's two sides read as parallel and a shared rim
+    edge would union the outside of the wall with the inside of it.
+    """
+    na, nb = np.array(fa["plane"][:3]), np.array(fb["plane"][:3])
+    d = float(na @ nb)
+    if abs(d) < 0.9999:
+        return False
+    ob = fb["plane"][3] if d > 0 else -fb["plane"][3]
+    return abs(fa["plane"][3] - ob) < tol
+
+
 def _group_planes(shape, out, plane_by_idx):
     """Union planar faces across DECLARED conditional-line seams, and stamp
     face['group'] so shade.attach_group_gradients shades each group as one
@@ -1287,8 +1308,7 @@ def _group_planes(shape, out, plane_by_idx):
         return x
 
     for (fa, fb), on_seam in zip(pairs, seam):
-        coplanar = float(np.asarray(fa["normal"]) @ np.asarray(fb["normal"])) > 0.9999
-        if not on_seam and not coplanar:
+        if not on_seam and not _same_plane(fa, fb):
             continue
         ra, rb = find(id(fa)), find(id(fb))
         if ra != rb:

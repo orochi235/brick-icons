@@ -269,8 +269,7 @@ counts land near naive's (`6589` 21 against 21, `3649` 93 against 87, `3941`
 Three parts still diverge, all in the same direction — occt draws far more
 line commands than naive:
 
-- **`4070` `L` 110 -> 935**, and it is the one part with a visible fill hole
-  (below). The two are probably the same defect.
+- **`4070` `L` 110 -> 935** (measured before the cull fix below; re-measure).
 - **`32062` `L` 435 -> 1333.** It sews as 178 planes with no curved surface at
   all, so nothing groups it but coplanarity; naive substitutes analytic rounds
   for the axle ends and gets 16 gradients where occt gets 13.
@@ -278,9 +277,15 @@ line commands than naive:
 
 ### occt-only defects
 
-- **`4070`: an unfilled wedge on the right face.** Visible on the contact
-  sheet, occt only, and undiagnosed. Its base-ledge edge was already open
-  (below); whether that is the same defect is untested.
+- **`4070`'s see-through right wall: FIXED**, and the cause was the back-face
+  cull. Sewing does not orient faces consistently — 4070's near right wall
+  comes back oriented away from the camera and its far twin toward it — so
+  culling by orientation dropped a visible wall and the brick's hollow
+  interior drew through the hole. There is no plane cull now; `order_faces`
+  covers a hidden face by painting it early, and the tone normal is flipped
+  toward the camera the way `primitives._flat_face` does. Do not reinstate a
+  cull keyed on orientation, and do not orient the shell first: that assumes
+  a closed solid, which LDraw parts are not.
 - **bbox shifts**: `3941` 1.18, `6589` 4.84. Every other part is under 1.0.
 - **`3649` costs 392s** for the naive+occt pair the comparison renders (the
   script does not split them). `order_faces` is O(faces^2) in witness tests

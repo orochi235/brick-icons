@@ -660,21 +660,39 @@ def test_32062_is_all_flat_faces(ldraw_dir):
     assert set(kinds) == {GeomAbs_SurfaceType.GeomAbs_Plane}
 
 
-def test_back_faces_are_culled_without_losing_visible_area(ldraw_dir):
-    """The cull is naive's rule (faces_from_tris) and exists for the witness
-    sort's O(n^2): 3649 sews 846 faces. It must remove nothing that shows."""
-    from shapely.ops import unary_union
-    from brick_icons import geom2d
-    out = occt.flatten_part("3005", ldraw_dir)
+def test_the_sewn_shape_does_not_orient_its_faces_consistently(ldraw_dir):
+    """Why there is no back-face cull. 4070's near right wall comes back
+    oriented AWAY from the camera and its far twin oriented toward it, so a
+    cull keyed on orientation drops a wall that is plainly visible and the
+    brick's hollow interior draws through the hole."""
+    out = occt.flatten_part("4070", ldraw_dir)
     shape = occt.build_shape(out)
     right, up, fwd = hlr.view_basis(30.0, 45.0)
     proj = occt.op_projection(right, up, fwd)
-    kept = occt.plane_faces(shape, proj)
-    every = occt.plane_faces(shape, proj, cull_back=False)
-    assert len(kept) < len(every)
-    a = unary_union([geom2d.to_geom(f["poly"], f.get("holes") or []) for f in kept])
-    b = unary_union([geom2d.to_geom(f["poly"], f.get("holes") or []) for f in every])
-    assert b.difference(a).area <= 0.01 * b.area
+    away = []
+    for face in occt._faces_of_type(shape, occt.GeomAbs_SurfaceType.GeomAbs_Plane):
+        pl = occt.BRepAdaptor_Surface(face).Plane()
+        d = pl.Axis().Direction()
+        n = np.array([d.X(), d.Y(), d.Z()], float)
+        if face.Orientation() == occt.TopAbs_Orientation.TopAbs_REVERSED:
+            n = -n
+        f = occt._plane_face(face, proj)
+        if float(n @ proj.fwd) > 0:
+            away.append(float(f["depth"]))
+    assert away, "no face is oriented away at all"
+    # the nearest surface in the drawing is among them: culling by orientation
+    # would have removed it
+    every = [f["depth"] for f in occt.plane_faces(shape, proj)]
+    assert min(away) < np.median(every)
+
+
+def test_a_plane_face_tones_toward_the_camera(ldraw_dir):
+    """Follows from the above: with orientation untrustworthy, the tone normal
+    is flipped to face the camera the way primitives._flat_face does, or a
+    visible wall shades as if it were pointing away."""
+    faces, _ = _plane_faces_of("4070", ldraw_dir)
+    assert faces
+    assert all(f["normal"][2] <= 1e-9 for f in faces)
 
 
 def test_visible_segments_returns_faces_and_a_projection(ldraw_dir):
