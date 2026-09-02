@@ -618,3 +618,60 @@ def test_wire_points_do_not_repeat_the_shared_vertex():
     pts = occt._wire_points(occt.BRepTools.OuterWire_s(occt.tri_face(p)))
     d = np.linalg.norm(np.diff(np.vstack([pts, pts[:1]]), axis=0), axis=1)
     assert d.min() > 1e-6
+
+
+def _plane_faces_of(part, ldraw_dir, lat=30.0, long=45.0):
+    out = occt.flatten_part(part, ldraw_dir)
+    shape = occt.build_shape(out)
+    right, up, fwd = hlr.view_basis(lat, long)
+    proj = occt.op_projection(right, up, fwd)
+    return occt.plane_faces(shape, proj), proj
+
+
+def test_a_ring_face_carries_its_bore_as_a_hole():
+    o = np.zeros(3)
+    face = occt.annulus_face(o, np.array([0.0, 1.0, 0.0]),
+                             np.array([1.0, 0.0, 0.0]), 2.0, 6.0,
+                             2 * math.pi)
+    right, up, fwd = hlr.view_basis(90.0, 0.0)     # straight down the axis
+    f = occt._plane_face(face, occt.op_projection(right, up, fwd))
+    assert len(f["holes"]) == 1
+    outer = np.linalg.norm(f["poly"] - f["poly"].mean(0), axis=1)
+    inner = np.linalg.norm(f["holes"][0] - f["poly"].mean(0), axis=1)
+    assert inner.max() < outer.min()
+
+
+def test_a_flat_face_carries_the_fields_fill_ops_reads(ldraw_dir):
+    faces, _ = _plane_faces_of("32062", ldraw_dir)
+    assert faces
+    for f in faces:
+        assert set(f) >= {"poly", "normal", "depth", "zs", "plane", "color"}
+        assert f["poly"].shape[1] == 2
+        assert len(f["zs"]) == len(f["poly"])
+        assert f["color"] == 16
+
+
+def test_32062_is_all_flat_faces(ldraw_dir):
+    """178 planes and no curved surface at all -- the part that proves the
+    flat path without any limb solving."""
+    from OCP.GeomAbs import GeomAbs_SurfaceType
+    out = occt.flatten_part("32062", ldraw_dir)
+    kinds = _surface_types(occt.build_shape(out))
+    assert set(kinds) == {GeomAbs_SurfaceType.GeomAbs_Plane}
+
+
+def test_back_faces_are_culled_without_losing_visible_area(ldraw_dir):
+    """The cull is naive's rule (faces_from_tris) and exists for the witness
+    sort's O(n^2): 3649 sews 846 faces. It must remove nothing that shows."""
+    from shapely.ops import unary_union
+    from brick_icons import geom2d
+    out = occt.flatten_part("3005", ldraw_dir)
+    shape = occt.build_shape(out)
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    proj = occt.op_projection(right, up, fwd)
+    kept = occt.plane_faces(shape, proj)
+    every = occt.plane_faces(shape, proj, cull_back=False)
+    assert len(kept) < len(every)
+    a = unary_union([geom2d.to_geom(f["poly"], f.get("holes") or []) for f in kept])
+    b = unary_union([geom2d.to_geom(f["poly"], f.get("holes") or []) for f in every])
+    assert b.difference(a).area <= 0.01 * b.area

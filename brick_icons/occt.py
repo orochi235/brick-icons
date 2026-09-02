@@ -870,6 +870,61 @@ def _wire_points(wire, step_deg=BOUNDARY_STEP_DEG):
     return np.array(loop, float)
 
 
+def _plane_face(face, proj, step_deg=BOUNDARY_STEP_DEG):
+    """One planar face as a fill_ops face dict."""
+    pl = BRepAdaptor_Surface(face).Plane()
+    d = pl.Axis().Direction()
+    n = np.array([d.X(), d.Y(), d.Z()], float)
+    if face.Orientation() == TopAbs_Orientation.TopAbs_REVERSED:
+        n = -n
+    outer = BRepTools.OuterWire_s(face)
+    W = _wire_points(outer, step_deg)
+    px, py, z = proj.to_px(W)
+    holes = []
+    ex = TopExp_Explorer(face, TopAbs_ShapeEnum.TopAbs_WIRE)
+    while ex.More():
+        w = TopoDS.Wire_s(ex.Current())
+        ex.Next()
+        if w.IsSame(outer):
+            continue
+        hx, hy, _ = proj.to_px(_wire_points(w, step_deg))
+        holes.append(np.stack([hx, hy], 1))
+    f = {"poly": np.stack([px, py], 1),
+         "normal": np.array([n @ proj.right, n @ proj.up, n @ proj.fwd]),
+         "depth": float(np.mean(z)), "zs": z, "kind": "occt-plane",
+         # carrier plane key: fill_ops unions same-plane fragments that abut
+         # without a shared edge, which is what UnifySameDomain declined to do
+         "plane": (round(float(n[0]), 4), round(float(n[1]), 4),
+                   round(float(n[2]), 4), round(float(n @ W[0]), 2)),
+         "color": 16}
+    if holes:
+        f["holes"] = holes
+    return f
+
+
+def plane_faces(shape, proj, cull_back=True):
+    """Every planar face of `shape`, camera-facing ones only by default.
+
+    Culling matches faces_from_tris: winding is trusted (repair.repaired_tris
+    fixed it upstream) and a face pointing away is never visible on a closed
+    part. It is a cost decision, not a correctness one -- order_faces is
+    O(faces^2) in witness tests and 3649 sews 846 of them.
+    """
+    out = []
+    ex = TopExp_Explorer(shape, TopAbs_ShapeEnum.TopAbs_FACE)
+    while ex.More():
+        face = TopoDS.Face_s(ex.Current())
+        ex.Next()
+        if BRepAdaptor_Surface(face).GetType() != GeomAbs_SurfaceType.GeomAbs_Plane:
+            continue
+        f = _plane_face(face, proj)
+        if cull_back and f["normal"][2] > -1e-6:
+            continue
+        if len(f["poly"]) >= 3:
+            out.append(f)
+    return out
+
+
 def _negate_y(ops):
     """The winning configuration (see projector_axes) needs HLR's raw Y
     negated to match hlr.project's screen convention -- settled by the same

@@ -247,7 +247,7 @@ git commit -m "sample a face wire on its own curve"
 - Modify: `brick_icons/occt.py`
 - Test: `tests/test_occt.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def _plane_faces_of(part, ldraw_dir, lat=30.0, long=45.0):
@@ -306,12 +306,12 @@ def test_back_faces_are_culled_without_losing_visible_area(ldraw_dir):
     assert b.difference(a).area <= 0.01 * b.area
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `.venv/bin/pytest tests/test_occt.py -k "flat_face or ring_face_carries or 32062_is_all or back_faces_are_culled" -v`
 Expected: FAIL, `AttributeError: module 'brick_icons.occt' has no attribute 'plane_faces'`
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```python
 def _plane_face(face, proj, step_deg=BOUNDARY_STEP_DEG):
@@ -369,19 +369,19 @@ def plane_faces(shape, proj, cull_back=True):
     return out
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `.venv/bin/pytest tests/test_occt.py -k "flat_face or ring_face_carries or 32062_is_all or back_faces_are_culled" -v`
 Expected: 5 passed
 
-- [ ] **Step 5: Mutate the cull guard and watch it fail**
+- [x] **Step 5: Mutate the cull guard and watch it fail**
 
 Temporarily change `f["normal"][2] > -1e-6` to `f["normal"][2] > 1e6` (cull nothing), run the cull test, and confirm it fails on `len(kept) < len(every)`. Revert.
 
 Run: `.venv/bin/pytest tests/test_occt.py -k back_faces_are_culled -v`
 Expected while mutated: FAIL. Expected after revert: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add brick_icons/occt.py tests/test_occt.py
