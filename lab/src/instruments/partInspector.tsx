@@ -7,7 +7,7 @@ import { CommandLine } from '@lab/chrome/CommandLine';
 import { GoldenStatus } from '@lab/chrome/GoldenStatus';
 import { SourcePane, type PaneState } from '@lab/panes/SourcePane';
 import { readView } from '@lab/panes/camera';
-import { enabledSources, type SourceId } from '@lab/panes/sources';
+import { enabledSources, SOURCES, type SourceId } from '@lab/panes/sources';
 import { renderSignature, runRenders, type SourceRender } from '@lab/instruments/renderJob';
 import { paneSpec, type PaneDeps } from '@lab/panes/paneSpec';
 import { useArtifactSvg } from '@lab/panes/useArtifactSvg';
@@ -22,6 +22,8 @@ import { useReference } from '@lab/panes/useReference';
 import { useRenderFit } from '@lab/panes/useRenderFit';
 import { threeStyle } from '@lab/panes/viewport';
 import { decalCaption, useDecal } from '@lab/panes/useDecal';
+import { showsLoupe } from '@lab/panes/loupe';
+import { useLoupe } from '@lab/panes/useLoupe';
 
 /** three.js and its loaders are around a megabyte, and the 3D pane is off by
  *  default, so the code for it is fetched the first time a pane asks to draw
@@ -59,6 +61,9 @@ function Panes({ ctx, client }: { ctx: any; client: LabClient }) {
                                      shows('reference'));
   const decal = useDecal(client, part, shows('decal'));
   const fit = useRenderFit(client, renders);
+  const loupe = useLoupe(config, (key, value) => ctx.setConfig(key, value));
+  const [threeSnapshot, setThreeSnapshot] = useState<string | null>(null);
+  const over = loupe.over ? SOURCES[loupe.over] : null;
 
   const engineIds = sources.filter((s) => s.kind === 'engine').map((s) => s.id);
   // What every engine pane compares its own render against: the run on screen.
@@ -84,6 +89,7 @@ function Panes({ ctx, client }: { ctx: any; client: LabClient }) {
         <Suspense fallback={<div className="pane-note">loading 3D…</div>}>
           <ThreePane part={part} angle={angle} fit={fit} style={threeStyle(config)}
             box={boxes['3d'] ?? { width: 0, height: 0 }} view={camera}
+            onSnapshot={setThreeSnapshot}
             onSettle={(next) => ctx.setConfig('angle', next)} />
         </Suspense>
       ),
@@ -102,6 +108,12 @@ function Panes({ ctx, client }: { ctx: any; client: LabClient }) {
             state={spec.state}
             busy={spec.busy}
             camera={camera}
+            loupe={showsLoupe(source, over, loupe.allPanes) && loupe.at
+              ? { at: loupe.at, factor: loupe.factor,
+                  image: source.kind === '3d' ? threeSnapshot : null }
+              : null}
+            onHover={loupe.live ? (at) => loupe.onHover(source.id, at) : undefined}
+            onFactor={loupe.bumpFactor}
             onCamera={spec.followsCamera ? (next) => ctx.trial.setView(next) : () => {}}
             onBox={(box) => setBoxes((prev) => ({ ...prev, [source.id]: box }))}
             overlay={
