@@ -536,8 +536,24 @@ No defects filed.
   Robustness is not a differentiator. Measurements and the four binding traps:
   `docs/superpowers/specs/2026-08-29-pathops-evaluation.md`.
 
+- **`naive` shades `4740`'s dish wrong, so it is not the oracle for that
+  part.** LDView renders the dish top as a light ramp falling 175 to 143;
+  `naive` paints it flat at 86, spread 1. `occt` disagreeing with `naive`
+  there was the correct answer, and a parity score against `naive` marks it
+  down for being right. Check a shading disagreement against
+  `scripts/render-references.py` before assuming the port drifted; that script
+  renders "ours" with the DEFAULT engine, so pass `--engine occt` or the sheet
+  compares LDView against `naive` and tells you nothing about the port.
+
 ## Traps
 
+- **A dome's highlight comes from the light, not from a fit.** Two ways of
+  placing it were measured against LDView on `4740` and are worse: the
+  brightest SAMPLE's own position puts it at radius 0.37 against a true 1.18,
+  and the sphere radius `hypot(Lx, Ly)` at 0.60. A dish's normals tilt only
+  slightly from its axis, so the one nearest the light is at its outer edge —
+  the rim, 0.95, lands at 1.14. The least-squares slope `_radial_focal_stops`
+  fits for the faceted path sat 71 degrees off the light on the same part.
 - **The cluster refit is load-bearing.** Without it, an arch-shaped boundary
   (`14769px2`) fits a meaningless whole-ring centre, invents circles, and
   throws a stray arc outside the silhouette.
