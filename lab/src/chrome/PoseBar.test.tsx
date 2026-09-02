@@ -44,8 +44,11 @@ describe('the loupe buttons', () => {
   it('reads as off until the loupe is made sticky', () => {
     bar({});
     expect(screen.getByText('loupe').getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('reads as on once the loupe is sticky', () => {
     bar({ loupe_sticky: true });
-    expect(screen.getAllByText('loupe')[1]!.getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByText('loupe').getAttribute('aria-pressed')).toBe('true');
   });
 
   it('lights while Alt is held, without being sticky', () => {

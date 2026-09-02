@@ -10,7 +10,6 @@ export type PaneState =
 export interface PaneStageProps {
   state: PaneState;
   camera: Camera;
-  /** Alt text for a raster source. */
   label: string;
   busy?: boolean;
 }

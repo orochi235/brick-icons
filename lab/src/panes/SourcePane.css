@@ -74,9 +74,8 @@
   border-radius: 50%;
   overflow: hidden;
   pointer-events: none;
-  border: 2px solid var(--wzl-accent);
   background: var(--wzl-surface);
-  box-shadow: 0 2px 12px rgb(0 0 0 / 35%);
+  box-shadow: inset 0 0 0 2px var(--wzl-accent), 0 2px 12px rgb(0 0 0 / 35%);
 }
 
 .pane-loupe-inner {

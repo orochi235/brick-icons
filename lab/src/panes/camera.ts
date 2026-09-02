@@ -26,11 +26,8 @@ export function panBy(camera: Camera, dx: number, dy: number): Camera {
   return { zoom: camera.zoom, pan: { x: camera.pan.x + dx, y: camera.pan.y + dy } };
 }
 
-/** Scale about a screen point, keeping the world point under it fixed.
- *
- *  `max` is the ceiling the result is clamped to. The loupe passes a higher
- *  one: sharing `MAX_ZOOM` stops the bubble magnifying whenever the shared
- *  camera is near its own limit, which reads as the loupe being broken. */
+/** Scale about a screen point, keeping the world point under it fixed. `max`
+ *  is the ceiling the result is clamped to. */
 export function zoomAt(camera: Camera, factor: number, sx: number, sy: number,
                        max: number = MAX_ZOOM): Camera {
   const zoom = Math.min(max, Math.max(MIN_ZOOM, camera.zoom * factor));

@@ -74,6 +74,9 @@ export function SourcePane({ source, state, camera, onCamera, note, busy,
     return () => observer.disconnect();
   }, []);
 
+  const diameter = bubbleDiameter(size);
+  const offset = loupe ? stageOffset(loupe.at, diameter) : null;
+
   return (
     <section className="pane">
       <header className="pane-head">
@@ -113,15 +116,13 @@ export function SourcePane({ source, state, camera, onCamera, note, busy,
       >
         <PaneStage state={state} camera={camera} label={source.label} busy={busy} />
         {overlay}
-        {loupe && size.width >= 1 ? (
+        {loupe && offset && size.width >= 1 ? (
           <div className="pane-loupe"
             style={{ left: `${loupe.at.x}px`, top: `${loupe.at.y}px`,
-                     width: `${bubbleDiameter(size)}px`,
-                     height: `${bubbleDiameter(size)}px` }}>
+                     width: `${diameter}px`, height: `${diameter}px` }}>
             <div className="pane-loupe-inner"
               style={{
-                left: `${stageOffset(loupe.at, bubbleDiameter(size)).x}px`,
-                top: `${stageOffset(loupe.at, bubbleDiameter(size)).y}px`,
+                left: `${offset.x}px`, top: `${offset.y}px`,
                 width: `${size.width}px`, height: `${size.height}px`,
               }}>
               <PaneStage

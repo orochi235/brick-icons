@@ -1,9 +1,4 @@
-/** The loupe: a magnified window on one pane's drawing, following the cursor.
- *
- * Kept out of the DOM for the reason `camera.ts` is -- the rule that the point
- * under the cursor is the point at the bubble's centre is then checked by a
- * test rather than by eye.
- */
+/** The loupe: a magnified window on one pane's drawing, following the cursor. */
 import { HOME, type Camera, zoomAt } from '@lab/panes/camera';
 import type { Source, SourceKind } from '@lab/panes/sources';
 
@@ -48,13 +43,10 @@ export function bubbleDiameter(box: Box): number {
   return Math.min(MAX_DIAMETER, Math.max(MIN_DIAMETER, short * DIAMETER_FRACTION));
 }
 
-/** Where the magnified stage sits inside the bubble: the pane body, shifted so
- *  the cursor's own point lands at the bubble's centre. */
 export function stageOffset(at: Point, diameter: number): Point {
   return { x: diameter / 2 - at.x, y: diameter / 2 - at.y };
 }
 
-/** Whether `source` draws a bubble for a pointer sitting in `over`. */
 export function showsLoupe(source: Source, over: Source | null,
                            allPanes: boolean): boolean {
   if (!over) return false;
