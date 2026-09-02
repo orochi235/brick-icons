@@ -88,6 +88,26 @@ export function PoseBar({ angle, config, fields, setConfig }: PoseBarProps) {
           mark
         </button>
       </div>
+      <div className="pose-bar-group" role="group" aria-label="Loupe">
+        <button
+          type="button"
+          className={config.loupe_sticky ? 'pose is-on' : 'pose'}
+          aria-pressed={Boolean(config.loupe_sticky)}
+          title="Hold Alt over a pane to magnify; Alt+wheel sets how much. Click to keep it up."
+          onClick={() => setConfig('loupe_sticky', !config.loupe_sticky)}
+        >
+          loupe
+        </button>
+        <button
+          type="button"
+          className={config.loupe_all_panes ? 'pose is-on' : 'pose'}
+          aria-pressed={Boolean(config.loupe_all_panes)}
+          title="Magnify every engine pane at the same point, not only the one under the cursor."
+          onClick={() => setConfig('loupe_all_panes', !config.loupe_all_panes)}
+        >
+          all panes
+        </button>
+      </div>
       <div className="pose-bar-group" role="group" aria-label="Render options">
         {quickOptions(fields).map((option) => (
           <label key={option.key} className="quick-option">

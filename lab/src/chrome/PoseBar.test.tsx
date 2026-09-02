@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import type { SchemaField } from '@lab/api/types';
-import { quickOptions } from '@lab/chrome/PoseBar';
+import { PoseBar, quickOptions } from '@lab/chrome/PoseBar';
 
 function field(key: string, choices: string[] | null): SchemaField {
   return { key, flag: `--${key}`, type: 'str', choices, help: '',
@@ -28,5 +29,36 @@ describe('quickOptions', () => {
   it('drops a control whose flag the CLI no longer offers', () => {
     const keys = quickOptions([field('engine', ['naive'])]).map((o) => o.key);
     expect(keys).toEqual(['engine', 'layout']);
+  });
+});
+
+describe('the loupe buttons', () => {
+  const bar = (config: Record<string, unknown>, setConfig = () => {}) =>
+    render(<PoseBar angle="iso" config={config} fields={FIELDS} setConfig={setConfig} />);
+
+  it('names the key, because a modifier alone is undiscoverable', () => {
+    bar({});
+    expect(screen.getByText('loupe').getAttribute('title')).toMatch(/Alt/);
+  });
+
+  it('reads as off until the loupe is made sticky', () => {
+    bar({});
+    expect(screen.getByText('loupe').getAttribute('aria-pressed')).toBe('false');
+    bar({ loupe_sticky: true });
+    expect(screen.getAllByText('loupe')[1]!.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('makes the loupe sticky on a click', () => {
+    const setConfig = vi.fn();
+    bar({}, setConfig);
+    fireEvent.click(screen.getByText('loupe'));
+    expect(setConfig).toHaveBeenCalledWith('loupe_sticky', true);
+  });
+
+  it('toggles the all-panes reach', () => {
+    const setConfig = vi.fn();
+    bar({ loupe_all_panes: true }, setConfig);
+    fireEvent.click(screen.getByText('all panes'));
+    expect(setConfig).toHaveBeenCalledWith('loupe_all_panes', false);
   });
 });
