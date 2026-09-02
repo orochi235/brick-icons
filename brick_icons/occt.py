@@ -941,14 +941,14 @@ CURVED_SURFACES = (GeomAbs_SurfaceType.GeomAbs_Cylinder,
 
 
 def _curved_frame(face):
-    """(point(u, v), normal(u), a, b, c) for a cylinder or cone face.
+    """(point(u, v), normal(u), a, b, c) for any face kind in CURVED_SURFACES.
 
     `point` and `normal` are callables in the surface's own parameters;
     (a, b, c) are the normal's cos/sin/constant vectors for _limb_params.
     """
     s = BRepAdaptor_Surface(face)
     kind = s.GetType()
-    flip0 = -1.0 if face.Orientation() == TopAbs_Orientation.TopAbs_REVERSED else 1.0
+    flip = -1.0 if face.Orientation() == TopAbs_Orientation.TopAbs_REVERSED else 1.0
     if kind == GeomAbs_SurfaceType.GeomAbs_SurfaceOfExtrusion:
         el = s.BasisCurve().Ellipse()
         pos = el.Position()
@@ -966,8 +966,8 @@ def _curved_frame(face):
 
         # n(u) = C'(u) x D with C'(u) = -maj sin u X + minr cos u Y, so the
         # normal keeps the cos/sin form _limb_params solves.
-        a = flip0 * minr * np.cross(Y, D)
-        b = flip0 * -maj * np.cross(X, D)
+        a = flip * minr * np.cross(Y, D)
+        b = flip * -maj * np.cross(X, D)
         c = np.zeros(3)
 
         def normal(u):
@@ -981,7 +981,6 @@ def _curved_frame(face):
     X = np.array([pos.XDirection().X(), pos.XDirection().Y(), pos.XDirection().Z()])
     Y = np.array([pos.YDirection().X(), pos.YDirection().Y(), pos.YDirection().Z()])
     Z = np.array([pos.Direction().X(), pos.Direction().Y(), pos.Direction().Z()])
-    flip = -1.0 if face.Orientation() == TopAbs_Orientation.TopAbs_REVERSED else 1.0
 
     if kind == GeomAbs_SurfaceType.GeomAbs_Cylinder:
         r = g.Radius()
