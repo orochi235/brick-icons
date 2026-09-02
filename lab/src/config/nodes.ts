@@ -1,6 +1,7 @@
 import { f } from '@weasel-js/labkit';
 import type { SchemaField } from '@lab/api/types';
 import { DEFAULT_SOURCES, type SourceId } from '@lab/panes/sources';
+import { DEFAULT_FACTOR } from '@lab/panes/loupe';
 
 /** Flags that arrange a run rather than change what is drawn. They are the
  *  lab's own business: it decides where output goes and which part to draw. */
@@ -26,7 +27,8 @@ function usable(field: SchemaField): boolean {
  * it names a FILE of part ids -- so leaking this one through renders every
  * part with `--list manifest:spread` and fails the whole sheet with
  * `FileNotFoundError: 'manifest:spread'`. */
-export const LAB_ONLY = new Set(['part', 'layout', 'sources', 'marking', 'list']);
+export const LAB_ONLY = new Set(['part', 'layout', 'sources', 'marking', 'list',
+                                 'loupe_factor', 'loupe_sticky', 'loupe_all_panes']);
 
 /** How the panes are arranged. The lab's own flag, so unlike every other
  *  enum its values have no CLI `choices` to come from. */
@@ -38,6 +40,12 @@ function labNodes() {
     sources: f.value<SourceId[]>([...DEFAULT_SOURCES]).section('Panes'),
     marking: f.boolean(false).section('Panes')
       .describe('A drag on a pane draws a defect mark instead of panning'),
+    loupe_factor: f.number(DEFAULT_FACTOR).section('Panes')
+      .describe('How much the loupe magnifies. Alt-wheel over a pane sets it too'),
+    loupe_sticky: f.boolean(false).section('Panes')
+      .describe('Keep the loupe up without holding Alt'),
+    loupe_all_panes: f.boolean(false).section('Panes')
+      .describe('Show the loupe on every engine pane at once, not only the one under the cursor'),
   };
 }
 

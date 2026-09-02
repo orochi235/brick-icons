@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildSchema, defaultsFor, LAB_ONLY, RENDER_KEYS } from '@lab/config/nodes';
+import { buildSchema, defaultsFor, LAB_ONLY, RENDER_KEYS, renderConfig } from '@lab/config/nodes';
 import type { SchemaField } from '@lab/api/types';
 
 const field = (over: Partial<SchemaField>): SchemaField => ({
@@ -79,8 +79,6 @@ describe('RENDER_KEYS', () => {
   });
 });
 
-import { renderConfig } from '@lab/config/nodes';
-
 describe('renderConfig', () => {
   it('drops the lab-only fields', () => {
     const got = renderConfig({ part: '3941', layout: 'split', sources: ['occt'],
@@ -142,5 +140,13 @@ describe('a non-switch flag resolved to false', () => {
     const d = defaultsFor([field({ key: 'weld_corners', type: 'bool',
                                    effective: false as unknown as null })]);
     expect(d.weld_corners).toBe(false);
+  });
+});
+
+describe('the loupe keys', () => {
+  it('never reach the CLI as flags', () => {
+    const out = renderConfig({ part: '3005', engine: 'naive', loupe_factor: 8,
+                               loupe_sticky: true, loupe_all_panes: true });
+    expect(out).toEqual({ engine: 'naive' });
   });
 });
