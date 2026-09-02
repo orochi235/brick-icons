@@ -256,44 +256,38 @@ exact surface. `--engine occt --shade-style flat3` fills all 21 parts of the
 `OCCT-MIGRATION.md` is still the roadmap. Items 1 and 2 are done; 3, 4 and 5
 are not, and `occt` is still not the default.
 
-### One cause explains most of the remaining gap
+### Where it still differs
 
-Structure agrees across the corpus; tone and element counts do not. **Where
-LDraw authors a curve as facets, `occt` sews N planes and flat-tones each,
-while `naive` substitutes one analytic primitive and gives the group one
-gradient.** Measured on that run:
+Structure agrees across the corpus and the fills now shade like naive's:
+faceted curves union across their declared type-5 seams and share one
+gradient, and face-boundary conics are arc-recovery candidates. Gradient
+counts land near naive's (`6589` 21 against 21, `3649` 93 against 87, `3941`
+12 against 14) and `L` falls below naive's on most parts (`3649`
+21889 -> 16164, `4740` 350 -> 16, `99781` 152 -> 75, `3960` 451 -> 391).
+`A` rises on the round parts, which is what `OCCT-MIGRATION.md` predicts.
 
-- `3960`'s dome emits **194 same-colour fills against naive's 1**, and reads as
-  a flat disc rather than a dome.
-- `32062` loses every gradient (naive 16, occt 0): 178 planes, no curved
-  surface at all.
-- `4740` and `3942c` are flatter and differently toned for the same reason.
-- `L` moves both ways — 32062 435->1631, 4070 110->983, 4589 90->496,
-  3960 451->1232, against 3942c 1428->1051, 6589 1752->1426, 4740 350->156.
-  `A` **falls** on nearly every round part (4019 360->257, 3649 1124->765),
-  which is the opposite of what `OCCT-MIGRATION.md` predicts. Whoever picks
-  this up should decide whether that prediction or the engine is wrong.
+Three parts still diverge, all in the same direction — occt draws far more
+line commands than naive:
 
-Boundary conics now join the arc-recovery list, which is what the design
-asked for and the plan left out: `4740` fell from 156 `L` to 16 and `3942c`
-from 1051 to 775, with `4589`, `3960` and `32062` unmoved (`32062` authors no
-conic edge at all). What is still missing is a smooth-group merge keyed the
-way `shade._attach_smooth_gradients` keys naive's, on type-5 conditional
-lines — that is what would collapse `3960`'s 194 fills and give the dome its
-gradient back.
+- **`4070` `L` 110 -> 935**, and it is the one part with a visible fill hole
+  (below). The two are probably the same defect.
+- **`32062` `L` 435 -> 1333.** It sews as 178 planes with no curved surface at
+  all, so nothing groups it but coplanarity; naive substitutes analytic rounds
+  for the axle ends and gets 16 gradients where occt gets 13.
+- **`4589` `L` 90 -> 496**, unmoved by either fill change.
 
-### occt-only defects found by that run
+### occt-only defects
 
 - **`4070`: an unfilled wedge on the right face.** Visible on the contact
-  sheet, occt only. Its base-ledge edge was already open (below); this is a
-  fill hole, not the same symptom.
+  sheet, occt only, and undiagnosed. Its base-ledge edge was already open
+  (below); whether that is the same defect is untested.
 - **bbox shifts**: `3941` 1.18, `6589` 4.84. Every other part is under 1.0.
-- **`3649` costs 384s** for the naive+occt pair the comparison renders (the
+- **`3649` costs 392s** for the naive+occt pair the comparison renders (the
   script does not split them). `order_faces` is O(faces^2) in witness tests
   and 3649 sews 846 faces; ordering 3960's 828 faces alone measured 5.3s, so
-  the sort is not the whole 384s. Not a blocker; it sets the corpus's pace.
+  the sort is not the whole of it. Not a blocker; it sets the corpus's pace.
 
-Durable records, none of which this file repeats:
+Durable records, none of which this file repeats:Durable records, none of which this file repeats:
 
 - `OCCT-MIGRATION.md` — what has to exist before `--engine occt` can be the
   default, and what is out of scope.
