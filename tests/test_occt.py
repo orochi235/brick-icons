@@ -705,3 +705,44 @@ def test_the_fit_sidecar_still_composes_under_occt(ldraw_dir):
     right, up, fwd = hlr.view_basis(30.0, 45.0)
     res = occt.visible_segments(out, right, up, 512, cull=True, fwd=fwd)
     assert hlr.canvas_affine(res, 3.0, 5.0, 7.0) == (3.0, 5.0, 7.0)
+
+
+def test_a_cylinder_across_the_view_has_two_limbs_half_a_turn_apart():
+    # a and b span the RADIAL plane, so the axis is a x b -- here (1,0,0),
+    # across the view. Spanning the view plane instead is the end-on cylinder
+    # below, which has no limb at all.
+    fwd = np.array([0.0, 0.0, 1.0])
+    a, b, c = np.array([0.0, 1.0, 0.0]), np.array([0.0, 0.0, 1.0]), np.zeros(3)
+    us = occt._limb_params(a, b, c, fwd)
+    assert len(us) == 2
+    assert abs(((us[1] - us[0]) % (2 * math.pi)) - math.pi) < 1e-9
+
+
+def test_an_end_on_cylinder_has_no_limb():
+    """Axis along the view: the wall projects onto its own end circle and
+    encloses no area, so there is no generator to cut it at."""
+    fwd = np.array([0.0, 0.0, 1.0])
+    a, b = np.array([1.0, 0.0, 0.0]), np.array([0.0, 1.0, 0.0])
+    assert occt._limb_params(a, b, np.zeros(3), fwd) == []
+
+
+def test_a_surface_that_never_turns_edge_on_has_no_limb():
+    """A cone pointed at the camera: every normal leans toward it."""
+    fwd = np.array([0.0, 0.0, 1.0])
+    a = np.array([0.05, 0.0, 0.0]); b = np.array([0.0, 0.05, 0.0])
+    c = np.array([0.0, 0.0, -1.0])
+    assert occt._limb_params(a, b, c, fwd) == []
+
+
+def test_a_limb_parameter_really_is_edge_on():
+    # c=0.4 here makes |ratio| 1.07, so there are no roots and the assertion
+    # below never runs -- the test then passes against any implementation.
+    # Keep the axial term small enough that the surface does turn edge-on.
+    fwd = np.array([0.3, -0.5, 0.81]); fwd = fwd / np.linalg.norm(fwd)
+    a = np.array([1.0, 0.2, 0.0]); b = np.array([0.1, 1.0, 0.3])
+    c = np.array([0.0, 0.0, 0.2])
+    us = occt._limb_params(a, b, c, fwd)
+    assert len(us) == 2
+    for u in us:
+        n = math.cos(u) * a + math.sin(u) * b + c
+        assert abs(float(n @ fwd)) < 1e-9

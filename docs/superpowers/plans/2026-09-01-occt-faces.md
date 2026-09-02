@@ -478,7 +478,7 @@ A cylinder or cone's silhouette is a generator where the surface normal turns pe
 - Modify: `brick_icons/occt.py`
 - Test: `tests/test_occt.py`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 def test_a_cylinder_across_the_view_has_two_limbs_half_a_turn_apart():
@@ -506,12 +506,12 @@ def test_a_limb_parameter_really_is_edge_on():
         assert abs(float(n @ fwd)) < 1e-9
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `.venv/bin/pytest tests/test_occt.py -k limb -v`
 Expected: FAIL, `AttributeError: module 'brick_icons.occt' has no attribute '_limb_params'`
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```python
 def _limb_params(a, b, c, fwd):
@@ -535,12 +535,12 @@ def _limb_params(a, b, c, fwd):
                    (math.pi - u - phi) % (2 * math.pi)})
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `.venv/bin/pytest tests/test_occt.py -k limb -v`
 Expected: 3 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add brick_icons/occt.py tests/test_occt.py

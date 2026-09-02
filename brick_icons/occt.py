@@ -870,6 +870,27 @@ def _wire_points(wire, step_deg=BOUNDARY_STEP_DEG):
     return np.array(loop, float)
 
 
+def _limb_params(a, b, c, fwd):
+    """Parameters where a curved surface turns edge-on to the camera.
+
+    Every curved surface in this library has a normal of the form
+    n(u) = cos u * a + sin u * b + c (c is zero for a cylinder, the axial term
+    for a cone), so n(u).fwd = 0 is A cos u + B sin u + C = 0 -- at most two
+    roots, and none when the surface never turns edge-on at all.
+    """
+    A, B, C = float(a @ fwd), float(b @ fwd), float(c @ fwd)
+    R = math.hypot(A, B)
+    if R < 1e-12:
+        return []
+    ratio = -C / R
+    if abs(ratio) > 1.0:
+        return []
+    phi = math.atan2(A, B)              # A cos u + B sin u == R sin(u + phi)
+    u = math.asin(max(-1.0, min(1.0, ratio)))
+    return sorted({(u - phi) % (2 * math.pi),
+                   (math.pi - u - phi) % (2 * math.pi)})
+
+
 def _plane_face(face, proj, step_deg=BOUNDARY_STEP_DEG):
     """One planar face as a fill_ops face dict."""
     pl = BRepAdaptor_Surface(face).Plane()
