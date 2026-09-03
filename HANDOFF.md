@@ -48,25 +48,12 @@ filed; the diagnosis is under the halo entry in Still open. `occt` draws the
 part's authored radii and nothing else, so the stud-ring trap named here as the
 candidate is not implicated and neither is `locus_arc`.
 
-**Three things for whoever owns `fbfda92`, none of them this branch's doing:**
+**The one finding `fbfda92` left that the fixes above did not close:**
 
-- **It regressed `naive`, on the SVG path only.** `6589` under `--shading
-  outline --shade-style flat3` dies with a shapely `TopologyException` (side
-  location conflict) at `--format svg`, at both 1024 and 2048 `--render-px`;
-  the same render at `--format png` passes at both. The same render succeeds
-  with `brick_icons/` from `c7a0e67`. Reproduce with svg — a png run says
-  nothing, which is how this reads as fixed when it is not. It is also why the
-  lab hits it and `scripts/render-references.py` dies on this part: both
-  default to svg.
-- **The golden gate cannot see that.** A case that ERRORS is dropped from the
-  hash set instead of failing, so `BRICK_GOLDENS=full` reported one fewer case
-  hashed and still failed only on drift. A part that stops rendering entirely
-  passes.
-- **The drift is real and unfrozen.** Every case that moved is `outline-flat3`;
-  every `outline` and `wireframe` case is byte-clean. That is the signature of a
-  fill-stage change, which is what the commit says it is, so it looks intended
-  and merely un-re-frozen -- but only its author can say. Re-run
-  `BRICK_GOLDENS=full` for the current list rather than trusting a count here.
+- **The golden gate cannot see a part that stops rendering.** A case that
+  ERRORS is dropped from the hash set instead of failing, so `BRICK_GOLDENS=full`
+  reported one fewer case hashed and still failed only on drift. `6589`'s crash
+  was invisible to it for exactly that reason.
 
 **Decided in conversation, recoverable from nowhere else:** a full sweep takes a
 RADIAL gradient even though that diverges from `naive` further, not less --
@@ -75,8 +62,9 @@ the same nine-task plan built in parallel; it reintroduces the plane cull
 `16321b5` removed and should be deleted rather than merged, once someone is
 satisfied nothing else in it is wanted.
 
-The worktree has no `lab/node_modules`, so the lab has to run from the main
-checkout or be installed there first.
+The worktree has its own `lab/node_modules` now, so run the lab from it rather
+than from the main checkout — marks filed from there land in whatever tree is
+serving them.
 
 ## Read first: there are two threads now
 
@@ -91,7 +79,7 @@ plans in `docs/superpowers/plans/` are executed and their walkthroughs run.
 
 Run it: `.venv/bin/python -m brick_icons.lab` and `cd lab && npm run dev`, then
 open `http://localhost:5178`. Gates are `.venv/bin/pytest -q` and, in `lab/`,
-`npx vitest run && npm run typecheck` (218 frontend tests).
+`npx vitest run && npm run typecheck` (351 frontend tests).
 
 Two instruments. **Part inspector**: a pane per enabled source — `naive`,
 `occt`, LDView, an orbitable 3D view, a printed part's decal, and a pixel diff
