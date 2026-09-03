@@ -11,3 +11,4 @@ vendor/
 /vendor
 .playwright-mcp/
 .superpowers/
+CLAUDE.local.md
