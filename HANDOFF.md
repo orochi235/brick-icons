@@ -1,15 +1,24 @@
 # Handoff — `main`: the corpus lab, and the OCCT engine
 
-On **`main`**. The render goldens were re-frozen for the arcfit changes below.
-A plain `pytest` skips the drift tests, and `BRICK_GOLDENS=1` renders only
-`3005` — neither is verification; only `BRICK_GOLDENS=full` (~22 min) is.
+On **`main`**, pushed through `114d115`. A plain `pytest` skips the drift
+tests, and `BRICK_GOLDENS=1` renders only `3005` — neither is verification;
+only `BRICK_GOLDENS=full` (~22 min) is.
 
-**The merged tree is verified, but not by one process.** `=full` ran on the
-merged render path — 16 passed, the 52 cases byte-clean — and the rest of the
-suite ran beside it in chunks: 640 tests plus the goldens against 696
-collected, every file in `tests/` accounted for. The honest limit: that was six
-processes rather than one, so it cannot catch cross-suite state leakage a
-single run would. Nothing here suggests such a coupling.
+**START HERE: the render goldens are STALE and one test is red for it.**
+`fbfda92` improved the fills on BOTH engines, so
+`tests/test_lab_app.py::test_goldens_check_starts_a_job_over_the_parts_cases`
+fails on a clean tree — `3005` reports `moved`. That is the only known-red
+test; 111 shade/geom2d, 64 occt and the 3-part fill gate were green. Nothing
+in `tests/goldens/` has been touched. Before re-freezing, RE-MEASURE: the
+per-case drift recorded below was taken from the stroke-band half of the fix
+only and predates the `_refine_order_clips` rewrite in the same commit.
+
+    .venv/bin/python scripts/freeze-goldens.py --out /tmp/new
+    .venv/bin/python scripts/compare-goldens.py /tmp/new --out report.md
+
+A whole-corpus `freeze-goldens.py` run WAS KILLED at 35/52 in this
+environment, twice — see the chunking trap below. Per-case
+`--only <case>` finished every time.
 
 ## Read first: there are two threads now
 
@@ -248,6 +257,16 @@ Two `arcfit` changes, both on the NAIVE path, both re-frozen into the goldens
   own silhouette". Both spans measure span_deg 180, so it is NOT the
   full-turn/end-on-cylinder case. Undiagnosed; predates the fill work
   (0 pixels move across it).
+- **`32062` (occt): both bottom notches carry two stray fill elements
+  each**, and they are the SAME defect twice — the pairs sit at
+  (66.3, 92.2)/(156.5, 137.3) and (67.3, 93.8)/(157.5, 138.9) in a 700px
+  render, an offset of exactly (90.2, 45.1), which is the notch spacing.
+  Each notch gets a 9.8 px^2 three-vertex `#5e5e5e` triangle with a 0.6 px^2
+  black one inside it. Rank the emitted fills by area to find them again;
+  they are the four smallest of 26 subpaths. Undiagnosed — spotted on the
+  face sheet, never chased. Something is also off on the BACK EDGE of the
+  frontmost bottom notch (naive-vs-occt diff component, 2028 px centred
+  (438, 352)); not characterized at all.
 - **`3673` (naive): only the front notch has its rounded end pocket.** Also
   zero arcfit-claimed edges. The earlier guess that this and `32062` were one
   bug is dead — `32062`'s was the locus gap, and `3673` has no chains at all.
@@ -269,6 +288,21 @@ exact surface. `--engine occt --shade-style flat3` fills all 21 parts of the
 
 `OCCT-MIGRATION.md` is still the roadmap. Items 1 and 2 are done; 3, 4 and 5
 are not, and `occt` is still not the default.
+
+**Look at faces, not at drawings — `scripts/render-face-sheet.py`.** One flat
+colour per fill element, strokes dropped, over any part list:
+
+    .venv/bin/python scripts/render-face-sheet.py --engine occt \
+      --list specimens.txt
+
+The ordinary sheet paints a 2px stroke over every seam, which is exactly
+where a fill defect hides. `4070`'s ledge seam was a 1.2px staircase for the
+life of the port and only ever showed because the stroke that covers it is
+truncated. One pass over the 22 specimens turned up, unchased: `3941`
+arrow-shaped artifacts on the top face, `6143` slivers, `3673` stripes,
+`3040bp08` fragments, plus the `32062` notch elements listed below. None of
+those are in the defects file yet. Note `--debug-colors` is NOT this — it
+recolours strokes and leaves the fills grey.
 
 ### Where it still differs
 
