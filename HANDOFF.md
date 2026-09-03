@@ -78,7 +78,7 @@ Design: `docs/superpowers/specs/2026-08-31-corpus-lab-design.md`. All five
 plans in `docs/superpowers/plans/` are executed and their walkthroughs run.
 
 Run it: `.venv/bin/python -m brick_icons.lab` and `cd lab && npm run dev`, then
-open `http://localhost:5178`. Gates are `.venv/bin/pytest -q` and, in `lab/`,
+open `http://localhost:5178`. Gates are `.venv/bin/python -m pytest -q` and, in `lab/`,
 `npx vitest run && npm run typecheck` (351 frontend tests).
 
 Two instruments. **Part inspector**: a pane per enabled source — `naive`,
@@ -101,6 +101,15 @@ decal, which are framed differently. Design:
 
 ### Traps
 
+- **`.venv/bin/pytest` in a worktree tests the MAIN checkout's library.** The
+  venv is shared and its editable `brick_icons` is rooted at the main clone, so
+  a console-script `pytest` imports that one -- including whatever is
+  uncommitted in it -- and the worktree's own `brick_icons/` never loads. It
+  fails loudly only where the branch has a feature main lacks (`test_occt.py`'s
+  two full-turn tests); everywhere else it goes green against the wrong code.
+  Run `.venv/bin/python -m pytest`, which puts cwd first on `sys.path`, or
+  `PYTHONPATH=$PWD .venv/bin/pytest`. A `-m` invocation such as
+  `python -m brick_icons.cli` was never affected, which is what hides it.
 - **`seen` and `renderSignature` answer different questions — do not merge
   them.** Both ask "is what I am looking at still the run this belongs to", and
   merging them looks obviously right. It is not. `identity.ts`'s `SEEN_KEYS` is
