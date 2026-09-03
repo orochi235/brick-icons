@@ -1,26 +1,26 @@
 {
   "bbox": [
     6.0,
-    15.42,
+    15.47,
     250.0,
     156.35
   ],
   "commands": {
-    "A": 104,
-    "L": 5621,
-    "M": 319,
-    "Z": 314
+    "A": 105,
+    "L": 5055,
+    "M": 316,
+    "Z": 311
   },
   "fills": {
     "#767676": 61,
     "#cccccc": 4,
-    "#cda4de": 169,
+    "#cda4de": 170,
     "#f4f4f4": 54,
-    "gradient": 6,
+    "gradient": 5,
     "none": 6
   },
-  "gradient_stops": 58,
-  "gradients": 6,
+  "gradient_stops": 49,
+  "gradients": 5,
   "lines": 4,
   "paths": 300,
   "transforms": 0,
