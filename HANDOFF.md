@@ -231,9 +231,23 @@ Two `arcfit` changes, both on the NAIVE path, both re-frozen into the goldens
   draws a different conic (14.88 x 9.11) instead. **Not** `UnifySameDomain` —
   building the shape without it changes neither the sharp-fragment count (481)
   nor the match (1 of 8). Undiagnosed.
-- **`4070` (occt): the base ledge's top-front edge is gone.** `4070` has ZERO
-  arcfit-claimed edges, so it is not the family above. Still the cleanest
-  reproduction of a dropped edge on a simple, fast part.
+- **`4070` (occt): the base ledge's top edge is TRUNCATED, not gone** — it
+  draws as two short stubs, one at each end, with the whole middle missing.
+  `4070` has ZERO arcfit-claimed edges, so it is not the family above. Still
+  the cleanest reproduction of a dropped edge on a simple, fast part. It used
+  to read as a ragged dotted line because the fill seam underneath was a
+  1.2px staircase; that seam is straight now, so what is left is purely the
+  missing stroke. See the memory note for three disproofs and the one
+  segment that measures as naive-only.
+- **`4070` (occt): a dark unstroked wedge past the SNOT stud's outer rim**,
+  at roughly 1:30 on the stud, lying on the front wall where naive draws
+  plain wall. It is fill op 7 of 11 — a GRADIENT (so a curved wall span,
+  not a plane), depth -0.59, bounded by 4 arcs and 0 lines. So a stud
+  cylinder's span polygon is painting outside the stud's own silhouette,
+  the class `_refine_order_clips` calls "a wall span polygon overhangs its
+  own silhouette". Both spans measure span_deg 180, so it is NOT the
+  full-turn/end-on-cylinder case. Undiagnosed; predates the fill work
+  (0 pixels move across it).
 - **`3673` (naive): only the front notch has its rounded end pocket.** Also
   zero arcfit-claimed edges. The earlier guess that this and `32062` were one
   bug is dead — `32062`'s was the locus gap, and `3673` has no chains at all.
@@ -263,16 +277,68 @@ curves union across their declared type-5 seams and share one gradient, and
 face-boundary conics are arc-recovery candidates. `A` rises on the round parts
 — which is what `OCCT-MIGRATION.md` predicts — and `L` lands at or below
 naive's on 18 of 21 (`3649` 21889 -> 16000, `4019` 3733 -> 2421, `3942c`
-1428 -> 402, `4740` 350 -> 16, `99781` 152 -> 75).
+1428 -> 402, `4740` 350 -> 16, `99781` 152 -> 75) — all measured BEFORE the
+buffer fix below, which moved both engines, so re-measure before quoting.
 
-Three parts still draw far more line commands than naive, and nothing so far
-explains them:
+**The three parts that drew far more line commands than naive were
+inheriting a shapely `buffer()` boundary.** It was neither the HLR nor the
+fills' own sampling: on strokes-only `outline` all three already agreed
+(6 -> 12, 49 -> 49, 97 -> 95), and their fill faces reached `fill_ops` with
+FEWER vertices than naive's (`4589` 854 against 1320). `fill_ops` added the
+rest, in the two stages that hand a region between elements on a coverage or
+order decision. Both bound that region with a `buffer()` whose round joins
+tessellate at ~0.05 px, and the fragments cut against them keep every vertex
+— on a boundary sitting half a stroke off the true arc, where no arc
+candidate can absorb it. 1020 of `32062`'s 1290 fill segments were shorter
+than a quarter pixel, in runs up to 104 long.
 
-- **`4589` `L` 90 -> 498**, unmoved by any of the three fill changes.
-- **`4070` `L` 110 -> 719.**
-- **`32062` `L` 435 -> 1377.** It sews as 178 planes with no curved surface at
-  all, so only coplanarity groups it, while naive substitutes analytic rounds
-  for the axle ends — 16 gradients against occt's 13.
+`_stroke_band` is FIXED: it simplifies itself now (`DECISION_SIMPLIFY`), and
+cleaning the band rather than the pieces cut from it is load-bearing —
+simplifying the donated piece instead moves the donation fixpoint and swaps a
+31px tone sliver on `32062`'s axle end. `4589` 498 -> 88 and `32062`
+1377 -> 424, gated by
+`test_a_fill_boundary_carries_no_stroke_band_tessellation`. Naive fell too
+(90 -> 73, 435 -> 377) since the band serves both engines.
+
+**The render goldens need re-freezing for it, and the drift is measured.**
+Every strokes-only `outline` and `wireframe` case is byte-identical — the
+band only bounds fills — and `outline-flat3` sheds vertices with nothing
+moving on screen: `3649` `L` 21889 -> 12658 and `4019` 3733 -> 3334 at ZERO
+pixels differing by more than 32 grey levels (peak 3 and 2), `3673`
+1015 -> 594, `6589` 1752 -> 1151, `3941` 1417 -> 1177, `4740p03`
+5621 -> 5499. Nothing was re-frozen; `tests/goldens/` is untouched and
+`test_lab_app`'s golden check is red until someone does it.
+
+**`_refine_order_clips` sampled a straight answer.** Two planes' depths are
+both affine in screen space, so "is `idx` in front of `j`" is one affine
+inequality and the region it wins is an exact half-plane. The pass
+grid-sampled it at 1.2 px anyway, which quantized `4070`'s ledge seam into a
+staircase and spent 315 vertices per face on it — visible because the stroke
+that should cover that seam is truncated to two stubs (a separate HLR bug,
+see the memory note). It solves the all-planar case in closed form now and
+runs the lattice only on the part of the region a CURVED coverer overlaps,
+since only a curved surface can also MISS the ray. `4070` 719 -> 100 against
+naive's 104, the ledge face 315 vertices -> 10, and `3673` — the part the
+pass exists for — is pixel-identical.
+
+Two traps in that closed form, both of which produce a plausible wrong
+picture rather than an error. A coverer occludes only INSIDE ITS OWN
+POLYGON, so the take is `region - (geoms[j] AND half-plane)`; clipping by the
+unbounded half-plane instead let a face erase area it does not cover, and
+4070's ledge top vanished. And the all-planar test has to be per-coverer:
+gating on "every coverer is a plane" fell back to the grid for the whole
+region because the ledge's lost area also grazed the stud walls.
+
+Parts whose refine regions genuinely involve a curved coverer still run the
+lattice and still carry its tessellation (`3941` 51 sub-quarter-pixel
+segments in a row, `4019` 64). Simplifying THAT is a real trade — it moves
+pixels (a `4019` gear-recess sliver, a NEW `4740p03` hairline) — and nobody
+has called it. Gating on the unsimplified area does not avoid it; tried.
+
+What separates the two engines after all that is the span boundary: 42 of the
+200 edges on `4589`'s cone-wall ring lie on no arc candidate and emit as
+chords where naive's counterpart emits 10. `geom2d._assign_edges` is where to
+look; undiagnosed.
 
 ### occt-only defects
 

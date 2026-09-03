@@ -1,6 +1,7 @@
 import collections
 import importlib.util
 import math
+import re
 import shutil
 import subprocess
 import sys
@@ -1001,3 +1002,59 @@ def test_plane_grouping_unions_only_what_the_part_declares(ldraw_dir):
     n_with = len({f["group"] for f in with_seams if f["kind"] == "occt-plane"})
     n_bare = len({f["group"] for f in bare if f["kind"] == "occt-plane"})
     assert n_bare > n_with * 5, f"seams changed nothing: {n_bare} vs {n_with}"
+
+
+@pytest.mark.parametrize("part", ["4589", "4070", "32062"])
+def test_a_fill_boundary_carries_no_sampled_boundary(part, tmp_path, ldraw_dir):
+    """A fill boundary must not be a buffer's or a lattice's tessellation.
+
+    Two stages hand a region between elements and used to write their own
+    sampling into the fragment. `_stroke_band` buffers every drawn op, and
+    its round joins tessellate at ~0.05 px. `_refine_order_clips` sampled
+    the region on a 1.2 px grid even between two PLANES, where the answer
+    is an exact half-plane. Both put vertices on a boundary no arc
+    candidate can absorb, so they cost L commands and draw nothing: these
+    three ran 498/719/1377 line commands against naive's 90/110/435, and
+    1020 of 32062's 1290 fill segments were shorter than a quarter pixel.
+
+    A sampled boundary leaves a RUN of short segments, which is what this
+    measures -- a lone short segment is ordinary geometry. Held only for
+    these three, and only for occt. Parts whose refine regions genuinely
+    involve a CURVED coverer still run the grid and still carry such runs
+    (3941 51, 4019 64), and so does the naive path (32062 18).
+    """
+    from brick_icons.cli import build_parser, _config_from_args, process_one
+
+    out = tmp_path / "occt"
+    args = build_parser().parse_args(
+        [part, "--engine", "occt", "--format", "svg", "--shading", "outline",
+         "--shade-style", "flat3", "--out", str(out)])
+    process_one(_config_from_args(args), part, out)
+
+    worst = total = short = 0
+    for m in re.finditer(r"<path\b([^>]*)>", (out / f"{part}.svg").read_text()):
+        attrs = dict(re.findall(r'([\w:-]+)="([^"]*)"', m.group(1)))
+        if attrs.get("fill") in (None, "none"):        # fills, not strokes
+            continue
+        run, cur = 0, None
+        for c in re.finditer(r"([MLAZ])([^MLAZ]*)", attrs.get("d", "")):
+            nums = [float(v) for v in re.findall(r"-?\d*\.?\d+", c.group(2))]
+            if c.group(1) == "Z" or len(nums) < 2:
+                run, cur = 0, None
+                continue
+            pt = (nums[-2], nums[-1])
+            if c.group(1) != "L" or cur is None:
+                run = 0                    # an arc or a new subpath breaks it
+            else:
+                total += 1
+                if math.dist(cur, pt) < 0.25:
+                    short += 1
+                    run += 1
+                    worst = max(worst, run)
+                else:
+                    run = 0
+            cur = pt
+
+    assert worst <= 4, (
+        f"{part}: {worst} sub-quarter-pixel fill segments in a row "
+        f"({short} of {total}) -- a buffer boundary reached the path")

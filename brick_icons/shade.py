@@ -355,28 +355,96 @@ def _face_depth_probe(face, proj, fit):
     return probe
 
 
+def _plane_depth_coef(face):
+    """(a, b, c) with depth = a*x + b*y + c for a planar face, else None.
+
+    Same fit and same planarity bail as _face_depth_probe, but handing back
+    the COEFFICIENTS: two of these subtract into one affine inequality, so
+    which of two planes is in front is a half-plane with a straight edge —
+    not something a grid has to discover.
+    """
+    poly = np.asarray(face["poly"], float)
+    zs = np.asarray(face.get("zs", ()), float)
+    if "normal" not in face or len(zs) != len(poly) or len(poly) < 3:
+        return None
+    A = np.column_stack([poly[:, 0], poly[:, 1], np.ones(len(poly))])
+    try:
+        coef, *_ = np.linalg.lstsq(A, zs, rcond=None)
+    except np.linalg.LinAlgError:
+        return None
+    if np.abs(A @ coef - zs).max() > 1e-3 * (abs(zs).max() + 1.0):
+        return None
+    return coef
+
+
+def _half_plane(a, b, c, bounds, pad=8.0):
+    """Polygon of {a*x + b*y + c >= 0}, big enough to cover `bounds`."""
+    from shapely.geometry import Polygon as _P
+    x0, y0, x1, y1 = bounds
+    cx, cy = (x0 + x1) / 2.0, (y0 + y1) / 2.0
+    n = math.hypot(a, b)
+    if n < 1e-12:                     # parallel depths: all of it or none
+        return None if c < 0 else _P([(x0 - pad, y0 - pad), (x1 + pad, y0 - pad),
+                                      (x1 + pad, y1 + pad), (x0 - pad, y1 + pad)])
+    L = 2.0 * math.hypot(x1 - x0, y1 - y0) + pad
+    ux, uy = a / n, b / n                          # unit normal, into the region
+    d = (a * cx + b * cy + c) / n                  # centre's signed distance
+    px, py = cx - d * ux, cy - d * uy              # foot on the line
+    vx, vy = -uy, ux                               # along the line
+    return _P([(px + vx * L, py + vy * L), (px - vx * L, py - vy * L),
+               (px - vx * L + ux * L, py - vy * L + uy * L),
+               (px + vx * L + ux * L, py + vy * L + uy * L)])
+
+
 def _refine_order_clips(ordered, geoms, frags, proj, fit, step=1.2):
     """Fix clips the scalar paint order got wrong.
 
     A face that passes THROUGH other geometry (3673's pin barrel runs through
     its collar) admits no correct total order: with a single scalar it
     subtracts regions where it is actually behind. For each region a face
-    lost, grid-sample true surface depths: where EVERY covering face is
-    absent (its surface misses the ray — a wall span polygon overhangs its
-    own silhouette) or verifiably behind, hand the cells back to the front
-    face and cut them out of the impostors. The cell boundary is blocky, but
-    faces genuinely in front keep their exact fragments and paint later, so
-    they overpaint the ragged edge; order-consistent clips are untouched."""
+    lost, work out where it is really in front and hand that back, cutting it
+    out of the impostors.
+
+    Between two PLANES that is exact and needs no sampling: both depths are
+    affine in screen space, so `idx is in front of j` is one affine
+    inequality and the region is a half-plane with a straight edge. Only a
+    curved coverer needs the grid — its surface can also MISS the ray, which
+    no inequality expresses — so the lattice runs on just the part of the
+    region a curved face overlaps. Sampling the whole thing quantized
+    straight seams into a 1.2px staircase and spent ~300 vertices per face
+    doing it, which shows wherever the stroke that should cover the seam is
+    missing (4070's ledge). The cell boundary is still blocky where it runs,
+    but faces genuinely in front keep their exact fragments and paint later,
+    so they overpaint the ragged edge; order-consistent clips are untouched."""
     if not geoms:
         return
     depths = [f["depth"] for f in ordered]
     eps = 0.02 * ((max(depths) - min(depths)) or 1.0)
-    probes = {}
+    probes, coefs = {}, {}
 
     def probe(idx):
         if idx not in probes:
             probes[idx] = _face_depth_probe(ordered[idx], proj, fit)
         return probes[idx]
+
+    def coef(idx):
+        if idx not in coefs:
+            coefs[idx] = _plane_depth_coef(ordered[idx])
+        return coefs[idx]
+
+    def apply(idx, take, cut_from):
+        if take is None or take.is_empty \
+                or geom2d.area(take) < 4 * MIN_FRAG_AREA:
+            return
+        frags[idx] = geom2d.union(frags[idx], take) if idx in frags else take
+        for j in cut_from:                         # impostors lose the region
+            if j not in frags:
+                continue
+            cut = geom2d.difference(frags[j], take)
+            if geom2d.area(cut) >= MIN_FRAG_AREA:
+                frags[j] = cut
+            elif geom2d.area(geom2d.intersection(frags[j], take)) > 0:
+                del frags[j]
 
     import shapely as _sh
     from shapely.geometry import box
@@ -385,24 +453,60 @@ def _refine_order_clips(ordered, geoms, frags, proj, fit, step=1.2):
         lost = geom2d.difference(g, frags[idx]) if idx in frags else g
         if geom2d.area(lost) < 4 * MIN_FRAG_AREA or probe(idx) is None:
             continue
+        near = [j for j in sorted(geoms)
+                if j != idx and geom2d.area(geom2d.intersection(lost, geoms[j]))
+                >= MIN_FRAG_AREA]
+        curved = [geoms[j] for j in near if coef(j) is None]
+        cov = geom2d.union_all(curved) if curved else None
+
+        exact = None
+        if coef(idx) is not None:
+            reg = geom2d.difference(lost, cov) if cov is not None else lost
+            for j in near:
+                if reg.is_empty:
+                    break
+                if coef(j) is None:
+                    continue
+                # j occludes only INSIDE ITS OWN POLYGON: the half-plane says
+                # where j is nearer, `geoms[j]` says where j exists at all,
+                # and only the intersection is taken away. Clipping by the
+                # unbounded half-plane instead lets a face erase area it
+                # does not even cover.
+                a, b, c = coef(j) - coef(idx)
+                front = _half_plane(-a, -b, eps - c, lost.bounds)
+                if front is None:                  # j is behind everywhere
+                    continue
+                reg = geom2d.difference(
+                    reg, geom2d.intersection(geoms[j], front))
+            exact = reg if not reg.is_empty else None
+
+        if cov is None:                            # nothing curved: done
+            apply(idx, exact, near)
+            continue
+
+        lost = geom2d.intersection(lost, cov)      # sample only what needs it
+        if geom2d.area(lost) < 4 * MIN_FRAG_AREA:
+            apply(idx, exact, near)
+            continue
         x0, y0, x1, y1 = lost.bounds
         gx = np.arange(x0 + step / 2, x1, step)
         gy = np.arange(y0 + step / 2, y1, step)
         if not len(gx) or not len(gy):
+            apply(idx, exact, near)
             continue
         XX, YY = np.meshgrid(gx, gy)
         pts = np.stack([XX.ravel(), YY.ravel()], 1)
         pts = pts[_sh.contains_xy(lost, pts[:, 0], pts[:, 1])]
         if not len(pts):
+            apply(idx, exact, near)
             continue
         di = probe(idx)(pts)
         exposed = np.isfinite(di)                     # no coverer in front yet
-        coverers = []
         # scan ALL other faces: true depth is the authority here, and an
         # impostor's real occluder sits at a LOWER paint order by definition
-        for j in sorted(geoms):
-            if j == idx or not exposed.any():
-                continue
+        for j in near:
+            if not exposed.any():
+                break
             inter = geom2d.intersection(lost, geoms[j])
             if geom2d.area(inter) < MIN_FRAG_AREA:
                 continue
@@ -415,29 +519,19 @@ def _refine_order_clips(ordered, geoms, frags, proj, fit, step=1.2):
                 continue
             dj = np.full(len(pts), np.inf)
             dj[sel] = pj(pts[sel])
-            in_front = sel & np.isfinite(dj) & (dj <= di + eps)
-            exposed &= ~in_front
-            coverers.append((j, sel))
-        if not exposed.any():
-            continue
-        cells = [box(p[0] - step / 2, p[1] - step / 2,
-                     p[0] + step / 2, p[1] + step / 2)
-                 for p in pts[exposed]]
-        # buffer past the cell lattice so no impostor frame survives along
-        # the region boundary; bleed into a true front face is harmless —
-        # it paints later and overpaints the overshoot exactly
-        take = geom2d.intersection(
-            geom2d.union_all(cells).buffer(step * 0.75), lost)
-        if geom2d.area(take) < 4 * MIN_FRAG_AREA:
-            continue
-        frags[idx] = geom2d.union(frags[idx], take) if idx in frags else take
-        for j, _ in coverers:                          # impostors lose the cells
-            if j in frags:
-                cut = geom2d.difference(frags[j], take)
-                if geom2d.area(cut) >= MIN_FRAG_AREA:
-                    frags[j] = cut
-                elif geom2d.area(geom2d.intersection(frags[j], take)) > 0:
-                    del frags[j]
+            exposed &= ~(sel & np.isfinite(dj) & (dj <= di + eps))
+        take = exact
+        if exposed.any():
+            cells = [box(p[0] - step / 2, p[1] - step / 2,
+                         p[0] + step / 2, p[1] + step / 2)
+                     for p in pts[exposed]]
+            # buffer past the cell lattice so no impostor frame survives along
+            # the region boundary; bleed into a true front face is harmless —
+            # it paints later and overpaints the overshoot exactly
+            grid = geom2d.intersection(
+                geom2d.union_all(cells).buffer(step * 0.75), lost)
+            take = grid if take is None else geom2d.union(take, grid)
+        apply(idx, take, near)
 
 
 def _ell_pts(op, t0, t1, step=1.0):
@@ -518,6 +612,14 @@ SPUR_MAX_AREA = 8.0
 # overhangs 0.4 past its boundary, plus ~a raster pixel of AA. Coverage
 # demands the seam sit this far INSIDE the drawn stroke.
 SPUR_COVER_MARGIN = 0.5
+# A region handed between elements on a COVERAGE decision is bounded by a
+# shapely buffer(), whose round joins tessellate at ~0.05 px. Cut a fragment
+# against one and it inherits every such vertex on a boundary no arc
+# candidate can absorb, so they emit as L commands and draw nothing (4589
+# 498 against naive's 90). The band's own uncertainty is the stroke width,
+# orders of magnitude coarser, so simplifying it this far cannot change what
+# it covers.
+DECISION_SIMPLIFY = 0.05
 
 
 def _merge_members(ordered, frags):
@@ -770,12 +872,17 @@ def _stroke_band(strokes, sil, line_px, sil_px):
     if not parts:
         return None, None
     import shapely as _sh
-    ink = geom2d.union_all(parts)
+    # Clean the band ITSELF, never the pieces later cut from it: every
+    # consumer then decides on the same geometry, so no decision moves.
+    # Simplifying the donated piece instead swapped a 31px tone sliver on
+    # 32062's axle end. Both buffers here tessellate (DECISION_SIMPLIFY).
+    ink = geom2d.union_all(parts).simplify(DECISION_SIMPLIFY)
     # coverage = ink eroded by the self-stroke overhang: a seam must sit
     # deep enough under the stroke that the fill's own 0.8px stroke stays
     # covered. Erode the UNION (junction overlaps keep their interior),
     # snapped back onto the precision grid (see geom2d.opened).
-    safe = _sh.set_precision(ink.buffer(-SPUR_COVER_MARGIN), geom2d.GRID)
+    safe = _sh.set_precision(
+        ink.buffer(-SPUR_COVER_MARGIN).simplify(DECISION_SIMPLIFY), geom2d.GRID)
     return safe, ink
 
 
