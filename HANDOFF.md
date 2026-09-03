@@ -11,6 +11,54 @@ collected, every file in `tests/` accounted for. The honest limit: that was six
 processes rather than one, so it cannot catch cross-suite state leakage a
 single run would. Nothing here suggests such a coupling.
 
+## Read first: unlanded work on `occt-full-turn-gradient`
+
+A baton pass, not a merge. The branch lives in the worktree
+`.claude/worktrees/occt-faces`; `git log --oneline main..occt-full-turn-gradient`
+is what has not landed and `git merge-base --is-ancestor main
+occt-full-turn-gradient` says whether it is still a fast-forward. `main` has
+moved under it once already.
+
+It makes a curved span that closes on itself shade as one dome: the coaxial
+stack shares one radial gradient, two stops spanning the surface's true
+extremes, and the focal point comes from the light rather than a least-squares
+slope, so it tracks the light to any angle. `tests/test_occt.py` covers it.
+
+**Next, and where the last session stopped:** `6589` draws extra circles. The
+user reads them as back-face edges that are mostly occluded and exposed over a
+small area, and was about to mark the affected regions in the lab so they land
+in `tests/goldens/defects.toml`. `locus_arc` is ruled out -- it takes its span
+from the fragment's own sampled points, so a sliver stays a sliver. The
+candidate left is this file's own stud-ring trap: HLR breaks a coincident-
+geometry tie VISIBLE and keeps a full 360-degree fragment, and `6589` is bores
+and hub rims coincident with their own walls. Unconfirmed on that part.
+
+**Three things for whoever owns `fbfda92`, none of them this branch's doing:**
+
+- **It regressed `naive`.** `6589` under `--shading outline --shade-style
+  flat3` dies with a shapely `TopologyException`; the same render succeeds with
+  `brick_icons/` from `c7a0e67`. Check it out and try it before assuming
+  otherwise.
+- **The golden gate cannot see that.** A case that ERRORS is dropped from the
+  hash set instead of failing, so `BRICK_GOLDENS=full` reported one fewer case
+  hashed and still failed only on drift. A part that stops rendering entirely
+  passes.
+- **The drift is real and unfrozen.** Every case that moved is `outline-flat3`;
+  every `outline` and `wireframe` case is byte-clean. That is the signature of a
+  fill-stage change, which is what the commit says it is, so it looks intended
+  and merely un-re-frozen -- but only its author can say. Re-run
+  `BRICK_GOLDENS=full` for the current list rather than trusting a count here.
+
+**Decided in conversation, recoverable from nowhere else:** a full sweep takes a
+RADIAL gradient even though that diverges from `naive` further, not less --
+chosen with that trade-off stated. And `worktree-occt-faces` is a duplicate of
+the same nine-task plan built in parallel; it reintroduces the plane cull
+`16321b5` removed and should be deleted rather than merged, once someone is
+satisfied nothing else in it is wanted.
+
+The worktree has no `lab/node_modules`, so the lab has to run from the main
+checkout or be installed there first.
+
 ## Read first: there are two threads now
 
 The **corpus lab** — a local web app for inspecting renders and tracking
