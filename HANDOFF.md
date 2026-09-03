@@ -24,21 +24,21 @@ stack shares one radial gradient, two stops spanning the surface's true
 extremes, and the focal point comes from the light rather than a least-squares
 slope, so it tracks the light to any angle. `tests/test_occt.py` covers it.
 
-**Next, and where the last session stopped:** `6589` draws extra circles. The
-user reads them as back-face edges that are mostly occluded and exposed over a
-small area, and was about to mark the affected regions in the lab so they land
-in `tests/goldens/defects.toml`. `locus_arc` is ruled out -- it takes its span
-from the fragment's own sampled points, so a sliver stays a sliver. The
-candidate left is this file's own stud-ring trap: HLR breaks a coincident-
-geometry tie VISIBLE and keeps a full 360-degree fragment, and `6589` is bores
-and hub rims coincident with their own walls. Unconfirmed on that part.
+**`6589`'s extra circles were `naive`'s, not `occt`'s.** Marked in the lab and
+filed; the diagnosis is under the halo entry in Still open. `occt` draws the
+part's authored radii and nothing else, so the stud-ring trap named here as the
+candidate is not implicated and neither is `locus_arc`.
 
 **Three things for whoever owns `fbfda92`, none of them this branch's doing:**
 
-- **It regressed `naive`.** `6589` under `--shading outline --shade-style
-  flat3` dies with a shapely `TopologyException`; the same render succeeds with
-  `brick_icons/` from `c7a0e67`. Check it out and try it before assuming
-  otherwise.
+- **It regressed `naive`, on the SVG path only.** `6589` under `--shading
+  outline --shade-style flat3` dies with a shapely `TopologyException` (side
+  location conflict) at `--format svg`, at both 1024 and 2048 `--render-px`;
+  the same render at `--format png` passes at both. The same render succeeds
+  with `brick_icons/` from `c7a0e67`. Reproduce with svg — a png run says
+  nothing, which is how this reads as fixed when it is not. It is also why the
+  lab hits it and `scripts/render-references.py` dies on this part: both
+  default to svg.
 - **The golden gate cannot see that.** A case that ERRORS is dropped from the
   hash set instead of failing, so `BRICK_GOLDENS=full` reported one fewer case
   hashed and still failed only on drift. A part that stops rendering entirely
@@ -300,9 +300,14 @@ Two `arcfit` changes, both on the NAIVE path, both re-frozen into the goldens
   zero arcfit-claimed edges. The earlier guess that this and `32062` were one
   bug is dead — `32062`'s was the locus gap, and `3673` has no chains at all.
 - **`99781`: a vertical line right of the hollow SNOT studs is missing.**
-- **`6589`'s misaligned halo on the naive path** — a halo is the signature of
-  the counterbore separator refit fixed for `4019` (`SEP_REFIT_MAX_GROWTH`), so
-  check whether `6589` has a refit sitting under the 10x cap.
+- **`6589`'s misaligned halo on the naive path — diagnosed, unfixed.** It is
+  the counterbore separator refit, and it does sit under the 10x cap: two
+  refits, the authored r=16 ring onto r=12.80 (sweep 121.72 -> 220.79, 1.81x)
+  and the authored r=12 onto r=11.33 (180.00 -> 344.69, 1.92x). `6589.dat`
+  authors circles only at r=9, 10, 12 and 16, so both are fabricated.
+  `SEP_REFIT_MAX_GROWTH` bounds the ANGULAR span only; the refit is free to
+  land on a circumcircle of any radius, which is what needs a guard. `occt`
+  draws the authored set and is right here.
 
 ## Read this before calling the port nearly done
 
@@ -586,7 +591,14 @@ A hand edit between the markers is overwritten — edit the store instead.
 
 <!-- defects:begin -->
 
-No defects filed.
+### Open
+
+- **`6589`** (naive) at `iso` — spurious ring at r=11.33 (separator refit)
+  naive draws a ring at r=11.33 LDU, unauthored the same way as 6589-naive-halo-r12.8. Refit of the authored r=12 ring: 0.944x radius, sweep 180.00 -> 344.69 deg (1.92x, under the same cap).
+- **`6589`** (naive) at `iso` — spurious ring at r=12.80 (separator refit)
+  naive draws a ring at r=12.80 LDU; 6589.dat authors circles only at r=9, 10, 12 and 16. The counterbore separator refit in hlr._snap_rim_crossings refits the authored r=16 ring onto this circumcircle (0.800x radius, sweep 121.72 -> 220.79 deg). SEP_REFIT_MAX_GROWTH caps angular growth at 10x, so 1.81x passes; nothing guards the radius. occt draws the authored set and is right.
+- **`6589`** (occt) at `iso` — this is weird
+  Unexamined; y re-anchored from the pane-box fractions the lab stored.
 
 <!-- defects:end -->
 

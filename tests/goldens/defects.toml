@@ -1,0 +1,39 @@
+# Defects found in corpus renders, filed from the lab.
+#
+# Written by brick_icons.lab; hand edits are kept but reformatted on the next
+# write. `mark` is in fractions of the render box, so it survives a change of
+# --render-px but not of --angle -- which is what `seen` records.
+
+
+[[defect]]
+id = "6589-naive-halo-r12.8"
+part = "6589"
+engines = ["naive"]
+status = "open"
+title = "spurious ring at r=12.80 (separator refit)"
+mark = { x = 0.3322, y = 0.3581, w = 0.02, h = 0.0861 }
+seen = { angle = "iso", shading = "outline", shade_style = "flat3" }
+filed = "2026-09-03"
+notes = "naive draws a ring at r=12.80 LDU; 6589.dat authors circles only at r=9, 10, 12 and 16. The counterbore separator refit in hlr._snap_rim_crossings refits the authored r=16 ring onto this circumcircle (0.800x radius, sweep 121.72 -> 220.79 deg). SEP_REFIT_MAX_GROWTH caps angular growth at 10x, so 1.81x passes; nothing guards the radius. occt draws the authored set and is right."
+
+[[defect]]
+id = "6589-naive-halo-r11.3"
+part = "6589"
+engines = ["naive"]
+status = "open"
+title = "spurious ring at r=11.33 (separator refit)"
+mark = { x = 0.4168, y = 0.7041, w = 0.059, h = 0.0518 }
+seen = { angle = "iso", shading = "outline", shade_style = "flat3" }
+filed = "2026-09-03"
+notes = "naive draws a ring at r=11.33 LDU, unauthored the same way as 6589-naive-halo-r12.8. Refit of the authored r=12 ring: 0.944x radius, sweep 180.00 -> 344.69 deg (1.92x, under the same cap)."
+
+[[defect]]
+id = "6589-occt-this-is-weird"
+part = "6589"
+engines = ["occt"]
+status = "open"
+title = "this is weird"
+mark = { x = 0.3369, y = 0.455, w = 0.0463, h = 0.0424 }
+seen = { angle = "iso", shading = "outline", shade_style = "flat3" }
+filed = "2026-09-03"
+notes = "Unexamined; y re-anchored from the pane-box fractions the lab stored."
