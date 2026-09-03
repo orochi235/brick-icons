@@ -945,7 +945,11 @@ def _donate_escaped_spurs(merged, order, strokes, sil, line_px, sil_px):
                       if p.geom_type == "Polygon" and p.area > 0.05]
             if not pieces:
                 continue
+            # a sub-0.04 px spike sliver buffers its own boundary into a
+            # self-intersection at the tip, which GEOS then refuses
             Wb = W.boundary.buffer(0.02)
+            if not Wb.is_valid:
+                Wb = Wb.buffer(0)
             for p in pieces:
                 inkp = near(ink, p.bounds)
                 if geom2d.area(geom2d.difference(p, inkp)) > SPUR_MAX_AREA:

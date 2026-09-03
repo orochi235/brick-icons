@@ -1660,3 +1660,29 @@ def test_ink_lens_pockets_returns_a_pair_when_there_is_no_ink():
     got = shade._ink_lens_pockets(None, None, [], None, 0, 0)
     assert isinstance(got, tuple) and len(got) == 2
     assert got == ([], [])
+
+
+def test_6589_spike_sliver_does_not_break_the_spur_donation():
+    # A merged element can be a valid but sub-0.04 px spike -- 6589 carries
+    # one running out to (143.2, 36.8) and back 0.01 px away -- and
+    # buffering ITS BOUNDARY by 0.02 self-intersects at the tip. The
+    # donation pass then hands GEOS an invalid operand and every fill on
+    # the part dies with a side location conflict, so the element's own
+    # thinness is not something the pass may assume away.
+    if not hlr.Path("vendor/ldraw").exists():
+        pytest.skip("LDraw library absent")
+    from brick_icons.config import load_config
+    cfg = load_config(toml_path="labels.toml", overrides={}, root=".")
+    res = hlr.visible_segments("6589", cfg.ldraw_dir, render_px=cfg.render_px)
+    f, ox, oy = hlr.fit_affine(res.bbox, cfg.width, cfg.height,
+                               cfg.margin, cfg.scale)
+    faces = shade.apply_affine_faces(res.faces, f, ox, oy)
+    ells = hlr.fit_ellipses(res.ellipses, f, ox, oy)
+    strokes = hlr.fit_segments(res.segs, res.bbox, cfg.width, cfg.height,
+                               cfg.margin, cfg.scale)
+    fills = shade.fill_ops(faces, shade.make_style("flat3"), clip=True,
+                           ellipses=ells, proj=res.proj, fit=(f, ox, oy),
+                           refits=res.refits, loops=res.loops,
+                           strokes=strokes, line_px=cfg.line_width,
+                           sil_px=cfg.silhouette_width)
+    assert fills
