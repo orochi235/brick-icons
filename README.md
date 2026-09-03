@@ -410,6 +410,12 @@ triangles and loses the arcs `arcfit` recovers on the naive path (`32062`, all
 re-derives the current per-part deltas across the `outline` corpus; the
 `occt-port` branch's handoff lists what is still open.
 
+`scripts/compare-silhouette-truth.py` answers the prior question — whether an
+outline feature is real geometry at all — by rasterizing the .dat's own
+triangles under the render's own camera and diffing. Use it before chasing an
+outline that merely looks wrong; on `3941` at `30,65` it settles the tangent
+notch as authored geometry and catches occt filling it in solid.
+
 #### `--debug-dir DIR`
 
 Save intermediate stages (`render/`, `tone/`, `mono/`) instead of deleting

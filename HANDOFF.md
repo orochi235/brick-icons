@@ -625,19 +625,23 @@ No defects filed.
   Sampling by count class, not alphabetically, is load-bearing: 310 parts yield
   one decal and 20 yield none, so an alphabetical sample misses both edges —
   which is where `MAX_DECALS` does its silencing.
-- **The rim veers down where a notch meets the silhouette, in BOTH engines.**
-  On `3941` at `30,65` the outline climbs the notch ceiling, detours to a
-  spurious low vertex, then rises to the silhouette:
-  `L(193.8,131.7) -> L(198.0,136.3) -> L(201.0,126.7)`. Naive and occt emit
-  that same `(198.0, 136.3)` point, so it is NOT an HLR defect — it comes from
-  the stage they share (`geom2d.contour_d` / `shade.silhouette_geom`). Fixing
-  it there fixes both. Reproduce with `--angle 30,65 --part-label`.
-  Two things this explains, so nobody re-chases them: the tangent notch walls
-  measure 9.2px against the front notch's 11.8px, and the outline carries a
-  visible barb at the tangent. Both appear in both engines. The 9.2-vs-11.8
-  split is NOT independent evidence of a naive defect — an orthographic
-  argument says equal-height edges project equally, but the two notch corner
-  edges sit at different depths and only part of one is unoccluded.
+- **`3941`'s notch "rim veer": NOT A DEFECT, and this file said otherwise.**
+  The V at the tangent notch is the true projection of the skirt panel's
+  bottom corner, the vertex `(11.36, 24, 16)` authored in `s/3941s01.dat`,
+  which lands at exactly `(197.56, 134.36)`. Naive's silhouette contains the
+  part's own polygons with ZERO missing pixels at `30,65`
+  (`scripts/compare-silhouette-truth.py`). The `(198.0, 136.3)` recorded here
+  was read out of the `sclip` clipPath, not the outline: it is
+  `buffer_d(sil, 1.0)`'s mitre apex at that 60.1-degree corner, matching to
+  both decimals. The "barb" is the same corner mitred — ink reaches 1.9px out
+  against 1.0px along the rest of the outline, which is what miterlimit 5 on
+  `contour_d` is FOR. occt does not emit the point at all today.
+- **occt fills that notch in solid, and naive does not.** Same pose, same
+  part: occt's silhouette runs 10.1px (99th pct) beyond the part where the
+  skirt is cut flat, so the flat walls never reach the silhouette; naive
+  holds 0.56px, which is antialias plus arc-over-chord bulge. `4589` also
+  loses 686px in 2 components under occt and none under naive. One more
+  reason the flag cannot flip — see "The decision the merge creates".
 - **`3941`/`6143`'s `stud10` lateral cut: FIXED** — see the arcfit anchor
   fallback in the corpus review. The cut is a cylinder-cylinder intersection
   LDraw approximates with 4 tris and 4 quads; the chain now fits one arc
