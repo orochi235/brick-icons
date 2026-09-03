@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SourcePane } from '@lab/panes/SourcePane';
+import { stageAspect } from '@lab/panes/PaneStage';
 import { HOME } from '@lab/panes/camera';
 import { SOURCES } from '@lab/panes/sources';
 
@@ -200,5 +201,21 @@ describe('SourcePane', () => {
     fireEvent.wheel(body, { deltaY: 1, altKey: true });
     expect(onFactor).toHaveBeenLastCalledWith(-1);
     expect(onCamera).not.toHaveBeenCalled();
+  });
+});
+
+describe('stageAspect', () => {
+  it('reads the viewBox an engine render carries', () => {
+    expect(stageAspect({ kind: 'svg', markup: '<svg viewBox="0 0 256 170"></svg>' }))
+      .toBeCloseTo(256 / 170);
+  });
+
+  it('is null for a pane with no SVG to measure', () => {
+    expect(stageAspect({ kind: 'running' })).toBeNull();
+    expect(stageAspect({ kind: 'image', src: 'x.png' })).toBeNull();
+  });
+
+  it('is null for an SVG that declares no viewBox, rather than guessing one', () => {
+    expect(stageAspect({ kind: 'svg', markup: '<svg width="10"></svg>' })).toBeNull();
   });
 });

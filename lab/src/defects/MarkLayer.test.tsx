@@ -11,7 +11,7 @@ const defect = (over: Partial<Defect> = {}): Defect => ({
 });
 
 const props = {
-  box: { width: 200, height: 100 },
+  box: { x: 0, y: 0, width: 200, height: 100 },
   camera: HOME,
   config: { angle: '30,25' },
   armed: true,

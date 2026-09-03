@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { markFromDrag, markToScreen, normalizeMark } from '@lab/defects/geometry';
+import { contentBox, markFromDrag, markToScreen, normalizeMark }
+  from '@lab/defects/geometry';
 import { HOME } from '@lab/panes/camera';
 
-const BOX = { width: 200, height: 100 };
+const BOX = { x: 0, y: 0, width: 200, height: 100 };
 
 describe('markFromDrag', () => {
   it('converts a drag to fractions of the render box', () => {
@@ -68,5 +69,60 @@ describe('normalizeMark', () => {
 
   it('rejects a mark below the minimum size, which is a stray click', () => {
     expect(normalizeMark({ x: 0.1, y: 0.1, w: 0.001, h: 0.001 })).toBeNull();
+  });
+});
+
+describe('contentBox', () => {
+  it('is the whole pane when the drawing has the pane\'s aspect', () => {
+    expect(contentBox({ width: 200, height: 100 }, 2))
+      .toEqual({ x: 0, y: 0, width: 200, height: 100 });
+  });
+
+  it('letterboxes a pane taller than the drawing', () => {
+    expect(contentBox({ width: 200, height: 200 }, 2))
+      .toEqual({ x: 0, y: 50, width: 200, height: 100 });
+  });
+
+  it('pillarboxes a pane wider than the drawing', () => {
+    expect(contentBox({ width: 400, height: 100 }, 2))
+      .toEqual({ x: 100, y: 0, width: 200, height: 100 });
+  });
+
+  it('falls back to the pane when the drawing has no aspect to give', () => {
+    expect(contentBox({ width: 200, height: 100 }, null))
+      .toEqual({ x: 0, y: 0, width: 200, height: 100 });
+  });
+});
+
+describe('a mark is a fraction of the drawing, not of the pane', () => {
+  // The bug this replaces: the box was the pane body, so the letterbox bands
+  // counted as part of the drawing and every y was compressed toward the
+  // middle. It only showed as marks that missed what they were drawn on.
+  it('reads a drag against the drawing inside a letterboxed pane', () => {
+    const box = contentBox({ width: 200, height: 200 }, 2);   // drawing y 50..150
+    const mark = markFromDrag({ x: 0, y: 50 }, { x: 100, y: 100 }, box, HOME);
+    expect(mark).toEqual({ x: 0, y: 0, w: 0.5, h: 0.5 });
+  });
+
+  it('puts one mark on the same part of the drawing at any pane size', () => {
+    const mark = { x: 0.25, y: 0.25, w: 0.5, h: 0.5 };
+    const wide = contentBox({ width: 400, height: 200 }, 2);
+    const tall = contentBox({ width: 400, height: 400 }, 2);
+    const onWide = markToScreen(mark, wide, HOME);
+    const onTall = markToScreen(mark, tall, HOME);
+    // Same fraction of the drawing: same offset from the drawing's own origin.
+    expect(onWide.left - wide.x).toBeCloseTo(onTall.left - tall.x);
+    expect(onWide.top - wide.y).toBeCloseTo(onTall.top - tall.y);
+    expect(onWide.height).toBeCloseTo(onTall.height);
+  });
+
+  it('round-trips a drag through the letterbox offset', () => {
+    const box = contentBox({ width: 300, height: 400 }, 2);
+    const mark = markFromDrag({ x: 40, y: 130 }, { x: 160, y: 190 }, box, HOME);
+    const screen = markToScreen(mark, box, HOME);
+    expect(screen.left).toBeCloseTo(40);
+    expect(screen.top).toBeCloseTo(130);
+    expect(screen.width).toBeCloseTo(120);
+    expect(screen.height).toBeCloseTo(60);
   });
 });

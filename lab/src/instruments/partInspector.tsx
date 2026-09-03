@@ -17,7 +17,7 @@ import { MarkLayer } from '@lab/defects/MarkLayer';
 import { FileDefectDialog } from '@lab/defects/FileDefectDialog';
 import { DefectCard } from '@lab/defects/DefectCard';
 import { buildDefect, useDefects } from '@lab/defects/useDefects';
-import type { Mark } from '@lab/defects/geometry';
+import type { Box, Mark } from '@lab/defects/geometry';
 import { useReference } from '@lab/panes/useReference';
 import { useRenderFit } from '@lab/panes/useRenderFit';
 import { threeStyle } from '@lab/panes/viewport';
@@ -50,7 +50,7 @@ function Panes({ ctx, client }: { ctx: any; client: LabClient }) {
 
   const part = String(config.part ?? '');
   const { defects, file, setStatus } = useDefects(client, part);
-  const [boxes, setBoxes] = useState<Record<string, { width: number; height: number }>>({});
+  const [boxes, setBoxes] = useState<Record<string, Box>>({});
   const [pendingMark, setPendingMark] = useState<Mark | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -127,7 +127,7 @@ function Panes({ ctx, client }: { ctx: any; client: LabClient }) {
                 {spec.marks ? (
                   <MarkLayer
                     defects={defects.filter((d) => d.engines.includes(source.id))}
-                    box={boxes[source.id] ?? { width: 1, height: 1 }}
+                    box={boxes[source.id] ?? { x: 0, y: 0, width: 1, height: 1 }}
                     camera={camera}
                     config={config}
                     armed={marking}

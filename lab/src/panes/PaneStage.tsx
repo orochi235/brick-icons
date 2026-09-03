@@ -14,6 +14,18 @@ export interface PaneStageProps {
   busy?: boolean;
 }
 
+/** The drawing's own aspect, read off the SVG's viewBox. Null when nothing is
+ *  drawn yet, or when what is drawn does not declare one. */
+export function stageAspect(state: PaneState): number | null {
+  if (state.kind !== 'svg') return null;
+  const found = /viewBox="\s*[-\d.]+\s+[-\d.]+\s+([\d.]+)\s+([\d.]+)/
+    .exec(state.markup);
+  if (!found) return null;
+  const width = Number(found[1]);
+  const height = Number(found[2]);
+  return width > 0 && height > 0 ? width / height : null;
+}
+
 /** The drawing itself, at a camera. Its own component because the loupe draws
  *  a second one at the magnified camera. */
 export function PaneStage({ state, camera, label, busy }: PaneStageProps) {

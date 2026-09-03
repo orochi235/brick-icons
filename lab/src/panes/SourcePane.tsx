@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { type Camera, panBy, zoomAt } from '@lab/panes/camera';
-import { PaneStage, type PaneState } from '@lab/panes/PaneStage';
+import { PaneStage, type PaneState, stageAspect } from '@lab/panes/PaneStage';
+import { type Box, contentBox } from '@lab/defects/geometry';
 import { bubbleDiameter, loupeCamera, loupeCameraForImage, stageOffset,
   type Point } from '@lab/panes/loupe';
 import type { Source } from '@lab/panes/sources';
@@ -29,8 +30,8 @@ export interface SourcePaneProps {
   busy?: boolean;
   /** Drawn above the stage, in body coordinates. */
   overlay?: ReactNode;
-  /** The body's pixel size, reported when it is measured or changes. */
-  onBox?: (box: { width: number; height: number }) => void;
+  /** Where the drawing sits in the body, reported when either changes. */
+  onBox?: (box: Box) => void;
   /** The magnifier over this pane, or null when it is elsewhere. */
   loupe?: LoupeView | null;
   /** Where the pointer is in this pane's body, and null when it leaves.
@@ -59,14 +60,19 @@ export function SourcePane({ source, state, camera, onCamera, note, busy,
   report.current = onBox;
 
   const [size, setSize] = useState({ width: 0, height: 0 });
+  const aspect = stageAspect(state);
+
+  // Separate from the resize below because a render of a different shape moves
+  // the drawing inside a pane that never changed size.
+  useEffect(() => {
+    report.current?.(contentBox(size, aspect));
+  }, [size, aspect]);
 
   useEffect(() => {
     const el = body.current;
     if (!el) return;
     const emit = () => {
-      const box = { width: el.clientWidth, height: el.clientHeight };
-      setSize(box);
-      report.current?.(box);
+      setSize({ width: el.clientWidth, height: el.clientHeight });
     };
     emit();
     const observer = new ResizeObserver(emit);

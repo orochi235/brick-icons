@@ -10,9 +10,34 @@ export interface Mark {
   h: number;
 }
 
+/** Where the drawing sits inside its pane, in stage pixels.
+ *
+ *  Not the pane's own box: a drawing letterboxes itself inside the pane
+ *  (`xMidYMid meet` for an SVG, `object-fit: contain` for a raster), and a
+ *  mark measured against the pane instead moves relative to the drawing
+ *  whenever the window is a different shape. */
 export interface Box {
+  x: number;
+  y: number;
   width: number;
   height: number;
+}
+
+/** The rect a drawing of this aspect occupies in a pane of this size. A null
+ *  aspect -- nothing drawn yet -- stands the pane in for it. */
+export function contentBox(pane: { width: number; height: number },
+                           aspect: number | null): Box {
+  if (aspect === null || !(aspect > 0) || pane.width <= 0 || pane.height <= 0) {
+    return { x: 0, y: 0, width: pane.width, height: pane.height };
+  }
+  const height = Math.min(pane.width / aspect, pane.height);
+  const width = height * aspect;
+  return {
+    x: (pane.width - width) / 2,
+    y: (pane.height - height) / 2,
+    width,
+    height,
+  };
 }
 
 export interface ScreenRect {
@@ -29,8 +54,8 @@ const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
 function screenToFraction(point: { x: number; y: number }, box: Box, camera: Camera) {
   return {
-    x: clamp01((point.x - camera.pan.x) / camera.zoom / box.width),
-    y: clamp01((point.y - camera.pan.y) / camera.zoom / box.height),
+    x: clamp01(((point.x - camera.pan.x) / camera.zoom - box.x) / box.width),
+    y: clamp01(((point.y - camera.pan.y) / camera.zoom - box.y) / box.height),
   };
 }
 
@@ -49,8 +74,8 @@ export function markFromDrag(start: { x: number; y: number },
 
 export function markToScreen(mark: Mark, box: Box, camera: Camera): ScreenRect {
   return {
-    left: mark.x * box.width * camera.zoom + camera.pan.x,
-    top: mark.y * box.height * camera.zoom + camera.pan.y,
+    left: (box.x + mark.x * box.width) * camera.zoom + camera.pan.x,
+    top: (box.y + mark.y * box.height) * camera.zoom + camera.pan.y,
     width: mark.w * box.width * camera.zoom,
     height: mark.h * box.height * camera.zoom,
   };
