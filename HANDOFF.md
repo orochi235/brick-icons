@@ -1,24 +1,34 @@
 # Handoff — `main`: the corpus lab, and the OCCT engine
 
-On **`main`**, pushed through `114d115`. A plain `pytest` skips the drift
-tests, and `BRICK_GOLDENS=1` renders only `3005` — neither is verification;
-only `BRICK_GOLDENS=full` (~22 min) is.
+On **`main`**, pushed through `6a780c5` with the goldens re-freeze
+and its crash fix committed on top, unpushed. A plain `pytest`
+skips the drift tests, and `BRICK_GOLDENS=1` renders only `3005` — neither is
+verification; only `BRICK_GOLDENS=full` (~18 min) is.
 
-**START HERE: the render goldens are STALE and one test is red for it.**
-`fbfda92` improved the fills on BOTH engines, so
-`tests/test_lab_app.py::test_goldens_check_starts_a_job_over_the_parts_cases`
-fails on a clean tree — `3005` reports `moved`. That is the only known-red
-test; 111 shade/geom2d, 64 occt and the 3-part fill gate were green. Nothing
-in `tests/goldens/` has been touched. Before re-freezing, RE-MEASURE: the
-per-case drift recorded below was taken from the stroke-band half of the fix
-only and predates the `_refine_order_clips` rewrite in the same commit.
+**START HERE: the goldens are re-frozen and `BRICK_GOLDENS=full` is green**
+(16 passed, 17m31s). The drift `fbfda92` caused is re-measured below, against
+BOTH halves of that commit this time.
+
+Re-freezing it turned up a hard crash, now fixed: `6589` at
+`--shade-style flat3` died with a GEOS side location conflict on the NAIVE
+engine, so the part drew nothing at all. One of its merged fill elements is a
+valid but sub-0.04 px spike, and `_donate_escaped_spurs` buffers each
+element's own BOUNDARY by 0.02 to find the seam — which self-intersects at
+such a spike's tip and hands GEOS an invalid operand. The element's thinness
+is not something that pass may assume away; it repairs the band now. Gated by
+`test_6589_spike_sliver_does_not_break_the_spur_donation`. Blast radius
+measured at byte level: of the 23 `outline-flat3` cases, the repair changes
+`6589`'s hash and nothing else.
 
     .venv/bin/python scripts/freeze-goldens.py --out /tmp/new
     .venv/bin/python scripts/compare-goldens.py /tmp/new --out report.md
 
-A whole-corpus `freeze-goldens.py` run WAS KILLED at 35/52 in this
-environment, twice — see the chunking trap below. Per-case
-`--only <case>` finished every time.
+**Run the freeze one case at a time.** A whole-corpus `freeze-goldens.py` was
+killed at 35/52 twice; the cause is now known — the OTHER session was
+rendering `3649` at the same moment, and two of those at once is what the
+machine will not carry. A `--only <case>` loop over the 52 ids finished every
+time, and prints per-case timings worth keeping (`outline-flat3__3649` 330s,
+`4740p03` 114s, `outline__3649` 230s; everything else under 25s).
 
 ## Read first: there are two threads now
 
@@ -334,14 +344,21 @@ simplifying the donated piece instead moves the donation fixpoint and swaps a
 `test_a_fill_boundary_carries_no_stroke_band_tessellation`. Naive fell too
 (90 -> 73, 435 -> 377) since the band serves both engines.
 
-**The render goldens need re-freezing for it, and the drift is measured.**
-Every strokes-only `outline` and `wireframe` case is byte-identical — the
-band only bounds fills — and `outline-flat3` sheds vertices with nothing
-moving on screen: `3649` `L` 21889 -> 12658 and `4019` 3733 -> 3334 at ZERO
-pixels differing by more than 32 grey levels (peak 3 and 2), `3673`
-1015 -> 594, `6589` 1752 -> 1151, `3941` 1417 -> 1177, `4740p03`
-5621 -> 5499. Nothing was re-frozen; `tests/goldens/` is untouched and
-`test_lab_app`'s golden check is red until someone does it.
+**The render goldens are re-frozen for it, and the whole drift is measured.**
+All 29 strokes-only `outline` and `wireframe` cases are byte-identical — the
+band and the refine pass only bound fills. All 23 `outline-flat3` cases shed
+vertices: `3649` `L` 21889 -> 12630, `4740p03` 5621 -> 5055, `4019`
+3733 -> 3333, `3941` 1417 -> 1186, `3673` 1015 -> 654, `6143` 1059 -> 859,
+`32062` 435 -> 393, `4589` 90 -> 53.
+
+Almost nothing moves on screen, but "zero pixels" is no longer true now that
+the refine rewrite is in the measurement. Counting pixels off by more than 8
+grey levels: `32062` and `3941` 0, `3649` 5, `4019` 84 — one sliver in a gear
+recess, the trade the rewrite's own note predicted — and the printed parts
+carry decoration hairlines that shift, `3040bp08` 2, `3941p01` 41, `4740p03`
+367 in 53 components, none bigger than 155 px. Peak grey deltas reach 135
+(`4740p03`) and 106 (`3941p01`) on those hairlines. Rendered before/after
+pairs were compared for all of these; nothing structural moved.
 
 **`_refine_order_clips` sampled a straight answer.** Two planes' depths are
 both affine in screen space, so "is `idx` in front of `j`" is one affine
@@ -656,20 +673,15 @@ No defects filed.
   pinned 2026-06-27 LDraw snapshot was lost — `complete.zip` serves only the
   latest, so it is gone for good. `/vendor` is now in `.gitignore`; stage
   explicit paths regardless.
-- **A long test run does not survive in this environment — chunk it.** Four
-  separate runs were killed externally in one session, at 11%, 51% and twice
-  more, under different loads and with the machine to itself; every run short
-  enough to finish inside a tool timeout completed. The suite splits cleanly by
-  file into six groups of a few minutes each. A killed run leaves a truncated
-  progress bar and no summary line, which looks exactly like a run still going
-  — check for the exit line before believing either.
-
-  Chunking costs you the ability to say "one run covered this commit", so
-  recover it with mtimes: `stat -f '%Sm' -t '%H:%M:%S' <file>` against the run's
-  start time proves which bytes a chunk actually exercised, and a clean tree
-  proves those bytes are the ones committed. That is what established the 52
-  cases ran on the merged render path when the two halves were committed half
-  an hour apart.
+- **A long run survives if you DETACH it; chunking was treating the symptom.**
+  What kills a run is the tool call's own timeout, not the environment: a
+  foreground call dies at its limit no matter what the process is doing, which
+  is why "every run short enough to finish inside a tool timeout completed"
+  and four longer ones did not. Start it with `nohup … > log 2>&1 &`, then poll
+  the log. `BRICK_GOLDENS=full` then finishes unchunked (16 passed, 1051s), and
+  so does a 52-case freeze. A killed run leaves a truncated progress bar and no
+  summary line, which looks exactly like a run still going — check for the exit
+  line before believing either.
 - **`BRICK_GOLDENS=1` or the gate does not run — and `=1` is still not the
   gate.** A plain suite reports "N passed, 3 skipped" and those 3 skips are the
   drift tests; two sessions independently mistook that for verification. But
