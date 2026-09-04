@@ -49,9 +49,13 @@ export interface BuildDefectArgs {
 export function buildDefect(args: BuildDefectArgs): Defect {
   const title = args.title.trim();
   if (!title) throw new Error('a defect needs a title');
+  // The server keys defects by part and `useDefects` reads them back by it, so
+  // one filed with no part is accepted and then never listed again.
+  const part = args.part.trim();
+  if (!part) throw new Error('a defect needs a part');
   return {
-    id: defectId(args.part, args.engines, title, args.existing),
-    part: args.part,
+    id: defectId(part, args.engines, title, args.existing),
+    part,
     engines: [...args.engines].sort(),
     status: 'open',
     title,

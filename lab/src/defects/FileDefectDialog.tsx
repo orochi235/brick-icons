@@ -16,11 +16,18 @@ export function FileDefectDialog({ part, engines, onCancel, onFile }: FileDefect
   const [notes, setNotes] = useState('');
   const [checked, setChecked] = useState<string[]>(engines);
 
-  const ready = title.trim().length > 0 && checked.length > 0;
+  const named = part.trim();
+  const ready = named.length > 0 && title.trim().length > 0 && checked.length > 0;
 
   return (
     <div className="file-defect">
-      <h3>New defect on {part}</h3>
+      <h3>{named ? `New defect on ${named}` : 'New defect'}</h3>
+      {named ? null : (
+        <p className="file-defect-blocked">
+          Load a part first — a defect is stored under its part, and one filed
+          without a part is never listed again.
+        </p>
+      )}
       <label>
         Title
         <input value={title} onChange={(e) => setTitle(e.target.value)} />

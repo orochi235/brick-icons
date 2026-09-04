@@ -38,6 +38,12 @@ describe('buildDefect', () => {
     expect(() => buildDefect({ ...args, title: '   ' })).toThrow(/title/i);
   });
 
+  // A defect is stored under its part and read back by it, so one filed with
+  // no part is written, accepted, and never listed again.
+  it('refuses a defect with no part', () => {
+    expect(() => buildDefect({ ...args, part: '   ' })).toThrow(/part/i);
+  });
+
   it('carries a mark kind and its points', () => {
     const d = buildDefect({
       part: '3001', engines: ['naive'], title: 'missing edge', notes: '',
