@@ -195,10 +195,14 @@ tile means making them one `sidebar` contribution with both groups inside it,
 not two contributions — so this is a restructure of the panel, not an
 annotation on it.
 
-**The sidebar is a fixed 320px** — `flex: 0 0 auto`, `resize: none`, and no
-handle element between it and the content, so drag-to-resize needs a labkit
-change. Filed as an ask, not worked around here; a consumer `resize: horizontal`
-would put the grip in the bottom-right corner of a full-height column.
+**The sidebar is a fixed 320px here, and drag-to-resize is built upstream but
+unpublished.** Weasel has it on `labkit/trial-body-strip` (unpushed): the
+sidebar and content well become a two-pane windease strip whose seam is a real
+`role="separator"` — pointer drag, arrows, Home/End — with the width persisted
+per trial as `TrialRecord.sidebarWidth`. It reaches us only when that is
+published; we pin `1.4.0-pre.1` from npm. Nothing here needs changing first:
+we use neither `--lk-trial-sidebar-w` (which stops meaning anything) nor
+`<TrialBody>` (newly exported, for chrome you compose yourself).
 
 Do not wait on any of it; every item has a working local workaround.
 
