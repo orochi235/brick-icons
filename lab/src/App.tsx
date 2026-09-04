@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FloatingPanel, Lab } from '@weasel-js/labkit';
 import type { Instrument, TrialContribution } from '@weasel-js/labkit';
 import type { LabClient } from '@lab/api/client';
 import { PartSearch } from '@lab/chrome/PartSearch';
-import { COMPACT_ROWS } from '@lab/config/rows';
+import { rowsFor } from '@lab/config/rows';
 import { DefectList } from '@lab/defects/DefectList';
 import type { Defect, DefectStatus } from '@lab/defects/useDefects';
 import { useOpenPart } from '@lab/config/pending';
@@ -98,6 +98,7 @@ const TRIAL_CHROME: TrialContribution[] = [
 
 export function App({ instruments, client }:
                     { instruments: Instrument<any, any, any>[]; client: LabClient }) {
+  const controls = useMemo(() => rowsFor(client), [client]);
   return (
     <Lab
       instruments={instruments}
@@ -105,7 +106,7 @@ export function App({ instruments, client }:
       storageKey="brick-icons-lab"
       title="brick-icons lab"
       chrome={TRIAL_CHROME}
-      controls={COMPACT_ROWS}
+      controls={controls}
       suppress={['snapshot']}
     >
       <TitleBar client={client} />

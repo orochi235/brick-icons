@@ -10,6 +10,14 @@ _COLOUR = re.compile(
     r"VALUE\s+#(?P<value>[0-9A-Fa-f]{6})",
     re.IGNORECASE)
 _ALPHA = re.compile(r"\bALPHA\s+(\d+)", re.IGNORECASE)
+# LDConfig files its colours under comment headings -- "LDraw Solid Colours",
+# "LDraw Obsolete Colours". Nothing else says which family a colour is in.
+_HEADING = re.compile(r"^0\s+//\s+LDraw\s+(?P<name>.+?)\s+Colours\s*$",
+                      re.IGNORECASE)
+# LDConfig writes LEGO's own number for a colour on the line above it. Only
+# the colours LEGO numbers carry one, which is the closest thing the file has
+# to "this is a colour LEGO moulds".
+_LEGOID = re.compile(r"^0\s+//\s+LEGOID\s+(?P<id>\d+)\b", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -18,6 +26,11 @@ class Color:
     name: str
     rgb: tuple
     alpha: int = 255
+    #: The LDConfig heading it was listed under -- 'Solid', 'Rubber',
+    #: 'Obsolete' -- or '' for a file that carries no headings.
+    category: str = ""
+    #: LEGO's own number for the colour, where LDConfig declares one.
+    lego_id: int | None = None
 
     @property
     def hex(self) -> str:
@@ -31,7 +44,17 @@ class Color:
 def parse_ldconfig(lines) -> list[Color]:
     """Every '0 !COLOUR ... CODE n VALUE #rrggbb [... ALPHA a]' line."""
     out = []
+    category = ""
+    lego_id = None
     for ln in lines:
+        heading = _HEADING.match(ln)
+        if heading:
+            category = heading.group("name").strip()
+            continue
+        legoid = _LEGOID.match(ln)
+        if legoid:
+            lego_id = int(legoid.group("id"))
+            continue
         m = _COLOUR.match(ln)
         if not m:
             continue
@@ -39,7 +62,9 @@ def parse_ldconfig(lines) -> list[Color]:
         a = _ALPHA.search(ln[m.end():])
         out.append(Color(code=int(m.group("code")), name=m.group("name"),
                          rgb=((v >> 16) & 255, (v >> 8) & 255, v & 255),
-                         alpha=int(a.group(1)) if a else 255))
+                         alpha=int(a.group(1)) if a else 255,
+                         category=category, lego_id=lego_id))
+        lego_id = None
     return out
 
 

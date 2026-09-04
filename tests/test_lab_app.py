@@ -322,3 +322,35 @@ def test_goldens_check_on_a_part_with_no_cases_is_an_empty_job(client):
     body = client.post("/api/goldens/check", json={"part": "not-a-part"}).json()
     done = _finish(client, body["job"])
     assert done["total"] == 0
+
+
+def test_colors_route_returns_the_ldraw_palette(client):
+    body = client.get("/api/colors").json()
+    by_code = {c["code"]: c for c in body["colors"]}
+    assert by_code[0]["name"] == "Black"
+    assert by_code[4]["hex"].startswith("#")
+    assert len(by_code[4]["hex"]) == 7
+
+
+def test_colors_route_carries_alpha_only_where_it_is_set(client):
+    body = client.get("/api/colors").json()
+    by_code = {c["code"]: c for c in body["colors"]}
+    assert by_code[0]["alpha"] == 255
+    assert any(c["alpha"] < 255 for c in body["colors"])
+
+
+def test_colors_route_sorts_by_code(client):
+    codes = [c["code"] for c in client.get("/api/colors").json()["colors"]]
+    assert codes == sorted(codes)
+
+
+def test_colors_route_carries_the_ldconfig_family(client):
+    by_code = {c["code"]: c for c in client.get("/api/colors").json()["colors"]}
+    assert by_code[0]["category"] == "Solid"
+    assert by_code[256]["category"] == "Rubber"
+
+
+def test_colors_route_carries_legos_own_number_where_there_is_one(client):
+    by_code = {c["code"]: c for c in client.get("/api/colors").json()["colors"]}
+    assert by_code[0]["legoId"] == 26
+    assert by_code[507]["legoId"] is None

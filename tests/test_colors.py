@@ -5,7 +5,7 @@ from brick_icons.colors import (Color, UnknownColorError, load_palette,
 
 LDCFG = """\
 0 LDraw.org Configuration File
-0 // Colour definitions
+0 // Color definitions
 0 !COLOUR Black          CODE     0   VALUE #1B2A34   EDGE #808080
 0                              // LEGOID  26 - Black
 0 !COLOUR Red            CODE     4   VALUE #B40000   EDGE #333333
@@ -17,7 +17,8 @@ LDCFG = """\
 def test_parse_ldconfig_reads_code_name_value():
     cs = {c.code: c for c in parse_ldconfig(LDCFG.splitlines())}
     assert set(cs) == {0, 4, 71, 36}
-    assert cs[4] == Color(code=4, name="Red", rgb=(0xB4, 0x00, 0x00), alpha=255)
+    assert cs[4] == Color(code=4, name="Red", rgb=(0xB4, 0x00, 0x00), alpha=255,
+                          lego_id=26)
     assert cs[71].name == "Light_Bluish_Grey"
     assert cs[71].rgb == (0x96, 0x96, 0x96)
 
@@ -34,7 +35,7 @@ def test_color_hex_is_canonical_lowercase():
 
 
 def test_parse_ldconfig_ignores_comments_and_legoid_lines():
-    assert len(parse_ldconfig(["0 // not a colour", "0 // LEGOID 26 - Black"])) == 0
+    assert len(parse_ldconfig(["0 // not a color", "0 // LEGOID 26 - Black"])) == 0
 
 
 def test_normalize_name_folds_case_separators_and_gray():
@@ -120,3 +121,46 @@ def test_six_digits_is_still_hex_not_a_code():
     """'000016' is hex, '16' is LDraw code 16 — widening the code pattern must
     not eat the hex form."""
     assert resolve("000016", "vendor/ldraw")[0] == "0x000016"
+
+
+CATEGORISED = """0 // LDraw Solid Colours
+0 !COLOUR Black          CODE     0   VALUE #1B2A34   EDGE #808080
+0 // LDraw Rubber Colours
+0 !COLOUR Rubber_Black   CODE 10000   VALUE #1B2A34   EDGE #808080
+0 // LDraw Obsolete Colours
+0 !COLOUR Old_Thing      CODE   500   VALUE #FF0000   EDGE #000000
+""".splitlines()
+
+
+def test_a_color_carries_the_heading_it_was_listed_under():
+    by_code = {c.code: c for c in parse_ldconfig(CATEGORISED)}
+    assert by_code[0].category == "Solid"
+    assert by_code[10000].category == "Rubber"
+    assert by_code[500].category == "Obsolete"
+
+
+def test_a_color_listed_under_no_heading_has_no_category():
+    [c] = parse_ldconfig(["0 !COLOUR Black CODE 0 VALUE #1B2A34 EDGE #808080"])
+    assert c.category == ""
+
+
+LEGOID_LINES = """0 // LDraw Solid Colours
+0                              // LEGOID  26 - Black
+0 !COLOUR Black          CODE     0   VALUE #1B2A34   EDGE #808080
+0 !COLOUR Rubber_Black   CODE   256   VALUE #1B2A34   EDGE #808080
+0                              // LEGOID  23 - Bright Blue
+0 !COLOUR Blue           CODE     1   VALUE #1E5AA8   EDGE #333333
+""".splitlines()
+
+
+def test_a_color_takes_the_lego_id_declared_above_it():
+    by_code = {c.code: c for c in parse_ldconfig(LEGOID_LINES)}
+    assert by_code[0].lego_id == 26
+    assert by_code[1].lego_id == 23
+
+
+# The id is consumed by the colour it precedes: LDConfig carries one only for
+# the colours LEGO itself numbers, and the rest must not inherit the last one.
+def test_a_color_with_no_lego_id_of_its_own_has_none():
+    by_code = {c.code: c for c in parse_ldconfig(LEGOID_LINES)}
+    assert by_code[256].lego_id is None

@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from pydantic import BaseModel
 
+from .. import colors as ldraw_colors
 from ..config import load_config
 from . import (cache, corpus, decal, defects, diff, goldens_status, jobs,
                partindex, reference, runner, schema)
@@ -69,6 +70,15 @@ def create_app(root: Path | str = ".",
     @app.get("/api/schema")
     def get_schema():
         return {"fields": schema.config_schema(root=root)}
+
+    @app.get("/api/colors")
+    def get_colors():
+        pal = ldraw_colors.load_palette(app.state.ldraw_dir)
+        return {"colors": [
+            {"code": c.code, "name": c.name.replace("_", " "),
+             "hex": "#%02x%02x%02x" % tuple(c.rgb), "alpha": c.alpha,
+             "category": c.category, "legoId": c.lego_id}
+            for c in (pal.by_code[k] for k in sorted(pal.by_code))]}
 
     @app.get("/api/lists")
     def get_lists():

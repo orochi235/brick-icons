@@ -1,4 +1,5 @@
-import type { Artifact, JobState, LabConfig, PartHit, RenderResult, SchemaField } from '@lab/api/types';
+import type { Artifact, JobState, LabConfig, LdrawColor, PartHit, RenderResult,
+  SchemaField } from '@lab/api/types';
 
 export interface ClientOptions {
   base?: string;
@@ -30,6 +31,13 @@ export function createClient({ base = '', fetchImpl = fetch }: ClientOptions = {
   return {
     async schema(): Promise<SchemaField[]> {
       return (await json<{ fields: SchemaField[] }>(fetchImpl, at('/api/schema'))).fields;
+    },
+
+    /** The LDraw palette, by code. Cached by the server, small enough to take
+     *  whole -- `--part-color` accepts a name, a code or hex, so the field
+     *  needs every row to match against. */
+    async colors(): Promise<LdrawColor[]> {
+      return (await json<{ colors: LdrawColor[] }>(fetchImpl, at('/api/colors'))).colors;
     },
 
     async searchParts(q: string, limit = 25): Promise<PartHit[]> {

@@ -18,6 +18,20 @@ export interface PartHit {
   printed: boolean;
 }
 
+/** One LDraw palette entry, as `/api/colors` sends it. `hex` is `#rrggbb`;
+ *  `alpha` is 255 for everything but the transparent colors, and `category` is
+ *  the LDConfig heading it was listed under. */
+export interface LdrawColor {
+  code: number;
+  name: string;
+  hex: string;
+  alpha: number;
+  category: string;
+  /** LEGO's own number for the color, where LDConfig declares one. Null for
+   *  the LDraw-only entries — derived materials, Modulex, the retired list. */
+  legoId: number | null;
+}
+
 export interface Artifact {
   name: string;
   bytes: number;
