@@ -21,18 +21,25 @@ export interface TargetSnapshot {
 }
 
 export interface TargetRegistry {
-  publish: (snapshot: TargetSnapshot) => void;
-  targets: () => readonly AnnotationTarget[];
+  publish: (trial: string, snapshot: TargetSnapshot) => void;
+  targets: (trial: string) => readonly AnnotationTarget[];
+  forget: (trial: string) => void;
 }
 
 /** `annotations.targets` is handed only `(state, config)`, so it cannot reach
  *  the pane refs or the trial's camera. The instrument holds one of these and
- *  `Panes` republishes on every render. */
+ *  `Panes` republishes on every render.
+ *
+ *  Keyed by trial: the capability is declared once per *instrument* but
+ *  `targets` runs once per *trial*, so a single holder lets two open trials
+ *  overwrite each other and each one's overlay measures the other's panes. */
 export function createTargetRegistry(): TargetRegistry {
-  let current: TargetSnapshot | null = null;
+  const byTrial = new Map<string, TargetSnapshot>();
   return {
-    publish: (snapshot) => { current = snapshot; },
-    targets: () => {
+    publish: (trial, snapshot) => { byTrial.set(trial, snapshot); },
+    forget: (trial) => { byTrial.delete(trial); },
+    targets: (trial) => {
+      const current = byTrial.get(trial);
       if (!current) return [];
       const { camera, panes } = current;
       return panes.map((p) => ({

@@ -40,6 +40,10 @@ export interface InspectorState {
   /** Which run each pane's render came from, so a pane can tell its own
    *  drawing from the one before it. */
   stamps: Partial<Record<SourceId, string>>;
+  /** This trial's key into the annotation target registry. `targets` is given
+   *  the instrument's state and nothing else, so a trial has no other way to
+   *  say which one it is, and two open trials would read each other's panes. */
+  trialKey: string;
 }
 
 /** What a capture composites the marks over. A pane already holds exactly the
@@ -131,7 +135,7 @@ function Panes({ ctx, client, registry }:
   };
 
   const markable = sources.filter((s) => paneSpec(s, deps).marks);
-  registry.publish({
+  registry.publish((ctx.state as InspectorState).trialKey, {
     camera,
     panes: markable.map((s) => ({
       id: s.id,
@@ -220,7 +224,9 @@ function DefectCount({ client, part }: { client: LabClient; part: string }) {
 export function createPartInspector(fields: SchemaField[], client: LabClient) {
   const nodes = buildSchema(fields);
   const defaults = defaultsFor(fields);
-  // One registry per instrument, written by `Panes` and read by `targets`.
+  // One registry per instrument, keyed by trial: `targets` runs per trial
+  // but the capability is declared once, so a single holder lets two open
+  // trials overwrite each other's pane refs.
   const registry = createTargetRegistry();
 
   return defineInstrument<InspectorState, Record<string, unknown>, SourceRender>({
@@ -234,7 +240,12 @@ export function createPartInspector(fields: SchemaField[], client: LabClient) {
     // walkthrough is what confirms this at runtime.
     defaultConfig: () => ({ ...defaults, part: takePendingPart() }),
 
-    initialState: () => ({ renders: {}, errors: {}, stamps: {} }),
+    initialState: () => ({
+      renders: {}, errors: {}, stamps: {},
+      // Random rather than a counter: state is persisted, so a counter
+      // restarting at zero on reload would collide with a stored trial.
+      trialKey: `t${Math.random().toString(36).slice(2, 10)}`,
+    }),
 
     chrome: [
       {
@@ -312,6 +323,7 @@ export function createPartInspector(fields: SchemaField[], client: LabClient) {
         signal,
       }),
       onItem: (item, state) => ({
+        ...state,
         renders: { ...state.renders, [item.source]: item.result },
         errors: {
           ...state.errors,
@@ -322,7 +334,7 @@ export function createPartInspector(fields: SchemaField[], client: LabClient) {
     },
 
     annotations: {
-      targets: () => registry.targets(),
+      targets: (state) => registry.targets((state as InspectorState).trialKey),
       meaning: {
         statuses: STATUSES.map((id) => ({ id, label: id })),
       },
