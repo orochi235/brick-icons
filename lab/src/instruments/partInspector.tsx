@@ -83,6 +83,14 @@ function Panes({ ctx, client, registry }:
     // absence of the id the projection stamps on every mark it makes.
     const loose = marks.query().find((a) => !(a.meta as MarkMeta | undefined)?.defectId);
     setPending(loose ?? null);
+    // Selection arrives on this same channel: weasel keeps a canvas's selection
+    // on the scene, so setSelection notifies the store's listeners. Probed
+    // rather than called, because `selection()` lands in labkit after
+    // 1.4.0-pre.0 -- drop the probe when the pin moves.
+    const withSelection = marks as typeof marks & { selection?: () => readonly string[] };
+    const picked = withSelection.selection?.()[0];
+    const mark = picked ? marks.get(picked) : undefined;
+    setSelected((mark?.meta as MarkMeta | undefined)?.defectId ?? null);
   }), [marks]);
 
   const angle = String(config.angle ?? 'iso');

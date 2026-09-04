@@ -124,7 +124,7 @@ describe('createTargetRegistry', () => {
       content: { w: 900, h: 900 },
       panes: [{ id: 'naive', ref }],
     });
-    const [t] = reg.targets();
+    const t = reg.targets()[0]!;
     expect(t.id).toBe('pane:naive');
     expect(t.ref).toBe(ref);
     expect(t.content).toEqual({ w: 900, h: 900 });
