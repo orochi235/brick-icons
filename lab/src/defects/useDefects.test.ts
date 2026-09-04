@@ -42,6 +42,28 @@ describe('buildDefect', () => {
   it('refuses an untitled defect, which nothing could later find', () => {
     expect(() => buildDefect({ ...args, title: '   ' })).toThrow(/title/i);
   });
+
+  it('carries a mark kind and its points', () => {
+    const d = buildDefect({
+      part: '3001', engines: ['naive'], title: 'missing edge', notes: '',
+      mark: { x: 0.1, y: 0.1, w: 0.3, h: 0.2 },
+      kind: 'line',
+      points: [{ x: 0.1, y: 0.1 }, { x: 0.4, y: 0.3 }],
+      config: {}, existing: [], today: '2026-09-03',
+    });
+    expect(d.kind).toBe('line');
+    expect(d.points).toHaveLength(2);
+  });
+
+  it('leaves kind and points off a plain rectangle', () => {
+    const d = buildDefect({
+      part: '3001', engines: ['naive'], title: 'blob', notes: '',
+      mark: { x: 0, y: 0, w: 0.2, h: 0.2 },
+      config: {}, existing: [], today: '2026-09-03',
+    });
+    expect(d.kind).toBeUndefined();
+    expect(d.points).toBeUndefined();
+  });
 });
 
 const record = buildDefect({

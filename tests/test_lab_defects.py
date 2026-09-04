@@ -74,3 +74,27 @@ def test_update_of_a_missing_defect_is_an_error(tmp_path):
     defects.save(path, [ONE])
     with pytest.raises(KeyError):
         defects.update(path, "no-such-id", {"status": "fixed"})
+
+
+def test_a_line_defect_round_trips(tmp_path):
+    path = tmp_path / "defects.toml"
+    record = {"id": "3001-naive-edge", "part": "3001", "engines": ["naive"],
+              "status": "open", "title": "missing edge",
+              "mark": {"x": 0.1, "y": 0.2, "w": 0.3, "h": 0.4},
+              "kind": "line",
+              "points": [{"x": 0.1, "y": 0.2}, {"x": 0.4, "y": 0.6}],
+              "seen": {}, "filed": "2026-09-03", "notes": ""}
+    defects.add(path, record)
+    [back] = defects.load(path)
+    assert back["kind"] == "line"
+    assert back["points"] == record["points"]
+
+
+def test_a_defect_with_no_kind_still_loads(tmp_path):
+    path = tmp_path / "defects.toml"
+    defects.add(path, {"id": "3001-naive-blob", "part": "3001",
+                       "engines": ["naive"], "status": "open", "title": "blob",
+                       "mark": {"x": 0, "y": 0, "w": 0.2, "h": 0.2},
+                       "seen": {}, "filed": "2026-09-03", "notes": ""})
+    [back] = defects.load(path)
+    assert "kind" not in back

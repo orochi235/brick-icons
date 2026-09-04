@@ -11,15 +11,17 @@ from pathlib import Path
 
 DEFAULT_PATH = Path("tests/goldens/defects.toml")
 STATUSES = ("open", "fixed", "wontfix", "notabug")
-_ORDER = ("id", "part", "engines", "status", "title", "mark", "seen",
-          "filed", "notes")
+_ORDER = ("id", "part", "engines", "status", "title", "mark", "kind", "points",
+          "seen", "filed", "notes")
 
 _HEADER = """\
 # Defects found in corpus renders, filed from the lab.
 #
 # Written by brick_icons.lab; hand edits are kept but reformatted on the next
-# write. `mark` is in fractions of the render box, so it survives a change of
-# --render-px but not of --angle -- which is what `seen` records.
+# write. `mark` is in fractions of the pane box it was drawn on. `kind` and
+# `points` are absent on a plain rectangle, which is every defect filed before
+# 2026-09. `seen` is retained for records that carry it; the lab now asks
+# labkit whether a mark is stale.
 
 """
 

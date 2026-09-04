@@ -8,6 +8,8 @@ export type DefectStatus = 'open' | 'fixed' | 'wontfix' | 'notabug';
 /** Beside the type, so a new status cannot reach one dropdown and not the other. */
 export const STATUSES: DefectStatus[] = ['open', 'fixed', 'wontfix', 'notabug'];
 
+export type MarkKind = 'rect' | 'line' | 'arrow' | 'ellipse' | 'stroke' | 'text';
+
 export interface Defect {
   id: string;
   part: string;
@@ -15,6 +17,11 @@ export interface Defect {
   status: DefectStatus;
   title: string;
   mark: Mark;
+  /** Absent means a rectangle — every defect filed before marks could be
+   *  anything else. */
+  kind?: MarkKind;
+  /** Vertices for a kind a bounding box cannot describe. Absent for a rect. */
+  points?: { x: number; y: number }[];
   seen: Seen;
   filed: string;
   notes: string;
@@ -26,6 +33,8 @@ export interface BuildDefectArgs {
   title: string;
   notes: string;
   mark: Mark;
+  kind?: MarkKind;
+  points?: { x: number; y: number }[];
   config: Record<string, unknown>;
   existing: readonly string[];
   today: string;
@@ -41,6 +50,8 @@ export function buildDefect(args: BuildDefectArgs): Defect {
     status: 'open',
     title,
     mark: args.mark,
+    ...(args.kind && args.kind !== 'rect' ? { kind: args.kind } : {}),
+    ...(args.points?.length ? { points: args.points } : {}),
     seen: seenFrom(args.config),
     filed: args.today,
     notes: args.notes,
