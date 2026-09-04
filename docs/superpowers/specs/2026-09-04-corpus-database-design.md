@@ -11,17 +11,32 @@ defect): `defects.toml` records "this specific thing is wrong", never "this
 part has been looked at and is fine". And history: each census run writes its
 own JSONL, so "did this regress" is a diff of two files nobody kept.
 
-## One file, `corpus.db`, at the repo root
+## The renders are committed files; the database is derived
 
-SQLite. Gitignored — it reaches ~600MB once renders are in it, and every byte
-of it is reproducible from the library plus the code that drew it.
+**`renders/<source>/<part>.svg`, tracked in git.** A render is the most
+expensive artifact this project makes — the census spent 46 CPU-hours to
+measure 60% of one engine — so nothing may depend on being able to draw it
+again. One canonical render per part per source, at a fixed pose and config;
+every other config stays in `out/lab`'s argv-keyed cache and is not tracked.
+Without that rule the store grows without bound the first time somebody sweeps
+a flag.
 
-Everything a *human* authored is the exception, and it exports to git-tracked
-TOML on every write: defects continue to land in `tests/goldens/defects.toml`
-in the format `brick_icons/lab/defects.py` already writes, and part statuses
-land beside it in `part-status.toml`. The database is the working store; the
-TOML is the record that survives `rm corpus.db` and shows up in a diff. Import
-runs the other way at build time, so the two cannot drift.
+**Store the SVG plain, never gzipped.** Git already zlib-compresses blobs and
+delta-compresses similar ones; a pre-compressed file defeats both, so every
+re-render would cost its full size forever. Measured on this corpus: raw SVGs
+run 2–63KB (median ~14KB), so both engines over the unprinted half is ~230MB
+in the working tree and ~50MB packed.
+
+**`corpus.db` is SQLite, gitignored, and genuinely cheap to rebuild** —
+because rebuilding no longer means rendering. It holds the metadata, the
+measurement history and a pointer to each render's file, and it is
+reconstructed by walking `renders/` and the TOML below.
+
+**What a human authored is git-tracked text.** Defects continue to land in
+`tests/goldens/defects.toml` in the format `brick_icons/lab/defects.py`
+already writes, and part statuses land beside it in `part-status.toml`,
+exported on every write. Import runs the other way at build time, so the two
+cannot drift.
 
 ## Schema
 
@@ -56,9 +71,8 @@ CREATE TABLE renders (
   config_key TEXT NOT NULL,         -- lab.cache.key(argv), so the lab agrees
   run_id     INTEGER REFERENCES runs(id),
   made_at    TEXT NOT NULL,
-  sha256     TEXT NOT NULL,         -- of the SVG, or of the PNG when there is none
-  svgz       BLOB,                  -- gzipped SVG, ~10KB; null for decal/ldview
-  png        BLOB,                  -- 512px on the long side, ~25KB
+  path       TEXT NOT NULL,         -- 'renders/naive/3001.svg', relative to the repo
+  sha256     TEXT NOT NULL,         -- of that file, so a stale row is detectable
   width      INTEGER, height INTEGER,
   PRIMARY KEY (part_id, source, config_key)
 );
@@ -104,6 +118,10 @@ CREATE INDEX renders_by_part ON renders(part_id);
 in either has simply never been drawn, which is a fact worth being able to
 query.
 
+Rasters are not stored at all. A PNG is a resvg call away from the SVG, so the
+lab renders one into `out/` when it needs pixels; `ldview` and `decal` sources
+have no vector form and are the only ones that keep a `.png` in the store.
+
 ## Reuse `lab.cache.key` for `config_key`
 
 The lab already canonicalizes an argv into a 16-hex key that ignores flag
@@ -113,8 +131,8 @@ answer to "what counts as a different drawing" in the repo.
 
 ## What writes it
 
-`compare-silhouette-truth.py` opens a run, writes a `measurements` row per
-part, and stores the render when the row trips `worth_keeping`. Its JSONL
+`compare-silhouette-truth.py` writes a `measurements` row per part and drops
+the render into `renders/` when the row trips `worth_keeping`. Its JSONL
 output stays: a shard writing to its own append-only file cannot corrupt a
 neighbour, and SQLite under eight concurrent writers on a contended box is a
 lock-contention problem nobody needs at 3am. **The shards write JSONL; one
@@ -130,8 +148,9 @@ list as a batch job every time it is opened.
 ## Build order
 
 1. `brick_icons/db.py`: schema, migrations keyed off `meta.schema_version`,
-   and the reader/writer functions. Backfill the 6,125 existing JSONL rows and
-   `defects.toml`. Testable with no renders at all.
+   the reader/writer functions, and a rebuild that walks `renders/` and the
+   TOML. Backfill the 6,125 existing JSONL rows and `defects.toml`. Testable
+   with no renders at all.
 2. The render job that populates `renders` for a part list.
 3. The lab's findings view, reading from the database.
 4. The regression gate: a test that fails when a part measures worse than its
@@ -143,6 +162,10 @@ Each is its own plan. Only the first is specified here.
 
 **Do not point the eight census shards at SQLite.** See above; the JSONL is
 load-bearing, not legacy.
+
+**Never make the database the only copy of a render.** It is gitignored and
+rebuilt; a render that exists only inside it is one `rm` from being a night of
+machine time. The file in `renders/` is the artifact, the row is the index.
 
 **A `wontfix` part status is not a `notabug` defect status.** The part status
 answers "should this part's renders be looked at again"; the defect status
