@@ -92,10 +92,10 @@ the polygons are actually in, or `ray_origin` inverts into the wrong place.
 The frame was settled by enumeration once already; check it the same way
 rather than deriving it.
 
-## Colour and tone
+## Color and tone
 
-Everything is colour 16. Sewing drops LDraw colour, and printed parts are out
-of the engine loop, so decoration colour is item 4's problem. Flat faces carry
+Everything is color 16. Sewing drops LDraw color, and printed parts are out
+of the engine loop, so decoration color is item 4's problem. Flat faces carry
 a view-space `normal` for the flat3 tone; curved spans carry `grad_axis` and
 `grad_samples` built from the exact surface normal, in the field shape
 `_wall_span_face` emits.

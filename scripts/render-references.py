@@ -1,7 +1,7 @@
 """Compare our outline render against LDView in LDraw's own colors.
 
 The specimen byte-diff gate proves the renderer is stable, not that it is
-right. LDView reads the same .dat files and honors each polygon's colour code,
+right. LDView reads the same .dat files and honors each polygon's color code,
 so it is a free ground truth for what a part is supposed to look like —
 especially for printed parts, whose decoration our pipeline currently drops.
 
@@ -31,8 +31,8 @@ def read_list(path: Path) -> list[str]:
 
 
 def ldview_reference(cfg, part: str, out_png: Path) -> None:
-    """LDView's own render, with every polygon in its authored LDraw colour."""
-    # part_color would become -DefaultColor3 and repaint colour 16, which is
+    """LDView's own render, with every polygon in its authored LDraw color."""
+    # part_color would become -DefaultColor3 and repaint color 16, which is
     # the one thing a reference must not do.
     ref_cfg = dataclasses.replace(cfg, part_color=None)
     argv = render.build_argv(ref_cfg, render.resolve_part(cfg, part), out_png)

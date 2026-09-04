@@ -23,12 +23,12 @@ to its baseline 2,676 bytes with the arrow as a single path.
 
 | task | commit |
 |---|---|
-| 2 colour through `flatten` | `7283a36` |
+| 2 color through `flatten` | `7283a36` |
 | 3 repair order/cache key pinned | `5014eac` |
-| 4 colour on face dicts | `24aaaaf` |
-| 5 both `shade.py` merges colour-aware | `10b1e1a` |
+| 4 color on face dicts | `24aaaaf` |
+| 5 both `shade.py` merges color-aware | `10b1e1a` |
 | 6 paint decoration flat | `9ad2e0b` |
-| 6b colour on analytic primitives | `ca33697` |
+| 6b color on analytic primitives | `ca33697` |
 | 6c decoration skips gradients | `c970622` |
 | 8 bind to a carrier | `a1d4ba4` |
 | 9 the unwrap maps | `8a38ec9` |
@@ -73,7 +73,7 @@ Each of these was written into a task above and would have shipped silently.
   hand-faceted wherever no primitive was substituted, and each such facet is a
   plane the decoration sits exactly on at gap 0 — matching one would beat the
   cylinder and flatten the curvature the unwrap exists to dissolve.
-- **`absorb_wall_facets`' missing colour guard is moot for bound decals:** the
+- **`absorb_wall_facets`' missing color guard is moot for bound decals:** the
   unwrap runs first and a bound decal is already its own region.
 
 ---
@@ -197,7 +197,7 @@ def test_flatten_records_a_color_per_triangle(part):
 
 
 def test_flatten_resolves_color_16_against_the_reference(tmp_path):
-    """Colour 16 in a subfile inherits the referring line's colour."""
+    """Color 16 in a subfile inherits the referring line's color."""
     (tmp_path / "sub.dat").write_text("0 BFC CERTIFY CCW\n"
                                       "3 16 0 0 0 1 0 0 1 1 0\n")
     top = tmp_path / "top.dat"
@@ -226,8 +226,8 @@ def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
 Inside the `for ln in lines:` loop, right after `typ = tok[0]` and the `typ == "0"` branch, resolve this line's color:
 
 ```python
-        # LDraw column 2: 16 means "inherit the referring line's colour",
-        # 24 is the edge colour. Anything else overrides.
+        # LDraw column 2: 16 means "inherit the referring line's color",
+        # 24 is the edge color. Anything else overrides.
         own = int(tok[1]) if len(tok) > 1 and tok[1].lstrip("#").isdigit() else 16
         cur = color if own == 16 else own
 ```
@@ -256,7 +256,7 @@ Expected: 2 passed
 
 `tests/test_hlr.py` compares whole `tri_meta` entries for equality, so both
 of these fail on the added key. Add `"color": 16` to each expected dict (both
-fixtures use colour 16); the other `tri_meta` assertions index by key and are
+fixtures use color 16); the other `tri_meta` assertions index by key and are
 unaffected.
 
 ```python
@@ -277,7 +277,7 @@ Expected: 365 passed
 
 ```bash
 git add brick_icons/hlr.py tests/test_hlr_color.py tests/test_hlr.py
-git commit -m "carry the LDraw colour code through flatten"
+git commit -m "carry the LDraw color code through flatten"
 ```
 
 ---
@@ -314,8 +314,8 @@ def test_repair_preserves_triangle_order_and_count(tmp_path):
                {tuple(v) for v in np.round(want, 6)}
 
 
-def test_repair_cache_key_ignores_colour(tmp_path):
-    """Colour cannot affect orientation; keying on it would invalidate every
+def test_repair_cache_key_ignores_color(tmp_path):
+    """Color cannot affect orientation; keying on it would invalidate every
     cached mesh for no gain."""
     tris = np.array([[[0, 0, 0], [1, 0, 0], [0, 1, 0]]], float)
     a = [{"certified": True, "invert": False, "color": 16}]
@@ -367,7 +367,7 @@ class FakeProj:
         return v[:, 0] * 10, v[:, 1] * 10, v[:, 2]
 
 
-def test_faces_carry_their_triangle_colour():
+def test_faces_carry_their_triangle_color():
     tri = np.array([
         [[0, 0, 0], [1, 0, 0], [0, 1, 0]],
         [[2, 0, 0], [3, 0, 0], [2, 1, 0]],
@@ -376,7 +376,7 @@ def test_faces_carry_their_triangle_colour():
     assert [f["color"] for f in faces] == [16, 14]
 
 
-def test_faces_default_to_the_part_colour_when_none_given():
+def test_faces_default_to_the_part_color_when_none_given():
     tri = np.array([[[0, 0, 0], [1, 0, 0], [0, 1, 0]]], float)
     faces = shade.faces_from_tris(tri, FakeProj())
     assert [f["color"] for f in faces] == [16]
@@ -436,7 +436,7 @@ Expected: 369 passed
 
 ```bash
 git add brick_icons/shade.py brick_icons/hlr.py tests/test_shade_color.py
-git commit -m "put each triangle's LDraw colour on its face"
+git commit -m "put each triangle's LDraw color on its face"
 ```
 
 ---
@@ -454,7 +454,7 @@ This is the change that makes flat prints appear at all.
 Append to `tests/test_shade_color.py`:
 
 ```python
-def test_coplanar_faces_of_different_colours_do_not_union():
+def test_coplanar_faces_of_different_colors_do_not_union():
     """A decal quad is coplanar with its carrier and shares an edge with it.
     Unioning them is what erases flat prints today."""
     tri = np.array([
@@ -465,7 +465,7 @@ def test_coplanar_faces_of_different_colours_do_not_union():
     assert faces[0]["group"] != faces[1]["group"]
 
 
-def test_coplanar_faces_of_the_same_colour_still_union():
+def test_coplanar_faces_of_the_same_color_still_union():
     tri = np.array([
         [[0, 0, 0], [1, 0, 0], [0, 1, 0]],
         [[1, 0, 0], [1, 1, 0], [0, 1, 0]],
@@ -476,8 +476,8 @@ def test_coplanar_faces_of_the_same_colour_still_union():
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `.venv/bin/python -m pytest tests/test_shade_color.py -k colours -q`
-Expected: FAIL on `test_coplanar_faces_of_different_colours_do_not_union` — the groups are equal.
+Run: `.venv/bin/python -m pytest tests/test_shade_color.py -k colors -q`
+Expected: FAIL on `test_coplanar_faces_of_different_colors_do_not_union` — the groups are equal.
 
 - [ ] **Step 3: Guard the edge-adjacency union**
 
@@ -486,7 +486,7 @@ In `_attach_smooth_gradients` (`brick_icons/shade.py`), inside `for ek, ks in by
 ```python
         for k in ks[1:]:
             # a decal is coplanar with its carrier and shares its edges;
-            # unioning across the colour boundary is what erased flat prints
+            # unioning across the color boundary is what erased flat prints
             if faces[ks[0]].get("color", 16) != faces[k].get("color", 16):
                 continue
             # union across a seam always; across an ordinary shared edge only
@@ -532,7 +532,7 @@ Expected: more paths than before — the arrow is now its own region rather than
 
 ```bash
 git add brick_icons/shade.py tests/test_shade_color.py
-git commit -m "keep surface merges from crossing a colour boundary"
+git commit -m "keep surface merges from crossing a color boundary"
 ```
 
 ---
@@ -551,9 +551,9 @@ Append to `tests/test_shade_color.py`:
 from brick_icons import colors as ldcolors
 
 
-def test_decoration_fills_use_the_ldraw_colour(tmp_path):
-    """Colour 16 takes the part colour and shades; anything else paints its
-    own LDraw colour, so a print reads as print rather than as engraving."""
+def test_decoration_fills_use_the_ldraw_color(tmp_path):
+    """Color 16 takes the part color and shades; anything else paints its
+    own LDraw color, so a print reads as print rather than as engraving."""
     face_body = {"normal": np.array([0.0, 0.0, -1.0]), "color": 16}
     face_deco = {"normal": np.array([0.0, 0.0, -1.0]), "color": 4}
     style = shade.Flat3Style(part_color=(157, 157, 157))
@@ -564,7 +564,7 @@ def test_decoration_fills_use_the_ldraw_colour(tmp_path):
 
 - [ ] **Step 2: Run it to verify it fails**
 
-Run: `.venv/bin/python -m pytest tests/test_shade_color.py -k ldraw_colour -q`
+Run: `.venv/bin/python -m pytest tests/test_shade_color.py -k ldraw_color -q`
 Expected: FAIL with `AttributeError: module 'brick_icons.shade' has no attribute 'face_fill'`
 
 - [ ] **Step 3: Add the helper**
@@ -573,8 +573,8 @@ In `brick_icons/shade.py`, above `fill_ops`:
 
 ```python
 def face_fill(face, style, ldraw_dir):
-    """A face's fill: shaded part tone for body geometry (colour 16), the
-    flat LDraw colour for decoration. Decoration is print, not relief — tone
+    """A face's fill: shaded part tone for body geometry (color 16), the
+    flat LDraw color for decoration. Decoration is print, not relief — tone
     it and it reads as engraving, which is the bug this fixes."""
     code = face.get("color", 16)
     if code == 16:
@@ -624,7 +624,7 @@ Expected: `3068bp00` now shows a yellow arrow and `3040bp08` a yellow border wit
 
 ```bash
 git add brick_icons/shade.py brick_icons/cli.py tests/test_shade_color.py
-git commit -m "paint decoration in its own LDraw colour"
+git commit -m "paint decoration in its own LDraw color"
 ```
 
 ---
@@ -639,8 +639,8 @@ git commit -m "paint decoration in its own LDraw colour"
 substituted primitives still paints in body tone, which is measurable in the Task 6
 render: `3941p01`'s panel comes out as scattered black patches because its 36 quads
 paint but its 8 `1-4chrd` and 16 `4-4ndis` pieces do not; `3942bp01`'s stripes
-(`48\5-24co*`) and `3040bp08`'s lamps (`4-4disc`, colour 14) do not paint at all.
-`hlr.flatten` computes the colour and then drops it at
+(`48\5-24co*`) and `3040bp08`'s lamps (`4-4disc`, color 14) do not paint at all.
+`hlr.flatten` computes the color and then drops it at
 `out["analytic"].append(prim)`, and `faces_from_analytic` never sets one.
 
 - [ ] **Step 1: Write the failing test**
@@ -648,7 +648,7 @@ paint but its 8 `1-4chrd` and 16 `4-4ndis` pieces do not; `3942bp01`'s stripes
 Append to `tests/test_shade_color.py`:
 
 ```python
-def test_analytic_faces_carry_the_primitive_colour():
+def test_analytic_faces_carry_the_primitive_color():
     from brick_icons import hlr, primitives as P
     right, up, fwd = hlr.view_basis(30.0, 45.0)
     proj = P.Projection(right, up, fwd, 2.0, 0.0, 0.0, 50.0)
@@ -658,7 +658,7 @@ def test_analytic_faces_carry_the_primitive_colour():
     assert all(f["color"] == 14 for f in faces)
 
 
-def test_analytic_primitives_default_to_the_part_colour():
+def test_analytic_primitives_default_to_the_part_color():
     from brick_icons import hlr, primitives as P
     right, up, fwd = hlr.view_basis(30.0, 45.0)
     proj = P.Projection(right, up, fwd, 2.0, 0.0, 0.0, 50.0)
@@ -672,13 +672,13 @@ def test_analytic_primitives_default_to_the_part_colour():
 Run: `.venv/bin/python -m pytest tests/test_shade_color.py -k analytic -q`
 Expected: FAIL — `Disc` takes no `color` argument.
 
-- [ ] **Step 3: Give `Primitive` a colour field**
+- [ ] **Step 3: Give `Primitive` a color field**
 
 In `brick_icons/primitives.py`, add to the `Primitive` dataclass beside `sector`:
 
 ```python
     sector: float = 360.0
-    color: int = 16          # LDraw code; 16 = inherit the part colour
+    color: int = 16          # LDraw code; 16 = inherit the part color
 ```
 
 It is `kw_only=True`, so a defaulted field is safe to add and every subclass inherits it.
@@ -711,17 +711,17 @@ def faces_from_analytic(analytic, proj):
     return out
 ```
 
-- [ ] **Step 6: Keep the wall merge from crossing a colour boundary**
+- [ ] **Step 6: Keep the wall merge from crossing a color boundary**
 
 `merge_smooth_walls` collapses chains of full-sector cylinders/cones into one synthetic
-primitive. Add the colour to its `by_key` grouping key so a coloured wall never merges
+primitive. Add the color to its `by_key` grouping key so a colored wall never merges
 into a body one — the same rule Task 5 applied to the other two merges. Find the
 `by_key[...]` line and append `p.color` to the key tuple. The synthetic primitive it
-builds must carry that colour too.
+builds must carry that color too.
 
 Note: this is a guard, not a fix for a part we have — `3942bp01`'s stripes are
 5/24 sectors, so `is_full` is False and they never reach this merge. Add it anyway;
-leaving a third colour-blind merge in place is how this class of bug returns.
+leaving a third color-blind merge in place is how this class of bug returns.
 
 - [ ] **Step 7: Run the targeted tests**
 
@@ -743,7 +743,7 @@ Report the script's final lines. Do NOT run `open`.
 ```bash
 git add brick_icons/primitives.py brick_icons/hlr.py brick_icons/shade.py \
         tests/test_shade_color.py
-git commit -m "carry the LDraw colour onto analytic primitives"
+git commit -m "carry the LDraw color onto analytic primitives"
 ```
 
 ---
@@ -754,14 +754,14 @@ git commit -m "carry the LDraw colour onto analytic primitives"
 `3942bp01`'s cone showed no red because `absorb_wall_facets` swallowed its 160
 stripe facets into the carrier wall's gradient. That diagnosis was false: the
 stripes reach the pipeline as `Cone` PRIMITIVES, not facets. `48\5-24co10.dat`
-is a `~Moved to` redirect, which `flatten` follows, inheriting colour 4 through
-it, so `hlr.flatten` yields 16 `Cone` primitives at colour 4 and ZERO decoration
+is a `~Moved to` redirect, which `flatten` follows, inheriting color 4 through
+it, so `hlr.flatten` yields 16 `Cone` primitives at color 4 and ZERO decoration
 triangles. There was nothing for wall absorption to absorb.
 
 The real cause: `fill_ops` has three emission branches, and only the flat `else`
 called `face_fill`. Both gradient branches — `grad_radial` via
 `_radial_focal_stops`, and `grad_axis` via the inline `style.ramp(nv)` sort —
-tone from the body part colour and never read `face["color"]`. Every curved
+tone from the body part color and never read `face["color"]`. Every curved
 surface shades with a gradient, so ALL decoration on a cylinder or cone painted
 in body tone. The fix routes decoration to the flat branch: a print is ink on a
 surface, not relief, so it takes no shading ramp.
@@ -772,8 +772,8 @@ hand-authored quads around a cylinder — 7.5 deg apart, and the part carries on
 10 type-5 lines — so neither fired and the panel shattered into separately
 stroked fragments. Decoration now unions across curvature.
 
-**The `absorb_wall_facets` colour guard was never implemented.** It remains a
-genuine fourth colour-blind merge, but no part is known to hit it. Add it only
+**The `absorb_wall_facets` color guard was never implemented.** It remains a
+genuine fourth color-blind merge, but no part is known to hit it. Add it only
 with a part that demonstrates the bug; do not add it on this plan's say-so.
 
 ---
@@ -1106,7 +1106,7 @@ def test_texture_canvas_comes_from_the_carrier_not_the_decal():
     assert 'width="400"' in svg and 'height="200"' in svg   # 40:20, not 1:1
 
 
-def test_texture_paints_each_region_in_its_ldraw_colour():
+def test_texture_paints_each_region_in_its_ldraw_color():
     carrier_uv = np.array([[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]])
     region = np.array([[2.0, 2.0], [8.0, 2.0], [8.0, 8.0], [2.0, 8.0]])
     svg = unwrap.texture_svg(carrier_uv, [(14, region)], px=100)
@@ -1211,14 +1211,14 @@ def test_two_facets_sharing_an_edge_merge_to_one_four_corner_region():
     assert len(rings[0]) == 4                  # the shared edge is gone
 
 
-def test_different_colours_stay_separate_regions():
+def test_different_colors_stay_separate_regions():
     a = np.array([[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]])
     b = np.array([[2.0, 0.0], [4.0, 0.0], [4.0, 2.0], [2.0, 2.0]])
     assert len(unwrap.merge_regions([(4, a), (14, b)])) == 2
 
 
 def test_a_hole_survives_the_merge():
-    """3941p01's buttons are body-coloured discs INSIDE the black panel: the
+    """3941p01's buttons are body-colored discs INSIDE the black panel: the
     panel region must keep them as holes, not swallow them."""
     outer = np.array([[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]])
     merged = unwrap.merge_regions([(0, outer)],
@@ -1242,7 +1242,7 @@ from . import geom2d
 
 
 def merge_regions(regions, holes=None):
-    """Union same-colour facets in UV. Interior facet edges vanish with the
+    """Union same-color facets in UV. Interior facet edges vanish with the
     union — a decal is one region, not a mesh."""
     by_code = {}
     for code, poly in regions:
@@ -1272,7 +1272,7 @@ Expected: 13 passed
 
 ```bash
 git add brick_icons/unwrap.py tests/test_unwrap.py
-git commit -m "union same-colour decal facets into one region in UV"
+git commit -m "union same-color decal facets into one region in UV"
 ```
 
 ---
@@ -1500,8 +1500,8 @@ git commit -m "re-project unwrapped decals onto the exact carrier surface"
 Append to `tests/test_unwrap.py`:
 
 ```python
-def test_decal_paints_its_ldraw_colour_end_to_end(tmp_path):
-    """The sagitta seam showed as a body-coloured sliver along the panel's
+def test_decal_paints_its_ldraw_color_end_to_end(tmp_path):
+    """The sagitta seam showed as a body-colored sliver along the panel's
     lower edge; the panel itself never painted at all."""
     from brick_icons import cli
     out = tmp_path / "o"

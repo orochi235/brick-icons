@@ -187,7 +187,7 @@ is invisible on the white one.
 One thing is dropped deliberately. LDraw authors a minifig neck as a
 270-degree body cylinder plus a 90-degree one in black — `973.dat` calls it the
 "neck mark" — which an assembled minifig's head covers. It is authored exactly
-as real print is, so it is caught by position and size together: a coloured
+as real print is, so it is caught by position and size together: a colored
 primitive standing proud of the part's body and covering no more than a
 quarter of its surface's ring. Across all 11,220 printed parts that is 1,388
 torso necks and nothing else; `scripts/sweep-marker-prims.py` re-derives it

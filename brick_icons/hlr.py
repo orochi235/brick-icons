@@ -83,8 +83,8 @@ def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
         if not tok:
             continue
         typ = tok[0]
-        # LDraw column 2: 16 means "inherit the referring line's colour",
-        # 24 is the edge colour. Anything else overrides.
+        # LDraw column 2: 16 means "inherit the referring line's color",
+        # 24 is the edge color. Anything else overrides.
         own = int(tok[1]) if len(tok) > 1 and tok[1].lstrip("#").isdigit() else 16
         cur = color if own == 16 else own
         if typ == "0":
@@ -516,7 +516,7 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
                                       cond_edges=out["5"],
                                       colors=out.get("tri_colors")) if out["tri"] else []
     an_faces = shade.faces_from_analytic(analytic, proj)
-    # before absorb_wall_facets, which is colour-blind: a decal that binds is
+    # before absorb_wall_facets, which is color-blind: a decal that binds is
     # already its own region and must not be swallowed into the wall it sits on
     decal_ells = []
     tri_faces = shade.unwrap_decoration(tri_faces, analytic, proj,

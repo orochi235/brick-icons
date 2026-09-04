@@ -65,7 +65,7 @@ from brick_icons.colors import Color, parse_ldconfig
 
 LDCFG = """\
 0 LDraw.org Configuration File
-0 // Colour definitions
+0 // Color definitions
 0 !COLOUR Black          CODE     0   VALUE #1B2A34   EDGE #808080
 0                              // LEGOID  26 - Black
 0 !COLOUR Red            CODE     4   VALUE #B40000   EDGE #333333
@@ -94,7 +94,7 @@ def test_color_hex_is_canonical_lowercase():
 
 
 def test_parse_ldconfig_ignores_comments_and_legoid_lines():
-    assert len(parse_ldconfig(["0 // not a colour", "0 // LEGOID 26 - Black"])) == 0
+    assert len(parse_ldconfig(["0 // not a color", "0 // LEGOID 26 - Black"])) == 0
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -175,7 +175,7 @@ Expected: `322 colors` then `Red 0xb40000 | Light_Bluish_Grey 0x969696 | Trans_R
 
 ```bash
 git add brick_icons/colors.py tests/test_colors.py
-git commit -m "parse LDConfig colour definitions into Color records"
+git commit -m "parse LDConfig color definitions into Color records"
 ```
 
 ---

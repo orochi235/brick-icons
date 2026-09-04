@@ -26,7 +26,7 @@ export interface RenderFit {
   /** The style's VIEW-space light direction, pointing at the source. Absent
    *  for a render with no style -- wireframe, or `--shade-style none`. */
   light?: Vec3Tuple;
-  /** The style's resolved part colour, as r/g/b 0-255. Absent with `light`. */
+  /** The style's resolved part color, as r/g/b 0-255. Absent with `light`. */
   part_color?: Vec3Tuple;
 }
 
@@ -139,7 +139,7 @@ export function threeStyle(config: Record<string, unknown>): ThreeStyle {
   return {
     opacity: Math.min(1, Math.max(0, num('opacity', DEFAULT_STYLE.opacity))),
     lineWidth: Math.max(0, num('line_width', DEFAULT_STYLE.lineWidth)),
-    // `none` is the CLI's word for a transparent ground, not a colour.
+    // `none` is the CLI's word for a transparent ground, not a color.
     background: typeof bg === 'string' && bg && bg !== 'none' ? bg : null,
   };
 }
@@ -171,8 +171,8 @@ export function lightPosition(fit: RenderFit | null,
   ]);
 }
 
-/** The render's part colour as a three.js hex, or null to leave the part in
- *  the colours the LDraw file gave it. */
+/** The render's part color as a three.js hex, or null to leave the part in
+ *  the colors the LDraw file gave it. */
 export function partColorHex(fit: RenderFit | null): number | null {
   if (!fit?.part_color) return null;
   const [r, g, b] = fit.part_color;

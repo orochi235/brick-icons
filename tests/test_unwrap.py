@@ -97,7 +97,7 @@ def test_texture_canvas_comes_from_the_carrier_not_the_decal():
     assert 'width="400"' in svg and 'height="200"' in svg   # 40:20, not 1:1
 
 
-def test_texture_paints_each_region_in_its_ldraw_colour():
+def test_texture_paints_each_region_in_its_ldraw_color():
     carrier_uv = np.array([[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]])
     region = np.array([[2.0, 2.0], [8.0, 2.0], [8.0, 8.0], [2.0, 8.0]])
     svg = unwrap.texture_svg(carrier_uv, [(14, region)], px=100)
@@ -166,14 +166,14 @@ def test_two_facets_sharing_an_edge_merge_to_one_four_corner_region():
     assert len(rings[0]) == 4                  # the shared edge is gone
 
 
-def test_different_colours_stay_separate_regions():
+def test_different_colors_stay_separate_regions():
     a = np.array([[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]])
     b = np.array([[2.0, 0.0], [4.0, 0.0], [4.0, 2.0], [2.0, 2.0]])
     assert len(unwrap.merge_regions([(4, a), (14, b)])) == 2
 
 
 def test_a_hole_survives_the_merge():
-    """3941p01's buttons are body-coloured discs INSIDE the black panel: the
+    """3941p01's buttons are body-colored discs INSIDE the black panel: the
     panel region must keep them as holes, not swallow them."""
     outer = np.array([[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]])
     merged = unwrap.merge_regions([(0, outer)],
@@ -308,7 +308,7 @@ def test_geometry_binding_to_no_carrier_is_untouched():
     assert unwrap.decorate(weird, [4], carriers=[]) == []
 
 
-def test_decorate_returns_one_region_per_colour_on_a_carrier():
+def test_decorate_returns_one_region_per_color_on_a_carrier():
     cyl = FakeCylinder(r=20.0, h=24.0)
     tris = _wall_quads(cyl, 10, 50, 4.0, 8.0)
     out = unwrap.decorate(tris, [4] * len(tris), [cyl])
@@ -350,8 +350,8 @@ def test_cone_unwrap_round_trips_on_the_taper():
     assert back == pytest.approx(pts, abs=1e-9)
 
 
-def test_decal_paints_its_ldraw_colour_as_one_element(tmp_path):
-    """The panel never painted at all before the colour rode out of flatten,
+def test_decal_paints_its_ldraw_color_as_one_element(tmp_path):
+    """The panel never painted at all before the color rode out of flatten,
     and painted as six separately-stroked fragments before the union moved to
     UV. One path in the part's own black is both fixes at once."""
     import re
@@ -394,7 +394,7 @@ def test_a_flat_print_binds_to_its_face_not_a_nearby_primitive():
 
 
 def test_the_carrier_face_is_the_whole_face_print_included():
-    """The print REPLACES the body facets under it, so unioning colour 16
+    """The print REPLACES the body facets under it, so unioning color 16
     alone leaves the strips around a torso's stripes, not the torso's front."""
     left = _quad_tris([[-20, 0, 0], [-5, 0, 0], [-5, 40, 0], [-20, 40, 0]])
     right = _quad_tris([[5, 0, 0], [20, 0, 0], [20, 40, 0], [5, 40, 0]])
@@ -441,7 +441,7 @@ def test_a_cylinder_family_does_not_become_a_needle_cone():
 
 
 def test_a_connector_marking_is_not_extracted():
-    """LDraw authors a minifig neck as a 270-degree colour-16 cylinder plus a
+    """LDraw authors a minifig neck as a 270-degree color-16 cylinder plus a
     90-degree one in black. The head covers it, and nothing in its authoring
     tells it from print."""
     from brick_icons import primitives
@@ -458,7 +458,7 @@ def test_a_connector_marking_is_not_extracted():
 
 
 def test_a_print_on_the_body_survives_the_marker_filter():
-    """3942bp01's stripes partition their wall into coloured and colour-16
+    """3942bp01's stripes partition their wall into colored and color-16
     sectors summing to 360 exactly as the neck does — only position separates
     them, so a share test alone would drop real print."""
     from brick_icons import primitives
@@ -485,7 +485,7 @@ def test_an_unmeasurable_part_keeps_its_decoration():
 
 
 def test_decoration_authored_as_primitives_is_extracted():
-    """3942bp01 is 16 coloured cone sectors and NO coloured facets, so a
+    """3942bp01 is 16 colored cone sectors and NO colored facets, so a
     triangle-only extraction emits an empty texture for it."""
     from brick_icons import primitives
 

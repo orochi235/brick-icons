@@ -183,7 +183,7 @@ describe('partColorHex', () => {
     expect(partColorHex({ ...FIT_3005, part_color: [157, 157, 157] })).toBe(0x9d9d9d);
   });
 
-  it("is null with no colour to impose, leaving the LDraw file's own", () => {
+  it("is null with no color to impose, leaving the LDraw file's own", () => {
     expect(partColorHex(FIT_3005)).toBeNull();
     expect(partColorHex(null)).toBeNull();
   });
@@ -195,7 +195,7 @@ describe('threeStyle', () => {
       .toEqual({ opacity: 0.55, lineWidth: 3, background: '#ffffff' });
   });
 
-  it("treats the CLI's `none` background as transparent, not as a colour", () => {
+  it("treats the CLI's `none` background as transparent, not as a color", () => {
     expect(threeStyle({ svg_bg: 'none' }).background).toBeNull();
     expect(threeStyle({ svg_bg: '' }).background).toBeNull();
   });

@@ -259,7 +259,7 @@ def _chain_line_ops(ops, stub_len=0.0):
 
 
 # 12 hues at fixed saturation/lightness, for --debug-colors. Adjacent entries
-# are 30 degrees apart so consecutive elements never read as the same colour.
+# are 30 degrees apart so consecutive elements never read as the same color.
 DEBUG_PALETTE = ("#e6194b", "#f58231", "#ffe119", "#bfef45", "#3cb44b",
                  "#42d4f4", "#4363d8", "#911eb4", "#f032e6", "#a9a9a9",
                  "#9a6324", "#469990")
@@ -279,11 +279,11 @@ def _hsl_hex(h, s, ll):
 
 
 def ramp_color(n, ramp_len=RAMP_LEN):
-    """Emission-order colour that reads as BOTH position and group: `n` runs
+    """Emission-order color that reads as BOTH position and group: `n` runs
     light to dark inside one hue for `ramp_len` elements, then the hue steps.
 
     The flat cycle answers "which element owns this vertex" but not "how far
-    along is it" -- past a dozen elements every colour has been used already.
+    along is it" -- past a dozen elements every color has been used already.
     Here the lightness gives the position within a run and the hue gives the
     run. A short run (the default 6) reads adjacent elements apart; a long one
     (ramp=100) trades that for coarse structure -- which hundred a segment
@@ -319,7 +319,7 @@ def debug_color(n, mode):
 
 
 def _colorize(parts, start, mode="cycle"):
-    """Give every drawn element after `start` its own colour, in emission
+    """Give every drawn element after `start` its own color, in emission
     order. Answers "which element owns this vertex", which one black outline
     cannot. `mode` is "cycle" (12 distinct hues), "ramp", or "ramp=N" for a
     run of N elements per hue (see ramp_color)."""
@@ -328,8 +328,8 @@ def _colorize(parts, start, mode="cycle"):
         el = parts[i]
         if not (el.startswith("<path") or el.startswith("<line")):
             continue
-        colour = debug_color(n, mode)
-        parts[i] = el.replace("/>", f' stroke="{colour}"/>', 1)
+        color = debug_color(n, mode)
+        parts[i] = el.replace("/>", f' stroke="{color}"/>', 1)
         n += 1
     return n
 

@@ -63,7 +63,7 @@ def build_parser():
     p.add_argument("--debug-colors", dest="debug_colors", nargs="?",
                    const="cycle", default=None, type=_debug_mode,
                    metavar="cycle|ramp|ramp=N",
-                   help="one colour per drawn element, in emission order; "
+                   help="one color per drawn element, in emission order; "
                         "'ramp' fades light-to-dark within a hue then steps "
                         "the hue every 6 elements, 'ramp=N' every N")
     p.add_argument("--part-label", dest="part_label", action="store_true",

@@ -21,10 +21,10 @@ from . import geom2d
 
 BIND_TOL = 0.5          # LDU; see the plan's measured table
 
-# A connector marking: LDraw authors a minifig neck as a 270-degree colour-16
+# A connector marking: LDraw authors a minifig neck as a 270-degree color-16
 # cylinder plus a 90-degree one in black, and the head covers that quarter on
 # an assembled figure. Nothing in its authoring distinguishes it from print —
-# 3942bp01's cone stripes partition their wall into coloured and colour-16
+# 3942bp01's cone stripes partition their wall into colored and color-16
 # sectors summing to 360 the same way — so it is caught by position and size
 # together. Swept over all 11,220 printed parts (scripts/sweep-marker-prims.py):
 # the two conditions isolate 1,388 torso necks, at clearance +4.0 and share
@@ -289,7 +289,7 @@ def bind_groups(tris, tri_colors, carriers):
 
 
 def merge_regions(regions, holes=None):
-    """Union same-colour facets in UV. Interior facet edges vanish with the
+    """Union same-color facets in UV. Interior facet edges vanish with the
     union — a decal is one region, not a mesh."""
     by_code = {}
     for code, poly in regions:
@@ -490,14 +490,14 @@ def planes_from(polys, inside=None):
 
 def _surface_key(prim, tol=0.01):
     """The surface a primitive lies on, independent of the sector of it that
-    the primitive covers and of its colour."""
+    the primitive covers and of its color."""
     q = lambda v: tuple(np.round(np.asarray(v, float) / tol).astype(np.int64))
     return (prim.kind, q(prim.t), q(prim.R[:, 1]),
             int(round(float(np.linalg.norm(prim.R[:, 0])) / tol)))
 
 
 def marker_prims(analytic, tris=None, tri_colors=None):
-    """ids of coloured primitives that mark a connector rather than print it.
+    """ids of colored primitives that mark a connector rather than print it.
 
     See MARKER_CLEARANCE. Returns an empty set when the part has no body
     triangles to measure against, so an unmeasurable part keeps its geometry.
@@ -535,7 +535,7 @@ def prim_loop(prim, n=48):
     """The world-space boundary of a primitive's own surface, as one loop.
 
     A wall is bounded by its two end rings, a flat kind by its rim; either way
-    the decal a coloured primitive paints IS that surface, so its outline is
+    the decal a colored primitive paints IS that surface, so its outline is
     the primitive's own extent rather than anything fitted.
     """
     th = np.linspace(0.0, np.radians(prim.sector), n)
@@ -551,10 +551,10 @@ def prim_loop(prim, n=48):
 
 
 def prim_regions(analytic, carriers, skip=()):
-    """[(colour, carrier, pts)] for every coloured primitive that binds.
+    """[(color, carrier, pts)] for every colored primitive that binds.
 
-    Decoration is not all triangles: 3942bp01's stripes are 16 coloured cone
-    sectors and no coloured facets at all, so a triangle-only extraction
+    Decoration is not all triangles: 3942bp01's stripes are 16 colored cone
+    sectors and no colored facets at all, so a triangle-only extraction
     emits an empty texture for it.
     """
     out = []
@@ -573,7 +573,7 @@ def carrier_face(carrier, tris, theta0=0.0, contains=None, extra=()):
     """The carrier's own face in UV — the surface the decal is printed on.
 
     A plane's face is the union of every facet lying in it, PRINT INCLUDED:
-    decoration replaces the body facets under it, so unioning colour 16 alone
+    decoration replaces the body facets under it, so unioning color 16 alone
     leaves the leftover strips around 973p01's stripes instead of the torso's
     front. `contains` picks the component the decal sits in, since a part
     usually has other geometry in the same plane (30260p01 has 13 further
@@ -618,9 +618,9 @@ def carrier_face(carrier, tris, theta0=0.0, contains=None, extra=()):
 def decal_groups(tris, tri_colors, analytic):
     """[(carrier, theta0, regions, face)] for every decal a part carries.
 
-    Decoration reaches here two ways — coloured facets and coloured
+    Decoration reaches here two ways — colored facets and colored
     primitives — and both have to be collected or a part extracts to an empty
-    texture: 3942bp01 is 16 coloured cone sectors and no coloured facets at
+    texture: 3942bp01 is 16 colored cone sectors and no colored facets at
     all, 973p01 is six facets and one primitive.
 
     Carriers are BODY surfaces only. Binding to a decoration primitive would

@@ -1205,8 +1205,8 @@ def _weld_junction_notches(strokes, base, line_px, sil_px, broad=False):
 
 
 def face_fill(face, style, ldraw_dir):
-    """A face's fill: shaded part tone for body geometry (colour 16), the
-    flat LDraw colour for decoration. Decoration is print, not relief — tone
+    """A face's fill: shaded part tone for body geometry (color 16), the
+    flat LDraw color for decoration. Decoration is print, not relief — tone
     it and it reads as engraving, which is the bug this fixes."""
     code = face.get("color", 16)
     if code == 16:
@@ -1429,7 +1429,7 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
         if not d:
             continue
         # decoration is ink on a surface, not relief, so it takes no shading
-        # ramp — and the gradient branches never consulted the LDraw colour,
+        # ramp — and the gradient branches never consulted the LDraw color,
         # which is why a printed cylinder or cone painted in body tone
         deco = f.get("color", 16) != 16
         if "grad_radial" in f and not deco:
@@ -1769,7 +1769,7 @@ def ink_prims(analytic, tris, tri_colors):
         return ink
     # A decal is a stack of nested regions: 3941p01's buttons are LDraw 16
     # discs lying flush INSIDE the black panel, so they are print too and
-    # colour cannot tell them from the part's own geometry. They are the
+    # color cannot tell them from the part's own geometry. They are the
     # panel's holes, so test against each region with its holes filled.
     filled = [(carrier, theta0, _filled(g)) for _c, carrier, theta0, g in regions]
     for prim in analytic:
@@ -2112,7 +2112,7 @@ def _attach_smooth_gradients(faces, cond_edges, min_spread=0.002):
     for ek, ks in by_edge.items():
         for k in ks[1:]:
             # a decal is coplanar with its carrier and shares its edges;
-            # unioning across the colour boundary is what erased flat prints
+            # unioning across the color boundary is what erased flat prints
             if faces[ks[0]].get("color", 16) != faces[k].get("color", 16):
                 continue
             # union across a seam always; across an ordinary shared edge only

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render a part list as a FACE-ONLY contact sheet: one flat colour per fill
+"""Render a part list as a FACE-ONLY contact sheet: one flat color per fill
 element, strokes dropped.
 
     python scripts/render-face-sheet.py --engine occt --list specimens.txt
@@ -9,11 +9,11 @@ fill defects hide: a staircased boundary, a sliver on the wrong surface, a
 fragment that should have merged into its neighbour. 4070's ledge seam was a
 1.2px staircase that only showed because the stroke that would have covered
 it was missing. This strips the strokes so no seam can hide behind one, and
-cycles the fill colours so adjacent elements never share a tone.
+cycles the fill colors so adjacent elements never share a tone.
 
 It POST-PROCESSES the emitted SVG rather than adding a render mode, so what
 you see is exactly what the renderer produced. `--debug-colors` is not this:
-it recolours strokes and leaves the fills grey.
+it recolors strokes and leaves the fills grey.
 """
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ PALETTE = ["#e6194b", "#3cb44b", "#4363d8", "#f58231", "#911eb4", "#46f0f0",
 
 
 def faces_only(svg: str) -> str:
-    """Drop stroke-only paths; give every remaining fill its own flat colour."""
+    """Drop stroke-only paths; give every remaining fill its own flat color."""
     n = 0
 
     def sub(m):

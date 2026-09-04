@@ -45,7 +45,7 @@ DEFAULTS = {
                              # junctions (restyles stud/limb corners)
     "part_label": False,     # stamp the part id in small print (test renders)
     "debug_colors": False,   # False | "cycle" | "ramp" | "ramp=N" -- one
-                             # colour per drawn element, in emission order
+                             # color per drawn element, in emission order
     "fmt": "png",            # png | svg | both
     "mode": "both",          # gray | mono | color | both  (png only)
     "dither": "atkinson",    # threshold | floyd | ordered | atkinson

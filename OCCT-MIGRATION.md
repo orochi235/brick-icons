@@ -33,8 +33,8 @@ shape, and one per limb-cut span of each cylinder, cone and elliptical wall.
 contract, and `occt._faces_for` as the third.
 
 What is still empty under `occt`: `refits`, `loops` and `fold_ells` (item 3),
-`tri` and `tri_colors` (item 4). Every face is colour 16, because sewing drops
-LDraw colour.
+`tri` and `tri_colors` (item 4). Every face is color 16, because sewing drops
+LDraw color.
 
 **A surface kind the producer does not handle contributes no fill and raises
 nothing.** That is how 50950's elliptical wall stayed empty. `CURVED_SURFACES`

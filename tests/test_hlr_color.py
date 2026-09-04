@@ -28,7 +28,7 @@ def test_flatten_records_a_color_per_triangle(part):
 
 
 def test_flatten_resolves_color_16_against_the_reference(tmp_path):
-    """Colour 16 in a subfile inherits the referring line's colour."""
+    """Color 16 in a subfile inherits the referring line's color."""
     (tmp_path / "sub.dat").write_text("0 BFC CERTIFY CCW\n"
                                       "3 16 0 0 0 1 0 0 1 1 0\n")
     top = tmp_path / "top.dat"
@@ -59,8 +59,8 @@ def test_repair_preserves_triangle_order_and_count(tmp_path):
                {tuple(v) for v in np.round(want, 6)}
 
 
-def test_repair_cache_key_ignores_colour(tmp_path):
-    """Colour cannot affect orientation; keying on it would invalidate every
+def test_repair_cache_key_ignores_color(tmp_path):
+    """Color cannot affect orientation; keying on it would invalidate every
     cached mesh for no gain."""
     tris = np.array([[[0, 0, 0], [1, 0, 0], [0, 1, 0]]], float)
     a = [{"certified": True, "invert": False, "color": 16}]

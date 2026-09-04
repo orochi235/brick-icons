@@ -394,7 +394,7 @@ class Primitive:
     R: np.ndarray
     t: np.ndarray
     sector: float = 360.0
-    color: int = 16          # LDraw code; 16 = inherit the part colour
+    color: int = 16          # LDraw code; 16 = inherit the part color
 
     kind = None          # class attribute, overridden per subclass
 

@@ -195,7 +195,35 @@ tile means making them one `sidebar` contribution with both groups inside it,
 not two contributions — so this is a restructure of the panel, not an
 annotation on it.
 
+**The sidebar is a fixed 320px** — `flex: 0 0 auto`, `resize: none`, and no
+handle element between it and the content, so drag-to-resize needs a labkit
+change. Filed as an ask, not worked around here; a consumer `resize: horizontal`
+would put the grip in the bottom-right corner of a full-height column.
+
 Do not wait on any of it; every item has a working local workaround.
+
+### The annotations overlay owns pane input — two defects fall out
+
+Found driving a browser against `1.4.0-pre.1`; neither is visible to jsdom.
+
+- **Pan and zoom are dead on every engine pane.** `.lk-annotate__input`
+  (`pointer-events: auto`, `z-index: 2`) covers the pane, so `SourcePane`'s
+  `onWheel` and drag-to-pan never see a pointer. Dispatching the same wheel
+  straight at `.pane-body` moves the camera, which is how the cause was pinned.
+- **The `mark` toggle does nothing.** `config.marking` is written by `PoseBar`
+  and read by nobody: `markable` comes from `paneSpec(s).marks`, a static `true`
+  for engine panes, so a target mounts whether marking is on or off. Deleting
+  `MarkLayer` took the flag's only reader with it.
+
+Gating `markable` on `config.marking` fixes the second and confines the first to
+while marking is armed. Whether the camera should stay live *under* an armed
+overlay is the open question, and `usePanZoom` above is the likely answer.
+
+**A projected mark can never go stale.** `positionDependsOn` reaches the target
+and `angle` is in it, but the projection effect lists `config` in its deps AND
+passes it to `marks.add`, so every config change destroys and remakes each mark
+with the new snapshot. Changing `angle` re-renders both panes and leaves the
+marks styled exactly as before, sitting on a picture they were not drawn on.
 
 ## The engine thread: one checkout, no branches
 

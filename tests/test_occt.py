@@ -975,7 +975,7 @@ def test_boundary_conics_cover_rims_no_drawn_arc_reports(ldraw_dir):
 
 def test_a_faceted_dome_shades_as_one_surface(ldraw_dir):
     """3960 sews 822 planes. Toned one at a time they read flat and emit one
-    fill element each -- 194 same-colour fills against naive's 1, and a dome
+    fill element each -- 194 same-color fills against naive's 1, and a dome
     that draws as a disc."""
     out = occt.flatten_part("3960", ldraw_dir)
     shape = occt.build_shape(out)

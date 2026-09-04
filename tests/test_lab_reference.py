@@ -16,7 +16,7 @@ def test_angle_changes_the_key():
         != reference.key("3941", "45,45", 900, None)
 
 
-def test_colour_changes_the_key():
+def test_color_changes_the_key():
     assert reference.key("3941", "30,25", 900, None) \
         != reference.key("3941", "30,25", 900, "0xc91a09")
 

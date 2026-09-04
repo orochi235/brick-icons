@@ -1266,7 +1266,7 @@ def _group_planes(shape, out, plane_by_idx):
 
     A hand-faceted curve sews as hundreds of planes. Toned one by one they
     read flat and emit one fill element each: 3960's dome came out as 194
-    same-colour fills against naive's 1. The union is DECLARED-only (type-5
+    same-color fills against naive's 1. The union is DECLARED-only (type-5
     lines, plus exactly coplanar neighbours, which is naive's rule) -- a
     dihedral test over tessellation is the explosion this engine exists to
     avoid.
@@ -1386,7 +1386,7 @@ def face_polys(shape, right, up, deflection):
     negated, like the segment ops).
 
     Built for the silhouette contour, which needs only their union -- but the
-    per-face split is what the fills slice will attribute colour and depth to,
+    per-face split is what the fills slice will attribute color and depth to,
     so it stays per-face rather than pre-unioned.
     """
     ax, ay = _screen_axes(right, up)
