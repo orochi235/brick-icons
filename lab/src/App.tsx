@@ -1,18 +1,18 @@
 import { useEffect, useState } from 'react';
-import { FloatingPanel, Lab, useLabContext } from '@weasel-js/labkit';
+import { FloatingPanel, Lab } from '@weasel-js/labkit';
 import type { Instrument, TrialContribution } from '@weasel-js/labkit';
 import type { LabClient } from '@lab/api/client';
 import { PartSearch } from '@lab/chrome/PartSearch';
 import { COMPACT_ROWS } from '@lab/config/rows';
 import { DefectList } from '@lab/defects/DefectList';
 import type { Defect, DefectStatus } from '@lab/defects/useDefects';
-import { setPendingPart } from '@lab/config/pending';
+import { useOpenPart } from '@lab/config/pending';
 import '@lab/app.css';
 
 // `FloatingPanel` is a positioned box and nothing else -- it carries neither a
 // title nor a dismissal, so both are written here as its first child.
 function AllDefects({ client }: { client: LabClient }) {
-  const { addTrial } = useLabContext();
+  const openPart = useOpenPart();
   const [defects, setDefects] = useState<Defect[]>([]);
   const [open, setOpen] = useState(false);
 
@@ -39,7 +39,7 @@ function AllDefects({ client }: { client: LabClient }) {
       </div>
       <DefectList
         defects={defects}
-        onOpen={(part) => { setPendingPart(part); addTrial('part-inspector'); }}
+        onOpen={(part) => openPart(part)}
         onStatus={async (id: string, status: DefectStatus) => {
           await client.patchDefect(id, { status });
           setDefects((await client.defects()) as Defect[]);
@@ -53,12 +53,10 @@ function AllDefects({ client }: { client: LabClient }) {
 // and puts its children in the shell's header beside the built-in controls.
 // Nesting a `<LabShell>` here would lay the whole app out as one header item.
 function TitleBar({ client }: { client: LabClient }) {
-  const { addTrial } = useLabContext();
-  // `addTrial` reads the pending part through the instrument's defaultConfig;
-  // see src/config/pending.ts.
+  const openPart = useOpenPart();
   return (
     <>
-      <PartSearch client={client} onOpen={() => addTrial('part-inspector')} />
+      <PartSearch client={client} onOpen={(part) => openPart(part)} />
       <AllDefects client={client} />
     </>
   );

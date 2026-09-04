@@ -1,7 +1,7 @@
-import { defineInstrument, f, useLabContext } from '@weasel-js/labkit';
+import { defineInstrument, f } from '@weasel-js/labkit';
 import type { LabClient, SchemaField } from '@lab/api/client';
 import { buildSchema, defaultsFor, renderConfig } from '@lab/config/nodes';
-import { setPendingPart } from '@lab/config/pending';
+import { useOpenPart } from '@lab/config/pending';
 import { runSheet, type SheetCell } from '@lab/instruments/sheetJob';
 import '@lab/instruments/contactSheet.css';
 
@@ -37,10 +37,10 @@ function RunBar({ ctx, list }: { ctx: any; list?: CorpusList }) {
 
 function Sheet({ ctx, client, lists }:
                { ctx: any; client: LabClient; lists: CorpusList[] }) {
-  const { addTrial } = useLabContext();
+  const openPart = useOpenPart();
   const cells = (ctx.state as SheetState).cells;
   const list = lists.find((l) => l.name === ctx.config.list);
-  const open = (part: string) => { setPendingPart(part); addTrial('part-inspector'); };
+  const open = (part: string) => openPart(part);
 
   return (
     <div className="sheet-wrap">
