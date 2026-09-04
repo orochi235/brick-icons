@@ -56,6 +56,19 @@ describe('buildDefect', () => {
     expect(d.points).toHaveLength(2);
   });
 
+  // Without the snapshot the projection has nothing to date a mark by, and a
+  // mark remade under today's config can never be stale.
+  it('records the pose the mark was drawn at', () => {
+    expect(buildDefect(args).seen)
+      .toEqual({ angle: '30,25', shading: 'outline', shade_style: 'flat3' });
+  });
+
+  it('records only what moves a mark, not the whole config', () => {
+    const seen = buildDefect({ ...args, config: { ...args.config, render_px: 900,
+                                                  line_width: 2 } }).seen;
+    expect(Object.keys(seen).sort()).toEqual(['angle', 'shade_style', 'shading']);
+  });
+
   it('leaves kind and points off a plain rectangle', () => {
     const d = buildDefect({
       part: '3001', engines: ['naive'], title: 'blob', notes: '',

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { LabClient } from '@lab/api/client';
 import { defectId } from '@lab/defects/identity';
+import { POSITION_DEPENDS_ON } from '@lab/defects/targets';
 
 export type DefectStatus = 'open' | 'fixed' | 'wontfix' | 'notabug';
 
@@ -14,6 +15,18 @@ export interface Mark { x: number; y: number; w: number; h: number; }
 
 export type Seen = Record<string, string>;
 
+/** The pose a mark was drawn at, for storing beside it. Only the keys the
+ *  target says a position depends on: `line_width` changes the picture but
+ *  moves nothing, and a mark that went stale on it would cry wolf. */
+function seenFrom(config: Record<string, unknown>): Seen {
+  const out: Seen = {};
+  for (const key of POSITION_DEPENDS_ON) {
+    const value = config[key];
+    if (typeof value === 'string' && value) out[key] = value;
+  }
+  return out;
+}
+
 export interface Defect {
   id: string;
   part: string;
@@ -26,8 +39,9 @@ export interface Defect {
   kind?: MarkKind;
   /** Vertices for a kind a bounding box cannot describe. Absent for a rect. */
   points?: { x: number; y: number }[];
-  /** Kept so an existing record round-trips. labkit answers staleness now,
-   *  from the target's `positionDependsOn`. */
+  /** The pose the mark was drawn at. labkit answers staleness from it, against
+   *  the target's `positionDependsOn`; a record filed without one never goes
+   *  stale, which is what an older record wants. */
   seen: Seen;
   filed: string;
   notes: string;
@@ -62,7 +76,7 @@ export function buildDefect(args: BuildDefectArgs): Defect {
     mark: args.mark,
     ...(args.kind && args.kind !== 'rect' ? { kind: args.kind } : {}),
     ...(args.points?.length ? { points: args.points } : {}),
-    seen: {},
+    seen: seenFrom(args.config),
     filed: args.today,
     notes: args.notes,
   };

@@ -18,7 +18,7 @@ import { diffCaption, diffWarning, useDiff } from '@lab/panes/useDiff';
 import { FileDefectDialog } from '@lab/defects/FileDefectDialog';
 import { DefectCard } from '@lab/defects/DefectCard';
 import { buildDefect, STATUSES, useDefects } from '@lab/defects/useDefects';
-import { defectToMarks, markToDefectFields, targetId,
+import { markToDefectFields, projectDefects, targetId,
   type MarkMeta } from '@lab/defects/projection';
 import { createTargetRegistry, type TargetRegistry } from '@lab/defects/targets';
 import { useReference } from '@lab/panes/useReference';
@@ -137,6 +137,7 @@ function Panes({ ctx, client, registry }:
         </Suspense>
       ),
     },
+    marking: Boolean(config.marking),
   };
 
   const markable = sources.filter((s) => paneSpec(s, deps).marks);
@@ -158,13 +159,8 @@ function Panes({ ctx, client, registry }:
 
   const shownTargets = markable.map((s) => targetId(s.id));
   useEffect(() => {
-    for (const a of marks.query()) {
-      if ((a.meta as MarkMeta | undefined)?.defectId) marks.remove(a.id);
-    }
-    for (const d of defects) {
-      for (const init of defectToMarks(d, shownTargets)) marks.add(init, config);
-    }
-  }, [defects, shownTargets.join(','), marks, config]);
+    projectDefects(marks, defects, shownTargets);
+  }, [defects, shownTargets.join(','), marks]);
 
   return (
     <div className={`panes panes-${layout}`}>
@@ -338,6 +334,12 @@ export function createPartInspector(fields: SchemaField[], client: LabClient) {
         stamps: { ...state.stamps, [item.source]: item.signature },
       }),
     },
+
+    // No tools of its own; declaring the capability is how a trial starts on
+    // one. An instrument that declares only `annotations` opens on `select`,
+    // where a drag marquees instead of drawing and the `mark` toggle looks
+    // inert all over again.
+    tools: { tools: [], initial: 'rect' },
 
     annotations: {
       targets: (state) => registry.targets((state as InspectorState).trialKey),

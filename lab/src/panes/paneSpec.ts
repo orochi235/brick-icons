@@ -16,6 +16,8 @@ export interface PaneDeps {
   /** The 3D pane's orbit view, built by the caller because it is JSX, and
    *  what it has to say about how far it is registered with the rest. */
   three: { node: ReactNode; note?: string };
+  /** Whether the defect-marking mode is armed. */
+  marking: boolean;
 }
 
 export interface PaneSpec {
@@ -25,8 +27,11 @@ export interface PaneSpec {
   /** Drawn above the stage and owned by the kind, unlike the mark layer the
    *  caller adds. */
   overlay?: ReactNode;
-  /** A mark is a fraction of the render it was drawn on, so it belongs only
-   *  on a pane showing that render at the shared camera. */
+  /** Whether this pane takes marks right now. A mark is a fraction of the
+   *  render it was drawn on, so only a pane showing that render at the shared
+   *  camera qualifies — and only while marking is armed, because the overlay a
+   *  target mounts covers the pane and takes every pointer event it would
+   *  otherwise pan and zoom with. */
   marks: boolean;
   /** Whether the shared camera reads and writes this pane. */
   followsCamera: boolean;
@@ -36,7 +41,8 @@ export function paneSpec(source: Source, deps: PaneDeps): PaneSpec {
   switch (source.kind) {
     case 'engine': {
       const engine = enginePaneState(source.id, deps.engines, deps.markup, deps.run);
-      return { state: engine.pane, busy: engine.busy, marks: true, followsCamera: true };
+      return { state: engine.pane, busy: engine.busy, marks: deps.marking,
+               followsCamera: true };
     }
     case 'diff':
       // A defect names engines, and `diff` is not one, so a mark drawn here

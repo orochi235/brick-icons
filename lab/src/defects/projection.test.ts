@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { defectToMarks, markToDefectFields } from '@lab/defects/projection';
+import type { Annotation, AnnotationInit } from '@weasel-js/labkit';
+import { defectToMarks, markToDefectFields, projectDefects,
+  type MarkStore } from '@lab/defects/projection';
 import type { Defect } from '@lab/defects/useDefects';
 
 const defect = (over: Partial<Defect> = {}): Defect => ({
@@ -72,5 +74,41 @@ describe('markToDefectFields', () => {
       frac: { x: 0, y: 0, w: 0.2, h: 0.2 },
     });
     expect(fields.engine).toBe('occt');
+  });
+});
+
+function fakeStore(existing: Annotation[] = []) {
+  const added: { init: AnnotationInit; snapshot: unknown }[] = [];
+  const removed: string[] = [];
+  const store: MarkStore = {
+    query: () => existing,
+    add: (init, snapshot) => { added.push({ init, snapshot }); return init.target; },
+    remove: (id) => { removed.push(id); },
+  };
+  return { store, added, removed };
+}
+
+const drawn = (over: Partial<Annotation>): Annotation => ({
+  id: 'pane:naive/n1', target: 'pane:naive', kind: 'rect',
+  frac: { x: 0, y: 0, w: 0.1, h: 0.1 }, ...over,
+});
+
+describe('projectDefects', () => {
+  // The whole point of a snapshot: a mark remade under today's config matches
+  // it by construction and can never be reported stale.
+  it('dates a mark by the pose the defect was filed at', () => {
+    const { store, added } = fakeStore();
+    projectDefects(store, [defect({ seen: { angle: 'front' } })], ['pane:naive']);
+    expect(added).toHaveLength(1);
+    expect(added[0]!.snapshot).toEqual({ angle: 'front' });
+  });
+
+  it('replaces the marks it made before, and leaves a hand-drawn one alone', () => {
+    const { store, removed } = fakeStore([
+      drawn({ id: 'pane:naive/n1', meta: { defectId: '3001-naive-missing-edge' } }),
+      drawn({ id: 'pane:naive/n2' }),
+    ]);
+    projectDefects(store, [], ['pane:naive']);
+    expect(removed).toEqual(['pane:naive/n1']);
   });
 });
