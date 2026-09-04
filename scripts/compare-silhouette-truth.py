@@ -125,22 +125,30 @@ def one(part: str, args, tmp: Path) -> dict:
             "extra": components(extra, args.zoom, args.floor)}
 
 
+_ARMED = None
+
+
+def _on_alarm(signum, frame):
+    """Installed once and never removed: SIGALRM's default action is to KILL,
+    so a timer that expires in the microseconds before the itimer is disarmed
+    takes the whole run down silently. Ignoring a disarmed alarm is the fix."""
+    if _ARMED:
+        raise TimeoutError(f"exceeded {_ARMED}s")
+
+
 def run_guarded(part: str, args, tmp: Path) -> dict:
     """`one()` under a wall-clock cap. Best effort: the alarm lands between
     Python bytecodes, so a part stuck inside a C call runs past it."""
+    global _ARMED
     if not args.timeout:
         return one(part, args, tmp)
-
-    def fire(signum, frame):
-        raise TimeoutError(f"exceeded {args.timeout}s")
-
-    prev = signal.signal(signal.SIGALRM, fire)
+    _ARMED = args.timeout
     signal.setitimer(signal.ITIMER_REAL, args.timeout)
     try:
         return one(part, args, tmp)
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0)
-        signal.signal(signal.SIGALRM, prev)
+        _ARMED = None
 
 
 def main() -> int:
@@ -173,11 +181,28 @@ def main() -> int:
         ids = [i for i in ids if i not in done]
         print(f"resuming: {len(done)} done, {len(ids)} left", flush=True)
 
+    if args.timeout:
+        signal.signal(signal.SIGALRM, _on_alarm)
+
+    inflight = Path(f"{args.jsonl}.inflight") if jsonl else None
+    if inflight and inflight.exists():
+        pid = inflight.read_text().strip()
+        if pid:
+            with jsonl.open("a") as fh:
+                fh.write(json.dumps({"part": pid, "engine": args.engine,
+                                     "angle": args.angle, "error": "ProcessDied",
+                                     "detail": "killed mid-render; not retried"}) + "\n")
+            print(f"recorded {pid} as ProcessDied and skipping it", flush=True)
+            ids = [i for i in ids if i != pid]
+        inflight.unlink()
+
     rows = []
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         for n, pid in enumerate(ids, 1):
             t0 = time.time()
+            if inflight:
+                inflight.write_text(pid)
             try:
                 r = run_guarded(pid, args, tmp)
             except BaseException as exc:  # a part must not end the run
@@ -202,6 +227,8 @@ def main() -> int:
                     fh.write(json.dumps(r) + "\n")
             for f in tmp.glob(f"{pid}.*"):
                 f.unlink(missing_ok=True)
+            if inflight:
+                inflight.unlink(missing_ok=True)
     if args.out:
         Path(args.out).write_text(json.dumps(rows, indent=1))
         print(f"wrote {args.out}")

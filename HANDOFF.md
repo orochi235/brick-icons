@@ -45,6 +45,15 @@ library scale the two questions 21 parts cannot — which parts either engine
 omits real geometry from, and how far `occt`'s silhouette sits from the part's
 own polygons, which is the open blocker on making it the default.
 
+**`occt` segfaults on some parts, and it killed three shards the first
+night.** All three crash reports are the same frame — `SIGSEGV` in
+`ShapeUpgrade_UnifySameDomain::IntUnifyFaces`, OCCT's own C++ — and `92738`
+(`--engine occt`) reproduces it on demand, exit 139. A native crash writes no
+row, so a resume used to retry the killer part and die again; each shard now
+names the part it is rendering in `<jsonl>.inflight` and records it as
+`ProcessDied` on the way back in. `UnifySameDomain` is the same pass the
+corpus review reached for when collinear seg loci needed merging.
+
 **The per-part cap is 120s and about a fifth of the library hits it.** A
 `TimeoutError` row is a rendering-cost finding, not a defect; the curated
 corpus is unrepresentatively fast (25 random parts averaged 40s against the
