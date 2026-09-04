@@ -1,5 +1,7 @@
-import { lazy, Suspense, useState } from 'react';
-import { defineInstrument, f } from '@weasel-js/labkit';
+import { createRef, lazy, Suspense, useEffect, useRef, useState,
+  type RefObject } from 'react';
+import { defineInstrument, f, useAnnotations,
+  type Annotation, type CaptureSource } from '@weasel-js/labkit';
 import type { LabClient, RenderResult, SchemaField } from '@lab/api/client';
 import { buildSchema, defaultsFor, renderConfig } from '@lab/config/nodes';
 import { takePendingPart } from '@lab/config/pending';
@@ -13,11 +15,11 @@ import { paneSpec, type PaneDeps } from '@lab/panes/paneSpec';
 import { useArtifactSvg } from '@lab/panes/useArtifactSvg';
 import { PartTitle, PoseBar } from '@lab/chrome/PoseBar';
 import { diffCaption, diffWarning, useDiff } from '@lab/panes/useDiff';
-import { MarkLayer } from '@lab/defects/MarkLayer';
 import { FileDefectDialog } from '@lab/defects/FileDefectDialog';
 import { DefectCard } from '@lab/defects/DefectCard';
 import { buildDefect, STATUSES, useDefects } from '@lab/defects/useDefects';
-import type { Mark } from '@lab/defects/geometry';
+import { defectToMarks, markToDefectFields, targetId,
+  type MarkMeta } from '@lab/defects/projection';
 import { createTargetRegistry, type TargetRegistry } from '@lab/defects/targets';
 import { useReference } from '@lab/panes/useReference';
 import { useRenderFit } from '@lab/panes/useRenderFit';
@@ -40,14 +42,24 @@ export interface InspectorState {
   stamps: Partial<Record<SourceId, string>>;
 }
 
+/** What a capture composites the marks over. A pane already holds exactly the
+ *  two shapes `CaptureSource` takes. */
+function baseOf(deps: PaneDeps, source: Source): CaptureSource {
+  const state = paneSpec(source, deps).state;
+  if (state.kind === 'svg') return { kind: 'svg', markup: state.markup };
+  if (state.kind === 'image') return { kind: 'image', src: state.src };
+  return { kind: 'svg', markup: '<svg xmlns="http://www.w3.org/2000/svg"/>' };
+}
+
 function Panes({ ctx, client, registry }:
     { ctx: any; client: LabClient; registry: TargetRegistry }) {
-  // The next task wires the registry into the overlay; for now it only
-  // needs to exist on the props so the instrument can hand it down.
-  void registry;
-
   const config = ctx.config as Record<string, unknown>;
   const camera = readView(ctx.trial.view);
+  const paneRefs = useRef<Record<string, RefObject<HTMLDivElement | null>>>({});
+  const refFor = (id: SourceId) => {
+    paneRefs.current[id] ??= createRef<HTMLDivElement>();
+    return paneRefs.current[id]!;
+  };
   const sources = enabledSources((config.sources as SourceId[]) ?? []);
   const renders = (ctx.state as InspectorState).renders;
   const markup = useArtifactSvg(client, renders);
@@ -57,8 +69,17 @@ function Panes({ ctx, client, registry }:
   const part = String(config.part ?? '');
   const { defects, file, setStatus } = useDefects(client, part);
   const [boxes, setBoxes] = useState<Record<string, { width: number; height: number }>>({});
-  const [pendingMark, setPendingMark] = useState<Mark | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+
+  const marks = useAnnotations();
+  const [pending, setPending] = useState<Annotation | null>(null);
+
+  useEffect(() => marks.subscribe(() => {
+    // No delta comes with the callback, so the unfiled mark is found by the
+    // absence of the id the projection stamps on every mark it makes.
+    const loose = marks.query().find((a) => !(a.meta as MarkMeta | undefined)?.defectId);
+    setPending(loose ?? null);
+  }), [marks]);
 
   const angle = String(config.angle ?? 'iso');
   const shows = (kind: string) => sources.some((s) => s.kind === kind);
@@ -75,7 +96,6 @@ function Panes({ ctx, client, registry }:
   // What every engine pane compares its own render against: the run on screen.
   const run = { signature: renderSignature(part, renderConfig(config)),
                 running: ctx.job?.status === 'running' };
-  const marking = Boolean(config.marking);
   const shown = defects.find((d) => d.id === selected);
 
   const loupeFor = (source: Source): LoupeView | null => {
@@ -110,6 +130,34 @@ function Panes({ ctx, client, registry }:
     },
   };
 
+  const markable = sources.filter((s) => paneSpec(s, deps).marks);
+  registry.publish({
+    camera,
+    panes: markable.map((s) => ({
+      id: s.id,
+      ref: refFor(s.id),
+      // The measured body, not `render_px`: a stored fraction has always been
+      // a fraction of the box the layout gave the pane. Passing the render
+      // size instead moves every defect filed before today -- proved in
+      // src/defects/projection.contract.test.ts.
+      content: (() => {
+        const box = boxes[s.id] ?? { width: 1, height: 1 };
+        return { w: box.width, h: box.height };
+      })(),
+      base: () => baseOf(deps, s),
+    })),
+  });
+
+  const shownTargets = markable.map((s) => targetId(s.id));
+  useEffect(() => {
+    for (const a of marks.query()) {
+      if ((a.meta as MarkMeta | undefined)?.defectId) marks.remove(a.id);
+    }
+    for (const d of defects) {
+      for (const init of defectToMarks(d, shownTargets)) marks.add(init, config);
+    }
+  }, [defects, shownTargets.join(','), marks, config]);
+
   return (
     <div className={`panes panes-${layout}`}>
       {sources.map((source) => {
@@ -127,39 +175,32 @@ function Panes({ ctx, client, registry }:
             onFactor={loupe.bumpFactor}
             onCamera={spec.followsCamera ? (next) => ctx.trial.setView(next) : () => {}}
             onBox={(box) => setBoxes((prev) => ({ ...prev, [source.id]: box }))}
-            overlay={
-              <>
-                {spec.overlay}
-                {spec.marks ? (
-                  <MarkLayer
-                    defects={defects.filter((d) => d.engines.includes(source.id))}
-                    box={boxes[source.id] ?? { width: 1, height: 1 }}
-                    camera={camera}
-                    config={config}
-                    armed={marking}
-                    onDraw={setPendingMark}
-                    onSelect={setSelected}
-                  />
-                ) : null}
-              </>
-            }
+            bodyRef={spec.marks ? refFor(source.id) : undefined}
+            overlay={spec.overlay}
           />
         );
       })}
-      {pendingMark ? (
+      {pending ? (
         <FileDefectDialog
           part={part}
-          mark={pendingMark}
+          mark={pending.frac}
           engines={engineIds}
-          onCancel={() => setPendingMark(null)}
+          onCancel={() => { marks.remove(pending.id); setPending(null); }}
           onFile={async (fields) => {
+            const geometry = markToDefectFields({
+              id: pending.id, target: pending.target,
+              kind: pending.kind, frac: pending.frac, points: pending.points,
+            });
             await file(buildDefect({
               part, engines: fields.engines, title: fields.title, notes: fields.notes,
-              mark: pendingMark, config,
+              mark: geometry.mark, kind: geometry.kind, points: geometry.points,
+              config,
               existing: defects.map((d) => d.id),
               today: new Date().toISOString().slice(0, 10),
             }));
-            setPendingMark(null);
+            // The server owns it now; the projection remakes it on reload.
+            marks.remove(pending.id);
+            setPending(null);
           }}
         />
       ) : null}
