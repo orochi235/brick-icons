@@ -39,7 +39,7 @@ function labNodes() {
     layout: f.enum(LAYOUTS[0], [...LAYOUTS]).section('Panes'),
     sources: f.value<SourceId[]>([...DEFAULT_SOURCES]).section('Panes'),
     marking: f.boolean(false).section('Panes')
-      .describe('A drag on a pane draws a defect mark instead of panning'),
+      .describe('Show defect marks; a drag on a pane draws one instead of panning'),
     loupe_factor: f.number(DEFAULT_FACTOR).section('Panes')
       .describe('How much the loupe magnifies. Alt-wheel over a pane sets it too'),
     loupe_sticky: f.boolean(false).section('Panes')

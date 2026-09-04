@@ -42,11 +42,15 @@ branch carrying the whole arc-5 migration) or fast-forward `main` onto it.
 Arc 5 is closed out in weasel's spec, so nobody has stated a reason `main` is
 still 21 behind.
 
-**The two-trial overlay fix is not in this lab yet.** weasel `main` carries it
-(`a397fa6c`, pushed) — a surface tile id is now scoped per trial, so a trial
-that opened second no longer steals the first one's rect and painter. This lab
-pins `@weasel-js/labkit` at `1.4.0-pre.1` from npm, so two open trials still
-mis-measure here until that pin moves.
+**labkit is a `file:` link now, not an npm pin.** `lab/package.json` reads
+`file:../../weasel/packages/labkit`, so the lab compiles against whatever that
+checkout holds — today a detached HEAD at weasel `origin/main` (`762f9477`),
+which `main` cannot be checked out on because the `trunk` worktree holds the
+ref. Advance it with `git -C ~/src/weasel fetch && git -C ~/src/weasel checkout
+--detach origin/main && npm run build`; **the build is not optional**, since a
+link resolves to `dist/`, not to `src/`. This is how the two-trial overlay fix
+(`a397fa6c`, a surface tile id scoped per trial) and the icon set reached the
+lab. Going back to npm means a published `1.4.0-pre.2`.
 
 The **corpus lab** — a local web app for inspecting renders and tracking
 defects — is the active one. The engine thread below it is unchanged and still
@@ -178,15 +182,20 @@ Not re-derivable from a green suite, and each cost real time:
 
 ### Upstream
 
-Pinned at `@weasel-js/labkit@1.4.0-pre.1`. It ships `AnnotationsApi.selection()`
-and `setSelection()` — the probe that stood in for the first is gone — and the
-styling contract, now in labkit's `docs/RECIPES.md`. The `FloatingPanel` capture
-is filed upstream, not fixed, so `App.tsx`'s drag-stop stays. The `.pair()`-vs-
-`pack` question and the leading titlebar slot are filed and open.
+Linked, not pinned — see the link paragraph above for how to advance it.
+labkit ships `AnnotationsApi.selection()` and `setSelection()`, and the styling
+contract is in its `docs/RECIPES.md`. The `FloatingPanel` capture is filed
+upstream, not fixed, so `App.tsx`'s drag-stop stays. The `.pair()`-vs-`pack`
+question and the leading titlebar slot are filed and open.
 
-pre.1 also exports `usePanZoom` standalone, for a lab that hosts its own
-renderer through `surface` — which is what `lab/src/panes/camera.ts` is. Nobody
-has checked whether its view shape matches what an annotation target wants.
+`usePanZoom` is exported standalone, for a lab that hosts its own renderer
+through `surface` — which is what `lab/src/panes/camera.ts` is. Nobody has
+checked whether its view shape matches what an annotation target wants.
+
+The icon set is reachable as `import { Icon } from '@weasel-js/labkit/weasel-ui'`
+— the bare barrel does not carry it. The pose bar's layout selector draws from
+it. `weasel-ui` is the passthrough for every kit primitive, so importing
+`@weasel-js/ui` directly is never the answer.
 
 Sidebar sections can now be torn out into workspace tiles (`undockAs`), but a
 section undocks WHOLE, as one panel: our six settings sections would become six
@@ -195,39 +204,35 @@ tile means making them one `sidebar` contribution with both groups inside it,
 not two contributions — so this is a restructure of the panel, not an
 annotation on it.
 
-**The sidebar is a fixed 320px here, and drag-to-resize is built upstream but
-unpublished.** Weasel has it on `labkit/trial-body-strip` (unpushed): the
-sidebar and content well become a two-pane windease strip whose seam is a real
+**Sidebar drag-to-resize is in the linked tip** (`21b0582a`): the sidebar and
+content well are a two-pane windease strip whose seam is a real
 `role="separator"` — pointer drag, arrows, Home/End — with the width persisted
-per trial as `TrialRecord.sidebarWidth`. It reaches us only when that is
-published; we pin `1.4.0-pre.1` from npm. Nothing here needs changing first:
+per trial as `TrialRecord.sidebarWidth`. Nothing here needed changing for it:
 we use neither `--lk-trial-sidebar-w` (which stops meaning anything) nor
-`<TrialBody>` (newly exported, for chrome you compose yourself).
+`<TrialBody>` (for chrome you compose yourself). Nobody has driven it here yet.
 
 Do not wait on any of it; every item has a working local workaround.
 
-### The annotations overlay owns pane input — two defects fall out
+### The annotations overlay owns pane input
 
-Found driving a browser against `1.4.0-pre.1`; neither is visible to jsdom.
+`paneSpec().marks` now answers "does this pane take marks *right now*", and
+`config.marking` is half of it, so a target — and the `.lk-annotate__input` box
+that covers a pane and takes every pointer event it would otherwise pan with —
+mounts only while marking is armed. **Filed defect marks are therefore hidden
+while it is off**, which is what the toggle promises; the Defects panel still
+lists them. The trial also starts on `rect`: an instrument declaring only
+`annotations` opens on `select`, where a drag marquees rather than draws.
 
-- **Pan and zoom are dead on every engine pane.** `.lk-annotate__input`
-  (`pointer-events: auto`, `z-index: 2`) covers the pane, so `SourcePane`'s
-  `onWheel` and drag-to-pan never see a pointer. Dispatching the same wheel
-  straight at `.pane-body` moves the camera, which is how the cause was pinned.
-- **The `mark` toggle does nothing.** `config.marking` is written by `PoseBar`
-  and read by nobody: `markable` comes from `paneSpec(s).marks`, a static `true`
-  for engine panes, so a target mounts whether marking is on or off. Deleting
-  `MarkLayer` took the flag's only reader with it.
+**Still open: whether the camera should stay live *under* an armed overlay.**
+`usePanZoom` above is the likely answer. Nothing here is visible to jsdom —
+all three were found driving a browser.
 
-Gating `markable` on `config.marking` fixes the second and confines the first to
-while marking is armed. Whether the camera should stay live *under* an armed
-overlay is the open question, and `usePanZoom` above is the likely answer.
-
-**A projected mark can never go stale.** `positionDependsOn` reaches the target
-and `angle` is in it, but the projection effect lists `config` in its deps AND
-passes it to `marks.add`, so every config change destroys and remakes each mark
-with the new snapshot. Changing `angle` re-renders both panes and leaves the
-marks styled exactly as before, sitting on a picture they were not drawn on.
+A projected mark could not go stale, because the projection passed the live
+config to `marks.add` and re-ran on every config change. `buildDefect` fills
+`seen` from `POSITION_DEPENDS_ON` again — the TOML store never stopped keeping
+the field — and `projectDefects` dates each mark by that. A record filed
+between `f1638fc` and `d6d9293` carries `seen = {}` and never goes stale, which
+is what labkit's `isStale` does with an absent key by design.
 
 ## The engine thread: one checkout, no branches
 

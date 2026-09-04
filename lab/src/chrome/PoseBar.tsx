@@ -1,3 +1,4 @@
+import { Icon, type IconName } from '@weasel-js/labkit/weasel-ui';
 import type { LabClient, PartHit, SchemaField } from '@lab/api/client';
 import { LAYOUTS } from '@lab/config/nodes';
 import { SOURCE_ORDER } from '@lab/panes/sources';
@@ -23,8 +24,16 @@ const QUICK_KEYS: { key: string; label: string; values?: readonly string[] }[] =
   { key: 'engine', label: 'engine' },
   { key: 'shading', label: 'shading' },
   { key: 'shade_style', label: 'fill' },
-  { key: 'layout', label: 'layout', values: LAYOUTS },
 ];
+
+/** A glyph and a sentence for each pane arrangement. `stack` puts every pane
+ *  in one cell, one over another, which is `layers` rather than the kit's
+ *  `layoutRows` — that one draws three separate bands. */
+const LAYOUT_ICONS: Record<(typeof LAYOUTS)[number], { icon: IconName; title: string }> = {
+  grid: { icon: 'layoutGrid', title: 'Panes in a grid' },
+  split: { icon: 'layoutColumns', title: 'Panes side by side' },
+  stack: { icon: 'layers', title: 'Panes stacked in one cell' },
+};
 
 export interface QuickOption { key: string; label: string; values: readonly string[] }
 
@@ -47,6 +56,7 @@ export interface PoseBarProps {
 
 export function PoseBar({ angle, config, fields, setConfig }: PoseBarProps) {
   const sources = (config.sources as string[]) ?? [];
+  const layout = String(config.layout ?? LAYOUTS[0]);
   const loupeLive = useAltHeld() || Boolean(config.loupe_sticky);
   const toggle = (id: string) => setConfig('sources',
     sources.includes(id) ? sources.filter((s) => s !== id) : [...sources, id]);
@@ -79,12 +89,27 @@ export function PoseBar({ angle, config, fields, setConfig }: PoseBarProps) {
           </button>
         ))}
       </div>
+      <div className="pose-bar-group" role="group" aria-label="Layout">
+        {LAYOUTS.map((id) => (
+          <button
+            key={id}
+            type="button"
+            className={layout === id ? 'pose pose-icon is-on' : 'pose pose-icon'}
+            aria-pressed={layout === id}
+            aria-label={id}
+            title={LAYOUT_ICONS[id].title}
+            onClick={() => setConfig('layout', id)}
+          >
+            <Icon name={LAYOUT_ICONS[id].icon} size={14} />
+          </button>
+        ))}
+      </div>
       <div className="pose-bar-group" role="group" aria-label="Defects">
         <button
           type="button"
           className={config.marking ? 'pose is-on' : 'pose'}
           aria-pressed={Boolean(config.marking)}
-          title="Drag on a pane to mark a defect. Off, a drag pans."
+          title="Show defect marks, and draw one by dragging on a pane. Off, a drag pans and zooms."
           onClick={() => setConfig('marking', !config.marking)}
         >
           mark

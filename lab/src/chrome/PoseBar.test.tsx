@@ -21,14 +21,37 @@ describe('quickOptions', () => {
     expect(engine?.values).toEqual(['naive', 'occt', 'cadquery']);
   });
 
-  it('names the lab-only layout values itself', () => {
-    const layout = quickOptions(FIELDS).find((o) => o.key === 'layout');
-    expect(layout?.values).toEqual(['grid', 'split', 'stack']);
-  });
-
+  // `layout` is the lab's own and has its own buttons; every quick option
+  // left is a CLI flag, so one the CLI drops leaves nothing behind.
   it('drops a control whose flag the CLI no longer offers', () => {
     const keys = quickOptions([field('engine', ['naive'])]).map((o) => o.key);
-    expect(keys).toEqual(['engine', 'layout']);
+    expect(keys).toEqual(['engine']);
+  });
+});
+
+describe('the layout buttons', () => {
+  const bar = (config: Record<string, unknown>, setConfig = () => {}) =>
+    render(<PoseBar angle="iso" config={config} fields={FIELDS} setConfig={setConfig} />);
+
+  it('offers every layout, named for a reader who cannot read the glyph', () => {
+    bar({});
+    expect(screen.getAllByRole('button', { name: /^(grid|split|stack)$/ })
+      .map((b) => b.getAttribute('aria-label'))).toEqual(['grid', 'split', 'stack']);
+  });
+
+  it('shows which layout is on, and opens on the grid', () => {
+    bar({});
+    expect(screen.getByRole('button', { name: 'grid' }).getAttribute('aria-pressed'))
+      .toBe('true');
+    expect(screen.getByRole('button', { name: 'stack' }).getAttribute('aria-pressed'))
+      .toBe('false');
+  });
+
+  it('chooses a layout on a click', () => {
+    const setConfig = vi.fn();
+    bar({ layout: 'grid' }, setConfig);
+    fireEvent.click(screen.getByRole('button', { name: 'split' }));
+    expect(setConfig).toHaveBeenCalledWith('layout', 'split');
   });
 });
 

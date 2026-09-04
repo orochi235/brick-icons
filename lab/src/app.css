@@ -71,6 +71,10 @@
   border-radius: 3px;
   cursor: pointer;
 }
+/* A glyph is a box, not text: the padding that centres a label would leave it
+   sitting on the baseline with the descender space below it. */
+.pose-icon { display: inline-flex; align-items: center; padding: 0.15rem 0.3rem; }
+
 .pose:hover { border-color: var(--wzl-border); }
 .pose.is-on { border-color: currentColor; font-weight: 700; }
 
