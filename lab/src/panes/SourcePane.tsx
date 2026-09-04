@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, type RefObject, useEffect, useRef, useState } from 'react';
 import { type Camera, panBy, zoomAt } from '@lab/panes/camera';
 import { PaneStage, type PaneState } from '@lab/panes/PaneStage';
 import { bubbleDiameter, loupeCamera, loupeCameraForImage, stageOffset,
@@ -38,6 +38,8 @@ export interface SourcePaneProps {
   onHover?: (at: Point | null) => void;
   /** One notch of the wheel while Alt is down: +1 in, -1 out. */
   onFactor?: (steps: number) => void;
+  /** The pane body, for a caller that must measure it or mount over it. */
+  bodyRef?: RefObject<HTMLDivElement | null>;
 }
 
 /** A press inside an overlay child that wants the pointer for itself -- a
@@ -49,7 +51,7 @@ function startsPan(target: EventTarget | null): boolean {
 }
 
 export function SourcePane({ source, state, camera, onCamera, note, busy,
-                             overlay, onBox, loupe, onHover, onFactor }: SourcePaneProps) {
+                             overlay, onBox, loupe, onHover, onFactor, bodyRef }: SourcePaneProps) {
   const dragging = useRef(false);
   const body = useRef<HTMLDivElement | null>(null);
   // The callback goes through a ref so the effect does not re-subscribe when
@@ -87,7 +89,10 @@ export function SourcePane({ source, state, camera, onCamera, note, busy,
       {state.kind === 'error' ? <p className="pane-error">{state.message}</p> : null}
       <div
         className="pane-body"
-        ref={body}
+        ref={(el) => {
+          body.current = el;
+          if (bodyRef) bodyRef.current = el;
+        }}
         onPointerDown={(e) => {
           // Secondary and middle drags belong to whatever the overlay does
           // with them -- on the 3D pane, orbiting.

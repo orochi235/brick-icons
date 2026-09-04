@@ -1,3 +1,4 @@
+import { createRef } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SourcePane } from '@lab/panes/SourcePane';
@@ -200,5 +201,15 @@ describe('SourcePane', () => {
     fireEvent.wheel(body, { deltaY: 1, altKey: true });
     expect(onFactor).toHaveBeenLastCalledWith(-1);
     expect(onCamera).not.toHaveBeenCalled();
+  });
+
+  it('hands the pane body to a caller-supplied ref', () => {
+    const bodyRef = createRef<HTMLDivElement>();
+    render(
+      <SourcePane {...props} source={SOURCES.naive} state={{ kind: 'idle' }}
+        bodyRef={bodyRef} />,
+    );
+    expect(bodyRef.current).not.toBeNull();
+    expect(bodyRef.current?.classList.contains('pane-body')).toBe(true);
   });
 });
