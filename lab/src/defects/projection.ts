@@ -18,18 +18,19 @@ export function defectToMarks(
   defect: Defect,
   shown: readonly string[],
 ): AnnotationInit[] {
-  const meta: MarkMeta = { defectId: defect.id };
   return defect.engines
     .map(targetId)
     .filter((t) => shown.includes(t))
     .map((target) => ({
       target,
-      kind: (defect.kind ?? 'rect') as MarkKind,
+      kind: defect.kind ?? 'rect',
       frac: defect.mark,
       ...(defect.points?.length ? { points: defect.points } : {}),
       title: defect.title,
       status: defect.status,
-      meta,
+      // Minted per mark: sharing one object would make a write through any
+      // sibling's meta reach all of them.
+      meta: { defectId: defect.id } satisfies MarkMeta,
     }));
 }
 
