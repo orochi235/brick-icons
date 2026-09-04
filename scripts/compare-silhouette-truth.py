@@ -151,6 +151,12 @@ def run_guarded(part: str, args, tmp: Path) -> dict:
         _ARMED = None
 
 
+def worth_keeping(r: dict) -> bool:
+    """A row somebody will want to look at: geometry the render dropped, or
+    ink landing well past the antialias-and-arc-bulge floor of ~0.6px."""
+    return bool(r.get("missing")) or r.get("extra_dist_px", {}).get("99", 0) > 1.5
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("parts", nargs="*")
@@ -166,6 +172,9 @@ def main() -> int:
                     help="with --jsonl, skip parts already in that file")
     ap.add_argument("--timeout", type=float, default=0,
                     help="seconds a single part may take (0 = no limit)")
+    ap.add_argument("--keep", metavar="DIR",
+                    help="save the SVG and camera of every part that trips a "
+                         "finding, so a hit can be looked at without re-rendering")
     args = ap.parse_args()
 
     ids = args.parts
@@ -183,6 +192,10 @@ def main() -> int:
 
     if args.timeout:
         signal.signal(signal.SIGALRM, _on_alarm)
+
+    keep = Path(args.keep) if args.keep else None
+    if keep:
+        keep.mkdir(parents=True, exist_ok=True)
 
     inflight = Path(f"{args.jsonl}.inflight") if jsonl else None
     if inflight and inflight.exists():
@@ -225,6 +238,11 @@ def main() -> int:
             if jsonl:
                 with jsonl.open("a") as fh:
                     fh.write(json.dumps(r) + "\n")
+            if keep and worth_keeping(r):
+                for suffix in (".svg", ".fit.json"):
+                    src = tmp / f"{pid}{suffix}"
+                    if src.exists():
+                        src.rename(keep / f"{pid}.{args.engine}{suffix}")
             for f in tmp.glob(f"{pid}.*"):
                 f.unlink(missing_ok=True)
             if inflight:
