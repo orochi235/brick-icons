@@ -294,10 +294,60 @@ Expected: PASS, every test in the file.
 
 - [ ] **Step 5: Teach the server the two fields**
 
-The Python lab server validates defect records. Find the schema it checks on `POST /api/defects` (search the `brick_icons` package for the handler behind `/api/defects`) and add `kind` and `points` as optional. Do not migrate stored records — absent means rect.
+Defects are git-tracked TOML written in a fixed field order. In `brick_icons/lab/defects.py`, add both fields to `_ORDER`, after `mark` so geometry stays together:
+
+```python
+_ORDER = ("id", "part", "engines", "status", "title", "mark", "kind", "points",
+          "seen", "filed", "notes")
+```
+
+Nothing else is needed to serialize them — `_dump_value` already handles a list of dicts, which is what `points` is. There is no field whitelist rejecting unknown keys; `add` only validates `status` and id uniqueness, so no validation change either.
+
+Fix the module's `_HEADER` in the same edit. It currently tells the reader:
+
+> `mark` is in fractions of the render box, so it survives a change of --render-px but not of --angle -- which is what `seen` records.
+
+The first half is false — `markFromDrag` divides by the measured pane body, not the render box (Task 4 proves it). The second half is now labkit's job. Replace with:
+
+```python
+# Written by brick_icons.lab; hand edits are kept but reformatted on the next
+# write. `mark` is in fractions of the pane box it was drawn on. `kind` and
+# `points` are absent on a plain rectangle, which is every defect filed before
+# 2026-09. `seen` is retained for records that carry it; the lab now asks
+# labkit whether a mark is stale.
+```
+
+- [ ] **Step 6: Prove the round-trip**
+
+Add to the server's defect tests (find them with `grep -rln "defects" --include="*.py" /Users/mike/src/brick-icons | grep test`):
+
+```python
+def test_a_line_defect_round_trips(tmp_path):
+    path = tmp_path / "defects.toml"
+    record = {"id": "3001-naive-edge", "part": "3001", "engines": ["naive"],
+              "status": "open", "title": "missing edge",
+              "mark": {"x": 0.1, "y": 0.2, "w": 0.3, "h": 0.4},
+              "kind": "line",
+              "points": [{"x": 0.1, "y": 0.2}, {"x": 0.4, "y": 0.6}],
+              "seen": {}, "filed": "2026-09-03", "notes": ""}
+    defects.add(path, record)
+    [back] = defects.load(path)
+    assert back["kind"] == "line"
+    assert back["points"] == record["points"]
+
+
+def test_a_defect_with_no_kind_still_loads(tmp_path):
+    path = tmp_path / "defects.toml"
+    defects.add(path, {"id": "3001-naive-blob", "part": "3001",
+                       "engines": ["naive"], "status": "open", "title": "blob",
+                       "mark": {"x": 0, "y": 0, "w": 0.2, "h": 0.2},
+                       "seen": {}, "filed": "2026-09-03", "notes": ""})
+    [back] = defects.load(path)
+    assert "kind" not in back
+```
 
 Run: `cd /Users/mike/src/brick-icons && python -m pytest -k defect -q`
-Expected: PASS. If the server has no defect tests, add one asserting a record with `kind: 'line'` and two points round-trips, and one asserting a record with neither still loads.
+Expected: PASS, including the two new tests.
 
 - [ ] **Step 6: Commit**
 
