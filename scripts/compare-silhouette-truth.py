@@ -30,9 +30,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import signal
 import subprocess
 import sys
 import tempfile
+import time
+import traceback
 from pathlib import Path
 
 import numpy as np
@@ -122,6 +125,24 @@ def one(part: str, args, tmp: Path) -> dict:
             "extra": components(extra, args.zoom, args.floor)}
 
 
+def run_guarded(part: str, args, tmp: Path) -> dict:
+    """`one()` under a wall-clock cap. Best effort: the alarm lands between
+    Python bytecodes, so a part stuck inside a C call runs past it."""
+    if not args.timeout:
+        return one(part, args, tmp)
+
+    def fire(signum, frame):
+        raise TimeoutError(f"exceeded {args.timeout}s")
+
+    prev = signal.signal(signal.SIGALRM, fire)
+    signal.setitimer(signal.ITIMER_REAL, args.timeout)
+    try:
+        return one(part, args, tmp)
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, prev)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("parts", nargs="*")
@@ -132,6 +153,11 @@ def main() -> int:
     ap.add_argument("--floor", type=int, default=200,
                     help="smallest diff component to report, in raster px")
     ap.add_argument("--out", help="write results as JSON here")
+    ap.add_argument("--jsonl", help="append one result per line here, as it finishes")
+    ap.add_argument("--skip-done", action="store_true",
+                    help="with --jsonl, skip parts already in that file")
+    ap.add_argument("--timeout", type=float, default=0,
+                    help="seconds a single part may take (0 = no limit)")
     args = ap.parse_args()
 
     ids = args.parts
@@ -141,16 +167,41 @@ def main() -> int:
     if not ids:
         ap.error("name at least one part, or pass --list")
 
+    jsonl = Path(args.jsonl) if args.jsonl else None
+    if jsonl and args.skip_done and jsonl.exists():
+        done = {json.loads(ln)["part"] for ln in jsonl.read_text().splitlines() if ln.strip()}
+        ids = [i for i in ids if i not in done]
+        print(f"resuming: {len(done)} done, {len(ids)} left", flush=True)
+
     rows = []
     with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
         for n, pid in enumerate(ids, 1):
-            r = one(pid, args, Path(td))
+            t0 = time.time()
+            try:
+                r = run_guarded(pid, args, tmp)
+            except BaseException as exc:  # a part must not end the run
+                r = {"part": pid, "engine": args.engine, "angle": args.angle,
+                     "error": type(exc).__name__, "detail": str(exc)[:300],
+                     "traceback": traceback.format_exc()[-1200:]}
+            r["secs"] = round(time.time() - t0, 1)
             rows.append(r)
-            print(f"{n}/{len(ids)} {pid} {args.engine}@{args.angle}: "
-                  f"missing {r['missing_px']}px ({len(r['missing'])} comps), "
-                  f"extra {r['extra_px']}px "
-                  f"(99th {r['extra_dist_px'].get('99', 0)}px, "
-                  f"max {r['extra_dist_px'].get('100', 0)}px)", flush=True)
+            if "error" in r:
+                print(f"{n}/{len(ids)} {pid} {args.engine}@{args.angle}: "
+                      f"FAILED {r['error']}: {r['detail'].splitlines()[0][:120]} "
+                      f"[{r['secs']}s]", flush=True)
+            else:
+                print(f"{n}/{len(ids)} {pid} {args.engine}@{args.angle}: "
+                      f"missing {r['missing_px']}px ({len(r['missing'])} comps), "
+                      f"extra {r['extra_px']}px "
+                      f"(99th {r['extra_dist_px'].get('99', 0)}px, "
+                      f"max {r['extra_dist_px'].get('100', 0)}px) "
+                      f"[{r['secs']}s]", flush=True)
+            if jsonl:
+                with jsonl.open("a") as fh:
+                    fh.write(json.dumps(r) + "\n")
+            for f in tmp.glob(f"{pid}.*"):
+                f.unlink(missing_ok=True)
     if args.out:
         Path(args.out).write_text(json.dumps(rows, indent=1))
         print(f"wrote {args.out}")

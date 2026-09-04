@@ -31,6 +31,25 @@ machine will not carry. A `--only <case>` loop over the 52 ids finished every
 time, and prints per-case timings worth keeping (`outline-flat3__3649` 330s,
 `4740p03` 114s, `outline__3649` 230s; everything else under 25s).
 
+## In flight: the library-scale silhouette census (started 2026-09-04 01:22)
+
+Eight detached shards (4 naive, 4 occt) are running
+`scripts/compare-silhouette-truth.py` over `out/census/parts.txt` — 8,235
+unprinted library parts, the corpus the 21-part `unprinted` list samples.
+`scripts/run-census.sh` starts or resumes it; every shard streams JSONL and
+skips what it already has, so re-running costs nothing and a kill loses one
+part. Read it with `scripts/census-report.py`.
+
+What it is for: the oracle needs no golden and no eye, so it answers at
+library scale the two questions 21 parts cannot — which parts either engine
+omits real geometry from, and how far `occt`'s silhouette sits from the part's
+own polygons, which is the open blocker on making it the default.
+
+**The per-part cap is 120s and about a fifth of the library hits it.** A
+`TimeoutError` row is a rendering-cost finding, not a defect; the curated
+corpus is unrepresentatively fast (25 random parts averaged 40s against the
+corpus's ~5s).
+
 ## Read first: there are two threads now
 
 **Branch state (2026-09-04):** `labkit/annotations-arc-5` is fast-forwarded
