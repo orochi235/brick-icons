@@ -32,6 +32,22 @@ time, and prints per-case timings worth keeping (`outline-flat3__3649` 330s,
 
 ## Read first: there are two threads now
 
+**Branch state (2026-09-03):** on `labkit/annotations-arc-5`, 21 ahead of
+`main`, and **origin has no such branch** — only `main`. Nothing here is
+pushed. Tip `4677384` refuses to file a defect before a part is loaded: a
+defect is stored under its part and `useDefects` returns `[]` for a blank one,
+so a blank-part defect was written, accepted by the server, and then never
+listed again. Open: whether to push the branch (it would create a new remote
+branch carrying the whole arc-5 migration) or fast-forward `main` onto it.
+Arc 5 is closed out in weasel's spec, so nobody has stated a reason `main` is
+still 21 behind.
+
+**The two-trial overlay fix is not in this lab yet.** weasel `main` carries it
+(`a397fa6c`, pushed) — a surface tile id is now scoped per trial, so a trial
+that opened second no longer steals the first one's rect and painter. This lab
+pins `@weasel-js/labkit` at `1.4.0-pre.1` from npm, so two open trials still
+mis-measure here until that pin moves.
+
 The **corpus lab** — a local web app for inspecting renders and tracking
 defects — is the active one. The engine thread below it is unchanged and still
 true; skip to it if you are here for `occt`.
@@ -174,7 +190,7 @@ has checked whether its view shape matches what an annotation target wants.
 
 Sidebar sections can now be torn out into workspace tiles (`undockAs`), but a
 section undocks WHOLE, as one panel: our six settings sections would become six
-tear-out controls and six panels. Putting the render and colour flags in one
+tear-out controls and six panels. Putting the render and color flags in one
 tile means making them one `sidebar` contribution with both groups inside it,
 not two contributions — so this is a restructure of the panel, not an
 annotation on it.
@@ -304,7 +320,7 @@ exact surface. `--engine occt --shade-style flat3` fills all 21 parts of the
 are not, and `occt` is still not the default.
 
 **Look at faces, not at drawings — `scripts/render-face-sheet.py`.** One flat
-colour per fill element, strokes dropped, over any part list:
+color per fill element, strokes dropped, over any part list:
 
     .venv/bin/python scripts/render-face-sheet.py --engine occt \
       --list specimens.txt
@@ -316,7 +332,7 @@ truncated. One pass over the 22 specimens turned up, unchased: `3941`
 arrow-shaped artifacts on the top face, `6143` slivers, `3673` stripes,
 `3040bp08` fragments, plus the `32062` notch elements listed below. None of
 those are in the defects file yet. Note `--debug-colors` is NOT this — it
-recolours strokes and leaves the fills grey.
+recolors strokes and leaves the fills grey.
 
 ### Where it still differs
 
@@ -507,13 +523,13 @@ and the substitutions.
 against doubled ink's black, which is how naive's 30–55% duplicate ink becomes
 visible at all.
 
-**`--debug-colors` gives every drawn element its own colour** in emission
+**`--debug-colors` gives every drawn element its own color** in emission
 order. Bare, it is a 12-hue cycle (`trace.DEBUG_PALETTE`) — use it to ask which
 element owns a vertex, which a black outline cannot say. `ramp` instead fades
 light to dark across 6 elements then steps the hue, so position within a run
 and which run both read at once; `ramp=N` sets the run length, and `ramp=100`
 trades adjacent-step contrast for coarse structure. It already shows the outer
-silhouette is not one contour but many fragments, with the colour changing at
+silhouette is not one contour but many fragments, with the color changing at
 each tangent jog. Opt-in; the goldens do not pass it.
 
 **`--part-label` stamps the whole render tag**, not just the part id:
@@ -559,8 +575,8 @@ causes, all now fixed and tested:
   constant height — a round tile's print unwrapped to a zero-area line.
 - A round tile's top face **is** a disc primitive, so it has no facets and
   contributed no plane. Flat primitives now contribute theirs.
-- Decoration authored as coloured *primitives* was ignored entirely.
-  `3942bp01` is 16 cone sectors and zero coloured facets.
+- Decoration authored as colored *primitives* was ignored entirely.
+  `3942bp01` is 16 cone sectors and zero colored facets.
 
 Also: stacked wall sections merge into one spanning carrier (`span_carrier`),
 carrier faces union **all** coplanar facets including the print, groups sort by
@@ -574,7 +590,7 @@ pipeline (99s → 0.04s on a high-poly torso, byte-identical output, pinned).
 **The minifig neck mark is dropped from decals only.** LDraw authors a neck as
 a 270-degree body cylinder plus a 90-degree one in black; the head covers it.
 It is authored exactly as real print is — `3942bp01`'s stripes partition their
-wall into coloured and colour-16 sectors summing to 360 the same way — so it is
+wall into colored and color-16 sectors summing to 360 the same way — so it is
 caught by position *and* size together: protrudes past the body **and** covers
 no more than a quarter of its ring. Either condition alone admits `29030p01`'s
 head print and `53983p01`'s turbine case. Renders keep the band, by request.
@@ -736,4 +752,4 @@ No defects filed.
   move under an engine swap, and an extraction corpus whose candidate pool was
   an alphabetical prefix containing no classic brick, plate or tile. Ask what
   a gate would MISS before trusting it.
-- LDView colour is not evidence; a proof sheet is not the renderer.
+- LDView color is not evidence; a proof sheet is not the renderer.
