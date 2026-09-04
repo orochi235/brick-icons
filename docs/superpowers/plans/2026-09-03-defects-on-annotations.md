@@ -20,6 +20,8 @@ Run tests from `lab/`: `cd /Users/mike/src/brick-icons/lab && npx vitest run <pa
 
 **A mark drawn on the diff pane can never be seen.** `paneSpec` gives the diff pane `marks: true`, but `FileDefectDialog` only offers engine-kind sources as checkboxes, and the layer filters with `d.engines.includes(source.id)` — `'diff'` is never in `engines`. So today you can draw on the diff pane and the mark vanishes on reload. Task 6 decides this deliberately rather than porting the bug.
 
+**`noUncheckedIndexedAccess` is on.** `const [x] = someArray` types `x` as `T | undefined`, so every property access after it fails `TS18048` even though the test passes. Write `const x = someArray[0]!` — the convention the existing tests already use (`src/panes/threeModel.test.ts`, `src/api/client.test.ts`).
+
 **There are no `jest-dom` matchers here.** `lab/src/test-setup.ts` imports none, and no existing test uses them. `toHaveClass`, `toBeInTheDocument` and friends throw `Invalid Chai property` — which reads as a broken test rather than a failing one, so a test written with them can never fail honestly. Assert on `classList.contains(...)`, `textContent`, and `querySelector(...)` instead. Only vitest's own matchers are available.
 
 ---
@@ -456,27 +458,27 @@ describe('defectToMarks', () => {
   });
 
   it('carries the defect id so a mark can be traced back', () => {
-    const [m] = defectToMarks(defect(), ['pane:naive']);
+    const m = defectToMarks(defect(), ['pane:naive'])[0]!;
     expect(m.meta).toEqual({ defectId: '3001-naive-missing-edge' });
   });
 
   it('reads a defect with no kind as a rectangle', () => {
-    const [m] = defectToMarks(defect(), ['pane:naive']);
+    const m = defectToMarks(defect(), ['pane:naive'])[0]!;
     expect(m.kind).toBe('rect');
     expect(m.points).toBeUndefined();
   });
 
   it('carries a line through with its points', () => {
-    const [m] = defectToMarks(
+    const m = defectToMarks(
       defect({ kind: 'line', points: [{ x: 0.1, y: 0.2 }, { x: 0.4, y: 0.6 }] }),
       ['pane:naive'],
-    );
+    )[0]!;
     expect(m.kind).toBe('line');
     expect(m.points).toHaveLength(2);
   });
 
   it('carries title and status so a mark paints by its meaning', () => {
-    const [m] = defectToMarks(defect({ status: 'fixed' }), ['pane:naive']);
+    const m = defectToMarks(defect({ status: 'fixed' }), ['pane:naive'])[0]!;
     expect(m.title).toBe('missing edge');
     expect(m.status).toBe('fixed');
   });
