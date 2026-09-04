@@ -84,11 +84,8 @@ function Panes({ ctx, client, registry }:
     const loose = marks.query().find((a) => !(a.meta as MarkMeta | undefined)?.defectId);
     setPending(loose ?? null);
     // Selection arrives on this same channel: weasel keeps a canvas's selection
-    // on the scene, so setSelection notifies the store's listeners. Probed
-    // rather than called, because `selection()` lands in labkit after
-    // 1.4.0-pre.0 -- drop the probe when the pin moves.
-    const withSelection = marks as typeof marks & { selection?: () => readonly string[] };
-    const picked = withSelection.selection?.()[0];
+    // on the scene, so setSelection notifies the store's listeners.
+    const picked = marks.selection()[0];
     const mark = picked ? marks.get(picked) : undefined;
     setSelected((mark?.meta as MarkMeta | undefined)?.defectId ?? null);
   }), [marks]);
@@ -216,7 +213,8 @@ function Panes({ ctx, client, registry }:
         />
       ) : null}
       {shown ? (
-        <DefectCard defect={shown} onStatus={setStatus} onClose={() => setSelected(null)} />
+        <DefectCard defect={shown} onStatus={setStatus}
+                    onClose={() => { marks.setSelection([]); setSelected(null); }} />
       ) : null}
     </div>
   );
