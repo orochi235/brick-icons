@@ -20,6 +20,8 @@ Run tests from `lab/`: `cd /Users/mike/src/brick-icons/lab && npx vitest run <pa
 
 **A mark drawn on the diff pane can never be seen.** `paneSpec` gives the diff pane `marks: true`, but `FileDefectDialog` only offers engine-kind sources as checkboxes, and the layer filters with `d.engines.includes(source.id)` — `'diff'` is never in `engines`. So today you can draw on the diff pane and the mark vanishes on reload. Task 6 decides this deliberately rather than porting the bug.
 
+**There are no `jest-dom` matchers here.** `lab/src/test-setup.ts` imports none, and no existing test uses them. `toHaveClass`, `toBeInTheDocument` and friends throw `Invalid Chai property` — which reads as a broken test rather than a failing one, so a test written with them can never fail honestly. Assert on `classList.contains(...)`, `textContent`, and `querySelector(...)` instead. Only vitest's own matchers are available.
+
 ---
 
 ### Task 1: Let a caller reach a pane's body element
