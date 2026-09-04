@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Mark } from '@lab/defects/geometry';
+import type { Mark } from '@lab/defects/useDefects';
 import '@lab/defects/FileDefectDialog.css';
 
 export interface FileDefectDialogProps {

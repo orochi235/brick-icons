@@ -1,9 +1,3 @@
-/** The parameters a mark's position depends on. `--render-px` is absent on
- *  purpose: the mark is fractional, so resolution does not move it. */
-const SEEN_KEYS = ['angle', 'shading', 'shade_style'] as const;
-
-export type Seen = Partial<Record<(typeof SEEN_KEYS)[number], string>>;
-
 export function slug(text: string, max = 40): string {
   const base = text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   if (base.length <= max) return base;
@@ -26,18 +20,4 @@ export function defectId(part: string, engines: string[], title: string,
   let n = 2;
   while (existing.includes(`${base}-${n}`)) n += 1;
   return `${base}-${n}`;
-}
-
-export function seenFrom(config: Record<string, unknown>): Seen {
-  const out: Seen = {};
-  for (const key of SEEN_KEYS) {
-    const value = config[key];
-    if (typeof value === 'string' && value) out[key] = value;
-  }
-  return out;
-}
-
-/** Whether a defect's mark can be trusted against the render on screen. */
-export function seenMatches(seen: Seen, config: Record<string, unknown>): boolean {
-  return Object.entries(seen).every(([key, value]) => config[key] === value);
 }

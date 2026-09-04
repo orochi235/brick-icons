@@ -1,6 +1,5 @@
 import type { AnnotationInit } from '@weasel-js/labkit';
-import type { Defect, MarkKind } from '@lab/defects/useDefects';
-import type { Mark } from '@lab/defects/geometry';
+import type { Defect, Mark, MarkKind } from '@lab/defects/useDefects';
 import type { SourceId } from '@lab/panes/sources';
 
 /** What the lab writes into a mark's `meta`, and reads back to trace a mark

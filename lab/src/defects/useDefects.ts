@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { LabClient } from '@lab/api/client';
-import type { Mark } from '@lab/defects/geometry';
-import { defectId, seenFrom, type Seen } from '@lab/defects/identity';
+import { defectId } from '@lab/defects/identity';
 
 export type DefectStatus = 'open' | 'fixed' | 'wontfix' | 'notabug';
 
@@ -9,6 +8,11 @@ export type DefectStatus = 'open' | 'fixed' | 'wontfix' | 'notabug';
 export const STATUSES: DefectStatus[] = ['open', 'fixed', 'wontfix', 'notabug'];
 
 export type MarkKind = 'rect' | 'line' | 'arrow' | 'ellipse' | 'stroke' | 'text';
+
+/** A rectangle in fractions of the pane box it was drawn on. */
+export interface Mark { x: number; y: number; w: number; h: number; }
+
+export type Seen = Record<string, string>;
 
 export interface Defect {
   id: string;
@@ -22,6 +26,8 @@ export interface Defect {
   kind?: MarkKind;
   /** Vertices for a kind a bounding box cannot describe. Absent for a rect. */
   points?: { x: number; y: number }[];
+  /** Kept so an existing record round-trips. labkit answers staleness now,
+   *  from the target's `positionDependsOn`. */
   seen: Seen;
   filed: string;
   notes: string;
@@ -52,7 +58,7 @@ export function buildDefect(args: BuildDefectArgs): Defect {
     mark: args.mark,
     ...(args.kind && args.kind !== 'rect' ? { kind: args.kind } : {}),
     ...(args.points?.length ? { points: args.points } : {}),
-    seen: seenFrom(args.config),
+    seen: {},
     filed: args.today,
     notes: args.notes,
   };

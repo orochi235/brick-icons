@@ -25,11 +25,6 @@ describe('buildDefect', () => {
     expect(got.filed).toBe('2026-08-31');
   });
 
-  it('records only the parameters that move the mark', () => {
-    expect(buildDefect(args).seen)
-      .toEqual({ angle: '30,25', shading: 'outline', shade_style: 'flat3' });
-  });
-
   it('avoids an id already in use', () => {
     expect(buildDefect({ ...args, existing: ['3941-occt-borehole-rim-not-drawn'] }).id)
       .toBe('3941-occt-borehole-rim-not-drawn-2');

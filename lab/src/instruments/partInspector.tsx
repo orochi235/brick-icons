@@ -138,8 +138,7 @@ function Panes({ ctx, client, registry }:
       ref: refFor(s.id),
       // The measured body, not `render_px`: a stored fraction has always been
       // a fraction of the box the layout gave the pane. Passing the render
-      // size instead moves every defect filed before today -- proved in
-      // src/defects/projection.contract.test.ts.
+      // size instead moves every defect filed before today.
       content: (() => {
         const box = boxes[s.id] ?? { width: 1, height: 1 };
         return { w: box.width, h: box.height };
