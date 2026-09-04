@@ -162,11 +162,15 @@ Not re-derivable from a green suite, and each cost real time:
 
 ### Upstream
 
-Weasel has fixed the `FloatingPanel` capture (movement threshold) and written
-the styling contract into labkit's `RECIPES.md`; both are on
-`labkit/consumer-asks`, unpushed and unreleased — so the two workarounds above
-are delete-when-it-ships, not delete-on-a-date. The `.pair()`-vs-`pack`
-question and the leading titlebar slot are filed and open.
+Pinned at `@weasel-js/labkit@1.4.0-pre.1`. It ships `AnnotationsApi.selection()`
+and `setSelection()` — the probe that stood in for the first is gone — and the
+styling contract, now in labkit's `docs/RECIPES.md`. The `FloatingPanel` capture
+is filed upstream, not fixed, so `App.tsx`'s drag-stop stays. The `.pair()`-vs-
+`pack` question and the leading titlebar slot are filed and open.
+
+pre.1 also exports `usePanZoom` standalone, for a lab that hosts its own
+renderer through `surface` — which is what `lab/src/panes/camera.ts` is. Nobody
+has checked whether its view shape matches what an annotation target wants.
 
 Sidebar sections can now be torn out into workspace tiles (`undockAs`), but a
 section undocks WHOLE, as one panel: our six settings sections would become six
