@@ -16,8 +16,9 @@ import { diffCaption, diffWarning, useDiff } from '@lab/panes/useDiff';
 import { MarkLayer } from '@lab/defects/MarkLayer';
 import { FileDefectDialog } from '@lab/defects/FileDefectDialog';
 import { DefectCard } from '@lab/defects/DefectCard';
-import { buildDefect, useDefects } from '@lab/defects/useDefects';
+import { buildDefect, STATUSES, useDefects } from '@lab/defects/useDefects';
 import type { Mark } from '@lab/defects/geometry';
+import { createTargetRegistry, type TargetRegistry } from '@lab/defects/targets';
 import { useReference } from '@lab/panes/useReference';
 import { useRenderFit } from '@lab/panes/useRenderFit';
 import { threeStyle } from '@lab/panes/viewport';
@@ -39,7 +40,12 @@ export interface InspectorState {
   stamps: Partial<Record<SourceId, string>>;
 }
 
-function Panes({ ctx, client }: { ctx: any; client: LabClient }) {
+function Panes({ ctx, client, registry }:
+    { ctx: any; client: LabClient; registry: TargetRegistry }) {
+  // The next task wires the registry into the overlay; for now it only
+  // needs to exist on the props so the instrument can hand it down.
+  void registry;
+
   const config = ctx.config as Record<string, unknown>;
   const camera = readView(ctx.trial.view);
   const sources = enabledSources((config.sources as SourceId[]) ?? []);
@@ -174,6 +180,8 @@ function DefectCount({ client, part }: { client: LabClient; part: string }) {
 export function createPartInspector(fields: SchemaField[], client: LabClient) {
   const nodes = buildSchema(fields);
   const defaults = defaultsFor(fields);
+  // One registry per instrument, written by `Panes` and read by `targets`.
+  const registry = createTargetRegistry();
 
   return defineInstrument<InspectorState, Record<string, unknown>, SourceRender>({
     name: 'part-inspector',
@@ -273,6 +281,13 @@ export function createPartInspector(fields: SchemaField[], client: LabClient) {
       }),
     },
 
-    render: (ctx) => <Panes ctx={ctx} client={client} />,
+    annotations: {
+      targets: () => registry.targets(),
+      meaning: {
+        statuses: STATUSES.map((id) => ({ id, label: id })),
+      },
+    },
+
+    render: (ctx) => <Panes ctx={ctx} client={client} registry={registry} />,
   });
 }

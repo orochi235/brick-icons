@@ -39,8 +39,11 @@ export function paneSpec(source: Source, deps: PaneDeps): PaneSpec {
       return { state: engine.pane, busy: engine.busy, marks: true, followsCamera: true };
     }
     case 'diff':
+      // A defect names engines, and `diff` is not one, so a mark drawn here
+      // could never be found again. It comes back when a defect can name a
+      // pane rather than an engine.
       return { state: deps.diff.pane, busy: false, note: deps.diff.note,
-               marks: true, followsCamera: true };
+               marks: false, followsCamera: true };
     case 'reference':
       return { state: deps.reference, busy: false, marks: false, followsCamera: true };
     case 'decal':
