@@ -1,7 +1,8 @@
 # Handoff — `main`: the corpus lab, and the OCCT engine
 
-On **`main`**, pushed through `6a780c5` with the goldens re-freeze
-and its crash fix committed on top, unpushed. A plain `pytest`
+On **`main`**, pushed through `6a780c5`, with the goldens re-freeze, its
+crash fix, and the whole `labkit/annotations-arc-5` arc committed on top and
+unpushed. A plain `pytest`
 skips the drift tests, and `BRICK_GOLDENS=1` renders only `3005` — neither is
 verification; only `BRICK_GOLDENS=full` (~18 min) is.
 
@@ -32,15 +33,15 @@ time, and prints per-case timings worth keeping (`outline-flat3__3649` 330s,
 
 ## Read first: there are two threads now
 
-**Branch state (2026-09-03):** on `labkit/annotations-arc-5`, 21 ahead of
-`main`, and **origin has no such branch** — only `main`. Nothing here is
-pushed. Tip `4677384` refuses to file a defect before a part is loaded: a
-defect is stored under its part and `useDefects` returns `[]` for a blank one,
-so a blank-part defect was written, accepted by the server, and then never
-listed again. Open: whether to push the branch (it would create a new remote
-branch carrying the whole arc-5 migration) or fast-forward `main` onto it.
-Arc 5 is closed out in weasel's spec, so nobody has stated a reason `main` is
-still 21 behind.
+**Branch state (2026-09-04):** `labkit/annotations-arc-5` is fast-forwarded
+into `main` and the whole arc is on it. **`main` is 27 ahead of `origin/main`
+and nothing is pushed.** The `BRICK_GOLDENS=full` run that gates the engine
+files this arc touched — the colour-to-color rename across `hlr`, `occt`,
+`shade`, `trace`, `unwrap` — finished green at 00:59 (751 passed, 4 skipped,
+18m04s), before the two lab-only commits on top of it; a lab commit cannot
+move a Python suite. Only the tail of that run's log survived, so the
+`BRICK_GOLDENS=full` on its command line is inferred from the duration and
+from three tests un-skipping, not read.
 
 **labkit is a `file:` link now, not an npm pin.** `lab/package.json` reads
 `file:../../weasel/packages/labkit`, so the lab compiles against whatever that
