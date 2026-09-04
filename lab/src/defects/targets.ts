@@ -11,12 +11,12 @@ export const POSITION_DEPENDS_ON = ['angle', 'shading', 'shade_style'] as const;
 export interface PaneEntry {
   id: SourceId;
   ref: RefObject<HTMLElement | null>;
+  content: { w: number; h: number };
   base?: () => CaptureSource;
 }
 
 export interface TargetSnapshot {
   camera: Camera;
-  content: { w: number; h: number };
   panes: readonly PaneEntry[];
 }
 
@@ -34,11 +34,11 @@ export function createTargetRegistry(): TargetRegistry {
     publish: (snapshot) => { current = snapshot; },
     targets: () => {
       if (!current) return [];
-      const { camera, content, panes } = current;
+      const { camera, panes } = current;
       return panes.map((p) => ({
         id: `pane:${p.id}`,
         ref: p.ref,
-        content,
+        content: p.content,
         view: camera,
         positionDependsOn: POSITION_DEPENDS_ON,
         ...(p.base ? { base: p.base } : {}),
