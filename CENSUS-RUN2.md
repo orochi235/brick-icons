@@ -76,3 +76,35 @@ Comparability is verified rather than assumed: msb-uai's smoke run of `3001` und
 
 Another session owns studio/occt and the script changes. Coordinate before dispatching to either
 node: one job per tree, and a second dispatch loses the lock race rather than queueing.
+
+## Decided, not yet started
+
+**occt render backfill: all 4,733 measured-but-never-drawn parts** (~48 core-hours), not just the
+flagged ones. `out/census/occt-backfill.txt` is that list. Needs a fresh JSONL so `--skip-done`
+skips nothing, the same shape as the naive run on msb-uai.
+
+**Timeouts: probe 100 before committing.** `out/census/{occt,naive}-probe100.txt` are evenly
+spaced samples of the degenerate sets, to learn what a 600s cap actually buys before spending
+dozens of core-hours on 2,523 parts.
+
+Both wait on studio's tree, which `62bb81bd` holds.
+
+## What run 1's timings say
+
+11,359 parts produced a measurement. naive median 13.3s, p90 84.7s, max 1038s; occt median 21.6s,
+p90 90.3s, max 678s. The distribution is broad — no bin holds more than 8% — and there is no gap
+between 60s and 120s: 1,605 successful parts land in that band.
+
+A hard cap would have cut, of successful parts: 30s → 34.9%, 60s → 18.2%, 90s → 9.4%,
+120s → 4.1%, 180s → 0.9%, 300s → 0.2%. So 120s is a defensible number.
+
+**But the guard does not enforce it.** `batch.py` arms `signal.setitimer` around the work
+function, and the handler runs only between Python bytecodes — so a part inside one long OCCT,
+GEOS or numpy call runs straight past the deadline and finishes. That is how 464 successful rows
+exceed 120s, the largest at 1038s. The cap therefore selects on *where* time is spent rather than
+how much, and two equally slow parts get opposite treatment. Worth fixing independently of what
+number is chosen.
+
+**Per-phase timings do not exist.** Every row carries one `secs`, measured across the whole of
+`compare-silhouette-truth.py`. Splitting it into geometry / rasterize / truth-mask / compare needs
+the script instrumented; nothing recorded so far can be re-analysed to get it.
