@@ -3698,6 +3698,77 @@ git commit -m "give the corpus wall its own labkit shell, theme and loupe"
 
 ---
 
+### Task 21b: A floating legend that highlights what it names
+
+Six cell colours are six things to memorise. A legend makes them readable, and
+hovering one should pick those cells out of the wall.
+
+It comes after the labkit shell so it can be a `FloatingPanel` — the existing
+lab already uses one for its defect list (see `lab/src/App.tsx`), including the
+detail that `FloatingPanel` is a positioned box and nothing else, so its title
+and dismissal are written as its first child.
+
+**Files:**
+- Create: `lab/src/corpus/Legend.tsx`, `Legend.test.tsx`, `Legend.css`
+- Modify: `lab/src/corpus/paint.ts`, `paint.test.ts`
+- Modify: `lab/src/corpus/CorpusWall.tsx`, `CorpusWall.test.tsx`
+
+- [ ] **Step 1: Name the states once**
+
+`paint.ts` currently decides a colour inside `fillFor`. Split out the state
+itself — `cellState(cell)` returning the state name — so the legend and the
+painter agree by construction rather than by two parallel tables. `fillFor`
+becomes a lookup on that.
+
+Test that every state `cellState` can return has an entry in `CELL_FILL`, so a
+seventh state cannot be added without a colour.
+
+- [ ] **Step 2: Count them**
+
+The legend shows a count per state, which makes it a summary of the corpus and
+not merely a key. Count from the cells already in hand — no request. A pure
+`tally(cells)` returning a count per state, tested against a handful of cells.
+
+- [ ] **Step 3: Dim what is not hovered**
+
+Hovering a legend row highlights those cells. **Dim the others rather than
+brightening the matches** — on a wall this dense, changing the matching cells'
+colour destroys the thing the legend is teaching, while dropping everything else
+back makes them pop and keeps their colour honest.
+
+`paintCommands` takes a `highlight: CellState | null`; when set, cells of other
+states get a dimmed fill and drawn cells a reduced alpha. Test that the
+highlighted state's cells keep their exact colour and the rest do not.
+
+- [ ] **Step 4: The panel**
+
+`Legend.tsx` renders one row per state: swatch, name, count. Hovering a row
+raises the highlight; leaving it clears. Rows are not buttons — they are hover
+targets — but they must be reachable, so give each a `tabIndex` and raise the
+highlight on focus too, which is the same behaviour for a keyboard.
+
+Test: rows render with their counts; hovering reports the state; leaving reports
+null; focusing does what hovering does.
+
+- [ ] **Step 5: Run, drive it, commit**
+
+`npx vitest run src/corpus` and `npx tsc -b --noEmit` clean.
+
+In the browser: confirm the counts match what the wall shows, hover "timed out"
+and confirm about 6% of the wall stays lit while the rest recedes, hover
+"cannot be drawn" and confirm the eight cells are findable. Tab to a row and
+confirm focus highlights the same way. Screenshot a highlight and slop it.
+
+```bash
+git add lab/src/corpus/Legend.tsx lab/src/corpus/Legend.test.tsx \
+        lab/src/corpus/Legend.css lab/src/corpus/paint.ts \
+        lab/src/corpus/paint.test.ts lab/src/corpus/CorpusWall.tsx \
+        lab/src/corpus/CorpusWall.test.tsx
+git commit -m "a floating legend that dims the wall around what it names"
+```
+
+---
+
 ### Task 22: The caret
 
 The wall is mouse-only. Give it a caret: an implied focus when there is no
