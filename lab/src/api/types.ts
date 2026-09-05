@@ -47,6 +47,10 @@ export interface RenderResult {
   artifacts: Artifact[];
   seconds: number;
   error: string | null;
+  /** The process that ran it, so a render that died names its own corpse.
+   *  Absent on a cached hit and on a render that never started. */
+  pid?: number | null;
+  cancelled?: boolean;
 }
 
 export interface JobState {

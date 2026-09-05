@@ -64,7 +64,13 @@ async function renderOne(
     const started = await client.startRender(part, sourceConfig(SOURCES[source]!, config));
 
     const state = await settledJob(client, started.job, { signal, pollMs });
-    if (!state) return [];
+    // Abandoning the wait leaves the render running: the server has a process
+    // on it and nothing left that wants the answer. A cancel that fails is
+    // still not this pane's failure -- the pane is already gone.
+    if (!state) {
+      await client.cancelJob(started.job).catch(() => {});
+      return [];
+    }
 
     const result = state.results[0]
       ?? failedResult('the job finished without a result');

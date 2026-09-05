@@ -19,9 +19,12 @@ class Registry:
         self._lock = threading.Lock()
 
     def start(self, kind: str, items: list, work: Callable) -> str:
-        """Run `work(item, emit)` over `items` on a thread. Whatever `work`
-        returns is collected into the job's `results`, which is how a caller
-        gets an answer back without closing over the not-yet-assigned id."""
+        """Run `work(item, emit, cancel)` over `items` on a thread. Whatever
+        `work` returns is collected into the job's `results`, which is how a
+        caller gets an answer back without closing over the not-yet-assigned
+        id. `cancel` is the job's own event: an item long enough to be worth
+        cancelling has to watch it, because the loop only checks between
+        items."""
         job_id = uuid.uuid4().hex[:12]
         record = {"id": job_id, "kind": kind, "state": "running",
                   "total": len(items), "done": 0, "failed": 0,
@@ -44,14 +47,14 @@ class Registry:
                                          "message": str(message), "ok": _ok})
 
             try:
-                result = work(item, emit)
+                result = work(item, emit, record["cancel"])
                 if result is not None:
                     record["results"].append(result)
                 record["done"] += 1
             except Exception as e:                  # noqa: BLE001
                 record["failed"] += 1
                 emit(f"{type(e).__name__}: {e}", index, False)
-        record["state"] = "done"
+        record["state"] = "cancelled" if record["cancel"].is_set() else "done"
 
     def get(self, job_id: str) -> dict | None:
         record = self._jobs.get(job_id)

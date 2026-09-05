@@ -102,8 +102,9 @@ def create_app(root: Path | str = ".",
         digests = frozen.get(req.part, {})
         cases = goldens_status.cases_for(root, req.part)
 
-        def work(case, emit):
-            result = runner.render(case["argv"], root=app.state.cache_root)
+        def work(case, emit, cancel):
+            result = runner.render(case["argv"], root=app.state.cache_root,
+                                   cancel=cancel)
             svg = app.state.cache_root / result["key"] / f"{req.part}.svg"
             compared = goldens_status.compare_case(svg, digests.get(case["combo"]))
             emit(f"{case['case']}: {compared['state']}")
@@ -119,9 +120,9 @@ def create_app(root: Path | str = ".",
         except KeyError as e:
             raise HTTPException(400, str(e)) from None
 
-        def work(item, emit):
+        def work(item, emit, cancel):
             result = runner.render(item, root=app.state.cache_root,
-                                   force=req.force)
+                                   force=req.force, cancel=cancel)
             emit(f"{req.part}: {'cached' if result['cached'] else 'rendered'}")
             if not result["ok"]:
                 raise RuntimeError(result["error"])
@@ -249,9 +250,9 @@ def create_app(root: Path | str = ".",
         except KeyError as e:
             raise HTTPException(400, str(e)) from None
 
-        def work(item, emit):
+        def work(item, emit, cancel):
             result = runner.render(item, root=app.state.cache_root,
-                                   force=req.force)
+                                   force=req.force, cancel=cancel)
             emit(f"{item[0]}: {'cached' if result['cached'] else 'rendered'}")
             if not result["ok"]:
                 raise RuntimeError(result["error"])
