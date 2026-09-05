@@ -30,7 +30,9 @@ and re-running the same command picks up only what accumulated meanwhile.
 **occt will still be missing renders for the 5,716 parts run 1 already measured.** That is the
 open backfill: 2,552 parts for the flagged ones only, 11,335 for everything. Both core-hour
 figures those carried (29 and 104) were pre-fix; see below for the occt half re-derived, and note
-that naive gained only the two `geom2d` commits, by an amount nobody has measured. It has to wait for `62bb81bd` — onto locks a tree to one job.
+that naive gained only the two `geom2d` commits, worth **1.23x** (484.4s → 393.0s over the 14-part
+bench; the shared fill half of it 1.35x, and the total is close to this box's ±13% noise floor).
+It has to wait for `62bb81bd` — onto locks a tree to one job.
 
 ## Run 1 is archived, not lost
 
@@ -90,11 +92,22 @@ node: one job per tree, and a second dispatch loses the lock race rather than qu
 ## Decided, not yet started
 
 **occt render backfill: all 4,733 measured-but-never-drawn parts**, not just the flagged ones.
-Run 1 spent 47.8 core-hours on exactly these, so post-fix they are **15-23 core-hours, and the mix
-argues for the upper half — call it 20**. The speedup sample averaged 20.2s a part with nothing
-over 120s; the backfill averages 36.4s, and 57% of its time sits in the 60s+ bands where the fix
-helps least (60-120s holds 18.4 core-hours on its own, 120s+ another 8.9). 3.24x is the ceiling
-here, not the expected value. `out/census/occt-backfill.txt` is that list. Needs a fresh JSONL so `--skip-done`
+Run 1 spent 47.8 core-hours on exactly these; applying the measured per-band speedup curve to
+their own run-1 timings gives **16.6 core-hours**, an effective 2.87x rather than the aggregate
+3.24x. The curve, from the 120-part diff sample
+(`docs/census-timings/occt-diff-sample120-timings.jsonl`):
+
+| run-1 band | n | pre-fix | HEAD | speedup |
+|---|---|---|---|---|
+| 0-10s | 41 | 129.8s | 30.9s | 4.20x |
+| 10-30s | 59 | 741.1s | 213.4s | 3.47x |
+| 30-60s | 15 | 436.6s | 135.5s | 3.22x |
+| 60-120s | 5 | 294.0s | 114.2s | 2.58x |
+
+The gain falls as parts get more expensive, which is why the backfill's mix matters: 789 of its
+parts sit in the 60-120s band (18.4 core-hours pre-fix) and 189 above 120s (8.8). **The 120s+ band
+is extrapolated** — the sample was capped at 120s, so it reuses the 60-120s factor and 16.6 is
+optimistic by however much that understates. `out/census/occt-backfill.txt` is that list. Needs a fresh JSONL so `--skip-done`
 skips nothing, the same shape as the naive run on msb-uai.
 
 **Timeouts: probe 100 before committing.** `out/census/{occt,naive}-probe100.txt` are evenly
