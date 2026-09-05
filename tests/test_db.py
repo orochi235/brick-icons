@@ -185,3 +185,51 @@ def test_defects_round_trip_through_the_database(tmp_path):
     out = tmp_path / "again.toml"
     db.export_defects(conn, out)
     assert defects_toml.load(out) == [DEFECT]
+
+
+def test_setting_a_status_and_adding_notes(tmp_path):
+    conn = db.connect(tmp_path / "corpus.db")
+    db.seed_parts(conn, _library(tmp_path))
+
+    db.set_status(conn, "3001", "suspect", note="stud row looks thin")
+    row = conn.execute("SELECT * FROM parts WHERE id='3001'").fetchone()
+    assert row["status"] == "suspect"
+    assert row["status_note"] == "stud row looks thin"
+    assert row["status_at"]
+
+    db.add_note(conn, "measured 2595px missing", part_id="3001")
+    assert [n["body"] for n in db.notes_for(conn, part_id="3001")] == [
+        "measured 2595px missing"]
+
+
+def test_an_unknown_status_is_refused(tmp_path):
+    conn = db.connect(tmp_path / "corpus.db")
+    db.seed_parts(conn, _library(tmp_path))
+    with pytest.raises(ValueError, match="status"):
+        db.set_status(conn, "3001", "haunted")
+
+
+def test_statuses_and_notes_round_trip_through_toml(tmp_path):
+    library = _library(tmp_path)
+    conn = db.connect(tmp_path / "corpus.db")
+    db.seed_parts(conn, library)
+    db.set_status(conn, "3001", "broken", note="no stud row at all")
+    db.add_note(conn, "second look agrees", part_id="3001")
+    path = tmp_path / "part-status.toml"
+    db.export_statuses(conn, path)
+
+    fresh = db.connect(tmp_path / "fresh.db")
+    db.seed_parts(fresh, library)
+    assert db.import_statuses(fresh, path) == 1
+    row = fresh.execute("SELECT * FROM parts WHERE id='3001'").fetchone()
+    assert (row["status"], row["status_note"]) == ("broken", "no stud row at all")
+    assert [n["body"] for n in db.notes_for(fresh, part_id="3001")] == [
+        "second look agrees"]
+
+
+def test_a_part_left_unreviewed_is_not_written_out(tmp_path):
+    conn = db.connect(tmp_path / "corpus.db")
+    db.seed_parts(conn, _library(tmp_path))
+    path = tmp_path / "part-status.toml"
+    assert db.export_statuses(conn, path) == 0
+    assert "[[part]]" not in path.read_text()

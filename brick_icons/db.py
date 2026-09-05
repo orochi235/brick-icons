@@ -248,3 +248,85 @@ def export_defects(conn: sqlite3.Connection, path: Path | str) -> int:
         records.append(record)
     defects_toml.save(path, records)
     return len(records)
+
+
+_STATUS_HEADER = """\
+# What a human decided about a part, and any notes against one.
+#
+# Written by brick_icons.db from corpus.db, which is derived and gitignored.
+# This file is the record: a status that is not here does not survive a
+# rebuild.
+
+"""
+
+
+def set_status(conn: sqlite3.Connection, part_id: str, status: str,
+               note: str | None = None) -> None:
+    if status not in PART_STATUSES:
+        raise ValueError(f"status must be one of {PART_STATUSES}, not {status!r}")
+    conn.execute(
+        "UPDATE parts SET status=?, status_note=?, status_at=? WHERE id=?",
+        (status, note, now(), part_id))
+    conn.commit()
+
+
+def add_note(conn: sqlite3.Connection, body: str, part_id: str | None = None,
+             defect_id: str | None = None) -> int:
+    cur = conn.execute(
+        "INSERT INTO notes (part_id, defect_id, written, body) VALUES (?, ?, ?, ?)",
+        (part_id, defect_id, now(), body))
+    conn.commit()
+    return cur.lastrowid
+
+
+def notes_for(conn: sqlite3.Connection, part_id: str | None = None,
+              defect_id: str | None = None) -> list[sqlite3.Row]:
+    if part_id:
+        return list(conn.execute(
+            "SELECT * FROM notes WHERE part_id=? ORDER BY id", (part_id,)))
+    return list(conn.execute(
+        "SELECT * FROM notes WHERE defect_id=? ORDER BY id", (defect_id,)))
+
+
+def export_statuses(conn: sqlite3.Connection, path: Path | str) -> int:
+    dump = defects_toml.dump_value
+    chunks, n = [_STATUS_HEADER], 0
+    for row in conn.execute(
+            "SELECT * FROM parts WHERE status != 'unreviewed' ORDER BY id"):
+        lines = ["[[part]]", f"id = {dump(row['id'])}",
+                 f"status = {dump(row['status'])}"]
+        if row["status_note"]:
+            lines.append(f"note = {dump(row['status_note'])}")
+        if row["status_at"]:
+            lines.append(f"at = {dump(row['status_at'])}")
+        chunks.append("\n".join(lines) + "\n")
+        n += 1
+    for row in conn.execute("SELECT * FROM notes ORDER BY id"):
+        lines = ["[[note]]"]
+        if row["part_id"]:
+            lines.append(f"part = {dump(row['part_id'])}")
+        if row["defect_id"]:
+            lines.append(f"defect = {dump(row['defect_id'])}")
+        lines += [f"written = {dump(row['written'])}",
+                  f"body = {dump(row['body'])}"]
+        chunks.append("\n".join(lines) + "\n")
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    Path(path).write_text("\n".join(chunks))
+    return n
+
+
+def import_statuses(conn: sqlite3.Connection, path: Path | str) -> int:
+    path = Path(path)
+    if not path.exists():
+        return 0
+    data = tomllib.loads(path.read_text())
+    parts = data.get("part", [])
+    conn.executemany(
+        "UPDATE parts SET status=?, status_note=?, status_at=? WHERE id=?",
+        [(p["status"], p.get("note"), p.get("at"), p["id"]) for p in parts])
+    conn.executemany(
+        "INSERT INTO notes (part_id, defect_id, written, body) VALUES (?, ?, ?, ?)",
+        [(n.get("part"), n.get("defect"), n["written"], n["body"])
+         for n in data.get("note", [])])
+    conn.commit()
+    return len(parts)

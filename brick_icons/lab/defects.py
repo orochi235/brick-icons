@@ -26,15 +26,15 @@ _HEADER = """\
 """
 
 
-def _dump_value(value) -> str:
+def dump_value(value) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, (int, float)):
         return repr(value)
     if isinstance(value, list):
-        return "[" + ", ".join(_dump_value(v) for v in value) + "]"
+        return "[" + ", ".join(dump_value(v) for v in value) + "]"
     if isinstance(value, dict):
-        return "{ " + ", ".join(f"{k} = {_dump_value(v)}"
+        return "{ " + ", ".join(f"{k} = {dump_value(v)}"
                                 for k, v in value.items()) + " }"
     text = str(value)
     if "\n" in text:
@@ -57,9 +57,9 @@ def save(path: Path | str, records: list[dict]) -> None:
         lines = ["[[defect]]"]
         for field in _ORDER:
             if field in record:
-                lines.append(f"{field} = {_dump_value(record[field])}")
+                lines.append(f"{field} = {dump_value(record[field])}")
         for field in sorted(set(record) - set(_ORDER)):
-            lines.append(f"{field} = {_dump_value(record[field])}")
+            lines.append(f"{field} = {dump_value(record[field])}")
         chunks.append("\n".join(lines) + "\n")
     path.write_text("\n".join(chunks))
 
