@@ -162,6 +162,14 @@ Triage writes, defect editing, the regression gate, and any change to weasel.
 
 ## Traps
 
+**Canvas2D runs out at full zoom-out, and the arithmetic says where.**
+`paintCommands` builds a 24,591-command frame in 1.05ms, but the draw loop
+issues one `drawImage` per cell — at roughly 0.5-1us each that is 12-25ms a
+frame, past the 16.6ms budget, and it is all per-call overhead rather than fill
+rate. So the wall is smooth zoomed in and degrades only at the extreme where
+every cell is on screen. That extreme is what weasel's batched image path
+exists for; nothing here should be restructured to avoid it.
+
 **A placeholder cell is not a missing cell.** Most parts have no render, and
 even a finished render job leaves ~16,000 of them placeholders. Placeholders are the common path, not
 the error path.

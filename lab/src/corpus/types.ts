@@ -30,3 +30,15 @@ export interface SheetManifest {
   size: number;
   baked: Record<string, string>;
 }
+
+export interface PartDetail {
+  part: { id: string; title: string; category: string | null;
+          status: string; status_note: string | null };
+  findings: { part_id: string; engine: string; extra_d99: number | null;
+              missing_px: number | null; secs: number | null;
+              error: string | null }[];
+  runs: { id: number; kind: string; started: string; commit_sha: string;
+          engine: string; extra_d99: number | null; missing_px: number | null;
+          secs: number | null; error: string | null }[];
+  defects: { id: string; part: string; title: string; status: string }[];
+}
