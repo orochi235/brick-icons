@@ -28,8 +28,9 @@ Both are collected by `onto fetch --stream --every 10m`, logging to `out/census-
 and re-running the same command picks up only what accumulated meanwhile.
 
 **occt will still be missing renders for the 5,716 parts run 1 already measured.** That is the
-open backfill: 2,552 parts / 29 core-hours for the flagged ones only, 11,335 / 104 for
-everything. It has to wait for `62bb81bd` — onto locks a tree to one job.
+open backfill: 2,552 parts for the flagged ones only, 11,335 for everything. Both core-hour
+figures those carried (29 and 104) were pre-fix; see below for the occt half re-derived, and note
+that naive gained only the two `geom2d` commits, by an amount nobody has measured. It has to wait for `62bb81bd` — onto locks a tree to one job.
 
 ## Run 1 is archived, not lost
 
@@ -88,8 +89,12 @@ node: one job per tree, and a second dispatch loses the lock race rather than qu
 
 ## Decided, not yet started
 
-**occt render backfill: all 4,733 measured-but-never-drawn parts** (~48 core-hours), not just the
-flagged ones. `out/census/occt-backfill.txt` is that list. Needs a fresh JSONL so `--skip-done`
+**occt render backfill: all 4,733 measured-but-never-drawn parts**, not just the flagged ones.
+Run 1 spent 47.8 core-hours on exactly these, so post-fix they are **15-23 core-hours, and the mix
+argues for the upper half — call it 20**. The speedup sample averaged 20.2s a part with nothing
+over 120s; the backfill averages 36.4s, and 57% of its time sits in the 60s+ bands where the fix
+helps least (60-120s holds 18.4 core-hours on its own, 120s+ another 8.9). 3.24x is the ceiling
+here, not the expected value. `out/census/occt-backfill.txt` is that list. Needs a fresh JSONL so `--skip-done`
 skips nothing, the same shape as the naive run on msb-uai.
 
 **Timeouts: probe 100 before committing.** `out/census/{occt,naive}-probe100.txt` are evenly
@@ -97,9 +102,10 @@ spaced samples of the degenerate sets. What the probe is for has changed: at 3.2
 "what does a 600s cap buy" but "how many of these still fail at 120s now" — most of the occt list
 should simply pass, and the answer decides whether a longer cap is wanted at all.
 
-**Both core-hour figures above are pre-fix and too high.** They were derived from run 1's timings,
-against code since made 3.24x faster on a representative draw. Re-derive from post-fix timings
-before scheduling either; the probe is the cheapest way to get them.
+**The degenerate re-run cannot be costed from run 1 at all.** Those 985 parts burned 30.6
+core-hours without one of them completing, so nothing on record says how long they take — only
+that they exceed 120s under the old code. The probe is the only way to get a number, which is
+what makes it worth running before the re-run rather than after.
 
 Both wait on studio's tree, which `62bb81bd` holds.
 
@@ -129,9 +135,14 @@ watchdog comparing `<jsonl>.inflight`'s mtime against a ceiling, killing the wor
 restart loop do the rest, is the fix; it is not landed, and goes into `census-shard.sh` alongside
 the `onto: plan` line so that file takes one edit rather than two. **The ceiling is a crash guard,
 not a second cap** — every part it kills is one the 120s cap already meant to kill and structurally
-could not — which is why it belongs near 3600s, where it fires only on pathology. Choosing 600s
-would quietly impose a stricter measurement policy nobody argued for. Whatever is wanted for parts
-between 120s and the ceiling belongs in the cap, and should be derived from post-fix timings.
+could not.
+
+**Decided: start at 240s and ratchet.** A part the watchdog kills joins a list, that list is re-run
+at a higher ceiling, and the set shrinks each pass. A single ceiling forces a choice between
+catching hangs early and discarding parts that were merely slow; a ratchet refuses it, because
+nothing is discarded — the next pass comes back for it. The machinery already exists:
+`census-triage.py` turns failures into a plain list and `--list` re-runs exactly that. 240s also
+keeps any one part from burning an hour of a shard, which a 3600s guard would have allowed.
 
 ## Where the time actually goes
 
