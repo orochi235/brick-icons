@@ -264,3 +264,36 @@ def test_rebuild_starts_from_empty_each_time(tmp_path):
     conn = db.connect(tmp_path / "corpus.db")
     assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 1
     assert conn.execute("SELECT count(*) FROM measurements").fetchone()[0] == 1
+
+
+def test_storing_a_render_puts_it_under_source_and_part(tmp_path):
+    conn = db.connect(tmp_path / "corpus.db")
+    conn.execute("INSERT INTO parts (id, title, printed, obsolete) "
+                 "VALUES ('3001', 'Brick 2 x 4', 0, 0)")
+    made = tmp_path / "work" / "3001.svg"
+    made.parent.mkdir()
+    made.write_text(SVG)
+
+    path = db.store_render(conn, "3001", "naive", made, root=tmp_path)
+    assert path == tmp_path / "renders" / "naive" / "3001.svg"
+    assert path.read_text() == SVG
+    row = conn.execute("SELECT path, sha256 FROM renders").fetchone()
+    assert row["path"] == "renders/naive/3001.svg"
+    assert row["sha256"] == goldens.sha256(SVG)
+
+
+def test_a_second_source_does_not_overwrite_the_first(tmp_path):
+    """Two sources of the same part are two rows AND two files. A source whose
+    renders share a path would let the second silently replace the first."""
+    conn = db.connect(tmp_path / "corpus.db")
+    conn.execute("INSERT INTO parts (id, title, printed, obsolete) "
+                 "VALUES ('3001', 'Brick 2 x 4', 0, 0)")
+    made = tmp_path / "work" / "3001.svg"
+    made.parent.mkdir()
+    made.write_text(SVG)
+
+    kept = [db.store_render(conn, "3001", s, made, root=tmp_path)
+            for s in ("naive", "occt")]
+    assert len(set(kept)) == 2
+    assert all(p.exists() for p in kept)
+    assert conn.execute("SELECT count(*) FROM renders").fetchone()[0] == 2

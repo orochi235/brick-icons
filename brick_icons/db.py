@@ -215,6 +215,17 @@ def record_render(conn: sqlite3.Connection, part_id: str, source: str,
     return key
 
 
+def store_render(conn: sqlite3.Connection, part_id: str, source: str,
+                 made: Path | str, root: Path | str = ".",
+                 run_id: int | None = None) -> Path:
+    """Copy a freshly rendered SVG into the store and index it."""
+    dest = Path(root) / "renders" / source / f"{part_id}.svg"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(Path(made).read_text())
+    record_render(conn, part_id, source, dest, root=root, run_id=run_id)
+    return dest
+
+
 def import_defects(conn: sqlite3.Connection, path: Path | str) -> int:
     records = defects_toml.load(path)
     conn.executemany(
