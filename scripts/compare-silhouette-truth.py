@@ -186,6 +186,10 @@ def main() -> int:
         before = len(ids)
         ids = runner.remaining(ids)
         print(f"resuming: {before - len(ids)} done, {len(ids)} left", flush=True)
+        # Only this process knows the absolute denominator: remaining() dedupes
+        # by key, so counting the JSONL overcounts a part that has a retry row.
+        # census-shard.sh attaches the label; onto reads it as the unit's size.
+        print(f"onto: plan {before - len(ids)}/{before}", flush=True)
 
     keep = Path(args.keep) if args.keep else None
     if keep:
