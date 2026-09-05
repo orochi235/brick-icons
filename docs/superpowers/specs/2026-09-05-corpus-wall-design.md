@@ -67,6 +67,10 @@ the name: `out/thumbs/128/3001.png`. The bake skips a part whose recorded sha
 matches the one it baked last time, and the client cache-busts with `?v=<first 8
 of sha>`.
 
+Every stored render is `naive` today, so a cell's thumbnail is that part's
+`naive` render and the name is the bare id. If a second engine ever needs to be
+on the wall at once, suffix the name; do not restructure for it now.
+
 The two coarse levels ship as **whole-corpus sprite sheets**, one page each:
 `out/thumbs/sheet-8.png` and `sheet-32.png`. 128 px stays loose files — only a
 few dozen cells are that large on screen at once, so they are a residency
