@@ -13,12 +13,12 @@ PHASES = [("render", "#2a78d6", "render — hidden-line + SVG"),
 
 rows = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
 rows.sort(key=lambda r: r["total"])
-x = np.array([r["total"] for r in rows])
-shares = np.array([[r[k] / r["total"] * 100 for r in rows] for k, _, _ in PHASES])
+x = np.arange(len(rows))
+secs = np.array([[r[k] for r in rows] for k, _, _ in PHASES])
 
 fig, ax = plt.subplots(figsize=(12.6, 6.4), dpi=170)
 fig.patch.set_facecolor(SURFACE); ax.set_facecolor(SURFACE)
-ax.stackplot(x, shares, colors=[c for _, c, _ in PHASES], zorder=3,
+ax.stackplot(x, secs, colors=[c for _, c, _ in PHASES], zorder=3,
              edgecolor=SURFACE, linewidth=0.6)
 
 # A legend rather than in-band labels: three of the four bands are too thin at
@@ -31,27 +31,34 @@ leg = ax.legend(handles=handles, frameon=False, loc="center left",
 for t in leg.get_texts():
     t.set_color(INK)
 
-ax.set_xscale("log")
 ax.set_xlim(x.min(), x.max())
-ax.set_ylim(0, 100)
-ax.set_xticks([1, 2, 5, 10, 30, 60, 120, 200])
-ax.xaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}s"))
-ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}%"))
-ax.set_xlabel("Total wall-clock for the part (log)", color=INK2, fontsize=10)
-ax.set_ylabel("Share of that part's time", color=INK2, fontsize=10)
-ax.set_title("Where a part's time goes, by how long it takes — naive engine, 32 sampled parts",
+ax.set_ylim(0, max(r["total"] for r in rows) * 1.04)
+ax.set_xticks(x)
+ax.set_xticklabels([r["part"] for r in rows], rotation=90, fontsize=7.5)
+ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}s"))
+ax.set_ylabel("Wall-clock for that part", color=INK2, fontsize=10)
+ax.set_title("What each part costs and where it goes — naive engine, 32 sampled parts, shortest first",
              color=INK, fontsize=13.5, weight="bold", loc="left", pad=14)
+ax.grid(axis="y", color="#dedcd6", linewidth=0.7, zorder=0)
+
 tot = sum(r["total"] for r in rows)
-ax.annotate("Across every part measured: render 96.1%, truth_mask 3.0%, compare 0.6%, rasterize 0.3%.\n"
-            "A part under 2s is mostly fixed overhead; past 10s it is almost entirely the renderer.",
-            xy=(0, 0), xytext=(0, -42), textcoords="offset points",
+top4 = sum(r["total"] for r in rows[-4:])
+under10 = [r for r in rows if r["total"] < 10]
+ax.annotate(f"Across every part measured: render {sum(r['render'] for r in rows)/tot*100:.1f}%, "
+            f"truth_mask {sum(r['truth_mask'] for r in rows)/tot*100:.1f}%, "
+            f"compare {sum(r['compare'] for r in rows)/tot*100:.1f}%, "
+            f"rasterize {sum(r['rasterize'] for r in rows)/tot*100:.1f}%.\n"
+            f"The four longest parts are {top4/tot*100:.0f}% of the sampled {tot:.0f}s; "
+            f"the {len(under10)} parts under 10s are {sum(r['total'] for r in under10)/tot*100:.0f}% "
+            f"between them.",
+            xy=(0, 0), xytext=(0, -104), textcoords="offset points",
             xycoords="axes fraction", color=INK2, fontsize=9.5, va="top")
 for side in ("top", "right"):
     ax.spines[side].set_visible(False)
 for side in ("left", "bottom"):
     ax.spines[side].set_color("#dedcd6")
 ax.tick_params(colors=INK2, labelsize=9.5)
-fig.tight_layout(rect=(0, 0.08, 1, 1))
+fig.tight_layout(rect=(0, 0.03, 1, 1))
 fig.savefig(sys.argv[2], facecolor=SURFACE)
 for k, _, _ in PHASES:
     print(f"{k}: {sum(r[k] for r in rows)/tot*100:.1f}%")
