@@ -120,7 +120,8 @@ core-hours without one of them completing, so nothing on record says how long th
 that they exceed 120s under the old code. The probe is the only way to get a number, which is
 what makes it worth running before the re-run rather than after.
 
-Both wait on studio's tree, which `62bb81bd` holds.
+Both wait on studio's tree, which `62bb81bd` holds. It frees when the last shard exits, not at the
+deadline: at 95% and 5.4 parts/min on 2026-09-05 that is **21:20-22:00**, about two hours early.
 
 ## What run 1's timings say
 
