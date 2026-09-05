@@ -2157,7 +2157,9 @@ export function Wall({ cells, rects, cam, sheet, manifest, width, height,
 }
 ```
 
-Add to `lab/src/corpus/corpus.css`:
+Create `lab/src/corpus/Wall.css` and import it from `Wall.tsx`
+(`import '@lab/corpus/Wall.css';`) — the lab keeps CSS per component
+(`ColorRow.css`, `DefectCard.css`, `SourcePane.css`), not in one sheet:
 
 ```css
 .corpus-canvas { display: block; cursor: crosshair; }
@@ -2392,7 +2394,7 @@ export function FilterBar({ selection, onChange, shown, total,
 }
 ```
 
-Add to `lab/src/corpus/corpus.css`:
+Create `lab/src/corpus/FilterBar.css` and import it from `FilterBar.tsx`:
 
 ```css
 .corpus-bar {
@@ -2599,7 +2601,7 @@ export function Lightbox({ partId, source, client, onClose }: {
 }
 ```
 
-Add to `lab/src/corpus/corpus.css`:
+Create `lab/src/corpus/Lightbox.css` and import it from `Lightbox.tsx`:
 
 ```css
 .corpus-lightbox {
@@ -2809,7 +2811,8 @@ export function CorpusWall({ client }: { client: LabClient }) {
 }
 ```
 
-Add to `lab/src/corpus/corpus.css`:
+Add to `lab/src/corpus/corpus.css` (the shell's own sheet, already imported by
+`CorpusWall.tsx`):
 
 ```css
 .corpus-app { display: flex; flex-direction: column; height: 100vh; }
