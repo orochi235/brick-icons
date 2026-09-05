@@ -3369,6 +3369,59 @@ git commit -m "raise a part card on click, and the lightbox on double click"
 
 ---
 
+### Task 19b: Two bugs the level ladder exposed
+
+- [ ] **Pick the opening level from the zoom, not from a default**
+
+`fitBounds` lands the default view at a cell size of about 11px. The 8/32 dead
+zone is 10.7-24, and `level` initialises to 32 — so `pickLevel` correctly holds
+32, and the wall opens drawing 32px art at 11px, which is the banding this whole
+ladder exists to remove.
+
+Hysteresis governs *transitions*; the first pick has nothing to be hysteretic
+about. Initialise `level` from `levelFor(CELL * cam.scale)` at the moment the
+camera first fits, and only run it through `pickLevel` thereafter.
+
+Test that a wall opening at an 11px cell size starts on level 8, and that a
+later small jiggle does not move it.
+
+- [ ] **Stop requesting old-slot ids against the new slot**
+
+Switching slots fires a burst of 404s: `useCells` clears its cells in an effect,
+so for one commit `useLooseThumbs` sees the previous slot's `cells` alongside
+the new `source` and builds URLs that cannot exist. It self-heals and never
+shows wrong content — a 404 never fires `onload`, so nothing enters the map —
+but the console is not clean, and a reader cannot tell this 404 from a real one.
+
+Clear during render rather than in an effect, so the child never observes the
+mismatched pair:
+
+```ts
+  const [fetchedFor, setFetchedFor] = useState(source);
+  if (fetchedFor !== source) {
+    setFetchedFor(source);
+    setCells(null);
+    version.current = '';
+  }
+```
+
+Test that changing `source` yields `null` cells on the very next render, before
+any effect runs.
+
+- [ ] **Verify and commit**
+
+`npx vitest run src/corpus` and `npx tsc -b --noEmit` clean. In the browser:
+the wall opens on `sheet-8` with no banding, and switching slots produces no
+404s in the network log.
+
+```bash
+git add lab/src/corpus/CorpusWall.tsx lab/src/corpus/CorpusWall.test.tsx \
+        lab/src/corpus/useCells.ts lab/src/corpus/useCells.test.ts
+git commit -m "open on the level the zoom asks for, and stop 404ing on a slot switch"
+```
+
+---
+
 ### Task 20: Colour a cell by what is known about it
 
 Most of the wall has no thumbnail, so a cell's colour is the only thing it can
