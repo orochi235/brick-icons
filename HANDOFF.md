@@ -221,6 +221,70 @@ are what make a re-rendered part nearly free, and a pre-compressed blob defeats
 both. `corpus.db` is gitignored and rebuilt by walking `renders/` and the TOML.
 
 
+## The corpus wall — branch `corpus-wall`, worktree `.claude/worktrees/corpus-wall`
+
+A pan/zoom surface showing every one of the 24,591 parts as one cell, thumbnail
+where a render exists, filling in as the census runs. Build-order step 3 of the
+corpus database spec.
+
+- Spec: `docs/superpowers/specs/2026-09-05-corpus-wall-design.md`
+- Plan: `docs/superpowers/plans/2026-09-05-corpus-wall.md` — 18 tasks, each
+  carrying its verbatim tests and code
+
+**Resume at Task 3.** Tasks 1 and 2 are committed; `git log --oneline main..HEAD`
+in the worktree says exactly what has landed, and
+`.venv/bin/python -m pytest tests/test_thumbs.py tests/test_index_census.py`
+is the green set so far. Execution is subagent-driven: one implementer per task,
+then a spec check, then a quality review, then the next task.
+
+### Two traps in this worktree that make a passing test meaningless
+
+**Run Python tests as `.venv/bin/python -m pytest`, never `.venv/bin/pytest`.**
+The venv is shared with the main checkout and its editable install maps
+`brick_icons` to the main checkout's copy; the console script puts its own
+`bin/` first on `sys.path` and imports *that* tree. Both forms pass for a module
+that exists unchanged in both, which is how the wrong one goes unnoticed until a
+new module appears and only then throws `ImportError`.
+
+**Do not symlink `out/` into a worktree.** `db.record_render` does
+`path.resolve().relative_to(root)`, which follows the symlink out of the
+worktree and raises `ValueError` on every file — caught and logged as "skipped",
+so it reads as a no-op rather than a failure. This worktree has a real `out/`
+with the census SVGs copied in.
+
+### Decisions from conversation that are not in the code
+
+**The census's drawing is not the store's, and must never be filed as one.**
+`compare-silhouette-truth.py` renders with `--line-width 0 --silhouette-width 0`
+so its fills carry the silhouette; `naive` is the ordinary stroked drawing
+`db.canonical_argv` names. Recording one under the other files a drawing under a
+key describing a different drawing. `db.py` has `census-naive`/`census-occt` for
+this. Tried and reverted twice — `5cbcd4e`, and again during this build, where a
+code review caught it. Index census renders **in place** with `db.record_render`;
+never `db.store_render`, which copies into the tracked store.
+
+**A wall slot is a `db.SOURCES` entry** — an engine crossed with a style. The
+wall shows one slot at a time and switches between them, so thumbnails live at
+`out/thumbs/<source>/<level>/<part>.png` with a sheet pair per slot. Adding a
+slot is adding a `SOURCES` entry and re-running the bake; nothing in the layout,
+camera or wall changes.
+
+**The wall draws `census-naive` for now.** It is the only slot with thousands of
+renders; `naive` has dozens. Switch when the real render job has run.
+
+**A cell's index is its position in part-id order over every part**, including
+parts with no render — never a packing of the parts that happen to be drawn.
+That is what makes a render landing mid-session write one cell instead of
+renumbering every cell after it.
+
+### Not this branch's work
+
+Four engine defects surfaced during this build and none were investigated:
+`780`'s stud tips, `874`'s steering wheel meshing instead of substituting a
+torus, `896`'s edge heights, and a report about stud sides. They arrived
+secondhand through a subagent rather than from the user directly, so they need
+confirming before anyone spends time on them.
+
 ## Lab decisions from 2026-09-04, none of them in the code
 
 **The three layout buttons name windease's own strategies.** windease
