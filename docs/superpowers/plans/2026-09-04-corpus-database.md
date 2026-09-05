@@ -1,6 +1,6 @@
 # Corpus database Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Build `brick_icons/db.py` — the SQLite store for part status, defects, render pointers and census measurement history — and the script that rebuilds it from files on disk.
 
@@ -28,7 +28,7 @@ Spec: `docs/superpowers/specs/2026-09-04-corpus-database-design.md`.
 - Create: `brick_icons/db.py`
 - Test: `tests/test_db.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 import sqlite3
@@ -64,12 +64,12 @@ def test_a_newer_database_is_refused(tmp_path):
         db.connect(path)
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_db.py -q`
 Expected: FAIL — `ModuleNotFoundError: No module named 'brick_icons.db'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 """The corpus database: part status, defects, renders and measurement history.
@@ -188,12 +188,12 @@ def connect(path: Path | str = DEFAULT_PATH) -> sqlite3.Connection:
     return conn
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `.venv/bin/pytest tests/test_db.py -q`
 Expected: PASS, 3 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add brick_icons/db.py tests/test_db.py
@@ -208,7 +208,7 @@ git commit -m "add the corpus database schema"
 - Modify: `brick_icons/db.py`
 - Test: `tests/test_db.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `partindex.build` wants a directory holding `parts/*.dat`, so the test writes four one-line files rather than reaching for the real library.
 
@@ -247,12 +247,12 @@ def test_reseeding_keeps_a_status_a_human_set(tmp_path):
         "SELECT status FROM parts WHERE id='3001'").fetchone()[0] == "broken"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_db.py -q`
 Expected: FAIL — `AttributeError: module 'brick_icons.db' has no attribute 'seed_parts'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 The `INSERT … ON CONFLICT DO UPDATE` names only the library's own columns, which is what leaves a human's status alone on a reseed.
 
@@ -278,12 +278,12 @@ def seed_parts(conn: sqlite3.Connection, ldraw_dir: Path | str) -> int:
     return len(rows)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `.venv/bin/pytest tests/test_db.py -q`
 Expected: PASS, 5 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add brick_icons/db.py tests/test_db.py
@@ -298,7 +298,7 @@ git commit -m "seed the parts table from the library's description lines"
 - Modify: `brick_icons/db.py`
 - Test: `tests/test_db.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 def test_a_run_records_its_arguments_and_closes(tmp_path):
@@ -317,12 +317,12 @@ def test_a_run_records_its_arguments_and_closes(tmp_path):
 
 Add `import json` to the test file's imports.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_db.py -q`
 Expected: FAIL — `AttributeError: module 'brick_icons.db' has no attribute 'start_run'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 def start_run(conn: sqlite3.Connection, kind: str, args: dict,
@@ -341,12 +341,12 @@ def finish_run(conn: sqlite3.Connection, run_id: int,
     conn.commit()
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `.venv/bin/pytest tests/test_db.py -q`
 Expected: PASS, 6 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add brick_icons/db.py tests/test_db.py
@@ -363,7 +363,7 @@ git commit -m "record a run and the arguments it was given"
 
 The rows are exactly what `scripts/compare-silhouette-truth.py` appends: a measured row carries `missing`/`extra` component lists and `extra_dist_px`, a failed row carries `error` and `detail` and neither.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 MEASURED = {
@@ -406,12 +406,12 @@ def test_reimporting_the_same_run_replaces_rather_than_duplicates(tmp_path):
     assert conn.execute("SELECT count(*) FROM measurements").fetchone()[0] == 1
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_db.py -q`
 Expected: FAIL — `AttributeError: module 'brick_icons.db' has no attribute 'import_census_jsonl'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 def import_census_jsonl(conn: sqlite3.Connection, run_id: int,
@@ -435,12 +435,12 @@ def import_census_jsonl(conn: sqlite3.Connection, run_id: int,
     return len(rows)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `.venv/bin/pytest tests/test_db.py -q`
 Expected: PASS, 8 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add brick_icons/db.py tests/test_db.py
@@ -457,7 +457,7 @@ git commit -m "import a census shard's JSONL as measurement rows"
 
 `config_key` comes from `lab.cache.key`, so a render the lab made and one the census made land on the same row instead of two.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 SVG = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180">'
@@ -500,12 +500,12 @@ def test_an_unknown_source_is_refused(tmp_path):
 
 Add `from brick_icons import db, goldens` to the test file's imports.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_db.py -q`
 Expected: FAIL — `AttributeError: module 'brick_icons.db' has no attribute 'record_render'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 from brick_icons import goldens
@@ -551,12 +551,12 @@ def record_render(conn: sqlite3.Connection, part_id: str, source: str,
     return key
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `.venv/bin/pytest tests/test_db.py -q`
 Expected: PASS, 11 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add brick_icons/db.py tests/test_db.py
@@ -573,7 +573,7 @@ git commit -m "record a render's file, hash and extent"
 
 `lab.defects` already reads and writes the TOML in a fixed field order. Import maps its records into rows and export hands them back to `defects.save`, so the file's format has exactly one owner.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 DEFECT = {
@@ -606,12 +606,12 @@ def test_defects_round_trip_through_the_database(tmp_path):
     assert defects_toml.load(out) == [DEFECT]
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_db.py -q`
 Expected: FAIL — `AttributeError: module 'brick_icons.db' has no attribute 'import_defects'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```python
 from brick_icons.lab import defects as defects_toml
@@ -652,12 +652,12 @@ def export_defects(conn: sqlite3.Connection, path: Path | str) -> int:
     return len(records)
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `.venv/bin/pytest tests/test_db.py -q`
 Expected: PASS, 12 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add brick_icons/db.py tests/test_db.py
@@ -677,7 +677,7 @@ Both are hand-authored, so both are exported to one git-tracked file,
 `tests/goldens/part-status.toml`, carrying a `[[part]]` array and a `[[note]]`
 array.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 def test_setting_a_status_and_adding_notes(tmp_path):
@@ -727,12 +727,12 @@ def test_a_part_left_unreviewed_is_not_written_out(tmp_path):
     assert "[[part]]" not in path.read_text()
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_db.py -q`
 Expected: FAIL — `AttributeError: module 'brick_icons.db' has no attribute 'set_status'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Both TOML files must quote and escape identically, so rename
 `lab/defects.py`'s `_dump_value` to `dump_value` and update its three uses in
@@ -828,12 +828,12 @@ def import_statuses(conn: sqlite3.Connection, path: Path | str) -> int:
 Move `import tomllib` to the module's imports rather than leaving it inside the
 function.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `.venv/bin/pytest tests/test_db.py -q`
 Expected: PASS, 16 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add brick_icons/db.py brick_icons/lab/defects.py tests/test_db.py
@@ -849,7 +849,7 @@ git commit -m "track a part's status and notes, exported as TOML"
 - Modify: `.gitignore`
 - Test: `tests/test_db.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 The script's work belongs in `db.rebuild` so it can be tested without a
 subprocess; the script is then argument parsing and progress lines.
@@ -884,12 +884,12 @@ def test_rebuild_starts_from_empty_each_time(tmp_path):
     assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 1
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_db.py -q`
 Expected: FAIL — `AttributeError: module 'brick_icons.db' has no attribute 'rebuild'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `brick_icons/db.py`. A rebuild deletes the old file rather than merging into
 it, so a row that no longer has a file behind it cannot survive.
@@ -984,12 +984,12 @@ Add to `.gitignore`:
 corpus.db
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `.venv/bin/pytest tests/test_db.py -q`
 Expected: PASS, 18 passed
 
-- [ ] **Step 5: Run it against the real corpus**
+- [x] **Step 5: Run it against the real corpus**
 
 Run: `.venv/bin/python scripts/build-corpus-db.py`
 Expected: a progress line per shard, then a summary naming ~24,591 parts and
@@ -1005,7 +1005,7 @@ print(c.execute('SELECT engine, count(*) FROM measurements GROUP BY engine').fet
 "
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add brick_icons/db.py scripts/build-corpus-db.py tests/test_db.py .gitignore
