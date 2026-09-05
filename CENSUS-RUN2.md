@@ -18,7 +18,7 @@ the truth mask, and unlinks it. The `--keep DIR` flag exists to save them and ne
 |---|---|---|
 | job | `62bb81bd` | `0ac8d710` |
 | engine | occt | naive |
-| deadline | ~18:40 | 23:40 |
+| deadline | ~23:28 | ~23:39 |
 | scope | remaining ~2,519 of 8,235 (`--skip-done` skips what run 1 measured) | all 6,626 non-degenerate parts, fresh JSONLs |
 | renders | only the parts it newly reaches | every part it runs |
 | collected into | `out/census` | `out/census-naive` |
@@ -213,8 +213,8 @@ Two costs came out of it (c4834f0, 2fcde17), both byte-identical across 36 parts
 intersection, difference and `union_all` — which is real geometric work, not overhead.
 
 **Job `62bb81bd` predates the fix**, so every row it writes carries the old cost. At its sustained
-5.3 parts/min it reaches ~89% of 8,235 by the ~18:40 deadline; at the measured 2x the remaining
-work would fit inside it. Restarting was not done — it would discard the in-flight shards, and the
+5.3 parts/min it reached 89% of 8,235 with five hours still on its ~23:28 deadline, so it finishes
+its shards well inside it. Restarting was not done — it would discard the in-flight shards, and the
 2.12x is a 14-part estimate from the laptop rather than from studio.
 
 ## The census runs the most expensive mode of the four
