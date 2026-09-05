@@ -3499,6 +3499,89 @@ git commit -m "colour a cell by what is known about it"
 
 ---
 
+### Task 21: Put the wall in its own labkit shell
+
+The corpus wall gets labkit's **UI** — the shell, the theme, the loupe, the
+panel primitives — and none of its **ontology**. It is its own lab, not an
+instrument inside the existing one.
+
+**Use:** `LabShell` (exported from `@weasel-js/labkit` independently of `Lab`),
+the interstellar theme and its `--wzl-*` tokens, the loupe, and labkit's panel
+primitives.
+
+**Do not use:** `Lab`, `defineInstrument`, trials, snapshots, the job model, or
+the CLI-derived config schema. The wall's Slot/Sort/Show are view state, not
+render parameters, and they stay the wall's own controls — rendered in the
+shell's header rather than a generated config panel.
+
+Nothing in `lab/src/corpus/` may import from `lab/src/instruments/` or
+`lab/src/panes/`; that rule does not change.
+
+**Files:**
+- Modify: `lab/src/corpus/main.tsx` (mount the shell around `<CorpusWall/>`)
+- Modify: `lab/src/corpus/CorpusWall.tsx`, `corpus.css`, `FilterBar.css`,
+  `PartCard.css`, `Lightbox.css`, `Wall.css`
+- Modify: `lab/src/corpus/paint.ts`, `paint.test.ts`
+- Create: `lab/src/corpus/palette.ts`, `palette.test.ts`
+
+- [ ] **Step 1: Read the theme's colours instead of hardcoding them**
+
+The six cell colours are **canvas fills**, so CSS cannot style them — they have
+to be read at paint time or the wall keeps its own palette while everything
+around it follows the theme.
+
+Create `palette.ts`: a `readPalette(el: Element)` that pulls each cell state's
+colour from a CSS custom property via `getComputedStyle`, with the current hex
+values as fallbacks so a missing token degrades rather than paints nothing.
+Declare the properties in `corpus.css` against the `--wzl-*` tokens where one
+fits, and as literal values where none does.
+
+Test it against a stubbed `getComputedStyle`: each state resolves from its
+property, and a missing property falls back rather than yielding `""`.
+
+Then have `paint.ts` take the palette as input rather than owning `CELL_FILL`,
+and `Wall.tsx` read it once per theme change rather than per frame.
+
+- [ ] **Step 2: Mount `LabShell` in `main.tsx`**
+
+Read `LabShellProps` and `lab/src/App.tsx` for how the existing app parameterises
+the shell — then take only the shell. The wall is full-bleed: it wants the whole
+viewport under the header, so whatever the shell offers for a maximised content
+region is what it uses.
+
+Put `<FilterBar/>` in the shell's header slot beside the title, where
+`PartSearch` sits in the existing lab.
+
+- [ ] **Step 3: Restyle against the theme**
+
+Replace the hardcoded colours in `corpus.css`, `FilterBar.css`, `PartCard.css`,
+`Lightbox.css` and `Wall.css` with `--wzl-*` tokens. The lightbox's `#131316`
+and the card's background are the obvious ones. No inline `style`, no
+`!important` — the standing rules still hold.
+
+- [ ] **Step 4: Add the loupe**
+
+A wall of 5px cells is the case the loupe exists for: magnify a region without
+disturbing the camera. Wire labkit's loupe over the canvas. Read
+`lab/src/panes/useLoupe.ts` for how the existing lab drives it — **read it, do
+not import it**; that file belongs to the lab.
+
+- [ ] **Step 5: Run, look, commit**
+
+`npx vitest run src/corpus` and `npx tsc -b --noEmit` clean.
+
+Then look at it in both themes — that is the point of this task. Confirm the
+cell colours change with the theme rather than staying fixed, the card and
+lightbox follow it, and the loupe magnifies without moving the camera.
+Screenshot both themes and the loupe, and slop them.
+
+```bash
+git add lab/src/corpus
+git commit -m "give the corpus wall its own labkit shell, theme and loupe"
+```
+
+---
+
 ### Task 19: The full gate
 
 Only now, and only once.
