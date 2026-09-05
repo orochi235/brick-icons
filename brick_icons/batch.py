@@ -50,6 +50,8 @@ class Runner:
             if crashed:
                 self.write({self.key: crashed, "error": "ProcessDied",
                             "detail": "killed mid-render; not retried"})
+                print(f"recorded {crashed} as ProcessDied and skipping it",
+                      flush=True)
             self.inflight.unlink()
         if not self.log.exists():
             return list(items)

@@ -30,7 +30,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import signal
 import subprocess
 import sys
 import tempfile
@@ -45,6 +44,7 @@ from scipy import ndimage
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from brick_icons import cli, hlr
+from brick_icons.batch import Runner
 
 
 def truth_mask(part: str, ldraw_dir: Path, fit: dict, zoom: int) -> np.ndarray:
@@ -125,30 +125,17 @@ def one(part: str, args, tmp: Path) -> dict:
             "extra": components(extra, args.zoom, args.floor)}
 
 
-_ARMED = None
-
-
-def _on_alarm(signum, frame):
-    """Installed once and never removed: SIGALRM's default action is to KILL,
-    so a timer that expires in the microseconds before the itimer is disarmed
-    takes the whole run down silently. Ignoring a disarmed alarm is the fix."""
-    if _ARMED:
-        raise TimeoutError(f"exceeded {_ARMED}s")
-
-
-def run_guarded(part: str, args, tmp: Path) -> dict:
-    """`one()` under a wall-clock cap. Best effort: the alarm lands between
-    Python bytecodes, so a part stuck inside a C call runs past it."""
-    global _ARMED
-    if not args.timeout:
-        return one(part, args, tmp)
-    _ARMED = args.timeout
-    signal.setitimer(signal.ITIMER_REAL, args.timeout)
+def _bare(part: str, work, args) -> dict:
+    """The same row a Runner would build, for a run with no --jsonl behind it."""
+    t0 = time.time()
     try:
-        return one(part, args, tmp)
-    finally:
-        signal.setitimer(signal.ITIMER_REAL, 0)
-        _ARMED = None
+        r = work(part)
+    except BaseException as exc:  # a part must not end the run
+        r = {"part": part, "engine": args.engine, "angle": args.angle,
+             "error": type(exc).__name__, "detail": str(exc)[:300],
+             "traceback": traceback.format_exc()[-1200:]}
+    r["secs"] = round(time.time() - t0, 1)
+    return r
 
 
 def main() -> int:
@@ -178,45 +165,25 @@ def main() -> int:
     if not ids:
         ap.error("name at least one part, or pass --list")
 
-    jsonl = Path(args.jsonl) if args.jsonl else None
-    if jsonl and args.skip_done and jsonl.exists():
-        done = {json.loads(ln)["part"] for ln in jsonl.read_text().splitlines() if ln.strip()}
-        ids = [i for i in ids if i not in done]
-        print(f"resuming: {len(done)} done, {len(ids)} left", flush=True)
-
-    if args.timeout:
-        signal.signal(signal.SIGALRM, _on_alarm)
+    runner = Runner(args.jsonl, timeout=args.timeout, key="part",
+                    extra={"engine": args.engine, "angle": args.angle}) \
+        if args.jsonl else None
+    if runner and args.skip_done:
+        before = len(ids)
+        ids = runner.remaining(ids)
+        print(f"resuming: {before - len(ids)} done, {len(ids)} left", flush=True)
 
     keep = Path(args.keep) if args.keep else None
     if keep:
         (keep / args.engine).mkdir(parents=True, exist_ok=True)
 
-    inflight = Path(f"{args.jsonl}.inflight") if jsonl else None
-    if inflight and inflight.exists():
-        pid = inflight.read_text().strip()
-        if pid:
-            with jsonl.open("a") as fh:
-                fh.write(json.dumps({"part": pid, "engine": args.engine,
-                                     "angle": args.angle, "error": "ProcessDied",
-                                     "detail": "killed mid-render; not retried"}) + "\n")
-            print(f"recorded {pid} as ProcessDied and skipping it", flush=True)
-            ids = [i for i in ids if i != pid]
-        inflight.unlink()
-
     rows = []
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         for n, pid in enumerate(ids, 1):
-            t0 = time.time()
-            if inflight:
-                inflight.write_text(pid)
-            try:
-                r = run_guarded(pid, args, tmp)
-            except BaseException as exc:  # a part must not end the run
-                r = {"part": pid, "engine": args.engine, "angle": args.angle,
-                     "error": type(exc).__name__, "detail": str(exc)[:300],
-                     "traceback": traceback.format_exc()[-1200:]}
-            r["secs"] = round(time.time() - t0, 1)
+            def work(part, tmp=tmp):
+                return one(part, args, tmp)
+            r = runner.run(pid, work) if runner else _bare(pid, work, args)
             rows.append(r)
             if "error" in r:
                 print(f"{n}/{len(ids)} {pid} {args.engine}@{args.angle}: "
@@ -229,9 +196,6 @@ def main() -> int:
                       f"(99th {r['extra_dist_px'].get('99', 0)}px, "
                       f"max {r['extra_dist_px'].get('100', 0)}px) "
                       f"[{r['secs']}s]", flush=True)
-            if jsonl:
-                with jsonl.open("a") as fh:
-                    fh.write(json.dumps(r) + "\n")
             # Every render, not only the flagged ones. A flag is not a defect
             # -- `18742` measures 7.12px of stray ink under occt and 0.52px
             # under naive, because occt draws the exact circle the truth mask
@@ -244,8 +208,6 @@ def main() -> int:
                         src.rename(keep / args.engine / f"{pid}{suffix}")
             for f in tmp.glob(f"{pid}.*"):
                 f.unlink(missing_ok=True)
-            if inflight:
-                inflight.unlink(missing_ok=True)
     if args.out:
         Path(args.out).write_text(json.dumps(rows, indent=1))
         print(f"wrote {args.out}")
