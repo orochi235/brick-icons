@@ -31,33 +31,104 @@ machine will not carry. A `--only <case>` loop over the 52 ids finished every
 time, and prints per-case timings worth keeping (`outline-flat3__3649` 330s,
 `4740p03` 114s, `outline__3649` 230s; everything else under 25s).
 
-## In flight: the library-scale silhouette census (started 2026-09-04 01:22)
+## Next: render performance
 
-Eight detached shards (4 naive, 4 occt) are running
+Agreed in conversation, nothing written down elsewhere. A lab render is slow
+enough to be the thing that limits working in it, and the census measured why:
+a naive render's median is 12s, its 90th percentile 76s, its worst 695s; occt's
+median is 22s. Three things to do, in order:
+
+1. **Run renders in a `ProcessPoolExecutor`, not threads.** `lab/runner.py`
+   calls `cli.process_one` in the API server's own process, on a daemon thread
+   per job, so two renders take turns on the GIL and both hold up the server
+   that is also serving artifacts.
+2. **Cancel a superseded render.** Change the config again and the old render
+   runs to completion, and its result is thrown away.
+3. **Serve a known part from `renders/` once the store exists**, so opening one
+   is a file read.
+
+**Stop the census before measuring any of this** — `pkill -f
+compare-silhouette` — or you are timing eight of your own render processes
+fighting for eight performance cores.
+
+## In flight: the library-scale silhouette census
+
+Eight detached shards (4 naive, 4 occt) run
 `scripts/compare-silhouette-truth.py` over `out/census/parts.txt` — 8,235
 unprinted library parts, the corpus the 21-part `unprinted` list samples.
 `scripts/run-census.sh` starts or resumes it; every shard streams JSONL and
-skips what it already has, so re-running costs nothing and a kill loses one
-part. Read it with `scripts/census-report.py`.
+skips what it already has. Read progress with `scripts/census-report.py`,
+which prints coverage per engine and ranks the worst parts.
 
 What it is for: the oracle needs no golden and no eye, so it answers at
 library scale the two questions 21 parts cannot — which parts either engine
 omits real geometry from, and how far `occt`'s silhouette sits from the part's
-own polygons, which is the open blocker on making it the default.
+own polygons, which is the open blocker on making it the default. On the parts
+both engines have measured, **naive omits real geometry more often than occt**
+(roughly 11% against 5%), though occt's failures are far larger when they land.
 
-**`occt` segfaults on some parts, and it killed three shards the first
-night.** All three crash reports are the same frame — `SIGSEGV` in
+**occt segfaults on some parts, and it has killed its shards three times.**
+The crash reports are all one frame — `SIGSEGV` in
 `ShapeUpgrade_UnifySameDomain::IntUnifyFaces`, OCCT's own C++ — and `92738`
-(`--engine occt`) reproduces it on demand, exit 139. A native crash writes no
-row, so a resume used to retry the killer part and die again; each shard now
-names the part it is rendering in `<jsonl>.inflight` and records it as
-`ProcessDied` on the way back in. `UnifySameDomain` is the same pass the
-corpus review reached for when collinear seg loci needed merging.
+under `--engine occt` reproduces it on demand, exit 139. Four parts are known
+to do it: `92738`, `u9236c03`, `76110p01`, `u9105p01c04`. A native crash writes
+no row, so each shard now names the part it is rendering in `<jsonl>.inflight`
+and records it as `ProcessDied` on the way back in — which means **a shard that
+died before that machinery existed needs one restart to get past its killer,
+and a second run to make progress.** That is what happened tonight.
 
-**The per-part cap is 120s and about a fifth of the library hits it.** A
-`TimeoutError` row is a rendering-cost finding, not a defect; the curated
-corpus is unrepresentatively fast (25 random parts averaged 40s against the
-corpus's ~5s).
+**The per-part cap is 120s and about a fifth of the library hits it**, burning
+roughly 40% of the CPU on parts that record nothing but "too slow". A
+`TimeoutError` row is a rendering-cost finding, not a defect. The cap also
+leaks: SIGALRM only lands between Python bytecodes, so a part stuck inside
+OCCT ran 695s against it.
+
+## The corpus database
+
+`docs/superpowers/specs/2026-09-04-corpus-database-design.md` is the design and
+`docs/superpowers/plans/2026-09-04-corpus-database.md` the plan. **Part 1 is
+built and its tasks are checked off**: `brick_icons/db.py` holds the schema and
+every accessor, `scripts/build-corpus-db.py` rebuilds `corpus.db` from files,
+and `tests/test_db.py` covers it. Parts 2, 3 and 4 — the render job that fills
+`renders/`, the lab's findings view, and the regression gate — are unwritten,
+each its own plan.
+
+The decision that shaped it, argued in conversation: **a render is the most
+expensive artifact this project makes, so `renders/<source>/<part>.svg` is
+tracked in git and the database is derived from it.** Not the other way round.
+Store the SVG plain rather than gzipped — git's own zlib and delta compression
+are what make a re-rendered part nearly free, and a pre-compressed blob defeats
+both. `corpus.db` is gitignored and rebuilt by walking `renders/` and the TOML.
+
+
+## Lab decisions from 2026-09-04, none of them in the code
+
+**The three layout buttons name windease's own strategies.** windease
+(`~/src/windease`, its own repo, reaching the lab as a labkit dependency) ships
+`grid`, `split`, `stack`, `strip` and `floating`. The lab reimplements three of
+them as CSS classes in `lab/src/app.css`, which is how `grid` came to lay four
+panes out in a row of four — windease's grid auto-balances. The `:has()` column
+counting there now is a stopgap standing in for that; the panes should become a
+windease zone.
+
+**A key that temporarily arms a toggle gets its own half-pressed state**, not
+the on state — `.pose.is-armed` against `.pose.is-on`. A clicked toggle stays
+until clicked again; a key-armed one returns on release, and drawing them alike
+makes the button look stuck. Alt on the loupe is the first case; write the next
+one the same way.
+
+**Two asks are blocked on the same missing seam.** labkit's `StringNode` offers
+`placeholder`, `maxLength` and `debounce` and nothing else, and its node tree
+has no read-only text leaf. So committing the part field on Enter, and showing
+the selected part's name inside the settings panel, both need the lab's first
+custom control (`f.custom` + `controls`). Worth building once. The part field
+is throttled with `.debounce(400)` meanwhile, and the trial titlebar already
+reads `3001 - Brick 2 x 4`.
+
+**labkit is pinned to the released `@weasel-js/labkit@^1.4.0`.** One labkit
+commit landed after that tag — `a2c5318c`, bundling declarations from built
+types rather than source — so if a labkit type ever resolves oddly, that is
+why and 1.4.1 is the fix.
 
 ## Read first: there are two threads now
 
