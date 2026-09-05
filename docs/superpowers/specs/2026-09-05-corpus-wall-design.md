@@ -133,6 +133,29 @@ rebakes. The strategy returns rects rather than a row and column, so the grouped
 layout — category blocks separated by whitespace, labels fading in by zoom — is
 a second strategy rather than a rewrite of the wall.
 
+## What a cell's colour says
+
+A cell with no thumbnail is not blank space — it is most of the wall, and its
+colour is the only thing it can say. Four states, in this precedence:
+
+| state | colour | source |
+|---|---|---|
+| an open defect is filed against it | bright ochre `#c8860d` | `defects` |
+| it cannot be drawn — GEOS, a dead process, a type error | red `#8c2020` | `measurements.error` |
+| the render timed out | dim rust `#5a3326` | `measurements.error` |
+| nothing is known | gray `#3a3a3f` | absence |
+
+**A timeout is not a defect.** 1,420 of the 1,428 recorded errors are
+`TimeoutError` — the render did not finish, not that the part cannot be drawn.
+The eight that genuinely failed would be invisible among them under one colour,
+which is the whole reason these are two states rather than one.
+
+**An open defect outranks a failure**, because it is the newer fact and the one
+someone acted on. It also applies to cells that *are* drawn: a thumbnail is an
+opaque tile, so a background colour would sit behind it unseen, and the cell
+gets an ochre ring instead. Defects get filed against parts that render, so
+those have to be findable too.
+
 ## Selection opens a lightbox
 
 Full screen: the render large, every engine's measurement for that part, its
