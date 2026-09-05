@@ -13,3 +13,5 @@ vendor/
 .superpowers/
 CLAUDE.local.md
 corpus.db
+corpus.db-shm
+corpus.db-wal

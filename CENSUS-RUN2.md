@@ -117,6 +117,39 @@ with part size: a part under 2s is mostly fixed overhead, by 10s render is ~90%,
 96-98%. So making the census cheaper means the hidden-line pass and nothing else — `truth_mask`'s
 pure-Python scanline fill looks alarming and costs 3%.
 
+## Half of occt's render was a Python idiom
+
+`analytic_creases` and `_group_planes` walked every edge of the sewn shape as
+`list(amap.FindFromIndex(i))`. Exhausting a pybind11 iterator over an OCP collection raises
+`StopIteration` from a thrown C++ exception, and unwinding it through OCP's library costs ~3ms per
+call however few shapes the collection holds — 478 edges on 3941 cost 1.76s in each function. Fixed
+in c770700 with `Size()`/`First()`/`Last()`; SVG is byte-identical on eight specimens.
+
+`scripts/census-engine-bench.py` splits the render phase into the hidden-line call and the shading,
+fill and SVG emit that follow it, over 14 occt parts sampled across run 1's duration bands. Data in
+`docs/census-timings/occt-render-{d487865,c770700}.jsonl`:
+
+| | before (d487865) | after (c770700) |
+|---|---|---|
+| render | 291.4s | 137.6s |
+| geometry | 193.0s (66%) | 42.8s (31%) |
+| the rest | 98.4s | 94.8s |
+
+**2.12x on the census's own workload**, median 2.79x per part, range 1.21-11.82x. The gain scales
+with edge count, so it is largest on cheap parts (6521: 1.78s → 0.15s) and smallest on the ones
+nearest the 120s cap, which is the wrong way round. Note "the rest" holding still across the two
+revisions — that is the instrumentation checking itself.
+
+**The next occt win is not in OCCT.** Geometry is now 31% of the render, and 10-13% on 0901 and
+0902, the two slowest parts sampled; their ~20s each is `shade.order_faces` and `fill_ops`, which
+every engine shares. Driving geometry to zero from here would reach 3.0x against the pre-fix
+baseline and stop.
+
+**Job `62bb81bd` predates the fix**, so every row it writes carries the old cost. At its sustained
+5.3 parts/min it reaches ~89% of 8,235 by the ~18:40 deadline; at the measured 2x the remaining
+work would fit inside it. Restarting was not done — it would discard the in-flight shards, and the
+2.12x is a 14-part estimate from the laptop rather than from studio.
+
 ## The census runs the most expensive mode of the four
 
 `scripts/census-mode-sweep.py` timed 10 parts through every mode that can emit SVG, same parts each
