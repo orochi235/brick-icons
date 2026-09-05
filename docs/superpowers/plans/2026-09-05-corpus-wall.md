@@ -1127,6 +1127,19 @@ Expected: FAIL — `TypeError: create_app() got an unexpected keyword argument '
 
 - [ ] **Step 3: Implement**
 
+The cell list is ~6.5MB of JSON for the whole corpus, so the app gzips. Add the
+import and one line inside `create_app`, right after the `FastAPI(...)` call:
+
+```python
+from fastapi.middleware.gzip import GZipMiddleware
+```
+
+```python
+    # 24,591 cells is ~6.5MB of JSON and highly repetitive; gzip takes it under
+    # a megabyte for the cost of one line.
+    app.add_middleware(GZipMiddleware, minimum_size=1024)
+```
+
 In `brick_icons/lab/app.py`, extend the import line and the signature:
 
 ```python
