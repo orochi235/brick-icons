@@ -337,3 +337,36 @@ def test_opening_a_half_created_database_is_not_a_crash(tmp_path):
     assert db.connect(path).execute(
         "SELECT value FROM meta WHERE key='schema_version'").fetchone()[0] \
         == str(db.SCHEMA_VERSION)
+
+
+def test_the_census_renders_are_their_own_sources(tmp_path):
+    """The census draws strokeless -- fills carry the silhouette -- so its
+    renders are not the drawing canonical_argv names and cannot share its
+    config_key. One source per engine, because the census writes
+    out/census/renders/<engine>/<part>.svg and the path has no room for both."""
+    for source, engine in (("census-naive", "naive"), ("census-occt", "occt")):
+        argv = db.canonical_argv("3001", source)
+        assert argv[argv.index("--engine") + 1] == engine
+        assert argv[argv.index("--line-width") + 1] == "0"
+        assert argv[argv.index("--silhouette-width") + 1] == "0"
+        assert "--out" not in argv, "a temp path would poison the config key"
+    assert db.canonical_argv("3001", "census-naive") != \
+        db.canonical_argv("3001", "naive")
+
+
+def test_a_rebuild_indexes_the_census_renders_too(tmp_path):
+    conn_path = tmp_path / "corpus.db"
+    lib = _library(tmp_path)
+    for engine in ("naive", "occt"):
+        d = tmp_path / "out" / "census" / "renders" / engine
+        d.mkdir(parents=True)
+        (d / "3001.svg").write_text(SVG)
+    counts = db.rebuild(conn_path, lib, root=tmp_path,
+                        census_dir=tmp_path / "out" / "census")
+    conn = db.connect(conn_path)
+    sources = {r["source"] for r in conn.execute("SELECT source FROM renders")}
+    assert sources == {"census-naive", "census-occt"}
+    assert counts["renders"] == 2
+    paths = {r["path"] for r in conn.execute("SELECT path FROM renders")}
+    assert paths == {"out/census/renders/naive/3001.svg",
+                     "out/census/renders/occt/3001.svg"}

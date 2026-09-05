@@ -19,7 +19,8 @@ from brick_icons.lab import defects as defects_toml
 DEFAULT_PATH = Path("corpus.db")
 SCHEMA_VERSION = 1
 PART_STATUSES = ("unreviewed", "good", "suspect", "broken", "wontfix")
-SOURCES = ("naive", "occt", "decal", "ldview")
+SOURCES = ("naive", "occt", "decal", "ldview",
+           "census-naive", "census-occt")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
@@ -191,6 +192,18 @@ _CANONICAL = {
              "--shade-style", "flat3", "--angle", "iso", "--format", "svg"],
     "decal": ["--decal", "--angle", "iso", "--format", "svg"],
     "ldview": ["--ldview", "--angle", "iso"],
+    # The census's oracle drawing, not the store's: strokeless, so the fills
+    # carry the silhouette and no stroke overhang has to be subtracted from
+    # the comparison. One source per engine because the census writes
+    # out/census/renders/<engine>/<part>.svg and the path holds only one.
+    "census-naive": ["--format", "svg", "--shading", "outline",
+                     "--shade-style", "flat3", "--angle", "iso",
+                     "--engine", "naive", "--line-width", "0",
+                     "--silhouette-width", "0"],
+    "census-occt": ["--format", "svg", "--shading", "outline",
+                    "--shade-style", "flat3", "--angle", "iso",
+                    "--engine", "occt", "--line-width", "0",
+                    "--silhouette-width", "0"],
 }
 
 
@@ -371,6 +384,16 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
         record_render(conn, svg.stem, svg.parent.name, svg, root=root)
         counts["renders"] += 1
         progress(f"render {counts['renders']}: {svg.parent.name}/{svg.stem}")
+
+    # The census's renders stay out of git but are indexed all the same, under
+    # their own source so they cannot be mistaken for the store's drawing.
+    for svg in sorted(Path(census_dir).glob("renders/*/*.svg")):
+        source = f"census-{svg.parent.name}"
+        if source not in SOURCES:
+            continue
+        record_render(conn, svg.stem, source, svg, root=root)
+        counts["renders"] += 1
+        progress(f"render {counts['renders']}: {source}/{svg.stem}")
 
     shards = sorted(Path(census_dir).glob("*.jsonl"))
     if shards:
