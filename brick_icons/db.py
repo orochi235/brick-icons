@@ -330,3 +330,41 @@ def import_statuses(conn: sqlite3.Connection, path: Path | str) -> int:
          for n in data.get("note", [])])
     conn.commit()
     return len(parts)
+
+
+DEFAULT_STATUS_PATH = Path("tests/goldens/part-status.toml")
+
+
+def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
+            census_dir: Path | str = "out/census",
+            defects_path: Path | str = defects_toml.DEFAULT_PATH,
+            status_path: Path | str = DEFAULT_STATUS_PATH,
+            commit_sha: str = "unknown",
+            progress=lambda msg: None) -> dict[str, int]:
+    path = Path(path)
+    path.unlink(missing_ok=True)
+    conn = connect(path)
+    counts = {"parts": seed_parts(conn, ldraw_dir), "renders": 0,
+              "measurements": 0, "defects": 0, "statuses": 0}
+    progress(f"seeded {counts['parts']} parts")
+
+    root = Path(root)
+    for svg in sorted((root / "renders").rglob("*.svg")):
+        record_render(conn, svg.stem, svg.parent.name, svg, root=root)
+        counts["renders"] += 1
+        progress(f"render {counts['renders']}: {svg.parent.name}/{svg.stem}")
+
+    shards = sorted(Path(census_dir).glob("*.jsonl"))
+    if shards:
+        run_id = start_run(conn, "census", {"shards": len(shards)}, commit_sha)
+        for shard in shards:
+            n = import_census_jsonl(conn, run_id, shard)
+            counts["measurements"] += n
+            progress(f"{shard.name}: {n} measurements")
+        finish_run(conn, run_id, note=f"rebuilt from {len(shards)} shards")
+
+    counts["defects"] = import_defects(conn, defects_path)
+    counts["statuses"] = import_statuses(conn, status_path)
+    progress(f"{counts['defects']} defects, {counts['statuses']} statuses")
+    conn.close()
+    return counts

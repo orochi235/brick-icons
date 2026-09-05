@@ -233,3 +233,34 @@ def test_a_part_left_unreviewed_is_not_written_out(tmp_path):
     path = tmp_path / "part-status.toml"
     assert db.export_statuses(conn, path) == 0
     assert "[[part]]" not in path.read_text()
+
+
+def test_rebuild_walks_renders_and_toml_and_jsonl(tmp_path):
+    library = _library(tmp_path)
+    svg = tmp_path / "renders" / "naive" / "3001.svg"
+    svg.parent.mkdir(parents=True)
+    svg.write_text(SVG)
+    (tmp_path / "census").mkdir()
+    (tmp_path / "census" / "naive-s0.jsonl").write_text(json.dumps(MEASURED) + "\n")
+
+    counts = db.rebuild(tmp_path / "corpus.db", ldraw_dir=library,
+                        root=tmp_path, census_dir=tmp_path / "census",
+                        commit_sha="abc1234")
+    assert counts == {"parts": 4, "renders": 1, "measurements": 1,
+                      "defects": 0, "statuses": 0}
+
+    conn = db.connect(tmp_path / "corpus.db")
+    assert conn.execute("SELECT path FROM renders").fetchone()[0] == \
+        "renders/naive/3001.svg"
+
+
+def test_rebuild_starts_from_empty_each_time(tmp_path):
+    library = _library(tmp_path)
+    (tmp_path / "census").mkdir()
+    (tmp_path / "census" / "naive-s0.jsonl").write_text(json.dumps(MEASURED) + "\n")
+    for _ in range(2):
+        db.rebuild(tmp_path / "corpus.db", ldraw_dir=library, root=tmp_path,
+                   census_dir=tmp_path / "census", commit_sha="abc1234")
+    conn = db.connect(tmp_path / "corpus.db")
+    assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 1
+    assert conn.execute("SELECT count(*) FROM measurements").fetchone()[0] == 1

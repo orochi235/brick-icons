@@ -12,3 +12,4 @@ vendor/
 .playwright-mcp/
 .superpowers/
 CLAUDE.local.md
+corpus.db
