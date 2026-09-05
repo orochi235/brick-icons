@@ -67,9 +67,11 @@ the name: `out/thumbs/128/3001.png`. The bake skips a part whose recorded sha
 matches the one it baked last time, and the client cache-busts with `?v=<first 8
 of sha>`.
 
-Every stored render is `naive` today, so a cell's thumbnail is that part's
-`naive` render and the name is the bare id. If a second engine ever needs to be
-on the wall at once, suffix the name; do not restructure for it now.
+A cell's thumbnail is that part's **`census-naive`** render and the name is the
+bare id. That is the drawing the corpus actually has thousands of; the canonical
+`naive` store holds 49. When the render job fills `naive`, the wall switches
+source. If two sources ever need to be on the wall at once, suffix the name; do
+not restructure for it now.
 
 The two coarse levels ship as **whole-corpus sprite sheets**, one page each:
 `out/thumbs/sheet-8.png` and `sheet-32.png`. 128 px stays loose files — only a
@@ -93,10 +95,14 @@ retrofitted without rebaking.
 
 ## Backfill
 
-`renders` holds 49 naive rows. `out/census-naive/renders/naive/` holds 1,127
-SVGs the census kept. Backfill the first 100 through `db.store_render`, which
-copies each into `renders/naive/` and records it under the canonical config key.
-Skip any id not in `parts`. The count is an argument, not a constant.
+`renders` holds 49 `naive` rows. `out/census-naive/renders/naive/` holds 2,539
+SVGs the census kept, and more land as it runs.
+
+Index them **in place** as source `census-naive`, through `db.record_render` —
+never `db.store_render`. `db.rebuild` already does exactly this for
+`out/census/renders/*/*.svg`, under the comment "the census's renders stay out
+of git but are indexed all the same". Skip any id not in `parts`. The count is
+an argument, not a constant.
 
 ## Layout is a strategy
 
@@ -150,6 +156,14 @@ Shared code moves to `lab/src/api/` or a new `lab/src/shared/` first.
 
 **`renders.path` is the artifact; a thumbnail is derived.** Bake from the file
 in the store, and never let `out/thumbs/` be the only copy of a drawing.
+
+**The census's drawing is not the store's, and must never be filed as one.**
+The oracle renders with `--line-width 0 --silhouette-width 0` so its fills carry
+the silhouette; the store's `naive` render is the ordinary stroked drawing
+`db.canonical_argv` names. Recording one under the other's source files a
+drawing under a key describing a different drawing. `db.py` has `census-naive`
+and `census-occt` for this. It has been tried and reverted twice — `5cbcd4e`,
+and again during this build.
 
 **Never pack a sprite sheet by what is currently rendered.** It is the one
 choice that makes every later render rewrite the whole sheet, and it looks
