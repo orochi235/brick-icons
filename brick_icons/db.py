@@ -134,3 +134,40 @@ def seed_parts(conn: sqlite3.Connection, ldraw_dir: Path | str) -> int:
         rows)
     conn.commit()
     return len(rows)
+
+
+def start_run(conn: sqlite3.Connection, kind: str, args: dict,
+              commit_sha: str) -> int:
+    cur = conn.execute(
+        "INSERT INTO runs (kind, started, commit_sha, args) VALUES (?, ?, ?, ?)",
+        (kind, now(), commit_sha, json.dumps(args, sort_keys=True)))
+    conn.commit()
+    return cur.lastrowid
+
+
+def finish_run(conn: sqlite3.Connection, run_id: int,
+               note: str | None = None) -> None:
+    conn.execute("UPDATE runs SET finished=?, note=? WHERE id=?",
+                 (now(), note, run_id))
+    conn.commit()
+
+
+def import_census_jsonl(conn: sqlite3.Connection, run_id: int,
+                        path: Path | str) -> int:
+    rows = []
+    for line in Path(path).read_text().splitlines():
+        if not line.strip():
+            continue
+        r = json.loads(line)
+        dist = r.get("extra_dist_px") or {}
+        rows.append((run_id, r["part"], r["engine"],
+                     r.get("missing_px"), r.get("extra_px"),
+                     len(r["missing"]) if "missing" in r else None,
+                     dist.get("99"), dist.get("100"),
+                     r.get("secs"), r.get("error"), r.get("detail")))
+    conn.executemany(
+        "INSERT OR REPLACE INTO measurements (run_id, part_id, engine, "
+        "missing_px, extra_px, missing_comps, extra_d99, extra_d100, secs, "
+        "error, detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+    conn.commit()
+    return len(rows)

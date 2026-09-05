@@ -63,3 +63,57 @@ def test_reseeding_keeps_a_status_a_human_set(tmp_path):
     db.seed_parts(conn, library)
     assert conn.execute(
         "SELECT status FROM parts WHERE id='3001'").fetchone()[0] == "broken"
+
+
+def test_a_run_records_its_arguments_and_closes(tmp_path):
+    conn = db.connect(tmp_path / "corpus.db")
+    run_id = db.start_run(conn, "census", {"engine": "naive", "timeout": 120},
+                          commit_sha="abc1234")
+    row = conn.execute("SELECT * FROM runs WHERE id=?", (run_id,)).fetchone()
+    assert row["kind"] == "census"
+    assert json.loads(row["args"])["engine"] == "naive"
+    assert row["started"] and row["finished"] is None
+
+    db.finish_run(conn, run_id, note="8235 parts")
+    row = conn.execute("SELECT * FROM runs WHERE id=?", (run_id,)).fetchone()
+    assert row["finished"] and row["note"] == "8235 parts"
+
+
+MEASURED = {
+    "part": "93064", "engine": "naive", "angle": "iso",
+    "extra_px": 17197, "missing_px": 2595,
+    "extra_dist_px": {"50": 0.4, "90": 1.9, "99": 2.57, "100": 3.09},
+    "missing": [{"px": 459, "x": [96.5, 102.2], "y": [153.2, 155.5]}],
+    "extra": [], "secs": 49.0,
+}
+FAILED = {
+    "part": "92738", "engine": "occt", "angle": "iso",
+    "error": "ProcessDied", "detail": "killed mid-render; not retried",
+    "secs": 0.0,
+}
+
+
+def test_importing_a_census_jsonl(tmp_path):
+    conn = db.connect(tmp_path / "corpus.db")
+    run_id = db.start_run(conn, "census", {}, commit_sha="abc1234")
+    path = tmp_path / "naive-s0.jsonl"
+    path.write_text(json.dumps(MEASURED) + "\n" + json.dumps(FAILED) + "\n")
+
+    assert db.import_census_jsonl(conn, run_id, path) == 2
+    rows = {r["part_id"]: r for r in conn.execute("SELECT * FROM measurements")}
+    assert rows["93064"]["missing_px"] == 2595
+    assert rows["93064"]["missing_comps"] == 1
+    assert rows["93064"]["extra_d99"] == 2.57
+    assert rows["93064"]["error"] is None
+    assert rows["92738"]["error"] == "ProcessDied"
+    assert rows["92738"]["missing_px"] is None
+
+
+def test_reimporting_the_same_run_replaces_rather_than_duplicates(tmp_path):
+    conn = db.connect(tmp_path / "corpus.db")
+    run_id = db.start_run(conn, "census", {}, commit_sha="abc1234")
+    path = tmp_path / "naive-s0.jsonl"
+    path.write_text(json.dumps(MEASURED) + "\n")
+    db.import_census_jsonl(conn, run_id, path)
+    db.import_census_jsonl(conn, run_id, path)
+    assert conn.execute("SELECT count(*) FROM measurements").fetchone()[0] == 1
