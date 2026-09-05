@@ -109,12 +109,17 @@ both engines have measured, **naive omits real geometry more often than occt**
 **occt segfaults on some parts, and it has killed its shards three times.**
 The crash reports are all one frame — `SIGSEGV` in
 `ShapeUpgrade_UnifySameDomain::IntUnifyFaces`, OCCT's own C++ — and `92738`
-under `--engine occt` reproduces it on demand, exit 139. Four parts are known
-to do it: `92738`, `u9236c03`, `76110p01`, `u9105p01c04`. A native crash writes
+under `--engine occt` reproduces it on demand, exit 139. Five parts are known
+to do it: `92738`, `u9236c03`, `76110p01`, `u9105p01c04`, `47326p01`. A native crash writes
 no row, so each shard now names the part it is rendering in `<jsonl>.inflight`
 and records it as `ProcessDied` on the way back in — which means **a shard that
-died before that machinery existed needs one restart to get past its killer,
-and a second run to make progress.** That is what happened tonight.
+dies needs one restart to get past its killer, and a second run to make
+progress.**
+
+`scripts/census-supervise.sh` does that restarting, and is what to start for
+an unattended run — `run-census.sh` launches the shards but does not watch
+them, so one crash costs that shard the rest of the night. The supervisor
+resumes each shard until it reports done.
 
 **The census's renders are NOT the store's renders, and they cannot be
 promoted into it.** `--keep` saves what the oracle drew, and the oracle draws
