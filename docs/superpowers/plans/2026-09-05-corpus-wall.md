@@ -3583,6 +3583,16 @@ ladder. They move into their own module rather than being deleted with the rest.
   `caret.ts` if it exists yet, and their tests
 - Modify: `lab/src/corpus/Wall.css`
 
+**All of it is in the version already installed.** `@weasel-js/core` 1.4.0 is in
+`lab/node_modules` and its `.d.ts` exports every symbol above. Nothing needs
+releasing, upgrading, or asking for.
+
+The one real gap is packaging: `lab/package.json` depends on `@weasel-js/labkit`
+only, so core is present transitively and invisible to anyone reading the
+manifest. **Add `@weasel-js/core` as a direct dependency at the version already
+resolved** — that omission is the likeliest reason a previous agent hand-rolled
+a camera instead of finding this.
+
 - [ ] **Step 1: Read core's viewport before writing anything**
 
 Read `packages/core/src/core/viewport/` in `~/src/weasel` — at minimum `view.ts`,
@@ -3651,9 +3661,21 @@ The corpus wall gets labkit's **UI** — the shell, the theme, the loupe, the
 panel primitives — and none of its **ontology**. It is its own lab, not an
 instrument inside the existing one.
 
-**Use:** `LabShell` (exported from `@weasel-js/labkit` independently of `Lab`),
-the interstellar theme and its `--wzl-*` tokens, the loupe, and labkit's panel
-primitives.
+**Read `~/src/weasel/docs/handoffs/2026-08-30-labkit-consumer-asks.md` first.**
+This repo already filed five asks against labkit, and one of them is a direct
+warning about the pattern this task reaches for: labkit's README shows
+`<LabShell><Workspace>…</Workspace></LabShell>` as the way to build a lab, and
+following it *inside* a `<Lab>` lays the whole app out as one header item with
+every trial rendered twice, because `<Lab>` owns its own shell.
+
+The wall is standalone and wants no trials, so `LabShell` may well be right here
+— but confirm that against the docs rather than against my say-so, and report
+what you find. If `LabShell` alone turns out not to be a supported way to build a
+non-trial app, say so and stop; that is a finding, not an obstacle to work
+around.
+
+**Use:** the interstellar theme and its `--wzl-*` tokens, the loupe, and
+labkit's panel primitives, with whatever shell the docs actually sanction.
 
 **Do not use:** `Lab`, `defineInstrument`, trials, snapshots, the job model, or
 the CLI-derived config schema. The wall's Slot/Sort/Show are view state, not
