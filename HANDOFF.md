@@ -65,7 +65,7 @@ median is 22s. Three things to do, in order:
 compare-silhouette` — or you are timing eight of your own render processes
 fighting for eight performance cores.
 
-## In flight: the library-scale silhouette census
+## In flight: the library-scale silhouette census, now on `studio`
 
 Eight detached shards (4 naive, 4 occt) run
 `scripts/compare-silhouette-truth.py` over `out/census/parts.txt` — 8,235
@@ -73,6 +73,31 @@ unprinted library parts, the corpus the 21-part `unprinted` list samples.
 `scripts/run-census.sh` starts or resumes it; every shard streams JSONL and
 skips what it already has. Read progress with `scripts/census-report.py`,
 which prints coverage per engine and ranks the worst parts.
+
+**It runs on `studio` now, not here**, in the onto working tree at
+`~/.config/onto/work/brick-icons` — the rows this machine had collected were
+copied there first, so the shards resumed rather than restarted. Bring results
+back with `onto fetch studio:brick-icons/out/census .` and merge; a shard
+writes only its own file, so nothing conflicts.
+
+**Studio reproduces this machine's numbers exactly** — `3001` gives 14590
+extra px on naive and 14584 on occt on both — so its rows merge with the ones
+already collected. That is not free, and two things buy it:
+
+- **`resvg` must be the 0.47.0 the lock pins.** Brew now serves 0.48.1, and
+  resvg's antialiasing *is* the comparison reference, so a node on the wrong
+  one produces plausible numbers that mean something different. Studio has the
+  0.47.0 binary copied over and sha256-verified, at `~/.local/bin/resvg`.
+- **LDraw must be the same snapshot.** `complete.zip` is rolling, so fetching
+  it on a new machine gets a different library. Studio's copy was rsynced from
+  here and verified with the manifest command in `scripts/external-deps.lock`:
+  36603 files, `5f855079…`.
+
+**Two dependencies are missing from `pyproject.toml`.** The census script
+imports `scipy`, which nothing declares, and the `occt` engine needs the
+`cadquery` extra on top of `occt`. A fresh checkout installing `.[occt]` gets
+neither, and fails at the first import. Worth fixing in `pyproject.toml`
+rather than remembering.
 
 What it is for: the oracle needs no golden and no eye, so it answers at
 library scale the two questions 21 parts cannot — which parts either engine
