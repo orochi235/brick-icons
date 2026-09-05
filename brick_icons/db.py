@@ -101,17 +101,24 @@ def connect(path: Path | str = DEFAULT_PATH) -> sqlite3.Connection:
     path = Path(path)
     if path.parent != Path(""):
         path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path)
+    conn = sqlite3.connect(path, timeout=60)
     conn.row_factory = sqlite3.Row
+    # The store job shards across processes. WAL lets them write concurrently
+    # and lets the lab read while they do; the timeout makes a collision a wait
+    # rather than an exception a batch runner would log as a dead part.
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=60000")
     found = conn.execute(
         "SELECT name FROM sqlite_master WHERE type='table' AND name='meta'"
     ).fetchone()
     if found:
-        version = conn.execute(
-            "SELECT value FROM meta WHERE key='schema_version'").fetchone()[0]
-        if int(version) > SCHEMA_VERSION:
+        # A concurrent opener may have created `meta` and not yet stamped it,
+        # so a missing row means "brand new", not "corrupt".
+        row = conn.execute(
+            "SELECT value FROM meta WHERE key='schema_version'").fetchone()
+        if row and int(row[0]) > SCHEMA_VERSION:
             raise RuntimeError(
-                f"{path} is at schema version {version}; this code speaks "
+                f"{path} is at schema version {row[0]}; this code speaks "
                 f"{SCHEMA_VERSION}")
     conn.executescript(_SCHEMA)
     conn.execute("INSERT OR IGNORE INTO meta VALUES ('schema_version', ?)",

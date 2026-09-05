@@ -1,4 +1,5 @@
 import json
+import sqlite3
 
 import pytest
 
@@ -305,3 +306,34 @@ def test_every_svg_source_asks_the_cli_for_an_svg(tmp_path):
     for source in ("naive", "occt", "decal"):
         argv = db.canonical_argv("3001", source)
         assert argv[argv.index("--format") + 1] == "svg"
+
+
+def test_a_second_writer_waits_instead_of_failing(tmp_path):
+    """The store job shards, so several processes write renders at once. A
+    default connection raises 'database is locked' on the second writer, and
+    under a batch runner that becomes an error row the resume then skips."""
+    path = tmp_path / "corpus.db"
+    a = db.connect(path)
+    b = db.connect(path)
+    a.execute("INSERT INTO parts (id, title, printed, obsolete) "
+              "VALUES ('3001', 'Brick', 0, 0)")
+    a.commit()
+    b.execute("INSERT INTO parts (id, title, printed, obsolete) "
+              "VALUES ('3004', 'Brick', 0, 0)")
+    b.commit()
+    assert a.execute("SELECT count(*) FROM parts").fetchone()[0] == 2
+    assert a.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+
+
+def test_opening_a_half_created_database_is_not_a_crash(tmp_path):
+    """Two processes opening a fresh DB race: one creates `meta` and the other
+    reads it before the schema_version row is in it. Reading that row as if it
+    must exist took out five of eight store shards at once."""
+    path = tmp_path / "corpus.db"
+    conn = sqlite3.connect(path)
+    conn.execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)")
+    conn.commit()
+    conn.close()
+    assert db.connect(path).execute(
+        "SELECT value FROM meta WHERE key='schema_version'").fetchone()[0] \
+        == str(db.SCHEMA_VERSION)
