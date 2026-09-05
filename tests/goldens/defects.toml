@@ -39,9 +39,9 @@ id = "3832-doubled-stud-ellipses"
 part = "3832"
 engines = ["naive"]
 status = "open"
-title = "each stud carries a second offset ellipse"
+title = "constant-width strokes drown small features"
 filed = "2026-09-04"
-notes = "Surprising because a plain plate is the simplest case there is; 3001 and 3004 draw clean studs at the same config. Whatever this is, it is not curved-surface tessellation."
+notes = "Not a stud bug and not a count bug -- a scale bug. Stroke width is a constant 2.0 output px while fit-to-canvas shrinks the geometry, so the longer the part the less of each feature survives its own outline. Stud rim radius against that stroke, all at the same 256x170 viewBox: 3024 22.5x (clean), 3710 10.3x (clean), 3460 5.8x (clean), 3832 4.3x (bad), 65068 1.9x (bad). Monotone, and the break sits between 5.8 and 4.3. At 65068 a 2px stroke on both sides of a 3.7-unit radius leaves almost no wall, which is why the studs read as solid black bands with scalloped inner edges. Studs are simply the smallest recurring feature, so they drown first -- the ragged black edges reported on other parts are likely the same cause. 3024's single large stud is drawn correctly, base rim as a front arc only, which rules out the 4524 whole-circle defect as the cause here."
 
 [[defect]]
 id = "7037-gradient-banding"
@@ -96,3 +96,21 @@ status = "open"
 title = "gradients over curved surfaces band, and one oscillates between two greys"
 filed = "2026-09-04"
 notes = "Class defect; 44300 near the hole is the clearest case and 7037 is the other measured one. 44300's g6 spends 67 stops on exactly two colors, #9c9c9c and #c0c0c0, alternating -- a stripe pattern, not a ramp. Across the parts measured so far: 52 gradients, 587 stops, 192 of them repeating the previous color (33%), and every single gradient is LINEAR -- zero radial. The binned-stop path is radial-only, so it never runs on any of these. That is the lead: either bin the linear path too, or emit these as radial where the surface is one."
+
+[[defect]]
+id = "65068-studs-drowned"
+part = "65068"
+engines = ["naive"]
+status = "open"
+title = "studs drowned by their own strokes"
+filed = "2026-09-04"
+notes = "Worst measured case of constant-width strokes drowning small features; see 3832-doubled-stud-ellipses for the measurement."
+
+[[defect]]
+id = "u7040-stray-stroke-tips"
+part = "u7040"
+engines = ["naive"]
+status = "open"
+title = "stray stroke tips across the darkest face"
+filed = "2026-09-04"
+notes = "May be the same constant-width stroke class; not measured yet."
