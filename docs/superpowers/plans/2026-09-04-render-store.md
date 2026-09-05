@@ -394,46 +394,15 @@ git commit -m "render a part list into the tracked store"
 
 ---
 
-### Task 5: Fill the store for real
+### Task 5: Filling the store is not this plan's to start
 
-- [x] **Step 1: Wait for the census, or stop it**
+**Never launch this on Mike's machine without him saying so, in his own words,
+at the time.** Eight shards plus their children take the box for hours: the
+lab crawls, anything else being measured is measuring contention, and it has
+already happened twice in one evening — once with the census, once with this
+job starting minutes after he asked for the census stopped.
 
-Both jobs render, and eight shards already have the box. Check with
-`pgrep -f compare-silhouette | wc -l` and either wait or `pkill -f
-compare-silhouette`.
-
-- [x] **Step 2: Start it detached, naive first**
-
-```bash
-scripts/run-render-store.sh 8 180 naive     # progress: scripts/render-store-report.sh
-```
-
-Naive first because occt segfaults on at least four parts and its coverage is
-the one the census is already behind on.
-
-Sharded, not the single process this plan first called for: the census's own
-timings put the naive corpus at ~70 core-hours (mean 30.8s a part, 17% of them
-over a minute), and a store render costs the same as a census one -- `0901`
-takes 146s against the census's 141s, so the truth mask and the diff are noise
-next to the render. One process would not finish in a night.
-
-Sharding is what made the database's write path matter: eight writers need WAL
-and a busy timeout, and `connect()` had a create-then-stamp race that killed
-five of eight shards on a fresh database before it was fixed.
-
-- [ ] **Step 3: Commit the store in batches, not at the end**
-
-**Held for Mike.** The store is bigger than this plan assumed: the canonical
-stroked render has a 29KB median and a long tail (`0901` is 699KB of genuine
-geometry -- 1481 elements, no precision bloat to trim), which puts the naive
-half somewhere between 230MB and 640MB. That is a repo-growth decision, not a
-mechanical batch commit, so the run fills `renders/` on disk and leaves it
-uncommitted.
-
-The renders are the expensive half and they are safe where they are; committing
-them later costs nothing. Firm the number up with:
-
-```bash
-du -sh renders && find renders -name '*.svg' | wc -l
-git add renders && git commit -m "store the naive renders for <range>"
-```
+The job is resumable and `renders/` keeps whatever it wrote, so there is never
+a reason to start it opportunistically. Ask, and say what it will cost:
+roughly 8,235 parts per engine, eight-wide, and the rate is worth re-measuring
+after an hour rather than trusting an early estimate.
