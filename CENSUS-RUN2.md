@@ -105,6 +105,51 @@ exceed 120s, the largest at 1038s. The cap therefore selects on *where* time is 
 how much, and two equally slow parts get opposite treatment. Worth fixing independently of what
 number is chosen.
 
-**Per-phase timings do not exist.** Every row carries one `secs`, measured across the whole of
-`compare-silhouette-truth.py`. Splitting it into geometry / rasterize / truth-mask / compare needs
-the script instrumented; nothing recorded so far can be re-analysed to get it.
+## Where the time actually goes
+
+`compare-silhouette-truth.py` now records a `phase` map on every row — `render`, `rasterize`,
+`truth_mask`, `compare` — so this answers itself from run 2 onward. Run 1 had only a total, so the
+numbers below come from re-measuring 32 naive parts sampled across its duration range
+(`scripts/census-phase-probe.py`, data in `docs/census-timings/phases.jsonl`).
+
+**The renderer is 96.1% of it.** truth_mask 3.0%, compare 0.6%, rasterize 0.3%. The share moves
+with part size: a part under 2s is mostly fixed overhead, by 10s render is ~90%, past 30s it is
+96-98%. So making the census cheaper means the hidden-line pass and nothing else — `truth_mask`'s
+pure-Python scanline fill looks alarming and costs 3%.
+
+## The census runs the most expensive mode of the four
+
+`scripts/census-mode-sweep.py` timed 10 parts through every mode that can emit SVG, same parts each
+time (`docs/census-timings/modes.jsonl`):
+
+| mode | render | rasterize | svg |
+|---|---|---|---|
+| cel+none | 0.62s | 3.11s | 15K |
+| cel+flat3 | 0.65s | 2.96s | 15K |
+| outline+none | 5.15s | 0.16s | 26K |
+| **outline+flat3** (the census) | **11.09s** | 0.12s | 61K |
+
+`cel` renders 17x faster than what the census runs, and dropping `flat3` alone halves it. This is a
+cost measurement only — nothing here says cel is substitutable for measuring silhouette accuracy,
+and cel rasterizes to a ~209 megapixel image at zoom 8, past PIL's default bomb guard.
+
+**`normal` shading cannot be measured this way**: the CLI refuses to write SVG for it ("--shading
+must be outline or cel"), so the mode grid is 2x2, not 3x2.
+
+## Expected output volume
+
+naive writes exactly two files per part, `<part>.svg` and `<part>.fit.json`, at ~50 KiB per part
+measured over the first 820 it finished. The full 6,626-part run projects to **13,252 files,
+~324 MiB**.
+
+`onto fetch --stream` could report this without any protocol change: it already fetches a manifest
+each round and the job already prints `onto: progress <done>/<total>`. Multiplying one by the other
+projects the finished size. Not built.
+
+## naive will not finish inside its deadline
+
+It sustains ~8.0 parts/min, so 6,626 parts need ~14h against a 10h deadline — it will reach roughly
+73% and be killed. **Deliberately left alone:** these are incremental jobs, the shards resume from
+their JSONL, and whatever is left is requeued as another job. The calculus would be different for a
+job with one indivisible deliverable, which is recorded as an open question in onto's
+`2026-09-04-2.0-open-decisions.md`.
