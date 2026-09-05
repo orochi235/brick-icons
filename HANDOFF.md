@@ -101,11 +101,19 @@ different drawing; it was tried and backed out. `out/census/renders` is
 evidence for a finding, to be looked at beside the numbers. The store gets
 filled by its own job, which is part 2 of the database plan.
 
-**The per-part cap is 120s and about a fifth of the library hits it**, burning
-roughly 40% of the CPU on parts that record nothing but "too slow". A
-`TimeoutError` row is a rendering-cost finding, not a defect. The cap also
-leaks: SIGALRM only lands between Python bytecodes, so a part stuck inside
-OCCT ran 695s against it.
+**The per-part cap is 120s, it does not bound wall clock, and the tail is
+worse than it looks.** SIGALRM lands between Python bytecodes, so a part stuck
+inside OCCT or shapely runs straight past the cap — one measured 695s against
+it. Worse, when the shards were stopped on 2026-09-04 at 23:18, **all eight had
+written nothing since 22:57**: twenty-one minutes of eight-way render time with
+no row to show for it, and no timeout fired in any of them. The four occt
+shards were on `4480c04`, `7757`, `85834` and `12890`. Treat a cap as a
+throughput hint, not a guarantee, and read progress from the log's mtime rather
+than from the fact that processes are alive.
+
+About a fifth of the corpus hits the cap, burning roughly 40% of the CPU on
+parts that record nothing but "too slow". A `TimeoutError` row is a
+rendering-cost finding, not a defect.
 
 ## The corpus database
 
