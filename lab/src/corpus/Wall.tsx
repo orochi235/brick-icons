@@ -57,13 +57,16 @@ export function Wall({ cells, rects, cam, sheet, manifest, width, height,
         const box = e.currentTarget.getBoundingClientRect();
         const sx = e.clientX - box.left;
         const sy = e.clientY - box.top;
-        const hit = visibleRange(rects, cam, { width, height }).find((i) => {
-          const r = rects[i]!;
-          const p = { x: (r.x - cam.x) * cam.scale, y: (r.y - cam.y) * cam.scale };
-          return sx >= p.x && sx <= p.x + r.w * cam.scale
-              && sy >= p.y && sy <= p.y + r.h * cam.scale;
-        });
-        if (hit !== undefined && cells[hit]) onPick(cells[hit]!);
+        const visible = visibleRange(rects, cam, { width, height });
+        const cmds = paintCommands({ cells, rects, visible, cam, manifest });
+        for (let i = cmds.length - 1; i >= 0; i--) {
+          const c = cmds[i]!;
+          if (sx >= c.dx && sx <= c.dx + c.dw && sy >= c.dy && sy <= c.dy + c.dh) {
+            const cell = cells[visible[i]!];
+            if (cell) onPick(cell);
+            return;
+          }
+        }
       }}
     />
   );

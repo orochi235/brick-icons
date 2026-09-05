@@ -58,6 +58,17 @@ it('emits nothing for an empty visible set', () => {
   })).toEqual([]);
 });
 
+it('emits one command per visible index, in the same order', () => {
+  const cmds = paintCommands({
+    cells: [cell('a', 0, 'sha-a'), cell('b', 1, null)],
+    rects, visible: [1, 0],
+    cam: { x: 0, y: 0, scale: 1 }, manifest,
+  });
+  expect(cmds).toHaveLength(2);
+  expect(cmds[0]!.dx).toBe(rects[1]!.x);
+  expect(cmds[1]!.dx).toBe(rects[0]!.x);
+});
+
 it('falls back to a fill when there is no manifest yet', () => {
   const [cmd] = paintCommands({
     cells: [cell('a', 0, 'sha-a')], rects, visible: [0],
