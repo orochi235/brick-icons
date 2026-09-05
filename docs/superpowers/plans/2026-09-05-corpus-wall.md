@@ -4,7 +4,7 @@
 
 **Goal:** A pan/zoom wall at `/corpus` showing all 24,591 LDraw parts as one cell each, thumbnails where a render exists, filling in as the render job lands more.
 
-**Architecture:** Python bakes thumbnails from the render store into two whole-corpus sprite sheets (8 px, 32 px) plus loose 128 px files, all addressed by part number. FastAPI serves the cell list, a delta since a version, and the images. The React app computes layout and camera as pure functions and paints one `<canvas>`; that canvas is the only place weasel's mega view will ever need to replace.
+**Architecture:** Python bakes thumbnails from the render store into two whole-corpus sprite sheets (8 px, 32 px) plus loose 128 px files, per slot — a slot being one `db.SOURCES` entry, i.e. an engine crossed with a style — all addressed by slot and part number. FastAPI serves the cell list, a delta since a version, and the images. The React app computes layout and camera as pure functions and paints one `<canvas>`; that canvas is the only place weasel's mega view will ever need to replace.
 
 **Tech Stack:** Python 3.11, SQLite, FastAPI, Pillow, resvg; React 19, TypeScript, Vite, vitest.
 
@@ -682,6 +682,10 @@ git commit -m "compose the corpus sprite sheets with edge-replicated gutters"
 
 ### Task 5: The bake CLI
 
+One slot at a time, into that slot's own directory. A slot is a `db.SOURCES`
+entry — `naive`, `census-naive`, and any other with renders. `thumbs.py` needs
+no knowledge of slots: it is handed `out/thumbs/<source>` as its output root.
+
 **Files:**
 - Create: `scripts/bake-thumbs.py`
 
@@ -689,12 +693,15 @@ git commit -m "compose the corpus sprite sheets with edge-replicated gutters"
 
 ```python
 #!/usr/bin/env python3
-"""Bake the corpus wall's thumbnails and sprite sheets.
+"""Bake the corpus wall's thumbnails and sprite sheets, one slot at a time.
 
     .venv/bin/python scripts/bake-thumbs.py
+    .venv/bin/python scripts/bake-thumbs.py --source naive
 
-Idempotent: a part whose render sha has not changed is skipped, so running this
-after each batch of renders costs only the new ones.
+A slot is one `db.SOURCES` entry -- an engine crossed with a style. Each gets
+its own thumbnails and its own sheets under `out/thumbs/<source>/`. Idempotent:
+a part whose render sha has not changed is skipped, so running this after each
+batch of renders costs only the new ones.
 """
 from __future__ import annotations
 
@@ -710,39 +717,54 @@ from brick_icons import db, thumbs  # noqa: E402
 DEFAULT_OUT = Path("out") / "thumbs"
 
 
+def bake_source(conn, source: str, root: Path, out: Path,
+                order: list[str]) -> tuple[int, int]:
+    """Bake one slot. Returns (baked, total)."""
+    rows = conn.execute(
+        "SELECT part_id, path, sha256 FROM renders WHERE source = ? "
+        "ORDER BY part_id", (source,)).fetchall()
+    slot = out / source
+    total, baked = len(rows), 0
+    for i, row in enumerate(rows, 1):
+        svg = root / row["path"]
+        if not svg.is_file():
+            print(f"  {source} {i}/{total} {row['part_id']} MISSING {row['path']}",
+                  flush=True)
+            continue
+        made = thumbs.bake_part(row["part_id"], svg, slot, sha=row["sha256"])
+        baked += bool(made)
+        print(f"  {source} {i}/{total} {row['part_id']} "
+              f"{'baked' if made else 'fresh'}", flush=True)
+    for path in thumbs.compose(slot, order):
+        print(f"  wrote {path}", flush=True)
+    return baked, total
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", default=str(ROOT / db.DEFAULT_PATH))
     ap.add_argument("--root", default=str(ROOT))
     ap.add_argument("--out", default=str(ROOT / DEFAULT_OUT))
-    ap.add_argument("--source", default="census-naive")
+    ap.add_argument("--source", action="append",
+                    help="slot to bake; repeatable. Default: every slot with renders.")
     args = ap.parse_args()
 
     root, out = Path(args.root), Path(args.out)
     conn = db.connect(args.db)
     try:
         order = [r["id"] for r in conn.execute("SELECT id FROM parts ORDER BY id")]
-        rows = conn.execute(
-            "SELECT part_id, path, sha256 FROM renders WHERE source = ? "
-            "ORDER BY part_id", (args.source,)).fetchall()
+        sources = args.source or [
+            r["source"] for r in conn.execute(
+                "SELECT DISTINCT source FROM renders ORDER BY source")]
+        print(f"{len(sources)} slot(s) over {len(order)} cells: "
+              f"{', '.join(sources)}", flush=True)
+        for n, source in enumerate(sources, 1):
+            print(f"[{n}/{len(sources)}] {source}", flush=True)
+            baked, total = bake_source(conn, source, root, out, order)
+            print(f"[{n}/{len(sources)}] {source}: baked {baked} of {total}",
+                  flush=True)
     finally:
         conn.close()
-
-    total, baked = len(rows), 0
-    for i, row in enumerate(rows, 1):
-        svg = root / row["path"]
-        if not svg.is_file():
-            print(f"{i}/{total} {row['part_id']} MISSING {row['path']}", flush=True)
-            continue
-        made = thumbs.bake_part(row["part_id"], svg, out, sha=row["sha256"])
-        baked += bool(made)
-        print(f"{i}/{total} {row['part_id']} {'baked' if made else 'fresh'}",
-              flush=True)
-
-    print(f"composing {len(order)} cells onto sheets", flush=True)
-    for path in thumbs.compose(out, order):
-        print(f"wrote {path}", flush=True)
-    print(f"baked {baked} of {total}")
     return 0
 
 
@@ -753,26 +775,33 @@ if __name__ == "__main__":
 - [ ] **Step 2: Run it for real**
 
 Run: `.venv/bin/python scripts/bake-thumbs.py`
-Expected: 100 progress lines each `i/100 <part> baked`, then `wrote .../sheet-8.png`,
-`wrote .../sheet-32.png`, then `baked 100 of 100`.
+Expected: two slots — `census-naive` (200 renders) and `naive` (49) — each
+printing one line per part and then two `wrote .../sheet-*.png` lines. Both
+slots' sheets land under `out/thumbs/<source>/`.
 
 - [ ] **Step 3: Verify it is idempotent**
 
 Run: `.venv/bin/python scripts/bake-thumbs.py`
-Expected: every line reads `fresh`, and the last line reads `baked 0 of 100`.
+Expected: every part line reads `fresh`, and each slot reports `baked 0 of N`.
 
-- [ ] **Step 4: Look at the sheet**
+- [ ] **Step 4: Look at both slots**
 
-Run: `~/src/slopboard/bin/slop out/thumbs/sheet-32.png`
-Expected: a 5652 px square, almost entirely transparent, with 100 small drawings
-scattered through it in part-id order. Confirm the drawings are recognisable
-parts and not black blobs.
+```bash
+~/src/slopboard/bin/slop out/thumbs/census-naive/sheet-32.png
+~/src/slopboard/bin/slop out/thumbs/naive/sheet-32.png
+```
+
+Expected: two 5652 px squares, almost entirely transparent, with small drawings
+scattered through them in part-id order. The `naive` sheet's drawings carry
+black outline strokes; the `census-naive` sheet's do not — that difference is
+the whole point of keeping the slots apart. Confirm both are recognisable parts
+and not black blobs.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add scripts/bake-thumbs.py
-git commit -m "bake the corpus wall's thumbnails from the render store"
+git commit -m "bake each slot's thumbnails and sheets from the render store"
 ```
 
 ---
@@ -986,9 +1015,9 @@ def _corpus_client(tmp_path):
     conn.commit()
     conn.close()
     thumbs = tmp_path / "thumbs"
-    (thumbs / "128").mkdir(parents=True)
-    (thumbs / "128" / "3001.png").write_bytes(b"\x89PNG\r\n\x1a\n")
-    (thumbs / "sheet-8.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    (thumbs / "naive" / "128").mkdir(parents=True)
+    (thumbs / "naive" / "128" / "3001.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    (thumbs / "naive" / "sheet-8.png").write_bytes(b"\x89PNG\r\n\x1a\n")
     return TestClient(lab_app.create_app(
         cache_root=tmp_path / "cache",
         corpus_db=tmp_path / "corpus.db",
@@ -1025,18 +1054,28 @@ def test_part_route_404s_on_an_unknown_part(tmp_path):
 
 
 def test_thumb_route_serves_a_loose_level(tmp_path):
-    r = _corpus_client(tmp_path).get("/api/thumbs/128/3001.png")
+    r = _corpus_client(tmp_path).get("/api/thumbs/naive/128/3001.png")
     assert r.status_code == 200
 
 
 def test_thumb_route_serves_a_sheet(tmp_path):
     assert _corpus_client(tmp_path).get(
-        "/api/thumbs/sheet-8.png").status_code == 200
+        "/api/thumbs/naive/sheet-8.png").status_code == 200
+
+
+def test_thumb_route_refuses_an_unknown_slot(tmp_path):
+    assert _corpus_client(tmp_path).get(
+        "/api/thumbs/nonsense/128/3001.png").status_code == 400
 
 
 def test_thumb_route_refuses_traversal(tmp_path):
     assert _corpus_client(tmp_path).get(
-        "/api/thumbs/128/..%2F..%2Fcorpus.db").status_code in (400, 404)
+        "/api/thumbs/naive/128/..%2F..%2Fcorpus.db").status_code in (400, 404)
+
+
+def test_sources_route_lists_the_slots_that_have_renders(tmp_path):
+    body = _corpus_client(tmp_path).get("/api/corpus/sources").json()
+    assert body["sources"] == []
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -1121,25 +1160,41 @@ Then add the routes, next to the other artifact routes:
                 "defects": [d for d in defects.load(app.state.defects_path)
                             if d["part"] == part_id]}
 
-    @app.get("/api/thumbs/sheet-{level}.png")
-    def get_sheet(level: int):
-        path = Path(app.state.thumbs_root) / f"sheet-{level}.png"
+    def _slot(source: str) -> Path:
+        if source not in corpus_db_module.SOURCES:
+            raise HTTPException(400, f"no such slot: {source}")
+        return Path(app.state.thumbs_root) / source
+
+    @app.get("/api/corpus/sources")
+    def get_sources():
+        """The slots that have renders, worst-populated last."""
+        conn = corpus_conn()
+        try:
+            return {"sources": [dict(r) for r in conn.execute(
+                "SELECT source, count(*) AS n FROM renders "
+                "GROUP BY source ORDER BY n DESC")]}
+        finally:
+            conn.close()
+
+    @app.get("/api/thumbs/{source}/sheet-{level}.png")
+    def get_sheet(source: str, level: int):
+        path = _slot(source) / f"sheet-{level}.png"
         if not path.is_file():
             raise HTTPException(404, "no such sheet; run scripts/bake-thumbs.py")
         return FileResponse(path)
 
-    @app.get("/api/thumbs/sheet-{level}.json")
-    def get_sheet_manifest(level: int):
-        path = Path(app.state.thumbs_root) / f"sheet-{level}.json"
+    @app.get("/api/thumbs/{source}/sheet-{level}.json")
+    def get_sheet_manifest(source: str, level: int):
+        path = _slot(source) / f"sheet-{level}.json"
         if not path.is_file():
             raise HTTPException(404, "no such sheet manifest")
         return FileResponse(path)
 
-    @app.get("/api/thumbs/{level}/{name}")
-    def get_thumb(level: int, name: str):
+    @app.get("/api/thumbs/{source}/{level}/{name}")
+    def get_thumb(source: str, level: int, name: str):
         if "/" in name or ".." in name or not name.endswith(".png"):
             raise HTTPException(400, "bad thumbnail path")
-        path = Path(app.state.thumbs_root) / str(level) / name
+        path = _slot(source) / str(level) / name
         if not path.is_file():
             raise HTTPException(404, "no such thumbnail")
         return FileResponse(path)
@@ -1303,9 +1358,13 @@ In `lab/vite.config.ts`, replace `build: { outDir: 'dist' },` with:
 Add to `lab/src/api/client.ts`, beside the other methods:
 
 ```ts
-  cells: (since?: string): Promise<CellsBody> =>
-    get(since ? `/api/corpus/cells?since=${encodeURIComponent(since)}`
-              : '/api/corpus/cells'),
+  cells: (source: string, since?: string): Promise<CellsBody> => {
+    const q = new URLSearchParams({ source });
+    if (since) q.set('since', since);
+    return get(`/api/corpus/cells?${q}`);
+  },
+  corpusSources: (): Promise<{ sources: { source: string; n: number }[] }> =>
+    get('/api/corpus/sources'),
 ```
 
 Import `CellsBody` from `@lab/corpus/types` at the top of `client.ts`.
@@ -2526,8 +2585,8 @@ Expected: FAIL — no canvas, no `2 of 2`
 Add to `lab/src/api/client.ts`:
 
 ```ts
-  sheetManifest: (level: number): Promise<SheetManifest> =>
-    get(`/api/thumbs/sheet-${level}.json`),
+  sheetManifest: (source: string, level: number): Promise<SheetManifest> =>
+    get(`/api/thumbs/${source}/sheet-${level}.json`),
 ```
 
 Replace `lab/src/corpus/CorpusWall.tsx`:
