@@ -12,6 +12,7 @@ export interface WallProps {
   cam: Camera;
   sheet: HTMLImageElement | null;
   manifest: SheetManifest | null;
+  loose: Map<string, HTMLImageElement>;
   width: number;
   height: number;
   onPick: (cell: Cell, at: { x: number; y: number }) => void;
@@ -22,7 +23,7 @@ export interface WallProps {
  *
  *  Canvas2D holds today's corpus. When weasel's mega view exists this body is
  *  what it replaces; nothing above it knows what an atlas page is. */
-export function Wall({ cells, rects, cam, sheet, manifest, width, height,
+export function Wall({ cells, rects, cam, sheet, manifest, loose, width, height,
                        onPick, onOpen }: WallProps) {
   const ref = useRef<HTMLCanvasElement>(null);
 
@@ -42,16 +43,18 @@ export function Wall({ cells, rects, cam, sheet, manifest, width, height,
     ctx.clearRect(0, 0, width, height);
     ctx.imageSmoothingEnabled = true;
     const visible = visibleRange(rects, cam, { width, height });
-    for (const cmd of paintCommands({ cells, rects, visible, cam, manifest })) {
+    for (const cmd of paintCommands({ cells, rects, visible, cam, manifest, loose })) {
       if (cmd.kind === 'sprite' && sheet) {
         ctx.drawImage(sheet, cmd.sx, cmd.sy, cmd.sw, cmd.sh,
                       cmd.dx, cmd.dy, cmd.dw, cmd.dh);
+      } else if (cmd.kind === 'image') {
+        ctx.drawImage(cmd.image, cmd.dx, cmd.dy, cmd.dw, cmd.dh);
       } else if (cmd.kind === 'fill') {
         ctx.fillStyle = cmd.fill;
         ctx.fillRect(cmd.dx, cmd.dy, cmd.dw, cmd.dh);
       }
     }
-  }, [cells, rects, cam, sheet, manifest, width, height]);
+  }, [cells, rects, cam, sheet, manifest, loose, width, height]);
 
   const hitTest = (e: { clientX: number; clientY: number;
                          currentTarget: HTMLCanvasElement }) => {

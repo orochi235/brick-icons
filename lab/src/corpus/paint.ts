@@ -16,7 +16,9 @@ export type PaintCommand =
   | { kind: 'sprite'; dx: number; dy: number; dw: number; dh: number;
       sx: number; sy: number; sw: number; sh: number }
   | { kind: 'fill'; dx: number; dy: number; dw: number; dh: number;
-      fill: string };
+      fill: string }
+  | { kind: 'image'; dx: number; dy: number; dw: number; dh: number;
+      image: HTMLImageElement };
 
 export interface PaintInput {
   cells: Cell[];
@@ -24,6 +26,7 @@ export interface PaintInput {
   visible: number[];
   cam: Camera;
   manifest: SheetManifest | null;
+  loose?: Map<string, HTMLImageElement>;
 }
 
 /** What to draw this frame, as data.
@@ -31,7 +34,7 @@ export interface PaintInput {
  *  Kept separate from the canvas so the decisions -- which cells, from where,
  *  in what colour -- are testable without a rendering context, and so the
  *  drawing itself is the only thing weasel's mega view has to replace. */
-export function paintCommands({ cells, rects, visible, cam, manifest }:
+export function paintCommands({ cells, rects, visible, cam, manifest, loose }:
                               PaintInput): PaintCommand[] {
   const out: PaintCommand[] = [];
   for (const i of visible) {
@@ -41,6 +44,11 @@ export function paintCommands({ cells, rects, visible, cam, manifest }:
     const { x: dx, y: dy } = toScreen(cam, rect.x, rect.y);
     const dw = rect.w * cam.scale;
     const dh = rect.h * cam.scale;
+    const image = loose?.get(cell.id);
+    if (image) {
+      out.push({ kind: 'image', dx, dy, dw, dh, image });
+      continue;
+    }
     const box = manifest && cell.sha && !isStale(manifest, cell)
       ? sourceBox(manifest, cell.index)
       : null;

@@ -76,3 +76,26 @@ it('falls back to a fill when there is no manifest yet', () => {
   });
   expect(cmd!.kind).toBe('fill');
 });
+
+it('draws a whole loose image when one is loaded for the cell', () => {
+  const img = {} as HTMLImageElement;
+  const [cmd] = paintCommands({
+    cells: [cell('a', 0, 'sha-a')], rects, visible: [0],
+    cam: { x: 0, y: 0, scale: 1 }, manifest, loose: new Map([['a', img]]),
+  });
+  expect(cmd).toEqual({ kind: 'image', dx: 0, dy: 0, dw: 10, dh: 10, image: img });
+});
+
+it('prefers the loose image over the sheet', () => {
+  const img = {} as HTMLImageElement;
+  const sheetOnly = paintCommands({
+    cells: [cell('a', 0, 'sha-a')], rects, visible: [0],
+    cam: { x: 0, y: 0, scale: 1 }, manifest, loose: new Map(),
+  });
+  expect(sheetOnly[0]!.kind).toBe('sprite');
+  const withLoose = paintCommands({
+    cells: [cell('a', 0, 'sha-a')], rects, visible: [0],
+    cam: { x: 0, y: 0, scale: 1 }, manifest, loose: new Map([['a', img]]),
+  });
+  expect(withLoose[0]!.kind).toBe('image');
+});
