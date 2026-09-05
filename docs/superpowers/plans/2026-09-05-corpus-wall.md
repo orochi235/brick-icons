@@ -354,8 +354,21 @@ def test_it_rasterizes_every_level_for_one_part(tmp_path):
     made = thumbs.bake_part("3001", svg, out, sha="abc123")
     assert sorted(made) == [8, 32, 128]
     for level in (8, 32, 128):
-        img = Image.open(out / str(level) / "3001.png")
-        assert max(img.size) == level
+        with Image.open(out / str(level) / "3001.png") as img:
+            assert img.size == (level, level)
+
+
+def test_a_wide_render_is_padded_square_not_stretched(tmp_path):
+    # Every stored render is 256x170. resvg cannot letterbox, so squaring is
+    # this module's job -- and stretching would make every part the wrong shape.
+    svg = tmp_path / "3001.svg"
+    svg.write_text(SVG)
+    out = tmp_path / "thumbs"
+    thumbs.bake_part("3001", svg, out, sha="abc123")
+    with Image.open(out / "128" / "3001.png") as img:
+        assert img.size == (128, 128)
+        assert img.getpixel((2, 2))[3] == 0       # padding is transparent
+        assert img.getpixel((64, 64))[3] == 255   # the drawing is not
 
 
 def test_it_skips_a_part_whose_sha_is_unchanged(tmp_path):
@@ -416,27 +429,43 @@ def bake_part(part_id: str, svg: Path | str, out: Path | str,
     shas = baked_shas(out)
     if shas.get(part_id) == sha:
         return []
-    # resvg is the project's antialias reference; it is what the census, the
-    # contact sheet and the differ all rasterize with.
-    biggest = out / str(LOOSE_LEVEL) / f"{part_id}.png"
-    biggest.parent.mkdir(parents=True, exist_ok=True)
+    # resvg is the project's antialias reference -- the same rasterizer the
+    # census, the contact sheet and the differ use. It has no letterbox flag
+    # (`-w`, `-h`, `-z` only) and passing both -w and -h stretches a 256x170
+    # render, so it is asked for a width and squared here.
+    out.mkdir(parents=True, exist_ok=True)
+    wide = out / f".{part_id}.wide.png"
     proc = subprocess.run(
-        ["resvg", "--background", "white", "--width", str(LOOSE_LEVEL),
-         "--height", str(LOOSE_LEVEL), "--fit-to-canvas",
-         str(svg), str(biggest)],
+        ["resvg", "--width", str(LOOSE_LEVEL), str(svg), str(wide)],
         capture_output=True, text=True)
-    if proc.returncode != 0 or not biggest.is_file():
+    if proc.returncode != 0 or not wide.is_file():
         raise RuntimeError(f"resvg failed on {part_id}: "
                            f"{(proc.stderr or proc.stdout).strip()[:200]}")
-    with Image.open(biggest) as img:
-        base = img.convert("RGBA")
-        for level in SHEET_LEVELS:
-            small = base.resize((level, level), Image.LANCZOS)
+    try:
+        with Image.open(wide) as img:
+            drawn = img.convert("RGBA")
+        for level in LEVELS:
             path = out / str(level) / f"{part_id}.png"
             path.parent.mkdir(parents=True, exist_ok=True)
-            small.save(path)
+            _square(drawn, level).save(path)
+    finally:
+        wide.unlink(missing_ok=True)
     _write_baked(out, {**shas, part_id: sha})
     return list(LEVELS)
+
+
+def _square(drawn: Image.Image, level: int) -> Image.Image:
+    """Fit a render inside a transparent square of `level` px.
+
+    Transparent, not white: the sheet distinguishes a cell that was never baked
+    from one that was by its alpha, and an opaque pad would erase that.
+    """
+    scale = level / max(drawn.size)
+    size = (max(1, round(drawn.width * scale)), max(1, round(drawn.height * scale)))
+    cell = Image.new("RGBA", (level, level), (0, 0, 0, 0))
+    cell.paste(drawn.resize(size, Image.LANCZOS),
+               ((level - size[0]) // 2, (level - size[1]) // 2))
+    return cell
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
@@ -1004,7 +1033,11 @@ Then add the routes, next to the other artifact routes:
                                (part_id,)).fetchone()
             if row is None:
                 raise HTTPException(404, "no such part")
-            found = findings.findings(conn, part=part_id, limit=20)
+            # `findings` matches `part` with LIKE, so 3001 would drag in
+            # 3001a. The detail view is about one part.
+            found = [f for f in findings.findings(conn, part=part_id,
+                                                  limit=50)["rows"]
+                     if f["part_id"] == part_id]
             runs = [dict(r) for r in conn.execute(
                 "SELECT r.id, r.kind, r.started, r.commit_sha, m.engine, "
                 "m.extra_d99, m.missing_px, m.secs, m.error "
@@ -1013,7 +1046,7 @@ Then add the routes, next to the other artifact routes:
                 (part_id,))]
         finally:
             conn.close()
-        return {"part": dict(row), "findings": found["rows"], "runs": runs,
+        return {"part": dict(row), "findings": found, "runs": runs,
                 "defects": [d for d in defects.load(app.state.defects_path)
                             if d["part"] == part_id]}
 
@@ -2496,7 +2529,6 @@ export function CorpusWall({ client }: { client: LabClient }) {
       <FilterBar selection={selection} onChange={setSelection}
                  shown={shown.length} total={cells.length} />
       <div className="corpus-stage" ref={box}
-challenge
            onWheel={(e) => {
              if (!cam) return;
              const r = e.currentTarget.getBoundingClientRect();
@@ -2517,9 +2549,6 @@ challenge
   );
 }
 ```
-
-Note: delete the stray `challenge` token on the `corpus-stage` div — it is not
-valid JSX and the build will reject it.
 
 Add to `lab/src/corpus/corpus.css`:
 
@@ -2565,7 +2594,325 @@ git commit -m "wire the corpus wall: cells, layout, camera, filter, lightbox"
 
 ---
 
-### Task 17: The full gate
+### Task 17: Level of detail
+
+`camera.ts` grew `levelFor` and `pickLevel` in Task 10 and nothing has used them
+yet. This is the spec's rule that a cell shows the coarse sheet when it is
+small, the fine sheet when it is bigger, and its own 128 px file when it is
+large enough that the sheet would look soft.
+
+**Files:**
+- Modify: `lab/src/corpus/paint.ts`
+- Modify: `lab/src/corpus/paint.test.ts`
+- Create: `lab/src/corpus/useSheets.ts`
+- Create: `lab/src/corpus/useLooseThumbs.ts`
+- Test: `lab/src/corpus/useLooseThumbs.test.ts`
+- Modify: `lab/src/corpus/Wall.tsx`
+- Modify: `lab/src/corpus/CorpusWall.tsx`
+
+- [ ] **Step 1: Write the failing tests**
+
+Append to `lab/src/corpus/paint.test.ts`:
+
+```ts
+it('draws a whole loose image when one is loaded for the cell', () => {
+  const img = {} as HTMLImageElement;
+  const [cmd] = paintCommands({
+    cells: [cell('a', 0, 'sha-a')], rects, visible: [0],
+    cam: { x: 0, y: 0, scale: 1 }, manifest, loose: new Map([['a', img]]),
+  });
+  expect(cmd).toEqual({ kind: 'image', dx: 0, dy: 0, dw: 10, dh: 10, image: img });
+});
+
+it('prefers the loose image over the sheet', () => {
+  const img = {} as HTMLImageElement;
+  const sheetOnly = paintCommands({
+    cells: [cell('a', 0, 'sha-a')], rects, visible: [0],
+    cam: { x: 0, y: 0, scale: 1 }, manifest, loose: new Map(),
+  });
+  expect(sheetOnly[0]!.kind).toBe('sprite');
+  const withLoose = paintCommands({
+    cells: [cell('a', 0, 'sha-a')], rects, visible: [0],
+    cam: { x: 0, y: 0, scale: 1 }, manifest, loose: new Map([['a', img]]),
+  });
+  expect(withLoose[0]!.kind).toBe('image');
+});
+
+it('falls back to the sheet while a loose image is still loading', () => {
+  const [cmd] = paintCommands({
+    cells: [cell('a', 0, 'sha-a')], rects, visible: [0],
+    cam: { x: 0, y: 0, scale: 1 }, manifest, loose: new Map(),
+  });
+  expect(cmd!.kind).toBe('sprite');
+});
+```
+
+`lab/src/corpus/useLooseThumbs.test.ts`:
+
+```ts
+import { thumbUrl, wanted } from '@lab/corpus/useLooseThumbs';
+import type { Cell } from '@lab/corpus/types';
+
+const cell = (id: string, index: number, sha: string | null): Cell => ({
+  id, index, title: id, category: null, printed: false, obsolete: false,
+  status: 'unreviewed', sha, made_at: null, extra_d99: null, secs: null,
+  error: null,
+});
+
+it('cache-busts on the render sha', () => {
+  expect(thumbUrl(cell('3001', 0, 'deadbeefcafe')))
+    .toBe('/api/thumbs/128/3001.png?v=deadbeef');
+});
+
+it('wants nothing below the loose level', () => {
+  expect(wanted([cell('a', 0, 'x')], [0], 32)).toEqual([]);
+});
+
+it('wants only visible cells that have a render', () => {
+  const cells = [cell('a', 0, 'x'), cell('b', 1, null)];
+  expect(wanted(cells, [0, 1], 128).map((c) => c.id)).toEqual(['a']);
+});
+
+it('caps how many it asks for at once', () => {
+  const many = Array.from({ length: 300 }, (_, i) => cell(`p${i}`, i, 'x'));
+  expect(wanted(many, many.map((_, i) => i), 128).length).toBe(200);
+});
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `cd lab && npx vitest run src/corpus/paint.test.ts src/corpus/useLooseThumbs.test.ts`
+Expected: FAIL — `paintCommands` rejects `loose`; `@lab/corpus/useLooseThumbs` unresolved.
+
+- [ ] **Step 3: Implement**
+
+In `lab/src/corpus/paint.ts`, add the command variant, the input field and the
+branch:
+
+```ts
+export type PaintCommand =
+  | { kind: 'sprite'; dx: number; dy: number; dw: number; dh: number;
+      sx: number; sy: number; sw: number; sh: number }
+  | { kind: 'image'; dx: number; dy: number; dw: number; dh: number;
+      image: HTMLImageElement }
+  | { kind: 'fill'; dx: number; dy: number; dw: number; dh: number;
+      fill: string };
+
+export interface PaintInput {
+  cells: Cell[];
+  rects: Rect[];
+  visible: number[];
+  cam: Camera;
+  manifest: SheetManifest | null;
+  /** Full-size thumbnails already loaded, by part id. */
+  loose?: Map<string, HTMLImageElement>;
+}
+```
+
+and inside the loop in `paintCommands`, replace the `out.push(...)` with:
+
+```ts
+    const image = loose?.get(cell.id);
+    if (image) {
+      out.push({ kind: 'image', dx, dy, dw, dh, image });
+      continue;
+    }
+    const box = manifest && cell.sha && !isStale(manifest, cell)
+      ? sourceBox(manifest, cell.index)
+      : null;
+    out.push(box
+      ? { kind: 'sprite', dx, dy, dw, dh, ...box }
+      : { kind: 'fill', dx, dy, dw, dh,
+          fill: STATUS_FILL[cell.status] ?? STATUS_FILL.unreviewed! });
+```
+
+(and destructure `loose` out of the argument alongside `manifest`.)
+
+`lab/src/corpus/useLooseThumbs.ts`:
+
+```ts
+import { useEffect, useState } from 'react';
+import { LOOSE_LEVEL } from '@lab/corpus/useSheets';
+import type { Cell } from '@lab/corpus/types';
+
+/** How many full-size thumbnails to have in flight. At the zoom that asks for
+ *  them only a few dozen cells are on screen; the cap is for the moment a
+ *  filter change puts many large cells in view at once. */
+export const MAX_IN_FLIGHT = 200;
+
+export function thumbUrl(cell: Cell): string {
+  return `/api/thumbs/${LOOSE_LEVEL}/${cell.id}.png?v=${cell.sha!.slice(0, 8)}`;
+}
+
+/** Which visible cells deserve their own image at this level. */
+export function wanted(cells: Cell[], visible: number[],
+                       level: number): Cell[] {
+  if (level < LOOSE_LEVEL) return [];
+  const out: Cell[] = [];
+  for (const i of visible) {
+    const cell = cells[i];
+    if (cell && cell.sha !== null) out.push(cell);
+    if (out.length === MAX_IN_FLIGHT) break;
+  }
+  return out;
+}
+
+export function useLooseThumbs(cells: Cell[], visible: number[], level: number) {
+  const [loaded, setLoaded] = useState(new Map<string, HTMLImageElement>());
+
+  useEffect(() => {
+    const want = wanted(cells, visible, level);
+    const missing = want.filter((c) => !loaded.has(c.id));
+    if (missing.length === 0) return;
+    let live = true;
+    for (const cell of missing) {
+      const img = new Image();
+      img.onload = () => {
+        if (!live) return;
+        setLoaded((prev) => new Map(prev).set(cell.id, img));
+      };
+      img.src = thumbUrl(cell);
+    }
+    return () => { live = false; };
+  }, [cells, visible, level, loaded]);
+
+  return level >= LOOSE_LEVEL ? loaded : undefined;
+}
+```
+
+`lab/src/corpus/useSheets.ts`:
+
+```ts
+import { useEffect, useState } from 'react';
+import type { LabClient } from '@lab/api/client';
+import type { SheetManifest } from '@lab/corpus/types';
+
+export const SHEET_LEVELS = [8, 32] as const;
+export const LOOSE_LEVEL = 128;
+
+export interface Sheet {
+  image: HTMLImageElement | null;
+  manifest: SheetManifest | null;
+}
+
+/** Both sprite sheets, loaded once. They are one small texture each and never
+ *  change during a session, so there is nothing to evict. */
+export function useSheets(client: LabClient): Record<number, Sheet> {
+  const [sheets, setSheets] = useState<Record<number, Sheet>>({});
+
+  useEffect(() => {
+    for (const level of SHEET_LEVELS) {
+      void client.sheetManifest(level).then((manifest) => {
+        setSheets((prev) => ({ ...prev,
+          [level]: { ...(prev[level] ?? { image: null }), manifest } }));
+      }).catch(() => {});
+      const img = new Image();
+      img.onload = () => setSheets((prev) => ({ ...prev,
+        [level]: { ...(prev[level] ?? { manifest: null }), image: img } }));
+      img.src = `/api/thumbs/sheet-${level}.png`;
+    }
+  }, [client]);
+
+  return sheets;
+}
+```
+
+In `lab/src/corpus/Wall.tsx`, take `loose` and draw the new command kind. Change
+the props and the paint loop:
+
+```tsx
+export interface WallProps {
+  cells: Cell[];
+  rects: Rect[];
+  cam: Camera;
+  sheet: HTMLImageElement | null;
+  manifest: SheetManifest | null;
+  loose?: Map<string, HTMLImageElement>;
+  width: number;
+  height: number;
+  onPick: (cell: Cell) => void;
+}
+```
+
+```tsx
+    for (const cmd of paintCommands({ cells, rects, visible, cam, manifest,
+                                      loose })) {
+      if (cmd.kind === 'sprite' && sheet) {
+        ctx.drawImage(sheet, cmd.sx, cmd.sy, cmd.sw, cmd.sh,
+                      cmd.dx, cmd.dy, cmd.dw, cmd.dh);
+      } else if (cmd.kind === 'image') {
+        ctx.drawImage(cmd.image, cmd.dx, cmd.dy, cmd.dw, cmd.dh);
+      } else if (cmd.kind === 'fill') {
+        ctx.fillStyle = cmd.fill;
+        ctx.fillRect(cmd.dx, cmd.dy, cmd.dw, cmd.dh);
+      }
+    }
+```
+
+and add `loose` to that effect's dependency array.
+
+In `lab/src/corpus/CorpusWall.tsx`, replace the single-sheet state with the
+level ladder. Delete the `SHEET_LEVEL` constant, the `manifest`/`sheet` state
+and the effect that loaded them, and use:
+
+```tsx
+import { pickLevel } from '@lab/corpus/camera';
+import { useLooseThumbs } from '@lab/corpus/useLooseThumbs';
+import { useSheets } from '@lab/corpus/useSheets';
+import { visibleRange } from '@lab/corpus/visible';
+```
+
+```tsx
+  const sheets = useSheets(client);
+  const [level, setLevel] = useState(8);
+
+  useEffect(() => {
+    if (cam) setLevel((current) => pickLevel(current, CELL * cam.scale));
+  }, [cam]);
+
+  const visible = useMemo(
+    () => (cam ? visibleRange(laid.rects, cam, size) : []),
+    [laid.rects, cam, size]);
+  const loose = useLooseThumbs(shown, visible, level);
+  const sheet = sheets[level === 128 ? 32 : level] ?? { image: null, manifest: null };
+```
+
+and pass them down:
+
+```tsx
+          <Wall cells={shown} rects={laid.rects} cam={cam} sheet={sheet.image}
+                manifest={sheet.manifest} loose={loose} width={size.width}
+                height={size.height} onPick={(c) => setPicked(c.id)} />
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `cd lab && npx vitest run src/corpus`
+Expected: PASS, including the 3 new paint tests and the 4 new loose-thumb tests.
+
+- [ ] **Step 5: See the ladder work**
+
+With the server and dev page running, open `http://localhost:5178/corpus.html`.
+Zoom all the way out: cells are a few pixels and come from `sheet-8.png` — check
+the network panel shows it fetched. Zoom in: `sheet-32.png` takes over. Zoom
+until a cell is bigger than 128 px: individual `/api/thumbs/128/<part>.png`
+requests appear and the drawing sharpens.
+
+Park the zoom exactly on a threshold and jiggle it. Expected: the level does not
+flip back and forth — that is what `pickLevel`'s hysteresis is for. If the
+network panel shows a sheet being refetched every frame, the hysteresis is
+broken.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add lab/src/corpus
+git commit -m "swap the corpus wall between both sheets and the loose thumbnails"
+```
+
+---
+
+### Task 18: The full gate
 
 Only now, and only once.
 
