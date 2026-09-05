@@ -10,6 +10,13 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-05-corpus-wall-design.md`
 
+**Run Python tests as `.venv/bin/python -m pytest`, never `.venv/bin/pytest`.**
+The venv is shared with the main checkout and its editable install maps
+`brick_icons` to the main checkout's copy. The console script puts its own
+`bin/` on `sys.path[0]` and so imports *that* tree; `-m` puts the working
+directory first and imports this one. Both forms pass for a module that exists
+unchanged in both trees, which is how the wrong one goes unnoticed.
+
 ---
 
 ## File structure
@@ -151,7 +158,7 @@ def test_one_unreadable_svg_does_not_abandon_the_rest(tree):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `.venv/bin/pytest tests/test_index_census.py -v`
+Run: `.venv/bin/python -m pytest tests/test_index_census.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'index-census-renders'`
 
 - [ ] **Step 3: Write the script**
@@ -234,7 +241,7 @@ if __name__ == "__main__":
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `.venv/bin/pytest tests/test_index_census.py -v`
+Run: `.venv/bin/python -m pytest tests/test_index_census.py -v`
 Expected: PASS, 8 tests
 
 - [ ] **Step 5: Run it for real**
@@ -317,7 +324,7 @@ def test_an_index_past_the_grid_is_an_error():
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `.venv/bin/pytest tests/test_thumbs.py -v`
+Run: `.venv/bin/python -m pytest tests/test_thumbs.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'brick_icons.thumbs'`
 
 - [ ] **Step 3: Write the module**
@@ -375,7 +382,7 @@ def geometry(count: int, level: int) -> Geometry:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `.venv/bin/pytest tests/test_thumbs.py -v`
+Run: `.venv/bin/python -m pytest tests/test_thumbs.py -v`
 Expected: PASS, 6 tests
 
 - [ ] **Step 5: Commit**
@@ -459,7 +466,7 @@ def test_the_baked_sha_is_readable_back(tmp_path):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `.venv/bin/pytest tests/test_thumbs.py -v`
+Run: `.venv/bin/python -m pytest tests/test_thumbs.py -v`
 Expected: FAIL — `AttributeError: module 'brick_icons.thumbs' has no attribute 'bake_part'`
 
 - [ ] **Step 3: Implement**
@@ -541,7 +548,7 @@ def _square(drawn: Image.Image, level: int) -> Image.Image:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `.venv/bin/pytest tests/test_thumbs.py -v`
+Run: `.venv/bin/python -m pytest tests/test_thumbs.py -v`
 Expected: PASS, 9 tests
 
 - [ ] **Step 5: Commit**
@@ -610,7 +617,7 @@ def test_the_gutter_replicates_the_cell_edge(tmp_path):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `.venv/bin/pytest tests/test_thumbs.py -v`
+Run: `.venv/bin/python -m pytest tests/test_thumbs.py -v`
 Expected: FAIL — `AttributeError: module 'brick_icons.thumbs' has no attribute 'compose'`
 
 - [ ] **Step 3: Implement**
@@ -668,7 +675,7 @@ def _replicate_edges(sheet: Image.Image, cell: Image.Image,
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `.venv/bin/pytest tests/test_thumbs.py -v`
+Run: `.venv/bin/python -m pytest tests/test_thumbs.py -v`
 Expected: PASS, 13 tests
 
 - [ ] **Step 5: Commit**
@@ -909,7 +916,7 @@ def test_a_delta_cell_keeps_the_index_it_has_on_the_wall(conn):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `.venv/bin/pytest tests/test_lab_cells.py -v`
+Run: `.venv/bin/python -m pytest tests/test_lab_cells.py -v`
 Expected: FAIL — `ImportError: cannot import name 'cells'`
 
 - [ ] **Step 3: Implement**
@@ -984,7 +991,7 @@ def cells(conn: sqlite3.Connection, source: str = "census-naive",
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `.venv/bin/pytest tests/test_lab_cells.py -v`
+Run: `.venv/bin/python -m pytest tests/test_lab_cells.py -v`
 Expected: PASS, 8 tests
 
 - [ ] **Step 5: Commit**
@@ -1080,7 +1087,7 @@ def test_sources_route_lists_the_slots_that_have_renders(tmp_path):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `.venv/bin/pytest tests/test_lab_app.py -k corpus -v`
+Run: `.venv/bin/python -m pytest tests/test_lab_app.py -k corpus -v`
 Expected: FAIL — `TypeError: create_app() got an unexpected keyword argument 'corpus_db'`
 
 - [ ] **Step 3: Implement**
@@ -1202,7 +1209,7 @@ Then add the routes, next to the other artifact routes:
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `.venv/bin/pytest tests/test_lab_app.py -v`
+Run: `.venv/bin/python -m pytest tests/test_lab_app.py -v`
 Expected: PASS, including the 8 new corpus tests and every route test that
 already passed.
 
@@ -3118,7 +3125,7 @@ Only now, and only once.
 
 - [ ] **Step 1: Run the Python suite**
 
-Run: `.venv/bin/pytest`
+Run: `.venv/bin/python -m pytest`
 Expected: PASS. If something outside `tests/test_thumbs.py`,
 `tests/test_lab_cells.py`, `tests/test_lab_app.py` or
 `tests/test_index_census.py` fails, check whether another suite is running on
