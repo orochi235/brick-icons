@@ -82,6 +82,24 @@ describe('the loupe buttons', () => {
     expect(screen.getByText('loupe').getAttribute('aria-pressed')).toBe('false');
   });
 
+  it('shows a key-armed toggle as half-pressed, not as on', () => {
+    bar({});
+    const button = screen.getByText('loupe');
+    fireEvent.keyDown(window, { key: 'Alt' });
+    expect(button.className).toContain('is-armed');
+    expect(button.className).not.toContain('is-on');
+    fireEvent.keyUp(window, { key: 'Alt' });
+    expect(button.className).not.toContain('is-armed');
+  });
+
+  it('shows a clicked toggle as on, even while the key is held', () => {
+    bar({ loupe_sticky: true });
+    fireEvent.keyDown(window, { key: 'Alt' });
+    const button = screen.getByText('loupe');
+    expect(button.className).toContain('is-on');
+    expect(button.className).not.toContain('is-armed');
+  });
+
   it('makes the loupe sticky on a click', () => {
     const setConfig = vi.fn();
     bar({}, setConfig);

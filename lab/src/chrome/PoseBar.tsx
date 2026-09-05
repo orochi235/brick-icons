@@ -57,7 +57,9 @@ export interface PoseBarProps {
 export function PoseBar({ angle, config, fields, setConfig }: PoseBarProps) {
   const sources = (config.sources as string[]) ?? [];
   const layout = String(config.layout ?? LAYOUTS[0]);
-  const loupeLive = useAltHeld() || Boolean(config.loupe_sticky);
+  const altHeld = useAltHeld();
+  const loupeSticky = Boolean(config.loupe_sticky);
+  const loupeLive = altHeld || loupeSticky;
   const toggle = (id: string) => setConfig('sources',
     sources.includes(id) ? sources.filter((s) => s !== id) : [...sources, id]);
 
@@ -118,7 +120,7 @@ export function PoseBar({ angle, config, fields, setConfig }: PoseBarProps) {
       <div className="pose-bar-group" role="group" aria-label="Loupe">
         <button
           type="button"
-          className={loupeLive ? 'pose is-on' : 'pose'}
+          className={loupeSticky ? 'pose is-on' : altHeld ? 'pose is-armed' : 'pose'}
           aria-pressed={loupeLive}
           title="Hold Alt over a pane to magnify; Alt+wheel sets how much. Click to keep it up."
           onClick={() => setConfig('loupe_sticky', !config.loupe_sticky)}

@@ -78,6 +78,14 @@
 .pose:hover { border-color: var(--wzl-border); }
 .pose.is-on { border-color: currentColor; font-weight: 700; }
 
+/* Half-pressed: a key is arming the toggle, so the button is live but letting
+   go returns it. Distinct from is-on, which a click set and a click clears. */
+.pose.is-armed {
+  background: var(--wzl-accent-soft);
+  border-color: var(--wzl-accent);
+  color: var(--wzl-fg-muted);
+}
+
 .quick-option { display: flex; align-items: center; gap: 0.25rem; font-size: 0.7rem; }
 .part-title { font-weight: 700; }
 
