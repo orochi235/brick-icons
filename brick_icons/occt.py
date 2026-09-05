@@ -410,9 +410,12 @@ def analytic_creases(shape: TopoDS_Shape, out: dict) -> TopoDS_Shape:
     cos_tol = math.cos(math.radians(TANGENT_DEG))
     keep = []
     for i in range(1, amap.Extent() + 1):
-        faces = list(amap.FindFromIndex(i))
-        if len(faces) != 2:
+        # First/Last, never list(): exhausting an OCP collection iterator
+        # throws a C++ stop_iteration whose unwind costs 3ms inside OCP.so
+        fl = amap.FindFromIndex(i)
+        if fl.Size() != 2:
             continue          # a crack has no junction; see the docstring
+        faces = (fl.First(), fl.Last())
         if faces[0].IsSame(faces[1]):
             continue          # a closed surface's parametric seam, not a crease
         try:
@@ -1279,8 +1282,11 @@ def _group_planes(shape, out, plane_by_idx):
                                    TopAbs_ShapeEnum.TopAbs_FACE, amap)
     pairs, A, B = [], [], []
     for i in range(1, amap.Extent() + 1):
-        fs = list(amap.FindFromIndex(i))
-        if len(fs) != 2 or fs[0].IsSame(fs[1]):
+        fl = amap.FindFromIndex(i)          # not list(): see analytic_creases
+        if fl.Size() != 2:
+            continue
+        fs = (fl.First(), fl.Last())
+        if fs[0].IsSame(fs[1]):
             continue
         fa = plane_by_idx.get(fmap.FindIndex(fs[0]))
         fb = plane_by_idx.get(fmap.FindIndex(fs[1]))
