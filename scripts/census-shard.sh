@@ -5,7 +5,10 @@
 #
 #     scripts/census-shard.sh <engine> <tag> [per_part_timeout_s]
 #
-# Reads out/census/<engine>-<tag>.txt and appends to out/census/<engine>-<tag>.jsonl.
+# Reads out/census/<engine>-<tag>.txt, appends to out/census/<engine>-<tag>.jsonl,
+# and keeps every render under out/census/renders/<engine>/ (KEEP= to move it).
+# Without --keep the census measures a drawing and then deletes it, so a row
+# that flags a part cannot be looked at without paying the render again.
 # scripts/census-reshard.py writes those list files. Launch one job per shard:
 #
 #     onto run --detach --timeout 10h --in brick-icons --env PATH=... <node> \
@@ -21,6 +24,7 @@ engine=${1:?engine}
 tag=${2:?shard tag}
 TIMEOUT=${3:-120}
 DIR=out/census
+KEEP=${KEEP:-out/census/renders}
 MAX_RESTARTS=${MAX_RESTARTS:-300}
 
 # The shard's own "7/1437 <part> ..." lines are echoed through unchanged and
@@ -35,7 +39,7 @@ while [ "$n" -le "$MAX_RESTARTS" ]; do
   {
     .venv/bin/python scripts/compare-silhouette-truth.py \
       --list "$DIR/$engine-$tag.txt" --engine "$engine" --timeout "$TIMEOUT" \
-      --jsonl "$DIR/$engine-$tag.jsonl" --skip-done
+      --jsonl "$DIR/$engine-$tag.jsonl" --skip-done --keep "$KEEP"
     echo $? > "$rcfile"
   } | awk -v label="$engine $tag" '
       { print }

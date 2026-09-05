@@ -37,7 +37,7 @@ for engine in naive occt; do
   for i in $(seq 0 $((SHARDS - 1))); do
     nohup .venv/bin/python scripts/compare-silhouette-truth.py \
       --list "$DIR/shard-$i.txt" --engine "$engine" --timeout "$TIMEOUT" \
-      --jsonl "$DIR/$engine-s$i.jsonl" --skip-done \
+      --jsonl "$DIR/$engine-s$i.jsonl" --skip-done --keep "$DIR/renders" \
       > "$DIR/logs/$engine-s$i.log" 2>&1 &
     echo "started $engine shard $i (pid $!)"
   done
