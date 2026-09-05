@@ -63,6 +63,10 @@ def arc_candidates(ellipses):
         if S_[-1] < MIN_AXIS:
             continue
         cands.append({"c": c, "Minv": np.linalg.inv(M), "M": M,
+                      # ellipse bbox half-extents: point(t) = c + cos t*u +
+                      # sin t*v, so |x-cx| <= hypot(ux, vx)
+                      "hx": float(math.hypot(M[0, 0], M[0, 1])),
+                      "hy": float(math.hypot(M[1, 0], M[1, 1])),
                       "det": float(M[0, 0] * M[1, 1] - M[0, 1] * M[1, 0]),
                       "rx": float(S_[0]), "ry": float(S_[1]),
                       "phi": math.degrees(math.atan2(U_[1, 0], U_[0, 0])),
@@ -103,24 +107,37 @@ def _assign_edges(pts, cands, tol, wide=False):
     """Per ring edge i -> (cand_index, signed sweep[, wide]) or None.
     `wide=True` re-offers edges the strict pass left unmatched at
     WIDE_TOL/WIDE_STEP; those get a third truthy element so _ring_d can
-    demote runs shorter than WIDE_MIN_RUN."""
+    demote runs shorter than WIDE_MIN_RUN.
+
+    Lowest candidate index wins an edge, so candidate order is significant
+    and a skipped candidate must be one that could not have matched: a
+    vertex within `eff` px of the curve is within `eff` of the curve's bbox,
+    which is what the prefilter tests."""
     n = len(pts)
     assign = [None] * n
+    rx0, ry0 = pts.min(axis=0)
+    rx1, ry1 = pts.max(axis=0)
     passes = [(tol, None)] + ([(WIDE_TOL, WIDE_STEP)] if wide else [])
     for ptol, pstep in passes:
         for k, cand in enumerate(cands):
             eff, inward = _cand_tol(cand, ptol)
+            cx, cy = cand["c"]
+            if (rx0 > cx + cand["hx"] + eff or rx1 < cx - cand["hx"] - eff
+                    or ry0 > cy + cand["hy"] + eff
+                    or ry1 < cy - cand["hy"] - eff):
+                continue
+            open_i = [i for i in range(n) if assign[i] is None]
+            if not open_i:
+                return assign
             t = _vertex_angles(pts, cand, eff, inward=inward)
             step = max(cand["step"], pstep) if pstep else cand["step"]
-            for i in range(n):
-                if assign[i] is not None:
-                    continue
-                ti, tj = t[i], t[(i + 1) % n]
-                if np.isnan(ti) or np.isnan(tj):
-                    continue
-                dt = (tj - ti + math.pi) % (2 * math.pi) - math.pi
-                if 1e-9 < abs(dt) <= step:
-                    assign[i] = (k, dt) if pstep is None else (k, dt, True)
+            dt = (np.roll(t, -1) - t + math.pi) % (2 * math.pi) - math.pi
+            ok = np.abs(dt)
+            hit = (ok > 1e-9) & (ok <= step)     # NaN compares False both ways
+            for i in open_i:
+                if hit[i]:
+                    d = float(dt[i])
+                    assign[i] = (k, d) if pstep is None else (k, d, True)
     return assign
 
 
