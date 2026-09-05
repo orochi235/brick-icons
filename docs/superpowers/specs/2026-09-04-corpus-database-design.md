@@ -34,8 +34,8 @@ reconstructed by walking `renders/` and the TOML below.
 
 **What a human authored is git-tracked text.** Defects continue to land in
 `tests/goldens/defects.toml` in the format `brick_icons/lab/defects.py`
-already writes, and part statuses land beside it in `part-status.toml`,
-exported on every write. Import runs the other way at build time, so the two
+already writes, and part statuses and notes land beside it in
+`part-status.toml`, exported on every write. Import runs the other way at build time, so the two
 cannot drift.
 
 ## Schema
