@@ -320,6 +320,26 @@ def test_an_index_past_the_grid_is_an_error():
     g = thumbs.geometry(4, level=8)
     with pytest.raises(IndexError):
         g.cell_box(g.cols * g.rows)
+
+
+def test_the_loose_level_is_not_a_sheet():
+    # 128 px is served as loose files. Sheeting it would silently produce a
+    # 12800px page nothing asks for.
+    with pytest.raises(ValueError):
+        thumbs.geometry(100, level=thumbs.LOOSE_LEVEL)
+
+
+def test_a_square_sheet_never_crops_an_uneven_grid():
+    g = thumbs.geometry(82, level=32)   # cols 10, rows 9
+    assert (g.cols, g.rows) == (10, 9)
+    assert g.size >= g.rows * g.pitch
+    assert g.cell_box(81)[3] <= g.size
+
+
+def test_a_tiny_corpus_still_has_a_grid():
+    for count in (0, 1):
+        g = thumbs.geometry(count, level=8)
+        assert g.cols == 1 and g.rows == 1
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -364,7 +384,7 @@ class Geometry:
         return self.cols * self.pitch
 
     def cell_box(self, index: int) -> tuple[int, int, int, int]:
-        """The cell's pixel box on the sheet, gutters excluded."""
+        """The cell's (left, top, right, bottom) on the sheet, gutters excluded."""
         if not 0 <= index < self.cols * self.rows:
             raise IndexError(f"cell {index} is outside a {self.cols}x{self.rows} grid")
         col, row = index % self.cols, index // self.cols
@@ -374,7 +394,11 @@ class Geometry:
 
 
 def geometry(count: int, level: int) -> Geometry:
+    if level not in SHEET_LEVELS:
+        raise ValueError(f"{level} is not a sheet level; sheets are {SHEET_LEVELS}")
     cols = max(1, math.ceil(math.sqrt(count)))
+    # cols >= sqrt(count) makes cols*cols >= count, so rows <= cols always and
+    # a square `size` is never a crop -- only ever some dead rows at the bottom.
     rows = max(1, math.ceil(count / cols))
     gutter = 0 if level == min(SHEET_LEVELS) else GUTTER
     return Geometry(count=count, level=level, cols=cols, rows=rows, gutter=gutter)
