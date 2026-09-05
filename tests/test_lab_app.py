@@ -356,3 +356,80 @@ def test_colors_route_carries_legos_own_number_where_there_is_one(client):
     by_code = {c["code"]: c for c in client.get("/api/colors").json()["colors"]}
     assert by_code[0]["legoId"] == 26
     assert by_code[507]["legoId"] is None
+
+
+def _corpus_client(tmp_path):
+    from brick_icons import db
+    conn = db.connect(tmp_path / "corpus.db")
+    conn.execute("INSERT INTO parts (id, title, category, printed, obsolete, "
+                 "status) VALUES ('3001', 'Brick 2 x 4', 'Brick', 0, 0, 'good')")
+    conn.commit()
+    conn.close()
+    thumbs = tmp_path / "thumbs"
+    (thumbs / "naive" / "128").mkdir(parents=True)
+    (thumbs / "naive" / "128" / "3001.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    (thumbs / "naive" / "sheet-8.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    return TestClient(lab_app.create_app(
+        cache_root=tmp_path / "cache",
+        corpus_db=tmp_path / "corpus.db",
+        thumbs_root=thumbs))
+
+
+def test_cells_route_returns_every_part(tmp_path):
+    body = _corpus_client(tmp_path).get("/api/corpus/cells").json()
+    assert body["cells"][0]["id"] == "3001"
+    assert body["count"] == 1
+
+
+def test_cells_route_takes_a_since(tmp_path):
+    body = _corpus_client(tmp_path).get(
+        "/api/corpus/cells", params={"since": "2030-01-01T00:00:00+00:00"}).json()
+    assert body["cells"] == []
+    assert body["count"] == 1
+
+
+def test_cells_route_takes_a_slot(tmp_path):
+    body = _corpus_client(tmp_path).get(
+        "/api/corpus/cells", params={"source": "naive"}).json()
+    assert body["source"] == "naive"
+
+
+def test_summary_route_counts_the_corpus(tmp_path):
+    body = _corpus_client(tmp_path).get("/api/corpus/summary").json()
+    assert body["parts"] == 1
+
+
+def test_sources_route_lists_the_slots_that_have_renders(tmp_path):
+    body = _corpus_client(tmp_path).get("/api/corpus/sources").json()
+    assert body["sources"] == []
+
+
+def test_part_route_carries_measurements_and_defects(tmp_path):
+    body = _corpus_client(tmp_path).get("/api/corpus/part/3001").json()
+    assert body["part"]["title"] == "Brick 2 x 4"
+    assert body["findings"] == []
+    assert body["defects"] == []
+
+
+def test_part_route_404s_on_an_unknown_part(tmp_path):
+    assert _corpus_client(tmp_path).get("/api/corpus/part/nope").status_code == 404
+
+
+def test_thumb_route_serves_a_loose_level(tmp_path):
+    r = _corpus_client(tmp_path).get("/api/thumbs/naive/128/3001.png")
+    assert r.status_code == 200
+
+
+def test_thumb_route_serves_a_sheet(tmp_path):
+    assert _corpus_client(tmp_path).get(
+        "/api/thumbs/naive/sheet-8.png").status_code == 200
+
+
+def test_thumb_route_refuses_an_unknown_slot(tmp_path):
+    assert _corpus_client(tmp_path).get(
+        "/api/thumbs/nonsense/128/3001.png").status_code == 400
+
+
+def test_thumb_route_refuses_traversal(tmp_path):
+    assert _corpus_client(tmp_path).get(
+        "/api/thumbs/naive/128/..%2F..%2Fcorpus.db").status_code in (400, 404)
