@@ -3377,10 +3377,18 @@ not what a viewer needs to see. Replace it with four states:
 
 | state | colour | source |
 |---|---|---|
-| an open defect is filed against it | bright ochre `#c8860d` | `defects` |
-| it cannot be drawn — GEOS, dead process, type error | red `#8c2020` | `measurements.error` |
-| the render timed out | dim rust `#5a3326` | `measurements.error` |
+| an open defect against this slot | bright ochre `#c8860d` | `defects.engines` includes this engine |
+| cannot be drawn here — GEOS, dead process, type error | red `#8c2020` | `measurements.error` |
+| timed out here | dim rust `#5a3326` | `measurements.error` |
+| an open defect against another slot | muted ochre `#6b5220` | `defects.engines` excludes it |
+| a failure or timeout under another engine | muted red `#4a2a2a` | other engines' measurements |
 | nothing is known | gray `#3a3a3f` | absence |
+
+`defects.engines` is a JSON array of engine names, so a defect knows which
+permutations it applies to. Parts are measured under both `naive` and `occt`,
+and 1,313 of them error under at least one — so "a problem exists in another
+permutation of this part" is real data, not a hypothetical. What is wrong here
+always outranks what is wrong elsewhere.
 
 **A timeout is not a defect.** 1,420 of the 1,428 recorded errors are
 `TimeoutError`; the eight that genuinely failed would be invisible among them
@@ -3402,12 +3410,24 @@ second approach.
 - Modify: `lab/src/corpus/paint.ts`, `paint.test.ts`
 - Modify: `lab/src/corpus/PartCard.tsx` (say why a cell is the colour it is)
 
-- [ ] **Step 1: Return open defect counts from `cells.py`**
+- [ ] **Step 1: Return the four problem counts from `cells.py`**
 
-Test first. A cell gains `open_defects`, counting defects on that part whose
-status is not `fixed` or `notabug`. Add tests for: a part with no defects
-reporting 0, a part with two open ones reporting 2, and a part whose only defect
-is `fixed` reporting 0. One query for the whole response, not one per cell.
+Test first. A cell gains four fields, all counting only what is open (status not
+`fixed`, not `notabug`) or erroring:
+
+- `open_defects` — defects whose `engines` includes this slot's engine
+- `open_defects_elsewhere` — defects on this part naming only other engines
+- `error` — this engine's latest error, as today
+- `error_elsewhere` — true when another engine's latest measurement errored
+
+`engines` is stored as a JSON array string, so parse it rather than pattern
+matching the text. `cells.engine_for(source)` already maps a slot to its engine.
+
+Tests to write: a part with no defects reports 0 and 0; a defect naming this
+engine counts in `open_defects` only; a defect naming a different engine counts
+in `open_defects_elsewhere` only; a `fixed` defect counts in neither; a part
+erroring under `occt` while clean under `naive` sets `error_elsewhere` and not
+`error`. One query per response for each, not one per cell.
 
 - [ ] **Step 2: Decide the fill in `paint.ts`**
 
@@ -3424,6 +3444,18 @@ it('separates a part that cannot be drawn from one that timed out', () => {
   expect(fillFor({ ...base, error: 'GEOSException' })).toBe(CELL_FILL.failed);
   expect(fillFor({ ...base, error: 'ProcessDied' })).toBe(CELL_FILL.failed);
   expect(fillFor({ ...base, error: 'TimeoutError' })).toBe(CELL_FILL.timeout);
+});
+
+it('mutes a problem that belongs to another permutation', () => {
+  expect(fillFor({ ...base, open_defects_elsewhere: 1 }))
+    .toBe(CELL_FILL.defectElsewhere);
+  expect(fillFor({ ...base, error_elsewhere: true }))
+    .toBe(CELL_FILL.problemElsewhere);
+});
+
+it('lets what is wrong here outrank what is wrong elsewhere', () => {
+  expect(fillFor({ ...base, error: 'TimeoutError', open_defects_elsewhere: 3 }))
+    .toBe(CELL_FILL.timeout);
 });
 
 it('says nothing is known when nothing is known', () => {

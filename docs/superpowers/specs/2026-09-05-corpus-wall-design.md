@@ -136,14 +136,21 @@ a second strategy rather than a rewrite of the wall.
 ## What a cell's colour says
 
 A cell with no thumbnail is not blank space — it is most of the wall, and its
-colour is the only thing it can say. Four states, in this precedence:
+colour is the only thing it can say. Six states, in this precedence:
 
 | state | colour | source |
 |---|---|---|
-| an open defect is filed against it | bright ochre `#c8860d` | `defects` |
-| it cannot be drawn — GEOS, a dead process, a type error | red `#8c2020` | `measurements.error` |
-| the render timed out | dim rust `#5a3326` | `measurements.error` |
+| an open defect against this slot | bright ochre `#c8860d` | `defects.engines` includes this engine |
+| it cannot be drawn here — GEOS, a dead process, a type error | red `#8c2020` | `measurements.error` |
+| the render timed out here | dim rust `#5a3326` | `measurements.error` |
+| an open defect against another slot | muted ochre `#6b5220` | `defects.engines` excludes this engine |
+| a failure or timeout under another engine | muted red `#4a2a2a` | `measurements` for another engine |
 | nothing is known | gray `#3a3a3f` | absence |
+
+**A problem in another permutation is worth seeing but must not shout.** A part
+that renders cleanly here and fails under `occt` is a lead, not a defect of the
+view you are looking at — so it gets the muted tint of whatever it is. What is
+wrong *here* always outranks what is wrong elsewhere.
 
 **A timeout is not a defect.** 1,420 of the 1,428 recorded errors are
 `TimeoutError` — the render did not finish, not that the part cannot be drawn.
