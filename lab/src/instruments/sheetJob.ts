@@ -32,8 +32,9 @@ function cellFrom(part: string, result: RenderResult): SheetCell {
   };
 }
 
-/** One batch job for the whole list. The server renders in order, so a result
- *  at index i belongs to `parts[i]`. */
+/** One batch job for the whole list. The server renders several at once and
+ *  they land as they finish, so a result names its own part -- the first word
+ *  of the argv that produced it -- rather than being matched by position. */
 export async function* runSheet(
   { client, parts, config, signal, pollMs = 400 }: RunSheetArgs,
 ): AsyncIterable<SheetEvent> {
@@ -45,8 +46,8 @@ export async function* runSheet(
 
   for await (const state of jobStates(client, started.job, { signal, pollMs })) {
     while (seen < state.results.length) {
-      const part = parts[seen];
       const result = state.results[seen];
+      const part = result?.argv[0];
       if (part && result) yield { kind: 'item', item: cellFrom(part, result) };
       seen += 1;
     }

@@ -205,7 +205,9 @@ def test_batch_starts_one_job_for_the_list(client, ldraw_dir):
     done = _finish(client, body["job"], timeout=180)
     assert done["total"] == 2
     assert done["done"] == 2
-    assert [e["index"] for e in done["events"]] == [1, 2]
+    # The list runs several at a time, so the positions arrive in
+    # whatever order the renders finish.
+    assert sorted(e["index"] for e in done["events"]) == [1, 2]
 
 
 def test_command_route_returns_argv_without_rendering(client):

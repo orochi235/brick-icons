@@ -24,6 +24,21 @@ async function collect<T>(iter: AsyncIterable<T>): Promise<T[]> {
 }
 
 describe('runSheet', () => {
+  it('a cell out of order still lands on its own part', async () => {
+    // The parts are asked for in one order and finish in another, which is
+    // what running several renders at once produces.
+    const client = fakeClient([result({ argv: ['3024'], key: 'k2' }),
+                               result({ argv: ['3005'] })]);
+    const events = await collect(runSheet({
+      client, parts: ['3005', '3024'], config: {},
+      signal: new AbortController().signal, pollMs: 0,
+    }));
+    const cells = events.filter((e) => e.kind === 'item');
+    expect(cells.map((e) => (e as { item: { part: string; key: string } }).item))
+      .toEqual([expect.objectContaining({ part: '3024', key: 'k2' }),
+                expect.objectContaining({ part: '3005', key: 'k1' })]);
+  });
+
   it('reports the total before any cell', async () => {
     const events = await collect(runSheet({
       client: fakeClient([result()]), parts: ['3005'], config: {},
@@ -32,7 +47,7 @@ describe('runSheet', () => {
     expect(events[0]).toEqual({ kind: 'total', total: 1 });
   });
 
-  it('yields a cell per part, in the order asked', async () => {
+  it('names each cell from the render that produced it', async () => {
     const client = fakeClient([result({ argv: ['3005'] }),
                                result({ argv: ['3024'], key: 'k2' })]);
     const events = await collect(runSheet({

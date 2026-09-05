@@ -84,3 +84,18 @@ def test_work_can_watch_the_cancellation():
     r.cancel(job_id)
     assert _wait(r, job_id)["state"] == "cancelled"
     assert saw_it.is_set()
+
+
+def test_a_wide_job_runs_its_items_at_once():
+    """A contact sheet is one job of many renders. Left one at a time it uses
+    one render slot of four, so the barrier never opens."""
+    together = threading.Barrier(2, timeout=5)
+
+    def work(item, emit, cancel):
+        together.wait()
+        return item
+
+    r = jobs.Registry()
+    job_id = r.start("test", ["a", "b"], work, workers=2)
+    assert _wait(r, job_id)["state"] == "done"
+    assert sorted(r.get(job_id)["results"]) == ["a", "b"]

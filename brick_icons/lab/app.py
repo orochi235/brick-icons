@@ -110,7 +110,8 @@ def create_app(root: Path | str = ".",
             emit(f"{case['case']}: {compared['state']}")
             return {"case": case["case"], "combo": case["combo"], **compared}
 
-        return {"job": app.state.jobs.start("goldens", cases, work),
+        return {"job": app.state.jobs.start("goldens", cases, work,
+                                            workers=runner.worker_count()),
                 "count": len(cases)}
 
     @app.post("/api/render")
@@ -258,7 +259,8 @@ def create_app(root: Path | str = ".",
                 raise RuntimeError(result["error"])
             return result
 
-        return {"job": app.state.jobs.start("batch", argvs, work),
+        return {"job": app.state.jobs.start("batch", argvs, work,
+                                            workers=runner.worker_count()),
                 "count": len(argvs)}
 
     ldraw = app.state.ldraw_dir

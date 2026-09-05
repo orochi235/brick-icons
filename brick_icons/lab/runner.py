@@ -28,14 +28,14 @@ DEFAULT_WORKERS = 4
 _CTX = mp.get_context("spawn")
 
 
-def _worker_count() -> int:
+def worker_count() -> int:
     try:
         return max(1, int(os.environ.get("BRICK_LAB_WORKERS", DEFAULT_WORKERS)))
     except ValueError:
         return DEFAULT_WORKERS
 
 
-_slots = threading.Semaphore(_worker_count())
+_slots = threading.Semaphore(worker_count())
 
 
 def _command(argv: list[str]) -> str:
