@@ -31,6 +31,20 @@ machine will not carry. A `--only <case>` loop over the 52 ids finished every
 time, and prints per-case timings worth keeping (`outline-flat3__3649` 330s,
 `4740p03` 114s, `outline__3649` 230s; everything else under 25s).
 
+## High priority: decals on the occt path
+
+**occt does not draw decoration at all.** `shade.unwrap_decoration` and
+`shade.ink_prims` are called only from `hlr.py` — lines 405, 451 and 522 —
+and `occt.py` calls neither. Measured on `20308p02`: naive's palette carries
+the print colors (`#b40000`, `#f6a9bb`, `#720012`), occt's is five grays.
+
+This blocks the flag flip as surely as the silhouette gap does: an engine that
+cannot draw a print cannot become the default for a library that is more than
+half printed parts. The decoration passes take faces and a projection, so the
+question is what occt hands them — its sewn-shape faces rather than `hlr`'s
+triangle faces — and whether `unwrap.bind` can carry a decal onto an exact
+surface instead of a tessellated one.
+
 ## Next: render performance
 
 Agreed in conversation, nothing written down elsewhere. A lab render is slow
