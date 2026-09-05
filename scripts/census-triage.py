@@ -2,6 +2,7 @@
 """Split a finished census run's corpus into work worth redoing and work that isn't.
 
     scripts/census-triage.py <archive-dir> <engine> <n>
+    scripts/census-triage.py <archive-dir> <engine> --corpus LIST --out LIST
 
 A part is degenerate for an engine when every row that engine recorded for it
 carries an error — a 120s timeout, an OCCT segfault, a geometry exception. Those
@@ -15,9 +16,24 @@ want after raising --timeout or fixing the engine.
 The rest of the corpus is split into <engine>-r<i>.txt. Unlike census-reshard.py
 this keeps parts that already succeeded — the point of a re-run is the renders
 --keep saves, which the first run drew and deleted.
+
+The second form is one pass of the watchdog ratchet. `census-shard.sh` kills a
+part that outlives HARD and the restart loop buries it as ProcessDied, so a pass
+leaves some of its input undone; this reads that pass's own list as the corpus
+and writes what is still undone as the next pass's list, to be run at a higher
+HARD. The set shrinks each pass and nothing is discarded — a part the ceiling
+killed comes back rather than being ruled out:
+
+    HARD=240 scripts/census-shard.sh occt h240 120
+    scripts/census-triage.py out/census occt \\
+        --corpus out/census/occt-h240.txt --out out/census/occt-h480.txt
+    HARD=480 scripts/census-shard.sh occt h480 120
+
+Stop when the count stops falling: what is left then is parts the engine cannot
+draw, not parts it was not given long enough to draw.
 """
+import argparse
 import json
-import sys
 from collections import Counter
 from pathlib import Path
 
@@ -38,8 +54,20 @@ def rows(archive: Path, engine: str):
 
 
 def main() -> int:
-    archive, engine, n = Path(sys.argv[1]), sys.argv[2], int(sys.argv[3])
-    corpus = DIR.joinpath("order.txt").read_text().split()
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("archive", type=Path)
+    ap.add_argument("engine")
+    ap.add_argument("n", nargs="?", type=int, help="number of shards to split into")
+    ap.add_argument("--corpus", type=Path, default=DIR / "order.txt",
+                    help="list file to triage against (default out/census/order.txt)")
+    ap.add_argument("--out", type=Path,
+                    help="write the still-undone parts here as one ratchet pass")
+    args = ap.parse_args()
+    if args.out is None and args.n is None:
+        ap.error("give <n> to split into shards, or --out for one ratchet pass")
+
+    archive, engine = args.archive, args.engine
+    corpus = args.corpus.read_text().split()
 
     good, bad = set(), {}
     for i, row in enumerate(rows(archive, engine), 1):
@@ -52,6 +80,9 @@ def main() -> int:
             good.add(part)
         if i % 2000 == 0:
             print(f"  read {i} rows")
+
+    if args.out:
+        return ratchet(engine, corpus, good, bad, args.corpus, args.out)
 
     # A part that failed once and succeeded later is not degenerate: the shard
     # restarts, and ProcessDied means the run died on it, not that it cannot be
@@ -75,8 +106,8 @@ def main() -> int:
         step = max(1, len(degenerate) // PROBE)
         probe = degenerate[::step][:PROBE]
         DIR.joinpath(f"{engine}-probe{PROBE}.txt").write_text("\n".join(probe) + "\n")
-    for i in range(n):
-        shard = keep[i::n]
+    for i in range(args.n):
+        shard = keep[i::args.n]
         DIR.joinpath(f"{engine}-r{i}.txt").write_text("\n".join(shard) + "\n")
         print(f"{engine}-r{i}: {len(shard)} parts")
 
@@ -86,6 +117,23 @@ def main() -> int:
     print(f"{engine}: {len(backfill)} measured but never drawn -> {engine}-backfill.txt")
     for err, count in why.most_common():
         print(f"  {err}: {count}")
+    return 0
+
+
+def ratchet(engine, corpus, good, bad, src: Path, out: Path) -> int:
+    # Absence of a row is not success: a pass killed at its deadline leaves
+    # parts it never reached, and testing `p in bad` instead would drop them
+    # from every later pass without saying so.
+    again = [p for p in corpus if p not in good]
+    out.write_text("\n".join(again) + "\n" if again else "")
+
+    why = Counter(bad.get(p, "(never attempted)") for p in again)
+    done = len(corpus) - len(again)
+    print(f"{engine}: {len(corpus)} in {src}, {done} done, {len(again)} to re-run -> {out}")
+    for err, count in why.most_common():
+        print(f"  {err}: {count}")
+    if not again:
+        print(f"{engine}: nothing left, the ratchet is done")
     return 0
 
 
