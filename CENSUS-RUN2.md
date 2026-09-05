@@ -140,10 +140,21 @@ with edge count, so it is largest on cheap parts (6521: 1.78s → 0.15s) and sma
 nearest the 120s cap, which is the wrong way round. Note "the rest" holding still across the two
 revisions — that is the instrumentation checking itself.
 
-**The next occt win is not in OCCT.** Geometry is now 31% of the render, and 10-13% on 0901 and
-0902, the two slowest parts sampled; their ~20s each is `shade.order_faces` and `fill_ops`, which
-every engine shares. Driving geometry to zero from here would reach 3.0x against the pre-fix
-baseline and stop.
+**The rest of the render is `fill_ops`, and it is shared by every engine.** Geometry is now 31% of
+a render and 10-14% on the baseplates 0901/0902, the slowest parts sampled. `fill_ops` holds the
+remainder — 23.6s of 0901's 28.8s, most of it in `clip_pass`. Not `order_faces`: its pair test is
+O(n^2) but 98.1% of 0901's 103,740 pairs bail on the bbox check, for 1.2s all told.
+
+Two costs came out of it (c4834f0, 2fcde17), both byte-identical across 36 parts:
+
+- `geom2d._assign_edges` offered every ring to every candidate ellipse, then walked the ring's
+  vertices in Python. Prefiltering candidates by bbox and vectorizing the sweep took 0901 from
+  526,955 `_vertex_angles` calls and 9.31s to 8,419 calls and 0.79s.
+- Every `Polygon()` empty sentinel in `geom2d` parsed the WKT text `"POLYGON EMPTY"` at 2us a
+  call. Part-dependent: 2.1M calls on 44937, 872 on 0902.
+
+0901 end to end: 28.8s → 21.0s under the profiler. What remains is GEOS itself — union,
+intersection, difference and `union_all` — which is real geometric work, not overhead.
 
 **Job `62bb81bd` predates the fix**, so every row it writes carries the old cost. At its sustained
 5.3 parts/min it reaches ~89% of 8,235 by the ~18:40 deadline; at the measured 2x the remaining
