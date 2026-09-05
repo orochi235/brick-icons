@@ -3635,6 +3635,77 @@ git commit -m "give the corpus wall its own labkit shell, theme and loupe"
 
 ---
 
+### Task 22: The caret
+
+The wall is mouse-only. Give it a caret: an implied focus when there is no
+explicit one, arrow keys to move it, `Enter` to raise the card.
+
+**Files:**
+- Create: `lab/src/corpus/caret.ts`, `caret.test.ts`
+- Modify: `lab/src/corpus/paint.ts`, `paint.test.ts` (draw it)
+- Modify: `lab/src/corpus/Wall.tsx`, `CorpusWall.tsx`, and their tests
+
+- [ ] **Step 1: `caret.ts` — two pure functions, tests first**
+
+`impliedCaret(rects, visible, cam, viewport)` returns the index of the cell
+holding the most on-screen area, breaking ties by distance from the viewport
+centre. Area is what separates a clipped edge cell from a whole one; zoomed out
+every whole cell has identical area, so the tie-break is what actually picks.
+Returns `null` for an empty visible set.
+
+`adjacent(rects, from, direction)` returns the index of the nearest cell whose
+centre lies in that direction (`'left' | 'right' | 'up' | 'down'`), or `null` at
+the edge. **Geometric, not `index ± 1`** — grid arithmetic works today and
+breaks the moment a grouped layout inserts whitespace, which is the whole reason
+layout is a strategy. Prefer a cell close to the same row or column: score by
+distance along the direction plus a penalty for drifting across it, so pressing
+right from the end of a row does not leap diagonally.
+
+Tests to write: the implied caret prefers a whole cell over a clipped one;
+prefers the centre among equals; is null when nothing is visible. `adjacent`
+finds the neighbour in each of the four directions, returns null at each edge,
+and — the one that matters — picks the same-row neighbour over a nearer
+diagonal one.
+
+- [ ] **Step 2: Draw it**
+
+Add a `caret` flag to the paint commands, set for the caret's index, and have
+`Wall.tsx` stroke it distinctly from the ochre defect ring — the two can be on
+the same cell. Test that exactly one command carries it and that a cell can
+carry both.
+
+- [ ] **Step 3: Keys**
+
+The canvas takes `tabIndex={0}`. Arrow keys move the caret and make it explicit;
+`Enter` raises the card for it; `Escape` drops back to the implied caret.
+Arrowing to a cell that is off screen pans the camera to bring it in — reuse the
+camera rather than adding a second notion of position.
+
+Announce the caret's part through an `aria-live="polite"` region. A canvas
+cannot expose 24,591 focusable children, so the canvas holds focus and the live
+region carries the name — that is keyboard operability and a programmatically
+determinable name without inventing DOM nodes for pixels.
+
+- [ ] **Step 4: Run, drive it, commit**
+
+`npx vitest run src/corpus` and `npx tsc -b --noEmit` clean.
+
+In the browser: tab to the canvas, confirm a caret appears on a central cell,
+arrow around and confirm it moves one cell at a time in the direction pressed,
+arrow to the edge of the viewport and confirm the camera follows, press Enter
+and confirm the card opens for the carated cell. Screenshot the caret and slop
+it.
+
+```bash
+git add lab/src/corpus/caret.ts lab/src/corpus/caret.test.ts \
+        lab/src/corpus/paint.ts lab/src/corpus/paint.test.ts \
+        lab/src/corpus/Wall.tsx lab/src/corpus/CorpusWall.tsx \
+        lab/src/corpus/CorpusWall.test.tsx
+git commit -m "give the wall a caret, moved by the arrow keys"
+```
+
+---
+
 ### Task 19: The full gate
 
 Only now, and only once.
