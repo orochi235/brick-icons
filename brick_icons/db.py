@@ -12,6 +12,8 @@ import tomllib
 from datetime import datetime, timezone
 from pathlib import Path
 
+from brick_icons.lab import partindex
+
 DEFAULT_PATH = Path("corpus.db")
 SCHEMA_VERSION = 1
 PART_STATUSES = ("unreviewed", "good", "suspect", "broken", "wontfix")
@@ -114,3 +116,21 @@ def connect(path: Path | str = DEFAULT_PATH) -> sqlite3.Connection:
                  (str(SCHEMA_VERSION),))
     conn.commit()
     return conn
+
+
+def seed_parts(conn: sqlite3.Connection, ldraw_dir: Path | str) -> int:
+    rows = []
+    for entry in partindex.build(ldraw_dir).values():
+        title = entry["description"]
+        rows.append((entry["id"], title, title.split()[0] if title else None,
+                     int(entry["printed"]),
+                     int(title.startswith(("~", "_")))))
+    conn.executemany(
+        "INSERT INTO parts (id, title, category, printed, obsolete) "
+        "VALUES (?, ?, ?, ?, ?) "
+        "ON CONFLICT(id) DO UPDATE SET title=excluded.title, "
+        "category=excluded.category, printed=excluded.printed, "
+        "obsolete=excluded.obsolete",
+        rows)
+    conn.commit()
+    return len(rows)
