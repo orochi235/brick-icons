@@ -60,3 +60,21 @@ status = "open"
 title = "needs tweaks"
 filed = "2026-09-04"
 notes = "Filed to keep it on the list; Mike called it expected, so it ranks below the others here."
+
+[[defect]]
+id = "30152a-ring-whole-circle"
+part = "30152a"
+engines = ["naive"]
+status = "open"
+title = "same split-arc ellipse as 4524"
+filed = "2026-09-04"
+notes = "Third instance after 4524 and 27448."
+
+[[defect]]
+id = "28192dy0-decal-torn"
+part = "28192dy0"
+engines = ["naive"]
+status = "open"
+title = "much of the decal is torn off"
+filed = "2026-09-04"
+notes = "A printed part, so it sits behind the decal work rather than the engine work; filed so the decal pass has a case waiting."
