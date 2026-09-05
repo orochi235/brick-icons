@@ -1586,18 +1586,32 @@ it('fits bounds inside a viewport', () => {
   expect(fitted.scale).toBe(2);
 });
 
+it('does not hand back Infinity for an empty wall', () => {
+  expect(fitBounds({ w: 0, h: 0 }, { width: 200, height: 200 }).scale).toBe(1);
+});
+
 it('picks the coarsest level that covers the on-screen cell size', () => {
   expect(levelFor(4)).toBe(8);
   expect(levelFor(20)).toBe(32);
   expect(levelFor(200)).toBe(128);
 });
 
-it('holds the current level until it is well past the threshold', () => {
-  // 8 -> 32 only at 1.5x the 8px band's top, and back only at 0.67x
-  expect(pickLevel(8, 10)).toBe(8);
-  expect(pickLevel(8, 13)).toBe(32);
-  expect(pickLevel(32, 12)).toBe(32);
+it('holds the current level across the whole hysteresis dead zone', () => {
+  // The 8/32 boundary is 16px, so the dead zone is [16*0.67, 16*1.5] = [10.7, 24].
+  // Inside it the level in hand wins, whichever one that is -- which is the
+  // entire point: a zoom parked on 16px would otherwise re-upload every frame.
+  expect(pickLevel(8, 20)).toBe(8);    // wants 32, not past 24 yet
+  expect(pickLevel(32, 12)).toBe(32);  // wants 8, not below 10.7 yet
+});
+
+it('swaps once the zoom is clearly past the dead zone', () => {
+  expect(pickLevel(8, 30)).toBe(32);
   expect(pickLevel(32, 5)).toBe(8);
+});
+
+it('leaves the level alone when it is already the right one', () => {
+  expect(pickLevel(8, 10)).toBe(8);
+  expect(pickLevel(32, 40)).toBe(32);
 });
 ```
 
@@ -1635,6 +1649,10 @@ export function zoomAt(cam: Camera, sx: number, sy: number,
 
 export function fitBounds(bounds: { w: number; h: number },
                           viewport: { width: number; height: number }): Camera {
+  // An empty wall has zero bounds, and the unguarded division hands back
+  // Infinity -- which multiplies every coordinate into NaN with nothing
+  // downstream to catch it.
+  if (bounds.w <= 0 || bounds.h <= 0) return { x: 0, y: 0, scale: 1 };
   const scale = Math.min(viewport.width / bounds.w, viewport.height / bounds.h);
   return { x: 0, y: 0, scale };
 }
