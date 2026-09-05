@@ -3206,7 +3206,145 @@ git commit -m "swap the corpus wall between both sheets and the loose thumbnails
 
 ---
 
-### Task 18: The full gate
+### Task 18: The part card
+
+Clicking a cell should not jump straight to a full-screen takeover. A single
+click raises a **business-card-sized popup** beside the cell — id, title,
+category, status, the sorted metric, its thumbnail, and a button that opens the
+full lightbox. A **double click** skips the card and opens the lightbox
+directly.
+
+Everything the card shows is already in the `Cell` the wall holds, so the card
+costs no fetch and appears instantly; only the lightbox goes to the server.
+
+**Files:**
+- Create: `lab/src/corpus/PartCard.tsx`, `PartCard.test.tsx`, `PartCard.css`
+- Modify: `lab/src/corpus/Wall.tsx` (report the click point and the cell)
+- Modify: `lab/src/corpus/CorpusWall.tsx` (card state, double-click to lightbox)
+- Modify: `lab/src/corpus/CorpusWall.test.tsx`
+
+Two repo rules bind this:
+
+**No inline `style={...}`.** The card is positioned at the click point, which is
+genuinely dynamic — so set CSS custom properties on the element from a ref in an
+effect (`el.style.setProperty('--card-x', `${x}px`)`) and let the stylesheet
+consume them. The JSX stays free of a `style` prop.
+
+**Single vs double click needs no timer.** A click event carries `detail` — the
+click count. `onClick` returns early when `e.detail === 2` and lets
+`onDoubleClick` handle it, so the card never flashes before the lightbox.
+
+- [ ] **Step 1: Write `lab/src/corpus/PartCard.test.tsx`**
+
+```tsx
+import { expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { PartCard } from '@lab/corpus/PartCard';
+import type { Cell } from '@lab/corpus/types';
+
+const cell: Cell = {
+  id: '3001', index: 0, title: 'Brick 2 x 4', category: 'Brick',
+  printed: false, obsolete: false, status: 'good', sha: 'deadbeefcafe',
+  made_at: '2026-09-05T10:00:00+00:00', extra_d99: 4.5, secs: 12, error: null,
+};
+
+const card = (props: Record<string, unknown> = {}) => (
+  <PartCard cell={cell} source="naive" at={{ x: 100, y: 100 }}
+            viewport={{ width: 1000, height: 800 }}
+            onOpen={() => {}} onClose={() => {}} {...props} />
+);
+
+it('shows what the wall already knows, without fetching', () => {
+  render(card());
+  expect(screen.getByText('Brick 2 x 4')).toBeTruthy();
+  expect(screen.getByText(/3001/)).toBeTruthy();
+  expect(screen.getByText(/good/)).toBeTruthy();
+});
+
+it('shows the thumbnail for the slot being viewed', () => {
+  render(card());
+  expect(screen.getByRole('img', { name: /3001/ })
+    .getAttribute('src')).toContain('/api/thumbs/naive/128/3001.png');
+});
+
+it('says so when a part has no render rather than showing a broken image', () => {
+  render(card({ cell: { ...cell, sha: null } }));
+  expect(screen.queryByRole('img')).toBeNull();
+  expect(screen.getByText(/not rendered/i)).toBeTruthy();
+});
+
+it('opens the lightbox from its button', () => {
+  const onOpen = vi.fn();
+  render(card({ onOpen }));
+  fireEvent.click(screen.getByRole('button', { name: /open/i }));
+  expect(onOpen).toHaveBeenCalledWith('3001');
+});
+
+it('closes on Escape', () => {
+  const onClose = vi.fn();
+  render(card({ onClose }));
+  fireEvent.keyDown(window, { key: 'Escape' });
+  expect(onClose).toHaveBeenCalled();
+});
+
+it('stays inside the viewport when clicked near the right edge', () => {
+  const { container } = render(card({ at: { x: 990, y: 790 } }));
+  const el = container.querySelector('.corpus-card') as HTMLElement;
+  expect(parseInt(el.style.getPropertyValue('--card-x'), 10))
+    .toBeLessThan(990);
+});
+```
+
+- [ ] **Step 2: Run to verify it fails**
+
+`cd lab && npx vitest run src/corpus/PartCard.test.tsx`
+
+- [ ] **Step 3: Implement the card**
+
+Write `PartCard.tsx` yourself against those tests. It takes
+`{ cell, source, at, viewport, onOpen, onClose }`, renders a small panel with
+the part's identity, its status, `extra_d99`/`secs` where present, the thumbnail
+when `cell.sha` is set, and an Open button. It clamps `--card-x`/`--card-y` so
+the card never leaves the viewport, and it listens for Escape.
+
+`PartCard.css` sizes it like a business card (about 320x190) and positions it
+absolutely from the two custom properties.
+
+- [ ] **Step 4: Report the click point from `Wall.tsx`**
+
+`onPick` currently receives only the cell. Widen it to
+`onPick(cell, at: {x, y})`, passing the click's position within the canvas —
+the hit-test already computes it. Update `Wall`'s own callers and tests.
+
+- [ ] **Step 5: Wire both gestures in `CorpusWall.tsx`**
+
+Hold `carded: {cell, at} | null` beside `picked`. `onPick` sets `carded`;
+`onDoubleClick` on the stage sets `picked` and clears `carded`. Opening the
+lightbox from the card's button clears the card. Add tests to
+`CorpusWall.test.tsx` for: a single click showing the card, the card's Open
+button raising the lightbox, and a double click going straight to the lightbox
+without the card appearing.
+
+- [ ] **Step 6: Run, look, and commit**
+
+`npx vitest run src/corpus` and `npx tsc -b --noEmit` must both be clean.
+
+Then run it and drive it in a browser, as Task 16 did: single-click a drawn
+cell and confirm the card appears beside it rather than over it; press its Open
+button; double-click another cell and confirm the lightbox opens with no card
+flash; click a placeholder cell and confirm the card says the part is not
+rendered. Screenshot the card and put it on the slopboard.
+
+```bash
+git add lab/src/corpus/PartCard.tsx lab/src/corpus/PartCard.test.tsx \
+        lab/src/corpus/PartCard.css lab/src/corpus/Wall.tsx \
+        lab/src/corpus/CorpusWall.tsx lab/src/corpus/CorpusWall.test.tsx
+git commit -m "raise a part card on click, and the lightbox on double click"
+```
+
+---
+
+### Task 19: The full gate
 
 Only now, and only once.
 
