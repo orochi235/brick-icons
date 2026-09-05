@@ -179,10 +179,10 @@ def import_census_jsonl(conn: sqlite3.Connection, run_id: int,
 # different drawing and belongs in out/lab's cache, not in the store.
 _CANONICAL = {
     "naive": ["--engine", "naive", "--shading", "outline",
-              "--shade-style", "flat3", "--angle", "iso"],
+              "--shade-style", "flat3", "--angle", "iso", "--format", "svg"],
     "occt": ["--engine", "occt", "--shading", "outline",
-             "--shade-style", "flat3", "--angle", "iso"],
-    "decal": ["--decal", "--angle", "iso"],
+             "--shade-style", "flat3", "--angle", "iso", "--format", "svg"],
+    "decal": ["--decal", "--angle", "iso", "--format", "svg"],
     "ldview": ["--ldview", "--angle", "iso"],
 }
 

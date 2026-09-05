@@ -297,3 +297,11 @@ def test_a_second_source_does_not_overwrite_the_first(tmp_path):
     assert len(set(kept)) == 2
     assert all(p.exists() for p in kept)
     assert conn.execute("SELECT count(*) FROM renders").fetchone()[0] == 2
+
+
+def test_every_svg_source_asks_the_cli_for_an_svg(tmp_path):
+    """The store holds SVG. A canonical config that defaults to PNG renders
+    fine and then has nothing to store, which the CLI reports as success."""
+    for source in ("naive", "occt", "decal"):
+        argv = db.canonical_argv("3001", source)
+        assert argv[argv.index("--format") + 1] == "svg"
