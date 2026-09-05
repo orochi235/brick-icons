@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 170" preserveAspectRatio="xMidYMid meet">
+<g stroke-linejoin="round">
+<path d="M 7.36 26.95 L 7.36 55.17 L 221.53 162.26 L 221.53 134.04 L 222.89 134.72 L 222.89 129.74 L 6.00 21.29 L 6.00 26.27 L 7.36 26.95 Z" fill="#858585" fill-rule="evenodd" stroke="#858585" stroke-width="0.8"/>
+<path d="M 243.22 143.12 L 240.49 144.48 L 235.24 147.11 L 234.92 147.27 L 243.22 151.42 L 243.22 143.12 Z" fill="#858585" fill-rule="evenodd" stroke="#858585" stroke-width="0.8"/>
+<path d="M 6.00 21.29 L 222.89 129.74 L 250.00 116.18 L 33.11 7.74 L 6.00 21.29 Z" fill="#cccccc" fill-rule="evenodd" stroke="#cccccc" stroke-width="0.8"/>
+<path d="M 248.38 121.97 L 248.28 122.03 L 247.17 122.58 L 222.89 134.72 L 221.53 134.04 L 221.53 162.26 L 226.96 159.55 L 226.96 151.25 L 243.22 143.12 L 243.22 151.42 L 248.64 148.71 L 248.64 121.84 L 248.38 121.97 Z" fill="#5e5e5e" fill-rule="evenodd" stroke="#5e5e5e" stroke-width="0.8"/>
+<path d="M 250.00 116.18 L 222.89 129.74 L 222.89 134.72 L 250.00 121.16 L 250.00 116.18 Z" fill="#5e5e5e" fill-rule="evenodd" stroke="#5e5e5e" stroke-width="0.8"/>
+</g>
+<defs><clipPath id="sclip"><path d="M 6.36 55.79 L 221.53 163.38 L 227.96 160.17 L 227.96 151.87 L 234.92 148.39 L 243.22 152.54 L 249.64 149.33 L 249.64 122.46 L 251.00 121.78 L 251.00 115.56 L 33.11 6.62 L 5.00 20.67 L 5.00 26.89 L 6.36 27.57 Z" clip-rule="evenodd"/></clipPath></defs>
+<g stroke="black" fill="none" stroke-linecap="round" clip-path="url(#sclip)">
+<path d="M 7.36 55.17 L 221.53 162.26 L 226.96 159.55 L 226.96 151.25 L 234.92 147.27 L 243.22 151.42 L 248.64 148.71 L 248.64 121.84 L 250.00 121.16 L 250.00 116.18 L 33.11 7.74 L 6.00 21.29 L 6.00 26.27 L 7.36 26.95 L 7.36 55.17 Z" stroke-width="2.00" stroke-linejoin="miter" stroke-miterlimit="5"/>
+<path d="M 250.00 116.18 L 250.00 121.16 L 222.89 134.72 L 222.89 129.74 L 6.00 21.29 L 33.11 7.74 L 250.00 116.18 L 222.89 129.74" stroke-width="2.00" stroke-linejoin="miter" stroke-miterlimit="1.5"/>
+<path d="M 6.00 21.29 L 6.00 26.27 L 7.36 26.95 L 7.36 55.17 L 221.53 162.26 L 221.53 134.04 L 222.89 134.72" stroke-width="2.00" stroke-linejoin="miter" stroke-miterlimit="1.5"/>
+<path d="M 221.53 162.26 L 226.96 159.55 L 226.96 151.25 L 243.22 143.12 L 243.22 151.42 L 235.03 147.32" stroke-width="2.00" stroke-linejoin="miter" stroke-miterlimit="1.5"/>
+<path d="M 248.64 121.94 L 248.64 148.71 L 243.22 151.42" stroke-width="2.00" stroke-linejoin="miter" stroke-miterlimit="1.5"/>
+<path d="M 250.00 119.18 L 250.00 116.18 L 247.32 117.52" stroke-width="2.00" stroke-linejoin="miter" stroke-miterlimit="1.5"/>
+<path d="M 8.68 22.63 L 6.00 21.29 L 6.00 24.29" stroke-width="2.00" stroke-linejoin="miter" stroke-miterlimit="1.5"/>
+<path d="M 225.57 128.40 L 222.89 129.74 L 222.89 132.74" stroke-width="2.00" stroke-linejoin="miter" stroke-miterlimit="1.5"/>
+<path d="M 220.21 128.40 L 222.89 129.74 L 225.57 128.40" stroke-width="2.00" stroke-linejoin="miter" stroke-miterlimit="1.5"/>
+<path d="M 221.53 134.04 L 222.89 134.72 L 222.89 131.72" stroke-width="2.00" stroke-linejoin="miter" stroke-miterlimit="1.5"/>
+<path d="M 221.53 159.26 L 221.53 162.26 L 224.21 160.92" stroke-width="2.00" stroke-linejoin="miter" stroke-miterlimit="1.5"/>
+<path d="M 243.22 148.42 L 243.22 151.42 L 245.90 150.08" stroke-width="2.00" stroke-linejoin="miter" stroke-miterlimit="1.5"/>
+</g>
+</svg>
