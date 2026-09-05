@@ -98,6 +98,27 @@ def test_a_delta_cell_keeps_the_index_it_has_on_the_wall(conn):
     assert body["cells"][0]["index"] == 2
 
 
+def test_a_census_slot_reads_its_engine_s_measurements(conn):
+    # renders.source is a slot; measurements.engine is an engine. Without the
+    # mapping every metric joins to nothing and the wall sorts on all-None.
+    assert cells.engine_for("census-naive") == "naive"
+    assert cells.engine_for("census-occt") == "occt"
+    assert cells.engine_for("naive") == "naive"
+
+
+def test_a_cell_carries_the_metric_from_its_slot_s_engine(conn):
+    _part(conn, "3001")
+    _render(conn, "3001", "a", "2026-09-05T10:00:00+00:00")
+    conn.execute("INSERT INTO runs (id, kind, started, commit_sha, args) "
+                 "VALUES (1, 'census', '2026-09-05T09:00:00+00:00', 'abc', '{}')")
+    conn.execute("INSERT INTO measurements (run_id, part_id, engine, extra_d99, "
+                 "secs) VALUES (1, '3001', 'naive', 4.5, 12.0)")
+    conn.commit()
+    cell = cells.cells(conn, source="census-naive")["cells"][0]
+    assert cell["extra_d99"] == 4.5
+    assert cell["secs"] == 12.0
+
+
 def test_a_delta_with_nothing_new_is_empty(conn):
     _part(conn, "3001")
     _render(conn, "3001", "a", "2026-09-05T10:00:00+00:00")
