@@ -15,6 +15,10 @@ from shapely.geometry import Polygon
 
 GRID = 1e-3            # set_precision snap grid, px
 
+# shapely builds Polygon() by parsing the WKT text "POLYGON EMPTY" -- 2us a
+# call, and the fill pipeline returns the empty sentinel millions of times.
+_EMPTY = Polygon()
+
 # --- arc recovery ---------------------------------------------------------
 # Face polygons sample their curves from known projected circles, so after
 # the GEOS booleans boundary runs can snap back onto those ellipses and be
@@ -225,8 +229,8 @@ def _only_area(g):
         return g
     if hasattr(g, "geoms"):
         polys = [x for x in g.geoms if x.geom_type in ("Polygon", "MultiPolygon")]
-        return shapely.union_all(polys) if polys else Polygon()
-    return Polygon()
+        return shapely.union_all(polys) if polys else _EMPTY
+    return _EMPTY
 
 
 def to_geom(poly, holes=None):
@@ -234,14 +238,14 @@ def to_geom(poly, holes=None):
     try:
         p = np.asarray(poly, float)
         if len(p) < 3:
-            return Polygon()
+            return _EMPTY
         g = Polygon(p, [np.asarray(h, float) for h in (holes or []) if len(h) >= 3])
         g = shapely.set_precision(g, GRID)
         if not g.is_valid:
             g = shapely.make_valid(g)
         return _only_area(g)
     except Exception:
-        return Polygon()
+        return _EMPTY
 
 
 def region(ring):
@@ -251,11 +255,11 @@ def region(ring):
     try:
         p = np.asarray(ring, float)
         if len(p) < 3:
-            return Polygon()
+            return _EMPTY
         g = shapely.make_valid(Polygon(p))
         return _only_area(shapely.set_precision(g, GRID))
     except Exception:
-        return Polygon()
+        return _EMPTY
 
 
 def union(a, b):
@@ -268,7 +272,7 @@ def union(a, b):
 def union_all(geoms):
     gs = [g for g in geoms if g is not None and not g.is_empty]
     if not gs:
-        return Polygon()
+        return _EMPTY
     try:
         return _only_area(shapely.union_all(gs))
     except Exception:
@@ -299,10 +303,10 @@ def opened(g, r):
 def intersection(a, b):
     try:
         if not a.intersects(b):
-            return Polygon()
+            return _EMPTY
         return _only_area(shapely.intersection(a, b))
     except Exception:
-        return Polygon()
+        return _EMPTY
 
 
 def area(g):
