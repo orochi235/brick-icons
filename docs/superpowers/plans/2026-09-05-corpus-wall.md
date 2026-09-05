@@ -3552,66 +3552,96 @@ git commit -m "colour a cell by what is known about it"
 
 ---
 
-### Task 20b: Open fitted to the width, and let the wall be dragged
+### Task 20b: Replace the hand-rolled camera with weasel's viewport
 
-The wall should open showing the corpus at full width, running off the bottom of
-the viewport rather than shrunk to fit inside it.
+`lab/src/corpus/camera.ts` reimplements, worse, a module `@weasel-js/core`
+already ships with tests. Two bugs have already come out of it — `fitBounds`
+handing back `Infinity` on an empty wall, and an opening level chosen inside the
+hysteresis dead zone. Neither would have existed in the tested version.
 
-`fitBounds` currently takes `min(width/bounds.w, height/bounds.h)` — the whole
-wall, both axes. On a window taller than it is wide that already picks width, so
-this is invisible today; on a normal landscape window it picks height and the
-wall sits small with empty space either side.
+What core has, all under `packages/core/src/core/viewport/` with a `.test.ts`
+each, and exported from `@weasel-js/core`:
 
-**Fitting the width means the wall overflows vertically, and nothing can reach
-it** — the wheel zooms and there is no pan. So this task is two things.
+| the wall's hand-rolled version | core's |
+|---|---|
+| `toScreen` / `toWorld` | `clientToCanvas`, `clientToWorld`, `viewTransform` |
+| `zoomAt` | `zoomAt` |
+| `fitBounds` | `fitToBounds`, `fitViewToBounds` |
+| `MIN_SCALE` / `MAX_SCALE` | `DEFAULT_MIN_ZOOM`, `DEFAULT_MAX_ZOOM`, `clampView` |
+| the `ResizeObserver` effect in `CorpusWall` | `useCanvasSize` |
+| nothing — this is new | `viewportDragPanAction`, `wheelHandler`, `usePinchGesture`, `useVelocityTracker`, `useDecayLoop` |
+
+**What stays.** `levelFor` and `pickLevel` are about which baked thumbnail to
+sample and have nothing to do with a viewport — core knows nothing of the 8/32/128
+ladder. They move into their own module rather than being deleted with the rest.
 
 **Files:**
-- Modify: `lab/src/corpus/camera.ts`, `camera.test.ts`
-- Modify: `lab/src/corpus/CorpusWall.tsx`, `CorpusWall.test.tsx`
+- Delete: `lab/src/corpus/camera.ts`, `camera.test.ts`
+- Create: `lab/src/corpus/levels.ts`, `levels.test.ts` (`levelFor`, `pickLevel`,
+  moved verbatim with their passing tests)
+- Modify: `lab/src/corpus/CorpusWall.tsx`, `Wall.tsx`, `paint.ts`, `visible.ts`,
+  `caret.ts` if it exists yet, and their tests
 - Modify: `lab/src/corpus/Wall.css`
 
-- [ ] **Step 1: `fitWidth` beside `fitBounds`**
+- [ ] **Step 1: Read core's viewport before writing anything**
 
-Add `fitWidth(bounds, viewport)` returning `viewport.width / bounds.w` with the
-same zero-bounds guard `fitBounds` has, and have `CorpusWall` use it for the
-initial and refit cases. Keep `fitBounds` — a later "fit everything" control is
-the obvious use, and it is already tested.
+Read `packages/core/src/core/viewport/` in `~/src/weasel` — at minimum `view.ts`,
+`viewTransform.ts`, `zoomAt.ts`, `fitToBounds.ts`, `fitViewToBounds.ts`,
+`clampView.ts`, `useCanvasSize.ts`, and `interactions/actions/defaults/viewportDragPan.ts`.
+Their tests are the documentation.
 
-Note when writing the test that `fitBounds({w:100,h:50},{width:200,height:200})`
-returns 2 either way, so a test reusing those numbers proves nothing. Pick a
-landscape viewport where the two answers differ.
+The wall's `Camera` is `{x, y, scale}`; core's is a `View`. Report what the shape
+actually is and how it converts, rather than assuming they match.
 
-- [ ] **Step 2: Drag to pan**
+- [ ] **Step 2: Move the level ladder out**
 
-Pointer down on the canvas starts a drag; movement translates the camera by the
-delta converted to world units (`dx / cam.scale`); pointer up ends it. Use
-pointer events, not mouse events, and capture the pointer so a drag that leaves
-the canvas still tracks.
+`levelFor` and `pickLevel` and their tests move to `levels.ts`/`levels.test.ts`
+unchanged. They pass today; they must still pass after the move, and that is the
+whole check.
 
-A drag must not fire the click that raises the part card. Track whether the
-pointer moved more than a few pixels between down and up, and suppress the click
-when it did — otherwise every pan ends with a card.
+- [ ] **Step 3: Swap the viewport**
 
-Set `cursor: grab` on the canvas and `grabbing` while dragging, in `Wall.css`.
-Panning counts as touching the camera, so it sets the same `touched` ref the
-wheel does and stops the automatic refit.
+Replace every use of the wall's camera with core's equivalents. `visible.ts`,
+`paint.ts` and `Wall.tsx` all convert world to screen; they take core's transform
+instead. `CorpusWall`'s `ResizeObserver` effect gives way to `useCanvasSize`.
 
-- [ ] **Step 3: Run, drive it, commit**
+Every existing test must still pass, adjusted only where the type changed. **A
+test that has to be weakened to accommodate the swap is a finding — report it
+rather than weakening it.**
+
+- [ ] **Step 4: Open fitted to the width, and drag to pan**
+
+Two behaviours, both now core's rather than hand-written:
+
+**Fit to width on load** — the wall fills the viewport's width and runs off the
+bottom, rather than shrinking to fit both axes. `fitToBounds`/`fitViewToBounds`
+take options; find the one that fits a single axis rather than computing it
+yourself. Note that on a window taller than it is wide the two answers coincide,
+so verify on a landscape window or you are testing nothing.
+
+**Drag to pan** via `viewportDragPanAction`, with whatever inertia core gives by
+default. A drag must not fire the click that raises a part card — track movement
+between down and up and suppress the click past a few pixels, or use whatever
+core provides for that. `cursor: grab`/`grabbing` in `Wall.css`.
+
+Panning and zooming both count as touching the camera and stop the automatic
+refit, as the wheel already does.
+
+- [ ] **Step 5: Run, drive it, commit**
 
 `npx vitest run src/corpus` and `npx tsc -b --noEmit` clean.
 
-In the browser, resize the window **wider than it is tall** — that is the only
-shape where this change is visible — and confirm the wall opens filling the
-width and running off the bottom. Drag to pan down to the last row and back.
-Confirm a drag does not open a card and a click still does. Screenshot and slop
-it.
+In the browser, on a window **wider than it is tall**: the wall opens filling the
+width and running off the bottom; drag pans it to the last row and back; a drag
+does not open a card and a click still does; zoom still anchors under the cursor;
+the level ladder still switches. Screenshot and slop it.
 
 ```bash
-git add lab/src/corpus/camera.ts lab/src/corpus/camera.test.ts \
-        lab/src/corpus/CorpusWall.tsx lab/src/corpus/CorpusWall.test.tsx \
-        lab/src/corpus/Wall.css
-git commit -m "open the wall fitted to the width, and let it be dragged"
+git add lab/src/corpus
+git commit -m "take weasel's viewport instead of a hand-rolled camera"
 ```
+
+Report how much code the swap deleted — that number is the point of the task.
 
 ---
 
