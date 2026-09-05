@@ -48,7 +48,16 @@ occt: 985 of the 5,716 it reached — 900 TimeoutError, 61 ProcessDied, 13 TypeE
 7 GEOSException, 3 LinAlgError, 1 RuntimeError. **That list is incomplete**: 2,517 parts were
 never attempted, so `62bb81bd` will find more.
 
-The timeout dominates both. Nothing here has been re-run at a longer `--timeout`.
+The timeout dominates both, and that makes both lists pre-fix artifacts. A `TimeoutError` row
+records the part *and* the code's speed, and occt is now 3.24x faster than the code that wrote
+these — so most of the 900 are a list the bug produced rather than parts occt cannot draw. Re-run
+the degenerate lists post-fix before reading either as a property of the geometry. Nothing here has
+been re-run at a longer `--timeout` either.
+
+The same cut applies to `62bb81bd`, which runs the pre-fix code for its whole life: **its measured
+rows stand and its failure rows do not.** The SVG is byte-identical across the three perf commits,
+so accuracy is unaffected by what the render cost to produce; the timings in those rows are dead,
+and every error row it contributes needs re-running with the rest.
 
 ## msb-uai, newly provisioned
 
@@ -84,8 +93,13 @@ flagged ones. `out/census/occt-backfill.txt` is that list. Needs a fresh JSONL s
 skips nothing, the same shape as the naive run on msb-uai.
 
 **Timeouts: probe 100 before committing.** `out/census/{occt,naive}-probe100.txt` are evenly
-spaced samples of the degenerate sets, to learn what a 600s cap actually buys before spending
-dozens of core-hours on 2,523 parts.
+spaced samples of the degenerate sets. What the probe is for has changed: at 3.24x it is no longer
+"what does a 600s cap buy" but "how many of these still fail at 120s now" — most of the occt list
+should simply pass, and the answer decides whether a longer cap is wanted at all.
+
+**Both core-hour figures above are pre-fix and too high.** They were derived from run 1's timings,
+against code since made 3.24x faster on a representative draw. Re-derive from post-fix timings
+before scheduling either; the probe is the cheapest way to get them.
 
 Both wait on studio's tree, which `62bb81bd` holds.
 
@@ -102,8 +116,22 @@ A hard cap would have cut, of successful parts: 30s → 34.9%, 60s → 18.2%, 90
 function, and the handler runs only between Python bytecodes — so a part inside one long OCCT,
 GEOS or numpy call runs straight past the deadline and finishes. That is how 464 successful rows
 exceed 120s, the largest at 1038s. The cap therefore selects on *where* time is spent rather than
-how much, and two equally slow parts get opposite treatment. Worth fixing independently of what
-number is chosen.
+how much, and two equally slow parts get opposite treatment.
+
+**It cost a machine on 2026-09-05.** `occt r2` under `62bb81bd` sat inside one OCCT call for 2h58m
+and reached a 185.9 GB physical footprint — `ps` showed 3.4 GB because the rest was paged out —
+taking studio's swap to 40 GB and its boot disk to within about 45 minutes of full. Killing the
+worker was the whole fix: the shard restarted, buried the part as `ProcessDied` off the `.inflight`
+marker, and stepped over it.
+
+So enforcement has to come from outside the process, and `Runner` already writes what it needs. A
+watchdog comparing `<jsonl>.inflight`'s mtime against a ceiling, killing the worker and letting the
+restart loop do the rest, is the fix; it is not landed, and goes into `census-shard.sh` alongside
+the `onto: plan` line so that file takes one edit rather than two. **The ceiling is a crash guard,
+not a second cap** — every part it kills is one the 120s cap already meant to kill and structurally
+could not — which is why it belongs near 3600s, where it fires only on pathology. Choosing 600s
+would quietly impose a stricter measurement policy nobody argued for. Whatever is wanted for parts
+between 120s and the ceiling belongs in the cap, and should be derived from post-fix timings.
 
 ## Where the time actually goes
 
