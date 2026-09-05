@@ -965,6 +965,16 @@ WHERE m.engine = ?
 """
 
 
+def engine_for(source: str) -> str:
+    """The engine a slot's measurements are filed under.
+
+    `renders.source` names a slot and `measurements.engine` names an engine, so
+    the census slots have to drop their prefix or every metric joins to nothing
+    and the wall sorts an unsorted column without erroring.
+    """
+    return source[len("census-"):] if source.startswith("census-") else source
+
+
 def cells(conn: sqlite3.Connection, source: str = "census-naive",
           since: str | None = None) -> dict:
     """Every cell, or only those whose render landed after `since`.
@@ -978,8 +988,9 @@ def cells(conn: sqlite3.Connection, source: str = "census-naive",
     renders = {r["part_id"]: r for r in conn.execute(
         "SELECT part_id, sha256, made_at FROM renders WHERE source = ?",
         (source,))}
+    engine = engine_for(source)
     measures = {r["part_id"]: r for r in conn.execute(
-        _LATEST_MEASURE, (source, source))}
+        _LATEST_MEASURE, (engine, engine))}
 
     version = max((r["made_at"] for r in renders.values()), default="")
     wanted = order
