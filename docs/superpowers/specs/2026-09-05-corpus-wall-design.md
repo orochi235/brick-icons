@@ -27,8 +27,9 @@ through one component so that landing it is a substitution:
     <Wall cells={…} layout={strategy} thumbs={source} onSelect={…} />
 
 Its body today is labkit's `useTiledSurface` plus core's image and solid draw
-commands. 52 image quads and ~24,500 solid quads sit well inside what the
-unbatched path carries. When the mega view exists, replace the body; nothing
+commands. That path is unbatched, so it carries the wall while the store is
+small and stops being enough somewhere on the way to 8,500 thumbnails — which
+is the point at which the mega view has to exist. When the mega view exists, replace the body; nothing
 above `<Wall>` learns what an atlas page is.
 
 ## Cells
@@ -39,7 +40,22 @@ coverage map before it is anything else.
 
 `/api/corpus/cells` returns all of them in one response: id, title, category,
 printed, obsolete, status, the render `sha256` where one exists, and the sort
-keys from that part's latest measurement. About 2MB, fetched once at mount.
+keys from that part's latest measurement. About 2MB.
+
+## The store fills while you watch
+
+The render job is ~8,500 unprinted parts and lands them a few at a time, so a
+wall that fetched its cells at mount would be stale within minutes and would
+show a blank cell for a part that has just been drawn.
+
+Cells carry a monotonic version — the greatest `renders.made_at` in the
+response. `GET /api/corpus/cells?since=<version>` returns only the rows whose
+render or measurement changed after it. The wall polls it, merges the delta into
+the cell list, and re-lays out. Camera, selection and sort survive the merge:
+new thumbnails appear where their cells already were.
+
+The bake is incremental for the same reason: it skips a sha it has already
+written, so re-running it after each batch costs only the new renders.
 
 ## Baking
 
@@ -101,8 +117,8 @@ to weasel.
 
 ## Traps
 
-**A placeholder cell is not a missing cell.** 24,539 parts have no render and
-are the majority of what the wall draws. Placeholders are the common path, not
+**A placeholder cell is not a missing cell.** Most parts have no render, and
+even a finished render job leaves ~16,000 of them placeholders. Placeholders are the common path, not
 the error path.
 
 **Do not import from `lab/src/instruments/` or `lab/src/panes/`.** Those are the
