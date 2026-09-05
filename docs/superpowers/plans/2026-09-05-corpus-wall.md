@@ -1232,7 +1232,8 @@ import { render, screen } from '@testing-library/react';
 import { CorpusWall } from '@lab/corpus/CorpusWall';
 
 it('says it is loading before the cells arrive', () => {
-  render(<CorpusWall client={{ cells: () => new Promise(() => {}) } as any} />);
+  render(<CorpusWall client={{ cells: () => new Promise(() => {}),
+                               corpusSources: () => new Promise(() => {}) } as any} />);
   expect(screen.getByText(/loading the corpus/i)).toBeTruthy();
 });
 ```
@@ -1275,7 +1276,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
   const [body, setBody] = useState<CellsBody | null>(null);
 
   useEffect(() => {
-    void client.cells().then(setBody);
+    void client.cells('census-naive').then(setBody);
   }, [client]);
 
   if (!body) return <p className="corpus-loading">loading the corpus…</p>;
@@ -1830,26 +1831,30 @@ export function mergeCells(current: Cell[], delta: Cell[]): Cell[] {
   return current.map((c) => byId.get(c.id) ?? c);
 }
 
-export function useCells(client: LabClient) {
+export function useCells(client: LabClient, source: string) {
   const [cells, setCells] = useState<Cell[] | null>(null);
   const version = useRef('');
 
   useEffect(() => {
     let live = true;
-    void client.cells().then((body: CellsBody) => {
+    // A slot change is a different set of drawings for the same parts, so the
+    // version resets with it -- polling the old one would merge the wrong shas.
+    version.current = '';
+    setCells(null);
+    void client.cells(source).then((body: CellsBody) => {
       if (!live) return;
       version.current = body.version;
       setCells(body.cells);
     });
     const timer = setInterval(() => {
-      void client.cells(version.current).then((body: CellsBody) => {
+      void client.cells(source, version.current).then((body: CellsBody) => {
         if (!live || body.cells.length === 0) return;
         version.current = body.version;
         setCells((prev) => (prev ? mergeCells(prev, body.cells) : prev));
       });
     }, POLL_MS);
     return () => { live = false; clearInterval(timer); };
-  }, [client]);
+  }, [client, source]);
 
   return cells;
 }
@@ -2167,26 +2172,43 @@ it('never mutates the input', () => {
 import { fireEvent, render, screen } from '@testing-library/react';
 import { FilterBar } from '@lab/corpus/FilterBar';
 
+const SLOTS = [{ source: 'census-naive', n: 200 }, { source: 'naive', n: 49 }];
+const bar = (props: Record<string, unknown> = {}) => (
+  <FilterBar selection={{ sort: 'id', filter: 'all' }} onChange={() => {}}
+             shown={10} total={100} sources={SLOTS} source="census-naive"
+             onSource={() => {}} {...props} />
+);
+
+it('lists the slots that have renders, with their counts', () => {
+  render(bar());
+  expect(screen.getByRole('option', { name: 'census-naive (200)' })).toBeTruthy();
+  expect(screen.getByRole('option', { name: 'naive (49)' })).toBeTruthy();
+});
+
+it('reports a slot change', () => {
+  const onSource = vi.fn();
+  render(bar({ onSource }));
+  fireEvent.change(screen.getByLabelText('Slot'), { target: { value: 'naive' } });
+  expect(onSource).toHaveBeenCalledWith('naive');
+});
+
 it('reports a sort change', () => {
   const onChange = vi.fn();
-  render(<FilterBar selection={{ sort: 'id', filter: 'all' }}
-                    onChange={onChange} shown={10} total={100} />);
+  render(bar({ onChange }));
   fireEvent.change(screen.getByLabelText('Sort'), { target: { value: 'secs' } });
   expect(onChange).toHaveBeenCalledWith({ sort: 'secs', filter: 'all' });
 });
 
 it('reports a filter change', () => {
   const onChange = vi.fn();
-  render(<FilterBar selection={{ sort: 'id', filter: 'all' }}
-                    onChange={onChange} shown={10} total={100} />);
+  render(bar({ onChange }));
   fireEvent.change(screen.getByLabelText('Show'),
                    { target: { value: 'unrendered' } });
   expect(onChange).toHaveBeenCalledWith({ sort: 'id', filter: 'unrendered' });
 });
 
 it('says how much of the corpus is on the wall', () => {
-  render(<FilterBar selection={{ sort: 'id', filter: 'all' }}
-                    onChange={() => {}} shown={10} total={100} />);
+  render(bar());
   expect(screen.getByText('10 of 100')).toBeTruthy();
 });
 ```
@@ -2255,14 +2277,26 @@ export function applySelection(cells: Cell[], selection: Selection): Cell[] {
 ```tsx
 import { FILTERS, SORTS, type Selection } from '@lab/corpus/select';
 
-export function FilterBar({ selection, onChange, shown, total }: {
+export function FilterBar({ selection, onChange, shown, total,
+                            sources, source, onSource }: {
   selection: Selection;
   onChange: (next: Selection) => void;
   shown: number;
   total: number;
+  sources: { source: string; n: number }[];
+  source: string;
+  onSource: (next: string) => void;
 }) {
   return (
     <div className="corpus-bar">
+      <label>
+        Slot
+        <select value={source} onChange={(e) => onSource(e.target.value)}>
+          {sources.map((s) => (
+            <option key={s.source} value={s.source}>{s.source} ({s.n})</option>
+          ))}
+        </select>
+      </label>
       <label>
         Sort
         <select value={selection.sort}
@@ -2340,28 +2374,32 @@ const detail = {
 };
 
 const client = { corpusPart: () => Promise.resolve(detail) } as any;
+const box = (props: Record<string, unknown> = {}) => (
+  <Lightbox partId="3001" source="naive" client={client} onClose={() => {}}
+            {...props} />
+);
 
-it('shows the part title and its render', async () => {
-  render(<Lightbox partId="3001" client={client} onClose={() => {}} />);
+it('shows the part title and the render for the slot being viewed', async () => {
+  render(box());
   await waitFor(() => screen.getByText('Brick 2 x 4'));
   expect(screen.getByRole('img', { name: /3001/ })
-    .getAttribute('src')).toContain('/api/thumbs/128/3001.png');
+    .getAttribute('src')).toContain('/api/thumbs/naive/128/3001.png');
 });
 
 it('lists each engine measurement', async () => {
-  render(<Lightbox partId="3001" client={client} onClose={() => {}} />);
+  render(box());
   await waitFor(() => screen.getByText('naive'));
   expect(screen.getByText('1.5')).toBeTruthy();
 });
 
 it('lists open defects', async () => {
-  render(<Lightbox partId="3001" client={client} onClose={() => {}} />);
+  render(box());
   await waitFor(() => screen.getByText('rim nubs'));
 });
 
 it('closes on the button', async () => {
   const onClose = vi.fn();
-  render(<Lightbox partId="3001" client={client} onClose={onClose} />);
+  render(box({ onClose }));
   await waitFor(() => screen.getByLabelText('Close'));
   fireEvent.click(screen.getByLabelText('Close'));
   expect(onClose).toHaveBeenCalled();
@@ -2369,7 +2407,7 @@ it('closes on the button', async () => {
 
 it('closes on Escape', async () => {
   const onClose = vi.fn();
-  render(<Lightbox partId="3001" client={client} onClose={onClose} />);
+  render(box({ onClose }));
   await waitFor(() => screen.getByLabelText('Close'));
   fireEvent.keyDown(window, { key: 'Escape' });
   expect(onClose).toHaveBeenCalled();
@@ -2413,8 +2451,9 @@ import { useEffect, useState } from 'react';
 import type { LabClient } from '@lab/api/client';
 import type { PartDetail } from '@lab/corpus/types';
 
-export function Lightbox({ partId, client, onClose }: {
+export function Lightbox({ partId, source, client, onClose }: {
   partId: string;
+  source: string;
   client: LabClient;
   onClose: () => void;
 }) {
@@ -2444,7 +2483,7 @@ export function Lightbox({ partId, client, onClose }: {
             {' '}{detail.part.status}
           </p>
           <img className="corpus-big" alt={`${detail.part.id} render`}
-               src={`/api/thumbs/128/${detail.part.id}.png`} />
+               src={`/api/thumbs/${source}/128/${detail.part.id}.png`} />
           <h3>Measurements</h3>
           <table>
             <thead>
@@ -2544,9 +2583,12 @@ const cell = (id: string, index: number, sha: string | null = null): Cell => ({
 });
 
 const client = {
+  corpusSources: () => Promise.resolve({
+    sources: [{ source: 'census-naive', n: 2 }],
+  }),
   cells: () => Promise.resolve({
     cells: [cell('a', 0, 'sha-a'), cell('b', 1)], count: 2,
-    version: '2026-09-05T10:00:00+00:00', source: 'naive',
+    version: '2026-09-05T10:00:00+00:00', source: 'census-naive',
   }),
   sheetManifest: () => Promise.resolve({
     level: 32, gutter: 2, pitch: 36, cols: 2, rows: 1, count: 2, size: 72,
@@ -2557,6 +2599,7 @@ const client = {
 
 it('says it is loading before the cells arrive', () => {
   render(<CorpusWall client={{ cells: () => new Promise(() => {}),
+                               corpusSources: () => new Promise(() => {}),
                                sheetManifest: () => new Promise(() => {}) } as any} />);
   expect(screen.getByText(/loading the corpus/i)).toBeTruthy();
 });
@@ -2611,7 +2654,9 @@ const GAP = 4;
 /** The whole app, minus its mount. Exported so a labkit instrument can host it
  *  without the standalone page. */
 export function CorpusWall({ client }: { client: LabClient }) {
-  const cells = useCells(client);
+  const [sources, setSources] = useState<{ source: string; n: number }[]>([]);
+  const [source, setSource] = useState('census-naive');
+  const cells = useCells(client, source);
   const [manifest, setManifest] = useState<SheetManifest | null>(null);
   const [sheet, setSheet] = useState<HTMLImageElement | null>(null);
   const [selection, setSelection] = useState<Selection>(
@@ -2621,12 +2666,22 @@ export function CorpusWall({ client }: { client: LabClient }) {
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 800, height: 600 });
 
+  // The most-populated slot is the one worth opening on; the route already
+  // orders them that way.
   useEffect(() => {
-    void client.sheetManifest(SHEET_LEVEL).then(setManifest).catch(() => {});
+    void client.corpusSources().then(({ sources: got }) => {
+      setSources(got);
+      if (got[0]) setSource(got[0].source);
+    }).catch(() => {});
+  }, [client]);
+
+  useEffect(() => {
+    setSheet(null);
+    void client.sheetManifest(source, SHEET_LEVEL).then(setManifest).catch(() => {});
     const img = new Image();
     img.onload = () => setSheet(img);
-    img.src = `/api/thumbs/sheet-${SHEET_LEVEL}.png`;
-  }, [client]);
+    img.src = `/api/thumbs/${source}/sheet-${SHEET_LEVEL}.png`;
+  }, [client, source]);
 
   useEffect(() => {
     const el = box.current;
@@ -2657,7 +2712,8 @@ export function CorpusWall({ client }: { client: LabClient }) {
   return (
     <div className="corpus-app">
       <FilterBar selection={selection} onChange={setSelection}
-                 shown={shown.length} total={cells.length} />
+                 shown={shown.length} total={cells.length}
+                 sources={sources} source={source} onSource={setSource} />
       <div className="corpus-stage" ref={box}
            onWheel={(e) => {
              if (!cam) return;
@@ -2672,7 +2728,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
         )}
       </div>
       {picked && (
-        <Lightbox partId={picked} client={client}
+        <Lightbox partId={picked} source={source} client={client}
                   onClose={() => setPicked(null)} />
       )}
     </div>
@@ -2793,9 +2849,9 @@ const cell = (id: string, index: number, sha: string | null): Cell => ({
   error: null,
 });
 
-it('cache-busts on the render sha', () => {
-  expect(thumbUrl(cell('3001', 0, 'deadbeefcafe')))
-    .toBe('/api/thumbs/128/3001.png?v=deadbeef');
+it('names the slot and cache-busts on the render sha', () => {
+  expect(thumbUrl(cell('3001', 0, 'deadbeefcafe'), 'naive'))
+    .toBe('/api/thumbs/naive/128/3001.png?v=deadbeef');
 });
 
 it('wants nothing below the loose level', () => {
@@ -2874,8 +2930,9 @@ import type { Cell } from '@lab/corpus/types';
  *  filter change puts many large cells in view at once. */
 export const MAX_IN_FLIGHT = 200;
 
-export function thumbUrl(cell: Cell): string {
-  return `/api/thumbs/${LOOSE_LEVEL}/${cell.id}.png?v=${cell.sha!.slice(0, 8)}`;
+export function thumbUrl(cell: Cell, source: string): string {
+  return `/api/thumbs/${source}/${LOOSE_LEVEL}/${cell.id}.png`
+       + `?v=${cell.sha!.slice(0, 8)}`;
 }
 
 /** Which visible cells deserve their own image at this level. */
@@ -2891,8 +2948,11 @@ export function wanted(cells: Cell[], visible: number[],
   return out;
 }
 
-export function useLooseThumbs(cells: Cell[], visible: number[], level: number) {
+export function useLooseThumbs(cells: Cell[], visible: number[], level: number,
+                               source: string) {
   const [loaded, setLoaded] = useState(new Map<string, HTMLImageElement>());
+
+  useEffect(() => { setLoaded(new Map()); }, [source]);
 
   useEffect(() => {
     const want = wanted(cells, visible, level);
@@ -2905,10 +2965,10 @@ export function useLooseThumbs(cells: Cell[], visible: number[], level: number) 
         if (!live) return;
         setLoaded((prev) => new Map(prev).set(cell.id, img));
       };
-      img.src = thumbUrl(cell);
+      img.src = thumbUrl(cell, source);
     }
     return () => { live = false; };
-  }, [cells, visible, level, loaded]);
+  }, [cells, visible, level, source, loaded]);
 
   return level >= LOOSE_LEVEL ? loaded : undefined;
 }
@@ -2931,21 +2991,22 @@ export interface Sheet {
 
 /** Both sprite sheets, loaded once. They are one small texture each and never
  *  change during a session, so there is nothing to evict. */
-export function useSheets(client: LabClient): Record<number, Sheet> {
+export function useSheets(client: LabClient, source: string): Record<number, Sheet> {
   const [sheets, setSheets] = useState<Record<number, Sheet>>({});
 
   useEffect(() => {
+    setSheets({});
     for (const level of SHEET_LEVELS) {
-      void client.sheetManifest(level).then((manifest) => {
+      void client.sheetManifest(source, level).then((manifest) => {
         setSheets((prev) => ({ ...prev,
           [level]: { ...(prev[level] ?? { image: null }), manifest } }));
       }).catch(() => {});
       const img = new Image();
       img.onload = () => setSheets((prev) => ({ ...prev,
         [level]: { ...(prev[level] ?? { manifest: null }), image: img } }));
-      img.src = `/api/thumbs/sheet-${level}.png`;
+      img.src = `/api/thumbs/${source}/sheet-${level}.png`;
     }
-  }, [client]);
+  }, [client, source]);
 
   return sheets;
 }
@@ -2997,7 +3058,7 @@ import { visibleRange } from '@lab/corpus/visible';
 ```
 
 ```tsx
-  const sheets = useSheets(client);
+  const sheets = useSheets(client, source);
   const [level, setLevel] = useState(8);
 
   useEffect(() => {
@@ -3007,7 +3068,7 @@ import { visibleRange } from '@lab/corpus/visible';
   const visible = useMemo(
     () => (cam ? visibleRange(laid.rects, cam, size) : []),
     [laid.rects, cam, size]);
-  const loose = useLooseThumbs(shown, visible, level);
+  const loose = useLooseThumbs(shown, visible, level, source);
   const sheet = sheets[level === 128 ? 32 : level] ?? { image: null, manifest: null };
 ```
 
