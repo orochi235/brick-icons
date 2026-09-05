@@ -3654,18 +3654,27 @@ every whole cell has identical area, so the tie-break is what actually picks.
 Returns `null` for an empty visible set.
 
 `adjacent(rects, from, direction)` returns the index of the nearest cell whose
-centre lies in that direction (`'left' | 'right' | 'up' | 'down'`), or `null` at
-the edge. **Geometric, not `index ± 1`** — grid arithmetic works today and
-breaks the moment a grouped layout inserts whitespace, which is the whole reason
-layout is a strategy. Prefer a cell close to the same row or column: score by
-distance along the direction plus a penalty for drifting across it, so pressing
-right from the end of a row does not leap diagonally.
+centre lies in that direction (`'left' | 'right' | 'up' | 'down'`). **Geometric,
+not `index ± 1`** — grid arithmetic works today and breaks the moment a grouped
+layout inserts whitespace, which is the whole reason layout is a strategy.
+Prefer a cell close to the same row or column: score by distance along the
+direction plus a penalty for drifting across it, so pressing right from the end
+of a row does not leap diagonally.
+
+**When geometry finds nothing, left and right fall back to sequence order;
+up and down return `null`.** Wrapping is an ordering idea, not a geometric one,
+so it applies only where a single reading exists: off the end of a row, the next
+cell in sequence is the only continuation anyone would mean. Off the bottom
+there is none — stopping and moving to the next column are equally arguable, so
+the caret stays put. The last cell of the array has nothing after it and the
+first has nothing before it, so those still return `null`.
 
 Tests to write: the implied caret prefers a whole cell over a clipped one;
 prefers the centre among equals; is null when nothing is visible. `adjacent`
-finds the neighbour in each of the four directions, returns null at each edge,
-and — the one that matters — picks the same-row neighbour over a nearer
-diagonal one.
+finds the neighbour in each of the four directions; picks the same-row neighbour
+over a nearer diagonal one; **wraps from the end of a row to the start of the
+next and back**; returns `null` going up from the top row, down from the bottom
+row, right from the very last cell and left from the very first.
 
 - [ ] **Step 2: Draw it**
 

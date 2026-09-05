@@ -179,6 +179,15 @@ that way — not `index ± 1`. Grid arithmetic would work today and break the
 moment a grouped layout inserts whitespace, which is the entire reason layout is
 a strategy.
 
+**Left and right wrap; up and down stop.** Wrapping is an ordering idea rather
+than a geometric one, so it applies only where a single reading exists: off the
+end of a row, the next cell in sequence is the only continuation anyone would
+mean. Off the bottom there is no such reading — stopping and moving to the next
+column are equally arguable, so neither is *the* interpretation and the caret
+stays put. Geometry answers where it can and sequence answers where it cannot,
+which is also what carries the caret from one block to the next once a grouped
+layout exists.
+
 Arrowing to a cell that is off screen pans the camera to bring it in. `Enter`
 raises that cell's card, matching what a click does. `Escape` drops the explicit
 caret back to the implied one.
