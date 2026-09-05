@@ -121,7 +121,10 @@ that they exceed 120s under the old code. The probe is the only way to get a num
 what makes it worth running before the re-run rather than after.
 
 Both wait on studio's tree, which `62bb81bd` holds. It frees when the last shard exits, not at the
-deadline: at 95% and 5.4 parts/min on 2026-09-05 that is **21:20-22:00**, about two hours early.
+deadline: at 95% on 2026-09-05, and 5.6 parts/min sustained over the preceding 86 minutes, that is
+**any time from about 21:00**, up to two and a half hours early. Treat it as a floor rather than an
+estimate — being ready early costs nothing and being late leaves the tree idle. The tail is the
+slow parts and one of the five shards has already finished, so both push the other way.
 
 ## What run 1's timings say
 
