@@ -16,14 +16,21 @@ export function mergeCells(current: Cell[], delta: Cell[]): Cell[] {
 
 export function useCells(client: LabClient, source: string): Cell[] | null {
   const [cells, setCells] = useState<Cell[] | null>(null);
+  const [fetchedFor, setFetchedFor] = useState(source);
   const version = useRef('');
+
+  // Cleared during render, not in an effect: a slot change is a different
+  // set of drawings for the same parts, and clearing a render later would
+  // let a child see this slot's `source` paired with the old slot's `cells`
+  // for one commit -- exactly the mismatch that fires loose-thumb 404s.
+  if (fetchedFor !== source) {
+    setFetchedFor(source);
+    setCells(null);
+    version.current = '';
+  }
 
   useEffect(() => {
     let live = true;
-    // A slot change is a different set of drawings for the same parts, so the
-    // version resets with it -- polling the old one would merge the wrong shas.
-    version.current = '';
-    setCells(null);
     void client.cells(source).then((body: CellsBody) => {
       if (!live) return;
       version.current = body.version;

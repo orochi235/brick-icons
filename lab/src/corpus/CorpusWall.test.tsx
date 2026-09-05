@@ -6,7 +6,8 @@ import type { Cell } from '@lab/corpus/types';
 
 vi.mock('@lab/corpus/camera', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@lab/corpus/camera')>();
-  return { ...actual, fitBounds: vi.fn(actual.fitBounds) };
+  return { ...actual, fitBounds: vi.fn(actual.fitBounds),
+           pickLevel: vi.fn(actual.pickLevel) };
 });
 
 const cell = (id: string, index: number, sha: string | null = null): Cell => ({
@@ -82,6 +83,49 @@ it('opens the lightbox on a double click with no card flash', async () => {
   expect(await waitFor(() => container.querySelector('.corpus-lightbox')))
     .toBeTruthy();
   expect(container.querySelector('.corpus-card')).toBeNull();
+});
+
+it('opens on the level the initial fit asks for, and holds it through a jiggle', async () => {
+  let observed: ResizeObserverCallback | null = null;
+  class CapturingResizeObserver {
+    constructor(cb: ResizeObserverCallback) { observed = cb; }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  const original = globalThis.ResizeObserver;
+  (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver =
+    CapturingResizeObserver;
+
+  const fit = vi.mocked(camera.fitBounds);
+  const pick = vi.mocked(camera.pickLevel);
+  fit.mockClear();
+  pick.mockClear();
+  // CELL(32) * 11/32 = 11px -- inside the 8/32 dead zone (10.7-24px) and
+  // below the 16px boundary, so a fresh pick wants level 8. A fixed level
+  // (32) held by pickLevel across this zone is exactly the pre-fix bug.
+  fit.mockImplementation(() => ({ x: 0, y: 0, scale: 11 / 32 }));
+
+  try {
+    const { container } = render(<CorpusWall client={client} />);
+    await waitFor(() => expect(container.querySelector('canvas')).toBeTruthy());
+
+    // The very first pick bypasses pickLevel entirely -- there is nothing
+    // yet to be hysteretic about.
+    expect(pick).not.toHaveBeenCalled();
+
+    act(() => {
+      observed!([{ contentRect: { width: 801, height: 601 } }] as any, {} as any);
+    });
+    await waitFor(() => expect(pick).toHaveBeenCalled());
+
+    // The jiggle re-fits at the same scale; pickLevel should see the level
+    // already sitting at 8 (not the old hardcoded 32) and hold it there.
+    expect(pick.mock.calls[0]![0]).toBe(8);
+    expect(pick.mock.results[0]!.value).toBe(8);
+  } finally {
+    (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = original;
+  }
 });
 
 it('re-fits the camera when the observed size changes, but not after a wheel', async () => {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { LabClient } from '@lab/api/client';
-import { fitBounds, pickLevel, zoomAt, type Camera } from '@lab/corpus/camera';
+import { fitBounds, levelFor, pickLevel, zoomAt, type Camera } from '@lab/corpus/camera';
 import { FilterBar } from '@lab/corpus/FilterBar';
 import { gridLayout } from '@lab/corpus/layout';
 import { Lightbox } from '@lab/corpus/Lightbox';
@@ -33,6 +33,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 800, height: 600 });
   const touched = useRef(false);
+  const camInitialized = useRef(false);
 
   // The most-populated slot is the one worth opening on; the route already
   // orders them that way.
@@ -72,9 +73,17 @@ export function CorpusWall({ client }: { client: LabClient }) {
     setCam(fitBounds(laid.bounds, size));
   }, [laid.bounds, size]);
 
+  // Hysteresis governs transitions, and the first pick has nothing to be
+  // hysteretic about -- the camera's first fit sets the level directly, and
+  // only later camera changes route through pickLevel.
   useEffect(() => {
     if (!cam) return;
-    setLevel((current) => pickLevel(current, CELL * cam.scale));
+    if (camInitialized.current) {
+      setLevel((current) => pickLevel(current, CELL * cam.scale));
+    } else {
+      camInitialized.current = true;
+      setLevel(levelFor(CELL * cam.scale));
+    }
   }, [cam]);
 
   const visible = useMemo(

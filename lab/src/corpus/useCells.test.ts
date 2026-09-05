@@ -1,5 +1,6 @@
+import { createElement } from 'react';
 import { expect, it, vi } from 'vitest';
-import { act, renderHook } from '@testing-library/react';
+import { act, render, renderHook } from '@testing-library/react';
 import { mergeCells, POLL_MS, useCells } from '@lab/corpus/useCells';
 import type { Cell, CellsBody } from '@lab/corpus/types';
 import type { LabClient } from '@lab/api/client';
@@ -122,4 +123,35 @@ it('refetches from scratch, with no since, when the source changes', async () =>
   } finally {
     vi.useRealTimers();
   }
+});
+
+it('clears cells during render on a source change, so no child ever sees the new source paired with the old slot\'s cells', async () => {
+  const seen: { source: string; cells: Cell[] | null }[] = [];
+  let resolveNaive!: (body: CellsBody) => void;
+  const naive = new Promise<CellsBody>((res) => { resolveNaive = res; });
+  const client = {
+    cells: vi.fn((source: string) =>
+      source === 'naive' ? naive : new Promise<CellsBody>(() => {})),
+  } as unknown as LabClient;
+
+  function Child({ source, cells }: { source: string; cells: Cell[] | null }) {
+    seen.push({ source, cells });
+    return null;
+  }
+  function Parent({ source }: { source: string }) {
+    return createElement(Child, { source, cells: useCells(client, source) });
+  }
+
+  const { rerender } = render(createElement(Parent, { source: 'naive' }));
+  await act(async () => {
+    resolveNaive({ cells: [cell('a', 0, 'sha-a')], count: 1,
+                    version: 'v1', source: 'naive' });
+  });
+  expect(seen.at(-1)!.cells).not.toBeNull();
+
+  seen.length = 0;
+  rerender(createElement(Parent, { source: 'occt' }));
+
+  expect(seen.every((s) => !(s.source === 'occt' && s.cells !== null))).toBe(true);
+  expect(seen[0]).toEqual({ source: 'occt', cells: null });
 });
