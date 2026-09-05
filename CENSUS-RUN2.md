@@ -135,10 +135,14 @@ fill and SVG emit that follow it, over 14 occt parts sampled across run 1's dura
 | geometry | 193.0s (66%) | 42.8s (31%) |
 | the rest | 98.4s | 94.8s |
 
-**2.12x on the census's own workload**, median 2.79x per part, range 1.21-11.82x. The gain scales
-with edge count, so it is largest on cheap parts (6521: 1.78s → 0.15s) and smallest on the ones
-nearest the 120s cap, which is the wrong way round. Note "the rest" holding still across the two
-revisions — that is the instrumentation checking itself.
+**3.24x on the census's own workload** — 1601.5s → 493.9s over a seeded 120-part draw from run 1's
+occt rows (100 under 30s, 20 between 30 and 120s), byte-identical on every one. The 14-part figure
+from the table above is 2.12x because that sample is weighted toward the slow tail, where the gain
+is smallest; the fix scales with edge count, so cheap parts gain most (6521: 1.78s → 0.15s). Note
+"the rest" holding still across the two revisions — that is the instrumentation checking itself.
+
+`scripts/census-render-diff.sh d487865 docs/census-timings/occt-diff-sample120.txt` re-runs that
+byte diff at any later revision.
 
 **The rest of the render is `fill_ops`, and it is shared by every engine.** Geometry is now 31% of
 a render and 10-14% on the baseplates 0901/0902, the slowest parts sampled. `fill_ops` holds the
