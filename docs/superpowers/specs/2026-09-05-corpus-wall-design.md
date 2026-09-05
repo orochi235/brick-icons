@@ -163,6 +163,32 @@ opaque tile, so a background colour would sit behind it unseen, and the cell
 gets an ochre ring instead. Defects get filed against parts that render, so
 those have to be findable too.
 
+## The caret
+
+The wall is a canvas, so there is nothing for the browser to focus per cell.
+It gets a caret of its own instead.
+
+**Without an explicit one, the caret is implied** — the cell holding the most
+on-screen area, and among equals the one nearest the viewport centre. Zoomed
+out every whole cell has the same area, so the tie-break is what actually picks;
+area is what separates a clipped edge cell from a whole one.
+
+**An arrow key moves the caret** to the adjacent cell in that direction and
+makes it explicit. Adjacency is geometric — the nearest cell whose centre lies
+that way — not `index ± 1`. Grid arithmetic would work today and break the
+moment a grouped layout inserts whitespace, which is the entire reason layout is
+a strategy.
+
+Arrowing to a cell that is off screen pans the camera to bring it in. `Enter`
+raises that cell's card, matching what a click does. `Escape` drops the explicit
+caret back to the implied one.
+
+**Accessibility is the trio, not the element.** A canvas cannot expose 24,591
+focusable children, so the canvas itself takes focus, and the caret's part is
+announced through a live region. That satisfies keyboard operability and a
+programmatically determinable name without inventing DOM nodes for cells that
+are pixels.
+
 ## Selection opens a lightbox
 
 Full screen: the render large, every engine's measurement for that part, its
