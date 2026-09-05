@@ -91,14 +91,15 @@ and records it as `ProcessDied` on the way back in — which means **a shard tha
 died before that machinery existed needs one restart to get past its killer,
 and a second run to make progress.** That is what happened tonight.
 
-**The running shards keep their renders in the wrong place.** `--keep
-out/census/renders` writes `<part>.<engine>.svg` into a gitignored directory,
-while the store the design specifies is `renders/<source>/<part>.svg`, tracked.
-Promote them rather than losing them — the mapping is exactly that rename —
-and either restart the shards with `--keep renders/` once the layout is
-settled, or promote again at the end. Three are already promoted and indexed,
-which is what proves the loop: census keeps a render, it lands in the store,
-`scripts/build-corpus-db.py` indexes it with its path and extent.
+**The census's renders are NOT the store's renders, and they cannot be
+promoted into it.** `--keep` saves what the oracle drew, and the oracle draws
+strokeless on purpose — `--line-width 0 --silhouette-width 0`, so fills carry
+the silhouette with no stroke overhang to subtract from the comparison. The
+store's canonical render is the ordinary stroked drawing `db.canonical_argv`
+names. Copying one into the other puts a file under a key describing a
+different drawing; it was tried and backed out. `out/census/renders` is
+evidence for a finding, to be looked at beside the numbers. The store gets
+filled by its own job, which is part 2 of the database plan.
 
 **The per-part cap is 120s and about a fifth of the library hits it**, burning
 roughly 40% of the CPU on parts that record nothing but "too slow". A
@@ -109,7 +110,9 @@ OCCT ran 695s against it.
 ## The corpus database
 
 `docs/superpowers/specs/2026-09-04-corpus-database-design.md` is the design and
-`docs/superpowers/plans/2026-09-04-corpus-database.md` the plan. **Part 1 is
+`docs/superpowers/plans/2026-09-04-corpus-database.md` the plan, and part 2 —
+the job that fills the store — has its own plan at
+`docs/superpowers/plans/2026-09-04-render-store.md`. **Part 1 is
 built and its tasks are checked off**: `brick_icons/db.py` holds the schema and
 every accessor, `scripts/build-corpus-db.py` rebuilds `corpus.db` from files,
 and `tests/test_db.py` covers it. Parts 2, 3 and 4 — the render job that fills
