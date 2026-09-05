@@ -1,6 +1,6 @@
 import type { Artifact, JobState, LabConfig, LdrawColor, PartHit, RenderResult,
   SchemaField } from '@lab/api/types';
-import type { CellsBody, PartDetail } from '@lab/corpus/types';
+import type { CellsBody, PartDetail, SheetManifest } from '@lab/corpus/types';
 
 export interface ClientOptions {
   base?: string;
@@ -145,6 +145,10 @@ export function createClient({ base = '', fetchImpl = fetch }: ClientOptions = {
 
     async corpusPart(id: string): Promise<PartDetail> {
       return json(fetchImpl, at(`/api/corpus/part/${encodeURIComponent(id)}`));
+    },
+
+    async sheetManifest(source: string, level: number): Promise<SheetManifest> {
+      return json(fetchImpl, at(`/api/thumbs/${source}/sheet-${level}.json`));
     },
   };
 }

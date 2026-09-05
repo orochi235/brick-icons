@@ -32,6 +32,11 @@ export function Wall({ cells, rects, cam, sheet, manifest, width, height,
     const dpr = window.devicePixelRatio || 1;
     canvas.width = width * dpr;
     canvas.height = height * dpr;
+    // The backing store is oversized for sharpness; without pinning the CSS
+    // size back down the canvas displays at the backing-store size and
+    // overflows its container on any dpr != 1.
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
     ctx.imageSmoothingEnabled = true;

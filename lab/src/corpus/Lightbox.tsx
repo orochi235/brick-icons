@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { LabClient } from '@lab/api/client';
 import type { PartDetail } from '@lab/corpus/types';
 import '@lab/corpus/Lightbox.css';
@@ -10,6 +10,7 @@ export function Lightbox({ partId, source, client, onClose }: {
   onClose: () => void;
 }) {
   const [detail, setDetail] = useState<PartDetail | null>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     let live = true;
@@ -23,10 +24,12 @@ export function Lightbox({ partId, source, client, onClose }: {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  useEffect(() => { closeRef.current?.focus(); }, []);
+
   return (
     <div className="corpus-lightbox" role="dialog" aria-label={`Part ${partId}`}>
       <button type="button" className="corpus-close" aria-label="Close"
-              onClick={onClose}>x</button>
+              ref={closeRef} onClick={onClose}>x</button>
       {!detail ? <p>loading {partId}…</p> : (
         <>
           <h2>{detail.part.title}</h2>

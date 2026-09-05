@@ -52,3 +52,9 @@ it('closes on Escape', async () => {
   fireEvent.keyDown(window, { key: 'Escape' });
   expect(onClose).toHaveBeenCalled();
 });
+
+it('focuses the Close button on mount', async () => {
+  render(box());
+  await waitFor(() => screen.getByLabelText('Close'));
+  expect(document.activeElement).toBe(screen.getByLabelText('Close'));
+});

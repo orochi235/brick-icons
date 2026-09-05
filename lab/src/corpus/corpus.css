@@ -2,3 +2,6 @@
   padding: 1rem;
   font: 13px/1.4 ui-monospace, monospace;
 }
+
+.corpus-app { display: flex; flex-direction: column; height: 100vh; }
+.corpus-stage { flex: 1; overflow: hidden; }
