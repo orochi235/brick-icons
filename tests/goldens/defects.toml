@@ -87,3 +87,12 @@ status = "open"
 title = "stray dots against the annulus"
 filed = "2026-09-04"
 notes = "Filed separately from the split-arc defect on the same part: a shared part is not evidence of a shared cause, and merging them would hide it if one fix lands and the other does not."
+
+[[defect]]
+id = "curved-surface-gradient-banding"
+part = "44300"
+engines = ["naive"]
+status = "open"
+title = "gradients over curved surfaces band, and one oscillates between two greys"
+filed = "2026-09-04"
+notes = "Class defect; 44300 near the hole is the clearest case and 7037 is the other measured one. 44300's g6 spends 67 stops on exactly two colors, #9c9c9c and #c0c0c0, alternating -- a stripe pattern, not a ramp. Across the parts measured so far: 52 gradients, 587 stops, 192 of them repeating the previous color (33%), and every single gradient is LINEAR -- zero radial. The binned-stop path is radial-only, so it never runs on any of these. That is the lead: either bin the linear path too, or emit these as radial where the surface is one."
