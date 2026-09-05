@@ -3234,6 +3234,31 @@ consume them. The JSX stays free of a `style` prop.
 click count. `onClick` returns early when `e.detail === 2` and lets
 `onDoubleClick` handle it, so the card never flashes before the lightbox.
 
+- [ ] **Step 0: Fix the camera, which fits once at the wrong size**
+
+Seen in the browser: the wall draws at half the scale it should, filling about
+half the canvas. `cam` is fitted only when it is `null`, and that happens on the
+first render with `size` still at its 800x600 default — the `ResizeObserver`
+reports the real 1184x1443 a moment later and nothing re-fits.
+
+Refit while the camera is still the automatic one, and stop as soon as the user
+moves it. Track that explicitly rather than guessing from the values:
+
+```tsx
+  const touched = useRef(false);
+  useEffect(() => {
+    if (touched.current || laid.bounds.w <= 0) return;
+    setCam(fitBounds(laid.bounds, size));
+  }, [laid.bounds, size]);
+```
+
+and set `touched.current = true` in the wheel handler. That also fixes filtering
+to a small set leaving the camera on the old bounds, since the refit follows
+`laid.bounds`.
+
+Add a test asserting the camera re-fits when the observed size changes but not
+after a wheel event.
+
 - [ ] **Step 1: Write `lab/src/corpus/PartCard.test.tsx`**
 
 ```tsx
