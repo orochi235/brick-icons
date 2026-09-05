@@ -18,7 +18,7 @@
 
 | File | Responsibility |
 |---|---|
-| `scripts/backfill-census-renders.py` | Index kept census SVGs into the render store. One-shot, takes a count. |
+| `scripts/index-census-renders.py` | Index the census's kept SVGs in place, as `census-naive`. Takes a count. |
 | `brick_icons/thumbs.py` | Sheet geometry, per-part rasterizing, sheet composition, manifest. No I/O policy, no CLI. |
 | `scripts/bake-thumbs.py` | CLI over `thumbs.py`, with per-item progress. |
 | `brick_icons/lab/cells.py` | The cell list and the delta since a version, read from `corpus.db`. |
@@ -41,18 +41,29 @@
 
 ---
 
-### Task 1: Backfill census renders into the store
+### Task 1: Index the census's kept renders
 
-The census kept 1,127 naive SVGs under `out/census-naive/renders/naive/`. The store has 49 rows. `db.store_render` already copies a file into `renders/<source>/` and indexes it.
+The census keeps its renders under `out/census-naive/renders/naive/` — 2,539 of
+them, growing as it runs. They are **not** the store's drawing: the oracle
+renders with `--line-width 0 --silhouette-width 0` so its fills carry the
+silhouette, while `db.canonical_argv("...", "naive")` names the ordinary stroked
+drawing. Filing one under the other's source records a drawing under a key
+describing a different drawing, and was reverted once already in `5cbcd4e`.
+
+So this indexes them **in place**, as source `census-naive`, with
+`db.record_render`. Nothing is copied and nothing new enters git —
+`db.rebuild` already treats census renders exactly this way, under the comment
+"The census's renders stay out of git but are indexed all the same."
 
 **Files:**
-- Create: `scripts/backfill-census-renders.py`
-- Test: `tests/test_backfill_census.py`
+- Create: `scripts/index-census-renders.py`
+- Test: `tests/test_index_census.py`
 
 - [ ] **Step 1: Write the failing test**
 
 ```python
-"""Indexing kept census renders into the store."""
+"""Indexing the census's kept renders, in place."""
+import importlib
 import sys
 from pathlib import Path
 
@@ -63,8 +74,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from brick_icons import db
 
-import importlib
-backfill = importlib.import_module("backfill-census-renders")
+index_census = importlib.import_module("index-census-renders")
 
 SVG = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 170">'
        '<path d="M0 0h10v10H0z"/></svg>')
@@ -72,10 +82,10 @@ SVG = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 170">'
 
 @pytest.fixture
 def tree(tmp_path):
-    src = tmp_path / "out" / "census-naive" / "renders" / "naive"
-    src.mkdir(parents=True)
+    kept = tmp_path / "out" / "census-naive" / "renders" / "naive"
+    kept.mkdir(parents=True)
     for pid in ("3001", "3004", "nosuchpart"):
-        (src / f"{pid}.svg").write_text(SVG)
+        (kept / f"{pid}.svg").write_text(SVG)
     conn = db.connect(tmp_path / "corpus.db")
     for pid in ("3001", "3004"):
         conn.execute("INSERT INTO parts (id, title, printed, obsolete) "
@@ -85,19 +95,31 @@ def tree(tmp_path):
     conn.close()
 
 
-def test_it_indexes_and_copies_into_the_store(tree):
+def test_it_indexes_under_the_census_source(tree):
     root, conn = tree
-    n = backfill.backfill(conn, root=root, limit=10)
-    assert n == 2
-    assert (root / "renders" / "naive" / "3001.svg").is_file()
+    assert index_census.index(conn, root=root, limit=10) == 2
     rows = conn.execute("SELECT part_id, source FROM renders").fetchall()
     assert {(r["part_id"], r["source"]) for r in rows} == {
-        ("3001", "naive"), ("3004", "naive")}
+        ("3001", "census-naive"), ("3004", "census-naive")}
+
+
+def test_it_leaves_the_svg_where_the_census_put_it(tree):
+    root, conn = tree
+    index_census.index(conn, root=root, limit=10)
+    assert not (root / "renders" / "census-naive").exists()
+    assert (root / "out" / "census-naive" / "renders" / "naive" / "3001.svg").is_file()
+
+
+def test_the_recorded_path_points_at_the_census_file(tree):
+    root, conn = tree
+    index_census.index(conn, root=root, limit=10)
+    path = conn.execute("SELECT path FROM renders WHERE part_id='3001'").fetchone()[0]
+    assert path == "out/census-naive/renders/naive/3001.svg"
 
 
 def test_it_skips_ids_that_are_not_parts(tree):
     root, conn = tree
-    backfill.backfill(conn, root=root, limit=10)
+    index_census.index(conn, root=root, limit=10)
     assert conn.execute(
         "SELECT count(*) FROM renders WHERE part_id='nosuchpart'"
     ).fetchone()[0] == 0
@@ -105,34 +127,49 @@ def test_it_skips_ids_that_are_not_parts(tree):
 
 def test_the_limit_caps_the_work(tree):
     root, conn = tree
-    assert backfill.backfill(conn, root=root, limit=1) == 1
+    assert index_census.index(conn, root=root, limit=1) == 1
 
 
-def test_it_skips_what_is_already_stored(tree):
+def test_it_skips_what_is_already_indexed(tree):
     root, conn = tree
-    backfill.backfill(conn, root=root, limit=10)
-    assert backfill.backfill(conn, root=root, limit=10) == 0
+    index_census.index(conn, root=root, limit=10)
+    assert index_census.index(conn, root=root, limit=10) == 0
+
+
+def test_a_missing_kept_directory_is_an_error_not_a_zero(tree):
+    # A wrong --root and a finished backfill must not look identical.
+    _, conn = tree
+    with pytest.raises(FileNotFoundError):
+        index_census.index(conn, root=tree[0] / "nowhere", limit=10)
+
+
+def test_one_unreadable_svg_does_not_abandon_the_rest(tree):
+    root, conn = tree
+    (root / "out" / "census-naive" / "renders" / "naive" / "3001.svg").write_text("")
+    assert index_census.index(conn, root=root, limit=10) == 1
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `.venv/bin/pytest tests/test_backfill_census.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'backfill-census-renders'`
+Run: `.venv/bin/pytest tests/test_index_census.py -v`
+Expected: FAIL — `ModuleNotFoundError: No module named 'index-census-renders'`
 
 - [ ] **Step 3: Write the script**
 
 ```python
 #!/usr/bin/env python3
-"""Index renders the census kept into the store.
+"""Index the renders the census kept, where they lie.
 
-    .venv/bin/python scripts/backfill-census-renders.py --limit 100
+    .venv/bin/python scripts/index-census-renders.py --limit 100
 
-The census writes to `out/census-naive/renders/naive/`, which is scratch. This
-copies each SVG into `renders/naive/` -- the artifact -- and records the row.
+The census's drawing is strokeless -- its fills carry the silhouette -- so it is
+not the store's `naive` render and is never recorded as one. It is indexed under
+`census-naive` and left in `out/`, which is what `db.rebuild` does with it too.
 """
 from __future__ import annotations
 
 import argparse
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -141,27 +178,39 @@ sys.path.insert(0, str(ROOT))
 
 from brick_icons import db  # noqa: E402
 
-SOURCE = "naive"
-KEPT = Path("out") / "census-naive" / "renders" / SOURCE
+ENGINE = "naive"
+SOURCE = f"census-{ENGINE}"
+KEPT = Path("out") / SOURCE / "renders" / ENGINE
 
 
-def backfill(conn, root: Path | str = ".", limit: int = 100) -> int:
-    """Store up to `limit` kept census renders. Returns how many it stored."""
+def index(conn: sqlite3.Connection, root: Path | str = ".",
+          limit: int = 100) -> int:
+    """Record up to `limit` kept census renders. Returns how many it recorded."""
     root = Path(root)
+    kept = root / KEPT
+    if not kept.is_dir():
+        raise FileNotFoundError(f"no census renders at {kept}")
+
     known = {r["id"] for r in conn.execute("SELECT id FROM parts")}
     have = {r["part_id"] for r in conn.execute(
         "SELECT part_id FROM renders WHERE source = ?", (SOURCE,))}
-    stored = 0
-    for svg in sorted((root / KEPT).glob("*.svg")):
-        if stored >= limit:
+    recorded = 0
+    for svg in sorted(kept.glob("*.svg")):
+        if recorded >= limit:
             break
         pid = svg.stem
         if pid not in known or pid in have:
             continue
-        db.store_render(conn, pid, SOURCE, svg, root=root)
-        stored += 1
-        print(f"{stored}/{limit} {pid}", flush=True)
-    return stored
+        try:
+            db.record_render(conn, pid, SOURCE, svg, root=root)
+        except Exception as e:  # noqa: BLE001
+            # The census is still running and kills shards mid-write, so a
+            # truncated SVG is expected traffic, not a reason to stop.
+            print(f"skipped {pid}: {type(e).__name__} {e}", flush=True)
+            continue
+        recorded += 1
+        print(f"{recorded}/{limit} {pid}", flush=True)
+    return recorded
 
 
 def main() -> int:
@@ -172,10 +221,10 @@ def main() -> int:
     args = ap.parse_args()
     conn = db.connect(args.db)
     try:
-        n = backfill(conn, root=args.root, limit=args.limit)
+        n = index(conn, root=args.root, limit=args.limit)
     finally:
         conn.close()
-    print(f"stored {n}")
+    print(f"recorded {n}")
     return 0
 
 
@@ -185,21 +234,31 @@ if __name__ == "__main__":
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `.venv/bin/pytest tests/test_backfill_census.py -v`
-Expected: PASS, 4 tests
+Run: `.venv/bin/pytest tests/test_index_census.py -v`
+Expected: PASS, 8 tests
 
 - [ ] **Step 5: Run it for real**
 
-Run: `.venv/bin/python scripts/backfill-census-renders.py --limit 100`
-Expected: 100 progress lines, then `stored 100`. Confirm with
-`sqlite3 corpus.db "select count(*) from renders"` — expect 149.
+Run: `.venv/bin/python scripts/index-census-renders.py --limit 100`
+Expected: 100 progress lines, then `recorded 100`.
+
+Confirm the sources are separate:
+`sqlite3 corpus.db "select source, count(*) from renders group by source"`
+Expected: `census-naive|100` and `naive|49`.
+
+Confirm nothing was copied into git:
+`git status --porcelain` — expected: only the two new files, no `renders/` changes.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add scripts/backfill-census-renders.py tests/test_backfill_census.py
-git commit -m "index kept census renders into the store"
+git add scripts/index-census-renders.py tests/test_index_census.py
+git commit -m "index the census's kept renders under their own source"
 ```
+
+`corpus.db` is gitignored and must NOT be committed. Neither should anything
+under `renders/` change — if it did, the script copied when it should have
+recorded.
 
 ---
 
@@ -656,7 +715,7 @@ def main() -> int:
     ap.add_argument("--db", default=str(ROOT / db.DEFAULT_PATH))
     ap.add_argument("--root", default=str(ROOT))
     ap.add_argument("--out", default=str(ROOT / DEFAULT_OUT))
-    ap.add_argument("--source", default="naive")
+    ap.add_argument("--source", default="census-naive")
     args = ap.parse_args()
 
     root, out = Path(args.root), Path(args.out)
@@ -694,18 +753,18 @@ if __name__ == "__main__":
 - [ ] **Step 2: Run it for real**
 
 Run: `.venv/bin/python scripts/bake-thumbs.py`
-Expected: 149 progress lines each `i/149 <part> baked`, then `wrote .../sheet-8.png`,
-`wrote .../sheet-32.png`, then `baked 149 of 149`.
+Expected: 100 progress lines each `i/100 <part> baked`, then `wrote .../sheet-8.png`,
+`wrote .../sheet-32.png`, then `baked 100 of 100`.
 
 - [ ] **Step 3: Verify it is idempotent**
 
 Run: `.venv/bin/python scripts/bake-thumbs.py`
-Expected: every line reads `fresh`, and the last line reads `baked 0 of 149`.
+Expected: every line reads `fresh`, and the last line reads `baked 0 of 100`.
 
 - [ ] **Step 4: Look at the sheet**
 
 Run: `~/src/slopboard/bin/slop out/thumbs/sheet-32.png`
-Expected: a 5652 px square, almost entirely transparent, with 149 small drawings
+Expected: a 5652 px square, almost entirely transparent, with 100 small drawings
 scattered through it in part-id order. Confirm the drawings are recognisable
 parts and not black blobs.
 
@@ -846,7 +905,7 @@ WHERE m.engine = ?
 """
 
 
-def cells(conn: sqlite3.Connection, source: str = "naive",
+def cells(conn: sqlite3.Connection, source: str = "census-naive",
           since: str | None = None) -> dict:
     """Every cell, or only those whose render landed after `since`.
 
@@ -1022,7 +1081,7 @@ Then add the routes, next to the other artifact routes:
         return corpus_db_module.connect(app.state.corpus_db)
 
     @app.get("/api/corpus/cells")
-    def get_cells(source: str = "naive", since: str | None = None):
+    def get_cells(source: str = "census-naive", since: str | None = None):
         conn = corpus_conn()
         try:
             return cells.cells(conn, source=source, since=since)
@@ -2587,7 +2646,7 @@ cd lab && npm run dev
 ```
 
 Open `http://localhost:5178/corpus.html`. Expected: a wall of 24,591 cells,
-149 of them white tiles carrying a part drawing and the rest flat placeholders.
+100 of them white tiles carrying a part drawing and the rest flat placeholders.
 Scroll to zoom. Click a drawn cell and the lightbox opens on that part. Change
 Sort to `extra_d99` and the drawn cells move to the top-left.
 
@@ -2937,7 +2996,7 @@ Only now, and only once.
 Run: `.venv/bin/pytest`
 Expected: PASS. If something outside `tests/test_thumbs.py`,
 `tests/test_lab_cells.py`, `tests/test_lab_app.py` or
-`tests/test_backfill_census.py` fails, check whether another suite is running on
+`tests/test_index_census.py` fails, check whether another suite is running on
 the box before treating it as a regression.
 
 - [ ] **Step 2: Run the lab suite**
