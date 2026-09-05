@@ -234,7 +234,7 @@ export function createPartInspector(fields: SchemaField[], client: LabClient) {
   return defineInstrument<InspectorState, Record<string, unknown>, SourceRender>({
     name: 'part-inspector',
 
-    config: f.schema({ part: f.string(''), ...nodes } as never) as never,
+    config: f.schema({ part: f.string('').section('Part'), ...nodes } as never) as never,
 
     // Both `config` and `defaultConfig` are supplied. `defineInstrument`
     // synthesizes the latter only when it is absent, and `addTrial` calls it,

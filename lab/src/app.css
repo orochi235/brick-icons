@@ -1,13 +1,17 @@
 .panes { display: flex; gap: 0.5rem; width: 100%; height: 100%; }
 .panes-split > .pane { flex: 1 1 0; }
 
-/* Grid, the default: with three or more panes a single row makes each one too
-   narrow to read, and these are drawings. */
+/* Grid, the default: a square-ish arrangement, so four panes are 2x2 rather
+   than a row of four. Counted with :has rather than auto-fit, which fits as
+   many columns as the width allows and so is just `split` on a wide window. */
 .panes-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: 1fr;
   grid-auto-rows: minmax(0, 1fr);
 }
+.panes-grid:has(> .pane:nth-child(2)) { grid-template-columns: repeat(2, 1fr); }
+.panes-grid:has(> .pane:nth-child(5)) { grid-template-columns: repeat(3, 1fr); }
+.panes-grid:has(> .pane:nth-child(10)) { grid-template-columns: repeat(4, 1fr); }
 .panes-stack { display: grid; }
 .panes-stack > .pane { grid-area: 1 / 1; }
 
@@ -27,6 +31,10 @@
 }
 
 .part-search-hits li > span { display: block; padding: 0.15rem 0.5rem; cursor: pointer; }
+
+/* Oswald tops out at 700 -- it ships as one variable face spanning 200-700 --
+   and a part id is what the eye scans this list for. */
+.part-search-hits strong { font-weight: 700; }
 .part-search-hits li > span:hover { background: var(--wzl-surface-hover); }
 
 .command { position: relative; }
