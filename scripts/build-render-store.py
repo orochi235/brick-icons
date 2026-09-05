@@ -55,6 +55,9 @@ def main() -> int:
     ap.add_argument("--db", default=str(ROOT / db.DEFAULT_PATH))
     ap.add_argument("--force", action="store_true",
                     help="re-render a part already in the store")
+    ap.add_argument("--retry-failed", action="store_true",
+                    help="also take the parts a previous pass timed out or "
+                         "errored on, which resume otherwise treats as done")
     args = ap.parse_args()
 
     ids = list(args.parts)
@@ -77,7 +80,7 @@ def main() -> int:
     for source in sources:
         batch = Runner(f"{args.log}.{source}", timeout=args.timeout, key="part",
                        extra={"source": source})
-        todo = batch.remaining(ids)
+        todo = batch.remaining(ids, retry_errors=args.retry_failed)
         print(f"{source}: {len(todo)} of {len(ids)} to render", flush=True)
         for n, part in enumerate(todo, 1):
             row = batch.run(part, lambda p, s=source: render_one(

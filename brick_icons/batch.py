@@ -42,9 +42,14 @@ class Runner:
         if timeout:
             signal.signal(signal.SIGALRM, _on_alarm)
 
-    def remaining(self, items: list[str]) -> list[str]:
+    def remaining(self, items: list[str], retry_errors: bool = False) -> list[str]:
         """`items` minus what the log already holds, with a crashed item
-        recorded and dropped."""
+        recorded and dropped.
+
+        `retry_errors` keeps the ones that timed out or raised -- worth another
+        pass at a bigger cap or on a quieter box. It never returns a
+        ProcessDied item: retrying what killed the interpreter loops forever.
+        """
         if self.inflight.exists():
             crashed = self.inflight.read_text().strip()
             if crashed:
@@ -55,8 +60,15 @@ class Runner:
             self.inflight.unlink()
         if not self.log.exists():
             return list(items)
-        done = {json.loads(line)[self.key]
-                for line in self.log.read_text().splitlines() if line.strip()}
+        done = set()
+        for line in self.log.read_text().splitlines():
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            error = row.get("error")
+            if retry_errors and error and error != "ProcessDied":
+                continue  # a later row for the same item may still settle it
+            done.add(row[self.key])
         return [i for i in items if i not in done]
 
     def write(self, row: dict) -> None:

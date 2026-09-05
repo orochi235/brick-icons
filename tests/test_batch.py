@@ -55,3 +55,31 @@ def test_a_raising_item_is_a_row_and_the_inflight_marker_is_cleared(tmp_path):
     assert row["error"] == "RuntimeError"
     assert row["detail"] == "no such part"
     assert not (tmp_path / "out.jsonl.inflight").exists()
+
+
+def test_a_retry_pass_picks_up_what_failed_but_not_what_crashed(tmp_path):
+    """A timeout under contention is worth another pass at a bigger cap; a part
+    that killed the interpreter is not, and retrying it loops the run forever."""
+    log = tmp_path / "out.jsonl"
+    log.write_text("\n".join(json.dumps(r) for r in [
+        {"item": "done"},
+        {"item": "slow", "error": "TimeoutError"},
+        {"item": "broke", "error": "RuntimeError"},
+        {"item": "fatal", "error": "ProcessDied"},
+    ]) + "\n")
+    runner = batch.Runner(log)
+    every = ["done", "slow", "broke", "fatal", "fresh"]
+    assert runner.remaining(every) == ["fresh"]
+    assert runner.remaining(every, retry_errors=True) == \
+        ["slow", "broke", "fresh"]
+
+
+def test_a_retry_that_succeeded_is_not_retried_again(tmp_path):
+    """A retry appends a row rather than replacing the failed one, so the log
+    holds both. The later success is what counts."""
+    log = tmp_path / "out.jsonl"
+    log.write_text("\n".join(json.dumps(r) for r in [
+        {"item": "slow", "error": "TimeoutError"},
+        {"item": "slow"},
+    ]) + "\n")
+    assert batch.Runner(log).remaining(["slow"], retry_errors=True) == []

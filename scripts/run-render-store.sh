@@ -14,6 +14,7 @@ cd "$(dirname "$0")/.."
 SHARDS=${1:-8}
 TIMEOUT=${2:-180}
 SOURCES=${3:-naive}
+RETRY=${RETRY:-}          # RETRY=1 also takes what a previous pass timed out on
 DIR=out/store
 mkdir -p "$DIR/logs"
 
@@ -28,6 +29,7 @@ done
 for i in $(seq 0 $((SHARDS - 1))); do
   nohup .venv/bin/python scripts/build-render-store.py \
     --list "$DIR/shard-$i.txt" --sources "$SOURCES" --timeout "$TIMEOUT" \
+    ${RETRY:+--retry-failed} \
     --log "$DIR/s$i.jsonl" > "$DIR/logs/s$i.log" 2>&1 &
   echo "started shard $i (pid $!)"
 done
