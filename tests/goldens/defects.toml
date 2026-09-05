@@ -1,0 +1,62 @@
+# Defects found in corpus renders, filed from the lab.
+#
+# Written by brick_icons.lab; hand edits are kept but reformatted on the next
+# write. `mark` is in fractions of the pane box it was drawn on. `kind` and
+# `points` are absent on a plain rectangle, which is every defect filed before
+# 2026-09. `seen` is retained for records that carry it; the lab now asks
+# labkit whether a mark is stale.
+
+
+[[defect]]
+id = "4524-ring-whole-circle"
+part = "4524"
+engines = ["naive"]
+status = "open"
+title = "a circle whose visible part is several arcs is drawn whole"
+filed = "2026-09-04"
+notes = "The neck ring keeps a complete ellipse where the near rim should cut it. In the SVG the ring comes out as 4-chunk closed arc runs (paths 11 and 13 of 21) alongside genuine 1- and 2-chunk partial arcs elsewhere in the same drawing, so partial arcs work and these specifically did not. Suspected rule: when occlusion breaks one circle into more than one visible span, the whole circle survives instead of the spans. 27448 shows the same thing."
+
+[[defect]]
+id = "27448-ring-whole-circle"
+part = "27448"
+engines = ["naive"]
+status = "open"
+title = "same split-arc ellipse as 4524"
+filed = "2026-09-04"
+notes = "Second instance of 4524-ring-whole-circle; two parts make it a class rather than a one-part quirk."
+
+[[defect]]
+id = "6107-pockets-through-wall"
+part = "6107"
+engines = ["naive"]
+status = "open"
+title = "underside pockets punch through the solid front wall"
+filed = "2026-09-04"
+notes = "Four rectangular notches are cut into the silhouette along the bottom front edge. They are interior underside geometry escaping through a face that should occlude them -- a hidden-line miss, not a fill problem."
+
+[[defect]]
+id = "3832-doubled-stud-ellipses"
+part = "3832"
+engines = ["naive"]
+status = "open"
+title = "each stud carries a second offset ellipse"
+filed = "2026-09-04"
+notes = "Surprising because a plain plate is the simplest case there is; 3001 and 3004 draw clean studs at the same config. Whatever this is, it is not curved-surface tessellation."
+
+[[defect]]
+id = "7037-gradient-banding"
+part = "7037"
+engines = ["naive"]
+status = "open"
+title = "gradients spend half their stops repeating the previous color"
+filed = "2026-09-04"
+notes = "Measured on the stored SVG: 102 stops across 4 gradients, 50 of them the same color as the stop before. g1 is the worst -- 59 stops for 14 distinct greys, 43 exact repeats. Consecutive equal stops are flat plateaus, so this is the banding rather than a symptom beside it. Merging equal-color runs is the obvious fix and costs no fidelity."
+
+[[defect]]
+id = "15469-tweaks"
+part = "15469"
+engines = ["naive"]
+status = "open"
+title = "needs tweaks"
+filed = "2026-09-04"
+notes = "Filed to keep it on the list; Mike called it expected, so it ranks below the others here."
