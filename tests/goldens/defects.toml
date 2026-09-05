@@ -68,7 +68,7 @@ engines = ["naive"]
 status = "open"
 title = "same split-arc ellipse as 4524"
 filed = "2026-09-04"
-notes = "Third instance after 4524 and 27448."
+notes = "Third instance after 4524 and 27448. Also carries a couple of stray dots against the annulus, which may or may not be the same cause."
 
 [[defect]]
 id = "28192dy0-decal-torn"
@@ -78,3 +78,12 @@ status = "open"
 title = "much of the decal is torn off"
 filed = "2026-09-04"
 notes = "A printed part, so it sits behind the decal work rather than the engine work; filed so the decal pass has a case waiting."
+
+[[defect]]
+id = "30152a-annulus-dots"
+part = "30152a"
+engines = ["naive"]
+status = "open"
+title = "stray dots against the annulus"
+filed = "2026-09-04"
+notes = "Filed separately from the split-arc defect on the same part: a shared part is not evidence of a shared cause, and merging them would hide it if one fix lands and the other does not."
