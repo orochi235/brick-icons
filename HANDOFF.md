@@ -228,14 +228,17 @@ where a render exists, filling in as the census runs. Build-order step 3 of the
 corpus database spec.
 
 - Spec: `docs/superpowers/specs/2026-09-05-corpus-wall-design.md`
-- Plan: `docs/superpowers/plans/2026-09-05-corpus-wall.md` — 18 tasks, each
+- Plan: `docs/superpowers/plans/2026-09-05-corpus-wall.md` — 22 tasks, each
   carrying its verbatim tests and code
 
-**Resume at Task 3.** Tasks 1 and 2 are committed; `git log --oneline main..HEAD`
-in the worktree says exactly what has landed, and
-`.venv/bin/python -m pytest tests/test_thumbs.py tests/test_index_census.py`
-is the green set so far. Execution is subagent-driven: one implementer per task,
-then a spec check, then a quality review, then the next task.
+**Resume at Task 19, the full gate — the last step.** Tasks 1-18, 19b, 20, 21
+and 22 have all landed; `git log --oneline main..HEAD` says exactly what. The
+working tree also carries uncommitted work on the cell colour states
+(`cells.py`, `paint.ts`, `Wall.tsx`, `PartCard.tsx` and their tests) — finish
+and commit that before running the gate, or the gate runs against a tree that
+is not what merges.
+
+Task 19 is the only place the full suite is allowed to run.
 
 ### Two traps in this worktree that make a passing test meaningless
 
@@ -284,6 +287,13 @@ Four engine defects surfaced during this build and none were investigated:
 torus, `896`'s edge heights, and a report about stud sides. They arrived
 secondhand through a subagent rather than from the user directly, so they need
 confirming before anyone spends time on them.
+
+**Grouping the wall is a follow-up, not this branch.** Coverage, category and
+release-year groupings, the part facts they group by (year introduced,
+frequency, colours produced, from Rebrickable's free CSVs), and a DOM sidebar
+that switches between them are specified in
+`docs/superpowers/specs/2026-09-05-corpus-grouping-design.md` on `main`. It is
+unbuilt and deliberately gated on this branch merging first.
 
 ## Lab decisions from 2026-09-04, none of them in the code
 
