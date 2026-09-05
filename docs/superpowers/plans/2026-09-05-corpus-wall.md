@@ -367,8 +367,18 @@ def test_a_wide_render_is_padded_square_not_stretched(tmp_path):
     thumbs.bake_part("3001", svg, out, sha="abc123")
     with Image.open(out / "128" / "3001.png") as img:
         assert img.size == (128, 128)
-        assert img.getpixel((2, 2))[3] == 0       # padding is transparent
-        assert img.getpixel((64, 64))[3] == 255   # the drawing is not
+        assert img.getpixel((2, 2)) == (255, 255, 255, 255)
+
+
+def test_a_baked_cell_is_opaque_so_the_ink_is_visible(tmp_path):
+    # Renders are black ink on transparency and the lab's surface follows the
+    # weasel theme, so a transparent thumbnail disappears in dark mode.
+    svg = tmp_path / "3001.svg"
+    svg.write_text(SVG)
+    out = tmp_path / "thumbs"
+    thumbs.bake_part("3001", svg, out, sha="abc123")
+    with Image.open(out / "8" / "3001.png") as img:
+        assert img.convert("RGBA").getextrema()[3] == (255, 255)
 
 
 def test_it_skips_a_part_whose_sha_is_unchanged(tmp_path):
@@ -455,16 +465,18 @@ def bake_part(part_id: str, svg: Path | str, out: Path | str,
 
 
 def _square(drawn: Image.Image, level: int) -> Image.Image:
-    """Fit a render inside a transparent square of `level` px.
+    """Fit a render inside an opaque white square of `level` px.
 
-    Transparent, not white: the sheet distinguishes a cell that was never baked
-    from one that was by its alpha, and an opaque pad would erase that.
+    Opaque, because a render is black ink on transparency and the wall's
+    background follows the weasel theme -- a transparent thumbnail is invisible
+    in dark mode. A cell that was never baked stays fully transparent on the
+    sheet, so alpha still separates "drawn" from "not drawn".
     """
     scale = level / max(drawn.size)
     size = (max(1, round(drawn.width * scale)), max(1, round(drawn.height * scale)))
-    cell = Image.new("RGBA", (level, level), (0, 0, 0, 0))
-    cell.paste(drawn.resize(size, Image.LANCZOS),
-               ((level - size[0]) // 2, (level - size[1]) // 2))
+    cell = Image.new("RGBA", (level, level), (255, 255, 255, 255))
+    fitted = drawn.resize(size, Image.LANCZOS)
+    cell.paste(fitted, ((level - size[0]) // 2, (level - size[1]) // 2), fitted)
     return cell
 ```
 
@@ -2575,9 +2587,13 @@ cd lab && npm run dev
 ```
 
 Open `http://localhost:5178/corpus.html`. Expected: a wall of 24,591 cells,
-149 of them showing a part drawing and the rest dark placeholders. Scroll to
-zoom. Click a drawn cell and the lightbox opens on that part. Change Sort to
-`extra_d99` and the drawn cells move to the top-left.
+149 of them white tiles carrying a part drawing and the rest flat placeholders.
+Scroll to zoom. Click a drawn cell and the lightbox opens on that part. Change
+Sort to `extra_d99` and the drawn cells move to the top-left.
+
+Check it in both themes before moving on: the placeholder colours in
+`STATUS_FILL` are a first guess, and the drawn tiles have to stay legible
+against whichever surface the theme paints.
 
 Screenshot it and put it on the wall:
 
