@@ -1,6 +1,10 @@
 """A lab render is the CLI's render: same parser, same Config, same
 process_one. Anything else and the app drifts from the command line."""
-import pytest
+import multiprocessing
+import os
+import signal
+import threading
+import time
 
 from brick_icons.lab import runner
 
@@ -45,3 +49,43 @@ def test_a_missing_part_is_an_error(tmp_path, ldraw_dir):
     result = runner.render(["definitely-not-a-part"], root=tmp_path)
     assert result["ok"] is False
     assert result["error"]
+
+
+def test_the_render_runs_in_a_child_process(tmp_path, ldraw_dir):
+    result = runner.render(["3005", "--format", "svg", "--shading", "outline"],
+                           root=tmp_path)
+    assert result["ok"]
+    assert result["pid"] and result["pid"] != os.getpid()
+
+
+def test_a_render_process_that_dies_is_an_error():
+    """A native crash sends nothing back, so the exit code is the only report
+    there is. Reaching it needs the child to die without writing the pipe."""
+    proc, conn, _send = _child_process(os._exit, (3,))
+    outcome = runner._collect(proc, conn, None)
+    assert outcome["ok"] is False
+    assert "3" in outcome["error"]
+
+
+def test_a_signal_death_is_named_by_its_signal():
+    assert "SIGSEGV" in runner._death(-signal.SIGSEGV)
+
+
+def test_cancelling_kills_the_render_process():
+    proc, conn, _send = _child_process(time.sleep, (120,))
+    cancel = threading.Event()
+    cancel.set()
+    outcome = runner._collect(proc, conn, cancel)
+    assert outcome["ok"] is False
+    assert outcome["cancelled"] is True
+    assert not proc.is_alive()
+
+
+def _child_process(target, args):
+    """A child holding the write end. The caller keeps `send` alive: dropping
+    it makes the read end report EOF, which is a death the child has not had."""
+    ctx = multiprocessing.get_context("spawn")
+    receive, send = ctx.Pipe(duplex=False)
+    proc = ctx.Process(target=target, args=args, daemon=True)
+    proc.start()
+    return proc, receive, send
