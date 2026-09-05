@@ -14,6 +14,7 @@ from pathlib import Path
 
 from brick_icons import goldens
 from brick_icons.lab import cache, partindex
+from brick_icons.lab import defects as defects_toml
 
 DEFAULT_PATH = Path("corpus.db")
 SCHEMA_VERSION = 1
@@ -212,3 +213,38 @@ def record_render(conn: sqlite3.Connection, part_id: str, source: str,
          goldens.sha256(text), width, height))
     conn.commit()
     return key
+
+
+def import_defects(conn: sqlite3.Connection, path: Path | str) -> int:
+    records = defects_toml.load(path)
+    conn.executemany(
+        "INSERT OR REPLACE INTO defects (id, part_id, engines, status, title, "
+        "mark, kind, points, filed, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [(r["id"], r["part"], json.dumps(r.get("engines", [])),
+          r.get("status", "open"), r["title"],
+          json.dumps(r["mark"]) if "mark" in r else None,
+          r.get("kind"),
+          json.dumps(r["points"]) if "points" in r else None,
+          r["filed"], r.get("notes")) for r in records])
+    conn.commit()
+    return len(records)
+
+
+def export_defects(conn: sqlite3.Connection, path: Path | str) -> int:
+    records = []
+    for row in conn.execute("SELECT * FROM defects ORDER BY id"):
+        record = {"id": row["id"], "part": row["part_id"],
+                  "engines": json.loads(row["engines"]),
+                  "status": row["status"], "title": row["title"]}
+        if row["mark"]:
+            record["mark"] = json.loads(row["mark"])
+        if row["kind"]:
+            record["kind"] = row["kind"]
+        if row["points"]:
+            record["points"] = json.loads(row["points"])
+        record["filed"] = row["filed"]
+        if row["notes"]:
+            record["notes"] = row["notes"]
+        records.append(record)
+    defects_toml.save(path, records)
+    return len(records)

@@ -155,3 +155,33 @@ def test_an_unknown_source_is_refused(tmp_path):
     svg.write_text(SVG)
     with pytest.raises(ValueError, match="source"):
         db.record_render(conn, "3001", "wireframe", svg, root=tmp_path)
+
+
+DEFECT = {
+    "id": "3941-occt-borehole",
+    "part": "3941",
+    "engines": ["occt"],
+    "status": "open",
+    "title": "borehole rim not drawn",
+    "mark": {"x": 0.42, "y": 0.55, "w": 0.11, "h": 0.09},
+    "filed": "2026-08-31",
+    "notes": "occt draws nothing at all",
+}
+
+
+def test_defects_round_trip_through_the_database(tmp_path):
+    from brick_icons.lab import defects as defects_toml
+
+    conn = db.connect(tmp_path / "corpus.db")
+    path = tmp_path / "defects.toml"
+    defects_toml.save(path, [DEFECT])
+
+    assert db.import_defects(conn, path) == 1
+    row = conn.execute("SELECT * FROM defects").fetchone()
+    assert row["part_id"] == "3941"
+    assert json.loads(row["engines"]) == ["occt"]
+    assert json.loads(row["mark"])["x"] == 0.42
+
+    out = tmp_path / "again.toml"
+    db.export_defects(conn, out)
+    assert defects_toml.load(out) == [DEFECT]
