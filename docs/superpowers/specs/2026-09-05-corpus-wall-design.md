@@ -57,26 +57,40 @@ new thumbnails appear where their cells already were.
 The bake is incremental for the same reason: it skips a sha it has already
 written, so re-running it after each batch costs only the new renders.
 
+## Slots: one per engine and style
+
+A **slot** is one drawing of a part — an engine crossed with a style. That is
+what `db.py`'s `SOURCES` already enumerates (`naive`, `occt`, `decal`,
+`ldview`, `census-naive`, `census-occt`), each with its own argument list in
+`_CANONICAL`, so the wall needs no render vocabulary of its own: a slot is a
+source.
+
+Every slot gets its own thumbnails and its own sprite sheets. The wall shows one
+at a time and can switch between them, which is how you compare what two engines
+made of the same part without leaving the wall. `census-naive` is the only slot
+with thousands of renders today; `naive` has 49 and the rest have none, so the
+source control offers only the slots that have something in them.
+
+Adding a slot is adding a `SOURCES` entry and re-running the bake. Nothing in
+the layout, the camera or the wall changes.
+
 ## Baking
 
-`scripts/bake-thumbs.py` rasterizes each stored render at 8, 32 and 128 px.
+`scripts/bake-thumbs.py` rasterizes each stored render at 8, 32 and 128 px, one
+slot at a time into that slot's own directory.
 
-**Thumbnails are addressed by part number, and `renders.sha256` says whether one
-is stale.** A cell on the wall knows its part id and nothing else, so the id is
-the name: `out/thumbs/128/3001.png`. The bake skips a part whose recorded sha
-matches the one it baked last time, and the client cache-busts with `?v=<first 8
-of sha>`.
+**Thumbnails are addressed by slot and part number, and `renders.sha256` says
+whether one is stale.** A cell on the wall knows its part id and the slot it is
+looking at, so those are the name: `out/thumbs/naive/128/3001.png`. The bake
+skips a part whose recorded sha matches the one it baked last time, and the
+client cache-busts with `?v=<first 8 of sha>`.
 
-A cell's thumbnail is that part's **`census-naive`** render and the name is the
-bare id. That is the drawing the corpus actually has thousands of; the canonical
-`naive` store holds 49. When the render job fills `naive`, the wall switches
-source. If two sources ever need to be on the wall at once, suffix the name; do
-not restructure for it now.
+A cell's thumbnail is the bare part id under the slot it belongs to.
 
-The two coarse levels ship as **whole-corpus sprite sheets**, one page each:
-`out/thumbs/sheet-8.png` and `sheet-32.png`. 128 px stays loose files — only a
-few dozen cells are that large on screen at once, so they are a residency
-problem, not a draw-call one.
+The two coarse levels ship as **whole-corpus sprite sheets**, one page per slot:
+`out/thumbs/<source>/sheet-8.png` and `sheet-32.png`. 128 px stays loose files at
+`out/thumbs/<source>/128/<part>.png` — only a few dozen cells are that large on
+screen at once, so they are a residency problem, not a draw-call one.
 
 **A cell's index is its position in part-id order over all 24,591 parts, not a
 packing of the parts that happen to be drawn.** An unrendered part still owns
@@ -112,7 +126,7 @@ order.
 
 Sort keys: part id, category, status, `extra_d99`, `secs`, render age. The
 filter bar narrows to unrendered only, errors only, a corpus list, printed, or
-obsolete.
+obsolete, and carries the slot control beside them.
 
 Re-sorting emits different rects against the same baked thumbnails; nothing
 rebakes. The strategy returns rects rather than a row and column, so the grouped
@@ -133,9 +147,11 @@ detail, not the way you inspect a part.
 Three routes on the existing FastAPI app in `brick_icons/lab/app.py`. A second
 server would fork the artifact and defect routes.
 
-- `GET /api/corpus/cells`
+- `GET /api/corpus/cells?source=` — defaults to `census-naive`
+- `GET /api/corpus/sources` — the slots that have renders, and how many each
 - `GET /api/corpus/summary` — `findings.summary`
-- `GET /api/thumbs/{level}/{part}.png` and `/api/thumbs/sheet-{level}.png`
+- `GET /api/thumbs/{source}/{level}/{part}.png`
+  and `/api/thumbs/{source}/sheet-{level}.png`
 
 The lightbox reads through `findings.findings(part=…)` and the existing
 `/api/defects`.
