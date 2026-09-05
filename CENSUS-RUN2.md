@@ -10,7 +10,7 @@ census measures; this file only carries what changed today.
 
 `compare-silhouette-truth.py` renders each part to a temp dir, rasterizes it to compare against
 the truth mask, and unlinks it. The `--keep DIR` flag exists to save them and neither
-`census-shard.sh` nor `run-census.sh` passed it. Both now do (uncommitted, from another session).
+`census-shard.sh` nor `run-census.sh` passed it. Both now do (`ab116b5`).
 
 ## Two jobs, one engine each
 
@@ -143,19 +143,34 @@ taking studio's swap to 40 GB and its boot disk to within about 45 minutes of fu
 worker was the whole fix: the shard restarted, buried the part as `ProcessDied` off the `.inflight`
 marker, and stepped over it.
 
-So enforcement has to come from outside the process, and `Runner` already writes what it needs. A
-watchdog comparing `<jsonl>.inflight`'s mtime against a ceiling, killing the worker and letting the
-restart loop do the rest, is the fix; it is not landed, and goes into `census-shard.sh` alongside
-the `onto: plan` line so that file takes one edit rather than two. **The ceiling is a crash guard,
-not a second cap** — every part it kills is one the 120s cap already meant to kill and structurally
-could not.
+So enforcement has to come from outside the process, and `Runner` already writes what it needs.
+`census-shard.sh` now compares `<jsonl>.inflight`'s mtime against `HARD` (240s), kills the worker,
+and lets the restart loop bury the part as `ProcessDied` and step over it (`2f2f574`). **The
+ceiling is a crash guard, not a second cap** — every part it kills is one the 120s cap already
+meant to kill and structurally could not.
 
-**Decided: start at 240s and ratchet.** A part the watchdog kills joins a list, that list is re-run
-at a higher ceiling, and the set shrinks each pass. A single ceiling forces a choice between
-catching hangs early and discarding parts that were merely slow; a ratchet refuses it, because
-nothing is discarded — the next pass comes back for it. The machinery already exists:
-`census-triage.py` turns failures into a plain list and `--list` re-runs exactly that. 240s also
-keeps any one part from burning an hour of a shard, which a 3600s guard would have allowed.
+**It runs as a ratchet, starting at 240s** (`fa2cfd6`). Each pass runs a list, triages against that
+same list, and writes what is still undone as the next pass's list at a higher ceiling:
+
+    HARD=240 scripts/census-shard.sh occt h240 120
+    scripts/census-triage.py out/census occt \
+        --corpus out/census/occt-h240.txt --out out/census/occt-h480.txt
+    HARD=480 scripts/census-shard.sh occt h480 120
+
+The tag names the list file, so the first pass's input is whatever list you are starting from,
+saved as `out/census/occt-h240.txt`. Stop when the count stops falling: what is left then is parts
+the engine cannot draw rather than parts it was not given long enough to draw. Nothing is discarded,
+which is why a single ceiling was rejected — it forces a choice between catching hangs early and
+throwing away parts that were merely slow. 240s also keeps any one part from burning an hour of a
+shard, which a 3600s guard would have allowed.
+
+**The next pass's list is every part with no successful row**, not the degenerate test `p in bad
+and p not in good`. A pass killed at its own deadline leaves parts it never reached, and those are
+in neither set — against `occt-r3.txt` that is 125 of 363, which the degenerate test would have
+dropped from every later pass without printing anything. The error breakdown counts those as
+`(never attempted)` separately, and that distinction is the signal to read: never-attempted means
+the job ran out of time and wants requeueing, `TimeoutError` means the ceiling is too low and wants
+raising. The count alone cannot tell them apart.
 
 ## Where the time actually goes
 
