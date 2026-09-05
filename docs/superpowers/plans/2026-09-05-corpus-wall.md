@@ -3552,6 +3552,69 @@ git commit -m "colour a cell by what is known about it"
 
 ---
 
+### Task 20b: Open fitted to the width, and let the wall be dragged
+
+The wall should open showing the corpus at full width, running off the bottom of
+the viewport rather than shrunk to fit inside it.
+
+`fitBounds` currently takes `min(width/bounds.w, height/bounds.h)` — the whole
+wall, both axes. On a window taller than it is wide that already picks width, so
+this is invisible today; on a normal landscape window it picks height and the
+wall sits small with empty space either side.
+
+**Fitting the width means the wall overflows vertically, and nothing can reach
+it** — the wheel zooms and there is no pan. So this task is two things.
+
+**Files:**
+- Modify: `lab/src/corpus/camera.ts`, `camera.test.ts`
+- Modify: `lab/src/corpus/CorpusWall.tsx`, `CorpusWall.test.tsx`
+- Modify: `lab/src/corpus/Wall.css`
+
+- [ ] **Step 1: `fitWidth` beside `fitBounds`**
+
+Add `fitWidth(bounds, viewport)` returning `viewport.width / bounds.w` with the
+same zero-bounds guard `fitBounds` has, and have `CorpusWall` use it for the
+initial and refit cases. Keep `fitBounds` — a later "fit everything" control is
+the obvious use, and it is already tested.
+
+Note when writing the test that `fitBounds({w:100,h:50},{width:200,height:200})`
+returns 2 either way, so a test reusing those numbers proves nothing. Pick a
+landscape viewport where the two answers differ.
+
+- [ ] **Step 2: Drag to pan**
+
+Pointer down on the canvas starts a drag; movement translates the camera by the
+delta converted to world units (`dx / cam.scale`); pointer up ends it. Use
+pointer events, not mouse events, and capture the pointer so a drag that leaves
+the canvas still tracks.
+
+A drag must not fire the click that raises the part card. Track whether the
+pointer moved more than a few pixels between down and up, and suppress the click
+when it did — otherwise every pan ends with a card.
+
+Set `cursor: grab` on the canvas and `grabbing` while dragging, in `Wall.css`.
+Panning counts as touching the camera, so it sets the same `touched` ref the
+wheel does and stops the automatic refit.
+
+- [ ] **Step 3: Run, drive it, commit**
+
+`npx vitest run src/corpus` and `npx tsc -b --noEmit` clean.
+
+In the browser, resize the window **wider than it is tall** — that is the only
+shape where this change is visible — and confirm the wall opens filling the
+width and running off the bottom. Drag to pan down to the last row and back.
+Confirm a drag does not open a card and a click still does. Screenshot and slop
+it.
+
+```bash
+git add lab/src/corpus/camera.ts lab/src/corpus/camera.test.ts \
+        lab/src/corpus/CorpusWall.tsx lab/src/corpus/CorpusWall.test.tsx \
+        lab/src/corpus/Wall.css
+git commit -m "open the wall fitted to the width, and let it be dragged"
+```
+
+---
+
 ### Task 21: Put the wall in its own labkit shell
 
 The corpus wall gets labkit's **UI** — the shell, the theme, the loupe, the
