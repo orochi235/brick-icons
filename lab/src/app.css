@@ -83,6 +83,18 @@
    sitting on the baseline with the descender space below it. */
 .pose-icon { display: inline-flex; align-items: center; padding: 0.15rem 0.3rem; }
 
+/* One segmented control, not three buttons that happen to sit together: the
+   three name a single choice, so they share their borders and abut. */
+.pose-bar-group.pose-bar-strip { gap: 0; }
+.pose-bar-strip > .pose {
+  border-color: var(--wzl-border);
+  border-radius: 0;
+  margin-left: -1px;
+}
+.pose-bar-strip > .pose:first-child { border-radius: 3px 0 0 3px; margin-left: 0; }
+.pose-bar-strip > .pose:last-child { border-radius: 0 3px 3px 0; }
+.pose-bar-strip > .pose.is-on { position: relative; z-index: 1; }
+
 .pose:hover { border-color: var(--wzl-border); }
 .pose.is-on { border-color: currentColor; font-weight: 700; }
 

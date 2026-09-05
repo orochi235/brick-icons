@@ -91,7 +91,7 @@ export function PoseBar({ angle, config, fields, setConfig }: PoseBarProps) {
           </button>
         ))}
       </div>
-      <div className="pose-bar-group" role="group" aria-label="Layout">
+      <div className="pose-bar-group pose-bar-strip" role="group" aria-label="Layout">
         {LAYOUTS.map((id) => (
           <button
             key={id}
