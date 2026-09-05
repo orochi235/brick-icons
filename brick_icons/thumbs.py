@@ -105,6 +105,54 @@ def bake_part(part_id: str, svg: Path | str, out: Path | str,
     return list(LEVELS)
 
 
+def compose(out: Path | str, order: list[str]) -> list[Path]:
+    """Paste every baked thumbnail onto its sheet, in `order`'s index order.
+
+    `order` is every part, not only the drawn ones: an index is a position in
+    the corpus, so a part gaining a render later fills the cell it already had.
+    """
+    out = Path(out)
+    shas = baked_shas(out)
+    written = []
+    for level in SHEET_LEVELS:
+        g = geometry(len(order), level)
+        sheet = Image.new("RGBA", (g.size, g.size), (0, 0, 0, 0))
+        for index, part_id in enumerate(order):
+            tile = out / str(level) / f"{part_id}.png"
+            if not tile.is_file():
+                continue
+            with Image.open(tile) as img:
+                cell = img.convert("RGBA")
+            x0, y0, _, _ = g.cell_box(index)
+            sheet.paste(cell, (x0, y0))
+            if g.gutter:
+                _replicate_edges(sheet, cell, x0, y0, g.gutter)
+        path = out / f"sheet-{level}.png"
+        sheet.save(path)
+        (out / f"sheet-{level}.json").write_text(json.dumps({
+            "level": level, "gutter": g.gutter, "pitch": g.pitch,
+            "cols": g.cols, "rows": g.rows, "count": len(order),
+            "size": g.size, "baked": shas,
+        }, sort_keys=True))
+        written.append(path)
+    return written
+
+
+def _replicate_edges(sheet: Image.Image, cell: Image.Image,
+                     x0: int, y0: int, gutter: int) -> None:
+    """Pad a cell with its own edge pixels.
+
+    Without this each mip reduction averages a cell against its neighbour and
+    the wall reads as halos -- a rendering fault that looks like a data fault.
+    """
+    w, h = cell.size
+    for d in range(1, gutter + 1):
+        sheet.paste(cell.crop((0, 0, w, 1)), (x0, y0 - d))
+        sheet.paste(cell.crop((0, h - 1, w, h)), (x0, y0 + h + d - 1))
+        sheet.paste(cell.crop((0, 0, 1, h)), (x0 - d, y0))
+        sheet.paste(cell.crop((w - 1, 0, w, h)), (x0 + w + d - 1, y0))
+
+
 def _square(drawn: Image.Image, level: int) -> Image.Image:
     """Fit a render inside an opaque white square of `level` px.
 

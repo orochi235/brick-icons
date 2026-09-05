@@ -1,4 +1,5 @@
 """Thumbnail baking: geometry, freshness, sheets."""
+import json
 from pathlib import Path
 
 import pytest
@@ -116,3 +117,47 @@ def test_the_baked_sha_is_readable_back(tmp_path):
     out = tmp_path / "thumbs"
     thumbs.bake_part("3001", svg, out, sha="abc123")
     assert thumbs.baked_shas(out) == {"3001": "abc123"}
+
+
+def _baked(tmp_path, ids):
+    svg = tmp_path / "src.svg"
+    svg.write_text(SVG)
+    out = tmp_path / "thumbs"
+    for pid in ids:
+        thumbs.bake_part(pid, svg, out, sha=f"sha-{pid}")
+    return out
+
+
+def test_the_sheet_is_one_page_sized_from_the_part_count(tmp_path):
+    out = _baked(tmp_path, ["a", "b", "c"])
+    thumbs.compose(out, order=["a", "b", "c", "d"])
+    for level in (8, 32):
+        g = thumbs.geometry(4, level)
+        with Image.open(out / f"sheet-{level}.png") as img:
+            assert img.size == (g.size, g.size)
+
+
+def test_the_manifest_names_the_geometry_and_what_is_baked(tmp_path):
+    out = _baked(tmp_path, ["a", "c"])
+    thumbs.compose(out, order=["a", "b", "c", "d"])
+    m = json.loads((out / "sheet-32.json").read_text())
+    assert m["level"] == 32 and m["gutter"] == 2 and m["pitch"] == 36
+    assert m["cols"] == 2 and m["count"] == 4
+    assert m["baked"] == {"a": "sha-a", "c": "sha-c"}
+
+
+def test_a_part_with_no_thumbnail_leaves_its_cell_empty(tmp_path):
+    out = _baked(tmp_path, ["a"])
+    thumbs.compose(out, order=["a", "b"])
+    g = thumbs.geometry(2, 32)
+    with Image.open(out / "sheet-32.png") as img:
+        assert img.crop(g.cell_box(0)).getextrema()[3][1] > 0   # a is drawn
+        assert img.crop(g.cell_box(1)).getextrema()[3][1] == 0  # b is empty
+
+
+def test_the_gutter_replicates_the_cell_edge(tmp_path):
+    out = _baked(tmp_path, ["a"])
+    thumbs.compose(out, order=["a", "b"])
+    with Image.open(out / "sheet-32.png") as img:
+        x0, y0, _, _ = thumbs.geometry(2, 32).cell_box(0)
+        assert img.getpixel((x0 - 1, y0)) == img.getpixel((x0, y0))
