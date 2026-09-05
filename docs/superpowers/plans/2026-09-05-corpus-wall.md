@@ -2556,6 +2556,7 @@ export function Lightbox({ partId, source, client, onClose }: {
           <p className="corpus-sub">
             {detail.part.id} · {detail.part.category ?? 'uncategorised'} ·
             {' '}{detail.part.status}
+            {detail.part.status_note ? ` · ${detail.part.status_note}` : ''}
           </p>
           <img className="corpus-big" alt={`${detail.part.id} render`}
                src={`/api/thumbs/${source}/128/${detail.part.id}.png`} />
@@ -2818,6 +2819,23 @@ Add to `lab/src/corpus/corpus.css` (the shell's own sheet, already imported by
 .corpus-app { display: flex; flex-direction: column; height: 100vh; }
 .corpus-stage { flex: 1; overflow: hidden; }
 ```
+
+- [ ] **Step 3b: Move focus into the lightbox when it opens**
+
+The lightbox is `role="dialog"` with an Escape handler and a real `<button>`
+Close, but nothing moves focus into it — so a keyboard user lands wherever the
+canvas left them and has to tab through the page to reach it. No single
+component can fix that; the one that mounts the dialog has to.
+
+In `Lightbox.tsx`, focus the close button on mount:
+
+```tsx
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => { closeRef.current?.focus(); }, []);
+```
+
+and put `ref={closeRef}` on the Close button. Add a test asserting
+`document.activeElement` is the Close button after the dialog renders.
 
 - [ ] **Step 4: Run test to verify it passes**
 
