@@ -60,13 +60,17 @@ written, so re-running it after each batch costs only the new renders.
 ## Baking
 
 `scripts/bake-thumbs.py` rasterizes each stored render at 8, 32 and 128 px.
-Keyed on `renders.sha256`, so a re-render invalidates one cell and re-running
-the bake is idempotent.
+
+**Thumbnails are addressed by part number, and `renders.sha256` says whether one
+is stale.** A cell on the wall knows its part id and nothing else, so the id is
+the name: `out/thumbs/128/3001.png`. The bake skips a part whose recorded sha
+matches the one it baked last time, and the client cache-busts with `?v=<first 8
+of sha>`.
 
 The two coarse levels ship as **whole-corpus sprite sheets**, one page each:
-`out/thumbs/sheet-8.png` and `sheet-32.png`. 128 px stays loose files at
-`out/thumbs/128/<sha>.png` — only a few dozen cells are that large on screen at
-once, so they are a residency problem, not a draw-call one.
+`out/thumbs/sheet-8.png` and `sheet-32.png`. 128 px stays loose files — only a
+few dozen cells are that large on screen at once, so they are a residency
+problem, not a draw-call one.
 
 **A cell's index is its position in part-id order over all 24,591 parts, not a
 packing of the parts that happen to be drawn.** An unrendered part still owns
@@ -75,8 +79,8 @@ matters — a render landing mid-session writes one cell instead of renumbering
 every cell after it. The sheet at 32 px is 157x157 cells, 5024 px square.
 
 Each sheet ships a JSON manifest beside it: grid pitch, cell size, and the
-`sha256` in each occupied cell. The wall diffs the manifest to know which cells
-went stale; the sheet itself carries an ETag.
+`sha256` baked into each occupied cell, by part id. The wall diffs the manifest
+to know which cells went stale; the sheet itself carries an ETag.
 
 Gutters, per the mega view's bleed trap: level 8 is the coarsest and the mip
 chain stops there, so it needs none. Level 32 gets a 2 px edge-replicated
@@ -121,7 +125,7 @@ server would fork the artifact and defect routes.
 
 - `GET /api/corpus/cells`
 - `GET /api/corpus/summary` — `findings.summary`
-- `GET /api/thumbs/{level}/{sha}.png`
+- `GET /api/thumbs/{level}/{part}.png` and `/api/thumbs/sheet-{level}.png`
 
 The lightbox reads through `findings.findings(part=…)` and the existing
 `/api/defects`.
