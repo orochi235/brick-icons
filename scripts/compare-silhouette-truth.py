@@ -105,24 +105,38 @@ def one(part: str, args, tmp: Path) -> dict:
             "--silhouette-width", "0", "--out", str(tmp)]
     parsed = cli.build_parser().parse_args(argv)
     cfg = cli._config_from_args(parsed)
+    # Timed per phase, because `secs` alone cannot say whether a slow part is
+    # slow to draw or slow to build a reference for, and those have different
+    # fixes.
+    phase, t0 = {}, time.perf_counter()
     cli.process_one(cfg, part, tmp)
+    phase["render"] = round(time.perf_counter() - t0, 2)
 
+    t0 = time.perf_counter()
     svg, png = tmp / f"{part}.svg", tmp / f"{part}.png"
     subprocess.run(["resvg", "--zoom", str(args.zoom), str(svg), str(png)],
                    check=True, capture_output=True)
     ours = np.array(Image.open(png).convert("RGBA"))[:, :, 3] > 128
+    phase["rasterize"] = round(time.perf_counter() - t0, 2)
+
+    t0 = time.perf_counter()
     truth = truth_mask(part, cfg.ldraw_dir, json.loads((tmp / f"{part}.fit.json").read_text()),
                        args.zoom)
+    phase["truth_mask"] = round(time.perf_counter() - t0, 2)
 
+    t0 = time.perf_counter()
     extra, missing = ours & ~truth, truth & ~ours
     dist = ndimage.distance_transform_edt(~truth)
     pct = {str(p): round(float(np.percentile(dist[extra], p)) / args.zoom, 2)
            for p in (50, 90, 99, 100)} if extra.any() else {}
-    return {"part": part, "engine": args.engine, "angle": args.angle,
-            "extra_px": int(extra.sum()), "missing_px": int(missing.sum()),
-            "extra_dist_px": pct,
-            "missing": components(missing, args.zoom, args.floor),
-            "extra": components(extra, args.zoom, args.floor)}
+    row = {"part": part, "engine": args.engine, "angle": args.angle,
+           "extra_px": int(extra.sum()), "missing_px": int(missing.sum()),
+           "extra_dist_px": pct,
+           "missing": components(missing, args.zoom, args.floor),
+           "extra": components(extra, args.zoom, args.floor)}
+    phase["compare"] = round(time.perf_counter() - t0, 2)
+    row["phase"] = phase
+    return row
 
 
 def _bare(part: str, work, args) -> dict:

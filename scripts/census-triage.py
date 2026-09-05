@@ -22,6 +22,7 @@ from collections import Counter
 from pathlib import Path
 
 DIR = Path("out/census")
+PROBE = 100
 
 
 def rows(archive: Path, engine: str):
@@ -59,6 +60,21 @@ def main() -> int:
     keep = [p for p in corpus if p not in bad or p in good]
 
     DIR.joinpath(f"{engine}-degenerate.txt").write_text("\n".join(degenerate) + "\n")
+
+    # Measured but never drawn: run 1 recorded numbers for these and deleted
+    # every render. Re-running them with --keep against a fresh JSONL is the
+    # backfill, and it is a different list from the shards above because those
+    # also carry parts nobody has reached yet.
+    backfill = [p for p in corpus if p in good]
+    DIR.joinpath(f"{engine}-backfill.txt").write_text("\n".join(backfill) + "\n")
+
+    # An evenly spaced sample of the degenerate set, for learning what a higher
+    # --timeout actually buys before committing to the whole list. Evenly
+    # spaced rather than random so the file is reproducible.
+    if degenerate:
+        step = max(1, len(degenerate) // PROBE)
+        probe = degenerate[::step][:PROBE]
+        DIR.joinpath(f"{engine}-probe{PROBE}.txt").write_text("\n".join(probe) + "\n")
     for i in range(n):
         shard = keep[i::n]
         DIR.joinpath(f"{engine}-r{i}.txt").write_text("\n".join(shard) + "\n")
@@ -67,6 +83,7 @@ def main() -> int:
     why = Counter(bad[p] for p in degenerate)
     print(f"{engine}: {len(corpus)} in corpus, {len(degenerate)} degenerate, {len(keep)} to run")
     print(f"{engine}: never attempted = {len(keep) - len(good)}")
+    print(f"{engine}: {len(backfill)} measured but never drawn -> {engine}-backfill.txt")
     for err, count in why.most_common():
         print(f"  {err}: {count}")
     return 0
