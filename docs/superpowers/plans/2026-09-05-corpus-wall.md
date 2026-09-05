@@ -3369,6 +3369,104 @@ git commit -m "raise a part card on click, and the lightbox on double click"
 
 ---
 
+### Task 20: Colour a cell by what is known about it
+
+Most of the wall has no thumbnail, so a cell's colour is the only thing it can
+say. Today `STATUS_FILL` keys off `parts.status`, which is a review verdict —
+not what a viewer needs to see. Replace it with four states:
+
+| state | colour | source |
+|---|---|---|
+| an open defect is filed against it | bright ochre `#c8860d` | `defects` |
+| it cannot be drawn — GEOS, dead process, type error | red `#8c2020` | `measurements.error` |
+| the render timed out | dim rust `#5a3326` | `measurements.error` |
+| nothing is known | gray `#3a3a3f` | absence |
+
+**A timeout is not a defect.** 1,420 of the 1,428 recorded errors are
+`TimeoutError`; the eight that genuinely failed would be invisible among them
+under one colour. That is why these are two states.
+
+**An open defect outranks a failure** — it is the newer fact, and someone acted
+on it. It also applies to cells that *are* drawn: the thumbnail is an opaque
+tile, so a background colour would sit behind it unseen. Those get an ochre ring
+around the tile instead.
+
+`cells.py` does not return defect counts yet; that is the first half of this
+task. `findings.py`'s `_attach_defects` already does this in one query for a
+page of rows rather than one query per row — follow it rather than inventing a
+second approach.
+
+**Files:**
+- Modify: `brick_icons/lab/cells.py`, `tests/test_lab_cells.py`
+- Modify: `lab/src/corpus/types.ts` (add `open_defects: number`)
+- Modify: `lab/src/corpus/paint.ts`, `paint.test.ts`
+- Modify: `lab/src/corpus/PartCard.tsx` (say why a cell is the colour it is)
+
+- [ ] **Step 1: Return open defect counts from `cells.py`**
+
+Test first. A cell gains `open_defects`, counting defects on that part whose
+status is not `fixed` or `notabug`. Add tests for: a part with no defects
+reporting 0, a part with two open ones reporting 2, and a part whose only defect
+is `fixed` reporting 0. One query for the whole response, not one per cell.
+
+- [ ] **Step 2: Decide the fill in `paint.ts`**
+
+Replace `STATUS_FILL` with a `CELL_FILL` table and a `fillFor(cell)` function.
+Write the tests first — they are the specification:
+
+```ts
+it('flags a part with an open defect in ochre, whatever else is true', () => {
+  expect(fillFor({ ...base, open_defects: 1, error: 'GEOSException' }))
+    .toBe(CELL_FILL.defect);
+});
+
+it('separates a part that cannot be drawn from one that timed out', () => {
+  expect(fillFor({ ...base, error: 'GEOSException' })).toBe(CELL_FILL.failed);
+  expect(fillFor({ ...base, error: 'ProcessDied' })).toBe(CELL_FILL.failed);
+  expect(fillFor({ ...base, error: 'TimeoutError' })).toBe(CELL_FILL.timeout);
+});
+
+it('says nothing is known when nothing is known', () => {
+  expect(fillFor(base)).toBe(CELL_FILL.unknown);
+});
+```
+
+`base` is a `Cell` with no sha, no error and no defects. Classify the error by
+whether it *is* `TimeoutError`, not by a list of the failures — a new failure
+mode should read as a failure, not fall through to gray.
+
+- [ ] **Step 3: Ring a drawn cell that has an open defect**
+
+Add a `ring` field to the sprite and image paint commands, set when
+`open_defects > 0`, and have `Wall.tsx` stroke that rect after drawing the
+image. Test that a drawn cell with a defect emits a command carrying the ring
+and one without does not.
+
+- [ ] **Step 4: Say it in the card**
+
+`PartCard` should name the state in words — "not rendered", "render timed out",
+"cannot be drawn: GEOSException", "2 open defects" — so the colour is legible
+rather than something to memorise. Test each.
+
+- [ ] **Step 5: Run, look, commit**
+
+`npx vitest run src/corpus`, `.venv/bin/python -m pytest tests/test_lab_cells.py`
+and `npx tsc -b --noEmit` all clean.
+
+Then look at the wall: with 24,591 cells and 1,428 errors, the rust band should
+be plainly visible and the eight red cells findable. Sort by `extra_d99` and by
+`id` and confirm the colours travel with the cells. Screenshot and slop it.
+
+```bash
+git add brick_icons/lab/cells.py tests/test_lab_cells.py \
+        lab/src/corpus/types.ts lab/src/corpus/paint.ts \
+        lab/src/corpus/paint.test.ts lab/src/corpus/PartCard.tsx \
+        lab/src/corpus/PartCard.test.tsx lab/src/corpus/Wall.tsx
+git commit -m "colour a cell by what is known about it"
+```
+
+---
+
 ### Task 19: The full gate
 
 Only now, and only once.
