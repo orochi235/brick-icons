@@ -38,3 +38,23 @@ def test_an_index_past_the_grid_is_an_error():
     g = thumbs.geometry(4, level=8)
     with pytest.raises(IndexError):
         g.cell_box(g.cols * g.rows)
+
+
+def test_the_loose_level_is_not_a_sheet():
+    # 128 px is served as loose files. Sheeting it would silently produce a
+    # 12800px page nothing asks for.
+    with pytest.raises(ValueError):
+        thumbs.geometry(100, level=thumbs.LOOSE_LEVEL)
+
+
+def test_a_square_sheet_never_crops_an_uneven_grid():
+    g = thumbs.geometry(82, level=32)   # cols 10, rows 9
+    assert (g.cols, g.rows) == (10, 9)
+    assert g.size >= g.rows * g.pitch
+    assert g.cell_box(81)[3] <= g.size
+
+
+def test_a_tiny_corpus_still_has_a_grid():
+    for count in (0, 1):
+        g = thumbs.geometry(count, level=8)
+        assert g.cols == 1 and g.rows == 1

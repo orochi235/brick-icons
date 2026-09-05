@@ -32,7 +32,7 @@ class Geometry:
         return self.cols * self.pitch
 
     def cell_box(self, index: int) -> tuple[int, int, int, int]:
-        """The cell's pixel box on the sheet, gutters excluded."""
+        """The cell's (left, top, right, bottom) on the sheet, gutters excluded."""
         if not 0 <= index < self.cols * self.rows:
             raise IndexError(f"cell {index} is outside a {self.cols}x{self.rows} grid")
         col, row = index % self.cols, index // self.cols
@@ -42,7 +42,11 @@ class Geometry:
 
 
 def geometry(count: int, level: int) -> Geometry:
+    if level not in SHEET_LEVELS:
+        raise ValueError(f"{level} is not a sheet level; sheets are {SHEET_LEVELS}")
     cols = max(1, math.ceil(math.sqrt(count)))
+    # cols >= sqrt(count) makes cols*cols >= count, so rows <= cols always and
+    # a square `size` is never a crop -- only ever some dead rows at the bottom.
     rows = max(1, math.ceil(count / cols))
     gutter = 0 if level == min(SHEET_LEVELS) else GUTTER
     return Geometry(count=count, level=level, cols=cols, rows=rows, gutter=gutter)
