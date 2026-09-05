@@ -148,9 +148,25 @@ the job that fills the store — has its own plan at
 `docs/superpowers/plans/2026-09-04-render-store.md`. **Part 1 is
 built and its tasks are checked off**: `brick_icons/db.py` holds the schema and
 every accessor, `scripts/build-corpus-db.py` rebuilds `corpus.db` from files,
-and `tests/test_db.py` covers it. Parts 2, 3 and 4 — the render job that fills
-`renders/`, the lab's findings view, and the regression gate — are unwritten,
+and `tests/test_db.py` covers it.
+
+**Part 2 is built and running.** Every task in the render-store plan is checked
+off but the last, which is Mike's to take (below). `brick_icons/batch.py` holds
+the guard both batch jobs now share, `scripts/build-render-store.py` renders a
+part list into the store, and `scripts/run-render-store.sh` shards it:
+
+    scripts/run-render-store.sh 8 180 naive     # RETRY=1 to re-take timeouts
+    scripts/render-store-report.sh              # where it has got to
+
+Parts 3 and 4 — the lab's findings view and the regression gate — are unwritten,
 each its own plan.
+
+**The store run needs a second, slower pass.** Resume treats every logged part
+as done, so anything the per-part cap cut short is dropped rather than retried.
+`RETRY=1 scripts/run-render-store.sh 8 600 naive` takes exactly those, and a
+`ProcessDied` part is still never retried. Run it on a quiet box: the first
+22 parts timed out at 23% against a desktop running Chrome, and the renders are
+single-threaded at ~80% CPU each, so contention is the whole story.
 
 Two decisions taken 2026-09-04, so they are not re-argued from scratch:
 
@@ -167,9 +183,15 @@ another whole pass. Adding a pose needs the pose in the file path, since
 
 **The census's renders stay out of git for now.** They live in
 `out/census/renders/<engine>/`, gitignored, with rows in the database. Roughly
-16,500 of them at full coverage, ~230MB, and the tracked store carries about
-as much again — so tracking them is a real decision about repo growth, left
-open rather than taken by default.
+16,500 of them at full coverage, ~230MB.
+
+**The tracked store is bigger than that, not equal to it.** Measured on the
+first stored renders, the canonical stroked drawing has a 29KB median and a
+long tail — `0901` is 699KB of real geometry, 1481 elements, already at 2dp, so
+there is no precision bloat to trim. That puts the naive half between 230MB and
+640MB, and the run leaves `renders/` **uncommitted** for that reason: the
+rendering is the expensive half and it is safe on disk, so committing later
+costs nothing. Firm the number up with `du -sh renders` and decide then.
 
 The decision that shaped it, argued in conversation: **a render is the most
 expensive artifact this project makes, so `renders/<source>/<part>.svg` is
