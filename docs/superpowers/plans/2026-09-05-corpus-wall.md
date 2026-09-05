@@ -3090,8 +3090,13 @@ Expected: PASS, including the 3 new paint tests and the 4 new loose-thumb tests.
 With the server and dev page running, open `http://localhost:5178/corpus.html`.
 Zoom all the way out: cells are a few pixels and come from `sheet-8.png` — check
 the network panel shows it fetched. Zoom in: `sheet-32.png` takes over. Zoom
-until a cell is bigger than 128 px: individual `/api/thumbs/128/<part>.png`
-requests appear and the drawing sharpens.
+until a cell is bigger than 128 px: individual
+`/api/thumbs/<slot>/128/<part>.png` requests appear and the drawing sharpens.
+
+Then switch the Slot control from `census-naive` to `naive`. The wall keeps its
+camera and its sort, the sheets swap, and far fewer cells are drawn — 49 against
+200. The drawings that do appear carry black outline strokes the census ones
+lack.
 
 Park the zoom exactly on a threshold and jiggle it. Expected: the level does not
 flip back and forth — that is what `pickLevel`'s hysteresis is for. If the
