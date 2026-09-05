@@ -1,5 +1,6 @@
 import type { Artifact, JobState, LabConfig, LdrawColor, PartHit, RenderResult,
   SchemaField } from '@lab/api/types';
+import type { CellsBody } from '@lab/corpus/types';
 
 export interface ClientOptions {
   base?: string;
@@ -130,6 +131,16 @@ export function createClient({ base = '', fetchImpl = fetch }: ClientOptions = {
     async goldens(part: string) {
       return json<{ part: string; cases: Record<string, string>; known: boolean }>(
         fetchImpl, at(`/api/goldens?part=${encodeURIComponent(part)}`));
+    },
+
+    async cells(source: string, since?: string): Promise<CellsBody> {
+      const q = new URLSearchParams({ source });
+      if (since) q.set('since', since);
+      return json(fetchImpl, at(`/api/corpus/cells?${q}`));
+    },
+
+    async corpusSources(): Promise<{ sources: { source: string; n: number }[] }> {
+      return json(fetchImpl, at('/api/corpus/sources'));
     },
   };
 }
