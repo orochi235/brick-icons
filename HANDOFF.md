@@ -127,6 +127,25 @@ and `tests/test_db.py` covers it. Parts 2, 3 and 4 — the render job that fills
 `renders/`, the lab's findings view, and the regression gate — are unwritten,
 each its own plan.
 
+Two decisions taken 2026-09-04, so they are not re-argued from scratch:
+
+**One pass, iso only.** The store holds one canonical render per part per
+source, all at iso — the pose the goldens already use. This inherits their
+blind spot knowingly: no golden combo sets `--angle`, so nothing here says
+anything about other poses, and the one bug that hid was every round part
+crashing the naive engine at a side elevation. A second pose costs about 110
+CPU-hours per engine — the renders, not the disk, which is ~115MB — so the
+version worth proposing later is a side elevation for the parts the database
+can already single out, round ones and anything the census flagged, not
+another whole pass. Adding a pose needs the pose in the file path, since
+`config_key` distinguishes them in the table but the path does not.
+
+**The census's renders stay out of git for now.** They live in
+`out/census/renders/<engine>/`, gitignored, with rows in the database. Roughly
+16,500 of them at full coverage, ~230MB, and the tracked store carries about
+as much again — so tracking them is a real decision about repo growth, left
+open rather than taken by default.
+
 The decision that shaped it, argued in conversation: **a render is the most
 expensive artifact this project makes, so `renders/<source>/<part>.svg` is
 tracked in git and the database is derived from it.** Not the other way round.
