@@ -12,7 +12,8 @@ import tomllib
 from datetime import datetime, timezone
 from pathlib import Path
 
-from brick_icons.lab import partindex
+from brick_icons import goldens
+from brick_icons.lab import cache, partindex
 
 DEFAULT_PATH = Path("corpus.db")
 SCHEMA_VERSION = 1
@@ -171,3 +172,43 @@ def import_census_jsonl(conn: sqlite3.Connection, run_id: int,
         "error, detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
     conn.commit()
     return len(rows)
+
+
+# The one config each source's stored render is drawn at. A second config is a
+# different drawing and belongs in out/lab's cache, not in the store.
+_CANONICAL = {
+    "naive": ["--engine", "naive", "--shading", "outline",
+              "--shade-style", "flat3", "--angle", "iso"],
+    "occt": ["--engine", "occt", "--shading", "outline",
+             "--shade-style", "flat3", "--angle", "iso"],
+    "decal": ["--decal", "--angle", "iso"],
+    "ldview": ["--ldview", "--angle", "iso"],
+}
+
+
+def canonical_argv(part_id: str, source: str) -> list[str]:
+    if source not in SOURCES:
+        raise ValueError(f"source must be one of {SOURCES}, not {source!r}")
+    return [part_id, *_CANONICAL[source]]
+
+
+def record_render(conn: sqlite3.Connection, part_id: str, source: str,
+                  path: Path | str, root: Path | str = ".",
+                  run_id: int | None = None) -> str:
+    argv = canonical_argv(part_id, source)
+    path = Path(path)
+    text = path.read_text()
+    width = height = None
+    if path.suffix == ".svg":
+        box = goldens.summarize_svg(text)["viewBox"]
+        if box:
+            _, _, width, height = (float(v) for v in box.split())
+    key = cache.key(argv)
+    conn.execute(
+        "INSERT OR REPLACE INTO renders (part_id, source, config_key, run_id, "
+        "made_at, path, sha256, width, height) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (part_id, source, key, run_id, now(),
+         str(path.resolve().relative_to(Path(root).resolve())),
+         goldens.sha256(text), width, height))
+    conn.commit()
+    return key

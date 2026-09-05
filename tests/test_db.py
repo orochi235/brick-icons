@@ -117,3 +117,41 @@ def test_reimporting_the_same_run_replaces_rather_than_duplicates(tmp_path):
     db.import_census_jsonl(conn, run_id, path)
     db.import_census_jsonl(conn, run_id, path)
     assert conn.execute("SELECT count(*) FROM measurements").fetchone()[0] == 1
+
+
+SVG = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180">'
+       '<path d="M 10 10 L 20 20" stroke="black"/></svg>')
+
+
+def test_recording_a_render_stores_its_path_hash_and_size(tmp_path):
+    conn = db.connect(tmp_path / "corpus.db")
+    svg = tmp_path / "renders" / "naive" / "3001.svg"
+    svg.parent.mkdir(parents=True)
+    svg.write_text(SVG)
+
+    key = db.record_render(conn, "3001", "naive", svg, root=tmp_path)
+    row = conn.execute("SELECT * FROM renders").fetchone()
+    assert row["path"] == "renders/naive/3001.svg"
+    assert row["config_key"] == key
+    assert row["sha256"] == goldens.sha256(SVG)
+    assert (row["width"], row["height"]) == (240.0, 180.0)
+
+
+def test_a_second_render_of_the_same_config_replaces_the_row(tmp_path):
+    conn = db.connect(tmp_path / "corpus.db")
+    svg = tmp_path / "renders" / "naive" / "3001.svg"
+    svg.parent.mkdir(parents=True)
+    svg.write_text(SVG)
+    db.record_render(conn, "3001", "naive", svg, root=tmp_path)
+    svg.write_text(SVG.replace("240", "300"))
+    db.record_render(conn, "3001", "naive", svg, root=tmp_path)
+    rows = conn.execute("SELECT * FROM renders").fetchall()
+    assert len(rows) == 1 and rows[0]["width"] == 300.0
+
+
+def test_an_unknown_source_is_refused(tmp_path):
+    conn = db.connect(tmp_path / "corpus.db")
+    svg = tmp_path / "x.svg"
+    svg.write_text(SVG)
+    with pytest.raises(ValueError, match="source"):
+        db.record_render(conn, "3001", "wireframe", svg, root=tmp_path)
