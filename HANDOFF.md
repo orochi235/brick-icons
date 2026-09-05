@@ -116,10 +116,25 @@ and records it as `ProcessDied` on the way back in — which means **a shard tha
 dies needs one restart to get past its killer, and a second run to make
 progress.**
 
-`scripts/census-supervise.sh` does that restarting, and is what to start for
-an unattended run — `run-census.sh` launches the shards but does not watch
-them, so one crash costs that shard the rest of the night. The supervisor
-resumes each shard until it reports done.
+`scripts/census-shard.sh` does that restarting, and every shard runs under it
+now — `run-census.sh` launches shards but does not watch them, so one crash
+costs that shard the rest of the night.
+
+**The whole census is one onto job**, `scripts/census-run.sh`, which starts
+every shard in parallel and waits. It is one job rather than eight because
+onto locks a working tree to a single job, and that is the right shape: the
+census is one workload on one tree. `onto jobs` shows its CPU and peak group
+RSS; `onto logs -f <id>` follows every shard interleaved, with a progress line
+joining them every five minutes.
+
+**Shards are split per engine, not shared.** The two engines run at different
+rates and are rarely the same distance through, so a shared split spends half
+the machine on whichever one is nearly done. `scripts/census-reshard.py
+<engine> <n>` re-splits just that engine's unfinished parts into n fresh
+shards, leaving out anything already recorded in any of its JSONL files, so no
+work is repeated and old files stay as the record. Studio runs 3 naive and 5
+occt against its 8 performance cores — naive had 22 core-hours left against
+occt's 102, and occt is the blocker.
 
 **The census's renders are NOT the store's renders, and they cannot be
 promoted into it.** `--keep` saves what the oracle drew, and the oracle draws
