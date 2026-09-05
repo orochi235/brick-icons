@@ -59,13 +59,29 @@ written, so re-running it after each batch costs only the new renders.
 
 ## Baking
 
-`scripts/bake-thumbs.py` reads `renders.path` and `renders.sha256` and writes
-`out/thumbs/<level>/<sha>.png` at 8, 32 and 128 px, plus a manifest mapping part
-id to sha to available levels. Keyed on the content hash, so a re-render
-invalidates one cell and re-running the bake is idempotent.
+`scripts/bake-thumbs.py` rasterizes each stored render at 8, 32 and 128 px.
+Keyed on `renders.sha256`, so a re-render invalidates one cell and re-running
+the bake is idempotent.
 
-Whether atlas pages get composed here or in weasel stays open until the mega
-view has an API. Per-item PNGs are its input either way.
+The two coarse levels ship as **whole-corpus sprite sheets**, one page each:
+`out/thumbs/sheet-8.png` and `sheet-32.png`. 128 px stays loose files at
+`out/thumbs/128/<sha>.png` — only a few dozen cells are that large on screen at
+once, so they are a residency problem, not a draw-call one.
+
+**A cell's index is its position in part-id order over all 24,591 parts, not a
+packing of the parts that happen to be drawn.** An unrendered part still owns
+its cell; blank cells cost nearly nothing in a PNG and buy the property that
+matters — a render landing mid-session writes one cell instead of renumbering
+every cell after it. The sheet at 32 px is 157x157 cells, 5024 px square.
+
+Each sheet ships a JSON manifest beside it: grid pitch, cell size, and the
+`sha256` in each occupied cell. The wall diffs the manifest to know which cells
+went stale; the sheet itself carries an ETag.
+
+Gutters, per the mega view's bleed trap: level 8 is the coarsest and the mip
+chain stops there, so it needs none. Level 32 gets a 2 px edge-replicated
+gutter, making its pitch 36 px. Both are decided at bake time and cannot be
+retrofitted without rebaking.
 
 ## Backfill
 
@@ -112,8 +128,7 @@ The lightbox reads through `findings.findings(part=…)` and the existing
 
 ## Not in this build
 
-Triage writes, defect editing, the regression gate, atlas pages, and any change
-to weasel.
+Triage writes, defect editing, the regression gate, and any change to weasel.
 
 ## Traps
 
@@ -127,3 +142,7 @@ Shared code moves to `lab/src/api/` or a new `lab/src/shared/` first.
 
 **`renders.path` is the artifact; a thumbnail is derived.** Bake from the file
 in the store, and never let `out/thumbs/` be the only copy of a drawing.
+
+**Never pack a sprite sheet by what is currently rendered.** It is the one
+choice that makes every later render rewrite the whole sheet, and it looks
+correct until the second batch lands.
