@@ -1,5 +1,8 @@
 """Thumbnail baking: geometry, freshness, sheets."""
+from pathlib import Path
+
 import pytest
+from PIL import Image
 
 from brick_icons import thumbs
 
@@ -58,3 +61,58 @@ def test_a_tiny_corpus_still_has_a_grid():
     for count in (0, 1):
         g = thumbs.geometry(count, level=8)
         assert g.cols == 1 and g.rows == 1
+
+
+SVG = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 170">'
+       '<rect x="0" y="0" width="256" height="170" fill="black"/></svg>')
+
+
+def test_it_rasterizes_every_level_for_one_part(tmp_path):
+    svg = tmp_path / "3001.svg"
+    svg.write_text(SVG)
+    out = tmp_path / "thumbs"
+    made = thumbs.bake_part("3001", svg, out, sha="abc123")
+    assert sorted(made) == [8, 32, 128]
+    for level in (8, 32, 128):
+        with Image.open(out / str(level) / "3001.png") as img:
+            assert img.size == (level, level)
+
+
+def test_a_wide_render_is_padded_square_not_stretched(tmp_path):
+    # Every stored render is 256x170. resvg cannot letterbox, so squaring is
+    # this module's job -- and stretching would make every part the wrong shape.
+    svg = tmp_path / "3001.svg"
+    svg.write_text(SVG)
+    out = tmp_path / "thumbs"
+    thumbs.bake_part("3001", svg, out, sha="abc123")
+    with Image.open(out / "128" / "3001.png") as img:
+        assert img.size == (128, 128)
+        assert img.getpixel((2, 2)) == (255, 255, 255, 255)
+
+
+def test_a_baked_cell_is_opaque_so_the_ink_is_visible(tmp_path):
+    # Renders are black ink on transparency and the lab's surface follows the
+    # weasel theme, so a transparent thumbnail disappears in dark mode.
+    svg = tmp_path / "3001.svg"
+    svg.write_text(SVG)
+    out = tmp_path / "thumbs"
+    thumbs.bake_part("3001", svg, out, sha="abc123")
+    with Image.open(out / "8" / "3001.png") as img:
+        assert img.convert("RGBA").getextrema()[3] == (255, 255)
+
+
+def test_it_skips_a_part_whose_sha_is_unchanged(tmp_path):
+    svg = tmp_path / "3001.svg"
+    svg.write_text(SVG)
+    out = tmp_path / "thumbs"
+    thumbs.bake_part("3001", svg, out, sha="abc123")
+    assert thumbs.bake_part("3001", svg, out, sha="abc123") == []
+    assert thumbs.bake_part("3001", svg, out, sha="different") != []
+
+
+def test_the_baked_sha_is_readable_back(tmp_path):
+    svg = tmp_path / "3001.svg"
+    svg.write_text(SVG)
+    out = tmp_path / "thumbs"
+    thumbs.bake_part("3001", svg, out, sha="abc123")
+    assert thumbs.baked_shas(out) == {"3001": "abc123"}
