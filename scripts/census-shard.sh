@@ -23,11 +23,25 @@ TIMEOUT=${3:-120}
 DIR=out/census
 MAX_RESTARTS=${MAX_RESTARTS:-300}
 
+# The shard's own "7/1437 <part> ..." lines are echoed through unchanged and
+# each one also becomes an `onto: progress` line, so `onto top` draws a bar per
+# shard. onto sees one job here -- it locks a tree to a single job -- and this
+# is what breaks that job back down into the eight things it is really doing.
+rcfile=$(mktemp)
+trap 'rm -f "$rcfile"' EXIT
+
 n=0
 while [ "$n" -le "$MAX_RESTARTS" ]; do
-  .venv/bin/python scripts/compare-silhouette-truth.py \
-    --list "$DIR/$engine-$tag.txt" --engine "$engine" --timeout "$TIMEOUT" \
-    --jsonl "$DIR/$engine-$tag.jsonl" --skip-done && break
+  {
+    .venv/bin/python scripts/compare-silhouette-truth.py \
+      --list "$DIR/$engine-$tag.txt" --engine "$engine" --timeout "$TIMEOUT" \
+      --jsonl "$DIR/$engine-$tag.jsonl" --skip-done
+    echo $? > "$rcfile"
+  } | awk -v label="$engine $tag" '
+      { print }
+      /^[0-9]+\/[0-9]+ / { split($1, a, "/"); printf "onto: progress %s/%s %s\n", a[1], a[2], label }
+      { fflush() }'
+  [ "$(cat "$rcfile")" = "0" ] && break
   n=$((n + 1))
   echo "--- $engine $tag died, restart $n at $(date '+%H:%M:%S') ---" >&2
   sleep 2
