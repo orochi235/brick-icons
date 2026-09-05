@@ -91,6 +91,15 @@ and records it as `ProcessDied` on the way back in — which means **a shard tha
 died before that machinery existed needs one restart to get past its killer,
 and a second run to make progress.** That is what happened tonight.
 
+**The running shards keep their renders in the wrong place.** `--keep
+out/census/renders` writes `<part>.<engine>.svg` into a gitignored directory,
+while the store the design specifies is `renders/<source>/<part>.svg`, tracked.
+Promote them rather than losing them — the mapping is exactly that rename —
+and either restart the shards with `--keep renders/` once the layout is
+settled, or promote again at the end. Three are already promoted and indexed,
+which is what proves the loop: census keeps a render, it lands in the store,
+`scripts/build-corpus-db.py` indexes it with its path and extent.
+
 **The per-part cap is 120s and about a fifth of the library hits it**, burning
 roughly 40% of the CPU on parts that record nothing but "too slow". A
 `TimeoutError` row is a rendering-cost finding, not a defect. The cap also
