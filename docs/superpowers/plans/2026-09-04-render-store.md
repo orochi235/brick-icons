@@ -42,7 +42,7 @@ The three pieces to move, unchanged in behavior: `_on_alarm`/`_ARMED` and
 `run_guarded`, the `<jsonl>.inflight` marker read and write, and the
 `--skip-done` filter.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 import json
@@ -78,12 +78,12 @@ def test_resume_skips_what_is_done_and_buries_what_crashed(tmp_path):
                         "detail": "killed mid-render; not retried"}
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_batch.py -q`
 Expected: FAIL — `ModuleNotFoundError: No module named 'brick_icons.batch'`
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```python
 """What a long unattended batch needs to survive itself.
@@ -170,12 +170,12 @@ class Runner:
         return row
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `.venv/bin/pytest tests/test_batch.py -q`
 Expected: PASS, 2 passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add brick_icons/batch.py tests/test_batch.py
@@ -193,7 +193,7 @@ Its rows are keyed `part`, not `item`, so it constructs `Runner(..., key="part")
 Delete `_ARMED`, `_on_alarm`, `run_guarded` and the inflight and `--skip-done`
 handling from the script; keep every flag it already offers.
 
-- [ ] **Step 1: Rewrite the loop against `Runner`**
+- [x] **Step 1: Rewrite the loop against `Runner`**
 
 ```python
 from brick_icons.batch import Runner
@@ -206,14 +206,14 @@ from brick_icons.batch import Runner
         ...
 ```
 
-- [ ] **Step 2: Prove the behavior did not move**
+- [x] **Step 2: Prove the behavior did not move**
 
 Run: `.venv/bin/python scripts/compare-silhouette-truth.py 3004 --timeout 1 --jsonl /tmp/guard.jsonl`
 Expected: one `FAILED TimeoutError` line, exit 0, and `/tmp/guard.jsonl.inflight` gone afterwards.
 
 Then run it again with `--skip-done` and expect `resuming: 1 done, 0 left`.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add scripts/compare-silhouette-truth.py
@@ -228,7 +228,7 @@ git commit -m "run the census through the shared batch guard"
 - Modify: `brick_icons/db.py`
 - Test: `tests/test_db.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 def test_storing_a_render_puts_it_under_source_and_part(tmp_path, monkeypatch):
@@ -245,12 +245,12 @@ def test_storing_a_render_puts_it_under_source_and_part(tmp_path, monkeypatch):
     assert row["sha256"] == goldens.sha256(SVG)
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `.venv/bin/pytest tests/test_db.py -q`
 Expected: FAIL — `AttributeError: module 'brick_icons.db' has no attribute 'store_render'`
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```python
 def store_render(conn: sqlite3.Connection, part_id: str, source: str,
@@ -264,12 +264,12 @@ def store_render(conn: sqlite3.Connection, part_id: str, source: str,
     return dest
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `.venv/bin/pytest tests/test_db.py -q`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add brick_icons/db.py tests/test_db.py
@@ -283,7 +283,7 @@ git commit -m "copy a render into the store and index it"
 **Files:**
 - Create: `scripts/build-render-store.py`
 
-- [ ] **Step 1: Write the script**
+- [x] **Step 1: Write the script**
 
 ```python
 #!/usr/bin/env python3
@@ -370,7 +370,7 @@ if __name__ == "__main__":
     raise SystemExit(main())
 ```
 
-- [ ] **Step 2: Prove it on three parts**
+- [x] **Step 2: Prove it on three parts**
 
 Run: `.venv/bin/python scripts/build-render-store.py 3001 3004 3005 --sources naive --timeout 180 --log /tmp/store.jsonl`
 Expected: three `stored` lines, and `renders/naive/{3001,3004,3005}.svg` on disk.
@@ -385,7 +385,7 @@ c = db.connect('corpus.db')
 print(c.execute('SELECT count(*) FROM renders').fetchone()[0], 'renders indexed')"
 ```
 
-- [ ] **Step 3: Commit the script and its first renders**
+- [x] **Step 3: Commit the script and its first renders**
 
 ```bash
 git add scripts/build-render-store.py renders
@@ -396,27 +396,44 @@ git commit -m "render a part list into the tracked store"
 
 ### Task 5: Fill the store for real
 
-- [ ] **Step 1: Wait for the census, or stop it**
+- [x] **Step 1: Wait for the census, or stop it**
 
 Both jobs render, and eight shards already have the box. Check with
 `pgrep -f compare-silhouette | wc -l` and either wait or `pkill -f
 compare-silhouette`.
 
-- [ ] **Step 2: Start it detached, naive first**
+- [x] **Step 2: Start it detached, naive first**
 
 ```bash
-nohup .venv/bin/python scripts/build-render-store.py --list out/census/parts.txt \
-  --sources naive --timeout 180 --log out/store/run.jsonl > out/store/naive.log 2>&1 &
+scripts/run-render-store.sh 8 180 naive     # progress: scripts/render-store-report.sh
 ```
 
 Naive first because occt segfaults on at least four parts and its coverage is
 the one the census is already behind on.
 
+Sharded, not the single process this plan first called for: the census's own
+timings put the naive corpus at ~70 core-hours (mean 30.8s a part, 17% of them
+over a minute), and a store render costs the same as a census one -- `0901`
+takes 146s against the census's 141s, so the truth mask and the diff are noise
+next to the render. One process would not finish in a night.
+
+Sharding is what made the database's write path matter: eight writers need WAL
+and a busy timeout, and `connect()` had a create-then-stamp race that killed
+five of eight shards on a fresh database before it was fixed.
+
 - [ ] **Step 3: Commit the store in batches, not at the end**
 
-A commit per few thousand renders keeps any one commit reviewable and means a
-crash costs a batch rather than a night.
+**Held for Mike.** The store is bigger than this plan assumed: the canonical
+stroked render has a 29KB median and a long tail (`0901` is 699KB of genuine
+geometry -- 1481 elements, no precision bloat to trim), which puts the naive
+half somewhere between 230MB and 640MB. That is a repo-growth decision, not a
+mechanical batch commit, so the run fills `renders/` on disk and leaves it
+uncommitted.
+
+The renders are the expensive half and they are safe where they are; committing
+them later costs nothing. Firm the number up with:
 
 ```bash
+du -sh renders && find renders -name '*.svg' | wc -l
 git add renders && git commit -m "store the naive renders for <range>"
 ```
