@@ -14,7 +14,8 @@ export interface WallProps {
   manifest: SheetManifest | null;
   width: number;
   height: number;
-  onPick: (cell: Cell) => void;
+  onPick: (cell: Cell, at: { x: number; y: number }) => void;
+  onOpen: (cell: Cell) => void;
 }
 
 /** The wall's only rendering surface.
@@ -22,7 +23,7 @@ export interface WallProps {
  *  Canvas2D holds today's corpus. When weasel's mega view exists this body is
  *  what it replaces; nothing above it knows what an atlas page is. */
 export function Wall({ cells, rects, cam, sheet, manifest, width, height,
-                       onPick }: WallProps) {
+                       onPick, onOpen }: WallProps) {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -52,6 +53,24 @@ export function Wall({ cells, rects, cam, sheet, manifest, width, height,
     }
   }, [cells, rects, cam, sheet, manifest, width, height]);
 
+  const hitTest = (e: { clientX: number; clientY: number;
+                         currentTarget: HTMLCanvasElement }) => {
+    const box = e.currentTarget.getBoundingClientRect();
+    const sx = e.clientX - box.left;
+    const sy = e.clientY - box.top;
+    const visible = visibleRange(rects, cam, { width, height });
+    const cmds = paintCommands({ cells, rects, visible, cam, manifest });
+    for (let i = cmds.length - 1; i >= 0; i--) {
+      const c = cmds[i]!;
+      if (sx >= c.dx && sx <= c.dx + c.dw && sy >= c.dy && sy <= c.dy + c.dh) {
+        const cell = cells[visible[i]!];
+        if (cell) return { cell, at: { x: sx, y: sy } };
+        return null;
+      }
+    }
+    return null;
+  };
+
   return (
     <canvas
       ref={ref}
@@ -59,19 +78,16 @@ export function Wall({ cells, rects, cam, sheet, manifest, width, height,
       width={width}
       height={height}
       onClick={(e) => {
-        const box = e.currentTarget.getBoundingClientRect();
-        const sx = e.clientX - box.left;
-        const sy = e.clientY - box.top;
-        const visible = visibleRange(rects, cam, { width, height });
-        const cmds = paintCommands({ cells, rects, visible, cam, manifest });
-        for (let i = cmds.length - 1; i >= 0; i--) {
-          const c = cmds[i]!;
-          if (sx >= c.dx && sx <= c.dx + c.dw && sy >= c.dy && sy <= c.dy + c.dh) {
-            const cell = cells[visible[i]!];
-            if (cell) onPick(cell);
-            return;
-          }
-        }
+        // A double click's first click also fires this handler; e.detail
+        // marks it so onDoubleClick handles it instead and the card never
+        // flashes before the lightbox opens.
+        if (e.detail === 2) return;
+        const hit = hitTest(e);
+        if (hit) onPick(hit.cell, hit.at);
+      }}
+      onDoubleClick={(e) => {
+        const hit = hitTest(e);
+        if (hit) onOpen(hit.cell);
       }}
     />
   );

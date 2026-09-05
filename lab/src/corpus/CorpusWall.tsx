@@ -4,9 +4,10 @@ import { fitBounds, zoomAt, type Camera } from '@lab/corpus/camera';
 import { FilterBar } from '@lab/corpus/FilterBar';
 import { gridLayout } from '@lab/corpus/layout';
 import { Lightbox } from '@lab/corpus/Lightbox';
+import { PartCard } from '@lab/corpus/PartCard';
 import { applySelection, type Selection } from '@lab/corpus/select';
 import { useCells } from '@lab/corpus/useCells';
-import type { SheetManifest } from '@lab/corpus/types';
+import type { Cell, SheetManifest } from '@lab/corpus/types';
 import { Wall } from '@lab/corpus/Wall';
 import '@lab/corpus/corpus.css';
 
@@ -26,8 +27,10 @@ export function CorpusWall({ client }: { client: LabClient }) {
     { sort: 'id', filter: 'all' });
   const [cam, setCam] = useState<Camera | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
+  const [carded, setCarded] = useState<{ cell: Cell; at: { x: number; y: number } } | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 800, height: 600 });
+  const touched = useRef(false);
 
   // The most-populated slot is the one worth opening on; the route already
   // orders them that way.
@@ -67,8 +70,9 @@ export function CorpusWall({ client }: { client: LabClient }) {
     [shown, cols]);
 
   useEffect(() => {
-    if (cam === null && laid.bounds.w > 0) setCam(fitBounds(laid.bounds, size));
-  }, [cam, laid.bounds, size]);
+    if (touched.current || laid.bounds.w <= 0) return;
+    setCam(fitBounds(laid.bounds, size));
+  }, [laid.bounds, size]);
 
   if (!cells) return <p className="corpus-loading">loading the corpus…</p>;
 
@@ -80,6 +84,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
       <div className="corpus-stage" ref={box}
            onWheel={(e) => {
              if (!cam) return;
+             touched.current = true;
              const r = e.currentTarget.getBoundingClientRect();
              setCam(zoomAt(cam, e.clientX - r.left, e.clientY - r.top,
                            e.deltaY < 0 ? 1.1 : 1 / 1.1));
@@ -87,7 +92,14 @@ export function CorpusWall({ client }: { client: LabClient }) {
         {cam && (
           <Wall cells={shown} rects={laid.rects} cam={cam} sheet={sheet}
                 manifest={manifest} width={size.width} height={size.height}
-                onPick={(c) => setPicked(c.id)} />
+                onPick={(c, at) => setCarded({ cell: c, at })}
+                onOpen={(c) => { setCarded(null); setPicked(c.id); }} />
+        )}
+        {carded && !picked && (
+          <PartCard cell={carded.cell} source={source} at={carded.at}
+                    viewport={size}
+                    onOpen={(id) => { setCarded(null); setPicked(id); }}
+                    onClose={() => setCarded(null)} />
         )}
       </div>
       {picked && (

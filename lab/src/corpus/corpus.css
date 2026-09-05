@@ -4,4 +4,4 @@
 }
 
 .corpus-app { display: flex; flex-direction: column; height: 100vh; }
-.corpus-stage { flex: 1; overflow: hidden; }
+.corpus-stage { flex: 1; overflow: hidden; position: relative; }
