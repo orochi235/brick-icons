@@ -71,15 +71,11 @@ move a Python suite. Only the tail of that run's log survived, so the
 `BRICK_GOLDENS=full` on its command line is inferred from the duration and
 from three tests un-skipping, not read.
 
-**labkit is a `file:` link now, not an npm pin.** `lab/package.json` reads
-`file:../../weasel/packages/labkit`, so the lab compiles against whatever that
-checkout holds — today a detached HEAD at weasel `origin/main` (`762f9477`),
-which `main` cannot be checked out on because the `trunk` worktree holds the
-ref. Advance it with `git -C ~/src/weasel fetch && git -C ~/src/weasel checkout
---detach origin/main && npm run build`; **the build is not optional**, since a
-link resolves to `dist/`, not to `src/`. This is how the two-trial overlay fix
-(`a397fa6c`, a surface tile id scoped per trial) and the icon set reached the
-lab. Going back to npm means a published `1.4.0-pre.2`.
+**labkit is pinned to the released `@weasel-js/labkit@^1.4.0`.** The `file:`
+link to the weasel checkout is gone, and with it the requirement to rebuild
+that checkout before the lab could see a kit change. `lab/vite.config.weasel-src.mts`
+still exists for running against weasel source when a kit change needs to be
+seen before release — it is opt-in with `--config`, never the default.
 
 The **corpus lab** — a local web app for inspecting renders and tracking
 defects — is the active one. The engine thread below it is unchanged and still

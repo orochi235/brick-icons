@@ -11,7 +11,7 @@
   "dependencies": {
     "@react-three/drei": "^10.7.8",
     "@react-three/fiber": "^9.7.0",
-    "@weasel-js/labkit": "file:../../weasel/packages/labkit",
+    "@weasel-js/labkit": "^1.4.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "three": "^0.170.0"
