@@ -3655,6 +3655,78 @@ Report how much code the swap deleted — that number is the point of the task.
 
 ---
 
+### Task 20c: Make the problem states actually read
+
+The six cell colours were chosen as dark fills and four of them do not separate
+at cell size. `#5a3326` rust against `#3a3a3f` gray is two dark, low-chroma
+colours a few pixels across; the two muted "elsewhere" states are worse. Only
+the bright ochre and the red carry.
+
+**Pale fill, thick coloured border.** At five pixels the border is most of the
+cell and carries the identity; at a hundred it reads as a labelled empty slot.
+The dark gray unknown stays a plain fill with no border — it is the field
+everything else has to separate from, and it should recede.
+
+Starting point, to be corrected by looking rather than trusted:
+
+| state | fill | border |
+|---|---|---|
+| unknown | `#3a3a3f` | none |
+| timed out here | `#e8d5cc` | `#8a4a32`, thick |
+| cannot be drawn here | `#f0d0d0` | `#b02020`, thick |
+| open defect here | `#f5e3b8` | `#c8860d`, thick |
+| problem in another slot | `#e8d5cc` | `#8a4a32`, thin |
+| defect in another slot | `#f5e3b8` | `#c8860d`, thin |
+
+"Elsewhere" reads as lower priority through border weight, not a duller hue —
+duller hues are what failed.
+
+**Scale the border with the cell**, `max(1, cell * 0.18)` or similar, capped so
+a large cell does not become a picture frame. A fixed pixel width disappears
+when zoomed out, which is the case that matters most.
+
+**Files:**
+- Modify: `lab/src/corpus/paint.ts`, `paint.test.ts`
+- Modify: `lab/src/corpus/Wall.tsx`
+- Modify: `lab/src/corpus/Legend.tsx` if it exists by now
+
+- [ ] **Step 1: A fill command that carries a border**
+
+`CELL_FILL` becomes a table of `{ fill, border, weight }`. The `fill` paint
+command gains `border` and `borderWidth`, computed from the cell size. `unknown`
+has no border and must emit none — not a transparent one.
+
+Test: each state emits its fill and border; unknown emits no border; the border
+width scales with the drawn cell size and never goes below 1.
+
+- [ ] **Step 2: Stroke it**
+
+`Wall.tsx` strokes the border inside the cell rect after filling, so adjacent
+cells do not bleed into each other. Mind that a stroke straddles its path —
+inset by half the width or neighbouring borders will overlap and read as a grid.
+
+- [ ] **Step 3: LOOK AT IT, then correct the palette**
+
+This is a task whose output is judged by eye, and the palette above is a first
+guess by someone who already guessed wrong once.
+
+Screenshot the wall zoomed fully out, at mid zoom, and zoomed in, and put all
+three on the slopboard. Then answer, from the images and not from the hex
+values: can you find the eight `cannot be drawn` cells at a glance? Do the ~1,260
+timeouts read as a distinct population from the gray field? Do the pale fills
+compete with the white drawn thumbnails, and if so say so — that is the most
+likely thing to be wrong with this scheme.
+
+Adjust the palette until those answers are yes, and report what you changed and
+why.
+
+```bash
+git add lab/src/corpus
+git commit -m "give the problem states pale fills and weighted borders"
+```
+
+---
+
 ### Task 21: Put the wall in its own labkit shell
 
 The corpus wall gets labkit's **UI** — the shell, the theme, the loupe, the
