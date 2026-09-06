@@ -1386,8 +1386,15 @@ def _with_decoration(faces, out, proj):
     -- it is in the source triangles, which is where naive reads it from too,
     so the fix is to bring those faces along and let `unwrap_decoration` find
     its carrier among OCCT's own planes.
+
+    Only for a part the library describes as printed. Color alone says nothing
+    -- an assembly's sub-parts each carry their own -- and running the carrier
+    search over one cost 6.8s of 604ac01's 8.8s geometry phase, to draw
+    decoration it does not have.
     """
-    if out is None or not out.get("tri") or not out.get("tri_colors"):
+    if out is None or not out.get("printed"):
+        return faces
+    if not out.get("tri") or not out.get("tri_colors"):
         return faces
     from . import shade
     deco = [f for f in shade.faces_from_tris(

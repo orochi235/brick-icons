@@ -987,6 +987,17 @@ def part_geometry(part: str, ldraw_dir):
 VALID_ENGINES = ("naive", "occt", "cadquery")
 
 
+def _is_printed(path) -> bool:
+    """Whether line 1 of the part file describes a pattern or a sticker."""
+    try:
+        with Path(path).open(encoding="utf-8", errors="replace") as fh:
+            first = fh.readline().strip()
+    except OSError:
+        return False
+    desc = first[1:].strip().lower() if first.startswith("0") else ""
+    return "pattern" in desc or "sticker" in desc
+
+
 def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
                      cull=True, engine="naive"):
     if engine not in VALID_ENGINES:
@@ -995,6 +1006,12 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
     roots = default_roots(ldraw_dir)
     path = _resolve_input(part, roots)
     out = {"2": [], "5": [], "tri": [], "tri_meta": [], "analytic": []}
+    # Decoration is drawn only where the library says there is some. A color
+    # other than 16 is not that signal: every sub-part of an assembly has its
+    # own, and treating those as print sends a thousand carrier candidates
+    # through the unwrap for nothing. The description line is the signal
+    # -- see partindex, which classifies the corpus the same way.
+    out["printed"] = _is_printed(path)
     flatten(path, np.eye(3), np.zeros(3), out, roots)
     if out["tri"]:
         # Repair returns outward-oriented tris as float32 (cache dtype); the
