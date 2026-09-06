@@ -87,6 +87,25 @@ function stageResizeCallback(container: HTMLElement): ResizeObserverCallback {
   return observer.cb;
 }
 
+// jsdom loads nothing, so a sheet's `<img>` never fires and `useSheets` never
+// settles -- which is the one thing a slot change waits on. Firing `load` on
+// assignment lets the wall actually reach the new slot, and the srcs it
+// collects say which slot's drawings were asked for.
+function installLoadingImages() {
+  const srcs: string[] = [];
+  const desc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src')!;
+  Object.defineProperty(HTMLImageElement.prototype, 'src', {
+    configurable: true,
+    get(this: HTMLImageElement) { return desc.get!.call(this); },
+    set(this: HTMLImageElement, value: string) {
+      srcs.push(value);
+      desc.set!.call(this, value);
+      queueMicrotask(() => { this.dispatchEvent(new Event('load')); });
+    },
+  });
+  return { srcs, restore: () => Object.defineProperty(HTMLImageElement.prototype, 'src', desc) };
+}
+
 afterEach(() => { vi.restoreAllMocks(); });
 
 it('says it is loading before the cells arrive', () => {
@@ -246,6 +265,49 @@ it('opens on the level the initial fit asks for, and holds it through a jiggle',
     expect(pick.mock.calls[0]![0]).toBe(8);
     expect(pick.mock.results[0]!.value).toBe(8);
   } finally {
+    restore();
+  }
+});
+
+it('holds its level through a slot change, so a zoomed-in wall stays zoomed in', async () => {
+  const restore = installCapturingResizeObserver();
+  const images = installLoadingImages();
+
+  const twoSlots = { ...client, corpusSources: () => Promise.resolve({
+    sources: [{ source: 'census-naive', n: 2 }, { source: 'census-occt', n: 2 }],
+  }) } as any;
+
+  const fit = vi.mocked(core.fitViewToBounds);
+  const pick = vi.mocked(levels.pickLevel);
+  fit.mockClear();
+  pick.mockClear();
+  // CELL(32) * 3 = 96px on screen -- the 128px loose rung, well past the
+  // 32px sheet the wall opens on.
+  fit.mockImplementation(() => ({ x: 0, y: 0, scale: { x: 3, y: 3 } }));
+
+  try {
+    const { container } = render(<CorpusWall client={twoSlots} />);
+    await waitFor(() => expect(container.querySelector('canvas')).toBeTruthy());
+
+    fireEvent.change(screen.getByLabelText('Slot'),
+                     { target: { value: 'census-occt' } });
+    // A loose thumb for the new slot means the wall has actually swapped to
+    // it -- those are keyed on the drawn slot, not the selected one.
+    await waitFor(() => expect(images.srcs.some(
+      (s) => s.includes('/api/thumbs/census-occt/128/'))).toBe(true));
+
+    // Nothing but a camera change re-picks the level, so a slot change that
+    // drops it lands the wall on the 32px sheet until the next zoom.
+    pick.mockClear();
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue(rect(801, 601));
+    const onResize = stageResizeCallback(container);
+    act(() => { onResize([] as unknown as ResizeObserverEntry[], {} as any); });
+    await waitFor(() => expect(pick).toHaveBeenCalled());
+
+    expect(pick.mock.calls[0]![0]).toBe(128);
+  } finally {
+    images.restore();
     restore();
   }
 });

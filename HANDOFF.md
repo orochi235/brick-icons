@@ -333,7 +333,8 @@ directly in `renders/` instead of `renders/<engine>/` are skipped: three
 `<part>.occt.svg` files from an early smoke run are there, and their stem would
 file a row under a part id that does not exist.
 
-**Merge note, delete once `corpus-grouping` lands.** Branch
+**Merge note for `corpus-grouping` only** -- `corpus-grouping-v2` cleared it
+in its 13:06 merge, and carries no `census_dir=` at all. Branch
 `census-multi-dir-index` renamed `rebuild`'s `census_dir` to `census_dirs` (a
 sequence, `None` for every tree) and `counts` gained a `"skipped"` key.
 `corpus-grouping` was cut before that and adds a `_rebuild()` test helper
@@ -432,18 +433,21 @@ and draws as a blank cell (that was the 29111 report). The last one is why
 `e60f811` writes sidecars atomically -- and why only one bake should run at a
 time.
 
-**Open bug, unreproduced: Mike reports SVG pop-in "or possibly even
-mipmapping" broken** after the slot-hold change (`1117576`, which made
-`useCells`/`useSheets` report the slot their contents belong to and had the
-wall draw only the newest slot both agree on). What I measured before handing
-over: a 34-step zoom fires 226 loose-thumb requests and 24 vector requests,
-no console errors, and a canvas capture at ~110px cells shows correct
-thumbnails, captions and badges. So the fetches happen and the paint is
-right at that rung -- the suspicion is the rung *choice*, i.e. `level` or the
-`drawnSource` the thumb hooks are keyed on, not the fetching. Reproduce
-before changing anything; the prime suspects are `setLevel(32)` now firing on
-`drawnSource` rather than `source`, and `sheets` being `{}` for the frames
-where `fetched.source !== loaded.source`.
+**The blur after a slot change is fixed** (`f9a3801`) -- the "SVG pop-in, or
+possibly even mipmapping" report. A zoom is not what broke it; switching
+slots is, and it is only visible if you switch while zoomed in. Two causes,
+either enough on its own. `setLevel(32)` on a slot change threw away the rung
+the camera asked for, and nothing recomputes the level but a camera move, so
+the wall sat on the 32px sheet until the next wheel tick. And
+`useVectorThumbs` cleared its raster cache through `setRaster`, which the ref
+the work-splitter reads does not see until the next commit -- so the new
+slot's cells were matched against the old slot's rasters, which a parked
+camera makes look exactly the right size to keep, and they were neither drawn
+nor redrawn. The second one *is* a regression from the slot hold (`1117576`):
+the blank frame it removed used to give the cache clear a commit of its own.
+**The level belongs to the camera, not to a slot** -- every slot lays out the
+same 24,591 cells at the same size, so nothing about a slot change should
+touch it.
 
 **Still open.** Badges and captions are not toggleable, and Mike wants them
 to be. The census draws the `~Moved` redirects, which are hidden on the wall
@@ -456,7 +460,20 @@ fast; it would cost roughly 600MB per slot.
 into its own repo with this corpus as one host. Nothing is built, and it
 argues for waiting until the census stops landing renders.
 
-**Grouping it is the follow-up**, specified and planned and unbuilt:
+**Grouping is built, on two branches, not on main.** `corpus-grouping`
+(worktree `.claude/worktrees/corpus-grouping`, 20 commits ahead) and
+`corpus-grouping-v2` (worktree `.claude/worktrees/cg2`, 4 ahead, tip merges
+main as of 2026-09-06 13:06) both carry the sidebar, the tint and grouping in
+the selection. **They collide with the part facts on main**: this branch
+derived its own Rebrickable data, `tests/test_rebrickable.py` and all, while
+main grew `part_years`, `scripts/fetch-part-years.py` and `brick_icons/tags.py`
+from the same source. Two implementations of one idea, and v2's merge of main
+predates the last few commits. **Merging main into v2 conflicts in exactly one
+file, `CorpusWall.tsx`, and v2 still carries the `setLevel(32)` reset that
+`f9a3801` deleted** -- keep the deletion when resolving it, or the wall goes
+back to blurring on every slot change. `CorpusWall.test.tsx` merges clean and
+fails if the reset comes back, so the merge is only silent if someone drops
+the test with it. The spec and plan behind them:
 `docs/superpowers/specs/2026-09-05-corpus-grouping-design.md` and
 `docs/superpowers/plans/2026-09-05-corpus-grouping.md`. Coverage, category and
 release-year groupings, the Rebrickable facts they group by, and a facet
