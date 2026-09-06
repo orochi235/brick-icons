@@ -116,18 +116,18 @@ export const drawMagnet: Mark = (ctx, field) => {
 export const drawBrush: Mark = (ctx, field, accent) => {
   fillPath(ctx, BRUSH);
   ctx.beginPath();
-  ctx.moveTo(-0.4, 0.54);
-  ctx.lineTo(0.4, 0.54);
-  ctx.lineTo(0.33, 1);
-  ctx.lineTo(-0.33, 1);
+  ctx.moveTo(-0.5, 0.52);
+  ctx.lineTo(0.5, 0.52);
+  ctx.lineTo(0.42, 1);
+  ctx.lineTo(-0.42, 1);
   ctx.closePath();
   ctx.fill();
   ctx.save();
   ctx.fillStyle = field;
-  ctx.fillRect(-0.44, 0.47, 0.88, 0.09);
+  ctx.fillRect(-0.56, 0.44, 1.12, 0.1);
   // Crimp ridges, cut across the ferrule rather than drawn on it.
-  ctx.fillRect(-0.42, 0.7, 0.84, 0.06);
-  ctx.fillRect(-0.42, 0.85, 0.84, 0.06);
+  ctx.fillRect(-0.52, 0.7, 1.04, 0.06);
+  ctx.fillRect(-0.52, 0.85, 1.04, 0.06);
   ctx.restore();
   cutPaths(ctx, BRUSH_CUT, accent);
 };
@@ -137,17 +137,17 @@ export const drawBrush: Mark = (ctx, field, accent) => {
 // stopped reading below about 20px, which is most of the wall.
 export const drawMinifig: Mark = (ctx) => {
   ctx.beginPath();
-  ctx.arc(-0.34, -0.26, 0.15, 0, Math.PI * 2);
+  ctx.arc(-0.46, -0.4, 0.17, 0, Math.PI * 2);
   ctx.fill();
   ctx.beginPath();
-  ctx.arc(0.34, -0.26, 0.15, 0, Math.PI * 2);
+  ctx.arc(0.46, -0.4, 0.17, 0, Math.PI * 2);
   ctx.fill();
   ctx.save();
   ctx.strokeStyle = ctx.fillStyle;
-  ctx.lineWidth = 0.16;
+  ctx.lineWidth = 0.17;
   ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.arc(0, -0.08, 0.52, Math.PI * 0.16, Math.PI * 0.84, false);
+  ctx.arc(0, -0.08, 0.72, Math.PI * 0.18, Math.PI * 0.82, false);
   ctx.stroke();
   ctx.restore();
 };

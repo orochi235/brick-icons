@@ -80,6 +80,7 @@ def brush():
     actual circle at the base reads as a brush's belly. The heading bends one
     way the whole climb: swinging out and back put a second curl in the tip
     going the wrong way before the one that was wanted."""
+    from shapely import affinity
     from shapely.geometry import Point, Polygon
     from shapely.ops import unary_union
 
@@ -91,7 +92,7 @@ def brush():
     left, right = [], []
     for i in range(n):
         u = i / (n - 1)
-        heading = -math.pi / 2 - 1.25 * u ** 1.7
+        heading = -math.pi / 2 - 1.62 * u ** 1.45
         x += math.cos(heading) * step
         y += math.sin(heading) * step
         w = max(radius * (1.0 - u ** 1.25) ** 0.75, 3.0)
@@ -100,7 +101,10 @@ def brush():
         right.append((x - nx * w, y - ny * w))
 
     band = Polygon(left + list(reversed(right))).buffer(0)
-    shape = unary_union([band, Point(0, base_y).buffer(radius, resolution=48)])
+    # An ellipse, wider than it is tall: a circle read as a light bulb.
+    bulb = affinity.scale(Point(0, base_y).buffer(radius, resolution=48),
+                          xfact=1.3, yfact=0.9)
+    shape = unary_union([band, bulb])
     if shape.geom_type == "MultiPolygon":
         shape = max(shape.geoms, key=lambda g: g.area)
     # Just enough to take the kink out of the join, not enough to move it.
@@ -239,7 +243,7 @@ if __name__ == "__main__":
     # The topmost point of the outline. Not its midpoint: the outline is a
     # resampled ring now, and the midpoint of one is nowhere in particular.
     tip_xy = min(brush_pts, key=lambda pt: pt[1])
-    cuts = contract(brush_pts, 0.0, Point(tip_xy).buffer(250.0))
+    cuts = contract(brush_pts, 0.0, Point(tip_xy).buffer(370.0))
     out.append(emit_many("BRUSH_CUT", cuts))
     print(f"BRUSH_CUT: {len(cuts)} pieces")
 
