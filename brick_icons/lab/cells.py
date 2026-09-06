@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import sqlite3
 
+from brick_icons import tags as part_tags
 from brick_icons.db import OUT_OF_SCOPE_CATEGORIES
 
 _LATEST_MEASURE = """
@@ -89,6 +90,8 @@ def cells(conn: sqlite3.Connection, source: str = "census-naive",
                         if r["made_at"] > since)
 
     defects = _open_defects(conn, wanted, engine)
+    years = {r["part_id"]: r for r in conn.execute(
+        "SELECT part_id, year_from, year_to, sets FROM part_years")}
 
     rows = []
     marks = ",".join("?" * len(wanted)) if wanted else "NULL"
@@ -104,6 +107,7 @@ def cells(conn: sqlite3.Connection, source: str = "census-naive",
         render = renders.get(pid)
         measure = measures.get(pid)
         bucket = defects.get(pid, {"here": 0, "elsewhere": 0})
+        year = years.get(pid)
         rows.append({
             "id": pid,
             "index": index[pid],
@@ -113,6 +117,13 @@ def cells(conn: sqlite3.Connection, source: str = "census-naive",
             "obsolete": bool(part["obsolete"]),
             "base": bool(part["base"]),
             "out_of_scope": bool(part["out_of_scope"]),
+            "year_from": year["year_from"] if year else None,
+            "year_to": year["year_to"] if year else None,
+            "sets": year["sets"] if year else None,
+            "tags": part_tags.tags_for(
+                part["category"], bool(part["printed"]), bool(part["obsolete"]),
+                year["year_to"] if year else None,
+                year["sets"] if year else None),
             "status": part["status"],
             "sha": render["sha256"] if render else None,
             "made_at": render["made_at"] if render else None,

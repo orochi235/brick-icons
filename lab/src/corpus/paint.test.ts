@@ -1,11 +1,12 @@
 import { expect, it } from 'vitest';
-import { cellState, fillFor, paintCommands, tally, THUMB_GROUND } from '@lab/corpus/paint';
+import { badgeFor, cellState, fillFor, paintCommands, tally, THUMB_GROUND }
+  from '@lab/corpus/paint';
 import { CELL_STATES, DEFAULT_PALETTE as CELL_FILL, type CellState } from '@lab/corpus/palette';
 import type { Cell, SheetManifest } from '@lab/corpus/types';
 
 const cell = (id: string, index: number, sha: string | null,
               overrides: Partial<Cell> = {}): Cell => ({
-  id, index, title: id, category: null, printed: false, obsolete: false, base: true, out_of_scope: false,
+  id, index, title: id, category: null, printed: false, obsolete: false, base: true, out_of_scope: false, year_from: null, year_to: null, sets: null, tags: [],
   status: 'unreviewed', sha, made_at: null, extra_d99: null, secs: null,
   error: null, open_defects: 0, open_defects_elsewhere: 0,
   error_elsewhere: false, ...overrides,
@@ -336,4 +337,20 @@ it('lets a cell carry both the defect ring and the caret', () => {
     loose: new Map([['a', img]]), caret: 0,
   });
   expect(cmd).toMatchObject({ ring: true, caret: true });
+});
+
+it('badges a retired cell once it is drawn big enough to hold one', () => {
+  const retired = cell('a', 0, 'sha-a', { tags: ['retired'] });
+  expect(badgeFor(retired, 200)).toBe('R');
+  expect(badgeFor(retired, 20)).toBeNull();
+  expect(badgeFor(cell('b', 1, 'sha-b', { tags: ['popular'] }), 200)).toBeNull();
+});
+
+it('carries the badge on the drawn cell, not the empty one', () => {
+  const cells = [cell('a', 0, 'sha-a', { tags: ['retired'] })];
+  const [cmd] = paintCommands({
+    cells, rects, visible: [0], cam: { x: 0, y: 0, scale: { x: 20, y: 20 } },
+    palette: CELL_FILL, manifest, loose: new Map([['a', {} as HTMLImageElement]]),
+  });
+  expect(cmd).toMatchObject({ kind: 'image', badge: 'R' });
 });

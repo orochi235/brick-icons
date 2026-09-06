@@ -8,7 +8,7 @@ import type { Cell } from '@lab/corpus/types';
 
 const cell = (id: string, sha: string | null): Cell => ({
   id, index: 0, title: id, category: null, printed: false, obsolete: false, base: true,
-  out_of_scope: false, status: 'unreviewed', sha, made_at: null, extra_d99: null, secs: null,
+  out_of_scope: false, year_from: null, year_to: null, sets: null, tags: [], status: 'unreviewed', sha, made_at: null, extra_d99: null, secs: null,
   error: null, open_defects: 0, open_defects_elsewhere: 0,
   error_elsewhere: false,
 });

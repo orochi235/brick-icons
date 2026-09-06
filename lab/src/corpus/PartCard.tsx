@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { cellState } from '@lab/corpus/paint';
+import { Tags, yearRange } from '@lab/corpus/tags';
 import type { Cell } from '@lab/corpus/types';
 import '@lab/corpus/PartCard.css';
 
@@ -58,13 +59,17 @@ export function PartCard({ cell, source, at, viewport, onOpen, onClose }: {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  const years = yearRange(cell.year_from, cell.year_to);
+
   return (
     <div className="corpus-card" ref={ref} role="dialog"
          aria-label={`${cell.title} card`}>
       <h3 className="corpus-card-title">{cell.title}</h3>
       <p className="corpus-card-sub">
         {cell.id} · {cell.category ?? 'uncategorised'} · {cell.status}
+        {years ? ` · ${years}` : ''}
       </p>
+      <Tags tags={cell.tags} />
       {cellStateLabel(cell) && <p className="corpus-card-state">{cellStateLabel(cell)}</p>}
       <div className="corpus-card-body">
         {cell.sha ? (

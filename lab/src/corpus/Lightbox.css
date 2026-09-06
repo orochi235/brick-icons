@@ -26,8 +26,11 @@
 
 .corpus-slot { display: flex; flex-direction: column; gap: 0.25rem; }
 .corpus-slot-name { color: var(--wzl-fg-muted); }
-.corpus-slot[data-current='true'] .corpus-slot-name { color: var(--wzl-fg); }
-.corpus-slot[data-current='true'] .corpus-big { outline: 2px solid var(--corpus-caret-color); }
+.corpus-slot[data-current='true'] .corpus-slot-name {
+  color: var(--wzl-fg);
+  font-weight: 700;
+}
+.corpus-slot[data-current='true'] .corpus-big { outline: 2px solid var(--wzl-fg); }
 .corpus-sub { color: var(--wzl-fg-muted); }
 .corpus-lightbox td, .corpus-lightbox th {
   padding: 0.1rem 0.8rem 0.1rem 0;

@@ -3,7 +3,7 @@ import { applySelection } from '@lab/corpus/select';
 import type { Cell } from '@lab/corpus/types';
 
 const cell = (over: Partial<Cell> & { id: string; index: number }): Cell => ({
-  title: over.id, category: 'Brick', printed: false, obsolete: false, base: true, out_of_scope: false,
+  title: over.id, category: 'Brick', printed: false, obsolete: false, base: true, out_of_scope: false, year_from: null, year_to: null, sets: null, tags: [],
   status: 'unreviewed', sha: null, made_at: null, extra_d99: null,
   secs: null, error: null, open_defects: 0, open_defects_elsewhere: 0,
   error_elsewhere: false, ...over,

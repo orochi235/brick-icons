@@ -6,6 +6,7 @@ them.
 """
 from __future__ import annotations
 
+import csv
 import json
 import sqlite3
 import tomllib
@@ -94,6 +95,18 @@ CREATE TABLE IF NOT EXISTS notes (
   defect_id TEXT,
   written TEXT NOT NULL,
   body TEXT NOT NULL
+);
+
+-- Production years and how many sets a part appears in, derived from
+-- Rebrickable's dumps by scripts/fetch-part-years.py. Its own table rather
+-- than columns on `parts`: `seed_parts` rebuilds that from the LDraw library,
+-- which knows none of this.
+CREATE TABLE IF NOT EXISTS part_years (
+  part_id TEXT PRIMARY KEY,
+  year_from INTEGER,
+  year_to INTEGER,
+  sets INTEGER NOT NULL DEFAULT 0,
+  matched TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS measurements_by_part ON measurements(part_id, engine);
@@ -318,6 +331,19 @@ def set_status(conn: sqlite3.Connection, part_id: str, status: str,
         "UPDATE parts SET status=?, status_note=?, status_at=? WHERE id=?",
         (status, note, now(), part_id))
     conn.commit()
+
+
+def import_part_years(conn: sqlite3.Connection, path: Path | str) -> int:
+    """Load `scripts/fetch-part-years.py`'s CSV into `part_years`."""
+    with Path(path).open(newline="") as fh:
+        rows = [(r["part_id"], int(r["year_from"]), int(r["year_to"]),
+                 int(r["sets"]), r["matched"])
+                for r in csv.DictReader(fh)]
+    conn.executemany(
+        "INSERT OR REPLACE INTO part_years (part_id, year_from, year_to, sets, "
+        "matched) VALUES (?, ?, ?, ?, ?)", rows)
+    conn.commit()
+    return len(rows)
 
 
 def add_note(conn: sqlite3.Connection, body: str, part_id: str | None = None,

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { LabClient } from '@lab/api/client';
 import { CATALOGS } from '@lab/corpus/catalogs';
+import { Tags, yearRange } from '@lab/corpus/tags';
 import type { PartDetail } from '@lab/corpus/types';
 import '@lab/corpus/Lightbox.css';
 
@@ -30,6 +31,8 @@ export function Lightbox({ partId, source, client, onClose }: {
   // An API older than this component sends no slots -- the lab's server is a
   // long-lived process and outlives a reload of the page in front of it.
   const slots = detail?.slots ?? [];
+  const years = detail
+    ? yearRange(detail.part.year_from, detail.part.year_to) : null;
 
   return (
     <div className="corpus-lightbox" role="dialog" aria-label={`Part ${partId}`}>
@@ -42,7 +45,10 @@ export function Lightbox({ partId, source, client, onClose }: {
             {detail.part.id} · {detail.part.category ?? 'uncategorised'} ·
             {' '}{detail.part.status}
             {detail.part.status_note ? ` · ${detail.part.status_note}` : ''}
+            {years ? ` · ${years}` : ''}
+            {detail.part.sets != null ? ` · ${detail.part.sets} sets` : ''}
           </p>
+          <Tags tags={detail.part.tags ?? []} />
           <ul className="corpus-slots">
             {slots.map((slot) => (
               <li key={slot.source} className="corpus-slot"

@@ -68,15 +68,35 @@ function borderWidthFor(weight: CellStyle['weight'], cellPx: number,
  *  wall's dark canvas. */
 export const THUMB_GROUND = '#ffffff';
 
+/** Below this drawn size a cell has no room for a badge without covering the
+ *  drawing it is about. */
+export const BADGE_MIN_PX = 56;
+
+/** The tags that earn a corner letter on the wall itself, and the letter
+ *  each gets. The detail views show every tag in words; the wall has room
+ *  for the one that changes how a drawing should be read. */
+export const BADGE_LETTERS: Record<string, string> = { retired: 'R' };
+
+/** The letter a drawn cell wears in its corner, if any. */
+export function badgeFor(cell: Cell, cellPx: number,
+                         minPx = BADGE_MIN_PX): string | null {
+  if (cellPx < minPx) return null;
+  for (const tag of cell.tags) {
+    const letter = BADGE_LETTERS[tag];
+    if (letter) return letter;
+  }
+  return null;
+}
+
 export type PaintCommand =
   | { kind: 'sprite'; dx: number; dy: number; dw: number; dh: number;
       sx: number; sy: number; sw: number; sh: number; ring: boolean; alpha?: number;
-      caret?: boolean }
+      caret?: boolean; badge?: string }
   | { kind: 'fill'; dx: number; dy: number; dw: number; dh: number;
       fill: string; border: string | null; borderWidth: number; caret?: boolean }
   | { kind: 'image'; dx: number; dy: number; dw: number; dh: number;
       image: CanvasImageSource; ground: string; ring: boolean; alpha?: number;
-      caret?: boolean };
+      caret?: boolean; badge?: string };
 
 export interface PaintInput {
   cells: Cell[];
@@ -122,17 +142,19 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
     const state = cellState(cell);
     const dimmed = highlight !== null && highlight !== state;
     const alpha = dimmed ? appearance.dimAlpha : undefined;
+    const badge = badgeFor(cell, dw) ?? undefined;
     const image = vector?.get(cell.id) ?? loose?.get(cell.id);
     if (image) {
       out.push({ kind: 'image', dx, dy, dw, dh, image, ground: THUMB_GROUND, ring, alpha,
-                 caret: isCaret });
+                 caret: isCaret, badge });
       continue;
     }
     const box = manifest && cell.sha && !isStale(manifest, cell)
       ? sourceBox(manifest, cell.index)
       : null;
     if (box) {
-      out.push({ kind: 'sprite', dx, dy, dw, dh, ...box, ring, alpha, caret: isCaret });
+      out.push({ kind: 'sprite', dx, dy, dw, dh, ...box, ring, alpha, caret: isCaret,
+                 badge });
       continue;
     }
     const style = dimmed ? palette.unknown : palette[state];

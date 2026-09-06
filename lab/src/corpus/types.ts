@@ -7,6 +7,12 @@ export interface Cell {
   obsolete: boolean;
   base: boolean;
   out_of_scope: boolean;
+  /** First and last year a set carried this part, and how many sets did --
+   *  null for a part the catalogs do not list. */
+  year_from: number | null;
+  year_to: number | null;
+  sets: number | null;
+  tags: string[];
   status: string;
   sha: string | null;
   made_at: string | null;
@@ -38,7 +44,9 @@ export interface SheetManifest {
 
 export interface PartDetail {
   part: { id: string; title: string; category: string | null;
-          status: string; status_note: string | null };
+          status: string; status_note: string | null;
+          year_from: number | null; year_to: number | null;
+          sets: number | null; tags: string[] };
   /** Every slot that has drawn this part, in slot order. */
   slots: { source: string; sha256: string; made_at: string }[];
   findings: { part_id: string; engine: string; extra_d99: number | null;

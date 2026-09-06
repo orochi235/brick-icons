@@ -250,3 +250,25 @@ def test_a_brick_is_in_scope(conn):
     _part(conn, "3001")
     conn.commit()
     assert cells.cells(conn)["cells"][0]["out_of_scope"] is False
+
+
+def _years(conn, pid, year_from, year_to, sets, matched="exact"):
+    conn.execute("INSERT INTO part_years (part_id, year_from, year_to, sets, "
+                 "matched) VALUES (?, ?, ?, ?, ?)",
+                 (pid, year_from, year_to, sets, matched))
+
+
+def test_a_cell_carries_its_years_and_tags(conn):
+    _part(conn, "3001")
+    _years(conn, "3001", 1979, 2026, 4252)
+    conn.commit()
+    cell = cells.cells(conn)["cells"][0]
+    assert (cell["year_from"], cell["year_to"], cell["sets"]) == (1979, 2026, 4252)
+    assert "popular" in cell["tags"]
+
+
+def test_a_cell_with_no_catalog_entry_says_so(conn):
+    _part(conn, "3001")
+    conn.commit()
+    cell = cells.cells(conn)["cells"][0]
+    assert cell["year_from"] is None and cell["sets"] is None

@@ -82,6 +82,20 @@ function strokeCaret(ctx: CanvasRenderingContext2D,
   ctx.restore();
 }
 
+// Ink on the thumbnail's own white ground, bottom-right so it lands on the
+// letterbox margin rather than the drawing, which is centered.
+function drawBadge(ctx: CanvasRenderingContext2D, letter: string,
+                   cmd: { dx: number; dy: number; dw: number; dh: number }) {
+  const size = Math.max(9, Math.min(20, cmd.dw * 0.14));
+  ctx.save();
+  ctx.font = `600 ${size}px ui-monospace, monospace`;
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'bottom';
+  ctx.fillStyle = '#000000';
+  ctx.fillText(letter, cmd.dx + cmd.dw - size * 0.35, cmd.dy + cmd.dh - size * 0.25);
+  ctx.restore();
+}
+
 /** One paint command, drawn into `ctx` and shifted by `offset` -- the loupe
  *  reuses this to redraw the same commands into its own small canvas,
  *  recentred on the aimed point rather than at their outer screen position. */
@@ -94,6 +108,7 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
     ctx.save();
     ctx.globalAlpha = cmd.alpha ?? 1;
     ctx.drawImage(sheet, cmd.sx, cmd.sy, cmd.sw, cmd.sh, dx, dy, cmd.dw, cmd.dh);
+    if (cmd.badge) drawBadge(ctx, cmd.badge, { ...cmd, dx, dy });
     if (cmd.ring) strokeRing(ctx, { ...cmd, dx, dy }, palette);
     ctx.restore();
     if (cmd.caret) strokeCaret(ctx, { ...cmd, dx, dy }, palette);
@@ -105,6 +120,7 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
     ctx.fillStyle = cmd.ground;
     ctx.fillRect(dx, dy, cmd.dw, cmd.dh);
     ctx.drawImage(cmd.image, dx, dy, cmd.dw, cmd.dh);
+    if (cmd.badge) drawBadge(ctx, cmd.badge, { ...cmd, dx, dy });
     if (cmd.ring) strokeRing(ctx, { ...cmd, dx, dy }, palette);
     ctx.restore();
     if (cmd.caret) strokeCaret(ctx, { ...cmd, dx, dy }, palette);

@@ -1,0 +1,21 @@
+.corpus-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0.3rem 0;
+  padding: 0;
+  list-style: none;
+}
+
+.corpus-tag {
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--wzl-border, currentColor);
+  border-radius: 0.6rem;
+  font-size: 0.85em;
+  color: var(--wzl-fg-muted);
+}
+
+/* Only the two that change what a part means to this project get a color of
+ * their own; the rest are labels. */
+.corpus-tag[data-tag='retired'] { border-color: #c7b78f; color: #c7b78f; }
+.corpus-tag[data-tag='popular'] { border-color: #97bcc5; color: #97bcc5; }

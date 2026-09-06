@@ -16,6 +16,7 @@ from PIL import Image
 from pydantic import BaseModel
 
 from .. import colors as ldraw_colors
+from .. import tags
 from ..config import load_config
 from . import (cache, cells, corpus, decal, defects, diff, findings,
                goldens_status, jobs, partindex, reference, runner, schema)
@@ -337,9 +338,19 @@ def create_app(root: Path | str = ".",
             slots = [dict(r) for r in conn.execute(
                 "SELECT source, sha256, made_at FROM renders WHERE part_id = ? "
                 "ORDER BY source", (part_id,))]
+            years = conn.execute(
+                "SELECT year_from, year_to, sets FROM part_years WHERE part_id = ?",
+                (part_id,)).fetchone()
         finally:
             conn.close()
-        return {"part": dict(row), "findings": found, "runs": runs,
+        part = dict(row)
+        part["year_from"] = years["year_from"] if years else None
+        part["year_to"] = years["year_to"] if years else None
+        part["sets"] = years["sets"] if years else None
+        part["tags"] = tags.tags_for(part["category"], bool(part["printed"]),
+                                     bool(part["obsolete"]),
+                                     part["year_to"], part["sets"])
+        return {"part": part, "findings": found, "runs": runs,
                 "slots": slots,
                 "defects": [d for d in defects.load(app.state.defects_path)
                             if d["part"] == part_id]}

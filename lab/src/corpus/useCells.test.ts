@@ -7,7 +7,7 @@ import type { LabClient } from '@lab/api/client';
 
 const cell = (id: string, index: number, sha: string | null = null): Cell => ({
   id, index, title: id, category: null, printed: false, obsolete: false, base: true,
-  out_of_scope: false,
+  out_of_scope: false, year_from: null, year_to: null, sets: null, tags: [],
   status: 'unreviewed', sha, made_at: null, extra_d99: null, secs: null,
   error: null, open_defects: 0, open_defects_elsewhere: 0,
   error_elsewhere: false,

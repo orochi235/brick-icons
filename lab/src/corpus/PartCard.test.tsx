@@ -5,7 +5,7 @@ import type { Cell } from '@lab/corpus/types';
 
 const cell: Cell = {
   id: '3001', index: 0, title: 'Brick 2 x 4', category: 'Brick',
-  printed: false, obsolete: false, base: true, out_of_scope: false, status: 'good',
+  printed: false, obsolete: false, base: true, out_of_scope: false, year_from: null, year_to: null, sets: null, tags: [], status: 'good',
   sha: 'deadbeefcafe',
   made_at: '2026-09-05T10:00:00+00:00', extra_d99: 4.5, secs: 12, error: null,
   open_defects: 0, open_defects_elsewhere: 0, error_elsewhere: false,
