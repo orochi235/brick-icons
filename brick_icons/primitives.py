@@ -331,33 +331,63 @@ class TriangleOccluder:
     lambda inside the triangle, inf on miss.
     """
 
+    # rays per chunk; the working set is CHUNK x tris floats a few times over
+    CHUNK_ELEMS = 2_000_000
+
     def __init__(self, tris):
         self.tris = np.asarray(tris, float) if len(tris) else np.zeros((0, 3, 3))
+        self._F = None
+
+    def _prepare(self, F):
+        """Per-triangle constants for view direction F. Every one of these is
+        ray-independent, and `depth` is called once per drawn op, so they are
+        computed once per part rather than once per op per triangle."""
+        if self._F is not None and self._F.shape == F.shape and np.array_equal(self._F, F):
+            return
+        self._F = F.copy()
+        t = self.tris
+        if not len(t):
+            self.v0 = np.zeros((0, 3))
+            return
+        v0, e0, e1 = t[:, 0], t[:, 1] - t[:, 0], t[:, 2] - t[:, 0]
+        n = np.empty_like(e0)
+        n[:, 0] = e0[:, 1] * e1[:, 2] - e0[:, 2] * e1[:, 1]
+        n[:, 1] = e0[:, 2] * e1[:, 0] - e0[:, 0] * e1[:, 2]
+        n[:, 2] = e0[:, 0] * e1[:, 1] - e0[:, 1] * e1[:, 0]
+        denom = n @ F
+        d00 = np.einsum("ij,ij->i", e0, e0)
+        d01 = np.einsum("ij,ij->i", e0, e1)
+        d11 = np.einsum("ij,ij->i", e1, e1)
+        denomb = d00 * d11 - d01 * d01
+        keep = (np.abs(denom) >= 1e-12) & (np.abs(denomb) >= 1e-18)
+        self.v0, self.e0, self.e1 = v0[keep], e0[keep], e1[keep]
+        self.n, self.denom = n[keep], denom[keep]
+        self.d00, self.d01 = d00[keep], d01[keep]
+        self.d11, self.denomb = d11[keep], denomb[keep]
+        self.nv0 = np.einsum("ij,ij->i", self.n, self.v0)
+        self.Fe0 = self.e0 @ F
+        self.Fe1 = self.e1 @ F
+        self.v0e0 = np.einsum("ij,ij->i", self.v0, self.e0)
+        self.v0e1 = np.einsum("ij,ij->i", self.v0, self.e1)
 
     def depth(self, O, F):
         O = np.atleast_2d(O).astype(float)
         F = np.asarray(F, float)
+        self._prepare(F)
         out = np.full(O.shape[0], np.inf)
-        for tri in self.tris:
-            v0, v1, v2 = tri
-            e0, e1 = v1 - v0, v2 - v0
-            n = np.cross(e0, e1)
-            denom = float(F @ n)
-            if abs(denom) < 1e-12:
-                continue
-            lam = ((v0 - O) @ n) / denom
-            Ph = O + lam[:, None] * F
-            e2 = Ph - v0
-            d00 = float(e0 @ e0); d01 = float(e0 @ e1); d11 = float(e1 @ e1)
-            d20 = e2 @ e0; d21 = e2 @ e1
-            denomb = d00 * d11 - d01 * d01
-            if abs(denomb) < 1e-18:
-                continue
-            v = (d11 * d20 - d01 * d21) / denomb
-            w = (d00 * d21 - d01 * d20) / denomb
-            u = 1.0 - v - w
-            inside = (u >= -1e-6) & (v >= -1e-6) & (w >= -1e-6)
-            out = np.minimum(out, np.where(inside, lam, np.inf))
+        m = len(self.v0)
+        if not m:
+            return out
+        step = max(1, self.CHUNK_ELEMS // m)
+        for lo in range(0, O.shape[0], step):
+            Oc = O[lo:lo + step]
+            lam = (self.nv0 - Oc @ self.n.T) / self.denom
+            d20 = Oc @ self.e0.T + lam * self.Fe0 - self.v0e0
+            d21 = Oc @ self.e1.T + lam * self.Fe1 - self.v0e1
+            v = (self.d11 * d20 - self.d01 * d21) / self.denomb
+            w = (self.d00 * d21 - self.d01 * d20) / self.denomb
+            inside = (1.0 - v - w >= -1e-6) & (v >= -1e-6) & (w >= -1e-6)
+            out[lo:lo + step] = np.where(inside, lam, np.inf).min(axis=1)
         return out
 
 
