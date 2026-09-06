@@ -333,7 +333,8 @@ directly in `renders/` instead of `renders/<engine>/` are skipped: three
 `<part>.occt.svg` files from an early smoke run are there, and their stem would
 file a row under a part id that does not exist.
 
-**Merge note, delete once `corpus-grouping` lands.** Branch
+**Merge note for `corpus-grouping` only** -- `corpus-grouping-v2` cleared it
+in its 13:06 merge, and carries no `census_dir=` at all. Branch
 `census-multi-dir-index` renamed `rebuild`'s `census_dir` to `census_dirs` (a
 sequence, `None` for every tree) and `counts` gained a `"skipped"` key.
 `corpus-grouping` was cut before that and adds a `_rebuild()` test helper
@@ -467,7 +468,12 @@ the selection. **They collide with the part facts on main**: this branch
 derived its own Rebrickable data, `tests/test_rebrickable.py` and all, while
 main grew `part_years`, `scripts/fetch-part-years.py` and `brick_icons/tags.py`
 from the same source. Two implementations of one idea, and v2's merge of main
-predates the last few commits. The spec and plan behind them:
+predates the last few commits. **Merging main into v2 conflicts in exactly one
+file, `CorpusWall.tsx`, and v2 still carries the `setLevel(32)` reset that
+`f9a3801` deleted** -- keep the deletion when resolving it, or the wall goes
+back to blurring on every slot change. `CorpusWall.test.tsx` merges clean and
+fails if the reset comes back, so the merge is only silent if someone drops
+the test with it. The spec and plan behind them:
 `docs/superpowers/specs/2026-09-05-corpus-grouping-design.md` and
 `docs/superpowers/plans/2026-09-05-corpus-grouping.md`. Coverage, category and
 release-year groupings, the Rebrickable facts they group by, and a facet
