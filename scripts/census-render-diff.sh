@@ -15,6 +15,20 @@ base=${1:?usage: census-render-diff.sh <base-rev> <part-list> [engine]}
 list=${2:?usage: census-render-diff.sh <base-rev> <part-list> [engine]}
 engine=${3:-occt}
 work=$(mktemp -d)
+
+# This swaps engine files under git and puts them back. Several sessions share
+# one checkout, so a dirty brick_icons/ means somebody's uncommitted work is
+# what the restore would overwrite.
+dirty=$(git status --porcelain -- 'brick_icons/*.py')
+if [ -n "$dirty" ]; then
+    echo "brick_icons/ is dirty -- this script would checkout over it:" >&2
+    echo "$dirty" >&2
+    echo "Run it in a throwaway worktree instead:" >&2
+    echo "  git worktree add --detach /tmp/gate HEAD && ln -s \"$PWD/vendor\" /tmp/gate/vendor" >&2
+    echo "  cd /tmp/gate && $0 $*" >&2
+    exit 1
+fi
+
 files=$(git diff --name-only "$base" HEAD -- 'brick_icons/*.py')
 [ -n "$files" ] || { echo "no brick_icons change between $base and HEAD" >&2; exit 1; }
 
