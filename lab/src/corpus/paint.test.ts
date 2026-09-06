@@ -382,8 +382,6 @@ it('gives the property family one field and each system badge its own', () => {
   const [system, ...properties] = stripFor(part, 200);
   expect(system!.field).not.toEqual(PROPERTY_FIELD);
   expect(properties.map((b) => b.field)).toEqual([PROPERTY_FIELD, PROPERTY_FIELD]);
-  // Duplo is red on white, and every baked thumbnail sits on a white ground.
-  expect(system!.stroke).toBeTruthy();
 });
 
 it('lets electric off the shared field, a bright bolt on black', () => {

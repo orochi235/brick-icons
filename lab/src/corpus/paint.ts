@@ -189,8 +189,7 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
   // Yellow (#f2cd37), which reads golden against the rest of the strip.
   minifig: { tag: 'minifig', mark: 'minifig', field: '#ffd500', ink: '#1a1a1a' },
   technic: { tag: 'technic', mark: 'technic', field: '#1b2a5e', ink: '#ffffff' },
-  duplo: { tag: 'duplo', mark: 'duplo', field: '#ffffff', ink: '#c8102e',
-           stroke: '#c8102e' },
+  duplo: { tag: 'duplo', mark: 'duplo', field: '#c8102e', ink: '#ffffff' },
   weird: { tag: 'weird', text: '\u03a8', field: '#5b3a86', ink: '#ffffff',
            font: WEIRD_FACE, dy: 0.035 },
   // The one property badge off the shared field: a gold bolt on black is
