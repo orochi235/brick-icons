@@ -395,3 +395,38 @@ it('offers the direction toggle only once the wall is grouped by release', async
   fireEvent.change(screen.getByLabelText('Group'), { target: { value: 'release' } });
   expect(screen.getByLabelText('Newest first')).toBeTruthy();
 });
+
+it('closes the legend and gets it back from the topbar', async () => {
+  const { container } = render(<CorpusWall client={client} />);
+  await waitFor(() => expect(container.querySelector('.corpus-legend')).toBeTruthy());
+  fireEvent.click(screen.getByRole('button', { name: /close legend/i }));
+  expect(container.querySelector('.corpus-legend')).toBeNull();
+  // The whole point: a dismissed legend used to need a reload to come back.
+  fireEvent.click(screen.getByRole('button', { name: 'Legend' }));
+  expect(container.querySelector('.corpus-legend')).toBeTruthy();
+});
+
+it('refits the wall on cmd-0, even after the camera was touched', async () => {
+  const fit = vi.mocked(core.fitViewToBounds);
+  const { container } = render(<CorpusWall client={client} />);
+  await waitFor(() => expect(container.querySelector('canvas')).toBeTruthy());
+
+  const stage = container.querySelector('.corpus-stage')!;
+  fireEvent.wheel(stage, { deltaY: -1, clientX: 10, clientY: 10 });
+  fit.mockClear();
+
+  fireEvent.keyDown(window, { key: '0', metaKey: true });
+  await waitFor(() => expect(fit.mock.calls.length).toBeGreaterThan(0));
+});
+
+it('leaves a bare 0 alone -- only the modified one resets', async () => {
+  const fit = vi.mocked(core.fitViewToBounds);
+  const { container } = render(<CorpusWall client={client} />);
+  await waitFor(() => expect(container.querySelector('canvas')).toBeTruthy());
+  fireEvent.wheel(container.querySelector('.corpus-stage')!,
+                  { deltaY: -1, clientX: 10, clientY: 10 });
+  fit.mockClear();
+  fireEvent.keyDown(window, { key: '0' });
+  await new Promise((r) => setTimeout(r, 0));
+  expect(fit.mock.calls.length).toBe(0);
+});

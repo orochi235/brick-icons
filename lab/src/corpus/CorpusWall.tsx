@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   clientToCanvas, fitViewToBounds, useCanvasSize, useViewAnimation, zoomAt, type View,
 } from '@weasel-js/core';
@@ -55,6 +55,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
   const [carded, setCarded] = useState<{ cell: Cell; at: { x: number; y: number } } | null>(null);
   const [highlight, setHighlight] = useState<CellState | null>(null);
   const [highlightTag, setHighlightTag] = useState<string | null>(null);
+  const [legendOpen, setLegendOpen] = useState(true);
   const [explicitCaret, setExplicitCaret] = useState<number | null>(null);
   const [searchNotice, setSearchNotice] = useState<string | null>(null);
   const box = useRef<HTMLDivElement>(null);
@@ -185,15 +186,33 @@ export function CorpusWall({ client }: { client: LabClient }) {
   // reason to re-fit: the reader asked for a different arrangement, not for
   // their camera back at the top. The sync below runs after this effect, so
   // within the commit that changes the grouping this still sees the old one.
-  useEffect(() => {
-    if (fittedGrouping.current !== selection.grouping) return;
-    if (touched.current || laid.bounds.w <= 0) return;
-    if (size.width <= 0 || size.height <= 0) return;
+  const fitToWall = useCallback(() => {
+    if (laid.bounds.w <= 0 || size.width <= 0 || size.height <= 0) return;
     const fitted = fitViewToBounds(
       { x: 0, y: 0, width: laid.bounds.w, height: laid.bounds.h },
-      size, cam ?? IDENTITY_VIEW, { mode: 'fill', padding: 0 });
+      size, camRef.current ?? IDENTITY_VIEW, { mode: 'fill', padding: 0 });
     updateCam({ x: 0, y: 0, scale: fitted.scale });
   }, [laid.bounds.w, laid.bounds.h, size.width, size.height]);
+
+  useEffect(() => {
+    if (fittedGrouping.current !== selection.grouping) return;
+    if (touched.current) return;
+    fitToWall();
+  }, [laid.bounds.w, laid.bounds.h, size.width, size.height]);
+
+  // cmd-0 puts the whole wall back on screen, the way it opened. Also clears
+  // `touched`, so a later resize refits rather than holding the camera the
+  // reset just replaced.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== '0' || !(e.metaKey || e.ctrlKey) || e.altKey) return;
+      e.preventDefault();
+      touched.current = false;
+      fitToWall();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [fitToWall]);
 
   useEffect(() => { fittedGrouping.current = selection.grouping; },
             [selection.grouping]);
@@ -232,8 +251,9 @@ export function CorpusWall({ client }: { client: LabClient }) {
     thickBorderFactor: params.thickBorderFactor, thinBorderFactor: params.thinBorderFactor,
     maxBorderPx: params.maxBorderPx, dimAlpha: params.dimAlpha,
     retiredWash: params.retiredWash,
+    showBadges: params.showBadges, showCaptions: params.showCaptions,
   }), [params.thickBorderFactor, params.thinBorderFactor, params.maxBorderPx,
-       params.dimAlpha, params.retiredWash]);
+       params.dimAlpha, params.retiredWash, params.showBadges, params.showCaptions]);
 
   return (
     <LabShell title="brick-icons corpus"
@@ -241,6 +261,11 @@ export function CorpusWall({ client }: { client: LabClient }) {
                 <>
                   <FilterBar sources={sources} source={source} onSource={setSource} />
                   <PartSearch client={client} onOpen={openSearchedPart} />
+                  <button type="button" className="corpus-legend-toggle"
+                          aria-pressed={legendOpen}
+                          onClick={() => setLegendOpen((v) => !v)}>
+                    Legend
+                  </button>
                   {searchNotice && (
                     <span className="corpus-search-notice" role="status">{searchNotice}</span>
                   )}
@@ -284,11 +309,12 @@ export function CorpusWall({ client }: { client: LabClient }) {
                       onOpen={(id) => { setCarded(null); setPicked(id); }}
                       onClose={() => setCarded(null)} />
           )}
-          {cells && (
+          {cells && legendOpen && (
             <Legend cells={cells} highlight={highlight} onHighlight={setHighlight}
                     badges={selection.badges}
                     onBadges={(update) => setSelection((s) => ({ ...s, badges: update(s.badges) }))}
-                    highlightTag={highlightTag} onHighlightTag={setHighlightTag} />
+                    highlightTag={highlightTag} onHighlightTag={setHighlightTag}
+                    onClose={() => setLegendOpen(false)} />
           )}
         </div>
         {picked && (

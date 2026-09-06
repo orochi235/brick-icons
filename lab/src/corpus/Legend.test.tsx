@@ -21,7 +21,7 @@ const cells: Cell[] = [
 
 it('renders a row per state with its own count', () => {
   render(<Legend cells={cells} highlight={null} onHighlight={() => {}} badges={[]} onBadges={vi.fn()}
-                 highlightTag={null} onHighlightTag={vi.fn()} />);
+                 highlightTag={null} onHighlightTag={vi.fn()} onClose={vi.fn()} />);
   expect(screen.getByLabelText('unknown, 2 parts')).toBeTruthy();
   expect(screen.getByLabelText('timed out, 2 parts')).toBeTruthy();
   expect(screen.getByLabelText('open defect, 1 parts')).toBeTruthy();
@@ -33,7 +33,7 @@ it('renders a row per state with its own count', () => {
 it('reports the hovered state, and null once the pointer leaves', () => {
   const onHighlight = vi.fn();
   render(<Legend cells={cells} highlight={null} onHighlight={onHighlight} badges={[]} onBadges={vi.fn()}
-                 highlightTag={null} onHighlightTag={vi.fn()} />);
+                 highlightTag={null} onHighlightTag={vi.fn()} onClose={vi.fn()} />);
   const row = screen.getByLabelText(/timed out/);
   fireEvent.mouseEnter(row);
   expect(onHighlight).toHaveBeenCalledWith('timeout');
@@ -44,7 +44,7 @@ it('reports the hovered state, and null once the pointer leaves', () => {
 it('treats keyboard focus the same as hover, and blur the same as leaving', () => {
   const onHighlight = vi.fn();
   render(<Legend cells={cells} highlight={null} onHighlight={onHighlight} badges={[]} onBadges={vi.fn()}
-                 highlightTag={null} onHighlightTag={vi.fn()} />);
+                 highlightTag={null} onHighlightTag={vi.fn()} onClose={vi.fn()} />);
   const row = screen.getByLabelText(/open defect/);
   fireEvent.focus(row);
   expect(onHighlight).toHaveBeenCalledWith('defect');
@@ -54,7 +54,7 @@ it('treats keyboard focus the same as hover, and blur the same as leaving', () =
 
 it('is reachable by keyboard -- every row is focusable', () => {
   const { container } = render(<Legend cells={cells} highlight={null} onHighlight={() => {}} badges={[]} onBadges={vi.fn()}
-                 highlightTag={null} onHighlightTag={vi.fn()} />);
+                 highlightTag={null} onHighlightTag={vi.fn()} onClose={vi.fn()} />);
   const rows = container.querySelectorAll('[data-state]');
   expect(rows.length).toBe(CELL_STATES.length);
   for (const row of rows) {
@@ -62,11 +62,14 @@ it('is reachable by keyboard -- every row is focusable', () => {
   }
 });
 
-it('closes on its own dismissal', () => {
+it('asks its owner to close rather than hiding itself', () => {
+  const onClose = vi.fn();
   const { container } = render(<Legend cells={cells} highlight={null} onHighlight={() => {}} badges={[]} onBadges={vi.fn()}
-                 highlightTag={null} onHighlightTag={vi.fn()} />);
+                 highlightTag={null} onHighlightTag={vi.fn()} onClose={onClose} />);
   fireEvent.click(screen.getByRole('button', { name: /close legend/i }));
-  expect(container.querySelector('.corpus-legend')).toBeNull();
+  expect(onClose).toHaveBeenCalled();
+  // Still on screen: whoever owns the toggle decides, so there is a way back.
+  expect(container.querySelector('.corpus-legend')).toBeTruthy();
 });
 
 it('filters the wall by a badge, and stacks two picks', () => {
@@ -74,7 +77,7 @@ it('filters the wall by a badge, and stacks two picks', () => {
   render(<Legend cells={[cell('a', { tags: ['technic'] }), cell('b', { tags: ['technic', 'printed'] })]}
                  highlight={null} onHighlight={vi.fn()}
                  badges={[]} onBadges={onBadges}
-                 highlightTag={null} onHighlightTag={vi.fn()} />);
+                 highlightTag={null} onHighlightTag={vi.fn()} onClose={vi.fn()} />);
   fireEvent.click(screen.getByRole('button', { name: /^technic/ }));
   expect(onBadges).toHaveBeenCalled();
   // An updater, not an array: two rows clicked in one render both read the
@@ -88,7 +91,7 @@ it('counts every badge over the whole corpus', () => {
   render(<Legend cells={[cell('a', { tags: ['technic'] }), cell('b', { tags: ['technic', 'printed'] })]}
                  highlight={null} onHighlight={vi.fn()}
                  badges={[]} onBadges={vi.fn()}
-                 highlightTag={null} onHighlightTag={vi.fn()} />);
+                 highlightTag={null} onHighlightTag={vi.fn()} onClose={vi.fn()} />);
   expect(screen.getByRole('button', { name: 'technic, 2 parts' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'printed, 1 parts' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'magnet, 0 parts' })).toBeTruthy();
@@ -98,7 +101,8 @@ it('reports the hovered tag, and null once the pointer leaves', () => {
   const onHighlightTag = vi.fn();
   render(<Legend cells={cells} highlight={null} onHighlight={vi.fn()}
                  badges={[]} onBadges={vi.fn()}
-                 highlightTag={null} onHighlightTag={onHighlightTag} />);
+                 highlightTag={null} onHighlightTag={onHighlightTag}
+                 onClose={vi.fn()} />);
   const row = screen.getByRole('button', { name: /^technic/ });
   fireEvent.mouseEnter(row);
   expect(onHighlightTag).toHaveBeenCalledWith('technic');
@@ -110,7 +114,8 @@ it('treats focus on a tag row the same as hover, and blur the same as leaving', 
   const onHighlightTag = vi.fn();
   render(<Legend cells={cells} highlight={null} onHighlight={vi.fn()}
                  badges={[]} onBadges={vi.fn()}
-                 highlightTag={null} onHighlightTag={onHighlightTag} />);
+                 highlightTag={null} onHighlightTag={onHighlightTag}
+                 onClose={vi.fn()} />);
   const row = screen.getByRole('button', { name: /^printed/ });
   fireEvent.focus(row);
   expect(onHighlightTag).toHaveBeenCalledWith('printed');
@@ -121,7 +126,8 @@ it('treats focus on a tag row the same as hover, and blur the same as leaving', 
 it('marks the hovered tag row the way a hovered state row is marked', () => {
   render(<Legend cells={cells} highlight={null} onHighlight={vi.fn()}
                  badges={[]} onBadges={vi.fn()}
-                 highlightTag={'technic'} onHighlightTag={vi.fn()} />);
+                 highlightTag={'technic'} onHighlightTag={vi.fn()}
+                 onClose={vi.fn()} />);
   const row = screen.getByRole('button', { name: /^technic/ });
   expect(row.getAttribute('data-highlighted')).toBe('true');
 });

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { FloatingPanel } from '@weasel-js/labkit';
 import { drawBadge } from '@lab/corpus/badges';
 import { ALL_BADGES, tally, type CellBadge } from '@lab/corpus/paint';
@@ -20,6 +20,9 @@ export interface LegendProps {
    *  dims every cell without it, exactly as hovering a state row does. */
   highlightTag: string | null;
   onHighlightTag: (tag: string | null) => void;
+  /** Dismissal is the topbar's to own: a legend that closed itself had no way
+   *  back short of a reload. */
+  onClose: () => void;
 }
 
 /** Sized so a badge comes out the same 14px across as the state swatches
@@ -62,7 +65,7 @@ function BadgeSwatch({ badge }: { badge: CellBadge }) {
  *  that isn't in that state rather than brightening the ones that are. */
 export function Legend({ cells, highlight, onHighlight,
                         badges, onBadges,
-                        highlightTag, onHighlightTag }: LegendProps) {
+                        highlightTag, onHighlightTag, onClose }: LegendProps) {
   const counts = useMemo(() => tally(cells), [cells]);
   const badgeCounts = useMemo(() => {
     const out: Record<string, number> = {};
@@ -74,21 +77,17 @@ export function Legend({ cells, highlight, onHighlight,
     }
     return out;
   }, [cells]);
-  const [open, setOpen] = useState(true);
-
   const toggle = (tag: string) => {
     onBadges((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag)
                                            : [...prev, tag]));
   };
-
-  if (!open) return null;
 
   return (
     <FloatingPanel anchor="top-right" storageKey="brick-icons-lab.corpus-legend"
       className="corpus-legend">
       <div className="corpus-legend-head">
         <strong>Legend</strong>
-        <button type="button" aria-label="Close legend" onClick={() => setOpen(false)}>
+        <button type="button" aria-label="Close legend" onClick={onClose}>
           x
         </button>
       </div>
