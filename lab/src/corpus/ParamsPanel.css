@@ -32,3 +32,11 @@
 .corpus-params-panel label:has(> input[type='color']) {
   grid-column: 1 / -1;
 }
+
+/* One column, not `ControlPanel`'s pairs. The sidebar is 216px, so a paired
+   grid leaves each row about 90px -- and a row's label and readout sit in one
+   `nowrap` flex line whose text is an anonymous item, so it cannot be shrunk
+   from out here. "Drag threshold" needs 93px and hangs its unit 7px past the
+   row; "Max border" fits and does not. Full-width rows fit every label the
+   panel has. */
+.corpus-params-panel label { grid-column: 1 / -1; }
