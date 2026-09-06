@@ -30,6 +30,13 @@ body { margin: 0; }
    * it still reads when a caret'd cell also carries the ochre defect ring. */
   --corpus-caret-color: #ffffff;
 
+  /* A band header, and the block header inside it that must not compete. */
+  --corpus-label: #e8e8ea;
+  --corpus-sublabel: #7e7e88;
+  /* A part that matched nothing outside -- its own flat tone, so absence
+   * never reads as the low end of a tint ramp. */
+  --corpus-unmatched: #2a2a2e;
+
   /* The wall is full-bleed under the shell header -- the workspace padding
    * is meant for a tile grid, not this single canvas. */
   --lk-workspace-pad: 0;

@@ -8,12 +8,13 @@ import {
 } from '@weasel-js/core';
 import { LoupeBubble, resolveLoupe, useLoupe } from '@weasel-js/labkit/loupe';
 import { adjacent, impliedCaret, type Direction } from '@lab/corpus/caret';
-import type { Rect } from '@lab/corpus/layout';
+import type { Band, Rect } from '@lab/corpus/layout';
 import { paintCommands, RETIRED_WASH, type Appearance, type CellBadge,
   type CellCaption, type PaintCommand } from '@lab/corpus/paint';
 import { DEFAULT_PALETTE, readPalette, type CellState, type Palette } from '@lab/corpus/palette';
 import { DEFAULT_PARAMS } from '@lab/corpus/params';
 import { panToReveal } from '@lab/corpus/reveal';
+import type { TintMode } from '@lab/corpus/tint';
 import type { Cell, SheetManifest } from '@lab/corpus/types';
 import { visibleRange } from '@lab/corpus/visible';
 import '@lab/corpus/Wall.css';
@@ -47,6 +48,11 @@ export interface WallProps {
   dragThresholdPx?: number;
   /** Border and dim tuning, live from the params panel. */
   appearance?: Appearance;
+  /** Group headers the layout asked for. Absent for a dense grid. */
+  bands?: Band[];
+  /** What a cell's color says. Outside `status` the thumbnail gives way to
+   *  the ramp. */
+  tint?: TintMode;
 }
 
 function ongoingInvoker(action: typeof viewportDragPanAction) {
@@ -272,6 +278,14 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
     strokeBorder(ctx, { ...cmd, dx, dy });
     for (const caption of cmd.captions ?? []) drawCaption(ctx, caption, { ...cmd, dx, dy });
     if (cmd.caret) strokeCaret(ctx, { ...cmd, dx, dy }, palette);
+  } else if (cmd.kind === 'label') {
+    ctx.save();
+    ctx.fillStyle = cmd.depth === 0 ? palette.label.fill : palette.sublabel.fill;
+    ctx.font = `${cmd.depth === 0 ? 700 : 600} ${cmd.size}px ui-sans-serif, system-ui, sans-serif`;
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(cmd.depth === 0 ? `${cmd.text}  ${cmd.count.toLocaleString()}`
+                                 : cmd.text, dx, dy);
+    ctx.restore();
   }
 }
 
@@ -283,7 +297,7 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
                        highlight, explicitCaret, onExplicitCaretChange,
                        onPan, onPick, onOpen, onDragStart,
                        dragThresholdPx = DEFAULT_PARAMS.dragThresholdPx,
-                       appearance }: WallProps) {
+                       appearance, bands, tint }: WallProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [dragging, setDragging] = useState(false);
   const decay = useDecayLoop();
@@ -356,12 +370,12 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
     ctx.imageSmoothingEnabled = true;
     for (const cmd of paintCommands({
       cells, rects, visible, cam, manifest, palette, loose, vector, highlight, caret: caretIndex,
-      appearance,
+      appearance, bands, tint,
     })) {
       drawPaintCommand(ctx, cmd, sheet, palette);
     }
   }, [cells, rects, visible, cam, sheet, manifest, palette, loose, vector, highlight, caretIndex,
-      appearance, width, height]);
+      appearance, bands, tint, width, height]);
 
   // The lens shows a magnified crop of what is already on screen -- zooming
   // in about a fixed point never brings a cell into view that the outer
@@ -386,13 +400,13 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
     const offset = { x: d / 2 - loupe.aim.x, y: d / 2 - loupe.aim.y };
     for (const cmd of paintCommands({
       cells, rects, visible, cam: magCam, manifest, palette, loose, vector, highlight, caret: caretIndex,
-      appearance,
+      appearance, bands, tint,
     })) {
       drawPaintCommand(ctx, cmd, sheet, palette, offset);
     }
   }, [loupe.visible, loupe.aim, loupe.factor, loupeCapability.diameter,
       cells, rects, visible, cam, sheet, manifest, palette, loose, vector, highlight, caretIndex,
-      appearance, width, height]);
+      appearance, bands, tint, width, height]);
 
   const hitTest = (e: { clientX: number; clientY: number;
                          currentTarget: HTMLCanvasElement }) => {
@@ -401,6 +415,7 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
     const cmds = paintCommands({ cells, rects, visible, cam, manifest, palette });
     for (let i = cmds.length - 1; i >= 0; i--) {
       const c = cmds[i]!;
+      if (c.kind === 'label') continue;
       if (sx >= c.dx && sx <= c.dx + c.dw && sy >= c.dy && sy <= c.dy + c.dh) {
         const cell = cells[visible[i]!];
         if (cell) return { cell, at: { x: sx, y: sy } };

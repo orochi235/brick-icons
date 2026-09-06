@@ -1,0 +1,60 @@
+import { describe, expect, it } from 'vitest';
+import { TINT_MODES, ramp, tintFor } from '@lab/corpus/tint';
+import { DEFAULT_PALETTE } from '@lab/corpus/palette';
+import type { Cell } from '@lab/corpus/types';
+
+const c = (over: Partial<Cell>): Cell => ({
+  id: 'x', index: 0, title: '', category: null, printed: false,
+  obsolete: false, base: false, out_of_scope: false, moved: false,
+  year_from: null, year_to: null, sets: null, tags: [],
+  status: 'unreviewed', sha: null, made_at: null, extra_d99: null, secs: null,
+  error: null, open_defects: 0, open_defects_elsewhere: 0, accepted_defects: 0,
+  error_elsewhere: false, ...over,
+});
+
+describe('ramp', () => {
+  it('clamps at both ends', () => {
+    expect(ramp(-1)).toBe(ramp(0));
+    expect(ramp(2)).toBe(ramp(1));
+  });
+});
+
+describe('tintFor', () => {
+  it('gives an unmatched part the unmatched style, never the ramp\'s floor', () => {
+    const style = tintFor(c({}), 'sets', DEFAULT_PALETTE);
+    expect(style).toBe(DEFAULT_PALETTE.unmatched);
+    expect(style).not.toBe(tintFor(c({ sets: 1 }), 'sets', DEFAULT_PALETTE));
+  });
+
+  it('separates a part in one set from one in nine thousand', () => {
+    expect(tintFor(c({ sets: 1 }), 'sets', DEFAULT_PALETTE).fill)
+      .not.toBe(tintFor(c({ sets: 8953 }), 'sets', DEFAULT_PALETTE).fill);
+  });
+
+  it('is logarithmic, so a tenth of the range is high on the ramp, not low', () => {
+    const tenth = tintFor(c({ sets: 895 }), 'sets', DEFAULT_PALETTE).fill;
+    // A linear scale would put a tenth just off the floor; a log one puts it
+    // three quarters of the way up.
+    expect(tenth).toBe(ramp(0.75));
+    expect(tenth).not.toBe(ramp(0.1));
+  });
+
+  it('separates the oldest part in the catalog from the newest', () => {
+    expect(tintFor(c({ year_from: 1954 }), 'year', DEFAULT_PALETTE).fill)
+      .not.toBe(tintFor(c({ year_from: 2027 }), 'year', DEFAULT_PALETTE).fill);
+  });
+
+  it('gives an undated part the unmatched style, not the ramp\'s floor', () => {
+    expect(tintFor(c({ sets: 3 }), 'year', DEFAULT_PALETTE))
+      .toBe(DEFAULT_PALETTE.unmatched);
+  });
+
+  it('falls back to the status palette in status mode', () => {
+    expect(tintFor(c({ open_defects: 1 }), 'status', DEFAULT_PALETTE))
+      .toBe(DEFAULT_PALETTE.defect);
+  });
+
+  it('names every mode it supports', () => {
+    expect(TINT_MODES).toEqual(['status', 'year', 'sets']);
+  });
+});

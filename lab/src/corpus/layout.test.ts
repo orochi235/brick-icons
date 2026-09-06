@@ -32,5 +32,10 @@ it('is a function of the array order, not of cell.index', () => {
 
 it('lays out an empty corpus without dividing by zero', () => {
   expect(gridLayout([], { cell: 10, gap: 2, cols: 2 }))
-    .toEqual({ rects: [], bounds: { w: 0, h: 0 } });
+    .toEqual({ rects: [], bands: [], bounds: { w: 0, h: 0 } });
+});
+
+it('reports no bands, because a dense grid has no groups', () => {
+  const out = gridLayout([cell('a', 0), cell('b', 1)], { cell: 32, gap: 4, cols: 2 });
+  expect(out.bands).toEqual([]);
 });

@@ -1,8 +1,9 @@
 import { worldToScreen, viewToTransform, type View } from '@weasel-js/core';
-import type { Rect } from '@lab/corpus/layout';
+import type { Band, Rect } from '@lab/corpus/layout';
 import { CELL_STATES, type CellState, type CellStyle, type Palette } from '@lab/corpus/palette';
 import { DEFAULT_PARAMS } from '@lab/corpus/params';
 import { isStale, sourceBox } from '@lab/corpus/sheet';
+import { tintFor, type TintMode } from '@lab/corpus/tint';
 import type { Cell, SheetManifest } from '@lab/corpus/types';
 import { yearRange } from '@lab/corpus/years';
 
@@ -51,6 +52,11 @@ export interface Appearance {
   dimAlpha: number;
   retiredWash: number;
 }
+
+// A label narrower than its own text is ink, not a word.
+const MIN_LABEL_PX = 40;
+const OUTER_LABEL_PX = 18;
+const INNER_LABEL_PX = 11;
 
 const DEFAULT_APPEARANCE: Appearance = {
   thickBorderFactor: DEFAULT_PARAMS.thickBorderFactor,
@@ -195,7 +201,9 @@ export type PaintCommand =
        *  own opaque ground and hides anything drawn under it. */
       translucent: boolean;
       border: string | null; borderWidth: number; alpha?: number;
-      caret?: boolean; badges?: CellBadge[]; captions?: CellCaption[] };
+      caret?: boolean; badges?: CellBadge[]; captions?: CellCaption[] }
+  | { kind: 'label'; text: string; count: number; dx: number; dy: number;
+      size: number; depth: 0 | 1 };
 
 export interface PaintInput {
   cells: Cell[];
@@ -217,6 +225,11 @@ export interface PaintInput {
   /** Border and dim tuning, live from the params panel. Defaults to the same
    *  values `DEFAULT_PARAMS` gives that panel. */
   appearance?: Appearance;
+  /** Group headers the layout asked for. Absent for a dense grid. */
+  bands?: Band[];
+  /** What a cell's color says. Outside `status` the thumbnail gives way to
+   *  the ramp -- an opaque drawing and a ramp cannot both be read. */
+  tint?: TintMode;
 }
 
 /** What to draw this frame, as data.
@@ -225,8 +238,9 @@ export interface PaintInput {
  *  in what color -- are testable without a rendering context, and so the
  *  drawing itself is the only thing weasel's mega view has to replace. */
 export function paintCommands({ cells, rects, visible, cam, manifest, palette, loose, vector,
-                                highlight = null, caret = null,
-                                appearance = DEFAULT_APPEARANCE }: PaintInput): PaintCommand[] {
+                                highlight = null, bands, caret = null,
+                                appearance = DEFAULT_APPEARANCE,
+                                tint = 'status' }: PaintInput): PaintCommand[] {
   const out: PaintCommand[] = [];
   const transform = viewToTransform(cam);
   for (const i of visible) {
@@ -243,21 +257,21 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
     // A drawn cell wears its state's border too: a part that fails in another
     // slot looks perfectly fine in this one, and the frame is the only thing
     // saying otherwise.
-    const style = dimmed ? palette.unknown : palette[state];
+    const style = dimmed ? palette.unknown : tintFor(cell, tint, palette);
     const border = style.border;
     const borderWidth = borderWidthFor(style.weight, dw, appearance);
     const badges = badgesFor(cell, dw);
     const captions = captionsFor(cell, dw, CAPTION_ON_THUMB);
     const wash = isRetired(cell) ? appearance.retiredWash : undefined;
-    const vectored = vector?.get(cell.id);
-    const image = vectored ?? loose?.get(cell.id);
+    const vectored = tint === 'status' ? vector?.get(cell.id) : undefined;
+    const image = tint === 'status' ? (vectored ?? loose?.get(cell.id)) : undefined;
     if (image) {
       out.push({ kind: 'image', dx, dy, dw, dh, image, ground: THUMB_GROUND,
                  translucent: vectored !== undefined,
                  border, borderWidth, alpha, caret: isCaret, badges, captions, wash });
       continue;
     }
-    const box = manifest && cell.sha && !isStale(manifest, cell)
+    const box = tint === 'status' && manifest && cell.sha && !isStale(manifest, cell)
       ? sourceBox(manifest, cell.index)
       : null;
     if (box) {
@@ -274,6 +288,14 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
                captions: state === 'outOfScope'
                  ? undefined : captionsFor(cell, dw, CAPTION_ON_FILL),
                slash: border !== null, caret: isCaret });
+  }
+  for (const b of bands ?? []) {
+    const w = b.rect.w * cam.scale.x;
+    if (w < MIN_LABEL_PX) continue;
+    const [dx, dy] = worldToScreen(b.rect.x, b.rect.y, transform);
+    const size = b.depth === 0 ? OUTER_LABEL_PX : INNER_LABEL_PX;
+    out.push({ kind: 'label', text: b.label, count: b.count,
+               dx, dy: dy + size, size, depth: b.depth });
   }
   return out;
 }

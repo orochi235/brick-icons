@@ -12,9 +12,19 @@ export interface CellStyle {
   weight: 'thick' | 'thin' | null;
 }
 
-/** The cell-state fills, plus the caret's own stroke color -- the caret is UI
- *  chrome, not a cell state, so it never appears in `CELL_STATES`. */
-export type Palette = Record<CellState, CellStyle> & { caret: string };
+/** The cell-state fills, plus the chrome the wall draws over them -- the
+ *  caret and the band headers are not cell states, so none of them appears
+ *  in `CELL_STATES`. */
+export type Palette = Record<CellState, CellStyle> & {
+  caret: string;
+  /** An outer band's header. */
+  label: CellStyle;
+  /** An inner block's header, which must not compete with it. */
+  sublabel: CellStyle;
+  /** A part that matched nothing outside. Its own flat tone, so absence never
+   *  reads as the low end of a ramp. */
+  unmatched: CellStyle;
+};
 
 // Lightness is reserved for "has been rendered" -- a rendered thumbnail is
 // the brightest thing on the wall, so a problem fill has to stay dark enough
@@ -47,8 +57,17 @@ const CELL_PALETTE: Record<CellState, CellStyle> = {
 };
 
 const CARET_PROPERTY = '--corpus-caret-color';
+const LABEL_PROPERTY = '--corpus-label';
+const SUBLABEL_PROPERTY = '--corpus-sublabel';
+const UNMATCHED_PROPERTY = '--corpus-unmatched';
 
-export const DEFAULT_PALETTE: Palette = { ...CELL_PALETTE, caret: DEFAULT_PARAMS.caretColor };
+export const DEFAULT_PALETTE: Palette = {
+  ...CELL_PALETTE,
+  caret: DEFAULT_PARAMS.caretColor,
+  label: { fill: '#e8e8ea', border: null, weight: null },
+  sublabel: { fill: '#7e7e88', border: null, weight: null },
+  unmatched: { fill: '#2a2a2e', border: null, weight: null },
+};
 
 const PROPERTY: Record<CellState, { fill: string; border: string | null }> = {
   unknown: { fill: '--corpus-cell-unknown-fill', border: null },
@@ -122,5 +141,11 @@ export function readPalette(el: Element): Palette {
     out[state] = { fill, border, weight: fallback.weight };
   }
   out.caret = readVar(styles, CARET_PROPERTY, DEFAULT_PALETTE.caret);
+  out.label = { fill: readVar(styles, LABEL_PROPERTY, DEFAULT_PALETTE.label.fill),
+                border: null, weight: null };
+  out.sublabel = { fill: readVar(styles, SUBLABEL_PROPERTY, DEFAULT_PALETTE.sublabel.fill),
+                   border: null, weight: null };
+  out.unmatched = { fill: readVar(styles, UNMATCHED_PROPERTY, DEFAULT_PALETTE.unmatched.fill),
+                    border: null, weight: null };
   return out;
 }

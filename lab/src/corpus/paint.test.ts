@@ -1,7 +1,9 @@
-import { expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { badgesFor, captionsFor, CAPTION_ON_FILL, cellState, fillFor, paintCommands,
   tally, THUMB_GROUND } from '@lab/corpus/paint';
 import { CELL_STATES, DEFAULT_PALETTE as CELL_FILL, type CellState } from '@lab/corpus/palette';
+import type { Band } from '@lab/corpus/layout';
+import { tintFor } from '@lab/corpus/tint';
 import type { Cell, SheetManifest } from '@lab/corpus/types';
 
 const cell = (id: string, index: number, sha: string | null,
@@ -334,11 +336,11 @@ it('marks exactly one command as the caret', () => {
     visible: [0, 1, 2],
     cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest, caret: 1,
   });
-  const marked = cmds.filter((c) => c.caret === true);
-  expect(marked).toHaveLength(1);
-  expect(cmds[1]).toMatchObject({ caret: true });
-  expect(cmds[0]!.caret).toBeUndefined();
-  expect(cmds[2]!.caret).toBeUndefined();
+  const cells = cmds.filter((c) => c.kind !== 'label');
+  expect(cells.filter((c) => c.caret === true)).toHaveLength(1);
+  expect(cells[1]).toMatchObject({ caret: true });
+  expect(cells[0]!.caret).toBeUndefined();
+  expect(cells[2]!.caret).toBeUndefined();
 });
 
 it('lets a cell carry both the defect frame and the caret', () => {
@@ -449,4 +451,75 @@ it('marks an out-of-scope cell rather than filling it, and squares the rest', ()
   expect(at({ out_of_scope: true, category: 'Sticker' }, 1).mark).toBe('sticker');
   expect(at({}).shape).toBe('square');
   expect(at({ error: 'TimeoutError' }).glyph).toBeUndefined();
+});
+
+const band = (over: Partial<Band> = {}): Band => ({
+  key: '1970s', label: '1970s', count: 12,
+  rect: { x: 0, y: 0, w: 400, h: 200 }, depth: 0, ...over,
+});
+
+describe('band labels', () => {
+  const cam = { x: 0, y: 0, scale: { x: 1, y: 1 } };
+
+  it('emits a label per band, with its count', () => {
+    const out = paintCommands({
+      cells: [], rects: [], visible: [], cam, manifest: null,
+      palette: CELL_FILL, bands: [band()],
+    });
+    const labels = out.filter((c) => c.kind === 'label');
+    expect(labels).toHaveLength(1);
+    expect(labels[0]).toMatchObject({ text: '1970s', count: 12, depth: 0 });
+  });
+
+  it('drops a band too narrow on screen to read', () => {
+    const out = paintCommands({
+      cells: [], rects: [], visible: [], cam: { ...cam, scale: { x: 0.01, y: 0.01 } },
+      manifest: null, palette: CELL_FILL, bands: [band()],
+    });
+    expect(out.filter((c) => c.kind === 'label')).toEqual([]);
+  });
+
+  it('emits nothing when there are no bands, as the dense grid has none', () => {
+    const out = paintCommands({
+      cells: [], rects: [], visible: [], cam, manifest: null, palette: CELL_FILL,
+    });
+    expect(out.filter((c) => c.kind === 'label')).toEqual([]);
+  });
+});
+
+describe('tint', () => {
+  const img = {} as HTMLImageElement;
+  const drawn = { cells: [cell('a', 0, 'sha-a', { sets: 8953 })], rects, visible: [0],
+                  cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL,
+                  manifest, loose: new Map([['a', img]]) };
+
+  it('drops the thumbnail for the ramp outside status mode', () => {
+    expect(paintCommands({ ...drawn, tint: 'sets' })[0]).toMatchObject({
+      kind: 'fill', fill: tintFor(drawn.cells[0]!, 'sets', CELL_FILL).fill,
+    });
+  });
+
+  it('keeps the thumbnail in status mode, tint given or not', () => {
+    expect(paintCommands(drawn)[0]!.kind).toBe('image');
+    expect(paintCommands({ ...drawn, tint: 'status' })[0]!.kind).toBe('image');
+  });
+
+  it('keeps the vector rung and the sheet in status mode too', () => {
+    const vec = {} as CanvasImageSource;
+    // Byte-for-byte the pre-tint path: vector wins over loose, and a cell in
+    // neither still comes off the sheet.
+    expect(paintCommands({ ...drawn, vector: new Map([['a', vec]]) })[0])
+      .toMatchObject({ kind: 'image', image: vec, translucent: true });
+    expect(paintCommands({ ...drawn, loose: new Map() })[0]!.kind).toBe('sprite');
+  });
+
+  it('hides the sheet outside status mode, so the ramp is what is read', () => {
+    expect(paintCommands({ ...drawn, loose: new Map(), tint: 'sets' })[0]!.kind)
+      .toBe('fill');
+  });
+
+  it('paints an unmatched part its own tone rather than the ramp floor', () => {
+    const [cmd] = paintCommands({ ...drawn, cells: [cell('a', 0, null)], tint: 'sets' });
+    expect(cmd).toMatchObject({ kind: 'fill', fill: CELL_FILL.unmatched.fill });
+  });
 });
