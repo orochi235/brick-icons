@@ -43,10 +43,10 @@ IFS=,
 set -- $batch
 unset IFS
 
-# The inner process emits its own `onto: plan` for the batch, unlabelled.
-# Under item dispatch every worker would emit one, they would all collide on
-# the empty label, and the bar would reset to 0/25 forever. onto's pool prints
-# the authoritative plan and progress for the item list, so these are dropped.
+# onto reads these off this item's own stdout pipe, so an unlabelled line is
+# attributed to this worker instead of colliding with the other ten on the
+# job's shared log. Without them the only progress onto sees is the batch
+# finishing, which for 25 parts is a bar that moves once every twenty minutes.
 rc=$(mktemp)
 {
   # EXTRA carries the facet's render config (--shade-style, --line-width,
@@ -57,7 +57,16 @@ rc=$(mktemp)
     --engine "$engine" --timeout "$timeout" --jsonl "$jsonl" --skip-done \
     --keep "$KEEP" ${EXTRA:-}
   echo $? > "$rc"
-} | grep --line-buffered -v '^onto: ' &
+} | awk '
+    /^onto: plan / { print; fflush(); next }
+    { print }
+    /^[0-9]+\/[0-9]+ / {
+      split($1, a, "/")
+      if ($0 ~ / FAILED /) bad++
+      printf "onto: progress %s/%s\n", a[1], a[2]
+      if (bad) printf "onto: failed %d/%s\n", bad, a[2]
+    }
+    { fflush() }' &
 worker=$!
 trap 'rm -f "$rc"; kill "$worker" 2>/dev/null || true' EXIT INT TERM
 
