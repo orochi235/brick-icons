@@ -245,7 +245,8 @@ const MARKS: Record<string, (ctx: CanvasRenderingContext2D,
 // drawing, which is centered. Reversed out so it reads over ink and over the
 // white ground alike.
 function drawBadge(ctx: CanvasRenderingContext2D, badge: CellBadge,
-                   at: { cx: number; cy: number; size: number; radius: number }) {
+                   at: { cx: number; cy: number; size: number; radius: number;
+                         baseline?: number }) {
   const { cx, cy, size, radius } = at;
   ctx.save();
   ctx.beginPath();
@@ -266,10 +267,17 @@ function drawBadge(ctx: CanvasRenderingContext2D, badge: CellBadge,
   } else if (badge.text) {
     ctx.font = `600 ${size}px ui-monospace, monospace`;
     ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    // Optically centered rather than metrically: a monospace capital carries
-    // more side bearing on its left and sits high in the em box.
-    ctx.fillText(badge.text, cx + size * 0.05, cy + size * 0.08);
+    if (at.baseline != null) {
+      // On the part number's own baseline, so `4761 T d` reads as one line
+      // rather than as a caption with ornaments floating beside it.
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(badge.text, cx + size * 0.05, at.baseline);
+    } else {
+      ctx.textBaseline = 'middle';
+      // Optically centered rather than metrically: a monospace capital
+      // carries more side bearing on its left and sits high in the em box.
+      ctx.fillText(badge.text, cx + size * 0.05, cy + size * 0.08);
+    }
   }
   ctx.restore();
 }
@@ -289,6 +297,14 @@ export function cornerBadgeAt(badge: CellBadge,
 /** The kind badges, running right along the bottom edge from wherever the
  *  part number ended. Stops short of the bottom-right corner rather than
  *  drawing under the badge that lives there. */
+/** Half a capital's height in the current font, measured rather than
+ *  assumed: it is what turns the caption's `middle` position into the
+ *  baseline the badges have to sit on. */
+function capHalf(ctx: CanvasRenderingContext2D, size: number): number {
+  const ascent = ctx.measureText('H').actualBoundingBoxAscent;
+  return Number.isFinite(ascent) && ascent > 0 ? ascent / 2 : size * 0.35;
+}
+
 function drawStrip(ctx: CanvasRenderingContext2D, strip: CellBadge[],
                    cmd: { dx: number; dy: number; dw: number; dh: number },
                    startX: number) {
@@ -296,11 +312,17 @@ function drawStrip(ctx: CanvasRenderingContext2D, strip: CellBadge[],
   const { size, radius, inset } = stripGeometry(cmd.dw);
   const gap = radius * 0.5;
   const limit = cmd.dx + cmd.dw - inset - radius * 2;
+  ctx.save();
+  ctx.font = `600 ${size}px ui-monospace, monospace`;
+  const half = capHalf(ctx, size);
+  ctx.restore();
+  // The part number's baseline, derived from where drawCaption centers it.
+  const baseline = cmd.dy + cmd.dh - cornerPad(cmd.dw, size) - size * 0.5 + half;
+  const cy = baseline - half;
   let cx = startX + radius;
-  const cy = cmd.dy + cmd.dh - inset;
   for (const badge of strip) {
     if (cx + radius > limit) return;
-    drawBadge(ctx, badge, { cx, cy, size, radius });
+    drawBadge(ctx, badge, { cx, cy, size, radius, baseline });
     cx += radius * 2 + gap;
   }
 }
