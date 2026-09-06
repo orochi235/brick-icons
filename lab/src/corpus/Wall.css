@@ -1,1 +1,2 @@
-.corpus-canvas { display: block; cursor: crosshair; }
+.corpus-canvas { display: block; cursor: grab; }
+.corpus-canvas-dragging { cursor: grabbing; }

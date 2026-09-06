@@ -25,7 +25,7 @@ const rects = [
 it('draws a baked cell from the sheet', () => {
   const [cmd] = paintCommands({
     cells: [cell('a', 0, 'sha-a')], rects, visible: [0],
-    cam: { x: 0, y: 0, scale: 1 }, manifest,
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, manifest,
   });
   expect(cmd).toMatchObject({ kind: 'sprite', dx: 0, dy: 0, dw: 10, dh: 10,
                               sx: 2, sy: 2, ring: false });
@@ -34,7 +34,7 @@ it('draws a baked cell from the sheet', () => {
 it('draws an unrendered cell with nothing known as unknown gray', () => {
   const [cmd] = paintCommands({
     cells: [cell('b', 1, null)], rects: [rects[1]!], visible: [0],
-    cam: { x: 0, y: 0, scale: 1 }, manifest,
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, manifest,
   });
   expect(cmd).toEqual({ kind: 'fill', dx: 20, dy: 0, dw: 10, dh: 10,
                         fill: CELL_FILL.unknown });
@@ -43,7 +43,7 @@ it('draws an unrendered cell with nothing known as unknown gray', () => {
 it('draws a stale cell as a fill, not as last week’s picture', () => {
   const [cmd] = paintCommands({
     cells: [cell('a', 0, 'sha-newer')], rects, visible: [0],
-    cam: { x: 0, y: 0, scale: 1 }, manifest,
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, manifest,
   });
   expect(cmd!.kind).toBe('fill');
 });
@@ -51,14 +51,14 @@ it('draws a stale cell as a fill, not as last week’s picture', () => {
 it('applies the camera to every command', () => {
   const [cmd] = paintCommands({
     cells: [cell('a', 0, 'sha-a')], rects, visible: [0],
-    cam: { x: -5, y: -5, scale: 2 }, manifest,
+    cam: { x: -5, y: -5, scale: { x: 2, y: 2 } }, manifest,
   });
   expect(cmd).toMatchObject({ dx: 10, dy: 10, dw: 20, dh: 20 });
 });
 
 it('emits nothing for an empty visible set', () => {
   expect(paintCommands({
-    cells: [], rects: [], visible: [], cam: { x: 0, y: 0, scale: 1 }, manifest,
+    cells: [], rects: [], visible: [], cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, manifest,
   })).toEqual([]);
 });
 
@@ -66,7 +66,7 @@ it('emits one command per visible index, in the same order', () => {
   const cmds = paintCommands({
     cells: [cell('a', 0, 'sha-a'), cell('b', 1, null)],
     rects, visible: [1, 0],
-    cam: { x: 0, y: 0, scale: 1 }, manifest,
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, manifest,
   });
   expect(cmds).toHaveLength(2);
   expect(cmds[0]!.dx).toBe(rects[1]!.x);
@@ -76,7 +76,7 @@ it('emits one command per visible index, in the same order', () => {
 it('falls back to a fill when there is no manifest yet', () => {
   const [cmd] = paintCommands({
     cells: [cell('a', 0, 'sha-a')], rects, visible: [0],
-    cam: { x: 0, y: 0, scale: 1 }, manifest: null,
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, manifest: null,
   });
   expect(cmd!.kind).toBe('fill');
 });
@@ -85,7 +85,7 @@ it('draws a whole loose image when one is loaded for the cell', () => {
   const img = {} as HTMLImageElement;
   const [cmd] = paintCommands({
     cells: [cell('a', 0, 'sha-a')], rects, visible: [0],
-    cam: { x: 0, y: 0, scale: 1 }, manifest, loose: new Map([['a', img]]),
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, manifest, loose: new Map([['a', img]]),
   });
   expect(cmd).toEqual({ kind: 'image', dx: 0, dy: 0, dw: 10, dh: 10, image: img,
                         ring: false });
@@ -95,12 +95,12 @@ it('prefers the loose image over the sheet', () => {
   const img = {} as HTMLImageElement;
   const sheetOnly = paintCommands({
     cells: [cell('a', 0, 'sha-a')], rects, visible: [0],
-    cam: { x: 0, y: 0, scale: 1 }, manifest, loose: new Map(),
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, manifest, loose: new Map(),
   });
   expect(sheetOnly[0]!.kind).toBe('sprite');
   const withLoose = paintCommands({
     cells: [cell('a', 0, 'sha-a')], rects, visible: [0],
-    cam: { x: 0, y: 0, scale: 1 }, manifest, loose: new Map([['a', img]]),
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, manifest, loose: new Map([['a', img]]),
   });
   expect(withLoose[0]!.kind).toBe('image');
 });
@@ -109,12 +109,12 @@ it('rings a drawn cell that has an open defect', () => {
   const img = {} as HTMLImageElement;
   const [withDefect] = paintCommands({
     cells: [cell('a', 0, 'sha-a', { open_defects: 1 })], rects, visible: [0],
-    cam: { x: 0, y: 0, scale: 1 }, manifest, loose: new Map([['a', img]]),
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, manifest, loose: new Map([['a', img]]),
   });
   expect(withDefect).toMatchObject({ ring: true });
   const [clean] = paintCommands({
     cells: [cell('a', 0, 'sha-a')], rects, visible: [0],
-    cam: { x: 0, y: 0, scale: 1 }, manifest, loose: new Map([['a', img]]),
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, manifest, loose: new Map([['a', img]]),
   });
   expect(clean).toMatchObject({ ring: false });
 });

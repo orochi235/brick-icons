@@ -1,13 +1,18 @@
-import { expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import * as camera from '@lab/corpus/camera';
+import * as core from '@weasel-js/core';
+import * as levels from '@lab/corpus/levels';
 import { CorpusWall } from '@lab/corpus/CorpusWall';
 import type { Cell } from '@lab/corpus/types';
 
-vi.mock('@lab/corpus/camera', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@lab/corpus/camera')>();
-  return { ...actual, fitBounds: vi.fn(actual.fitBounds),
-           pickLevel: vi.fn(actual.pickLevel) };
+vi.mock('@weasel-js/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@weasel-js/core')>();
+  return { ...actual, fitViewToBounds: vi.fn(actual.fitViewToBounds) };
+});
+
+vi.mock('@lab/corpus/levels', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@lab/corpus/levels')>();
+  return { ...actual, pickLevel: vi.fn(actual.pickLevel) };
 });
 
 const cell = (id: string, index: number, sha: string | null = null): Cell => ({
@@ -37,6 +42,21 @@ const findCanvas = (container: HTMLElement) => waitFor(() => {
   expect(el).toBeTruthy();
   return el as HTMLCanvasElement;
 });
+
+// jsdom does no layout, and `useCanvasSize` measures the stage via
+// `getBoundingClientRect` rather than a ResizeObserver entry -- this stands
+// in for both, at the same 800x600 the wall's own state used to default to.
+const rect = (width: number, height: number): DOMRect => ({
+  width, height, top: 0, left: 0, right: width, bottom: height, x: 0, y: 0,
+  toJSON() { return this; },
+});
+
+beforeEach(() => {
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+    .mockReturnValue(rect(800, 600));
+});
+
+afterEach(() => { vi.restoreAllMocks(); });
 
 it('says it is loading before the cells arrive', () => {
   render(<CorpusWall client={{ cells: () => new Promise(() => {}),
@@ -98,14 +118,14 @@ it('opens on the level the initial fit asks for, and holds it through a jiggle',
   (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver =
     CapturingResizeObserver;
 
-  const fit = vi.mocked(camera.fitBounds);
-  const pick = vi.mocked(camera.pickLevel);
+  const fit = vi.mocked(core.fitViewToBounds);
+  const pick = vi.mocked(levels.pickLevel);
   fit.mockClear();
   pick.mockClear();
   // CELL(32) * 11/32 = 11px -- inside the 8/32 dead zone (10.7-24px) and
   // below the 16px boundary, so a fresh pick wants level 8. A fixed level
   // (32) held by pickLevel across this zone is exactly the pre-fix bug.
-  fit.mockImplementation(() => ({ x: 0, y: 0, scale: 11 / 32 }));
+  fit.mockImplementation(() => ({ x: 0, y: 0, scale: { x: 11 / 32, y: 11 / 32 } }));
 
   try {
     const { container } = render(<CorpusWall client={client} />);
@@ -115,9 +135,9 @@ it('opens on the level the initial fit asks for, and holds it through a jiggle',
     // yet to be hysteretic about.
     expect(pick).not.toHaveBeenCalled();
 
-    act(() => {
-      observed!([{ contentRect: { width: 801, height: 601 } }] as any, {} as any);
-    });
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue(rect(801, 601));
+    act(() => { observed!([] as unknown as ResizeObserverEntry[], {} as any); });
     await waitFor(() => expect(pick).toHaveBeenCalled());
 
     // The jiggle re-fits at the same scale; pickLevel should see the level
@@ -140,7 +160,7 @@ it('re-fits the camera when the observed size changes, but not after a wheel', a
   const original = globalThis.ResizeObserver;
   (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver =
     CapturingResizeObserver;
-  const fit = vi.mocked(camera.fitBounds);
+  const fit = vi.mocked(core.fitViewToBounds);
   fit.mockClear();
 
   try {
@@ -149,18 +169,18 @@ it('re-fits the camera when the observed size changes, but not after a wheel', a
     const initial = fit.mock.calls.length;
     expect(initial).toBeGreaterThan(0);
 
-    act(() => {
-      observed!([{ contentRect: { width: 1000, height: 700 } }] as any, {} as any);
-    });
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue(rect(1000, 700));
+    act(() => { observed!([] as unknown as ResizeObserverEntry[], {} as any); });
     await waitFor(() => expect(fit.mock.calls.length).toBeGreaterThan(initial));
 
     const stage = container.querySelector('.corpus-stage')!;
     fireEvent.wheel(stage, { deltaY: -1, clientX: 10, clientY: 10 });
     const afterWheel = fit.mock.calls.length;
 
-    act(() => {
-      observed!([{ contentRect: { width: 1200, height: 900 } }] as any, {} as any);
-    });
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue(rect(1200, 900));
+    act(() => { observed!([] as unknown as ResizeObserverEntry[], {} as any); });
     await new Promise((r) => setTimeout(r, 0));
     expect(fit.mock.calls.length).toBe(afterWheel);
   } finally {

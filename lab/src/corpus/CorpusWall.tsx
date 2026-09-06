@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  clientToCanvas, fitViewToBounds, useCanvasSize, zoomAt, type View,
+} from '@weasel-js/core';
 import type { LabClient } from '@lab/api/client';
-import { fitBounds, levelFor, pickLevel, zoomAt, type Camera } from '@lab/corpus/camera';
 import { FilterBar } from '@lab/corpus/FilterBar';
 import { gridLayout } from '@lab/corpus/layout';
+import { levelFor, pickLevel } from '@lab/corpus/levels';
 import { Lightbox } from '@lab/corpus/Lightbox';
 import { PartCard } from '@lab/corpus/PartCard';
 import { applySelection, type Selection } from '@lab/corpus/select';
@@ -17,6 +20,8 @@ import '@lab/corpus/corpus.css';
 const CELL = 32;
 const GAP = 4;
 
+const IDENTITY_VIEW: View = { x: 0, y: 0, scale: { x: 1, y: 1 } };
+
 /** The whole app, minus its mount. Exported so a labkit instrument can host it
  *  without the standalone page. */
 export function CorpusWall({ client }: { client: LabClient }) {
@@ -27,11 +32,12 @@ export function CorpusWall({ client }: { client: LabClient }) {
   const [level, setLevel] = useState(32);
   const [selection, setSelection] = useState<Selection>(
     { sort: 'id', filter: 'all' });
-  const [cam, setCam] = useState<Camera | null>(null);
+  const [cam, setCam] = useState<View | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
   const [carded, setCarded] = useState<{ cell: Cell; at: { x: number; y: number } } | null>(null);
   const box = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ width: 800, height: 600 });
+  const { width, height } = useCanvasSize(box);
+  const size = { width, height };
   const touched = useRef(false);
   const camInitialized = useRef(false);
 
@@ -48,17 +54,6 @@ export function CorpusWall({ client }: { client: LabClient }) {
   // the previous corpus and camera.scale hasn't re-fired pickLevel yet.
   useEffect(() => { setLevel(32); }, [source]);
 
-  useEffect(() => {
-    const el = box.current;
-    if (!el) return;
-    const observer = new ResizeObserver(([entry]) => {
-      if (entry) setSize({ width: entry.contentRect.width,
-                           height: entry.contentRect.height });
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [cells]);
-
   const shown = useMemo(
     () => (cells ? applySelection(cells, selection) : []),
     [cells, selection]);
@@ -68,10 +63,19 @@ export function CorpusWall({ client }: { client: LabClient }) {
     () => gridLayout(shown, { cell: CELL, gap: GAP, cols }),
     [shown, cols]);
 
+  // Fits the wall's width into the viewport and lets it run off the bottom,
+  // rather than shrinking to fit both axes -- 'fill' picks whichever axis's
+  // ratio is larger, which for a viewport wider than the wall is width's.
+  // The wall's own top-left belongs at the viewport's top-left, so only the
+  // scale from the fit is kept; centering the bounds would crop row zero.
   useEffect(() => {
     if (touched.current || laid.bounds.w <= 0) return;
-    setCam(fitBounds(laid.bounds, size));
-  }, [laid.bounds, size]);
+    if (size.width <= 0 || size.height <= 0) return;
+    const fitted = fitViewToBounds(
+      { x: 0, y: 0, width: laid.bounds.w, height: laid.bounds.h },
+      size, cam ?? IDENTITY_VIEW, { mode: 'fill', padding: 0 });
+    setCam({ x: 0, y: 0, scale: fitted.scale });
+  }, [laid.bounds.w, laid.bounds.h, size.width, size.height]);
 
   // Hysteresis governs transitions, and the first pick has nothing to be
   // hysteretic about -- the camera's first fit sets the level directly, and
@@ -79,41 +83,44 @@ export function CorpusWall({ client }: { client: LabClient }) {
   useEffect(() => {
     if (!cam) return;
     if (camInitialized.current) {
-      setLevel((current) => pickLevel(current, CELL * cam.scale));
+      setLevel((current) => pickLevel(current, CELL * cam.scale.x));
     } else {
       camInitialized.current = true;
-      setLevel(levelFor(CELL * cam.scale));
+      setLevel(levelFor(CELL * cam.scale.x));
     }
   }, [cam]);
 
   const visible = useMemo(
     () => (cam ? visibleRange(laid.rects, cam, size) : []),
-    [laid.rects, cam, size]);
+    [laid.rects, cam, size.width, size.height]);
   const loose = useLooseThumbs(shown, visible, level, source);
 
   // The 128 rung still draws from the 32px bake underneath -- a cell whose
   // loose image hasn't arrived yet needs something to show.
   const active = sheets[level === 8 ? 8 : 32] ?? null;
 
-  if (!cells) return <p className="corpus-loading">loading the corpus…</p>;
-
   return (
     <div className="corpus-app">
-      <FilterBar selection={selection} onChange={setSelection}
-                 shown={shown.length} total={cells.length}
-                 sources={sources} source={source} onSource={setSource} />
+      {/* `useCanvasSize` measures the stage once, on its own first mount --
+          it has to exist from the start, not appear once cells arrive. */}
+      {cells && (
+        <FilterBar selection={selection} onChange={setSelection}
+                   shown={shown.length} total={cells.length}
+                   sources={sources} source={source} onSource={setSource} />
+      )}
       <div className="corpus-stage" ref={box}
            onWheel={(e) => {
              if (!cam) return;
              touched.current = true;
-             const r = e.currentTarget.getBoundingClientRect();
-             setCam(zoomAt(cam, e.clientX - r.left, e.clientY - r.top,
-                           e.deltaY < 0 ? 1.1 : 1 / 1.1));
+             const [sx, sy] = clientToCanvas(e.currentTarget, e.clientX, e.clientY);
+             setCam(zoomAt(cam, { x: sx, y: sy }, e.deltaY < 0 ? 1.1 : 1 / 1.1));
            }}>
+        {!cells && <p className="corpus-loading">loading the corpus…</p>}
         {cam && (
           <Wall cells={shown} rects={laid.rects} cam={cam}
                 sheet={active?.image ?? null} manifest={active?.manifest ?? null}
                 loose={loose} width={size.width} height={size.height}
+                onPan={(next) => { touched.current = true; setCam(next); }}
                 onPick={(c, at) => setCarded({ cell: c, at })}
                 onOpen={(c) => { setCarded(null); setPicked(c.id); }} />
         )}

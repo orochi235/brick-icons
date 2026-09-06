@@ -1,5 +1,4 @@
-import type { Camera } from '@lab/corpus/camera';
-import { toScreen } from '@lab/corpus/camera';
+import { worldToScreen, viewToTransform, type View } from '@weasel-js/core';
 import type { Rect } from '@lab/corpus/layout';
 import { isStale, sourceBox } from '@lab/corpus/sheet';
 import type { Cell, SheetManifest } from '@lab/corpus/types';
@@ -35,7 +34,7 @@ export interface PaintInput {
   cells: Cell[];
   rects: Rect[];
   visible: number[];
-  cam: Camera;
+  cam: View;
   manifest: SheetManifest | null;
   loose?: Map<string, HTMLImageElement>;
 }
@@ -48,13 +47,14 @@ export interface PaintInput {
 export function paintCommands({ cells, rects, visible, cam, manifest, loose }:
                               PaintInput): PaintCommand[] {
   const out: PaintCommand[] = [];
+  const transform = viewToTransform(cam);
   for (const i of visible) {
     const cell = cells[i];
     const rect = rects[i];
     if (!cell || !rect) continue;
-    const { x: dx, y: dy } = toScreen(cam, rect.x, rect.y);
-    const dw = rect.w * cam.scale;
-    const dh = rect.h * cam.scale;
+    const [dx, dy] = worldToScreen(rect.x, rect.y, transform);
+    const dw = rect.w * cam.scale.x;
+    const dh = rect.h * cam.scale.y;
     const ring = cell.open_defects > 0;
     const image = loose?.get(cell.id);
     if (image) {
