@@ -245,6 +245,17 @@ the count `CENSUS-RUN2.md` records as never attempted. **Beware the run ids:**
 run 1 in the database is `out/census`, the live tree; the archive is run 3.
 Read `args.dir`, never the id.
 
+**The database cannot tell you which code produced a timing, and two traps
+follow.** `runs.commit_sha` is whatever was checked out when the *rebuild* ran,
+not what produced the rows — it says nothing about the engine that timed them.
+And a run is a directory, so job `62bb81bd`'s pre-fix rows sit in `out/census`
+beside the backfill's HEAD rows and share a run id. Comparing engines off the
+database alone therefore reads occt as 1.16x slower than naive when it is
+about 2.5x faster; `scripts/census-plot-engines.py` reads the HEAD timings from
+`out/census/backfill/*.jsonl` directly for that reason. Accuracy is unaffected
+— the SVG is byte-identical across the perf commits — this is a timings-only
+hazard.
+
 A part drawn by two trees under one engine is **one row**, won by whichever
 tree sorts last — the nodes run an engine each so nothing collides today, but
 an archive carrying renders would, and the render total would not move. The
