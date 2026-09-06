@@ -24,8 +24,9 @@ PART_STATUSES = ("unreviewed", "good", "suspect", "broken", "wontfix")
 # Part categories the project is not trying to draw yet. A rule over the
 # library's own category, not a list of ids: it covers parts nobody has seen
 # yet, and it is not a judgment about any one part, so it stays out of
-# `parts.status` and its hand-written record.
-OUT_OF_SCOPE_CATEGORIES = ("Sticker",)
+# `parts.status` and its hand-written record. `|` is LDraw's mark for a part
+# nobody at LEGO made -- third-party electronics and wheels that fit LEGO.
+OUT_OF_SCOPE_CATEGORIES = ("Sticker", "|")
 SOURCES = ("naive", "occt", "decal", "ldview",
            "census-naive", "census-occt",
            "census-white-naive", "census-white-occt")
