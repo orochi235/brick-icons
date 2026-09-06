@@ -10,7 +10,7 @@ body { margin: 0; }
   /* What every render is drawn on, canvas and DOM alike -- `THUMB_GROUND`
    * in paint.ts is the canvas's copy. */
   --corpus-thumb-ground: #ffffff;
-  --corpus-thumb-ground-retired: #e9e9e9;
+  --corpus-thumb-ground-retired: #d8d8d8;
 
   --corpus-cell-unknown-fill: #3a3a3f;
   --corpus-cell-out-of-scope-fill: #241a38;

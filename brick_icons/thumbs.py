@@ -21,15 +21,14 @@ LOOSE_LEVEL = 128
 GUTTER = 2
 LEVELS = (*SHEET_LEVELS, LOOSE_LEVEL)
 BAKED = "baked.json"
-GROUNDS = "grounds.json"
 
-#: The ground a thumbnail is fitted onto, mirrored by `THUMB_GROUND` in
+#: The ground every thumbnail is fitted onto, mirrored by `THUMB_GROUND` in
 #: lab/src/corpus/paint.ts -- the wall's vector rung rasterizes the SVG itself
-#: and has no bake to inherit this from.
+#: and has no bake to inherit this from. One ground for every part: what a
+#: retired cell looks like is the viewer's business, and baking it meant a
+#: full rebake to change the shade and a stale one the day a part retires.
 GROUND = (255, 255, 255, 255)
 
-#: What a retired part sits on instead, mirrored by `RETIRED_GROUND` there.
-RETIRED_GROUND = (233, 233, 233, 255)
 
 
 @dataclass(frozen=True)
@@ -93,35 +92,21 @@ def baked_shas(out: Path | str) -> dict[str, str]:
     return _read_json(Path(out) / BAKED)
 
 
-def baked_grounds(out: Path | str) -> dict[str, list[int]]:
-    """What ground each part was last baked on.
-
-    Its own sidecar because `baked.json` is copied into the sheet manifest and
-    the wall compares those values to a render sha -- anything else in there
-    would read as a stale cell.
-    """
-    return _read_json(Path(out) / GROUNDS)
-
 
 def _write_baked(out: Path, shas: dict[str, str]) -> None:
     _write_json(out / BAKED, shas)
 
 
 def bake_part(part_id: str, svg: Path | str, out: Path | str,
-              sha: str, ground: tuple[int, int, int, int] = GROUND) -> list[int]:
+              sha: str) -> list[int]:
     """Rasterize one part at every level. Returns the levels written.
 
-    An unchanged sha on an unchanged ground writes nothing: this runs after
-    every batch of renders, and the corpus it has already baked is the
-    overwhelming majority of it.
+    An unchanged sha writes nothing: this runs after every batch of renders,
+    and the corpus it has already baked is the overwhelming majority of it.
     """
     out = Path(out)
     shas = baked_shas(out)
-    grounds = baked_grounds(out)
-    # A part baked before grounds were recorded was baked on `GROUND`, so a
-    # missing entry is not a reason to redo the whole corpus once.
-    if (shas.get(part_id) == sha
-            and grounds.get(part_id, list(GROUND)) == list(ground)):
+    if shas.get(part_id) == sha:
         return []
     # resvg is the project's antialias reference -- the same rasterizer the
     # census, the contact sheet and the differ use. It has no letterbox flag
@@ -141,11 +126,10 @@ def bake_part(part_id: str, svg: Path | str, out: Path | str,
         for level in LEVELS:
             path = out / str(level) / f"{part_id}.png"
             path.parent.mkdir(parents=True, exist_ok=True)
-            _square(drawn, level, ground).save(path)
+            _square(drawn, level).save(path)
     finally:
         wide.unlink(missing_ok=True)
     _write_baked(out, {**shas, part_id: sha})
-    _write_json(out / GROUNDS, {**grounds, part_id: list(ground)})
     return list(LEVELS)
 
 
@@ -197,9 +181,8 @@ def _replicate_edges(sheet: Image.Image, cell: Image.Image,
         sheet.paste(cell.crop((w - 1, 0, w, h)), (x0 + w + d - 1, y0))
 
 
-def _square(drawn: Image.Image, level: int,
-            ground: tuple[int, int, int, int] = GROUND) -> Image.Image:
-    """Fit a render inside an opaque `ground` square of `level` px.
+def _square(drawn: Image.Image, level: int) -> Image.Image:
+    """Fit a render inside an opaque `GROUND` square of `level` px.
 
     Opaque, because a render is black ink on transparency and the wall's
     background follows the weasel theme -- a transparent thumbnail is invisible
@@ -208,7 +191,7 @@ def _square(drawn: Image.Image, level: int,
     """
     scale = level / max(drawn.size)
     size = (max(1, round(drawn.width * scale)), max(1, round(drawn.height * scale)))
-    cell = Image.new("RGBA", (level, level), ground)
+    cell = Image.new("RGBA", (level, level), GROUND)
     fitted = drawn.resize(size, Image.LANCZOS)
     cell.paste(fitted, ((level - size[0]) // 2, (level - size[1]) // 2), fitted)
     return cell

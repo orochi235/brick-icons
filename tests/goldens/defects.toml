@@ -114,3 +114,19 @@ status = "open"
 title = "stray stroke tips across the darkest face"
 filed = "2026-09-04"
 notes = "May be the same constant-width stroke class; not measured yet."
+
+[[defect]]
+id = "35480-extra-elements-in-shaded-view"
+part = "35480"
+engines = ["occt"]
+status = "open"
+title = "extra elements in shaded view"
+filed = "2026-09-06"
+
+[[defect]]
+id = "24434-extra-diagonal-under-closer-arch"
+part = "24434"
+engines = ["naive"]
+status = "open"
+title = "extra diagonal under closer arch"
+filed = "2026-09-06"

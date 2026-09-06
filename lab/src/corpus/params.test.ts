@@ -31,6 +31,9 @@ const PRE_TASK_LITERALS: Params = {
   thinBorderFactor: 0.09,
   maxBorderPx: 6,
   dimAlpha: 0.25,
+  // Post-snapshot, like the out-of-scope fill: the wash replaced a ground
+  // that used to be baked into the sprites.
+  retiredWash: 0.35,
 
   dragThresholdPx: 4,
   levelUpHysteresis: 1.5,

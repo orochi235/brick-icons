@@ -177,7 +177,9 @@ export function CorpusWall({ client }: { client: LabClient }) {
   const appearance = useMemo(() => ({
     thickBorderFactor: params.thickBorderFactor, thinBorderFactor: params.thinBorderFactor,
     maxBorderPx: params.maxBorderPx, dimAlpha: params.dimAlpha,
-  }), [params.thickBorderFactor, params.thinBorderFactor, params.maxBorderPx, params.dimAlpha]);
+    retiredWash: params.retiredWash,
+  }), [params.thickBorderFactor, params.thinBorderFactor, params.maxBorderPx,
+       params.dimAlpha, params.retiredWash]);
 
   return (
     <LabShell title="brick-icons corpus"

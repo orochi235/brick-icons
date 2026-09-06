@@ -9,7 +9,8 @@ import {
 import { LoupeBubble, resolveLoupe, useLoupe } from '@weasel-js/labkit/loupe';
 import { adjacent, impliedCaret, type Direction } from '@lab/corpus/caret';
 import type { Rect } from '@lab/corpus/layout';
-import { paintCommands, type Appearance, type PaintCommand } from '@lab/corpus/paint';
+import { paintCommands, RETIRED_WASH, THUMB_GROUND, type Appearance, type CellBadge,
+  type PaintCommand } from '@lab/corpus/paint';
 import { DEFAULT_PALETTE, readPalette, type CellState, type Palette } from '@lab/corpus/palette';
 import { DEFAULT_PARAMS } from '@lab/corpus/params';
 import { panToReveal } from '@lab/corpus/reveal';
@@ -95,29 +96,56 @@ function strokeCaret(ctx: CanvasRenderingContext2D,
   ctx.restore();
 }
 
-// A filled disc in the bottom-right corner, on the letterbox margin rather
-// than the drawing, which is centered. Reversed out so it reads over ink and
-// over the white ground alike -- dark gray rather than black, which sat on a
-// line drawing like a hole punched in it.
-const BADGE_FIELD = '#4a4a4f';
-const BADGE_INK = '#ffffff';
-
-function drawBadge(ctx: CanvasRenderingContext2D, letter: string,
+// A filled disc in one corner, on the letterbox margin rather than the
+// drawing, which is centered. Reversed out so it reads over ink and over the
+// white ground alike.
+function drawBadge(ctx: CanvasRenderingContext2D, badge: CellBadge,
                    cmd: { dx: number; dy: number; dw: number; dh: number }) {
   const size = Math.max(9, Math.min(20, cmd.dw * 0.14));
   const radius = size * 0.72;
-  const cx = cmd.dx + cmd.dw - radius - size * 0.3;
-  const cy = cmd.dy + cmd.dh - radius - size * 0.3;
+  const inset = radius + size * 0.3;
+  const cx = badge.corner === 'br' ? cmd.dx + cmd.dw - inset : cmd.dx + inset;
+  const cy = badge.corner === 'br' ? cmd.dy + cmd.dh - inset : cmd.dy + inset;
   ctx.save();
   ctx.beginPath();
   ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-  ctx.fillStyle = BADGE_FIELD;
+  ctx.fillStyle = badge.field;
   ctx.fill();
   ctx.font = `600 ${size}px ui-monospace, monospace`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillStyle = BADGE_INK;
-  ctx.fillText(letter, cx, cy + size * 0.06);
+  ctx.fillStyle = badge.ink;
+  ctx.fillText(badge.text, cx, cy + size * 0.06);
+  ctx.restore();
+}
+
+// The years, across the top of a cell big enough to read them on. Drawn on a
+// pill of the cell's own ground so it never lands on the drawing's own ink.
+function drawLabel(ctx: CanvasRenderingContext2D, text: string, ground: string,
+                   cmd: { dx: number; dy: number; dw: number; dh: number }) {
+  const size = Math.max(10, Math.min(18, cmd.dw * 0.1));
+  const cx = cmd.dx + cmd.dw / 2;
+  const cy = cmd.dy + size * 0.9;
+  ctx.save();
+  ctx.font = `${size}px ui-monospace, monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const wide = ctx.measureText(text).width + size * 0.8;
+  ctx.fillStyle = ground;
+  ctx.fillRect(cx - wide / 2, cmd.dy + size * 0.2, wide, size * 1.4);
+  ctx.fillStyle = '#4a4a4f';
+  ctx.fillText(text, cx, cy);
+  ctx.restore();
+}
+
+// Flattens a retired cell toward the wash color: white goes gray, ink goes
+// gray, and the whole thumbnail drops in contrast without a second bake.
+function washCell(ctx: CanvasRenderingContext2D, wash: number,
+                  cmd: { dx: number; dy: number; dw: number; dh: number }) {
+  ctx.save();
+  ctx.globalAlpha = (ctx.globalAlpha || 1) * wash;
+  ctx.fillStyle = RETIRED_WASH;
+  ctx.fillRect(cmd.dx, cmd.dy, cmd.dw, cmd.dh);
   ctx.restore();
 }
 
@@ -133,10 +161,12 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
     ctx.save();
     ctx.globalAlpha = cmd.alpha ?? 1;
     ctx.drawImage(sheet, cmd.sx, cmd.sy, cmd.sw, cmd.sh, dx, dy, cmd.dw, cmd.dh);
+    if (cmd.wash) washCell(ctx, cmd.wash, { ...cmd, dx, dy });
     strokeBorder(ctx, { ...cmd, dx, dy });
     // After the border, not before: the badge sits in the corner the frame
     // runs through, and it is the badge that has to stay readable.
-    if (cmd.badge) drawBadge(ctx, cmd.badge, { ...cmd, dx, dy });
+    if (cmd.label) drawLabel(ctx, cmd.label, THUMB_GROUND, { ...cmd, dx, dy });
+    for (const badge of cmd.badges ?? []) drawBadge(ctx, badge, { ...cmd, dx, dy });
     ctx.restore();
     if (cmd.caret) strokeCaret(ctx, { ...cmd, dx, dy }, palette);
   } else if (cmd.kind === 'image') {
@@ -150,10 +180,12 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
     // ground; a baked PNG is opaque, so its frame has to go on top or vanish.
     if (cmd.translucent) strokeBorder(ctx, { ...cmd, dx, dy });
     ctx.drawImage(cmd.image, dx, dy, cmd.dw, cmd.dh);
+    if (cmd.wash) washCell(ctx, cmd.wash, { ...cmd, dx, dy });
     if (!cmd.translucent) strokeBorder(ctx, { ...cmd, dx, dy });
     // After the border, not before: the badge sits in the corner the frame
     // runs through, and it is the badge that has to stay readable.
-    if (cmd.badge) drawBadge(ctx, cmd.badge, { ...cmd, dx, dy });
+    if (cmd.label) drawLabel(ctx, cmd.label, THUMB_GROUND, { ...cmd, dx, dy });
+    for (const badge of cmd.badges ?? []) drawBadge(ctx, badge, { ...cmd, dx, dy });
     ctx.restore();
     if (cmd.caret) strokeCaret(ctx, { ...cmd, dx, dy }, palette);
   } else if (cmd.kind === 'fill') {

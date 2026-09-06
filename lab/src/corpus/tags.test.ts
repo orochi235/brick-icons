@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { yearRange } from '@lab/corpus/tags';
+import { yearRange } from '@lab/corpus/years';
 
 it('leaves a part still being made without an end year', () => {
   expect(yearRange(1979, 2026, false)).toBe('1979–');

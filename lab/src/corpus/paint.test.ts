@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
-import { badgeFor, cellState, fillFor, groundFor, paintCommands, tally,
-  RETIRED_GROUND, THUMB_GROUND } from '@lab/corpus/paint';
+import { badgesFor, cellState, fillFor, labelFor, paintCommands, tally,
+  THUMB_GROUND } from '@lab/corpus/paint';
 import { CELL_STATES, DEFAULT_PALETTE as CELL_FILL, type CellState } from '@lab/corpus/palette';
 import type { Cell, SheetManifest } from '@lab/corpus/types';
 
@@ -92,7 +92,7 @@ it('draws a whole loose image when one is loaded for the cell', () => {
   });
   expect(cmd).toEqual({ kind: 'image', dx: 0, dy: 0, dw: 10, dh: 10, image: img,
                         ground: THUMB_GROUND, translucent: false, border: null,
-                        borderWidth: 0 });
+                        borderWidth: 0, badges: [], label: undefined, wash: undefined });
 });
 
 it('grounds a vector cell on what the thumbnails were baked against', () => {
@@ -348,11 +348,19 @@ it('lets a cell carry both the defect frame and the caret', () => {
   expect(cmd).toMatchObject({ border: CELL_FILL.defect.border, caret: true });
 });
 
-it('badges a retired cell once it is drawn big enough to hold one', () => {
-  const retired = cell('a', 0, 'sha-a', { tags: ['retired'] });
-  expect(badgeFor(retired, 200)).toBe('R');
-  expect(badgeFor(retired, 20)).toBeNull();
-  expect(badgeFor(cell('b', 1, 'sha-b', { tags: ['popular'] }), 200)).toBeNull();
+it('badges a cell once it is drawn big enough to hold one, one tag per corner', () => {
+  const both = cell('a', 0, 'sha-a', { tags: ['retired', 'popular'] });
+  expect(badgesFor(both, 200).map((b) => [b.text, b.corner]))
+    .toEqual([['R', 'br'], ['P', 'tl']]);
+  expect(badgesFor(both, 20)).toEqual([]);
+  expect(badgesFor(cell('b', 1, 'sha-b', { tags: ['minifig'] }), 200)).toEqual([]);
+});
+
+it('writes the years across a cell drawn large, and nothing on a small one', () => {
+  const part = cell('a', 0, 'sha-a', { year_from: 1979, year_to: 2026 });
+  expect(labelFor(part, 200)).toBe('1979–');
+  expect(labelFor(part, 60)).toBeNull();
+  expect(labelFor(cell('b', 1, 'sha-b'), 200)).toBeNull();
 });
 
 it('carries the badge on the drawn cell, not the empty one', () => {
@@ -361,7 +369,7 @@ it('carries the badge on the drawn cell, not the empty one', () => {
     cells, rects, visible: [0], cam: { x: 0, y: 0, scale: { x: 20, y: 20 } },
     palette: CELL_FILL, manifest, loose: new Map([['a', {} as HTMLImageElement]]),
   });
-  expect(cmd).toMatchObject({ kind: 'image', badge: 'R' });
+  expect(cmd).toMatchObject({ kind: 'image', badges: [{ text: 'R', corner: 'br' }] });
 });
 
 it('strikes every undrawn cell with a border, and leaves the quiet ones alone', () => {
@@ -379,13 +387,18 @@ it('strikes every undrawn cell with a border, and leaves the quiet ones alone', 
   expect(struck({}).slash).toBe(false);
 });
 
-it('sits a retired part on its own ground, at the rung the wall rasterizes', () => {
-  expect(groundFor(cell('a', 0, null))).toBe(THUMB_GROUND);
-  expect(groundFor(cell('b', 1, null, { tags: ['retired'] }))).toBe(RETIRED_GROUND);
-  const [cmd] = paintCommands({
+it('washes a retired cell rather than baking it a ground of its own', () => {
+  const [plain] = paintCommands({
+    cells: [cell('a', 0, 'sha-a')], rects, visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest,
+    vector: new Map([['a', {} as CanvasImageSource]]),
+  });
+  expect(plain).toMatchObject({ ground: THUMB_GROUND, wash: undefined });
+  const [retired] = paintCommands({
     cells: [cell('b', 1, 'sha-b', { tags: ['retired'] })], rects, visible: [0],
     cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest,
     vector: new Map([['b', {} as CanvasImageSource]]),
   });
-  expect(cmd).toMatchObject({ kind: 'image', ground: RETIRED_GROUND, translucent: true });
+  expect(retired).toMatchObject({ ground: THUMB_GROUND, translucent: true });
+  expect((retired as { wash?: number }).wash).toBeGreaterThan(0);
 });

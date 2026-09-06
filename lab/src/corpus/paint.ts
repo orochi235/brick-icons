@@ -4,6 +4,7 @@ import { CELL_STATES, type CellState, type CellStyle, type Palette } from '@lab/
 import { DEFAULT_PARAMS } from '@lab/corpus/params';
 import { isStale, sourceBox } from '@lab/corpus/sheet';
 import type { Cell, SheetManifest } from '@lab/corpus/types';
+import { yearRange } from '@lab/corpus/years';
 
 export type { CellStyle } from '@lab/corpus/palette';
 
@@ -45,6 +46,7 @@ export interface Appearance {
   thinBorderFactor: number;
   maxBorderPx: number;
   dimAlpha: number;
+  retiredWash: number;
 }
 
 const DEFAULT_APPEARANCE: Appearance = {
@@ -52,6 +54,7 @@ const DEFAULT_APPEARANCE: Appearance = {
   thinBorderFactor: DEFAULT_PARAMS.thinBorderFactor,
   maxBorderPx: DEFAULT_PARAMS.maxBorderPx,
   dimAlpha: DEFAULT_PARAMS.dimAlpha,
+  retiredWash: DEFAULT_PARAMS.retiredWash,
 };
 
 function borderWidthFor(weight: CellStyle['weight'], cellPx: number,
@@ -68,40 +71,57 @@ function borderWidthFor(weight: CellStyle['weight'], cellPx: number,
  *  wall's dark canvas. */
 export const THUMB_GROUND = '#ffffff';
 
-/** What a retired part sits on instead -- `thumbs.RETIRED_GROUND` bakes the
- *  same value into the sprites, so a cell does not change shade as it crosses
- *  from a bake to the vector rung. */
-export const RETIRED_GROUND = '#e9e9e9';
-
-export function groundFor(cell: Cell): string {
-  return cell.tags?.includes('retired') ? RETIRED_GROUND : THUMB_GROUND;
-}
+/** What a retired cell is washed with, over the drawing rather than under it:
+ *  every rung draws the same white bake, and the viewer decides how faded a
+ *  retired part looks. Baking a second ground meant a full rebake to change
+ *  the shade, and a part retiring later kept the wrong one until someone
+ *  noticed. */
+export const RETIRED_WASH = '#d8d8d8';
 
 /** Below this drawn size a cell has no room for a badge without covering the
- *  drawing it is about. */
+ *  drawing it is about; the year needs more room still, being words. */
 export const BADGE_MIN_PX = 56;
+export const LABEL_MIN_PX = 110;
 
-/** The tags that earn a corner letter on the wall itself, and the letter
- *  each gets. The detail views show every tag in words; the wall has room
- *  for the one that changes how a drawing should be read. */
-export const BADGE_LETTERS: Record<string, string> = { retired: 'R' };
+export interface CellBadge {
+  text: string;
+  corner: 'tl' | 'br';
+  field: string;
+  ink: string;
+}
 
-/** The letter a drawn cell wears in its corner, if any. */
-export function badgeFor(cell: Cell, cellPx: number,
-                         minPx = BADGE_MIN_PX): string | null {
+/** The tags that earn a corner disc on the wall itself. The detail views
+ *  show every tag in words; the wall has room for the two that change how a
+ *  drawing should be read, one corner each so they never collide. */
+export const BADGES: Record<string, CellBadge> = {
+  retired: { text: 'R', corner: 'br', field: '#6b6b72', ink: '#ffffff' },
+  popular: { text: 'P', corner: 'tl', field: '#7c5cff', ink: '#ffffff' },
+};
+
+export function isRetired(cell: Cell): boolean {
+  return cell.tags?.includes('retired') ?? false;
+}
+
+/** The discs a drawn cell wears, if it is drawn big enough to hold them. */
+export function badgesFor(cell: Cell, cellPx: number,
+                          minPx = BADGE_MIN_PX): CellBadge[] {
+  if (cellPx < minPx) return [];
+  return (cell.tags ?? []).map((tag) => BADGES[tag]).filter((b): b is CellBadge => !!b);
+}
+
+/** The years written across the top of a cell, once it is big enough that
+ *  they are readable rather than a smudge. */
+export function labelFor(cell: Cell, cellPx: number,
+                         minPx = LABEL_MIN_PX): string | null {
   if (cellPx < minPx) return null;
-  for (const tag of cell.tags) {
-    const letter = BADGE_LETTERS[tag];
-    if (letter) return letter;
-  }
-  return null;
+  return yearRange(cell.year_from, cell.year_to, isRetired(cell));
 }
 
 export type PaintCommand =
   | { kind: 'sprite'; dx: number; dy: number; dw: number; dh: number;
       sx: number; sy: number; sw: number; sh: number;
       border: string | null; borderWidth: number; alpha?: number;
-      caret?: boolean; badge?: string }
+      caret?: boolean; badges?: CellBadge[]; label?: string; wash?: number }
   | { kind: 'fill'; dx: number; dy: number; dw: number; dh: number;
       fill: string; border: string | null; borderWidth: number;
       /** Struck corner to corner in the border's own color and width. Every
@@ -110,13 +130,13 @@ export type PaintCommand =
        *  and an empty cell is the one that has something to say. */
       slash: boolean; caret?: boolean }
   | { kind: 'image'; dx: number; dy: number; dw: number; dh: number;
-      image: CanvasImageSource; ground: string;
+      image: CanvasImageSource; ground: string; wash?: number;
       /** The vector rung's rasters are ink on transparency, so the ground and
        *  the state's frame both show through them. A baked PNG carries its
        *  own opaque ground and hides anything drawn under it. */
       translucent: boolean;
       border: string | null; borderWidth: number; alpha?: number;
-      caret?: boolean; badge?: string };
+      caret?: boolean; badges?: CellBadge[]; label?: string };
 
 export interface PaintInput {
   cells: Cell[];
@@ -167,13 +187,15 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
     const style = dimmed ? palette.unknown : palette[state];
     const border = style.border;
     const borderWidth = borderWidthFor(style.weight, dw, appearance);
-    const badge = badgeFor(cell, dw) ?? undefined;
+    const badges = badgesFor(cell, dw);
+    const label = labelFor(cell, dw) ?? undefined;
+    const wash = isRetired(cell) ? appearance.retiredWash : undefined;
     const vectored = vector?.get(cell.id);
     const image = vectored ?? loose?.get(cell.id);
     if (image) {
-      out.push({ kind: 'image', dx, dy, dw, dh, image, ground: groundFor(cell),
+      out.push({ kind: 'image', dx, dy, dw, dh, image, ground: THUMB_GROUND,
                  translucent: vectored !== undefined,
-                 border, borderWidth, alpha, caret: isCaret, badge });
+                 border, borderWidth, alpha, caret: isCaret, badges, label, wash });
       continue;
     }
     const box = manifest && cell.sha && !isStale(manifest, cell)
@@ -181,7 +203,7 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
       : null;
     if (box) {
       out.push({ kind: 'sprite', dx, dy, dw, dh, ...box, border, borderWidth, alpha,
-                 caret: isCaret, badge });
+                 caret: isCaret, badges, label, wash });
       continue;
     }
     out.push({ kind: 'fill', dx, dy, dw, dh, fill: style.fill, border, borderWidth,

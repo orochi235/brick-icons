@@ -30,6 +30,7 @@ export interface Params {
   thinBorderFactor: number;
   maxBorderPx: number;
   dimAlpha: number;
+  retiredWash: number;
 
   dragThresholdPx: number;
   levelUpHysteresis: number;
@@ -66,6 +67,7 @@ export const DEFAULT_PARAMS: Params = {
   thinBorderFactor: 0.09,
   maxBorderPx: 6,
   dimAlpha: 0.25,
+  retiredWash: 0.35,
 
   dragThresholdPx: 4,
   levelUpHysteresis: 1.5,
@@ -133,6 +135,8 @@ export const APPEARANCE_FIELDS: ConfigField[] = [
     default: DEFAULT_PARAMS.maxBorderPx, min: 1, max: 20, step: 1 },
   { key: 'dimAlpha', label: 'Dim alpha', type: 'slider',
     default: DEFAULT_PARAMS.dimAlpha, min: 0, max: 1, step: 0.05 },
+  { key: 'retiredWash', label: 'Retired wash', type: 'slider',
+    default: DEFAULT_PARAMS.retiredWash, min: 0, max: 1, step: 0.05 },
 ];
 
 export const FEEL_FIELDS: ConfigField[] = [
