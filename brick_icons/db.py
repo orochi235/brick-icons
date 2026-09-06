@@ -19,7 +19,7 @@ from brick_icons.lab import cache, partindex
 from brick_icons.lab import defects as defects_toml
 
 DEFAULT_PATH = Path("corpus.db")
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 PART_STATUSES = ("unreviewed", "good", "suspect", "broken", "wontfix")
 # Part categories the project is not trying to draw yet. A rule over the
 # library's own category, not a list of ids: it covers parts nobody has seen
@@ -112,6 +112,15 @@ CREATE TABLE IF NOT EXISTS part_years (
   year_to INTEGER,
   sets INTEGER NOT NULL DEFAULT 0,
   matched TEXT NOT NULL
+);
+
+-- The part that replaced this one, from Rebrickable's part_relationships
+-- dump. LDraw records no such thing: `~Moved to` is a file rename, and 2780
+-- has no redirect because 2780 and 61332 are genuinely different parts.
+CREATE TABLE IF NOT EXISTS part_successors (
+  part_id TEXT PRIMARY KEY,
+  successor TEXT NOT NULL,
+  rel TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS measurements_by_part ON measurements(part_id, engine);
@@ -340,6 +349,19 @@ def set_status(conn: sqlite3.Connection, part_id: str, status: str,
         "UPDATE parts SET status=?, status_note=?, status_at=? WHERE id=?",
         (status, note, now(), part_id))
     conn.commit()
+
+
+def import_part_successors(conn: sqlite3.Connection, path: Path | str) -> int:
+    """Load `scripts/fetch-part-years.py`'s successor CSV into
+    `part_successors`."""
+    with Path(path).open(newline="") as fh:
+        rows = [(r["part_id"], r["successor"], r["rel"])
+                for r in csv.DictReader(fh)]
+    conn.executemany(
+        "INSERT OR REPLACE INTO part_successors (part_id, successor, rel) "
+        "VALUES (?, ?, ?)", rows)
+    conn.commit()
+    return len(rows)
 
 
 def import_part_years(conn: sqlite3.Connection, path: Path | str) -> int:

@@ -33,10 +33,43 @@ def test_a_part_in_one_set_is_obscure():
                                       sets=1, this_year=2026)
 
 
-def test_a_sideline_theme_is_obscure_however_many_sets_it_had():
-    assert "obscure" in tags.tags_for("Fabuland", False, False, year_to=1985,
-                                      sets=90, this_year=2026)
-    assert "obscure" in tags.tags_for("Modulex", False, False)
+def test_a_sideline_theme_is_weird_however_many_sets_it_had():
+    assert "weird" in tags.tags_for("Figure", False, False, year_to=1985,
+                                    sets=90, this_year=2026,
+                                    title="~Figure Fabuland Neck")
+    assert "weird" in tags.tags_for(None, False, False, title="Modulex Brick 1 x 1")
+
+
+def test_a_theme_named_deep_in_a_description_is_describing_a_picture():
+    # 363 Fabuland parts are filed under `Figure`, so the category cannot find
+    # them -- but "Tile 1 x 1 with Rainbow and Cloud Pattern" is not a Cloud
+    # part, which is why only the opening words count.
+    assert not tags.is_weird("Tile  1 x  1 with Rainbow and Cloud Pattern")
+    assert not tags.is_weird("Sticker  3.0 x  3.6 with Airplane above Sun and Clouds")
+    assert tags.is_weird("Mursten Window Pane  1 x  4 x  2")
+
+
+def test_electric_and_magnet_come_from_the_category():
+    assert "electric" in tags.tags_for("Electric", False, False)
+    assert "magnet" in tags.tags_for("~Magnet", False, False)
+
+
+def test_an_assembly_is_composite():
+    assert "composite" in tags.tags_for("Brick", False, False, part_id="3815c01")
+    assert "composite" not in tags.tags_for("Brick", False, False, part_id="3001")
+
+
+def test_a_replaced_part_is_updated_rather_than_retired():
+    stopped = dict(year_to=2021, sets=2492, this_year=2026)
+    assert "retired" in tags.tags_for("Electric", False, False, **stopped)
+    replaced = tags.tags_for("Electric", False, False, successor="61332", **stopped)
+    assert "updated" in replaced
+    assert "retired" not in replaced
+
+
+def test_a_part_still_being_made_is_neither_however_many_successors():
+    assert tags.tags_for("Brick", False, False, year_to=2026, sets=50,
+                         this_year=2026, successor="99999") == []
 
 
 def test_an_uncatalogued_part_is_neither_popular_nor_obscure():

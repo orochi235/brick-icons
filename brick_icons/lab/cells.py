@@ -121,6 +121,8 @@ def cells(conn: sqlite3.Connection, source: str = "census-naive",
     defects = _open_defects(conn, wanted, engine)
     years = {r["part_id"]: r for r in conn.execute(
         "SELECT part_id, year_from, year_to, sets FROM part_years")}
+    successors = {r["part_id"]: r["successor"] for r in conn.execute(
+        "SELECT part_id, successor FROM part_successors")}
 
     rows = []
     marks = ",".join("?" * len(wanted)) if wanted else "NULL"
@@ -138,6 +140,7 @@ def cells(conn: sqlite3.Connection, source: str = "census-naive",
         measure = measures.get(pid)
         bucket = defects.get(pid, _NO_DEFECTS)
         year = years.get(pid)
+        successor = successors.get(pid)
         rows.append({
             "id": pid,
             "index": index[pid],
@@ -153,10 +156,14 @@ def cells(conn: sqlite3.Connection, source: str = "census-naive",
             "year_from": year["year_from"] if year else None,
             "year_to": year["year_to"] if year else None,
             "sets": year["sets"] if year else None,
+            # The part that replaced this one, where one is known: the wall's
+            # updated badge links to it.
+            "successor": successor,
             "tags": part_tags.tags_for(
                 part["category"], bool(part["printed"]), bool(part["obsolete"]),
                 year["year_to"] if year else None,
-                year["sets"] if year else None),
+                year["sets"] if year else None,
+                title=part["title"], part_id=pid, successor=successor),
             "status": part["status"],
             "sha": render["sha256"] if render else None,
             "made_at": render["made_at"] if render else None,

@@ -9,8 +9,9 @@ import {
 import { LoupeBubble, resolveLoupe, useLoupe } from '@weasel-js/labkit/loupe';
 import { adjacent, impliedCaret, type Direction } from '@lab/corpus/caret';
 import type { Rect } from '@lab/corpus/layout';
-import { paintCommands, RETIRED_WASH, type Appearance, type CellBadge,
-  type CellCaption, type PaintCommand } from '@lab/corpus/paint';
+import { badgeGeometry, captionSize, cornerPad, LINKED_BADGE, paintCommands,
+  RETIRED_WASH, stripGeometry, type Appearance, type CellBadge, type CellCaption,
+  type PaintCommand } from '@lab/corpus/paint';
 import { DEFAULT_PALETTE, readPalette, type CellState, type Palette } from '@lab/corpus/palette';
 import { DEFAULT_PARAMS } from '@lab/corpus/params';
 import { panToReveal } from '@lab/corpus/reveal';
@@ -136,24 +137,126 @@ function drawStar(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: numb
   ctx.fill();
 }
 
+// An archive box: a body and the lid band across its top. Retired now means
+// put away rather than replaced -- `updated` took the parts that had a
+// successor -- so the box says stored, not dead.
+function drawArchive(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+  ctx.fillRect(cx - r, cy - r, r * 2, r * 0.62);
+  ctx.fillRect(cx - r * 0.82, cy - r * 0.2, r * 1.64, r * 1.2);
+}
+
+// A clockwise curved arrow -- redo, not undo. Drawn rather than typed: the
+// arrow glyphs are unreliable in a monospace face.
+function drawRedo(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+  ctx.save();
+  ctx.strokeStyle = ctx.fillStyle;
+  ctx.lineWidth = Math.max(1, r * 0.36);
+  ctx.lineCap = 'butt';
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.72, Math.PI * 0.85, Math.PI * 0.25, false);
+  ctx.stroke();
+  const hx = cx + Math.cos(Math.PI * 0.25) * r * 0.72;
+  const hy = cy + Math.sin(Math.PI * 0.25) * r * 0.72;
+  ctx.beginPath();
+  ctx.moveTo(hx + r * 0.52, hy - r * 0.1);
+  ctx.lineTo(hx - r * 0.24, hy - r * 0.46);
+  ctx.lineTo(hx - r * 0.16, hy + r * 0.5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+// A lightning bolt. A zigzag silhouette is the shape that survives the mark
+// budget best -- 4.3px at the badge floor.
+function drawBolt(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+  ctx.beginPath();
+  ctx.moveTo(cx + r * 0.34, cy - r);
+  ctx.lineTo(cx - r * 0.62, cy + r * 0.14);
+  ctx.lineTo(cx - r * 0.04, cy + r * 0.14);
+  ctx.lineTo(cx - r * 0.34, cy + r);
+  ctx.lineTo(cx + r * 0.62, cy - r * 0.18);
+  ctx.lineTo(cx + r * 0.02, cy - r * 0.18);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// A horseshoe magnet as mass rather than line: a thick arc with two square
+// feet. A real horseshoe reads by its two-tone poles, which a single-ink
+// badge has no way to draw, so the closed top and the gap carry it instead.
+function drawMagnet(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+  ctx.save();
+  ctx.strokeStyle = ctx.fillStyle;
+  ctx.lineWidth = r * 0.46;
+  ctx.beginPath();
+  ctx.arc(cx, cy - r * 0.1, r * 0.62, Math.PI, 0, false);
+  ctx.stroke();
+  ctx.restore();
+  ctx.fillRect(cx - r * 0.85, cy - r * 0.1, r * 0.46, r * 0.95);
+  ctx.fillRect(cx + r * 0.39, cy - r * 0.1, r * 0.46, r * 0.95);
+}
+
+// A brush tip: a tapered diagonal with a ferrule band. Printed parts are pad
+// prints, so if this does not hold at the strip's floor the fallback is a
+// halftone dot cluster.
+function drawBrush(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+  ctx.beginPath();
+  ctx.moveTo(cx - r * 0.9, cy + r * 0.9);
+  ctx.lineTo(cx - r * 0.1, cy + r * 0.2);
+  ctx.lineTo(cx + r * 0.3, cy + r * 0.6);
+  ctx.closePath();
+  ctx.fill();
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(-Math.PI / 4);
+  ctx.fillRect(-r * 0.28, -r * 1.15, r * 0.56, r * 0.95);
+  ctx.restore();
+}
+
+// A minifig head in silhouette -- a barrel with its stud, and no face. Most
+// minifig parts are printed, so a face here would read as the printed badge
+// twice over.
+function drawMinifig(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+  ctx.fillRect(cx - r * 0.28, cy - r, r * 0.56, r * 0.36);
+  ctx.beginPath();
+  const top = cy - r * 0.64;
+  const w = r * 0.72;
+  ctx.moveTo(cx - w, top + r * 0.24);
+  ctx.quadraticCurveTo(cx - w, top, cx, top);
+  ctx.quadraticCurveTo(cx + w, top, cx + w, top + r * 0.24);
+  ctx.lineTo(cx + w, cy + r * 0.78);
+  ctx.lineTo(cx - w, cy + r * 0.78);
+  ctx.closePath();
+  ctx.fill();
+}
+
+const MARKS: Record<string, (ctx: CanvasRenderingContext2D,
+                             cx: number, cy: number, r: number) => void> = {
+  star: drawStar, archive: drawArchive, redo: drawRedo, bolt: drawBolt,
+  magnet: drawMagnet, brush: drawBrush, minifig: drawMinifig,
+};
+
 // A filled disc in one corner, on the letterbox margin rather than the
 // drawing, which is centered. Reversed out so it reads over ink and over the
 // white ground alike.
 function drawBadge(ctx: CanvasRenderingContext2D, badge: CellBadge,
-                   cmd: { dx: number; dy: number; dw: number; dh: number }) {
-  const size = Math.max(9, Math.min(20, cmd.dw * 0.14));
-  const radius = size * 0.72;
-  const inset = radius + cornerPad(cmd.dw, size);
-  const cx = badge.corner === 'br' ? cmd.dx + cmd.dw - inset : cmd.dx + inset;
-  const cy = badge.corner === 'br' ? cmd.dy + cmd.dh - inset : cmd.dy + inset;
+                   at: { cx: number; cy: number; size: number; radius: number }) {
+  const { cx, cy, size, radius } = at;
   ctx.save();
   ctx.beginPath();
   ctx.arc(cx, cy, radius, 0, Math.PI * 2);
   ctx.fillStyle = badge.field;
   ctx.fill();
+  // Only where the field would vanish into the cell: duplo is red on white
+  // and every baked thumbnail sits on THUMB_GROUND.
+  if (badge.stroke) {
+    ctx.lineWidth = Math.max(1, radius * 0.16);
+    ctx.strokeStyle = badge.stroke;
+    ctx.stroke();
+  }
   ctx.fillStyle = badge.ink;
-  if (badge.mark === 'star') {
-    drawStar(ctx, cx, cy, radius * 0.66);
+  const mark = badge.mark ? MARKS[badge.mark] : undefined;
+  if (mark) {
+    mark(ctx, cx, cy, radius * 0.66);
   } else if (badge.text) {
     ctx.font = `600 ${size}px ui-monospace, monospace`;
     ctx.textAlign = 'center';
@@ -165,11 +268,42 @@ function drawBadge(ctx: CanvasRenderingContext2D, badge: CellBadge,
   ctx.restore();
 }
 
+/** Where a corner badge's disc sits. Shared with the hit test, so a click
+ *  cannot land somewhere the disc is not drawn. */
+export function cornerBadgeAt(badge: CellBadge,
+                              cmd: { dx: number; dy: number; dw: number; dh: number }) {
+  const { size, radius, inset } = badgeGeometry(cmd.dw);
+  return {
+    cx: badge.corner === 'br' ? cmd.dx + cmd.dw - inset : cmd.dx + inset,
+    cy: badge.corner === 'br' ? cmd.dy + cmd.dh - inset : cmd.dy + inset,
+    size, radius,
+  };
+}
+
+/** The kind badges, running right along the bottom edge from wherever the
+ *  part number ended. Stops short of the bottom-right corner rather than
+ *  drawing under the badge that lives there. */
+function drawStrip(ctx: CanvasRenderingContext2D, strip: CellBadge[],
+                   cmd: { dx: number; dy: number; dw: number; dh: number },
+                   startX: number) {
+  if (strip.length === 0) return;
+  const { size, radius, inset } = stripGeometry(cmd.dw);
+  const gap = radius * 0.5;
+  const limit = cmd.dx + cmd.dw - inset - radius * 2;
+  let cx = startX + radius;
+  const cy = cmd.dy + cmd.dh - inset;
+  for (const badge of strip) {
+    if (cx + radius > limit) return;
+    drawBadge(ctx, badge, { cx, cy, size, radius });
+    cx += radius * 2 + gap;
+  }
+}
+
 // A caption in one of the corners the badges leave free, set straight onto
 // the cell: the drawing is centered and letterboxed, so its corners are empty.
 function drawCaption(ctx: CanvasRenderingContext2D, caption: CellCaption,
-                     cmd: { dx: number; dy: number; dw: number; dh: number }) {
-  const size = Math.max(10, Math.min(18, cmd.dw * 0.1));
+                     cmd: { dx: number; dy: number; dw: number; dh: number }): number {
+  const size = captionSize(cmd.dw);
   const right = caption.corner === 'tr';
   ctx.save();
   ctx.font = `${size}px ui-monospace, monospace`;
@@ -177,18 +311,12 @@ function drawCaption(ctx: CanvasRenderingContext2D, caption: CellCaption,
   ctx.textBaseline = 'middle';
   const pad = cornerPad(cmd.dw, size);
   ctx.fillStyle = caption.ink;
-  ctx.fillText(caption.text,
-               right ? cmd.dx + cmd.dw - pad : cmd.dx + pad,
+  const x = right ? cmd.dx + cmd.dw - pad : cmd.dx + pad;
+  ctx.fillText(caption.text, x,
                right ? cmd.dy + pad + size * 0.5 : cmd.dy + cmd.dh - pad - size * 0.5);
+  const width = ctx.measureText(caption.text).width;
   ctx.restore();
-}
-
-/** How far a corner mark sits off the cell's edge. A fraction of the cell
- *  rather than of the mark: both the badge and the caption stop scaling at
- *  their floor sizes, so at the small end of the zoom a margin measured off
- *  them crowds the corner. */
-function cornerPad(cellPx: number, size: number): number {
-  return Math.max(size * 0.35, cellPx * 0.06);
+  return right ? x - width : x + width;
 }
 
 /** How much of its cell a round cell fills across, and how tall its letter
@@ -207,6 +335,22 @@ function washCell(ctx: CanvasRenderingContext2D, wash: number,
   ctx.restore();
 }
 
+/** The captions, corner discs and kind strip a drawn cell wears. The strip
+ *  starts where the part number ended, so it has to run after the captions. */
+function drawOverlays(ctx: CanvasRenderingContext2D,
+                      cmd: { captions?: CellCaption[]; badges?: CellBadge[];
+                             strip?: CellBadge[] },
+                      box: { dx: number; dy: number; dw: number; dh: number }) {
+  const { size, radius } = stripGeometry(box.dw);
+  let stripX = box.dx + cornerPad(box.dw, size);
+  for (const caption of cmd.captions ?? []) {
+    const end = drawCaption(ctx, caption, box);
+    if (caption.corner === 'bl') stripX = end + radius * 0.6;
+  }
+  for (const badge of cmd.badges ?? []) drawBadge(ctx, badge, cornerBadgeAt(badge, box));
+  drawStrip(ctx, cmd.strip ?? [], box, stripX);
+}
+
 /** One paint command, drawn into `ctx` and shifted by `offset` -- the loupe
  *  reuses this to redraw the same commands into its own small canvas,
  *  recentred on the aimed point rather than at their outer screen position. */
@@ -223,8 +367,7 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
     strokeBorder(ctx, { ...cmd, dx, dy });
     // After the border, not before: the badge sits in the corner the frame
     // runs through, and it is the badge that has to stay readable.
-    for (const caption of cmd.captions ?? []) drawCaption(ctx, caption, { ...cmd, dx, dy });
-    for (const badge of cmd.badges ?? []) drawBadge(ctx, badge, { ...cmd, dx, dy });
+    drawOverlays(ctx, cmd, { ...cmd, dx, dy });
     ctx.restore();
     if (cmd.caret) strokeCaret(ctx, { ...cmd, dx, dy }, palette);
   } else if (cmd.kind === 'image') {
@@ -242,8 +385,7 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
     if (!cmd.translucent) strokeBorder(ctx, { ...cmd, dx, dy });
     // After the border, not before: the badge sits in the corner the frame
     // runs through, and it is the badge that has to stay readable.
-    for (const caption of cmd.captions ?? []) drawCaption(ctx, caption, { ...cmd, dx, dy });
-    for (const badge of cmd.badges ?? []) drawBadge(ctx, badge, { ...cmd, dx, dy });
+    drawOverlays(ctx, cmd, { ...cmd, dx, dy });
     ctx.restore();
     if (cmd.caret) strokeCaret(ctx, { ...cmd, dx, dy }, palette);
   } else if (cmd.kind === 'fill') {
@@ -336,6 +478,20 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
   const implied = useMemo(
     () => impliedCaret(rects, visible, cam, { width, height }),
     [rects, visible, cam, width, height]);
+  const byId = useMemo(() => new Map(cells.map((c, i) => [c.id, i])), [cells]);
+
+  /** Follow an updated badge to the part that replaced this one: put the
+   *  caret on it and bring it on screen, the same move an arrow key makes. */
+  const goToSuccessor = (cell: Cell): boolean => {
+    if (!cell.successor) return false;
+    const next = byId.get(cell.successor);
+    if (next == null) return false;
+    onExplicitCaretChange(next);
+    const rect = rects[next];
+    if (rect) onPan(panToReveal(rect, camRef.current, { width, height }));
+    return true;
+  };
+
   const caretIndex = explicitCaret ?? implied;
   const caretCell = caretIndex != null ? cells[caretIndex] : undefined;
 
@@ -403,8 +559,15 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
       const c = cmds[i]!;
       if (sx >= c.dx && sx <= c.dx + c.dw && sy >= c.dy && sy <= c.dy + c.dh) {
         const cell = cells[visible[i]!];
-        if (cell) return { cell, at: { x: sx, y: sy } };
-        return null;
+        if (!cell) return null;
+        // Before the cell itself: the updated badge goes somewhere else, and
+        // it sits inside the cell's own box.
+        const badge = (('badges' in c ? c.badges : undefined) ?? []).find((b) => {
+          if (b.tag !== LINKED_BADGE) return false;
+          const { cx, cy, radius } = cornerBadgeAt(b, c);
+          return Math.hypot(sx - cx, sy - cy) <= radius;
+        });
+        return { cell, at: { x: sx, y: sy }, badge };
       }
     }
     return null;
@@ -503,7 +666,9 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
           // flashes before the lightbox opens.
           if (e.detail === 2) return;
           const hit = hitTest(e);
-          if (hit) onPick(hit.cell, hit.at);
+          if (!hit) return;
+          if (hit.badge && goToSuccessor(hit.cell)) return;
+          onPick(hit.cell, hit.at);
         }}
         onDoubleClick={(e) => {
           const hit = hitTest(e);

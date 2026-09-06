@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
-import { badgesFor, captionsFor, CAPTION_ON_FILL, cellState, fillFor, paintCommands,
-  tally, THUMB_GROUND } from '@lab/corpus/paint';
+import { badgeGeometry, badgesFor, captionsFor, CAPTION_ON_FILL, cellState, fillFor,
+  paintCommands, PROPERTY_FIELD, stripFor, tally, THUMB_GROUND } from '@lab/corpus/paint';
 import { CELL_STATES, DEFAULT_PALETTE as CELL_FILL, type CellState } from '@lab/corpus/palette';
 import type { Cell, SheetManifest } from '@lab/corpus/types';
 
@@ -93,7 +93,8 @@ it('draws a whole loose image when one is loaded for the cell', () => {
   });
   expect(cmd).toEqual({ kind: 'image', dx: 0, dy: 0, dw: 10, dh: 10, image: img,
                         ground: THUMB_GROUND, translucent: false, border: null,
-                        borderWidth: 0, badges: [], captions: [], wash: undefined });
+                        borderWidth: 0, badges: [], strip: [], captions: [],
+                        wash: undefined });
 });
 
 it('grounds a vector cell on what the thumbnails were baked against', () => {
@@ -354,9 +355,50 @@ it('lets a cell carry both the defect frame and the caret', () => {
 it('badges a cell once it is drawn big enough to hold one, one tag per corner', () => {
   const both = cell('a', 0, 'sha-a', { tags: ['retired', 'popular'] });
   expect(badgesFor(both, 200).map((b) => [b.text ?? b.mark, b.corner]))
-    .toEqual([['R', 'br'], ['star', 'tl']]);
+    .toEqual([['archive', 'br'], ['star', 'tl']]);
   expect(badgesFor(both, 20)).toEqual([]);
   expect(badgesFor(cell('b', 1, 'sha-b', { tags: ['minifig'] }), 200)).toEqual([]);
+});
+
+it('gives retired and updated the same corner, never both at once', () => {
+  const stopped = badgesFor(cell('a', 0, 'sha-a', { tags: ['retired'] }), 200);
+  const replaced = badgesFor(cell('b', 1, 'sha-b', { tags: ['updated'] }), 200);
+  expect(stopped.map((b) => [b.tag, b.mark, b.corner])).toEqual([['retired', 'archive', 'br']]);
+  expect(replaced.map((b) => [b.tag, b.mark, b.corner])).toEqual([['updated', 'redo', 'br']]);
+});
+
+it('strips the kind badges in tag order, system before property', () => {
+  const part = cell('a', 0, 'sha-a',
+    { tags: ['technic', 'electric', 'printed', 'retired'] });
+  expect(stripFor(part, 200).map((b) => b.tag))
+    .toEqual(['technic', 'electric', 'printed']);
+  expect(stripFor(part, 20)).toEqual([]);
+});
+
+it('gives the property family one field and each system badge its own', () => {
+  const part = cell('a', 0, 'sha-a', { tags: ['duplo', 'electric', 'printed'] });
+  const [system, ...properties] = stripFor(part, 200);
+  expect(system!.field).not.toEqual(PROPERTY_FIELD);
+  expect(properties.map((b) => b.field)).toEqual([PROPERTY_FIELD, PROPERTY_FIELD]);
+  // Duplo is red on white, and every baked thumbnail sits on a white ground.
+  expect(system!.stroke).toBeTruthy();
+});
+
+it('draws a letter at twice the height of a mark in the same disc', () => {
+  const { size, radius } = badgeGeometry(200);
+  expect(size).toBe(20);
+  expect(radius * 0.66).toBeCloseTo(size * 0.475, 2);
+  // At the badge floor a mark is a little over 4px across.
+  expect(badgeGeometry(56).radius * 0.66).toBeCloseTo(4.28, 2);
+});
+
+it('puts the strip on a drawn cell', () => {
+  const [cmd] = paintCommands({
+    cells: [cell('a', 0, 'sha-a', { tags: ['technic', 'electric'] })], rects, visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 20, y: 20 } }, palette: CELL_FILL, manifest,
+  });
+  expect((cmd as { strip?: { tag: string }[] }).strip?.map((b) => b.tag))
+    .toEqual(['technic', 'electric']);
 });
 
 it('captions a large cell with its years and its part number, and a small one with nothing', () => {
@@ -388,7 +430,7 @@ it('carries the badge on the drawn cell, not the empty one', () => {
     cells, rects, visible: [0], cam: { x: 0, y: 0, scale: { x: 20, y: 20 } },
     palette: CELL_FILL, manifest, loose: new Map([['a', {} as HTMLImageElement]]),
   });
-  expect(cmd).toMatchObject({ kind: 'image', badges: [{ text: 'R', corner: 'br' }] });
+  expect(cmd).toMatchObject({ kind: 'image', badges: [{ mark: 'archive', corner: 'br' }] });
 });
 
 it('strikes every undrawn cell with a border, and leaves the quiet ones alone', () => {
