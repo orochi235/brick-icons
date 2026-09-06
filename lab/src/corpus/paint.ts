@@ -85,14 +85,30 @@ export const RETIRED_WASH = '#d8d8d8';
  *  to a plain dot. */
 export const GLYPH_MIN_PX = 22;
 
-/** The letter an out-of-scope cell wears: its category's initial, so the
- *  block of them says which category it is -- S for Sticker, D for Duplo.
- *  Mirrors `tags.normalize_category`, whose sigils are LDraw's. */
+/** Categories drawn as a picture rather than a letter, where there is an
+ *  obvious one. */
+export const CATEGORY_MARKS: Record<string, 'sticker'> = { sticker: 'sticker' };
+
+/** A category without its LDraw sigil, lowercased -- mirrors
+ *  `tags.normalize_category`. */
+export function plainCategory(cell: Cell): string {
+  return (cell.category ?? '').replace(/^[~=_|]+/, '').trim().toLowerCase();
+}
+
+/** What an out-of-scope cell wears: a picture where its category has one, its
+ *  initial otherwise, so a block of them says which category it is. */
 export function glyphFor(cell: Cell, cellPx: number,
                          minPx = GLYPH_MIN_PX): string | undefined {
-  if (cellPx < minPx) return undefined;
+  if (cellPx < minPx || CATEGORY_MARKS[plainCategory(cell)]) return undefined;
   const plain = (cell.category ?? '').replace(/^[~=_|]+/, '').trim();
   return plain ? plain[0]!.toUpperCase() : undefined;
+}
+
+/** No size gate, unlike a letter: three strokes still read as a sticker at
+ *  the width where an S is a smudge, and a recognizable shape beats the dot
+ *  at every zoom. */
+export function markFor(cell: Cell): 'sticker' | undefined {
+  return CATEGORY_MARKS[plainCategory(cell)];
 }
 
 /** Below this drawn size a cell has no room for a badge without covering the
@@ -128,19 +144,35 @@ export function badgesFor(cell: Cell, cellPx: number,
   return (cell.tags ?? []).map((tag) => BADGES[tag]).filter((b): b is CellBadge => !!b);
 }
 
-/** The years written across the top of a cell, once it is big enough that
- *  they are readable rather than a smudge. */
-export function labelFor(cell: Cell, cellPx: number,
-                         minPx = LABEL_MIN_PX): string | null {
-  if (cellPx < minPx) return null;
-  return yearRange(cell.year_from, cell.year_to, isRetired(cell));
+export interface CellCaption {
+  text: string;
+  /** The two corners the badges leave free. */
+  corner: 'tr' | 'bl';
+  ink: string;
+}
+
+/** Dark on a thumbnail's white ground, white on a state fill -- the same two
+ *  captions have to read on both. */
+export const CAPTION_ON_THUMB = '#4a4a4f';
+export const CAPTION_ON_FILL = '#ffffff';
+
+/** What a cell says about itself once it is drawn big enough to read: its
+ *  years on the top edge, its part number on the bottom. */
+export function captionsFor(cell: Cell, cellPx: number, ink: string,
+                            minPx = LABEL_MIN_PX): CellCaption[] {
+  if (cellPx < minPx) return [];
+  const out: CellCaption[] = [];
+  const years = yearRange(cell.year_from, cell.year_to, isRetired(cell));
+  if (years) out.push({ text: years, corner: 'tr', ink });
+  out.push({ text: cell.id, corner: 'bl', ink });
+  return out;
 }
 
 export type PaintCommand =
   | { kind: 'sprite'; dx: number; dy: number; dw: number; dh: number;
       sx: number; sy: number; sw: number; sh: number;
       border: string | null; borderWidth: number; alpha?: number;
-      caret?: boolean; badges?: CellBadge[]; label?: string; wash?: number }
+      caret?: boolean; badges?: CellBadge[]; captions?: CellCaption[]; wash?: number }
   | { kind: 'fill'; dx: number; dy: number; dw: number; dh: number;
       fill: string; border: string | null; borderWidth: number;
       /** Out-of-scope cells are drawn as a mark rather than a filled square,
@@ -149,6 +181,8 @@ export type PaintCommand =
        *  letter, a dot where there is not. */
       shape: 'square' | 'circle';
       glyph?: string;
+      mark?: 'sticker';
+      captions?: CellCaption[];
       /** Struck corner to corner in the border's own color and width. Every
        *  bordered state earns it when there is nothing drawn in the cell: the
        *  border alone reads as a tint at the zooms where most cells are small,
@@ -161,7 +195,7 @@ export type PaintCommand =
        *  own opaque ground and hides anything drawn under it. */
       translucent: boolean;
       border: string | null; borderWidth: number; alpha?: number;
-      caret?: boolean; badges?: CellBadge[]; label?: string };
+      caret?: boolean; badges?: CellBadge[]; captions?: CellCaption[] };
 
 export interface PaintInput {
   cells: Cell[];
@@ -213,14 +247,14 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
     const border = style.border;
     const borderWidth = borderWidthFor(style.weight, dw, appearance);
     const badges = badgesFor(cell, dw);
-    const label = labelFor(cell, dw) ?? undefined;
+    const captions = captionsFor(cell, dw, CAPTION_ON_THUMB);
     const wash = isRetired(cell) ? appearance.retiredWash : undefined;
     const vectored = vector?.get(cell.id);
     const image = vectored ?? loose?.get(cell.id);
     if (image) {
       out.push({ kind: 'image', dx, dy, dw, dh, image, ground: THUMB_GROUND,
                  translucent: vectored !== undefined,
-                 border, borderWidth, alpha, caret: isCaret, badges, label, wash });
+                 border, borderWidth, alpha, caret: isCaret, badges, captions, wash });
       continue;
     }
     const box = manifest && cell.sha && !isStale(manifest, cell)
@@ -228,12 +262,17 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
       : null;
     if (box) {
       out.push({ kind: 'sprite', dx, dy, dw, dh, ...box, border, borderWidth, alpha,
-                 caret: isCaret, badges, label, wash });
+                 caret: isCaret, badges, captions, wash });
       continue;
     }
     out.push({ kind: 'fill', dx, dy, dw, dh, fill: style.fill, border, borderWidth,
                shape: state === 'outOfScope' ? 'circle' : 'square',
                glyph: state === 'outOfScope' ? glyphFor(cell, dw) : undefined,
+               mark: state === 'outOfScope' ? markFor(cell) : undefined,
+               // Not on an out-of-scope cell: it is deliberately the quietest
+               // thing on the wall, and captions would undo that.
+               captions: state === 'outOfScope'
+                 ? undefined : captionsFor(cell, dw, CAPTION_ON_FILL),
                slash: border !== null, caret: isCaret });
   }
   return out;

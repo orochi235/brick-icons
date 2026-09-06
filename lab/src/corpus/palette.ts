@@ -95,7 +95,7 @@ export const STATE_LABEL: Record<CellState, string> = {
   unknown: 'unknown',
   outOfScope: 'currently out of scope',
   timeout: 'timed out here',
-  failed: 'cannot be drawn here',
+  failed: 'render error here',
   defect: 'open defect here',
   accepted: 'known issue, not fixing',
   problemElsewhere: 'problem in another slot',

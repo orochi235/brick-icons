@@ -10,7 +10,7 @@ import { LoupeBubble, resolveLoupe, useLoupe } from '@weasel-js/labkit/loupe';
 import { adjacent, impliedCaret, type Direction } from '@lab/corpus/caret';
 import type { Rect } from '@lab/corpus/layout';
 import { paintCommands, RETIRED_WASH, type Appearance, type CellBadge,
-  type PaintCommand } from '@lab/corpus/paint';
+  type CellCaption, type PaintCommand } from '@lab/corpus/paint';
 import { DEFAULT_PALETTE, readPalette, type CellState, type Palette } from '@lab/corpus/palette';
 import { DEFAULT_PARAMS } from '@lab/corpus/params';
 import { panToReveal } from '@lab/corpus/reveal';
@@ -96,6 +96,31 @@ function strokeCaret(ctx: CanvasRenderingContext2D,
   ctx.restore();
 }
 
+// A sheet with its corner turned up: the sticker every catalog draws. Stroked
+// rather than filled, so it reads as a mark on the field instead of a blob.
+function drawSticker(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+  const fold = r * 0.62;
+  const x0 = cx - r, y0 = cy - r, x1 = cx + r, y1 = cy + r;
+  ctx.save();
+  ctx.lineWidth = Math.max(1, r * 0.16);
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = ctx.fillStyle;
+  ctx.beginPath();
+  ctx.moveTo(x0, y0);
+  ctx.lineTo(x1, y0);
+  ctx.lineTo(x1, y1 - fold);
+  ctx.lineTo(x1 - fold, y1);
+  ctx.lineTo(x0, y1);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x1, y1 - fold);
+  ctx.lineTo(x1 - fold, y1 - fold);
+  ctx.lineTo(x1 - fold, y1);
+  ctx.stroke();
+  ctx.restore();
+}
+
 // A five-pointed star, point up, filled in the current style.
 function drawStar(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
   const inner = r * 0.42;
@@ -118,7 +143,7 @@ function drawBadge(ctx: CanvasRenderingContext2D, badge: CellBadge,
                    cmd: { dx: number; dy: number; dw: number; dh: number }) {
   const size = Math.max(9, Math.min(20, cmd.dw * 0.14));
   const radius = size * 0.72;
-  const inset = radius + size * 0.3;
+  const inset = radius + cornerPad(cmd.dw, size);
   const cx = badge.corner === 'br' ? cmd.dx + cmd.dw - inset : cmd.dx + inset;
   const cy = badge.corner === 'br' ? cmd.dy + cmd.dh - inset : cmd.dy + inset;
   ctx.save();
@@ -140,19 +165,30 @@ function drawBadge(ctx: CanvasRenderingContext2D, badge: CellBadge,
   ctx.restore();
 }
 
-// The years, along the top edge of a cell big enough to read them on. Set to
-// the right, clear of the top-left badge, and straight onto the thumbnail:
-// the drawing is centered and letterboxed, so the corner is empty anyway.
-function drawLabel(ctx: CanvasRenderingContext2D, text: string,
-                   cmd: { dx: number; dy: number; dw: number; dh: number }) {
+// A caption in one of the corners the badges leave free, set straight onto
+// the cell: the drawing is centered and letterboxed, so its corners are empty.
+function drawCaption(ctx: CanvasRenderingContext2D, caption: CellCaption,
+                     cmd: { dx: number; dy: number; dw: number; dh: number }) {
   const size = Math.max(10, Math.min(18, cmd.dw * 0.1));
+  const right = caption.corner === 'tr';
   ctx.save();
   ctx.font = `${size}px ui-monospace, monospace`;
-  ctx.textAlign = 'right';
+  ctx.textAlign = right ? 'right' : 'left';
   ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#4a4a4f';
-  ctx.fillText(text, cmd.dx + cmd.dw - size * 0.5, cmd.dy + size * 0.9);
+  const pad = cornerPad(cmd.dw, size);
+  ctx.fillStyle = caption.ink;
+  ctx.fillText(caption.text,
+               right ? cmd.dx + cmd.dw - pad : cmd.dx + pad,
+               right ? cmd.dy + pad + size * 0.5 : cmd.dy + cmd.dh - pad - size * 0.5);
   ctx.restore();
+}
+
+/** How far a corner mark sits off the cell's edge. A fraction of the cell
+ *  rather than of the mark: both the badge and the caption stop scaling at
+ *  their floor sizes, so at the small end of the zoom a margin measured off
+ *  them crowds the corner. */
+function cornerPad(cellPx: number, size: number): number {
+  return Math.max(size * 0.35, cellPx * 0.06);
 }
 
 /** How much of its cell a round cell fills across, and how tall its letter
@@ -187,7 +223,7 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
     strokeBorder(ctx, { ...cmd, dx, dy });
     // After the border, not before: the badge sits in the corner the frame
     // runs through, and it is the badge that has to stay readable.
-    if (cmd.label) drawLabel(ctx, cmd.label, { ...cmd, dx, dy });
+    for (const caption of cmd.captions ?? []) drawCaption(ctx, caption, { ...cmd, dx, dy });
     for (const badge of cmd.badges ?? []) drawBadge(ctx, badge, { ...cmd, dx, dy });
     ctx.restore();
     if (cmd.caret) strokeCaret(ctx, { ...cmd, dx, dy }, palette);
@@ -206,13 +242,15 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
     if (!cmd.translucent) strokeBorder(ctx, { ...cmd, dx, dy });
     // After the border, not before: the badge sits in the corner the frame
     // runs through, and it is the badge that has to stay readable.
-    if (cmd.label) drawLabel(ctx, cmd.label, { ...cmd, dx, dy });
+    for (const caption of cmd.captions ?? []) drawCaption(ctx, caption, { ...cmd, dx, dy });
     for (const badge of cmd.badges ?? []) drawBadge(ctx, badge, { ...cmd, dx, dy });
     ctx.restore();
     if (cmd.caret) strokeCaret(ctx, { ...cmd, dx, dy }, palette);
   } else if (cmd.kind === 'fill') {
     ctx.fillStyle = cmd.fill;
-    if (cmd.glyph) {
+    if (cmd.mark === 'sticker') {
+      drawSticker(ctx, dx + cmd.dw / 2, dy + cmd.dh / 2, cmd.dw * CIRCLE_SCALE / 2);
+    } else if (cmd.glyph) {
       // The category's initial, sized to the cell: a block of S says sticker
       // at a glance, and no filled square competes with the drawings around it.
       ctx.save();
@@ -232,6 +270,7 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
       ctx.fillRect(dx, dy, cmd.dw, cmd.dh);
     }
     strokeBorder(ctx, { ...cmd, dx, dy });
+    for (const caption of cmd.captions ?? []) drawCaption(ctx, caption, { ...cmd, dx, dy });
     if (cmd.caret) strokeCaret(ctx, { ...cmd, dx, dy }, palette);
   }
 }

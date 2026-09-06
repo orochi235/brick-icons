@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
-import { badgesFor, cellState, fillFor, labelFor, paintCommands, tally,
-  THUMB_GROUND } from '@lab/corpus/paint';
+import { badgesFor, captionsFor, CAPTION_ON_FILL, cellState, fillFor, paintCommands,
+  tally, THUMB_GROUND } from '@lab/corpus/paint';
 import { CELL_STATES, DEFAULT_PALETTE as CELL_FILL, type CellState } from '@lab/corpus/palette';
 import type { Cell, SheetManifest } from '@lab/corpus/types';
 
@@ -40,7 +40,8 @@ it('draws an unrendered cell with nothing known as unknown gray, and no border',
   });
   expect(cmd).toEqual({ kind: 'fill', dx: 20, dy: 0, dw: 10, dh: 10,
                         fill: CELL_FILL.unknown.fill, border: null, borderWidth: 0,
-                        shape: 'square', slash: false });
+                        shape: 'square', slash: false, glyph: undefined,
+                        captions: [] });
 });
 
 it('draws a stale cell as a fill, not as last week’s picture', () => {
@@ -92,7 +93,7 @@ it('draws a whole loose image when one is loaded for the cell', () => {
   });
   expect(cmd).toEqual({ kind: 'image', dx: 0, dy: 0, dw: 10, dh: 10, image: img,
                         ground: THUMB_GROUND, translucent: false, border: null,
-                        borderWidth: 0, badges: [], label: undefined, wash: undefined });
+                        borderWidth: 0, badges: [], captions: [], wash: undefined });
 });
 
 it('grounds a vector cell on what the thumbnails were baked against', () => {
@@ -154,7 +155,7 @@ it('flags a part with an open defect in ochre, whatever else is true', () => {
     .toBe(CELL_FILL.defect);
 });
 
-it('separates a part that cannot be drawn from one that timed out', () => {
+it('separates a render error from a timeout', () => {
   expect(fillFor({ ...base, error: 'GEOSException' }, CELL_FILL)).toBe(CELL_FILL.failed);
   expect(fillFor({ ...base, error: 'ProcessDied' }, CELL_FILL)).toBe(CELL_FILL.failed);
   expect(fillFor({ ...base, error: 'TimeoutError' }, CELL_FILL)).toBe(CELL_FILL.timeout);
@@ -284,7 +285,8 @@ it('dims a fill cell outside the highlighted state to the unknown field, without
   });
   expect(cmd).toEqual({ kind: 'fill', dx: 0, dy: 0, dw: 10, dh: 10,
                         fill: CELL_FILL.unknown.fill, border: null, borderWidth: 0,
-                        shape: 'square', slash: false });
+                        shape: 'square', slash: false, glyph: undefined,
+                        captions: [] });
 });
 
 it('reduces alpha on a drawn cell outside the highlighted state, and leaves a matching one alone', () => {
@@ -357,11 +359,27 @@ it('badges a cell once it is drawn big enough to hold one, one tag per corner', 
   expect(badgesFor(cell('b', 1, 'sha-b', { tags: ['minifig'] }), 200)).toEqual([]);
 });
 
-it('writes the years across a cell drawn large, and nothing on a small one', () => {
-  const part = cell('a', 0, 'sha-a', { year_from: 1979, year_to: 2026 });
-  expect(labelFor(part, 200)).toBe('1979–');
-  expect(labelFor(part, 60)).toBeNull();
-  expect(labelFor(cell('b', 1, 'sha-b'), 200)).toBeNull();
+it('captions a large cell with its years and its part number, and a small one with nothing', () => {
+  const part = cell('3001', 0, 'sha-a', { year_from: 1979, year_to: 2026 });
+  expect(captionsFor(part, 200, CAPTION_ON_FILL).map((c) => [c.text, c.corner]))
+    .toEqual([['1979–', 'tr'], ['3001', 'bl']]);
+  expect(captionsFor(part, 60, CAPTION_ON_FILL)).toEqual([]);
+  // no years known: the part number still earns its corner
+  expect(captionsFor(cell('b', 1, 'sha-b'), 200, CAPTION_ON_FILL).map((c) => c.text))
+    .toEqual(['b']);
+});
+
+it('captions an undrawn cell in white, and leaves an out-of-scope one alone', () => {
+  const at = (over: Partial<Cell>) => {
+    const [cmd] = paintCommands({
+      cells: [cell('3001', 0, null, over)], rects, visible: [0],
+      cam: { x: 0, y: 0, scale: { x: 20, y: 20 } }, palette: CELL_FILL, manifest: null,
+    });
+    return cmd as { captions?: { text: string; ink: string }[] };
+  };
+  expect(at({ error: 'TimeoutError' }).captions?.map((c) => c.ink))
+    .toEqual([CAPTION_ON_FILL]);
+  expect(at({ out_of_scope: true, category: 'Sticker' }).captions).toBeUndefined();
 });
 
 it('carries the badge on the drawn cell, not the empty one', () => {
@@ -420,13 +438,15 @@ it('marks an out-of-scope cell rather than filling it, and squares the rest', ()
       cam: { x: 0, y: 0, scale: { x: scale, y: scale } }, palette: CELL_FILL,
       manifest: null,
     });
-    return cmd as { shape?: string; glyph?: string };
+    return cmd as { shape?: string; glyph?: string; mark?: string };
   };
   // rects are 10 world px, so scale 4 draws a 40px cell and scale 1 a 10px one
+  // a sticker has a picture of its own; everything else falls back to a letter
   expect(at({ out_of_scope: true, category: 'Sticker' }, 4))
-    .toMatchObject({ shape: 'circle', glyph: 'S' });
+    .toMatchObject({ shape: 'circle', mark: 'sticker', glyph: undefined });
   expect(at({ out_of_scope: true, category: '~Duplo' }, 4).glyph).toBe('D');
-  expect(at({ out_of_scope: true, category: 'Sticker' }, 1).glyph).toBeUndefined();
+  // and the sticker keeps its picture right down to the smallest cell
+  expect(at({ out_of_scope: true, category: 'Sticker' }, 1).mark).toBe('sticker');
   expect(at({}).shape).toBe('square');
   expect(at({ error: 'TimeoutError' }).glyph).toBeUndefined();
 });

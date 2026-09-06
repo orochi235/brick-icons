@@ -24,7 +24,7 @@ it('renders a row per state with its own count', () => {
   expect(screen.getByLabelText('unknown, 2 parts')).toBeTruthy();
   expect(screen.getByLabelText('timed out here, 2 parts')).toBeTruthy();
   expect(screen.getByLabelText('open defect here, 1 parts')).toBeTruthy();
-  expect(screen.getByLabelText('cannot be drawn here, 0 parts')).toBeTruthy();
+  expect(screen.getByLabelText('render error here, 0 parts')).toBeTruthy();
   expect(screen.getByLabelText('problem in another slot, 0 parts')).toBeTruthy();
   expect(screen.getByLabelText('defect in another slot, 0 parts')).toBeTruthy();
 });

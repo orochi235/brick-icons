@@ -61,9 +61,9 @@ it('names a timeout separately from a real failure', () => {
   expect(screen.getByText(/render timed out/i)).toBeTruthy();
 });
 
-it('names the real error when the part cannot be drawn', () => {
+it('names the real error behind a failed render', () => {
   render(card({ cell: { ...cell, error: 'GEOSException' } }));
-  expect(screen.getByText(/cannot be drawn: GEOSException/)).toBeTruthy();
+  expect(screen.getByText(/render error: GEOSException/)).toBeTruthy();
 });
 
 it('counts open defects filed against this slot', () => {

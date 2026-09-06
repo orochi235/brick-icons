@@ -20,7 +20,7 @@ function cellStateLabel(cell: Cell): string | null {
     case 'timeout':
       return 'render timed out';
     case 'failed':
-      return `cannot be drawn: ${cell.error}`;
+      return `render error: ${cell.error}`;
     case 'defectElsewhere':
       return `${cell.open_defects_elsewhere} open defect${cell.open_defects_elsewhere === 1 ? '' : 's'} in another slot`;
     case 'problemElsewhere':
