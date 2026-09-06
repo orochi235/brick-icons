@@ -6,6 +6,7 @@ between this and `brick_icons.thumbs` -- and both take it from `ORDER BY id`.
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 
 _LATEST_MEASURE = """
@@ -15,6 +16,39 @@ JOIN (SELECT part_id, MAX(run_id) AS run_id FROM measurements
   ON m.part_id = latest.part_id AND m.run_id = latest.run_id
 WHERE m.engine = ?
 """
+
+# Newest run per (part, engine) among engines other than this one -- never the
+# newest run overall, or a part whose other engine has since gone clean would
+# still read as erroring elsewhere.
+_LATEST_OTHER_ERRORS = """
+SELECT m.part_id FROM measurements m
+JOIN (SELECT part_id, engine, MAX(run_id) AS run_id FROM measurements
+      WHERE engine != ? GROUP BY part_id, engine) latest
+  ON m.part_id = latest.part_id AND m.engine = latest.engine
+ AND m.run_id = latest.run_id
+WHERE m.engine != ? AND m.error IS NOT NULL
+"""
+
+
+def _open_defects(conn: sqlite3.Connection, ids: list[str],
+                   engine: str) -> dict[str, dict[str, int]]:
+    """Open-defect counts for a page of parts, split here vs. elsewhere.
+
+    One query for the page, following `findings._attach_defects`.
+    """
+    if not ids:
+        return {}
+    marks = ",".join("?" * len(ids))
+    out: dict[str, dict[str, int]] = {}
+    for d in conn.execute(
+            f"SELECT part_id, engines FROM defects WHERE part_id IN ({marks}) "
+            f"AND status NOT IN ('fixed', 'notabug')", ids):
+        bucket = out.setdefault(d["part_id"], {"here": 0, "elsewhere": 0})
+        if engine in json.loads(d["engines"]):
+            bucket["here"] += 1
+        else:
+            bucket["elsewhere"] += 1
+    return out
 
 
 def engine_for(source: str) -> str:
@@ -43,12 +77,16 @@ def cells(conn: sqlite3.Connection, source: str = "census-naive",
     engine = engine_for(source)
     measures = {r["part_id"]: r for r in conn.execute(
         _LATEST_MEASURE, (engine, engine))}
+    error_elsewhere = {r["part_id"] for r in conn.execute(
+        _LATEST_OTHER_ERRORS, (engine, engine))}
 
     version = max((r["made_at"] for r in renders.values()), default="")
     wanted = order
     if since is not None:
         wanted = sorted(pid for pid, r in renders.items()
                         if r["made_at"] > since)
+
+    defects = _open_defects(conn, wanted, engine)
 
     rows = []
     marks = ",".join("?" * len(wanted)) if wanted else "NULL"
@@ -58,6 +96,7 @@ def cells(conn: sqlite3.Connection, source: str = "census-naive",
         pid = part["id"]
         render = renders.get(pid)
         measure = measures.get(pid)
+        bucket = defects.get(pid, {"here": 0, "elsewhere": 0})
         rows.append({
             "id": pid,
             "index": index[pid],
@@ -71,6 +110,9 @@ def cells(conn: sqlite3.Connection, source: str = "census-naive",
             "extra_d99": measure["extra_d99"] if measure else None,
             "secs": measure["secs"] if measure else None,
             "error": measure["error"] if measure else None,
+            "open_defects": bucket["here"],
+            "open_defects_elsewhere": bucket["elsewhere"],
+            "error_elsewhere": pid in error_elsewhere,
         })
     return {"cells": rows, "count": len(order), "version": version,
             "source": source}

@@ -13,7 +13,8 @@ vi.mock('@lab/corpus/camera', async (importOriginal) => {
 const cell = (id: string, index: number, sha: string | null = null): Cell => ({
   id, index, title: `Part ${id}`, category: 'Brick', printed: false,
   obsolete: false, status: 'unreviewed', sha, made_at: null,
-  extra_d99: null, secs: null, error: null,
+  extra_d99: null, secs: null, error: null, open_defects: 0,
+  open_defects_elsewhere: 0, error_elsewhere: false,
 });
 
 const client = {

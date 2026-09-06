@@ -1,4 +1,6 @@
 """The corpus wall's cell list."""
+import json
+
 import pytest
 
 from brick_icons import db
@@ -22,6 +24,25 @@ def _render(conn, pid, sha, made_at, source="census-naive"):
     conn.execute("INSERT INTO renders (part_id, source, config_key, made_at, "
                  "path, sha256) VALUES (?, ?, 'k', ?, ?, ?)",
                  (pid, source, made_at, f"renders/{source}/{pid}.svg", sha))
+
+
+def _defect(conn, defect_id, pid, engines, status="open"):
+    conn.execute("INSERT INTO defects (id, part_id, engines, status, title, "
+                 "filed) VALUES (?, ?, ?, ?, 't', '2026-09-05T00:00:00+00:00')",
+                 (defect_id, pid, json.dumps(engines), status))
+
+
+_run_id = 0
+
+
+def _measure(conn, pid, engine, error=None):
+    global _run_id
+    _run_id += 1
+    conn.execute("INSERT INTO runs (id, kind, started, commit_sha, args) "
+                 "VALUES (?, 'census', '2026-09-05T09:00:00+00:00', 'abc', '{}')",
+                 (_run_id,))
+    conn.execute("INSERT INTO measurements (run_id, part_id, engine, error) "
+                 "VALUES (?, ?, ?, ?)", (_run_id, pid, engine, error))
 
 
 def test_every_part_is_a_cell_in_id_order(conn):
@@ -126,3 +147,48 @@ def test_a_delta_with_nothing_new_is_empty(conn):
     body = cells.cells(conn, since="2026-09-05T12:00:00+00:00")
     assert body["cells"] == []
     assert body["count"] == 1
+
+
+def test_a_part_with_no_defects_reports_none_open(conn):
+    _part(conn, "3001")
+    conn.commit()
+    cell = cells.cells(conn, source="census-naive")["cells"][0]
+    assert cell["open_defects"] == 0
+    assert cell["open_defects_elsewhere"] == 0
+
+
+def test_a_defect_naming_this_engine_counts_here_only(conn):
+    _part(conn, "3001")
+    _defect(conn, "d1", "3001", ["naive"])
+    conn.commit()
+    cell = cells.cells(conn, source="census-naive")["cells"][0]
+    assert cell["open_defects"] == 1
+    assert cell["open_defects_elsewhere"] == 0
+
+
+def test_a_defect_naming_another_engine_counts_elsewhere_only(conn):
+    _part(conn, "3001")
+    _defect(conn, "d1", "3001", ["occt"])
+    conn.commit()
+    cell = cells.cells(conn, source="census-naive")["cells"][0]
+    assert cell["open_defects"] == 0
+    assert cell["open_defects_elsewhere"] == 1
+
+
+def test_a_fixed_defect_counts_in_neither(conn):
+    _part(conn, "3001")
+    _defect(conn, "d1", "3001", ["naive"], status="fixed")
+    conn.commit()
+    cell = cells.cells(conn, source="census-naive")["cells"][0]
+    assert cell["open_defects"] == 0
+    assert cell["open_defects_elsewhere"] == 0
+
+
+def test_a_part_erroring_elsewhere_is_clean_here(conn):
+    _part(conn, "3001")
+    _measure(conn, "3001", "naive")
+    _measure(conn, "3001", "occt", error="TimeoutError")
+    conn.commit()
+    cell = cells.cells(conn, source="census-naive")["cells"][0]
+    assert cell["error"] is None
+    assert cell["error_elsewhere"] is True

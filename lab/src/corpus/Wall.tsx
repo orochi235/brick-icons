@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { Camera } from '@lab/corpus/camera';
 import type { Rect } from '@lab/corpus/layout';
-import { paintCommands } from '@lab/corpus/paint';
+import { CELL_FILL, paintCommands } from '@lab/corpus/paint';
 import type { Cell, SheetManifest } from '@lab/corpus/types';
 import { visibleRange } from '@lab/corpus/visible';
 import '@lab/corpus/Wall.css';
@@ -17,6 +17,17 @@ export interface WallProps {
   height: number;
   onPick: (cell: Cell, at: { x: number; y: number }) => void;
   onOpen: (cell: Cell) => void;
+}
+
+// A thumbnail is an opaque tile, so a defect's colour is hidden behind it;
+// the ring is what makes a drawn cell's open defect findable.
+function strokeRing(ctx: CanvasRenderingContext2D,
+                     cmd: { dx: number; dy: number; dw: number; dh: number }) {
+  ctx.save();
+  ctx.strokeStyle = CELL_FILL.defect;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(cmd.dx + 1, cmd.dy + 1, cmd.dw - 2, cmd.dh - 2);
+  ctx.restore();
 }
 
 /** The wall's only rendering surface.
@@ -47,8 +58,10 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, width, height,
       if (cmd.kind === 'sprite' && sheet) {
         ctx.drawImage(sheet, cmd.sx, cmd.sy, cmd.sw, cmd.sh,
                       cmd.dx, cmd.dy, cmd.dw, cmd.dh);
+        if (cmd.ring) strokeRing(ctx, cmd);
       } else if (cmd.kind === 'image') {
         ctx.drawImage(cmd.image, cmd.dx, cmd.dy, cmd.dw, cmd.dh);
+        if (cmd.ring) strokeRing(ctx, cmd);
       } else if (cmd.kind === 'fill') {
         ctx.fillStyle = cmd.fill;
         ctx.fillRect(cmd.dx, cmd.dy, cmd.dw, cmd.dh);

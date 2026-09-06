@@ -9,6 +9,18 @@ const MARGIN = 8;
 // of what was clicked.
 const OFFSET = 16;
 
+/** Names what the wall's colour and ring are saying about this cell. */
+function cellState(cell: Cell): string | null {
+  if (cell.open_defects > 0)
+    return `${cell.open_defects} open defect${cell.open_defects === 1 ? '' : 's'}`;
+  if (cell.error === 'TimeoutError') return 'render timed out';
+  if (cell.error) return `cannot be drawn: ${cell.error}`;
+  if (cell.open_defects_elsewhere > 0)
+    return `${cell.open_defects_elsewhere} open defect${cell.open_defects_elsewhere === 1 ? '' : 's'} in another slot`;
+  if (cell.error_elsewhere) return 'fails in another slot';
+  return null;
+}
+
 export function PartCard({ cell, source, at, viewport, onOpen, onClose }: {
   cell: Cell;
   source: string;
@@ -43,6 +55,7 @@ export function PartCard({ cell, source, at, viewport, onOpen, onClose }: {
       <p className="corpus-card-sub">
         {cell.id} · {cell.category ?? 'uncategorised'} · {cell.status}
       </p>
+      {cellState(cell) && <p className="corpus-card-state">{cellState(cell)}</p>}
       <div className="corpus-card-body">
         {cell.sha ? (
           <img className="corpus-card-thumb" alt={`${cell.id} render`}
@@ -59,11 +72,6 @@ export function PartCard({ cell, source, at, viewport, onOpen, onClose }: {
           {cell.secs !== null && (
             <>
               <dt>secs</dt><dd>{cell.secs}</dd>
-            </>
-          )}
-          {cell.error && (
-            <>
-              <dt>error</dt><dd>{cell.error}</dd>
             </>
           )}
         </dl>

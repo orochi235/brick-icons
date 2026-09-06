@@ -5,7 +5,8 @@ import type { Cell } from '@lab/corpus/types';
 const cell = (over: Partial<Cell> & { id: string; index: number }): Cell => ({
   title: over.id, category: 'Brick', printed: false, obsolete: false,
   status: 'unreviewed', sha: null, made_at: null, extra_d99: null,
-  secs: null, error: null, ...over,
+  secs: null, error: null, open_defects: 0, open_defects_elsewhere: 0,
+  error_elsewhere: false, ...over,
 });
 
 const cells = [

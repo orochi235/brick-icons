@@ -11,6 +11,9 @@ export interface Cell {
   extra_d99: number | null;
   secs: number | null;
   error: string | null;
+  open_defects: number;
+  open_defects_elsewhere: number;
+  error_elsewhere: boolean;
 }
 
 export interface CellsBody {
