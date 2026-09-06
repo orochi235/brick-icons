@@ -63,7 +63,7 @@ def test_a_replaced_part_is_updated_rather_than_retired():
     stopped = dict(year_to=2021, sets=2492, this_year=2026)
     assert "retired" in tags.tags_for("Electric", False, False, **stopped)
     replaced = tags.tags_for("Electric", False, False, successor="61332", **stopped)
-    assert "updated" in replaced
+    assert "replaced" in replaced
     assert "retired" not in replaced
 
 

@@ -45,7 +45,7 @@ duplicate.
 
 Counts are from the vendored library, 24,591 part files.
 
-## Retired splits into retired and updated
+## Retired splits into retired and replaced
 
 A part that stopped and a part that was replaced are not the same thing, and
 today they wear the same gray `R`. 2780 is the case: 2,492 sets, last seen in
@@ -56,7 +56,7 @@ Both keep the bottom-right slot, so at most one shows and nothing else moves.
 | | glyph | n |
 |---|---|---|
 | retired | `R`, as today | 3550 |
-| updated | redo — a clockwise curved arrow, clickable | 456 |
+| replaced | redo — a clockwise curved arrow, clickable | 456 |
 
 A letter against an arrow is deliberate. The two never appear together, so they
 do not need to read as a pair — they need telling apart, and this also makes the
@@ -65,7 +65,7 @@ wall's one clickable badge look unlike everything else on it.
 Draw the arrow, do not type it: `↻` and `↷` are unreliable in monospace. Draw it
 clockwise, or it reads as undo.
 
-**Clicking an updated badge goes to the successor.** The wall draws to canvas,
+**Clicking an replaced badge goes to the successor.** The wall draws to canvas,
 so the badge has no DOM node to carry a link: this needs hit-testing the badge's
 rect in canvas coordinates. `select.ts` selects a cell, not a mark within one.
 
@@ -78,13 +78,13 @@ Rebrickable publishes `part_relationships.csv.gz` (37,390 rows, six types).
 `fetch-part-years.py` pulls `parts`, `sets`, `inventories` and
 `inventory_parts`; this adds a fifth dump and a table beside `part_years`.
 
-A retired part is *updated* when a relation names a partner with a later last
+A retired part is *replaced* when a relation names a partner with a later last
 year. **Mould (`M`) outranks alternate (`A`)**, or 2780 resolves to 3673, the
 frictionless pin — a part that fits the same hole, not a replacement.
 
 Measured: 456 of the 4,006 retired parts qualify — 310 by mould, 146 by
 alternate. Every successor is an LDraw part; 312 are still current. The other
-3,550 stay plain retired, so updated is the minority badge.
+3,550 stay plain retired, so replaced is the minority badge.
 
 ### The moved target is already free and discarded
 
@@ -98,9 +98,9 @@ not a supersession, but the edge costs nothing to keep.
 Badges run right along the bottom edge from the part number: `4761 T ⚡ ✎`.
 
 Corners do not scale. Two already hold captions (years top-right, part id
-bottom-left), `popular` and `retired`/`updated` hold the other two, and this
+bottom-left), `popular` and `retired`/`replaced` hold the other two, and this
 adds eight — eleven discs into two corners. Nothing moves: `popular` keeps top-left,
-`retired`/`updated` bottom-right, years top-right, and the part id keeps bottom-left with
+`retired`/`replaced` bottom-right, years top-right, and the part id keeps bottom-left with
 the strip growing rightward from it.
 
 Glyphs show from `BADGE_MIN_PX` (56); the id text joins them at `LABEL_MIN_PX`

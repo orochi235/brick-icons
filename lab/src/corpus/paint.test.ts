@@ -362,11 +362,11 @@ it('badges a cell once it is drawn big enough to hold one, one tag per corner', 
   expect(badgesFor(cell('b', 1, 'sha-b', { tags: ['minifig'] }), 200)).toEqual([]);
 });
 
-it('gives retired and updated the same corner, never both at once', () => {
+it('gives retired and replaced the same corner, never both at once', () => {
   const stopped = badgesFor(cell('a', 0, 'sha-a', { tags: ['retired'] }), 200);
-  const replaced = badgesFor(cell('b', 1, 'sha-b', { tags: ['updated'] }), 200);
+  const replaced = badgesFor(cell('b', 1, 'sha-b', { tags: ['replaced'] }), 200);
   expect(stopped.map((b) => [b.tag, b.mark, b.corner])).toEqual([['retired', 'archive', 'br']]);
-  expect(replaced.map((b) => [b.tag, b.mark, b.corner])).toEqual([['updated', 'redo', 'br']]);
+  expect(replaced.map((b) => [b.tag, b.mark, b.corner])).toEqual([['replaced', 'redo', 'br']]);
 });
 
 it('strips the kind badges in tag order, system before property', () => {

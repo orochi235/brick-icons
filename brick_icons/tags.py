@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 #: belongs to, then what is true of the drawing, then what became of it.
 TAGS = ("sticker", "minifig", "technic", "duplo", "weird",
         "electric", "magnet", "printed", "composite",
-        "obsolete", "retired", "updated", "popular", "obscure")
+        "obsolete", "retired", "replaced", "popular", "obscure")
 
 #: A category maps to a tag of its own name once its LDraw marker is stripped.
 _CATEGORY_TAGS = {"sticker": "sticker", "minifig": "minifig",
@@ -81,7 +81,7 @@ def tags_for(category: str | None, printed: bool, obsolete: bool,
     most of the library, once primitives, subparts and unofficial parts are
     counted. That is missing data, not evidence of rarity, so it earns no tag.
 
-    `retired` and `updated` are exclusive: a part that stopped and a part that
+    `retired` and `replaced` are exclusive: a part that stopped and a part that
     was replaced share a badge slot on the wall, and 2780 is the second.
     """
     if this_year is None:
@@ -99,7 +99,7 @@ def tags_for(category: str | None, printed: bool, obsolete: bool,
     if is_composite(part_id):
         out.add("composite")
     if year_to is not None and year_to <= this_year - RETIRED_AFTER_YEARS:
-        out.add("updated" if successor else "retired")
+        out.add("replaced" if successor else "retired")
     if sets is not None:
         if sets >= POPULAR_SETS:
             out.add("popular")

@@ -27,9 +27,14 @@ function draw(canvas: HTMLCanvasElement, entries: [string, CellBadge][]) {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   ctx.scale(dpr, dpr);
-  ctx.fillStyle = '#ffffff';
+  // The sheet's ground follows the theme rather than being paper-white: a
+  // white badge on a white page is a badge you cannot see.
+  const dark = document.documentElement.dataset.wzlMode === 'dark'
+    || (!document.documentElement.dataset.wzlMode
+        && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  ctx.fillStyle = dark ? '#000000' : '#ffffff';
   ctx.fillRect(0, 0, w, h);
-  ctx.fillStyle = '#333333';
+  ctx.fillStyle = dark ? '#cccccc' : '#333333';
   ctx.font = `13px ${BADGE_FACE}`;
   ctx.textAlign = 'center';
   entries.forEach(([name], i) => ctx.fillText(name, i * COL + COL / 2, 22));

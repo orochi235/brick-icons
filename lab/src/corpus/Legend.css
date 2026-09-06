@@ -113,3 +113,29 @@
   min-width: 6ch;
   text-align: right;
 }
+
+/* The badge section. Its rows are buttons, since picking one filters the
+   wall, where a state row only highlights while hovered. */
+.corpus-legend-subhead {
+  margin-top: 0.5rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid var(--lk-border, #3a3a42);
+}
+
+.corpus-legend-badge-row {
+  width: 100%;
+  background: none;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.corpus-legend-badge-row[data-picked='true'] {
+  background: var(--lk-selected, rgb(255 255 255 / 0.12));
+}
+
+.corpus-legend-badge {
+  flex: 0 0 auto;
+}

@@ -157,14 +157,14 @@ export interface CellBadge {
   dy?: number;
 }
 
-/** The two discs that keep a corner of their own. `retired` and `updated`
+/** The two discs that keep a corner of their own. `retired` and `replaced`
  *  share the bottom-right slot and never both apply -- a part that stopped
  *  and a part that was replaced are different things wearing one badge
  *  today. */
 export const CORNER_BADGES: Record<string, CellBadge> = {
-  popular: { tag: 'popular', mark: 'star', corner: 'tl', field: '#daa520', ink: '#ffffff' },
+  popular: { tag: 'popular', mark: 'star', corner: 'tl', field: '#ff7a00', ink: '#ffffff' },
   retired: { tag: 'retired', mark: 'archive', corner: 'br', field: '#6b6b72', ink: '#ffffff' },
-  updated: { tag: 'updated', mark: 'redo', corner: 'br', field: '#2f7d4f',
+  replaced: { tag: 'replaced', mark: 'redo', corner: 'br', field: '#2f7d4f',
              ink: '#ffffff', accent: '#ffffff', scale: 1.14 },
 };
 
@@ -205,12 +205,19 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
                ink: '#22c8dc', accent: '#f5a623', scale: 0.86 },
 };
 
+/** Every badge the wall can draw, in the order the legend lists them:
+ *  what became of the part, then which system it belongs to, then what is
+ *  true of its drawing. */
+export const ALL_BADGES: Record<string, CellBadge> = {
+  ...CORNER_BADGES, ...STRIP_BADGES,
+};
+
 /** The badge that links somewhere when clicked. Only one does. */
-export const LINKED_BADGE = 'updated';
+export const LINKED_BADGE = 'replaced';
 
 export function isRetired(cell: Cell): boolean {
   return (cell.tags?.includes('retired') ?? false)
-      || (cell.tags?.includes('updated') ?? false);
+      || (cell.tags?.includes('replaced') ?? false);
 }
 
 /** How big a badge is drawn on a cell of this width, and how far its center
@@ -233,7 +240,9 @@ export function captionSize(cellPx: number): number {
  *  inset stays the corner badges', so the row lines up with them. */
 export function stripGeometry(cellPx: number) {
   const size = captionSize(cellPx);
-  return { size, radius: size * 0.72, inset: badgeGeometry(cellPx).inset };
+  // Tighter to its type than a corner badge is: the strip sits in the line
+  // of the part number, where a disc sized like a corner one crowds it.
+  return { size, radius: size * 0.63, inset: badgeGeometry(cellPx).inset };
 }
 
 /** How far a corner mark sits off the cell's edge. A fraction of the cell

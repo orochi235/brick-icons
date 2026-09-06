@@ -69,7 +69,7 @@ export const drawStar: Mark = (ctx) => {
 
 // An archive box: a body under its lid band, with the handle slot punched
 // out of its front. Retired now means put away
-// rather than replaced -- `updated` took the parts that had a successor.
+// rather than replaced -- `replaced` took the parts that had a successor.
 // Kept well inside the unit box: a full-extent rectangle puts its corners at
 // 1.41, which is almost the field's edge.
 export const drawArchive: Mark = (ctx, field) => {

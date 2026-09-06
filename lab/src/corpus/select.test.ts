@@ -3,7 +3,7 @@ import { applySelection, DEFAULT_SHOWN, type Selection } from '@lab/corpus/selec
 import type { Cell } from '@lab/corpus/types';
 
 const base: Omit<Selection, 'sort' | 'filter' | 'shown'> = {
-  grouping: 'none', tint: 'status', excluded: [], desc: true,
+  grouping: 'none', tint: 'status', excluded: [], badges: [], desc: true,
 };
 
 const cell = (over: Partial<Cell> & { id: string; index: number }): Cell => ({

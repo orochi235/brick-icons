@@ -38,8 +38,10 @@ const client = {
   searchParts: () => Promise.resolve([]),
 } as any;
 
+// The wall's own canvas, by class: the legend's badge swatches and the
+// loupe are canvases too, and the first one in the document is not the wall.
 const findCanvas = (container: HTMLElement) => waitFor(() => {
-  const el = container.querySelector('canvas');
+  const el = container.querySelector('canvas.corpus-canvas');
   expect(el).toBeTruthy();
   return el as HTMLCanvasElement;
 });

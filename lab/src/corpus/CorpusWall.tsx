@@ -49,7 +49,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
   const [level, setLevel] = useState(32);
   const [selection, setSelection] = useState<Selection>({
     sort: 'id', filter: 'all', shown: DEFAULT_SHOWN, grouping: 'none',
-    tint: 'status', excluded: [], desc: true,
+    tint: 'status', excluded: [], badges: [], desc: true,
   });
   const [cam, setCam] = useState<View | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
@@ -284,7 +284,9 @@ export function CorpusWall({ client }: { client: LabClient }) {
                       onClose={() => setCarded(null)} />
           )}
           {cells && (
-            <Legend cells={cells} highlight={highlight} onHighlight={setHighlight} />
+            <Legend cells={cells} highlight={highlight} onHighlight={setHighlight}
+                    badges={selection.badges}
+                    onBadges={(update) => setSelection((s) => ({ ...s, badges: update(s.badges) }))} />
           )}
           <ParamsPanel params={params} setParam={setParam} reset={resetParams} />
         </div>
