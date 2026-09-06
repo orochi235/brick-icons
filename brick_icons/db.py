@@ -394,7 +394,8 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
     path.unlink(missing_ok=True)
     conn = connect(path)
     counts = {"parts": seed_parts(conn, ldraw_dir), "renders": 0,
-              "measurements": 0, "skipped": 0, "defects": 0, "statuses": 0}
+              "measurements": 0, "skipped": 0, "replaced": 0,
+              "defects": 0, "statuses": 0}
     progress(f"seeded {counts['parts']} parts")
 
     root = Path(root)
@@ -407,6 +408,12 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
         record_render(conn, svg.stem, svg.parent.name, svg, root=root)
         counts["renders"] += 1
         progress(f"render {counts['renders']}: {svg.parent.name}/{svg.stem}")
+
+    # A part drawn by two trees under one engine resolves to one row, and the
+    # tree sorting last wins it. Nothing today collides -- the nodes run an
+    # engine each -- but an archive that carries renders would, and the totals
+    # would not move. Counted so the rebuild says so instead.
+    from_tree: dict[tuple[str, str], Path] = {}
 
     for census_dir in census_dirs:
         census_dir = Path(census_dir)
@@ -421,6 +428,10 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
             source = f"census-{svg.parent.name}"
             if source not in SOURCES:
                 continue
+            first = from_tree.get((svg.stem, source))
+            if first is not None:
+                counts["replaced"] += 1
+                progress(f"replaced {source}/{svg.stem}: {first} by {svg}")
             try:
                 record_render(conn, svg.stem, source, svg, root=root)
             except Exception as e:  # noqa: BLE001
@@ -428,7 +439,10 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
                 counts["skipped"] += 1
                 progress(f"skipped {source}/{svg.stem}: {type(e).__name__} {e}")
                 continue
-            counts["renders"] += 1
+            if first is None:
+                # A replacement is the same row rewritten, not another one.
+                counts["renders"] += 1
+            from_tree[(svg.stem, source)] = svg
             progress(f"render {counts['renders']}: {source}/{svg.stem}")
 
         # rglob, because the backfill gives each batch its own JSONL below the

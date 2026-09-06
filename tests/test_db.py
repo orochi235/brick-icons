@@ -251,7 +251,8 @@ def test_rebuild_walks_renders_and_toml_and_jsonl(tmp_path):
                         root=tmp_path, census_dirs=[tmp_path / "census"],
                         defects_path=defects, commit_sha="abc1234")
     assert counts == {"parts": 4, "renders": 1, "measurements": 1,
-                      "skipped": 0, "defects": 0, "statuses": 0}
+                      "skipped": 0, "replaced": 0, "defects": 0,
+                      "statuses": 0}
 
     conn = db.connect(tmp_path / "corpus.db")
     assert conn.execute("SELECT path FROM renders").fetchone()[0] == \
@@ -477,3 +478,22 @@ def test_census_trees_ignores_a_file_named_like_one(tmp_path):
     (tmp_path / "out" / "census").mkdir()
     (tmp_path / "out" / "census-stream.log").write_text("not a tree\n")
     assert db.census_trees(tmp_path) == [tmp_path / "out" / "census"]
+
+
+def test_one_part_in_two_trees_is_counted_not_swallowed(tmp_path):
+    # One row, and the tree sorting last wins it. The count is what says so:
+    # renders stays at 1, and `replaced` is the only sign the other tree drew
+    # the same part.
+    lib = _library(tmp_path)
+    for dirname in ("census", "census-run2"):
+        d = tmp_path / "out" / dirname / "renders" / "occt"
+        d.mkdir(parents=True)
+        (d / "3001.svg").write_text(SVG)
+
+    counts = db.rebuild(tmp_path / "corpus.db", lib, root=tmp_path)
+    assert counts["renders"] == 1
+    assert counts["replaced"] == 1
+
+    conn = db.connect(tmp_path / "corpus.db")
+    assert conn.execute("SELECT path FROM renders").fetchone()[0] == \
+        "out/census-run2/renders/occt/3001.svg"

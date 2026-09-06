@@ -245,6 +245,14 @@ the count `CENSUS-RUN2.md` records as never attempted. **Beware the run ids:**
 run 1 in the database is `out/census`, the live tree; the archive is run 3.
 Read `args.dir`, never the id.
 
+A part drawn by two trees under one engine is **one row**, won by whichever
+tree sorts last — the nodes run an engine each so nothing collides today, but
+an archive carrying renders would, and the render total would not move. The
+rebuild counts it as `replaced` rather than leaving it silent. Renders sitting
+directly in `renders/` instead of `renders/<engine>/` are skipped: three
+`<part>.occt.svg` files from an early smoke run are there, and their stem would
+file a row under a part id that does not exist.
+
 **Merge note, delete once `corpus-grouping` lands.** Branch
 `census-multi-dir-index` renamed `rebuild`'s `census_dir` to `census_dirs` (a
 sequence, `None` for every tree) and `counts` gained a `"skipped"` key.
