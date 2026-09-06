@@ -22,9 +22,9 @@ const cells: Cell[] = [
 it('renders a row per state with its own count', () => {
   render(<Legend cells={cells} highlight={null} onHighlight={() => {}} />);
   expect(screen.getByLabelText('unknown, 2 parts')).toBeTruthy();
-  expect(screen.getByLabelText('timed out here, 2 parts')).toBeTruthy();
-  expect(screen.getByLabelText('open defect here, 1 parts')).toBeTruthy();
-  expect(screen.getByLabelText('render error here, 0 parts')).toBeTruthy();
+  expect(screen.getByLabelText('timed out, 2 parts')).toBeTruthy();
+  expect(screen.getByLabelText('open defect, 1 parts')).toBeTruthy();
+  expect(screen.getByLabelText('render error, 0 parts')).toBeTruthy();
   expect(screen.getByLabelText('problem in another slot, 0 parts')).toBeTruthy();
   expect(screen.getByLabelText('defect in another slot, 0 parts')).toBeTruthy();
 });
@@ -32,7 +32,7 @@ it('renders a row per state with its own count', () => {
 it('reports the hovered state, and null once the pointer leaves', () => {
   const onHighlight = vi.fn();
   render(<Legend cells={cells} highlight={null} onHighlight={onHighlight} />);
-  const row = screen.getByLabelText(/timed out here/);
+  const row = screen.getByLabelText(/timed out/);
   fireEvent.mouseEnter(row);
   expect(onHighlight).toHaveBeenCalledWith('timeout');
   fireEvent.mouseLeave(row);
@@ -42,7 +42,7 @@ it('reports the hovered state, and null once the pointer leaves', () => {
 it('treats keyboard focus the same as hover, and blur the same as leaving', () => {
   const onHighlight = vi.fn();
   render(<Legend cells={cells} highlight={null} onHighlight={onHighlight} />);
-  const row = screen.getByLabelText(/open defect here/);
+  const row = screen.getByLabelText(/open defect/);
   fireEvent.focus(row);
   expect(onHighlight).toHaveBeenCalledWith('defect');
   fireEvent.blur(row);

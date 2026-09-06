@@ -113,9 +113,9 @@ export const CELL_STATES = Object.keys(CELL_PALETTE) as CellState[];
 export const STATE_LABEL: Record<CellState, string> = {
   unknown: 'unknown',
   outOfScope: 'currently out of scope',
-  timeout: 'timed out here',
-  failed: 'render error here',
-  defect: 'open defect here',
+  timeout: 'timed out',
+  failed: 'render error',
+  defect: 'open defect',
   accepted: 'known issue, not fixing',
   problemElsewhere: 'problem in another slot',
   defectElsewhere: 'defect in another slot',

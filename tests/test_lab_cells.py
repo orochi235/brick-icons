@@ -319,3 +319,9 @@ def test_erroring_elsewhere_means_this_facet_s_other_engine(conn):
     conn.commit()
     assert cells.cells(conn, source="census-white-naive")["cells"][0][
         "error_elsewhere"] is True
+
+
+def test_a_third_party_part_is_out_of_scope(conn):
+    _part(conn, "t1008", title="| Brickstuff Pico LED", category="|")
+    conn.commit()
+    assert cells.cells(conn)["cells"][0]["out_of_scope"] is True

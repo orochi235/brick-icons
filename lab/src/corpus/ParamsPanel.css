@@ -2,7 +2,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  width: 17rem;
+  width: var(--corpus-panel-width, 17rem);
   max-height: 80vh;
   padding: 0.5rem 0.6rem;
   /* `--wzl-surface-raised` carries alpha in the active theme (a frosted-glass

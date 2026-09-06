@@ -4,7 +4,7 @@ import {
 } from '@weasel-js/core';
 import { LabShell } from '@weasel-js/labkit';
 import type { LabClient } from '@lab/api/client';
-import { clampWallView } from '@lab/corpus/clamp';
+import { clampWallView, DEFAULT_BLANK_PX } from '@lab/corpus/clamp';
 import { categoryOf, COVERAGE_ORDER, groupers, rollUp } from '@lab/corpus/facts';
 import { FilterBar } from '@lab/corpus/FilterBar';
 import { bandedLayout, blockLayout } from '@lab/corpus/grouped';
@@ -59,6 +59,18 @@ export function CorpusWall({ client }: { client: LabClient }) {
   const [searchNotice, setSearchNotice] = useState<string | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const { width, height } = useCanvasSize(box);
+  // Read rather than repeated in TypeScript: the panels set their own width
+  // from this property, and the pan allowance has to be the same number.
+  const [blankPx, setBlankPx] = useState(DEFAULT_BLANK_PX);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const declared = getComputedStyle(el).getPropertyValue('--corpus-panel-width').trim();
+    const px = declared.endsWith('rem')
+      ? parseFloat(declared) * parseFloat(getComputedStyle(document.documentElement).fontSize)
+      : parseFloat(declared);
+    if (Number.isFinite(px) && px > 0) setBlankPx(px);
+  }, [width]);
   const size = { width, height };
   const touched = useRef(false);
   const camInitialized = useRef(false);
@@ -136,7 +148,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
   // each intermediate frame too, not just once it comes to rest.
   const updateCam = (next: View) => {
     setCam(laid.bounds.w > 0 && size.width > 0 && size.height > 0
-      ? clampWallView(next, laid.bounds, size, pitch)
+      ? clampWallView(next, laid.bounds, size, blankPx)
       : next);
   };
 

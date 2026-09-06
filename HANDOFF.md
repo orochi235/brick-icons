@@ -369,67 +369,92 @@ all 23 tasks of `docs/superpowers/plans/2026-09-05-corpus-wall.md` landed.
 Run it: `.venv/bin/python -m brick_icons.lab` and `cd lab && npm run dev`, then
 `/corpus.html`. `scripts/index-census-renders.py` indexes census renders and
 `scripts/bake-thumbs.py` bakes the sheets; both are idempotent.
+### 2026-09-06: the wall, after a day of it
 
-### 2026-09-06: what the wall grew today
-
-Committed on `main` through `9f5b8bc`, unpushed. All of it is visible at
+Committed on `main` through `a923d92`, **unpushed**. All of it is live at
 `/corpus.html` with `.venv/bin/python -m brick_icons.lab` and `npm run dev`
-running -- **restart the lab server after pulling**, it is long-lived and the
-cell list gained fields.
+running. **Restart the lab server after pulling** -- it is long-lived, the
+cell payload gained fields, and `corpus.db` is schema 2 now: new code against
+an old database fails every cells request with `no such column: source`.
+Rebuild it the way the loop does (build to a temp, checkpoint, `mv`) or wait
+for a tick of `scripts/census-ingest.sh 900`.
 
-- **Renders are drawn on the bake's white ground at every rung.** Zooming
-  past the 128px PNG used to swap a cell's surround to the dark canvas.
-- **The vector rung lands its rasters during a zoom, not after it.** It was
-  canceling every fetch in flight on each camera frame. Residency is now a
-  pixel budget, not a flat 96 cells, so a screenful of small cells all
-  sharpen. The same cancellation bug was in the loose 128px rung, where a
-  dropped image was never re-requested.
-- **`out_of_scope`**: a seventh cell state, ahead of every problem state, for
-  parts the project is not trying to draw. The rule is a category
-  (`db.OUT_OF_SCOPE_CATEGORIES`, today just `Sticker`), which covers 2,701
-  cells that used to sit in the unknown gray.
-- **Part years and tags.** `scripts/fetch-part-years.py` derives first year,
-  last year and set count from Rebrickable's public dumps (no key) into
-  `tests/goldens/part-years.csv`, committed, and into `part_years` in
-  corpus.db. `brick_icons/tags.py` turns those plus the library's category
-  and flags into tags -- sticker, minifig, technic, duplo, printed, obsolete,
-  retired, popular, obscure. **This is the Rebrickable data the grouping plan
-  below was waiting on**; its year and category facets can read `part_years`
-  and `tags_for` rather than fetching anything.
-- **Detail views**: the lightbox draws the part from every slot that has a
-  render (straight from the SVG, so it does not go blank when a slot's bakes
-  are stale) and links out to Rebrickable, BrickLink, Brickset and the LDraw
-  library. Both it and the hover card show the years and the tag row.
-- **A retired cell wears an R** in its corner once it is drawn past 56px.
-  Mike wants these badges toggleable eventually; nothing is toggleable yet.
+**What a cell knows.** `part_years` carries first year, last year and set
+count for 9,269 parts, derived from Rebrickable's public dumps by
+`scripts/fetch-part-years.py` into the committed
+`tests/goldens/part-years.csv` -- `db.rebuild` reloads it, because a rebuild
+drops the database and the ingest cron rebuilds every 15 minutes.
+`brick_icons/tags.py` turns those plus the library's category and flags into
+tags: sticker, minifig, technic, duplo, printed, obsolete, retired, popular,
+obscure. Retired means the last set is two years back; obscure covers the
+sideline themes whatever their set count; a part the catalogs do not list gets
+neither popular nor obscure, because that is missing data rather than rarity.
 
-Later the same day, what a square says:
+**What a cell shows.** Its state color, and now: a slash corner to corner when
+it is undrawn and bordered; its state's border over the thumbnail when it is
+drawn (under the drawing at the vector rung, over it on an opaque bake); a
+gray R bottom-right when retired and a goldenrod star top-left when popular;
+its years top-right and its part number bottom-left past 110px; and a wash
+over the whole cell when retired, painted by the viewer at
+`params.retiredWash` rather than baked -- **the bake has one ground again**,
+and changing how a retired cell looks costs a repaint, not 7,600 rebakes.
+Out-of-scope cells are not squares at all: a lavender sticker glyph, or the
+category's initial, at 60% of the cell.
 
-- **An undrawn cell with a border is struck corner to corner** in the
-  border's own color; a drawn cell now wears that border too (under the
-  drawing at the vector rung, over it on an opaque bake).
-- **Retired parts sit on a light gray ground**, baked into the sprites
-  (`thumbs.RETIRED_GROUND`, `grounds.json` recording what each part was baked
-  on) and matched by `paint.groundFor`, so a cell holds its shade across
-  rungs. **Rebaking every slot is what makes this visible** -- `bake-thumbs.py`
-  does it and is idempotent.
-- **The R badge** is a white-on-black disc, drawn over the border.
-- **`~Moved to` redirects are off the map by default** -- 1,159 of the 24,591
-  files -- with checkboxes in the filter bar for them and for the
-  out-of-scope parts. They are still in `parts`, and still indexed: a cell's
-  sprite position is its index over the whole corpus, so dropping them from
-  the table would renumber every sheet.
-- Numeric params carry units (`ms`, `px`) through a resolved schema, since a
-  legacy `ConfigField` cannot hold one.
+**What is out of scope**, in `db.OUT_OF_SCOPE_CATEGORIES`: `Sticker` and `|`
+(LDraw's mark for a part nobody at LEGO made -- Circuit Cubes, Brickstuff,
+Hubelino, BuWizz). 2,794 cells. Separately, `~Moved to` redirects are hidden
+from the view rather than dropped from `parts`: a cell's sprite position is
+its index over the whole corpus, so removing them would renumber every sheet.
+Checkboxes in the filter bar bring both classes back.
 
-Two things left on the floor:
+**A `wontfix` defect has its own state** and its own count. It used to be
+counted as open, so a fault someone decided to live with painted exactly like
+a live one.
 
-- **The census draws the `~Moved` redirects**, which are now hidden on the
-  wall and can never be worth rendering. Skipping them in `out/census*/`
-  batch lists would give back whatever share of the run they are.
-- **A 512px baked level** between the 128px PNG and the SVG was considered
-  and deferred: the vector rung got fast enough that the pop-in it would
-  cover may be gone. Roughly 600MB per slot if it is ever wanted.
+**Chrome.** The lightbox is a modal portaled over the shell header, showing
+the part as every slot drew it, with links out to Rebrickable, BrickLink,
+Brickset and the LDraw library, an `Open in lab` link (`index.html?part=<id>`)
+and a form that files a defect against the slot being viewed. A drag or a
+wheel drops the hover card. A slot change keeps the old drawings up until the
+new slot's cells and sheets are both in hand. A pan stops a panel width plus
+30px past the wall's edge. Numeric params carry units through a resolved
+schema, since a legacy `ConfigField` cannot hold one.
+
+**Bugs found and fixed along the way, worth not re-finding:** the vector rung
+canceled every raster in flight on each camera frame, so a zoom threw the work
+away and started over; the same cancellation was in the loose rung, where a
+dropped image was never re-requested; `engine_for` took everything after
+`census-`, so both white slots asked for measurements from an engine called
+`white-naive` and joined to nothing; and two bakes running at once dropped
+5,110 entries from two slots' `baked.json`, which the wall reads as "stale"
+and draws as a blank cell (that was the 29111 report). The last one is why
+`e60f811` writes sidecars atomically -- and why only one bake should run at a
+time.
+
+**Open bug, unreproduced: Mike reports SVG pop-in "or possibly even
+mipmapping" broken** after the slot-hold change (`1117576`, which made
+`useCells`/`useSheets` report the slot their contents belong to and had the
+wall draw only the newest slot both agree on). What I measured before handing
+over: a 34-step zoom fires 226 loose-thumb requests and 24 vector requests,
+no console errors, and a canvas capture at ~110px cells shows correct
+thumbnails, captions and badges. So the fetches happen and the paint is
+right at that rung -- the suspicion is the rung *choice*, i.e. `level` or the
+`drawnSource` the thumb hooks are keyed on, not the fetching. Reproduce
+before changing anything; the prime suspects are `setLevel(32)` now firing on
+`drawnSource` rather than `source`, and `sheets` being `{}` for the frames
+where `fetched.source !== loaded.source`.
+
+**Still open.** Badges and captions are not toggleable, and Mike wants them
+to be. The census draws the `~Moved` redirects, which are hidden on the wall
+and can never be worth rendering -- skipping them in the batch lists would
+give back whatever share of the run they are. A 512px baked level between the
+128px PNG and the SVG was considered and deferred once the vector rung got
+fast; it would cost roughly 600MB per slot.
+
+**`~/src/castleblack/wall/README.md`** is a writeup of pulling the wall out
+into its own repo with this corpus as one host. Nothing is built, and it
+argues for waiting until the census stops landing renders.
 
 **Grouping it is the follow-up**, specified and planned and unbuilt:
 `docs/superpowers/specs/2026-09-05-corpus-grouping-design.md` and
