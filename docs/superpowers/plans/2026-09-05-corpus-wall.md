@@ -4053,6 +4053,86 @@ git commit -m "give the wall a caret, moved by the arrow keys"
 
 ---
 
+### Task 22c: A params panel
+
+Every tuning constant in the wall is a literal in a source file, and the palette
+alone has taken four rounds of hand-editing hex and reloading. A panel turns
+that into seconds.
+
+**Use labkit's `ControlPanel`.** It takes a `ConfigField[]` and a config object —
+it is not coupled to `defineInstrument`, and it builds on `@weasel-js/ui`'s rows
+including `ColorRow`, `SliderRow`, `NumberRow` and `SelectRow`. Same call as
+`LabShell`: take the widget, define the wall's own schema. **Do not** reach for
+the CLI-derived schema; these are view parameters, not render flags.
+
+**The palette needs no new plumbing.** `readPalette` already resolves each state
+from a CSS custom property, and `Wall.tsx` already re-reads on a mutation. So a
+colour row writes `--corpus-cell-<state>-<fill|border>` on the root element and
+the wall follows. Wiring colours through React state instead would fork that
+pipeline — do not.
+
+**Files:**
+- Create: `lab/src/corpus/params.ts`, `params.test.ts`, `ParamsPanel.tsx`,
+  `ParamsPanel.test.tsx`
+- Modify: `lab/src/corpus/CorpusWall.tsx`, `paint.ts`, `Wall.tsx`, `levels.ts`,
+  and the modules holding the constants below
+
+- [ ] **Step 1: Gather the constants that earn a knob**
+
+These exist today as literals. Group them:
+
+*Layout* — `CELL` 32 and `GAP` 4 (`CorpusWall.tsx`), and the column count,
+currently `ceil(sqrt(n))` with no way to override.
+
+*Appearance* — the twelve palette values (six states x fill/border);
+`THICK_BORDER_FACTOR` 0.18, `THIN_BORDER_FACTOR` 0.09, `MAX_BORDER_PX` 6 and
+`DIM_ALPHA` 0.25 (`paint.ts`).
+
+*Feel* — `DRAG_THRESHOLD_PX` 4 (`Wall.tsx`) and the 1.5 / 0.67 hysteresis
+factors (`levels.ts`), which are currently inline numbers rather than named
+constants.
+
+Leave out and say why in the report: `PartCard`'s geometry, `caret.ts`'s
+`CROSS_PENALTY`, and `MAX_IN_FLIGHT` — all things nobody tunes by eye. Include
+`POLL_MS` only if it is cheap; it is useful for exercising the trickle-in path.
+
+- [ ] **Step 2: `params.ts` — the schema and its defaults**
+
+A `ConfigField[]` describing the above, with the current literals as defaults, and
+a `Params` type. Every constant it replaces must import its default **from here**,
+so there is one source of truth rather than a literal and a schema that drift.
+
+Test that every field has a default and that the defaults match the values the
+code used before this task — a param panel that silently changes the wall's
+appearance on first load is worse than no panel.
+
+- [ ] **Step 3: Persist and reset**
+
+Params survive a reload (`localStorage`), and the panel has a reset that restores
+defaults. Test both.
+
+- [ ] **Step 4: The panel**
+
+`ParamsPanel.tsx` renders `ControlPanel` in a `FloatingPanel`, as `Legend` does.
+Colour rows write CSS custom properties on the root; everything else feeds the
+wall through props.
+
+- [ ] **Step 5: Run, drive it, commit**
+
+`npx vitest run src/corpus` and `npx tsc -b --noEmit` clean.
+
+In the browser: change a cell colour and confirm the wall repaints without a
+reload; change `CELL` and confirm the grid re-flows and the level ladder still
+picks sensibly; reload and confirm the changes survived; reset and confirm the
+wall returns to what it looks like today. Screenshot the panel and slop it.
+
+```bash
+git add lab/src/corpus
+git commit -m "a params panel for the wall's own tuning constants"
+```
+
+---
+
 ### Task 22b: A search box that goes to the part
 
 The wall needs the lab's part search. It is nearly shareable already — `client`
