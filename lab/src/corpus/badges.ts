@@ -119,16 +119,17 @@ export const drawMinifig: Mark = (ctx) => {
   ctx.restore();
 };
 
-// Composite: two overlapping squares, the universal mark for more than one
-// item. The front square is bordered in the field so the two read apart
-// rather than as one stepped blob.
+// Composite: two squares with their overlap knocked out -- a symmetric
+// difference, which says two things meeting rather than one stacked on
+// another. Filled twice and then cut, so the hole is exactly the
+// intersection.
 export const drawComposite: Mark = (ctx, field) => {
   ctx.fillRect(-0.88, -0.88, 1.2, 1.2);
+  ctx.fillRect(-0.32, -0.32, 1.2, 1.2);
   ctx.save();
   ctx.fillStyle = field;
-  ctx.fillRect(-0.44, -0.44, 1.32, 1.32);
+  ctx.fillRect(-0.32, -0.32, 0.64, 0.64);
   ctx.restore();
-  ctx.fillRect(-0.32, -0.32, 1.2, 1.2);
 };
 
 // Technic's T, drawn rather than set: a font's italic T carries a short
