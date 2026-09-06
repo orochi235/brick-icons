@@ -165,7 +165,7 @@ export const CORNER_BADGES: Record<string, CellBadge> = {
   popular: { tag: 'popular', mark: 'star', corner: 'tl', field: '#daa520', ink: '#ffffff' },
   retired: { tag: 'retired', mark: 'archive', corner: 'br', field: '#6b6b72', ink: '#ffffff' },
   updated: { tag: 'updated', mark: 'redo', corner: 'br', field: '#2f7d4f',
-             ink: '#ffffff', accent: '#ffe14d', scale: 1.14 },
+             ink: '#ffffff', accent: '#ffffff', scale: 1.14 },
 };
 
 /** The system letters are set in a wide rounded sans rather than the wall's
