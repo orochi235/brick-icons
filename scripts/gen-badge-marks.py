@@ -307,7 +307,7 @@ if __name__ == "__main__":
 
     magnet_pts = horseshoe()
     tip = -470.0
-    cuts = contract(magnet_pts, 0.0, sbox(-GRID, -400.0, GRID, -400.0 + 210.0))
+    cuts = contract(magnet_pts, 0.0, sbox(-GRID, -400.0, GRID, -400.0 + 145.0))
     out.append(emit_many("MAGNET_CUT", cuts))
     print(f"MAGNET_CUT: {len(cuts)} pieces")
 
