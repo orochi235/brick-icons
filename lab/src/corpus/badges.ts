@@ -172,6 +172,8 @@ export const drawMinifig: Mark = (ctx) => {
 // rather than merely stacked. Each piece takes its own color and the seam
 // between them is cut in the field, so neither needs an outline.
 export const drawComposite: Mark = (ctx, field, accent) => {
+  ctx.save();
+  ctx.rotate(-Math.PI / 2);
   ctx.beginPath();
   ctx.moveTo(-0.6, -0.9);
   ctx.lineTo(0.6, -0.9);
@@ -201,6 +203,7 @@ export const drawComposite: Mark = (ctx, field, accent) => {
   ctx.lineTo(0, 0.3);
   ctx.lineTo(-0.6, 0.3);
   ctx.stroke();
+  ctx.restore();
   ctx.restore();
 };
 
