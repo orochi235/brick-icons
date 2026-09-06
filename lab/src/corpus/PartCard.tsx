@@ -59,7 +59,8 @@ export function PartCard({ cell, source, at, viewport, onOpen, onClose }: {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const years = yearRange(cell.year_from, cell.year_to);
+  const years = yearRange(cell.year_from, cell.year_to,
+                          (cell.tags ?? []).includes('retired'));
 
   return (
     <div className="corpus-card" ref={ref} role="dialog"

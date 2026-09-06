@@ -32,7 +32,9 @@ export function Lightbox({ partId, source, client, onClose }: {
   // long-lived process and outlives a reload of the page in front of it.
   const slots = detail?.slots ?? [];
   const years = detail
-    ? yearRange(detail.part.year_from, detail.part.year_to) : null;
+    ? yearRange(detail.part.year_from, detail.part.year_to,
+                (detail.part.tags ?? []).includes('retired'))
+    : null;
 
   return (
     <div className="corpus-lightbox" role="dialog" aria-label={`Part ${partId}`}>

@@ -249,10 +249,11 @@ def test_rebuild_walks_renders_and_toml_and_jsonl(tmp_path):
 
     counts = db.rebuild(tmp_path / "corpus.db", ldraw_dir=library,
                         root=tmp_path, census_dirs=[tmp_path / "census"],
-                        defects_path=defects, commit_sha="abc1234")
+                        defects_path=defects, years_path=tmp_path / "none.csv",
+                        commit_sha="abc1234")
     assert counts == {"parts": 4, "renders": 1, "measurements": 1,
                       "skipped": 0, "replaced": 0, "defects": 0,
-                      "statuses": 0}
+                      "statuses": 0, "years": 0}
 
     conn = db.connect(tmp_path / "corpus.db")
     assert conn.execute("SELECT path FROM renders").fetchone()[0] == \
@@ -528,3 +529,20 @@ def test_one_part_in_two_trees_is_counted_not_swallowed(tmp_path):
     conn = db.connect(tmp_path / "corpus.db")
     assert conn.execute("SELECT path FROM renders").fetchone()[0] == \
         "out/census-run2/renders/occt/3001.svg"
+
+
+def test_a_rebuild_keeps_the_part_years(tmp_path):
+    library = _library(tmp_path)
+    years = tmp_path / "part-years.csv"
+    years.write_text("part_id,year_from,year_to,sets,matched\n"
+                     "3001,1979,2026,4252,exact\n")
+    out = tmp_path / "corpus.db"
+    counts = db.rebuild(out, ldraw_dir=library, root=tmp_path,
+                        census_dirs=[], years_path=years)
+    assert counts["years"] == 1
+    conn = db.connect(out)
+    try:
+        row = conn.execute("SELECT * FROM part_years WHERE part_id = '3001'").fetchone()
+    finally:
+        conn.close()
+    assert (row["year_from"], row["year_to"], row["sets"]) == (1979, 2026, 4252)
