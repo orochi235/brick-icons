@@ -134,38 +134,52 @@ that builds `near` changed the SVG bytes. Not slower — wrong. Whatever the
 mechanism, a shapely call threaded over geometry another thread also touches
 has to be proved byte-identical before it is believed.
 
-## In flight: the white line-drawing census facet, second pass
+## In flight: the white census facet, third pass -- the 300s cap
 
-Two jobs are running as of 2026-09-06 12:10, deadline ~18:10:
-`census-white-naive` (857df647, msb-uai) and `census-white-occt`
-(ebdc20b3, studio), launched by the onto session as resumes of the pair it
-pruned to restart the node agents. Streams collect into
-`out/census-white-{naive,occt}/`. **The ingest loop belongs to the Database
-web UI session** -- one loop, not two.
+Two jobs launched 2026-09-06 17:04, deadline 05:04: `census-white-naive-r2`
+(1183e8ff, msb-uai, 10 workers, 1,909 parts) and `census-white-occt-r2`
+(1cef35fc, studio, 8 workers, 959 parts). **Per-part cap is 300s, up from
+120s**, `HARD=600`. Batch lists are `out/census-white/{naive,occt}-retry-batches.txt`,
+built by `census-coverage.py --facet white --out out/census-white/todo`;
+`onto fetch --stream` collects into `out/census-white-{naive,occt}/`. **The
+ingest loop belongs to the Database web UI session** -- one loop, not two.
 
-Two bugs the facet caused, both fixed, both the same shape: a facet had no
-identity in a table, so the newest row won and the older facet silently read
-as the newer one.
+Parts that only ever timed out at 120s are finishing at 300s, so the cap was
+the binding constraint and not a rendering fault.
 
-- `e60f811` -- renders. `config_key` comes from the source alone, so indexing
-  a second facet under `census-<engine>` replaced the oracle's rows.
-  `census_source` now reads the tree name.
-- `a1295f5` -- measurements. Same again one table over: both facets of an
-  engine are "naive", `census-white-*` sorts last so it won `MAX(run_id)`, and
-  every oracle cell on the wall showed white figures. **Schema 2**: a reader
-  on older code refuses the database rather than degrading, so restart any
-  lab server after the next rebuild.
+**onto's automatic pool sizing gets this job wrong.** It divides free memory
+by the task's recorded peak -- 18.3G, which was the whole 8-worker job, not
+one part -- and hands out one worker. Pass `--workers` explicitly; 8 on studio
+and 10 on msb-uai are what earlier passes ran at, at ~2.3G each.
+
+`649bdba` -- **a part the batch attempted now always gets a row.** The
+watchdog kill left the part named in `<jsonl>.inflight` and nowhere else, to
+be buried only on the way into a re-run of that same batch; where onto ordered
+none, the part was in no census at all -- not drawn, not failed, just absent,
+and so invisible to the coverage list the next run is built from. A segfault
+was the same hole one level up, losing every part after the killer.
+`census-batch.sh` buries the in-flight part itself and resumes the batch;
+`compare-silhouette-truth.py --bury` writes that row with the facet's own
+engine/angle/style/strokes. 120 naive and 147 occt parts went missing this way.
+
+**Read a facet by `source`, never by `engine`** -- an engine's two facets are
+both "naive". `census-coverage.py --facet` does; its default oracle path still
+reads by engine and counts a white measurement as the oracle's.
+
+Two earlier bugs of that same shape, both fixed: `e60f811` (renders --
+`config_key` comes from the source alone, so a second facet indexed under
+`census-<engine>` replaced the oracle's rows) and `a1295f5` (measurements --
+`census-white-*` sorts last, won `MAX(run_id)`, and every oracle cell on the
+wall showed white figures; **schema 2**, so restart any lab server after the
+next rebuild).
 
 **Do not read a white row against an oracle row.** Strokes put a ~1px band
 outside the fill boundary everywhere, moving `extra_dist_px` 99th from ~0.45px
 to ~1.01px on every part. The facet is worth having for its drawings.
 
-To finish after this pass, rebuild the remaining lists the same way and
-relaunch; `--skip-done` reads the JSONL already collected, and the batch
-lists must be rsync'd to each node because `--each` reads its list in the
-tree and `out/` is gitignored. **~2,000 parts per engine were never attempted
-and a further ~2,100 only ever timed out at the 120s cap** -- that second
-bucket needs a raised cap to mean anything, not a re-run.
+**Not built:** the wall wants a third border color for a part that renders
+correctly but slowly, distinct from one that fails. `measurements.secs`
+already carries what it needs; nothing reads it for status yet.
 
 ## Superseded: the first white census pass
 
