@@ -43,7 +43,7 @@ from scipy import ndimage
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from brick_icons import cli, hlr
+from brick_icons import cli, hlr, timing
 from brick_icons import build
 from brick_icons.batch import Runner
 
@@ -116,8 +116,13 @@ def one(part: str, args, tmp: Path) -> dict:
     # slow to draw or slow to build a reference for, and those have different
     # fixes.
     phase, t0 = {}, time.perf_counter()
+    timing.reset()
     cli.process_one(cfg, part, tmp)
     phase["render"] = round(time.perf_counter() - t0, 2)
+    # The render's own split (geometry / decoration / fill), each exclusive of
+    # the others. What it does not name is the SVG emit, so these sum to less
+    # than `render`.
+    phase.update(timing.phases())
 
     t0 = time.perf_counter()
     svg, png = tmp / f"{part}.svg", tmp / f"{part}.png"

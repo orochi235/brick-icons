@@ -4,6 +4,7 @@ from collections import defaultdict, namedtuple
 from pathlib import Path
 import numpy as np
 
+from . import timing
 from . import arcfit
 from . import primitives
 from . import repair
@@ -998,6 +999,7 @@ def _is_printed(path) -> bool:
     return "pattern" in desc or "sticker" in desc
 
 
+@timing.timed("geometry")
 def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
                      cull=True, engine="naive"):
     if engine not in VALID_ENGINES:

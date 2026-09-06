@@ -7,6 +7,7 @@ from collections import Counter, defaultdict
 import numpy as np
 from PIL import Image, ImageDraw
 
+from . import timing
 from . import colors, geom2d, primitives, unwrap
 
 
@@ -1248,6 +1249,7 @@ def face_fill(face, style, ldraw_dir):
     return "#" + hex_str[2:]
 
 
+@timing.timed("fill")
 def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
              refits=None, loops=None, strokes=None, line_px=2.0,
              sil_px=2.0, drop=None, weld_corners=False, ldraw_dir="vendor/ldraw"):

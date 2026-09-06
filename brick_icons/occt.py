@@ -38,6 +38,7 @@ from OCP.BRepMesh import BRepMesh_IncrementalMesh
 from OCP.TopLoc import TopLoc_Location
 from OCP.BRepTools import BRepTools, BRepTools_WireExplorer
 
+from . import timing
 from . import hlr, primitives
 
 TOL = 1e-4
@@ -1377,6 +1378,7 @@ def ordered_faces(shape, proj, out=None):
     return shade.order_faces(faces, proj, 1e-3 * zrange, own_occ=own_occ)
 
 
+@timing.timed("decoration")
 def _with_decoration(faces, out, proj):
     """Print, back onto the body OCCT drew.
 

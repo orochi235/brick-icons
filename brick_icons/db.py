@@ -19,7 +19,7 @@ from brick_icons.lab import cache, partindex
 from brick_icons.lab import defects as defects_toml
 
 DEFAULT_PATH = Path("corpus.db")
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 PART_STATUSES = ("unreviewed", "good", "suspect", "broken", "wontfix")
 # Part categories the project is not trying to draw yet. A rule over the
 # library's own category, not a list of ids: it covers parts nobody has seen
@@ -83,6 +83,10 @@ CREATE TABLE IF NOT EXISTS measurements (
   missing_comps INTEGER,
   extra_d99 REAL, extra_d100 REAL,
   secs REAL,
+  -- Where those seconds went, as the census's own `phase` dict. JSON rather
+  -- than columns because the phases follow the engine: three landed in one
+  -- evening, and each would otherwise have been a migration.
+  phases TEXT,
   error TEXT, detail TEXT,
   PRIMARY KEY (run_id, part_id, engine)
 );
@@ -217,11 +221,14 @@ def import_census_jsonl(conn: sqlite3.Connection, run_id: int,
                      r.get("missing_px"), r.get("extra_px"),
                      len(r["missing"]) if "missing" in r else None,
                      dist.get("99"), dist.get("100"),
-                     r.get("secs"), r.get("error"), r.get("detail")))
+                     r.get("secs"),
+                     json.dumps(r["phase"]) if r.get("phase") else None,
+                     r.get("error"), r.get("detail")))
     conn.executemany(
         "INSERT OR REPLACE INTO measurements (run_id, part_id, engine, source, "
         "build, missing_px, extra_px, missing_comps, extra_d99, extra_d100, "
-        "secs, error, detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+        "secs, phases, error, detail) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
     conn.commit()
     return len(rows)
 
