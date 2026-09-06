@@ -459,7 +459,15 @@ fast; it would cost roughly 600MB per slot.
 into its own repo with this corpus as one host. Nothing is built, and it
 argues for waiting until the census stops landing renders.
 
-**Grouping it is the follow-up**, specified and planned and unbuilt:
+**Grouping is built, on two branches, not on main.** `corpus-grouping`
+(worktree `.claude/worktrees/corpus-grouping`, 20 commits ahead) and
+`corpus-grouping-v2` (worktree `.claude/worktrees/cg2`, 4 ahead, tip merges
+main as of 2026-09-06 13:06) both carry the sidebar, the tint and grouping in
+the selection. **They collide with the part facts on main**: this branch
+derived its own Rebrickable data, `tests/test_rebrickable.py` and all, while
+main grew `part_years`, `scripts/fetch-part-years.py` and `brick_icons/tags.py`
+from the same source. Two implementations of one idea, and v2's merge of main
+predates the last few commits. The spec and plan behind them:
 `docs/superpowers/specs/2026-09-05-corpus-grouping-design.md` and
 `docs/superpowers/plans/2026-09-05-corpus-grouping.md`. Coverage, category and
 release-year groupings, the Rebrickable facts they group by, and a facet
