@@ -228,17 +228,28 @@ where a render exists, filling in as the census runs. Build-order step 3 of the
 corpus database spec.
 
 - Spec: `docs/superpowers/specs/2026-09-05-corpus-wall-design.md`
-- Plan: `docs/superpowers/plans/2026-09-05-corpus-wall.md` — 22 tasks, each
+- Plan: `docs/superpowers/plans/2026-09-05-corpus-wall.md` — 27 tasks, each
   carrying its verbatim tests and code
 
-**Resume at Task 19, the full gate — the last step.** Tasks 1-18, 19b, 20, 21
-and 22 have all landed; `git log --oneline main..HEAD` says exactly what. The
-working tree also carries uncommitted work on the cell colour states
-(`cells.py`, `paint.ts`, `Wall.tsx`, `PartCard.tsx` and their tests) — finish
-and commit that before running the gate, or the gate runs against a tree that
-is not what merges.
+**Resume at Task 22, the caret.** Read the code, not the checkboxes — none of
+them were ever ticked, so the plan's boxes say nothing about what has landed.
 
-Task 19 is the only place the full suite is allowed to run.
+What is built: Tasks 1-18, 19b, 20, 20b, 20c, 21 and 21b. What is not:
+
+- **Task 22, the caret.** There is no `caret` symbol anywhere in `lab/src`.
+  Its spec and plan landed; the implementation did not.
+- **Task 22b, the search box.** `FilterBar.tsx` has slot, sort and show, no
+  search input.
+- **Task 19, the full gate.** Last, and the only place the full suite runs.
+
+The working tree also carries uncommitted work on the cell colour states
+(`cells.py`, `paint.ts`, `Wall.tsx`, `PartCard.tsx` and their tests). Finish and
+commit that first, or the gate runs against a tree that is not what merges.
+
+**Task 22 has a downstream consumer.** The caret's adjacency must stay
+geometric and its wrapping sequence-based, as its spec says. The grouping
+follow-up inserts whitespace between blocks, and grid arithmetic would break
+there while passing every test written against a dense grid.
 
 ### Two traps in this worktree that make a passing test meaningless
 
