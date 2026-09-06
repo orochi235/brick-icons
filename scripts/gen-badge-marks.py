@@ -44,12 +44,15 @@ def redo_arrow():
     """The subset sign with a head: one filled band, so the head cannot come
     adrift of the stroke it is supposed to finish."""
     rm, t = 330.0, 78.0
-    a0, ah, a1 = math.pi / 3, math.pi * 1.60, math.pi * 1.78
+    a0, ah, a1 = math.pi * 0.1, math.pi * 1.62, math.pi * 1.89
     outer = arc(0, 0, rm + t, a0, ah, 70)
     inner = arc(0, 0, rm - t, ah, a0, 70)
-    head = [(math.cos(ah) * (rm + t * 2.9), math.sin(ah) * (rm + t * 2.9)),
+    # Base half-width against the chord to the apex, so the head comes out
+    # near enough equilateral rather than squat.
+    wing = t * 2.0
+    head = [(math.cos(ah) * (rm + wing), math.sin(ah) * (rm + wing)),
             (math.cos(a1) * rm, math.sin(a1) * rm),
-            (math.cos(ah) * (rm - t * 2.9), math.sin(ah) * (rm - t * 2.9))]
+            (math.cos(ah) * (rm - wing), math.sin(ah) * (rm - wing))]
     return outer + head + inner
 
 

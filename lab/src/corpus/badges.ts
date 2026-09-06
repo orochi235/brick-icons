@@ -180,7 +180,8 @@ export function drawBadge(ctx: CanvasRenderingContext2D, badge: CellBadge,
   if (mark) {
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.scale(radius * 0.66, radius * 0.66);
+    const m = radius * 0.66 * (badge.scale ?? 1);
+    ctx.scale(m, m);
     mark(ctx, badge.field);
     ctx.restore();
   } else if (badge.text) {
@@ -190,10 +191,10 @@ export function drawBadge(ctx: CanvasRenderingContext2D, badge: CellBadge,
       // On the part number's own baseline, so `4761 T d` reads as one line
       // rather than as a caption with ornaments floating beside it.
       ctx.textBaseline = 'alphabetic';
-      ctx.fillText(badge.text, cx, at.baseline);
+      ctx.fillText(badge.text, cx + size * (badge.dx ?? 0), at.baseline);
     } else {
       ctx.textBaseline = 'middle';
-      ctx.fillText(badge.text, cx, cy);
+      ctx.fillText(badge.text, cx + size * (badge.dx ?? 0), cy);
     }
   }
   ctx.restore();

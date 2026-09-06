@@ -145,8 +145,12 @@ export interface CellBadge {
   weight?: number;
   /** Slanted, where the system's own lettering is. */
   style?: string;
-  /** A multiple of the badge type size, for a glyph that sets small. */
+  /** A multiple of the mark or type size, for a shape that sets large or
+   *  small against the rest of the set. */
   scale?: number;
+  /** Optical centering, in multiples of the type size: a glyph's ink box is
+   *  not always where its advance width puts it. */
+  dx?: number;
 }
 
 /** The two discs that keep a corner of their own. `retired` and `updated`
@@ -181,13 +185,16 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
   minifig: { tag: 'minifig', mark: 'minifig', field: '#f2cd37', ink: '#ffffff' },
   technic: { tag: 'technic', mark: 'technic', field: '#1b2a5e', ink: '#ffffff' },
   duplo: { tag: 'duplo', text: 'd', field: '#ffffff', ink: '#c8102e',
-           stroke: '#c8102e', font: SYSTEM_FACE, weight: 700, scale: 1.18 },
+           stroke: '#c8102e', font: SYSTEM_FACE, weight: 700, scale: 1.18,
+           dx: -0.045 },
   weird: { tag: 'weird', text: '\u03a8', field: '#5b3a86', ink: '#ffffff',
            font: WEIRD_FACE },
   // The one property badge off the shared field: a gold bolt on black is
   // what a live circuit looks like everywhere else, and it earns the break.
-  electric: { tag: 'electric', mark: 'bolt', field: '#101014', ink: '#ffd60a' },
-  magnet: { tag: 'magnet', mark: 'magnet', field: PROPERTY_FIELD, ink: '#ffffff' },
+  electric: { tag: 'electric', mark: 'bolt', field: '#101014', ink: '#ffd60a',
+              scale: 0.86 },
+  magnet: { tag: 'magnet', mark: 'magnet', field: PROPERTY_FIELD, ink: '#ffffff',
+            scale: 0.86 },
   printed: { tag: 'printed', mark: 'brush', field: PROPERTY_FIELD, ink: '#ffffff' },
   composite: { tag: 'composite', text: '\u00d7', field: PROPERTY_FIELD, ink: '#ffffff' },
 };
