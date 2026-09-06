@@ -453,13 +453,35 @@ def build_shape(out: dict) -> TopoDS_Shape:
     sew.Perform()
     shape = sew.SewedShape()
 
-    try:
+    if _unify_survives(shape):
         u = ShapeUpgrade_UnifySameDomain(shape, True, True, True)
         u.Build()
         shape = u.Shape()
-    except Exception:
-        pass
     return shape
+
+
+def _unify_survives(shape) -> bool:
+    """Whether UnifySameDomain can merge this shape without dying.
+
+    It segfaults inside its own IntUnifyFaces on badly cracked meshes -- the
+    crashers carry three times the free-edge-per-triangle of the parts that
+    survive -- and no input test separates them: the sewn shape is valid, and
+    parts on both sides of the crash share every statistic. A SIGSEGV is not
+    catchable, so the call is tried in a forked child, which inherits the sewn
+    shape copy-on-write and costs one extra unify and no serialization.
+    """
+    import os
+    pid = os.fork()
+    if pid == 0:
+        try:
+            u = ShapeUpgrade_UnifySameDomain(shape, True, True, True)
+            u.Build()
+            u.Shape()
+            os._exit(0)
+        except BaseException:
+            os._exit(1)
+    _, status = os.waitpid(pid, 0)
+    return os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0
 
 
 def count_faces(shape: TopoDS_Shape) -> int:
