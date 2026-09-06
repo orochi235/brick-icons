@@ -333,17 +333,10 @@ directly in `renders/` instead of `renders/<engine>/` are skipped: three
 `<part>.occt.svg` files from an early smoke run are there, and their stem would
 file a row under a part id that does not exist.
 
-**Merge note for `corpus-grouping` only** -- `corpus-grouping-v2` cleared it
-in its 13:06 merge, and carries no `census_dir=` at all. Branch
-`census-multi-dir-index` renamed `rebuild`'s `census_dir` to `census_dirs` (a
-sequence, `None` for every tree) and `counts` gained a `"skipped"` key.
-`corpus-grouping` was cut before that and adds a `_rebuild()` test helper
-passing `census_dir=tmp_path / "nope"`, plus four tests through it — a
-`TypeError` at merge, not a conflict git will show. It becomes
-`census_dirs=(tmp_path / "nope",)`. The same branch's copy of
-`test_rebuild_walks_renders_and_toml_and_jsonl` still fails against the repo's
-real defects TOML; the fix is on this branch and its handoff says to ignore the
-failure until then.
+**`corpus-grouping` was cut before `census_dir` became `census_dirs`** and its
+`_rebuild()` test helper still passes the old name in four places, so its
+tests raise `TypeError` rather than conflicting. It matters only if that
+branch is ever revived; nothing on main or in v2 carries it.
 
 **The tracked store is bigger than that, not equal to it.** Measured on the
 first stored renders, the canonical stroked drawing has a 29KB median and a
@@ -460,24 +453,34 @@ fast; it would cost roughly 600MB per slot.
 into its own repo with this corpus as one host. Nothing is built, and it
 argues for waiting until the census stops landing renders.
 
-**Grouping is built, on two branches, not on main.** `corpus-grouping`
-(worktree `.claude/worktrees/corpus-grouping`, 20 commits ahead) and
-`corpus-grouping-v2` (worktree `.claude/worktrees/cg2`, 4 ahead, tip merges
-main as of 2026-09-06 13:06) both carry the sidebar, the tint and grouping in
-the selection. **They collide with the part facts on main**: this branch
-derived its own Rebrickable data, `tests/test_rebrickable.py` and all, while
-main grew `part_years`, `scripts/fetch-part-years.py` and `brick_icons/tags.py`
-from the same source. Two implementations of one idea, and v2's merge of main
-predates the last few commits. **Merging main into v2 conflicts in exactly one
-file, `CorpusWall.tsx`, and v2 still carries the `setLevel(32)` reset that
-`f9a3801` deleted** -- keep the deletion when resolving it, or the wall goes
-back to blurring on every slot change. `CorpusWall.test.tsx` merges clean and
-fails if the reset comes back, so the merge is only silent if someone drops
-the test with it. The spec and plan behind them:
+**Grouping is on the wall.** `corpus-grouping-v2` merged, giving the sidebar
+four groupings -- nothing, coverage, category, release year -- an order and a
+color ramp, category and class facets with live counts, and band labels over
+the blocks. Design and plan:
 `docs/superpowers/specs/2026-09-05-corpus-grouping-design.md` and
-`docs/superpowers/plans/2026-09-05-corpus-grouping.md`. Coverage, category and
-release-year groupings, the Rebrickable facts they group by, and a facet
-sidebar. Its gate — that `corpus-wall` had merged — is now met.
+`docs/superpowers/plans/2026-09-05-corpus-grouping.md`.
+
+**`corpus-grouping` -- the older, 20-commit branch -- is not merging, and
+that is a decision, not a backlog item.** It carries the same grouping core
+(`grouped.ts` and `layout.ts` are byte-identical to v2's) on top of a second
+Rebrickable pipeline of its own: `brick_icons/rebrickable.py`, a
+`part_facts` and a `part_colors` table, `scripts/import-rebrickable.py`, and
+a `cells.py` that sends `cat` as an index into a `categories[]` array plus
+`year`/`uses`/`ncolors`. Main already answers all of that from `part_years`,
+`tests/goldens/part-years.csv` and `tags.py`, offline and without a network
+fetch of 1.5M inventory rows -- which matters, because the ingest cron
+rebuilds every 15 minutes. Its `useCells` also predates the slot hold and
+returns a bare body rather than the `{cells, source}` pair. **The one thing
+it has that main does not is a color count per part**, which is why its tint
+offers `colors` and v2's offers `year` and `sets`. That is being added to
+main's own pipeline instead, as a `colors` column on `part_years`.
+
+**Band labels overlap the top cell row when the whole wall is fit to width.**
+`grouped.ts` reserves `headerRows * pitch` of world space above every block,
+but `paint.ts` draws the label at a fixed 18px (outer) or 11px (inner), so
+below roughly a 20px cell the text is taller than the gap it was given. There
+is a width guard (`MIN_LABEL_PX`) and no height one. Zoomed in, labels sit
+clean.
 
 **windease cannot lay out this wall, and the caret already has what it offered.**
 `gridStrategy.layout` is O(n^2): 6.4ms at 250 items, 18.7s at 16,000, 44.7s at
