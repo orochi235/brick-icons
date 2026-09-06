@@ -133,21 +133,24 @@ export const drawBrush: Mark = (ctx, field, accent) => {
 };
 
 // A minifig face: the disc is the head, so all the mark has to carry is the
-// 1978 smiley. Drawing the head's own outline instead gave a silhouette that
-// stopped reading below about 20px, which is most of the wall.
+// 1978 smiley. Measured off a face-on photograph of `3626` and expressed
+// against the head's width -- the proportions are the recognizable part, and
+// the disc is 3.03 mark units across. Drawing the head's own silhouette
+// instead gave a shape that stopped reading below about 20px.
 export const drawMinifig: Mark = (ctx) => {
+  const drop = 0.244;   // the face group, centered in a disc that has no stud
   ctx.beginPath();
-  ctx.arc(-0.46, -0.4, 0.17, 0, Math.PI * 2);
+  ctx.arc(-0.433, -0.064 - drop, 0.189, 0, Math.PI * 2);
   ctx.fill();
   ctx.beginPath();
-  ctx.arc(0.46, -0.4, 0.17, 0, Math.PI * 2);
+  ctx.arc(0.433, -0.064 - drop, 0.189, 0, Math.PI * 2);
   ctx.fill();
   ctx.save();
   ctx.strokeStyle = ctx.fillStyle;
-  ctx.lineWidth = 0.17;
+  ctx.lineWidth = 0.135;
   ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.arc(0, -0.08, 0.72, Math.PI * 0.18, Math.PI * 0.82, false);
+  ctx.arc(0, 0.15 - drop, 0.626, Math.PI * 0.234, Math.PI * 0.766, false);
   ctx.stroke();
   ctx.restore();
 };
