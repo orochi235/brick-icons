@@ -15,3 +15,4 @@ CLAUDE.local.md
 corpus.db
 corpus.db-shm
 corpus.db-wal
+corpus.db.ingest*
