@@ -5,7 +5,7 @@ import type { Cell, SheetManifest } from '@lab/corpus/types';
 
 const cell = (id: string, index: number, sha: string | null,
               overrides: Partial<Cell> = {}): Cell => ({
-  id, index, title: id, category: null, printed: false, obsolete: false, base: true,
+  id, index, title: id, category: null, printed: false, obsolete: false, base: true, out_of_scope: false,
   status: 'unreviewed', sha, made_at: null, extra_d99: null, secs: null,
   error: null, open_defects: 0, open_defects_elsewhere: 0,
   error_elsewhere: false, ...overrides,
@@ -220,6 +220,14 @@ it('gives every state cellState can produce an entry in the palette', () => {
   }
 });
 
+it('calls a sticker out of scope, not broken, whatever else it carries', () => {
+  expect(cellState(cell('a', 0, null, { out_of_scope: true }))).toBe('outOfScope');
+  expect(cellState(cell('b', 1, null, { out_of_scope: true, error: 'TimeoutError' })))
+    .toBe('outOfScope');
+  expect(cellState(cell('c', 2, null, { out_of_scope: true, open_defects: 1 })))
+    .toBe('outOfScope');
+});
+
 it('tallies each cell into its own state, and nowhere else', () => {
   const cells: Cell[] = [
     cell('a', 0, null, { open_defects: 1 }),
@@ -229,16 +237,17 @@ it('tallies each cell into its own state, and nowhere else', () => {
     cell('e', 4, null, { open_defects_elsewhere: 1 }),
     cell('f', 5, null, { error_elsewhere: true }),
     cell('g', 6, null),
+    cell('h', 7, null, { out_of_scope: true }),
   ];
   expect(tally(cells)).toEqual({
-    unknown: 1, timeout: 1, failed: 1, defect: 2,
+    unknown: 1, outOfScope: 1, timeout: 1, failed: 1, defect: 2,
     problemElsewhere: 1, defectElsewhere: 1,
   });
 });
 
 it('tallies an empty corpus as all zeros', () => {
   expect(tally([])).toEqual({
-    unknown: 0, timeout: 0, failed: 0, defect: 0,
+    unknown: 0, outOfScope: 0, timeout: 0, failed: 0, defect: 0,
     problemElsewhere: 0, defectElsewhere: 0,
   });
 });

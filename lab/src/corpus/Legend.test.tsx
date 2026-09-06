@@ -1,10 +1,11 @@
 import { expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { Legend } from '@lab/corpus/Legend';
+import { CELL_STATES } from '@lab/corpus/palette';
 import type { Cell } from '@lab/corpus/types';
 
 const cell = (id: string, overrides: Partial<Cell> = {}): Cell => ({
-  id, index: 0, title: id, category: null, printed: false, obsolete: false, base: true,
+  id, index: 0, title: id, category: null, printed: false, obsolete: false, base: true, out_of_scope: false,
   status: 'unreviewed', sha: null, made_at: null, extra_d99: null, secs: null,
   error: null, open_defects: 0, open_defects_elsewhere: 0,
   error_elsewhere: false, ...overrides,
@@ -51,7 +52,7 @@ it('treats keyboard focus the same as hover, and blur the same as leaving', () =
 it('is reachable by keyboard -- every row is focusable', () => {
   const { container } = render(<Legend cells={cells} highlight={null} onHighlight={() => {}} />);
   const rows = container.querySelectorAll('[data-state]');
-  expect(rows.length).toBe(6);
+  expect(rows.length).toBe(CELL_STATES.length);
   for (const row of rows) {
     expect(row.getAttribute('tabindex')).toBe('0');
   }

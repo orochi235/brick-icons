@@ -1,7 +1,8 @@
 import { DEFAULT_PARAMS, type ColorParamKey } from '@lab/corpus/params';
 
 export type CellState =
-  'unknown' | 'timeout' | 'failed' | 'defect' | 'problemElsewhere' | 'defectElsewhere';
+  'unknown' | 'outOfScope' | 'timeout' | 'failed' | 'defect' | 'problemElsewhere'
+  | 'defectElsewhere';
 
 export interface CellStyle {
   fill: string;
@@ -11,8 +12,8 @@ export interface CellStyle {
   weight: 'thick' | 'thin' | null;
 }
 
-/** The six cell-state fills, plus the caret's own stroke color -- the caret
- *  is UI chrome, not a cell state, so it never appears in `CELL_STATES`. */
+/** The cell-state fills, plus the caret's own stroke color -- the caret is UI
+ *  chrome, not a cell state, so it never appears in `CELL_STATES`. */
 export type Palette = Record<CellState, CellStyle> & { caret: string };
 
 // Lightness is reserved for "has been rendered" -- a rendered thumbnail is
@@ -25,6 +26,9 @@ export type Palette = Record<CellState, CellStyle> & { caret: string };
 // panel being the other reader of them.
 const CELL_PALETTE: Record<CellState, CellStyle> = {
   unknown: { fill: DEFAULT_PARAMS.unknownFill, border: null, weight: null },
+  // Borderless like `unknown`: 2,701 sticker cells in one block would read as
+  // a fenced-off region rather than a quiet one.
+  outOfScope: { fill: DEFAULT_PARAMS.outOfScopeFill, border: null, weight: null },
   timeout: { fill: DEFAULT_PARAMS.timeoutFill, border: DEFAULT_PARAMS.timeoutBorder,
              weight: 'thick' },
   failed: { fill: DEFAULT_PARAMS.failedFill, border: DEFAULT_PARAMS.failedBorder,
@@ -43,6 +47,7 @@ export const DEFAULT_PALETTE: Palette = { ...CELL_PALETTE, caret: DEFAULT_PARAMS
 
 const PROPERTY: Record<CellState, { fill: string; border: string | null }> = {
   unknown: { fill: '--corpus-cell-unknown-fill', border: null },
+  outOfScope: { fill: '--corpus-cell-out-of-scope-fill', border: null },
   timeout: { fill: '--corpus-cell-timeout-fill', border: '--corpus-cell-timeout-border' },
   failed: { fill: '--corpus-cell-failed-fill', border: '--corpus-cell-failed-border' },
   defect: { fill: '--corpus-cell-defect-fill', border: '--corpus-cell-defect-border' },
@@ -58,6 +63,7 @@ const PROPERTY: Record<CellState, { fill: string; border: string | null }> = {
  *  without a state/fill-or-border switch of its own. */
 export const PARAM_CSS_VAR: Record<ColorParamKey, string> = {
   unknownFill: PROPERTY.unknown.fill,
+  outOfScopeFill: PROPERTY.outOfScope.fill,
   timeoutFill: PROPERTY.timeout.fill,
   timeoutBorder: PROPERTY.timeout.border as string,
   failedFill: PROPERTY.failed.fill,
@@ -71,13 +77,14 @@ export const PARAM_CSS_VAR: Record<ColorParamKey, string> = {
   caretColor: CARET_PROPERTY,
 };
 
-/** Iteration order for every table keyed by state -- worst-here-first then
- *  worst-elsewhere, matching `cellState`'s precedence. */
+/** Iteration order for every table keyed by state -- out of scope, then
+ *  worst-here-first and worst-elsewhere, matching `cellState`'s precedence. */
 export const CELL_STATES = Object.keys(CELL_PALETTE) as CellState[];
 
 /** What each state is called on the legend. */
 export const STATE_LABEL: Record<CellState, string> = {
   unknown: 'unknown',
+  outOfScope: 'currently out of scope',
   timeout: 'timed out here',
   failed: 'cannot be drawn here',
   defect: 'open defect here',
@@ -90,7 +97,7 @@ function readVar(styles: CSSStyleDeclaration, prop: string, fallback: string): s
   return value.length > 0 ? value : fallback;
 }
 
-/** Reads the wall's six cell-state colors from CSS custom properties on
+/** Reads the wall's cell-state colors from CSS custom properties on
  *  `el`, falling back to the tuned defaults for anything the stylesheet
  *  doesn't declare. These are canvas fills, so CSS cannot reach them any
  *  other way -- this is how the wall's colors track a theme change. */

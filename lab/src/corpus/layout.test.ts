@@ -4,6 +4,7 @@ import type { Cell } from '@lab/corpus/types';
 
 const cell = (id: string, index: number): Cell => ({
   id, index, title: id, category: 'Brick', printed: false, obsolete: false, base: true,
+  out_of_scope: false,
   status: 'unreviewed', sha: null, made_at: null, extra_d99: null,
   secs: null, error: null, open_defects: 0, open_defects_elsewhere: 0,
   error_elsewhere: false,

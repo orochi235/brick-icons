@@ -24,6 +24,8 @@ function cellStateLabel(cell: Cell): string | null {
       return `${cell.open_defects_elsewhere} open defect${cell.open_defects_elsewhere === 1 ? '' : 's'} in another slot`;
     case 'problemElsewhere':
       return 'fails in another slot';
+    case 'outOfScope':
+      return 'currently out of scope';
     case 'unknown':
       return null;
   }

@@ -13,6 +13,7 @@ export interface Params {
   cols: number;
 
   unknownFill: string;
+  outOfScopeFill: string;
   timeoutFill: string;
   timeoutBorder: string;
   failedFill: string;
@@ -48,6 +49,7 @@ export const DEFAULT_PARAMS: Params = {
   cols: 0,
 
   unknownFill: '#3a3a3f',
+  outOfScopeFill: '#2f2740',
   timeoutFill: '#26383f',
   timeoutBorder: '#30b0d0',
   failedFill: '#4a2626',
@@ -75,7 +77,7 @@ export const DEFAULT_PARAMS: Params = {
  *  instead of passing down as a prop -- see `useParams` and `palette.ts`'s
  *  `PARAM_CSS_VAR`. */
 export const COLOR_PARAM_KEYS = [
-  'unknownFill', 'timeoutFill', 'timeoutBorder', 'failedFill', 'failedBorder',
+  'unknownFill', 'outOfScopeFill', 'timeoutFill', 'timeoutBorder', 'failedFill', 'failedBorder',
   'defectFill', 'defectBorder', 'problemElsewhereFill', 'problemElsewhereBorder',
   'defectElsewhereFill', 'defectElsewhereBorder', 'caretColor',
 ] as const satisfies readonly (keyof Params)[];
@@ -84,6 +86,7 @@ export type ColorParamKey = (typeof COLOR_PARAM_KEYS)[number];
 
 const COLOR_LABEL: Record<ColorParamKey, string> = {
   unknownFill: 'Unknown fill',
+  outOfScopeFill: 'Out-of-scope fill',
   timeoutFill: 'Timeout fill',
   timeoutBorder: 'Timeout border',
   failedFill: 'Failed fill',

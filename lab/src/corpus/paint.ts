@@ -7,10 +7,14 @@ import type { Cell, SheetManifest } from '@lab/corpus/types';
 
 export type { CellStyle } from '@lab/corpus/palette';
 
-/** What a cell's color says about it, worst-here-first then worst-elsewhere.
+/** What a cell's color says about it: out of scope first, then
+ *  worst-here-first and worst-elsewhere.
  *  The single precedence table -- `fillFor`, the legend and `PartCard` all
  *  read a cell's state through this, so they cannot drift apart. */
 export function cellState(cell: Cell): CellState {
+  // Ahead of every problem state: a part the project is not drawing yet has
+  // not failed at anything, and a wall of red stickers would say it had.
+  if (cell.out_of_scope) return 'outOfScope';
   if (cell.open_defects > 0) return 'defect';
   if (cell.error === 'TimeoutError') return 'timeout';
   if (cell.error) return 'failed';

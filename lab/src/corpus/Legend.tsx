@@ -11,7 +11,7 @@ export interface LegendProps {
   onHighlight: (state: CellState | null) => void;
 }
 
-/** The wall's six states, with a swatch, a name and a corpus-wide count.
+/** The wall's cell states, with a swatch, a name and a corpus-wide count.
  *  Hovering or focusing a row raises `highlight`; `Wall` dims every cell
  *  that isn't in that state rather than brightening the ones that are. */
 export function Legend({ cells, highlight, onHighlight }: LegendProps) {

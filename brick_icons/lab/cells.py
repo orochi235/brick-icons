@@ -9,6 +9,8 @@ from __future__ import annotations
 import json
 import sqlite3
 
+from brick_icons.db import OUT_OF_SCOPE_CATEGORIES
+
 _LATEST_MEASURE = """
 SELECT m.part_id, m.extra_d99, m.secs, m.error FROM measurements m
 JOIN (SELECT part_id, MAX(run_id) AS run_id FROM measurements
@@ -90,11 +92,14 @@ def cells(conn: sqlite3.Connection, source: str = "census-naive",
 
     rows = []
     marks = ",".join("?" * len(wanted)) if wanted else "NULL"
+    scope_marks = ",".join("?" * len(OUT_OF_SCOPE_CATEGORIES))
     for part in conn.execute(
             f"SELECT id, title, category, printed, obsolete, status, "
             f"(printed = 0 AND obsolete = 0 AND id NOT LIKE '%c__' "
-            f"AND id NOT LIKE '%d__' AND id NOT LIKE 'u9%') AS base "
-            f"FROM parts WHERE id IN ({marks}) ORDER BY id", wanted):
+            f"AND id NOT LIKE '%d__' AND id NOT LIKE 'u9%') AS base, "
+            f"(category IN ({scope_marks})) AS out_of_scope "
+            f"FROM parts WHERE id IN ({marks}) ORDER BY id",
+            (*OUT_OF_SCOPE_CATEGORIES, *wanted)):
         pid = part["id"]
         render = renders.get(pid)
         measure = measures.get(pid)
@@ -107,6 +112,7 @@ def cells(conn: sqlite3.Connection, source: str = "census-naive",
             "printed": bool(part["printed"]),
             "obsolete": bool(part["obsolete"]),
             "base": bool(part["base"]),
+            "out_of_scope": bool(part["out_of_scope"]),
             "status": part["status"],
             "sha": render["sha256"] if render else None,
             "made_at": render["made_at"] if render else None,

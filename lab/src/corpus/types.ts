@@ -6,6 +6,7 @@ export interface Cell {
   printed: boolean;
   obsolete: boolean;
   base: boolean;
+  out_of_scope: boolean;
   status: string;
   sha: string | null;
   made_at: string | null;
@@ -38,6 +39,8 @@ export interface SheetManifest {
 export interface PartDetail {
   part: { id: string; title: string; category: string | null;
           status: string; status_note: string | null };
+  /** Every slot that has drawn this part, in slot order. */
+  slots: { source: string; sha256: string; made_at: string }[];
   findings: { part_id: string; engine: string; extra_d99: number | null;
               missing_px: number | null; secs: number | null;
               error: string | null }[];

@@ -238,3 +238,15 @@ def test_a_part_erroring_elsewhere_is_clean_here(conn):
     cell = cells.cells(conn, source="census-naive")["cells"][0]
     assert cell["error"] is None
     assert cell["error_elsewhere"] is True
+
+
+def test_a_sticker_is_out_of_scope(conn):
+    _part(conn, "003238a", title="Sticker Minifig Shield", category="Sticker")
+    conn.commit()
+    assert cells.cells(conn)["cells"][0]["out_of_scope"] is True
+
+
+def test_a_brick_is_in_scope(conn):
+    _part(conn, "3001")
+    conn.commit()
+    assert cells.cells(conn)["cells"][0]["out_of_scope"] is False
