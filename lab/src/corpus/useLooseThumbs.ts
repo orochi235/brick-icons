@@ -35,6 +35,12 @@ export function useLooseThumbs(cells: Cell[], visible: number[], level: number,
                                source: string): Map<string, HTMLImageElement> {
   const [loose, setLoose] = useState<Map<string, HTMLImageElement>>(new Map());
   const requested = useRef<Set<string>>(new Set());
+  // Only unmounting stops an image landing. Keying liveness to the effect
+  // instead dropped every image that finished loading after the next camera
+  // move -- and `requested` still held the id, so it was never asked for
+  // again.
+  const mounted = useRef(true);
+  useEffect(() => () => { mounted.current = false; }, []);
 
   useEffect(() => {
     requested.current = new Set();
@@ -42,18 +48,16 @@ export function useLooseThumbs(cells: Cell[], visible: number[], level: number,
   }, [source]);
 
   useEffect(() => {
-    let live = true;
     for (const cell of wanted(cells, visible, level)) {
       if (requested.current.has(cell.id)) continue;
       requested.current.add(cell.id);
       const img = new Image();
       img.onload = () => {
-        if (!live) return;
+        if (!mounted.current) return;
         setLoose((prev) => new Map(prev).set(cell.id, img));
       };
       img.src = thumbUrl(cell, source);
     }
-    return () => { live = false; };
   }, [cells, visible, level, source]);
 
   return loose;

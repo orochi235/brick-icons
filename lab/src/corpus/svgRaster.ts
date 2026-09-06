@@ -24,10 +24,10 @@ export function injectSize(svgText: string, w: number, h: number): string {
 
 /** A decoded SVG, rasterized at exactly `w`x`h` device pixels.
  *
- *  `createImageBitmap` is preferred: it decodes the blob directly, with no
- *  DOM `<img>` natural-size step to get wrong. The `<img>`-into-canvas path
- *  below is the fallback for engines without it (or without SVG support in
- *  it), sized the same way for the same reason. */
+ *  `createImageBitmap` decodes the blob directly, with no DOM `<img>`
+ *  natural-size step to get wrong -- but Chrome throws `InvalidStateError`
+ *  on any SVG blob, so there it is the `<img>`-into-canvas fallback that
+ *  runs, sized the same way for the same reason. */
 export async function rasterizeSvg(svgText: string, w: number, h: number):
     Promise<CanvasImageSource> {
   const sized = injectSize(svgText, w, h);
@@ -61,10 +61,16 @@ export async function rasterizeSvg(svgText: string, w: number, h: number):
   }
 }
 
+/** The render at `url`, as text -- held by the caller, because rerastering a
+ *  cell the zoom drifted past must not cost another few hundred KB. */
+export async function fetchText(url: string): Promise<string> {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`${url}: ${response.status}`);
+  return response.text();
+}
+
 /** Fetches the render at `url` and rasterizes it at `w`x`h`. */
 export async function fetchAndRasterize(url: string, w: number, h: number):
     Promise<CanvasImageSource> {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`${url}: ${response.status}`);
-  return rasterizeSvg(await response.text(), w, h);
+  return rasterizeSvg(await fetchText(url), w, h);
 }

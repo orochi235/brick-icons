@@ -1,11 +1,14 @@
 import { expect, it } from 'vitest';
-import { needsRerender, vectorUrl, wantedVector } from '@lab/corpus/useVectorThumbs';
+import {
+  MAX_TARGET_PX, PIXEL_BUDGET, needsRerender, residentCap, splitWork, targetPxFor,
+  vectorUrl, wantedVector,
+} from '@lab/corpus/useVectorThumbs';
 import { VECTOR_LEVEL } from '@lab/corpus/levels';
 import type { Cell } from '@lab/corpus/types';
 
 const cell = (id: string, sha: string | null): Cell => ({
   id, index: 0, title: id, category: null, printed: false, obsolete: false, base: true,
-  status: 'unreviewed', sha, made_at: null, extra_d99: null, secs: null,
+  out_of_scope: false, status: 'unreviewed', sha, made_at: null, extra_d99: null, secs: null,
   error: null, open_defects: 0, open_defects_elsewhere: 0,
   error_elsewhere: false,
 });
@@ -24,9 +27,28 @@ it('wants only visible cells that have a render', () => {
   expect(wantedVector(cells, [0, 1], VECTOR_LEVEL).map((c) => c.id)).toEqual(['a']);
 });
 
-it('caps how many stay resident at once', () => {
-  const many = Array.from({ length: 200 }, (_, i) => cell(`p${i}`, 'x'));
-  expect(wantedVector(many, many.map((_, i) => i), VECTOR_LEVEL).length).toBe(96);
+it('keeps a screenful of small cells, where the budget holds them', () => {
+  const many = Array.from({ length: 400 }, (_, i) => cell(`p${i}`, 'x'));
+  const all = many.map((_, i) => i);
+  expect(wantedVector(many, all, VECTOR_LEVEL, 256).length).toBe(400);
+});
+
+it('drops back to a few cells once each raster is a big one', () => {
+  const many = Array.from({ length: 400 }, (_, i) => cell(`p${i}`, 'x'));
+  const all = many.map((_, i) => i);
+  expect(wantedVector(many, all, VECTOR_LEVEL, 1024).length)
+    .toBe(Math.floor(PIXEL_BUDGET / (1024 * 1024)));
+});
+
+it('sizes a raster in device pixels, capped', () => {
+  expect(targetPxFor(300, 2)).toBe(600);
+  expect(targetPxFor(300, 1)).toBe(300);
+  expect(targetPxFor(4000, 2)).toBe(MAX_TARGET_PX);
+});
+
+it('spends the same budget on many small rasters or few big ones', () => {
+  expect(residentCap(256)).toBeGreaterThan(residentCap(1024));
+  expect(residentCap(256) * 256 * 256).toBeLessThanOrEqual(PIXEL_BUDGET);
 });
 
 it('treats a never-rastered cell as needing one', () => {
@@ -41,4 +63,18 @@ it('holds a raster whose size is still close enough to the target', () => {
 it('reraster once the drawn size drifts past the threshold', () => {
   expect(needsRerender(400, 501)).toBe(true);
   expect(needsRerender(400, 299)).toBe(true);
+});
+
+it('rasterizes a cell with nothing to draw immediately', () => {
+  const want = [cell('a', 'x'), cell('b', 'x')];
+  const { now, onSettle } = splitWork(want, new Map([['a', { px: 400 }]]), 400);
+  expect(now.map((c) => c.id)).toEqual(['b']);
+  expect(onSettle).toEqual([]);
+});
+
+it('makes a merely-wrong-sized raster wait for the camera to stop', () => {
+  const want = [cell('a', 'x')];
+  const { now, onSettle } = splitWork(want, new Map([['a', { px: 200 }]]), 800);
+  expect(now).toEqual([]);
+  expect(onSettle.map((c) => c.id)).toEqual(['a']);
 });
