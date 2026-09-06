@@ -78,19 +78,19 @@ def brush():
     width that goes to nothing. Walking the spine by its heading is what
     makes it curl -- leaning a straight spine sideways only ever produced a
     bent bottle."""
-    n, length = 110, 760.0
+    n, length = 110, 660.0
     step = length / (n - 1)
-    x, y, spine, widths = 0.0, 250.0, [], []
+    x, y, spine, widths = 0.0, 60.0, [], []
     for i in range(n):
         u = i / (n - 1)
         heading = -math.pi / 2 + 1.45 * u ** 2.4
         x += math.cos(heading) * step
         y += math.sin(heading) * step
         spine.append((x, y, heading))
-        # Wide at the base so it meets the ferrule squarely, a slight belly,
-        # and nothing at all at the tip.
-        belly = 0.62 + 0.38 * math.sin(math.pi * u ** 0.75)
-        widths.append(max(200.0 * belly * (1.0 - u ** 2.2), 3.0))
+        # Widest right at the base, holding that width a while before
+        # falling away to a point -- a belly part-way up reads as a bottle,
+        # and a hard taper straight off the base as a light bulb.
+        widths.append(max(215.0 * (1.0 - u ** 1.3) ** 0.45, 3.0))
 
     left, right = [], []
     for (px, py, heading), w in zip(spine, widths):
@@ -157,7 +157,9 @@ def contract(pts, inset, keep):
     """The shape's own outline pulled inward, then clipped to `keep`.
 
     A cutout shaped like an axis-aligned rectangle reads as damage; one that
-    is the silhouette contracted reads as a marking on the form.
+    is the silhouette contracted reads as a marking on the form. An inset of
+    zero keeps the marking flush with the edge, for a marking drawn in its
+    own color rather than punched out of the field.
     """
     from shapely.geometry import Polygon
 
@@ -211,7 +213,7 @@ if __name__ == "__main__":
 
     brush_pts = brush()
     tip_xy = brush_pts[len(brush_pts) // 2 - 1]
-    cuts = contract(brush_pts, 44.0, Point(tip_xy).buffer(330.0))
+    cuts = contract(brush_pts, 0.0, Point(tip_xy).buffer(340.0))
     out.append(emit_many("BRUSH_CUT", cuts))
     print(f"BRUSH_CUT: {len(cuts)} pieces")
 

@@ -16,14 +16,15 @@ import type { CellBadge } from '@lab/corpus/paint';
 export const BADGE_WEIGHT = 400;
 export const BADGE_FACE = 'ui-monospace, monospace';
 
-export type Mark = (ctx: CanvasRenderingContext2D, field: string) => void;
+export type Mark = (ctx: CanvasRenderingContext2D, field: string,
+                    accent: string) => void;
 
 /** Fill each of a generated set of outlines in the field color -- the
  *  silhouette contracted and clipped, so a marking follows the form it sits
  *  on instead of reading as a rectangle chopped out of it. */
-function cutPaths(ctx: CanvasRenderingContext2D, groups: number[][], field: string) {
+function cutPaths(ctx: CanvasRenderingContext2D, groups: number[][], color: string) {
   ctx.save();
-  ctx.fillStyle = field;
+  ctx.fillStyle = color;
   for (const pts of groups) fillPath(ctx, pts);
   ctx.restore();
 }
@@ -37,18 +38,28 @@ function fillPath(ctx: CanvasRenderingContext2D, pts: number[]) {
   ctx.fill();
 }
 
-// A five-pointed star, point up.
+// A five-pointed star, point up, with its points and valleys rounded: the
+// path is built small and then stroked back out to size with round joins,
+// which is what takes the needle off each point.
 export const drawStar: Mark = (ctx) => {
-  const inner = 0.42;
+  const outer = 0.78;
+  const inner = 0.34;
   ctx.beginPath();
   for (let i = 0; i < 10; i++) {
-    const reach = i % 2 === 0 ? 1 : inner;
+    const reach = i % 2 === 0 ? outer : inner;
     const angle = -Math.PI / 2 + (i * Math.PI) / 5;
     const x = Math.cos(angle) * reach;
     const y = Math.sin(angle) * reach;
     if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   }
   ctx.closePath();
+  ctx.save();
+  ctx.strokeStyle = ctx.fillStyle;
+  ctx.lineWidth = 0.2;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.stroke();
+  ctx.restore();
   ctx.fill();
 };
 
@@ -98,24 +109,27 @@ export const drawMagnet: Mark = (ctx, field) => {
   cutPaths(ctx, MAGNET_CUT, field);
 };
 
-// A brush: bristles whose width goes to nothing at the tip, a ferrule under
-// them broken off by a band of the field, and paint cut out of the tip so
-// the field shows through. Printed parts are pad prints, so if this does not
+// A brush: bristles whose width goes to nothing at the tip, a crimped
+// ferrule under them broken off by a band of the field, and paint cut out of
+// the tip so the field shows through. Printed parts are pad prints, so if this does not
 // hold at the strip's floor the fallback is a halftone dot cluster.
-export const drawBrush: Mark = (ctx, field) => {
+export const drawBrush: Mark = (ctx, field, accent) => {
   fillPath(ctx, BRUSH);
   ctx.beginPath();
-  ctx.moveTo(-0.3, 0.42);
-  ctx.lineTo(0.3, 0.42);
-  ctx.lineTo(0.25, 1);
-  ctx.lineTo(-0.25, 1);
+  ctx.moveTo(-0.4, 0.54);
+  ctx.lineTo(0.4, 0.54);
+  ctx.lineTo(0.33, 1);
+  ctx.lineTo(-0.33, 1);
   ctx.closePath();
   ctx.fill();
   ctx.save();
   ctx.fillStyle = field;
-  ctx.fillRect(-0.34, 0.4, 0.68, 0.1);
+  ctx.fillRect(-0.44, 0.47, 0.88, 0.09);
+  // Crimp ridges, cut across the ferrule rather than drawn on it.
+  ctx.fillRect(-0.42, 0.7, 0.84, 0.06);
+  ctx.fillRect(-0.42, 0.85, 0.84, 0.06);
   ctx.restore();
-  cutPaths(ctx, BRUSH_CUT, field);
+  cutPaths(ctx, BRUSH_CUT, accent);
 };
 
 // A minifig head in silhouette -- stud, body and neck. Not drawn by eye: it
@@ -228,7 +242,7 @@ export function drawBadge(ctx: CanvasRenderingContext2D, badge: CellBadge,
     ctx.translate(cx, cy);
     const m = radius * 0.66 * (badge.scale ?? 1);
     ctx.scale(m, m);
-    mark(ctx, badge.field);
+    mark(ctx, badge.field, badge.accent ?? badge.field);
     ctx.restore();
   } else if (badge.text) {
     ctx.font = font;

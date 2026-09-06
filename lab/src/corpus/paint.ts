@@ -139,6 +139,9 @@ export interface CellBadge {
   /** Only where the field would vanish: duplo is red on white and
    *  `THUMB_GROUND` is white. */
   stroke?: string;
+  /** A second ink, for the one part of a mark that is not the mark's own
+   *  material -- the paint on the brush. */
+  accent?: string;
   /** A face other than the badge default, for a glyph the default sets
    *  badly. */
   font?: string;
@@ -195,7 +198,8 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
               scale: 0.86 },
   magnet: { tag: 'magnet', mark: 'magnet', field: PROPERTY_FIELD, ink: '#ffffff',
             scale: 0.86 },
-  printed: { tag: 'printed', mark: 'brush', field: PROPERTY_FIELD, ink: '#ffffff' },
+  printed: { tag: 'printed', mark: 'brush', field: PROPERTY_FIELD, ink: '#ffffff',
+             accent: '#8fd14f' },
   composite: { tag: 'composite', mark: 'composite', field: PROPERTY_FIELD,
                ink: '#ffffff', scale: 0.86 },
 };
