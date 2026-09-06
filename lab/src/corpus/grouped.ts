@@ -51,7 +51,8 @@ export function flowBlocks(groups: Group[], opts: LayoutOptions, top: number,
     });
     const h = headerRows * pitch + rows * pitch - opts.gap;
     bands.push({ key: group.key, label: group.label ?? group.key, count: n,
-                 rect: { x, y, w: w - opts.gap, h }, depth: 1 });
+                 rect: { x, y, w: w - opts.gap, h }, depth: 1,
+                 header: headerRows * pitch });
     rowHeight = Math.max(rowHeight, h);
     x += w + gutter;
   }
@@ -144,7 +145,7 @@ export function bandedLayout(outer: (c: Cell) => string,
       const h = OUTER_HEADER_ROWS * pitch + flowed.height;
       bands.push({ key, label: key, count: indices.length,
                    rect: { x: 0, y, w: opts.cols * pitch - opts.gap, h },
-                   depth: 0 });
+                   depth: 0, header: OUTER_HEADER_ROWS * pitch });
       bands.push(...flowed.bands);
       y += h + BAND_GAP_PITCHES * pitch;
     }

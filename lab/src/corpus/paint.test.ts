@@ -543,7 +543,7 @@ it('marks an out-of-scope cell rather than filling it, and squares the rest', ()
 
 const band = (over: Partial<Band> = {}): Band => ({
   key: '1970s', label: '1970s', count: 12,
-  rect: { x: 0, y: 0, w: 400, h: 200 }, depth: 0, ...over,
+  rect: { x: 0, y: 0, w: 400, h: 200 }, depth: 0, header: 72, ...over,
 });
 
 describe('band labels', () => {
@@ -563,6 +563,36 @@ describe('band labels', () => {
     const out = paintCommands({
       cells: [], rects: [], visible: [], cam: { ...cam, scale: { x: 0.01, y: 0.01 } },
       manifest: null, palette: CELL_FILL, bands: [band()],
+    });
+    expect(out.filter((c) => c.kind === 'label')).toEqual([]);
+  });
+
+  it('sets the label to the space the layout reserved above the block', () => {
+    // A fifth of world scale leaves 14.4px of header for an 18px label.
+    const out = paintCommands({
+      cells: [], rects: [], visible: [], cam: { ...cam, scale: { x: 0.2, y: 0.2 } },
+      manifest: null, palette: CELL_FILL, bands: [band({ rect: { x: 0, y: 0, w: 4000, h: 2000 } })],
+    });
+    const label = out.find((c) => c.kind === 'label');
+    expect(label).toBeDefined();
+    expect(label!.size).toBeCloseTo(11.52);
+    // and its baseline still sits inside the header, not over the first row
+    expect(label!.dy).toBeLessThanOrEqual(14.4);
+  });
+
+  it('keeps the full size when the header has room for it', () => {
+    const out = paintCommands({
+      cells: [], rects: [], visible: [], cam, manifest: null,
+      palette: CELL_FILL, bands: [band()],
+    });
+    expect(out.find((c) => c.kind === 'label')!.size).toBe(18);
+  });
+
+  it('drops a label whose header is too short to read at any size', () => {
+    const out = paintCommands({
+      cells: [], rects: [], visible: [], cam: { ...cam, scale: { x: 0.02, y: 0.02 } },
+      manifest: null, palette: CELL_FILL,
+      bands: [band({ rect: { x: 0, y: 0, w: 40000, h: 20000 } })],
     });
     expect(out.filter((c) => c.kind === 'label')).toEqual([]);
   });

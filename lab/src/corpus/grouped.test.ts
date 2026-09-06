@@ -18,6 +18,11 @@ describe('flowBlocks', () => {
     expect(out.placed[0]!.rect.y).toBe(20);
   });
 
+  it('says how much world space it reserved above each block', () => {
+    const out = flowBlocks([{ key: 'a', items: [0] }], opts, 0, 2);
+    expect(out.bands[0]!.header).toBe(20);
+  });
+
   it('wraps to a new row when the next block would overrun', () => {
     const wide = { key: 'w', items: [...Array(64).keys()] };       // 10 cols
     const next = { key: 'n', items: [0] };                          // 1 col

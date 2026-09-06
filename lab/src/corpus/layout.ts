@@ -19,6 +19,10 @@ export interface Band {
   count: number;
   rect: Rect;
   depth: 0 | 1;
+  /** World space the layout kept clear above the block's first cell row. The
+   *  label is set to fit this, so the two cannot disagree about how much room
+   *  the text has. */
+  header: number;
 }
 
 /** A layout answers where each cell sits, and nothing else. It never touches

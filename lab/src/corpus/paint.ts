@@ -57,6 +57,11 @@ export interface Appearance {
 const MIN_LABEL_PX = 40;
 const OUTER_LABEL_PX = 18;
 const INNER_LABEL_PX = 11;
+// The share of the reserved header the type may take, leaving the rest for
+// descenders and a little air above the first row of cells.
+const LABEL_FILL = 0.8;
+// Set smaller than this a label is a gray smear over the block it names.
+const MIN_LABEL_SIZE_PX = 7;
 
 const DEFAULT_APPEARANCE: Appearance = {
   thickBorderFactor: DEFAULT_PARAMS.thickBorderFactor,
@@ -419,8 +424,13 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
   for (const b of bands ?? []) {
     const w = b.rect.w * cam.scale.x;
     if (w < MIN_LABEL_PX) continue;
+    // The layout reserves the header in world units and this sets the type in
+    // screen pixels, so zooming out shrinks the gap under a label that does
+    // not shrink with it. Fit the type to the room instead.
+    const size = Math.min(b.depth === 0 ? OUTER_LABEL_PX : INNER_LABEL_PX,
+                          b.header * cam.scale.y * LABEL_FILL);
+    if (size < MIN_LABEL_SIZE_PX) continue;
     const [dx, dy] = worldToScreen(b.rect.x, b.rect.y, transform);
-    const size = b.depth === 0 ? OUTER_LABEL_PX : INNER_LABEL_PX;
     out.push({ kind: 'label', text: b.label, count: b.count,
                dx, dy: dy + size, size, depth: b.depth });
   }
