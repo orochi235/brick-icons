@@ -186,7 +186,7 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
   minifig: { tag: 'minifig', mark: 'minifig', field: '#f2cd37', ink: '#ffffff' },
   technic: { tag: 'technic', mark: 'technic', field: '#1b2a5e', ink: '#ffffff' },
   duplo: { tag: 'duplo', mark: 'duplo', field: '#ffffff', ink: '#c8102e',
-           stroke: '#c8102e' },
+           stroke: '#c8102e', scale: 1.06 },
   weird: { tag: 'weird', text: '\u03a8', field: '#5b3a86', ink: '#ffffff',
            font: WEIRD_FACE, dy: 0.035 },
   // The one property badge off the shared field: a gold bolt on black is

@@ -125,22 +125,28 @@ export const drawComposite: Mark = (ctx) => {
   for (const y of [-0.74, -0.18, 0.38]) ctx.fillRect(-0.7, y, 1.4, 0.36);
 };
 
-// Duplo's d, drawn as a monoline the way the logotype sets it: a circle for
-// the bowl and a straight ascender, one stroke width throughout. A text face
-// modulates its strokes, which is the one thing that logotype does not do.
-export const drawDuplo: Mark = (ctx) => {
+// Duplo's d, in the weight its logotype uses: a heavy rounded geometric with
+// a counter small against the stroke. The bowl is cut thicker than the stem
+// -- a curved stroke of the same width reads lighter than a straight one --
+// and the stem's right edge sits on the bowl's, or the two pile up into a
+// lump heavier than the side opposite it.
+export const drawDuplo: Mark = (ctx, field) => {
   ctx.save();
-  ctx.translate(0.11, 0.08);
+  ctx.translate(0.23, 0.02);
+  ctx.beginPath();
+  ctx.arc(-0.3, 0.28, 0.62, 0, Math.PI * 2);
+  ctx.fill();
   ctx.strokeStyle = ctx.fillStyle;
-  ctx.lineWidth = 0.28;
+  ctx.lineWidth = 0.44;
   ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.arc(-0.18, 0.3, 0.42, 0, Math.PI * 2);
+  ctx.moveTo(0.1, -0.72);
+  ctx.lineTo(0.1, 0.68);
   ctx.stroke();
+  ctx.fillStyle = field;
   ctx.beginPath();
-  ctx.moveTo(0.38, -0.88);
-  ctx.lineTo(0.38, 0.72);
-  ctx.stroke();
+  ctx.arc(-0.3, 0.28, 0.15, 0, Math.PI * 2);
+  ctx.fill();
   ctx.restore();
 };
 
