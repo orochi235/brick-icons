@@ -280,3 +280,31 @@ it('re-fits the camera when the observed size changes, but not after a wheel', a
     restore();
   }
 });
+
+it('regroups the wall without going back to the server', async () => {
+  const cells = vi.fn(client.cells);
+  const { container } = render(<CorpusWall client={{ ...client, cells } as any} />);
+  await findCanvas(container);
+  const fetches = cells.mock.calls.length;
+  fireEvent.change(screen.getByLabelText('Group'), { target: { value: 'category' } });
+  await new Promise((r) => setTimeout(r, 0));
+  expect(cells.mock.calls.length).toBe(fetches);
+});
+
+it('excludes a category without going back to the server', async () => {
+  const cells = vi.fn(client.cells);
+  const { container } = render(<CorpusWall client={{ ...client, cells } as any} />);
+  await findCanvas(container);
+  const fetches = cells.mock.calls.length;
+  fireEvent.click(screen.getByRole('checkbox', { name: /Brick/ }));
+  await waitFor(() => screen.getByText('0 of 2'));
+  expect(cells.mock.calls.length).toBe(fetches);
+});
+
+it('offers the direction toggle only once the wall is grouped by release', async () => {
+  const { container } = render(<CorpusWall client={client} />);
+  await findCanvas(container);
+  expect(screen.queryByLabelText('Newest first')).toBeNull();
+  fireEvent.change(screen.getByLabelText('Group'), { target: { value: 'release' } });
+  expect(screen.getByLabelText('Newest first')).toBeTruthy();
+});

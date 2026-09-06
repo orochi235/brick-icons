@@ -1,7 +1,9 @@
+import { categoryOf, type Grouping } from '@lab/corpus/facts';
+import type { TintMode } from '@lab/corpus/tint';
 import type { Cell } from '@lab/corpus/types';
 
 export const SORTS = ['id', 'category', 'status', 'extra_d99', 'secs',
-                      'made_at'] as const;
+                      'made_at', 'year', 'sets'] as const;
 export const FILTERS = ['all', 'rendered', 'unrendered', 'errors', 'printed',
                         'obsolete', 'base'] as const;
 
@@ -29,7 +31,17 @@ const IN_CLASS: Record<CellClass, (c: Cell) => boolean> = {
   outOfScope: (c) => c.out_of_scope,
 };
 
-export interface Selection { sort: Sort; filter: Filter; shown: Shown }
+export interface Selection {
+  sort: Sort;
+  filter: Filter;
+  shown: Shown;
+  grouping: Grouping;
+  tint: TintMode;
+  /** Clean category names to leave off the wall entirely. */
+  excluded: string[];
+  /** Which way `release` runs, and nothing else. */
+  desc: boolean;
+}
 
 const KEEP: Record<Filter, (c: Cell) => boolean> = {
   all: () => true,
@@ -43,7 +55,8 @@ const KEEP: Record<Filter, (c: Cell) => boolean> = {
 
 // Metrics read worst-first; the descriptive keys read alphabetically. Both put
 // "no answer" last, so an unmeasured part never displaces a bad one.
-const DESCENDING: ReadonlySet<Sort> = new Set(['extra_d99', 'secs', 'made_at']);
+const DESCENDING: ReadonlySet<Sort> =
+  new Set(['extra_d99', 'secs', 'made_at', 'sets']);
 
 function key(cell: Cell, sort: Sort): string | number | null {
   switch (sort) {
@@ -53,14 +66,18 @@ function key(cell: Cell, sort: Sort): string | number | null {
     case 'extra_d99': return cell.extra_d99;
     case 'secs': return cell.secs;
     case 'made_at': return cell.made_at;
+    case 'year': return cell.year_from;
+    case 'sets': return cell.sets;
   }
 }
 
 export function applySelection(cells: Cell[], selection: Selection): Cell[] {
   const shown = selection.shown ?? DEFAULT_SHOWN;
   const hidden = CLASSES.filter((c) => !shown[c]);
+  const off = new Set(selection.excluded);
   const kept = cells.filter((c) => KEEP[selection.filter](c)
-                                   && !hidden.some((h) => IN_CLASS[h](c)));
+                                   && !hidden.some((h) => IN_CLASS[h](c))
+                                   && !off.has(categoryOf(c)));
   const desc = DESCENDING.has(selection.sort);
   return kept.slice().sort((a, b) => {
     const ka = key(a, selection.sort);

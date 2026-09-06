@@ -5,7 +5,9 @@ import {
 import { LabShell } from '@weasel-js/labkit';
 import type { LabClient } from '@lab/api/client';
 import { clampWallView } from '@lab/corpus/clamp';
+import { categoryOf, COVERAGE_ORDER, groupers, rollUp } from '@lab/corpus/facts';
 import { FilterBar } from '@lab/corpus/FilterBar';
+import { bandedLayout, blockLayout } from '@lab/corpus/grouped';
 import { gridLayout } from '@lab/corpus/layout';
 import { Legend } from '@lab/corpus/Legend';
 import { levelFor, pickLevel } from '@lab/corpus/levels';
@@ -15,6 +17,7 @@ import { ParamsPanel } from '@lab/corpus/ParamsPanel';
 import { PartCard } from '@lab/corpus/PartCard';
 import { centerReveal } from '@lab/corpus/reveal';
 import { applySelection, DEFAULT_SHOWN, type Selection } from '@lab/corpus/select';
+import { Sidebar } from '@lab/corpus/Sidebar';
 import { useCells } from '@lab/corpus/useCells';
 import { useLooseThumbs } from '@lab/corpus/useLooseThumbs';
 import { useParams } from '@lab/corpus/useParams';
@@ -28,6 +31,12 @@ import '@lab/corpus/corpus.css';
 
 const IDENTITY_VIEW: View = { x: 0, y: 0, scale: { x: 1, y: 1 } };
 
+// Stable identity: a slot with nothing in it yet must not hand the memos
+// below a fresh array on every render.
+const NO_CELLS: Cell[] = [];
+// `blockLayout` takes no order for the groupings that have none of their own.
+const NO_ORDER: string[] = [];
+
 /** The whole app, minus its mount -- including labkit's `<LabShell>`, so this
  *  is a standalone lab and must not be nested inside a `<Lab>` or another
  *  `<LabShell>`. */
@@ -38,8 +47,10 @@ export function CorpusWall({ client }: { client: LabClient }) {
   const fetched = useCells(client, source, params.pollMs);
   const loaded = useSheets(client, source);
   const [level, setLevel] = useState(32);
-  const [selection, setSelection] = useState<Selection>(
-    { sort: 'id', filter: 'all', shown: DEFAULT_SHOWN });
+  const [selection, setSelection] = useState<Selection>({
+    sort: 'id', filter: 'all', shown: DEFAULT_SHOWN, grouping: 'none',
+    tint: 'status', excluded: [], desc: true,
+  });
   const [cam, setCam] = useState<View | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
   const [carded, setCarded] = useState<{ cell: Cell; at: { x: number; y: number } } | null>(null);
@@ -53,6 +64,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
   const camInitialized = useRef(false);
   const camRef = useRef<View | null>(null);
   camRef.current = cam;
+  const fittedGrouping = useRef<Selection['grouping']>('none');
 
   // The most-populated slot is the one worth opening on; the route already
   // orders them that way.
@@ -76,6 +88,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
   }
   const view = drawn.current;
   const cells = view?.cells ?? null;
+  const all = cells ?? NO_CELLS;
   const sheets = view?.sheets ?? {};
   const drawnSource = view?.source ?? source;
 
@@ -87,12 +100,35 @@ export function CorpusWall({ client }: { client: LabClient }) {
     () => (cells ? applySelection(cells, selection) : []),
     [cells, selection]);
 
+  // Counted over the whole slot, not over `shown` -- a facet's own checkbox
+  // must not zero out the moment it is cleared.
+  const counts = useMemo(() => {
+    const out = new Map<string, number>();
+    for (const c of all) {
+      const name = categoryOf(c);
+      out.set(name, (out.get(name) ?? 0) + 1);
+    }
+    return out;
+  }, [all]);
+
+  const rolled = useMemo(() => rollUp(shown), [shown]);
+
+  const layout = useMemo(() => {
+    const keys = groupers(selection.grouping, rolled);
+    if (keys.length === 0) return gridLayout;
+    if (keys.length === 1) {
+      return blockLayout(keys[0]!, selection.grouping === 'coverage'
+                                     ? COVERAGE_ORDER : NO_ORDER);
+    }
+    return bandedLayout(keys[0]!, keys[1]!, selection.desc);
+  }, [selection.grouping, selection.desc, rolled]);
+
   // 0 means auto -- the override exists for judging a fixed grid shape, not
   // for replacing the default that already fills the wall's width.
   const cols = params.cols > 0 ? params.cols : Math.max(1, Math.ceil(Math.sqrt(shown.length)));
   const laid = useMemo(
-    () => gridLayout(shown, { cell: params.cell, gap: params.gap, cols }),
-    [shown, cols, params.cell, params.gap]);
+    () => layout(shown, { cell: params.cell, gap: params.gap, cols }),
+    [layout, shown, cols, params.cell, params.gap]);
   const pitch = params.cell + params.gap;
 
   // Every camera write goes through this, so a flick's inertia decay -- which
@@ -137,7 +173,12 @@ export function CorpusWall({ client }: { client: LabClient }) {
   // ratio is larger, which for a viewport wider than the wall is width's.
   // The wall's own top-left belongs at the viewport's top-left, so only the
   // scale from the fit is kept; centering the bounds would crop row zero.
+  // A regroup moves every cell and so changes `laid.bounds`, but it is not a
+  // reason to re-fit: the reader asked for a different arrangement, not for
+  // their camera back at the top. The sync below runs after this effect, so
+  // within the commit that changes the grouping this still sees the old one.
   useEffect(() => {
+    if (fittedGrouping.current !== selection.grouping) return;
     if (touched.current || laid.bounds.w <= 0) return;
     if (size.width <= 0 || size.height <= 0) return;
     const fitted = fitViewToBounds(
@@ -145,6 +186,9 @@ export function CorpusWall({ client }: { client: LabClient }) {
       size, cam ?? IDENTITY_VIEW, { mode: 'fill', padding: 0 });
     updateCam({ x: 0, y: 0, scale: fitted.scale });
   }, [laid.bounds.w, laid.bounds.h, size.width, size.height]);
+
+  useEffect(() => { fittedGrouping.current = selection.grouping; },
+            [selection.grouping]);
 
   // Hysteresis governs transitions, and the first pick has nothing to be
   // hysteretic about -- the camera's first fit sets the level directly, and
@@ -185,9 +229,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
     <LabShell title="brick-icons corpus"
               header={cells && (
                 <>
-                  <FilterBar selection={selection} onChange={setSelection}
-                             shown={shown.length} total={cells.length}
-                             sources={sources} source={source} onSource={setSource} />
+                  <FilterBar sources={sources} source={source} onSource={setSource} />
                   <PartSearch client={client} onOpen={openSearchedPart} />
                   {searchNotice && (
                     <span className="corpus-search-notice" role="status">{searchNotice}</span>
@@ -195,6 +237,10 @@ export function CorpusWall({ client }: { client: LabClient }) {
                 </>
               )}>
       <div className="corpus-app">
+        {cells && (
+          <Sidebar selection={selection} onChange={setSelection} counts={counts}
+                   shown={shown.length} total={cells.length} />
+        )}
         {/* `useCanvasSize` measures the stage once, on its own first mount --
             it has to exist from the start, not appear once cells arrive. */}
         <div className="corpus-stage" ref={box}
@@ -213,6 +259,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
                   sheet={active?.image ?? null} manifest={active?.manifest ?? null}
                   loose={loose} vector={vector} width={size.width} height={size.height}
                   highlight={highlight}
+                  bands={laid.bands} tint={selection.tint}
                   explicitCaret={explicitCaret} onExplicitCaretChange={setExplicitCaret}
                   onPan={(next) => { touched.current = true; updateCam(next); }}
                   onPick={(c, at) => setCarded({ cell: c, at })}

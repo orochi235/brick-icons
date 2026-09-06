@@ -1,0 +1,34 @@
+.corpus-side {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 216px;
+  padding: 10px 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--wzl-border);
+  background: var(--wzl-surface);
+  font-size: 13px;
+}
+.corpus-side > label { display: flex; flex-direction: column; gap: 3px; padding: 0 12px }
+.corpus-side > label.corpus-side__check {
+  flex-direction: row; align-items: center; gap: 6px;
+}
+.corpus-side h3 {
+  display: flex; align-items: baseline; gap: 8px; margin: 12px 0 2px; padding: 0 12px;
+  font-size: 10px; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--wzl-fg-subtle);
+}
+.corpus-side h3 button {
+  border: 0; background: none; padding: 0; cursor: pointer;
+  color: var(--wzl-fg-subtle); font: inherit; text-transform: none; letter-spacing: 0;
+}
+.corpus-side h3 button:hover { color: var(--wzl-accent) }
+.corpus-side__facets { margin: 0; padding: 0; list-style: none }
+.corpus-side__facets label {
+  display: flex; gap: 7px; align-items: baseline; padding: 2px 12px; cursor: pointer;
+}
+.corpus-side__facets label:hover { background: var(--wzl-surface-raised) }
+.corpus-side__facets span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.corpus-side__facets em { font-style: normal; font-size: 11px; color: var(--wzl-fg-subtle);
+  font-variant-numeric: tabular-nums }
+.corpus-side__count { margin: 8px 12px 0; color: var(--wzl-fg-subtle) }

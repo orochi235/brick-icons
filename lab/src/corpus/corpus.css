@@ -55,7 +55,7 @@ body { margin: 0; }
 
 .corpus-app {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   height: 100%;
   background: var(--wzl-surface-sunken);
   color: var(--wzl-fg);
