@@ -369,12 +369,30 @@ cell list gained fields.
 - **A retired cell wears an R** in its corner once it is drawn past 56px.
   Mike wants these badges toggleable eventually; nothing is toggleable yet.
 
+Later the same day, what a square says:
+
+- **An undrawn cell with a border is struck corner to corner** in the
+  border's own color; a drawn cell now wears that border too (under the
+  drawing at the vector rung, over it on an opaque bake).
+- **Retired parts sit on a light gray ground**, baked into the sprites
+  (`thumbs.RETIRED_GROUND`, `grounds.json` recording what each part was baked
+  on) and matched by `paint.groundFor`, so a cell holds its shade across
+  rungs. **Rebaking every slot is what makes this visible** -- `bake-thumbs.py`
+  does it and is idempotent.
+- **The R badge** is a white-on-black disc, drawn over the border.
+- **`~Moved to` redirects are off the map by default** -- 1,159 of the 24,591
+  files -- with checkboxes in the filter bar for them and for the
+  out-of-scope parts. They are still in `parts`, and still indexed: a cell's
+  sprite position is its index over the whole corpus, so dropping them from
+  the table would renumber every sheet.
+- Numeric params carry units (`ms`, `px`) through a resolved schema, since a
+  legacy `ConfigField` cannot hold one.
+
 Two things left on the floor:
 
-- **`census-occt`'s loose thumbs are stale** -- 2,655 baked against 6,659
-  renders, so at the 128px rung most of that slot falls back to the 32px
-  sheet. `scripts/bake-thumbs.py --source census-occt` fixes it and only
-  costs the new ones.
+- **The census draws the `~Moved` redirects**, which are now hidden on the
+  wall and can never be worth rendering. Skipping them in `out/census*/`
+  batch lists would give back whatever share of the run they are.
 - **A 512px baked level** between the 128px PNG and the SVG was considered
   and deferred: the vector rung got fast enough that the pop-in it would
   cover may be gone. Roughly 600MB per slot if it is ever wanted.
