@@ -49,8 +49,8 @@ def redo_arrow():
     going -- and oversized, because at badge size a head in proportion to the
     stroke disappears into the curve it sits on."""
     rm = 330.0
-    t_tail, t_head = 48.0, 84.0
-    a0, ah = math.pi * 0.36, math.pi * 1.66
+    t_tail, t_head = 26.0, 86.0
+    a0, ah = math.pi * 0.52, math.pi * 1.66
     side = 400.0
     n = 80
 

@@ -88,7 +88,22 @@ export const drawArchive: Mark = (ctx, field) => {
 
 // Redo: the subset sign with a head, as one filled band so the head cannot
 // come adrift of the stroke it finishes. Clockwise, or it reads as undo.
-export const drawRedo: Mark = (ctx) => fillPath(ctx, REDO);
+export const drawRedo: Mark = (ctx) => {
+  fillPath(ctx, REDO);
+  // A sparkle off the tail, where the arrow starts: the part it came from.
+  const cx = 0.46;
+  const cy = 0.44;
+  const r = 0.3;
+  const k = r * 0.2;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - r);
+  ctx.quadraticCurveTo(cx + k, cy - k, cx + r, cy);
+  ctx.quadraticCurveTo(cx + k, cy + k, cx, cy + r);
+  ctx.quadraticCurveTo(cx - k, cy + k, cx - r, cy);
+  ctx.quadraticCurveTo(cx - k, cy - k, cx, cy - r);
+  ctx.closePath();
+  ctx.fill();
+};
 
 // A lightning bolt. A zigzag silhouette is the shape that survives the mark
 // budget best -- a little over 4px at the badge floor -- and it wants some
@@ -127,14 +142,22 @@ export const drawMagnet: Mark = (ctx, _field, accent) => {
 // hold at the strip's floor the fallback is a halftone dot cluster.
 export const drawBrush: Mark = (ctx, _field, accent) => {
   ctx.save();
-  ctx.rotate(-Math.PI / 6);
+  ctx.rotate(-Math.PI * 2 / 3);
   // The handle runs off the edge of the field rather than stopping inside
   // it: a ferrule drawn whole is a stack of bands at the strip's floor, and
   // `drawBadge` clips the mark to the disc, so this reads as a brush held
   // into frame.
   ctx.save();
   ctx.fillStyle = '#c9c9d0';
-  ctx.fillRect(-0.22, 0.55, 0.44, 1.6);
+  // Narrow where it meets the head and widening as it runs out, the way a
+  // ferrule crimps onto a handle.
+  ctx.beginPath();
+  ctx.moveTo(-0.15, 0.55);
+  ctx.lineTo(0.15, 0.55);
+  ctx.lineTo(0.34, 2.15);
+  ctx.lineTo(-0.34, 2.15);
+  ctx.closePath();
+  ctx.fill();
   ctx.restore();
   fillPath(ctx, BRUSH);
   cutPaths(ctx, BRUSH_CUT, accent);
