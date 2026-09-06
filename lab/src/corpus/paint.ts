@@ -191,14 +191,14 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
   technic: { tag: 'technic', mark: 'technic', field: '#1b2a5e', ink: '#ffffff' },
   duplo: { tag: 'duplo', mark: 'duplo', field: '#c8102e', ink: '#ffffff' },
   weird: { tag: 'weird', text: '\u03a8', field: '#5b3a86', ink: '#ffffff',
-           font: WEIRD_FACE, dy: 0.035 },
+           font: WEIRD_FACE, weight: 300, scale: 1.22, dy: 0.035 },
   // The one property badge off the shared field: a gold bolt on black is
   // what a live circuit looks like everywhere else, and it earns the break.
   electric: { tag: 'electric', mark: 'bolt', field: '#101014', ink: '#ffd60a',
               scale: 0.86 },
-  magnet: { tag: 'magnet', mark: 'magnet', field: PROPERTY_FIELD, ink: '#ffffff',
-            scale: 0.97 },
-  printed: { tag: 'printed', mark: 'brush', field: PROPERTY_FIELD, ink: '#ffffff',
+  magnet: { tag: 'magnet', mark: 'magnet', field: PROPERTY_FIELD, ink: '#e03131',
+            accent: '#d8d8dc', scale: 0.97 },
+  printed: { tag: 'printed', mark: 'brush', field: PROPERTY_FIELD, ink: '#f5e6a3',
              accent: '#00ff00' },
   composite: { tag: 'composite', mark: 'composite', field: PROPERTY_FIELD,
                ink: '#ffffff', scale: 0.86 },

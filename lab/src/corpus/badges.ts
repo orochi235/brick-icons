@@ -109,12 +109,12 @@ export const drawBolt: Mark = (ctx) => {
   ctx.fill();
 };
 
-// A horseshoe magnet: a U with its poles marked by the silhouette contracted
-// and clipped to the tips, so the marking follows the limb rather than
-// cutting across it.
-export const drawMagnet: Mark = (ctx, field) => {
+// A horseshoe magnet: a U with its poles in their own color, the silhouette
+// clipped to the tips so they sit flush with the limbs' edges. Contracted
+// inside them instead, they read as damage to the shape.
+export const drawMagnet: Mark = (ctx, _field, accent) => {
   fillPath(ctx, MAGNET);
-  cutPaths(ctx, MAGNET_CUT, field);
+  cutPaths(ctx, MAGNET_CUT, accent);
 };
 
 // A brush: bristles whose width goes to nothing at the tip, a crimped
@@ -164,10 +164,23 @@ export const drawMinifig: Mark = (ctx) => {
   ctx.restore();
 };
 
-// Composite: three stacked bars. Several things in one place, in the shape
-// everyone already reads as a stack.
-export const drawComposite: Mark = (ctx) => {
-  for (const y of [-0.74, -0.18, 0.38]) ctx.fillRect(-0.7, y, 1.4, 0.36);
+// Composite: two L-trominoes interlocked into a 2x3 block -- the smallest
+// rectangle two identical pieces can tile, and it says assembled-from-parts
+// rather than merely stacked. The seam between them is cut in the field, so
+// the two pieces read apart without either being outlined.
+export const drawComposite: Mark = (ctx, field) => {
+  ctx.fillRect(-0.6, -0.9, 1.2, 1.8);
+  ctx.save();
+  ctx.strokeStyle = field;
+  ctx.lineWidth = 0.15;
+  ctx.lineJoin = 'miter';
+  ctx.beginPath();
+  ctx.moveTo(0.6, -0.3);
+  ctx.lineTo(0, -0.3);
+  ctx.lineTo(0, 0.3);
+  ctx.lineTo(-0.6, 0.3);
+  ctx.stroke();
+  ctx.restore();
 };
 
 // Duplo's d, in the weight its logotype uses: a heavy rounded geometric with
