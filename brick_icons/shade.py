@@ -116,8 +116,11 @@ def _overlap_witness(pa, pb, ha=(), hb=(), grid=48):
     if not m.any():
         return None
     while True:                                  # erode to the interior
-        er = m & np.pad(m, 1)[:-2, 1:-1] & np.pad(m, 1)[2:, 1:-1] \
-               & np.pad(m, 1)[1:-1, :-2] & np.pad(m, 1)[1:-1, 2:]
+        # Sliced rather than padded: the four np.pad copies per pass were the
+        # single most-run allocation in the whole render.
+        er = np.zeros_like(m)
+        er[1:-1, 1:-1] = (m[1:-1, 1:-1] & m[:-2, 1:-1] & m[2:, 1:-1]
+                          & m[1:-1, :-2] & m[1:-1, 2:])
         if not er.any():
             break
         m = er
@@ -183,6 +186,33 @@ def _stall_release(remaining, succ, faces):
     return max(cand or rem, key=lambda i: faces[i]["depth"])
 
 
+def _bbox_pairs(polys, gap=0.5, chunk=256):
+    """(i, j), i < j, for every pair of polygons whose screen bboxes overlap by
+    at least `gap` on both axes -- the test _overlap_witness opens with, which
+    all but a percent or two of the pairs fail. Ordered exactly as the i<j
+    double loop it replaces, so the graph it feeds is built in the same order.
+
+    Chunked because the mask is n^2 booleans and a 2000-face part is common.
+    """
+    n = len(polys)
+    if n < 2:
+        return np.zeros((0, 2), int)
+    bb = np.array([(p[:, 0].min(), p[:, 1].min(), p[:, 0].max(), p[:, 1].max())
+                   for p in polys], float)
+    idx = np.arange(n)
+    out = []
+    for s in range(0, n, chunk):
+        e = min(s + chunk, n)
+        lo, hi = bb[s:e, :2, None], bb[s:e, 2:, None]
+        m = ((np.minimum(hi[:, 0], bb[None, :, 2]) - np.maximum(lo[:, 0], bb[None, :, 0]) >= gap)
+             & (np.minimum(hi[:, 1], bb[None, :, 3]) - np.maximum(lo[:, 1], bb[None, :, 1]) >= gap)
+             & (idx[None, :] > idx[s:e, None]))
+        ii, jj = np.nonzero(m)
+        if len(ii):
+            out.append(np.stack([ii + s, jj], axis=1))
+    return np.concatenate(out) if out else np.zeros((0, 2), int)
+
+
 def order_faces(faces, proj=None, eps=1e-6, own_occ=None):
     """Witness-depth (Newell-style) paint ordering, replacing the mean-depth
     painter sort AND the occlusion cull: for every screen-overlapping pair,
@@ -225,20 +255,20 @@ def order_faces(faces, proj=None, eps=1e-6, own_occ=None):
 
     succ = defaultdict(set)
     indeg = [0] * n
-    for i in range(n):
-        for j in range(i + 1, n):
-            w = _overlap_witness(faces[i]["poly"], faces[j]["poly"],
-                                 ha=faces[i].get("holes") or (),
-                                 hb=faces[j].get("holes") or ())
-            if w is None:
-                continue
-            di, dj = depth_at(i, *w), depth_at(j, *w)
-            if abs(di - dj) <= eps:
-                continue                         # coplanar at witness: no edge
-            a, b = (i, j) if di > dj else (j, i)  # farther paints first
-            if b not in succ[a]:
-                succ[a].add(b)
-                indeg[b] += 1
+    polys = [np.asarray(f["poly"], float) for f in faces]
+    for i, j in _bbox_pairs(polys):
+        w = _overlap_witness(polys[i], polys[j],
+                             ha=faces[i].get("holes") or (),
+                             hb=faces[j].get("holes") or ())
+        if w is None:
+            continue
+        di, dj = depth_at(i, *w), depth_at(j, *w)
+        if abs(di - dj) <= eps:
+            continue                             # coplanar at witness: no edge
+        a, b = (i, j) if di > dj else (j, i)      # farther paints first
+        if b not in succ[a]:
+            succ[a].add(b)
+            indeg[b] += 1
 
     ready = [(-faces[i]["depth"], i) for i in range(n) if indeg[i] == 0]
     heapq.heapify(ready)

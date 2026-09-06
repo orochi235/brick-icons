@@ -697,6 +697,26 @@ def _fragment_points(edge):
     return np.array(out, float)
 
 
+def _locus_bboxes(loci):
+    """(x0, y0, x1, y1) per locus, grown by everything _on_locus tolerates, so
+    a fragment whose own bbox escapes one cannot lie on it. Every locus is a
+    bounded segment or ellipse, so this turns the fragments x loci scan into a
+    handful of real tests."""
+    bb = np.empty((len(loci), 4))
+    for k, l in enumerate(loci):
+        if l[0] == "seg":
+            a, b = np.asarray(l[1], float), np.asarray(l[2], float)
+            pad = MATCH_TOL + 1e-3 * np.abs(b - a)
+            lo, hi = np.minimum(a, b) - pad, np.maximum(a, b) + pad
+        else:
+            c = np.asarray(l[1], float)
+            M = np.linalg.inv(l[2])
+            h = (1.0 + MATCH_TOL) * np.hypot(M[:, 0], M[:, 1])
+            lo, hi = c - h, c + h
+        bb[k] = (lo[0], lo[1], hi[0], hi[1])
+    return bb
+
+
 def select_authored(comp, loci):
     """(edge, kind) for every fragment lying on an authored locus.
 
@@ -710,14 +730,18 @@ def select_authored(comp, loci):
     got = []
     if comp is None:
         return got
+    lb = _locus_bboxes(loci)
     for e in _edges_of(comp):
         try:
             pts = _fragment_points(e)
         except Exception:
             continue
-        for locus in loci:
-            if _on_locus(pts, locus):
-                got.append((e, locus))
+        lo, hi = pts.min(axis=0), pts.max(axis=0)
+        near = np.nonzero((lo[0] >= lb[:, 0]) & (hi[0] <= lb[:, 2])
+                          & (lo[1] >= lb[:, 1]) & (hi[1] <= lb[:, 3]))[0]
+        for k in near:
+            if _on_locus(pts, loci[k]):
+                got.append((e, loci[k]))
                 break
     return got
 
