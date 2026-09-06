@@ -358,6 +358,37 @@ def test_the_census_renders_are_their_own_sources(tmp_path):
         db.canonical_argv("3001", "naive")
 
 
+def test_a_facet_tree_does_not_replace_the_oracle_it_sits_beside(tmp_path):
+    """A render's config_key comes from its source alone, so two census trees
+    that resolve to one source overwrite each other part for part -- the wall
+    keeps drawing census-naive and the drawing underneath has changed."""
+    lib = _library(tmp_path)
+    for dirname in ("census", "census-white-naive"):
+        d = tmp_path / "out" / dirname / "renders" / "naive"
+        d.mkdir(parents=True)
+        (d / "3001.svg").write_text(SVG)
+
+    counts = db.rebuild(tmp_path / "corpus.db", lib, root=tmp_path,
+                        census_dirs=[tmp_path / "out" / "census",
+                                     tmp_path / "out" / "census-white-naive"])
+    conn = db.connect(tmp_path / "corpus.db")
+    rows = {r["source"]: r["path"] for r in
+            conn.execute("SELECT source, path FROM renders")}
+    assert rows == {"census-naive": "out/census/renders/naive/3001.svg",
+                    "census-white-naive":
+                        "out/census-white-naive/renders/naive/3001.svg"}
+    assert counts["renders"] == 2 and counts["replaced"] == 0
+    assert db.canonical_argv("3001", "census-white-naive") != \
+        db.canonical_argv("3001", "census-naive")
+
+
+def test_census_source_repeats_no_engine_it_is_already_named_with():
+    assert db.census_source("out/census", "naive") == "census-naive"
+    assert db.census_source("out/census-naive", "naive") == "census-naive"
+    assert db.census_source("out/census-white-occt", "occt") == \
+        "census-white-occt"
+
+
 def test_a_rebuild_indexes_the_census_renders_too(tmp_path):
     conn_path = tmp_path / "corpus.db"
     lib = _library(tmp_path)
