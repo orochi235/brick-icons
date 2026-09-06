@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { cellState, fillFor, paintCommands, tally } from '@lab/corpus/paint';
+import { cellState, fillFor, paintCommands, tally, THUMB_GROUND } from '@lab/corpus/paint';
 import { CELL_STATES, DEFAULT_PALETTE as CELL_FILL, type CellState } from '@lab/corpus/palette';
 import type { Cell, SheetManifest } from '@lab/corpus/types';
 
@@ -89,7 +89,16 @@ it('draws a whole loose image when one is loaded for the cell', () => {
     cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest, loose: new Map([['a', img]]),
   });
   expect(cmd).toEqual({ kind: 'image', dx: 0, dy: 0, dw: 10, dh: 10, image: img,
-                        ring: false });
+                        ground: THUMB_GROUND, ring: false });
+});
+
+it('grounds a vector cell on what the thumbnails were baked against', () => {
+  const [cmd] = paintCommands({
+    cells: [cell('a', 0, 'sha-a')], rects, visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest,
+    vector: new Map([['a', {} as CanvasImageSource]]),
+  });
+  expect(cmd).toMatchObject({ kind: 'image', ground: '#ffffff' });
 });
 
 it('prefers the loose image over the sheet', () => {

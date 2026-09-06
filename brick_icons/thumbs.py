@@ -153,8 +153,14 @@ def _replicate_edges(sheet: Image.Image, cell: Image.Image,
         sheet.paste(cell.crop((w - 1, 0, w, h)), (x0 + w + d - 1, y0))
 
 
+#: The ground a thumbnail is fitted onto, mirrored by `THUMB_GROUND` in
+#: lab/src/corpus/paint.ts -- the wall's vector rung rasterizes the SVG itself
+#: and has no bake to inherit this from.
+GROUND = (255, 255, 255, 255)
+
+
 def _square(drawn: Image.Image, level: int) -> Image.Image:
-    """Fit a render inside an opaque white square of `level` px.
+    """Fit a render inside an opaque `GROUND` square of `level` px.
 
     Opaque, because a render is black ink on transparency and the wall's
     background follows the weasel theme -- a transparent thumbnail is invisible
@@ -163,7 +169,7 @@ def _square(drawn: Image.Image, level: int) -> Image.Image:
     """
     scale = level / max(drawn.size)
     size = (max(1, round(drawn.width * scale)), max(1, round(drawn.height * scale)))
-    cell = Image.new("RGBA", (level, level), (255, 255, 255, 255))
+    cell = Image.new("RGBA", (level, level), GROUND)
     fitted = drawn.resize(size, Image.LANCZOS)
     cell.paste(fitted, ((level - size[0]) // 2, (level - size[1]) // 2), fitted)
     return cell

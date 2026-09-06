@@ -97,6 +97,10 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
   } else if (cmd.kind === 'image') {
     ctx.save();
     ctx.globalAlpha = cmd.alpha ?? 1;
+    // Under the same alpha as the image, so a dimmed vector cell fades the
+    // way a dimmed sprite does -- the bakes carry this ground in their pixels.
+    ctx.fillStyle = cmd.ground;
+    ctx.fillRect(dx, dy, cmd.dw, cmd.dh);
     ctx.drawImage(cmd.image, dx, dy, cmd.dw, cmd.dh);
     if (cmd.ring) strokeRing(ctx, { ...cmd, dx, dy }, palette);
     ctx.restore();

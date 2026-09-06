@@ -57,6 +57,13 @@ function borderWidthFor(weight: CellStyle['weight'], cellPx: number,
   return Math.min(appearance.maxBorderPx, Math.max(1, cellPx * factor));
 }
 
+/** The ground every baked thumbnail sits on -- `thumbs._square` in
+ *  `brick_icons/thumbs.py` fills the whole cell with it, because a render is
+ *  ink on transparency. A cell drawn from the vector rung has to be given the
+ *  same ground, or zooming past the loose PNG swaps the surround to the
+ *  wall's dark canvas. */
+export const THUMB_GROUND = '#ffffff';
+
 export type PaintCommand =
   | { kind: 'sprite'; dx: number; dy: number; dw: number; dh: number;
       sx: number; sy: number; sw: number; sh: number; ring: boolean; alpha?: number;
@@ -64,7 +71,8 @@ export type PaintCommand =
   | { kind: 'fill'; dx: number; dy: number; dw: number; dh: number;
       fill: string; border: string | null; borderWidth: number; caret?: boolean }
   | { kind: 'image'; dx: number; dy: number; dw: number; dh: number;
-      image: CanvasImageSource; ring: boolean; alpha?: number; caret?: boolean };
+      image: CanvasImageSource; ground: string; ring: boolean; alpha?: number;
+      caret?: boolean };
 
 export interface PaintInput {
   cells: Cell[];
@@ -112,7 +120,8 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
     const alpha = dimmed ? appearance.dimAlpha : undefined;
     const image = vector?.get(cell.id) ?? loose?.get(cell.id);
     if (image) {
-      out.push({ kind: 'image', dx, dy, dw, dh, image, ring, alpha, caret: isCaret });
+      out.push({ kind: 'image', dx, dy, dw, dh, image, ground: THUMB_GROUND, ring, alpha,
+                 caret: isCaret });
       continue;
     }
     const box = manifest && cell.sha && !isStale(manifest, cell)

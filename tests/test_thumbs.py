@@ -1,5 +1,6 @@
 """Thumbnail baking: geometry, freshness, sheets."""
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -161,3 +162,18 @@ def test_the_gutter_replicates_the_cell_edge(tmp_path):
     with Image.open(out / "sheet-32.png") as img:
         x0, y0, _, _ = thumbs.geometry(2, 32).cell_box(0)
         assert img.getpixel((x0 - 1, y0)) == img.getpixel((x0, y0))
+
+
+def test_the_wall_grounds_its_vector_cells_on_what_the_bake_used():
+    """The two grounds are set in different languages and must not drift.
+
+    The vector rung draws the SVG straight, so a cell zoomed past the loose
+    PNG shows this ground where the bake showed its own -- any mismatch reads
+    as the background changing color mid-zoom.
+    """
+    paint = (Path(__file__).resolve().parent.parent
+             / "lab" / "src" / "corpus" / "paint.ts").read_text()
+    match = re.search(r"THUMB_GROUND = '(#[0-9a-fA-F]{6})'", paint)
+    assert match, "paint.ts no longer declares THUMB_GROUND"
+    r, g, b = (int(match.group(1)[i:i + 2], 16) for i in (1, 3, 5))
+    assert (r, g, b, 255) == thumbs.GROUND
