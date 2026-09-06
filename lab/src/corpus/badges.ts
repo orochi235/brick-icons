@@ -6,7 +6,7 @@
  *  Their own module because nothing but a canvas can check them: keeping
  *  them out of `Wall.tsx` is what lets a page draw the set and look at it.
  */
-import { BRUSH, BRUSH_CUT, MAGNET, MAGNET_CUT, MINIFIG,
+import { BRUSH, BRUSH_CUT, MAGNET, MAGNET_CUT,
   REDO } from '@lab/corpus/markPaths';
 import type { CellBadge } from '@lab/corpus/paint';
 
@@ -132,14 +132,23 @@ export const drawBrush: Mark = (ctx, field, accent) => {
   cutPaths(ctx, BRUSH_CUT, accent);
 };
 
-// A minifig head in silhouette -- stud, body and neck. Not drawn by eye: it
-// is `3626b`'s own geometry seen face on, resampled at a fine step so the
-// dome stays a curve. No face, because most minifig parts are printed and a
-// face would read as the printed badge twice over.
+// A minifig face: the disc is the head, so all the mark has to carry is the
+// 1978 smiley. Drawing the head's own outline instead gave a silhouette that
+// stopped reading below about 20px, which is most of the wall.
 export const drawMinifig: Mark = (ctx) => {
+  ctx.beginPath();
+  ctx.arc(-0.34, -0.26, 0.15, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(0.34, -0.26, 0.15, 0, Math.PI * 2);
+  ctx.fill();
   ctx.save();
-  ctx.scale(0.84, 0.84);
-  fillPath(ctx, MINIFIG);
+  ctx.strokeStyle = ctx.fillStyle;
+  ctx.lineWidth = 0.16;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.arc(0, -0.08, 0.52, Math.PI * 0.16, Math.PI * 0.84, false);
+  ctx.stroke();
   ctx.restore();
 };
 

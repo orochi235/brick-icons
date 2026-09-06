@@ -186,7 +186,7 @@ export const PROPERTY_FIELD = '#4a4a4f';
  *  properties, which stack. Tag order, which `tags.TAGS` already sets. */
 export const STRIP_BADGES: Record<string, CellBadge> = {
   // LDraw's own Yellow, the color a bare minifig head is moulded in.
-  minifig: { tag: 'minifig', mark: 'minifig', field: '#f2cd37', ink: '#ffffff' },
+  minifig: { tag: 'minifig', mark: 'minifig', field: '#f2cd37', ink: '#1a1a1a' },
   technic: { tag: 'technic', mark: 'technic', field: '#1b2a5e', ink: '#ffffff' },
   duplo: { tag: 'duplo', mark: 'duplo', field: '#ffffff', ink: '#c8102e',
            stroke: '#c8102e' },
