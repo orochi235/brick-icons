@@ -5,7 +5,7 @@ import type { Cell, SheetManifest } from '@lab/corpus/types';
 
 const cell = (id: string, index: number, sha: string | null,
               overrides: Partial<Cell> = {}): Cell => ({
-  id, index, title: id, category: null, printed: false, obsolete: false,
+  id, index, title: id, category: null, printed: false, obsolete: false, base: true,
   status: 'unreviewed', sha, made_at: null, extra_d99: null, secs: null,
   error: null, open_defects: 0, open_defects_elsewhere: 0,
   error_elsewhere: false, ...overrides,

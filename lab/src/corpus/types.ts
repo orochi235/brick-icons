@@ -5,6 +5,7 @@ export interface Cell {
   category: string | null;
   printed: boolean;
   obsolete: boolean;
+  base: boolean;
   status: string;
   sha: string | null;
   made_at: string | null;

@@ -3,7 +3,7 @@ import { applySelection } from '@lab/corpus/select';
 import type { Cell } from '@lab/corpus/types';
 
 const cell = (over: Partial<Cell> & { id: string; index: number }): Cell => ({
-  title: over.id, category: 'Brick', printed: false, obsolete: false,
+  title: over.id, category: 'Brick', printed: false, obsolete: false, base: true,
   status: 'unreviewed', sha: null, made_at: null, extra_d99: null,
   secs: null, error: null, open_defects: 0, open_defects_elsewhere: 0,
   error_elsewhere: false, ...over,
@@ -39,6 +39,16 @@ it('filters to what has no render', () => {
 it('filters to errors', () => {
   expect(applySelection(cells, { sort: 'id', filter: 'errors' })
     .map((c) => c.id)).toEqual(['c']);
+});
+
+it('filters to base parts', () => {
+  const mixed = [
+    cell({ id: 'a', index: 0, base: true }),
+    cell({ id: 'b', index: 1, base: false, printed: true }),
+    cell({ id: 'c', index: 2, base: false, obsolete: true }),
+  ];
+  expect(applySelection(mixed, { sort: 'id', filter: 'base' })
+    .map((c) => c.id)).toEqual(['a']);
 });
 
 it('never mutates the input', () => {

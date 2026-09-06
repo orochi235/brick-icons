@@ -91,8 +91,10 @@ def cells(conn: sqlite3.Connection, source: str = "census-naive",
     rows = []
     marks = ",".join("?" * len(wanted)) if wanted else "NULL"
     for part in conn.execute(
-            f"SELECT id, title, category, printed, obsolete, status FROM parts "
-            f"WHERE id IN ({marks}) ORDER BY id", wanted):
+            f"SELECT id, title, category, printed, obsolete, status, "
+            f"(printed = 0 AND obsolete = 0 AND id NOT LIKE '%c__' "
+            f"AND id NOT LIKE '%d__' AND id NOT LIKE 'u9%') AS base "
+            f"FROM parts WHERE id IN ({marks}) ORDER BY id", wanted):
         pid = part["id"]
         render = renders.get(pid)
         measure = measures.get(pid)
@@ -104,6 +106,7 @@ def cells(conn: sqlite3.Connection, source: str = "census-naive",
             "category": part["category"],
             "printed": bool(part["printed"]),
             "obsolete": bool(part["obsolete"]),
+            "base": bool(part["base"]),
             "status": part["status"],
             "sha": render["sha256"] if render else None,
             "made_at": render["made_at"] if render else None,

@@ -184,6 +184,52 @@ def test_a_fixed_defect_counts_in_neither(conn):
     assert cell["open_defects_elsewhere"] == 0
 
 
+def test_a_plain_part_is_base(conn):
+    _part(conn, "3001")
+    conn.commit()
+    assert cells.cells(conn)["cells"][0]["base"] is True
+
+
+def test_a_printed_part_is_not_base(conn):
+    conn.execute("INSERT INTO parts (id, title, category, printed, obsolete, "
+                 "status) VALUES ('3001p01', 'Brick, Printed', 'Brick', 1, 0, "
+                 "'unreviewed')")
+    conn.commit()
+    assert cells.cells(conn)["cells"][0]["base"] is False
+
+
+def test_an_obsolete_part_is_not_base(conn):
+    conn.execute("INSERT INTO parts (id, title, category, printed, obsolete, "
+                 "status) VALUES ('3001', '~Brick', 'Brick', 0, 1, "
+                 "'unreviewed')")
+    conn.commit()
+    assert cells.cells(conn)["cells"][0]["base"] is False
+
+
+def test_a_composite_part_is_not_base(conn):
+    _part(conn, "1234c01")
+    conn.commit()
+    assert cells.cells(conn)["cells"][0]["base"] is False
+
+
+def test_a_sticker_part_is_not_base(conn):
+    _part(conn, "1234d01")
+    conn.commit()
+    assert cells.cells(conn)["cells"][0]["base"] is False
+
+
+def test_an_unofficial_part_is_not_base(conn):
+    _part(conn, "u9123")
+    conn.commit()
+    assert cells.cells(conn)["cells"][0]["base"] is False
+
+
+def test_a_mould_variant_is_base(conn):
+    _part(conn, "3068b")
+    conn.commit()
+    assert cells.cells(conn)["cells"][0]["base"] is True
+
+
 def test_a_part_erroring_elsewhere_is_clean_here(conn):
     _part(conn, "3001")
     _measure(conn, "3001", "naive")

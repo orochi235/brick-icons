@@ -3,7 +3,7 @@ import type { Cell } from '@lab/corpus/types';
 export const SORTS = ['id', 'category', 'status', 'extra_d99', 'secs',
                       'made_at'] as const;
 export const FILTERS = ['all', 'rendered', 'unrendered', 'errors', 'printed',
-                        'obsolete'] as const;
+                        'obsolete', 'base'] as const;
 
 export type Sort = typeof SORTS[number];
 export type Filter = typeof FILTERS[number];
@@ -16,6 +16,7 @@ const KEEP: Record<Filter, (c: Cell) => boolean> = {
   errors: (c) => c.error !== null,
   printed: (c) => c.printed,
   obsolete: (c) => c.obsolete,
+  base: (c) => c.base,
 };
 
 // Metrics read worst-first; the descriptive keys read alphabetically. Both put

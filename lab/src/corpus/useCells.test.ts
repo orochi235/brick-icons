@@ -6,7 +6,7 @@ import type { Cell, CellsBody } from '@lab/corpus/types';
 import type { LabClient } from '@lab/api/client';
 
 const cell = (id: string, index: number, sha: string | null = null): Cell => ({
-  id, index, title: id, category: null, printed: false, obsolete: false,
+  id, index, title: id, category: null, printed: false, obsolete: false, base: true,
   status: 'unreviewed', sha, made_at: null, extra_d99: null, secs: null,
   error: null, open_defects: 0, open_defects_elsewhere: 0,
   error_elsewhere: false,
