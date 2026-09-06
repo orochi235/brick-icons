@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { FloatingPanel, Lab } from '@weasel-js/labkit';
 import type { Instrument, TrialContribution } from '@weasel-js/labkit';
 import type { LabClient } from '@lab/api/client';
@@ -54,6 +54,22 @@ function AllDefects({ client }: { client: LabClient }) {
 // Nesting a `<LabShell>` here would lay the whole app out as one header item.
 function TitleBar({ client }: { client: LabClient }) {
   const openPart = useOpenPart();
+  // `?part=3001` opens that part on load -- the corpus wall is its own page,
+  // so a link is the only way it can hand one over. Once, and the query is
+  // dropped afterwards so a reload does not reopen it.
+  const opened = useRef(false);
+  useEffect(() => {
+    if (opened.current) return;
+    const asked = new URLSearchParams(window.location.search).get('part');
+    if (!asked) return;
+    opened.current = true;
+    setPendingPart(asked);
+    openPart(asked);
+    const url = new URL(window.location.href);
+    url.searchParams.delete('part');
+    window.history.replaceState(null, '', url);
+  }, [openPart]);
+
   return (
     <>
       <PartSearch client={client} onOpen={(part) => { setPendingPart(part); openPart(part); }} />

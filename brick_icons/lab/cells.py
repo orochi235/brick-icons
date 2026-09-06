@@ -59,9 +59,12 @@ def engine_for(source: str) -> str:
 
     `renders.source` names a slot and `measurements.engine` names an engine, so
     the census slots have to drop their prefix or every metric joins to nothing
-    and the wall sorts an unsorted column without erroring.
+    and the wall sorts an unsorted column without erroring. A facet puts its
+    own name in the middle -- `census-white-naive` is the naive engine drawing
+    the white facet -- so it is the last segment that names the engine, not
+    everything after `census-`.
     """
-    return source[len("census-"):] if source.startswith("census-") else source
+    return source.rsplit("-", 1)[-1] if source.startswith("census-") else source
 
 
 def cells(conn: sqlite3.Connection, source: str = "census-naive",

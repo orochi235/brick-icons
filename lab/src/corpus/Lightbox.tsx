@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { LabClient } from '@lab/api/client';
 import { CATALOGS } from '@lab/corpus/catalogs';
 import { Tags, yearRange } from '@lab/corpus/tags';
+import { defectId, engineFor } from '@lab/corpus/flag';
 import type { PartDetail } from '@lab/corpus/types';
 import '@lab/corpus/Lightbox.css';
 
@@ -12,6 +13,9 @@ export function Lightbox({ partId, source, client, onClose }: {
   onClose: () => void;
 }) {
   const [detail, setDetail] = useState<PartDetail | null>(null);
+  const [flagging, setFlagging] = useState(false);
+  const [title, setTitle] = useState('');
+  const [flagError, setFlagError] = useState<string | null>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -31,6 +35,25 @@ export function Lightbox({ partId, source, client, onClose }: {
   // An API older than this component sends no slots -- the lab's server is a
   // long-lived process and outlives a reload of the page in front of it.
   const slots = detail?.slots ?? [];
+
+  const file = async () => {
+    setFlagError(null);
+    try {
+      await client.addDefect({
+        id: defectId(partId, title),
+        part: partId,
+        engines: [engineFor(source)],
+        status: 'open',
+        title: title.trim(),
+        filed: new Date().toISOString().slice(0, 10),
+      });
+      setTitle('');
+      setFlagging(false);
+      setDetail(await client.corpusPart(partId));
+    } catch (e) {
+      setFlagError(e instanceof Error ? e.message : String(e));
+    }
+  };
   const years = detail
     ? yearRange(detail.part.year_from, detail.part.year_to,
                 (detail.part.tags ?? []).includes('retired'))
@@ -64,6 +87,26 @@ export function Lightbox({ partId, source, client, onClose }: {
             ))}
             {slots.length === 0 && <li>no slot has drawn this part</li>}
           </ul>
+          <div className="corpus-actions">
+            <a className="corpus-action" href={`/index.html?part=${encodeURIComponent(partId)}`}
+               target="_blank" rel="noopener noreferrer">Open in lab</a>
+            <button type="button" className="corpus-action"
+                    onClick={() => setFlagging((was) => !was)}>
+              {flagging ? 'Cancel' : 'Flag a problem'}
+            </button>
+          </div>
+          {flagging && (
+            <form className="corpus-flag" onSubmit={(e) => { e.preventDefault(); void file(); }}>
+              <label>
+                What is wrong
+                <input value={title} autoFocus
+                       onChange={(e) => setTitle(e.target.value)}
+                       placeholder="the near rim is drawn as a whole circle" />
+              </label>
+              <button type="submit" disabled={!title.trim()}>File against {source}</button>
+              {flagError && <span className="corpus-flag-error" role="alert">{flagError}</span>}
+            </form>
+          )}
           <ul className="corpus-catalogs">
             {CATALOGS.map((catalog) => (
               <li key={catalog.name}>

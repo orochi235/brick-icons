@@ -17,7 +17,8 @@ const detail = {
   ],
 };
 
-const client = { corpusPart: () => Promise.resolve(detail) } as any;
+const addDefect = vi.fn(async (r: unknown) => r);
+const client = { corpusPart: () => Promise.resolve(detail), addDefect } as any;
 const box = (props: Record<string, unknown> = {}) => (
   <Lightbox partId="3001" source="naive" client={client} onClose={() => {}}
             {...props} />
@@ -82,4 +83,30 @@ it('links the part out to the public catalogs, each in a new window', async () =
   expect(rebrickable.getAttribute('rel')).toContain('noopener');
   expect(screen.getByRole('link', { name: 'BrickLink' }).getAttribute('href'))
     .toBe('https://www.bricklink.com/v2/catalog/catalogitem.page?P=3001');
+});
+
+it('links the part into the lab, in its own tab', async () => {
+  render(box());
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  const link = screen.getByRole('link', { name: 'Open in lab' });
+  expect(link.getAttribute('href')).toBe('/index.html?part=3001');
+  expect(link.getAttribute('target')).toBe('_blank');
+});
+
+it('files a defect against the slot being viewed', async () => {
+  addDefect.mockClear();
+  render(box());
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  fireEvent.click(screen.getByRole('button', { name: 'Flag a problem' }));
+  fireEvent.change(screen.getByLabelText('What is wrong'),
+                   { target: { value: 'the rim is drawn whole' } });
+  fireEvent.click(screen.getByRole('button', { name: /File against/ }));
+  await waitFor(() => expect(addDefect).toHaveBeenCalled());
+  expect(addDefect.mock.calls[0]![0]).toMatchObject({
+    id: '3001-the-rim-is-drawn-whole',
+    part: '3001',
+    engines: ['naive'],
+    status: 'open',
+    title: 'the rim is drawn whole',
+  });
 });

@@ -47,3 +47,22 @@
   padding: 0;
   list-style: none;
 }
+
+.corpus-actions {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  margin: 0.6rem 0;
+}
+
+.corpus-flag {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+
+.corpus-flag label { display: flex; flex-direction: column; gap: 0.2rem; }
+.corpus-flag input { min-width: 32ch; font: inherit; }
+.corpus-flag-error { color: var(--corpus-cell-failed-border, #e03030); }

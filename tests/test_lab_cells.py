@@ -272,3 +272,9 @@ def test_a_cell_with_no_catalog_entry_says_so(conn):
     conn.commit()
     cell = cells.cells(conn)["cells"][0]
     assert cell["year_from"] is None and cell["sets"] is None
+
+
+def test_a_facet_slot_still_names_its_engine():
+    assert cells.engine_for("census-white-naive") == "naive"
+    assert cells.engine_for("census-occt") == "occt"
+    assert cells.engine_for("naive") == "naive"
