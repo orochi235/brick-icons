@@ -19,7 +19,7 @@ def test_connect_is_idempotent(tmp_path):
     db.connect(path).close()
     conn = db.connect(path)
     assert conn.execute(
-        "SELECT value FROM meta WHERE key='schema_version'").fetchone()[0] == "1"
+        "SELECT value FROM meta WHERE key='schema_version'").fetchone()[0] == "2"
 
 
 def test_a_newer_database_is_refused(tmp_path):
@@ -381,6 +381,26 @@ def test_a_facet_tree_does_not_replace_the_oracle_it_sits_beside(tmp_path):
     assert counts["renders"] == 2 and counts["replaced"] == 0
     assert db.canonical_argv("3001", "census-white-naive") != \
         db.canonical_argv("3001", "census-naive")
+
+
+def test_a_measurement_records_which_facet_it_measured(tmp_path):
+    """engine alone cannot say: two facets of one engine are both "naive", so
+    a reader taking the newest run per engine hands the oracle slot the other
+    facet's numbers -- silently, since both are valid rows for that engine."""
+    lib = _library(tmp_path)
+    for dirname, d99 in (("census", 0.45), ("census-white-naive", 1.01)):
+        d = tmp_path / "out" / dirname
+        d.mkdir(parents=True)
+        (d / "naive-r0.jsonl").write_text(json.dumps(
+            {**MEASURED, "engine": "naive", "extra_dist_px": {"99": d99}}) + "\n")
+
+    db.rebuild(tmp_path / "corpus.db", lib, root=tmp_path,
+               census_dirs=[tmp_path / "out" / "census",
+                            tmp_path / "out" / "census-white-naive"])
+    conn = db.connect(tmp_path / "corpus.db")
+    got = {r["source"]: r["extra_d99"] for r in
+           conn.execute("SELECT source, extra_d99 FROM measurements")}
+    assert got == {"census-naive": 0.45, "census-white-naive": 1.01}
 
 
 def test_census_source_repeats_no_engine_it_is_already_named_with():

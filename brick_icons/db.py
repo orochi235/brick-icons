@@ -19,7 +19,7 @@ from brick_icons.lab import cache, partindex
 from brick_icons.lab import defects as defects_toml
 
 DEFAULT_PATH = Path("corpus.db")
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 PART_STATUSES = ("unreviewed", "good", "suspect", "broken", "wontfix")
 # Part categories the project is not trying to draw yet. A rule over the
 # library's own category, not a list of ids: it covers parts nobody has seen
@@ -70,6 +70,10 @@ CREATE TABLE IF NOT EXISTS measurements (
   run_id INTEGER NOT NULL REFERENCES runs(id),
   part_id TEXT NOT NULL,
   engine TEXT NOT NULL,
+  -- The render source these numbers describe. `engine` cannot stand in for
+  -- it: two facets of one engine are both "naive", so a query picking the
+  -- newest run per engine hands a slot the other facet's measurements.
+  source TEXT,
   missing_px INTEGER, extra_px INTEGER,
   missing_comps INTEGER,
   extra_d99 REAL, extra_d100 REAL,
@@ -183,22 +187,26 @@ def finish_run(conn: sqlite3.Connection, run_id: int,
 
 
 def import_census_jsonl(conn: sqlite3.Connection, run_id: int,
-                        path: Path | str) -> int:
+                        path: Path | str,
+                        census_dir: Path | str | None = None) -> int:
+    """`census_dir` names the facet: without it a row's source is left null and
+    a reader can only fall back to the engine, which does not distinguish."""
     rows = []
     for line in Path(path).read_text().splitlines():
         if not line.strip():
             continue
         r = json.loads(line)
         dist = r.get("extra_dist_px") or {}
-        rows.append((run_id, r["part"], r["engine"],
+        source = census_source(census_dir, r["engine"]) if census_dir else None
+        rows.append((run_id, r["part"], r["engine"], source,
                      r.get("missing_px"), r.get("extra_px"),
                      len(r["missing"]) if "missing" in r else None,
                      dist.get("99"), dist.get("100"),
                      r.get("secs"), r.get("error"), r.get("detail")))
     conn.executemany(
-        "INSERT OR REPLACE INTO measurements (run_id, part_id, engine, "
+        "INSERT OR REPLACE INTO measurements (run_id, part_id, engine, source, "
         "missing_px, extra_px, missing_comps, extra_d99, extra_d100, secs, "
-        "error, detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+        "error, detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
     conn.commit()
     return len(rows)
 
@@ -518,7 +526,7 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
         run_id = start_run(conn, "census",
                            {"dir": where, "shards": len(shards)}, commit_sha)
         for shard in shards:
-            n = import_census_jsonl(conn, run_id, shard)
+            n = import_census_jsonl(conn, run_id, shard, census_dir)
             counts["measurements"] += n
             progress(f"{shard.name}: {n} measurements")
         finish_run(conn, run_id,

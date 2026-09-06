@@ -12,25 +12,39 @@ import sqlite3
 from brick_icons import tags as part_tags
 from brick_icons.db import OUT_OF_SCOPE_CATEGORIES
 
+# Matched on source, not engine. Two facets of one engine are both "naive", so
+# the newest run per engine is whichever facet was indexed last -- which handed
+# the oracle slots the white facet's figures, both valid rows, no error. A slot
+# with no measurements of its own shows none: these numbers are not comparable
+# across facets, so a borrowed one is worse than a blank.
 _LATEST_MEASURE = """
 SELECT m.part_id, m.extra_d99, m.secs, m.error FROM measurements m
 JOIN (SELECT part_id, MAX(run_id) AS run_id FROM measurements
-      WHERE engine = ? GROUP BY part_id) latest
+      WHERE source = ? GROUP BY part_id) latest
   ON m.part_id = latest.part_id AND m.run_id = latest.run_id
-WHERE m.engine = ?
+WHERE m.source = ?
 """
 
-# Newest run per (part, engine) among engines other than this one -- never the
-# newest run overall, or a part whose other engine has since gone clean would
-# still read as erroring elsewhere.
+# Newest run per sibling source -- never the newest run overall, or a part
+# whose other engine has since gone clean would still read as erroring
+# elsewhere. Siblings are the same facet's other engines, so a white cell is
+# not marked by an oracle failure it says nothing about.
 _LATEST_OTHER_ERRORS = """
 SELECT m.part_id FROM measurements m
-JOIN (SELECT part_id, engine, MAX(run_id) AS run_id FROM measurements
-      WHERE engine != ? GROUP BY part_id, engine) latest
-  ON m.part_id = latest.part_id AND m.engine = latest.engine
+JOIN (SELECT part_id, source, MAX(run_id) AS run_id FROM measurements
+      WHERE source != ? AND source LIKE ? GROUP BY part_id, source) latest
+  ON m.part_id = latest.part_id AND m.source = latest.source
  AND m.run_id = latest.run_id
-WHERE m.engine != ? AND m.error IS NOT NULL
+WHERE m.source != ? AND m.source LIKE ? AND m.error IS NOT NULL
 """
+
+
+def sibling_glob(source: str) -> str:
+    """LIKE pattern for a facet's other engines: census-white-naive ->
+    census-white-%. Dropping the engine leaves the facet, and a source that
+    names no facet is its own family."""
+    stem = source.rsplit("-", 1)[0] if "-" in source else source
+    return f"{stem}-%"
 
 
 def _open_defects(conn: sqlite3.Connection, ids: list[str],
@@ -81,10 +95,11 @@ def cells(conn: sqlite3.Connection, source: str = "census-naive",
         "SELECT part_id, sha256, made_at FROM renders WHERE source = ?",
         (source,))}
     engine = engine_for(source)
+    siblings = sibling_glob(source)
     measures = {r["part_id"]: r for r in conn.execute(
-        _LATEST_MEASURE, (engine, engine))}
+        _LATEST_MEASURE, (source, source))}
     error_elsewhere = {r["part_id"] for r in conn.execute(
-        _LATEST_OTHER_ERRORS, (engine, engine))}
+        _LATEST_OTHER_ERRORS, (source, siblings, source, siblings))}
 
     version = max((r["made_at"] for r in renders.values()), default="")
     wanted = order

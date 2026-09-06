@@ -35,14 +35,15 @@ def _defect(conn, defect_id, pid, engines, status="open"):
 _run_id = 0
 
 
-def _measure(conn, pid, engine, error=None):
+def _measure(conn, pid, engine, error=None, source=None):
     global _run_id
     _run_id += 1
     conn.execute("INSERT INTO runs (id, kind, started, commit_sha, args) "
                  "VALUES (?, 'census', '2026-09-05T09:00:00+00:00', 'abc', '{}')",
                  (_run_id,))
-    conn.execute("INSERT INTO measurements (run_id, part_id, engine, error) "
-                 "VALUES (?, ?, ?, ?)", (_run_id, pid, engine, error))
+    conn.execute("INSERT INTO measurements (run_id, part_id, engine, source, "
+                 "error) VALUES (?, ?, ?, ?, ?)",
+                 (_run_id, pid, engine, source or f"census-{engine}", error))
 
 
 def test_every_part_is_a_cell_in_id_order(conn):
@@ -132,8 +133,9 @@ def test_a_cell_carries_the_metric_from_its_slot_s_engine(conn):
     _render(conn, "3001", "a", "2026-09-05T10:00:00+00:00")
     conn.execute("INSERT INTO runs (id, kind, started, commit_sha, args) "
                  "VALUES (1, 'census', '2026-09-05T09:00:00+00:00', 'abc', '{}')")
-    conn.execute("INSERT INTO measurements (run_id, part_id, engine, extra_d99, "
-                 "secs) VALUES (1, '3001', 'naive', 4.5, 12.0)")
+    conn.execute("INSERT INTO measurements (run_id, part_id, engine, source, "
+                 "extra_d99, secs) "
+                 "VALUES (1, '3001', 'naive', 'census-naive', 4.5, 12.0)")
     conn.commit()
     cell = cells.cells(conn, source="census-naive")["cells"][0]
     assert cell["extra_d99"] == 4.5
@@ -278,3 +280,42 @@ def test_a_facet_slot_still_names_its_engine():
     assert cells.engine_for("census-white-naive") == "naive"
     assert cells.engine_for("census-occt") == "occt"
     assert cells.engine_for("naive") == "naive"
+
+
+def test_a_facet_slot_does_not_borrow_the_oracle_s_numbers(conn):
+    """Both file under engine "naive", and census-white-* sorts last so it
+    always won MAX(run_id) -- every oracle cell quietly showed white figures,
+    which are ~1px larger on every part because the strokes are drawn."""
+    _part(conn, "3001")
+    _measure(conn, "3001", "naive", source="census-naive")
+    conn.execute("UPDATE measurements SET extra_d99 = 0.45 "
+                 "WHERE source = 'census-naive'")
+    _measure(conn, "3001", "naive", source="census-white-naive")
+    conn.execute("UPDATE measurements SET extra_d99 = 1.01 "
+                 "WHERE source = 'census-white-naive'")
+    conn.commit()
+    assert cells.cells(conn, source="census-naive")["cells"][0]["extra_d99"] == 0.45
+    assert cells.cells(conn, source="census-white-naive")["cells"][0]["extra_d99"] == 1.01
+
+
+def test_a_slot_with_no_measurements_of_its_own_shows_none(conn):
+    _part(conn, "3001")
+    _measure(conn, "3001", "naive", source="census-naive")
+    conn.commit()
+    assert cells.cells(conn, source="census-white-naive")["cells"][0]["extra_d99"] is None
+
+
+def test_erroring_elsewhere_means_this_facet_s_other_engine(conn):
+    """An oracle timeout says nothing about whether the white facet drew the
+    part, so it must not mark a white cell."""
+    _part(conn, "3001")
+    _measure(conn, "3001", "naive", source="census-white-naive")
+    _measure(conn, "3001", "occt", error="TimeoutError", source="census-occt")
+    conn.commit()
+    assert cells.cells(conn, source="census-white-naive")["cells"][0][
+        "error_elsewhere"] is False
+    _measure(conn, "3001", "occt", error="TimeoutError",
+             source="census-white-occt")
+    conn.commit()
+    assert cells.cells(conn, source="census-white-naive")["cells"][0][
+        "error_elsewhere"] is True
