@@ -199,7 +199,7 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
   magnet: { tag: 'magnet', mark: 'magnet', field: PROPERTY_FIELD, ink: '#ffffff',
             scale: 0.86 },
   printed: { tag: 'printed', mark: 'brush', field: PROPERTY_FIELD, ink: '#ffffff',
-             accent: '#8fd14f' },
+             accent: '#00ff00' },
   composite: { tag: 'composite', mark: 'composite', field: PROPERTY_FIELD,
                ink: '#ffffff', scale: 0.86 },
 };
