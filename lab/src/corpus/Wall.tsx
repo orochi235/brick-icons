@@ -3,7 +3,8 @@ import {
   type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent,
 } from 'react';
 import {
-  clientToCanvas, viewToTransform, worldToScreen, useDecayLoop, viewportDragPanAction, zoomAt,
+  clientToCanvas, viewToTransform, worldToScreen, useDecayLoop, usePinchGesture,
+  viewportDragPanAction, zoomAt,
   type InvocationCtx, type OngoingHandle, type View,
 } from '@weasel-js/core';
 import { LoupeBubble, resolveLoupe, useLoupe } from '@weasel-js/labkit/loupe';
@@ -15,6 +16,7 @@ import { badgeGeometry, captionSize, cornerPad, LINKED_BADGE, paintCommands,
   type PaintCommand } from '@lab/corpus/paint';
 import { DEFAULT_PALETTE, readPalette, type CellState, type Palette } from '@lab/corpus/palette';
 import { DEFAULT_PARAMS } from '@lab/corpus/params';
+import { pinchStep } from '@lab/corpus/pinch';
 import { panToReveal } from '@lab/corpus/reveal';
 import type { TintMode } from '@lab/corpus/tint';
 import type { Cell, SheetManifest } from '@lab/corpus/types';
@@ -330,6 +332,11 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
   const draggedRef = useRef(false);
   const suppressClickRef = useRef(false);
   const startRef = useRef({ x: 0, y: 0 });
+  // Which pointers are on the glass, and which one the pan is following --
+  // a touch canvas gets more than one, and only the first of them pans.
+  const downRef = useRef(new Set<number>());
+  const dragPointerRef = useRef<number | null>(null);
+  const pinchAtRef = useRef<{ x: number; y: number } | null>(null);
 
   const view = { get: () => camRef.current, set: onPan, decay: decay.start };
 
@@ -471,24 +478,44 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
             screenDelta },
   });
 
+  const endDrag = (delta: { x: number; y: number }, reason: 'commit' | 'cancel') => {
+    dragPointerRef.current = null;
+    if (!handleRef.current) return;
+    handleRef.current.onEnd?.(dragCtx(delta), reason);
+    handleRef.current = null;
+    setDragging(false);
+    if (reason === 'commit' && draggedRef.current) suppressClickRef.current = true;
+  };
+
+  const dragDelta = (e: ReactPointerEvent<HTMLCanvasElement>) =>
+    ({ x: e.clientX - startRef.current.x, y: e.clientY - startRef.current.y });
+
   // A plain onPointerDown/Move/Up trio with pointer capture, rather than
   // weasel's `openPointerSession`: that helper (lost-capture and missed-release
   // recovery included) landed in core after 1.4.0, the version this lab has.
   const onPointerDown = (e: ReactPointerEvent<HTMLCanvasElement>) => {
+    downRef.current.add(e.pointerId);
+    // A second finger turns the gesture into a pinch, which `usePinchGesture`
+    // drives -- and a one-finger pan that carried on underneath it would
+    // fight the zoom for the same camera.
+    if (downRef.current.size > 1) { endDrag({ x: 0, y: 0 }, 'cancel'); return; }
     if (e.button !== 0) return;
+    // Not every gesture ends in a click that would clear it -- a pinch
+    // usually ends in none at all -- so a fresh press is what unlatches it.
+    suppressClickRef.current = false;
     // Best-effort: capture keeps the drag alive once the pointer leaves the
     // canvas, but its absence is not a reason to refuse the drag.
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* uncaptured is fine */ }
     startRef.current = { x: e.clientX, y: e.clientY };
     draggedRef.current = false;
+    dragPointerRef.current = e.pointerId;
     handleRef.current = ongoingInvoker(viewportDragPanAction)
       .start(dragCtx({ x: 0, y: 0 }), { params: { inertia: {} } });
   };
 
   const onPointerMove = (e: ReactPointerEvent<HTMLCanvasElement>) => {
-    if (!handleRef.current) return;
-    const dx = e.clientX - startRef.current.x;
-    const dy = e.clientY - startRef.current.y;
+    if (!handleRef.current || e.pointerId !== dragPointerRef.current) return;
+    const { x: dx, y: dy } = dragDelta(e);
     if (!draggedRef.current) {
       if (Math.hypot(dx, dy) < dragThresholdPx) return;
       draggedRef.current = true;
@@ -498,16 +525,26 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
     handleRef.current.onMove?.(dragCtx({ x: dx, y: dy }));
   };
 
-  const endDrag = (e: ReactPointerEvent<HTMLCanvasElement>,
-                    reason: 'commit' | 'cancel') => {
-    if (!handleRef.current) return;
-    const dx = e.clientX - startRef.current.x;
-    const dy = e.clientY - startRef.current.y;
-    handleRef.current.onEnd?.(dragCtx({ x: dx, y: dy }), reason);
-    handleRef.current = null;
-    setDragging(false);
-    if (reason === 'commit' && draggedRef.current) suppressClickRef.current = true;
+  const onPointerRelease = (e: ReactPointerEvent<HTMLCanvasElement>,
+                            reason: 'commit' | 'cancel') => {
+    downRef.current.delete(e.pointerId);
+    if (downRef.current.size < 2) pinchAtRef.current = null;
+    if (e.pointerId === dragPointerRef.current) endDrag(dragDelta(e), reason);
   };
+
+  // Two-finger zoom, anchored where the fingers are so the cell under them
+  // stays under them. The midpoint travels too, which is the same gesture's
+  // pan -- see `pinchStep`.
+  usePinchGesture(ref, (clientAnchor, factor) => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    const [x, y] = clientToCanvas(canvas, clientAnchor.x, clientAnchor.y);
+    // Whatever was anchored to a cell is about to be somewhere else.
+    if (!pinchAtRef.current) onDragStart?.();
+    onPan(pinchStep(camRef.current, { x, y }, pinchAtRef.current, factor));
+    pinchAtRef.current = { x, y };
+    suppressClickRef.current = true;
+  });
 
   // The trio WCAG actually asks for -- role, name, keyboard operability --
   // rather than a focusable DOM node per cell, which 24,591 of them rules
@@ -548,8 +585,8 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
         onKeyDown={onKeyDown}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
-        onPointerUp={(e) => endDrag(e, 'commit')}
-        onPointerCancel={(e) => endDrag(e, 'cancel')}
+        onPointerUp={(e) => onPointerRelease(e, 'commit')}
+        onPointerCancel={(e) => onPointerRelease(e, 'cancel')}
         onClick={(e) => {
           if (suppressClickRef.current) { suppressClickRef.current = false; return; }
           // A double click's first click also fires this handler; e.detail

@@ -148,6 +148,29 @@ it('drops the card once a drag starts moving the wall under it', async () => {
   await waitFor(() => expect(container.querySelector('.corpus-card')).toBeNull());
 });
 
+it('drops the card when two fingers start a pinch over it', async () => {
+  const { container } = render(<CorpusWall client={client} />);
+  const canvas = await findCanvas(container);
+  fireEvent.click(canvas, { clientX: 10, clientY: 10 });
+  expect(await screen.findByRole('dialog', { name: /Part a/ })).toBeTruthy();
+  fireEvent.pointerDown(canvas, { button: 0, clientX: 40, clientY: 40, pointerId: 1 });
+  fireEvent.pointerDown(canvas, { button: 0, clientX: 60, clientY: 40, pointerId: 2 });
+  fireEvent.pointerMove(canvas, { clientX: 80, clientY: 40, pointerId: 2 });
+  await waitFor(() => expect(container.querySelector('.corpus-card')).toBeNull());
+});
+
+it('does not raise a card from the click that ends a pinch', async () => {
+  const { container } = render(<CorpusWall client={client} />);
+  const canvas = await findCanvas(container);
+  fireEvent.pointerDown(canvas, { button: 0, clientX: 10, clientY: 10, pointerId: 1 });
+  fireEvent.pointerDown(canvas, { button: 0, clientX: 30, clientY: 10, pointerId: 2 });
+  fireEvent.pointerMove(canvas, { clientX: 50, clientY: 10, pointerId: 2 });
+  fireEvent.pointerUp(canvas, { clientX: 50, clientY: 10, pointerId: 2 });
+  fireEvent.pointerUp(canvas, { clientX: 10, clientY: 10, pointerId: 1 });
+  fireEvent.click(canvas, { clientX: 10, clientY: 10 });
+  expect(container.querySelector('.corpus-card')).toBeNull();
+});
+
 // Both cells land fully on screen at the initial fit, but 'b' sits nearer
 // the viewport's center -- so it, not the leftmost 'a', is the implied
 // caret these tests start from.

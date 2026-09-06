@@ -1,4 +1,5 @@
 import { type ReactNode, type RefObject, useEffect, useRef, useState } from 'react';
+import { usePinchGesture } from '@weasel-js/core';
 import { type Camera, panBy, zoomAt } from '@lab/panes/camera';
 import { PaneStage, type PaneState } from '@lab/panes/PaneStage';
 import { bubbleDiameter, loupeCamera, loupeCameraForImage, stageOffset,
@@ -52,7 +53,13 @@ function startsPan(target: EventTarget | null): boolean {
 
 export function SourcePane({ source, state, camera, onCamera, note, busy,
                              overlay, onBox, loupe, onHover, onFactor, bodyRef }: SourcePaneProps) {
-  const dragging = useRef(false);
+  // Which pointer the pan is following, and where it last was. `movementX`
+  // would say the same thing for a mouse, but WebKit leaves it at 0 for a
+  // touch pointer, so the pane would not pan at all on iOS.
+  const dragPointer = useRef<number | null>(null);
+  const last = useRef({ x: 0, y: 0 });
+  const down = useRef(new Set<number>());
+  const pinchAt = useRef<Point | null>(null);
   const body = useRef<HTMLDivElement | null>(null);
   // The callback goes through a ref so the effect does not re-subscribe when
   // the caller passes a fresh arrow each render -- which it will, because it
@@ -76,6 +83,19 @@ export function SourcePane({ source, state, camera, onCamera, note, busy,
     return () => observer.disconnect();
   }, []);
 
+  // Two fingers zoom about their midpoint and pan by where it travels, the
+  // gesture the wheel handler below has no touch equivalent for.
+  usePinchGesture(body, (clientAnchor, factor) => {
+    const el = body.current;
+    if (!el) return;
+    const box = el.getBoundingClientRect();
+    const at = { x: clientAnchor.x - box.left, y: clientAnchor.y - box.top };
+    const from = pinchAt.current ?? at;
+    const zoomed = zoomAt(camera, factor, from.x, from.y);
+    onCamera(panBy(zoomed, at.x - from.x, at.y - from.y));
+    pinchAt.current = at;
+  });
+
   const diameter = bubbleDiameter(size);
   const offset = loupe ? stageOffset(loupe.at, diameter) : null;
 
@@ -94,15 +114,32 @@ export function SourcePane({ source, state, camera, onCamera, note, busy,
           if (bodyRef) bodyRef.current = el;
         }}
         onPointerDown={(e) => {
+          down.current.add(e.pointerId);
+          // A second finger is a pinch, and the one-finger pan would fight it
+          // for the same camera.
+          if (down.current.size > 1) { dragPointer.current = null; return; }
           // Secondary and middle drags belong to whatever the overlay does
           // with them -- on the 3D pane, orbiting.
           if (e.button !== 0 || !startsPan(e.target)) return;
-          dragging.current = true;
+          dragPointer.current = e.pointerId;
+          last.current = { x: e.clientX, y: e.clientY };
           e.currentTarget.setPointerCapture(e.pointerId);
         }}
-        onPointerUp={() => { dragging.current = false; }}
+        onPointerUp={(e) => {
+          down.current.delete(e.pointerId);
+          if (down.current.size < 2) pinchAt.current = null;
+          if (e.pointerId === dragPointer.current) dragPointer.current = null;
+        }}
+        onPointerCancel={(e) => {
+          down.current.delete(e.pointerId);
+          if (down.current.size < 2) pinchAt.current = null;
+          if (e.pointerId === dragPointer.current) dragPointer.current = null;
+        }}
         onPointerMove={(e) => {
-          if (dragging.current) onCamera(panBy(camera, e.movementX, e.movementY));
+          if (e.pointerId === dragPointer.current) {
+            onCamera(panBy(camera, e.clientX - last.current.x, e.clientY - last.current.y));
+            last.current = { x: e.clientX, y: e.clientY };
+          }
           if (onHover) {
             const box = e.currentTarget.getBoundingClientRect();
             onHover({ x: e.clientX - box.left, y: e.clientY - box.top });

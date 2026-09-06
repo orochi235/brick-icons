@@ -160,6 +160,11 @@ function Rig({ angle, fit, box, view, style, framing, lines, onSettle }: RigProp
       // how the left drag is left to the shared camera.
       mouseButtons={{ LEFT: undefined, MIDDLE: THREE.MOUSE.ROTATE,
                       RIGHT: THREE.MOUSE.ROTATE }}
+      // Touch has no middle or right button to put the orbit on, and the
+      // defaults (one finger rotates, two dolly-pan) would take both of the
+      // pane's own gestures. The pose bar's named angles are the way round
+      // for now.
+      touches={{ ONE: undefined, TWO: undefined }}
       // `end` fires when the drag stops, which is when a re-render is worth it.
       onEnd={() => onSettle(formatAngle(angleFromOrbit(camera.position)))}
     />

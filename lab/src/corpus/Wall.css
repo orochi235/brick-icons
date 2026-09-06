@@ -1,4 +1,7 @@
-.corpus-canvas { display: block; cursor: grab; }
+/* Without `touch-action: none` the browser claims a one-finger drag for
+ * scrolling and a two-finger one for page zoom, and the wall's own pan and
+ * pinch never see them. */
+.corpus-canvas { display: block; cursor: grab; touch-action: none; }
 .corpus-canvas-dragging { cursor: grabbing; }
 
 /* Off-screen rather than display:none -- a hidden node is dropped from the

@@ -92,6 +92,8 @@ describe('SourcePane', () => {
     expect(onBox).toHaveBeenCalled();
   });
 
+  // Deltas come from the pointer's own coordinates rather than `movementX`,
+  // which WebKit leaves at 0 for touch.
   it('pans on a drag across its body', () => {
     const onCamera = vi.fn();
     const { container } = render(
@@ -99,9 +101,9 @@ describe('SourcePane', () => {
         state={{ kind: 'idle' }} />);
     const body = container.querySelector('.pane-body')!;
     body.setPointerCapture = () => {};
-    fireEvent.pointerDown(body, { pointerId: 1 });
-    fireEvent.pointerMove(body, { movementX: 10, movementY: 4 });
-    expect(onCamera).toHaveBeenCalled();
+    fireEvent.pointerDown(body, { pointerId: 1, clientX: 30, clientY: 20 });
+    fireEvent.pointerMove(body, { pointerId: 1, clientX: 40, clientY: 24 });
+    expect(onCamera).toHaveBeenCalledWith({ zoom: 1, pan: { x: 10, y: 4 } });
   });
 
   it('leaves the drag alone when the press landed on a no-drag child', () => {
@@ -112,9 +114,41 @@ describe('SourcePane', () => {
         overlay={<div data-no-drag="" className="taker" />} />);
     const body = container.querySelector('.pane-body')!;
     body.setPointerCapture = () => {};
-    fireEvent.pointerDown(container.querySelector('.taker')!, { pointerId: 1 });
-    fireEvent.pointerMove(body, { movementX: 10, movementY: 4 });
+    fireEvent.pointerDown(container.querySelector('.taker')!,
+                          { pointerId: 1, clientX: 30, clientY: 20 });
+    fireEvent.pointerMove(body, { pointerId: 1, clientX: 40, clientY: 24 });
     expect(onCamera).not.toHaveBeenCalled();
+  });
+
+  it('zooms about the fingers on a pinch, and pans no further', () => {
+    const onCamera = vi.fn();
+    const { container } = render(
+      <SourcePane {...props} onCamera={onCamera} source={SOURCES.naive}
+        state={{ kind: 'idle' }} />);
+    const body = container.querySelector('.pane-body')!;
+    body.setPointerCapture = () => {};
+    // The spread doubles about a midpoint that has moved to x=60, and the
+    // first frame anchors there: the point under the fingers stays put.
+    fireEvent.pointerDown(body, { pointerId: 1, clientX: 40, clientY: 0 });
+    fireEvent.pointerDown(body, { pointerId: 2, clientX: 60, clientY: 0 });
+    fireEvent.pointerMove(body, { pointerId: 2, clientX: 80, clientY: 0 });
+    expect(onCamera).toHaveBeenCalledWith({ zoom: 2, pan: { x: -60, y: 0 } });
+  });
+
+  it('does not pan from the second finger of a pinch', () => {
+    const onCamera = vi.fn();
+    const { container } = render(
+      <SourcePane {...props} onCamera={onCamera} source={SOURCES.naive}
+        state={{ kind: 'idle' }} />);
+    const body = container.querySelector('.pane-body')!;
+    body.setPointerCapture = () => {};
+    fireEvent.pointerDown(body, { pointerId: 1, clientX: 40, clientY: 0 });
+    fireEvent.pointerDown(body, { pointerId: 2, clientX: 60, clientY: 0 });
+    fireEvent.pointerMove(body, { pointerId: 1, clientX: 10, clientY: 0 });
+    // A one-finger pan would have moved 30px left at zoom 1. Every camera
+    // this move produced came from the pinch, which spread the fingers.
+    expect(onCamera).toHaveBeenCalled();
+    for (const [cam] of onCamera.mock.calls) expect(cam.zoom).not.toBe(1);
   });
 
   it('draws no bubble when the loupe is not over it', () => {
