@@ -87,7 +87,7 @@
 .corpus-legend-row[data-state="defect"] .corpus-legend-swatch,
 .corpus-legend-row[data-state="problemElsewhere"] .corpus-legend-swatch,
 .corpus-legend-row[data-state="defectElsewhere"] .corpus-legend-swatch {
-  background-image: linear-gradient(to bottom right,
+  background-image: linear-gradient(to top right,
     transparent calc(50% - 1px), currentColor calc(50% - 1px),
     currentColor calc(50% + 1px), transparent calc(50% + 1px));
 }

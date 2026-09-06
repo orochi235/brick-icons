@@ -36,9 +36,11 @@ it('shows the part title and the part as every slot drew it', async () => {
 });
 
 it('marks which of the slots the wall is showing', async () => {
-  const { container } = render(box());
+  // Queried off the document, not the render container: the panel is
+  // portaled to the theme root so it can cover the shell's header.
+  render(box());
   await waitFor(() => screen.getByText('Brick 2 x 4'));
-  const current = container.querySelectorAll('[data-current="true"] .corpus-slot-name');
+  const current = document.querySelectorAll('[data-current="true"] .corpus-slot-name');
   expect([...current].map((el) => el.textContent)).toEqual(['naive']);
 });
 

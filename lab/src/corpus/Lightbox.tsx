@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { LabClient } from '@lab/api/client';
 import { CATALOGS } from '@lab/corpus/catalogs';
 import { Tags, yearRange } from '@lab/corpus/tags';
@@ -59,8 +60,16 @@ export function Lightbox({ partId, source, client, onClose }: {
                 (detail.part.tags ?? []).includes('retired'))
     : null;
 
-  return (
-    <div className="corpus-lightbox" role="dialog" aria-label={`Part ${partId}`}>
+  // Portaled to the theme root rather than left inside the workspace: as a
+  // child of the wall it drew under the shell's header, and a panel with the
+  // slot and filter controls above it reads as part of the same view.
+  const host = typeof document === 'undefined'
+    ? null : document.querySelector('.lk-root') ?? document.body;
+
+  const panel = (
+    <div className="corpus-lightbox-scrim" role="presentation" onClick={onClose}>
+    <div className="corpus-lightbox" role="dialog" aria-modal="true"
+         aria-label={`Part ${partId}`} onClick={(e) => e.stopPropagation()}>
       <button type="button" className="corpus-close" aria-label="Close"
               ref={closeRef} onClick={onClose}>x</button>
       {!detail ? <p>loading {partId}…</p> : (
@@ -154,5 +163,8 @@ export function Lightbox({ partId, source, client, onClose }: {
         </>
       )}
     </div>
+    </div>
   );
+
+  return host ? createPortal(panel, host) : panel;
 }

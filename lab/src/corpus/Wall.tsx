@@ -97,7 +97,11 @@ function strokeCaret(ctx: CanvasRenderingContext2D,
 
 // A filled disc in the bottom-right corner, on the letterbox margin rather
 // than the drawing, which is centered. Reversed out so it reads over ink and
-// over the white ground alike.
+// over the white ground alike -- dark gray rather than black, which sat on a
+// line drawing like a hole punched in it.
+const BADGE_FIELD = '#4a4a4f';
+const BADGE_INK = '#ffffff';
+
 function drawBadge(ctx: CanvasRenderingContext2D, letter: string,
                    cmd: { dx: number; dy: number; dw: number; dh: number }) {
   const size = Math.max(9, Math.min(20, cmd.dw * 0.14));
@@ -107,12 +111,12 @@ function drawBadge(ctx: CanvasRenderingContext2D, letter: string,
   ctx.save();
   ctx.beginPath();
   ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-  ctx.fillStyle = '#000000';
+  ctx.fillStyle = BADGE_FIELD;
   ctx.fill();
   ctx.font = `600 ${size}px ui-monospace, monospace`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#ffffff';
+  ctx.fillStyle = BADGE_INK;
   ctx.fillText(letter, cx, cy + size * 0.06);
   ctx.restore();
 }

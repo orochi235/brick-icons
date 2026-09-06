@@ -78,16 +78,16 @@ it('fetches the full list on mount, then polls the delta and merges it', async (
     const { result, unmount } = renderHook(() => useCells(client, 'naive'));
 
     await flush();
-    expect(result.current!.map((c) => c.id)).toEqual(['a', 'b']);
+    expect(result.current.cells!.map((c) => c.id)).toEqual(['a', 'b']);
     expect(calls[0]).toEqual({ source: 'naive', since: undefined });
 
-    const untouched = result.current![0];
+    const untouched = result.current.cells![0];
 
     await act(async () => { await vi.advanceTimersByTimeAsync(POLL_MS); });
 
     expect(calls[1]).toEqual({ source: 'naive', since: 'v1' });
-    expect(result.current!.find((c) => c.id === 'b')!.sha).toBe('sha-b');
-    expect(result.current![0]).toBe(untouched);
+    expect(result.current.cells!.find((c) => c.id === 'b')!.sha).toBe('sha-b');
+    expect(result.current.cells![0]).toBe(untouched);
 
     unmount();
     const callsBeforeUnmount = calls.length;
@@ -121,14 +121,14 @@ it('refetches from scratch, with no since, when the source changes', async () =>
 
     const occtCall = calls.find((c) => c.source === 'occt');
     expect(occtCall).toEqual({ source: 'occt', since: undefined });
-    expect(result.current!.find((c) => c.id === 'a')!.sha).toBe('sha-occt');
+    expect(result.current.cells!.find((c) => c.id === 'a')!.sha).toBe('sha-occt');
   } finally {
     vi.useRealTimers();
   }
 });
 
-it('clears cells during render on a source change, so no child ever sees the new source paired with the old slot\'s cells', async () => {
-  const seen: { source: string; cells: Cell[] | null }[] = [];
+it('keeps the old slot drawn until the new one lands, and never pairs cells with a slot they are not for', async () => {
+  const seen: { asked: string; state: { cells: Cell[] | null; source: string } }[] = [];
   let resolveNaive!: (body: CellsBody) => void;
   const naive = new Promise<CellsBody>((res) => { resolveNaive = res; });
   const client = {
@@ -136,12 +136,13 @@ it('clears cells during render on a source change, so no child ever sees the new
       source === 'naive' ? naive : new Promise<CellsBody>(() => {})),
   } as unknown as LabClient;
 
-  function Child({ source, cells }: { source: string; cells: Cell[] | null }) {
-    seen.push({ source, cells });
+  function Child({ asked, state }: { asked: string;
+                                     state: { cells: Cell[] | null; source: string } }) {
+    seen.push({ asked, state });
     return null;
   }
   function Parent({ source }: { source: string }) {
-    return createElement(Child, { source, cells: useCells(client, source) });
+    return createElement(Child, { asked: source, state: useCells(client, source) });
   }
 
   const { rerender } = render(createElement(Parent, { source: 'naive' }));
@@ -149,11 +150,14 @@ it('clears cells during render on a source change, so no child ever sees the new
     resolveNaive({ cells: [cell('a', 0, 'sha-a')], count: 1,
                     version: 'v1', source: 'naive' });
   });
-  expect(seen.at(-1)!.cells).not.toBeNull();
+  expect(seen.at(-1)!.state.cells).not.toBeNull();
 
   seen.length = 0;
   rerender(createElement(Parent, { source: 'occt' }));
 
-  expect(seen.every((s) => !(s.source === 'occt' && s.cells !== null))).toBe(true);
-  expect(seen[0]).toEqual({ source: 'occt', cells: null });
+  // The occt fetch never resolves here, so this is the whole switching
+  // window: naive's drawings stay on screen, labelled naive.
+  expect(seen.at(-1)!.state).toMatchObject({ source: 'naive' });
+  expect(seen.at(-1)!.state.cells).not.toBeNull();
+  expect(seen.every((s) => s.state.cells === null || s.state.source === 'naive')).toBe(true);
 });

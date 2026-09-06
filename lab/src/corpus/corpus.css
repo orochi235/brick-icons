@@ -1,3 +1,7 @@
+/* The app is the page: the browser's default body margin puts a strip of
+ * nothing around a shell that already manages its own edges. */
+body { margin: 0; }
+
 /* The cell-state canvas fills, read by `palette.ts` -- CSS cannot reach a
  * canvas fill any other way. None of the tuned values coincides with a
  * `--wzl-*` token, so they stay literal rather than drifting to a
@@ -9,7 +13,7 @@
   --corpus-thumb-ground-retired: #e9e9e9;
 
   --corpus-cell-unknown-fill: #3a3a3f;
-  --corpus-cell-out-of-scope-fill: #38294f;
+  --corpus-cell-out-of-scope-fill: #241a38;
   --corpus-cell-timeout-fill: #26383f;
   --corpus-cell-timeout-border: #30b0d0;
   --corpus-cell-failed-fill: #4a2626;

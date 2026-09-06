@@ -15,37 +15,39 @@ export function mergeCells(current: Cell[], delta: Cell[]): Cell[] {
   return current.map((c) => byId.get(c.id) ?? c);
 }
 
-export function useCells(client: LabClient, source: string, pollMs = POLL_MS): Cell[] | null {
-  const [cells, setCells] = useState<Cell[] | null>(null);
-  const [fetchedFor, setFetchedFor] = useState(source);
-  const version = useRef('');
+/** The wall's cells, and the slot they are for.
+ *
+ *  The pair travels together because a slot change is a different set of
+ *  drawings for the same parts: this slot's `source` beside the old slot's
+ *  cells is what fires loose-thumb 404s. Keeping both until the new ones
+ *  arrive is also what stops the wall blanking for a second on every switch.
+ */
+export interface CellsState { cells: Cell[] | null; source: string }
 
-  // Cleared during render, not in an effect: a slot change is a different
-  // set of drawings for the same parts, and clearing a render later would
-  // let a child see this slot's `source` paired with the old slot's `cells`
-  // for one commit -- exactly the mismatch that fires loose-thumb 404s.
-  if (fetchedFor !== source) {
-    setFetchedFor(source);
-    setCells(null);
-    version.current = '';
-  }
+export function useCells(client: LabClient, source: string,
+                         pollMs = POLL_MS): CellsState {
+  const [state, setState] = useState<CellsState>({ cells: null, source });
+  const version = useRef('');
 
   useEffect(() => {
     let live = true;
+    version.current = '';
     void client.cells(source).then((body: CellsBody) => {
       if (!live) return;
       version.current = body.version;
-      setCells(body.cells);
+      setState({ cells: body.cells, source });
     });
     const timer = setInterval(() => {
       void client.cells(source, version.current).then((body: CellsBody) => {
         if (!live || body.cells.length === 0) return;
         version.current = body.version;
-        setCells((prev) => (prev ? mergeCells(prev, body.cells) : prev));
+        setState((prev) => (prev.source === source && prev.cells
+          ? { source, cells: mergeCells(prev.cells, body.cells) }
+          : prev));
       });
     }, pollMs);
     return () => { live = false; clearInterval(timer); };
   }, [client, source, pollMs]);
 
-  return cells;
+  return state;
 }

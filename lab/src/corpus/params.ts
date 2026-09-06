@@ -49,7 +49,7 @@ export const DEFAULT_PARAMS: Params = {
   cols: 0,
 
   unknownFill: '#3a3a3f',
-  outOfScopeFill: '#38294f',
+  outOfScopeFill: '#241a38',
   timeoutFill: '#26383f',
   timeoutBorder: '#30b0d0',
   failedFill: '#4a2626',

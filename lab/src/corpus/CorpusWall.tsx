@@ -18,7 +18,7 @@ import { applySelection, DEFAULT_SHOWN, type Selection } from '@lab/corpus/selec
 import { useCells } from '@lab/corpus/useCells';
 import { useLooseThumbs } from '@lab/corpus/useLooseThumbs';
 import { useParams } from '@lab/corpus/useParams';
-import { useSheets } from '@lab/corpus/useSheets';
+import { useSheets, type Sheet } from '@lab/corpus/useSheets';
 import { useVectorThumbs } from '@lab/corpus/useVectorThumbs';
 import type { Cell } from '@lab/corpus/types';
 import { visibleRange } from '@lab/corpus/visible';
@@ -35,8 +35,8 @@ export function CorpusWall({ client }: { client: LabClient }) {
   const { params, setParam, reset: resetParams } = useParams();
   const [sources, setSources] = useState<{ source: string; n: number }[]>([]);
   const [source, setSource] = useState('census-naive');
-  const cells = useCells(client, source, params.pollMs);
-  const sheets = useSheets(client, source);
+  const fetched = useCells(client, source, params.pollMs);
+  const loaded = useSheets(client, source);
   const [level, setLevel] = useState(32);
   const [selection, setSelection] = useState<Selection>(
     { sort: 'id', filter: 'all', shown: DEFAULT_SHOWN });
@@ -63,9 +63,25 @@ export function CorpusWall({ client }: { client: LabClient }) {
     }).catch(() => {});
   }, [client]);
 
+  // What is on screen: the newest slot whose cells and sheets are both in
+  // hand, which is the slot before this one until the new one has both.
+  // Switching used to blank the wall for as long as that took, and pairing a
+  // new `source` with old cells is what fires loose-thumb 404s -- so the
+  // three travel together or not at all.
+  const drawn = useRef<{ source: string; cells: Cell[];
+                         sheets: Record<number, Sheet> } | null>(null);
+  if (fetched.cells && fetched.source === loaded.source) {
+    drawn.current = { source: fetched.source, cells: fetched.cells,
+                      sheets: loaded.sheets };
+  }
+  const view = drawn.current;
+  const cells = view?.cells ?? null;
+  const sheets = view?.sheets ?? {};
+  const drawnSource = view?.source ?? source;
+
   // Reset to the middle rung on a slot change -- the old level belonged to
   // the previous corpus and camera.scale hasn't re-fired pickLevel yet.
-  useEffect(() => { setLevel(32); }, [source]);
+  useEffect(() => { setLevel(32); }, [drawnSource]);
 
   const shown = useMemo(
     () => (cells ? applySelection(cells, selection) : []),
@@ -147,9 +163,9 @@ export function CorpusWall({ client }: { client: LabClient }) {
   const visible = useMemo(
     () => (cam ? visibleRange(laid.rects, cam, size) : []),
     [laid.rects, cam, size.width, size.height]);
-  const loose = useLooseThumbs(shown, visible, level, source);
+  const loose = useLooseThumbs(shown, visible, level, drawnSource);
   const cellPx = cam ? params.cell * cam.scale.x : 0;
-  const vector = useVectorThumbs(shown, visible, level, source, cellPx);
+  const vector = useVectorThumbs(shown, visible, level, drawnSource, cellPx);
 
   // The 128 rung still draws from the 32px bake underneath -- a cell whose
   // loose image hasn't arrived yet needs something to show.
@@ -200,7 +216,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
                   dragThresholdPx={params.dragThresholdPx} appearance={appearance} />
           )}
           {carded && !picked && (
-            <PartCard cell={carded.cell} source={source} at={carded.at}
+            <PartCard cell={carded.cell} source={drawnSource} at={carded.at}
                       viewport={size}
                       onOpen={(id) => { setCarded(null); setPicked(id); }}
                       onClose={() => setCarded(null)} />
@@ -211,7 +227,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
           <ParamsPanel params={params} setParam={setParam} reset={resetParams} />
         </div>
         {picked && (
-          <Lightbox partId={picked} source={source} client={client}
+          <Lightbox partId={picked} source={drawnSource} client={client}
                     onClose={() => setPicked(null)} />
         )}
       </div>

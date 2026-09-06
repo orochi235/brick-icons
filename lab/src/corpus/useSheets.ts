@@ -10,30 +10,39 @@ export interface Sheet {
   manifest: SheetManifest;
 }
 
-/** Both sprite-sheet levels for a slot, keyed by level.
+/** Both sprite-sheet levels for a slot, and the slot they are for.
  *
  *  Each is one small texture that never changes during a session, so nothing
- *  here evicts -- only a slot change clears and reloads. */
-export function useSheets(client: LabClient, source: string):
-    Record<number, Sheet> {
-  const [sheets, setSheets] = useState<Record<number, Sheet>>({});
+ *  here evicts. A slot change keeps the old pair on screen and swaps the whole
+ *  set in once the new one has settled -- a half-swapped wall reads every
+ *  cell as stale and blanks it.
+ */
+export interface SheetsState { sheets: Record<number, Sheet>; source: string }
+
+export function useSheets(client: LabClient, source: string): SheetsState {
+  const [state, setState] = useState<SheetsState>({ sheets: {}, source });
 
   useEffect(() => {
     let live = true;
-    setSheets({});
+    const next: Record<number, Sheet> = {};
+    let pending = SHEET_LEVELS.length;
+    const settle = () => {
+      if (--pending > 0 || !live) return;
+      setState({ sheets: next, source });
+    };
     for (const level of SHEET_LEVELS) {
       void client.sheetManifest(source, level).then((manifest) => {
-        if (!live) return;
+        if (!live) return settle();
         const img = new Image();
-        img.onload = () => {
-          if (!live) return;
-          setSheets((prev) => ({ ...prev, [level]: { image: img, manifest } }));
-        };
+        img.onload = () => { next[level] = { image: img, manifest }; settle(); };
+        // A slot with no sheet baked yet settles too, or the wall would hold
+        // the previous slot's drawings for the rest of the session.
+        img.onerror = () => settle();
         img.src = `/api/thumbs/${source}/sheet-${level}.png`;
-      }).catch(() => {});
+      }).catch(settle);
     }
     return () => { live = false; };
   }, [client, source]);
 
-  return sheets;
+  return state;
 }
