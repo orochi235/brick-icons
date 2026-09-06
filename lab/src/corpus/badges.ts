@@ -119,17 +119,10 @@ export const drawMinifig: Mark = (ctx) => {
   ctx.restore();
 };
 
-// Composite: two squares with their overlap knocked out -- a symmetric
-// difference, which says two things meeting rather than one stacked on
-// another. Filled twice and then cut, so the hole is exactly the
-// intersection.
-export const drawComposite: Mark = (ctx, field) => {
-  ctx.fillRect(-0.88, -0.88, 1.2, 1.2);
-  ctx.fillRect(-0.32, -0.32, 1.2, 1.2);
-  ctx.save();
-  ctx.fillStyle = field;
-  ctx.fillRect(-0.32, -0.32, 0.64, 0.64);
-  ctx.restore();
+// Composite: three stacked bars. Several things in one place, in the shape
+// everyone already reads as a stack.
+export const drawComposite: Mark = (ctx) => {
+  for (const y of [-0.74, -0.18, 0.38]) ctx.fillRect(-0.7, y, 1.4, 0.36);
 };
 
 // Technic's T, drawn rather than set: a font's italic T carries a short

@@ -189,7 +189,7 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
            stroke: '#c8102e', font: SYSTEM_FACE, weight: 700, scale: 1.18,
            dx: -0.045 },
   weird: { tag: 'weird', text: '\u03a8', field: '#5b3a86', ink: '#ffffff',
-           font: WEIRD_FACE },
+           font: WEIRD_FACE, dy: 0.035 },
   // The one property badge off the shared field: a gold bolt on black is
   // what a live circuit looks like everywhere else, and it earns the break.
   electric: { tag: 'electric', mark: 'bolt', field: '#101014', ink: '#ffd60a',
