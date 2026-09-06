@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import tomllib
+from collections.abc import Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -366,8 +367,25 @@ def import_statuses(conn: sqlite3.Connection, path: Path | str) -> int:
 DEFAULT_STATUS_PATH = Path("tests/goldens/part-status.toml")
 
 
+def _relative(path: Path, root: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(root.resolve()))
+    except ValueError:
+        return str(path)
+
+
+def census_trees(root: Path | str = ".") -> list[Path]:
+    """Every census tree under `root`: one per node, plus run 1's archive.
+
+    A node added later needs no edit. There is one definition of this and it
+    lives here -- a caller with its own idea of where the trees are indexes the
+    ones it knows and returns a smaller number than it should, with no error.
+    """
+    return sorted(d for d in (Path(root) / "out").glob("census*") if d.is_dir())
+
+
 def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
-            census_dir: Path | str = "out/census",
+            census_dirs: Sequence[Path | str] | None = None,
             defects_path: Path | str = defects_toml.DEFAULT_PATH,
             status_path: Path | str = DEFAULT_STATUS_PATH,
             commit_sha: str = "unknown",
@@ -376,33 +394,73 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
     path.unlink(missing_ok=True)
     conn = connect(path)
     counts = {"parts": seed_parts(conn, ldraw_dir), "renders": 0,
-              "measurements": 0, "defects": 0, "statuses": 0}
+              "measurements": 0, "skipped": 0, "replaced": 0,
+              "defects": 0, "statuses": 0}
     progress(f"seeded {counts['parts']} parts")
 
     root = Path(root)
+    if census_dirs is None:
+        census_dirs = census_trees(root)
+    progress(f"{len(census_dirs)} census tree(s): "
+             f"{', '.join(Path(d).name for d in census_dirs)}")
+
     for svg in sorted((root / "renders").rglob("*.svg")):
         record_render(conn, svg.stem, svg.parent.name, svg, root=root)
         counts["renders"] += 1
         progress(f"render {counts['renders']}: {svg.parent.name}/{svg.stem}")
 
-    # The census's renders stay out of git but are indexed all the same, under
-    # their own source so they cannot be mistaken for the store's drawing.
-    for svg in sorted(Path(census_dir).glob("renders/*/*.svg")):
-        source = f"census-{svg.parent.name}"
-        if source not in SOURCES:
-            continue
-        record_render(conn, svg.stem, source, svg, root=root)
-        counts["renders"] += 1
-        progress(f"render {counts['renders']}: {source}/{svg.stem}")
+    # A part drawn by two trees under one engine resolves to one row, and the
+    # tree sorting last wins it. Nothing today collides -- the nodes run an
+    # engine each -- but an archive that carries renders would, and the totals
+    # would not move. Counted so the rebuild says so instead.
+    from_tree: dict[tuple[str, str], Path] = {}
 
-    shards = sorted(Path(census_dir).glob("*.jsonl"))
-    if shards:
-        run_id = start_run(conn, "census", {"shards": len(shards)}, commit_sha)
+    for census_dir in census_dirs:
+        census_dir = Path(census_dir)
+        if not census_dir.is_dir():
+            progress(f"{census_dir}: not there, skipped")
+            continue
+
+        # The census's renders stay out of git but are indexed all the same,
+        # under their own source so they cannot be mistaken for the store's
+        # drawing: it renders strokeless, so its fills carry the silhouette.
+        for svg in sorted(census_dir.glob("renders/*/*.svg")):
+            source = f"census-{svg.parent.name}"
+            if source not in SOURCES:
+                continue
+            first = from_tree.get((svg.stem, source))
+            if first is not None:
+                counts["replaced"] += 1
+                progress(f"replaced {source}/{svg.stem}: {first} by {svg}")
+            try:
+                record_render(conn, svg.stem, source, svg, root=root)
+            except Exception as e:  # noqa: BLE001
+                # A census still running leaves half-written files behind it.
+                counts["skipped"] += 1
+                progress(f"skipped {source}/{svg.stem}: {type(e).__name__} {e}")
+                continue
+            if first is None:
+                # A replacement is the same row rewritten, not another one.
+                counts["renders"] += 1
+            from_tree[(svg.stem, source)] = svg
+            progress(f"render {counts['renders']}: {source}/{svg.stem}")
+
+        # rglob, because the backfill gives each batch its own JSONL below the
+        # census directory. One run per directory: run 1's archive holds the
+        # same rows as the live tree it is a prefix of, and the run is the only
+        # thing that tells the two apart.
+        shards = sorted(census_dir.rglob("*.jsonl"))
+        if not shards:
+            continue
+        where = _relative(census_dir, root)
+        run_id = start_run(conn, "census",
+                           {"dir": where, "shards": len(shards)}, commit_sha)
         for shard in shards:
             n = import_census_jsonl(conn, run_id, shard)
             counts["measurements"] += n
             progress(f"{shard.name}: {n} measurements")
-        finish_run(conn, run_id, note=f"rebuilt from {len(shards)} shards")
+        finish_run(conn, run_id,
+                   note=f"rebuilt from {len(shards)} shards in {where}")
 
     counts["defects"] = import_defects(conn, defects_path)
     counts["statuses"] = import_statuses(conn, status_path)

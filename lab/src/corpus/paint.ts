@@ -64,7 +64,7 @@ export type PaintCommand =
   | { kind: 'fill'; dx: number; dy: number; dw: number; dh: number;
       fill: string; border: string | null; borderWidth: number; caret?: boolean }
   | { kind: 'image'; dx: number; dy: number; dw: number; dh: number;
-      image: HTMLImageElement; ring: boolean; alpha?: number; caret?: boolean };
+      image: CanvasImageSource; ring: boolean; alpha?: number; caret?: boolean };
 
 export interface PaintInput {
   cells: Cell[];
@@ -74,6 +74,9 @@ export interface PaintInput {
   manifest: SheetManifest | null;
   palette: Palette;
   loose?: Map<string, HTMLImageElement>;
+  /** The vector rung's rasterized cells -- checked before `loose`, since a
+   *  cell only lands here once it is past the 128px loose PNG's own rung. */
+  vector?: Map<string, CanvasImageSource>;
   /** The legend's hovered or focused row, if any -- cells outside this state
    *  are painted dimmed rather than the matching cells being brightened. */
   highlight?: CellState | null;
@@ -90,7 +93,7 @@ export interface PaintInput {
  *  Kept separate from the canvas so the decisions -- which cells, from where,
  *  in what color -- are testable without a rendering context, and so the
  *  drawing itself is the only thing weasel's mega view has to replace. */
-export function paintCommands({ cells, rects, visible, cam, manifest, palette, loose,
+export function paintCommands({ cells, rects, visible, cam, manifest, palette, loose, vector,
                                 highlight = null, caret = null,
                                 appearance = DEFAULT_APPEARANCE }: PaintInput): PaintCommand[] {
   const out: PaintCommand[] = [];
@@ -107,7 +110,7 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
     const state = cellState(cell);
     const dimmed = highlight !== null && highlight !== state;
     const alpha = dimmed ? appearance.dimAlpha : undefined;
-    const image = loose?.get(cell.id);
+    const image = vector?.get(cell.id) ?? loose?.get(cell.id);
     if (image) {
       out.push({ kind: 'image', dx, dy, dw, dh, image, ring, alpha, caret: isCaret });
       continue;

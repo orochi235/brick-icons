@@ -106,6 +106,17 @@ it('prefers the loose image over the sheet', () => {
   expect(withLoose[0]!.kind).toBe('image');
 });
 
+it('prefers a rasterized vector over the loose image', () => {
+  const loose = {} as HTMLImageElement;
+  const vectored = {} as CanvasImageSource;
+  const [cmd] = paintCommands({
+    cells: [cell('a', 0, 'sha-a')], rects, visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest,
+    loose: new Map([['a', loose]]), vector: new Map([['a', vectored]]),
+  });
+  expect(cmd).toMatchObject({ kind: 'image', image: vectored });
+});
+
 it('rings a drawn cell that has an open defect', () => {
   const img = {} as HTMLImageElement;
   const [withDefect] = paintCommands({

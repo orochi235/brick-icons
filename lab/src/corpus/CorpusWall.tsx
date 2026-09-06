@@ -19,6 +19,7 @@ import { useCells } from '@lab/corpus/useCells';
 import { useLooseThumbs } from '@lab/corpus/useLooseThumbs';
 import { useParams } from '@lab/corpus/useParams';
 import { useSheets } from '@lab/corpus/useSheets';
+import { useVectorThumbs } from '@lab/corpus/useVectorThumbs';
 import type { Cell } from '@lab/corpus/types';
 import { visibleRange } from '@lab/corpus/visible';
 import { Wall } from '@lab/corpus/Wall';
@@ -147,6 +148,8 @@ export function CorpusWall({ client }: { client: LabClient }) {
     () => (cam ? visibleRange(laid.rects, cam, size) : []),
     [laid.rects, cam, size.width, size.height]);
   const loose = useLooseThumbs(shown, visible, level, source);
+  const cellPx = cam ? params.cell * cam.scale.x : 0;
+  const vector = useVectorThumbs(shown, visible, level, source, cellPx);
 
   // The 128 rung still draws from the 32px bake underneath -- a cell whose
   // loose image hasn't arrived yet needs something to show.
@@ -187,7 +190,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
           {cam && (
             <Wall cells={shown} rects={laid.rects} cam={cam}
                   sheet={active?.image ?? null} manifest={active?.manifest ?? null}
-                  loose={loose} width={size.width} height={size.height}
+                  loose={loose} vector={vector} width={size.width} height={size.height}
                   highlight={highlight}
                   explicitCaret={explicitCaret} onExplicitCaretChange={setExplicitCaret}
                   onPan={(next) => { touched.current = true; updateCam(next); }}

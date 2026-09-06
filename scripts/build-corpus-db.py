@@ -23,13 +23,15 @@ from brick_icons.config import load_config  # noqa: E402
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=str(ROOT / db.DEFAULT_PATH))
-    ap.add_argument("--census-dir", default=str(ROOT / "out" / "census"))
+    ap.add_argument("--census-dir", action="append", dest="census_dirs",
+                    help="census tree to index; repeatable. Default: every "
+                         "out/census* directory.")
     args = ap.parse_args()
 
     sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT,
                          capture_output=True, text=True).stdout.strip()
     counts = db.rebuild(args.out, ldraw_dir=load_config().ldraw_dir, root=ROOT,
-                        census_dir=args.census_dir, commit_sha=sha or "unknown",
+                        census_dirs=args.census_dirs, commit_sha=sha or "unknown",
                         progress=lambda m: print(m, flush=True))
     print(", ".join(f"{v} {k}" for k, v in counts.items()))
     return 0
