@@ -42,18 +42,25 @@ def horseshoe():
 
 def redo_arrow():
     """The subset sign with a head: one filled band, so the head cannot come
-    adrift of the stroke it is supposed to finish."""
-    rm, t = 330.0, 78.0
-    a0, ah, a1 = math.pi * 0.1, math.pi * 1.62, math.pi * 1.89
-    outer = arc(0, 0, rm + t, a0, ah, 70)
-    inner = arc(0, 0, rm - t, ah, a0, 70)
-    # Base half-width against the chord to the apex, so the head comes out
-    # near enough equilateral rather than squat.
-    wing = t * 2.0
+    adrift of the stroke it is supposed to finish. The band tapers from a
+    thin tail into the head, which is oversized on purpose -- at badge size a
+    proportionate head disappears into the curve it sits on."""
+    rm = 330.0
+    t_tail, t_head = 24.0, 88.0
+    a0, ah, a1 = math.pi * 0.1, math.pi * 1.62, math.pi * 1.96
+    n = 80
+    outer, inner = [], []
+    for i in range(n):
+        u = i / (n - 1)
+        a = a0 + (ah - a0) * u
+        t = t_tail + (t_head - t_tail) * u ** 0.8
+        outer.append((math.cos(a) * (rm + t), math.sin(a) * (rm + t)))
+        inner.append((math.cos(a) * (rm - t), math.sin(a) * (rm - t)))
+    wing = t_head * 2.6
     head = [(math.cos(ah) * (rm + wing), math.sin(ah) * (rm + wing)),
             (math.cos(a1) * rm, math.sin(a1) * rm),
             (math.cos(ah) * (rm - wing), math.sin(ah) * (rm - wing))]
-    return outer + head + inner
+    return outer + head + list(reversed(inner))
 
 
 def brush():
