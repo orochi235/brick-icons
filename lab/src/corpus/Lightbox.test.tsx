@@ -44,6 +44,38 @@ it('marks which of the slots the wall is showing', async () => {
   expect([...current].map((el) => el.textContent)).toEqual(['naive']);
 });
 
+it('picks a different slot without the wall having moved', async () => {
+  render(box());
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  fireEvent.click(screen.getByRole('radio', { name: 'census-occt' }));
+  const current = document.querySelectorAll('[data-current="true"] .corpus-slot-name');
+  expect([...current].map((el) => el.textContent)).toEqual(['census-occt']);
+});
+
+it('files a flag against the slot you picked, not the wall\'s', async () => {
+  addDefect.mockClear();
+  render(box());
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  fireEvent.click(screen.getByRole('radio', { name: 'census-occt' }));
+  fireEvent.click(screen.getByText('Flag a problem'));
+  fireEvent.change(screen.getByLabelText('What is wrong'),
+                   { target: { value: 'the near rim is a whole circle' } });
+  expect(screen.getByText('File against census-occt')).toBeTruthy();
+  fireEvent.click(screen.getByText('File against census-occt'));
+  await waitFor(() => expect(addDefect).toHaveBeenCalled());
+  expect(addDefect.mock.calls[0]?.[0]).toMatchObject({ engines: ['occt'] });
+});
+
+it('follows the wall again when the wall changes slot', async () => {
+  const { rerender } = render(box());
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  fireEvent.click(screen.getByRole('radio', { name: 'census-occt' }));
+  rerender(box({ source: 'census-occt' }));
+  rerender(box({ source: 'naive' }));
+  const current = document.querySelectorAll('[data-current="true"] .corpus-slot-name');
+  expect([...current].map((el) => el.textContent)).toEqual(['naive']);
+});
+
 it('lists each engine measurement', async () => {
   render(box());
   await waitFor(() => screen.getByText('1.5'));

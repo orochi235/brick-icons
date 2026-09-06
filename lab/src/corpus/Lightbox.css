@@ -42,6 +42,17 @@
 }
 
 .corpus-slot { display: flex; flex-direction: column; gap: 0.25rem; }
+.corpus-slot-pick { display: flex; flex-direction: column; gap: 0.25rem; cursor: pointer; }
+/* Off-screen rather than display:none, which drops it out of the tab order
+ * and takes the group's keyboard operability with it. */
+.corpus-slot-radio {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+.corpus-slot-pick:focus-within .corpus-big { outline: 2px dashed var(--wzl-accent, currentColor); }
 .corpus-slot[data-retired='true'] .corpus-big {
   background: var(--corpus-thumb-ground-retired, #d8d8d8);
 }

@@ -14,6 +14,10 @@ export function Lightbox({ partId, source, client, onClose }: {
   onClose: () => void;
 }) {
   const [detail, setDetail] = useState<PartDetail | null>(null);
+  // The slot this view is *about* -- which render is marked, and which engine
+  // a flag names. Seeded from the wall and free to differ from it, so a
+  // comparison can be made here without disturbing the wall behind.
+  const [shown, setShown] = useState(source);
   const [flagging, setFlagging] = useState(false);
   const [title, setTitle] = useState('');
   const [flagError, setFlagError] = useState<string | null>(null);
@@ -24,6 +28,8 @@ export function Lightbox({ partId, source, client, onClose }: {
     void client.corpusPart(partId).then((d) => { if (live) setDetail(d); });
     return () => { live = false; };
   }, [partId, client]);
+
+  useEffect(() => { setShown(source); }, [source]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -43,7 +49,7 @@ export function Lightbox({ partId, source, client, onClose }: {
       await client.addDefect({
         id: defectId(partId, title),
         part: partId,
-        engines: [engineFor(source)],
+        engines: [engineFor(shown)],
         status: 'open',
         title: title.trim(),
         filed: new Date().toISOString().slice(0, 10),
@@ -83,15 +89,23 @@ export function Lightbox({ partId, source, client, onClose }: {
             {detail.part.sets != null ? ` · ${detail.part.sets} sets` : ''}
           </p>
           <Tags tags={detail.part.tags ?? []} />
-          <ul className="corpus-slots">
+          {/* A radio group rather than a hand-built control: it carries the
+              role, the name and the arrow-key roving for free, and the `<li>`
+              stays a list item with neither a role nor a handler on it. */}
+          <ul className="corpus-slots" role="radiogroup" aria-label="Slot shown">
             {slots.map((slot) => (
               <li key={slot.source} className="corpus-slot"
-                  data-current={slot.source === source}
+                  data-current={slot.source === shown}
                   data-retired={(detail.part.tags ?? []).includes('retired')}>
-                <img className="corpus-big" alt={`${detail.part.id} drawn by ${slot.source}`}
-                     src={`/api/corpus/render/${slot.source}/${detail.part.id}.svg`
-                          + `?v=${slot.sha256.slice(0, 8)}`} />
-                <span className="corpus-slot-name">{slot.source}</span>
+                <label className="corpus-slot-pick">
+                  <input type="radio" name="corpus-slot-shown" aria-label={slot.source}
+                         className="corpus-slot-radio" checked={slot.source === shown}
+                         onChange={() => setShown(slot.source)} />
+                  <img className="corpus-big" alt={`${detail.part.id} drawn by ${slot.source}`}
+                       src={`/api/corpus/render/${slot.source}/${detail.part.id}.svg`
+                            + `?v=${slot.sha256.slice(0, 8)}`} />
+                  <span className="corpus-slot-name">{slot.source}</span>
+                </label>
               </li>
             ))}
             {slots.length === 0 && <li>no slot has drawn this part</li>}
@@ -112,7 +126,7 @@ export function Lightbox({ partId, source, client, onClose }: {
                        onChange={(e) => setTitle(e.target.value)}
                        placeholder="the near rim is drawn as a whole circle" />
               </label>
-              <button type="submit" disabled={!title.trim()}>File against {source}</button>
+              <button type="submit" disabled={!title.trim()}>File against {shown}</button>
               {flagError && <span className="corpus-flag-error" role="alert">{flagError}</span>}
             </form>
           )}
