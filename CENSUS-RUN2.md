@@ -107,8 +107,22 @@ their own run-1 timings gives **16.6 core-hours**, an effective 2.87x rather tha
 The gain falls as parts get more expensive, which is why the backfill's mix matters: 789 of its
 parts sit in the 60-120s band (18.4 core-hours pre-fix) and 189 above 120s (8.8). **The 120s+ band
 is extrapolated** — the sample was capped at 120s, so it reuses the 60-120s factor and 16.6 is
-optimistic by however much that understates. `out/census/occt-backfill.txt` is that list. Needs a fresh JSONL so `--skip-done`
-skips nothing, the same shape as the naive run on msb-uai.
+optimistic by however much that understates. `out/census/occt-backfill.txt` is that list.
+
+**It runs on onto's item dispatch, not on fixed shards.** `scripts/census-batch.sh` measures one
+comma-separated batch, and `onto run --each` deals the batches out under a pool onto sizes from the
+node's free cores. Batches are 25 parts because `import cadquery` costs 6.2s against a 21.6s median
+part — one process per part would spend 8.1 hours starting interpreters — and they are dealt
+longest-first off each part's run-1 cost, which puts every batch between 13.3 and 24.6 minutes
+where id order would have produced a 50-minute item beside three-minute ones. Each batch writes its
+own `<engine>-<first part>.jsonl`: `Runner` rewrites `<jsonl>.inflight` per item, so batches sharing
+one JSONL would share that marker and a crash in one would bury another's part as `ProcessDied`.
+The 240s watchdog is carried into that script, and `--retries 3` is what turns a killed batch back
+into a finished one, since a retry redoes only what `--skip-done` has not banked.
+
+The five-shard shape it replaces left studio at 1.4 cores of 10, and its tail ran one shard alone
+for the last hour — with balancing 25x coarser than the batches, the aggregate rate stopped
+predicting the finish as soon as that happened.
 
 **Timeouts: probe 100 before committing.** `out/census/{occt,naive}-probe100.txt` are evenly
 spaced samples of the degenerate sets. What the probe is for has changed: at 3.24x it is no longer
