@@ -365,13 +365,20 @@ Run it: `.venv/bin/python -m brick_icons.lab` and `cd lab && npm run dev`, then
 `scripts/bake-thumbs.py` bakes the sheets; both are idempotent.
 ### 2026-09-06: the wall, after a day of it
 
-Committed on `main` through `a923d92`, **unpushed**. All of it is live at
+Committed on `main` through `a3f5b90`, **unpushed**. All of it is live at
 `/corpus.html` with `.venv/bin/python -m brick_icons.lab` and `npm run dev`
-running. **Restart the lab server after pulling** -- it is long-lived, the
-cell payload gained fields, and `corpus.db` is schema 2 now: new code against
-an old database fails every cells request with `no such column: source`.
-Rebuild it the way the loop does (build to a temp, checkpoint, `mv`) or wait
-for a tick of `scripts/census-ingest.sh 900`.
+running.
+
+**A schema bump means restarting the lab server on 8792, and it is part of
+landing one rather than something to notice afterwards.** The server is
+long-lived and `scripts/census-ingest.sh 900` rebuilds `corpus.db` from the
+working tree every 15 minutes -- so a bump goes live on the next tick,
+underneath a server still holding the old schema, whether or not anyone
+restarted anything. Every cells request then fails (`no such column: source`
+was schema 2's version of it) and the wall draws blank, which reads as a
+frontend fault and has cost an hour twice. `db.py` has no `ALTER` path at
+all: `SCHEMA_VERSION` goes up and a rebuild recreates the table. Restart
+8792, and say in the commit that you did.
 
 **What a cell knows.** `part_years` carries first year, last year and set
 count for 9,269 parts, derived from Rebrickable's public dumps by
