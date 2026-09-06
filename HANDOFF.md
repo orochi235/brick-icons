@@ -136,13 +136,30 @@ has to be proved byte-identical before it is believed.
 
 ## In flight: the white census facet, third pass -- the 300s cap
 
-Two jobs launched 2026-09-06 17:04, deadline 05:04: `census-white-naive-r2`
-(1183e8ff, msb-uai, 10 workers, 1,909 parts) and `census-white-occt-r2`
-(1cef35fc, studio, 8 workers, 959 parts). **Per-part cap is 300s, up from
-120s**, `HARD=600`. Batch lists are `out/census-white/{naive,occt}-retry-batches.txt`,
-built by `census-coverage.py --facet white --out out/census-white/todo`;
-`onto fetch --stream` collects into `out/census-white-{naive,occt}/`. **The
-ingest loop belongs to the Database web UI session** -- one loop, not two.
+`census-white-occt-r2` (93af72b4, studio, 8 workers, 959 parts) launched
+2026-09-06 17:06, deadline 05:06. **Per-part cap is 300s, up from 120s**,
+`HARD=600`. `onto fetch --stream census-white-occt-r2` collects into
+`out/census-white-occt/`. **The ingest loop belongs to the Database web UI
+session** -- one loop, not two.
+
+**naive is built but unsent: 1,909 parts in
+`out/census-white/naive-retry-batches.txt`, staged on studio.** msb-uai left
+the fleet, a working tree takes one job at a time, and occt's list is the one
+that fits a 12h deadline. Launch it the same way once occt is done:
+
+    onto run --detach --in brick-icons --task census-white-naive-r2 \
+      --timeout 12h --each out/census-white/naive-retry-batches.txt \
+      --workers 8 --reserve 2 --out out/census-white --to out/census-white-naive \
+      --env PATH=/Users/mike/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin \
+      --env "EXTRA=--shade-style white --line-width 2 --silhouette-width 2" \
+      --env KEEP=out/census-white/renders --env HARD=600 \
+      studio -- scripts/census-batch.sh naive 300 out/census-white {}
+
+**`--env PATH` is not optional.** The agent's PATH has no `~/.local/bin`, so
+`resvg` is missing and every part fails `FileNotFoundError` in about a second
+-- fast enough to write a few hundred error rows before anyone looks, and
+`--skip-done` then skips those parts for good. A launch without it is worse
+than one that crashes.
 
 Parts that only ever timed out at 120s are finishing at 300s, so the cap was
 the binding constraint and not a rendering fault.
