@@ -116,18 +116,18 @@ export const drawMagnet: Mark = (ctx, field) => {
 export const drawBrush: Mark = (ctx, field, accent) => {
   fillPath(ctx, BRUSH);
   ctx.beginPath();
-  ctx.moveTo(-0.5, 0.52);
-  ctx.lineTo(0.5, 0.52);
-  ctx.lineTo(0.42, 1);
-  ctx.lineTo(-0.42, 1);
+  ctx.moveTo(-0.44, 0.52);
+  ctx.lineTo(0.44, 0.52);
+  ctx.lineTo(0.36, 1);
+  ctx.lineTo(-0.36, 1);
   ctx.closePath();
   ctx.fill();
   ctx.save();
   ctx.fillStyle = field;
-  ctx.fillRect(-0.56, 0.44, 1.12, 0.1);
-  // Crimp ridges, cut across the ferrule rather than drawn on it.
-  ctx.fillRect(-0.52, 0.7, 1.04, 0.06);
-  ctx.fillRect(-0.52, 0.85, 1.04, 0.06);
+  ctx.fillRect(-0.48, 0.46, 0.96, 0.09);
+  // Inside the ferrule, not across it: a band that runs to the edges cuts
+  // the ferrule in two instead of reading as a crimp.
+  ctx.fillRect(-0.3, 0.72, 0.6, 0.07);
   ctx.restore();
   cutPaths(ctx, BRUSH_CUT, accent);
 };

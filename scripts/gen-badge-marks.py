@@ -146,12 +146,25 @@ def brush():
     ferrule: 1.5 units tall with its base where the old sweep put it. Sampled
     rather than approximated -- the outline is the whole cue, and every
     parametric stand-in for it read as a bottle or a light bulb."""
+    from shapely.geometry import Polygon
+
     pts = _svg_paths("st2")[0]
     ys = [p[1] for p in pts]
     xs = [p[0] for p in pts]
     scale = 1.5 * GRID / (max(ys) - min(ys))
-    return _place(pts, scale, (min(xs) + max(xs)) / 2, max(ys)), scale, \
-        (min(xs) + max(xs)) / 2, max(ys)
+    cx, bottom = (min(xs) + max(xs)) / 2, max(ys)
+    placed = _place(pts, scale, cx, bottom)
+    # A closing: dilate then erode, which fills concavities narrower than
+    # twice its radius and leaves the convex outline alone. It takes the
+    # involution out of the tip's hook without touching the belly.
+    shape = Polygon(placed).buffer(0).buffer(26.0).buffer(-26.0)
+    if shape.geom_type == "MultiPolygon":
+        shape = max(shape.geoms, key=lambda g: g.area)
+    ring = shape.exterior
+    count = max(180, int(ring.length / 11.0))
+    smoothed = [ring.interpolate(i / count, normalized=True).coords[0]
+                for i in range(count)]
+    return smoothed, scale, cx, bottom
 
 
 def paint(scale, cx, bottom):
