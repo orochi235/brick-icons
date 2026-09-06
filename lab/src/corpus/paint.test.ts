@@ -314,6 +314,48 @@ it('reduces alpha on a drawn cell outside the highlighted state, and leaves a ma
   expect((full as { alpha?: number }).alpha).toBeUndefined();
 });
 
+it('dims a cell that does not carry the hovered tag, and leaves one that does', () => {
+  const img = {} as HTMLImageElement;
+  const tagged = cell('a', 0, 'sha-a', { tags: ['slow'] });
+  const untagged = cell('a', 0, 'sha-a', { tags: ['printed'] });
+  const [dimmed] = paintCommands({
+    cells: [untagged], rects, visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest,
+    loose: new Map([['a', img]]), highlightTag: 'slow',
+  });
+  expect((dimmed as { alpha: number }).alpha).toBeLessThan(1);
+
+  const [full] = paintCommands({
+    cells: [tagged], rects, visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest,
+    loose: new Map([['a', img]]), highlightTag: 'slow',
+  });
+  expect((full as { alpha?: number }).alpha).toBeUndefined();
+});
+
+it('dims a cell with no tags at all when a tag is hovered', () => {
+  const [cmd] = paintCommands({
+    cells: [cell('a', 0, null, { open_defects: 1 })], rects: [rects[0]!], visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest: null,
+    highlightTag: 'slow',
+  });
+  expect(cmd).toMatchObject({ kind: 'fill', fill: CELL_FILL.unknown.fill, border: null });
+});
+
+it('leaves every cell alone with no tag hovered', () => {
+  const cells = [cell('a', 0, null, { tags: ['slow'] })];
+  const plain = paintCommands({
+    cells, rects: [rects[0]!], visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest: null,
+  });
+  const hovered = paintCommands({
+    cells, rects: [rects[0]!], visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest: null,
+    highlightTag: null,
+  });
+  expect(hovered).toEqual(plain);
+});
+
 it('scales the border with the drawn cell size, floored at one pixel', () => {
   const tiny = [{ x: 0, y: 0, w: 4, h: 4 }];
   const big = [{ x: 0, y: 0, w: 200, h: 200 }];

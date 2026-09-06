@@ -16,6 +16,10 @@ export interface LegendProps {
    *  would drop the first's change. */
   badges: string[];
   onBadges: (update: (prev: string[]) => string[]) => void;
+  /** The tag row under the pointer, and a way to report it. Hovering a tag
+   *  dims every cell without it, exactly as hovering a state row does. */
+  highlightTag: string | null;
+  onHighlightTag: (tag: string | null) => void;
 }
 
 /** Sized so a badge comes out the same 14px across as the state swatches
@@ -57,7 +61,8 @@ function BadgeSwatch({ badge }: { badge: CellBadge }) {
  *  Hovering or focusing a row raises `highlight`; `Wall` dims every cell
  *  that isn't in that state rather than brightening the ones that are. */
 export function Legend({ cells, highlight, onHighlight,
-                        badges, onBadges }: LegendProps) {
+                        badges, onBadges,
+                        highlightTag, onHighlightTag }: LegendProps) {
   const counts = useMemo(() => tally(cells), [cells]);
   const badgeCounts = useMemo(() => {
     const out: Record<string, number> = {};
@@ -116,8 +121,13 @@ export function Legend({ cells, highlight, onHighlight,
             <button type="button" className="corpus-legend-row corpus-legend-badge-row"
                     aria-pressed={badges.includes(tag)}
                     data-picked={badges.includes(tag)}
+                    data-highlighted={highlightTag === tag}
                     aria-label={`${tag}, ${badgeCounts[tag]!.toLocaleString()} parts`}
-                    onClick={() => toggle(tag)}>
+                    onClick={() => toggle(tag)}
+                    onMouseEnter={() => onHighlightTag(tag)}
+                    onMouseLeave={() => onHighlightTag(null)}
+                    onFocus={() => onHighlightTag(tag)}
+                    onBlur={() => onHighlightTag(null)}>
               <BadgeSwatch badge={badge} />
               <span className="corpus-legend-name">{tag}</span>
               <span className="corpus-legend-count">

@@ -55,6 +55,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
   const [picked, setPicked] = useState<string | null>(null);
   const [carded, setCarded] = useState<{ cell: Cell; at: { x: number; y: number } } | null>(null);
   const [highlight, setHighlight] = useState<CellState | null>(null);
+  const [highlightTag, setHighlightTag] = useState<string | null>(null);
   const [explicitCaret, setExplicitCaret] = useState<number | null>(null);
   const [searchNotice, setSearchNotice] = useState<string | null>(null);
   const box = useRef<HTMLDivElement>(null);
@@ -268,7 +269,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
             <Wall cells={shown} rects={laid.rects} cam={cam}
                   sheet={active?.image ?? null} manifest={active?.manifest ?? null}
                   loose={loose} vector={vector} width={size.width} height={size.height}
-                  highlight={highlight}
+                  highlight={highlight} highlightTag={highlightTag}
                   bands={laid.bands} tint={selection.tint}
                   explicitCaret={explicitCaret} onExplicitCaretChange={setExplicitCaret}
                   onPan={(next) => { touched.current = true; updateCam(next); }}
@@ -286,7 +287,8 @@ export function CorpusWall({ client }: { client: LabClient }) {
           {cells && (
             <Legend cells={cells} highlight={highlight} onHighlight={setHighlight}
                     badges={selection.badges}
-                    onBadges={(update) => setSelection((s) => ({ ...s, badges: update(s.badges) }))} />
+                    onBadges={(update) => setSelection((s) => ({ ...s, badges: update(s.badges) }))}
+                    highlightTag={highlightTag} onHighlightTag={setHighlightTag} />
           )}
           <ParamsPanel params={params} setParam={setParam} reset={resetParams} />
         </div>

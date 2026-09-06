@@ -38,6 +38,8 @@ export interface WallProps {
   width: number;
   height: number;
   highlight: CellState | null;
+  /** The legend's hovered tag row, if any -- cells without it paint dimmed. */
+  highlightTag: string | null;
   explicitCaret: number | null;
   onExplicitCaretChange: (index: number | null) => void;
   onPan: (next: View) => void;
@@ -314,7 +316,7 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
  *  Canvas2D holds today's corpus. When weasel's mega view exists this body is
  *  what it replaces; nothing above it knows what an atlas page is. */
 export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width, height,
-                       highlight, explicitCaret, onExplicitCaretChange,
+                       highlight, highlightTag, explicitCaret, onExplicitCaretChange,
                        onPan, onPick, onOpen, onDragStart,
                        dragThresholdPx = DEFAULT_PARAMS.dragThresholdPx,
                        appearance, bands, tint }: WallProps) {
@@ -408,12 +410,14 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
     ctx.clearRect(0, 0, width, height);
     ctx.imageSmoothingEnabled = true;
     for (const cmd of paintCommands({
-      cells, rects, visible, cam, manifest, palette, loose, vector, highlight, caret: caretIndex,
+      cells, rects, visible, cam, manifest, palette, loose, vector, highlight, highlightTag,
+      caret: caretIndex,
       appearance, bands, tint,
     })) {
       drawPaintCommand(ctx, cmd, sheet, palette);
     }
-  }, [cells, rects, visible, cam, sheet, manifest, palette, loose, vector, highlight, caretIndex,
+  }, [cells, rects, visible, cam, sheet, manifest, palette, loose, vector, highlight, highlightTag,
+      caretIndex,
       appearance, bands, tint, width, height]);
 
   // The lens shows a magnified crop of what is already on screen -- zooming
@@ -438,7 +442,8 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
     const magCam = zoomAt(cam, loupe.aim, loupe.factor);
     const offset = { x: d / 2 - loupe.aim.x, y: d / 2 - loupe.aim.y };
     for (const cmd of paintCommands({
-      cells, rects, visible, cam: magCam, manifest, palette, loose, vector, highlight, caret: caretIndex,
+      cells, rects, visible, cam: magCam, manifest, palette, loose, vector, highlight, highlightTag,
+      caret: caretIndex,
       appearance, bands, tint,
     })) {
       drawPaintCommand(ctx, cmd, sheet, palette, offset);

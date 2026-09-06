@@ -341,6 +341,8 @@ export interface PaintInput {
   /** The legend's hovered or focused row, if any -- cells outside this state
    *  are painted dimmed rather than the matching cells being brightened. */
   highlight?: CellState | null;
+  /** The same, for a hovered tag row: cells that do not carry the tag dim. */
+  highlightTag?: string | null;
   /** Index of the caret cell, if any -- explicit or implied, resolved by the
    *  caller (`caret.ts`). */
   caret?: number | null;
@@ -360,7 +362,8 @@ export interface PaintInput {
  *  in what color -- are testable without a rendering context, and so the
  *  drawing itself is the only thing weasel's mega view has to replace. */
 export function paintCommands({ cells, rects, visible, cam, manifest, palette, loose, vector,
-                                highlight = null, bands, caret = null,
+                                highlight = null, highlightTag = null,
+                                bands, caret = null,
                                 appearance = DEFAULT_APPEARANCE,
                                 tint = 'status' }: PaintInput): PaintCommand[] {
   const out: PaintCommand[] = [];
@@ -374,7 +377,8 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
     const dh = rect.h * cam.scale.y;
     const isCaret = caret != null && i === caret ? true : undefined;
     const state = cellState(cell);
-    const dimmed = highlight !== null && highlight !== state;
+    const dimmed = (highlight !== null && highlight !== state)
+      || (highlightTag !== null && !(cell.tags ?? []).includes(highlightTag));
     const alpha = dimmed ? appearance.dimAlpha : undefined;
     // A drawn cell wears its state's border too: a part that fails in another
     // slot looks perfectly fine in this one, and the frame is the only thing
