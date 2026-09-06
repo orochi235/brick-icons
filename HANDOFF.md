@@ -88,46 +88,40 @@ that builds `near` changed the SVG bytes. Not slower — wrong. Whatever the
 mechanism, a shapely call threaded over geometry another thread also touches
 has to be proved byte-identical before it is believed.
 
-## In flight: the white line-drawing census facet, on both nodes
+## Done, and short: the white line-drawing census facet
 
-**Branch `census-stroked`**, worktree `.claude/worktrees/census-stroked`, two
-commits on top of `census-multi-dir-index`. Started 2026-09-06 01:19, both
-jobs deadline **09:19**.
+Ran 2026-09-06 01:19-09:19 on both nodes, **merged to `main`**, both jobs
+stopped by their 8h deadline rather than by finishing.
 
-| | msb-uai | studio |
+| | naive (msb-uai) | occt (studio) |
 |---|---|---|
-| task | `census-white-naive` | `census-white-occt` |
-| job | `9a085b10` | `ad4ced7e` |
-| lands in | `out/census-white-naive/` | `out/census-white-occt/` |
+| parts reached | 5,670 of 8,235 | 6,661 of 8,235 |
+| measured | 4,378 | 5,982 |
+| errored | 1,294 (1,285 timeouts) | 679 (529 timeouts, 125 ProcessDied) |
+| in `corpus.db` | 4,393 renders | 5,997 renders |
 
-Both run 330 batches of ~25 over the same 8,235 parts, rendering
-`--shade-style white --line-width 2 --silhouette-width 2`: every body surface
-one opaque white, strokes carrying the drawing. Resume or collect with
+Everything is collected, ingested and baked; the wall draws both slots.
+**naive timed out at more than twice occt's rate** against the same 120s cap,
+which is the opposite of the strokeless facet and worth a look before
+budgeting another run.
 
-    onto fetch --stream --every 10m census-white-naive     # and -occt
-
-The streams are plain background processes and do not survive this machine
-sleeping; the jobs do. Re-running the fetch picks up whatever accumulated.
-
-**What this facet is for is the drawings, not the numbers.** The metric
-thresholds alpha, so an opaque white fill and a flat3 fill give the same mask
-— the only thing strokes change is that they add a ~1px band outside the fill
-boundary everywhere, which moves `extra_dist_px` 99th from ~0.45px to ~1.01px
-on every part. Do not compare these rows against `out/census`'s: the strokes
-dominate them. What the run is worth having is 16,470 clean line drawings
-with `--keep`, ready to index.
-
-**The batch list has to be rsync'd to each node.** `--each` reads its list in
-the tree, `out/` is gitignored, so a sync never sends it and the job exits -1
-in about 25 seconds with an empty log:
+To finish the corpus, relaunch the same two jobs. `--skip-done` reads the
+JSONL already in `out/census-white-*`, so a second run costs only what is
+left, and the batch lists still have to be rsync'd to each node -- `--each`
+reads its list in the tree and `out/` is gitignored:
 
     rsync -a out/census-white/{naive,occt}-batches.txt \
       <node>.local:~/.config/onto/work/brick-icons/out/census-white/
 
-Rows carry `"style"` and `"strokes"`, because `measurements` has no column
-for the render config. Nothing is imported into `corpus.db` yet — that waits
-on the `db.rebuild` work in the main checkout, and on a `SOURCES` entry for
-the new render source.
+`scripts/census-ingest.sh 900` rebuilds corpus.db on an interval while it
+runs, and `scripts/bake-thumbs.py --source census-white-naive` afterwards is
+what puts new parts on the wall -- indexing alone does not, and it is
+idempotent by render sha so it only costs the new ones.
+
+**These numbers are not comparable to `out/census`.** Strokes add a ~1px band
+outside the fill boundary everywhere, moving `extra_dist_px` 99th from
+~0.45px to ~1.01px on every part. The facet is worth having for its drawings,
+not its measurements.
 
 ## In flight: the library-scale silhouette census, now on `studio`
 
