@@ -94,6 +94,11 @@ class Runner:
         """
         global _ARMED
         self.inflight.write_text(item)
+        # onto reads this off the item's own stdout pipe and shows it as the
+        # worker's label, so a batched item names the part in hand rather than
+        # the one it started with. Consumed, not forwarded: it never reaches
+        # the job log. Capped at 48 runes by onto.
+        print(f"onto: item {item[:48]}", flush=True)
         started = time.time()
         try:
             if self.timeout:
