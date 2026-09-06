@@ -228,6 +228,34 @@ another whole pass. Adding a pose needs the pose in the file path, since
 `out/census/renders/<engine>/`, gitignored, with rows in the database. Roughly
 16,500 of them at full coverage, ~230MB.
 
+**`db.census_trees()` is the one definition of where those renders are, and a
+caller that keeps its own list is a bug.** The census runs one tree per node —
+`out/census`, `out/census-naive`, plus run 1's archive `out/census-run1` — so a
+caller looking only in `out/census` indexes one engine, returns a smaller number
+than it should, and raises nothing. That is the shape that reads as "the census
+hasn't finished yet". `rebuild(census_dirs=None)` calls it; pass a list only to
+index something narrower.
+
+Each tree is imported as **its own run**, which is the only thing separating
+pre-fix rows from post-fix ones: `out/census-run1` is not a disjoint set of
+rows but a literal *prefix* of the live files, same filenames continued in
+place, and the rows carry no timestamp or commit. Post-fix occt rows are
+therefore `run(out/census) EXCEPT run(out/census-run1)` — 2,517 parts, matching
+the count `CENSUS-RUN2.md` records as never attempted. **Beware the run ids:**
+run 1 in the database is `out/census`, the live tree; the archive is run 3.
+Read `args.dir`, never the id.
+
+**Merge note, delete once `corpus-grouping` lands.** Branch
+`census-multi-dir-index` renamed `rebuild`'s `census_dir` to `census_dirs` (a
+sequence, `None` for every tree) and `counts` gained a `"skipped"` key.
+`corpus-grouping` was cut before that and adds a `_rebuild()` test helper
+passing `census_dir=tmp_path / "nope"`, plus four tests through it — a
+`TypeError` at merge, not a conflict git will show. It becomes
+`census_dirs=(tmp_path / "nope",)`. The same branch's copy of
+`test_rebuild_walks_renders_and_toml_and_jsonl` still fails against the repo's
+real defects TOML; the fix is on this branch and its handoff says to ignore the
+failure until then.
+
 **The tracked store is bigger than that, not equal to it.** Measured on the
 first stored renders, the canonical stroked drawing has a 29KB median and a
 long tail — `0901` is 699KB of real geometry, 1481 elements, already at 2dp, so

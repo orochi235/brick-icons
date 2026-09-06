@@ -453,3 +453,27 @@ def test_a_census_directory_that_is_not_there_is_skipped(tmp_path):
     counts = db.rebuild(tmp_path / "corpus.db", lib, root=tmp_path,
                         census_dirs=[d, tmp_path / "out" / "census-naive"])
     assert counts["measurements"] == 1
+
+
+def test_the_default_finds_every_census_tree_under_root(tmp_path):
+    # The trap this closes: a caller using defaults indexed out/census alone
+    # and dropped the naive node's whole tree, with no error to notice.
+    lib = _library(tmp_path)
+    for engine, dirname in (("occt", "census"), ("naive", "census-naive")):
+        d = tmp_path / "out" / dirname / "renders" / engine
+        d.mkdir(parents=True)
+        (d / "3001.svg").write_text(SVG)
+
+    counts = db.rebuild(tmp_path / "corpus.db", lib, root=tmp_path)
+    assert counts["renders"] == 2
+
+    conn = db.connect(tmp_path / "corpus.db")
+    assert {r["source"] for r in conn.execute("SELECT source FROM renders")} \
+        == {"census-occt", "census-naive"}
+
+
+def test_census_trees_ignores_a_file_named_like_one(tmp_path):
+    (tmp_path / "out").mkdir()
+    (tmp_path / "out" / "census").mkdir()
+    (tmp_path / "out" / "census-stream.log").write_text("not a tree\n")
+    assert db.census_trees(tmp_path) == [tmp_path / "out" / "census"]

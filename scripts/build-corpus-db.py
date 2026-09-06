@@ -28,17 +28,10 @@ def main() -> int:
                          "out/census* directory.")
     args = ap.parse_args()
 
-    # One tree per node, plus run 1's archive, and a node added later needs no
-    # edit here. Each is imported as its own run.
-    census_dirs = args.census_dirs or [
-        str(d) for d in sorted((ROOT / "out").glob("census*")) if d.is_dir()]
-    print(f"{len(census_dirs)} census tree(s): "
-          f"{', '.join(Path(d).name for d in census_dirs)}", flush=True)
-
     sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT,
                          capture_output=True, text=True).stdout.strip()
     counts = db.rebuild(args.out, ldraw_dir=load_config().ldraw_dir, root=ROOT,
-                        census_dirs=census_dirs, commit_sha=sha or "unknown",
+                        census_dirs=args.census_dirs, commit_sha=sha or "unknown",
                         progress=lambda m: print(m, flush=True))
     print(", ".join(f"{v} {k}" for k, v in counts.items()))
     return 0

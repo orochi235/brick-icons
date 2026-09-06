@@ -374,8 +374,18 @@ def _relative(path: Path, root: Path) -> str:
         return str(path)
 
 
+def census_trees(root: Path | str = ".") -> list[Path]:
+    """Every census tree under `root`: one per node, plus run 1's archive.
+
+    A node added later needs no edit. There is one definition of this and it
+    lives here -- a caller with its own idea of where the trees are indexes the
+    ones it knows and returns a smaller number than it should, with no error.
+    """
+    return sorted(d for d in (Path(root) / "out").glob("census*") if d.is_dir())
+
+
 def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
-            census_dirs: Sequence[Path | str] = ("out/census",),
+            census_dirs: Sequence[Path | str] | None = None,
             defects_path: Path | str = defects_toml.DEFAULT_PATH,
             status_path: Path | str = DEFAULT_STATUS_PATH,
             commit_sha: str = "unknown",
@@ -388,6 +398,11 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
     progress(f"seeded {counts['parts']} parts")
 
     root = Path(root)
+    if census_dirs is None:
+        census_dirs = census_trees(root)
+    progress(f"{len(census_dirs)} census tree(s): "
+             f"{', '.join(Path(d).name for d in census_dirs)}")
+
     for svg in sorted((root / "renders").rglob("*.svg")):
         record_render(conn, svg.stem, svg.parent.name, svg, root=root)
         counts["renders"] += 1
