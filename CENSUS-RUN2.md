@@ -6,6 +6,34 @@ census measures; this file only carries what changed today.
 
 **The question it answers:** run 1 measured 13,928 parts and saved no drawings. What replaced it?
 
+## Where coverage actually stands — ask the script, not this file
+
+    .venv/bin/python scripts/census-coverage.py            # the table
+    .venv/bin/python scripts/census-coverage.py --out out/census/todo
+
+Every part list in this file was cut at 13:44 on 2026-09-05 and the run that followed changed
+the answers. The script derives coverage from `corpus.db` instead, so it cannot go stale, and
+`--out` writes each bucket as a plain list for `--list`. As of 2026-09-06 01:30, over the
+8,235-part corpus:
+
+| | drawn | redraw | fails |
+|---|---|---|---|
+| naive | 4,789 (58%) | 1,837 | 1,609 |
+| occt | 2,653 (32%) | 4,168 | 1,414 |
+
+**Three buckets, three different jobs.** *drawn* has a render on disk and indexed. *redraw*
+measured fine and kept no drawing — a render pass, costed from each part's own recorded timing:
+about 13.8 core-hours for naive, 14.2 for occt. *fails* has errored on every attempt ever
+recorded, so it needs an engine fix or a longer cap, and **nothing on record says what those
+cost**, because none of them ever finished.
+
+**occt has now measured all 8,235** — the 2,517 it had never attempted are done — so its gap is
+entirely renders it threw away before the `--keep` fix, not parts it has yet to reach.
+
+**The naive job did not finish: it was SIGTERMed at its deadline**, at 58%. `onto logs 0ac8d710`
+ends `worst shard exit 143`. Its 1,837 *redraw* parts are the ones it never got to, and they need
+a new job rather than a resumed one.
+
 ## The bug
 
 `compare-silhouette-truth.py` renders each part to a temp dir, rasterizes it to compare against
@@ -39,7 +67,12 @@ It has to wait for `62bb81bd` — onto locks a tree to one job.
 `out/census-run1/` holds every JSONL, the logs and the old shard lists — 54 files. It is the
 record of what was measured; only the drawings are gone.
 
-## Degenerate parts have their own lists
+## Degenerate parts have their own lists — superseded, read for the reasoning only
+
+Every count below is from before the run that followed it; `scripts/census-coverage.py` has the
+live ones. What still holds is the argument: a `TimeoutError` row records the part *and* the
+code's speed, so these lists are artifacts of the pre-fix code, not properties of the geometry.
+
 
 `scripts/census-triage.py <archive-dir> <engine> <n>` separates parts where every recorded row
 errored from the rest, writes `out/census/<engine>-degenerate.txt`, and splits the remainder into
