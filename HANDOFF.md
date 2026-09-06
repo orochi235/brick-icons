@@ -45,6 +45,52 @@ question is what occt hands them — its sewn-shape faces rather than `hlr`'s
 triangle faces — and whether `unwrap.bind` can carry a decal onto an exact
 surface instead of a tessellated one.
 
+## In flight: the colour tint — branch `corpus-colors`, green, waiting to land
+
+Worktree `.claude/worktrees/cgc`. Two commits on top of `main`: the colour count
+itself and a merge of `main`. **Complete and green** — 645 lab tests, 70 Python
+(`test_lab_cells.py` + `test_db.py`), `tsc` clean, `npm run build` emits both
+entries.
+
+It is a pure fast-forward (`git merge --ff-only corpus-colors`), blocked only by
+an uncommitted `lab/src/corpus/paint.test.ts` in the main checkout. Nothing to
+resolve; it lands the moment that file is committed.
+
+**Landing it requires restarting the lab server on 8792.** `SCHEMA_VERSION` goes
+3 → 4 and `db.py` has no ALTER path, so the ingest loop's next 15-minute tick
+rebuilds `corpus.db` at schema 4 under a server still holding schema 3 — the
+"no such column" blank wall. This is the case the note above already warns about.
+
+What it does: extends `part_facts()` in `scripts/fetch-part-years.py` to collect
+distinct `color_id` in the pass it already makes over `inventory_parts`, adds one
+`colors` column to `part_years`, serves it from `cells.py`, and adds a fourth
+`TINT_MODES` entry. No second table and no second importer — the abandoned
+`corpus-grouping` branch's `part_facts`/`part_colors` tables are exactly what
+this avoids.
+
+**`tests/goldens/part-years.csv` is regenerated in the same commit as the loader
+change, deliberately.** `import_part_years` reads it by name, so a loader that
+expects `colors` against an un-regenerated golden dies with a bare `KeyError`
+inside `rebuild`, which reads as a corrupt database. The loader reads
+`int(r["colors"])` straight, with no tolerant default: zero colours is not a
+fact about any part, so a default would put all 9,269 parts on the ramp's bottom
+shade and render a missing column as a finding.
+
+**The ramp constant was measured twice and the first number was wrong.**
+`MAX_LOG_COLORS = Math.log10(80)`, over the golden's 9,269 dated parts: median 9,
+p90 63, max 80. An earlier measurement said median 4 / max 81 because it joined
+only the 5,051 `exact` matches and missed the 4,218 `base` ones. Log beats linear
+either way — 25% of the wall in the bottom two of eight shades against 62% — but
+recompute from the golden, not from `inventory_parts` directly, if the ceiling
+ever needs revisiting.
+
+### Dead, safe to delete
+
+`corpus-grouping` at `349fc8e` — the original 19-commit branch. Its Rebrickable
+backend duplicated `part_years` and does not land; the useful half was ported and
+is on `main` as of `a3f5b90`. Worktrees `.claude/worktrees/corpus-grouping` and
+`cg2` are disposable.
+
 ## Next: render performance
 
 Agreed in conversation, nothing written down elsewhere. A lab render is slow
