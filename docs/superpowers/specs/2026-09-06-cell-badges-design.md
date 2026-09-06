@@ -55,8 +55,15 @@ Both keep the bottom-right slot, so at most one shows and nothing else moves.
 
 | | glyph | n |
 |---|---|---|
-| retired | as today | 3550 |
-| updated | its own mark, clickable | 456 |
+| retired | `R`, as today | 3550 |
+| updated | redo — a clockwise curved arrow, clickable | 456 |
+
+A letter against an arrow is deliberate. The two never appear together, so they
+do not need to read as a pair — they need telling apart, and this also makes the
+wall's one clickable badge look unlike everything else on it.
+
+Draw the arrow, do not type it: `↻` and `↷` are unreliable in monospace. Draw it
+clockwise, or it reads as undo.
 
 **Clicking an updated badge goes to the successor.** The wall draws to canvas,
 so the badge has no DOM node to carry a link: this needs hit-testing the badge's
@@ -143,7 +150,7 @@ zigzag, a closed arc, a diagonal, a cross.
 `#ffffff`, so it is the first badge that would otherwise be invisible.
 
 `mark` grows from `'star'` to `'star' | 'sticker' | 'bolt' | 'magnet' | 'brush'
-| 'minifig'`. Technic, duplo, weird and composite go through `text`.
+| 'minifig' | 'redo'`. Technic, duplo, weird and composite go through `text`.
 
 Paint order in `Wall.tsx` is already right — wash, then captions, then badges —
 so a retired part's badges stay full color over the gray rather than fading into
