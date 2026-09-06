@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { panToReveal } from '@lab/corpus/reveal';
+import { centerReveal, panToReveal } from '@lab/corpus/reveal';
 
 const viewport = { width: 100, height: 100 };
 const cam = { x: 0, y: 0, scale: { x: 1, y: 1 } };
@@ -46,4 +46,26 @@ it('scales the pan by the camera zoom', () => {
   // On screen: rect spans [120, 160], past the 100-wide viewport.
   const next = panToReveal(rect, view, viewport);
   expect(next.x).toBe(30); // 60 - (100-40)/2
+});
+
+it('centers an on-screen rect exactly in the middle of the viewport', () => {
+  const rect = { x: 40, y: 40, w: 20, h: 20 };
+  const next = centerReveal(rect, cam, viewport);
+  expect(next.x).toBe(0);
+  expect(next.y).toBe(0);
+});
+
+it('centers an off-screen rect too, unlike panToReveal', () => {
+  const rect = { x: 500, y: 500, w: 20, h: 20 };
+  const next = centerReveal(rect, cam, viewport);
+  expect(next.x).toBe(460); // center 510 - half the 100-wide viewport
+  expect(next.y).toBe(460);
+});
+
+it('centers scaled by the camera zoom', () => {
+  const rect = { x: 60, y: 60, w: 20, h: 20 };
+  const view = { x: 0, y: 0, scale: { x: 2, y: 2 } };
+  const next = centerReveal(rect, view, viewport);
+  expect(next.x).toBe(45); // center 70 - (100/2)/2
+  expect(next.y).toBe(45);
 });

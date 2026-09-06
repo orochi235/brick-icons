@@ -35,6 +35,7 @@ const client = {
     baked: { a: 'sha-a' },
   }),
   corpusPart: () => new Promise(() => {}),
+  searchParts: () => Promise.resolve([]),
 } as any;
 
 const findCanvas = (container: HTMLElement) => waitFor(() => {
@@ -167,6 +168,38 @@ it('opens the lightbox on a double click with no card flash', async () => {
   expect(await waitFor(() => container.querySelector('.corpus-lightbox')))
     .toBeTruthy();
   expect(container.querySelector('.corpus-card')).toBeNull();
+});
+
+it('flies a search hit to the caret and raises its card', async () => {
+  const { container } = render(<CorpusWall client={client} />);
+  await findCanvas(container);
+  const input = screen.getByPlaceholderText(/part/i);
+  fireEvent.change(input, { target: { value: 'a' } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect(await screen.findByRole('dialog', { name: /Part a/ })).toBeTruthy();
+  const live = container.querySelector('[aria-live="polite"]');
+  await waitFor(() => expect(live!.textContent).toBe('Part a'));
+});
+
+it('says a searched part is hidden by the current filter, rather than doing nothing', async () => {
+  const { container } = render(<CorpusWall client={client} />);
+  await findCanvas(container);
+  fireEvent.change(screen.getByLabelText('Show'), { target: { value: 'unrendered' } });
+  await waitFor(() => screen.getByText('1 of 2'));
+  const input = screen.getByPlaceholderText(/part/i);
+  fireEvent.change(input, { target: { value: 'a' } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect(await screen.findByText('a is hidden by the current filter')).toBeTruthy();
+  expect(screen.queryByRole('dialog')).toBeNull();
+});
+
+it("says a searched part isn't drawn in this slot at all", async () => {
+  const { container } = render(<CorpusWall client={client} />);
+  await findCanvas(container);
+  const input = screen.getByPlaceholderText(/part/i);
+  fireEvent.change(input, { target: { value: 'zzz' } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect(await screen.findByText('zzz is not drawn in this slot')).toBeTruthy();
 });
 
 it('opens on the level the initial fit asks for, and holds it through a jiggle', async () => {

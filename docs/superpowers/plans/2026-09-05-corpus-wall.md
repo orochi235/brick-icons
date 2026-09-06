@@ -4053,6 +4053,68 @@ git commit -m "give the wall a caret, moved by the arrow keys"
 
 ---
 
+### Task 22d: A "base parts only" filter
+
+Most of the wall is not a part anyone is trying to render. Of 24,591 cells:
+13,083 are printed, 4,046 obsolete, 2,152 composites, 1,931 stickers, 878
+unofficial. **6,891 are base parts** — and 175 of the 200 census renders are
+among them, so the filter takes the wall from 0.8% drawn to 2.5% drawn.
+
+`FILTERS` in `lab/src/corpus/select.ts` already has `printed` and `obsolete`,
+which *show* only those. This adds `base`, which hides all of them at once.
+
+**The classification lives in `cells.py`, as one `base` boolean.** Do not
+re-derive it in TypeScript from id shapes: the id-shape knowledge belongs beside
+the seeding logic and the repo's own guidance on part numbering, not in two
+places that can disagree.
+
+`base` is true when a part is none of:
+
+- **printed** — `parts.printed`, already stored. Set from the description line,
+  which the repo's CLAUDE.md is emphatic about: `^\d{3,}p\d+$` catches only
+  3,254 of 13,081, a plain letter suffix is ambiguous, and 132 bare-numeric ids
+  are patterned. **Use the column; never pattern-match the id for this.**
+- **obsolete** — `parts.obsolete`, already stored, set from a `~` or `_` title.
+- **composite** — id matching `%c__`, 2,152 of them.
+- **sticker** — id matching `%d__`, 1,931.
+- **unofficial** — id matching `u9*`, 878.
+
+**Mould variants like `3068b` stay in.** A plain letter suffix is ambiguous per
+the same guidance, and excluding on it would drop real base parts.
+
+**Files:**
+- Modify: `brick_icons/lab/cells.py`, `tests/test_lab_cells.py`
+- Modify: `lab/src/corpus/types.ts`, `select.ts`, `select.test.ts`
+
+- [ ] **Step 1: `base` on the cell**
+
+Add the field, computed in SQL alongside the existing per-cell query rather than
+in a second pass. Tests: a plain part is base; a printed one is not; an obsolete
+one is not; `1234c01`, `1234d01` and `u9123` are not; `3068b` **is**.
+
+- [ ] **Step 2: The filter**
+
+Add `base` to `FILTERS` and `KEEP` in `select.ts`. Test that it keeps only base
+cells and that the existing filters are unchanged.
+
+- [ ] **Step 3: Check the real numbers**
+
+Restart the backend so the new `cells.py` is live, then select `base` and
+confirm the count reads **6,891 of 24,591**, and that the drawn cells drop to
+around 175 rather than 200. If either number is off, the classification
+disagrees with the database and that is worth reporting rather than adjusting
+the expectation.
+
+Screenshot the filtered wall and slop it — a wall at 2.5% coverage should look
+materially less empty than the full one.
+
+```bash
+git add brick_icons/lab/cells.py tests/test_lab_cells.py lab/src/corpus
+git commit -m "a base-parts filter, hiding printed, obsolete and variant parts"
+```
+
+---
+
 ### Task 22c: A params panel
 
 Every tuning constant in the wall is a literal in a source file, and the palette

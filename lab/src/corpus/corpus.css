@@ -29,6 +29,11 @@
   color: var(--wzl-fg-muted);
 }
 
+.corpus-search-notice {
+  font: 12px/1.4 ui-monospace, monospace;
+  color: var(--wzl-fg-muted);
+}
+
 .corpus-app {
   display: flex;
   flex-direction: column;

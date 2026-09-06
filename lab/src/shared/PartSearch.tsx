@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { LabClient, PartHit } from '@lab/api/client';
-import { setPendingPart } from '@lab/config/pending';
+import '@lab/shared/PartSearch.css';
 
 export interface PartSearchProps {
   client: LabClient;
@@ -27,7 +27,6 @@ export function PartSearch({ client, onOpen }: PartSearchProps) {
 
   function open(part: string) {
     if (!part.trim()) return;
-    setPendingPart(part);
     onOpen(part.trim());
     setQuery('');
     setHits([]);

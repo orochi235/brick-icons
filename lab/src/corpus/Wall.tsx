@@ -30,6 +30,8 @@ export interface WallProps {
   width: number;
   height: number;
   highlight: CellState | null;
+  explicitCaret: number | null;
+  onExplicitCaretChange: (index: number | null) => void;
   onPan: (next: View) => void;
   onPick: (cell: Cell, at: { x: number; y: number }) => void;
   onOpen: (cell: Cell) => void;
@@ -117,7 +119,8 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
  *  Canvas2D holds today's corpus. When weasel's mega view exists this body is
  *  what it replaces; nothing above it knows what an atlas page is. */
 export function Wall({ cells, rects, cam, sheet, manifest, loose, width, height,
-                       highlight, onPan, onPick, onOpen }: WallProps) {
+                       highlight, explicitCaret, onExplicitCaretChange,
+                       onPan, onPick, onOpen }: WallProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [dragging, setDragging] = useState(false);
   const decay = useDecayLoop();
@@ -155,9 +158,6 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, width, height,
   const loupe = useLoupe({ capability: loupeCapability, hostRef: ref, enabled: false });
   const lensRef = useRef<HTMLCanvasElement>(null);
 
-  // The caret an arrow key moves; null until one is set explicitly, at which
-  // point it stays wherever arrows or Enter leave it until Escape drops it.
-  const [explicitCaret, setExplicitCaret] = useState<number | null>(null);
   const visible = useMemo(
     () => visibleRange(rects, cam, { width, height }),
     [rects, cam, width, height]);
@@ -293,7 +293,7 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, width, height,
       if (caretIndex == null) return;
       const next = adjacent(rects, caretIndex, direction);
       if (next == null) return;
-      setExplicitCaret(next);
+      onExplicitCaretChange(next);
       const rect = rects[next];
       if (rect) onPan(panToReveal(rect, camRef.current, { width, height }));
       return;
@@ -307,7 +307,7 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, width, height,
       onPick(caretCell, { x: sx, y: sy });
       return;
     }
-    if (e.key === 'Escape') setExplicitCaret(null);
+    if (e.key === 'Escape') onExplicitCaretChange(null);
   };
 
   return (

@@ -19,3 +19,17 @@ export function panToReveal(rect: Rect, cam: View,
   else if (dy + dh > viewport.height) y = rect.y - (viewport.height - dh) / cam.scale.y;
   return { ...cam, x, y };
 }
+
+/** The camera that puts `rect`'s center at the viewport's -- what a search
+ *  hit flies to, as opposed to `panToReveal`'s minimum shift for a caret
+ *  move that is already mostly on screen. */
+export function centerReveal(rect: Rect, cam: View,
+                             viewport: { width: number; height: number }): View {
+  const cx = rect.x + rect.w / 2;
+  const cy = rect.y + rect.h / 2;
+  return {
+    ...cam,
+    x: cx - viewport.width / 2 / cam.scale.x,
+    y: cy - viewport.height / 2 / cam.scale.y,
+  };
+}

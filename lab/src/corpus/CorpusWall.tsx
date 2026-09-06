@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  clientToCanvas, fitViewToBounds, useCanvasSize, zoomAt, type View,
+  clientToCanvas, fitViewToBounds, useCanvasSize, useViewAnimation, zoomAt, type View,
 } from '@weasel-js/core';
 import { LabShell } from '@weasel-js/labkit';
 import type { LabClient } from '@lab/api/client';
@@ -12,6 +12,7 @@ import { levelFor, pickLevel } from '@lab/corpus/levels';
 import { Lightbox } from '@lab/corpus/Lightbox';
 import type { CellState } from '@lab/corpus/palette';
 import { PartCard } from '@lab/corpus/PartCard';
+import { centerReveal } from '@lab/corpus/reveal';
 import { applySelection, type Selection } from '@lab/corpus/select';
 import { useCells } from '@lab/corpus/useCells';
 import { useLooseThumbs } from '@lab/corpus/useLooseThumbs';
@@ -19,6 +20,7 @@ import { useSheets } from '@lab/corpus/useSheets';
 import type { Cell } from '@lab/corpus/types';
 import { visibleRange } from '@lab/corpus/visible';
 import { Wall } from '@lab/corpus/Wall';
+import { PartSearch } from '@lab/shared/PartSearch';
 import '@lab/corpus/corpus.css';
 
 const CELL = 32;
@@ -42,11 +44,15 @@ export function CorpusWall({ client }: { client: LabClient }) {
   const [picked, setPicked] = useState<string | null>(null);
   const [carded, setCarded] = useState<{ cell: Cell; at: { x: number; y: number } } | null>(null);
   const [highlight, setHighlight] = useState<CellState | null>(null);
+  const [explicitCaret, setExplicitCaret] = useState<number | null>(null);
+  const [searchNotice, setSearchNotice] = useState<string | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const { width, height } = useCanvasSize(box);
   const size = { width, height };
   const touched = useRef(false);
   const camInitialized = useRef(false);
+  const camRef = useRef<View | null>(null);
+  camRef.current = cam;
 
   // The most-populated slot is the one worth opening on; the route already
   // orders them that way.
@@ -77,6 +83,34 @@ export function CorpusWall({ client }: { client: LabClient }) {
     setCam(laid.bounds.w > 0 && size.width > 0 && size.height > 0
       ? clampWallView(next, laid.bounds, size, PITCH)
       : next);
+  };
+
+  // Glides rather than jumps -- reads the live camera through the ref, so an
+  // animation started mid-drag or mid-decay resumes from where the camera
+  // actually is rather than a captured value.
+  const camAnim = useViewAnimation({ get: () => camRef.current ?? IDENTITY_VIEW, set: updateCam });
+
+  // A search hit may not be on the wall at all: `/api/parts` runs over the
+  // whole LDraw index, so it can name a part this source never drew, or one
+  // the current filter is hiding. Either way, say so instead of flying to a
+  // cell that isn't there or doing nothing silently.
+  const openSearchedPart = (partId: string) => {
+    const index = shown.findIndex((c) => c.id === partId);
+    if (index < 0) {
+      const known = cells?.some((c) => c.id === partId) ?? false;
+      setSearchNotice(known
+        ? `${partId} is hidden by the current filter`
+        : `${partId} is not drawn in this slot`);
+      return;
+    }
+    setSearchNotice(null);
+    const rect = laid.rects[index];
+    if (rect && cam) {
+      touched.current = true;
+      camAnim.animate(centerReveal(rect, cam, size));
+    }
+    setExplicitCaret(index);
+    setCarded({ cell: shown[index]!, at: { x: size.width / 2, y: size.height / 2 } });
   };
 
   // Fits the wall's width into the viewport and lets it run off the bottom,
@@ -118,9 +152,15 @@ export function CorpusWall({ client }: { client: LabClient }) {
   return (
     <LabShell title="brick-icons corpus"
               header={cells && (
-                <FilterBar selection={selection} onChange={setSelection}
-                           shown={shown.length} total={cells.length}
-                           sources={sources} source={source} onSource={setSource} />
+                <>
+                  <FilterBar selection={selection} onChange={setSelection}
+                             shown={shown.length} total={cells.length}
+                             sources={sources} source={source} onSource={setSource} />
+                  <PartSearch client={client} onOpen={openSearchedPart} />
+                  {searchNotice && (
+                    <span className="corpus-search-notice" role="status">{searchNotice}</span>
+                  )}
+                </>
               )}>
       <div className="corpus-app">
         {/* `useCanvasSize` measures the stage once, on its own first mount --
@@ -138,6 +178,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
                   sheet={active?.image ?? null} manifest={active?.manifest ?? null}
                   loose={loose} width={size.width} height={size.height}
                   highlight={highlight}
+                  explicitCaret={explicitCaret} onExplicitCaretChange={setExplicitCaret}
                   onPan={(next) => { touched.current = true; updateCam(next); }}
                   onPick={(c, at) => setCarded({ cell: c, at })}
                   onOpen={(c) => { setCarded(null); setPicked(c.id); }} />
