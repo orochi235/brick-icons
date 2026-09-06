@@ -378,12 +378,18 @@ it('strips the kind badges in tag order, system before property', () => {
 });
 
 it('gives the property family one field and each system badge its own', () => {
-  const part = cell('a', 0, 'sha-a', { tags: ['duplo', 'electric', 'printed'] });
+  const part = cell('a', 0, 'sha-a', { tags: ['duplo', 'magnet', 'printed'] });
   const [system, ...properties] = stripFor(part, 200);
   expect(system!.field).not.toEqual(PROPERTY_FIELD);
   expect(properties.map((b) => b.field)).toEqual([PROPERTY_FIELD, PROPERTY_FIELD]);
   // Duplo is red on white, and every baked thumbnail sits on a white ground.
   expect(system!.stroke).toBeTruthy();
+});
+
+it('lets electric off the shared field, gold on black', () => {
+  const [bolt] = stripFor(cell('a', 0, 'sha-a', { tags: ['electric'] }), 200);
+  expect(bolt!.field).not.toEqual(PROPERTY_FIELD);
+  expect(bolt!.ink).toEqual('#daa520');
 });
 
 it('draws a letter at twice the height of a mark in the same disc', () => {
