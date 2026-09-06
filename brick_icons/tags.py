@@ -102,7 +102,11 @@ def tags_for(category: str | None, printed: bool, obsolete: bool,
     out = set()
     if plain in _CATEGORY_TAGS:
         out.add(_CATEGORY_TAGS[plain])
-    if printed:
+    # A sticker is not a printed part: the print is moulded into the brick and
+    # the sticker is a separate sheet item you apply. `partindex.printed`
+    # catches both -- its description test reads "pattern" or "sticker" -- so
+    # the category wins where it applies and the two badges never both show.
+    if printed and "sticker" not in out:
         out.add("printed")
     if obsolete:
         out.add("obsolete")

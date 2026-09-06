@@ -77,4 +77,12 @@ def test_an_uncatalogued_part_is_neither_popular_nor_obscure():
 
 
 def test_the_library_flags_carry_through():
-    assert tags.tags_for("Sticker", True, True) == ["sticker", "printed", "obsolete"]
+    assert tags.tags_for("Brick", True, True) == ["printed", "obsolete"]
+
+
+def test_a_sticker_is_not_a_printed_part():
+    # `partindex.printed` is true for both -- its description test reads
+    # "pattern" or "sticker" -- but a print is moulded into the brick and a
+    # sticker is a sheet item you apply. One badge each, never both.
+    assert tags.tags_for("Sticker", True, False) == ["sticker"]
+    assert tags.tags_for("Sticker", True, True) == ["sticker", "obsolete"]
