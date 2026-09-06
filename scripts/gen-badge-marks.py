@@ -138,12 +138,13 @@ def _svg_paths(cls):
 
 
 def _place(pts, scale, cx, bottom):
-    return [((x - cx) * scale, (y - bottom) * scale + 0.51 * GRID) for x, y in pts]
+    return [((x - cx) * scale, (y - bottom) * scale + 1.0 * GRID) for x, y in pts]
 
 
 def brush():
-    """The bristle head from `scripts/bristles.svg`, scaled to stand on the
-    ferrule: 1.5 units tall with its base where the old sweep put it. Sampled
+    """The bristle head from `scripts/bristles.svg`, filling the box: there
+    is no ferrule under it, so nothing to stand on and no reason to leave it
+    the room. Sampled
     rather than approximated -- the outline is the whole cue, and every
     parametric stand-in for it read as a bottle or a light bulb."""
     from shapely.geometry import Polygon
@@ -151,13 +152,13 @@ def brush():
     pts = _svg_paths("st2")[0]
     ys = [p[1] for p in pts]
     xs = [p[0] for p in pts]
-    scale = 1.5 * GRID / (max(ys) - min(ys))
+    scale = 2.0 * GRID / (max(ys) - min(ys))
     cx, bottom = (min(xs) + max(xs)) / 2, max(ys)
     placed = _place(pts, scale, cx, bottom)
     # A closing: dilate then erode, which fills concavities narrower than
     # twice its radius and leaves the convex outline alone. It takes the
     # involution out of the tip's hook without touching the belly.
-    shape = Polygon(placed).buffer(0).buffer(26.0).buffer(-26.0)
+    shape = Polygon(placed).buffer(0).buffer(48.0).buffer(-48.0)
     if shape.geom_type == "MultiPolygon":
         shape = max(shape.geoms, key=lambda g: g.area)
     ring = shape.exterior

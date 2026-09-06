@@ -29,12 +29,16 @@ function cutPaths(ctx: CanvasRenderingContext2D, groups: number[][], color: stri
   ctx.restore();
 }
 
-/** Fill a generated outline: flat x,y pairs, closed. */
-function fillPath(ctx: CanvasRenderingContext2D, pts: number[]) {
+/** Build a generated outline as the current path: flat x,y pairs, closed. */
+function tracePath(ctx: CanvasRenderingContext2D, pts: number[]) {
   ctx.beginPath();
   ctx.moveTo(pts[0]!, pts[1]!);
   for (let i = 2; i < pts.length; i += 2) ctx.lineTo(pts[i]!, pts[i + 1]!);
   ctx.closePath();
+}
+
+function fillPath(ctx: CanvasRenderingContext2D, pts: number[]) {
+  tracePath(ctx, pts);
   ctx.fill();
 }
 
@@ -121,26 +125,20 @@ export const drawMagnet: Mark = (ctx, _field, accent) => {
 // ferrule under them broken off by a band of the field, and paint cut out of
 // the tip so the field shows through. Printed parts are pad prints, so if this does not
 // hold at the strip's floor the fallback is a halftone dot cluster.
-export const drawBrush: Mark = (ctx, field, accent) => {
-  fillPath(ctx, BRUSH);
-  // The ferrule is metal whatever the bristles are, and it has to stay light
-  // against the field for the crimp cut into it to read.
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath();
-  ctx.moveTo(-0.44, 0.52);
-  ctx.lineTo(0.44, 0.52);
-  ctx.lineTo(0.36, 1);
-  ctx.lineTo(-0.36, 1);
-  ctx.closePath();
-  ctx.fill();
+export const drawBrush: Mark = (ctx, _field, accent) => {
   ctx.save();
-  ctx.fillStyle = field;
-  ctx.fillRect(-0.48, 0.46, 0.96, 0.09);
-  // Inside the ferrule, not across it: a band that runs to the edges cuts
-  // the ferrule in two instead of reading as a crimp.
-  ctx.fillRect(-0.3, 0.72, 0.6, 0.07);
+  ctx.rotate(-Math.PI / 6);
+  // The handle runs off the edge of the field rather than stopping inside
+  // it: a ferrule drawn whole is a stack of bands at the strip's floor, and
+  // `drawBadge` clips the mark to the disc, so this reads as a brush held
+  // into frame.
+  ctx.save();
+  ctx.fillStyle = '#c9c9d0';
+  ctx.fillRect(-0.22, 0.55, 0.44, 1.6);
   ctx.restore();
+  fillPath(ctx, BRUSH);
   cutPaths(ctx, BRUSH_CUT, accent);
+  ctx.restore();
 };
 
 // A minifig face: the disc is the head, so all the mark has to carry is the
@@ -297,6 +295,11 @@ export function drawBadge(ctx: CanvasRenderingContext2D, badge: CellBadge,
   const mark = badge.mark ? MARKS[badge.mark] : undefined;
   if (mark) {
     ctx.save();
+    // Clipped to its own disc, so a mark may run off the edge of the field
+    // without spilling onto the cell behind it.
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.clip();
     ctx.translate(cx, cy);
     const m = radius * 0.66 * (badge.scale ?? 1);
     ctx.scale(m, m);
