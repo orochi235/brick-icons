@@ -1,6 +1,7 @@
 # Corpus dashboard
 
-**Status: designed, not built.** Nothing in this document exists in the repo yet.
+**Status: built**, on branch `corpus-dashboard` (`65b08ac`), over the coverage
+move on `corpus-coverage-server-side` (`4aeb2d6`). Neither is merged.
 
 A third lab page, beside the wall and the badge sheet, that tallies what the
 corpus database holds: how far each slot's census got, how long the engines
@@ -33,7 +34,12 @@ opinion.
 ## The endpoint
 
 `GET /api/corpus/stats` takes the membership half of the wall's `Selection` —
-`filter`, `shown`, `excluded`, `badges` — and returns, for that working set:
+`kind`, `moved`, `out_of_scope`, `excluded`, `badges` — and returns, for that
+working set:
+
+The wall's `rendered` / `unrendered` / `errors` filters are not among them.
+Each is a statement about one slot, and the coverage chart already breaks
+every slot out that way.
 
 - `coverage`: per slot, a count per label, plus the set's own size
 - `speed`: per engine, `n`, total, median, p95, max `secs`, and a fixed-bin
@@ -96,3 +102,12 @@ Chart rendering is not tested beyond the data it is given.
 No comparison of two working sets side by side, no saved and named sets, no
 export. Presets and saved sets can sit on top of the URL state later without
 changing anything here.
+
+## What the build added that this did not ask for
+
+`vite.config.ts` reads `LAB_API` for its proxy target, so a worktree can run
+its own lab server on its own port without editing the committed config.
+`brick_icons/tags.py` gained `clean_category`, the display-cased sibling of
+`normalize_category` and the mirror of `cleanCategory` in `facts.ts` — the
+wall's category checklist names categories in that spelling on the way back
+in.

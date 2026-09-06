@@ -27,6 +27,9 @@ export interface Cell {
   extra_d99: number | null;
   secs: number | null;
   error: string | null;
+  /** How far this slot got: see `coverage_of` in `brick_icons/lab/cells.py`.
+   *  Absent from an API older than the field. */
+  coverage?: 'defect' | 'failed' | 'timeout' | 'drawn' | 'untried';
   open_defects: number;
   open_defects_elsewhere: number;
   /** Filed against this slot's engine and accepted rather than fixed. */

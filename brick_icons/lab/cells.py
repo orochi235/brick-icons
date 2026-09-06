@@ -92,6 +92,22 @@ def engine_for(source: str) -> str:
     return source.rsplit("-", 1)[-1] if source.startswith("census-") else source
 
 
+COVERAGE_ORDER = ("defect", "failed", "timeout", "drawn", "untried")
+
+
+def coverage_of(*, sha: str | None, error: str | None, open_defects: int) -> str:
+    """How far this slot got with a part, worst news first. Mirrored by
+    `Coverage` in the wall's `facts.ts`, which reads this rather than deriving
+    it a second time."""
+    if open_defects > 0:
+        return "defect"
+    if error and error != "TimeoutError":
+        return "failed"
+    if error:
+        return "timeout"
+    return "drawn" if sha else "untried"
+
+
 def cells(conn: sqlite3.Connection, source: str = "census-naive",
           since: str | None = None) -> dict:
     """Every cell, or only those whose render landed after `since`.
@@ -171,6 +187,10 @@ def cells(conn: sqlite3.Connection, source: str = "census-naive",
             "extra_d99": measure["extra_d99"] if measure else None,
             "secs": measure["secs"] if measure else None,
             "error": measure["error"] if measure else None,
+            "coverage": coverage_of(
+                sha=render["sha256"] if render else None,
+                error=measure["error"] if measure else None,
+                open_defects=bucket["here"]),
             "open_defects": bucket["here"],
             "open_defects_elsewhere": bucket["elsewhere"],
             "accepted_defects": bucket["accepted"],

@@ -58,6 +58,18 @@ def normalize_category(category: str | None) -> str:
     return category.lstrip("~=_|").strip().lower()
 
 
+NO_CATEGORY = "-"
+
+
+def clean_category(category: str | None) -> str:
+    """The marker stripped but the case kept -- the name a reader sees, and
+    the name the wall's category list is written in. Mirrored by
+    `cleanCategory` in lab/src/corpus/facts.ts, which names the same
+    categories in the same words on the way back in."""
+    plain = (category or "").lstrip("~=_|").strip()
+    return plain or NO_CATEGORY
+
+
 def is_weird(title: str | None) -> bool:
     """Whether a description opens by naming a sideline theme."""
     if not title:

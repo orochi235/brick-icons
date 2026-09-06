@@ -59,16 +59,15 @@ describe('rollUp', () => {
   });
 });
 
+// The ranking itself is `coverage_of` in brick_icons/lab/cells.py, and
+// tests/test_lab_cells.py owns its cases.
 describe('coverageOf', () => {
-  it('ranks a defect above a failure and a failure above a timeout', () => {
-    expect(coverageOf(cell({ open_defects: 1, error: 'TimeoutError' }))).toBe('defect');
-    expect(coverageOf(cell({ error: 'GEOSException' }))).toBe('failed');
-    expect(coverageOf(cell({ error: 'TimeoutError' }))).toBe('timeout');
+  it('takes the label the server sent', () => {
+    expect(coverageOf(cell({ coverage: 'failed', sha: 'abc' }))).toBe('failed');
   });
 
-  it('separates a drawn cell from one never attempted', () => {
-    expect(coverageOf(cell({ sha: 'abc' }))).toBe('drawn');
-    expect(coverageOf(cell())).toBe('untried');
+  it('calls a cell from an API too old to send one untried', () => {
+    expect(coverageOf(cell({ sha: 'abc' }))).toBe('untried');
   });
 });
 

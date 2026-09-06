@@ -1,0 +1,196 @@
+/* The coverage status palette. Three saturated states the wall already marks
+ * problems with, and two deliberately neutral ones for the bulk. */
+.stats-page {
+  --stats-defect: #daa520;
+  --stats-failed: #e03030;
+  --stats-timeout: #30b0d0;
+  --stats-drawn: #d8d8dc;
+  --stats-untried: #6a6a72;
+  /* Deliberately none of the status colors above: a histogram bar is a count,
+   * not a state, and painting it cyan would say "timed out" to anyone who
+   * just read the coverage legend. */
+  --stats-bin: #7f8ca6;
+  padding: 1rem 1.5rem 4rem;
+  max-width: 72rem;
+  margin: 0 auto;
+  color: var(--wzl-fg);
+}
+
+.stats-head {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.stats-head h1 { margin: 0; font-size: 1.25rem; }
+.stats-asof { margin: 0; color: var(--wzl-fg-muted); flex: 1; }
+.stats-muted { color: var(--wzl-fg-muted); }
+.stats-empty { color: var(--wzl-fg-muted); }
+.stats-error { color: var(--wzl-danger); }
+
+.stats-page h2 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--wzl-fg-muted);
+  margin: 2rem 0 0.75rem;
+}
+
+.stats-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin: 1rem 0 0;
+  padding: 0.75rem;
+  border: 1px solid var(--wzl-border, #333);
+  border-radius: 4px;
+}
+
+.stats-controls label { display: flex; align-items: center; gap: 0.35rem; }
+
+.stats-categories {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.stats-categories legend { color: var(--wzl-fg-muted); padding: 0 0.5rem 0 0; }
+
+/* -- coverage bars ------------------------------------------------------ */
+
+.stats-legend {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.75rem;
+  color: var(--wzl-fg-muted);
+  font-size: 0.85rem;
+}
+
+.stats-legend li { display: flex; align-items: center; gap: 0.35rem; }
+
+.stats-swatch {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.stats-bars { display: flex; flex-direction: column; gap: 0.5rem; }
+
+.stats-bar-row {
+  display: grid;
+  grid-template-columns: 11rem 1fr 9rem;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.stats-bar-name { font-variant-numeric: tabular-nums; }
+.stats-bar-value { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* The 2px gap is the surface showing through, not a stroke: a one-part
+ * segment stays a visible sliver instead of vanishing under a neighbor's
+ * border. */
+.stats-bar {
+  display: flex;
+  gap: 2px;
+  height: 1.5rem;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--wzl-bg-sunken, #111);
+}
+
+.stats-seg { display: block; height: 100%; min-width: 2px; }
+.stats-seg[data-label='defect'] { background: var(--stats-defect); }
+.stats-seg[data-label='failed'] { background: var(--stats-failed); }
+.stats-seg[data-label='timeout'] { background: var(--stats-timeout); }
+.stats-seg[data-label='drawn'] { background: var(--stats-drawn); }
+.stats-seg[data-label='untried'] { background: var(--stats-untried); }
+a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg); }
+
+.stats-swatch[data-label='defect'] { background: var(--stats-defect); }
+.stats-swatch[data-label='failed'] { background: var(--stats-failed); }
+.stats-swatch[data-label='timeout'] { background: var(--stats-timeout); }
+.stats-swatch[data-label='drawn'] { background: var(--stats-drawn); }
+.stats-swatch[data-label='untried'] { background: var(--stats-untried); }
+
+/* -- tiles -------------------------------------------------------------- */
+
+.stats-tiles {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 2rem;
+}
+
+.stats-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--wzl-border, #333);
+  border-radius: 4px;
+  min-width: 11rem;
+}
+
+.stats-tile strong { font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+.stats-tile-label { color: var(--wzl-fg-muted); font-size: 0.85rem; }
+
+/* -- histograms --------------------------------------------------------- */
+
+.stats-multiples { display: flex; gap: 2rem; flex-wrap: wrap; }
+
+.stats-histogram { margin: 0; flex: 1 1 20rem; }
+.stats-histogram figcaption { margin-bottom: 0.5rem; font-size: 0.9rem; }
+
+.stats-bins {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 8rem;
+}
+
+.stats-bin {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: 100%;
+  position: relative;
+}
+
+.stats-bin-fill {
+  display: block;
+  background: var(--stats-bin);
+  border-radius: 3px 3px 0 0;
+  min-height: 1px;
+}
+
+.stats-bin-label {
+  font-size: 0.65rem;
+  color: var(--wzl-fg-muted);
+  text-align: center;
+  padding-top: 0.25rem;
+  white-space: nowrap;
+}
+
+/* -- tables ------------------------------------------------------------- */
+
+.stats-page table { border-collapse: collapse; width: 100%; }
+
+.stats-page th, .stats-page td {
+  text-align: left;
+  padding: 0.3rem 0.75rem 0.3rem 0;
+  border-bottom: 1px solid var(--wzl-border, #2a2a2a);
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-page th { color: var(--wzl-fg-muted); font-weight: 600; }
+.stats-page tr[data-open='true'] td { color: var(--stats-defect); }

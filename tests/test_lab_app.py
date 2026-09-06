@@ -399,6 +399,24 @@ def test_summary_route_counts_the_corpus(tmp_path):
     assert body["parts"] == 1
 
 
+def test_stats_route_tallies_the_default_working_set(tmp_path):
+    body = _corpus_client(tmp_path).get("/api/corpus/stats").json()
+    assert body["set"]["size"] == 1
+    assert body["set"]["kind"] == "all"
+
+
+def test_stats_route_carries_the_working_set_through(tmp_path):
+    body = _corpus_client(tmp_path).get(
+        "/api/corpus/stats", params={"kind": "printed"}).json()
+    assert body["set"]["size"] == 0
+    assert body["set"]["kind"] == "printed"
+
+
+def test_stats_route_refuses_a_kind_it_does_not_have(tmp_path):
+    assert _corpus_client(tmp_path).get(
+        "/api/corpus/stats", params={"kind": "rendered"}).status_code == 422
+
+
 def test_sources_route_lists_the_slots_that_have_renders(tmp_path):
     body = _corpus_client(tmp_path).get("/api/corpus/sources").json()
     assert body["sources"] == []
