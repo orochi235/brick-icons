@@ -214,3 +214,20 @@ def test_a_bake_from_before_grounds_were_recorded_stays_fresh(tmp_path):
     thumbs.bake_part("3001", svg, out, sha="abc")
     (out / thumbs.GROUNDS).unlink()
     assert thumbs.bake_part("3001", svg, out, sha="abc") == []
+
+
+def test_a_truncated_sidecar_is_a_cache_miss_not_a_crash(tmp_path):
+    """Two bakes overlapping leaves a reader an empty baked.json, and every
+    later bake died on it -- the sheets stop updating while the database
+    keeps saying they are current."""
+    (tmp_path / thumbs.BAKED).write_text("")
+    (tmp_path / thumbs.GROUNDS).write_text("{oh no")
+    assert thumbs.baked_shas(tmp_path) == {}
+    assert thumbs.baked_grounds(tmp_path) == {}
+
+
+def test_a_sidecar_is_written_whole_or_not_at_all(tmp_path):
+    thumbs._write_json(tmp_path / "x.json", {"a": "1"})
+    assert json.loads((tmp_path / "x.json").read_text()) == {"a": "1"}
+    # nothing left behind to be mistaken for a slot's own file
+    assert not list(tmp_path.glob("*.tmp"))

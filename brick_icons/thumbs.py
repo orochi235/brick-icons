@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -68,9 +69,28 @@ def geometry(count: int, level: int) -> Geometry:
     return Geometry(count=count, level=level, cols=cols, rows=rows, gutter=gutter)
 
 
+def _read_json(path: Path) -> dict:
+    """A sidecar that cannot be read is a cache miss, not a crash: every value
+    in it is recoverable by baking the part again."""
+    if not path.is_file():
+        return {}
+    try:
+        return json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        return {}
+
+
+def _write_json(path: Path, data: dict) -> None:
+    """Written whole or not at all. `write_text` truncates first, so a reader
+    that arrives mid-write gets an empty file and every later bake dies on it."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(f".{os.getpid()}.tmp")
+    tmp.write_text(json.dumps(data, sort_keys=True))
+    os.replace(tmp, path)
+
+
 def baked_shas(out: Path | str) -> dict[str, str]:
-    path = Path(out) / BAKED
-    return json.loads(path.read_text()) if path.is_file() else {}
+    return _read_json(Path(out) / BAKED)
 
 
 def baked_grounds(out: Path | str) -> dict[str, list[int]]:
@@ -80,13 +100,11 @@ def baked_grounds(out: Path | str) -> dict[str, list[int]]:
     the wall compares those values to a render sha -- anything else in there
     would read as a stale cell.
     """
-    path = Path(out) / GROUNDS
-    return json.loads(path.read_text()) if path.is_file() else {}
+    return _read_json(Path(out) / GROUNDS)
 
 
 def _write_baked(out: Path, shas: dict[str, str]) -> None:
-    out.mkdir(parents=True, exist_ok=True)
-    (out / BAKED).write_text(json.dumps(shas, sort_keys=True))
+    _write_json(out / BAKED, shas)
 
 
 def bake_part(part_id: str, svg: Path | str, out: Path | str,
@@ -127,8 +145,7 @@ def bake_part(part_id: str, svg: Path | str, out: Path | str,
     finally:
         wide.unlink(missing_ok=True)
     _write_baked(out, {**shas, part_id: sha})
-    (out / GROUNDS).write_text(
-        json.dumps({**grounds, part_id: list(ground)}, sort_keys=True))
+    _write_json(out / GROUNDS, {**grounds, part_id: list(ground)})
     return list(LEVELS)
 
 
