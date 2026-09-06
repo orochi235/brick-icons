@@ -6,7 +6,7 @@ import type { Cell } from '@lab/corpus/types';
 const c = (over: Partial<Cell>): Cell => ({
   id: 'x', index: 0, title: '', category: null, printed: false,
   obsolete: false, base: false, out_of_scope: false, moved: false,
-  year_from: null, year_to: null, sets: null, tags: [],
+  year_from: null, year_to: null, sets: null, colors: null, tags: [],
   status: 'unreviewed', sha: null, made_at: null, extra_d99: null, secs: null,
   error: null, open_defects: 0, open_defects_elsewhere: 0, accepted_defects: 0,
   error_elsewhere: false, ...over,
@@ -54,7 +54,24 @@ describe('tintFor', () => {
       .toBe(DEFAULT_PALETTE.defect);
   });
 
+  it('gives a part with no colour count the unmatched style', () => {
+    expect(tintFor(c({ sets: 3 }), 'colors', DEFAULT_PALETTE))
+      .toBe(DEFAULT_PALETTE.unmatched);
+  });
+
+  it('separates a one-colour part from the most colourful one', () => {
+    expect(tintFor(c({ colors: 1 }), 'colors', DEFAULT_PALETTE).fill)
+      .not.toBe(tintFor(c({ colors: 81 }), 'colors', DEFAULT_PALETTE).fill);
+  });
+
+  it('lifts the median colour count off the floor, which a linear ramp would not', () => {
+    // The median part is in 4 colours; log puts that a third of the way up.
+    const median = tintFor(c({ colors: 4 }), 'colors', DEFAULT_PALETTE).fill;
+    expect(median).not.toBe(ramp(0));
+    expect(median).toBe(ramp(Math.log10(4) / Math.log10(81)));
+  });
+
   it('names every mode it supports', () => {
-    expect(TINT_MODES).toEqual(['status', 'year', 'sets']);
+    expect(TINT_MODES).toEqual(['status', 'year', 'sets', 'colors']);
   });
 });

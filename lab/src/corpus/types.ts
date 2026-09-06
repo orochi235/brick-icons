@@ -13,6 +13,8 @@ export interface Cell {
   year_from: number | null;
   year_to: number | null;
   sets: number | null;
+  /** How many distinct colors the part was made in. */
+  colors: number | null;
   tags: string[];
   /** The part that replaced this one, where Rebrickable records one. The
    *  updated badge links to it. Optional for the same reason `tags` is: the

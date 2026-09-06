@@ -19,7 +19,8 @@ def test_connect_is_idempotent(tmp_path):
     db.connect(path).close()
     conn = db.connect(path)
     assert conn.execute(
-        "SELECT value FROM meta WHERE key='schema_version'").fetchone()[0] == "2"
+        "SELECT value FROM meta WHERE key='schema_version'").fetchone()[0] == \
+        str(db.SCHEMA_VERSION)
 
 
 def test_a_newer_database_is_refused(tmp_path):
@@ -554,8 +555,8 @@ def test_one_part_in_two_trees_is_counted_not_swallowed(tmp_path):
 def test_a_rebuild_keeps_the_part_years(tmp_path):
     library = _library(tmp_path)
     years = tmp_path / "part-years.csv"
-    years.write_text("part_id,year_from,year_to,sets,matched\n"
-                     "3001,1979,2026,4252,exact\n")
+    years.write_text("part_id,year_from,year_to,sets,matched,colors\n"
+                     "3001,1979,2026,4252,exact,57\n")
     out = tmp_path / "corpus.db"
     counts = db.rebuild(out, ldraw_dir=library, root=tmp_path,
                         census_dirs=[], years_path=years)
@@ -565,4 +566,5 @@ def test_a_rebuild_keeps_the_part_years(tmp_path):
         row = conn.execute("SELECT * FROM part_years WHERE part_id = '3001'").fetchone()
     finally:
         conn.close()
-    assert (row["year_from"], row["year_to"], row["sets"]) == (1979, 2026, 4252)
+    assert (row["year_from"], row["year_to"], row["sets"], row["colors"]) == \
+        (1979, 2026, 4252, 57)

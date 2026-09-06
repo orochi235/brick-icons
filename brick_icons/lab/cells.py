@@ -120,7 +120,7 @@ def cells(conn: sqlite3.Connection, source: str = "census-naive",
 
     defects = _open_defects(conn, wanted, engine)
     years = {r["part_id"]: r for r in conn.execute(
-        "SELECT part_id, year_from, year_to, sets FROM part_years")}
+        "SELECT part_id, year_from, year_to, sets, colors FROM part_years")}
     successors = {r["part_id"]: r["successor"] for r in conn.execute(
         "SELECT part_id, successor FROM part_successors")}
 
@@ -156,6 +156,7 @@ def cells(conn: sqlite3.Connection, source: str = "census-naive",
             "year_from": year["year_from"] if year else None,
             "year_to": year["year_to"] if year else None,
             "sets": year["sets"] if year else None,
+            "colors": year["colors"] if year else None,
             # The part that replaced this one, where one is known: the wall's
             # updated badge links to it.
             "successor": successor,

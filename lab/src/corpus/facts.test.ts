@@ -8,7 +8,7 @@ import type { Cell } from '@lab/corpus/types';
 const cell = (over: Partial<Cell> = {}): Cell => ({
   id: '3001', index: 0, title: 'Brick', category: 'Brick',
   printed: false, obsolete: false, base: true, out_of_scope: false, moved: false,
-  year_from: null, year_to: null, sets: null, tags: [],
+  year_from: null, year_to: null, sets: null, colors: null, tags: [],
   status: 'unreviewed', sha: null, made_at: null, extra_d99: null, secs: null,
   error: null, open_defects: 0, open_defects_elsewhere: 0, accepted_defects: 0,
   error_elsewhere: false,

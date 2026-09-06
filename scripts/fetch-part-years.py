@@ -8,7 +8,8 @@ Rebrickable publishes no per-part years; what it publishes is which set holds
 which part, and what year each set is from. A part's first and last year are
 the first and last year of the sets it appears in, and how many sets that is
 says how common the part is -- the three numbers the wall's `retired`,
-`popular` and `obscure` tags are made of.
+`popular` and `obscure` tags are made of. Each of those rows also names a
+color, so the same walk counts how many colors a part was made in.
 
 The dumps are public and need no key. They are cached under `out/rebrickable`
 and reused; pass `--refresh` to pull them again.
@@ -74,8 +75,8 @@ def rows(path: Path):
         yield from csv.DictReader(io.TextIOWrapper(fh, encoding="utf-8"))
 
 
-def part_facts(cache: Path) -> dict[str, tuple[int, int, int]]:
-    """(first year, last year, set count) per Rebrickable part number."""
+def part_facts(cache: Path) -> dict[str, tuple[int, int, int, int]]:
+    """(first year, last year, set count, color count) per Rebrickable part."""
     set_year = {r["set_num"]: int(r["year"]) for r in rows(cache / "sets.csv.gz")
                 if r["year"]}
     print(f"  {len(set_year):,} sets", flush=True)
@@ -86,22 +87,25 @@ def part_facts(cache: Path) -> dict[str, tuple[int, int, int]]:
     print(f"  {len(inventory_set):,} first-version inventories", flush=True)
 
     sets_with: dict[str, set[str]] = defaultdict(set)
+    colors_of: dict[str, set[str]] = defaultdict(set)
     for i, r in enumerate(rows(cache / "inventory_parts.csv.gz"), 1):
         if i % 500_000 == 0:
             print(f"  inventory_parts: {i:,} rows", flush=True)
         set_num = inventory_set.get(r["inventory_id"])
         if set_num is not None and set_num in set_year:
             sets_with[r["part_num"]].add(set_num)
+            colors_of[r["part_num"]].add(r["color_id"])
     print(f"  {len(sets_with):,} parts appear in a set", flush=True)
 
     out = {}
     for part_num, in_sets in sets_with.items():
         years = [set_year[s] for s in in_sets]
-        out[part_num] = (min(years), max(years), len(in_sets))
+        out[part_num] = (min(years), max(years), len(in_sets),
+                         len(colors_of[part_num]))
     return out
 
 
-def match(part_id: str, facts: dict[str, tuple[int, int, int]]) -> tuple[str, str] | None:
+def match(part_id: str, facts: dict[str, tuple[int, int, int, int]]) -> tuple[str, str] | None:
     """The Rebrickable number to read `part_id`'s years off, and how it matched."""
     if part_id in facts:
         return part_id, "exact"
@@ -111,7 +115,7 @@ def match(part_id: str, facts: dict[str, tuple[int, int, int]]) -> tuple[str, st
     return None
 
 
-def successors(cache: Path, facts: dict[str, tuple[int, int, int]],
+def successors(cache: Path, facts: dict[str, tuple[int, int, int, int]],
                ids: set[str]) -> dict[str, tuple[str, str]]:
     """The part that replaced each one, where Rebrickable records a partner
     still being made after it stopped.
@@ -135,7 +139,7 @@ def successors(cache: Path, facts: dict[str, tuple[int, int, int]],
     for part_id in sorted(ids):
         if part_id not in facts:
             continue
-        _, last, _ = facts[part_id]
+        _, last, _, _ = facts[part_id]
         for rel in SUCCESSOR_RELS:
             best = None
             for other in adjacent[part_id][rel]:
@@ -183,14 +187,15 @@ def main() -> int:
         if hit is None:
             continue
         part_num, how = hit
-        first, last, sets = facts[part_num]
-        matched.append((part_id, first, last, sets, how))
+        first, last, sets, colors = facts[part_num]
+        matched.append((part_id, first, last, sets, how, colors))
 
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w", newline="") as fh:
         w = csv.writer(fh)
-        w.writerow(["part_id", "year_from", "year_to", "sets", "matched"])
+        w.writerow(["part_id", "year_from", "year_to", "sets", "matched",
+                    "colors"])
         w.writerows(matched)
     exact = sum(1 for m in matched if m[4] == "exact")
     print(f"wrote {out}: {len(matched):,} of {len(ids):,} parts "

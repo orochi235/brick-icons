@@ -19,7 +19,7 @@ from brick_icons.lab import cache, partindex
 from brick_icons.lab import defects as defects_toml
 
 DEFAULT_PATH = Path("corpus.db")
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 PART_STATUSES = ("unreviewed", "good", "suspect", "broken", "wontfix")
 # Part categories the project is not trying to draw yet. A rule over the
 # library's own category, not a list of ids: it covers parts nobody has seen
@@ -111,6 +111,7 @@ CREATE TABLE IF NOT EXISTS part_years (
   year_from INTEGER,
   year_to INTEGER,
   sets INTEGER NOT NULL DEFAULT 0,
+  colors INTEGER NOT NULL DEFAULT 0,
   matched TEXT NOT NULL
 );
 
@@ -368,11 +369,11 @@ def import_part_years(conn: sqlite3.Connection, path: Path | str) -> int:
     """Load `scripts/fetch-part-years.py`'s CSV into `part_years`."""
     with Path(path).open(newline="") as fh:
         rows = [(r["part_id"], int(r["year_from"]), int(r["year_to"]),
-                 int(r["sets"]), r["matched"])
+                 int(r["sets"]), int(r["colors"]), r["matched"])
                 for r in csv.DictReader(fh)]
     conn.executemany(
         "INSERT OR REPLACE INTO part_years (part_id, year_from, year_to, sets, "
-        "matched) VALUES (?, ?, ?, ?, ?)", rows)
+        "colors, matched) VALUES (?, ?, ?, ?, ?, ?)", rows)
     conn.commit()
     return len(rows)
 
