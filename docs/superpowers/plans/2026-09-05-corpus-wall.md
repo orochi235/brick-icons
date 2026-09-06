@@ -3908,6 +3908,71 @@ git commit -m "a floating legend that dims the wall around what it names"
 
 ---
 
+### Task 20d: Spread the status hues around the wheel
+
+The three signal colours sit inside a 38-degree wedge: `#e03030` is hue 0,
+`#c86a42` is 18, `#e8a020` is 38. Red, orange and amber are the hardest triple
+to tell apart at five pixels, and the one that collapses outright under the
+common colour-vision deficiencies.
+
+**The structure is right and stays:** hue means *what kind of problem*, border
+weight means *here or in another slot*, and lightness stays reserved for "this
+part has a render". Only the hue assignments change.
+
+There are three signal hues to place. Spread them:
+
+| state | border | hue |
+|---|---|---|
+| cannot be drawn here | `#e03030` | 0 — red keeps the hard-failure convention |
+| timed out here | `#30b0d0` | 193 — cool reads as waiting, not broken |
+| open defect here | `#c050e0` | 285 — distinct from both |
+
+Fills stay dark and near-neutral, tinted toward their border's hue just enough to
+group: roughly `#4a2626`, `#26383f`, `#3a2a42`. Unknown stays `#3a3a3f` with no
+border.
+
+**This moves the defect colour off the ochre that was originally asked for.**
+Ochre sat 38 degrees from red, and those two states — eight hard failures and
+eleven filed defects — are precisely the pair you most need to tell apart once
+you have found them. Say so in the report; it is a deliberate trade and worth
+being overruled on.
+
+**Files:** `lab/src/corpus/palette.ts`, `palette.test.ts`, and the CSS custom
+properties declaring them.
+
+- [ ] **Step 1: Change the values, nothing else**
+
+The palette pipeline already exists — `readPalette` resolves each state from a
+CSS custom property with a fallback. This changes those values in one place.
+
+Check `PartCard.css` and `Legend.css` for any swatch or accent that hardcodes one
+of the old hues rather than reading the property.
+
+- [ ] **Step 2: Look at it, and check the separation properly**
+
+Screenshot zoomed fully out and answer from the image:
+
+1. Are the ~1,260 timeouts, the eight failures and the eleven defects three
+   visibly different populations, or do any two still merge?
+2. Does the cyan read as a problem state rather than as decoration? Cool colours
+   can look informational rather than wrong.
+3. Do the thin "elsewhere" borders still read as quieter than the thick ones now
+   that the hues carry more of the load?
+
+Then check it under a colour-vision simulation. Chrome DevTools has
+`Rendering → Emulate vision deficiencies` — run protanopia and deuteranopia and
+confirm the three stay distinguishable. That is the failure this task exists to
+fix, so verifying it by eye in normal vision only would miss the point.
+
+Screenshot normal and one simulated deficiency, and slop both.
+
+```bash
+git add lab/src/corpus
+git commit -m "spread the status hues so red, amber and orange stop colliding"
+```
+
+---
+
 ### Task 22: The caret
 
 The wall is mouse-only. Give it a caret: an implied focus when there is no
