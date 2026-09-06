@@ -44,6 +44,7 @@ from scipy import ndimage
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from brick_icons import cli, hlr
+from brick_icons import build
 from brick_icons.batch import Runner
 
 
@@ -154,11 +155,12 @@ def _bare(part: str, work, args) -> dict:
         r = work(part)
     except BaseException as exc:  # a part must not end the run
         r = {"part": part, "engine": args.engine, "angle": args.angle,
-             "style": args.shade_style,
+             "style": args.shade_style, "build": build(),
              "strokes": [args.line_width, args.silhouette_width],
              "error": type(exc).__name__, "detail": str(exc)[:300],
              "traceback": traceback.format_exc()[-1200:]}
     r["secs"] = round(time.time() - t0, 1)
+    r.setdefault("build", build())   # Runner's `extra` merge, which this path skips
     return r
 
 
@@ -192,8 +194,12 @@ def main() -> int:
                          "in-flight as ProcessDied and exit, rendering nothing")
     args = ap.parse_args()
 
+    # `build` names the engine revision that drew the row. A census tree is
+    # merged from many passes on several machines, and the ingest can only
+    # see its own checkout, so provenance has to be written where the render
+    # happens or it is gone.
     extra = {"engine": args.engine, "angle": args.angle,
-             "style": args.shade_style,
+             "style": args.shade_style, "build": build(),
              "strokes": [args.line_width, args.silhouette_width]}
     # A part the watchdog kills leaves .inflight behind with no row, and the
     # burial only happens on the way into a re-run of that same batch. Where

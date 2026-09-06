@@ -1,4 +1,5 @@
 import json
+import re
 import sqlite3
 
 import pytest
@@ -403,6 +404,44 @@ def test_a_measurement_records_which_facet_it_measured(tmp_path):
     got = {r["source"]: r["extra_d99"] for r in
            conn.execute("SELECT source, extra_d99 FROM measurements")}
     assert got == {"census-naive": 0.45, "census-white-naive": 1.01}
+
+
+def test_a_measurement_keeps_the_build_that_drew_it(tmp_path):
+    """Two passes over the same part at different engine revisions land in one
+    tree, and the ingest sees only its own checkout -- so without the row's
+    own stamp both come back attributed to whoever rebuilt the database."""
+    lib = _library(tmp_path)
+    for dirname, build in (("census", "801.aaaaaaa"), ("census-white-naive", "808.b86e88c")):
+        d = tmp_path / "out" / dirname
+        d.mkdir(parents=True)
+        (d / "naive-r0.jsonl").write_text(json.dumps(
+            {**MEASURED, "engine": "naive", "build": build}) + "\n")
+
+    db.rebuild(tmp_path / "corpus.db", lib, root=tmp_path,
+               census_dirs=[tmp_path / "out" / "census",
+                            tmp_path / "out" / "census-white-naive"],
+               commit_sha="ffffff0")
+    conn = db.connect(tmp_path / "corpus.db")
+    got = {r["source"]: r["build"] for r in
+           conn.execute("SELECT source, build FROM measurements")}
+    assert got == {"census-naive": "801.aaaaaaa",
+                   "census-white-naive": "808.b86e88c"}
+
+
+def test_a_row_written_before_builds_were_stamped_still_ingests(tmp_path):
+    lib = _library(tmp_path)
+    d = tmp_path / "out" / "census"
+    d.mkdir(parents=True)
+    (d / "naive-r0.jsonl").write_text(json.dumps({**MEASURED, "engine": "naive"}) + "\n")
+    db.rebuild(tmp_path / "corpus.db", lib, root=tmp_path, census_dirs=[d])
+    conn = db.connect(tmp_path / "corpus.db")
+    assert conn.execute("SELECT build FROM measurements").fetchone()["build"] is None
+
+
+def test_the_build_names_a_revision_and_flags_an_uncommitted_engine():
+    import brick_icons
+    b = brick_icons.build()
+    assert b == "unknown" or re.fullmatch(r"\d+\.[0-9a-f]{7,}\+?", b), b
 
 
 def test_census_source_repeats_no_engine_it_is_already_named_with():

@@ -19,7 +19,7 @@ from brick_icons.lab import cache, partindex
 from brick_icons.lab import defects as defects_toml
 
 DEFAULT_PATH = Path("corpus.db")
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 PART_STATUSES = ("unreviewed", "good", "suspect", "broken", "wontfix")
 # Part categories the project is not trying to draw yet. A rule over the
 # library's own category, not a list of ids: it covers parts nobody has seen
@@ -75,6 +75,10 @@ CREATE TABLE IF NOT EXISTS measurements (
   -- it: two facets of one engine are both "naive", so a query picking the
   -- newest run per engine hands a slot the other facet's measurements.
   source TEXT,
+  -- The engine revision that drew this row, stamped by the machine that
+  -- rendered it. runs.commit_sha is the INGESTING checkout and says nothing
+  -- about the render, so a tree merged across passes needs this per row.
+  build TEXT,
   missing_px INTEGER, extra_px INTEGER,
   missing_comps INTEGER,
   extra_d99 REAL, extra_d100 REAL,
@@ -209,15 +213,15 @@ def import_census_jsonl(conn: sqlite3.Connection, run_id: int,
         r = json.loads(line)
         dist = r.get("extra_dist_px") or {}
         source = census_source(census_dir, r["engine"]) if census_dir else None
-        rows.append((run_id, r["part"], r["engine"], source,
+        rows.append((run_id, r["part"], r["engine"], source, r.get("build"),
                      r.get("missing_px"), r.get("extra_px"),
                      len(r["missing"]) if "missing" in r else None,
                      dist.get("99"), dist.get("100"),
                      r.get("secs"), r.get("error"), r.get("detail")))
     conn.executemany(
         "INSERT OR REPLACE INTO measurements (run_id, part_id, engine, source, "
-        "missing_px, extra_px, missing_comps, extra_d99, extra_d100, secs, "
-        "error, detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+        "build, missing_px, extra_px, missing_comps, extra_d99, extra_d100, "
+        "secs, error, detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
     conn.commit()
     return len(rows)
 
