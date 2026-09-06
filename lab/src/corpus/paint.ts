@@ -101,7 +101,9 @@ export const BADGE_MIN_PX = 56;
 export const LABEL_MIN_PX = 110;
 
 export interface CellBadge {
-  text: string;
+  /** A letter, or a shape where a letter would need explaining. */
+  text?: string;
+  mark?: 'star';
   corner: 'tl' | 'br';
   field: string;
   ink: string;
@@ -112,7 +114,7 @@ export interface CellBadge {
  *  drawing should be read, one corner each so they never collide. */
 export const BADGES: Record<string, CellBadge> = {
   retired: { text: 'R', corner: 'br', field: '#6b6b72', ink: '#ffffff' },
-  popular: { text: 'P', corner: 'tl', field: '#7c5cff', ink: '#ffffff' },
+  popular: { mark: 'star', corner: 'tl', field: '#daa520', ink: '#ffffff' },
 };
 
 export function isRetired(cell: Cell): boolean {

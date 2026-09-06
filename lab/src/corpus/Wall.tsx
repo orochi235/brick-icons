@@ -9,7 +9,7 @@ import {
 import { LoupeBubble, resolveLoupe, useLoupe } from '@weasel-js/labkit/loupe';
 import { adjacent, impliedCaret, type Direction } from '@lab/corpus/caret';
 import type { Rect } from '@lab/corpus/layout';
-import { paintCommands, RETIRED_WASH, THUMB_GROUND, type Appearance, type CellBadge,
+import { paintCommands, RETIRED_WASH, type Appearance, type CellBadge,
   type PaintCommand } from '@lab/corpus/paint';
 import { DEFAULT_PALETTE, readPalette, type CellState, type Palette } from '@lab/corpus/palette';
 import { DEFAULT_PARAMS } from '@lab/corpus/params';
@@ -96,6 +96,21 @@ function strokeCaret(ctx: CanvasRenderingContext2D,
   ctx.restore();
 }
 
+// A five-pointed star, point up, filled in the current style.
+function drawStar(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+  const inner = r * 0.42;
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const reach = i % 2 === 0 ? r : inner;
+    const angle = -Math.PI / 2 + (i * Math.PI) / 5;
+    const x = cx + Math.cos(angle) * reach;
+    const y = cy + Math.sin(angle) * reach;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+}
+
 // A filled disc in one corner, on the letterbox margin rather than the
 // drawing, which is centered. Reversed out so it reads over ink and over the
 // white ground alike.
@@ -111,32 +126,32 @@ function drawBadge(ctx: CanvasRenderingContext2D, badge: CellBadge,
   ctx.arc(cx, cy, radius, 0, Math.PI * 2);
   ctx.fillStyle = badge.field;
   ctx.fill();
-  ctx.font = `600 ${size}px ui-monospace, monospace`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
   ctx.fillStyle = badge.ink;
-  // Optically centered rather than metrically: a monospace capital carries
-  // more side bearing on its left and sits high in the em box.
-  ctx.fillText(badge.text, cx + size * 0.05, cy + size * 0.08);
+  if (badge.mark === 'star') {
+    drawStar(ctx, cx, cy, radius * 0.66);
+  } else if (badge.text) {
+    ctx.font = `600 ${size}px ui-monospace, monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    // Optically centered rather than metrically: a monospace capital carries
+    // more side bearing on its left and sits high in the em box.
+    ctx.fillText(badge.text, cx + size * 0.05, cy + size * 0.08);
+  }
   ctx.restore();
 }
 
-// The years, across the top of a cell big enough to read them on. Drawn on a
-// pill of the cell's own ground so it never lands on the drawing's own ink.
-function drawLabel(ctx: CanvasRenderingContext2D, text: string, ground: string,
+// The years, along the top edge of a cell big enough to read them on. Set to
+// the right, clear of the top-left badge, and straight onto the thumbnail:
+// the drawing is centered and letterboxed, so the corner is empty anyway.
+function drawLabel(ctx: CanvasRenderingContext2D, text: string,
                    cmd: { dx: number; dy: number; dw: number; dh: number }) {
   const size = Math.max(10, Math.min(18, cmd.dw * 0.1));
-  const cx = cmd.dx + cmd.dw / 2;
-  const cy = cmd.dy + size * 0.9;
   ctx.save();
   ctx.font = `${size}px ui-monospace, monospace`;
-  ctx.textAlign = 'center';
+  ctx.textAlign = 'right';
   ctx.textBaseline = 'middle';
-  const wide = ctx.measureText(text).width + size * 0.8;
-  ctx.fillStyle = ground;
-  ctx.fillRect(cx - wide / 2, cmd.dy + size * 0.2, wide, size * 1.4);
   ctx.fillStyle = '#4a4a4f';
-  ctx.fillText(text, cx, cy);
+  ctx.fillText(text, cmd.dx + cmd.dw - size * 0.5, cmd.dy + size * 0.9);
   ctx.restore();
 }
 
@@ -172,7 +187,7 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
     strokeBorder(ctx, { ...cmd, dx, dy });
     // After the border, not before: the badge sits in the corner the frame
     // runs through, and it is the badge that has to stay readable.
-    if (cmd.label) drawLabel(ctx, cmd.label, THUMB_GROUND, { ...cmd, dx, dy });
+    if (cmd.label) drawLabel(ctx, cmd.label, { ...cmd, dx, dy });
     for (const badge of cmd.badges ?? []) drawBadge(ctx, badge, { ...cmd, dx, dy });
     ctx.restore();
     if (cmd.caret) strokeCaret(ctx, { ...cmd, dx, dy }, palette);
@@ -191,7 +206,7 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
     if (!cmd.translucent) strokeBorder(ctx, { ...cmd, dx, dy });
     // After the border, not before: the badge sits in the corner the frame
     // runs through, and it is the badge that has to stay readable.
-    if (cmd.label) drawLabel(ctx, cmd.label, THUMB_GROUND, { ...cmd, dx, dy });
+    if (cmd.label) drawLabel(ctx, cmd.label, { ...cmd, dx, dy });
     for (const badge of cmd.badges ?? []) drawBadge(ctx, badge, { ...cmd, dx, dy });
     ctx.restore();
     if (cmd.caret) strokeCaret(ctx, { ...cmd, dx, dy }, palette);

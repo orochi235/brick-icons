@@ -351,8 +351,8 @@ it('lets a cell carry both the defect frame and the caret', () => {
 
 it('badges a cell once it is drawn big enough to hold one, one tag per corner', () => {
   const both = cell('a', 0, 'sha-a', { tags: ['retired', 'popular'] });
-  expect(badgesFor(both, 200).map((b) => [b.text, b.corner]))
-    .toEqual([['R', 'br'], ['P', 'tl']]);
+  expect(badgesFor(both, 200).map((b) => [b.text ?? b.mark, b.corner]))
+    .toEqual([['R', 'br'], ['star', 'tl']]);
   expect(badgesFor(both, 20)).toEqual([]);
   expect(badgesFor(cell('b', 1, 'sha-b', { tags: ['minifig'] }), 200)).toEqual([]);
 });
