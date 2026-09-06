@@ -52,13 +52,23 @@ export const drawStar: Mark = (ctx) => {
   ctx.fill();
 };
 
-// An archive box: a body under its lid band. Retired now means put away
+// An archive box: a body under its lid band, with the handle slot punched
+// out of its front. Retired now means put away
 // rather than replaced -- `updated` took the parts that had a successor.
 // Kept well inside the unit box: a full-extent rectangle puts its corners at
 // 1.41, which is almost the field's edge.
-export const drawArchive: Mark = (ctx) => {
-  ctx.fillRect(-0.82, -0.58, 1.64, 0.32);
-  ctx.fillRect(-0.66, -0.2, 1.32, 0.78);
+export const drawArchive: Mark = (ctx, field) => {
+  ctx.fillRect(-0.74, -0.67, 1.48, 0.32);
+  ctx.fillRect(-0.66, -0.21, 1.32, 0.88);
+  ctx.save();
+  ctx.strokeStyle = field;
+  ctx.lineWidth = 0.26;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-0.16, 0.04);
+  ctx.lineTo(0.16, 0.04);
+  ctx.stroke();
+  ctx.restore();
 };
 
 // Redo: the subset sign with a head, as one filled band so the head cannot
