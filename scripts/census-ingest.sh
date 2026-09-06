@@ -25,6 +25,10 @@ while :; do
     rm -f "$DB-wal" "$DB-shm"
     mv -f "$tmp" "$DB"
     rm -f "$tmp-wal" "$tmp-shm"
+    # Indexing a render does not put it on the wall -- the wall draws baked
+    # sheets. Idempotent by render sha, so this costs only the new parts.
+    .venv/bin/python scripts/bake-thumbs.py >/dev/null 2>&1 || \
+      echo "$(date '+%H:%M:%S') bake failed; the database is current, the sheets are not" >&2
     echo "$(date '+%H:%M:%S') $(sqlite3 "$DB" \
       "SELECT group_concat(s, ', ') FROM (SELECT source || ' ' || count(*) AS s
        FROM renders WHERE source LIKE 'census-white%' GROUP BY source)")"
