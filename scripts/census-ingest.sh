@@ -38,5 +38,7 @@ while :; do
     echo "$(date '+%H:%M:%S') rebuild failed, kept the last database" >&2
     rm -f "$tmp" "$tmp-wal" "$tmp-shm"
   fi
-  sleep "$EVERY"
+  # A signalled sleep must not end an unattended run: under `set -e` its
+  # non-zero status would exit the loop between passes.
+  sleep "$EVERY" || true
 done
