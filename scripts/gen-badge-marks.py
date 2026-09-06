@@ -156,7 +156,14 @@ def minifig():
     ys = [p[1] for p in pts]
     cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
     half = max(max(xs) - min(xs), max(ys) - min(ys)) / 2
-    return [((x - cx) / half * GRID, (y - cy) / half * GRID) for x, y in pts]
+    norm = [((x - cx) / half, (y - cy) / half) for x, y in pts]
+    # Narrow the barrel without touching the stud or the neck: the two ends
+    # are what say minifig head rather than cylinder, and they are already
+    # the narrowest parts of the outline.
+    def waist(x, y):
+        t = min(1.0, max(0.0, (abs(y) - 0.42) / 0.38))
+        return x * (1.0 - 0.11 * (1.0 - t * t)), y
+    return [(x * GRID, y * GRID) for x, y in (waist(px, py) for px, py in norm)]
 
 
 def contract(pts, inset, keep):
