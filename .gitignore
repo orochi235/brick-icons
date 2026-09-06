@@ -16,3 +16,4 @@ corpus.db
 corpus.db-shm
 corpus.db-wal
 corpus.db.ingest*
+.onto-fetch-cache.json
