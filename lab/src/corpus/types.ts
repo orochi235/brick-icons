@@ -14,6 +14,11 @@ export interface Cell {
   year_to: number | null;
   sets: number | null;
   tags: string[];
+  /** The part that replaced this one, where Rebrickable records one. The
+   *  updated badge links to it. Optional for the same reason `tags` is: the
+   *  lab's server is long-lived and can be older than the page in front of
+   *  it, and a missing field must not break the view. */
+  successor?: string | null;
   status: string;
   sha: string | null;
   made_at: string | null;

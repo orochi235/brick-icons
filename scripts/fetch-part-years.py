@@ -36,9 +36,17 @@ sys.path.insert(0, str(ROOT))
 from brick_icons import db  # noqa: E402
 
 BASE = "https://cdn.rebrickable.com/media/downloads"
-DUMPS = ("parts", "sets", "inventories", "inventory_parts")
+DUMPS = ("parts", "sets", "inventories", "inventory_parts",
+         "part_relationships")
 DEFAULT_CACHE = Path("out") / "rebrickable"
 DEFAULT_OUT = Path("tests") / "goldens" / "part-years.csv"
+DEFAULT_SUCCESSORS = Path("tests") / "goldens" / "part-successors.csv"
+
+#: Relation types that can name a replacement, best first. A mould is a
+#: re-cut of the same part; an alternate merely fits the same hole, which
+#: is why it loses -- 2780's alternate is the frictionless pin 3673, and
+#: its mould is 61332, the part that actually replaced it.
+SUCCESSOR_RELS = ("M", "A")
 
 # A printed part's decoration suffix -- `4740p03` is drawn from `4740`, and
 # Rebrickable numbers the print differently or not at all, so the base part's
@@ -103,11 +111,52 @@ def match(part_id: str, facts: dict[str, tuple[int, int, int]]) -> tuple[str, st
     return None
 
 
+def successors(cache: Path, facts: dict[str, tuple[int, int, int]],
+               ids: set[str]) -> dict[str, tuple[str, str]]:
+    """The part that replaced each one, where Rebrickable records a partner
+    still being made after it stopped.
+
+    Direction is taken from the years rather than from the row: the dump's
+    child/parent columns do not consistently put the newer part on one side.
+    """
+    adjacent: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
+    kept = 0
+    for r in rows(cache / "part_relationships.csv.gz"):
+        rel = r["rel_type"]
+        if rel not in SUCCESSOR_RELS:
+            continue
+        a, b = r["child_part_num"], r["parent_part_num"]
+        adjacent[a][rel].add(b)
+        adjacent[b][rel].add(a)
+        kept += 1
+    print(f"  {kept:,} mould and alternate relations", flush=True)
+
+    out: dict[str, tuple[str, str]] = {}
+    for part_id in sorted(ids):
+        if part_id not in facts:
+            continue
+        _, last, _ = facts[part_id]
+        for rel in SUCCESSOR_RELS:
+            best = None
+            for other in adjacent[part_id][rel]:
+                if other not in ids or other not in facts:
+                    continue
+                if facts[other][1] <= last:
+                    continue
+                if best is None or facts[other][1:] > facts[best][1:]:
+                    best = other
+            if best is not None:
+                out[part_id] = (best, rel)
+                break
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", default=str(ROOT / db.DEFAULT_PATH))
     ap.add_argument("--cache", default=str(ROOT / DEFAULT_CACHE))
     ap.add_argument("--out", default=str(ROOT / DEFAULT_OUT))
+    ap.add_argument("--successors-out", default=str(ROOT / DEFAULT_SUCCESSORS))
     ap.add_argument("--refresh", action="store_true",
                     help="pull the dumps again instead of using the cache")
     args = ap.parse_args()
@@ -147,12 +196,23 @@ def main() -> int:
     print(f"wrote {out}: {len(matched):,} of {len(ids):,} parts "
           f"({exact:,} exact, {len(matched) - exact:,} via base part)", flush=True)
 
+    found = successors(cache, facts, set(ids))
+    succ_out = Path(args.successors_out)
+    with succ_out.open("w", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["part_id", "successor", "rel"])
+        w.writerows((p, s, r) for p, (s, r) in sorted(found.items()))
+    moulds = sum(1 for s, r in found.values() if r == "M")
+    print(f"wrote {succ_out}: {len(found):,} successors "
+          f"({moulds:,} by mould, {len(found) - moulds:,} by alternate)", flush=True)
+
     conn = db.connect(args.db)
     try:
         n = db.import_part_years(conn, out)
+        m = db.import_part_successors(conn, succ_out)
     finally:
         conn.close()
-    print(f"loaded {n:,} rows into {args.db}", flush=True)
+    print(f"loaded {n:,} year rows and {m:,} successors into {args.db}", flush=True)
     return 0
 
 

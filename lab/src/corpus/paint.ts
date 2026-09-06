@@ -122,32 +122,107 @@ export function markFor(cell: Cell): 'sticker' | undefined {
 export const BADGE_MIN_PX = 56;
 export const LABEL_MIN_PX = 110;
 
+/** A picture rather than a letter, where a letter would need explaining. */
+export type BadgeMark = 'star' | 'archive' | 'redo' | 'bolt' | 'magnet'
+                      | 'brush' | 'minifig';
+
 export interface CellBadge {
+  /** The tag that drew it. The strip is hit-tested by tag, so a click knows
+   *  which badge it landed on without matching on appearance. */
+  tag: string;
   /** A letter, or a shape where a letter would need explaining. */
   text?: string;
-  mark?: 'star';
-  corner: 'tl' | 'br';
+  mark?: BadgeMark;
+  corner?: 'tl' | 'br';
   field: string;
   ink: string;
+  /** Only where the field would vanish: duplo is red on white and
+   *  `THUMB_GROUND` is white. */
+  stroke?: string;
 }
 
-/** The tags that earn a corner disc on the wall itself. The detail views
- *  show every tag in words; the wall has room for the two that change how a
- *  drawing should be read, one corner each so they never collide. */
-export const BADGES: Record<string, CellBadge> = {
-  retired: { text: 'R', corner: 'br', field: '#6b6b72', ink: '#ffffff' },
-  popular: { mark: 'star', corner: 'tl', field: '#daa520', ink: '#ffffff' },
+/** The two discs that keep a corner of their own. `retired` and `updated`
+ *  share the bottom-right slot and never both apply -- a part that stopped
+ *  and a part that was replaced are different things wearing one badge
+ *  today. */
+export const CORNER_BADGES: Record<string, CellBadge> = {
+  popular: { tag: 'popular', mark: 'star', corner: 'tl', field: '#daa520', ink: '#ffffff' },
+  retired: { tag: 'retired', mark: 'archive', corner: 'br', field: '#6b6b72', ink: '#ffffff' },
+  updated: { tag: 'updated', mark: 'redo', corner: 'br', field: '#2f7d4f', ink: '#ffffff' },
 };
 
+/** One field for the whole property family, so a run of them reads as a
+ *  group against the system badges' own liveries. */
+export const PROPERTY_FIELD = '#4a4a4f';
+
+/** The strip that runs right from the part number. System badges first --
+ *  a part has one category, so at most one of those shows -- then the
+ *  properties, which stack. Tag order, which `tags.TAGS` already sets. */
+export const STRIP_BADGES: Record<string, CellBadge> = {
+  minifig: { tag: 'minifig', mark: 'minifig', field: '#8a6d1f', ink: '#ffffff' },
+  technic: { tag: 'technic', text: 'T', field: '#1b2a5e', ink: '#ffffff' },
+  duplo: { tag: 'duplo', text: 'd', field: '#ffffff', ink: '#c8102e', stroke: '#c8102e' },
+  weird: { tag: 'weird', text: '\u03a8', field: '#5b3a86', ink: '#ffffff' },
+  electric: { tag: 'electric', mark: 'bolt', field: PROPERTY_FIELD, ink: '#ffffff' },
+  magnet: { tag: 'magnet', mark: 'magnet', field: PROPERTY_FIELD, ink: '#ffffff' },
+  printed: { tag: 'printed', mark: 'brush', field: PROPERTY_FIELD, ink: '#ffffff' },
+  composite: { tag: 'composite', text: '+', field: PROPERTY_FIELD, ink: '#ffffff' },
+};
+
+/** The badge that links somewhere when clicked. Only one does. */
+export const LINKED_BADGE = 'updated';
+
 export function isRetired(cell: Cell): boolean {
-  return cell.tags?.includes('retired') ?? false;
+  return (cell.tags?.includes('retired') ?? false)
+      || (cell.tags?.includes('updated') ?? false);
 }
 
-/** The discs a drawn cell wears, if it is drawn big enough to hold them. */
+/** How big a badge is drawn on a cell of this width, and how far its center
+ *  sits off the edge. One derivation: the wall draws badges from this and
+ *  hit-tests them against it, so a click cannot land somewhere the disc
+ *  isn't. */
+export function badgeGeometry(cellPx: number) {
+  const size = Math.max(9, Math.min(20, cellPx * 0.14));
+  const radius = size * 0.72;
+  return { size, radius, inset: radius + cornerPad(cellPx, size) };
+}
+
+/** The type size a caption is set at. */
+export function captionSize(cellPx: number): number {
+  return Math.max(10, Math.min(18, cellPx * 0.1));
+}
+
+/** The strip sits on the part number's line and is set to match it: a `T`
+ *  reads as part of `4761 T`, not as a separate ornament beside it. Its
+ *  inset stays the corner badges', so the row lines up with them. */
+export function stripGeometry(cellPx: number) {
+  const size = captionSize(cellPx);
+  return { size, radius: size * 0.72, inset: badgeGeometry(cellPx).inset };
+}
+
+/** How far a corner mark sits off the cell's edge. A fraction of the cell
+ *  rather than of the mark: both the badge and the caption stop scaling at
+ *  their floor sizes, so at the small end of the zoom a margin measured off
+ *  them crowds the corner. */
+export function cornerPad(cellPx: number, size: number): number {
+  return Math.max(size * 0.35, cellPx * 0.06);
+}
+
+/** The corner discs a drawn cell wears, if it is drawn big enough to hold
+ *  them. */
 export function badgesFor(cell: Cell, cellPx: number,
                           minPx = BADGE_MIN_PX): CellBadge[] {
   if (cellPx < minPx) return [];
-  return (cell.tags ?? []).map((tag) => BADGES[tag]).filter((b): b is CellBadge => !!b);
+  return (cell.tags ?? []).map((tag) => CORNER_BADGES[tag])
+    .filter((b): b is CellBadge => !!b);
+}
+
+/** The strip of kind badges, in tag order. */
+export function stripFor(cell: Cell, cellPx: number,
+                         minPx = BADGE_MIN_PX): CellBadge[] {
+  if (cellPx < minPx) return [];
+  return (cell.tags ?? []).map((tag) => STRIP_BADGES[tag])
+    .filter((b): b is CellBadge => !!b);
 }
 
 export interface CellCaption {
@@ -178,7 +253,8 @@ export type PaintCommand =
   | { kind: 'sprite'; dx: number; dy: number; dw: number; dh: number;
       sx: number; sy: number; sw: number; sh: number;
       border: string | null; borderWidth: number; alpha?: number;
-      caret?: boolean; badges?: CellBadge[]; captions?: CellCaption[]; wash?: number }
+      caret?: boolean; badges?: CellBadge[]; strip?: CellBadge[];
+      captions?: CellCaption[]; wash?: number }
   | { kind: 'fill'; dx: number; dy: number; dw: number; dh: number;
       fill: string; border: string | null; borderWidth: number;
       /** Out-of-scope cells are drawn as a mark rather than a filled square,
@@ -201,7 +277,8 @@ export type PaintCommand =
        *  own opaque ground and hides anything drawn under it. */
       translucent: boolean;
       border: string | null; borderWidth: number; alpha?: number;
-      caret?: boolean; badges?: CellBadge[]; captions?: CellCaption[] }
+      caret?: boolean; badges?: CellBadge[]; strip?: CellBadge[];
+      captions?: CellCaption[] }
   | { kind: 'label'; text: string; count: number; dx: number; dy: number;
       size: number; depth: 0 | 1 };
 
@@ -261,6 +338,7 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
     const border = style.border;
     const borderWidth = borderWidthFor(style.weight, dw, appearance);
     const badges = badgesFor(cell, dw);
+    const strip = stripFor(cell, dw);
     const captions = captionsFor(cell, dw, CAPTION_ON_THUMB);
     const wash = isRetired(cell) ? appearance.retiredWash : undefined;
     const vectored = tint === 'status' ? vector?.get(cell.id) : undefined;
@@ -268,7 +346,7 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
     if (image) {
       out.push({ kind: 'image', dx, dy, dw, dh, image, ground: THUMB_GROUND,
                  translucent: vectored !== undefined,
-                 border, borderWidth, alpha, caret: isCaret, badges, captions, wash });
+                 border, borderWidth, alpha, caret: isCaret, badges, strip, captions, wash });
       continue;
     }
     const box = tint === 'status' && manifest && cell.sha && !isStale(manifest, cell)
@@ -276,7 +354,7 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
       : null;
     if (box) {
       out.push({ kind: 'sprite', dx, dy, dw, dh, ...box, border, borderWidth, alpha,
-                 caret: isCaret, badges, captions, wash });
+                 caret: isCaret, badges, strip, captions, wash });
       continue;
     }
     out.push({ kind: 'fill', dx, dy, dw, dh, fill: style.fill, border, borderWidth,
