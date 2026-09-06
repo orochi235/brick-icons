@@ -27,6 +27,9 @@ function cellStateLabel(cell: Cell): string | null {
       return 'fails in another slot';
     case 'outOfScope':
       return 'currently out of scope';
+    case 'accepted':
+      return `${cell.accepted_defects} known issue`
+        + `${cell.accepted_defects === 1 ? '' : 's'}, not being fixed`;
     case 'unknown':
       return null;
   }

@@ -190,7 +190,13 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
     if (cmd.caret) strokeCaret(ctx, { ...cmd, dx, dy }, palette);
   } else if (cmd.kind === 'fill') {
     ctx.fillStyle = cmd.fill;
-    ctx.fillRect(dx, dy, cmd.dw, cmd.dh);
+    if (cmd.shape === 'circle') {
+      ctx.beginPath();
+      ctx.ellipse(dx + cmd.dw / 2, dy + cmd.dh / 2, cmd.dw / 2, cmd.dh / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.fillRect(dx, dy, cmd.dw, cmd.dh);
+    }
     strokeBorder(ctx, { ...cmd, dx, dy });
     if (cmd.caret) strokeCaret(ctx, { ...cmd, dx, dy }, palette);
   }

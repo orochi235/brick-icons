@@ -21,6 +21,9 @@ const PRE_TASK_LITERALS: Params = {
   failedBorder: '#e03030',
   defectFill: '#453c27',
   defectBorder: '#daa520',
+  // Post-snapshot: a fault we decided to live with needed a color of its own.
+  acceptedFill: '#26382c',
+  acceptedBorder: '#6f9e78',
   problemElsewhereFill: '#26383f',
   problemElsewhereBorder: '#97bcc5',
   defectElsewhereFill: '#453c27',

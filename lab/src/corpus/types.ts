@@ -22,6 +22,8 @@ export interface Cell {
   error: string | null;
   open_defects: number;
   open_defects_elsewhere: number;
+  /** Filed against this slot's engine and accepted rather than fixed. */
+  accepted_defects: number;
   error_elsewhere: boolean;
 }
 

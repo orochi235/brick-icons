@@ -20,6 +20,8 @@ body { margin: 0; }
   --corpus-cell-failed-border: #e03030;
   --corpus-cell-defect-fill: #453c27;
   --corpus-cell-defect-border: #daa520;
+  --corpus-cell-accepted-fill: #26382c;
+  --corpus-cell-accepted-border: #6f9e78;
   --corpus-cell-problem-elsewhere-fill: #26383f;
   --corpus-cell-problem-elsewhere-border: #97bcc5;
   --corpus-cell-defect-elsewhere-fill: #453c27;

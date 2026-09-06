@@ -8,7 +8,7 @@ const cell = (id: string, index: number, sha: string | null,
               overrides: Partial<Cell> = {}): Cell => ({
   id, index, title: id, category: null, printed: false, obsolete: false, base: true, out_of_scope: false, moved: false, year_from: null, year_to: null, sets: null, tags: [],
   status: 'unreviewed', sha, made_at: null, extra_d99: null, secs: null,
-  error: null, open_defects: 0, open_defects_elsewhere: 0,
+  error: null, open_defects: 0, open_defects_elsewhere: 0, accepted_defects: 0,
   error_elsewhere: false, ...overrides,
 });
 
@@ -40,7 +40,7 @@ it('draws an unrendered cell with nothing known as unknown gray, and no border',
   });
   expect(cmd).toEqual({ kind: 'fill', dx: 20, dy: 0, dw: 10, dh: 10,
                         fill: CELL_FILL.unknown.fill, border: null, borderWidth: 0,
-                        slash: false });
+                        shape: 'square', slash: false });
 });
 
 it('draws a stale cell as a fill, not as last week’s picture', () => {
@@ -247,16 +247,17 @@ it('tallies each cell into its own state, and nowhere else', () => {
     cell('f', 5, null, { error_elsewhere: true }),
     cell('g', 6, null),
     cell('h', 7, null, { out_of_scope: true }),
+    cell('i', 8, null, { accepted_defects: 1 }),
   ];
   expect(tally(cells)).toEqual({
-    unknown: 1, outOfScope: 1, timeout: 1, failed: 1, defect: 2,
+    unknown: 1, outOfScope: 1, timeout: 1, failed: 1, defect: 2, accepted: 1,
     problemElsewhere: 1, defectElsewhere: 1,
   });
 });
 
 it('tallies an empty corpus as all zeros', () => {
   expect(tally([])).toEqual({
-    unknown: 0, outOfScope: 0, timeout: 0, failed: 0, defect: 0,
+    unknown: 0, outOfScope: 0, timeout: 0, failed: 0, defect: 0, accepted: 0,
     problemElsewhere: 0, defectElsewhere: 0,
   });
 });
@@ -283,7 +284,7 @@ it('dims a fill cell outside the highlighted state to the unknown field, without
   });
   expect(cmd).toEqual({ kind: 'fill', dx: 0, dy: 0, dw: 10, dh: 10,
                         fill: CELL_FILL.unknown.fill, border: null, borderWidth: 0,
-                        slash: false });
+                        shape: 'square', slash: false });
 });
 
 it('reduces alpha on a drawn cell outside the highlighted state, and leaves a matching one alone', () => {
@@ -401,4 +402,26 @@ it('washes a retired cell rather than baking it a ground of its own', () => {
   });
   expect(retired).toMatchObject({ ground: THUMB_GROUND, translucent: true });
   expect((retired as { wash?: number }).wash).toBeGreaterThan(0);
+});
+
+it('paints a fault we decided to live with in its own color, under every live one', () => {
+  const accepted = cell('a', 0, null, { accepted_defects: 2 });
+  expect(cellState(accepted)).toBe('accepted');
+  expect(cellState(cell('b', 1, null, { accepted_defects: 1, open_defects: 1 })))
+    .toBe('defect');
+  expect(cellState(cell('c', 2, null, { accepted_defects: 1, error_elsewhere: true })))
+    .toBe('accepted');
+});
+
+it('draws an out-of-scope cell round, and every other undrawn cell square', () => {
+  const shape = (over: Partial<Cell>) => {
+    const [cmd] = paintCommands({
+      cells: [cell('a', 0, null, over)], rects, visible: [0],
+      cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest: null,
+    });
+    return (cmd as { shape?: string }).shape;
+  };
+  expect(shape({ out_of_scope: true })).toBe('circle');
+  expect(shape({})).toBe('square');
+  expect(shape({ error: 'TimeoutError' })).toBe('square');
 });

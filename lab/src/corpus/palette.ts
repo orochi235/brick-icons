@@ -1,8 +1,8 @@
 import { DEFAULT_PARAMS, type ColorParamKey } from '@lab/corpus/params';
 
 export type CellState =
-  'unknown' | 'outOfScope' | 'timeout' | 'failed' | 'defect' | 'problemElsewhere'
-  | 'defectElsewhere';
+  'unknown' | 'outOfScope' | 'timeout' | 'failed' | 'defect' | 'accepted'
+  | 'problemElsewhere' | 'defectElsewhere';
 
 export interface CellStyle {
   fill: string;
@@ -35,6 +35,10 @@ const CELL_PALETTE: Record<CellState, CellStyle> = {
             weight: 'thick' },
   defect: { fill: DEFAULT_PARAMS.defectFill, border: DEFAULT_PARAMS.defectBorder,
             weight: 'thick' },
+  // Thin, because nothing here needs doing: the fault is known and the
+  // decision was to keep it.
+  accepted: { fill: DEFAULT_PARAMS.acceptedFill, border: DEFAULT_PARAMS.acceptedBorder,
+              weight: 'thin' },
   problemElsewhere: { fill: DEFAULT_PARAMS.problemElsewhereFill,
                        border: DEFAULT_PARAMS.problemElsewhereBorder, weight: 'thin' },
   defectElsewhere: { fill: DEFAULT_PARAMS.defectElsewhereFill,
@@ -51,6 +55,8 @@ const PROPERTY: Record<CellState, { fill: string; border: string | null }> = {
   timeout: { fill: '--corpus-cell-timeout-fill', border: '--corpus-cell-timeout-border' },
   failed: { fill: '--corpus-cell-failed-fill', border: '--corpus-cell-failed-border' },
   defect: { fill: '--corpus-cell-defect-fill', border: '--corpus-cell-defect-border' },
+  accepted: { fill: '--corpus-cell-accepted-fill',
+              border: '--corpus-cell-accepted-border' },
   problemElsewhere: { fill: '--corpus-cell-problem-elsewhere-fill',
                        border: '--corpus-cell-problem-elsewhere-border' },
   defectElsewhere: { fill: '--corpus-cell-defect-elsewhere-fill',
@@ -70,6 +76,8 @@ export const PARAM_CSS_VAR: Record<ColorParamKey, string> = {
   failedBorder: PROPERTY.failed.border as string,
   defectFill: PROPERTY.defect.fill,
   defectBorder: PROPERTY.defect.border as string,
+  acceptedFill: PROPERTY.accepted.fill,
+  acceptedBorder: PROPERTY.accepted.border as string,
   problemElsewhereFill: PROPERTY.problemElsewhere.fill,
   problemElsewhereBorder: PROPERTY.problemElsewhere.border as string,
   defectElsewhereFill: PROPERTY.defectElsewhere.fill,
@@ -88,6 +96,7 @@ export const STATE_LABEL: Record<CellState, string> = {
   timeout: 'timed out here',
   failed: 'cannot be drawn here',
   defect: 'open defect here',
+  accepted: 'known issue, not fixing',
   problemElsewhere: 'problem in another slot',
   defectElsewhere: 'defect in another slot',
 };

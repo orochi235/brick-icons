@@ -202,6 +202,9 @@ export function CorpusWall({ client }: { client: LabClient }) {
                if (!cam) return;
                touched.current = true;
                const [sx, sy] = clientToCanvas(e.currentTarget, e.clientX, e.clientY);
+               // The card is anchored to a screen point, and a zoom moves the
+               // cell out from under it.
+               setCarded(null);
                updateCam(zoomAt(cam, { x: sx, y: sy }, e.deltaY < 0 ? 1.1 : 1 / 1.1));
              }}>
           {!cells && <p className="corpus-loading">loading the corpus…</p>}

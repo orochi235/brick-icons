@@ -20,6 +20,8 @@ export interface Params {
   failedBorder: string;
   defectFill: string;
   defectBorder: string;
+  acceptedFill: string;
+  acceptedBorder: string;
   problemElsewhereFill: string;
   problemElsewhereBorder: string;
   defectElsewhereFill: string;
@@ -57,6 +59,8 @@ export const DEFAULT_PARAMS: Params = {
   failedBorder: '#e03030',
   defectFill: '#453c27',
   defectBorder: '#daa520',
+  acceptedFill: '#26382c',
+  acceptedBorder: '#6f9e78',
   problemElsewhereFill: '#26383f',
   problemElsewhereBorder: '#97bcc5',
   defectElsewhereFill: '#453c27',
@@ -80,7 +84,7 @@ export const DEFAULT_PARAMS: Params = {
  *  `PARAM_CSS_VAR`. */
 export const COLOR_PARAM_KEYS = [
   'unknownFill', 'outOfScopeFill', 'timeoutFill', 'timeoutBorder', 'failedFill', 'failedBorder',
-  'defectFill', 'defectBorder', 'problemElsewhereFill', 'problemElsewhereBorder',
+  'defectFill', 'defectBorder', 'acceptedFill', 'acceptedBorder', 'problemElsewhereFill', 'problemElsewhereBorder',
   'defectElsewhereFill', 'defectElsewhereBorder', 'caretColor',
 ] as const satisfies readonly (keyof Params)[];
 
@@ -95,6 +99,8 @@ const COLOR_LABEL: Record<ColorParamKey, string> = {
   failedBorder: 'Failed border',
   defectFill: 'Defect fill',
   defectBorder: 'Defect border',
+  acceptedFill: 'Accepted fill',
+  acceptedBorder: 'Accepted border',
   problemElsewhereFill: 'Problem-elsewhere fill',
   problemElsewhereBorder: 'Problem-elsewhere border',
   defectElsewhereFill: 'Defect-elsewhere fill',

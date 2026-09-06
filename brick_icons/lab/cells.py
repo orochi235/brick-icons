@@ -47,21 +47,32 @@ def sibling_glob(source: str) -> str:
     return f"{stem}-%"
 
 
+_NO_DEFECTS = {"here": 0, "elsewhere": 0, "accepted": 0}
+
+
 def _open_defects(conn: sqlite3.Connection, ids: list[str],
                    engine: str) -> dict[str, dict[str, int]]:
-    """Open-defect counts for a page of parts, split here vs. elsewhere.
+    """Defect counts for a page of parts: open here, open elsewhere, and the
+    ones filed against this engine that were accepted rather than fixed.
 
-    One query for the page, following `findings._attach_defects`.
+    One query for the page, following `findings._attach_defects`. A `wontfix`
+    defect used to count as open, so a decision to live with something painted
+    the same as a live fault for as long as the record stood.
     """
     if not ids:
         return {}
     marks = ",".join("?" * len(ids))
     out: dict[str, dict[str, int]] = {}
     for d in conn.execute(
-            f"SELECT part_id, engines FROM defects WHERE part_id IN ({marks}) "
+            f"SELECT part_id, engines, status FROM defects WHERE part_id IN ({marks}) "
             f"AND status NOT IN ('fixed', 'notabug')", ids):
-        bucket = out.setdefault(d["part_id"], {"here": 0, "elsewhere": 0})
-        if engine in json.loads(d["engines"]):
+        bucket = out.setdefault(d["part_id"], dict(_NO_DEFECTS))
+        here = engine in json.loads(d["engines"])
+        if d["status"] == "wontfix":
+            # Only here: a fault someone accepted in another slot says nothing
+            # about this one.
+            bucket["accepted"] += int(here)
+        elif here:
             bucket["here"] += 1
         else:
             bucket["elsewhere"] += 1
@@ -125,7 +136,7 @@ def cells(conn: sqlite3.Connection, source: str = "census-naive",
         pid = part["id"]
         render = renders.get(pid)
         measure = measures.get(pid)
-        bucket = defects.get(pid, {"here": 0, "elsewhere": 0})
+        bucket = defects.get(pid, _NO_DEFECTS)
         year = years.get(pid)
         rows.append({
             "id": pid,
@@ -154,6 +165,7 @@ def cells(conn: sqlite3.Connection, source: str = "census-naive",
             "error": measure["error"] if measure else None,
             "open_defects": bucket["here"],
             "open_defects_elsewhere": bucket["elsewhere"],
+            "accepted_defects": bucket["accepted"],
             "error_elsewhere": pid in error_elsewhere,
         })
     return {"cells": rows, "count": len(order), "version": version,

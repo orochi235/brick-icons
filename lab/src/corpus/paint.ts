@@ -19,6 +19,9 @@ export function cellState(cell: Cell): CellState {
   if (cell.open_defects > 0) return 'defect';
   if (cell.error === 'TimeoutError') return 'timeout';
   if (cell.error) return 'failed';
+  // Below every live fault and above anything happening in another slot: it
+  // is this slot's problem, and it is settled.
+  if (cell.accepted_defects > 0) return 'accepted';
   if (cell.open_defects_elsewhere > 0) return 'defectElsewhere';
   if (cell.error_elsewhere) return 'problemElsewhere';
   return 'unknown';
@@ -124,6 +127,9 @@ export type PaintCommand =
       caret?: boolean; badges?: CellBadge[]; label?: string; wash?: number }
   | { kind: 'fill'; dx: number; dy: number; dw: number; dh: number;
       fill: string; border: string | null; borderWidth: number;
+      /** Out-of-scope cells are drawn round, so a part the project is not
+       *  trying to draw does not read as one it has failed to. */
+      shape: 'square' | 'circle';
       /** Struck corner to corner in the border's own color and width. Every
        *  bordered state earns it when there is nothing drawn in the cell: the
        *  border alone reads as a tint at the zooms where most cells are small,
@@ -207,6 +213,7 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
       continue;
     }
     out.push({ kind: 'fill', dx, dy, dw, dh, fill: style.fill, border, borderWidth,
+               shape: state === 'outOfScope' ? 'circle' : 'square',
                slash: border !== null, caret: isCaret });
   }
   return out;
