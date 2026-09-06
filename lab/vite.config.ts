@@ -13,7 +13,15 @@ export default defineConfig({
     port: 5178,
     proxy: { '/api': API, '/ldraw': API },
   },
-  build: { outDir: 'dist' },
+  build: {
+    outDir: 'dist',
+    rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        corpus: fileURLToPath(new URL('./corpus.html', import.meta.url)),
+      },
+    },
+  },
   test: {
     environment: 'jsdom',
     globals: true,

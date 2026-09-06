@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { FloatingPanel, Lab } from '@weasel-js/labkit';
 import type { Instrument, TrialContribution } from '@weasel-js/labkit';
 import type { LabClient } from '@lab/api/client';
-import { PartSearch } from '@lab/chrome/PartSearch';
+import { PartSearch } from '@lab/shared/PartSearch';
 import { rowsFor } from '@lab/config/rows';
 import { DefectList } from '@lab/defects/DefectList';
 import type { Defect, DefectStatus } from '@lab/defects/useDefects';
-import { useOpenPart } from '@lab/config/pending';
+import { setPendingPart, useOpenPart } from '@lab/config/pending';
 import '@lab/app.css';
 
 // `FloatingPanel` is a positioned box and nothing else -- it carries neither a
@@ -56,7 +56,7 @@ function TitleBar({ client }: { client: LabClient }) {
   const openPart = useOpenPart();
   return (
     <>
-      <PartSearch client={client} onOpen={(part) => openPart(part)} />
+      <PartSearch client={client} onOpen={(part) => { setPendingPart(part); openPart(part); }} />
       <AllDefects client={client} />
     </>
   );

@@ -4,11 +4,18 @@
 
 **Goal:** A pan/zoom wall at `/corpus` showing all 24,591 LDraw parts as one cell each, thumbnails where a render exists, filling in as the render job lands more.
 
-**Architecture:** Python bakes thumbnails from the render store into two whole-corpus sprite sheets (8 px, 32 px) plus loose 128 px files, all addressed by part number. FastAPI serves the cell list, a delta since a version, and the images. The React app computes layout and camera as pure functions and paints one `<canvas>`; that canvas is the only place weasel's mega view will ever need to replace.
+**Architecture:** Python bakes thumbnails from the render store into two whole-corpus sprite sheets (8 px, 32 px) plus loose 128 px files, per slot — a slot being one `db.SOURCES` entry, i.e. an engine crossed with a style — all addressed by slot and part number. FastAPI serves the cell list, a delta since a version, and the images. The React app computes layout and camera as pure functions and paints one `<canvas>`; that canvas is the only place weasel's mega view will ever need to replace.
 
 **Tech Stack:** Python 3.11, SQLite, FastAPI, Pillow, resvg; React 19, TypeScript, Vite, vitest.
 
 **Spec:** `docs/superpowers/specs/2026-09-05-corpus-wall-design.md`
+
+**Run Python tests as `.venv/bin/python -m pytest`, never `.venv/bin/pytest`.**
+The venv is shared with the main checkout and its editable install maps
+`brick_icons` to the main checkout's copy. The console script puts its own
+`bin/` on `sys.path[0]` and so imports *that* tree; `-m` puts the working
+directory first and imports this one. Both forms pass for a module that exists
+unchanged in both trees, which is how the wrong one goes unnoticed.
 
 ---
 
@@ -18,7 +25,7 @@
 
 | File | Responsibility |
 |---|---|
-| `scripts/backfill-census-renders.py` | Index kept census SVGs into the render store. One-shot, takes a count. |
+| `scripts/index-census-renders.py` | Index the census's kept SVGs in place, as `census-naive`. Takes a count. |
 | `brick_icons/thumbs.py` | Sheet geometry, per-part rasterizing, sheet composition, manifest. No I/O policy, no CLI. |
 | `scripts/bake-thumbs.py` | CLI over `thumbs.py`, with per-item progress. |
 | `brick_icons/lab/cells.py` | The cell list and the delta since a version, read from `corpus.db`. |
@@ -41,18 +48,29 @@
 
 ---
 
-### Task 1: Backfill census renders into the store
+### Task 1: Index the census's kept renders
 
-The census kept 1,127 naive SVGs under `out/census-naive/renders/naive/`. The store has 49 rows. `db.store_render` already copies a file into `renders/<source>/` and indexes it.
+The census keeps its renders under `out/census-naive/renders/naive/` — 2,539 of
+them, growing as it runs. They are **not** the store's drawing: the oracle
+renders with `--line-width 0 --silhouette-width 0` so its fills carry the
+silhouette, while `db.canonical_argv("...", "naive")` names the ordinary stroked
+drawing. Filing one under the other's source records a drawing under a key
+describing a different drawing, and was reverted once already in `5cbcd4e`.
+
+So this indexes them **in place**, as source `census-naive`, with
+`db.record_render`. Nothing is copied and nothing new enters git —
+`db.rebuild` already treats census renders exactly this way, under the comment
+"The census's renders stay out of git but are indexed all the same."
 
 **Files:**
-- Create: `scripts/backfill-census-renders.py`
-- Test: `tests/test_backfill_census.py`
+- Create: `scripts/index-census-renders.py`
+- Test: `tests/test_index_census.py`
 
 - [ ] **Step 1: Write the failing test**
 
 ```python
-"""Indexing kept census renders into the store."""
+"""Indexing the census's kept renders, in place."""
+import importlib
 import sys
 from pathlib import Path
 
@@ -63,8 +81,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from brick_icons import db
 
-import importlib
-backfill = importlib.import_module("backfill-census-renders")
+index_census = importlib.import_module("index-census-renders")
 
 SVG = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 170">'
        '<path d="M0 0h10v10H0z"/></svg>')
@@ -72,10 +89,10 @@ SVG = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 170">'
 
 @pytest.fixture
 def tree(tmp_path):
-    src = tmp_path / "out" / "census-naive" / "renders" / "naive"
-    src.mkdir(parents=True)
+    kept = tmp_path / "out" / "census-naive" / "renders" / "naive"
+    kept.mkdir(parents=True)
     for pid in ("3001", "3004", "nosuchpart"):
-        (src / f"{pid}.svg").write_text(SVG)
+        (kept / f"{pid}.svg").write_text(SVG)
     conn = db.connect(tmp_path / "corpus.db")
     for pid in ("3001", "3004"):
         conn.execute("INSERT INTO parts (id, title, printed, obsolete) "
@@ -85,19 +102,31 @@ def tree(tmp_path):
     conn.close()
 
 
-def test_it_indexes_and_copies_into_the_store(tree):
+def test_it_indexes_under_the_census_source(tree):
     root, conn = tree
-    n = backfill.backfill(conn, root=root, limit=10)
-    assert n == 2
-    assert (root / "renders" / "naive" / "3001.svg").is_file()
+    assert index_census.index(conn, root=root, limit=10) == 2
     rows = conn.execute("SELECT part_id, source FROM renders").fetchall()
     assert {(r["part_id"], r["source"]) for r in rows} == {
-        ("3001", "naive"), ("3004", "naive")}
+        ("3001", "census-naive"), ("3004", "census-naive")}
+
+
+def test_it_leaves_the_svg_where_the_census_put_it(tree):
+    root, conn = tree
+    index_census.index(conn, root=root, limit=10)
+    assert not (root / "renders" / "census-naive").exists()
+    assert (root / "out" / "census-naive" / "renders" / "naive" / "3001.svg").is_file()
+
+
+def test_the_recorded_path_points_at_the_census_file(tree):
+    root, conn = tree
+    index_census.index(conn, root=root, limit=10)
+    path = conn.execute("SELECT path FROM renders WHERE part_id='3001'").fetchone()[0]
+    assert path == "out/census-naive/renders/naive/3001.svg"
 
 
 def test_it_skips_ids_that_are_not_parts(tree):
     root, conn = tree
-    backfill.backfill(conn, root=root, limit=10)
+    index_census.index(conn, root=root, limit=10)
     assert conn.execute(
         "SELECT count(*) FROM renders WHERE part_id='nosuchpart'"
     ).fetchone()[0] == 0
@@ -105,34 +134,49 @@ def test_it_skips_ids_that_are_not_parts(tree):
 
 def test_the_limit_caps_the_work(tree):
     root, conn = tree
-    assert backfill.backfill(conn, root=root, limit=1) == 1
+    assert index_census.index(conn, root=root, limit=1) == 1
 
 
-def test_it_skips_what_is_already_stored(tree):
+def test_it_skips_what_is_already_indexed(tree):
     root, conn = tree
-    backfill.backfill(conn, root=root, limit=10)
-    assert backfill.backfill(conn, root=root, limit=10) == 0
+    index_census.index(conn, root=root, limit=10)
+    assert index_census.index(conn, root=root, limit=10) == 0
+
+
+def test_a_missing_kept_directory_is_an_error_not_a_zero(tree):
+    # A wrong --root and a finished backfill must not look identical.
+    _, conn = tree
+    with pytest.raises(FileNotFoundError):
+        index_census.index(conn, root=tree[0] / "nowhere", limit=10)
+
+
+def test_one_unreadable_svg_does_not_abandon_the_rest(tree):
+    root, conn = tree
+    (root / "out" / "census-naive" / "renders" / "naive" / "3001.svg").write_text("")
+    assert index_census.index(conn, root=root, limit=10) == 1
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `.venv/bin/pytest tests/test_backfill_census.py -v`
-Expected: FAIL — `ModuleNotFoundError: No module named 'backfill-census-renders'`
+Run: `.venv/bin/python -m pytest tests/test_index_census.py -v`
+Expected: FAIL — `ModuleNotFoundError: No module named 'index-census-renders'`
 
 - [ ] **Step 3: Write the script**
 
 ```python
 #!/usr/bin/env python3
-"""Index renders the census kept into the store.
+"""Index the renders the census kept, where they lie.
 
-    .venv/bin/python scripts/backfill-census-renders.py --limit 100
+    .venv/bin/python scripts/index-census-renders.py --limit 100
 
-The census writes to `out/census-naive/renders/naive/`, which is scratch. This
-copies each SVG into `renders/naive/` -- the artifact -- and records the row.
+The census's drawing is strokeless -- its fills carry the silhouette -- so it is
+not the store's `naive` render and is never recorded as one. It is indexed under
+`census-naive` and left in `out/`, which is what `db.rebuild` does with it too.
 """
 from __future__ import annotations
 
 import argparse
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -141,27 +185,39 @@ sys.path.insert(0, str(ROOT))
 
 from brick_icons import db  # noqa: E402
 
-SOURCE = "naive"
-KEPT = Path("out") / "census-naive" / "renders" / SOURCE
+ENGINE = "naive"
+SOURCE = f"census-{ENGINE}"
+KEPT = Path("out") / SOURCE / "renders" / ENGINE
 
 
-def backfill(conn, root: Path | str = ".", limit: int = 100) -> int:
-    """Store up to `limit` kept census renders. Returns how many it stored."""
+def index(conn: sqlite3.Connection, root: Path | str = ".",
+          limit: int = 100) -> int:
+    """Record up to `limit` kept census renders. Returns how many it recorded."""
     root = Path(root)
+    kept = root / KEPT
+    if not kept.is_dir():
+        raise FileNotFoundError(f"no census renders at {kept}")
+
     known = {r["id"] for r in conn.execute("SELECT id FROM parts")}
     have = {r["part_id"] for r in conn.execute(
         "SELECT part_id FROM renders WHERE source = ?", (SOURCE,))}
-    stored = 0
-    for svg in sorted((root / KEPT).glob("*.svg")):
-        if stored >= limit:
+    recorded = 0
+    for svg in sorted(kept.glob("*.svg")):
+        if recorded >= limit:
             break
         pid = svg.stem
         if pid not in known or pid in have:
             continue
-        db.store_render(conn, pid, SOURCE, svg, root=root)
-        stored += 1
-        print(f"{stored}/{limit} {pid}", flush=True)
-    return stored
+        try:
+            db.record_render(conn, pid, SOURCE, svg, root=root)
+        except Exception as e:  # noqa: BLE001
+            # The census is still running and kills shards mid-write, so a
+            # truncated SVG is expected traffic, not a reason to stop.
+            print(f"skipped {pid}: {type(e).__name__} {e}", flush=True)
+            continue
+        recorded += 1
+        print(f"{recorded}/{limit} {pid}", flush=True)
+    return recorded
 
 
 def main() -> int:
@@ -172,10 +228,10 @@ def main() -> int:
     args = ap.parse_args()
     conn = db.connect(args.db)
     try:
-        n = backfill(conn, root=args.root, limit=args.limit)
+        n = index(conn, root=args.root, limit=args.limit)
     finally:
         conn.close()
-    print(f"stored {n}")
+    print(f"recorded {n}")
     return 0
 
 
@@ -185,21 +241,31 @@ if __name__ == "__main__":
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `.venv/bin/pytest tests/test_backfill_census.py -v`
-Expected: PASS, 4 tests
+Run: `.venv/bin/python -m pytest tests/test_index_census.py -v`
+Expected: PASS, 8 tests
 
 - [ ] **Step 5: Run it for real**
 
-Run: `.venv/bin/python scripts/backfill-census-renders.py --limit 100`
-Expected: 100 progress lines, then `stored 100`. Confirm with
-`sqlite3 corpus.db "select count(*) from renders"` — expect 149.
+Run: `.venv/bin/python scripts/index-census-renders.py --limit 100`
+Expected: 100 progress lines, then `recorded 100`.
+
+Confirm the sources are separate:
+`sqlite3 corpus.db "select source, count(*) from renders group by source"`
+Expected: `census-naive|100` and `naive|49`.
+
+Confirm nothing was copied into git:
+`git status --porcelain` — expected: only the two new files, no `renders/` changes.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add scripts/backfill-census-renders.py tests/test_backfill_census.py
-git commit -m "index kept census renders into the store"
+git add scripts/index-census-renders.py tests/test_index_census.py
+git commit -m "index the census's kept renders under their own source"
 ```
+
+`corpus.db` is gitignored and must NOT be committed. Neither should anything
+under `renders/` change — if it did, the script copied when it should have
+recorded.
 
 ---
 
@@ -254,11 +320,31 @@ def test_an_index_past_the_grid_is_an_error():
     g = thumbs.geometry(4, level=8)
     with pytest.raises(IndexError):
         g.cell_box(g.cols * g.rows)
+
+
+def test_the_loose_level_is_not_a_sheet():
+    # 128 px is served as loose files. Sheeting it would silently produce a
+    # 12800px page nothing asks for.
+    with pytest.raises(ValueError):
+        thumbs.geometry(100, level=thumbs.LOOSE_LEVEL)
+
+
+def test_a_square_sheet_never_crops_an_uneven_grid():
+    g = thumbs.geometry(82, level=32)   # cols 10, rows 9
+    assert (g.cols, g.rows) == (10, 9)
+    assert g.size >= g.rows * g.pitch
+    assert g.cell_box(81)[3] <= g.size
+
+
+def test_a_tiny_corpus_still_has_a_grid():
+    for count in (0, 1):
+        g = thumbs.geometry(count, level=8)
+        assert g.cols == 1 and g.rows == 1
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `.venv/bin/pytest tests/test_thumbs.py -v`
+Run: `.venv/bin/python -m pytest tests/test_thumbs.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'brick_icons.thumbs'`
 
 - [ ] **Step 3: Write the module**
@@ -298,7 +384,7 @@ class Geometry:
         return self.cols * self.pitch
 
     def cell_box(self, index: int) -> tuple[int, int, int, int]:
-        """The cell's pixel box on the sheet, gutters excluded."""
+        """The cell's (left, top, right, bottom) on the sheet, gutters excluded."""
         if not 0 <= index < self.cols * self.rows:
             raise IndexError(f"cell {index} is outside a {self.cols}x{self.rows} grid")
         col, row = index % self.cols, index // self.cols
@@ -308,7 +394,11 @@ class Geometry:
 
 
 def geometry(count: int, level: int) -> Geometry:
+    if level not in SHEET_LEVELS:
+        raise ValueError(f"{level} is not a sheet level; sheets are {SHEET_LEVELS}")
     cols = max(1, math.ceil(math.sqrt(count)))
+    # cols >= sqrt(count) makes cols*cols >= count, so rows <= cols always and
+    # a square `size` is never a crop -- only ever some dead rows at the bottom.
     rows = max(1, math.ceil(count / cols))
     gutter = 0 if level == min(SHEET_LEVELS) else GUTTER
     return Geometry(count=count, level=level, cols=cols, rows=rows, gutter=gutter)
@@ -316,7 +406,7 @@ def geometry(count: int, level: int) -> Geometry:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `.venv/bin/pytest tests/test_thumbs.py -v`
+Run: `.venv/bin/python -m pytest tests/test_thumbs.py -v`
 Expected: PASS, 6 tests
 
 - [ ] **Step 5: Commit**
@@ -400,7 +490,7 @@ def test_the_baked_sha_is_readable_back(tmp_path):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `.venv/bin/pytest tests/test_thumbs.py -v`
+Run: `.venv/bin/python -m pytest tests/test_thumbs.py -v`
 Expected: FAIL — `AttributeError: module 'brick_icons.thumbs' has no attribute 'bake_part'`
 
 - [ ] **Step 3: Implement**
@@ -482,7 +572,7 @@ def _square(drawn: Image.Image, level: int) -> Image.Image:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `.venv/bin/pytest tests/test_thumbs.py -v`
+Run: `.venv/bin/python -m pytest tests/test_thumbs.py -v`
 Expected: PASS, 9 tests
 
 - [ ] **Step 5: Commit**
@@ -551,7 +641,7 @@ def test_the_gutter_replicates_the_cell_edge(tmp_path):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `.venv/bin/pytest tests/test_thumbs.py -v`
+Run: `.venv/bin/python -m pytest tests/test_thumbs.py -v`
 Expected: FAIL — `AttributeError: module 'brick_icons.thumbs' has no attribute 'compose'`
 
 - [ ] **Step 3: Implement**
@@ -609,7 +699,7 @@ def _replicate_edges(sheet: Image.Image, cell: Image.Image,
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `.venv/bin/pytest tests/test_thumbs.py -v`
+Run: `.venv/bin/python -m pytest tests/test_thumbs.py -v`
 Expected: PASS, 13 tests
 
 - [ ] **Step 5: Commit**
@@ -623,6 +713,10 @@ git commit -m "compose the corpus sprite sheets with edge-replicated gutters"
 
 ### Task 5: The bake CLI
 
+One slot at a time, into that slot's own directory. A slot is a `db.SOURCES`
+entry — `naive`, `census-naive`, and any other with renders. `thumbs.py` needs
+no knowledge of slots: it is handed `out/thumbs/<source>` as its output root.
+
 **Files:**
 - Create: `scripts/bake-thumbs.py`
 
@@ -630,12 +724,15 @@ git commit -m "compose the corpus sprite sheets with edge-replicated gutters"
 
 ```python
 #!/usr/bin/env python3
-"""Bake the corpus wall's thumbnails and sprite sheets.
+"""Bake the corpus wall's thumbnails and sprite sheets, one slot at a time.
 
     .venv/bin/python scripts/bake-thumbs.py
+    .venv/bin/python scripts/bake-thumbs.py --source naive
 
-Idempotent: a part whose render sha has not changed is skipped, so running this
-after each batch of renders costs only the new ones.
+A slot is one `db.SOURCES` entry -- an engine crossed with a style. Each gets
+its own thumbnails and its own sheets under `out/thumbs/<source>/`. Idempotent:
+a part whose render sha has not changed is skipped, so running this after each
+batch of renders costs only the new ones.
 """
 from __future__ import annotations
 
@@ -651,39 +748,54 @@ from brick_icons import db, thumbs  # noqa: E402
 DEFAULT_OUT = Path("out") / "thumbs"
 
 
+def bake_source(conn, source: str, root: Path, out: Path,
+                order: list[str]) -> tuple[int, int]:
+    """Bake one slot. Returns (baked, total)."""
+    rows = conn.execute(
+        "SELECT part_id, path, sha256 FROM renders WHERE source = ? "
+        "ORDER BY part_id", (source,)).fetchall()
+    slot = out / source
+    total, baked = len(rows), 0
+    for i, row in enumerate(rows, 1):
+        svg = root / row["path"]
+        if not svg.is_file():
+            print(f"  {source} {i}/{total} {row['part_id']} MISSING {row['path']}",
+                  flush=True)
+            continue
+        made = thumbs.bake_part(row["part_id"], svg, slot, sha=row["sha256"])
+        baked += bool(made)
+        print(f"  {source} {i}/{total} {row['part_id']} "
+              f"{'baked' if made else 'fresh'}", flush=True)
+    for path in thumbs.compose(slot, order):
+        print(f"  wrote {path}", flush=True)
+    return baked, total
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", default=str(ROOT / db.DEFAULT_PATH))
     ap.add_argument("--root", default=str(ROOT))
     ap.add_argument("--out", default=str(ROOT / DEFAULT_OUT))
-    ap.add_argument("--source", default="naive")
+    ap.add_argument("--source", action="append",
+                    help="slot to bake; repeatable. Default: every slot with renders.")
     args = ap.parse_args()
 
     root, out = Path(args.root), Path(args.out)
     conn = db.connect(args.db)
     try:
         order = [r["id"] for r in conn.execute("SELECT id FROM parts ORDER BY id")]
-        rows = conn.execute(
-            "SELECT part_id, path, sha256 FROM renders WHERE source = ? "
-            "ORDER BY part_id", (args.source,)).fetchall()
+        sources = args.source or [
+            r["source"] for r in conn.execute(
+                "SELECT DISTINCT source FROM renders ORDER BY source")]
+        print(f"{len(sources)} slot(s) over {len(order)} cells: "
+              f"{', '.join(sources)}", flush=True)
+        for n, source in enumerate(sources, 1):
+            print(f"[{n}/{len(sources)}] {source}", flush=True)
+            baked, total = bake_source(conn, source, root, out, order)
+            print(f"[{n}/{len(sources)}] {source}: baked {baked} of {total}",
+                  flush=True)
     finally:
         conn.close()
-
-    total, baked = len(rows), 0
-    for i, row in enumerate(rows, 1):
-        svg = root / row["path"]
-        if not svg.is_file():
-            print(f"{i}/{total} {row['part_id']} MISSING {row['path']}", flush=True)
-            continue
-        made = thumbs.bake_part(row["part_id"], svg, out, sha=row["sha256"])
-        baked += bool(made)
-        print(f"{i}/{total} {row['part_id']} {'baked' if made else 'fresh'}",
-              flush=True)
-
-    print(f"composing {len(order)} cells onto sheets", flush=True)
-    for path in thumbs.compose(out, order):
-        print(f"wrote {path}", flush=True)
-    print(f"baked {baked} of {total}")
     return 0
 
 
@@ -694,26 +806,33 @@ if __name__ == "__main__":
 - [ ] **Step 2: Run it for real**
 
 Run: `.venv/bin/python scripts/bake-thumbs.py`
-Expected: 149 progress lines each `i/149 <part> baked`, then `wrote .../sheet-8.png`,
-`wrote .../sheet-32.png`, then `baked 149 of 149`.
+Expected: two slots — `census-naive` (200 renders) and `naive` (49) — each
+printing one line per part and then two `wrote .../sheet-*.png` lines. Both
+slots' sheets land under `out/thumbs/<source>/`.
 
 - [ ] **Step 3: Verify it is idempotent**
 
 Run: `.venv/bin/python scripts/bake-thumbs.py`
-Expected: every line reads `fresh`, and the last line reads `baked 0 of 149`.
+Expected: every part line reads `fresh`, and each slot reports `baked 0 of N`.
 
-- [ ] **Step 4: Look at the sheet**
+- [ ] **Step 4: Look at both slots**
 
-Run: `~/src/slopboard/bin/slop out/thumbs/sheet-32.png`
-Expected: a 5652 px square, almost entirely transparent, with 149 small drawings
-scattered through it in part-id order. Confirm the drawings are recognisable
-parts and not black blobs.
+```bash
+~/src/slopboard/bin/slop out/thumbs/census-naive/sheet-32.png
+~/src/slopboard/bin/slop out/thumbs/naive/sheet-32.png
+```
+
+Expected: two 5652 px squares, almost entirely transparent, with small drawings
+scattered through them in part-id order. The `naive` sheet's drawings carry
+black outline strokes; the `census-naive` sheet's do not — that difference is
+the whole point of keeping the slots apart. Confirm both are recognisable parts
+and not black blobs.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add scripts/bake-thumbs.py
-git commit -m "bake the corpus wall's thumbnails from the render store"
+git commit -m "bake each slot's thumbnails and sheets from the render store"
 ```
 
 ---
@@ -821,7 +940,7 @@ def test_a_delta_cell_keeps_the_index_it_has_on_the_wall(conn):
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `.venv/bin/pytest tests/test_lab_cells.py -v`
+Run: `.venv/bin/python -m pytest tests/test_lab_cells.py -v`
 Expected: FAIL — `ImportError: cannot import name 'cells'`
 
 - [ ] **Step 3: Implement**
@@ -846,7 +965,17 @@ WHERE m.engine = ?
 """
 
 
-def cells(conn: sqlite3.Connection, source: str = "naive",
+def engine_for(source: str) -> str:
+    """The engine a slot's measurements are filed under.
+
+    `renders.source` names a slot and `measurements.engine` names an engine, so
+    the census slots have to drop their prefix or every metric joins to nothing
+    and the wall sorts an unsorted column without erroring.
+    """
+    return source[len("census-"):] if source.startswith("census-") else source
+
+
+def cells(conn: sqlite3.Connection, source: str = "census-naive",
           since: str | None = None) -> dict:
     """Every cell, or only those whose render landed after `since`.
 
@@ -859,8 +988,9 @@ def cells(conn: sqlite3.Connection, source: str = "naive",
     renders = {r["part_id"]: r for r in conn.execute(
         "SELECT part_id, sha256, made_at FROM renders WHERE source = ?",
         (source,))}
+    engine = engine_for(source)
     measures = {r["part_id"]: r for r in conn.execute(
-        _LATEST_MEASURE, (source, source))}
+        _LATEST_MEASURE, (engine, engine))}
 
     version = max((r["made_at"] for r in renders.values()), default="")
     wanted = order
@@ -896,7 +1026,7 @@ def cells(conn: sqlite3.Connection, source: str = "naive",
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `.venv/bin/pytest tests/test_lab_cells.py -v`
+Run: `.venv/bin/python -m pytest tests/test_lab_cells.py -v`
 Expected: PASS, 8 tests
 
 - [ ] **Step 5: Commit**
@@ -927,9 +1057,9 @@ def _corpus_client(tmp_path):
     conn.commit()
     conn.close()
     thumbs = tmp_path / "thumbs"
-    (thumbs / "128").mkdir(parents=True)
-    (thumbs / "128" / "3001.png").write_bytes(b"\x89PNG\r\n\x1a\n")
-    (thumbs / "sheet-8.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    (thumbs / "naive" / "128").mkdir(parents=True)
+    (thumbs / "naive" / "128" / "3001.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    (thumbs / "naive" / "sheet-8.png").write_bytes(b"\x89PNG\r\n\x1a\n")
     return TestClient(lab_app.create_app(
         cache_root=tmp_path / "cache",
         corpus_db=tmp_path / "corpus.db",
@@ -966,26 +1096,49 @@ def test_part_route_404s_on_an_unknown_part(tmp_path):
 
 
 def test_thumb_route_serves_a_loose_level(tmp_path):
-    r = _corpus_client(tmp_path).get("/api/thumbs/128/3001.png")
+    r = _corpus_client(tmp_path).get("/api/thumbs/naive/128/3001.png")
     assert r.status_code == 200
 
 
 def test_thumb_route_serves_a_sheet(tmp_path):
     assert _corpus_client(tmp_path).get(
-        "/api/thumbs/sheet-8.png").status_code == 200
+        "/api/thumbs/naive/sheet-8.png").status_code == 200
+
+
+def test_thumb_route_refuses_an_unknown_slot(tmp_path):
+    assert _corpus_client(tmp_path).get(
+        "/api/thumbs/nonsense/128/3001.png").status_code == 400
 
 
 def test_thumb_route_refuses_traversal(tmp_path):
     assert _corpus_client(tmp_path).get(
-        "/api/thumbs/128/..%2F..%2Fcorpus.db").status_code in (400, 404)
+        "/api/thumbs/naive/128/..%2F..%2Fcorpus.db").status_code in (400, 404)
+
+
+def test_sources_route_lists_the_slots_that_have_renders(tmp_path):
+    body = _corpus_client(tmp_path).get("/api/corpus/sources").json()
+    assert body["sources"] == []
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `.venv/bin/pytest tests/test_lab_app.py -k corpus -v`
+Run: `.venv/bin/python -m pytest tests/test_lab_app.py -k corpus -v`
 Expected: FAIL — `TypeError: create_app() got an unexpected keyword argument 'corpus_db'`
 
 - [ ] **Step 3: Implement**
+
+The cell list is ~6.5MB of JSON for the whole corpus, so the app gzips. Add the
+import and one line inside `create_app`, right after the `FastAPI(...)` call:
+
+```python
+from fastapi.middleware.gzip import GZipMiddleware
+```
+
+```python
+    # 24,591 cells is ~6.5MB of JSON and highly repetitive; gzip takes it under
+    # a megabyte for the cost of one line.
+    app.add_middleware(GZipMiddleware, minimum_size=1024)
+```
 
 In `brick_icons/lab/app.py`, extend the import line and the signature:
 
@@ -1022,7 +1175,7 @@ Then add the routes, next to the other artifact routes:
         return corpus_db_module.connect(app.state.corpus_db)
 
     @app.get("/api/corpus/cells")
-    def get_cells(source: str = "naive", since: str | None = None):
+    def get_cells(source: str = "census-naive", since: str | None = None):
         conn = corpus_conn()
         try:
             return cells.cells(conn, source=source, since=since)
@@ -1062,25 +1215,41 @@ Then add the routes, next to the other artifact routes:
                 "defects": [d for d in defects.load(app.state.defects_path)
                             if d["part"] == part_id]}
 
-    @app.get("/api/thumbs/sheet-{level}.png")
-    def get_sheet(level: int):
-        path = Path(app.state.thumbs_root) / f"sheet-{level}.png"
+    def _slot(source: str) -> Path:
+        if source not in corpus_db_module.SOURCES:
+            raise HTTPException(400, f"no such slot: {source}")
+        return Path(app.state.thumbs_root) / source
+
+    @app.get("/api/corpus/sources")
+    def get_sources():
+        """The slots that have renders, worst-populated last."""
+        conn = corpus_conn()
+        try:
+            return {"sources": [dict(r) for r in conn.execute(
+                "SELECT source, count(*) AS n FROM renders "
+                "GROUP BY source ORDER BY n DESC")]}
+        finally:
+            conn.close()
+
+    @app.get("/api/thumbs/{source}/sheet-{level}.png")
+    def get_sheet(source: str, level: int):
+        path = _slot(source) / f"sheet-{level}.png"
         if not path.is_file():
             raise HTTPException(404, "no such sheet; run scripts/bake-thumbs.py")
         return FileResponse(path)
 
-    @app.get("/api/thumbs/sheet-{level}.json")
-    def get_sheet_manifest(level: int):
-        path = Path(app.state.thumbs_root) / f"sheet-{level}.json"
+    @app.get("/api/thumbs/{source}/sheet-{level}.json")
+    def get_sheet_manifest(source: str, level: int):
+        path = _slot(source) / f"sheet-{level}.json"
         if not path.is_file():
             raise HTTPException(404, "no such sheet manifest")
         return FileResponse(path)
 
-    @app.get("/api/thumbs/{level}/{name}")
-    def get_thumb(level: int, name: str):
+    @app.get("/api/thumbs/{source}/{level}/{name}")
+    def get_thumb(source: str, level: int, name: str):
         if "/" in name or ".." in name or not name.endswith(".png"):
             raise HTTPException(400, "bad thumbnail path")
-        path = Path(app.state.thumbs_root) / str(level) / name
+        path = _slot(source) / str(level) / name
         if not path.is_file():
             raise HTTPException(404, "no such thumbnail")
         return FileResponse(path)
@@ -1088,7 +1257,7 @@ Then add the routes, next to the other artifact routes:
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `.venv/bin/pytest tests/test_lab_app.py -v`
+Run: `.venv/bin/python -m pytest tests/test_lab_app.py -v`
 Expected: PASS, including the 8 new corpus tests and every route test that
 already passed.
 
@@ -1118,7 +1287,8 @@ import { render, screen } from '@testing-library/react';
 import { CorpusWall } from '@lab/corpus/CorpusWall';
 
 it('says it is loading before the cells arrive', () => {
-  render(<CorpusWall client={{ cells: () => new Promise(() => {}) } as any} />);
+  render(<CorpusWall client={{ cells: () => new Promise(() => {}),
+                               corpusSources: () => new Promise(() => {}) } as any} />);
   expect(screen.getByText(/loading the corpus/i)).toBeTruthy();
 });
 ```
@@ -1161,7 +1331,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
   const [body, setBody] = useState<CellsBody | null>(null);
 
   useEffect(() => {
-    void client.cells().then(setBody);
+    void client.cells('census-naive').then(setBody);
   }, [client]);
 
   if (!body) return <p className="corpus-loading">loading the corpus…</p>;
@@ -1244,9 +1414,13 @@ In `lab/vite.config.ts`, replace `build: { outDir: 'dist' },` with:
 Add to `lab/src/api/client.ts`, beside the other methods:
 
 ```ts
-  cells: (since?: string): Promise<CellsBody> =>
-    get(since ? `/api/corpus/cells?since=${encodeURIComponent(since)}`
-              : '/api/corpus/cells'),
+  cells: (source: string, since?: string): Promise<CellsBody> => {
+    const q = new URLSearchParams({ source });
+    if (since) q.set('since', since);
+    return get(`/api/corpus/cells?${q}`);
+  },
+  corpusSources: (): Promise<{ sources: { source: string; n: number }[] }> =>
+    get('/api/corpus/sources'),
 ```
 
 Import `CellsBody` from `@lab/corpus/types` at the top of `client.ts`.
@@ -1412,18 +1586,32 @@ it('fits bounds inside a viewport', () => {
   expect(fitted.scale).toBe(2);
 });
 
+it('does not hand back Infinity for an empty wall', () => {
+  expect(fitBounds({ w: 0, h: 0 }, { width: 200, height: 200 }).scale).toBe(1);
+});
+
 it('picks the coarsest level that covers the on-screen cell size', () => {
   expect(levelFor(4)).toBe(8);
   expect(levelFor(20)).toBe(32);
   expect(levelFor(200)).toBe(128);
 });
 
-it('holds the current level until it is well past the threshold', () => {
-  // 8 -> 32 only at 1.5x the 8px band's top, and back only at 0.67x
-  expect(pickLevel(8, 10)).toBe(8);
-  expect(pickLevel(8, 13)).toBe(32);
-  expect(pickLevel(32, 12)).toBe(32);
+it('holds the current level across the whole hysteresis dead zone', () => {
+  // The 8/32 boundary is 16px, so the dead zone is [16*0.67, 16*1.5] = [10.7, 24].
+  // Inside it the level in hand wins, whichever one that is -- which is the
+  // entire point: a zoom parked on 16px would otherwise re-upload every frame.
+  expect(pickLevel(8, 20)).toBe(8);    // wants 32, not past 24 yet
+  expect(pickLevel(32, 12)).toBe(32);  // wants 8, not below 10.7 yet
+});
+
+it('swaps once the zoom is clearly past the dead zone', () => {
+  expect(pickLevel(8, 30)).toBe(32);
   expect(pickLevel(32, 5)).toBe(8);
+});
+
+it('leaves the level alone when it is already the right one', () => {
+  expect(pickLevel(8, 10)).toBe(8);
+  expect(pickLevel(32, 40)).toBe(32);
 });
 ```
 
@@ -1461,6 +1649,10 @@ export function zoomAt(cam: Camera, sx: number, sy: number,
 
 export function fitBounds(bounds: { w: number; h: number },
                           viewport: { width: number; height: number }): Camera {
+  // An empty wall has zero bounds, and the unguarded division hands back
+  // Infinity -- which multiplies every coordinate into NaN with nothing
+  // downstream to catch it.
+  if (bounds.w <= 0 || bounds.h <= 0) return { x: 0, y: 0, scale: 1 };
   const scale = Math.min(viewport.width / bounds.w, viewport.height / bounds.h);
   return { x: 0, y: 0, scale };
 }
@@ -1712,26 +1904,30 @@ export function mergeCells(current: Cell[], delta: Cell[]): Cell[] {
   return current.map((c) => byId.get(c.id) ?? c);
 }
 
-export function useCells(client: LabClient) {
+export function useCells(client: LabClient, source: string) {
   const [cells, setCells] = useState<Cell[] | null>(null);
   const version = useRef('');
 
   useEffect(() => {
     let live = true;
-    void client.cells().then((body: CellsBody) => {
+    // A slot change is a different set of drawings for the same parts, so the
+    // version resets with it -- polling the old one would merge the wrong shas.
+    version.current = '';
+    setCells(null);
+    void client.cells(source).then((body: CellsBody) => {
       if (!live) return;
       version.current = body.version;
       setCells(body.cells);
     });
     const timer = setInterval(() => {
-      void client.cells(version.current).then((body: CellsBody) => {
+      void client.cells(source, version.current).then((body: CellsBody) => {
         if (!live || body.cells.length === 0) return;
         version.current = body.version;
         setCells((prev) => (prev ? mergeCells(prev, body.cells) : prev));
       });
     }, POLL_MS);
     return () => { live = false; clearInterval(timer); };
-  }, [client]);
+  }, [client, source]);
 
   return cells;
 }
@@ -1961,7 +2157,9 @@ export function Wall({ cells, rects, cam, sheet, manifest, width, height,
 }
 ```
 
-Add to `lab/src/corpus/corpus.css`:
+Create `lab/src/corpus/Wall.css` and import it from `Wall.tsx`
+(`import '@lab/corpus/Wall.css';`) — the lab keeps CSS per component
+(`ColorRow.css`, `DefectCard.css`, `SourcePane.css`), not in one sheet:
 
 ```css
 .corpus-canvas { display: block; cursor: crosshair; }
@@ -2049,26 +2247,43 @@ it('never mutates the input', () => {
 import { fireEvent, render, screen } from '@testing-library/react';
 import { FilterBar } from '@lab/corpus/FilterBar';
 
+const SLOTS = [{ source: 'census-naive', n: 200 }, { source: 'naive', n: 49 }];
+const bar = (props: Record<string, unknown> = {}) => (
+  <FilterBar selection={{ sort: 'id', filter: 'all' }} onChange={() => {}}
+             shown={10} total={100} sources={SLOTS} source="census-naive"
+             onSource={() => {}} {...props} />
+);
+
+it('lists the slots that have renders, with their counts', () => {
+  render(bar());
+  expect(screen.getByRole('option', { name: 'census-naive (200)' })).toBeTruthy();
+  expect(screen.getByRole('option', { name: 'naive (49)' })).toBeTruthy();
+});
+
+it('reports a slot change', () => {
+  const onSource = vi.fn();
+  render(bar({ onSource }));
+  fireEvent.change(screen.getByLabelText('Slot'), { target: { value: 'naive' } });
+  expect(onSource).toHaveBeenCalledWith('naive');
+});
+
 it('reports a sort change', () => {
   const onChange = vi.fn();
-  render(<FilterBar selection={{ sort: 'id', filter: 'all' }}
-                    onChange={onChange} shown={10} total={100} />);
+  render(bar({ onChange }));
   fireEvent.change(screen.getByLabelText('Sort'), { target: { value: 'secs' } });
   expect(onChange).toHaveBeenCalledWith({ sort: 'secs', filter: 'all' });
 });
 
 it('reports a filter change', () => {
   const onChange = vi.fn();
-  render(<FilterBar selection={{ sort: 'id', filter: 'all' }}
-                    onChange={onChange} shown={10} total={100} />);
+  render(bar({ onChange }));
   fireEvent.change(screen.getByLabelText('Show'),
                    { target: { value: 'unrendered' } });
   expect(onChange).toHaveBeenCalledWith({ sort: 'id', filter: 'unrendered' });
 });
 
 it('says how much of the corpus is on the wall', () => {
-  render(<FilterBar selection={{ sort: 'id', filter: 'all' }}
-                    onChange={() => {}} shown={10} total={100} />);
+  render(bar());
   expect(screen.getByText('10 of 100')).toBeTruthy();
 });
 ```
@@ -2137,14 +2352,26 @@ export function applySelection(cells: Cell[], selection: Selection): Cell[] {
 ```tsx
 import { FILTERS, SORTS, type Selection } from '@lab/corpus/select';
 
-export function FilterBar({ selection, onChange, shown, total }: {
+export function FilterBar({ selection, onChange, shown, total,
+                            sources, source, onSource }: {
   selection: Selection;
   onChange: (next: Selection) => void;
   shown: number;
   total: number;
+  sources: { source: string; n: number }[];
+  source: string;
+  onSource: (next: string) => void;
 }) {
   return (
     <div className="corpus-bar">
+      <label>
+        Slot
+        <select value={source} onChange={(e) => onSource(e.target.value)}>
+          {sources.map((s) => (
+            <option key={s.source} value={s.source}>{s.source} ({s.n})</option>
+          ))}
+        </select>
+      </label>
       <label>
         Sort
         <select value={selection.sort}
@@ -2167,7 +2394,7 @@ export function FilterBar({ selection, onChange, shown, total }: {
 }
 ```
 
-Add to `lab/src/corpus/corpus.css`:
+Create `lab/src/corpus/FilterBar.css` and import it from `FilterBar.tsx`:
 
 ```css
 .corpus-bar {
@@ -2222,28 +2449,32 @@ const detail = {
 };
 
 const client = { corpusPart: () => Promise.resolve(detail) } as any;
+const box = (props: Record<string, unknown> = {}) => (
+  <Lightbox partId="3001" source="naive" client={client} onClose={() => {}}
+            {...props} />
+);
 
-it('shows the part title and its render', async () => {
-  render(<Lightbox partId="3001" client={client} onClose={() => {}} />);
+it('shows the part title and the render for the slot being viewed', async () => {
+  render(box());
   await waitFor(() => screen.getByText('Brick 2 x 4'));
   expect(screen.getByRole('img', { name: /3001/ })
-    .getAttribute('src')).toContain('/api/thumbs/128/3001.png');
+    .getAttribute('src')).toContain('/api/thumbs/naive/128/3001.png');
 });
 
 it('lists each engine measurement', async () => {
-  render(<Lightbox partId="3001" client={client} onClose={() => {}} />);
+  render(box());
   await waitFor(() => screen.getByText('naive'));
   expect(screen.getByText('1.5')).toBeTruthy();
 });
 
 it('lists open defects', async () => {
-  render(<Lightbox partId="3001" client={client} onClose={() => {}} />);
+  render(box());
   await waitFor(() => screen.getByText('rim nubs'));
 });
 
 it('closes on the button', async () => {
   const onClose = vi.fn();
-  render(<Lightbox partId="3001" client={client} onClose={onClose} />);
+  render(box({ onClose }));
   await waitFor(() => screen.getByLabelText('Close'));
   fireEvent.click(screen.getByLabelText('Close'));
   expect(onClose).toHaveBeenCalled();
@@ -2251,7 +2482,7 @@ it('closes on the button', async () => {
 
 it('closes on Escape', async () => {
   const onClose = vi.fn();
-  render(<Lightbox partId="3001" client={client} onClose={onClose} />);
+  render(box({ onClose }));
   await waitFor(() => screen.getByLabelText('Close'));
   fireEvent.keyDown(window, { key: 'Escape' });
   expect(onClose).toHaveBeenCalled();
@@ -2295,8 +2526,9 @@ import { useEffect, useState } from 'react';
 import type { LabClient } from '@lab/api/client';
 import type { PartDetail } from '@lab/corpus/types';
 
-export function Lightbox({ partId, client, onClose }: {
+export function Lightbox({ partId, source, client, onClose }: {
   partId: string;
+  source: string;
   client: LabClient;
   onClose: () => void;
 }) {
@@ -2324,9 +2556,10 @@ export function Lightbox({ partId, client, onClose }: {
           <p className="corpus-sub">
             {detail.part.id} · {detail.part.category ?? 'uncategorised'} ·
             {' '}{detail.part.status}
+            {detail.part.status_note ? ` · ${detail.part.status_note}` : ''}
           </p>
           <img className="corpus-big" alt={`${detail.part.id} render`}
-               src={`/api/thumbs/128/${detail.part.id}.png`} />
+               src={`/api/thumbs/${source}/128/${detail.part.id}.png`} />
           <h3>Measurements</h3>
           <table>
             <thead>
@@ -2369,7 +2602,7 @@ export function Lightbox({ partId, client, onClose }: {
 }
 ```
 
-Add to `lab/src/corpus/corpus.css`:
+Create `lab/src/corpus/Lightbox.css` and import it from `Lightbox.tsx`:
 
 ```css
 .corpus-lightbox {
@@ -2426,9 +2659,12 @@ const cell = (id: string, index: number, sha: string | null = null): Cell => ({
 });
 
 const client = {
+  corpusSources: () => Promise.resolve({
+    sources: [{ source: 'census-naive', n: 2 }],
+  }),
   cells: () => Promise.resolve({
     cells: [cell('a', 0, 'sha-a'), cell('b', 1)], count: 2,
-    version: '2026-09-05T10:00:00+00:00', source: 'naive',
+    version: '2026-09-05T10:00:00+00:00', source: 'census-naive',
   }),
   sheetManifest: () => Promise.resolve({
     level: 32, gutter: 2, pitch: 36, cols: 2, rows: 1, count: 2, size: 72,
@@ -2439,6 +2675,7 @@ const client = {
 
 it('says it is loading before the cells arrive', () => {
   render(<CorpusWall client={{ cells: () => new Promise(() => {}),
+                               corpusSources: () => new Promise(() => {}),
                                sheetManifest: () => new Promise(() => {}) } as any} />);
   expect(screen.getByText(/loading the corpus/i)).toBeTruthy();
 });
@@ -2467,8 +2704,8 @@ Expected: FAIL — no canvas, no `2 of 2`
 Add to `lab/src/api/client.ts`:
 
 ```ts
-  sheetManifest: (level: number): Promise<SheetManifest> =>
-    get(`/api/thumbs/sheet-${level}.json`),
+  sheetManifest: (source: string, level: number): Promise<SheetManifest> =>
+    get(`/api/thumbs/${source}/sheet-${level}.json`),
 ```
 
 Replace `lab/src/corpus/CorpusWall.tsx`:
@@ -2493,7 +2730,9 @@ const GAP = 4;
 /** The whole app, minus its mount. Exported so a labkit instrument can host it
  *  without the standalone page. */
 export function CorpusWall({ client }: { client: LabClient }) {
-  const cells = useCells(client);
+  const [sources, setSources] = useState<{ source: string; n: number }[]>([]);
+  const [source, setSource] = useState('census-naive');
+  const cells = useCells(client, source);
   const [manifest, setManifest] = useState<SheetManifest | null>(null);
   const [sheet, setSheet] = useState<HTMLImageElement | null>(null);
   const [selection, setSelection] = useState<Selection>(
@@ -2503,12 +2742,22 @@ export function CorpusWall({ client }: { client: LabClient }) {
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 800, height: 600 });
 
+  // The most-populated slot is the one worth opening on; the route already
+  // orders them that way.
   useEffect(() => {
-    void client.sheetManifest(SHEET_LEVEL).then(setManifest).catch(() => {});
+    void client.corpusSources().then(({ sources: got }) => {
+      setSources(got);
+      if (got[0]) setSource(got[0].source);
+    }).catch(() => {});
+  }, [client]);
+
+  useEffect(() => {
+    setSheet(null);
+    void client.sheetManifest(source, SHEET_LEVEL).then(setManifest).catch(() => {});
     const img = new Image();
     img.onload = () => setSheet(img);
-    img.src = `/api/thumbs/sheet-${SHEET_LEVEL}.png`;
-  }, [client]);
+    img.src = `/api/thumbs/${source}/sheet-${SHEET_LEVEL}.png`;
+  }, [client, source]);
 
   useEffect(() => {
     const el = box.current;
@@ -2539,7 +2788,8 @@ export function CorpusWall({ client }: { client: LabClient }) {
   return (
     <div className="corpus-app">
       <FilterBar selection={selection} onChange={setSelection}
-                 shown={shown.length} total={cells.length} />
+                 shown={shown.length} total={cells.length}
+                 sources={sources} source={source} onSource={setSource} />
       <div className="corpus-stage" ref={box}
            onWheel={(e) => {
              if (!cam) return;
@@ -2554,7 +2804,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
         )}
       </div>
       {picked && (
-        <Lightbox partId={picked} client={client}
+        <Lightbox partId={picked} source={source} client={client}
                   onClose={() => setPicked(null)} />
       )}
     </div>
@@ -2562,12 +2812,30 @@ export function CorpusWall({ client }: { client: LabClient }) {
 }
 ```
 
-Add to `lab/src/corpus/corpus.css`:
+Add to `lab/src/corpus/corpus.css` (the shell's own sheet, already imported by
+`CorpusWall.tsx`):
 
 ```css
 .corpus-app { display: flex; flex-direction: column; height: 100vh; }
 .corpus-stage { flex: 1; overflow: hidden; }
 ```
+
+- [ ] **Step 3b: Move focus into the lightbox when it opens**
+
+The lightbox is `role="dialog"` with an Escape handler and a real `<button>`
+Close, but nothing moves focus into it — so a keyboard user lands wherever the
+canvas left them and has to tab through the page to reach it. No single
+component can fix that; the one that mounts the dialog has to.
+
+In `Lightbox.tsx`, focus the close button on mount:
+
+```tsx
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => { closeRef.current?.focus(); }, []);
+```
+
+and put `ref={closeRef}` on the Close button. Add a test asserting
+`document.activeElement` is the Close button after the dialog renders.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -2587,7 +2855,7 @@ cd lab && npm run dev
 ```
 
 Open `http://localhost:5178/corpus.html`. Expected: a wall of 24,591 cells,
-149 of them white tiles carrying a part drawing and the rest flat placeholders.
+100 of them white tiles carrying a part drawing and the rest flat placeholders.
 Scroll to zoom. Click a drawn cell and the lightbox opens on that part. Change
 Sort to `extra_d99` and the drawn cells move to the top-left.
 
@@ -2675,9 +2943,9 @@ const cell = (id: string, index: number, sha: string | null): Cell => ({
   error: null,
 });
 
-it('cache-busts on the render sha', () => {
-  expect(thumbUrl(cell('3001', 0, 'deadbeefcafe')))
-    .toBe('/api/thumbs/128/3001.png?v=deadbeef');
+it('names the slot and cache-busts on the render sha', () => {
+  expect(thumbUrl(cell('3001', 0, 'deadbeefcafe'), 'naive'))
+    .toBe('/api/thumbs/naive/128/3001.png?v=deadbeef');
 });
 
 it('wants nothing below the loose level', () => {
@@ -2756,8 +3024,9 @@ import type { Cell } from '@lab/corpus/types';
  *  filter change puts many large cells in view at once. */
 export const MAX_IN_FLIGHT = 200;
 
-export function thumbUrl(cell: Cell): string {
-  return `/api/thumbs/${LOOSE_LEVEL}/${cell.id}.png?v=${cell.sha!.slice(0, 8)}`;
+export function thumbUrl(cell: Cell, source: string): string {
+  return `/api/thumbs/${source}/${LOOSE_LEVEL}/${cell.id}.png`
+       + `?v=${cell.sha!.slice(0, 8)}`;
 }
 
 /** Which visible cells deserve their own image at this level. */
@@ -2773,8 +3042,11 @@ export function wanted(cells: Cell[], visible: number[],
   return out;
 }
 
-export function useLooseThumbs(cells: Cell[], visible: number[], level: number) {
+export function useLooseThumbs(cells: Cell[], visible: number[], level: number,
+                               source: string) {
   const [loaded, setLoaded] = useState(new Map<string, HTMLImageElement>());
+
+  useEffect(() => { setLoaded(new Map()); }, [source]);
 
   useEffect(() => {
     const want = wanted(cells, visible, level);
@@ -2787,10 +3059,10 @@ export function useLooseThumbs(cells: Cell[], visible: number[], level: number) 
         if (!live) return;
         setLoaded((prev) => new Map(prev).set(cell.id, img));
       };
-      img.src = thumbUrl(cell);
+      img.src = thumbUrl(cell, source);
     }
     return () => { live = false; };
-  }, [cells, visible, level, loaded]);
+  }, [cells, visible, level, source, loaded]);
 
   return level >= LOOSE_LEVEL ? loaded : undefined;
 }
@@ -2813,21 +3085,22 @@ export interface Sheet {
 
 /** Both sprite sheets, loaded once. They are one small texture each and never
  *  change during a session, so there is nothing to evict. */
-export function useSheets(client: LabClient): Record<number, Sheet> {
+export function useSheets(client: LabClient, source: string): Record<number, Sheet> {
   const [sheets, setSheets] = useState<Record<number, Sheet>>({});
 
   useEffect(() => {
+    setSheets({});
     for (const level of SHEET_LEVELS) {
-      void client.sheetManifest(level).then((manifest) => {
+      void client.sheetManifest(source, level).then((manifest) => {
         setSheets((prev) => ({ ...prev,
           [level]: { ...(prev[level] ?? { image: null }), manifest } }));
       }).catch(() => {});
       const img = new Image();
       img.onload = () => setSheets((prev) => ({ ...prev,
         [level]: { ...(prev[level] ?? { manifest: null }), image: img } }));
-      img.src = `/api/thumbs/sheet-${level}.png`;
+      img.src = `/api/thumbs/${source}/sheet-${level}.png`;
     }
-  }, [client]);
+  }, [client, source]);
 
   return sheets;
 }
@@ -2879,7 +3152,7 @@ import { visibleRange } from '@lab/corpus/visible';
 ```
 
 ```tsx
-  const sheets = useSheets(client);
+  const sheets = useSheets(client, source);
   const [level, setLevel] = useState(8);
 
   useEffect(() => {
@@ -2889,7 +3162,7 @@ import { visibleRange } from '@lab/corpus/visible';
   const visible = useMemo(
     () => (cam ? visibleRange(laid.rects, cam, size) : []),
     [laid.rects, cam, size]);
-  const loose = useLooseThumbs(shown, visible, level);
+  const loose = useLooseThumbs(shown, visible, level, source);
   const sheet = sheets[level === 128 ? 32 : level] ?? { image: null, manifest: null };
 ```
 
@@ -2911,8 +3184,13 @@ Expected: PASS, including the 3 new paint tests and the 4 new loose-thumb tests.
 With the server and dev page running, open `http://localhost:5178/corpus.html`.
 Zoom all the way out: cells are a few pixels and come from `sheet-8.png` — check
 the network panel shows it fetched. Zoom in: `sheet-32.png` takes over. Zoom
-until a cell is bigger than 128 px: individual `/api/thumbs/128/<part>.png`
-requests appear and the drawing sharpens.
+until a cell is bigger than 128 px: individual
+`/api/thumbs/<slot>/128/<part>.png` requests appear and the drawing sharpens.
+
+Then switch the Slot control from `census-naive` to `naive`. The wall keeps its
+camera and its sort, the sheets swap, and far fewer cells are drawn — 49 against
+200. The drawings that do appear carry black outline strokes the census ones
+lack.
 
 Park the zoom exactly on a threshold and jiggle it. Expected: the level does not
 flip back and forth — that is what `pickLevel`'s hysteresis is for. If the
@@ -2928,16 +3206,1068 @@ git commit -m "swap the corpus wall between both sheets and the loose thumbnails
 
 ---
 
-### Task 18: The full gate
+### Task 18: The part card
+
+Clicking a cell should not jump straight to a full-screen takeover. A single
+click raises a **business-card-sized popup** beside the cell — id, title,
+category, status, the sorted metric, its thumbnail, and a button that opens the
+full lightbox. A **double click** skips the card and opens the lightbox
+directly.
+
+Everything the card shows is already in the `Cell` the wall holds, so the card
+costs no fetch and appears instantly; only the lightbox goes to the server.
+
+**Files:**
+- Create: `lab/src/corpus/PartCard.tsx`, `PartCard.test.tsx`, `PartCard.css`
+- Modify: `lab/src/corpus/Wall.tsx` (report the click point and the cell)
+- Modify: `lab/src/corpus/CorpusWall.tsx` (card state, double-click to lightbox)
+- Modify: `lab/src/corpus/CorpusWall.test.tsx`
+
+Two repo rules bind this:
+
+**No inline `style={...}`.** The card is positioned at the click point, which is
+genuinely dynamic — so set CSS custom properties on the element from a ref in an
+effect (`el.style.setProperty('--card-x', `${x}px`)`) and let the stylesheet
+consume them. The JSX stays free of a `style` prop.
+
+**Single vs double click needs no timer.** A click event carries `detail` — the
+click count. `onClick` returns early when `e.detail === 2` and lets
+`onDoubleClick` handle it, so the card never flashes before the lightbox.
+
+- [ ] **Step 0: Fix the camera, which fits once at the wrong size**
+
+Seen in the browser: the wall draws at half the scale it should, filling about
+half the canvas. `cam` is fitted only when it is `null`, and that happens on the
+first render with `size` still at its 800x600 default — the `ResizeObserver`
+reports the real 1184x1443 a moment later and nothing re-fits.
+
+Refit while the camera is still the automatic one, and stop as soon as the user
+moves it. Track that explicitly rather than guessing from the values:
+
+```tsx
+  const touched = useRef(false);
+  useEffect(() => {
+    if (touched.current || laid.bounds.w <= 0) return;
+    setCam(fitBounds(laid.bounds, size));
+  }, [laid.bounds, size]);
+```
+
+and set `touched.current = true` in the wheel handler. That also fixes filtering
+to a small set leaving the camera on the old bounds, since the refit follows
+`laid.bounds`.
+
+Add a test asserting the camera re-fits when the observed size changes but not
+after a wheel event.
+
+- [ ] **Step 1: Write `lab/src/corpus/PartCard.test.tsx`**
+
+```tsx
+import { expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { PartCard } from '@lab/corpus/PartCard';
+import type { Cell } from '@lab/corpus/types';
+
+const cell: Cell = {
+  id: '3001', index: 0, title: 'Brick 2 x 4', category: 'Brick',
+  printed: false, obsolete: false, status: 'good', sha: 'deadbeefcafe',
+  made_at: '2026-09-05T10:00:00+00:00', extra_d99: 4.5, secs: 12, error: null,
+};
+
+const card = (props: Record<string, unknown> = {}) => (
+  <PartCard cell={cell} source="naive" at={{ x: 100, y: 100 }}
+            viewport={{ width: 1000, height: 800 }}
+            onOpen={() => {}} onClose={() => {}} {...props} />
+);
+
+it('shows what the wall already knows, without fetching', () => {
+  render(card());
+  expect(screen.getByText('Brick 2 x 4')).toBeTruthy();
+  expect(screen.getByText(/3001/)).toBeTruthy();
+  expect(screen.getByText(/good/)).toBeTruthy();
+});
+
+it('shows the thumbnail for the slot being viewed', () => {
+  render(card());
+  expect(screen.getByRole('img', { name: /3001/ })
+    .getAttribute('src')).toContain('/api/thumbs/naive/128/3001.png');
+});
+
+it('says so when a part has no render rather than showing a broken image', () => {
+  render(card({ cell: { ...cell, sha: null } }));
+  expect(screen.queryByRole('img')).toBeNull();
+  expect(screen.getByText(/not rendered/i)).toBeTruthy();
+});
+
+it('opens the lightbox from its button', () => {
+  const onOpen = vi.fn();
+  render(card({ onOpen }));
+  fireEvent.click(screen.getByRole('button', { name: /open/i }));
+  expect(onOpen).toHaveBeenCalledWith('3001');
+});
+
+it('closes on Escape', () => {
+  const onClose = vi.fn();
+  render(card({ onClose }));
+  fireEvent.keyDown(window, { key: 'Escape' });
+  expect(onClose).toHaveBeenCalled();
+});
+
+it('stays inside the viewport when clicked near the right edge', () => {
+  const { container } = render(card({ at: { x: 990, y: 790 } }));
+  const el = container.querySelector('.corpus-card') as HTMLElement;
+  expect(parseInt(el.style.getPropertyValue('--card-x'), 10))
+    .toBeLessThan(990);
+});
+```
+
+- [ ] **Step 2: Run to verify it fails**
+
+`cd lab && npx vitest run src/corpus/PartCard.test.tsx`
+
+- [ ] **Step 3: Implement the card**
+
+Write `PartCard.tsx` yourself against those tests. It takes
+`{ cell, source, at, viewport, onOpen, onClose }`, renders a small panel with
+the part's identity, its status, `extra_d99`/`secs` where present, the thumbnail
+when `cell.sha` is set, and an Open button. It clamps `--card-x`/`--card-y` so
+the card never leaves the viewport, and it listens for Escape.
+
+`PartCard.css` sizes it like a business card (about 320x190) and positions it
+absolutely from the two custom properties.
+
+- [ ] **Step 4: Report the click point from `Wall.tsx`**
+
+`onPick` currently receives only the cell. Widen it to
+`onPick(cell, at: {x, y})`, passing the click's position within the canvas —
+the hit-test already computes it. Update `Wall`'s own callers and tests.
+
+- [ ] **Step 5: Wire both gestures in `CorpusWall.tsx`**
+
+Hold `carded: {cell, at} | null` beside `picked`. `onPick` sets `carded`;
+`onDoubleClick` on the stage sets `picked` and clears `carded`. Opening the
+lightbox from the card's button clears the card. Add tests to
+`CorpusWall.test.tsx` for: a single click showing the card, the card's Open
+button raising the lightbox, and a double click going straight to the lightbox
+without the card appearing.
+
+- [ ] **Step 6: Run, look, and commit**
+
+`npx vitest run src/corpus` and `npx tsc -b --noEmit` must both be clean.
+
+Then run it and drive it in a browser, as Task 16 did: single-click a drawn
+cell and confirm the card appears beside it rather than over it; press its Open
+button; double-click another cell and confirm the lightbox opens with no card
+flash; click a placeholder cell and confirm the card says the part is not
+rendered. Screenshot the card and put it on the slopboard.
+
+```bash
+git add lab/src/corpus/PartCard.tsx lab/src/corpus/PartCard.test.tsx \
+        lab/src/corpus/PartCard.css lab/src/corpus/Wall.tsx \
+        lab/src/corpus/CorpusWall.tsx lab/src/corpus/CorpusWall.test.tsx
+git commit -m "raise a part card on click, and the lightbox on double click"
+```
+
+---
+
+### Task 19b: Two bugs the level ladder exposed
+
+- [ ] **Pick the opening level from the zoom, not from a default**
+
+`fitBounds` lands the default view at a cell size of about 11px. The 8/32 dead
+zone is 10.7-24, and `level` initialises to 32 — so `pickLevel` correctly holds
+32, and the wall opens drawing 32px art at 11px, which is the banding this whole
+ladder exists to remove.
+
+Hysteresis governs *transitions*; the first pick has nothing to be hysteretic
+about. Initialise `level` from `levelFor(CELL * cam.scale)` at the moment the
+camera first fits, and only run it through `pickLevel` thereafter.
+
+Test that a wall opening at an 11px cell size starts on level 8, and that a
+later small jiggle does not move it.
+
+- [ ] **Stop requesting old-slot ids against the new slot**
+
+Switching slots fires a burst of 404s: `useCells` clears its cells in an effect,
+so for one commit `useLooseThumbs` sees the previous slot's `cells` alongside
+the new `source` and builds URLs that cannot exist. It self-heals and never
+shows wrong content — a 404 never fires `onload`, so nothing enters the map —
+but the console is not clean, and a reader cannot tell this 404 from a real one.
+
+Clear during render rather than in an effect, so the child never observes the
+mismatched pair:
+
+```ts
+  const [fetchedFor, setFetchedFor] = useState(source);
+  if (fetchedFor !== source) {
+    setFetchedFor(source);
+    setCells(null);
+    version.current = '';
+  }
+```
+
+Test that changing `source` yields `null` cells on the very next render, before
+any effect runs.
+
+- [ ] **Verify and commit**
+
+`npx vitest run src/corpus` and `npx tsc -b --noEmit` clean. In the browser:
+the wall opens on `sheet-8` with no banding, and switching slots produces no
+404s in the network log.
+
+```bash
+git add lab/src/corpus/CorpusWall.tsx lab/src/corpus/CorpusWall.test.tsx \
+        lab/src/corpus/useCells.ts lab/src/corpus/useCells.test.ts
+git commit -m "open on the level the zoom asks for, and stop 404ing on a slot switch"
+```
+
+---
+
+### Task 20: Colour a cell by what is known about it
+
+Most of the wall has no thumbnail, so a cell's colour is the only thing it can
+say. Today `STATUS_FILL` keys off `parts.status`, which is a review verdict —
+not what a viewer needs to see. Replace it with four states:
+
+| state | colour | source |
+|---|---|---|
+| an open defect against this slot | bright ochre `#c8860d` | `defects.engines` includes this engine |
+| cannot be drawn here — GEOS, dead process, type error | red `#8c2020` | `measurements.error` |
+| timed out here | dim rust `#5a3326` | `measurements.error` |
+| an open defect against another slot | muted ochre `#6b5220` | `defects.engines` excludes it |
+| a failure or timeout under another engine | muted red `#4a2a2a` | other engines' measurements |
+| nothing is known | gray `#3a3a3f` | absence |
+
+`defects.engines` is a JSON array of engine names, so a defect knows which
+permutations it applies to. Parts are measured under both `naive` and `occt`,
+and 1,313 of them error under at least one — so "a problem exists in another
+permutation of this part" is real data, not a hypothetical. What is wrong here
+always outranks what is wrong elsewhere.
+
+**A timeout is not a defect.** 1,420 of the 1,428 recorded errors are
+`TimeoutError`; the eight that genuinely failed would be invisible among them
+under one colour. That is why these are two states.
+
+**An open defect outranks a failure** — it is the newer fact, and someone acted
+on it. It also applies to cells that *are* drawn: the thumbnail is an opaque
+tile, so a background colour would sit behind it unseen. Those get an ochre ring
+around the tile instead.
+
+`cells.py` does not return defect counts yet; that is the first half of this
+task. `findings.py`'s `_attach_defects` already does this in one query for a
+page of rows rather than one query per row — follow it rather than inventing a
+second approach.
+
+**Files:**
+- Modify: `brick_icons/lab/cells.py`, `tests/test_lab_cells.py`
+- Modify: `lab/src/corpus/types.ts` (add `open_defects: number`)
+- Modify: `lab/src/corpus/paint.ts`, `paint.test.ts`
+- Modify: `lab/src/corpus/PartCard.tsx` (say why a cell is the colour it is)
+
+- [ ] **Step 1: Return the four problem counts from `cells.py`**
+
+Test first. A cell gains four fields, all counting only what is open (status not
+`fixed`, not `notabug`) or erroring:
+
+- `open_defects` — defects whose `engines` includes this slot's engine
+- `open_defects_elsewhere` — defects on this part naming only other engines
+- `error` — this engine's latest error, as today
+- `error_elsewhere` — true when another engine's latest measurement errored
+
+`engines` is stored as a JSON array string, so parse it rather than pattern
+matching the text. `cells.engine_for(source)` already maps a slot to its engine.
+
+Tests to write: a part with no defects reports 0 and 0; a defect naming this
+engine counts in `open_defects` only; a defect naming a different engine counts
+in `open_defects_elsewhere` only; a `fixed` defect counts in neither; a part
+erroring under `occt` while clean under `naive` sets `error_elsewhere` and not
+`error`. One query per response for each, not one per cell.
+
+- [ ] **Step 2: Decide the fill in `paint.ts`**
+
+Replace `STATUS_FILL` with a `CELL_FILL` table and a `fillFor(cell)` function.
+Write the tests first — they are the specification:
+
+```ts
+it('flags a part with an open defect in ochre, whatever else is true', () => {
+  expect(fillFor({ ...base, open_defects: 1, error: 'GEOSException' }))
+    .toBe(CELL_FILL.defect);
+});
+
+it('separates a part that cannot be drawn from one that timed out', () => {
+  expect(fillFor({ ...base, error: 'GEOSException' })).toBe(CELL_FILL.failed);
+  expect(fillFor({ ...base, error: 'ProcessDied' })).toBe(CELL_FILL.failed);
+  expect(fillFor({ ...base, error: 'TimeoutError' })).toBe(CELL_FILL.timeout);
+});
+
+it('mutes a problem that belongs to another permutation', () => {
+  expect(fillFor({ ...base, open_defects_elsewhere: 1 }))
+    .toBe(CELL_FILL.defectElsewhere);
+  expect(fillFor({ ...base, error_elsewhere: true }))
+    .toBe(CELL_FILL.problemElsewhere);
+});
+
+it('lets what is wrong here outrank what is wrong elsewhere', () => {
+  expect(fillFor({ ...base, error: 'TimeoutError', open_defects_elsewhere: 3 }))
+    .toBe(CELL_FILL.timeout);
+});
+
+it('says nothing is known when nothing is known', () => {
+  expect(fillFor(base)).toBe(CELL_FILL.unknown);
+});
+```
+
+`base` is a `Cell` with no sha, no error and no defects. Classify the error by
+whether it *is* `TimeoutError`, not by a list of the failures — a new failure
+mode should read as a failure, not fall through to gray.
+
+- [ ] **Step 3: Ring a drawn cell that has an open defect**
+
+Add a `ring` field to the sprite and image paint commands, set when
+`open_defects > 0`, and have `Wall.tsx` stroke that rect after drawing the
+image. Test that a drawn cell with a defect emits a command carrying the ring
+and one without does not.
+
+- [ ] **Step 4: Say it in the card**
+
+`PartCard` should name the state in words — "not rendered", "render timed out",
+"cannot be drawn: GEOSException", "2 open defects" — so the colour is legible
+rather than something to memorise. Test each.
+
+- [ ] **Step 5: Run, look, commit**
+
+`npx vitest run src/corpus`, `.venv/bin/python -m pytest tests/test_lab_cells.py`
+and `npx tsc -b --noEmit` all clean.
+
+Then look at the wall: with 24,591 cells and 1,428 errors, the rust band should
+be plainly visible and the eight red cells findable. Sort by `extra_d99` and by
+`id` and confirm the colours travel with the cells. Screenshot and slop it.
+
+```bash
+git add brick_icons/lab/cells.py tests/test_lab_cells.py \
+        lab/src/corpus/types.ts lab/src/corpus/paint.ts \
+        lab/src/corpus/paint.test.ts lab/src/corpus/PartCard.tsx \
+        lab/src/corpus/PartCard.test.tsx lab/src/corpus/Wall.tsx
+git commit -m "colour a cell by what is known about it"
+```
+
+---
+
+### Task 20b: Replace the hand-rolled camera with weasel's viewport
+
+`lab/src/corpus/camera.ts` reimplements, worse, a module `@weasel-js/core`
+already ships with tests. Two bugs have already come out of it — `fitBounds`
+handing back `Infinity` on an empty wall, and an opening level chosen inside the
+hysteresis dead zone. Neither would have existed in the tested version.
+
+What core has, all under `packages/core/src/core/viewport/` with a `.test.ts`
+each, and exported from `@weasel-js/core`:
+
+| the wall's hand-rolled version | core's |
+|---|---|
+| `toScreen` / `toWorld` | `clientToCanvas`, `clientToWorld`, `viewTransform` |
+| `zoomAt` | `zoomAt` |
+| `fitBounds` | `fitToBounds`, `fitViewToBounds` |
+| `MIN_SCALE` / `MAX_SCALE` | `DEFAULT_MIN_ZOOM`, `DEFAULT_MAX_ZOOM`, `clampView` |
+| the `ResizeObserver` effect in `CorpusWall` | `useCanvasSize` |
+| nothing — this is new | `viewportDragPanAction`, `wheelHandler`, `usePinchGesture`, `useVelocityTracker`, `useDecayLoop` |
+
+**What stays.** `levelFor` and `pickLevel` are about which baked thumbnail to
+sample and have nothing to do with a viewport — core knows nothing of the 8/32/128
+ladder. They move into their own module rather than being deleted with the rest.
+
+**Files:**
+- Delete: `lab/src/corpus/camera.ts`, `camera.test.ts`
+- Create: `lab/src/corpus/levels.ts`, `levels.test.ts` (`levelFor`, `pickLevel`,
+  moved verbatim with their passing tests)
+- Modify: `lab/src/corpus/CorpusWall.tsx`, `Wall.tsx`, `paint.ts`, `visible.ts`,
+  `caret.ts` if it exists yet, and their tests
+- Modify: `lab/src/corpus/Wall.css`
+
+**All of it is in the version already installed.** `@weasel-js/core` 1.4.0 is in
+`lab/node_modules` and its `.d.ts` exports every symbol above. Nothing needs
+releasing, upgrading, or asking for.
+
+The one real gap is packaging: `lab/package.json` depends on `@weasel-js/labkit`
+only, so core is present transitively and invisible to anyone reading the
+manifest. **Add `@weasel-js/core` as a direct dependency at the version already
+resolved** — that omission is the likeliest reason a previous agent hand-rolled
+a camera instead of finding this.
+
+- [ ] **Step 1: Read core's viewport before writing anything**
+
+Read `packages/core/src/core/viewport/` in `~/src/weasel` — at minimum `view.ts`,
+`viewTransform.ts`, `zoomAt.ts`, `fitToBounds.ts`, `fitViewToBounds.ts`,
+`clampView.ts`, `useCanvasSize.ts`, and `interactions/actions/defaults/viewportDragPan.ts`.
+Their tests are the documentation.
+
+The wall's `Camera` is `{x, y, scale}`; core's is a `View`. Report what the shape
+actually is and how it converts, rather than assuming they match.
+
+- [ ] **Step 2: Move the level ladder out**
+
+`levelFor` and `pickLevel` and their tests move to `levels.ts`/`levels.test.ts`
+unchanged. They pass today; they must still pass after the move, and that is the
+whole check.
+
+- [ ] **Step 3: Swap the viewport**
+
+Replace every use of the wall's camera with core's equivalents. `visible.ts`,
+`paint.ts` and `Wall.tsx` all convert world to screen; they take core's transform
+instead. `CorpusWall`'s `ResizeObserver` effect gives way to `useCanvasSize`.
+
+Every existing test must still pass, adjusted only where the type changed. **A
+test that has to be weakened to accommodate the swap is a finding — report it
+rather than weakening it.**
+
+- [ ] **Step 4: Open fitted to the width, and drag to pan**
+
+Two behaviours, both now core's rather than hand-written:
+
+**Fit to width on load** — the wall fills the viewport's width and runs off the
+bottom, rather than shrinking to fit both axes. `fitToBounds`/`fitViewToBounds`
+take options; find the one that fits a single axis rather than computing it
+yourself. Note that on a window taller than it is wide the two answers coincide,
+so verify on a landscape window or you are testing nothing.
+
+**Drag to pan** via `viewportDragPanAction`, with whatever inertia core gives by
+default. A drag must not fire the click that raises a part card — track movement
+between down and up and suppress the click past a few pixels, or use whatever
+core provides for that. `cursor: grab`/`grabbing` in `Wall.css`.
+
+Panning and zooming both count as touching the camera and stop the automatic
+refit, as the wheel already does.
+
+- [ ] **Step 5: Run, drive it, commit**
+
+`npx vitest run src/corpus` and `npx tsc -b --noEmit` clean.
+
+In the browser, on a window **wider than it is tall**: the wall opens filling the
+width and running off the bottom; drag pans it to the last row and back; a drag
+does not open a card and a click still does; zoom still anchors under the cursor;
+the level ladder still switches. Screenshot and slop it.
+
+```bash
+git add lab/src/corpus
+git commit -m "take weasel's viewport instead of a hand-rolled camera"
+```
+
+Report how much code the swap deleted — that number is the point of the task.
+
+---
+
+### Task 20c: Make the problem states actually read
+
+The six cell colours were chosen as dark fills and four of them do not separate
+at cell size. `#5a3326` rust against `#3a3a3f` gray is two dark, low-chroma
+colours a few pixels across; the two muted "elsewhere" states are worse. Only
+the bright ochre and the red carry.
+
+**Pale fill, thick coloured border.** At five pixels the border is most of the
+cell and carries the identity; at a hundred it reads as a labelled empty slot.
+The dark gray unknown stays a plain fill with no border — it is the field
+everything else has to separate from, and it should recede.
+
+Starting point, to be corrected by looking rather than trusted:
+
+| state | fill | border |
+|---|---|---|
+| unknown | `#3a3a3f` | none |
+| timed out here | `#e8d5cc` | `#8a4a32`, thick |
+| cannot be drawn here | `#f0d0d0` | `#b02020`, thick |
+| open defect here | `#f5e3b8` | `#c8860d`, thick |
+| problem in another slot | `#e8d5cc` | `#8a4a32`, thin |
+| defect in another slot | `#f5e3b8` | `#c8860d`, thin |
+
+"Elsewhere" reads as lower priority through border weight, not a duller hue —
+duller hues are what failed.
+
+**Scale the border with the cell**, `max(1, cell * 0.18)` or similar, capped so
+a large cell does not become a picture frame. A fixed pixel width disappears
+when zoomed out, which is the case that matters most.
+
+**Files:**
+- Modify: `lab/src/corpus/paint.ts`, `paint.test.ts`
+- Modify: `lab/src/corpus/Wall.tsx`
+- Modify: `lab/src/corpus/Legend.tsx` if it exists by now
+
+- [ ] **Step 0: Clamp the pan, so the wall cannot be lost**
+
+Adopting core's viewport brought drag-panning with inertia but **not** clamping —
+`clampView` exists in core and is opt-in, and nothing calls it. So a flick now
+sends the wall off into blank space with no way back except reloading. Wheel-zoom
+alone made that hard; inertia makes it easy.
+
+Apply `clampView` to panning. Read its signature and its test in
+`~/src/weasel/packages/core/src/core/viewport/clampView.ts` first.
+
+The bound is not "keep the whole wall on screen" — the wall deliberately
+overflows vertically once fitted to the width. Something like "at least one
+row and column of cells stays in view" is the shape to aim for. Say what rule
+you chose and why.
+
+- [ ] **Step 1: A fill command that carries a border**
+
+`CELL_FILL` becomes a table of `{ fill, border, weight }`. The `fill` paint
+command gains `border` and `borderWidth`, computed from the cell size. `unknown`
+has no border and must emit none — not a transparent one.
+
+Test: each state emits its fill and border; unknown emits no border; the border
+width scales with the drawn cell size and never goes below 1.
+
+- [ ] **Step 2: Stroke it**
+
+`Wall.tsx` strokes the border inside the cell rect after filling, so adjacent
+cells do not bleed into each other. Mind that a stroke straddles its path —
+inset by half the width or neighbouring borders will overlap and read as a grid.
+
+- [ ] **Step 3: LOOK AT IT, then correct the palette**
+
+This is a task whose output is judged by eye, and the palette above is a first
+guess by someone who already guessed wrong once.
+
+Screenshot the wall zoomed fully out, at mid zoom, and zoomed in, and put all
+three on the slopboard. Then answer, from the images and not from the hex
+values: can you find the eight `cannot be drawn` cells at a glance? Do the ~1,260
+timeouts read as a distinct population from the gray field? Do the pale fills
+compete with the white drawn thumbnails, and if so say so — that is the most
+likely thing to be wrong with this scheme.
+
+Adjust the palette until those answers are yes, and report what you changed and
+why.
+
+```bash
+git add lab/src/corpus
+git commit -m "give the problem states pale fills and weighted borders"
+```
+
+---
+
+### Task 21: Put the wall in its own labkit shell
+
+The corpus wall gets labkit's **UI** — the shell, the theme, the loupe, the
+panel primitives — and none of its **ontology**. It is its own lab, not an
+instrument inside the existing one.
+
+**Read `~/src/weasel/docs/handoffs/2026-08-30-labkit-consumer-asks.md` first.**
+This repo already filed five asks against labkit, and one of them is a direct
+warning about the pattern this task reaches for: labkit's README shows
+`<LabShell><Workspace>…</Workspace></LabShell>` as the way to build a lab, and
+following it *inside* a `<Lab>` lays the whole app out as one header item with
+every trial rendered twice, because `<Lab>` owns its own shell.
+
+The wall is standalone and wants no trials, so `LabShell` may well be right here
+— but confirm that against the docs rather than against my say-so, and report
+what you find. If `LabShell` alone turns out not to be a supported way to build a
+non-trial app, say so and stop; that is a finding, not an obstacle to work
+around.
+
+**Use:** the interstellar theme and its `--wzl-*` tokens, the loupe, and
+labkit's panel primitives, with whatever shell the docs actually sanction.
+
+**Do not use:** `Lab`, `defineInstrument`, trials, snapshots, the job model, or
+the CLI-derived config schema. The wall's Slot/Sort/Show are view state, not
+render parameters, and they stay the wall's own controls — rendered in the
+shell's header rather than a generated config panel.
+
+Nothing in `lab/src/corpus/` may import from `lab/src/instruments/` or
+`lab/src/panes/`; that rule does not change.
+
+**Files:**
+- Modify: `lab/src/corpus/main.tsx` (mount the shell around `<CorpusWall/>`)
+- Modify: `lab/src/corpus/CorpusWall.tsx`, `corpus.css`, `FilterBar.css`,
+  `PartCard.css`, `Lightbox.css`, `Wall.css`
+- Modify: `lab/src/corpus/paint.ts`, `paint.test.ts`
+- Create: `lab/src/corpus/palette.ts`, `palette.test.ts`
+
+- [ ] **Step 1: Read the theme's colours instead of hardcoding them**
+
+The six cell colours are **canvas fills**, so CSS cannot style them — they have
+to be read at paint time or the wall keeps its own palette while everything
+around it follows the theme.
+
+Create `palette.ts`: a `readPalette(el: Element)` that pulls each cell state's
+colour from a CSS custom property via `getComputedStyle`, with the current hex
+values as fallbacks so a missing token degrades rather than paints nothing.
+Declare the properties in `corpus.css` against the `--wzl-*` tokens where one
+fits, and as literal values where none does.
+
+Test it against a stubbed `getComputedStyle`: each state resolves from its
+property, and a missing property falls back rather than yielding `""`.
+
+Then have `paint.ts` take the palette as input rather than owning `CELL_FILL`,
+and `Wall.tsx` read it once per theme change rather than per frame.
+
+- [ ] **Step 2: Mount `LabShell` in `main.tsx`**
+
+Read `LabShellProps` and `lab/src/App.tsx` for how the existing app parameterises
+the shell — then take only the shell. The wall is full-bleed: it wants the whole
+viewport under the header, so whatever the shell offers for a maximised content
+region is what it uses.
+
+Put `<FilterBar/>` in the shell's header slot beside the title, where
+`PartSearch` sits in the existing lab.
+
+- [ ] **Step 3: Restyle against the theme**
+
+Replace the hardcoded colours in `corpus.css`, `FilterBar.css`, `PartCard.css`,
+`Lightbox.css` and `Wall.css` with `--wzl-*` tokens. The lightbox's `#131316`
+and the card's background are the obvious ones. No inline `style`, no
+`!important` — the standing rules still hold.
+
+- [ ] **Step 4: Add the loupe**
+
+A wall of 5px cells is the case the loupe exists for: magnify a region without
+disturbing the camera. Wire labkit's loupe over the canvas. Read
+`lab/src/panes/useLoupe.ts` for how the existing lab drives it — **read it, do
+not import it**; that file belongs to the lab.
+
+- [ ] **Step 5: Run, look, commit**
+
+`npx vitest run src/corpus` and `npx tsc -b --noEmit` clean.
+
+Then look at it in both themes — that is the point of this task. Confirm the
+cell colours change with the theme rather than staying fixed, the card and
+lightbox follow it, and the loupe magnifies without moving the camera.
+Screenshot both themes and the loupe, and slop them.
+
+```bash
+git add lab/src/corpus
+git commit -m "give the corpus wall its own labkit shell, theme and loupe"
+```
+
+---
+
+### Task 21b: A floating legend that highlights what it names
+
+Six cell colours are six things to memorise. A legend makes them readable, and
+hovering one should pick those cells out of the wall.
+
+It comes after the labkit shell so it can be a `FloatingPanel` — the existing
+lab already uses one for its defect list (see `lab/src/App.tsx`), including the
+detail that `FloatingPanel` is a positioned box and nothing else, so its title
+and dismissal are written as its first child.
+
+**Files:**
+- Create: `lab/src/corpus/Legend.tsx`, `Legend.test.tsx`, `Legend.css`
+- Modify: `lab/src/corpus/paint.ts`, `paint.test.ts`
+- Modify: `lab/src/corpus/CorpusWall.tsx`, `CorpusWall.test.tsx`
+
+- [ ] **Step 1: Name the states once**
+
+`paint.ts` currently decides a colour inside `fillFor`. Split out the state
+itself — `cellState(cell)` returning the state name — so the legend and the
+painter agree by construction rather than by two parallel tables. `fillFor`
+becomes a lookup on that.
+
+Test that every state `cellState` can return has an entry in `CELL_FILL`, so a
+seventh state cannot be added without a colour.
+
+- [ ] **Step 2: Count them**
+
+The legend shows a count per state, which makes it a summary of the corpus and
+not merely a key. Count from the cells already in hand — no request. A pure
+`tally(cells)` returning a count per state, tested against a handful of cells.
+
+- [ ] **Step 3: Dim what is not hovered**
+
+Hovering a legend row highlights those cells. **Dim the others rather than
+brightening the matches** — on a wall this dense, changing the matching cells'
+colour destroys the thing the legend is teaching, while dropping everything else
+back makes them pop and keeps their colour honest.
+
+`paintCommands` takes a `highlight: CellState | null`; when set, cells of other
+states get a dimmed fill and drawn cells a reduced alpha. Test that the
+highlighted state's cells keep their exact colour and the rest do not.
+
+- [ ] **Step 4: The panel**
+
+`Legend.tsx` renders one row per state: swatch, name, count. Hovering a row
+raises the highlight; leaving it clears. Rows are not buttons — they are hover
+targets — but they must be reachable, so give each a `tabIndex` and raise the
+highlight on focus too, which is the same behaviour for a keyboard.
+
+Test: rows render with their counts; hovering reports the state; leaving reports
+null; focusing does what hovering does.
+
+- [ ] **Step 5: Run, drive it, commit**
+
+`npx vitest run src/corpus` and `npx tsc -b --noEmit` clean.
+
+In the browser: confirm the counts match what the wall shows, hover "timed out"
+and confirm about 6% of the wall stays lit while the rest recedes, hover
+"cannot be drawn" and confirm the eight cells are findable. Tab to a row and
+confirm focus highlights the same way. Screenshot a highlight and slop it.
+
+```bash
+git add lab/src/corpus/Legend.tsx lab/src/corpus/Legend.test.tsx \
+        lab/src/corpus/Legend.css lab/src/corpus/paint.ts \
+        lab/src/corpus/paint.test.ts lab/src/corpus/CorpusWall.tsx \
+        lab/src/corpus/CorpusWall.test.tsx
+git commit -m "a floating legend that dims the wall around what it names"
+```
+
+---
+
+### Task 20d: Spread the status hues around the wheel
+
+The three signal colours sit inside a 38-degree wedge: `#e03030` is hue 0,
+`#c86a42` is 18, `#e8a020` is 38. Red, orange and amber are the hardest triple
+to tell apart at five pixels, and the one that collapses outright under the
+common colour-vision deficiencies.
+
+**The structure is right and stays:** hue means *what kind of problem*, border
+weight means *here or in another slot*, and lightness stays reserved for "this
+part has a render". Only the hue assignments change.
+
+There are three signal hues to place. Spread them:
+
+| state | border | hue |
+|---|---|---|
+| cannot be drawn here | `#e03030` | 0 — red keeps the hard-failure convention |
+| timed out here | `#30b0d0` | 193 — cool reads as waiting, not broken |
+| open defect here | `#c050e0` | 285 — distinct from both |
+
+Fills stay dark and near-neutral, tinted toward their border's hue just enough to
+group: roughly `#4a2626`, `#26383f`, `#3a2a42`. Unknown stays `#3a3a3f` with no
+border.
+
+**This moves the defect colour off the ochre that was originally asked for.**
+Ochre sat 38 degrees from red, and those two states — eight hard failures and
+eleven filed defects — are precisely the pair you most need to tell apart once
+you have found them. Say so in the report; it is a deliberate trade and worth
+being overruled on.
+
+**Files:** `lab/src/corpus/palette.ts`, `palette.test.ts`, and the CSS custom
+properties declaring them.
+
+- [ ] **Step 1: Change the values, nothing else**
+
+The palette pipeline already exists — `readPalette` resolves each state from a
+CSS custom property with a fallback. This changes those values in one place.
+
+Check `PartCard.css` and `Legend.css` for any swatch or accent that hardcodes one
+of the old hues rather than reading the property.
+
+- [ ] **Step 2: Look at it, and check the separation properly**
+
+Screenshot zoomed fully out and answer from the image:
+
+1. Are the ~1,260 timeouts, the eight failures and the eleven defects three
+   visibly different populations, or do any two still merge?
+2. Does the cyan read as a problem state rather than as decoration? Cool colours
+   can look informational rather than wrong.
+3. Do the thin "elsewhere" borders still read as quieter than the thick ones now
+   that the hues carry more of the load?
+
+Then check it under a colour-vision simulation. Chrome DevTools has
+`Rendering → Emulate vision deficiencies` — run protanopia and deuteranopia and
+confirm the three stay distinguishable. That is the failure this task exists to
+fix, so verifying it by eye in normal vision only would miss the point.
+
+Screenshot normal and one simulated deficiency, and slop both.
+
+```bash
+git add lab/src/corpus
+git commit -m "spread the status hues so red, amber and orange stop colliding"
+```
+
+---
+
+### Task 22: The caret
+
+The wall is mouse-only. Give it a caret: an implied focus when there is no
+explicit one, arrow keys to move it, `Enter` to raise the card.
+
+**Files:**
+- Create: `lab/src/corpus/caret.ts`, `caret.test.ts`
+- Modify: `lab/src/corpus/paint.ts`, `paint.test.ts` (draw it)
+- Modify: `lab/src/corpus/Wall.tsx`, `CorpusWall.tsx`, and their tests
+
+- [ ] **Step 1: `caret.ts` — two pure functions, tests first**
+
+`impliedCaret(rects, visible, cam, viewport)` returns the index of the cell
+holding the most on-screen area, breaking ties by distance from the viewport
+centre. Area is what separates a clipped edge cell from a whole one; zoomed out
+every whole cell has identical area, so the tie-break is what actually picks.
+Returns `null` for an empty visible set.
+
+`adjacent(rects, from, direction)` returns the index of the nearest cell whose
+centre lies in that direction (`'left' | 'right' | 'up' | 'down'`). **Geometric,
+not `index ± 1`** — grid arithmetic works today and breaks the moment a grouped
+layout inserts whitespace, which is the whole reason layout is a strategy.
+Prefer a cell close to the same row or column: score by distance along the
+direction plus a penalty for drifting across it, so pressing right from the end
+of a row does not leap diagonally.
+
+**When geometry finds nothing, left and right fall back to sequence order;
+up and down return `null`.** Wrapping is an ordering idea, not a geometric one,
+so it applies only where a single reading exists: off the end of a row, the next
+cell in sequence is the only continuation anyone would mean. Off the bottom
+there is none — stopping and moving to the next column are equally arguable, so
+the caret stays put. The last cell of the array has nothing after it and the
+first has nothing before it, so those still return `null`.
+
+Tests to write: the implied caret prefers a whole cell over a clipped one;
+prefers the centre among equals; is null when nothing is visible. `adjacent`
+finds the neighbour in each of the four directions; picks the same-row neighbour
+over a nearer diagonal one; **wraps from the end of a row to the start of the
+next and back**; returns `null` going up from the top row, down from the bottom
+row, right from the very last cell and left from the very first.
+
+- [ ] **Step 2: Draw it**
+
+Add a `caret` flag to the paint commands, set for the caret's index, and have
+`Wall.tsx` stroke it distinctly from the ochre defect ring — the two can be on
+the same cell. Test that exactly one command carries it and that a cell can
+carry both.
+
+- [ ] **Step 3: Keys**
+
+The canvas takes `tabIndex={0}`. Arrow keys move the caret and make it explicit;
+`Enter` raises the card for it; `Escape` drops back to the implied caret.
+Arrowing to a cell that is off screen pans the camera to bring it in — reuse the
+camera rather than adding a second notion of position.
+
+Announce the caret's part through an `aria-live="polite"` region. A canvas
+cannot expose 24,591 focusable children, so the canvas holds focus and the live
+region carries the name — that is keyboard operability and a programmatically
+determinable name without inventing DOM nodes for pixels.
+
+- [ ] **Step 4: Run, drive it, commit**
+
+`npx vitest run src/corpus` and `npx tsc -b --noEmit` clean.
+
+In the browser: tab to the canvas, confirm a caret appears on a central cell,
+arrow around and confirm it moves one cell at a time in the direction pressed,
+arrow to the edge of the viewport and confirm the camera follows, press Enter
+and confirm the card opens for the carated cell. Screenshot the caret and slop
+it.
+
+```bash
+git add lab/src/corpus/caret.ts lab/src/corpus/caret.test.ts \
+        lab/src/corpus/paint.ts lab/src/corpus/paint.test.ts \
+        lab/src/corpus/Wall.tsx lab/src/corpus/CorpusWall.tsx \
+        lab/src/corpus/CorpusWall.test.tsx
+git commit -m "give the wall a caret, moved by the arrow keys"
+```
+
+---
+
+### Task 22d: A "base parts only" filter
+
+Most of the wall is not a part anyone is trying to render. Of 24,591 cells:
+13,083 are printed, 4,046 obsolete, 2,152 composites, 1,931 stickers, 878
+unofficial. **6,891 are base parts** — and 175 of the 200 census renders are
+among them, so the filter takes the wall from 0.8% drawn to 2.5% drawn.
+
+`FILTERS` in `lab/src/corpus/select.ts` already has `printed` and `obsolete`,
+which *show* only those. This adds `base`, which hides all of them at once.
+
+**The classification lives in `cells.py`, as one `base` boolean.** Do not
+re-derive it in TypeScript from id shapes: the id-shape knowledge belongs beside
+the seeding logic and the repo's own guidance on part numbering, not in two
+places that can disagree.
+
+`base` is true when a part is none of:
+
+- **printed** — `parts.printed`, already stored. Set from the description line,
+  which the repo's CLAUDE.md is emphatic about: `^\d{3,}p\d+$` catches only
+  3,254 of 13,081, a plain letter suffix is ambiguous, and 132 bare-numeric ids
+  are patterned. **Use the column; never pattern-match the id for this.**
+- **obsolete** — `parts.obsolete`, already stored, set from a `~` or `_` title.
+- **composite** — id matching `%c__`, 2,152 of them.
+- **sticker** — id matching `%d__`, 1,931.
+- **unofficial** — id matching `u9*`, 878.
+
+**Mould variants like `3068b` stay in.** A plain letter suffix is ambiguous per
+the same guidance, and excluding on it would drop real base parts.
+
+**Files:**
+- Modify: `brick_icons/lab/cells.py`, `tests/test_lab_cells.py`
+- Modify: `lab/src/corpus/types.ts`, `select.ts`, `select.test.ts`
+
+- [ ] **Step 1: `base` on the cell**
+
+Add the field, computed in SQL alongside the existing per-cell query rather than
+in a second pass. Tests: a plain part is base; a printed one is not; an obsolete
+one is not; `1234c01`, `1234d01` and `u9123` are not; `3068b` **is**.
+
+- [ ] **Step 2: The filter**
+
+Add `base` to `FILTERS` and `KEEP` in `select.ts`. Test that it keeps only base
+cells and that the existing filters are unchanged.
+
+- [ ] **Step 3: Check the real numbers**
+
+Restart the backend so the new `cells.py` is live, then select `base` and
+confirm the count reads **6,891 of 24,591**, and that the drawn cells drop to
+around 175 rather than 200. If either number is off, the classification
+disagrees with the database and that is worth reporting rather than adjusting
+the expectation.
+
+Screenshot the filtered wall and slop it — a wall at 2.5% coverage should look
+materially less empty than the full one.
+
+```bash
+git add brick_icons/lab/cells.py tests/test_lab_cells.py lab/src/corpus
+git commit -m "a base-parts filter, hiding printed, obsolete and variant parts"
+```
+
+---
+
+### Task 22c: A params panel
+
+Every tuning constant in the wall is a literal in a source file, and the palette
+alone has taken four rounds of hand-editing hex and reloading. A panel turns
+that into seconds.
+
+**Use labkit's `ControlPanel`.** It takes a `ConfigField[]` and a config object —
+it is not coupled to `defineInstrument`, and it builds on `@weasel-js/ui`'s rows
+including `ColorRow`, `SliderRow`, `NumberRow` and `SelectRow`. Same call as
+`LabShell`: take the widget, define the wall's own schema. **Do not** reach for
+the CLI-derived schema; these are view parameters, not render flags.
+
+**The palette needs no new plumbing.** `readPalette` already resolves each state
+from a CSS custom property, and `Wall.tsx` already re-reads on a mutation. So a
+colour row writes `--corpus-cell-<state>-<fill|border>` on the root element and
+the wall follows. Wiring colours through React state instead would fork that
+pipeline — do not.
+
+**Files:**
+- Create: `lab/src/corpus/params.ts`, `params.test.ts`, `ParamsPanel.tsx`,
+  `ParamsPanel.test.tsx`
+- Modify: `lab/src/corpus/CorpusWall.tsx`, `paint.ts`, `Wall.tsx`, `levels.ts`,
+  and the modules holding the constants below
+
+- [ ] **Step 1: Gather the constants that earn a knob**
+
+These exist today as literals. Group them:
+
+*Layout* — `CELL` 32 and `GAP` 4 (`CorpusWall.tsx`), and the column count,
+currently `ceil(sqrt(n))` with no way to override.
+
+*Appearance* — the twelve palette values (six states x fill/border);
+`THICK_BORDER_FACTOR` 0.18, `THIN_BORDER_FACTOR` 0.09, `MAX_BORDER_PX` 6 and
+`DIM_ALPHA` 0.25 (`paint.ts`).
+
+*Feel* — `DRAG_THRESHOLD_PX` 4 (`Wall.tsx`) and the 1.5 / 0.67 hysteresis
+factors (`levels.ts`), which are currently inline numbers rather than named
+constants.
+
+Leave out and say why in the report: `PartCard`'s geometry, `caret.ts`'s
+`CROSS_PENALTY`, and `MAX_IN_FLIGHT` — all things nobody tunes by eye. Include
+`POLL_MS` only if it is cheap; it is useful for exercising the trickle-in path.
+
+- [ ] **Step 2: `params.ts` — the schema and its defaults**
+
+A `ConfigField[]` describing the above, with the current literals as defaults, and
+a `Params` type. Every constant it replaces must import its default **from here**,
+so there is one source of truth rather than a literal and a schema that drift.
+
+Test that every field has a default and that the defaults match the values the
+code used before this task — a param panel that silently changes the wall's
+appearance on first load is worse than no panel.
+
+- [ ] **Step 3: Persist and reset**
+
+Params survive a reload (`localStorage`), and the panel has a reset that restores
+defaults. Test both.
+
+- [ ] **Step 4: The panel**
+
+`ParamsPanel.tsx` renders `ControlPanel` in a `FloatingPanel`, as `Legend` does.
+Colour rows write CSS custom properties on the root; everything else feeds the
+wall through props.
+
+- [ ] **Step 5: Run, drive it, commit**
+
+`npx vitest run src/corpus` and `npx tsc -b --noEmit` clean.
+
+In the browser: change a cell colour and confirm the wall repaints without a
+reload; change `CELL` and confirm the grid re-flows and the level ladder still
+picks sensibly; reload and confirm the changes survived; reset and confirm the
+wall returns to what it looks like today. Screenshot the panel and slop it.
+
+```bash
+git add lab/src/corpus
+git commit -m "a params panel for the wall's own tuning constants"
+```
+
+---
+
+### Task 22b: A search box that goes to the part
+
+The wall needs the lab's part search. It is nearly shareable already — `client`
+and `onOpen` are both injected — so this promotes it rather than copying it.
+
+**One coupling to lift.** `PartSearch` calls `setPendingPart` from
+`@lab/config/pending`: a module-level one-slot box that exists because labkit's
+`addTrial` takes only an instrument name and has nowhere to put the subject.
+That is the first entry in `~/src/weasel/docs/handoffs/2026-08-30-labkit-consumer-asks.md`,
+filed by this repo. The wall has no trials, so the call is dead weight for it —
+and the component should not carry a workaround for a gap it has nothing to do
+with. Move that line into the lab's own `onOpen` handler.
+
+**Files:**
+- Move: `lab/src/chrome/PartSearch.tsx` and `.test.tsx` → `lab/src/shared/`
+- Modify: `lab/src/App.tsx` (import from the new home; call `setPendingPart` in
+  its `onOpen`)
+- Modify: `lab/src/corpus/CorpusWall.tsx`, `CorpusWall.test.tsx`
+- Modify: `lab/src/corpus/corpus.css` or the shell's stylesheet as needed
+
+- [ ] **Step 1: Promote it, unchanged except for the coupling**
+
+Move the component and its test to `lab/src/shared/`, delete the `setPendingPart`
+import and call, and put that call in `App.tsx`'s `onOpen` so the lab behaves
+exactly as before. Its existing tests must pass unmodified except for the import
+path — **a test that needs its assertions changed means the move altered
+behaviour, which is a finding.**
+
+- [ ] **Step 2: Point it at the wall**
+
+`CorpusWall` renders `<PartSearch/>` in the header beside the filter bar. Its
+`onOpen(partId)`:
+
+- finds that part's index in the currently shown cells
+- moves the camera so the cell is centred, using core's view animation rather
+  than jumping — `interpolateView`/`useViewAnimation` exist for this
+- sets the caret to it
+- raises its card
+
+**The part may not be on the wall.** `/api/parts` searches the whole LDraw
+index, so a hit can be filtered out by the current `Show`, or absent from the
+slot. Say so rather than silently doing nothing or jumping to a cell that is not
+drawn — "3001 is hidden by the current filter" is the useful answer. Test both
+the found and the filtered-out cases.
+
+- [ ] **Step 3: Run, drive it, commit**
+
+`npx vitest run src` — the lab's own tests too this time, since `App.tsx` and a
+moved component are in scope.
+`npx tsc -b --noEmit` clean.
+
+In the browser: search a part id, confirm the camera glides to it, the caret
+lands on it and its card opens. Search something filtered out and confirm it
+says so. Confirm the lab at `/` still opens a part into a trial exactly as
+before — that is the regression this move risks. Screenshot and slop it.
+
+```bash
+git add lab/src/shared lab/src/chrome lab/src/App.tsx lab/src/corpus
+git commit -m "share the part search, and let it fly the wall to a part"
+```
+
+---
+
+### Task 19: The full gate
 
 Only now, and only once.
 
 - [ ] **Step 1: Run the Python suite**
 
-Run: `.venv/bin/pytest`
+Run: `.venv/bin/python -m pytest`
 Expected: PASS. If something outside `tests/test_thumbs.py`,
 `tests/test_lab_cells.py`, `tests/test_lab_app.py` or
-`tests/test_backfill_census.py` fails, check whether another suite is running on
+`tests/test_index_census.py` fails, check whether another suite is running on
 the box before treating it as a regression.
 
 - [ ] **Step 2: Run the lab suite**

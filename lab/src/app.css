@@ -15,28 +15,6 @@
 .panes-stack { display: grid; }
 .panes-stack > .pane { grid-area: 1 / 1; }
 
-.part-search { position: relative; }
-.part-search input { min-width: 18rem; }
-
-.part-search-hits {
-  position: absolute;
-  z-index: 10;
-  margin: 0;
-  padding: 0.25rem 0;
-  list-style: none;
-  max-height: 20rem;
-  overflow-y: auto;
-  background: var(--wzl-surface);
-  border: 1px solid var(--wzl-border);
-}
-
-.part-search-hits li > span { display: block; padding: 0.15rem 0.5rem; cursor: pointer; }
-
-/* Oswald tops out at 700 -- it ships as one variable face spanning 200-700 --
-   and a part id is what the eye scans this list for. */
-.part-search-hits strong { font-weight: 700; }
-.part-search-hits li > span:hover { background: var(--wzl-surface-hover); }
-
 .command { position: relative; }
 .command-line { cursor: pointer; font-size: 0.75rem; }
 

@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
@@ -16,8 +17,9 @@ from pydantic import BaseModel
 
 from .. import colors as ldraw_colors
 from ..config import load_config
-from . import (cache, corpus, decal, defects, diff, goldens_status, jobs,
-               partindex, reference, runner, schema)
+from . import (cache, cells, corpus, decal, defects, diff, findings,
+               goldens_status, jobs, partindex, reference, runner, schema)
+from .. import db as corpus_db_module
 
 
 def _artifact_path(root: Path, key: str, name: str) -> Path:
@@ -49,9 +51,14 @@ class BatchRequest(BaseModel):
 
 def create_app(root: Path | str = ".",
                cache_root: Path | str = cache.DEFAULT_ROOT,
-               defects_path: Path | str | None = None) -> FastAPI:
+               defects_path: Path | str | None = None,
+               corpus_db: Path | str | None = None,
+               thumbs_root: Path | str | None = None) -> FastAPI:
     root = Path(root)
     app = FastAPI(title="brick-icons lab")
+    # 24,591 cells is ~6.5MB of JSON and highly repetitive; gzip takes it under
+    # a megabyte for the cost of one line.
+    app.add_middleware(GZipMiddleware, minimum_size=1024)
     app.state.root = root
     app.state.cache_root = Path(cache_root)
     app.state.ldraw_dir = load_config(root=str(root)).ldraw_dir
@@ -61,6 +68,10 @@ def create_app(root: Path | str = ".",
         root / defects.DEFAULT_PATH)
     app.state.reference_root = Path(cache_root) / "reference"
     app.state.decal_root = Path(cache_root) / "decal"
+    app.state.corpus_db = Path(corpus_db) if corpus_db else (
+        root / corpus_db_module.DEFAULT_PATH)
+    app.state.thumbs_root = Path(thumbs_root) if thumbs_root else (
+        root / "out" / "thumbs")
 
     def index() -> dict:
         if app.state.index is None:
@@ -262,6 +273,92 @@ def create_app(root: Path | str = ".",
         return {"job": app.state.jobs.start("batch", argvs, work,
                                             workers=runner.worker_count()),
                 "count": len(argvs)}
+
+    def corpus_conn():
+        if not Path(app.state.corpus_db).is_file():
+            raise HTTPException(503, "no corpus database; run "
+                                     "scripts/build-corpus-db.py")
+        return corpus_db_module.connect(app.state.corpus_db)
+
+    def _slot(source: str) -> Path:
+        if source not in corpus_db_module.SOURCES:
+            raise HTTPException(400, f"no such slot: {source}")
+        return Path(app.state.thumbs_root) / source
+
+    @app.get("/api/corpus/cells")
+    def get_cells(source: str = "census-naive", since: str | None = None):
+        conn = corpus_conn()
+        try:
+            return cells.cells(conn, source=source, since=since)
+        finally:
+            conn.close()
+
+    @app.get("/api/corpus/sources")
+    def get_sources():
+        """The slots that have renders, most-populated first."""
+        conn = corpus_conn()
+        try:
+            return {"sources": [dict(r) for r in conn.execute(
+                "SELECT source, count(*) AS n FROM renders "
+                "GROUP BY source ORDER BY n DESC")]}
+        finally:
+            conn.close()
+
+    @app.get("/api/corpus/summary")
+    def get_corpus_summary():
+        conn = corpus_conn()
+        try:
+            return findings.summary(conn)
+        finally:
+            conn.close()
+
+    @app.get("/api/corpus/part/{part_id}")
+    def get_corpus_part(part_id: str):
+        conn = corpus_conn()
+        try:
+            row = conn.execute("SELECT * FROM parts WHERE id = ?",
+                               (part_id,)).fetchone()
+            if row is None:
+                raise HTTPException(404, "no such part")
+            # `findings` matches `part` with LIKE, so 3001 would drag in
+            # 3001a. The detail view is about one part.
+            found = [f for f in findings.findings(conn, part=part_id,
+                                                  limit=50)["rows"]
+                     if f["part_id"] == part_id]
+            runs = [dict(r) for r in conn.execute(
+                "SELECT r.id, r.kind, r.started, r.commit_sha, m.engine, "
+                "m.extra_d99, m.missing_px, m.secs, m.error "
+                "FROM measurements m JOIN runs r ON r.id = m.run_id "
+                "WHERE m.part_id = ? ORDER BY r.started DESC LIMIT 20",
+                (part_id,))]
+        finally:
+            conn.close()
+        return {"part": dict(row), "findings": found, "runs": runs,
+                "defects": [d for d in defects.load(app.state.defects_path)
+                            if d["part"] == part_id]}
+
+    @app.get("/api/thumbs/{source}/sheet-{level}.png")
+    def get_sheet(source: str, level: int):
+        path = _slot(source) / f"sheet-{level}.png"
+        if not path.is_file():
+            raise HTTPException(404, "no such sheet; run scripts/bake-thumbs.py")
+        return FileResponse(path)
+
+    @app.get("/api/thumbs/{source}/sheet-{level}.json")
+    def get_sheet_manifest(source: str, level: int):
+        path = _slot(source) / f"sheet-{level}.json"
+        if not path.is_file():
+            raise HTTPException(404, "no such sheet manifest")
+        return FileResponse(path)
+
+    @app.get("/api/thumbs/{source}/{level}/{name}")
+    def get_thumb(source: str, level: int, name: str):
+        if "/" in name or ".." in name or not name.endswith(".png"):
+            raise HTTPException(400, "bad thumbnail path")
+        path = _slot(source) / str(level) / name
+        if not path.is_file():
+            raise HTTPException(404, "no such thumbnail")
+        return FileResponse(path)
 
     ldraw = app.state.ldraw_dir
     if Path(ldraw).is_dir():

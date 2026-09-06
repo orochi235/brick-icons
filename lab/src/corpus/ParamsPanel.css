@@ -1,0 +1,38 @@
+.corpus-params-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  width: 17rem;
+  max-height: 80vh;
+  padding: 0.5rem 0.6rem;
+  background: var(--wzl-surface-raised);
+  color: var(--wzl-fg);
+  border: var(--wzl-border-w) solid var(--wzl-border);
+  border-radius: var(--wzl-radius-md);
+  box-shadow: 0 6px 20px var(--wzl-shadow);
+  font: 12px/1.4 ui-monospace, monospace;
+}
+.corpus-params-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.corpus-params-head-actions { display: flex; gap: 0.4rem; }
+.corpus-params-body { overflow-y: auto; }
+.corpus-params-group + .corpus-params-group { margin-top: 0.6rem; }
+.corpus-params-group h3 {
+  margin: 0 0 0.2rem;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--wzl-fg-muted);
+}
+
+/* Overrides weasel-ui's centered color row (`Properties.module.css`), whose
+ * class names this package can't select from outside it -- reached
+ * structurally instead. No row here carries an alpha slider. */
+.corpus-params-panel label:has(> input[type='color']) > span:first-child,
+.corpus-params-panel label:has(> input[type='color']) > input[type='color'] {
+  align-self: start;
+}

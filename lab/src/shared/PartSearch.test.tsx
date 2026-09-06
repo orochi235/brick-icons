@@ -1,7 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { PartSearch } from '@lab/chrome/PartSearch';
-import { takePendingPart } from '@lab/config/pending';
+import { PartSearch } from '@lab/shared/PartSearch';
 import type { LabClient } from '@lab/api/client';
 
 const client = (results: { id: string; description: string; printed: boolean }[]) =>
@@ -15,14 +14,6 @@ describe('PartSearch', () => {
     fireEvent.change(input, { target: { value: '3941' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(onOpen).toHaveBeenCalledWith('3941');
-  });
-
-  it('leaves the part pending for the trial about to be added', () => {
-    render(<PartSearch client={client([])} onOpen={() => {}} />);
-    const input = screen.getByPlaceholderText(/part/i);
-    fireEvent.change(input, { target: { value: '4070' } });
-    fireEvent.keyDown(input, { key: 'Enter' });
-    expect(takePendingPart()).toBe('4070');
   });
 
   it('does nothing on Enter with an empty field', () => {
