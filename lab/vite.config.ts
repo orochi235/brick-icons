@@ -19,6 +19,7 @@ export default defineConfig({
       input: {
         main: fileURLToPath(new URL('./index.html', import.meta.url)),
         corpus: fileURLToPath(new URL('./corpus.html', import.meta.url)),
+        badges: fileURLToPath(new URL('./badges.html', import.meta.url)),
       },
     },
   },

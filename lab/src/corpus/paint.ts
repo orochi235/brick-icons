@@ -124,7 +124,7 @@ export const LABEL_MIN_PX = 110;
 
 /** A picture rather than a letter, where a letter would need explaining. */
 export type BadgeMark = 'star' | 'archive' | 'redo' | 'bolt' | 'magnet'
-                      | 'brush' | 'minifig';
+                      | 'brush' | 'minifig' | 'technic';
 
 export interface CellBadge {
   /** The tag that drew it. The strip is hit-tested by tag, so a click knows
@@ -142,6 +142,11 @@ export interface CellBadge {
   /** A face other than the badge default, for a glyph the default sets
    *  badly. */
   font?: string;
+  weight?: number;
+  /** Slanted, where the system's own lettering is. */
+  style?: string;
+  /** A multiple of the badge type size, for a glyph that sets small. */
+  scale?: number;
 }
 
 /** The two discs that keep a corner of their own. `retired` and `updated`
@@ -154,6 +159,16 @@ export const CORNER_BADGES: Record<string, CellBadge> = {
   updated: { tag: 'updated', mark: 'redo', corner: 'br', field: '#2f7d4f', ink: '#ffffff' },
 };
 
+/** The system letters are set in a wide rounded sans rather than the wall's
+ *  monospace, which is too condensed for a single letter standing alone on a
+ *  disc, and reads nothing like the systems' own lettering. */
+/** The psi is a physics symbol, so it is set the way a textbook sets one --
+ *  a plain text serif, not a display face. */
+export const WEIRD_FACE = '"STIX Two Text", "Times New Roman", Times, serif';
+
+export const SYSTEM_FACE =
+  '"SF Pro Rounded", "Avenir Next", Futura, "Trebuchet MS", sans-serif';
+
 /** One field for the whole property family, so a run of them reads as a
  *  group against the system badges' own liveries. */
 export const PROPERTY_FIELD = '#4a4a4f';
@@ -162,11 +177,13 @@ export const PROPERTY_FIELD = '#4a4a4f';
  *  a part has one category, so at most one of those shows -- then the
  *  properties, which stack. Tag order, which `tags.TAGS` already sets. */
 export const STRIP_BADGES: Record<string, CellBadge> = {
-  minifig: { tag: 'minifig', mark: 'minifig', field: '#8a6d1f', ink: '#ffffff' },
-  technic: { tag: 'technic', text: 'T', field: '#1b2a5e', ink: '#ffffff' },
-  duplo: { tag: 'duplo', text: 'd', field: '#ffffff', ink: '#c8102e', stroke: '#c8102e' },
+  // LDraw's own Yellow, the color a bare minifig head is moulded in.
+  minifig: { tag: 'minifig', mark: 'minifig', field: '#f2cd37', ink: '#2b2b2b' },
+  technic: { tag: 'technic', mark: 'technic', field: '#1b2a5e', ink: '#ffffff' },
+  duplo: { tag: 'duplo', text: 'd', field: '#ffffff', ink: '#c8102e',
+           stroke: '#c8102e', font: SYSTEM_FACE, weight: 700, scale: 1.18 },
   weird: { tag: 'weird', text: '\u03a8', field: '#5b3a86', ink: '#ffffff',
-           font: 'Didot, "Bodoni 72", Baskerville, "Times New Roman", serif' },
+           font: WEIRD_FACE },
   // The one property badge off the shared field: a gold bolt on black is
   // what a live circuit looks like everywhere else, and it earns the break.
   electric: { tag: 'electric', mark: 'bolt', field: '#101014', ink: '#ffd60a' },

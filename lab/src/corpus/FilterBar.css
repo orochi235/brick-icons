@@ -1,8 +1,13 @@
 .corpus-bar {
   display: flex;
   gap: 1rem;
-  align-items: center;
+  align-items: baseline;
   padding: 0.4rem 0.6rem;
   font: 12px/1.4 ui-monospace, monospace;
 }
-.corpus-bar label { display: flex; gap: 0.3rem; align-items: center; }
+.corpus-bar label { display: flex; gap: 0.3rem; align-items: baseline; }
+
+/* A checkbox has no text baseline -- it would align by its bottom margin
+   edge and drag its whole label down with it, so it is taken out of the
+   baseline set and centered against the line instead. */
+.corpus-bar input[type="checkbox"] { align-self: center; }

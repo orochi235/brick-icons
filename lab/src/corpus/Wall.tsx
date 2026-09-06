@@ -141,7 +141,23 @@ function drawSticker(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: n
 function drawBadge(ctx: CanvasRenderingContext2D, badge: CellBadge,
                    at: { cx: number; cy: number; size: number; radius: number;
                          baseline?: number }) {
-  const { cx, cy, size, radius } = at;
+  const { cx, size, radius } = at;
+  const font = `${badge.style ?? 'normal'} ${badge.weight ?? BADGE_WEIGHT} `
+    + `${size * (badge.scale ?? 1)}px ${badge.font ?? BADGE_FACE}`;
+  // A glyph sits in its own place in the em box -- a lowercase `d` climbs to
+  // its ascender, a `+` sits on the math axis -- so the disc centers on the
+  // ink this badge actually draws, measured, while the baseline stays shared
+  // with the part number beside it.
+  let cy = at.cy;
+  if (at.baseline != null && badge.text) {
+    ctx.save();
+    ctx.font = font;
+    const m = ctx.measureText(badge.text);
+    const asc = m.actualBoundingBoxAscent;
+    const desc = m.actualBoundingBoxDescent;
+    ctx.restore();
+    if (Number.isFinite(asc) && Number.isFinite(desc)) cy = at.baseline - (asc - desc) / 2;
+  }
   ctx.save();
   ctx.beginPath();
   ctx.arc(cx, cy, radius, 0, Math.PI * 2);
@@ -160,21 +176,19 @@ function drawBadge(ctx: CanvasRenderingContext2D, badge: CellBadge,
     ctx.save();
     ctx.translate(cx, cy);
     ctx.scale(radius * 0.66, radius * 0.66);
-    mark(ctx);
+    mark(ctx, badge.field);
     ctx.restore();
   } else if (badge.text) {
-    ctx.font = `${BADGE_WEIGHT} ${size}px ${badge.font ?? BADGE_FACE}`;
+    ctx.font = font;
     ctx.textAlign = 'center';
     if (at.baseline != null) {
       // On the part number's own baseline, so `4761 T d` reads as one line
       // rather than as a caption with ornaments floating beside it.
       ctx.textBaseline = 'alphabetic';
-      ctx.fillText(badge.text, cx + size * 0.05, at.baseline);
+      ctx.fillText(badge.text, cx, at.baseline);
     } else {
       ctx.textBaseline = 'middle';
-      // Optically centered rather than metrically: a monospace capital
-      // carries more side bearing on its left and sits high in the em box.
-      ctx.fillText(badge.text, cx + size * 0.05, cy + size * 0.08);
+      ctx.fillText(badge.text, cx, cy);
     }
   }
   ctx.restore();
