@@ -129,23 +129,26 @@ export const drawComposite: Mark = (ctx) => {
 // a counter small against the stroke. The bowl is cut thicker than the stem
 // -- a curved stroke of the same width reads lighter than a straight one --
 // and the stem's right edge sits on the bowl's, or the two pile up into a
-// lump heavier than the side opposite it.
+// lump heavier than the side opposite it. The stem stops at the bowl's
+// widest point rather than running to its foot: past that the bowl curves
+// away from it, and the stem's corner hangs outside the letter as a serif
+// the logotype does not have.
 export const drawDuplo: Mark = (ctx, field) => {
   ctx.save();
-  ctx.translate(0.23, 0.02);
+  ctx.translate(0.22, -0.02);
   ctx.beginPath();
-  ctx.arc(-0.3, 0.28, 0.62, 0, Math.PI * 2);
+  ctx.arc(-0.3, 0.28, 0.7, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = ctx.fillStyle;
   ctx.lineWidth = 0.44;
   ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.moveTo(0.1, -0.72);
-  ctx.lineTo(0.1, 0.68);
+  ctx.moveTo(0.18, -0.72);
+  ctx.lineTo(0.18, 0.28);
   ctx.stroke();
   ctx.fillStyle = field;
   ctx.beginPath();
-  ctx.arc(-0.3, 0.28, 0.15, 0, Math.PI * 2);
+  ctx.arc(-0.3, 0.28, 0.22, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 };
