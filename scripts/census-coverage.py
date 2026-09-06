@@ -44,13 +44,24 @@ def speedup(secs: float, engine: str) -> float:
     return next(f for cap, f in OCCT_BANDS if secs < cap)
 
 
-def coverage(conn, corpus: list[str], engine: str) -> dict[str, list[str]]:
+def coverage(conn, corpus: list[str], engine: str,
+             facet: str | None = None) -> dict[str, list[str]]:
+    """`facet` names a declared census facet (`white`) instead of the oracle.
+
+    A facet is its own drawing at its own config, so its rows are read by
+    `source`, not by `engine`: an engine's two facets are both "naive", and
+    counting them together reports a part the oracle drew as one this facet
+    has no render for.
+    """
+    source = f"census-{facet}-{engine}" if facet else f"census-{engine}"
     drawn = {r["part_id"] for r in conn.execute(
-        "SELECT part_id FROM renders WHERE source = ?", (f"census-{engine}",))}
+        "SELECT part_id FROM renders WHERE source = ?", (source,))}
     ok, seen = {}, set()
+    where, params = ("engine = ?", (engine,)) if not facet else \
+        ("source = ?", (source,))
     for r in conn.execute(
-            "SELECT part_id, error, secs FROM measurements WHERE engine = ?",
-            (engine,)):
+            f"SELECT part_id, error, secs FROM measurements WHERE {where}",
+            params):
         seen.add(r["part_id"])
         # A part measured in any run can be drawn; only one that has never
         # completed is a failure. The archive's rows count for this.
@@ -76,6 +87,8 @@ def main() -> int:
     ap.add_argument("--db", default=str(ROOT / db.DEFAULT_PATH))
     ap.add_argument("--corpus", default=str(ROOT / "out/census/parts.txt"))
     ap.add_argument("--out", help="directory to write <engine>-<bucket>.txt into")
+    ap.add_argument("--facet", help="a declared facet (e.g. white) instead of "
+                                    "the oracle census")
     args = ap.parse_args()
 
     corpus = [p for p in Path(args.corpus).read_text().split() if p]
@@ -83,7 +96,7 @@ def main() -> int:
     print(f"corpus: {len(corpus)} parts\n")
     try:
         for engine in ENGINES:
-            buckets, ok = coverage(conn, corpus, engine)
+            buckets, ok = coverage(conn, corpus, engine, args.facet)
             print(f"{engine}")
             for name in ("drawn", "redraw", "fails", "unmeasured"):
                 n = len(buckets[name])

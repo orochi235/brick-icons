@@ -187,7 +187,23 @@ def main() -> int:
     ap.add_argument("--keep", metavar="DIR",
                     help="save every render and its camera under DIR/<engine>/, "
                          "so a finding can be looked at without re-rendering")
+    ap.add_argument("--bury", action="store_true",
+                    help="with --jsonl, record whatever the last run left "
+                         "in-flight as ProcessDied and exit, rendering nothing")
     args = ap.parse_args()
+
+    extra = {"engine": args.engine, "angle": args.angle,
+             "style": args.shade_style,
+             "strokes": [args.line_width, args.silhouette_width]}
+    # A part the watchdog kills leaves .inflight behind with no row, and the
+    # burial only happens on the way into a re-run of that same batch. Where
+    # none comes, the part is in no census at all -- neither drawn nor failed,
+    # just absent, and absent from a coverage list is absent from every retry.
+    if args.bury:
+        if not args.jsonl:
+            ap.error("--bury needs --jsonl")
+        Runner(args.jsonl, key="part", extra=extra).remaining([])
+        return 0
 
     ids = args.parts
     if args.list:
@@ -197,11 +213,7 @@ def main() -> int:
         ap.error("name at least one part, or pass --list")
 
     runner = Runner(args.jsonl, timeout=args.timeout, key="part",
-                    extra={"engine": args.engine, "angle": args.angle,
-                           "style": args.shade_style,
-                           "strokes": [args.line_width,
-                                       args.silhouette_width]}) \
-        if args.jsonl else None
+                    extra=extra) if args.jsonl else None
     if runner and args.skip_done:
         before = len(ids)
         ids = runner.remaining(ids)
