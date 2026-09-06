@@ -1,6 +1,8 @@
 import { expect, it } from 'vitest';
 import { adjacent, impliedCaret } from '@lab/corpus/caret';
+import { blockLayout } from '@lab/corpus/grouped';
 import type { Rect } from '@lab/corpus/layout';
+import type { Cell } from '@lab/corpus/types';
 
 // A 3x3 grid, pitch 12 (cell 10, gap 2) -- rows major, matching gridLayout.
 const rect = (col: number, row: number): Rect =>
@@ -15,6 +17,14 @@ for (let row = 0; row < 3; row++) {
 //          6 7 8
 
 const cam = { x: 0, y: 0, scale: { x: 1, y: 1 } };
+
+const celled = (id: string, index: number, category: string): Cell => ({
+  id, index, title: '', category, printed: false, obsolete: false,
+  base: false, out_of_scope: false, moved: false, year_from: null,
+  year_to: null, sets: null, tags: [], status: 'unreviewed', sha: null,
+  made_at: null, extra_d99: null, secs: null, error: null, open_defects: 0,
+  open_defects_elsewhere: 0, accepted_defects: 0, error_elsewhere: false,
+});
 
 it('impliedCaret prefers a whole cell over a clipped one', () => {
   const rects: Rect[] = [
@@ -90,4 +100,26 @@ it('returns null going right from the very last cell', () => {
 
 it('returns null going left from the very first cell', () => {
   expect(adjacent(grid3x3, 0, 'left')).toBeNull();
+});
+
+it('crosses the gutter between two blocks', () => {
+  // Grouping puts whitespace between blocks, and a caret that moved by index
+  // arithmetic would stop at the edge of one. These are the real rects
+  // `blockLayout` lays out for two four-cell groups, three columns each.
+  const cells = [
+    ...['a0', 'a1', 'a2', 'a3'].map((id, i) => celled(id, i, 'A')),
+    ...['b0', 'b1', 'b2', 'b3'].map((id, i) => celled(id, i + 4, 'B')),
+  ];
+  const { rects } = blockLayout((c) => c.category ?? '', [])(
+    cells, { cell: 10, gap: 2, cols: 12 });
+
+  // Block A's top-right cell: nothing of its own block lies to its right.
+  const from = 2;
+  const next = adjacent(rects, from, 'right');
+
+  expect(next).not.toBeNull();
+  expect(rects[next!]!.x).toBeGreaterThan(rects[from]!.x + rects[from]!.w);
+  expect(cells[next!]!.category).toBe('B');
+  // Index arithmetic would have answered 3, which sits below-left in block A.
+  expect(next).not.toBe(from + 1);
 });
