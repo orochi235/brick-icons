@@ -65,6 +65,29 @@ median is 22s. Three things to do, in order:
 compare-silhouette` — or you are timing eight of your own render processes
 fighting for eight performance cores.
 
+**Threading one render's booleans: tried, byte-safe, worth nothing.** GEOS
+releases the GIL (a synthetic boolean load scales 4.8x over 8 threads), so the
+obvious move is to thread the independent maps in `fill_ops` — the impostor
+cuts in `_refine_order_clips.apply` and the per-group merge unions. Output was
+byte-identical on six parts and the speed was 0.99-1.02x on every one of them.
+The reason is granularity: on `0901`, 224 of 227 of those maps carry exactly
+ONE item, and those single-item maps hold 56.5s of its 116s. The fill stage is
+a chain of a few hundred large serial booleans, so spending a second core means
+splitting one boolean — canvas tiling, which brings back the T-junction seams
+the coplanar plane-merge exists to remove. Reverted; don't re-propose it
+without a plan for that.
+
+**The parallelism that is really there is in the hidden-line stage**, and it
+wants vectorizing before it wants cores: `hlr.visible_segments` is 67% of
+`66790`'s render and per-segment independent, but it is Python-level numpy —
+895,872 `np.cross` calls with 5.4M axis-normalization calls under them — so it
+holds the GIL throughout and most of that time is dispatch, not arithmetic.
+
+**Trap from the same experiment:** threading the per-face intersection sweep
+that builds `near` changed the SVG bytes. Not slower — wrong. Whatever the
+mechanism, a shapely call threaded over geometry another thread also touches
+has to be proved byte-identical before it is believed.
+
 ## In flight: the library-scale silhouette census, now on `studio`
 
 Eight detached shards (4 naive, 4 occt) run
