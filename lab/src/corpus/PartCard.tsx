@@ -68,32 +68,34 @@ export function PartCard({ cell, source, at, viewport, onOpen, onClose }: {
   return (
     <div className="corpus-card" ref={ref} role="dialog"
          aria-label={`${cell.title} card`}>
-      <h3 className="corpus-card-title">{cell.title}</h3>
-      <p className="corpus-card-sub">
-        {cell.id} · {cell.category ?? 'uncategorised'} · {cell.status}
-        {years ? ` · ${years}` : ''}
-      </p>
-      <Tags tags={cell.tags} />
-      {cellStateLabel(cell) && <p className="corpus-card-state">{cellStateLabel(cell)}</p>}
-      <div className="corpus-card-body">
+      <div className="corpus-card-head">
         {cell.sha ? (
           <img className="corpus-card-thumb" alt={`${cell.id} render`}
                src={`/api/thumbs/${source}/128/${cell.id}.png`} />
         ) : (
           <p className="corpus-card-none">not rendered</p>
         )}
-        <dl className="corpus-card-stats">
-          {cell.extra_d99 !== null && (
-            <>
-              <dt>extra d99</dt><dd>{cell.extra_d99}</dd>
-            </>
-          )}
-          {cell.secs !== null && (
-            <>
-              <dt>secs</dt><dd>{cell.secs}</dd>
-            </>
-          )}
-        </dl>
+        <div className="corpus-card-text">
+          <h3 className="corpus-card-title">{cell.title}</h3>
+          <p className="corpus-card-sub">
+            {cell.id} · {cell.category ?? 'uncategorized'} · {cell.status}
+            {years ? ` · ${years}` : ''}
+          </p>
+          <Tags tags={cell.tags} />
+          {cellStateLabel(cell) && <p className="corpus-card-state">{cellStateLabel(cell)}</p>}
+          <dl className="corpus-card-stats">
+            {cell.extra_d99 !== null && (
+              <>
+                <dt>extra d99</dt><dd>{cell.extra_d99}</dd>
+              </>
+            )}
+            {cell.secs !== null && (
+              <>
+                <dt>secs</dt><dd>{cell.secs}</dd>
+              </>
+            )}
+          </dl>
+        </div>
       </div>
       <button type="button" className="corpus-card-open"
               onClick={() => onOpen(cell.id)}>

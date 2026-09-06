@@ -19,7 +19,17 @@
 }
 .corpus-card-title { margin: 0; font-size: 13px; }
 .corpus-card-sub { margin: 0; color: var(--wzl-fg-muted); }
-.corpus-card-body { display: flex; gap: 0.6rem; flex: 1; min-height: 0; }
+/* The render leads and the text sets beside it, so the drawing is what the
+   eye lands on rather than the third thing under two headings. */
+.corpus-card-head { display: flex; gap: 0.6rem; flex: 1; min-height: 0; }
+.corpus-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+}
 .corpus-card-thumb {
   width: 96px;
   height: 96px;

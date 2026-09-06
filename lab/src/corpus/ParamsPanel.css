@@ -1,32 +1,14 @@
+/* A block of the sidebar, not a panel over the wall: the sidebar carries the
+   surface, the scrolling and the heading style, so this only has to space its
+   own rows and let the color rows out of ControlPanel's pairing grid. */
 .corpus-params-panel {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  width: var(--corpus-panel-width, 17rem);
-  max-height: 80vh;
-  padding: 0.5rem 0.6rem;
-  /* `--wzl-surface-raised` carries alpha in the active theme (a frosted-glass
-   * panel elsewhere composes it with `backdrop-filter`); backed by the opaque
-   * `--wzl-surface` here instead, since this panel floats over the wall's own
-   * cell colors rather than a blurred backdrop. */
-  background-color: var(--wzl-surface);
-  background-image: linear-gradient(var(--wzl-surface-raised), var(--wzl-surface-raised));
-  color: var(--wzl-fg);
-  border: var(--wzl-border-w) solid var(--wzl-border);
-  border-radius: var(--wzl-radius-md);
-  box-shadow: 0 6px 20px var(--wzl-shadow);
   font: 12px/1.4 ui-monospace, monospace;
 }
-.corpus-params-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-.corpus-params-head-actions { display: flex; gap: 0.4rem; }
-.corpus-params-body { overflow-y: auto; }
+.corpus-params-body { padding: 0 12px; }
 .corpus-params-group + .corpus-params-group { margin-top: 0.6rem; }
-.corpus-params-group h3 {
+.corpus-params-group h4 {
   margin: 0 0 0.2rem;
   font-size: 11px;
   text-transform: uppercase;

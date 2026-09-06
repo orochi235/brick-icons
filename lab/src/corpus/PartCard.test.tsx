@@ -75,3 +75,20 @@ it('names a defect filed against another slot as belonging elsewhere', () => {
   render(card({ cell: { ...cell, open_defects_elsewhere: 1 } }));
   expect(screen.getByText(/1 open defect in another slot/)).toBeTruthy();
 });
+
+it('leads with the render and sets the text beside it', () => {
+  const { container } = render(card());
+  const head = container.querySelector('.corpus-card-head');
+  expect(head).toBeTruthy();
+  // The render comes first in the row, so it reads top-left with the text
+  // to its right rather than under a stack of headings.
+  const [first] = head!.children;
+  expect(first!.classList.contains('corpus-card-thumb')).toBe(true);
+  expect(head!.querySelector('.corpus-card-text .corpus-card-title')).toBeTruthy();
+});
+
+it('keeps the render first even when there is none to show', () => {
+  const { container } = render(card({ cell: { ...cell, sha: null } }));
+  const [first] = container.querySelector('.corpus-card-head')!.children;
+  expect(first!.classList.contains('corpus-card-none')).toBe(true);
+});

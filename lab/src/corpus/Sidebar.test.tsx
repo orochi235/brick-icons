@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { Sidebar } from '@lab/corpus/Sidebar';
+import { DEFAULT_PARAMS } from '@lab/corpus/params';
 import { DEFAULT_SHOWN, type Selection } from '@lab/corpus/select';
 
 const selection: Selection = {
@@ -12,6 +13,7 @@ const props = {
   selection,
   counts: new Map([['Brick', 1332], ['Tile', 2117], ['Duplo', 589]]),
   shown: 1332, total: 1921,
+  params: DEFAULT_PARAMS, setParam: vi.fn(), resetParams: vi.fn(),
 };
 
 const facets = () => within(document.querySelectorAll('.corpus-side__facets')[0] as HTMLElement);

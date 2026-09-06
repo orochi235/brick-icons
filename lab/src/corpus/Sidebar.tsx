@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Grouping } from '@lab/corpus/facts';
 import { familyFacets, type Family, type FamilyFacet } from '@lab/corpus/families';
 import { CLASS_LABEL, CLASSES, FILTERS, SORTS, type Selection } from '@lab/corpus/select';
+import { ParamsPanel, type ParamsPanelProps } from '@lab/corpus/ParamsPanel';
 import { TINT_MODES } from '@lab/corpus/tint';
 import '@lab/corpus/Sidebar.css';
 
@@ -47,13 +48,16 @@ function FamilyRow({ facet, off, open, onOpen, onToggle }: {
   );
 }
 
-export function Sidebar({ selection, counts, shown, total, onChange }: {
+export function Sidebar({ selection, counts, shown, total, onChange,
+                         params, setParam, resetParams }: {
   selection: Selection;
   counts: Map<string, number>;
   shown: number;
   total: number;
   onChange: (next: Selection) => void;
-}) {
+} & { params: ParamsPanelProps['params'];
+      setParam: ParamsPanelProps['setParam'];
+      resetParams: ParamsPanelProps['reset'] }) {
   const [open, setOpen] = useState<ReadonlySet<Family>>(new Set());
   const off = new Set(selection.excluded);
   const facets = familyFacets(counts);
@@ -179,6 +183,8 @@ export function Sidebar({ selection, counts, shown, total, onChange }: {
       </ul>
 
       <p className="corpus-side__count">{shown} of {total}</p>
+
+      <ParamsPanel params={params} setParam={setParam} reset={resetParams} />
     </aside>
   );
 }

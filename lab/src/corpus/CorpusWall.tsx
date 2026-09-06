@@ -13,7 +13,6 @@ import { Legend } from '@lab/corpus/Legend';
 import { levelFor, pickLevel } from '@lab/corpus/levels';
 import { Lightbox } from '@lab/corpus/Lightbox';
 import type { CellState } from '@lab/corpus/palette';
-import { ParamsPanel } from '@lab/corpus/ParamsPanel';
 import { PartCard } from '@lab/corpus/PartCard';
 import { centerReveal } from '@lab/corpus/reveal';
 import { applySelection, DEFAULT_SHOWN, type Selection } from '@lab/corpus/select';
@@ -250,7 +249,8 @@ export function CorpusWall({ client }: { client: LabClient }) {
       <div className="corpus-app">
         {cells && (
           <Sidebar selection={selection} onChange={setSelection} counts={counts}
-                   shown={shown.length} total={cells.length} />
+                   shown={shown.length} total={cells.length}
+                   params={params} setParam={setParam} resetParams={resetParams} />
         )}
         {/* `useCanvasSize` measures the stage once, on its own first mount --
             it has to exist from the start, not appear once cells arrive. */}
@@ -290,7 +290,6 @@ export function CorpusWall({ client }: { client: LabClient }) {
                     onBadges={(update) => setSelection((s) => ({ ...s, badges: update(s.badges) }))}
                     highlightTag={highlightTag} onHighlightTag={setHighlightTag} />
           )}
-          <ParamsPanel params={params} setParam={setParam} reset={resetParams} />
         </div>
         {picked && (
           <Lightbox partId={picked} source={drawnSource} client={client}
