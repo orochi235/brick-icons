@@ -123,6 +123,9 @@ export const drawMagnet: Mark = (ctx, _field, accent) => {
 // hold at the strip's floor the fallback is a halftone dot cluster.
 export const drawBrush: Mark = (ctx, field, accent) => {
   fillPath(ctx, BRUSH);
+  // The ferrule is metal whatever the bristles are, and it has to stay light
+  // against the field for the crimp cut into it to read.
+  ctx.fillStyle = '#ffffff';
   ctx.beginPath();
   ctx.moveTo(-0.44, 0.52);
   ctx.lineTo(0.44, 0.52);
@@ -148,14 +151,14 @@ export const drawBrush: Mark = (ctx, field, accent) => {
 export const drawMinifig: Mark = (ctx) => {
   const drop = 0.185;   // the face group, centered in a disc that has no stud
   ctx.beginPath();
-  ctx.arc(-0.433, -0.064 - drop, 0.189, 0, Math.PI * 2);
+  ctx.arc(-0.433, -0.064 - drop, 0.215, 0, Math.PI * 2);
   ctx.fill();
   ctx.beginPath();
-  ctx.arc(0.433, -0.064 - drop, 0.189, 0, Math.PI * 2);
+  ctx.arc(0.433, -0.064 - drop, 0.215, 0, Math.PI * 2);
   ctx.fill();
   ctx.save();
   ctx.strokeStyle = ctx.fillStyle;
-  ctx.lineWidth = 0.135;
+  ctx.lineWidth = 0.175;
   ctx.lineCap = 'round';
   ctx.beginPath();
   // The ends land about mid-pupil, which is where the print puts them.
@@ -166,13 +169,31 @@ export const drawMinifig: Mark = (ctx) => {
 
 // Composite: two L-trominoes interlocked into a 2x3 block -- the smallest
 // rectangle two identical pieces can tile, and it says assembled-from-parts
-// rather than merely stacked. The seam between them is cut in the field, so
-// the two pieces read apart without either being outlined.
-export const drawComposite: Mark = (ctx, field) => {
-  ctx.fillRect(-0.6, -0.9, 1.2, 1.8);
+// rather than merely stacked. Each piece takes its own color and the seam
+// between them is cut in the field, so neither needs an outline.
+export const drawComposite: Mark = (ctx, field, accent) => {
+  ctx.beginPath();
+  ctx.moveTo(-0.6, -0.9);
+  ctx.lineTo(0.6, -0.9);
+  ctx.lineTo(0.6, -0.3);
+  ctx.lineTo(0, -0.3);
+  ctx.lineTo(0, 0.3);
+  ctx.lineTo(-0.6, 0.3);
+  ctx.closePath();
+  ctx.fill();
   ctx.save();
+  ctx.fillStyle = accent;
+  ctx.beginPath();
+  ctx.moveTo(0, -0.3);
+  ctx.lineTo(0.6, -0.3);
+  ctx.lineTo(0.6, 0.9);
+  ctx.lineTo(-0.6, 0.9);
+  ctx.lineTo(-0.6, 0.3);
+  ctx.lineTo(0, 0.3);
+  ctx.closePath();
+  ctx.fill();
   ctx.strokeStyle = field;
-  ctx.lineWidth = 0.15;
+  ctx.lineWidth = 0.12;
   ctx.lineJoin = 'miter';
   ctx.beginPath();
   ctx.moveTo(0.6, -0.3);

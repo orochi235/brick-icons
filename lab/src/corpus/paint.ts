@@ -198,10 +198,10 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
               scale: 0.86 },
   magnet: { tag: 'magnet', mark: 'magnet', field: PROPERTY_FIELD, ink: '#e03131',
             accent: '#d8d8dc', scale: 0.97 },
-  printed: { tag: 'printed', mark: 'brush', field: PROPERTY_FIELD, ink: '#ffffff',
+  printed: { tag: 'printed', mark: 'brush', field: PROPERTY_FIELD, ink: '#ffd500',
              accent: '#00ff00' },
   composite: { tag: 'composite', mark: 'composite', field: PROPERTY_FIELD,
-               ink: '#ffffff', scale: 0.86 },
+               ink: '#f5a623', accent: '#5aa9e6', scale: 0.86 },
 };
 
 /** The badge that links somewhere when clicked. Only one does. */
