@@ -20,10 +20,10 @@ export type Palette = Record<CellState, CellStyle>;
 export const DEFAULT_PALETTE: Palette = {
   unknown: { fill: '#3a3a3f', border: null, weight: null },
   timeout: { fill: '#26383f', border: '#30b0d0', weight: 'thick' },
-  failed: { fill: '#3a2a42', border: '#c050e0', weight: 'thick' },
-  defect: { fill: '#4a2626', border: '#e03030', weight: 'thick' },
+  failed: { fill: '#4a2626', border: '#e03030', weight: 'thick' },
+  defect: { fill: '#453c27', border: '#daa520', weight: 'thick' },
   problemElsewhere: { fill: '#26383f', border: '#97bcc5', weight: 'thin' },
-  defectElsewhere: { fill: '#4a2626', border: '#ce9e9e', weight: 'thin' },
+  defectElsewhere: { fill: '#453c27', border: '#c7b78f', weight: 'thin' },
 };
 
 const PROPERTY: Record<CellState, { fill: string; border: string | null }> = {
