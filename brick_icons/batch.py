@@ -7,6 +7,7 @@ resume cannot loop on it forever.
 from __future__ import annotations
 
 import json
+import os
 import signal
 import time
 import traceback
@@ -70,6 +71,15 @@ class Runner:
                 continue  # a later row for the same item may still settle it
             done.add(row[self.key])
         return [i for i in items if i not in done]
+
+    def pruned(self) -> bool:
+        """True once onto has marked this job pruned.
+
+        Call it BETWEEN items, never inside one: by then the finished item's
+        row is written and `.inflight` is gone, so a resume counts it as done
+        instead of burying it as ProcessDied."""
+        marker = os.environ.get("ONTO_PRUNE")
+        return bool(marker) and Path(marker).exists()
 
     def write(self, row: dict) -> None:
         with self.log.open("a") as fh:

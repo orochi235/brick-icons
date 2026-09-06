@@ -226,6 +226,12 @@ def main() -> int:
                         src.rename(keep / args.engine / f"{pid}{suffix}")
             for f in tmp.glob(f"{pid}.*"):
                 f.unlink(missing_ok=True)
+            if runner and runner.pruned():
+                # onto records only the exit code, and 0 here means "did what
+                # it was told" for a full run and a pruned one alike -- this
+                # line is the only place the difference survives.
+                print(f"pruned at {n}/{len(ids)} parts", flush=True)
+                break
     if args.out:
         Path(args.out).write_text(json.dumps(rows, indent=1))
         print(f"wrote {args.out}")
