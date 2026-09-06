@@ -51,14 +51,20 @@
 
 /* The twisty sits outside the label so that clicking the name still toggles
  * the family's box rather than opening it. */
-.corpus-side__fam { display: flex; align-items: baseline }
+.corpus-side__fam { display: flex; align-items: center }
 .corpus-side__fam label { flex: 1; min-width: 0; padding-left: 0 }
+/* Drawn rather than typed: the UI font has no triangle, so a glyph here
+ * falls back to whatever the system offers and lands at the wrong size. */
 .corpus-side__twisty {
-  flex: none; width: 18px; padding: 0 0 0 5px; border: 0; background: none;
-  cursor: pointer; color: var(--wzl-fg-muted); font: inherit; font-size: 11px;
-  line-height: inherit; text-align: left;
+  flex: none; display: flex; align-items: center; justify-content: flex-end;
+  width: 20px; height: 20px; margin-left: 4px; padding: 0 2px 0 0;
+  border: 0; border-radius: var(--wzl-radius-sm, 3px); background: none;
+  cursor: pointer; color: var(--wzl-fg-muted);
 }
-.corpus-side__twisty:hover { color: var(--wzl-fg) }
+.corpus-side__twisty svg { fill: currentColor; transition: transform 90ms ease }
+.corpus-side__twisty[aria-expanded="true"] svg { transform: rotate(90deg) }
+.corpus-side__twisty:hover { color: var(--wzl-fg); background: var(--wzl-surface-raised) }
+.corpus-side__twisty:focus-visible { outline: 2px solid var(--wzl-accent); outline-offset: -2px }
 .corpus-side__members label { padding-left: 36px }
 .corpus-side__members span { color: var(--wzl-fg-muted) }
 

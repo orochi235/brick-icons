@@ -33,7 +33,9 @@ function FamilyRow({ facet, off, open, onOpen, onToggle }: {
     <div className="corpus-side__fam">
       <button type="button" className="corpus-side__twisty" aria-expanded={open}
               aria-label={`${facet.family} categories`} onClick={onOpen}>
-        {open ? '▾' : '▸'}
+        <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
+          <path d="M4 2.5 L8.5 6 L4 9.5 Z" />
+        </svg>
       </button>
       <label>
         <input type="checkbox" name={facet.family} checked={allOn}
