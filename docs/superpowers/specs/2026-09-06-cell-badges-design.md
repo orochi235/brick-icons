@@ -36,8 +36,8 @@ taxonomy for its own sake.
 | printed | brush tip — tapered diagonal with a ferrule band | property | 8639 |
 | composite | `+` | property | 2033 |
 
-`popular` and `retired` keep their present discs and corners and are not part of
-either family.
+`popular` keeps its present disc and corner and is in neither family.
+`retired` splits — see below — and keeps its slot.
 
 The minifig head carries no face: 70% of minifig parts are also printed, so a
 face would sit beside the printed badge in the same strip reading as a
@@ -45,14 +45,55 @@ duplicate.
 
 Counts are from the vendored library, 24,591 part files.
 
+## Retired splits into retired and updated
+
+A part that stopped and a part that was replaced are not the same thing, and
+today they wear the same gray `R`. 2780 is the case: 2,492 sets, last seen in
+2021, and still made — as 61332.
+
+Both keep the bottom-right slot, so at most one shows and nothing else moves.
+
+| | glyph | n |
+|---|---|---|
+| retired | as today | 3550 |
+| updated | its own mark, clickable | 456 |
+
+**Clicking an updated badge goes to the successor.** The wall draws to canvas,
+so the badge has no DOM node to carry a link: this needs hit-testing the badge's
+rect in canvas coordinates. `select.ts` selects a cell, not a mark within one.
+
+### Where a successor comes from
+
+Not from LDraw. `~Moved to` is a file rename, not a supersession — 2780 has no
+such record because 2780 and 61332 are genuinely different parts.
+
+Rebrickable publishes `part_relationships.csv.gz` (37,390 rows, six types).
+`fetch-part-years.py` pulls `parts`, `sets`, `inventories` and
+`inventory_parts`; this adds a fifth dump and a table beside `part_years`.
+
+A retired part is *updated* when a relation names a partner with a later last
+year. **Mould (`M`) outranks alternate (`A`)**, or 2780 resolves to 3673, the
+frictionless pin — a part that fits the same hole, not a replacement.
+
+Measured: 456 of the 4,006 retired parts qualify — 310 by mould, 146 by
+alternate. Every successor is an LDraw part; 312 are still current. The other
+3,550 stay plain retired, so updated is the minority badge.
+
+### The moved target is already free and discarded
+
+Separately: `cells.py` computes `moved` as `title LIKE '~Moved to%'` and throws
+the target away. All 1,159 moved parts name one, the header agrees with the
+type-1 body reference in every case, and 1,153 resolve to a file. A redirect is
+not a supersession, but the edge costs nothing to keep.
+
 ## The strip
 
 Badges run right along the bottom edge from the part number: `4761 T ⚡ ✎`.
 
 Corners do not scale. Two already hold captions (years top-right, part id
-bottom-left), `popular` and `retired` hold the other two, and this adds eight —
-eleven discs into two corners. Nothing moves: `popular` keeps top-left,
-`retired` bottom-right, years top-right, and the part id keeps bottom-left with
+bottom-left), `popular` and `retired`/`updated` hold the other two, and this
+adds eight — eleven discs into two corners. Nothing moves: `popular` keeps top-left,
+`retired`/`updated` bottom-right, years top-right, and the part id keeps bottom-left with
 the strip growing rightward from it.
 
 Glyphs show from `BADGE_MIN_PX` (56); the id text joins them at `LABEL_MIN_PX`
