@@ -24,3 +24,10 @@ it('leaves the level alone when it is already the right one', () => {
   expect(pickLevel(8, 10)).toBe(8);
   expect(pickLevel(32, 40)).toBe(32);
 });
+
+it('honors a caller-supplied hysteresis, for the params panel', () => {
+  // Same 16px boundary, but a tighter up-factor of 1.1 -- 20/1.1 = 18.2,
+  // already past 16, so it swaps where the default 1.5 factor would hold.
+  expect(pickLevel(8, 20, 1.1, 0.67)).toBe(32);
+  expect(pickLevel(8, 20)).toBe(8);
+});

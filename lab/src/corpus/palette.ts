@@ -1,9 +1,11 @@
+import { DEFAULT_PARAMS, type ColorParamKey } from '@lab/corpus/params';
+
 export type CellState =
   'unknown' | 'timeout' | 'failed' | 'defect' | 'problemElsewhere' | 'defectElsewhere';
 
 export interface CellStyle {
   fill: string;
-  /** null means the state gets no border at all -- the unknown field colour
+  /** null means the state gets no border at all -- the unknown field color
    *  recedes rather than competing with everything drawn on top of it. */
   border: string | null;
   weight: 'thick' | 'thin' | null;
@@ -18,20 +20,26 @@ export type Palette = Record<CellState, CellStyle> & { caret: string };
 // to sit in the gray field. The border carries the state instead, brighter
 // and more saturated than the fill it sits on. Tuned by eye over two rounds;
 // none of the six values coincides with a `--wzl-*` token, so they stay
-// literal rather than drifting to a close-but-different one.
+// literal rather than drifting to a close-but-different one. The literals
+// themselves live in `params.ts`'s `DEFAULT_PARAMS`, the wall's own params
+// panel being the other reader of them.
 const CELL_PALETTE: Record<CellState, CellStyle> = {
-  unknown: { fill: '#3a3a3f', border: null, weight: null },
-  timeout: { fill: '#26383f', border: '#30b0d0', weight: 'thick' },
-  failed: { fill: '#4a2626', border: '#e03030', weight: 'thick' },
-  defect: { fill: '#453c27', border: '#daa520', weight: 'thick' },
-  problemElsewhere: { fill: '#26383f', border: '#97bcc5', weight: 'thin' },
-  defectElsewhere: { fill: '#453c27', border: '#c7b78f', weight: 'thin' },
+  unknown: { fill: DEFAULT_PARAMS.unknownFill, border: null, weight: null },
+  timeout: { fill: DEFAULT_PARAMS.timeoutFill, border: DEFAULT_PARAMS.timeoutBorder,
+             weight: 'thick' },
+  failed: { fill: DEFAULT_PARAMS.failedFill, border: DEFAULT_PARAMS.failedBorder,
+            weight: 'thick' },
+  defect: { fill: DEFAULT_PARAMS.defectFill, border: DEFAULT_PARAMS.defectBorder,
+            weight: 'thick' },
+  problemElsewhere: { fill: DEFAULT_PARAMS.problemElsewhereFill,
+                       border: DEFAULT_PARAMS.problemElsewhereBorder, weight: 'thin' },
+  defectElsewhere: { fill: DEFAULT_PARAMS.defectElsewhereFill,
+                      border: DEFAULT_PARAMS.defectElsewhereBorder, weight: 'thin' },
 };
 
 const CARET_PROPERTY = '--corpus-caret-color';
-const CARET_DEFAULT_COLOR = '#ffffff';
 
-export const DEFAULT_PALETTE: Palette = { ...CELL_PALETTE, caret: CARET_DEFAULT_COLOR };
+export const DEFAULT_PALETTE: Palette = { ...CELL_PALETTE, caret: DEFAULT_PARAMS.caretColor };
 
 const PROPERTY: Record<CellState, { fill: string; border: string | null }> = {
   unknown: { fill: '--corpus-cell-unknown-fill', border: null },
@@ -42,6 +50,25 @@ const PROPERTY: Record<CellState, { fill: string; border: string | null }> = {
                        border: '--corpus-cell-problem-elsewhere-border' },
   defectElsewhere: { fill: '--corpus-cell-defect-elsewhere-fill',
                       border: '--corpus-cell-defect-elsewhere-border' },
+};
+
+/** Where a params panel's color row writes each color param -- the same CSS
+ *  custom properties `readPalette` reads, keyed the way `Params` names them
+ *  rather than by state, so `useParams` can iterate `COLOR_PARAM_KEYS`
+ *  without a state/fill-or-border switch of its own. */
+export const PARAM_CSS_VAR: Record<ColorParamKey, string> = {
+  unknownFill: PROPERTY.unknown.fill,
+  timeoutFill: PROPERTY.timeout.fill,
+  timeoutBorder: PROPERTY.timeout.border as string,
+  failedFill: PROPERTY.failed.fill,
+  failedBorder: PROPERTY.failed.border as string,
+  defectFill: PROPERTY.defect.fill,
+  defectBorder: PROPERTY.defect.border as string,
+  problemElsewhereFill: PROPERTY.problemElsewhere.fill,
+  problemElsewhereBorder: PROPERTY.problemElsewhere.border as string,
+  defectElsewhereFill: PROPERTY.defectElsewhere.fill,
+  defectElsewhereBorder: PROPERTY.defectElsewhere.border as string,
+  caretColor: CARET_PROPERTY,
 };
 
 /** Iteration order for every table keyed by state -- worst-here-first then
@@ -63,10 +90,10 @@ function readVar(styles: CSSStyleDeclaration, prop: string, fallback: string): s
   return value.length > 0 ? value : fallback;
 }
 
-/** Reads the wall's six cell-state colours from CSS custom properties on
+/** Reads the wall's six cell-state colors from CSS custom properties on
  *  `el`, falling back to the tuned defaults for anything the stylesheet
  *  doesn't declare. These are canvas fills, so CSS cannot reach them any
- *  other way -- this is how the wall's colours track a theme change. */
+ *  other way -- this is how the wall's colors track a theme change. */
 export function readPalette(el: Element): Palette {
   const styles = getComputedStyle(el);
   const out = {} as Palette;

@@ -9,8 +9,9 @@ import {
 import { LoupeBubble, resolveLoupe, useLoupe } from '@weasel-js/labkit/loupe';
 import { adjacent, impliedCaret, type Direction } from '@lab/corpus/caret';
 import type { Rect } from '@lab/corpus/layout';
-import { paintCommands, type PaintCommand } from '@lab/corpus/paint';
+import { paintCommands, type Appearance, type PaintCommand } from '@lab/corpus/paint';
 import { DEFAULT_PALETTE, readPalette, type CellState, type Palette } from '@lab/corpus/palette';
+import { DEFAULT_PARAMS } from '@lab/corpus/params';
 import { panToReveal } from '@lab/corpus/reveal';
 import type { Cell, SheetManifest } from '@lab/corpus/types';
 import { visibleRange } from '@lab/corpus/visible';
@@ -35,11 +36,13 @@ export interface WallProps {
   onPan: (next: View) => void;
   onPick: (cell: Cell, at: { x: number; y: number }) => void;
   onOpen: (cell: Cell) => void;
+  /** A drag shorter than this is a click that wobbled, not a pan -- the same
+   *  distinction `e.detail === 2` draws between a double click and two
+   *  singles. Defaults to the params panel's own tuned value. */
+  dragThresholdPx?: number;
+  /** Border and dim tuning, live from the params panel. */
+  appearance?: Appearance;
 }
-
-// A drag shorter than this is a click that wobbled, not a pan -- the same
-// distinction `e.detail === 2` draws between a double click and two singles.
-const DRAG_THRESHOLD_PX = 4;
 
 function ongoingInvoker(action: typeof viewportDragPanAction) {
   if (!action.invoker || action.invoker.timing !== 'ongoing') {
@@ -120,7 +123,9 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
  *  what it replaces; nothing above it knows what an atlas page is. */
 export function Wall({ cells, rects, cam, sheet, manifest, loose, width, height,
                        highlight, explicitCaret, onExplicitCaretChange,
-                       onPan, onPick, onOpen }: WallProps) {
+                       onPan, onPick, onOpen,
+                       dragThresholdPx = DEFAULT_PARAMS.dragThresholdPx,
+                       appearance }: WallProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [dragging, setDragging] = useState(false);
   const decay = useDecayLoop();
@@ -138,20 +143,27 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, width, height,
 
   const view = { get: () => camRef.current, set: onPan, decay: decay.start };
 
-  // The six state colours are canvas fills, so CSS can only reach them
+  // The six state colors are canvas fills, so CSS can only reach them
   // through `getComputedStyle` -- read once on mount and again whenever the
-  // theme's mode or name attribute changes anywhere above the canvas, rather
-  // than on every frame.
+  // theme's mode or name attribute changes anywhere above the canvas, or a
+  // params-panel color row writes a `style`-attribute custom property onto
+  // `.lk-root`. The `.lk-root` watch is its own observer, scoped to that one
+  // node rather than the whole subtree -- the draw effect below sets the
+  // canvas's own `style.width`/`height` every frame, and a subtree watch for
+  // `style` would re-trigger this on that write too.
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
     const update = () => setPalette(readPalette(canvas));
     update();
-    const observer = new MutationObserver(update);
-    observer.observe(document.documentElement, {
+    const themeObserver = new MutationObserver(update);
+    themeObserver.observe(document.documentElement, {
       attributes: true, attributeFilter: ['data-wzl-mode', 'data-wzl-theme'], subtree: true,
     });
-    return () => observer.disconnect();
+    const root = canvas.closest('.lk-root');
+    const rootObserver = root ? new MutationObserver(update) : null;
+    rootObserver?.observe(root!, { attributes: true, attributeFilter: ['style'] });
+    return () => { themeObserver.disconnect(); rootObserver?.disconnect(); };
   }, []);
 
   const loupeCapability = useMemo(() => resolveLoupe(true), []);
@@ -186,11 +198,12 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, width, height,
     ctx.imageSmoothingEnabled = true;
     for (const cmd of paintCommands({
       cells, rects, visible, cam, manifest, palette, loose, highlight, caret: caretIndex,
+      appearance,
     })) {
       drawPaintCommand(ctx, cmd, sheet, palette);
     }
   }, [cells, rects, visible, cam, sheet, manifest, palette, loose, highlight, caretIndex,
-      width, height]);
+      appearance, width, height]);
 
   // The lens shows a magnified crop of what is already on screen -- zooming
   // in about a fixed point never brings a cell into view that the outer
@@ -215,12 +228,13 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, width, height,
     const offset = { x: d / 2 - loupe.aim.x, y: d / 2 - loupe.aim.y };
     for (const cmd of paintCommands({
       cells, rects, visible, cam: magCam, manifest, palette, loose, highlight, caret: caretIndex,
+      appearance,
     })) {
       drawPaintCommand(ctx, cmd, sheet, palette, offset);
     }
   }, [loupe.visible, loupe.aim, loupe.factor, loupeCapability.diameter,
       cells, rects, visible, cam, sheet, manifest, palette, loose, highlight, caretIndex,
-      width, height]);
+      appearance, width, height]);
 
   const hitTest = (e: { clientX: number; clientY: number;
                          currentTarget: HTMLCanvasElement }) => {
@@ -264,7 +278,7 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, width, height,
     const dx = e.clientX - startRef.current.x;
     const dy = e.clientY - startRef.current.y;
     if (!draggedRef.current) {
-      if (Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return;
+      if (Math.hypot(dx, dy) < dragThresholdPx) return;
       draggedRef.current = true;
       setDragging(true);
     }

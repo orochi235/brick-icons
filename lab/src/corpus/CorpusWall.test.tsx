@@ -57,10 +57,12 @@ beforeEach(() => {
     .mockReturnValue(rect(800, 600));
 });
 
-// The legend's `FloatingPanel` observes its own size with a second, real
-// `ResizeObserver` -- a single captured callback can no longer stand in for
-// "the one that watches the stage", so each instance records what it
-// observed and the test picks out the one watching `.corpus-stage`.
+// Every `FloatingPanel` (the legend, the params panel) observes its own size
+// with a second, real `ResizeObserver`, and since its offsetParent falls back
+// to `.corpus-stage` in jsdom, that instance watches the stage too -- but
+// alongside its own panel div, so it always has two targets. `useCanvasSize`'s
+// own observer watches only the stage, which is what distinguishes it from
+// however many floating panels the wall grows.
 class CapturingResizeObserver {
   static instances: CapturingResizeObserver[] = [];
   targets: Element[] = [];
@@ -79,8 +81,9 @@ function installCapturingResizeObserver() {
 
 function stageResizeCallback(container: HTMLElement): ResizeObserverCallback {
   const stage = container.querySelector('.corpus-stage')!;
-  const observer = CapturingResizeObserver.instances.find((i) => i.targets.includes(stage));
-  if (!observer) throw new Error('no ResizeObserver is watching .corpus-stage');
+  const observer = CapturingResizeObserver.instances.find(
+    (i) => i.targets.length === 1 && i.targets[0] === stage);
+  if (!observer) throw new Error('no ResizeObserver is watching only .corpus-stage');
   return observer.cb;
 }
 

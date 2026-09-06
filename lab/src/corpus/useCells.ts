@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import type { LabClient } from '@lab/api/client';
+import { DEFAULT_PARAMS } from '@lab/corpus/params';
 import type { Cell, CellsBody } from '@lab/corpus/types';
 
-export const POLL_MS = 10_000;
+export const POLL_MS = DEFAULT_PARAMS.pollMs;
 
 /** Fold a delta into the wall's cells.
  *
@@ -14,7 +15,7 @@ export function mergeCells(current: Cell[], delta: Cell[]): Cell[] {
   return current.map((c) => byId.get(c.id) ?? c);
 }
 
-export function useCells(client: LabClient, source: string): Cell[] | null {
+export function useCells(client: LabClient, source: string, pollMs = POLL_MS): Cell[] | null {
   const [cells, setCells] = useState<Cell[] | null>(null);
   const [fetchedFor, setFetchedFor] = useState(source);
   const version = useRef('');
@@ -42,9 +43,9 @@ export function useCells(client: LabClient, source: string): Cell[] | null {
         version.current = body.version;
         setCells((prev) => (prev ? mergeCells(prev, body.cells) : prev));
       });
-    }, POLL_MS);
+    }, pollMs);
     return () => { live = false; clearInterval(timer); };
-  }, [client, source]);
+  }, [client, source, pollMs]);
 
   return cells;
 }

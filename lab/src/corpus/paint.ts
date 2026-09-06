@@ -1,6 +1,7 @@
 import { worldToScreen, viewToTransform, type View } from '@weasel-js/core';
 import type { Rect } from '@lab/corpus/layout';
 import { CELL_STATES, type CellState, type CellStyle, type Palette } from '@lab/corpus/palette';
+import { DEFAULT_PARAMS } from '@lab/corpus/params';
 import { isStale, sourceBox } from '@lab/corpus/sheet';
 import type { Cell, SheetManifest } from '@lab/corpus/types';
 
@@ -32,22 +33,29 @@ export function tally(cells: Cell[]): Record<CellState, number> {
 
 // A fixed pixel width vanishes when the wall is zoomed out, which is the case
 // that matters most -- so the border scales with the drawn cell, capped
-// before it turns a large cell into a picture frame.
-const THICK_BORDER_FACTOR = 0.18;
-const THIN_BORDER_FACTOR = 0.09;
-const MAX_BORDER_PX = 6;
-
-function borderWidthFor(weight: CellStyle['weight'], cellPx: number): number {
-  if (!weight) return 0;
-  const factor = weight === 'thick' ? THICK_BORDER_FACTOR : THIN_BORDER_FACTOR;
-  return Math.min(MAX_BORDER_PX, Math.max(1, cellPx * factor));
+// before it turns a large cell into a picture frame. Defaults come from the
+// params panel's schema; `Appearance` below is how a live tuning session
+// overrides them without every other caller having to know the knob exists.
+export interface Appearance {
+  thickBorderFactor: number;
+  thinBorderFactor: number;
+  maxBorderPx: number;
+  dimAlpha: number;
 }
 
-// A cell not in the highlighted state recedes into the same flat tone as the
-// unknown field, rather than a scaled-down version of its own color -- on a
-// wall this dense a tinted dim reads as noise, while matching the field
-// exactly makes only the highlighted state's cells read as distinct.
-const DIM_ALPHA = 0.25;
+const DEFAULT_APPEARANCE: Appearance = {
+  thickBorderFactor: DEFAULT_PARAMS.thickBorderFactor,
+  thinBorderFactor: DEFAULT_PARAMS.thinBorderFactor,
+  maxBorderPx: DEFAULT_PARAMS.maxBorderPx,
+  dimAlpha: DEFAULT_PARAMS.dimAlpha,
+};
+
+function borderWidthFor(weight: CellStyle['weight'], cellPx: number,
+                        appearance: Appearance): number {
+  if (!weight) return 0;
+  const factor = weight === 'thick' ? appearance.thickBorderFactor : appearance.thinBorderFactor;
+  return Math.min(appearance.maxBorderPx, Math.max(1, cellPx * factor));
+}
 
 export type PaintCommand =
   | { kind: 'sprite'; dx: number; dy: number; dw: number; dh: number;
@@ -72,6 +80,9 @@ export interface PaintInput {
   /** Index of the caret cell, if any -- explicit or implied, resolved by the
    *  caller (`caret.ts`). */
   caret?: number | null;
+  /** Border and dim tuning, live from the params panel. Defaults to the same
+   *  values `DEFAULT_PARAMS` gives that panel. */
+  appearance?: Appearance;
 }
 
 /** What to draw this frame, as data.
@@ -80,7 +91,8 @@ export interface PaintInput {
  *  in what color -- are testable without a rendering context, and so the
  *  drawing itself is the only thing weasel's mega view has to replace. */
 export function paintCommands({ cells, rects, visible, cam, manifest, palette, loose,
-                                highlight = null, caret = null }: PaintInput): PaintCommand[] {
+                                highlight = null, caret = null,
+                                appearance = DEFAULT_APPEARANCE }: PaintInput): PaintCommand[] {
   const out: PaintCommand[] = [];
   const transform = viewToTransform(cam);
   for (const i of visible) {
@@ -94,7 +106,7 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
     const isCaret = caret != null && i === caret ? true : undefined;
     const state = cellState(cell);
     const dimmed = highlight !== null && highlight !== state;
-    const alpha = dimmed ? DIM_ALPHA : undefined;
+    const alpha = dimmed ? appearance.dimAlpha : undefined;
     const image = loose?.get(cell.id);
     if (image) {
       out.push({ kind: 'image', dx, dy, dw, dh, image, ring, alpha, caret: isCaret });
@@ -109,7 +121,7 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
     }
     const style = dimmed ? palette.unknown : palette[state];
     out.push({ kind: 'fill', dx, dy, dw, dh, fill: style.fill,
-               border: style.border, borderWidth: borderWidthFor(style.weight, dw),
+               border: style.border, borderWidth: borderWidthFor(style.weight, dw, appearance),
                caret: isCaret });
   }
   return out;

@@ -11,11 +11,13 @@ import { Legend } from '@lab/corpus/Legend';
 import { levelFor, pickLevel } from '@lab/corpus/levels';
 import { Lightbox } from '@lab/corpus/Lightbox';
 import type { CellState } from '@lab/corpus/palette';
+import { ParamsPanel } from '@lab/corpus/ParamsPanel';
 import { PartCard } from '@lab/corpus/PartCard';
 import { centerReveal } from '@lab/corpus/reveal';
 import { applySelection, type Selection } from '@lab/corpus/select';
 import { useCells } from '@lab/corpus/useCells';
 import { useLooseThumbs } from '@lab/corpus/useLooseThumbs';
+import { useParams } from '@lab/corpus/useParams';
 import { useSheets } from '@lab/corpus/useSheets';
 import type { Cell } from '@lab/corpus/types';
 import { visibleRange } from '@lab/corpus/visible';
@@ -23,19 +25,16 @@ import { Wall } from '@lab/corpus/Wall';
 import { PartSearch } from '@lab/shared/PartSearch';
 import '@lab/corpus/corpus.css';
 
-const CELL = 32;
-const GAP = 4;
-const PITCH = CELL + GAP;
-
 const IDENTITY_VIEW: View = { x: 0, y: 0, scale: { x: 1, y: 1 } };
 
 /** The whole app, minus its mount -- including labkit's `<LabShell>`, so this
  *  is a standalone lab and must not be nested inside a `<Lab>` or another
  *  `<LabShell>`. */
 export function CorpusWall({ client }: { client: LabClient }) {
+  const { params, setParam, reset: resetParams } = useParams();
   const [sources, setSources] = useState<{ source: string; n: number }[]>([]);
   const [source, setSource] = useState('census-naive');
-  const cells = useCells(client, source);
+  const cells = useCells(client, source, params.pollMs);
   const sheets = useSheets(client, source);
   const [level, setLevel] = useState(32);
   const [selection, setSelection] = useState<Selection>(
@@ -71,17 +70,20 @@ export function CorpusWall({ client }: { client: LabClient }) {
     () => (cells ? applySelection(cells, selection) : []),
     [cells, selection]);
 
-  const cols = Math.max(1, Math.ceil(Math.sqrt(shown.length)));
+  // 0 means auto -- the override exists for judging a fixed grid shape, not
+  // for replacing the default that already fills the wall's width.
+  const cols = params.cols > 0 ? params.cols : Math.max(1, Math.ceil(Math.sqrt(shown.length)));
   const laid = useMemo(
-    () => gridLayout(shown, { cell: CELL, gap: GAP, cols }),
-    [shown, cols]);
+    () => gridLayout(shown, { cell: params.cell, gap: params.gap, cols }),
+    [shown, cols, params.cell, params.gap]);
+  const pitch = params.cell + params.gap;
 
   // Every camera write goes through this, so a flick's inertia decay -- which
   // calls `view.set` directly, bypassing any handler below -- gets clamped on
   // each intermediate frame too, not just once it comes to rest.
   const updateCam = (next: View) => {
     setCam(laid.bounds.w > 0 && size.width > 0 && size.height > 0
-      ? clampWallView(next, laid.bounds, size, PITCH)
+      ? clampWallView(next, laid.bounds, size, pitch)
       : next);
   };
 
@@ -133,12 +135,13 @@ export function CorpusWall({ client }: { client: LabClient }) {
   useEffect(() => {
     if (!cam) return;
     if (camInitialized.current) {
-      setLevel((current) => pickLevel(current, CELL * cam.scale.x));
+      setLevel((current) => pickLevel(current, params.cell * cam.scale.x,
+                                       params.levelUpHysteresis, params.levelDownHysteresis));
     } else {
       camInitialized.current = true;
-      setLevel(levelFor(CELL * cam.scale.x));
+      setLevel(levelFor(params.cell * cam.scale.x));
     }
-  }, [cam]);
+  }, [cam, params.cell, params.levelUpHysteresis, params.levelDownHysteresis]);
 
   const visible = useMemo(
     () => (cam ? visibleRange(laid.rects, cam, size) : []),
@@ -148,6 +151,14 @@ export function CorpusWall({ client }: { client: LabClient }) {
   // The 128 rung still draws from the 32px bake underneath -- a cell whose
   // loose image hasn't arrived yet needs something to show.
   const active = sheets[level === 8 ? 8 : 32] ?? null;
+
+  // Stable across renders that don't touch these four -- `Wall`'s paint
+  // effects key on this object, and a fresh one every render would repaint
+  // every frame regardless of the camera.
+  const appearance = useMemo(() => ({
+    thickBorderFactor: params.thickBorderFactor, thinBorderFactor: params.thinBorderFactor,
+    maxBorderPx: params.maxBorderPx, dimAlpha: params.dimAlpha,
+  }), [params.thickBorderFactor, params.thinBorderFactor, params.maxBorderPx, params.dimAlpha]);
 
   return (
     <LabShell title="brick-icons corpus"
@@ -181,7 +192,8 @@ export function CorpusWall({ client }: { client: LabClient }) {
                   explicitCaret={explicitCaret} onExplicitCaretChange={setExplicitCaret}
                   onPan={(next) => { touched.current = true; updateCam(next); }}
                   onPick={(c, at) => setCarded({ cell: c, at })}
-                  onOpen={(c) => { setCarded(null); setPicked(c.id); }} />
+                  onOpen={(c) => { setCarded(null); setPicked(c.id); }}
+                  dragThresholdPx={params.dragThresholdPx} appearance={appearance} />
           )}
           {carded && !picked && (
             <PartCard cell={carded.cell} source={source} at={carded.at}
@@ -192,6 +204,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
           {cells && (
             <Legend cells={cells} highlight={highlight} onHighlight={setHighlight} />
           )}
+          <ParamsPanel params={params} setParam={setParam} reset={resetParams} />
         </div>
         {picked && (
           <Lightbox partId={picked} source={source} client={client}
