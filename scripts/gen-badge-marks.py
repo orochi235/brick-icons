@@ -28,7 +28,7 @@ def horseshoe():
     """A U -- tall, narrow mouth, long limbs. The squares that make it a
     magnet are cut in `badges.ts` in the field color, near the tips and flush
     with the outer edge so the limb stays whole behind them."""
-    cy, ro, ri = 110.0, 385.0, 175.0
+    cy, ro, ri = 110.0, 400.0, 145.0
     tip = -400.0
     # Sampling pi -> 0 passes through pi/2, which in a y-down space is the
     # bottom. pi -> 2*pi passes 3*pi/2 and puts the bend on top, which is an

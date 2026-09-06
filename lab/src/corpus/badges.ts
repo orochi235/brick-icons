@@ -98,6 +98,14 @@ export const drawBolt: Mark = (ctx) => {
   ctx.lineTo(0.74, -0.16);
   ctx.lineTo(0.06, -0.16);
   ctx.closePath();
+  // Stroked as well as filled: the zigzag's arms are the thinnest thing on
+  // the strip, and at the badge floor they close up before anything else.
+  ctx.save();
+  ctx.strokeStyle = ctx.fillStyle;
+  ctx.lineWidth = 0.17;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+  ctx.restore();
   ctx.fill();
 };
 
