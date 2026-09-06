@@ -41,14 +41,18 @@ def horseshoe():
 
 
 def redo_arrow():
-    """The subset sign with a head: one filled band, so the head cannot come
-    adrift of the stroke it is supposed to finish. The band tapers from a
-    thin tail into the head, which is oversized on purpose -- at badge size a
-    proportionate head disappears into the curve it sits on."""
+    """The subset sign with a head: one filled outline, so the head cannot
+    come adrift of the stroke it finishes. The head is a true equilateral
+    triangle on the arc's tangent where the band stops -- built off a radial
+    line instead it comes out a wedge aimed wide of the way the arrow is
+    going -- and oversized, because at badge size a head in proportion to the
+    stroke disappears into the curve it sits on."""
     rm = 330.0
-    t_tail, t_head = 24.0, 88.0
-    a0, ah, a1 = math.pi * 0.1, math.pi * 1.62, math.pi * 1.96
+    t_tail, t_head = 24.0, 80.0
+    a0, ah = math.pi * 0.36, math.pi * 1.66
+    side = 400.0
     n = 80
+
     outer, inner = [], []
     for i in range(n):
         u = i / (n - 1)
@@ -56,10 +60,16 @@ def redo_arrow():
         t = t_tail + (t_head - t_tail) * u ** 0.8
         outer.append((math.cos(a) * (rm + t), math.sin(a) * (rm + t)))
         inner.append((math.cos(a) * (rm - t), math.sin(a) * (rm - t)))
-    wing = t_head * 2.6
-    head = [(math.cos(ah) * (rm + wing), math.sin(ah) * (rm + wing)),
-            (math.cos(a1) * rm, math.sin(a1) * rm),
-            (math.cos(ah) * (rm - wing), math.sin(ah) * (rm - wing))]
+
+    px, py = math.cos(ah) * rm, math.sin(ah) * rm
+    tx, ty = -math.sin(ah), math.cos(ah)          # forward along the arc
+    nx, ny = math.cos(ah), math.sin(ah)           # outward from the center
+    height = side * math.sqrt(3) / 2
+    # The base sits back inside the band so the two meet without a seam.
+    bx, by = px - tx * height * 0.16, py - ty * height * 0.16
+    head = [(bx + nx * side / 2, by + ny * side / 2),
+            (bx + tx * height, by + ty * height),
+            (bx - nx * side / 2, by - ny * side / 2)]
     return outer + head + list(reversed(inner))
 
 
