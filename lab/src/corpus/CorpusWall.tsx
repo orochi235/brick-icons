@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   clientToCanvas, fitViewToBounds, useCanvasSize, zoomAt, type View,
 } from '@weasel-js/core';
+import { LabShell } from '@weasel-js/labkit';
 import type { LabClient } from '@lab/api/client';
 import { clampWallView } from '@lab/corpus/clamp';
 import { FilterBar } from '@lab/corpus/FilterBar';
@@ -24,8 +25,9 @@ const PITCH = CELL + GAP;
 
 const IDENTITY_VIEW: View = { x: 0, y: 0, scale: { x: 1, y: 1 } };
 
-/** The whole app, minus its mount. Exported so a labkit instrument can host it
- *  without the standalone page. */
+/** The whole app, minus its mount -- including labkit's `<LabShell>`, so this
+ *  is a standalone lab and must not be nested inside a `<Lab>` or another
+ *  `<LabShell>`. */
 export function CorpusWall({ client }: { client: LabClient }) {
   const [sources, setSources] = useState<{ source: string; n: number }[]>([]);
   const [source, setSource] = useState('census-naive');
@@ -111,41 +113,43 @@ export function CorpusWall({ client }: { client: LabClient }) {
   const active = sheets[level === 8 ? 8 : 32] ?? null;
 
   return (
-    <div className="corpus-app">
-      {/* `useCanvasSize` measures the stage once, on its own first mount --
-          it has to exist from the start, not appear once cells arrive. */}
-      {cells && (
-        <FilterBar selection={selection} onChange={setSelection}
-                   shown={shown.length} total={cells.length}
-                   sources={sources} source={source} onSource={setSource} />
-      )}
-      <div className="corpus-stage" ref={box}
-           onWheel={(e) => {
-             if (!cam) return;
-             touched.current = true;
-             const [sx, sy] = clientToCanvas(e.currentTarget, e.clientX, e.clientY);
-             updateCam(zoomAt(cam, { x: sx, y: sy }, e.deltaY < 0 ? 1.1 : 1 / 1.1));
-           }}>
-        {!cells && <p className="corpus-loading">loading the corpus…</p>}
-        {cam && (
-          <Wall cells={shown} rects={laid.rects} cam={cam}
-                sheet={active?.image ?? null} manifest={active?.manifest ?? null}
-                loose={loose} width={size.width} height={size.height}
-                onPan={(next) => { touched.current = true; updateCam(next); }}
-                onPick={(c, at) => setCarded({ cell: c, at })}
-                onOpen={(c) => { setCarded(null); setPicked(c.id); }} />
-        )}
-        {carded && !picked && (
-          <PartCard cell={carded.cell} source={source} at={carded.at}
-                    viewport={size}
-                    onOpen={(id) => { setCarded(null); setPicked(id); }}
-                    onClose={() => setCarded(null)} />
+    <LabShell title="brick-icons corpus"
+              header={cells && (
+                <FilterBar selection={selection} onChange={setSelection}
+                           shown={shown.length} total={cells.length}
+                           sources={sources} source={source} onSource={setSource} />
+              )}>
+      <div className="corpus-app">
+        {/* `useCanvasSize` measures the stage once, on its own first mount --
+            it has to exist from the start, not appear once cells arrive. */}
+        <div className="corpus-stage" ref={box}
+             onWheel={(e) => {
+               if (!cam) return;
+               touched.current = true;
+               const [sx, sy] = clientToCanvas(e.currentTarget, e.clientX, e.clientY);
+               updateCam(zoomAt(cam, { x: sx, y: sy }, e.deltaY < 0 ? 1.1 : 1 / 1.1));
+             }}>
+          {!cells && <p className="corpus-loading">loading the corpus…</p>}
+          {cam && (
+            <Wall cells={shown} rects={laid.rects} cam={cam}
+                  sheet={active?.image ?? null} manifest={active?.manifest ?? null}
+                  loose={loose} width={size.width} height={size.height}
+                  onPan={(next) => { touched.current = true; updateCam(next); }}
+                  onPick={(c, at) => setCarded({ cell: c, at })}
+                  onOpen={(c) => { setCarded(null); setPicked(c.id); }} />
+          )}
+          {carded && !picked && (
+            <PartCard cell={carded.cell} source={source} at={carded.at}
+                      viewport={size}
+                      onOpen={(id) => { setCarded(null); setPicked(id); }}
+                      onClose={() => setCarded(null)} />
+          )}
+        </div>
+        {picked && (
+          <Lightbox partId={picked} source={source} client={client}
+                    onClose={() => setPicked(null)} />
         )}
       </div>
-      {picked && (
-        <Lightbox partId={picked} source={source} client={client}
-                  onClose={() => setPicked(null)} />
-      )}
-    </div>
+    </LabShell>
   );
 }

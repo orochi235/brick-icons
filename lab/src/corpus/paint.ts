@@ -1,40 +1,19 @@
 import { worldToScreen, viewToTransform, type View } from '@weasel-js/core';
 import type { Rect } from '@lab/corpus/layout';
+import type { CellStyle, Palette } from '@lab/corpus/palette';
 import { isStale, sourceBox } from '@lab/corpus/sheet';
 import type { Cell, SheetManifest } from '@lab/corpus/types';
 
-export interface CellStyle {
-  fill: string;
-  /** null means the state gets no border at all -- the unknown field colour
-   *  recedes rather than competing with everything drawn on top of it. */
-  border: string | null;
-  weight: 'thick' | 'thin' | null;
-}
-
-export const CELL_FILL: Record<
-  'defect' | 'failed' | 'timeout' | 'defectElsewhere' | 'problemElsewhere' | 'unknown',
-  CellStyle
-> = {
-  // Lightness is reserved for "has been rendered" -- a rendered thumbnail is
-  // the brightest thing on the wall, so a problem fill has to stay dark
-  // enough to sit in the gray field. The border carries the state instead,
-  // brighter and more saturated than the fill it sits on.
-  unknown: { fill: '#3a3a3f', border: null, weight: null },
-  timeout: { fill: '#42302a', border: '#c86a42', weight: 'thick' },
-  failed: { fill: '#4a2626', border: '#e03030', weight: 'thick' },
-  defect: { fill: '#463a20', border: '#e8a020', weight: 'thick' },
-  problemElsewhere: { fill: '#42302a', border: '#c86a42', weight: 'thin' },
-  defectElsewhere: { fill: '#463a20', border: '#e8a020', weight: 'thin' },
-};
+export type { CellStyle } from '@lab/corpus/palette';
 
 /** What a cell's colour says about it, worst-here-first then worst-elsewhere. */
-export function fillFor(cell: Cell): CellStyle {
-  if (cell.open_defects > 0) return CELL_FILL.defect;
-  if (cell.error === 'TimeoutError') return CELL_FILL.timeout;
-  if (cell.error) return CELL_FILL.failed;
-  if (cell.open_defects_elsewhere > 0) return CELL_FILL.defectElsewhere;
-  if (cell.error_elsewhere) return CELL_FILL.problemElsewhere;
-  return CELL_FILL.unknown;
+export function fillFor(cell: Cell, palette: Palette): CellStyle {
+  if (cell.open_defects > 0) return palette.defect;
+  if (cell.error === 'TimeoutError') return palette.timeout;
+  if (cell.error) return palette.failed;
+  if (cell.open_defects_elsewhere > 0) return palette.defectElsewhere;
+  if (cell.error_elsewhere) return palette.problemElsewhere;
+  return palette.unknown;
 }
 
 // A fixed pixel width vanishes when the wall is zoomed out, which is the case
@@ -64,6 +43,7 @@ export interface PaintInput {
   visible: number[];
   cam: View;
   manifest: SheetManifest | null;
+  palette: Palette;
   loose?: Map<string, HTMLImageElement>;
 }
 
@@ -72,7 +52,7 @@ export interface PaintInput {
  *  Kept separate from the canvas so the decisions -- which cells, from where,
  *  in what colour -- are testable without a rendering context, and so the
  *  drawing itself is the only thing weasel's mega view has to replace. */
-export function paintCommands({ cells, rects, visible, cam, manifest, loose }:
+export function paintCommands({ cells, rects, visible, cam, manifest, palette, loose }:
                               PaintInput): PaintCommand[] {
   const out: PaintCommand[] = [];
   const transform = viewToTransform(cam);
@@ -96,7 +76,7 @@ export function paintCommands({ cells, rects, visible, cam, manifest, loose }:
       out.push({ kind: 'sprite', dx, dy, dw, dh, ...box, ring });
       continue;
     }
-    const style = fillFor(cell);
+    const style = fillFor(cell, palette);
     out.push({ kind: 'fill', dx, dy, dw, dh, fill: style.fill,
                border: style.border, borderWidth: borderWidthFor(style.weight, dw) });
   }

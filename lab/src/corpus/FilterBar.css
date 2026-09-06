@@ -6,4 +6,4 @@
   font: 12px/1.4 ui-monospace, monospace;
 }
 .corpus-bar label { display: flex; gap: 0.3rem; align-items: center; }
-.corpus-count { margin-left: auto; opacity: 0.7; }
+.corpus-count { margin-left: auto; color: var(--wzl-fg-muted); }

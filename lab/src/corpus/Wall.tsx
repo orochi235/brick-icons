@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import {
-  clientToCanvas, useDecayLoop, viewportDragPanAction,
+  clientToCanvas, useDecayLoop, viewportDragPanAction, zoomAt,
   type InvocationCtx, type OngoingHandle, type View,
 } from '@weasel-js/core';
+import { LoupeBubble, resolveLoupe, useLoupe } from '@weasel-js/labkit/loupe';
 import type { Rect } from '@lab/corpus/layout';
-import { CELL_FILL, paintCommands } from '@lab/corpus/paint';
+import { paintCommands, type PaintCommand } from '@lab/corpus/paint';
+import { DEFAULT_PALETTE, readPalette, type Palette } from '@lab/corpus/palette';
 import type { Cell, SheetManifest } from '@lab/corpus/types';
 import { visibleRange } from '@lab/corpus/visible';
 import '@lab/corpus/Wall.css';
@@ -39,12 +41,43 @@ const NOOP_MODIFIERS = { alt: false, ctrl: false, meta: false, shift: false };
 // A thumbnail is an opaque tile, so a defect's colour is hidden behind it;
 // the ring is what makes a drawn cell's open defect findable.
 function strokeRing(ctx: CanvasRenderingContext2D,
-                     cmd: { dx: number; dy: number; dw: number; dh: number }) {
+                     cmd: { dx: number; dy: number; dw: number; dh: number },
+                     palette: Palette) {
   ctx.save();
-  ctx.strokeStyle = CELL_FILL.defect.border ?? CELL_FILL.defect.fill;
+  ctx.strokeStyle = palette.defect.border ?? palette.defect.fill;
   ctx.lineWidth = 2;
   ctx.strokeRect(cmd.dx + 1, cmd.dy + 1, cmd.dw - 2, cmd.dh - 2);
   ctx.restore();
+}
+
+/** One paint command, drawn into `ctx` and shifted by `offset` -- the loupe
+ *  reuses this to redraw the same commands into its own small canvas,
+ *  recentred on the aimed point rather than at their outer screen position. */
+function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
+                          sheet: HTMLImageElement | null, palette: Palette,
+                          offset: { x: number; y: number } = { x: 0, y: 0 }) {
+  const dx = cmd.dx + offset.x;
+  const dy = cmd.dy + offset.y;
+  if (cmd.kind === 'sprite' && sheet) {
+    ctx.drawImage(sheet, cmd.sx, cmd.sy, cmd.sw, cmd.sh, dx, dy, cmd.dw, cmd.dh);
+    if (cmd.ring) strokeRing(ctx, { ...cmd, dx, dy }, palette);
+  } else if (cmd.kind === 'image') {
+    ctx.drawImage(cmd.image, dx, dy, cmd.dw, cmd.dh);
+    if (cmd.ring) strokeRing(ctx, { ...cmd, dx, dy }, palette);
+  } else if (cmd.kind === 'fill') {
+    ctx.fillStyle = cmd.fill;
+    ctx.fillRect(dx, dy, cmd.dw, cmd.dh);
+    if (cmd.border) {
+      // A stroke straddles its path, so inset by half the width --
+      // otherwise it overshoots the cell and eats into its neighbours.
+      const inset = cmd.borderWidth / 2;
+      ctx.save();
+      ctx.strokeStyle = cmd.border;
+      ctx.lineWidth = cmd.borderWidth;
+      ctx.strokeRect(dx + inset, dy + inset, cmd.dw - cmd.borderWidth, cmd.dh - cmd.borderWidth);
+      ctx.restore();
+    }
+  }
 }
 
 /** The wall's only rendering surface.
@@ -56,6 +89,7 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, width, height,
   const ref = useRef<HTMLCanvasElement>(null);
   const [dragging, setDragging] = useState(false);
   const decay = useDecayLoop();
+  const [palette, setPalette] = useState<Palette>(DEFAULT_PALETTE);
 
   // Read by the drag gesture, which spans several pointer events and must see
   // the live camera -- not the value closed over at the pointerdown that
@@ -68,6 +102,26 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, width, height,
   const startRef = useRef({ x: 0, y: 0 });
 
   const view = { get: () => camRef.current, set: onPan, decay: decay.start };
+
+  // The six state colours are canvas fills, so CSS can only reach them
+  // through `getComputedStyle` -- read once on mount and again whenever the
+  // theme's mode or name attribute changes anywhere above the canvas, rather
+  // than on every frame.
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    const update = () => setPalette(readPalette(canvas));
+    update();
+    const observer = new MutationObserver(update);
+    observer.observe(document.documentElement, {
+      attributes: true, attributeFilter: ['data-wzl-mode', 'data-wzl-theme'], subtree: true,
+    });
+    return () => observer.disconnect();
+  }, []);
+
+  const loupeCapability = useMemo(() => resolveLoupe(true), []);
+  const loupe = useLoupe({ capability: loupeCapability, hostRef: ref, enabled: false });
+  const lensRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const canvas = ref.current;
@@ -85,37 +139,44 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, width, height,
     ctx.clearRect(0, 0, width, height);
     ctx.imageSmoothingEnabled = true;
     const visible = visibleRange(rects, cam, { width, height });
-    for (const cmd of paintCommands({ cells, rects, visible, cam, manifest, loose })) {
-      if (cmd.kind === 'sprite' && sheet) {
-        ctx.drawImage(sheet, cmd.sx, cmd.sy, cmd.sw, cmd.sh,
-                      cmd.dx, cmd.dy, cmd.dw, cmd.dh);
-        if (cmd.ring) strokeRing(ctx, cmd);
-      } else if (cmd.kind === 'image') {
-        ctx.drawImage(cmd.image, cmd.dx, cmd.dy, cmd.dw, cmd.dh);
-        if (cmd.ring) strokeRing(ctx, cmd);
-      } else if (cmd.kind === 'fill') {
-        ctx.fillStyle = cmd.fill;
-        ctx.fillRect(cmd.dx, cmd.dy, cmd.dw, cmd.dh);
-        if (cmd.border) {
-          // A stroke straddles its path, so inset by half the width --
-          // otherwise it overshoots the cell and eats into its neighbours.
-          const inset = cmd.borderWidth / 2;
-          ctx.save();
-          ctx.strokeStyle = cmd.border;
-          ctx.lineWidth = cmd.borderWidth;
-          ctx.strokeRect(cmd.dx + inset, cmd.dy + inset,
-                         cmd.dw - cmd.borderWidth, cmd.dh - cmd.borderWidth);
-          ctx.restore();
-        }
-      }
+    for (const cmd of paintCommands({ cells, rects, visible, cam, manifest, palette, loose })) {
+      drawPaintCommand(ctx, cmd, sheet, palette);
     }
-  }, [cells, rects, cam, sheet, manifest, loose, width, height]);
+  }, [cells, rects, cam, sheet, manifest, palette, loose, width, height]);
+
+  // The lens shows a magnified crop of what is already on screen -- zooming
+  // in about a fixed point never brings a cell into view that the outer
+  // canvas didn't already have in its own visible set, so this redraws the
+  // same commands rather than recomputing visibility for the lens' own tiny
+  // viewport.
+  useEffect(() => {
+    const canvas = lensRef.current;
+    if (!canvas || !loupe.visible) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const dpr = window.devicePixelRatio || 1;
+    const d = loupeCapability.diameter;
+    canvas.width = d * dpr;
+    canvas.height = d * dpr;
+    canvas.style.width = `${d}px`;
+    canvas.style.height = `${d}px`;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, d, d);
+    ctx.imageSmoothingEnabled = true;
+    const magCam = zoomAt(cam, loupe.aim, loupe.factor);
+    const offset = { x: d / 2 - loupe.aim.x, y: d / 2 - loupe.aim.y };
+    const visible = visibleRange(rects, cam, { width, height });
+    for (const cmd of paintCommands({ cells, rects, visible, cam: magCam, manifest, palette, loose })) {
+      drawPaintCommand(ctx, cmd, sheet, palette, offset);
+    }
+  }, [loupe.visible, loupe.aim, loupe.factor, loupeCapability.diameter,
+      cells, rects, cam, sheet, manifest, palette, loose, width, height]);
 
   const hitTest = (e: { clientX: number; clientY: number;
                          currentTarget: HTMLCanvasElement }) => {
     const [sx, sy] = clientToCanvas(e.currentTarget, e.clientX, e.clientY);
     const visible = visibleRange(rects, cam, { width, height });
-    const cmds = paintCommands({ cells, rects, visible, cam, manifest });
+    const cmds = paintCommands({ cells, rects, visible, cam, manifest, palette });
     for (let i = cmds.length - 1; i >= 0; i--) {
       const c = cmds[i]!;
       if (sx >= c.dx && sx <= c.dx + c.dw && sy >= c.dy && sy <= c.dy + c.dh) {
@@ -172,28 +233,35 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, width, height,
   };
 
   return (
-    <canvas
-      ref={ref}
-      className={dragging ? 'corpus-canvas corpus-canvas-dragging' : 'corpus-canvas'}
-      width={width}
-      height={height}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={(e) => endDrag(e, 'commit')}
-      onPointerCancel={(e) => endDrag(e, 'cancel')}
-      onClick={(e) => {
-        if (suppressClickRef.current) { suppressClickRef.current = false; return; }
-        // A double click's first click also fires this handler; e.detail
-        // marks it so onDoubleClick handles it instead and the card never
-        // flashes before the lightbox opens.
-        if (e.detail === 2) return;
-        const hit = hitTest(e);
-        if (hit) onPick(hit.cell, hit.at);
-      }}
-      onDoubleClick={(e) => {
-        const hit = hitTest(e);
-        if (hit) onOpen(hit.cell);
-      }}
-    />
+    <>
+      <canvas
+        ref={ref}
+        className={dragging ? 'corpus-canvas corpus-canvas-dragging' : 'corpus-canvas'}
+        width={width}
+        height={height}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={(e) => endDrag(e, 'commit')}
+        onPointerCancel={(e) => endDrag(e, 'cancel')}
+        onClick={(e) => {
+          if (suppressClickRef.current) { suppressClickRef.current = false; return; }
+          // A double click's first click also fires this handler; e.detail
+          // marks it so onDoubleClick handles it instead and the card never
+          // flashes before the lightbox opens.
+          if (e.detail === 2) return;
+          const hit = hitTest(e);
+          if (hit) onPick(hit.cell, hit.at);
+        }}
+        onDoubleClick={(e) => {
+          const hit = hitTest(e);
+          if (hit) onOpen(hit.cell);
+        }}
+      />
+      {loupe.visible && (
+        <LoupeBubble aim={loupe.aim} diameter={loupeCapability.diameter}>
+          <canvas ref={lensRef} className="lk-loupe__canvas" />
+        </LoupeBubble>
+      )}
+    </>
   );
 }
