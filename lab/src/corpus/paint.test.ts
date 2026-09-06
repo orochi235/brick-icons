@@ -31,13 +31,13 @@ it('draws a baked cell from the sheet', () => {
                               sx: 2, sy: 2, ring: false });
 });
 
-it('draws an unrendered cell with nothing known as unknown gray', () => {
+it('draws an unrendered cell with nothing known as unknown gray, and no border', () => {
   const [cmd] = paintCommands({
     cells: [cell('b', 1, null)], rects: [rects[1]!], visible: [0],
     cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, manifest,
   });
   expect(cmd).toEqual({ kind: 'fill', dx: 20, dy: 0, dw: 10, dh: 10,
-                        fill: CELL_FILL.unknown });
+                        fill: CELL_FILL.unknown.fill, border: null, borderWidth: 0 });
 });
 
 it('draws a stale cell as a fill, not as last week’s picture', () => {
@@ -144,4 +144,58 @@ it('lets what is wrong here outrank what is wrong elsewhere', () => {
 
 it('says nothing is known when nothing is known', () => {
   expect(fillFor(base)).toBe(CELL_FILL.unknown);
+});
+
+it('emits a fill and border for every problem state, and neither for unknown', () => {
+  const states: [Cell, keyof typeof CELL_FILL][] = [
+    [{ ...base, open_defects: 1 }, 'defect'],
+    [{ ...base, error: 'GEOSException' }, 'failed'],
+    [{ ...base, error: 'TimeoutError' }, 'timeout'],
+    [{ ...base, open_defects_elsewhere: 1 }, 'defectElsewhere'],
+    [{ ...base, error_elsewhere: true }, 'problemElsewhere'],
+    [base, 'unknown'],
+  ];
+  for (const [c, key] of states) {
+    const [cmd] = paintCommands({
+      cells: [c], rects: [rects[0]!], visible: [0],
+      cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, manifest: null,
+    });
+    expect(cmd).toMatchObject({ kind: 'fill', fill: CELL_FILL[key].fill,
+                                border: CELL_FILL[key].border });
+    if (CELL_FILL[key].border === null) {
+      expect((cmd as { borderWidth: number }).borderWidth).toBe(0);
+    } else {
+      expect((cmd as { borderWidth: number }).borderWidth).toBeGreaterThanOrEqual(1);
+    }
+  }
+});
+
+it('draws a thinner border for a problem elsewhere than for one here', () => {
+  const midRect = [{ x: 0, y: 0, w: 20, h: 20 }];
+  const [here] = paintCommands({
+    cells: [{ ...base, error: 'TimeoutError' }], rects: midRect, visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, manifest: null,
+  });
+  const [elsewhere] = paintCommands({
+    cells: [{ ...base, error_elsewhere: true }], rects: midRect, visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, manifest: null,
+  });
+  expect((elsewhere as { borderWidth: number }).borderWidth)
+    .toBeLessThan((here as { borderWidth: number }).borderWidth);
+});
+
+it('scales the border with the drawn cell size, floored at one pixel', () => {
+  const tiny = [{ x: 0, y: 0, w: 4, h: 4 }];
+  const big = [{ x: 0, y: 0, w: 200, h: 200 }];
+  const [smallCmd] = paintCommands({
+    cells: [{ ...base, open_defects: 1 }], rects: tiny, visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, manifest: null,
+  });
+  const [bigCmd] = paintCommands({
+    cells: [{ ...base, open_defects: 1 }], rects: big, visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, manifest: null,
+  });
+  expect((smallCmd as { borderWidth: number }).borderWidth).toBe(1);
+  expect((bigCmd as { borderWidth: number }).borderWidth)
+    .toBeGreaterThan((smallCmd as { borderWidth: number }).borderWidth);
 });

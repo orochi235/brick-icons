@@ -3,6 +3,7 @@ import {
   clientToCanvas, fitViewToBounds, useCanvasSize, zoomAt, type View,
 } from '@weasel-js/core';
 import type { LabClient } from '@lab/api/client';
+import { clampWallView } from '@lab/corpus/clamp';
 import { FilterBar } from '@lab/corpus/FilterBar';
 import { gridLayout } from '@lab/corpus/layout';
 import { levelFor, pickLevel } from '@lab/corpus/levels';
@@ -19,6 +20,7 @@ import '@lab/corpus/corpus.css';
 
 const CELL = 32;
 const GAP = 4;
+const PITCH = CELL + GAP;
 
 const IDENTITY_VIEW: View = { x: 0, y: 0, scale: { x: 1, y: 1 } };
 
@@ -63,6 +65,15 @@ export function CorpusWall({ client }: { client: LabClient }) {
     () => gridLayout(shown, { cell: CELL, gap: GAP, cols }),
     [shown, cols]);
 
+  // Every camera write goes through this, so a flick's inertia decay -- which
+  // calls `view.set` directly, bypassing any handler below -- gets clamped on
+  // each intermediate frame too, not just once it comes to rest.
+  const updateCam = (next: View) => {
+    setCam(laid.bounds.w > 0 && size.width > 0 && size.height > 0
+      ? clampWallView(next, laid.bounds, size, PITCH)
+      : next);
+  };
+
   // Fits the wall's width into the viewport and lets it run off the bottom,
   // rather than shrinking to fit both axes -- 'fill' picks whichever axis's
   // ratio is larger, which for a viewport wider than the wall is width's.
@@ -74,7 +85,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
     const fitted = fitViewToBounds(
       { x: 0, y: 0, width: laid.bounds.w, height: laid.bounds.h },
       size, cam ?? IDENTITY_VIEW, { mode: 'fill', padding: 0 });
-    setCam({ x: 0, y: 0, scale: fitted.scale });
+    updateCam({ x: 0, y: 0, scale: fitted.scale });
   }, [laid.bounds.w, laid.bounds.h, size.width, size.height]);
 
   // Hysteresis governs transitions, and the first pick has nothing to be
@@ -113,14 +124,14 @@ export function CorpusWall({ client }: { client: LabClient }) {
              if (!cam) return;
              touched.current = true;
              const [sx, sy] = clientToCanvas(e.currentTarget, e.clientX, e.clientY);
-             setCam(zoomAt(cam, { x: sx, y: sy }, e.deltaY < 0 ? 1.1 : 1 / 1.1));
+             updateCam(zoomAt(cam, { x: sx, y: sy }, e.deltaY < 0 ? 1.1 : 1 / 1.1));
            }}>
         {!cells && <p className="corpus-loading">loading the corpus…</p>}
         {cam && (
           <Wall cells={shown} rects={laid.rects} cam={cam}
                 sheet={active?.image ?? null} manifest={active?.manifest ?? null}
                 loose={loose} width={size.width} height={size.height}
-                onPan={(next) => { touched.current = true; setCam(next); }}
+                onPan={(next) => { touched.current = true; updateCam(next); }}
                 onPick={(c, at) => setCarded({ cell: c, at })}
                 onOpen={(c) => { setCarded(null); setPicked(c.id); }} />
         )}

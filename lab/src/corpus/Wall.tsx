@@ -41,7 +41,7 @@ const NOOP_MODIFIERS = { alt: false, ctrl: false, meta: false, shift: false };
 function strokeRing(ctx: CanvasRenderingContext2D,
                      cmd: { dx: number; dy: number; dw: number; dh: number }) {
   ctx.save();
-  ctx.strokeStyle = CELL_FILL.defect;
+  ctx.strokeStyle = CELL_FILL.defect.border ?? CELL_FILL.defect.fill;
   ctx.lineWidth = 2;
   ctx.strokeRect(cmd.dx + 1, cmd.dy + 1, cmd.dw - 2, cmd.dh - 2);
   ctx.restore();
@@ -96,6 +96,17 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, width, height,
       } else if (cmd.kind === 'fill') {
         ctx.fillStyle = cmd.fill;
         ctx.fillRect(cmd.dx, cmd.dy, cmd.dw, cmd.dh);
+        if (cmd.border) {
+          // A stroke straddles its path, so inset by half the width --
+          // otherwise it overshoots the cell and eats into its neighbours.
+          const inset = cmd.borderWidth / 2;
+          ctx.save();
+          ctx.strokeStyle = cmd.border;
+          ctx.lineWidth = cmd.borderWidth;
+          ctx.strokeRect(cmd.dx + inset, cmd.dy + inset,
+                         cmd.dw - cmd.borderWidth, cmd.dh - cmd.borderWidth);
+          ctx.restore();
+        }
       }
     }
   }, [cells, rects, cam, sheet, manifest, loose, width, height]);
