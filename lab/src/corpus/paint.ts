@@ -15,12 +15,16 @@ export const CELL_FILL: Record<
   'defect' | 'failed' | 'timeout' | 'defectElsewhere' | 'problemElsewhere' | 'unknown',
   CellStyle
 > = {
+  // Lightness is reserved for "has been rendered" -- a rendered thumbnail is
+  // the brightest thing on the wall, so a problem fill has to stay dark
+  // enough to sit in the gray field. The border carries the state instead,
+  // brighter and more saturated than the fill it sits on.
   unknown: { fill: '#3a3a3f', border: null, weight: null },
-  timeout: { fill: '#e8d5cc', border: '#8a4a32', weight: 'thick' },
-  failed: { fill: '#f0d0d0', border: '#b02020', weight: 'thick' },
-  defect: { fill: '#f5e3b8', border: '#c8860d', weight: 'thick' },
-  problemElsewhere: { fill: '#e8d5cc', border: '#8a4a32', weight: 'thin' },
-  defectElsewhere: { fill: '#f5e3b8', border: '#c8860d', weight: 'thin' },
+  timeout: { fill: '#42302a', border: '#c86a42', weight: 'thick' },
+  failed: { fill: '#4a2626', border: '#e03030', weight: 'thick' },
+  defect: { fill: '#463a20', border: '#e8a020', weight: 'thick' },
+  problemElsewhere: { fill: '#42302a', border: '#c86a42', weight: 'thin' },
+  defectElsewhere: { fill: '#463a20', border: '#e8a020', weight: 'thin' },
 };
 
 /** What a cell's colour says about it, worst-here-first then worst-elsewhere. */
