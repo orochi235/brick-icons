@@ -6,6 +6,10 @@ export interface WallBounds { w: number; h: number }
  *  measured `--corpus-panel-width` yet. */
 export const DEFAULT_BLANK_PX = 272;
 
+/** A little past the panel, so the cells it was covering land clear of its
+ *  edge rather than tucked against it. */
+export const BLANK_SLOP_PX = 30;
+
 /**
  * Clamp a wall camera so a flick or zoom can never lose the wall.
  *
@@ -24,8 +28,9 @@ export function clampWallView(view: View, bounds: WallBounds, canvas: CanvasSize
                                blankPx = DEFAULT_BLANK_PX): View {
   const visW = Math.abs(canvas.width / view.scale.x);
   const visH = Math.abs(canvas.height / view.scale.y);
-  const blankW = blankPx / Math.abs(view.scale.x);
-  const blankH = blankPx / Math.abs(view.scale.y);
+  const blank = blankPx + BLANK_SLOP_PX;
+  const blankW = blank / Math.abs(view.scale.x);
+  const blankH = blank / Math.abs(view.scale.y);
   const marginX = Math.max(blankW, visW - bounds.w, 0);
   const marginY = Math.max(blankH, visH - bounds.h, 0);
   return clampView(view, {
