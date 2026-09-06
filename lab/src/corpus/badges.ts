@@ -119,6 +119,18 @@ export const drawMinifig: Mark = (ctx) => {
   ctx.restore();
 };
 
+// Composite: two overlapping squares, the universal mark for more than one
+// item. The front square is bordered in the field so the two read apart
+// rather than as one stepped blob.
+export const drawComposite: Mark = (ctx, field) => {
+  ctx.fillRect(-0.88, -0.88, 1.2, 1.2);
+  ctx.save();
+  ctx.fillStyle = field;
+  ctx.fillRect(-0.44, -0.44, 1.32, 1.32);
+  ctx.restore();
+  ctx.fillRect(-0.32, -0.32, 1.2, 1.2);
+};
+
 // Technic's T, drawn rather than set: a font's italic T carries a short
 // crossbar and its slant walks the glyph off the disc's center. The shear is
 // about the vertical middle, so the letter stays centered as it leans.
@@ -140,7 +152,7 @@ export const drawTechnic: Mark = (ctx) => {
 export const MARKS: Record<string, Mark> = {
   star: drawStar, archive: drawArchive, redo: drawRedo, bolt: drawBolt,
   magnet: drawMagnet, brush: drawBrush, minifig: drawMinifig,
-  technic: drawTechnic,
+  technic: drawTechnic, composite: drawComposite,
 };
 
 export function drawBadge(ctx: CanvasRenderingContext2D, badge: CellBadge,
@@ -149,19 +161,21 @@ export function drawBadge(ctx: CanvasRenderingContext2D, badge: CellBadge,
   const { cx, size, radius } = at;
   const font = `${badge.style ?? 'normal'} ${badge.weight ?? BADGE_WEIGHT} `
     + `${size * (badge.scale ?? 1)}px ${badge.font ?? BADGE_FACE}`;
-  // A glyph sits in its own place in the em box -- a lowercase `d` climbs to
-  // its ascender, a `+` sits on the math axis -- so the disc centers on the
-  // ink this badge actually draws, measured, while the baseline stays shared
-  // with the part number beside it.
-  let cy = at.cy;
-  if (at.baseline != null && badge.text) {
+  // Discs share one center, and each glyph is centered in its own disc: a
+  // lowercase `d` climbs to its ascender and a capital does not, so setting
+  // both on one text baseline puts their discs at different heights, which
+  // is what a reader sees on the strip.
+  const cy = at.cy;
+  let textY = at.baseline ?? cy;
+  if (badge.text) {
     ctx.save();
     ctx.font = font;
     const m = ctx.measureText(badge.text);
     const asc = m.actualBoundingBoxAscent;
     const desc = m.actualBoundingBoxDescent;
     ctx.restore();
-    if (Number.isFinite(asc) && Number.isFinite(desc)) cy = at.baseline - (asc - desc) / 2;
+    if (Number.isFinite(asc) && Number.isFinite(desc)) textY = cy + (asc - desc) / 2;
+    textY += size * (badge.dy ?? 0);
   }
   ctx.save();
   // Every badge is stroked, most of them in their own field: duplo needs a
@@ -191,10 +205,10 @@ export function drawBadge(ctx: CanvasRenderingContext2D, badge: CellBadge,
       // On the part number's own baseline, so `4761 T d` reads as one line
       // rather than as a caption with ornaments floating beside it.
       ctx.textBaseline = 'alphabetic';
-      ctx.fillText(badge.text, cx + size * (badge.dx ?? 0), at.baseline);
+      ctx.fillText(badge.text, cx + size * (badge.dx ?? 0), textY);
     } else {
-      ctx.textBaseline = 'middle';
-      ctx.fillText(badge.text, cx + size * (badge.dx ?? 0), cy);
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(badge.text, cx + size * (badge.dx ?? 0), textY);
     }
   }
   ctx.restore();

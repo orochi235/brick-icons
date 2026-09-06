@@ -124,7 +124,7 @@ export const LABEL_MIN_PX = 110;
 
 /** A picture rather than a letter, where a letter would need explaining. */
 export type BadgeMark = 'star' | 'archive' | 'redo' | 'bolt' | 'magnet'
-                      | 'brush' | 'minifig' | 'technic';
+                      | 'brush' | 'minifig' | 'technic' | 'composite';
 
 export interface CellBadge {
   /** The tag that drew it. The strip is hit-tested by tag, so a click knows
@@ -148,9 +148,10 @@ export interface CellBadge {
   /** A multiple of the mark or type size, for a shape that sets large or
    *  small against the rest of the set. */
   scale?: number;
-  /** Optical centering, in multiples of the type size: a glyph's ink box is
-   *  not always where its advance width puts it. */
+  /** Optical centering, in multiples of the type size: a glyph's measured
+   *  ink box is not always where it looks centered. */
   dx?: number;
+  dy?: number;
 }
 
 /** The two discs that keep a corner of their own. `retired` and `updated`
@@ -188,7 +189,7 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
            stroke: '#c8102e', font: SYSTEM_FACE, weight: 700, scale: 1.18,
            dx: -0.045 },
   weird: { tag: 'weird', text: '\u03a8', field: '#5b3a86', ink: '#ffffff',
-           font: WEIRD_FACE },
+           font: WEIRD_FACE, dy: -0.035 },
   // The one property badge off the shared field: a gold bolt on black is
   // what a live circuit looks like everywhere else, and it earns the break.
   electric: { tag: 'electric', mark: 'bolt', field: '#101014', ink: '#ffd60a',
@@ -196,7 +197,8 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
   magnet: { tag: 'magnet', mark: 'magnet', field: PROPERTY_FIELD, ink: '#ffffff',
             scale: 0.86 },
   printed: { tag: 'printed', mark: 'brush', field: PROPERTY_FIELD, ink: '#ffffff' },
-  composite: { tag: 'composite', text: '\u00d7', field: PROPERTY_FIELD, ink: '#ffffff' },
+  composite: { tag: 'composite', mark: 'composite', field: PROPERTY_FIELD,
+               ink: '#ffffff', scale: 0.86 },
 };
 
 /** The badge that links somewhere when clicked. Only one does. */
