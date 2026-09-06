@@ -4,7 +4,12 @@
   gap: 0.4rem;
   min-width: 15rem;
   padding: 0.5rem 0.6rem;
-  background: var(--wzl-surface-raised);
+  /* `--wzl-surface-raised` carries alpha in the active theme (a frosted-glass
+   * panel elsewhere composes it with `backdrop-filter`); backed by the opaque
+   * `--wzl-surface` here instead, since this panel floats over the wall's own
+   * cell colors rather than a blurred backdrop. */
+  background-color: var(--wzl-surface);
+  background-image: linear-gradient(var(--wzl-surface-raised), var(--wzl-surface-raised));
   color: var(--wzl-fg);
   border: var(--wzl-border-w) solid var(--wzl-border);
   border-radius: var(--wzl-radius-md);
@@ -19,7 +24,13 @@
 }
 .corpus-legend-list { list-style: none; margin: 0; padding: 0; }
 .corpus-legend-row {
-  display: flex;
+  /* A flexible name column pairs badly with a right-hand count: `flex:1`
+   * grows the name to fill whatever the longest row leaves it, so the count
+   * sits wherever that row's text happens to end rather than in a column of
+   * its own -- crowding it whenever a label is long. Grid gives the count a
+   * dedicated, reserved track instead. */
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 0.5rem;
   padding: 0.2rem 0.3rem;
@@ -40,7 +51,6 @@
   border-radius: 2px;
   border: 2px solid transparent;
   box-sizing: border-box;
-  flex: none;
 }
 .corpus-legend-row[data-state="unknown"] .corpus-legend-swatch {
   background: var(--corpus-cell-unknown-fill);
@@ -67,5 +77,9 @@
   border-color: var(--corpus-cell-defect-elsewhere-border);
   border-width: 1px;
 }
-.corpus-legend-name { flex: 1; }
-.corpus-legend-count { color: var(--wzl-fg-muted); }
+.corpus-legend-name { min-width: 0; }
+.corpus-legend-count {
+  color: var(--wzl-fg-muted);
+  min-width: 6ch;
+  text-align: right;
+}

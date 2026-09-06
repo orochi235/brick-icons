@@ -5,7 +5,12 @@
   width: 17rem;
   max-height: 80vh;
   padding: 0.5rem 0.6rem;
-  background: var(--wzl-surface-raised);
+  /* `--wzl-surface-raised` carries alpha in the active theme (a frosted-glass
+   * panel elsewhere composes it with `backdrop-filter`); backed by the opaque
+   * `--wzl-surface` here instead, since this panel floats over the wall's own
+   * cell colors rather than a blurred backdrop. */
+  background-color: var(--wzl-surface);
+  background-image: linear-gradient(var(--wzl-surface-raised), var(--wzl-surface-raised));
   color: var(--wzl-fg);
   border: var(--wzl-border-w) solid var(--wzl-border);
   border-radius: var(--wzl-radius-md);
@@ -35,4 +40,13 @@
 .corpus-params-panel label:has(> input[type='color']) > span:first-child,
 .corpus-params-panel label:has(> input[type='color']) > input[type='color'] {
   align-self: start;
+}
+
+/* `ControlPanel`'s default `pairs` packing gives every row half the panel's
+ * width; the twelve color labels here run up to three words and wrap onto
+ * the swatch. Span the full grid instead of pairing -- the same opt-out a
+ * `span` control gets, reached structurally since the pairing grid's class
+ * names are also weasel-ui's. */
+.corpus-params-panel label:has(> input[type='color']) {
+  grid-column: 1 / -1;
 }
