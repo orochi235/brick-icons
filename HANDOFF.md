@@ -88,7 +88,41 @@ that builds `near` changed the SVG bytes. Not slower — wrong. Whatever the
 mechanism, a shapely call threaded over geometry another thread also touches
 has to be proved byte-identical before it is believed.
 
-## Done, and short: the white line-drawing census facet
+## In flight: the white line-drawing census facet, second pass
+
+Two jobs are running as of 2026-09-06 12:10, deadline ~18:10:
+`census-white-naive` (857df647, msb-uai) and `census-white-occt`
+(ebdc20b3, studio), launched by the onto session as resumes of the pair it
+pruned to restart the node agents. Streams collect into
+`out/census-white-{naive,occt}/`. **The ingest loop belongs to the Database
+web UI session** -- one loop, not two.
+
+Two bugs the facet caused, both fixed, both the same shape: a facet had no
+identity in a table, so the newest row won and the older facet silently read
+as the newer one.
+
+- `e60f811` -- renders. `config_key` comes from the source alone, so indexing
+  a second facet under `census-<engine>` replaced the oracle's rows.
+  `census_source` now reads the tree name.
+- `a1295f5` -- measurements. Same again one table over: both facets of an
+  engine are "naive", `census-white-*` sorts last so it won `MAX(run_id)`, and
+  every oracle cell on the wall showed white figures. **Schema 2**: a reader
+  on older code refuses the database rather than degrading, so restart any
+  lab server after the next rebuild.
+
+**Do not read a white row against an oracle row.** Strokes put a ~1px band
+outside the fill boundary everywhere, moving `extra_dist_px` 99th from ~0.45px
+to ~1.01px on every part. The facet is worth having for its drawings.
+
+To finish after this pass, rebuild the remaining lists the same way and
+relaunch; `--skip-done` reads the JSONL already collected, and the batch
+lists must be rsync'd to each node because `--each` reads its list in the
+tree and `out/` is gitignored. **~2,000 parts per engine were never attempted
+and a further ~2,100 only ever timed out at the 120s cap** -- that second
+bucket needs a raised cap to mean anything, not a re-run.
+
+## Superseded: the first white census pass
+
 
 Ran 2026-09-06 01:19-09:19 on both nodes, **merged to `main`**, both jobs
 stopped by their 8h deadline rather than by finishing.
