@@ -77,9 +77,9 @@ def brush():
     """Bristles as a circle with a tapering tail rising out of it -- an
     upside-down light bulb. Built as a union rather than as a width profile:
     a profile that merely starts wide still reads as a bottle, and only an
-    actual circle at the base reads as a brush's belly. The heading swings
-    out and comes back, so the tip curls in toward the center rather than
-    away off the side."""
+    actual circle at the base reads as a brush's belly. The heading bends one
+    way the whole climb: swinging out and back put a second curl in the tip
+    going the wrong way before the one that was wanted."""
     from shapely.geometry import Point, Polygon
     from shapely.ops import unary_union
 
@@ -91,7 +91,7 @@ def brush():
     left, right = [], []
     for i in range(n):
         u = i / (n - 1)
-        heading = -math.pi / 2 + 0.8 * math.sin(math.pi * u ** 1.5)
+        heading = -math.pi / 2 - 1.05 * u ** 2.2
         x += math.cos(heading) * step
         y += math.sin(heading) * step
         w = max(radius * (1.0 - u ** 1.25) ** 0.75, 3.0)
