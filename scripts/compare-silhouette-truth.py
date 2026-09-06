@@ -97,12 +97,18 @@ def components(m: np.ndarray, zoom: int, floor_px: int):
 
 
 def one(part: str, args, tmp: Path) -> dict:
-    """Render strokeless (fills carry the silhouette, no stroke overhang to
-    subtract) and compare against the reference."""
+    """Render and compare against the reference.
+
+    Strokeless by default: the fills carry the silhouette and there is no
+    stroke overhang to subtract. With --line-width/--silhouette-width above 0
+    the strokes sit ~half their width outside the fill boundary, so EXTRA
+    grows by a band everywhere and its distance percentiles are no longer
+    comparable to a strokeless run's."""
     argv = [part, "--format", "svg", "--shading", "outline",
-            "--shade-style", "flat3", "--angle", args.angle,
-            "--engine", args.engine, "--line-width", "0",
-            "--silhouette-width", "0", "--out", str(tmp)]
+            "--shade-style", args.shade_style, "--angle", args.angle,
+            "--engine", args.engine, "--line-width", str(args.line_width),
+            "--silhouette-width", str(args.silhouette_width),
+            "--out", str(tmp)]
     parsed = cli.build_parser().parse_args(argv)
     cfg = cli._config_from_args(parsed)
     # Timed per phase, because `secs` alone cannot say whether a slow part is
@@ -130,6 +136,8 @@ def one(part: str, args, tmp: Path) -> dict:
     pct = {str(p): round(float(np.percentile(dist[extra], p)) / args.zoom, 2)
            for p in (50, 90, 99, 100)} if extra.any() else {}
     row = {"part": part, "engine": args.engine, "angle": args.angle,
+           "style": args.shade_style,
+           "strokes": [args.line_width, args.silhouette_width],
            "extra_px": int(extra.sum()), "missing_px": int(missing.sum()),
            "extra_dist_px": pct,
            "missing": components(missing, args.zoom, args.floor),
@@ -146,6 +154,8 @@ def _bare(part: str, work, args) -> dict:
         r = work(part)
     except BaseException as exc:  # a part must not end the run
         r = {"part": part, "engine": args.engine, "angle": args.angle,
+             "style": args.shade_style,
+             "strokes": [args.line_width, args.silhouette_width],
              "error": type(exc).__name__, "detail": str(exc)[:300],
              "traceback": traceback.format_exc()[-1200:]}
     r["secs"] = round(time.time() - t0, 1)
@@ -158,6 +168,13 @@ def main() -> int:
     ap.add_argument("--list")
     ap.add_argument("--angle", default="iso")
     ap.add_argument("--engine", default="naive")
+    ap.add_argument("--shade-style", dest="shade_style", default="flat3",
+                    help="fill treatment; 'white' draws every body surface "
+                         "one opaque white, so the strokes carry the drawing")
+    ap.add_argument("--line-width", dest="line_width", type=int, default=0,
+                    help="interior stroke, output px (0 = strokeless oracle)")
+    ap.add_argument("--silhouette-width", dest="silhouette_width", type=int,
+                    default=0, help="contour stroke, output px")
     ap.add_argument("--zoom", type=int, default=8, help="raster px per canvas px")
     ap.add_argument("--floor", type=int, default=200,
                     help="smallest diff component to report, in raster px")
@@ -180,7 +197,10 @@ def main() -> int:
         ap.error("name at least one part, or pass --list")
 
     runner = Runner(args.jsonl, timeout=args.timeout, key="part",
-                    extra={"engine": args.engine, "angle": args.angle}) \
+                    extra={"engine": args.engine, "angle": args.angle,
+                           "style": args.shade_style,
+                           "strokes": [args.line_width,
+                                       args.silhouette_width]}) \
         if args.jsonl else None
     if runner and args.skip_done:
         before = len(ids)

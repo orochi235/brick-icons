@@ -133,7 +133,8 @@ def _emit_fit(out_dir: Path, name: str, res, right, up, fwd,
         "width": int(w), "height": int(h),
     }
     if style is not None:
-        fit["light"] = [float(v) for v in style.light]
+        if style.light is not None:
+            fit["light"] = [float(v) for v in style.light]
         fit["part_color"] = [int(v) for v in style.part_color]
     (out_dir / f"{name}.fit.json").write_text(json.dumps(fit))
 
