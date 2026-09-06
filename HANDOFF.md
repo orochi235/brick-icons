@@ -136,33 +136,35 @@ has to be proved byte-identical before it is believed.
 
 ## In flight: the white census facet, third pass -- the 300s cap
 
-`census-white-occt-r2` (93af72b4, studio, 8 workers, 959 parts) launched
-2026-09-06 17:06, deadline 05:06. **Per-part cap is 300s, up from 120s**,
-`HARD=600`. `onto fetch --stream census-white-occt-r2` collects into
-`out/census-white-occt/`. **The ingest loop belongs to the Database web UI
-session** -- one loop, not two.
+Both engines are running at a **300s per-part cap, up from 120s**, `HARD=600`:
+`census-white-occt-r2` (93af72b4, studio, 8 workers, 959 parts, launched 17:06,
+deadline 05:06) and `census-white-naive-r2` (ed49e9f8, msb-uai, 10 workers,
+1,909 parts, launched 18:08, deadline 06:08). An `onto fetch --stream` per task
+collects into `out/census-white-{occt,naive}/`. **The ingest loop belongs to
+the Database web UI session** -- one loop, not two.
 
-**naive is built but unsent: 1,909 parts in
-`out/census-white/naive-retry-batches.txt`, staged on studio.** msb-uai left
-the fleet, a working tree takes one job at a time, and occt's list is the one
-that fits a 12h deadline. Launch it the same way once occt is done:
+**A retry pass needs its own directory.** A batch's JSONL is named for its
+first part, so a retry batch beginning with a part that also began a batch of
+an earlier pass appends to that pass's file -- and `--skip-done` then reads its
+120s TimeoutError rows as done and skips exactly the parts being retried. 15 of
+occt's first 37 batches started non-empty this way and one was skipped whole.
+naive writes to `out/census-white/r2` for that reason; `db.rebuild` rglobs, so
+a subdirectory is still indexed, and `KEEP` still points at the shared
+`out/census-white/renders`. occt's running pass predates the finding and keeps
+the flaw -- harmless, because a skipped part keeps its old error row and so
+comes back in the next coverage list.
 
-    onto run --detach --in brick-icons --task census-white-naive-r2 \
-      --timeout 12h --each out/census-white/naive-retry-batches.txt \
-      --workers 8 --reserve 2 --out out/census-white --to out/census-white-naive \
-      --env PATH=/Users/mike/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin \
-      --env "EXTRA=--shade-style white --line-width 2 --silhouette-width 2" \
-      --env KEEP=out/census-white/renders --env HARD=600 \
-      studio -- scripts/census-batch.sh naive 300 out/census-white {}
-
-**`onto sync` studio is refused while 93af72b4 runs**, with a 409: sync takes
+**`onto sync` a node while it runs a job is refused**, with a 409: sync takes
 the tree lock and a running job holds it. It is a refusal, not a loss --
-`out/` is gitignored and the reset's clean is not `-x`, so census output
-survives a sync either way. Launch naive after occt finishes; that sync is
-also what puts `273a6dd` on the node, so the worker labels only start naming
-the part in hand on that next launch. The running job's supervisor is on the
-old onto binary and keeps its old labels and its old `22/-117` progress
-arithmetic (fixed in onto `b137f50`) either way.
+`out/` is gitignored and the reset's clean is not `-x`, so census output and
+the rsync'd batch lists survive a sync either way. `onto sync` also wants
+`--ref origin/main` here, because the branch has no upstream and onto cannot
+otherwise name a commit the node is known to have.
+
+studio was synced before `273a6dd`, so **occt's worker labels still show the
+batch's first part**; msb-uai has it and naive's name the part in hand. Same
+for onto's own `22/-117` progress arithmetic, fixed in `b137f50`: a running
+job keeps the supervisor it launched with.
 
 **`--env PATH` is not optional.** The agent's PATH has no `~/.local/bin`, so
 `resvg` is missing and every part fails `FileNotFoundError` in about a second
