@@ -124,7 +124,7 @@ export const LABEL_MIN_PX = 110;
 
 /** A picture rather than a letter, where a letter would need explaining. */
 export type BadgeMark = 'star' | 'archive' | 'redo' | 'bolt' | 'magnet'
-                      | 'brush' | 'minifig' | 'technic' | 'composite';
+                      | 'brush' | 'minifig' | 'technic' | 'composite' | 'duplo';
 
 export interface CellBadge {
   /** The tag that drew it. The strip is hit-tested by tag, so a click knows
@@ -185,9 +185,8 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
   // LDraw's own Yellow, the color a bare minifig head is moulded in.
   minifig: { tag: 'minifig', mark: 'minifig', field: '#f2cd37', ink: '#ffffff' },
   technic: { tag: 'technic', mark: 'technic', field: '#1b2a5e', ink: '#ffffff' },
-  duplo: { tag: 'duplo', text: 'd', field: '#ffffff', ink: '#c8102e',
-           stroke: '#c8102e', font: SYSTEM_FACE, weight: 700, scale: 1.18,
-           dx: -0.045 },
+  duplo: { tag: 'duplo', mark: 'duplo', field: '#ffffff', ink: '#c8102e',
+           stroke: '#c8102e' },
   weird: { tag: 'weird', text: '\u03a8', field: '#5b3a86', ink: '#ffffff',
            font: WEIRD_FACE, dy: 0.035 },
   // The one property badge off the shared field: a gold bolt on black is

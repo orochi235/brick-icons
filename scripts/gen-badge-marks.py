@@ -195,13 +195,13 @@ if __name__ == "__main__":
 
     magnet_pts = horseshoe()
     tip = -470.0
-    cuts = contract(magnet_pts, 34.0, sbox(-GRID, -400.0, GRID, -400.0 + 190.0))
+    cuts = contract(magnet_pts, 54.0, sbox(-GRID, -400.0, GRID, -400.0 + 200.0))
     out.append(emit_many("MAGNET_CUT", cuts))
     print(f"MAGNET_CUT: {len(cuts)} pieces")
 
     brush_pts = brush()
     tip_xy = brush_pts[len(brush_pts) // 2 - 1]
-    cuts = contract(brush_pts, 26.0, Point(tip_xy).buffer(250.0))
+    cuts = contract(brush_pts, 44.0, Point(tip_xy).buffer(330.0))
     out.append(emit_many("BRUSH_CUT", cuts))
     print(f"BRUSH_CUT: {len(cuts)} pieces")
 

@@ -125,6 +125,25 @@ export const drawComposite: Mark = (ctx) => {
   for (const y of [-0.74, -0.18, 0.38]) ctx.fillRect(-0.7, y, 1.4, 0.36);
 };
 
+// Duplo's d, drawn as a monoline the way the logotype sets it: a circle for
+// the bowl and a straight ascender, one stroke width throughout. A text face
+// modulates its strokes, which is the one thing that logotype does not do.
+export const drawDuplo: Mark = (ctx) => {
+  ctx.save();
+  ctx.translate(0.11, 0.08);
+  ctx.strokeStyle = ctx.fillStyle;
+  ctx.lineWidth = 0.28;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.arc(-0.18, 0.3, 0.42, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(0.38, -0.88);
+  ctx.lineTo(0.38, 0.72);
+  ctx.stroke();
+  ctx.restore();
+};
+
 // Technic's T, drawn rather than set: a font's italic T carries a short
 // crossbar and its slant walks the glyph off the disc's center. The shear is
 // about the vertical middle, so the letter stays centered as it leans.
@@ -146,7 +165,7 @@ export const drawTechnic: Mark = (ctx) => {
 export const MARKS: Record<string, Mark> = {
   star: drawStar, archive: drawArchive, redo: drawRedo, bolt: drawBolt,
   magnet: drawMagnet, brush: drawBrush, minifig: drawMinifig,
-  technic: drawTechnic, composite: drawComposite,
+  technic: drawTechnic, composite: drawComposite, duplo: drawDuplo,
 };
 
 export function drawBadge(ctx: CanvasRenderingContext2D, badge: CellBadge,
