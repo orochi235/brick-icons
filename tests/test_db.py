@@ -244,11 +244,14 @@ def test_rebuild_walks_renders_and_toml_and_jsonl(tmp_path):
     (tmp_path / "census").mkdir()
     (tmp_path / "census" / "naive-s0.jsonl").write_text(json.dumps(MEASURED) + "\n")
 
+    defects = tmp_path / "defects.toml"
+    defects.write_text("")
+
     counts = db.rebuild(tmp_path / "corpus.db", ldraw_dir=library,
-                        root=tmp_path, census_dir=tmp_path / "census",
-                        commit_sha="abc1234")
+                        root=tmp_path, census_dirs=[tmp_path / "census"],
+                        defects_path=defects, commit_sha="abc1234")
     assert counts == {"parts": 4, "renders": 1, "measurements": 1,
-                      "defects": 0, "statuses": 0}
+                      "skipped": 0, "defects": 0, "statuses": 0}
 
     conn = db.connect(tmp_path / "corpus.db")
     assert conn.execute("SELECT path FROM renders").fetchone()[0] == \
@@ -261,7 +264,7 @@ def test_rebuild_starts_from_empty_each_time(tmp_path):
     (tmp_path / "census" / "naive-s0.jsonl").write_text(json.dumps(MEASURED) + "\n")
     for _ in range(2):
         db.rebuild(tmp_path / "corpus.db", ldraw_dir=library, root=tmp_path,
-                   census_dir=tmp_path / "census", commit_sha="abc1234")
+                   census_dirs=[tmp_path / "census"], commit_sha="abc1234")
     conn = db.connect(tmp_path / "corpus.db")
     assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 1
     assert conn.execute("SELECT count(*) FROM measurements").fetchone()[0] == 1
@@ -362,7 +365,7 @@ def test_a_rebuild_indexes_the_census_renders_too(tmp_path):
         d.mkdir(parents=True)
         (d / "3001.svg").write_text(SVG)
     counts = db.rebuild(conn_path, lib, root=tmp_path,
-                        census_dir=tmp_path / "out" / "census")
+                        census_dirs=[tmp_path / "out" / "census"])
     conn = db.connect(conn_path)
     sources = {r["source"] for r in conn.execute("SELECT source FROM renders")}
     assert sources == {"census-naive", "census-occt"}
@@ -370,3 +373,83 @@ def test_a_rebuild_indexes_the_census_renders_too(tmp_path):
     paths = {r["path"] for r in conn.execute("SELECT path FROM renders")}
     assert paths == {"out/census/renders/naive/3001.svg",
                      "out/census/renders/occt/3001.svg"}
+
+
+def test_rebuild_takes_several_census_directories(tmp_path):
+    # Two nodes ran the census, each into its own tree; one engine per tree.
+    lib = _library(tmp_path)
+    for engine, dirname in (("occt", "census"), ("naive", "census-naive")):
+        d = tmp_path / "out" / dirname / "renders" / engine
+        d.mkdir(parents=True)
+        (d / "3001.svg").write_text(SVG)
+        (tmp_path / "out" / dirname / f"{engine}-r0.jsonl").write_text(
+            json.dumps({**MEASURED, "engine": engine}) + "\n")
+
+    counts = db.rebuild(tmp_path / "corpus.db", lib, root=tmp_path,
+                        census_dirs=[tmp_path / "out" / "census",
+                                     tmp_path / "out" / "census-naive"])
+    assert counts["renders"] == 2
+    assert counts["measurements"] == 2
+
+    conn = db.connect(tmp_path / "corpus.db")
+    assert {r["source"] for r in conn.execute("SELECT source FROM renders")} \
+        == {"census-occt", "census-naive"}
+
+
+def test_each_census_directory_is_its_own_run(tmp_path):
+    # Run 1's archive holds the same rows as the live tree it is a prefix of,
+    # so only the run they were imported under tells them apart.
+    lib = _library(tmp_path)
+    for dirname in ("census", "census-run1"):
+        d = tmp_path / "out" / dirname
+        d.mkdir(parents=True)
+        (d / "naive-r0.jsonl").write_text(json.dumps(MEASURED) + "\n")
+
+    db.rebuild(tmp_path / "corpus.db", lib, root=tmp_path,
+               census_dirs=[tmp_path / "out" / "census",
+                            tmp_path / "out" / "census-run1"])
+    conn = db.connect(tmp_path / "corpus.db")
+    runs = conn.execute("SELECT id, args FROM runs ORDER BY id").fetchall()
+    assert len(runs) == 2
+    assert [json.loads(r["args"])["dir"] for r in runs] == \
+        ["out/census", "out/census-run1"]
+    assert conn.execute("SELECT count(*) FROM measurements").fetchone()[0] == 2
+
+
+def test_rebuild_finds_jsonl_below_the_census_directory(tmp_path):
+    # The backfill gives each batch its own JSONL in a subdirectory.
+    lib = _library(tmp_path)
+    d = tmp_path / "out" / "census"
+    (d / "backfill").mkdir(parents=True)
+    (d / "occt-r0.jsonl").write_text(json.dumps(MEASURED) + "\n")
+    (d / "backfill" / "occt-3709a.jsonl").write_text(
+        json.dumps({**MEASURED, "part": "3001"}) + "\n")
+
+    counts = db.rebuild(tmp_path / "corpus.db", lib, root=tmp_path,
+                        census_dirs=[d])
+    assert counts["measurements"] == 2
+
+
+def test_an_inflight_marker_is_not_read_as_measurements(tmp_path):
+    # `Runner` rewrites <jsonl>.inflight per item; it holds a part id, not JSON.
+    lib = _library(tmp_path)
+    d = tmp_path / "out" / "census"
+    d.mkdir(parents=True)
+    (d / "occt-r0.jsonl").write_text(json.dumps(MEASURED) + "\n")
+    (d / "occt-r0.jsonl.inflight").write_text("3001\n")
+
+    counts = db.rebuild(tmp_path / "corpus.db", lib, root=tmp_path,
+                        census_dirs=[d])
+    assert counts["measurements"] == 1
+
+
+def test_a_census_directory_that_is_not_there_is_skipped(tmp_path):
+    # The naive node's tree does not exist on a machine that never ran it.
+    lib = _library(tmp_path)
+    d = tmp_path / "out" / "census"
+    d.mkdir(parents=True)
+    (d / "occt-r0.jsonl").write_text(json.dumps(MEASURED) + "\n")
+
+    counts = db.rebuild(tmp_path / "corpus.db", lib, root=tmp_path,
+                        census_dirs=[d, tmp_path / "out" / "census-naive"])
+    assert counts["measurements"] == 1
