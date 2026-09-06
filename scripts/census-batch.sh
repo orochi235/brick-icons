@@ -65,8 +65,15 @@ while kill -0 "$worker" 2>/dev/null; do
   # The pipeline's pid is grep's, so the python is found by the jsonl path it
   # was handed, which is unique to this batch.
   py=$(pgrep -f "compare-silhouette-truth.py .* --jsonl $jsonl " || true)
-  echo "--- $first batch: $(cat "$inflight") stuck ${age}s > ${HARD}s, killing ${py:-$worker} ---" >&2
-  kill -9 ${py:-$worker} 2>/dev/null || true
+  if [ -z "$py" ]; then
+    # Never fall back to $worker. That is grep, and killing it returns 137
+    # while the runaway keeps growing — the watchdog causing the failure it
+    # exists to prevent, and onto would start another worker beside it.
+    echo "--- $first batch: $(cat "$inflight") stuck ${age}s but no worker matched; NOT killing ---" >&2
+    continue
+  fi
+  echo "--- $first batch: $(cat "$inflight") stuck ${age}s > ${HARD}s, killing $py ---" >&2
+  kill -9 "$py" 2>/dev/null || true
   break
 done
 
