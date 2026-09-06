@@ -1210,7 +1210,10 @@ def face_fill(face, style, ldraw_dir):
     it and it reads as engraving, which is the bug this fixes."""
     code = face.get("color", 16)
     if code == 16:
-        return style.tone(face["normal"])
+        # A curved face carries no view normal -- it only ever reached the
+        # gradient branch, which a flat style skips.
+        nv = face.get("normal")
+        return style.tone(nv) if nv is not None else style.ramp_b(1.0)
     hex_str, _ = colors.resolve(str(code), ldraw_dir)
     return "#" + hex_str[2:]
 
@@ -1432,14 +1435,15 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
         # ramp — and the gradient branches never consulted the LDraw color,
         # which is why a printed cylinder or cone painted in body tone
         deco = f.get("color", 16) != 16
-        if "grad_radial" in f and not deco:
+        flat = getattr(style, "flat", False)
+        if "grad_radial" in f and not deco and not flat:
             g = f["grad_radial"]
             stops, (fx, fy) = _radial_focal_stops(f["grad_samples"], style)
             ops.append({"d": d, "depth": f["depth"],
                         "gradient": {"type": "radial", "cx": g["cx"], "cy": g["cy"],
                                      "r": g["r"], "ratio": g["ratio"],
                                      "fx": fx, "fy": fy, "stops": stops}})
-        elif "grad_axis" in f and not deco:
+        elif "grad_axis" in f and not deco and not flat:
             p0, p1 = f["grad_axis"]
             stops = sorted(((off, style.ramp(nv)) for off, nv in f["grad_samples"]),
                            key=lambda s: s[0])
@@ -1592,7 +1596,33 @@ def apply_affine_faces(faces, f, ox, oy):
     return out
 
 
-STYLES = {"flat3": Flat3Style}
+class WhiteStyle(ShadingStyle):
+    """Every body surface one opaque white. Fills exist only to occlude what
+    is behind them, so the strokes carry the whole drawing.
+
+    `flat` is read by fill_ops: without it a curved face still takes the
+    gradient branch and emits a <radialGradient> whose stops are all the same
+    white, which is a def per curve across the corpus for no visible effect."""
+    flat = True
+    light = None
+
+    def __init__(self, part_color=None, light=None):
+        # part_color and light are accepted because make_style passes both to
+        # every style, and ignored because "white" names the output.
+        self.part_color = (255, 255, 255)
+        self._white = _hex(self.part_color)
+
+    def tone(self, nv):
+        return self._white
+
+    def ramp(self, nv):
+        return self._white
+
+    def ramp_b(self, b):
+        return self._white
+
+
+STYLES = {"flat3": Flat3Style, "white": WhiteStyle}
 
 
 def light_vector(spec):

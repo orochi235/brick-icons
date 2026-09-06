@@ -31,6 +31,7 @@ batch=${4:?comma-separated part ids}
 KEEP=${KEEP:-out/census/renders}
 HARD=${HARD:-240}
 POLL=${POLL:-15}
+EXTRA=${EXTRA:-}
 
 mkdir -p "$dir"
 first=${batch%%,*}
@@ -48,8 +49,13 @@ unset IFS
 # the authoritative plan and progress for the item list, so these are dropped.
 rc=$(mktemp)
 {
+  # EXTRA carries the facet's render config (--shade-style, --line-width,
+  # --silhouette-width). Deliberately word-split: it is a flag string, and
+  # onto passes it through --env as one variable.
+  # shellcheck disable=SC2086
   .venv/bin/python scripts/compare-silhouette-truth.py "$@" \
-    --engine "$engine" --timeout "$timeout" --jsonl "$jsonl" --skip-done --keep "$KEEP"
+    --engine "$engine" --timeout "$timeout" --jsonl "$jsonl" --skip-done \
+    --keep "$KEEP" ${EXTRA:-}
   echo $? > "$rc"
 } | grep --line-buffered -v '^onto: ' &
 worker=$!

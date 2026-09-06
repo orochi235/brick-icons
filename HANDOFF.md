@@ -88,6 +88,47 @@ that builds `near` changed the SVG bytes. Not slower — wrong. Whatever the
 mechanism, a shapely call threaded over geometry another thread also touches
 has to be proved byte-identical before it is believed.
 
+## In flight: the white line-drawing census facet, on both nodes
+
+**Branch `census-stroked`**, worktree `.claude/worktrees/census-stroked`, two
+commits on top of `census-multi-dir-index`. Started 2026-09-06 01:19, both
+jobs deadline **09:19**.
+
+| | msb-uai | studio |
+|---|---|---|
+| task | `census-white-naive` | `census-white-occt` |
+| job | `9a085b10` | `ad4ced7e` |
+| lands in | `out/census-white-naive/` | `out/census-white-occt/` |
+
+Both run 330 batches of ~25 over the same 8,235 parts, rendering
+`--shade-style white --line-width 2 --silhouette-width 2`: every body surface
+one opaque white, strokes carrying the drawing. Resume or collect with
+
+    onto fetch --stream --every 10m census-white-naive     # and -occt
+
+The streams are plain background processes and do not survive this machine
+sleeping; the jobs do. Re-running the fetch picks up whatever accumulated.
+
+**What this facet is for is the drawings, not the numbers.** The metric
+thresholds alpha, so an opaque white fill and a flat3 fill give the same mask
+— the only thing strokes change is that they add a ~1px band outside the fill
+boundary everywhere, which moves `extra_dist_px` 99th from ~0.45px to ~1.01px
+on every part. Do not compare these rows against `out/census`'s: the strokes
+dominate them. What the run is worth having is 16,470 clean line drawings
+with `--keep`, ready to index.
+
+**The batch list has to be rsync'd to each node.** `--each` reads its list in
+the tree, `out/` is gitignored, so a sync never sends it and the job exits -1
+in about 25 seconds with an empty log:
+
+    rsync -a out/census-white/{naive,occt}-batches.txt \
+      <node>.local:~/.config/onto/work/brick-icons/out/census-white/
+
+Rows carry `"style"` and `"strokes"`, because `measurements` has no column
+for the render config. Nothing is imported into `corpus.db` yet — that waits
+on the `db.rebuild` work in the main checkout, and on a `SOURCES` entry for
+the new render source.
+
 ## In flight: the library-scale silhouette census, now on `studio`
 
 Eight detached shards (4 naive, 4 occt) run
