@@ -14,6 +14,9 @@
   --corpus-cell-problem-elsewhere-border: #97bcc5;
   --corpus-cell-defect-elsewhere-fill: #453c27;
   --corpus-cell-defect-elsewhere-border: #c7b78f;
+  /* The caret's own ring -- distinct from every cell-state border above, so
+   * it still reads when a caret'd cell also carries the ochre defect ring. */
+  --corpus-caret-color: #ffffff;
 
   /* The wall is full-bleed under the shell header -- the workspace padding
    * is meant for a tile grid, not this single canvas. */

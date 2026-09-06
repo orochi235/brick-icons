@@ -1,15 +1,24 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import {
-  clientToCanvas, useDecayLoop, viewportDragPanAction, zoomAt,
+  useEffect, useMemo, useRef, useState,
+  type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent,
+} from 'react';
+import {
+  clientToCanvas, viewToTransform, worldToScreen, useDecayLoop, viewportDragPanAction, zoomAt,
   type InvocationCtx, type OngoingHandle, type View,
 } from '@weasel-js/core';
 import { LoupeBubble, resolveLoupe, useLoupe } from '@weasel-js/labkit/loupe';
+import { adjacent, impliedCaret, type Direction } from '@lab/corpus/caret';
 import type { Rect } from '@lab/corpus/layout';
 import { paintCommands, type PaintCommand } from '@lab/corpus/paint';
 import { DEFAULT_PALETTE, readPalette, type CellState, type Palette } from '@lab/corpus/palette';
+import { panToReveal } from '@lab/corpus/reveal';
 import type { Cell, SheetManifest } from '@lab/corpus/types';
 import { visibleRange } from '@lab/corpus/visible';
 import '@lab/corpus/Wall.css';
+
+const ARROW_DIRECTION: Record<string, Direction> = {
+  ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
+};
 
 export interface WallProps {
   cells: Cell[];
@@ -39,7 +48,7 @@ function ongoingInvoker(action: typeof viewportDragPanAction) {
 
 const NOOP_MODIFIERS = { alt: false, ctrl: false, meta: false, shift: false };
 
-// A thumbnail is an opaque tile, so a defect's colour is hidden behind it;
+// A thumbnail is an opaque tile, so a defect's color is hidden behind it;
 // the ring is what makes a drawn cell's open defect findable.
 function strokeRing(ctx: CanvasRenderingContext2D,
                      cmd: { dx: number; dy: number; dw: number; dh: number },
@@ -48,6 +57,19 @@ function strokeRing(ctx: CanvasRenderingContext2D,
   ctx.strokeStyle = palette.defect.border ?? palette.defect.fill;
   ctx.lineWidth = 2;
   ctx.strokeRect(cmd.dx + 1, cmd.dy + 1, cmd.dw - 2, cmd.dh - 2);
+  ctx.restore();
+}
+
+// Dashed and drawn outside the cell, so it never collides with the inset
+// defect ring when a cell carries both.
+function strokeCaret(ctx: CanvasRenderingContext2D,
+                     cmd: { dx: number; dy: number; dw: number; dh: number },
+                     palette: Palette) {
+  ctx.save();
+  ctx.strokeStyle = palette.caret;
+  ctx.lineWidth = 2;
+  ctx.setLineDash([4, 2]);
+  ctx.strokeRect(cmd.dx - 1, cmd.dy - 1, cmd.dw + 2, cmd.dh + 2);
   ctx.restore();
 }
 
@@ -65,18 +87,20 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
     ctx.drawImage(sheet, cmd.sx, cmd.sy, cmd.sw, cmd.sh, dx, dy, cmd.dw, cmd.dh);
     if (cmd.ring) strokeRing(ctx, { ...cmd, dx, dy }, palette);
     ctx.restore();
+    if (cmd.caret) strokeCaret(ctx, { ...cmd, dx, dy }, palette);
   } else if (cmd.kind === 'image') {
     ctx.save();
     ctx.globalAlpha = cmd.alpha ?? 1;
     ctx.drawImage(cmd.image, dx, dy, cmd.dw, cmd.dh);
     if (cmd.ring) strokeRing(ctx, { ...cmd, dx, dy }, palette);
     ctx.restore();
+    if (cmd.caret) strokeCaret(ctx, { ...cmd, dx, dy }, palette);
   } else if (cmd.kind === 'fill') {
     ctx.fillStyle = cmd.fill;
     ctx.fillRect(dx, dy, cmd.dw, cmd.dh);
     if (cmd.border) {
       // A stroke straddles its path, so inset by half the width --
-      // otherwise it overshoots the cell and eats into its neighbours.
+      // otherwise it overshoots the cell and eats into its neighbors.
       const inset = cmd.borderWidth / 2;
       ctx.save();
       ctx.strokeStyle = cmd.border;
@@ -84,6 +108,7 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
       ctx.strokeRect(dx + inset, dy + inset, cmd.dw - cmd.borderWidth, cmd.dh - cmd.borderWidth);
       ctx.restore();
     }
+    if (cmd.caret) strokeCaret(ctx, { ...cmd, dx, dy }, palette);
   }
 }
 
@@ -130,6 +155,20 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, width, height,
   const loupe = useLoupe({ capability: loupeCapability, hostRef: ref, enabled: false });
   const lensRef = useRef<HTMLCanvasElement>(null);
 
+  // The caret an arrow key moves; null until one is set explicitly, at which
+  // point it stays wherever arrows or Enter leave it until Escape drops it.
+  const [explicitCaret, setExplicitCaret] = useState<number | null>(null);
+  const visible = useMemo(
+    () => visibleRange(rects, cam, { width, height }),
+    [rects, cam, width, height]);
+  // Recomputed every frame the camera moves, so the implied caret drifts to
+  // whatever cell has the most on-screen area while dragging or zooming.
+  const implied = useMemo(
+    () => impliedCaret(rects, visible, cam, { width, height }),
+    [rects, visible, cam, width, height]);
+  const caretIndex = explicitCaret ?? implied;
+  const caretCell = caretIndex != null ? cells[caretIndex] : undefined;
+
   useEffect(() => {
     const canvas = ref.current;
     const ctx = canvas?.getContext('2d');
@@ -145,11 +184,13 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, width, height,
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
     ctx.imageSmoothingEnabled = true;
-    const visible = visibleRange(rects, cam, { width, height });
-    for (const cmd of paintCommands({ cells, rects, visible, cam, manifest, palette, loose, highlight })) {
+    for (const cmd of paintCommands({
+      cells, rects, visible, cam, manifest, palette, loose, highlight, caret: caretIndex,
+    })) {
       drawPaintCommand(ctx, cmd, sheet, palette);
     }
-  }, [cells, rects, cam, sheet, manifest, palette, loose, highlight, width, height]);
+  }, [cells, rects, visible, cam, sheet, manifest, palette, loose, highlight, caretIndex,
+      width, height]);
 
   // The lens shows a magnified crop of what is already on screen -- zooming
   // in about a fixed point never brings a cell into view that the outer
@@ -172,12 +213,14 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, width, height,
     ctx.imageSmoothingEnabled = true;
     const magCam = zoomAt(cam, loupe.aim, loupe.factor);
     const offset = { x: d / 2 - loupe.aim.x, y: d / 2 - loupe.aim.y };
-    const visible = visibleRange(rects, cam, { width, height });
-    for (const cmd of paintCommands({ cells, rects, visible, cam: magCam, manifest, palette, loose, highlight })) {
+    for (const cmd of paintCommands({
+      cells, rects, visible, cam: magCam, manifest, palette, loose, highlight, caret: caretIndex,
+    })) {
       drawPaintCommand(ctx, cmd, sheet, palette, offset);
     }
   }, [loupe.visible, loupe.aim, loupe.factor, loupeCapability.diameter,
-      cells, rects, cam, sheet, manifest, palette, loose, highlight, width, height]);
+      cells, rects, visible, cam, sheet, manifest, palette, loose, highlight, caretIndex,
+      width, height]);
 
   const hitTest = (e: { clientX: number; clientY: number;
                          currentTarget: HTMLCanvasElement }) => {
@@ -239,6 +282,34 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, width, height,
     if (reason === 'commit' && draggedRef.current) suppressClickRef.current = true;
   };
 
+  // The trio WCAG actually asks for -- role, name, keyboard operability --
+  // rather than a focusable DOM node per cell, which 24,591 of them rules
+  // out. Arrows move the caret and make it explicit; Enter opens the same
+  // card a click does; Escape drops back to the implied one.
+  const onKeyDown = (e: ReactKeyboardEvent<HTMLCanvasElement>) => {
+    const direction = ARROW_DIRECTION[e.key];
+    if (direction) {
+      e.preventDefault();
+      if (caretIndex == null) return;
+      const next = adjacent(rects, caretIndex, direction);
+      if (next == null) return;
+      setExplicitCaret(next);
+      const rect = rects[next];
+      if (rect) onPan(panToReveal(rect, camRef.current, { width, height }));
+      return;
+    }
+    if (e.key === 'Enter') {
+      if (caretCell == null || caretIndex == null) return;
+      const rect = rects[caretIndex];
+      if (!rect) return;
+      const [sx, sy] = worldToScreen(rect.x + rect.w / 2, rect.y + rect.h / 2,
+                                     viewToTransform(camRef.current));
+      onPick(caretCell, { x: sx, y: sy });
+      return;
+    }
+    if (e.key === 'Escape') setExplicitCaret(null);
+  };
+
   return (
     <>
       <canvas
@@ -246,6 +317,8 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, width, height,
         className={dragging ? 'corpus-canvas corpus-canvas-dragging' : 'corpus-canvas'}
         width={width}
         height={height}
+        tabIndex={0}
+        onKeyDown={onKeyDown}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={(e) => endDrag(e, 'commit')}
@@ -269,6 +342,9 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, width, height,
           <canvas ref={lensRef} className="lk-loupe__canvas" />
         </LoupeBubble>
       )}
+      <div className="corpus-caret-announce" aria-live="polite">
+        {caretCell ? caretCell.title : ''}
+      </div>
     </>
   );
 }

@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { cellState, fillFor, paintCommands, tally } from '@lab/corpus/paint';
-import { CELL_STATES, DEFAULT_PALETTE as CELL_FILL } from '@lab/corpus/palette';
+import { CELL_STATES, DEFAULT_PALETTE as CELL_FILL, type CellState } from '@lab/corpus/palette';
 import type { Cell, SheetManifest } from '@lab/corpus/types';
 
 const cell = (id: string, index: number, sha: string | null,
@@ -148,7 +148,7 @@ it('says nothing is known when nothing is known', () => {
 });
 
 it('emits a fill and border for every problem state, and neither for unknown', () => {
-  const states: [Cell, keyof typeof CELL_FILL][] = [
+  const states: [Cell, CellState][] = [
     [{ ...base, open_defects: 1 }, 'defect'],
     [{ ...base, error: 'GEOSException' }, 'failed'],
     [{ ...base, error: 'TimeoutError' }, 'timeout'],
@@ -283,4 +283,28 @@ it('scales the border with the drawn cell size, floored at one pixel', () => {
   expect((smallCmd as { borderWidth: number }).borderWidth).toBe(1);
   expect((bigCmd as { borderWidth: number }).borderWidth)
     .toBeGreaterThan((smallCmd as { borderWidth: number }).borderWidth);
+});
+
+it('marks exactly one command as the caret', () => {
+  const cmds = paintCommands({
+    cells: [cell('a', 0, null), cell('b', 1, null), cell('c', 2, null)],
+    rects: [rects[0]!, rects[1]!, { x: 40, y: 0, w: 10, h: 10 }],
+    visible: [0, 1, 2],
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest, caret: 1,
+  });
+  const marked = cmds.filter((c) => c.caret === true);
+  expect(marked).toHaveLength(1);
+  expect(cmds[1]).toMatchObject({ caret: true });
+  expect(cmds[0]!.caret).toBeUndefined();
+  expect(cmds[2]!.caret).toBeUndefined();
+});
+
+it('lets a cell carry both the defect ring and the caret', () => {
+  const img = {} as HTMLImageElement;
+  const [cmd] = paintCommands({
+    cells: [cell('a', 0, 'sha-a', { open_defects: 1 })], rects, visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest,
+    loose: new Map([['a', img]]), caret: 0,
+  });
+  expect(cmd).toMatchObject({ ring: true, caret: true });
 });

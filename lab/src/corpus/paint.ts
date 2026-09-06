@@ -51,11 +51,12 @@ const DIM_ALPHA = 0.25;
 
 export type PaintCommand =
   | { kind: 'sprite'; dx: number; dy: number; dw: number; dh: number;
-      sx: number; sy: number; sw: number; sh: number; ring: boolean; alpha?: number }
+      sx: number; sy: number; sw: number; sh: number; ring: boolean; alpha?: number;
+      caret?: boolean }
   | { kind: 'fill'; dx: number; dy: number; dw: number; dh: number;
-      fill: string; border: string | null; borderWidth: number }
+      fill: string; border: string | null; borderWidth: number; caret?: boolean }
   | { kind: 'image'; dx: number; dy: number; dw: number; dh: number;
-      image: HTMLImageElement; ring: boolean; alpha?: number };
+      image: HTMLImageElement; ring: boolean; alpha?: number; caret?: boolean };
 
 export interface PaintInput {
   cells: Cell[];
@@ -68,6 +69,9 @@ export interface PaintInput {
   /** The legend's hovered or focused row, if any -- cells outside this state
    *  are painted dimmed rather than the matching cells being brightened. */
   highlight?: CellState | null;
+  /** Index of the caret cell, if any -- explicit or implied, resolved by the
+   *  caller (`caret.ts`). */
+  caret?: number | null;
 }
 
 /** What to draw this frame, as data.
@@ -75,8 +79,8 @@ export interface PaintInput {
  *  Kept separate from the canvas so the decisions -- which cells, from where,
  *  in what color -- are testable without a rendering context, and so the
  *  drawing itself is the only thing weasel's mega view has to replace. */
-export function paintCommands({ cells, rects, visible, cam, manifest, palette, loose, highlight = null }:
-                              PaintInput): PaintCommand[] {
+export function paintCommands({ cells, rects, visible, cam, manifest, palette, loose,
+                                highlight = null, caret = null }: PaintInput): PaintCommand[] {
   const out: PaintCommand[] = [];
   const transform = viewToTransform(cam);
   for (const i of visible) {
@@ -87,24 +91,26 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
     const dw = rect.w * cam.scale.x;
     const dh = rect.h * cam.scale.y;
     const ring = cell.open_defects > 0;
+    const isCaret = caret != null && i === caret ? true : undefined;
     const state = cellState(cell);
     const dimmed = highlight !== null && highlight !== state;
     const alpha = dimmed ? DIM_ALPHA : undefined;
     const image = loose?.get(cell.id);
     if (image) {
-      out.push({ kind: 'image', dx, dy, dw, dh, image, ring, alpha });
+      out.push({ kind: 'image', dx, dy, dw, dh, image, ring, alpha, caret: isCaret });
       continue;
     }
     const box = manifest && cell.sha && !isStale(manifest, cell)
       ? sourceBox(manifest, cell.index)
       : null;
     if (box) {
-      out.push({ kind: 'sprite', dx, dy, dw, dh, ...box, ring, alpha });
+      out.push({ kind: 'sprite', dx, dy, dw, dh, ...box, ring, alpha, caret: isCaret });
       continue;
     }
     const style = dimmed ? palette.unknown : palette[state];
     out.push({ kind: 'fill', dx, dy, dw, dh, fill: style.fill,
-               border: style.border, borderWidth: borderWidthFor(style.weight, dw) });
+               border: style.border, borderWidth: borderWidthFor(style.weight, dw),
+               caret: isCaret });
   }
   return out;
 }

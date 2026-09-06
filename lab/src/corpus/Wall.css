@@ -1,2 +1,13 @@
 .corpus-canvas { display: block; cursor: grab; }
 .corpus-canvas-dragging { cursor: grabbing; }
+
+/* Off-screen rather than display:none -- a hidden node is dropped from the
+ * accessibility tree, which would silence the announcement it exists for. */
+.corpus-caret-announce {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}

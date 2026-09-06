@@ -9,7 +9,9 @@ export interface CellStyle {
   weight: 'thick' | 'thin' | null;
 }
 
-export type Palette = Record<CellState, CellStyle>;
+/** The six cell-state fills, plus the caret's own stroke color -- the caret
+ *  is UI chrome, not a cell state, so it never appears in `CELL_STATES`. */
+export type Palette = Record<CellState, CellStyle> & { caret: string };
 
 // Lightness is reserved for "has been rendered" -- a rendered thumbnail is
 // the brightest thing on the wall, so a problem fill has to stay dark enough
@@ -17,7 +19,7 @@ export type Palette = Record<CellState, CellStyle>;
 // and more saturated than the fill it sits on. Tuned by eye over two rounds;
 // none of the six values coincides with a `--wzl-*` token, so they stay
 // literal rather than drifting to a close-but-different one.
-export const DEFAULT_PALETTE: Palette = {
+const CELL_PALETTE: Record<CellState, CellStyle> = {
   unknown: { fill: '#3a3a3f', border: null, weight: null },
   timeout: { fill: '#26383f', border: '#30b0d0', weight: 'thick' },
   failed: { fill: '#4a2626', border: '#e03030', weight: 'thick' },
@@ -25,6 +27,11 @@ export const DEFAULT_PALETTE: Palette = {
   problemElsewhere: { fill: '#26383f', border: '#97bcc5', weight: 'thin' },
   defectElsewhere: { fill: '#453c27', border: '#c7b78f', weight: 'thin' },
 };
+
+const CARET_PROPERTY = '--corpus-caret-color';
+const CARET_DEFAULT_COLOR = '#ffffff';
+
+export const DEFAULT_PALETTE: Palette = { ...CELL_PALETTE, caret: CARET_DEFAULT_COLOR };
 
 const PROPERTY: Record<CellState, { fill: string; border: string | null }> = {
   unknown: { fill: '--corpus-cell-unknown-fill', border: null },
@@ -39,7 +46,7 @@ const PROPERTY: Record<CellState, { fill: string; border: string | null }> = {
 
 /** Iteration order for every table keyed by state -- worst-here-first then
  *  worst-elsewhere, matching `cellState`'s precedence. */
-export const CELL_STATES = Object.keys(DEFAULT_PALETTE) as CellState[];
+export const CELL_STATES = Object.keys(CELL_PALETTE) as CellState[];
 
 /** What each state is called on the legend. */
 export const STATE_LABEL: Record<CellState, string> = {
@@ -70,5 +77,6 @@ export function readPalette(el: Element): Palette {
     const border = prop.border ? readVar(styles, prop.border, fallback.border as string) : null;
     out[state] = { fill, border, weight: fallback.weight };
   }
+  out.caret = readVar(styles, CARET_PROPERTY, DEFAULT_PALETTE.caret);
   return out;
 }

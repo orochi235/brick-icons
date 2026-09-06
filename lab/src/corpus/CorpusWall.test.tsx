@@ -113,6 +113,42 @@ it('raises a card on a single click', async () => {
   expect(container.querySelector('.corpus-lightbox')).toBeNull();
 });
 
+// Both cells land fully on screen at the initial fit, but 'b' sits nearer
+// the viewport's center -- so it, not the leftmost 'a', is the implied
+// caret these tests start from.
+it('is keyboard-focusable and raises a card for the caret on Enter', async () => {
+  const { container } = render(<CorpusWall client={client} />);
+  const canvas = await findCanvas(container);
+  expect(canvas.tabIndex).toBe(0);
+  fireEvent.keyDown(canvas, { key: 'Enter' });
+  expect(await screen.findByRole('dialog', { name: /Part b/ })).toBeTruthy();
+});
+
+it('moves the caret with arrow keys before Enter opens it', async () => {
+  const { container } = render(<CorpusWall client={client} />);
+  const canvas = await findCanvas(container);
+  fireEvent.keyDown(canvas, { key: 'ArrowLeft' });
+  fireEvent.keyDown(canvas, { key: 'Enter' });
+  expect(await screen.findByRole('dialog', { name: /Part a/ })).toBeTruthy();
+});
+
+it('drops the explicit caret back to the implied one on Escape', async () => {
+  const { container } = render(<CorpusWall client={client} />);
+  const canvas = await findCanvas(container);
+  fireEvent.keyDown(canvas, { key: 'ArrowLeft' });
+  fireEvent.keyDown(canvas, { key: 'Escape' });
+  fireEvent.keyDown(canvas, { key: 'Enter' });
+  expect(await screen.findByRole('dialog', { name: /Part b/ })).toBeTruthy();
+});
+
+it("announces the caret's part through a live region", async () => {
+  const { container } = render(<CorpusWall client={client} />);
+  await findCanvas(container);
+  const live = container.querySelector('[aria-live="polite"]');
+  expect(live).toBeTruthy();
+  await waitFor(() => expect(live!.textContent).toBe('Part b'));
+});
+
 it("raises the lightbox from the card's Open button", async () => {
   const { container } = render(<CorpusWall client={client} />);
   const canvas = await findCanvas(container);
