@@ -1,10 +1,17 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
+import { renderHook, waitFor } from '@testing-library/react';
+import { fetchText } from '@lab/corpus/svgRaster';
 import {
   MAX_TARGET_PX, PIXEL_BUDGET, needsRerender, residentCap, splitWork, targetPxFor,
-  vectorUrl, wantedVector,
+  useVectorThumbs, vectorUrl, wantedVector,
 } from '@lab/corpus/useVectorThumbs';
 import { VECTOR_LEVEL } from '@lab/corpus/levels';
 import type { Cell } from '@lab/corpus/types';
+
+vi.mock('@lab/corpus/svgRaster', () => ({
+  fetchText: vi.fn(() => Promise.resolve('<svg/>')),
+  rasterizeSvg: vi.fn(() => Promise.resolve({} as CanvasImageSource)),
+}));
 
 const cell = (id: string, sha: string | null): Cell => ({
   id, index: 0, title: id, category: null, printed: false, obsolete: false, base: true,
@@ -77,4 +84,28 @@ it('makes a merely-wrong-sized raster wait for the camera to stop', () => {
   const { now, onSettle } = splitWork(want, new Map([['a', { px: 200 }]]), 800);
   expect(now).toEqual([]);
   expect(onSettle.map((c) => c.id)).toEqual(['a']);
+});
+
+// The hook itself, where the slot change lives. A parked camera is the whole
+// point: the drawn size is identical either side of the switch, so every cell
+// looks like it already has a raster the right size.
+it('rasterizes the new slot after a slot change, with the camera parked', async () => {
+  const cells = [cell('a', 'x'), cell('b', 'y')];
+  // Stable, as the wall's own memoized `visible` is -- a fresh array each
+  // render re-runs the effect for free and hides the bug.
+  const visible = [0, 1];
+  const { result, rerender } = renderHook(
+    ({ source }) => useVectorThumbs(cells, visible, VECTOR_LEVEL, source, 256),
+    { initialProps: { source: 'census-naive' } });
+
+  await waitFor(() => expect(result.current.size).toBe(2));
+  vi.mocked(fetchText).mockClear();
+
+  rerender({ source: 'census-occt' });
+  await waitFor(() => expect(vi.mocked(fetchText).mock.calls.map((c) => c[0]))
+    .toEqual(expect.arrayContaining([
+      expect.stringContaining('/census-occt/a.svg'),
+      expect.stringContaining('/census-occt/b.svg'),
+    ])));
+  await waitFor(() => expect(result.current.size).toBe(2));
 });

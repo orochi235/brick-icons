@@ -91,10 +91,6 @@ export function CorpusWall({ client }: { client: LabClient }) {
   const sheets = view?.sheets ?? {};
   const drawnSource = view?.source ?? source;
 
-  // Reset to the middle rung on a slot change -- the old level belonged to
-  // the previous corpus and camera.scale hasn't re-fired pickLevel yet.
-  useEffect(() => { setLevel(32); }, [drawnSource]);
-
   const shown = useMemo(
     () => (cells ? applySelection(cells, selection) : []),
     [cells, selection]);
@@ -158,6 +154,8 @@ export function CorpusWall({ client }: { client: LabClient }) {
     updateCam({ x: 0, y: 0, scale: fitted.scale });
   }, [laid.bounds.w, laid.bounds.h, size.width, size.height]);
 
+  // The only thing that sets the level: a slot change must not touch it, or
+  // the wall sits on the 32px sheet until the next camera move.
   // Hysteresis governs transitions, and the first pick has nothing to be
   // hysteretic about -- the camera's first fit sets the level directly, and
   // only later camera changes route through pickLevel.

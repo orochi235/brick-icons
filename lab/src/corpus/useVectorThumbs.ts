@@ -129,6 +129,11 @@ export function useVectorThumbs(cells: Cell[], visible: number[], level: number,
     queue.current = [];
     text.current = new Map();
     arrived.current = new Map();
+    // The ref lags the state by a commit, and the effect below reads the ref.
+    // Clearing only the state leaves that effect holding the previous slot's
+    // rasters, which a parked camera makes look exactly the right size to
+    // keep -- so the new slot is never drawn until the camera moves.
+    rasterRef.current = new Map();
     setRaster(new Map());
   }, [source]);
 
