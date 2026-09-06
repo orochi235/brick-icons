@@ -19,11 +19,11 @@ export type Palette = Record<CellState, CellStyle>;
 // literal rather than drifting to a close-but-different one.
 export const DEFAULT_PALETTE: Palette = {
   unknown: { fill: '#3a3a3f', border: null, weight: null },
-  timeout: { fill: '#42302a', border: '#c86a42', weight: 'thick' },
-  failed: { fill: '#4a2626', border: '#e03030', weight: 'thick' },
-  defect: { fill: '#463a20', border: '#e8a020', weight: 'thick' },
-  problemElsewhere: { fill: '#42302a', border: '#c86a42', weight: 'thin' },
-  defectElsewhere: { fill: '#463a20', border: '#e8a020', weight: 'thin' },
+  timeout: { fill: '#26383f', border: '#30b0d0', weight: 'thick' },
+  failed: { fill: '#3a2a42', border: '#c050e0', weight: 'thick' },
+  defect: { fill: '#4a2626', border: '#e03030', weight: 'thick' },
+  problemElsewhere: { fill: '#26383f', border: '#97bcc5', weight: 'thin' },
+  defectElsewhere: { fill: '#4a2626', border: '#ce9e9e', weight: 'thin' },
 };
 
 const PROPERTY: Record<CellState, { fill: string; border: string | null }> = {

@@ -4,16 +4,16 @@
  * close-but-different one; see `palette.ts` for the values these mirror. */
 .lk-root {
   --corpus-cell-unknown-fill: #3a3a3f;
-  --corpus-cell-timeout-fill: #42302a;
-  --corpus-cell-timeout-border: #c86a42;
-  --corpus-cell-failed-fill: #4a2626;
-  --corpus-cell-failed-border: #e03030;
-  --corpus-cell-defect-fill: #463a20;
-  --corpus-cell-defect-border: #e8a020;
-  --corpus-cell-problem-elsewhere-fill: #42302a;
-  --corpus-cell-problem-elsewhere-border: #c86a42;
-  --corpus-cell-defect-elsewhere-fill: #463a20;
-  --corpus-cell-defect-elsewhere-border: #e8a020;
+  --corpus-cell-timeout-fill: #26383f;
+  --corpus-cell-timeout-border: #30b0d0;
+  --corpus-cell-failed-fill: #3a2a42;
+  --corpus-cell-failed-border: #c050e0;
+  --corpus-cell-defect-fill: #4a2626;
+  --corpus-cell-defect-border: #e03030;
+  --corpus-cell-problem-elsewhere-fill: #26383f;
+  --corpus-cell-problem-elsewhere-border: #97bcc5;
+  --corpus-cell-defect-elsewhere-fill: #4a2626;
+  --corpus-cell-defect-elsewhere-border: #ce9e9e;
 
   /* The wall is full-bleed under the shell header -- the workspace padding
    * is meant for a tile grid, not this single canvas. */
