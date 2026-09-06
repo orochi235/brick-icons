@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MARKS } from '@lab/corpus/badges';
+import { BADGE_FACE, BADGE_WEIGHT, drawBadge } from '@lab/corpus/badges';
 import { CORNER_BADGES, STRIP_BADGES, type CellBadge } from '@lab/corpus/paint';
 
 /** Every badge at the sizes the wall actually draws them, on one shared
@@ -16,11 +16,6 @@ const ROW = 130;
 const WEIGHT = 400;
 const FACE = 'ui-monospace, monospace';
 
-function fontFor(badge: CellBadge, size: number): string {
-  return `${badge.style ?? 'normal'} ${badge.weight ?? WEIGHT} `
-    + `${size * (badge.scale ?? 1)}px ${badge.font ?? FACE}`;
-}
-
 function draw(canvas: HTMLCanvasElement, entries: [string, CellBadge][]) {
   const dpr = window.devicePixelRatio || 1;
   const w = COL * entries.length;
@@ -35,7 +30,7 @@ function draw(canvas: HTMLCanvasElement, entries: [string, CellBadge][]) {
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, w, h);
   ctx.fillStyle = '#333333';
-  ctx.font = `13px ${FACE}`;
+  ctx.font = `13px ${BADGE_FACE}`;
   ctx.textAlign = 'center';
   entries.forEach(([name], i) => ctx.fillText(name, i * COL + COL / 2, 22));
 
@@ -43,46 +38,18 @@ function draw(canvas: HTMLCanvasElement, entries: [string, CellBadge][]) {
     const radius = size * 0.72;
     const mid = 40 + r * ROW + ROW / 2;
     ctx.save();
-    ctx.font = `${WEIGHT} ${size}px ${FACE}`;
+    ctx.font = `${BADGE_WEIGHT} ${size}px ${BADGE_FACE}`;
     const baseline = mid + ctx.measureText('H').actualBoundingBoxAscent / 2;
     ctx.restore();
-    for (const [i, [, badge]] of entries.entries()) {
-      const cx = i * COL + COL / 2;
-      const font = fontFor(badge, size);
-      let cy = mid;
-      if (badge.text) {
-        ctx.save();
-        ctx.font = font;
-        const m = ctx.measureText(badge.text);
-        cy = baseline - (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2;
-        ctx.restore();
-      }
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-      ctx.fillStyle = badge.field;
-      ctx.fill();
-      if (badge.stroke) {
-        ctx.lineWidth = Math.max(1, radius * 0.16);
-        ctx.strokeStyle = badge.stroke;
-        ctx.stroke();
-      }
-      ctx.fillStyle = badge.ink;
-      const mark = badge.mark ? MARKS[badge.mark] : undefined;
-      if (mark) {
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.scale(radius * 0.66, radius * 0.66);
-        mark(ctx, badge.field);
-        ctx.restore();
-      } else if (badge.text) {
-        ctx.font = font;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'alphabetic';
-        ctx.fillText(badge.text, cx, baseline);
-      }
-      ctx.restore();
-    }
+    entries.forEach(([, badge], i) => {
+      // Through the wall's own drawBadge, never a copy of it: a preview that
+      // forks the draw path stops being evidence about the wall, which is
+      // how duplo's ring went on looking a size larger than every other
+      // badge after the wall had stopped drawing it that way.
+      drawBadge(ctx, badge, {
+        cx: i * COL + COL / 2, cy: mid, size, radius, baseline,
+      });
+    });
   }
 }
 

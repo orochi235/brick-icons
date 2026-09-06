@@ -9,7 +9,7 @@ import {
 import { LoupeBubble, resolveLoupe, useLoupe } from '@weasel-js/labkit/loupe';
 import { adjacent, impliedCaret, type Direction } from '@lab/corpus/caret';
 import type { Band, Rect } from '@lab/corpus/layout';
-import { MARKS } from '@lab/corpus/badges';
+import { BADGE_FACE, BADGE_WEIGHT, drawBadge } from '@lab/corpus/badges';
 import { badgeGeometry, captionSize, cornerPad, LINKED_BADGE, paintCommands,
   RETIRED_WASH, stripGeometry, type Appearance, type CellBadge, type CellCaption,
   type PaintCommand } from '@lab/corpus/paint';
@@ -20,12 +20,6 @@ import type { TintMode } from '@lab/corpus/tint';
 import type { Cell, SheetManifest } from '@lab/corpus/types';
 import { visibleRange } from '@lab/corpus/visible';
 import '@lab/corpus/Wall.css';
-
-// Lighter than the caption it sits beside would suggest: a badge letter is
-// reversed out of a solid field, and reversed type gains weight optically --
-// at 600 the Greek psi filled its disc.
-const BADGE_WEIGHT = 400;
-const BADGE_FACE = 'ui-monospace, monospace';
 
 const ARROW_DIRECTION: Record<string, Direction> = {
   ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
@@ -138,62 +132,6 @@ function drawSticker(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: n
 // A filled disc in one corner, on the letterbox margin rather than the
 // drawing, which is centered. Reversed out so it reads over ink and over the
 // white ground alike.
-function drawBadge(ctx: CanvasRenderingContext2D, badge: CellBadge,
-                   at: { cx: number; cy: number; size: number; radius: number;
-                         baseline?: number }) {
-  const { cx, size, radius } = at;
-  const font = `${badge.style ?? 'normal'} ${badge.weight ?? BADGE_WEIGHT} `
-    + `${size * (badge.scale ?? 1)}px ${badge.font ?? BADGE_FACE}`;
-  // A glyph sits in its own place in the em box -- a lowercase `d` climbs to
-  // its ascender, a `+` sits on the math axis -- so the disc centers on the
-  // ink this badge actually draws, measured, while the baseline stays shared
-  // with the part number beside it.
-  let cy = at.cy;
-  if (at.baseline != null && badge.text) {
-    ctx.save();
-    ctx.font = font;
-    const m = ctx.measureText(badge.text);
-    const asc = m.actualBoundingBoxAscent;
-    const desc = m.actualBoundingBoxDescent;
-    ctx.restore();
-    if (Number.isFinite(asc) && Number.isFinite(desc)) cy = at.baseline - (asc - desc) / 2;
-  }
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-  ctx.fillStyle = badge.field;
-  ctx.fill();
-  // Only where the field would vanish into the cell: duplo is red on white
-  // and every baked thumbnail sits on THUMB_GROUND.
-  if (badge.stroke) {
-    ctx.lineWidth = Math.max(1, radius * 0.16);
-    ctx.strokeStyle = badge.stroke;
-    ctx.stroke();
-  }
-  ctx.fillStyle = badge.ink;
-  const mark = badge.mark ? MARKS[badge.mark] : undefined;
-  if (mark) {
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.scale(radius * 0.66, radius * 0.66);
-    mark(ctx, badge.field);
-    ctx.restore();
-  } else if (badge.text) {
-    ctx.font = font;
-    ctx.textAlign = 'center';
-    if (at.baseline != null) {
-      // On the part number's own baseline, so `4761 T d` reads as one line
-      // rather than as a caption with ornaments floating beside it.
-      ctx.textBaseline = 'alphabetic';
-      ctx.fillText(badge.text, cx, at.baseline);
-    } else {
-      ctx.textBaseline = 'middle';
-      ctx.fillText(badge.text, cx, cy);
-    }
-  }
-  ctx.restore();
-}
-
 /** Where a corner badge's disc sits. Shared with the hit test, so a click
  *  cannot land somewhere the disc is not drawn. */
 export function cornerBadgeAt(badge: CellBadge,

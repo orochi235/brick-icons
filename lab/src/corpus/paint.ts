@@ -178,7 +178,7 @@ export const PROPERTY_FIELD = '#4a4a4f';
  *  properties, which stack. Tag order, which `tags.TAGS` already sets. */
 export const STRIP_BADGES: Record<string, CellBadge> = {
   // LDraw's own Yellow, the color a bare minifig head is moulded in.
-  minifig: { tag: 'minifig', mark: 'minifig', field: '#f2cd37', ink: '#2b2b2b' },
+  minifig: { tag: 'minifig', mark: 'minifig', field: '#f2cd37', ink: '#ffffff' },
   technic: { tag: 'technic', mark: 'technic', field: '#1b2a5e', ink: '#ffffff' },
   duplo: { tag: 'duplo', text: 'd', field: '#ffffff', ink: '#c8102e',
            stroke: '#c8102e', font: SYSTEM_FACE, weight: 700, scale: 1.18 },
@@ -189,7 +189,7 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
   electric: { tag: 'electric', mark: 'bolt', field: '#101014', ink: '#ffd60a' },
   magnet: { tag: 'magnet', mark: 'magnet', field: PROPERTY_FIELD, ink: '#ffffff' },
   printed: { tag: 'printed', mark: 'brush', field: PROPERTY_FIELD, ink: '#ffffff' },
-  composite: { tag: 'composite', text: '+', field: PROPERTY_FIELD, ink: '#ffffff' },
+  composite: { tag: 'composite', text: '\u00d7', field: PROPERTY_FIELD, ink: '#ffffff' },
 };
 
 /** The badge that links somewhere when clicked. Only one does. */
