@@ -91,7 +91,7 @@ def brush():
     left, right = [], []
     for i in range(n):
         u = i / (n - 1)
-        heading = -math.pi / 2 - 1.05 * u ** 2.2
+        heading = -math.pi / 2 - 1.25 * u ** 1.7
         x += math.cos(heading) * step
         y += math.sin(heading) * step
         w = max(radius * (1.0 - u ** 1.25) ** 0.75, 3.0)
@@ -218,7 +218,9 @@ if __name__ == "__main__":
     print(f"MAGNET_CUT: {len(cuts)} pieces")
 
     brush_pts = brush()
-    tip_xy = brush_pts[len(brush_pts) // 2 - 1]
+    # The topmost point of the outline. Not its midpoint: the outline is a
+    # resampled ring now, and the midpoint of one is nowhere in particular.
+    tip_xy = min(brush_pts, key=lambda pt: pt[1])
     cuts = contract(brush_pts, 0.0, Point(tip_xy).buffer(250.0))
     out.append(emit_many("BRUSH_CUT", cuts))
     print(f"BRUSH_CUT: {len(cuts)} pieces")
