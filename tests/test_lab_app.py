@@ -433,3 +433,45 @@ def test_thumb_route_refuses_an_unknown_slot(tmp_path):
 def test_thumb_route_refuses_traversal(tmp_path):
     assert _corpus_client(tmp_path).get(
         "/api/thumbs/naive/128/..%2F..%2Fcorpus.db").status_code in (400, 404)
+
+
+def _render_client(tmp_path, render_path="out/census/renders/naive/3001.svg"):
+    from brick_icons import db
+    conn = db.connect(tmp_path / "corpus.db")
+    conn.execute("INSERT INTO parts (id, title, category, printed, obsolete, "
+                 "status) VALUES ('3001', 'Brick 2 x 4', 'Brick', 0, 0, 'good')")
+    conn.execute(
+        "INSERT INTO renders (part_id, source, config_key, made_at, path, "
+        "sha256) VALUES ('3001', 'naive', 'default', ?, ?, 'deadbeef')",
+        (db.now(), render_path))
+    conn.commit()
+    conn.close()
+    svg = tmp_path / "out" / "census" / "renders" / "naive" / "3001.svg"
+    svg.parent.mkdir(parents=True, exist_ok=True)
+    svg.write_text("<svg viewBox='0 0 256 170'></svg>")
+    return TestClient(lab_app.create_app(
+        root=tmp_path, cache_root=tmp_path / "cache", corpus_db=tmp_path / "corpus.db"))
+
+
+def test_render_route_serves_a_real_render(tmp_path):
+    r = _render_client(tmp_path).get("/api/corpus/render/naive/3001.svg")
+    assert r.status_code == 200
+    assert "<svg" in r.text
+
+
+def test_render_route_404s_an_unknown_part(tmp_path):
+    assert _render_client(tmp_path).get(
+        "/api/corpus/render/naive/9999.svg").status_code == 404
+
+
+def test_render_route_400s_an_unknown_slot(tmp_path):
+    assert _render_client(tmp_path).get(
+        "/api/corpus/render/nonsense/3001.svg").status_code == 400
+
+
+def test_render_route_refuses_escaping_the_store(tmp_path):
+    outside = tmp_path.parent / "outside-3001.svg"
+    outside.write_text("<svg>not in the store</svg>")
+    r = _render_client(tmp_path, render_path="../outside-3001.svg").get(
+        "/api/corpus/render/naive/3001.svg")
+    assert r.status_code == 404

@@ -28,6 +28,7 @@ export interface WallProps {
   sheet: HTMLImageElement | null;
   manifest: SheetManifest | null;
   loose: Map<string, HTMLImageElement>;
+  vector: Map<string, CanvasImageSource>;
   width: number;
   height: number;
   highlight: CellState | null;
@@ -121,7 +122,7 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
  *
  *  Canvas2D holds today's corpus. When weasel's mega view exists this body is
  *  what it replaces; nothing above it knows what an atlas page is. */
-export function Wall({ cells, rects, cam, sheet, manifest, loose, width, height,
+export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width, height,
                        highlight, explicitCaret, onExplicitCaretChange,
                        onPan, onPick, onOpen,
                        dragThresholdPx = DEFAULT_PARAMS.dragThresholdPx,
@@ -197,12 +198,12 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, width, height,
     ctx.clearRect(0, 0, width, height);
     ctx.imageSmoothingEnabled = true;
     for (const cmd of paintCommands({
-      cells, rects, visible, cam, manifest, palette, loose, highlight, caret: caretIndex,
+      cells, rects, visible, cam, manifest, palette, loose, vector, highlight, caret: caretIndex,
       appearance,
     })) {
       drawPaintCommand(ctx, cmd, sheet, palette);
     }
-  }, [cells, rects, visible, cam, sheet, manifest, palette, loose, highlight, caretIndex,
+  }, [cells, rects, visible, cam, sheet, manifest, palette, loose, vector, highlight, caretIndex,
       appearance, width, height]);
 
   // The lens shows a magnified crop of what is already on screen -- zooming
@@ -227,13 +228,13 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, width, height,
     const magCam = zoomAt(cam, loupe.aim, loupe.factor);
     const offset = { x: d / 2 - loupe.aim.x, y: d / 2 - loupe.aim.y };
     for (const cmd of paintCommands({
-      cells, rects, visible, cam: magCam, manifest, palette, loose, highlight, caret: caretIndex,
+      cells, rects, visible, cam: magCam, manifest, palette, loose, vector, highlight, caret: caretIndex,
       appearance,
     })) {
       drawPaintCommand(ctx, cmd, sheet, palette, offset);
     }
   }, [loupe.visible, loupe.aim, loupe.factor, loupeCapability.diameter,
-      cells, rects, visible, cam, sheet, manifest, palette, loose, highlight, caretIndex,
+      cells, rects, visible, cam, sheet, manifest, palette, loose, vector, highlight, caretIndex,
       appearance, width, height]);
 
   const hitTest = (e: { clientX: number; clientY: number;

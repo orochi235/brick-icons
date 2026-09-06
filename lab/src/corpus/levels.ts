@@ -1,7 +1,12 @@
 import { DEFAULT_PARAMS } from '@lab/corpus/params';
 
-/** The on-screen cell size each baked level is meant to cover. */
-const BANDS: readonly [number, number][] = [[8, 16], [32, 64], [128, Infinity]];
+/** Not a raster size -- the rung above the 128px loose PNG, where a cell
+ *  draws its live SVG instead of upscaling that PNG. */
+export const VECTOR_LEVEL = 512;
+
+/** The on-screen cell size each baked level is meant to cover. Past the last
+ *  raster rung (128px) a cell wants the vector instead of a bigger bake. */
+const BANDS: readonly [number, number][] = [[8, 16], [32, 64], [128, 128], [VECTOR_LEVEL, Infinity]];
 
 /** The level a cell of `px` on screen wants, ignoring what is loaded. */
 export function levelFor(px: number): number {

@@ -1,10 +1,18 @@
 import { expect, it } from 'vitest';
-import { levelFor, pickLevel } from '@lab/corpus/levels';
+import { levelFor, pickLevel, VECTOR_LEVEL } from '@lab/corpus/levels';
 
 it('picks the coarsest level that covers the on-screen cell size', () => {
   expect(levelFor(4)).toBe(8);
   expect(levelFor(20)).toBe(32);
-  expect(levelFor(200)).toBe(128);
+  expect(levelFor(100)).toBe(128);
+  expect(levelFor(200)).toBe(VECTOR_LEVEL);
+});
+
+it('holds the 128/vector dead zone the same way as every other boundary', () => {
+  // The 128 boundary's dead zone is [128*0.67, 128*1.5] = [85.8, 192].
+  expect(pickLevel(128, 150)).toBe(128);           // wants vector, not past 192 yet
+  expect(pickLevel(VECTOR_LEVEL, 100)).toBe(VECTOR_LEVEL); // wants 128, not below 85.8 yet
+  expect(pickLevel(128, 250)).toBe(VECTOR_LEVEL);
 });
 
 it('holds the current level across the whole hysteresis dead zone', () => {

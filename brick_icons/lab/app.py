@@ -280,9 +280,12 @@ def create_app(root: Path | str = ".",
                                      "scripts/build-corpus-db.py")
         return corpus_db_module.connect(app.state.corpus_db)
 
-    def _slot(source: str) -> Path:
+    def _check_source(source: str) -> None:
         if source not in corpus_db_module.SOURCES:
             raise HTTPException(400, f"no such slot: {source}")
+
+    def _slot(source: str) -> Path:
+        _check_source(source)
         return Path(app.state.thumbs_root) / source
 
     @app.get("/api/corpus/cells")
@@ -359,6 +362,30 @@ def create_app(root: Path | str = ".",
         if not path.is_file():
             raise HTTPException(404, "no such thumbnail")
         return FileResponse(path)
+
+    @app.get("/api/corpus/render/{source}/{part_id}.svg")
+    def get_corpus_render(source: str, part_id: str):
+        """A part's rendered SVG for a slot, for the wall's vector rung.
+
+        The path a caller could smuggle in is never trusted -- only `source`
+        and `part_id` reach the filesystem, and only after `renders` names a
+        row for them, so there is nothing here to traverse with.
+        """
+        _check_source(source)
+        conn = corpus_conn()
+        try:
+            row = conn.execute(
+                "SELECT path FROM renders WHERE source = ? AND part_id = ? "
+                "LIMIT 1", (source, part_id)).fetchone()
+        finally:
+            conn.close()
+        if row is None:
+            raise HTTPException(404, "no such render")
+        render_root = Path(app.state.root).resolve()
+        path = (render_root / row["path"]).resolve()
+        if render_root not in path.parents or not path.is_file():
+            raise HTTPException(404, "no such render")
+        return FileResponse(path, media_type="image/svg+xml")
 
     ldraw = app.state.ldraw_dir
     if Path(ldraw).is_dir():
