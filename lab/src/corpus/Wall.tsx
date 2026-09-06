@@ -6,7 +6,7 @@ import {
 import { LoupeBubble, resolveLoupe, useLoupe } from '@weasel-js/labkit/loupe';
 import type { Rect } from '@lab/corpus/layout';
 import { paintCommands, type PaintCommand } from '@lab/corpus/paint';
-import { DEFAULT_PALETTE, readPalette, type Palette } from '@lab/corpus/palette';
+import { DEFAULT_PALETTE, readPalette, type CellState, type Palette } from '@lab/corpus/palette';
 import type { Cell, SheetManifest } from '@lab/corpus/types';
 import { visibleRange } from '@lab/corpus/visible';
 import '@lab/corpus/Wall.css';
@@ -20,6 +20,7 @@ export interface WallProps {
   loose: Map<string, HTMLImageElement>;
   width: number;
   height: number;
+  highlight: CellState | null;
   onPan: (next: View) => void;
   onPick: (cell: Cell, at: { x: number; y: number }) => void;
   onOpen: (cell: Cell) => void;
@@ -59,11 +60,17 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
   const dx = cmd.dx + offset.x;
   const dy = cmd.dy + offset.y;
   if (cmd.kind === 'sprite' && sheet) {
+    ctx.save();
+    ctx.globalAlpha = cmd.alpha ?? 1;
     ctx.drawImage(sheet, cmd.sx, cmd.sy, cmd.sw, cmd.sh, dx, dy, cmd.dw, cmd.dh);
     if (cmd.ring) strokeRing(ctx, { ...cmd, dx, dy }, palette);
+    ctx.restore();
   } else if (cmd.kind === 'image') {
+    ctx.save();
+    ctx.globalAlpha = cmd.alpha ?? 1;
     ctx.drawImage(cmd.image, dx, dy, cmd.dw, cmd.dh);
     if (cmd.ring) strokeRing(ctx, { ...cmd, dx, dy }, palette);
+    ctx.restore();
   } else if (cmd.kind === 'fill') {
     ctx.fillStyle = cmd.fill;
     ctx.fillRect(dx, dy, cmd.dw, cmd.dh);
@@ -85,7 +92,7 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
  *  Canvas2D holds today's corpus. When weasel's mega view exists this body is
  *  what it replaces; nothing above it knows what an atlas page is. */
 export function Wall({ cells, rects, cam, sheet, manifest, loose, width, height,
-                       onPan, onPick, onOpen }: WallProps) {
+                       highlight, onPan, onPick, onOpen }: WallProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [dragging, setDragging] = useState(false);
   const decay = useDecayLoop();
@@ -139,10 +146,10 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, width, height,
     ctx.clearRect(0, 0, width, height);
     ctx.imageSmoothingEnabled = true;
     const visible = visibleRange(rects, cam, { width, height });
-    for (const cmd of paintCommands({ cells, rects, visible, cam, manifest, palette, loose })) {
+    for (const cmd of paintCommands({ cells, rects, visible, cam, manifest, palette, loose, highlight })) {
       drawPaintCommand(ctx, cmd, sheet, palette);
     }
-  }, [cells, rects, cam, sheet, manifest, palette, loose, width, height]);
+  }, [cells, rects, cam, sheet, manifest, palette, loose, highlight, width, height]);
 
   // The lens shows a magnified crop of what is already on screen -- zooming
   // in about a fixed point never brings a cell into view that the outer
@@ -166,11 +173,11 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, width, height,
     const magCam = zoomAt(cam, loupe.aim, loupe.factor);
     const offset = { x: d / 2 - loupe.aim.x, y: d / 2 - loupe.aim.y };
     const visible = visibleRange(rects, cam, { width, height });
-    for (const cmd of paintCommands({ cells, rects, visible, cam: magCam, manifest, palette, loose })) {
+    for (const cmd of paintCommands({ cells, rects, visible, cam: magCam, manifest, palette, loose, highlight })) {
       drawPaintCommand(ctx, cmd, sheet, palette, offset);
     }
   }, [loupe.visible, loupe.aim, loupe.factor, loupeCapability.diameter,
-      cells, rects, cam, sheet, manifest, palette, loose, width, height]);
+      cells, rects, cam, sheet, manifest, palette, loose, highlight, width, height]);
 
   const hitTest = (e: { clientX: number; clientY: number;
                          currentTarget: HTMLCanvasElement }) => {

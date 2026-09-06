@@ -56,6 +56,33 @@ beforeEach(() => {
     .mockReturnValue(rect(800, 600));
 });
 
+// The legend's `FloatingPanel` observes its own size with a second, real
+// `ResizeObserver` -- a single captured callback can no longer stand in for
+// "the one that watches the stage", so each instance records what it
+// observed and the test picks out the one watching `.corpus-stage`.
+class CapturingResizeObserver {
+  static instances: CapturingResizeObserver[] = [];
+  targets: Element[] = [];
+  constructor(public cb: ResizeObserverCallback) { CapturingResizeObserver.instances.push(this); }
+  observe(el: Element) { this.targets.push(el); }
+  unobserve() {}
+  disconnect() {}
+}
+
+function installCapturingResizeObserver() {
+  CapturingResizeObserver.instances = [];
+  const original = globalThis.ResizeObserver;
+  (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = CapturingResizeObserver;
+  return () => { (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = original; };
+}
+
+function stageResizeCallback(container: HTMLElement): ResizeObserverCallback {
+  const stage = container.querySelector('.corpus-stage')!;
+  const observer = CapturingResizeObserver.instances.find((i) => i.targets.includes(stage));
+  if (!observer) throw new Error('no ResizeObserver is watching .corpus-stage');
+  return observer.cb;
+}
+
 afterEach(() => { vi.restoreAllMocks(); });
 
 it('says it is loading before the cells arrive', () => {
@@ -107,16 +134,7 @@ it('opens the lightbox on a double click with no card flash', async () => {
 });
 
 it('opens on the level the initial fit asks for, and holds it through a jiggle', async () => {
-  let observed: ResizeObserverCallback | null = null;
-  class CapturingResizeObserver {
-    constructor(cb: ResizeObserverCallback) { observed = cb; }
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  }
-  const original = globalThis.ResizeObserver;
-  (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver =
-    CapturingResizeObserver;
+  const restore = installCapturingResizeObserver();
 
   const fit = vi.mocked(core.fitViewToBounds);
   const pick = vi.mocked(levels.pickLevel);
@@ -137,7 +155,8 @@ it('opens on the level the initial fit asks for, and holds it through a jiggle',
 
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
       .mockReturnValue(rect(801, 601));
-    act(() => { observed!([] as unknown as ResizeObserverEntry[], {} as any); });
+    const onResize = stageResizeCallback(container);
+    act(() => { onResize([] as unknown as ResizeObserverEntry[], {} as any); });
     await waitFor(() => expect(pick).toHaveBeenCalled());
 
     // The jiggle re-fits at the same scale; pickLevel should see the level
@@ -145,21 +164,12 @@ it('opens on the level the initial fit asks for, and holds it through a jiggle',
     expect(pick.mock.calls[0]![0]).toBe(8);
     expect(pick.mock.results[0]!.value).toBe(8);
   } finally {
-    (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = original;
+    restore();
   }
 });
 
 it('re-fits the camera when the observed size changes, but not after a wheel', async () => {
-  let observed: ResizeObserverCallback | null = null;
-  class CapturingResizeObserver {
-    constructor(cb: ResizeObserverCallback) { observed = cb; }
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  }
-  const original = globalThis.ResizeObserver;
-  (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver =
-    CapturingResizeObserver;
+  const restore = installCapturingResizeObserver();
   const fit = vi.mocked(core.fitViewToBounds);
   fit.mockClear();
 
@@ -171,7 +181,8 @@ it('re-fits the camera when the observed size changes, but not after a wheel', a
 
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
       .mockReturnValue(rect(1000, 700));
-    act(() => { observed!([] as unknown as ResizeObserverEntry[], {} as any); });
+    const onResize = stageResizeCallback(container);
+    act(() => { onResize([] as unknown as ResizeObserverEntry[], {} as any); });
     await waitFor(() => expect(fit.mock.calls.length).toBeGreaterThan(initial));
 
     const stage = container.querySelector('.corpus-stage')!;
@@ -180,10 +191,10 @@ it('re-fits the camera when the observed size changes, but not after a wheel', a
 
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
       .mockReturnValue(rect(1200, 900));
-    act(() => { observed!([] as unknown as ResizeObserverEntry[], {} as any); });
+    act(() => { onResize([] as unknown as ResizeObserverEntry[], {} as any); });
     await new Promise((r) => setTimeout(r, 0));
     expect(fit.mock.calls.length).toBe(afterWheel);
   } finally {
-    (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = original;
+    restore();
   }
 });

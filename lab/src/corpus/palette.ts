@@ -37,7 +37,19 @@ const PROPERTY: Record<CellState, { fill: string; border: string | null }> = {
                       border: '--corpus-cell-defect-elsewhere-border' },
 };
 
-const CELL_STATES = Object.keys(DEFAULT_PALETTE) as CellState[];
+/** Iteration order for every table keyed by state -- worst-here-first then
+ *  worst-elsewhere, matching `cellState`'s precedence. */
+export const CELL_STATES = Object.keys(DEFAULT_PALETTE) as CellState[];
+
+/** What each state is called on the legend. */
+export const STATE_LABEL: Record<CellState, string> = {
+  unknown: 'unknown',
+  timeout: 'timed out here',
+  failed: 'cannot be drawn here',
+  defect: 'open defect here',
+  problemElsewhere: 'problem in another slot',
+  defectElsewhere: 'defect in another slot',
+};
 
 function readVar(styles: CSSStyleDeclaration, prop: string, fallback: string): string {
   const value = styles.getPropertyValue(prop).trim();

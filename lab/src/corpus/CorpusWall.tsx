@@ -7,8 +7,10 @@ import type { LabClient } from '@lab/api/client';
 import { clampWallView } from '@lab/corpus/clamp';
 import { FilterBar } from '@lab/corpus/FilterBar';
 import { gridLayout } from '@lab/corpus/layout';
+import { Legend } from '@lab/corpus/Legend';
 import { levelFor, pickLevel } from '@lab/corpus/levels';
 import { Lightbox } from '@lab/corpus/Lightbox';
+import type { CellState } from '@lab/corpus/palette';
 import { PartCard } from '@lab/corpus/PartCard';
 import { applySelection, type Selection } from '@lab/corpus/select';
 import { useCells } from '@lab/corpus/useCells';
@@ -39,6 +41,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
   const [cam, setCam] = useState<View | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
   const [carded, setCarded] = useState<{ cell: Cell; at: { x: number; y: number } } | null>(null);
+  const [highlight, setHighlight] = useState<CellState | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const { width, height } = useCanvasSize(box);
   const size = { width, height };
@@ -134,6 +137,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
             <Wall cells={shown} rects={laid.rects} cam={cam}
                   sheet={active?.image ?? null} manifest={active?.manifest ?? null}
                   loose={loose} width={size.width} height={size.height}
+                  highlight={highlight}
                   onPan={(next) => { touched.current = true; updateCam(next); }}
                   onPick={(c, at) => setCarded({ cell: c, at })}
                   onOpen={(c) => { setCarded(null); setPicked(c.id); }} />
@@ -143,6 +147,9 @@ export function CorpusWall({ client }: { client: LabClient }) {
                       viewport={size}
                       onOpen={(id) => { setCarded(null); setPicked(id); }}
                       onClose={() => setCarded(null)} />
+          )}
+          {cells && (
+            <Legend cells={cells} highlight={highlight} onHighlight={setHighlight} />
           )}
         </div>
         {picked && (

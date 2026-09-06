@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
-import { fillFor, paintCommands } from '@lab/corpus/paint';
-import { DEFAULT_PALETTE as CELL_FILL } from '@lab/corpus/palette';
+import { cellState, fillFor, paintCommands, tally } from '@lab/corpus/paint';
+import { CELL_STATES, DEFAULT_PALETTE as CELL_FILL } from '@lab/corpus/palette';
 import type { Cell, SheetManifest } from '@lab/corpus/types';
 
 const cell = (id: string, index: number, sha: string | null,
@@ -183,6 +183,90 @@ it('draws a thinner border for a problem elsewhere than for one here', () => {
   });
   expect((elsewhere as { borderWidth: number }).borderWidth)
     .toBeLessThan((here as { borderWidth: number }).borderWidth);
+});
+
+it('gives every state cellState can produce an entry in the palette', () => {
+  const cells: Cell[] = [
+    cell('a', 0, null, { open_defects: 1 }),
+    cell('b', 1, null, { error: 'TimeoutError' }),
+    cell('c', 2, null, { error: 'GEOSException' }),
+    cell('d', 3, null, { open_defects_elsewhere: 1 }),
+    cell('e', 4, null, { error_elsewhere: true }),
+    cell('f', 5, null),
+  ];
+  for (const c of cells) {
+    expect(CELL_STATES).toContain(cellState(c));
+    expect(CELL_FILL[cellState(c)]).toBeDefined();
+  }
+});
+
+it('tallies each cell into its own state, and nowhere else', () => {
+  const cells: Cell[] = [
+    cell('a', 0, null, { open_defects: 1 }),
+    cell('b', 1, null, { open_defects: 2 }),
+    cell('c', 2, null, { error: 'TimeoutError' }),
+    cell('d', 3, null, { error: 'GEOSException' }),
+    cell('e', 4, null, { open_defects_elsewhere: 1 }),
+    cell('f', 5, null, { error_elsewhere: true }),
+    cell('g', 6, null),
+  ];
+  expect(tally(cells)).toEqual({
+    unknown: 1, timeout: 1, failed: 1, defect: 2,
+    problemElsewhere: 1, defectElsewhere: 1,
+  });
+});
+
+it('tallies an empty corpus as all zeros', () => {
+  expect(tally([])).toEqual({
+    unknown: 0, timeout: 0, failed: 0, defect: 0,
+    problemElsewhere: 0, defectElsewhere: 0,
+  });
+});
+
+it('leaves the highlighted state exactly as painted with no highlight at all', () => {
+  const timedOut = cell('a', 0, null, { error: 'TimeoutError' });
+  const plain = paintCommands({
+    cells: [timedOut], rects: [rects[0]!], visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest: null,
+  });
+  const matched = paintCommands({
+    cells: [timedOut], rects: [rects[0]!], visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest: null,
+    highlight: 'timeout',
+  });
+  expect(matched).toEqual(plain);
+});
+
+it('dims a fill cell outside the highlighted state to the unknown field, without a border', () => {
+  const [cmd] = paintCommands({
+    cells: [cell('a', 0, null, { open_defects: 1 })], rects: [rects[0]!], visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest: null,
+    highlight: 'timeout',
+  });
+  expect(cmd).toEqual({ kind: 'fill', dx: 0, dy: 0, dw: 10, dh: 10,
+                        fill: CELL_FILL.unknown.fill, border: null, borderWidth: 0 });
+});
+
+it('reduces alpha on a drawn cell outside the highlighted state, and leaves a matching one alone', () => {
+  const img = {} as HTMLImageElement;
+  const manifest: SheetManifest = {
+    level: 32, gutter: 2, pitch: 36, cols: 2, rows: 2, count: 4, size: 72,
+    baked: { a: 'sha-a' },
+  };
+  const [dimmed] = paintCommands({
+    cells: [cell('a', 0, 'sha-a', { error: 'TimeoutError' })], rects, visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest,
+    loose: new Map([['a', img]]), highlight: 'defect',
+  });
+  expect(dimmed).toMatchObject({ kind: 'image', alpha: expect.any(Number) });
+  expect((dimmed as { alpha: number }).alpha).toBeLessThan(1);
+
+  const [full] = paintCommands({
+    cells: [cell('a', 0, 'sha-a', { error: 'TimeoutError' })], rects, visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest,
+    loose: new Map([['a', img]]), highlight: 'timeout',
+  });
+  expect((full as { alpha?: number }).alpha).toBeUndefined();
 });
 
 it('scales the border with the drawn cell size, floored at one pixel', () => {

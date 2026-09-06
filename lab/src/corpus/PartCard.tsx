@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { cellState } from '@lab/corpus/paint';
 import type { Cell } from '@lab/corpus/types';
 import '@lab/corpus/PartCard.css';
 
@@ -9,16 +10,23 @@ const MARGIN = 8;
 // of what was clicked.
 const OFFSET = 16;
 
-/** Names what the wall's colour and ring are saying about this cell. */
-function cellState(cell: Cell): string | null {
-  if (cell.open_defects > 0)
-    return `${cell.open_defects} open defect${cell.open_defects === 1 ? '' : 's'}`;
-  if (cell.error === 'TimeoutError') return 'render timed out';
-  if (cell.error) return `cannot be drawn: ${cell.error}`;
-  if (cell.open_defects_elsewhere > 0)
-    return `${cell.open_defects_elsewhere} open defect${cell.open_defects_elsewhere === 1 ? '' : 's'} in another slot`;
-  if (cell.error_elsewhere) return 'fails in another slot';
-  return null;
+/** Names what the wall's color and ring are saying about this cell, from the
+ *  same precedence `fillFor` and the legend read. */
+function cellStateLabel(cell: Cell): string | null {
+  switch (cellState(cell)) {
+    case 'defect':
+      return `${cell.open_defects} open defect${cell.open_defects === 1 ? '' : 's'}`;
+    case 'timeout':
+      return 'render timed out';
+    case 'failed':
+      return `cannot be drawn: ${cell.error}`;
+    case 'defectElsewhere':
+      return `${cell.open_defects_elsewhere} open defect${cell.open_defects_elsewhere === 1 ? '' : 's'} in another slot`;
+    case 'problemElsewhere':
+      return 'fails in another slot';
+    case 'unknown':
+      return null;
+  }
 }
 
 export function PartCard({ cell, source, at, viewport, onOpen, onClose }: {
@@ -55,7 +63,7 @@ export function PartCard({ cell, source, at, viewport, onOpen, onClose }: {
       <p className="corpus-card-sub">
         {cell.id} · {cell.category ?? 'uncategorised'} · {cell.status}
       </p>
-      {cellState(cell) && <p className="corpus-card-state">{cellState(cell)}</p>}
+      {cellStateLabel(cell) && <p className="corpus-card-state">{cellStateLabel(cell)}</p>}
       <div className="corpus-card-body">
         {cell.sha ? (
           <img className="corpus-card-thumb" alt={`${cell.id} render`}
