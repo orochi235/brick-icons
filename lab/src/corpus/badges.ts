@@ -138,7 +138,7 @@ export const drawBrush: Mark = (ctx, field, accent) => {
 // the disc is 3.03 mark units across. Drawing the head's own silhouette
 // instead gave a shape that stopped reading below about 20px.
 export const drawMinifig: Mark = (ctx) => {
-  const drop = 0.244;   // the face group, centered in a disc that has no stud
+  const drop = 0.185;   // the face group, centered in a disc that has no stud
   ctx.beginPath();
   ctx.arc(-0.433, -0.064 - drop, 0.189, 0, Math.PI * 2);
   ctx.fill();
