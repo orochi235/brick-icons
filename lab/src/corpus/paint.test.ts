@@ -413,15 +413,20 @@ it('paints a fault we decided to live with in its own color, under every live on
     .toBe('accepted');
 });
 
-it('draws an out-of-scope cell round, and every other undrawn cell square', () => {
-  const shape = (over: Partial<Cell>) => {
+it('marks an out-of-scope cell rather than filling it, and squares the rest', () => {
+  const at = (over: Partial<Cell>, scale = 1) => {
     const [cmd] = paintCommands({
       cells: [cell('a', 0, null, over)], rects, visible: [0],
-      cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest: null,
+      cam: { x: 0, y: 0, scale: { x: scale, y: scale } }, palette: CELL_FILL,
+      manifest: null,
     });
-    return (cmd as { shape?: string }).shape;
+    return cmd as { shape?: string; glyph?: string };
   };
-  expect(shape({ out_of_scope: true })).toBe('circle');
-  expect(shape({})).toBe('square');
-  expect(shape({ error: 'TimeoutError' })).toBe('square');
+  // rects are 10 world px, so scale 4 draws a 40px cell and scale 1 a 10px one
+  expect(at({ out_of_scope: true, category: 'Sticker' }, 4))
+    .toMatchObject({ shape: 'circle', glyph: 'S' });
+  expect(at({ out_of_scope: true, category: '~Duplo' }, 4).glyph).toBe('D');
+  expect(at({ out_of_scope: true, category: 'Sticker' }, 1).glyph).toBeUndefined();
+  expect(at({}).shape).toBe('square');
+  expect(at({ error: 'TimeoutError' }).glyph).toBeUndefined();
 });

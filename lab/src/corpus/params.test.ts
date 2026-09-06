@@ -14,7 +14,7 @@ const PRE_TASK_LITERALS: Params = {
   unknownFill: '#3a3a3f',
   // No pre-task literal: the out-of-scope state was added after this
   // snapshot, so what it pins is that the state kept the color it shipped with.
-  outOfScopeFill: '#241a38',
+  outOfScopeFill: '#b2a3dd',
   timeoutFill: '#26383f',
   timeoutBorder: '#30b0d0',
   failedFill: '#4a2626',

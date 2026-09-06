@@ -81,6 +81,20 @@ export const THUMB_GROUND = '#ffffff';
  *  noticed. */
 export const RETIRED_WASH = '#d8d8d8';
 
+/** Below this a cell's category initial is a smudge, and the mark falls back
+ *  to a plain dot. */
+export const GLYPH_MIN_PX = 22;
+
+/** The letter an out-of-scope cell wears: its category's initial, so the
+ *  block of them says which category it is -- S for Sticker, D for Duplo.
+ *  Mirrors `tags.normalize_category`, whose sigils are LDraw's. */
+export function glyphFor(cell: Cell, cellPx: number,
+                         minPx = GLYPH_MIN_PX): string | undefined {
+  if (cellPx < minPx) return undefined;
+  const plain = (cell.category ?? '').replace(/^[~=_|]+/, '').trim();
+  return plain ? plain[0]!.toUpperCase() : undefined;
+}
+
 /** Below this drawn size a cell has no room for a badge without covering the
  *  drawing it is about; the year needs more room still, being words. */
 export const BADGE_MIN_PX = 56;
@@ -127,9 +141,12 @@ export type PaintCommand =
       caret?: boolean; badges?: CellBadge[]; label?: string; wash?: number }
   | { kind: 'fill'; dx: number; dy: number; dw: number; dh: number;
       fill: string; border: string | null; borderWidth: number;
-      /** Out-of-scope cells are drawn round, so a part the project is not
-       *  trying to draw does not read as one it has failed to. */
+      /** Out-of-scope cells are drawn as a mark rather than a filled square,
+       *  so a part the project is not trying to draw does not read as one it
+       *  has failed to: its category's initial where there is room for a
+       *  letter, a dot where there is not. */
       shape: 'square' | 'circle';
+      glyph?: string;
       /** Struck corner to corner in the border's own color and width. Every
        *  bordered state earns it when there is nothing drawn in the cell: the
        *  border alone reads as a tint at the zooms where most cells are small,
@@ -214,6 +231,7 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
     }
     out.push({ kind: 'fill', dx, dy, dw, dh, fill: style.fill, border, borderWidth,
                shape: state === 'outOfScope' ? 'circle' : 'square',
+               glyph: state === 'outOfScope' ? glyphFor(cell, dw) : undefined,
                slash: border !== null, caret: isCaret });
   }
   return out;

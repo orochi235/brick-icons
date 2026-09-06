@@ -13,7 +13,7 @@ body { margin: 0; }
   --corpus-thumb-ground-retired: #d8d8d8;
 
   --corpus-cell-unknown-fill: #3a3a3f;
-  --corpus-cell-out-of-scope-fill: #241a38;
+  --corpus-cell-out-of-scope-fill: #b2a3dd;
   --corpus-cell-timeout-fill: #26383f;
   --corpus-cell-timeout-border: #30b0d0;
   --corpus-cell-failed-fill: #4a2626;

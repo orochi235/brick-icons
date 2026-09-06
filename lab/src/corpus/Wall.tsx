@@ -115,7 +115,9 @@ function drawBadge(ctx: CanvasRenderingContext2D, badge: CellBadge,
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = badge.ink;
-  ctx.fillText(badge.text, cx, cy + size * 0.06);
+  // Optically centered rather than metrically: a monospace capital carries
+  // more side bearing on its left and sits high in the em box.
+  ctx.fillText(badge.text, cx + size * 0.05, cy + size * 0.08);
   ctx.restore();
 }
 
@@ -137,6 +139,11 @@ function drawLabel(ctx: CanvasRenderingContext2D, text: string, ground: string,
   ctx.fillText(text, cx, cy);
   ctx.restore();
 }
+
+/** How much of its cell a round cell fills across, and how tall its letter
+ *  stands when there is room for one. */
+const CIRCLE_SCALE = 0.6;
+const GLYPH_SCALE = 0.62;
 
 // Flattens a retired cell toward the wash color: white goes gray, ink goes
 // gray, and the whole thumbnail drops in contrast without a second bake.
@@ -190,9 +197,21 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
     if (cmd.caret) strokeCaret(ctx, { ...cmd, dx, dy }, palette);
   } else if (cmd.kind === 'fill') {
     ctx.fillStyle = cmd.fill;
-    if (cmd.shape === 'circle') {
+    if (cmd.glyph) {
+      // The category's initial, sized to the cell: a block of S says sticker
+      // at a glance, and no filled square competes with the drawings around it.
+      ctx.save();
+      ctx.font = `600 ${cmd.dh * GLYPH_SCALE}px ui-monospace, monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(cmd.glyph, dx + cmd.dw / 2, dy + cmd.dh / 2 + cmd.dh * 0.03);
+      ctx.restore();
+    } else if (cmd.shape === 'circle') {
+      // Well inside the cell: an out-of-scope part is not competing for
+      // attention with the ones the project is actually drawing.
       ctx.beginPath();
-      ctx.ellipse(dx + cmd.dw / 2, dy + cmd.dh / 2, cmd.dw / 2, cmd.dh / 2, 0, 0, Math.PI * 2);
+      ctx.ellipse(dx + cmd.dw / 2, dy + cmd.dh / 2,
+                  cmd.dw * CIRCLE_SCALE / 2, cmd.dh * CIRCLE_SCALE / 2, 0, 0, Math.PI * 2);
       ctx.fill();
     } else {
       ctx.fillRect(dx, dy, cmd.dw, cmd.dh);

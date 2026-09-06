@@ -26,8 +26,9 @@ export type Palette = Record<CellState, CellStyle> & { caret: string };
 // panel being the other reader of them.
 const CELL_PALETTE: Record<CellState, CellStyle> = {
   unknown: { fill: DEFAULT_PARAMS.unknownFill, border: null, weight: null },
-  // Borderless like `unknown`: 2,701 sticker cells in one block would read as
-  // a fenced-off region rather than a quiet one.
+  // Borderless like `unknown`, and light where every other state is dark:
+  // the cell is drawn as a small circle, so it is a mark rather than a field
+  // and cannot be mistaken for a rendered thumbnail.
   outOfScope: { fill: DEFAULT_PARAMS.outOfScopeFill, border: null, weight: null },
   timeout: { fill: DEFAULT_PARAMS.timeoutFill, border: DEFAULT_PARAMS.timeoutBorder,
              weight: 'thick' },
