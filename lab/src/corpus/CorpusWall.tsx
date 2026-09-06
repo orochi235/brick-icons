@@ -195,6 +195,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
                   explicitCaret={explicitCaret} onExplicitCaretChange={setExplicitCaret}
                   onPan={(next) => { touched.current = true; updateCam(next); }}
                   onPick={(c, at) => setCarded({ cell: c, at })}
+                  onDragStart={() => setCarded(null)}
                   onOpen={(c) => { setCarded(null); setPicked(c.id); }}
                   dragThresholdPx={params.dragThresholdPx} appearance={appearance} />
           )}

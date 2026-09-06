@@ -36,6 +36,9 @@ export interface WallProps {
   onExplicitCaretChange: (index: number | null) => void;
   onPan: (next: View) => void;
   onPick: (cell: Cell, at: { x: number; y: number }) => void;
+  /** A drag has passed the threshold and the wall is moving under whatever
+   *  is anchored to it. */
+  onDragStart?: () => void;
   onOpen: (cell: Cell) => void;
   /** A drag shorter than this is a click that wobbled, not a pan -- the same
    *  distinction `e.detail === 2` draws between a double click and two
@@ -128,7 +131,7 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
  *  what it replaces; nothing above it knows what an atlas page is. */
 export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width, height,
                        highlight, explicitCaret, onExplicitCaretChange,
-                       onPan, onPick, onOpen,
+                       onPan, onPick, onOpen, onDragStart,
                        dragThresholdPx = DEFAULT_PARAMS.dragThresholdPx,
                        appearance }: WallProps) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -286,6 +289,7 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
       if (Math.hypot(dx, dy) < dragThresholdPx) return;
       draggedRef.current = true;
       setDragging(true);
+      onDragStart?.();
     }
     handleRef.current.onMove?.(dragCtx({ x: dx, y: dy }));
   };

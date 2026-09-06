@@ -17,7 +17,7 @@ vi.mock('@lab/corpus/levels', async (importOriginal) => {
 
 const cell = (id: string, index: number, sha: string | null = null): Cell => ({
   id, index, title: `Part ${id}`, category: 'Brick', printed: false,
-  obsolete: false, base: true, status: 'unreviewed', sha, made_at: null,
+  obsolete: false, base: true, out_of_scope: false, status: 'unreviewed', sha, made_at: null,
   extra_d99: null, secs: null, error: null, open_defects: 0,
   open_defects_elsewhere: 0, error_elsewhere: false,
 });
@@ -115,6 +115,16 @@ it('raises a card on a single click', async () => {
   fireEvent.click(canvas, { clientX: 10, clientY: 10 });
   expect(await screen.findByRole('dialog', { name: /Part a/ })).toBeTruthy();
   expect(container.querySelector('.corpus-lightbox')).toBeNull();
+});
+
+it('drops the card once a drag starts moving the wall under it', async () => {
+  const { container } = render(<CorpusWall client={client} />);
+  const canvas = await findCanvas(container);
+  fireEvent.click(canvas, { clientX: 10, clientY: 10 });
+  expect(await screen.findByRole('dialog', { name: /Part a/ })).toBeTruthy();
+  fireEvent.pointerDown(canvas, { button: 0, clientX: 10, clientY: 10, pointerId: 1 });
+  fireEvent.pointerMove(canvas, { clientX: 60, clientY: 40, pointerId: 1 });
+  await waitFor(() => expect(container.querySelector('.corpus-card')).toBeNull());
 });
 
 // Both cells land fully on screen at the initial fit, but 'b' sits nearer
