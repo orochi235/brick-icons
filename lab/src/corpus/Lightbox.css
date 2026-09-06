@@ -8,9 +8,36 @@
   font: 13px/1.5 ui-monospace, monospace;
 }
 .corpus-close { position: absolute; top: 1rem; right: 1rem; }
-.corpus-big { width: 256px; height: 256px; image-rendering: pixelated; }
+/* On the ground the thumbnails are baked onto -- see `THUMB_GROUND` in
+ * paint.ts. A render is ink on transparency and this panel is dark. */
+.corpus-big {
+  width: 256px;
+  height: 256px;
+  background: var(--corpus-thumb-ground, #ffffff);
+}
+
+.corpus-slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.corpus-slot { display: flex; flex-direction: column; gap: 0.25rem; }
+.corpus-slot-name { color: var(--wzl-fg-muted); }
+.corpus-slot[data-current='true'] .corpus-slot-name { color: var(--wzl-fg); }
+.corpus-slot[data-current='true'] .corpus-big { outline: 2px solid var(--corpus-caret-color); }
 .corpus-sub { color: var(--wzl-fg-muted); }
 .corpus-lightbox td, .corpus-lightbox th {
   padding: 0.1rem 0.8rem 0.1rem 0;
   text-align: left;
+}
+
+.corpus-catalogs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  padding: 0;
+  list-style: none;
 }

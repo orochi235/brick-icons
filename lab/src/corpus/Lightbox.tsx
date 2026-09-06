@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { LabClient } from '@lab/api/client';
+import { CATALOGS } from '@lab/corpus/catalogs';
 import type { PartDetail } from '@lab/corpus/types';
 import '@lab/corpus/Lightbox.css';
 
@@ -26,6 +27,10 @@ export function Lightbox({ partId, source, client, onClose }: {
 
   useEffect(() => { closeRef.current?.focus(); }, []);
 
+  // An API older than this component sends no slots -- the lab's server is a
+  // long-lived process and outlives a reload of the page in front of it.
+  const slots = detail?.slots ?? [];
+
   return (
     <div className="corpus-lightbox" role="dialog" aria-label={`Part ${partId}`}>
       <button type="button" className="corpus-close" aria-label="Close"
@@ -38,8 +43,27 @@ export function Lightbox({ partId, source, client, onClose }: {
             {' '}{detail.part.status}
             {detail.part.status_note ? ` · ${detail.part.status_note}` : ''}
           </p>
-          <img className="corpus-big" alt={`${detail.part.id} render`}
-               src={`/api/thumbs/${source}/128/${detail.part.id}.png`} />
+          <ul className="corpus-slots">
+            {slots.map((slot) => (
+              <li key={slot.source} className="corpus-slot"
+                  data-current={slot.source === source}>
+                <img className="corpus-big" alt={`${detail.part.id} drawn by ${slot.source}`}
+                     src={`/api/corpus/render/${slot.source}/${detail.part.id}.svg`
+                          + `?v=${slot.sha256.slice(0, 8)}`} />
+                <span className="corpus-slot-name">{slot.source}</span>
+              </li>
+            ))}
+            {slots.length === 0 && <li>no slot has drawn this part</li>}
+          </ul>
+          <ul className="corpus-catalogs">
+            {CATALOGS.map((catalog) => (
+              <li key={catalog.name}>
+                <a href={catalog.url(detail.part.id)} target="_blank" rel="noopener noreferrer">
+                  {catalog.name}
+                </a>
+              </li>
+            ))}
+          </ul>
           <h3>Measurements</h3>
           <table>
             <thead>

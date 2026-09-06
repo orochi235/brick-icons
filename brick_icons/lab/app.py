@@ -334,9 +334,13 @@ def create_app(root: Path | str = ".",
                 "FROM measurements m JOIN runs r ON r.id = m.run_id "
                 "WHERE m.part_id = ? ORDER BY r.started DESC LIMIT 20",
                 (part_id,))]
+            slots = [dict(r) for r in conn.execute(
+                "SELECT source, sha256, made_at FROM renders WHERE part_id = ? "
+                "ORDER BY source", (part_id,))]
         finally:
             conn.close()
         return {"part": dict(row), "findings": found, "runs": runs,
+                "slots": slots,
                 "defects": [d for d in defects.load(app.state.defects_path)
                             if d["part"] == part_id]}
 
