@@ -57,8 +57,8 @@ export const drawStar: Mark = (ctx) => {
 // Kept well inside the unit box: a full-extent rectangle puts its corners at
 // 1.41, which is almost the field's edge.
 export const drawArchive: Mark = (ctx) => {
-  ctx.fillRect(-0.82, -0.78, 1.64, 0.46);
-  ctx.fillRect(-0.66, -0.2, 1.32, 1);
+  ctx.fillRect(-0.82, -0.58, 1.64, 0.32);
+  ctx.fillRect(-0.66, -0.2, 1.32, 0.78);
 };
 
 // Redo: the subset sign with a head, as one filled band so the head cannot
