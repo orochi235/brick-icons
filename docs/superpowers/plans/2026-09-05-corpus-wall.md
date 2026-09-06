@@ -3690,6 +3690,21 @@ when zoomed out, which is the case that matters most.
 - Modify: `lab/src/corpus/Wall.tsx`
 - Modify: `lab/src/corpus/Legend.tsx` if it exists by now
 
+- [ ] **Step 0: Clamp the pan, so the wall cannot be lost**
+
+Adopting core's viewport brought drag-panning with inertia but **not** clamping —
+`clampView` exists in core and is opt-in, and nothing calls it. So a flick now
+sends the wall off into blank space with no way back except reloading. Wheel-zoom
+alone made that hard; inertia makes it easy.
+
+Apply `clampView` to panning. Read its signature and its test in
+`~/src/weasel/packages/core/src/core/viewport/clampView.ts` first.
+
+The bound is not "keep the whole wall on screen" — the wall deliberately
+overflows vertically once fitted to the width. Something like "at least one
+row and column of cells stays in view" is the shape to aim for. Say what rule
+you chose and why.
+
 - [ ] **Step 1: A fill command that carries a border**
 
 `CELL_FILL` becomes a table of `{ fill, border, weight }`. The `fill` paint
