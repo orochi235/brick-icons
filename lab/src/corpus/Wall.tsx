@@ -9,6 +9,7 @@ import {
 import { LoupeBubble, resolveLoupe, useLoupe } from '@weasel-js/labkit/loupe';
 import { adjacent, impliedCaret, type Direction } from '@lab/corpus/caret';
 import type { Band, Rect } from '@lab/corpus/layout';
+import { MARKS } from '@lab/corpus/badges';
 import { badgeGeometry, captionSize, cornerPad, LINKED_BADGE, paintCommands,
   RETIRED_WASH, stripGeometry, type Appearance, type CellBadge, type CellCaption,
   type PaintCommand } from '@lab/corpus/paint';
@@ -24,6 +25,7 @@ import '@lab/corpus/Wall.css';
 // reversed out of a solid field, and reversed type gains weight optically --
 // at 600 the Greek psi filled its disc.
 const BADGE_WEIGHT = 400;
+const BADGE_FACE = 'ui-monospace, monospace';
 
 const ARROW_DIRECTION: Record<string, Direction> = {
   ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
@@ -133,125 +135,6 @@ function drawSticker(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: n
   ctx.restore();
 }
 
-/** Every mark draws in a unit box centered on the origin -- `drawBadge`
- *  translates to the disc's center and scales -- so a mark is centered
- *  against its field by construction rather than by hand-tuned offsets. */
-type Mark = (ctx: CanvasRenderingContext2D) => void;
-
-// A five-pointed star, point up.
-const drawStar: Mark = (ctx) => {
-  const inner = 0.42;
-  ctx.beginPath();
-  for (let i = 0; i < 10; i++) {
-    const reach = i % 2 === 0 ? 1 : inner;
-    const angle = -Math.PI / 2 + (i * Math.PI) / 5;
-    const x = Math.cos(angle) * reach;
-    const y = Math.sin(angle) * reach;
-    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-  }
-  ctx.closePath();
-  ctx.fill();
-};
-
-// An archive box: a body under its lid band. Retired now means put away
-// rather than replaced -- `updated` took the parts that had a successor.
-const drawArchive: Mark = (ctx) => {
-  ctx.fillRect(-1, -1, 2, 0.55);
-  ctx.fillRect(-0.82, -0.34, 1.64, 1.34);
-};
-
-// A clockwise curved arrow -- redo, not undo -- turned a quarter left so the
-// head leads forward. Drawn rather than typed: the arrow glyphs are
-// unreliable in a monospace face.
-const drawRedo: Mark = (ctx) => {
-  ctx.save();
-  ctx.rotate(-Math.PI / 2);
-  ctx.strokeStyle = ctx.fillStyle;
-  ctx.lineWidth = 0.34;
-  ctx.beginPath();
-  ctx.arc(0, 0, 0.66, Math.PI * 0.9, Math.PI * 0.2, false);
-  ctx.stroke();
-  const a = Math.PI * 0.2;
-  const hx = Math.cos(a) * 0.66;
-  const hy = Math.sin(a) * 0.66;
-  ctx.translate(hx, hy);
-  ctx.rotate(a + Math.PI / 2);
-  ctx.beginPath();
-  ctx.moveTo(0, 0.46);
-  ctx.lineTo(-0.42, -0.3);
-  ctx.lineTo(0.42, -0.3);
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
-};
-
-// A lightning bolt. A zigzag silhouette is the shape that survives the mark
-// budget best -- a little over 4px at the badge floor.
-const drawBolt: Mark = (ctx) => {
-  ctx.beginPath();
-  ctx.moveTo(0.34, -1);
-  ctx.lineTo(-0.62, 0.08);
-  ctx.lineTo(-0.04, 0.08);
-  ctx.lineTo(-0.34, 1);
-  ctx.lineTo(0.62, -0.08);
-  ctx.lineTo(0.04, -0.08);
-  ctx.closePath();
-  ctx.fill();
-};
-
-// A horseshoe magnet as mass rather than line: a thick arc with two square
-// feet. A real horseshoe reads by its two-tone poles, which a single-ink
-// badge cannot draw, so the closed top and the gap carry it instead.
-const drawMagnet: Mark = (ctx) => {
-  ctx.save();
-  ctx.strokeStyle = ctx.fillStyle;
-  ctx.lineWidth = 0.44;
-  ctx.beginPath();
-  ctx.arc(0, -0.16, 0.6, Math.PI, 0, false);
-  ctx.stroke();
-  ctx.restore();
-  ctx.fillRect(-0.82, -0.16, 0.44, 1.16);
-  ctx.fillRect(0.38, -0.16, 0.44, 1.16);
-};
-
-// A brush tip: a tapered head on its ferrule. Printed parts are pad prints,
-// so if this does not hold at the strip's floor the fallback is a halftone
-// dot cluster.
-const drawBrush: Mark = (ctx) => {
-  ctx.save();
-  ctx.rotate(-Math.PI / 4);
-  ctx.fillRect(-0.34, -1, 0.68, 1.1);
-  ctx.beginPath();
-  ctx.moveTo(-0.34, 0.14);
-  ctx.lineTo(0.34, 0.14);
-  ctx.lineTo(0, 1);
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
-};
-
-// A minifig head in silhouette -- a barrel with its stud, and no face. Most
-// minifig parts are printed, so a face here would read as the printed badge
-// twice over.
-const drawMinifig: Mark = (ctx) => {
-  ctx.fillRect(-0.26, -1, 0.52, 0.34);
-  ctx.beginPath();
-  const top = -0.7;
-  const w = 0.66;
-  ctx.moveTo(-w, top + 0.22);
-  ctx.quadraticCurveTo(-w, top, 0, top);
-  ctx.quadraticCurveTo(w, top, w, top + 0.22);
-  ctx.lineTo(w, 1);
-  ctx.lineTo(-w, 1);
-  ctx.closePath();
-  ctx.fill();
-};
-
-const MARKS: Record<string, Mark> = {
-  star: drawStar, archive: drawArchive, redo: drawRedo, bolt: drawBolt,
-  magnet: drawMagnet, brush: drawBrush, minifig: drawMinifig,
-};
-
 // A filled disc in one corner, on the letterbox margin rather than the
 // drawing, which is centered. Reversed out so it reads over ink and over the
 // white ground alike.
@@ -280,7 +163,7 @@ function drawBadge(ctx: CanvasRenderingContext2D, badge: CellBadge,
     mark(ctx);
     ctx.restore();
   } else if (badge.text) {
-    ctx.font = `${BADGE_WEIGHT} ${size}px ui-monospace, monospace`;
+    ctx.font = `${BADGE_WEIGHT} ${size}px ${badge.font ?? BADGE_FACE}`;
     ctx.textAlign = 'center';
     if (at.baseline != null) {
       // On the part number's own baseline, so `4761 T d` reads as one line
@@ -324,11 +207,15 @@ function drawStrip(ctx: CanvasRenderingContext2D, strip: CellBadge[],
                    cmd: { dx: number; dy: number; dw: number; dh: number },
                    startX: number) {
   if (strip.length === 0) return;
-  const { size, radius, inset } = stripGeometry(cmd.dw);
+  const { size, radius } = stripGeometry(cmd.dw);
   const gap = radius * 0.5;
-  const limit = cmd.dx + cmd.dw - inset - radius * 2;
+  // Stop at the corner badge's left edge, not a badge-width short of it:
+  // `inset` is already that badge's center, so subtracting a strip diameter
+  // on top of it cost the strip about two badges' room.
+  const corner = badgeGeometry(cmd.dw);
+  const limit = cmd.dx + cmd.dw - corner.inset - corner.radius - gap;
   ctx.save();
-  ctx.font = `${BADGE_WEIGHT} ${size}px ui-monospace, monospace`;
+  ctx.font = `${BADGE_WEIGHT} ${size}px ${BADGE_FACE}`;
   const half = capHalf(ctx, size);
   ctx.restore();
   // The part number's baseline, derived from where drawCaption centers it.
