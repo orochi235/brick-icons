@@ -19,7 +19,8 @@ from .. import colors as ldraw_colors
 from .. import tags
 from ..config import load_config
 from . import (cache, cells, corpus, decal, defects, diff, findings,
-               goldens_status, jobs, partindex, reference, runner, schema)
+               goldens_status, jobs, partindex, reference, runner, schema,
+               stats)
 from .. import db as corpus_db_module
 
 
@@ -313,6 +314,22 @@ def create_app(root: Path | str = ".",
         conn = corpus_conn()
         try:
             return findings.summary(conn)
+        finally:
+            conn.close()
+
+    @app.get("/api/corpus/stats")
+    def get_corpus_stats(kind: str = "all", moved: bool = False,
+                         out_of_scope: bool = True,
+                         excluded: list[str] = Query(default=[]),
+                         badges: list[str] = Query(default=[])):
+        """Every tally the dashboard draws, over one working set."""
+        if kind not in stats.KINDS:
+            raise HTTPException(422, f"kind must be one of {stats.KINDS}")
+        conn = corpus_conn()
+        try:
+            return stats.stats(conn, kind=kind, moved=moved,
+                               out_of_scope=out_of_scope,
+                               excluded=tuple(excluded), badges=tuple(badges))
         finally:
             conn.close()
 
