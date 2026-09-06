@@ -3901,6 +3901,69 @@ git commit -m "give the wall a caret, moved by the arrow keys"
 
 ---
 
+### Task 22b: A search box that goes to the part
+
+The wall needs the lab's part search. It is nearly shareable already — `client`
+and `onOpen` are both injected — so this promotes it rather than copying it.
+
+**One coupling to lift.** `PartSearch` calls `setPendingPart` from
+`@lab/config/pending`: a module-level one-slot box that exists because labkit's
+`addTrial` takes only an instrument name and has nowhere to put the subject.
+That is the first entry in `~/src/weasel/docs/handoffs/2026-08-30-labkit-consumer-asks.md`,
+filed by this repo. The wall has no trials, so the call is dead weight for it —
+and the component should not carry a workaround for a gap it has nothing to do
+with. Move that line into the lab's own `onOpen` handler.
+
+**Files:**
+- Move: `lab/src/chrome/PartSearch.tsx` and `.test.tsx` → `lab/src/shared/`
+- Modify: `lab/src/App.tsx` (import from the new home; call `setPendingPart` in
+  its `onOpen`)
+- Modify: `lab/src/corpus/CorpusWall.tsx`, `CorpusWall.test.tsx`
+- Modify: `lab/src/corpus/corpus.css` or the shell's stylesheet as needed
+
+- [ ] **Step 1: Promote it, unchanged except for the coupling**
+
+Move the component and its test to `lab/src/shared/`, delete the `setPendingPart`
+import and call, and put that call in `App.tsx`'s `onOpen` so the lab behaves
+exactly as before. Its existing tests must pass unmodified except for the import
+path — **a test that needs its assertions changed means the move altered
+behaviour, which is a finding.**
+
+- [ ] **Step 2: Point it at the wall**
+
+`CorpusWall` renders `<PartSearch/>` in the header beside the filter bar. Its
+`onOpen(partId)`:
+
+- finds that part's index in the currently shown cells
+- moves the camera so the cell is centred, using core's view animation rather
+  than jumping — `interpolateView`/`useViewAnimation` exist for this
+- sets the caret to it
+- raises its card
+
+**The part may not be on the wall.** `/api/parts` searches the whole LDraw
+index, so a hit can be filtered out by the current `Show`, or absent from the
+slot. Say so rather than silently doing nothing or jumping to a cell that is not
+drawn — "3001 is hidden by the current filter" is the useful answer. Test both
+the found and the filtered-out cases.
+
+- [ ] **Step 3: Run, drive it, commit**
+
+`npx vitest run src` — the lab's own tests too this time, since `App.tsx` and a
+moved component are in scope.
+`npx tsc -b --noEmit` clean.
+
+In the browser: search a part id, confirm the camera glides to it, the caret
+lands on it and its card opens. Search something filtered out and confirm it
+says so. Confirm the lab at `/` still opens a part into a trial exactly as
+before — that is the regression this move risks. Screenshot and slop it.
+
+```bash
+git add lab/src/shared lab/src/chrome lab/src/App.tsx lab/src/corpus
+git commit -m "share the part search, and let it fly the wall to a part"
+```
+
+---
+
 ### Task 19: The full gate
 
 Only now, and only once.
