@@ -324,6 +324,16 @@ class DiscOccluder:
         return np.where(valid, lam, out)
 
 
+def _plane_basis(F):
+    """Any orthonormal (u, v) spanning the plane normal to F."""
+    F = np.asarray(F, float)
+    F = F / np.linalg.norm(F)          # u, v must be perpendicular to the ray
+    a = np.array([1.0, 0.0, 0.0]) if abs(F[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
+    u = a - (a @ F) * F
+    u /= np.linalg.norm(u)
+    return u, np.cross(F, u)
+
+
 class TriangleOccluder:
     """Flat triangles (world coords, shape (M,3,3)) as a gridless depth source.
 
@@ -333,6 +343,9 @@ class TriangleOccluder:
 
     # rays per chunk; the working set is CHUNK x tris floats a few times over
     CHUNK_ELEMS = 2_000_000
+    # ... and a ceiling on it, because the screen-space prefilter is only as
+    # tight as the chunk's own bounding box
+    RAYS_PER_CHUNK = 128
 
     def __init__(self, tris):
         self.tris = np.asarray(tris, float) if len(tris) else np.zeros((0, 3, 3))
@@ -369,6 +382,19 @@ class TriangleOccluder:
         self.Fe1 = self.e1 @ F
         self.v0e0 = np.einsum("ij,ij->i", self.v0, self.e0)
         self.v0e1 = np.einsum("ij,ij->i", self.v0, self.e1)
+        # Screen-space bounds, for the prefilter in `depth`. Every ray runs
+        # along F, so a ray misses a triangle whose 2-D box it lies outside
+        # of -- any basis spanning the plane normal to F gives the same
+        # answer. Padded by the barycentric slack the inside test allows.
+        u, v = _plane_basis(F)
+        self._u, self._v = u, v
+        corners = np.stack([self.v0, self.v0 + self.e0, self.v0 + self.e1], 1)
+        su, sv = corners @ u, corners @ v
+        self.blo = np.stack([su.min(1), sv.min(1)], 1)
+        self.bhi = np.stack([su.max(1), sv.max(1)], 1)
+        pad = 1e-5 * np.linalg.norm(self.bhi - self.blo, axis=1)[:, None]
+        self.blo -= pad
+        self.bhi += pad
 
     def depth(self, O, F):
         O = np.atleast_2d(O).astype(float)
@@ -378,14 +404,24 @@ class TriangleOccluder:
         m = len(self.v0)
         if not m:
             return out
-        step = max(1, self.CHUNK_ELEMS // m)
+        step = min(self.RAYS_PER_CHUNK, max(1, self.CHUNK_ELEMS // m))
+        ou, ov = O @ self._u, O @ self._v
         for lo in range(0, O.shape[0], step):
             Oc = O[lo:lo + step]
-            lam = (self.nv0 - Oc @ self.n.T) / self.denom
-            d20 = Oc @ self.e0.T + lam * self.Fe0 - self.v0e0
-            d21 = Oc @ self.e1.T + lam * self.Fe1 - self.v0e1
-            v = (self.d11 * d20 - self.d01 * d21) / self.denomb
-            w = (self.d00 * d21 - self.d01 * d20) / self.denomb
+            cu, cv = ou[lo:lo + step], ov[lo:lo + step]
+            near = np.nonzero((self.blo[:, 0] <= cu.max()) & (self.bhi[:, 0] >= cu.min())
+                              & (self.blo[:, 1] <= cv.max()) & (self.bhi[:, 1] >= cv.min()))[0]
+            if not len(near):
+                continue
+            n, denom = self.n[near], self.denom[near]
+            e0, e1 = self.e0[near], self.e1[near]
+            lam = (self.nv0[near] - Oc @ n.T) / denom
+            d20 = Oc @ e0.T + lam * self.Fe0[near] - self.v0e0[near]
+            d21 = Oc @ e1.T + lam * self.Fe1[near] - self.v0e1[near]
+            d00, d01, d11 = self.d00[near], self.d01[near], self.d11[near]
+            denomb = self.denomb[near]
+            v = (d11 * d20 - d01 * d21) / denomb
+            w = (d00 * d21 - d01 * d20) / denomb
             inside = (1.0 - v - w >= -1e-6) & (v >= -1e-6) & (w >= -1e-6)
             out[lo:lo + step] = np.where(inside, lam, np.inf).min(axis=1)
         return out
