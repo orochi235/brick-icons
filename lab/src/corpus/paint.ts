@@ -201,7 +201,7 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
   printed: { tag: 'printed', mark: 'brush', field: PROPERTY_FIELD, ink: '#ffd500',
              accent: '#00ff00' },
   composite: { tag: 'composite', mark: 'composite', field: PROPERTY_FIELD,
-               ink: '#f5a623', accent: '#5aa9e6', scale: 0.86 },
+               ink: '#22c8dc', accent: '#f5a623', scale: 0.86 },
 };
 
 /** The badge that links somewhere when clicked. Only one does. */
