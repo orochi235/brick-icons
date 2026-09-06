@@ -336,6 +336,49 @@ Run it: `.venv/bin/python -m brick_icons.lab` and `cd lab && npm run dev`, then
 `/corpus.html`. `scripts/index-census-renders.py` indexes census renders and
 `scripts/bake-thumbs.py` bakes the sheets; both are idempotent.
 
+### 2026-09-06: what the wall grew today
+
+Committed on `main` through `9f5b8bc`, unpushed. All of it is visible at
+`/corpus.html` with `.venv/bin/python -m brick_icons.lab` and `npm run dev`
+running -- **restart the lab server after pulling**, it is long-lived and the
+cell list gained fields.
+
+- **Renders are drawn on the bake's white ground at every rung.** Zooming
+  past the 128px PNG used to swap a cell's surround to the dark canvas.
+- **The vector rung lands its rasters during a zoom, not after it.** It was
+  canceling every fetch in flight on each camera frame. Residency is now a
+  pixel budget, not a flat 96 cells, so a screenful of small cells all
+  sharpen. The same cancellation bug was in the loose 128px rung, where a
+  dropped image was never re-requested.
+- **`out_of_scope`**: a seventh cell state, ahead of every problem state, for
+  parts the project is not trying to draw. The rule is a category
+  (`db.OUT_OF_SCOPE_CATEGORIES`, today just `Sticker`), which covers 2,701
+  cells that used to sit in the unknown gray.
+- **Part years and tags.** `scripts/fetch-part-years.py` derives first year,
+  last year and set count from Rebrickable's public dumps (no key) into
+  `tests/goldens/part-years.csv`, committed, and into `part_years` in
+  corpus.db. `brick_icons/tags.py` turns those plus the library's category
+  and flags into tags -- sticker, minifig, technic, duplo, printed, obsolete,
+  retired, popular, obscure. **This is the Rebrickable data the grouping plan
+  below was waiting on**; its year and category facets can read `part_years`
+  and `tags_for` rather than fetching anything.
+- **Detail views**: the lightbox draws the part from every slot that has a
+  render (straight from the SVG, so it does not go blank when a slot's bakes
+  are stale) and links out to Rebrickable, BrickLink, Brickset and the LDraw
+  library. Both it and the hover card show the years and the tag row.
+- **A retired cell wears an R** in its corner once it is drawn past 56px.
+  Mike wants these badges toggleable eventually; nothing is toggleable yet.
+
+Two things left on the floor:
+
+- **`census-occt`'s loose thumbs are stale** -- 2,655 baked against 6,659
+  renders, so at the 128px rung most of that slot falls back to the 32px
+  sheet. `scripts/bake-thumbs.py --source census-occt` fixes it and only
+  costs the new ones.
+- **A 512px baked level** between the 128px PNG and the SVG was considered
+  and deferred: the vector rung got fast enough that the pop-in it would
+  cover may be gone. Roughly 600MB per slot if it is ever wanted.
+
 **Grouping it is the follow-up**, specified and planned and unbuilt:
 `docs/superpowers/specs/2026-09-05-corpus-grouping-design.md` and
 `docs/superpowers/plans/2026-09-05-corpus-grouping.md`. Coverage, category and
