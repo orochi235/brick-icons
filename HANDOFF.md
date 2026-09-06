@@ -155,12 +155,14 @@ that fits a 12h deadline. Launch it the same way once occt is done:
       --env KEEP=out/census-white/renders --env HARD=600 \
       studio -- scripts/census-batch.sh naive 300 out/census-white {}
 
-**Do not `onto sync` studio while 93af72b4 runs.** Sync hard-resets the tree,
-and the job is writing `out/census-white` there. The order is fetch, then sync,
-then launch naive -- which is also what puts `273a6dd` on the node, so the
-worker labels only start naming the part in hand on that next launch. The
-running job's supervisor is on the old onto binary and keeps its old labels
-and its old `22/-117` progress arithmetic (fixed in onto `b137f50`) either way.
+**`onto sync` studio is refused while 93af72b4 runs**, with a 409: sync takes
+the tree lock and a running job holds it. It is a refusal, not a loss --
+`out/` is gitignored and the reset's clean is not `-x`, so census output
+survives a sync either way. Launch naive after occt finishes; that sync is
+also what puts `273a6dd` on the node, so the worker labels only start naming
+the part in hand on that next launch. The running job's supervisor is on the
+old onto binary and keeps its old labels and its old `22/-117` progress
+arithmetic (fixed in onto `b137f50`) either way.
 
 **`--env PATH` is not optional.** The agent's PATH has no `~/.local/bin`, so
 `resvg` is missing and every part fails `FileNotFoundError` in about a second
