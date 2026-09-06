@@ -19,7 +19,7 @@ between them and switch categories off, and the outside facts two of them need.
 
 ## The facts, and where they come from
 
-Rebrickable publishes its whole catalogue as gzipped CSVs at
+Rebrickable publishes its whole catalog as gzipped CSVs at
 `cdn.rebrickable.com/media/downloads/`. No account, no key, no rate limit, and
 re-downloadable in CI. Eight files matter:
 
@@ -28,13 +28,13 @@ re-downloadable in CI. Eight files matter:
 | `parts` | 64,616 part numbers, names, and a curated category |
 | `part_categories` | 77 categories, against LDraw's 336 |
 | `sets` | a year per set |
-| `inventories` + `inventory_parts` | 1,557,033 rows of part × colour × set |
-| `elements` | part × colour → LEGO element number, and a `design_id` |
-| `colors` | 276 colours with RGB and a transparency flag |
+| `inventories` + `inventory_parts` | 1,557,033 rows of part × color × set |
+| `elements` | part × color → LEGO element number, and a `design_id` |
+| `colors` | 276 colors with RGB and a transparency flag |
 | `part_relationships` | 37,391 print / mould / alternate edges |
 
 From those, per part: the earliest and latest set year it appears in, total
-quantity across every set, how many distinct sets, and the set of colours it was
+quantity across every set, how many distinct sets, and the set of colors it was
 produced in.
 
 **Attribution is a condition of use.** Credit Rebrickable in the README and in
@@ -97,13 +97,19 @@ cell reading *unknown* and reading *1954, never used*.
 - Records the download date and each file's row count in `meta`, so a stale
   import is visible rather than inferred.
 
+**`db.rebuild` re-joins from the cache and never downloads.** It deletes the
+database, so the facts go with it and have to be rebuilt — but a rebuild on a
+machine with no cache carries no facts rather than pulling 17 MB nobody asked
+for. A partial cache is treated as no cache: half the files would produce facts
+that are wrong rather than missing.
+
 ## What rides in the cells response
 
 The cells route gains `year`, `uses`, `sets`, `ncolors` and `cat` per cell.
 `cat` is an index into a `categories` array carried once in the body — 24,591
 repeated category strings is most of a megabyte for 171 distinct values.
 
-**The colour list stays out of the cells response.** It is per-part detail, it
+**The color list stays out of the cells response.** It is per-part detail, it
 is what the lightbox wants, and the lightbox already has a route.
 
 ## The layout seam grows bands
@@ -139,7 +145,7 @@ the timed-out block is the part it hurts most to be missing. This is the wall as
 a work queue.
 
 **Category** — one level, the rolled-up category. This is the wall as a
-catalogue: where the dish family is.
+catalog: where the dish family is.
 
 **Release year** — two levels. Decade bands stack vertically, and each band
 breaks left to right into its actual years. Direction is a parameter and applies
@@ -156,8 +162,8 @@ gives 336 values with a median of 5 parts and a thicket of `~` `=` `_` `|`
 prefixes. Stripping the prefixes gives 171.
 
 **Grouping and the facet list use different thresholds, on purpose.** For
-grouping, anything under 25 parts rolls into `Other`: 58 labelled blocks
-covering 97.4% of the corpus, because a labelled block of three cells is
+grouping, anything under 25 parts rolls into `Other`: 58 labeled blocks
+covering 97.4% of the corpus, because a labeled block of three cells is
 confetti. For the facet list, all 171 stay listed — a checkbox costs one row,
 and a category the layout declined to name is still one you should be able to
 switch off.
@@ -168,11 +174,11 @@ they are a display alternative rather than the grouping key.
 ## The sidebar
 
 DOM, beside the canvas, not drawn into it. Four sections: grouping, order
-within a group, cell colour, and the category facets — every category with its
+within a group, cell color, and the category facets — every category with its
 count, sorted by size, with all/none. Switching off Sticker, Minifig and Duplo
 removes 8,527 cells in three clicks.
 
-Colour modes are status, release year, frequency on a log scale, and colours
+Color modes are status, release year, frequency on a log scale, and colors
 produced. **Frequency must be logarithmic**: it spans 1 to 140,674, and a linear
 ramp puts every part except a few hundred at the same value.
 
@@ -191,8 +197,8 @@ store the result. Joining it live, per request, is the version that seems fine
 on a laptop and falls over on the wall.
 
 **Rebrickable ids are not stable forever.** They get merged and renamed as the
-catalogue is curated. `fetched` and the row counts in `meta` are what let a
-later reader tell a changed catalogue from a broken join.
+catalog is curated. `fetched` and the row counts in `meta` are what let a
+later reader tell a changed catalog from a broken join.
 
 ## Rejected
 
