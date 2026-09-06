@@ -13,11 +13,12 @@ export type Coverage = 'defect' | 'failed' | 'timeout' | 'drawn' | 'untried';
 const COVERAGE_ORDER: Coverage[] =
   ['defect', 'failed', 'timeout', 'drawn', 'untried'];
 
+/** The label the server put on the cell. Derived in `cells.py` so the wall's
+ *  grouping and the dashboard's tallies cannot disagree about what `drawn`
+ *  means; an API older than that field falls back to `untried`, which is what
+ *  a wall with no renders showed anyway. */
 export function coverageOf(cell: Cell): Coverage {
-  if (cell.open_defects > 0) return 'defect';
-  if (cell.error && cell.error !== 'TimeoutError') return 'failed';
-  if (cell.error) return 'timeout';
-  return cell.sha ? 'drawn' : 'untried';
+  return cell.coverage ?? 'untried';
 }
 
 /** An LDraw category without its leading sigil. The catalog sends the raw

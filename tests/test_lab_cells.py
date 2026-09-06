@@ -327,3 +327,41 @@ def test_a_third_party_part_is_out_of_scope(conn):
     _part(conn, "t1008", title="| Brickstuff Pico LED", category="|")
     conn.commit()
     assert cells.cells(conn)["cells"][0]["out_of_scope"] is True
+
+
+# `coverage` is the label the wall groups on and the dashboard tallies. It
+# lives here rather than in the browser so the two cannot disagree about what
+# `drawn` means.
+def test_a_part_nobody_drew_is_untried(conn):
+    _part(conn, "3001")
+    conn.commit()
+    assert cells.cells(conn)["cells"][0]["coverage"] == "untried"
+
+
+def test_a_drawn_part_with_nothing_against_it_is_drawn(conn):
+    _part(conn, "3001")
+    _render(conn, "3001", "a", "2026-09-05T10:00:00+00:00")
+    conn.commit()
+    assert cells.cells(conn)["cells"][0]["coverage"] == "drawn"
+
+
+def test_a_timeout_is_its_own_label_not_a_failure(conn):
+    _part(conn, "3001")
+    _measure(conn, "3001", "naive", error="TimeoutError")
+    conn.commit()
+    assert cells.cells(conn)["cells"][0]["coverage"] == "timeout"
+
+
+def test_any_other_error_is_a_failure(conn):
+    _part(conn, "3001")
+    _measure(conn, "3001", "naive", error="BRepCheck")
+    conn.commit()
+    assert cells.cells(conn)["cells"][0]["coverage"] == "failed"
+
+
+def test_an_open_defect_outranks_a_clean_render(conn):
+    _part(conn, "3001")
+    _render(conn, "3001", "a", "2026-09-05T10:00:00+00:00")
+    _defect(conn, "d1", "3001", ["naive"])
+    conn.commit()
+    assert cells.cells(conn)["cells"][0]["coverage"] == "defect"
