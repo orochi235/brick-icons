@@ -1371,9 +1371,32 @@ def ordered_faces(shape, proj, out=None):
     if out is not None and plane_by_idx:
         _group_planes(shape, out, plane_by_idx)
         shade.attach_group_gradients(faces)
+    faces = _with_decoration(faces, out, proj)
     zs = np.concatenate([f["zs"] for f in faces])
     zrange = float(zs.max() - zs.min()) or 1.0
     return shade.order_faces(faces, proj, 1e-3 * zrange, own_occ=own_occ)
+
+
+def _with_decoration(faces, out, proj):
+    """Print, back onto the body OCCT drew.
+
+    A sewn solid carries no color: every face this module builds is stamped
+    16, so a printed part came out blank while the same part through the
+    faceted path came out printed. The decoration is not in the solid at all
+    -- it is in the source triangles, which is where naive reads it from too,
+    so the fix is to bring those faces along and let `unwrap_decoration` find
+    its carrier among OCCT's own planes.
+    """
+    if out is None or not out.get("tri") or not out.get("tri_colors"):
+        return faces
+    from . import shade
+    deco = [f for f in shade.faces_from_tris(
+                np.array(out["tri"]), proj, cond_edges=out.get("5"),
+                colors=out.get("tri_colors"))
+            if f.get("color", 16) != 16]
+    if not deco:
+        return faces
+    return shade.unwrap_decoration(faces + deco, [], proj)
 
 
 def _negate_y(ops):
