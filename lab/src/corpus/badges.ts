@@ -150,7 +150,8 @@ export const drawMinifig: Mark = (ctx) => {
   ctx.lineWidth = 0.135;
   ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.arc(0, 0.15 - drop, 0.626, Math.PI * 0.234, Math.PI * 0.766, false);
+  // The ends land about mid-pupil, which is where the print puts them.
+  ctx.arc(0, 0.15 - drop, 0.626, Math.PI * 0.245, Math.PI * 0.755, false);
   ctx.stroke();
   ctx.restore();
 };
