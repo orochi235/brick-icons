@@ -76,6 +76,12 @@ while [ "$n" -le "$MAX_RESTARTS" ]; do
       /^[0-9]+\/[0-9]+ / { split($1, a, "/"); printf "onto: progress %s/%s %s\n", a[1], a[2], label }
       { fflush() }'
   [ "$(cat "$rcfile")" = "0" ] && break
+  # onto prune: stop at a part boundary rather than mid-render. -n keeps this
+  # a no-op under an agent that predates the marker.
+  if [ -n "${ONTO_PRUNE:-}" ] && [ -f "$ONTO_PRUNE" ]; then
+    echo "--- $engine $tag pruned at a part boundary ---" >&2
+    break
+  fi
   n=$((n + 1))
   echo "--- $engine $tag died, restart $n at $(date '+%H:%M:%S') ---" >&2
   sleep 2
