@@ -139,6 +139,9 @@ export interface CellBadge {
   /** Only where the field would vanish: duplo is red on white and
    *  `THUMB_GROUND` is white. */
   stroke?: string;
+  /** A face other than the badge default, for a glyph the default sets
+   *  badly. */
+  font?: string;
 }
 
 /** The two discs that keep a corner of their own. `retired` and `updated`
@@ -162,10 +165,11 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
   minifig: { tag: 'minifig', mark: 'minifig', field: '#8a6d1f', ink: '#ffffff' },
   technic: { tag: 'technic', text: 'T', field: '#1b2a5e', ink: '#ffffff' },
   duplo: { tag: 'duplo', text: 'd', field: '#ffffff', ink: '#c8102e', stroke: '#c8102e' },
-  weird: { tag: 'weird', text: '\u03a8', field: '#5b3a86', ink: '#ffffff' },
+  weird: { tag: 'weird', text: '\u03a8', field: '#5b3a86', ink: '#ffffff',
+           font: 'Didot, "Bodoni 72", Baskerville, "Times New Roman", serif' },
   // The one property badge off the shared field: a gold bolt on black is
   // what a live circuit looks like everywhere else, and it earns the break.
-  electric: { tag: 'electric', mark: 'bolt', field: '#101014', ink: '#daa520' },
+  electric: { tag: 'electric', mark: 'bolt', field: '#101014', ink: '#ffd60a' },
   magnet: { tag: 'magnet', mark: 'magnet', field: PROPERTY_FIELD, ink: '#ffffff' },
   printed: { tag: 'printed', mark: 'brush', field: PROPERTY_FIELD, ink: '#ffffff' },
   composite: { tag: 'composite', text: '+', field: PROPERTY_FIELD, ink: '#ffffff' },

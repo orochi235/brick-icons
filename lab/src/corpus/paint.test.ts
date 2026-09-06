@@ -386,10 +386,10 @@ it('gives the property family one field and each system badge its own', () => {
   expect(system!.stroke).toBeTruthy();
 });
 
-it('lets electric off the shared field, gold on black', () => {
+it('lets electric off the shared field, a bright bolt on black', () => {
   const [bolt] = stripFor(cell('a', 0, 'sha-a', { tags: ['electric'] }), 200);
   expect(bolt!.field).not.toEqual(PROPERTY_FIELD);
-  expect(bolt!.ink).toEqual('#daa520');
+  expect(bolt!.ink).toEqual('#ffd60a');
 });
 
 it('draws a letter at twice the height of a mark in the same disc', () => {
