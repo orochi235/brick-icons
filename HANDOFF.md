@@ -223,88 +223,88 @@ both. `corpus.db` is gitignored and rebuilt by walking `renders/` and the TOML.
 
 ## The corpus wall — branch `corpus-wall`, worktree `.claude/worktrees/corpus-wall`
 
-A pan/zoom surface showing every one of the 24,591 parts as one cell, thumbnail
-where a render exists, filling in as the census runs. Build-order step 3 of the
-corpus database spec.
+**Complete and green.** A pan/zoom surface showing every one of the 24,591 parts
+as one cell, thumbnail where a render exists. Build-order step 3 of the corpus
+database spec.
 
 - Spec: `docs/superpowers/specs/2026-09-05-corpus-wall-design.md`
-- Plan: `docs/superpowers/plans/2026-09-05-corpus-wall.md` — 27 tasks, each
-  carrying its verbatim tests and code
+- Plan: `docs/superpowers/plans/2026-09-05-corpus-wall.md` — all 23 tasks done
+- `git log --oneline main..HEAD` is the authority on what landed
 
-**Resume at Task 22, the caret.** Read the code, not the checkboxes — none of
-them were ever ticked, so the plan's boxes say nothing about what has landed.
+Run it: `.venv/bin/python -m brick_icons.lab` and `cd lab && npm run dev`, then
+`/corpus.html`. `scripts/index-census-renders.py` indexes census renders and
+`scripts/bake-thumbs.py` bakes the sheets; both are idempotent.
 
-What is built: Tasks 1-18, 19b, 20, 20b, 20c, 21 and 21b. What is not:
-
-- **Task 22, the caret.** There is no `caret` symbol anywhere in `lab/src`.
-  Its spec and plan landed; the implementation did not.
-- **Task 22b, the search box.** `FilterBar.tsx` has slot, sort and show, no
-  search input.
-- **Task 19, the full gate.** Last, and the only place the full suite runs.
-
-The working tree also carries uncommitted work on the cell colour states
-(`cells.py`, `paint.ts`, `Wall.tsx`, `PartCard.tsx` and their tests). Finish and
-commit that first, or the gate runs against a tree that is not what merges.
-
-**Task 22 has a downstream consumer.** The caret's adjacency must stay
-geometric and its wrapping sequence-based, as its spec says. The grouping
-follow-up inserts whitespace between blocks, and grid arithmetic would break
-there while passing every test written against a dense grid.
+**The gate, run once at the end:** 855 Python tests pass with one failure,
+`test_db.py::test_rebuild_walks_renders_and_toml_and_jsonl` — **pre-existing,
+reproduced on `main`**, `db.py` and that test have zero diff on this branch. 532
+lab tests pass. Both Vite entries build. Typecheck clean.
 
 ### Two traps in this worktree that make a passing test meaningless
 
 **Run Python tests as `.venv/bin/python -m pytest`, never `.venv/bin/pytest`.**
 The venv is shared with the main checkout and its editable install maps
-`brick_icons` to the main checkout's copy; the console script puts its own
-`bin/` first on `sys.path` and imports *that* tree. Both forms pass for a module
-that exists unchanged in both, which is how the wrong one goes unnoticed until a
-new module appears and only then throws `ImportError`.
+`brick_icons` to the main checkout's copy; the console script puts its own `bin/`
+first on `sys.path` and imports *that* tree. Both forms pass for a module that
+exists unchanged in both, which is how the wrong one goes unnoticed.
 
-**Do not symlink `out/` into a worktree.** `db.record_render` does
-`path.resolve().relative_to(root)`, which follows the symlink out of the
-worktree and raises `ValueError` on every file — caught and logged as "skipped",
-so it reads as a no-op rather than a failure. This worktree has a real `out/`
-with the census SVGs copied in.
+**Do not symlink `out/` or `node_modules` into a worktree.** `db.record_render`
+resolves paths and `relative_to(root)` then raises on every file, caught and
+logged as "skipped" so it reads as a no-op. This worktree has real directories
+for both.
 
 ### Decisions from conversation that are not in the code
 
-**The census's drawing is not the store's, and must never be filed as one.**
-`compare-silhouette-truth.py` renders with `--line-width 0 --silhouette-width 0`
-so its fills carry the silhouette; `naive` is the ordinary stroked drawing
-`db.canonical_argv` names. Recording one under the other files a drawing under a
-key describing a different drawing. `db.py` has `census-naive`/`census-occt` for
-this. Tried and reverted twice — `5cbcd4e`, and again during this build, where a
-code review caught it. Index census renders **in place** with `db.record_render`;
-never `db.store_render`, which copies into the tracked store.
+**The census's drawing is not the store's.** The oracle renders with
+`--line-width 0 --silhouette-width 0`; `naive` is the ordinary stroked drawing.
+Recording one under the other files a drawing under a key describing a different
+one. Tried and reverted twice — `5cbcd4e`, and again during this build. Index
+census renders **in place** with `db.record_render`, never `db.store_render`.
 
-**A wall slot is a `db.SOURCES` entry** — an engine crossed with a style. The
-wall shows one slot at a time and switches between them, so thumbnails live at
-`out/thumbs/<source>/<level>/<part>.png` with a sheet pair per slot. Adding a
-slot is adding a `SOURCES` entry and re-running the bake; nothing in the layout,
-camera or wall changes.
-
-**The wall draws `census-naive` for now.** It is the only slot with thousands of
-renders; `naive` has dozens. Switch when the real render job has run.
+**A wall slot is a `db.SOURCES` entry** — engine crossed with style. Thumbnails
+live at `out/thumbs/<source>/<level>/<part>.png`, a sheet pair per slot. Adding a
+slot is adding a `SOURCES` entry and re-running the bake.
 
 **A cell's index is its position in part-id order over every part**, including
-parts with no render — never a packing of the parts that happen to be drawn.
-That is what makes a render landing mid-session write one cell instead of
-renumbering every cell after it.
+undrawn ones, and the sheets are baked in that order. Filtering must never
+renumber, or every thumbnail lands in the wrong cell.
+
+**`measurements.engine` is an engine, `renders.source` is a slot.** `census-naive`
+maps to engine `naive` via `cells.engine_for`. Without it every metric joins to
+nothing and the wall sorts an unsorted column without erroring.
+
+**The palette took five rounds and is tuned by eye.** Lightness means "has a
+render"; hue means what kind of problem; border weight means here versus another
+slot. Red is a filed defect, violet cannot-be-drawn, cyan timed out — spread
+deliberately after they collided inside a 38-degree wedge. **Colour-vision
+constraints were explicitly ruled out of scope**; the audience is one person with
+fine colour vision.
+
+**The wall takes labkit's UI and none of its ontology** — `LabShell`, theme,
+loupe, `ControlPanel`, `FloatingPanel`, but no `Lab`, no `defineInstrument`, no
+trials or snapshots, and not the CLI-derived config schema. Slot/Sort/Show are
+view state, not render flags.
+
+**The viewport is `@weasel-js/core`'s, not hand-rolled.** `camera.ts` was deleted;
+`zoomAt`, `fitViewToBounds`, `clampView`, `useCanvasSize` and
+`viewportDragPanAction` come from core. Only `levels.ts` — which baked level to
+sample — is ours, because core knows nothing of the 8/32/128 ladder.
+
+### Known, unfixed
+
+**The implied caret moves while you drag.** "Most on-screen area" is recomputed
+continuously, so arrowing after a pan starts wherever the drag left it. Fix would
+be to recompute only when the caret leaves the viewport.
+
+**Filed against weasel:** colour rows centre their swatch with no way to
+top-justify — `docs/TODO.md` in `~/src/weasel`, commit `191bdfc3`. brick-icons
+overrides it locally in `ParamsPanel.css`.
 
 ### Not this branch's work
 
-Four engine defects surfaced during this build and none were investigated:
-`780`'s stud tips, `874`'s steering wheel meshing instead of substituting a
-torus, `896`'s edge heights, and a report about stud sides. They arrived
-secondhand through a subagent rather than from the user directly, so they need
-confirming before anyone spends time on them.
-
-**Grouping the wall is a follow-up, not this branch.** Coverage, category and
-release-year groupings, the part facts they group by (year introduced,
-frequency, colours produced, from Rebrickable's free CSVs), and a DOM sidebar
-that switches between them are specified in
-`docs/superpowers/specs/2026-09-05-corpus-grouping-design.md` on `main`. It is
-unbuilt and deliberately gated on this branch merging first.
+Four engine defects surfaced secondhand through a subagent and were never
+confirmed or investigated: `780`'s stud tips, `874`'s steering wheel meshing
+instead of substituting a torus, `896`'s edge heights, and a stud-sides report.
 
 ## Lab decisions from 2026-09-04, none of them in the code
 
