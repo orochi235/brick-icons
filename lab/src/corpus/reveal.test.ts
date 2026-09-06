@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { centerReveal, panToReveal } from '@lab/corpus/reveal';
 
 const viewport = { width: 100, height: 100 };
@@ -68,4 +68,35 @@ it('centers scaled by the camera zoom', () => {
   const next = centerReveal(rect, view, viewport);
   expect(next.x).toBe(45); // center 70 - (100/2)/2
   expect(next.y).toBe(45);
+});
+
+describe('centerReveal zoom floor', () => {
+  const cell = { x: 1000, y: 500, w: 32, h: 32 };
+  const viewport = { width: 800, height: 600 };
+
+  it('zooms in until the cell fills half the viewport height', () => {
+    const cam = { x: 0, y: 0, scale: { x: 1, y: 1 } };
+    const next = centerReveal(cell, cam, viewport, 0.5);
+    expect(next.scale.y).toBeCloseTo((600 * 0.5) / 32);
+    // and it is still centered, at the scale it arrived at
+    expect(next.x).toBeCloseTo(1016 - 400 / next.scale.x);
+    expect(next.y).toBeCloseTo(516 - 300 / next.scale.y);
+  });
+
+  it('scales both axes by the same factor, so cells stay square', () => {
+    const cam = { x: 0, y: 0, scale: { x: 2, y: 2 } };
+    const next = centerReveal(cell, cam, viewport, 0.5);
+    expect(next.scale.x).toBeCloseTo(next.scale.y);
+  });
+
+  it('leaves a camera that is already closer alone', () => {
+    const cam = { x: 0, y: 0, scale: { x: 40, y: 40 } };
+    const next = centerReveal(cell, cam, viewport, 0.5);
+    expect(next.scale).toEqual(cam.scale);
+  });
+
+  it('is the old centering with no floor asked for', () => {
+    const cam = { x: 0, y: 0, scale: { x: 1, y: 1 } };
+    expect(centerReveal(cell, cam, viewport)).toEqual(centerReveal(cell, cam, viewport, 0));
+  });
 });

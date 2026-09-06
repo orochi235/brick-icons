@@ -35,13 +35,17 @@ function cellStateLabel(cell: Cell): string | null {
   }
 }
 
-export function PartCard({ cell, source, at, viewport, onOpen, onClose }: {
+export function PartCard({ cell, source, at, viewport, onOpen, onClose,
+                          onHoverChange }: {
   cell: Cell;
   source: string;
   at: { x: number; y: number };
   viewport: { width: number; height: number };
   onOpen: (id: string) => void;
   onClose: () => void;
+  /** Whether the pointer is over the card. The wall drops the card on a zoom,
+   *  and this is the exception: the one you are reading stays. */
+  onHoverChange?: (over: boolean) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -67,7 +71,9 @@ export function PartCard({ cell, source, at, viewport, onOpen, onClose }: {
 
   return (
     <div className="corpus-card" ref={ref} role="dialog"
-         aria-label={`${cell.title} card`}>
+         aria-label={`${cell.title} card`}
+         onPointerEnter={() => onHoverChange?.(true)}
+         onPointerLeave={() => onHoverChange?.(false)}>
       <div className="corpus-card-head">
         {cell.sha ? (
           <img className="corpus-card-thumb" alt={`${cell.id} render`}

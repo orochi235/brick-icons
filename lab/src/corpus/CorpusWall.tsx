@@ -33,6 +33,10 @@ const IDENTITY_VIEW: View = { x: 0, y: 0, scale: { x: 1, y: 1 } };
 // Stable identity: a slot with nothing in it yet must not hand the memos
 // below a fresh array on every render.
 const NO_CELLS: Cell[] = [];
+
+/** How much of the viewport's height a cell fills when the wall jumps to it.
+ *  A jump that lands on a 32px cell has not really arrived. */
+const JUMP_MIN_CELL_HEIGHT = 0.5;
 // `blockLayout` takes no order for the groupings that have none of their own.
 const NO_ORDER: string[] = [];
 
@@ -56,6 +60,9 @@ export function CorpusWall({ client }: { client: LabClient }) {
   const [highlight, setHighlight] = useState<CellState | null>(null);
   const [highlightTag, setHighlightTag] = useState<string | null>(null);
   const [legendOpen, setLegendOpen] = useState(true);
+  // A ref, not state: the wheel handler reads it in the same tick the pointer
+  // moved, and a re-render per hover would repaint the wall.
+  const overCard = useRef(false);
   const [explicitCaret, setExplicitCaret] = useState<number | null>(null);
   const [searchNotice, setSearchNotice] = useState<string | null>(null);
   const box = useRef<HTMLDivElement>(null);
@@ -171,7 +178,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
     const rect = laid.rects[index];
     if (rect && cam) {
       touched.current = true;
-      camAnim.animate(centerReveal(rect, cam, size));
+      camAnim.animate(centerReveal(rect, cam, size, JUMP_MIN_CELL_HEIGHT));
     }
     setExplicitCaret(index);
     setCarded({ cell: shown[index]!, at: { x: size.width / 2, y: size.height / 2 } });
@@ -285,8 +292,9 @@ export function CorpusWall({ client }: { client: LabClient }) {
                touched.current = true;
                const [sx, sy] = clientToCanvas(e.currentTarget, e.clientX, e.clientY);
                // The card is anchored to a screen point, and a zoom moves the
-               // cell out from under it.
-               setCarded(null);
+               // cell out from under it -- so a zoom drops it, unless it is
+               // the card being read: the pointer is over it and has not left.
+               if (!overCard.current) setCarded(null);
                updateCam(zoomAt(cam, { x: sx, y: sy }, e.deltaY < 0 ? 1.1 : 1 / 1.1));
              }}>
           {!cells && <p className="corpus-loading">loading the corpus…</p>}
@@ -307,7 +315,8 @@ export function CorpusWall({ client }: { client: LabClient }) {
             <PartCard cell={carded.cell} source={drawnSource} at={carded.at}
                       viewport={size}
                       onOpen={(id) => { setCarded(null); setPicked(id); }}
-                      onClose={() => setCarded(null)} />
+                      onClose={() => setCarded(null)}
+                      onHoverChange={(over) => { overCard.current = over; }} />
           )}
           {cells && legendOpen && (
             <Legend cells={cells} highlight={highlight} onHighlight={setHighlight}

@@ -430,3 +430,25 @@ it('leaves a bare 0 alone -- only the modified one resets', async () => {
   await new Promise((r) => setTimeout(r, 0));
   expect(fit.mock.calls.length).toBe(0);
 });
+
+it('drops the card on a zoom, but keeps the one the pointer is over', async () => {
+  const { container } = render(<CorpusWall client={client} />);
+  const canvas = await findCanvas(container);
+  const stage = container.querySelector('.corpus-stage')!;
+
+  fireEvent.click(canvas, { clientX: 10, clientY: 10 });
+  expect(await screen.findByRole('dialog', { name: /Part a/ })).toBeTruthy();
+  fireEvent.wheel(stage, { deltaY: -1, clientX: 10, clientY: 10 });
+  expect(container.querySelector('.corpus-card')).toBeNull();
+
+  fireEvent.click(canvas, { clientX: 10, clientY: 10 });
+  const card = await screen.findByRole('dialog', { name: /Part a/ });
+  fireEvent.pointerEnter(card);
+  fireEvent.wheel(stage, { deltaY: -1, clientX: 10, clientY: 10 });
+  expect(container.querySelector('.corpus-card')).toBeTruthy();
+
+  // Once the pointer leaves it, the card is ordinary again.
+  fireEvent.pointerLeave(card);
+  fireEvent.wheel(stage, { deltaY: -1, clientX: 10, clientY: 10 });
+  expect(container.querySelector('.corpus-card')).toBeNull();
+});
