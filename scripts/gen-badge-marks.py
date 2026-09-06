@@ -42,36 +42,15 @@ def horseshoe():
 
 
 def redo_arrow():
-    """The subset sign with a head: one filled outline, so the head cannot
-    come adrift of the stroke it finishes. The head is a true equilateral
-    triangle on the arc's tangent where the band stops -- built off a radial
-    line instead it comes out a wedge aimed wide of the way the arrow is
-    going -- and oversized, because at badge size a head in proportion to the
-    stroke disappears into the curve it sits on."""
-    rm = 330.0
-    t_tail, t_head = 26.0, 86.0
-    a0, ah = math.pi * 0.52, math.pi * 1.66
-    side = 400.0
-    n = 80
+    """The arrow from `scripts/redo.svg`, drawn rather than computed: it was
+    an arc with a triangle glued on, and the drawing carries the taper and
+    the head's aim together."""
+    return _from_doc(_svg_paths("redo.svg", SHAPE_FILL)[0])
 
-    outer, inner = [], []
-    for i in range(n):
-        u = i / (n - 1)
-        a = a0 + (ah - a0) * u
-        t = t_tail + (t_head - t_tail) * u ** 0.9
-        outer.append((math.cos(a) * (rm + t), math.sin(a) * (rm + t)))
-        inner.append((math.cos(a) * (rm - t), math.sin(a) * (rm - t)))
 
-    px, py = math.cos(ah) * rm, math.sin(ah) * rm
-    tx, ty = -math.sin(ah), math.cos(ah)          # forward along the arc
-    nx, ny = math.cos(ah), math.sin(ah)           # outward from the center
-    height = side * math.sqrt(3) / 2
-    # The base sits back inside the band so the two meet without a seam.
-    bx, by = px - tx * height * 0.16, py - ty * height * 0.16
-    head = [(bx + nx * side / 2, by + ny * side / 2),
-            (bx + tx * height, by + ty * height),
-            (bx - nx * side / 2, by - ny * side / 2)]
-    return outer + head + list(reversed(inner))
+def redo_sparkle():
+    """The sparkle beside the arrow's tail, from the same drawing."""
+    return [_from_doc(pts) for pts in _svg_paths("redo.svg", ACCENT_FILL)]
 
 
 # --- scripts/bristles.svg -------------------------------------------------
@@ -131,10 +110,40 @@ def sample(d, per=24):
     return out
 
 
-def _svg_paths(cls):
-    svg = (pathlib.Path(__file__).resolve().parent / "bristles.svg").read_text()
-    return [sample(m) for m in
-            re.findall(rf'class="{cls}"[^>]*\sd="([^"]+)"', svg)]
+#: How a drawing names its parts. Illustrator renumbers style classes on
+#: every save -- the same path came back as `st1` after being written as
+#: `st2` -- so a path is found by the fill it was drawn with, never by class.
+SHAPE_FILL = "#fbb03b"
+ACCENT_FILL = "lime"
+
+
+def _svg_paths(name, fill):
+    svg = (pathlib.Path(__file__).resolve().parent / name).read_text()
+    classes = {cls for cls, body in
+               re.findall(r"\.(st\d+)\s*\{([^}]*)\}", svg)
+               if re.search(rf"fill:\s*{re.escape(fill)}\s*[;}}]", body)}
+    # A class can also be declared in a shared rule: `.st0, .st1 { ... }`.
+    for group, body in re.findall(r"((?:\.st\d+\s*,\s*)+\.st\d+)\s*\{([^}]*)\}", svg):
+        if re.search(rf"fill:\s*{re.escape(fill)}\s*[;}}]", body):
+            classes |= set(re.findall(r"\.(st\d+)", group))
+    out = []
+    for cls, d in re.findall(r'class="(st\d+)"[^>]*\sd="([^"]+)"', svg):
+        if cls in classes:
+            pts = sample(d)
+            if len(pts) >= 4:
+                out.append(pts)
+    return out
+
+
+#: The document both drawings use: 1920x1080, the mark's origin at its
+#: center, and one mark unit every 400 units of it.
+DOC_CENTER = (960.0, 540.0)
+DOC_UNIT = 400.0
+
+
+def _from_doc(pts):
+    return [((x - DOC_CENTER[0]) / DOC_UNIT * GRID,
+             (y - DOC_CENTER[1]) / DOC_UNIT * GRID) for x, y in pts]
 
 
 def _place(pts, scale, cx, bottom):
@@ -149,7 +158,7 @@ def brush():
     parametric stand-in for it read as a bottle or a light bulb."""
     from shapely.geometry import Polygon
 
-    pts = _svg_paths("st2")[0]
+    pts = _svg_paths("bristles.svg", SHAPE_FILL)[0]
     ys = [p[1] for p in pts]
     xs = [p[0] for p in pts]
     scale = 2.0 * GRID / (max(ys) - min(ys))
@@ -176,9 +185,7 @@ def paint(scale, cx, bottom):
 
     bristles = Polygon(brush()[0]).buffer(0)
     out = []
-    for pts in _svg_paths("st0"):
-        if len(pts) < 4:
-            continue
+    for pts in _svg_paths("bristles.svg", ACCENT_FILL):
         poly = Polygon(_place(pts, scale, cx, bottom)).buffer(0)
         hit = poly.intersection(bristles)
         parts = list(hit.geoms) if hit.geom_type == "MultiPolygon" else [hit]
@@ -311,6 +318,10 @@ if __name__ == "__main__":
     cuts = contract(magnet_pts, 0.0, sbox(-GRID, -400.0, GRID, -400.0 + 145.0))
     out.append(emit_many("MAGNET_CUT", cuts))
     print(f"MAGNET_CUT: {len(cuts)} pieces")
+
+    spark = redo_sparkle()
+    out.append(emit_many("REDO_SPARK", spark))
+    print(f"REDO_SPARK: {len(spark)} pieces")
 
     _, scale, cx, bottom = brush()
     cuts = paint(scale, cx, bottom)

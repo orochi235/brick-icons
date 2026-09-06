@@ -6,8 +6,8 @@
  *  Their own module because nothing but a canvas can check them: keeping
  *  them out of `Wall.tsx` is what lets a page draw the set and look at it.
  */
-import { BRUSH, BRUSH_CUT, MAGNET, MAGNET_CUT,
-  REDO } from '@lab/corpus/markPaths';
+import { BRUSH, BRUSH_CUT, MAGNET, MAGNET_CUT, REDO,
+  REDO_SPARK } from '@lab/corpus/markPaths';
 import type { CellBadge } from '@lab/corpus/paint';
 
 // Lighter than the caption it sits beside would suggest: a badge letter is
@@ -86,23 +86,12 @@ export const drawArchive: Mark = (ctx, field) => {
   ctx.restore();
 };
 
-// Redo: the subset sign with a head, as one filled band so the head cannot
-// come adrift of the stroke it finishes. Clockwise, or it reads as undo.
-export const drawRedo: Mark = (ctx) => {
+// Redo: the arrow and the sparkle beside its tail, both from
+// `scripts/redo.svg`. Computed instead it was an arc with a triangle glued
+// on, and the head's aim never quite belonged to the curve.
+export const drawRedo: Mark = (ctx, _field, accent) => {
   fillPath(ctx, REDO);
-  // A sparkle off the tail, where the arrow starts: the part it came from.
-  const cx = 0.46;
-  const cy = 0.44;
-  const r = 0.3;
-  const k = r * 0.2;
-  ctx.beginPath();
-  ctx.moveTo(cx, cy - r);
-  ctx.quadraticCurveTo(cx + k, cy - k, cx + r, cy);
-  ctx.quadraticCurveTo(cx + k, cy + k, cx, cy + r);
-  ctx.quadraticCurveTo(cx - k, cy + k, cx - r, cy);
-  ctx.quadraticCurveTo(cx - k, cy - k, cx, cy - r);
-  ctx.closePath();
-  ctx.fill();
+  cutPaths(ctx, REDO_SPARK, accent);
 };
 
 // A lightning bolt. A zigzag silhouette is the shape that survives the mark
@@ -142,6 +131,13 @@ export const drawMagnet: Mark = (ctx, _field, accent) => {
 // hold at the strip's floor the fallback is a halftone dot cluster.
 export const drawBrush: Mark = (ctx, _field, accent) => {
   ctx.save();
+  // Cut flat along a horizontal line, in the badge's frame rather than the
+  // brush's: the tip is pressed against the ground of a stroke, and the
+  // ground does not tilt with the brush.
+  ctx.beginPath();
+  ctx.rect(-1.8, -1.8, 3.6, 2.42);
+  ctx.clip();
+  ctx.translate(0, 0.18);
   ctx.rotate(-Math.PI * 2 / 3);
   // The handle runs off the edge of the field rather than stopping inside
   // it: a ferrule drawn whole is a stack of bands at the strip's floor, and
