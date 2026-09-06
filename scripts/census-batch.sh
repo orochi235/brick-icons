@@ -30,6 +30,7 @@ dir=${3:?directory to write this run of JSONLs into}
 batch=${4:?comma-separated part ids}
 KEEP=${KEEP:-out/census/renders}
 HARD=${HARD:-240}
+POLL=${POLL:-15}
 
 mkdir -p "$dir"
 first=${batch%%,*}
@@ -41,22 +42,39 @@ IFS=,
 set -- $batch
 unset IFS
 
-.venv/bin/python scripts/compare-silhouette-truth.py "$@" \
-  --engine "$engine" --timeout "$timeout" --jsonl "$jsonl" --skip-done --keep "$KEEP" &
+# The inner process emits its own `onto: plan` for the batch, unlabelled.
+# Under item dispatch every worker would emit one, they would all collide on
+# the empty label, and the bar would reset to 0/25 forever. onto's pool prints
+# the authoritative plan and progress for the item list, so these are dropped.
+rc=$(mktemp)
+{
+  .venv/bin/python scripts/compare-silhouette-truth.py "$@" \
+    --engine "$engine" --timeout "$timeout" --jsonl "$jsonl" --skip-done --keep "$KEEP"
+  echo $? > "$rc"
+} | grep --line-buffered -v '^onto: ' &
 worker=$!
-trap 'kill "$worker" 2>/dev/null || true' EXIT INT TERM
+trap 'rm -f "$rc"; kill "$worker" 2>/dev/null || true' EXIT INT TERM
 
 # .inflight's mtime is the current part's start time, and the only clock a
 # watchdog can read from outside the process.
 while kill -0 "$worker" 2>/dev/null; do
-  sleep 15
+  sleep "$POLL"
   [ -f "$inflight" ] || continue
   age=$(( $(date +%s) - $(stat -f %m "$inflight") ))
   [ "$age" -lt "$HARD" ] && continue
-  echo "--- $first batch: $(cat "$inflight") stuck ${age}s > ${HARD}s, killing $worker ---" >&2
-  kill -9 "$worker" 2>/dev/null || true
+  # The pipeline's pid is grep's, so the python is found by the jsonl path it
+  # was handed, which is unique to this batch.
+  py=$(pgrep -f "compare-silhouette-truth.py .* --jsonl $jsonl " || true)
+  echo "--- $first batch: $(cat "$inflight") stuck ${age}s > ${HARD}s, killing ${py:-$worker} ---" >&2
+  kill -9 ${py:-$worker} 2>/dev/null || true
   break
 done
 
+wait "$worker" 2>/dev/null || true
+# Empty as well as missing: a killed worker never writes the file, and
+# `exit ""` is 255, which would hide the signal that did it.
+code=$(cat "$rc" 2>/dev/null || true)
+[ -n "$code" ] || code=137
+rm -f "$rc"
 trap - EXIT INT TERM
-wait "$worker"
+exit "$code"
