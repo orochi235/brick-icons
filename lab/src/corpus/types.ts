@@ -7,6 +7,7 @@ export interface Cell {
   obsolete: boolean;
   base: boolean;
   out_of_scope: boolean;
+  moved: boolean;
   /** First and last year a set carried this part, and how many sets did --
    *  null for a part the catalogs do not list. */
   year_from: number | null;

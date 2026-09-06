@@ -1,4 +1,4 @@
-import { FILTERS, SORTS, type Selection } from '@lab/corpus/select';
+import { CLASS_LABEL, CLASSES, FILTERS, SORTS, type Selection } from '@lab/corpus/select';
 import '@lab/corpus/FilterBar.css';
 
 export function FilterBar({ selection, onChange, shown, total,
@@ -37,6 +37,16 @@ export function FilterBar({ selection, onChange, shown, total,
           {FILTERS.map((f) => <option key={f} value={f}>{f}</option>)}
         </select>
       </label>
+      {CLASSES.map((cls) => (
+        <label key={cls} className="corpus-bar-check">
+          <input type="checkbox" checked={selection.shown[cls]}
+                 onChange={(e) => onChange({
+                   ...selection,
+                   shown: { ...selection.shown, [cls]: e.target.checked },
+                 })} />
+          {CLASS_LABEL[cls]}
+        </label>
+      ))}
       <span className="corpus-count">{shown} of {total}</span>
     </div>
   );

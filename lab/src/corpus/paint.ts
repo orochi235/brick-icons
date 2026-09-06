@@ -68,6 +68,15 @@ function borderWidthFor(weight: CellStyle['weight'], cellPx: number,
  *  wall's dark canvas. */
 export const THUMB_GROUND = '#ffffff';
 
+/** What a retired part sits on instead -- `thumbs.RETIRED_GROUND` bakes the
+ *  same value into the sprites, so a cell does not change shade as it crosses
+ *  from a bake to the vector rung. */
+export const RETIRED_GROUND = '#e9e9e9';
+
+export function groundFor(cell: Cell): string {
+  return cell.tags?.includes('retired') ? RETIRED_GROUND : THUMB_GROUND;
+}
+
 /** Below this drawn size a cell has no room for a badge without covering the
  *  drawing it is about. */
 export const BADGE_MIN_PX = 56;
@@ -90,12 +99,23 @@ export function badgeFor(cell: Cell, cellPx: number,
 
 export type PaintCommand =
   | { kind: 'sprite'; dx: number; dy: number; dw: number; dh: number;
-      sx: number; sy: number; sw: number; sh: number; ring: boolean; alpha?: number;
+      sx: number; sy: number; sw: number; sh: number;
+      border: string | null; borderWidth: number; alpha?: number;
       caret?: boolean; badge?: string }
   | { kind: 'fill'; dx: number; dy: number; dw: number; dh: number;
-      fill: string; border: string | null; borderWidth: number; caret?: boolean }
+      fill: string; border: string | null; borderWidth: number;
+      /** Struck corner to corner in the border's own color and width. Every
+       *  bordered state earns it when there is nothing drawn in the cell: the
+       *  border alone reads as a tint at the zooms where most cells are small,
+       *  and an empty cell is the one that has something to say. */
+      slash: boolean; caret?: boolean }
   | { kind: 'image'; dx: number; dy: number; dw: number; dh: number;
-      image: CanvasImageSource; ground: string; ring: boolean; alpha?: number;
+      image: CanvasImageSource; ground: string;
+      /** The vector rung's rasters are ink on transparency, so the ground and
+       *  the state's frame both show through them. A baked PNG carries its
+       *  own opaque ground and hides anything drawn under it. */
+      translucent: boolean;
+      border: string | null; borderWidth: number; alpha?: number;
       caret?: boolean; badge?: string };
 
 export interface PaintInput {
@@ -137,30 +157,35 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
     const [dx, dy] = worldToScreen(rect.x, rect.y, transform);
     const dw = rect.w * cam.scale.x;
     const dh = rect.h * cam.scale.y;
-    const ring = cell.open_defects > 0;
     const isCaret = caret != null && i === caret ? true : undefined;
     const state = cellState(cell);
     const dimmed = highlight !== null && highlight !== state;
     const alpha = dimmed ? appearance.dimAlpha : undefined;
+    // A drawn cell wears its state's border too: a part that fails in another
+    // slot looks perfectly fine in this one, and the frame is the only thing
+    // saying otherwise.
+    const style = dimmed ? palette.unknown : palette[state];
+    const border = style.border;
+    const borderWidth = borderWidthFor(style.weight, dw, appearance);
     const badge = badgeFor(cell, dw) ?? undefined;
-    const image = vector?.get(cell.id) ?? loose?.get(cell.id);
+    const vectored = vector?.get(cell.id);
+    const image = vectored ?? loose?.get(cell.id);
     if (image) {
-      out.push({ kind: 'image', dx, dy, dw, dh, image, ground: THUMB_GROUND, ring, alpha,
-                 caret: isCaret, badge });
+      out.push({ kind: 'image', dx, dy, dw, dh, image, ground: groundFor(cell),
+                 translucent: vectored !== undefined,
+                 border, borderWidth, alpha, caret: isCaret, badge });
       continue;
     }
     const box = manifest && cell.sha && !isStale(manifest, cell)
       ? sourceBox(manifest, cell.index)
       : null;
     if (box) {
-      out.push({ kind: 'sprite', dx, dy, dw, dh, ...box, ring, alpha, caret: isCaret,
-                 badge });
+      out.push({ kind: 'sprite', dx, dy, dw, dh, ...box, border, borderWidth, alpha,
+                 caret: isCaret, badge });
       continue;
     }
-    const style = dimmed ? palette.unknown : palette[state];
-    out.push({ kind: 'fill', dx, dy, dw, dh, fill: style.fill,
-               border: style.border, borderWidth: borderWidthFor(style.weight, dw, appearance),
-               caret: isCaret });
+    out.push({ kind: 'fill', dx, dy, dw, dh, fill: style.fill, border, borderWidth,
+               slash: border !== null, caret: isCaret });
   }
   return out;
 }

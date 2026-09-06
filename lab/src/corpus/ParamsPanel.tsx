@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { ControlPanel, FloatingPanel } from '@weasel-js/labkit';
-import { PARAM_GROUPS, type Params } from '@lab/corpus/params';
+import { useMemo, useState } from 'react';
+import { ControlPanel, FloatingPanel, fromConfigFields } from '@weasel-js/labkit';
+import { PARAM_GROUPS, PARAM_UNITS, type Params } from '@lab/corpus/params';
 import '@lab/corpus/ParamsPanel.css';
 
 export interface ParamsPanelProps {
@@ -16,6 +16,17 @@ export interface ParamsPanelProps {
  *  change into a CSS custom property, never a prop into the wall. */
 export function ParamsPanel({ params, setParam, reset }: ParamsPanelProps) {
   const [open, setOpen] = useState(true);
+  // Resolved rather than handed over as `fields`, because that is the only
+  // shape that carries a unit: `fromConfigFields` drops anything a legacy
+  // `ConfigField` cannot express, and the row draws `suffix` as its unit.
+  const schemas = useMemo(() => PARAM_GROUPS.map((group) => {
+    const schema = fromConfigFields(group.fields);
+    for (const [key, unit] of Object.entries(PARAM_UNITS)) {
+      const leaf = schema.group.children[key] as { suffix?: string } | undefined;
+      if (leaf) leaf.suffix = unit;
+    }
+    return { label: group.label, schema };
+  }), []);
 
   if (!open) return null;
 
@@ -32,11 +43,11 @@ export function ParamsPanel({ params, setParam, reset }: ParamsPanelProps) {
         </div>
       </div>
       <div className="corpus-params-body">
-        {PARAM_GROUPS.map((group) => (
-          <section key={group.label} className="corpus-params-group">
-            <h3>{group.label}</h3>
+        {schemas.map(({ label, schema }) => (
+          <section key={label} className="corpus-params-group">
+            <h3>{label}</h3>
             <ControlPanel
-              fields={group.fields}
+              schema={schema}
               config={params as unknown as Record<string, unknown>}
               setConfig={(key, value) => setParam(key as keyof Params, value as never)}
             />

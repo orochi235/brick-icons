@@ -100,10 +100,22 @@ const COLOR_LABEL: Record<ColorParamKey, string> = {
   caretColor: 'Caret color',
 };
 
+/** The unit each numeric row shows after its value. A legacy `ConfigField`
+ *  cannot carry one -- `ParamsPanel` resolves the fields and annotates them
+ *  -- and the row reserves the space whether or not a unit is set, so a
+ *  label spelling out `(px)` pays twice for it. */
+export const PARAM_UNITS: Partial<Record<keyof Params, string>> = {
+  cell: 'px',
+  gap: 'px',
+  maxBorderPx: 'px',
+  dragThresholdPx: 'px',
+  pollMs: 'ms',
+};
+
 export const LAYOUT_FIELDS: ConfigField[] = [
-  { key: 'cell', label: 'Cell size (px)', type: 'slider',
+  { key: 'cell', label: 'Cell size', type: 'slider',
     default: DEFAULT_PARAMS.cell, min: 8, max: 128, step: 4 },
-  { key: 'gap', label: 'Gap (px)', type: 'slider',
+  { key: 'gap', label: 'Gap', type: 'slider',
     default: DEFAULT_PARAMS.gap, min: 0, max: 32, step: 1 },
   { key: 'cols', label: 'Columns (0 = auto)', type: 'number',
     default: DEFAULT_PARAMS.cols, min: 0, max: 64, step: 1 },
@@ -117,20 +129,20 @@ export const APPEARANCE_FIELDS: ConfigField[] = [
     default: DEFAULT_PARAMS.thickBorderFactor, min: 0, max: 0.5, step: 0.01 },
   { key: 'thinBorderFactor', label: 'Thin border factor', type: 'slider',
     default: DEFAULT_PARAMS.thinBorderFactor, min: 0, max: 0.5, step: 0.01 },
-  { key: 'maxBorderPx', label: 'Max border (px)', type: 'slider',
+  { key: 'maxBorderPx', label: 'Max border', type: 'slider',
     default: DEFAULT_PARAMS.maxBorderPx, min: 1, max: 20, step: 1 },
   { key: 'dimAlpha', label: 'Dim alpha', type: 'slider',
     default: DEFAULT_PARAMS.dimAlpha, min: 0, max: 1, step: 0.05 },
 ];
 
 export const FEEL_FIELDS: ConfigField[] = [
-  { key: 'dragThresholdPx', label: 'Drag threshold (px)', type: 'slider',
+  { key: 'dragThresholdPx', label: 'Drag threshold', type: 'slider',
     default: DEFAULT_PARAMS.dragThresholdPx, min: 0, max: 20, step: 1 },
   { key: 'levelUpHysteresis', label: 'Level-up hysteresis', type: 'slider',
     default: DEFAULT_PARAMS.levelUpHysteresis, min: 1, max: 3, step: 0.05 },
   { key: 'levelDownHysteresis', label: 'Level-down hysteresis', type: 'slider',
     default: DEFAULT_PARAMS.levelDownHysteresis, min: 0.3, max: 1, step: 0.01 },
-  { key: 'pollMs', label: 'Poll interval (ms)', type: 'number',
+  { key: 'pollMs', label: 'Poll interval', type: 'number',
     default: DEFAULT_PARAMS.pollMs, min: 1000, max: 60_000, step: 1000 },
 ];
 

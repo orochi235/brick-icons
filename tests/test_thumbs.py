@@ -173,7 +173,44 @@ def test_the_wall_grounds_its_vector_cells_on_what_the_bake_used():
     """
     paint = (Path(__file__).resolve().parent.parent
              / "lab" / "src" / "corpus" / "paint.ts").read_text()
-    match = re.search(r"THUMB_GROUND = '(#[0-9a-fA-F]{6})'", paint)
-    assert match, "paint.ts no longer declares THUMB_GROUND"
-    r, g, b = (int(match.group(1)[i:i + 2], 16) for i in (1, 3, 5))
-    assert (r, g, b, 255) == thumbs.GROUND
+    def declared(name):
+        m = re.search(name + r" = '(#[0-9a-fA-F]{6})'", paint)
+        assert m, f"paint.ts no longer declares {name}"
+        hexed = m.group(1)
+        return tuple(int(hexed[i:i + 2], 16) for i in (1, 3, 5)) + (255,)
+
+    assert declared("THUMB_GROUND") == thumbs.GROUND
+    assert declared("RETIRED_GROUND") == thumbs.RETIRED_GROUND
+
+
+def test_a_retired_part_bakes_onto_its_own_ground(tmp_path):
+    svg = tmp_path / "3001.svg"
+    svg.write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 170">'
+                   '<rect x="0" y="0" width="10" height="10"/></svg>')
+    out = tmp_path / "slot"
+    thumbs.bake_part("3001", svg, out, sha="abc", ground=thumbs.RETIRED_GROUND)
+    with Image.open(out / "128" / "3001.png") as img:
+        assert img.convert("RGBA").getpixel((2, 126)) == thumbs.RETIRED_GROUND
+
+
+def test_changing_the_ground_rebakes_a_part_the_sha_says_is_fresh(tmp_path):
+    svg = tmp_path / "3001.svg"
+    svg.write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 170">'
+                   '<rect x="0" y="0" width="10" height="10"/></svg>')
+    out = tmp_path / "slot"
+    assert thumbs.bake_part("3001", svg, out, sha="abc")
+    assert thumbs.bake_part("3001", svg, out, sha="abc") == []
+    assert thumbs.bake_part("3001", svg, out, sha="abc",
+                            ground=thumbs.RETIRED_GROUND)
+    with Image.open(out / "128" / "3001.png") as img:
+        assert img.convert("RGBA").getpixel((2, 126)) == thumbs.RETIRED_GROUND
+
+
+def test_a_bake_from_before_grounds_were_recorded_stays_fresh(tmp_path):
+    svg = tmp_path / "3001.svg"
+    svg.write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 170">'
+                   '<rect x="0" y="0" width="10" height="10"/></svg>')
+    out = tmp_path / "slot"
+    thumbs.bake_part("3001", svg, out, sha="abc")
+    (out / thumbs.GROUNDS).unlink()
+    assert thumbs.bake_part("3001", svg, out, sha="abc") == []

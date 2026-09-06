@@ -54,7 +54,8 @@ export function Lightbox({ partId, source, client, onClose }: {
           <ul className="corpus-slots">
             {slots.map((slot) => (
               <li key={slot.source} className="corpus-slot"
-                  data-current={slot.source === source}>
+                  data-current={slot.source === source}
+                  data-retired={(detail.part.tags ?? []).includes('retired')}>
                 <img className="corpus-big" alt={`${detail.part.id} drawn by ${slot.source}`}
                      src={`/api/corpus/render/${slot.source}/${detail.part.id}.svg`
                           + `?v=${slot.sha256.slice(0, 8)}`} />

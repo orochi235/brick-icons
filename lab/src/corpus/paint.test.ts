@@ -1,12 +1,12 @@
 import { expect, it } from 'vitest';
-import { badgeFor, cellState, fillFor, paintCommands, tally, THUMB_GROUND }
-  from '@lab/corpus/paint';
+import { badgeFor, cellState, fillFor, groundFor, paintCommands, tally,
+  RETIRED_GROUND, THUMB_GROUND } from '@lab/corpus/paint';
 import { CELL_STATES, DEFAULT_PALETTE as CELL_FILL, type CellState } from '@lab/corpus/palette';
 import type { Cell, SheetManifest } from '@lab/corpus/types';
 
 const cell = (id: string, index: number, sha: string | null,
               overrides: Partial<Cell> = {}): Cell => ({
-  id, index, title: id, category: null, printed: false, obsolete: false, base: true, out_of_scope: false, year_from: null, year_to: null, sets: null, tags: [],
+  id, index, title: id, category: null, printed: false, obsolete: false, base: true, out_of_scope: false, moved: false, year_from: null, year_to: null, sets: null, tags: [],
   status: 'unreviewed', sha, made_at: null, extra_d99: null, secs: null,
   error: null, open_defects: 0, open_defects_elsewhere: 0,
   error_elsewhere: false, ...overrides,
@@ -30,7 +30,7 @@ it('draws a baked cell from the sheet', () => {
     cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest,
   });
   expect(cmd).toMatchObject({ kind: 'sprite', dx: 0, dy: 0, dw: 10, dh: 10,
-                              sx: 2, sy: 2, ring: false });
+                              sx: 2, sy: 2, border: null });
 });
 
 it('draws an unrendered cell with nothing known as unknown gray, and no border', () => {
@@ -39,7 +39,8 @@ it('draws an unrendered cell with nothing known as unknown gray, and no border',
     cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest,
   });
   expect(cmd).toEqual({ kind: 'fill', dx: 20, dy: 0, dw: 10, dh: 10,
-                        fill: CELL_FILL.unknown.fill, border: null, borderWidth: 0 });
+                        fill: CELL_FILL.unknown.fill, border: null, borderWidth: 0,
+                        slash: false });
 });
 
 it('draws a stale cell as a fill, not as last week’s picture', () => {
@@ -90,7 +91,8 @@ it('draws a whole loose image when one is loaded for the cell', () => {
     cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest, loose: new Map([['a', img]]),
   });
   expect(cmd).toEqual({ kind: 'image', dx: 0, dy: 0, dw: 10, dh: 10, image: img,
-                        ground: THUMB_GROUND, ring: false });
+                        ground: THUMB_GROUND, translucent: false, border: null,
+                        borderWidth: 0 });
 });
 
 it('grounds a vector cell on what the thumbnails were baked against', () => {
@@ -127,18 +129,24 @@ it('prefers a rasterized vector over the loose image', () => {
   expect(cmd).toMatchObject({ kind: 'image', image: vectored });
 });
 
-it('rings a drawn cell that has an open defect', () => {
+it('frames a drawn cell in its state color, defect or trouble elsewhere', () => {
   const img = {} as HTMLImageElement;
   const [withDefect] = paintCommands({
     cells: [cell('a', 0, 'sha-a', { open_defects: 1 })], rects, visible: [0],
     cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest, loose: new Map([['a', img]]),
   });
-  expect(withDefect).toMatchObject({ ring: true });
+  expect(withDefect).toMatchObject({ border: CELL_FILL.defect.border });
   const [clean] = paintCommands({
     cells: [cell('a', 0, 'sha-a')], rects, visible: [0],
     cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest, loose: new Map([['a', img]]),
   });
-  expect(clean).toMatchObject({ ring: false });
+  expect(clean).toMatchObject({ border: null, borderWidth: 0 });
+  const [elsewhere] = paintCommands({
+    cells: [cell('a', 0, 'sha-a', { error_elsewhere: true })], rects, visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest,
+    loose: new Map([['a', img]]),
+  });
+  expect(elsewhere).toMatchObject({ border: CELL_FILL.problemElsewhere.border });
 });
 
 it('flags a part with an open defect in ochre, whatever else is true', () => {
@@ -274,7 +282,8 @@ it('dims a fill cell outside the highlighted state to the unknown field, without
     highlight: 'timeout',
   });
   expect(cmd).toEqual({ kind: 'fill', dx: 0, dy: 0, dw: 10, dh: 10,
-                        fill: CELL_FILL.unknown.fill, border: null, borderWidth: 0 });
+                        fill: CELL_FILL.unknown.fill, border: null, borderWidth: 0,
+                        slash: false });
 });
 
 it('reduces alpha on a drawn cell outside the highlighted state, and leaves a matching one alone', () => {
@@ -329,14 +338,14 @@ it('marks exactly one command as the caret', () => {
   expect(cmds[2]!.caret).toBeUndefined();
 });
 
-it('lets a cell carry both the defect ring and the caret', () => {
+it('lets a cell carry both the defect frame and the caret', () => {
   const img = {} as HTMLImageElement;
   const [cmd] = paintCommands({
     cells: [cell('a', 0, 'sha-a', { open_defects: 1 })], rects, visible: [0],
     cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest,
     loose: new Map([['a', img]]), caret: 0,
   });
-  expect(cmd).toMatchObject({ ring: true, caret: true });
+  expect(cmd).toMatchObject({ border: CELL_FILL.defect.border, caret: true });
 });
 
 it('badges a retired cell once it is drawn big enough to hold one', () => {
@@ -353,4 +362,30 @@ it('carries the badge on the drawn cell, not the empty one', () => {
     palette: CELL_FILL, manifest, loose: new Map([['a', {} as HTMLImageElement]]),
   });
   expect(cmd).toMatchObject({ kind: 'image', badge: 'R' });
+});
+
+it('strikes every undrawn cell with a border, and leaves the quiet ones alone', () => {
+  const struck = (over: Partial<Cell>) => {
+    const [cmd] = paintCommands({
+      cells: [cell('a', 0, null, over)], rects, visible: [0],
+      cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest: null,
+    });
+    return cmd as Extract<typeof cmd, { kind: 'fill' }>;
+  };
+  expect(struck({ error: 'TimeoutError' }).slash).toBe(true);
+  expect(struck({ error: 'GEOSException' }).slash).toBe(true);
+  expect(struck({ open_defects: 1 }).slash).toBe(true);
+  expect(struck({ error_elsewhere: true }).slash).toBe(true);
+  expect(struck({}).slash).toBe(false);
+});
+
+it('sits a retired part on its own ground, at the rung the wall rasterizes', () => {
+  expect(groundFor(cell('a', 0, null))).toBe(THUMB_GROUND);
+  expect(groundFor(cell('b', 1, null, { tags: ['retired'] }))).toBe(RETIRED_GROUND);
+  const [cmd] = paintCommands({
+    cells: [cell('b', 1, 'sha-b', { tags: ['retired'] })], rects, visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest,
+    vector: new Map([['b', {} as CanvasImageSource]]),
+  });
+  expect(cmd).toMatchObject({ kind: 'image', ground: RETIRED_GROUND, translucent: true });
 });

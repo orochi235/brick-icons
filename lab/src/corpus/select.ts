@@ -7,7 +7,29 @@ export const FILTERS = ['all', 'rendered', 'unrendered', 'errors', 'printed',
 
 export type Sort = typeof SORTS[number];
 export type Filter = typeof FILTERS[number];
-export interface Selection { sort: Sort; filter: Filter }
+
+/** Classes of cell the wall leaves out unless asked. Separate from `filter`,
+ *  which picks one class to look at: these say what the map is made of at
+ *  all, and a `~Moved to` redirect is not a part anyone can draw. */
+export const CLASSES = ['moved', 'outOfScope'] as const;
+export type CellClass = typeof CLASSES[number];
+export type Shown = Record<CellClass, boolean>;
+
+/** Redirects are off by default; out-of-scope parts stay on the map in their
+ *  own color, because knowing what is not being drawn is the point of it. */
+export const DEFAULT_SHOWN: Shown = { moved: false, outOfScope: true };
+
+export const CLASS_LABEL: Record<CellClass, string> = {
+  moved: 'moved',
+  outOfScope: 'out of scope',
+};
+
+const IN_CLASS: Record<CellClass, (c: Cell) => boolean> = {
+  moved: (c) => c.moved,
+  outOfScope: (c) => c.out_of_scope,
+};
+
+export interface Selection { sort: Sort; filter: Filter; shown: Shown }
 
 const KEEP: Record<Filter, (c: Cell) => boolean> = {
   all: () => true,
@@ -35,7 +57,10 @@ function key(cell: Cell, sort: Sort): string | number | null {
 }
 
 export function applySelection(cells: Cell[], selection: Selection): Cell[] {
-  const kept = cells.filter(KEEP[selection.filter]);
+  const shown = selection.shown ?? DEFAULT_SHOWN;
+  const hidden = CLASSES.filter((c) => !shown[c]);
+  const kept = cells.filter((c) => KEEP[selection.filter](c)
+                                   && !hidden.some((h) => IN_CLASS[h](c)));
   const desc = DESCENDING.has(selection.sort);
   return kept.slice().sort((a, b) => {
     const ka = key(a, selection.sort);

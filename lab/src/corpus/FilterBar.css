@@ -7,3 +7,9 @@
 }
 .corpus-bar label { display: flex; gap: 0.3rem; align-items: center; }
 .corpus-count { margin-left: auto; color: var(--wzl-fg-muted); }
+
+.corpus-bar-check {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}

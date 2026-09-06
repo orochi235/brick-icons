@@ -58,14 +58,27 @@ function ongoingInvoker(action: typeof viewportDragPanAction) {
 const NOOP_MODIFIERS = { alt: false, ctrl: false, meta: false, shift: false };
 
 // A thumbnail is an opaque tile, so a defect's color is hidden behind it;
-// the ring is what makes a drawn cell's open defect findable.
-function strokeRing(ctx: CanvasRenderingContext2D,
-                     cmd: { dx: number; dy: number; dw: number; dh: number },
-                     palette: Palette) {
+// A stroke straddles its path, so inset by half the width -- otherwise it
+// overshoots the cell and eats into its neighbors. Drawn over a thumbnail as
+// readily as over an empty cell: a part that fails in another slot draws
+// perfectly well here, and the frame is the only thing that says so.
+function strokeBorder(ctx: CanvasRenderingContext2D,
+                      cmd: { dx: number; dy: number; dw: number; dh: number;
+                             border: string | null; borderWidth: number;
+                             slash?: boolean }) {
+  if (!cmd.border || cmd.borderWidth <= 0) return;
+  const inset = cmd.borderWidth / 2;
   ctx.save();
-  ctx.strokeStyle = palette.defect.border ?? palette.defect.fill;
-  ctx.lineWidth = 2;
-  ctx.strokeRect(cmd.dx + 1, cmd.dy + 1, cmd.dw - 2, cmd.dh - 2);
+  ctx.strokeStyle = cmd.border;
+  ctx.lineWidth = cmd.borderWidth;
+  ctx.strokeRect(cmd.dx + inset, cmd.dy + inset,
+                 cmd.dw - cmd.borderWidth, cmd.dh - cmd.borderWidth);
+  if (cmd.slash) {
+    ctx.beginPath();
+    ctx.moveTo(cmd.dx + inset, cmd.dy + inset);
+    ctx.lineTo(cmd.dx + cmd.dw - inset, cmd.dy + cmd.dh - inset);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
@@ -82,17 +95,25 @@ function strokeCaret(ctx: CanvasRenderingContext2D,
   ctx.restore();
 }
 
-// Ink on the thumbnail's own white ground, bottom-right so it lands on the
-// letterbox margin rather than the drawing, which is centered.
+// A filled disc in the bottom-right corner, on the letterbox margin rather
+// than the drawing, which is centered. Reversed out so it reads over ink and
+// over the white ground alike.
 function drawBadge(ctx: CanvasRenderingContext2D, letter: string,
                    cmd: { dx: number; dy: number; dw: number; dh: number }) {
   const size = Math.max(9, Math.min(20, cmd.dw * 0.14));
+  const radius = size * 0.72;
+  const cx = cmd.dx + cmd.dw - radius - size * 0.3;
+  const cy = cmd.dy + cmd.dh - radius - size * 0.3;
   ctx.save();
-  ctx.font = `600 ${size}px ui-monospace, monospace`;
-  ctx.textAlign = 'right';
-  ctx.textBaseline = 'bottom';
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
   ctx.fillStyle = '#000000';
-  ctx.fillText(letter, cmd.dx + cmd.dw - size * 0.35, cmd.dy + cmd.dh - size * 0.25);
+  ctx.fill();
+  ctx.font = `600 ${size}px ui-monospace, monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(letter, cx, cy + size * 0.06);
   ctx.restore();
 }
 
@@ -108,8 +129,10 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
     ctx.save();
     ctx.globalAlpha = cmd.alpha ?? 1;
     ctx.drawImage(sheet, cmd.sx, cmd.sy, cmd.sw, cmd.sh, dx, dy, cmd.dw, cmd.dh);
+    strokeBorder(ctx, { ...cmd, dx, dy });
+    // After the border, not before: the badge sits in the corner the frame
+    // runs through, and it is the badge that has to stay readable.
     if (cmd.badge) drawBadge(ctx, cmd.badge, { ...cmd, dx, dy });
-    if (cmd.ring) strokeRing(ctx, { ...cmd, dx, dy }, palette);
     ctx.restore();
     if (cmd.caret) strokeCaret(ctx, { ...cmd, dx, dy }, palette);
   } else if (cmd.kind === 'image') {
@@ -119,24 +142,20 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
     // way a dimmed sprite does -- the bakes carry this ground in their pixels.
     ctx.fillStyle = cmd.ground;
     ctx.fillRect(dx, dy, cmd.dw, cmd.dh);
+    // A translucent raster lets the frame sit under the drawing, on the
+    // ground; a baked PNG is opaque, so its frame has to go on top or vanish.
+    if (cmd.translucent) strokeBorder(ctx, { ...cmd, dx, dy });
     ctx.drawImage(cmd.image, dx, dy, cmd.dw, cmd.dh);
+    if (!cmd.translucent) strokeBorder(ctx, { ...cmd, dx, dy });
+    // After the border, not before: the badge sits in the corner the frame
+    // runs through, and it is the badge that has to stay readable.
     if (cmd.badge) drawBadge(ctx, cmd.badge, { ...cmd, dx, dy });
-    if (cmd.ring) strokeRing(ctx, { ...cmd, dx, dy }, palette);
     ctx.restore();
     if (cmd.caret) strokeCaret(ctx, { ...cmd, dx, dy }, palette);
   } else if (cmd.kind === 'fill') {
     ctx.fillStyle = cmd.fill;
     ctx.fillRect(dx, dy, cmd.dw, cmd.dh);
-    if (cmd.border) {
-      // A stroke straddles its path, so inset by half the width --
-      // otherwise it overshoots the cell and eats into its neighbors.
-      const inset = cmd.borderWidth / 2;
-      ctx.save();
-      ctx.strokeStyle = cmd.border;
-      ctx.lineWidth = cmd.borderWidth;
-      ctx.strokeRect(dx + inset, dy + inset, cmd.dw - cmd.borderWidth, cmd.dh - cmd.borderWidth);
-      ctx.restore();
-    }
+    strokeBorder(ctx, { ...cmd, dx, dy });
     if (cmd.caret) strokeCaret(ctx, { ...cmd, dx, dy }, palette);
   }
 }

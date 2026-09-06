@@ -100,7 +100,8 @@ def cells(conn: sqlite3.Connection, source: str = "census-naive",
             f"SELECT id, title, category, printed, obsolete, status, "
             f"(printed = 0 AND obsolete = 0 AND id NOT LIKE '%c__' "
             f"AND id NOT LIKE '%d__' AND id NOT LIKE 'u9%') AS base, "
-            f"(category IN ({scope_marks})) AS out_of_scope "
+            f"(category IN ({scope_marks})) AS out_of_scope, "
+            f"(title LIKE '~Moved to%') AS moved "
             f"FROM parts WHERE id IN ({marks}) ORDER BY id",
             (*OUT_OF_SCOPE_CATEGORIES, *wanted)):
         pid = part["id"]
@@ -117,6 +118,9 @@ def cells(conn: sqlite3.Connection, source: str = "census-naive",
             "obsolete": bool(part["obsolete"]),
             "base": bool(part["base"]),
             "out_of_scope": bool(part["out_of_scope"]),
+            # A redirect to the part that replaced it, not a part -- LDraw
+            # keeps the file so old models still load.
+            "moved": bool(part["moved"]),
             "year_from": year["year_from"] if year else None,
             "year_to": year["year_to"] if year else None,
             "sets": year["sets"] if year else None,

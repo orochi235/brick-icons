@@ -18,13 +18,27 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from brick_icons import db, thumbs  # noqa: E402
+from brick_icons import db, tags, thumbs  # noqa: E402
 
 DEFAULT_OUT = Path("out") / "thumbs"
 
 
+def retired_parts(conn) -> set[str]:
+    """Parts whose last set is far enough back to count as retired.
+
+    Same rule as `tags.tags_for`, in SQL because this asks it of the whole
+    corpus at once. They bake onto their own ground, so the wall says a part
+    is out of production before anyone reads a tag.
+    """
+    from datetime import datetime, timezone
+    cutoff = datetime.now(timezone.utc).year - tags.RETIRED_AFTER_YEARS
+    return {r["part_id"] for r in conn.execute(
+        "SELECT part_id FROM part_years WHERE year_to IS NOT NULL AND year_to <= ?",
+        (cutoff,))}
+
+
 def bake_source(conn, source: str, root: Path, out: Path,
-                order: list[str]) -> tuple[int, int]:
+                order: list[str], retired: set[str]) -> tuple[int, int]:
     """Bake one slot. Returns (baked, total)."""
     rows = conn.execute(
         "SELECT part_id, path, sha256 FROM renders WHERE source = ? "
@@ -37,7 +51,10 @@ def bake_source(conn, source: str, root: Path, out: Path,
             print(f"  {source} {i}/{total} {row['part_id']} MISSING {row['path']}",
                   flush=True)
             continue
-        made = thumbs.bake_part(row["part_id"], svg, slot, sha=row["sha256"])
+        ground = (thumbs.RETIRED_GROUND if row["part_id"] in retired
+                  else thumbs.GROUND)
+        made = thumbs.bake_part(row["part_id"], svg, slot, sha=row["sha256"],
+                                ground=ground)
         baked += bool(made)
         print(f"  {source} {i}/{total} {row['part_id']} "
               f"{'baked' if made else 'fresh'}", flush=True)
@@ -59,6 +76,8 @@ def main() -> int:
     conn = db.connect(args.db)
     try:
         order = [r["id"] for r in conn.execute("SELECT id FROM parts ORDER BY id")]
+        retired = retired_parts(conn)
+        print(f"{len(retired)} retired parts bake on their own ground", flush=True)
         sources = args.source or [
             r["source"] for r in conn.execute(
                 "SELECT DISTINCT source FROM renders ORDER BY source")]
@@ -66,7 +85,7 @@ def main() -> int:
               f"{', '.join(sources)}", flush=True)
         for n, source in enumerate(sources, 1):
             print(f"[{n}/{len(sources)}] {source}", flush=True)
-            baked, total = bake_source(conn, source, root, out, order)
+            baked, total = bake_source(conn, source, root, out, order, retired)
             print(f"[{n}/{len(sources)}] {source}: baked {baked} of {total}",
                   flush=True)
     finally:

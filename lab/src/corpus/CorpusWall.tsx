@@ -14,7 +14,7 @@ import type { CellState } from '@lab/corpus/palette';
 import { ParamsPanel } from '@lab/corpus/ParamsPanel';
 import { PartCard } from '@lab/corpus/PartCard';
 import { centerReveal } from '@lab/corpus/reveal';
-import { applySelection, type Selection } from '@lab/corpus/select';
+import { applySelection, DEFAULT_SHOWN, type Selection } from '@lab/corpus/select';
 import { useCells } from '@lab/corpus/useCells';
 import { useLooseThumbs } from '@lab/corpus/useLooseThumbs';
 import { useParams } from '@lab/corpus/useParams';
@@ -39,7 +39,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
   const sheets = useSheets(client, source);
   const [level, setLevel] = useState(32);
   const [selection, setSelection] = useState<Selection>(
-    { sort: 'id', filter: 'all' });
+    { sort: 'id', filter: 'all', shown: DEFAULT_SHOWN });
   const [cam, setCam] = useState<View | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
   const [carded, setCarded] = useState<{ cell: Cell; at: { x: number; y: number } } | null>(null);

@@ -55,6 +55,9 @@
 .corpus-legend-row[data-state="unknown"] .corpus-legend-swatch {
   background: var(--corpus-cell-unknown-fill);
 }
+.corpus-legend-row[data-state="outOfScope"] .corpus-legend-swatch {
+  background: var(--corpus-cell-out-of-scope-fill);
+}
 .corpus-legend-row[data-state="timeout"] .corpus-legend-swatch {
   background: var(--corpus-cell-timeout-fill);
   border-color: var(--corpus-cell-timeout-border);
@@ -77,6 +80,33 @@
   border-color: var(--corpus-cell-defect-elsewhere-border);
   border-width: 1px;
 }
+/* Struck corner to corner, the way `Wall` strikes an undrawn cell in one of
+ * these states. `currentColor` is the border color, set per state below. */
+.corpus-legend-row[data-state="timeout"] .corpus-legend-swatch,
+.corpus-legend-row[data-state="failed"] .corpus-legend-swatch,
+.corpus-legend-row[data-state="defect"] .corpus-legend-swatch,
+.corpus-legend-row[data-state="problemElsewhere"] .corpus-legend-swatch,
+.corpus-legend-row[data-state="defectElsewhere"] .corpus-legend-swatch {
+  background-image: linear-gradient(to bottom right,
+    transparent calc(50% - 1px), currentColor calc(50% - 1px),
+    currentColor calc(50% + 1px), transparent calc(50% + 1px));
+}
+.corpus-legend-row[data-state="timeout"] .corpus-legend-swatch {
+  color: var(--corpus-cell-timeout-border);
+}
+.corpus-legend-row[data-state="failed"] .corpus-legend-swatch {
+  color: var(--corpus-cell-failed-border);
+}
+.corpus-legend-row[data-state="defect"] .corpus-legend-swatch {
+  color: var(--corpus-cell-defect-border);
+}
+.corpus-legend-row[data-state="problemElsewhere"] .corpus-legend-swatch {
+  color: var(--corpus-cell-problem-elsewhere-border);
+}
+.corpus-legend-row[data-state="defectElsewhere"] .corpus-legend-swatch {
+  color: var(--corpus-cell-defect-elsewhere-border);
+}
+
 .corpus-legend-name { min-width: 0; }
 .corpus-legend-count {
   color: var(--wzl-fg-muted);
