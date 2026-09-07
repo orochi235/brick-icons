@@ -259,9 +259,11 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
   if (cmd.kind === 'sprite' && sheet) {
     ctx.save();
     ctx.globalAlpha = cmd.alpha ?? 1;
+    ctx.fillStyle = cmd.ground;
+    ctx.fillRect(dx, dy, cmd.dw, cmd.dh);
+    strokeBorder(ctx, { ...cmd, dx, dy });
     ctx.drawImage(sheet, cmd.sx, cmd.sy, cmd.sw, cmd.sh, dx, dy, cmd.dw, cmd.dh);
     if (cmd.wash) washCell(ctx, cmd.wash, { ...cmd, dx, dy });
-    strokeBorder(ctx, { ...cmd, dx, dy });
     // After the border, not before: the badge sits in the corner the frame
     // runs through, and it is the badge that has to stay readable.
     drawOverlays(ctx, cmd, { ...cmd, dx, dy });
@@ -270,16 +272,13 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
   } else if (cmd.kind === 'image') {
     ctx.save();
     ctx.globalAlpha = cmd.alpha ?? 1;
-    // Under the same alpha as the image, so a dimmed vector cell fades the
-    // way a dimmed sprite does -- the bakes carry this ground in their pixels.
+    // Under the same alpha as the image, so a dimmed cell fades whole.
     ctx.fillStyle = cmd.ground;
     ctx.fillRect(dx, dy, cmd.dw, cmd.dh);
-    // A translucent raster lets the frame sit under the drawing, on the
-    // ground; a baked PNG is opaque, so its frame has to go on top or vanish.
-    if (cmd.translucent) strokeBorder(ctx, { ...cmd, dx, dy });
+    // Every rung is ink on transparency, so the frame sits under the drawing.
+    strokeBorder(ctx, { ...cmd, dx, dy });
     ctx.drawImage(cmd.image, dx, dy, cmd.dw, cmd.dh);
     if (cmd.wash) washCell(ctx, cmd.wash, { ...cmd, dx, dy });
-    if (!cmd.translucent) strokeBorder(ctx, { ...cmd, dx, dy });
     // After the border, not before: the badge sits in the corner the frame
     // runs through, and it is the badge that has to stay readable.
     drawOverlays(ctx, cmd, { ...cmd, dx, dy });

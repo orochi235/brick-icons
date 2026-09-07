@@ -79,34 +79,25 @@ function borderWidthFor(weight: CellStyle['weight'], cellPx: number,
   return Math.min(appearance.maxBorderPx, Math.max(1, cellPx * factor));
 }
 
-/** The ground every baked thumbnail sits on -- `thumbs._square` in
- *  `brick_icons/thumbs.py` fills the whole cell with it, because a render is
- *  ink on transparency. A cell drawn from the vector rung has to be given the
- *  same ground, or zooming past the loose PNG swaps the surround to the
- *  wall's dark canvas. */
-export const THUMB_GROUND = '#ffffff';
-
-/** The ground a vector cell is drawn on, once the wall is zoomed far enough
- *  to swap the bakes for SVG. The legend's border color -- but the light one
+/** The ground every thumbnail is drawn on, at every rung. A bake carries ink
+ *  and nothing else, so the sheet, the loose PNG and the live SVG all land on
+ *  this and a zoom crosses no seam. The legend's border color -- but the light one
  *  (`--wzl-gray-200`) in either theme, never `--wzl-border` itself: in dark
  *  mode that token resolves to #25272c, which is the page background to
  *  within a shade, and a thumbnail drawn on it disappears. The art is dark
  *  lines on a light ground and does not invert with the theme, so neither
  *  does what it sits on.
- *
- *  Only the vector path: a baked sprite carries white in its pixels, so
- *  changing the sheet's ground would leave a white square inside a gray one.
  */
-let vectorGroundCache: string | null = null;
+let thumbGroundCache: string | null = null;
 
-export function vectorGround(): string {
-  if (vectorGroundCache) return vectorGroundCache;
+export function thumbGround(): string {
+  if (thumbGroundCache) return thumbGroundCache;
   const root = (globalThis as { document?: Document }).document?.documentElement;
   const read = root
     ? getComputedStyle(root).getPropertyValue('--wzl-gray-200').trim()
     : '';
-  vectorGroundCache = read || '#c9cbcf';
-  return vectorGroundCache;
+  thumbGroundCache = read || '#c9cbcf';
+  return thumbGroundCache;
 }
 
 /** What a retired cell is washed with, over the drawing rather than under it:
@@ -167,7 +158,7 @@ export interface CellBadge {
   field: string;
   ink: string;
   /** Only where the field would vanish: duplo is red on white and
-   *  `THUMB_GROUND` is white. */
+   *  the thumbnail ground is light. */
   stroke?: string;
   /** A second ink, for the one part of a mark that is not the mark's own
    *  material -- the paint on the brush. */
@@ -341,7 +332,7 @@ export function captionsFor(cell: Cell, cellPx: number, ink: string,
 
 export type PaintCommand =
   | { kind: 'sprite'; dx: number; dy: number; dw: number; dh: number;
-      sx: number; sy: number; sw: number; sh: number;
+      sx: number; sy: number; sw: number; sh: number; ground: string;
       border: string | null; borderWidth: number; alpha?: number;
       caret?: boolean; badges?: CellBadge[]; strip?: CellBadge[];
       captions?: CellCaption[]; wash?: number }
@@ -362,10 +353,6 @@ export type PaintCommand =
       slash: boolean; caret?: boolean }
   | { kind: 'image'; dx: number; dy: number; dw: number; dh: number;
       image: CanvasImageSource; ground: string; wash?: number;
-      /** The vector rung's rasters are ink on transparency, so the ground and
-       *  the state's frame both show through them. A baked PNG carries its
-       *  own opaque ground and hides anything drawn under it. */
-      translucent: boolean;
       border: string | null; borderWidth: number; alpha?: number;
       caret?: boolean; badges?: CellBadge[]; strip?: CellBadge[];
       captions?: CellCaption[] }
@@ -438,8 +425,7 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
     const vectored = tint === 'status' ? vector?.get(cell.id) : undefined;
     const image = tint === 'status' ? (vectored ?? loose?.get(cell.id)) : undefined;
     if (image) {
-      out.push({ kind: 'image', dx, dy, dw, dh, image, ground: vectorGround(),
-                 translucent: vectored !== undefined,
+      out.push({ kind: 'image', dx, dy, dw, dh, image, ground: thumbGround(),
                  border, borderWidth, alpha, caret: isCaret, badges, strip, captions, wash });
       continue;
     }
@@ -447,7 +433,8 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
       ? sourceBox(manifest, cell.index)
       : null;
     if (box) {
-      out.push({ kind: 'sprite', dx, dy, dw, dh, ...box, border, borderWidth, alpha,
+      out.push({ kind: 'sprite', dx, dy, dw, dh, ...box, ground: thumbGround(),
+                 border, borderWidth, alpha,
                  caret: isCaret, badges, strip, captions, wash });
       continue;
     }

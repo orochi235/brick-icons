@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { badgeGeometry, badgesFor, captionsFor, CAPTION_ON_FILL, captionSize,
   cellState, fillFor, paintCommands, PROPERTY_FIELD, stripFor, stripGeometry,
-  tally, THUMB_GROUND } from '@lab/corpus/paint';
+  tally, thumbGround } from '@lab/corpus/paint';
 import { CELL_STATES, DEFAULT_PALETTE as CELL_FILL, type CellState } from '@lab/corpus/palette';
 import type { Band } from '@lab/corpus/layout';
 import { tintFor } from '@lab/corpus/tint';
@@ -95,18 +95,21 @@ it('draws a whole loose image when one is loaded for the cell', () => {
     cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest, loose: new Map([['a', img]]),
   });
   expect(cmd).toEqual({ kind: 'image', dx: 0, dy: 0, dw: 10, dh: 10, image: img,
-                        ground: THUMB_GROUND, translucent: false, border: null,
+                        ground: thumbGround(), border: null,
                         borderWidth: 0, badges: [], strip: [], captions: [],
                         wash: undefined });
 });
 
-it('grounds a vector cell on what the thumbnails were baked against', () => {
-  const [cmd] = paintCommands({
-    cells: [cell('a', 0, 'sha-a')], rects, visible: [0],
-    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest,
-    vector: new Map([['a', {} as CanvasImageSource]]),
-  });
-  expect(cmd).toMatchObject({ kind: 'image', ground: '#ffffff' });
+it('grounds every rung on the same color, so a zoom crosses no seam', () => {
+  const base = { cells: [cell('a', 0, 'sha-a')], rects, visible: [0],
+                 cam: { x: 0, y: 0, scale: { x: 1, y: 1 } },
+                 palette: CELL_FILL, manifest };
+  const [vector] = paintCommands({ ...base, vector: new Map([['a', {} as CanvasImageSource]]) });
+  const [loose] = paintCommands({ ...base, loose: new Map([['a', {} as HTMLImageElement]]) });
+  const [sprite] = paintCommands(base);
+  expect(sprite!.kind).toBe('sprite');
+  expect([vector, loose, sprite].map((c) => (c as { ground: string }).ground))
+    .toEqual([thumbGround(), thumbGround(), thumbGround()]);
 });
 
 it('prefers the loose image over the sheet', () => {
@@ -513,13 +516,13 @@ it('washes a retired cell rather than baking it a ground of its own', () => {
     cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest,
     vector: new Map([['a', {} as CanvasImageSource]]),
   });
-  expect(plain).toMatchObject({ ground: THUMB_GROUND, wash: undefined });
+  expect(plain).toMatchObject({ ground: thumbGround(), wash: undefined });
   const [retired] = paintCommands({
     cells: [cell('b', 1, 'sha-b', { tags: ['retired'] })], rects, visible: [0],
     cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest,
     vector: new Map([['b', {} as CanvasImageSource]]),
   });
-  expect(retired).toMatchObject({ ground: THUMB_GROUND, translucent: true });
+  expect(retired).toMatchObject({ ground: thumbGround() });
   expect((retired as { wash?: number }).wash).toBeGreaterThan(0);
 });
 
@@ -638,7 +641,7 @@ describe('tint', () => {
     // Byte-for-byte the pre-tint path: vector wins over loose, and a cell in
     // neither still comes off the sheet.
     expect(paintCommands({ ...drawn, vector: new Map([['a', vec]]) })[0])
-      .toMatchObject({ kind: 'image', image: vec, translucent: true });
+      .toMatchObject({ kind: 'image', image: vec });
     expect(paintCommands({ ...drawn, loose: new Map() })[0]!.kind).toBe('sprite');
   });
 

@@ -89,18 +89,21 @@ def test_a_wide_render_is_padded_square_not_stretched(tmp_path):
     thumbs.bake_part("3001", svg, out, sha="abc123")
     with Image.open(out / "128" / "3001.png") as img:
         assert img.size == (128, 128)
-        assert img.getpixel((2, 2)) == (255, 255, 255, 255)
+        assert img.getpixel((2, 2)) == (0, 0, 0, 0)  # letterbox, not ink
 
 
-def test_a_baked_cell_is_opaque_so_the_ink_is_visible(tmp_path):
-    # Renders are black ink on transparency and the lab's surface follows the
-    # weasel theme, so a transparent thumbnail disappears in dark mode.
+def test_a_baked_cell_carries_ink_and_no_ground(tmp_path):
+    # The wall paints the ground under every rung. Baking one made the sheet,
+    # the loose PNG and the live SVG disagree, and a cell changed shade on the
+    # wheel notch that crossed between them.
     svg = tmp_path / "3001.svg"
     svg.write_text(SVG)
     out = tmp_path / "thumbs"
     thumbs.bake_part("3001", svg, out, sha="abc123")
-    with Image.open(out / "8" / "3001.png") as img:
-        assert img.convert("RGBA").getextrema()[3] == (255, 255)
+    with Image.open(out / "128" / "3001.png") as img:
+        rgba = img.convert("RGBA")
+        assert rgba.getpixel((2, 2))[3] == 0        # letterbox is clear
+        assert rgba.getpixel((64, 64))[3] == 255    # ink is not
 
 
 def test_it_skips_a_part_whose_sha_is_unchanged(tmp_path):
@@ -164,19 +167,19 @@ def test_the_gutter_replicates_the_cell_edge(tmp_path):
         assert img.getpixel((x0 - 1, y0)) == img.getpixel((x0, y0))
 
 
-def test_the_wall_grounds_its_vector_cells_on_what_the_bake_used():
-    """The two grounds are set in different languages and must not drift.
+def test_no_ground_is_baked_in_either_language():
+    """The wall owns the ground; the bake owns the ink.
 
-    The vector rung draws the SVG straight, so a cell zoomed past the loose
-    PNG shows this ground where the bake showed its own -- any mismatch reads
-    as the background changing color mid-zoom.
+    Reintroducing a baked ground on one side only is what made a cell change
+    shade mid-zoom, and the two sides are set in different languages, so
+    neither is free to grow one back alone.
     """
+    assert thumbs.GROUND == (0, 0, 0, 0)
     paint = (Path(__file__).resolve().parent.parent
              / "lab" / "src" / "corpus" / "paint.ts").read_text()
-    match = re.search(r"THUMB_GROUND = '(#[0-9a-fA-F]{6})'", paint)
-    assert match, "paint.ts no longer declares THUMB_GROUND"
-    hexed = match.group(1)
-    assert tuple(int(hexed[i:i + 2], 16) for i in (1, 3, 5)) + (255,) == thumbs.GROUND
+    assert "THUMB_GROUND" not in paint, "paint.ts grew a baked-ground constant back"
+    assert re.search(r"export function thumbGround\(\)", paint), \
+        "paint.ts no longer declares thumbGround()"
 
 
 def test_a_truncated_sidecar_is_a_cache_miss_not_a_crash(tmp_path):

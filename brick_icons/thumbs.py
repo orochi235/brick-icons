@@ -22,12 +22,12 @@ GUTTER = 2
 LEVELS = (*SHEET_LEVELS, LOOSE_LEVEL)
 BAKED = "baked.json"
 
-#: The ground every thumbnail is fitted onto, mirrored by `THUMB_GROUND` in
-#: lab/src/corpus/paint.ts -- the wall's vector rung rasterizes the SVG itself
-#: and has no bake to inherit this from. One ground for every part: what a
-#: retired cell looks like is the viewer's business, and baking it meant a
-#: full rebake to change the shade and a stale one the day a part retires.
-GROUND = (255, 255, 255, 255)
+#: Transparent: a bake carries ink and nothing else, and the wall paints the
+#: ground under it. Baking a ground made the three zoom rungs disagree about
+#: who owned the cell background -- the sheet had white in its pixels, the
+#: loose PNG hid the ground drawn under it, and only the vector rung showed
+#: one -- so a cell jumped from #ffffff to the ground color on one wheel notch.
+GROUND = (0, 0, 0, 0)
 
 
 
@@ -182,12 +182,11 @@ def _replicate_edges(sheet: Image.Image, cell: Image.Image,
 
 
 def _square(drawn: Image.Image, level: int) -> Image.Image:
-    """Fit a render inside an opaque `GROUND` square of `level` px.
+    """Fit a render inside a `GROUND` square of `level` px.
 
-    Opaque, because a render is black ink on transparency and the wall's
-    background follows the weasel theme -- a transparent thumbnail is invisible
-    in dark mode. A cell that was never baked stays fully transparent on the
-    sheet, so alpha still separates "drawn" from "not drawn".
+    A never-baked cell is told apart by the manifest's `baked` map, not by
+    alpha -- `isStale` in lab/src/corpus/sheet.ts compares shas, and a cell
+    missing from that map never reaches the blit.
     """
     scale = level / max(drawn.size)
     size = (max(1, round(drawn.width * scale)), max(1, round(drawn.height * scale)))
