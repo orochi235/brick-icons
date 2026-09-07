@@ -1741,3 +1741,61 @@ Next, in order:
   means changing which point inside the overlap is the witness, which is not
   byte-safe by construction: a different point can flip a near-tie depth
   comparison and change paint order. Golden re-baseline, not a byte gate.
+
+## 2026-09-06 night: the floating dots, three crashes, and one disproof
+
+Landed on `main`, `c0c321e..0db788b`. All of it came out of the census DB:
+every failure in the finished occt run is `TimeoutError` (603) or
+`ProcessDied` (171) except 33 parts, and those 33 were three bugs.
+
+**What the dots were.** A short stroke run with 2-unit round caps on a peg
+barrel, and it had two separate causes:
+
+- The occt branch of `hlr.visible_segments` returned before the stylization
+  tail, so `cull_orphan_runs` had only ever run on naive. Over 300 census
+  parts rendered by both engines, occt carried a sub-200px isolated speck on
+  5.3% against naive's 3.0%, and 14 of the 16 were occt-only (30162).
+- The rest neither engine dropped. The peel starts at a free tip and never
+  starts on a `sil` op, so a short run touching nothing survives both rules.
+  `cull_orphan_runs` now also drops a whole connected island under 1.2% of
+  the drawn extent, whatever its kind (44874). Anything landing on other ink
+  still anchors.
+
+Across a 500-part sample of `out/census-white-occt`, 6.6% of parts carried at
+least one sub-200px isolated component before this.
+
+**Still crashing: 5241 only.** `RuntimeError: OCCT engine produced no edges`
+on a part with 14 healthy triangles, no type-2 lines and no condlines; naive
+draws it in 1.1s. Not diagnosed.
+
+**Disproved: prefiltering the `near` scan in `_refine_order_clips`.** That
+scan tests `lost` against every other face with a real GEOS intersection —
+272,549 calls on `30201`, 628,877 on `15624`, and 94% of them are
+bbox-disjoint. Both obvious fixes were written and both measured at or below
+parity: an STRtree envelope query (1.03x / 1.02x / 0.96x / 1.00x wall,
+byte-identical over 35 parts) and a vectorized `shapely.intersects` +
+`intersection` over an object array (0.98x / 1.00x / 1.01x / 1.00x wall,
+and 0.91x / 1.00x on CPU time, where it is if anything slower). Neither
+landed. cProfile is what made this look like a hot spot:
+at 600k calls its per-call overhead is most of what it reports.
+
+**The 30% is real, the target inside it is not the scan.** Timed with a
+single wrapper around `shade._refine_order_clips` (no per-call
+instrumentation), the whole pass is 1.83s of `30201`'s 6.2s and 2.07s of
+`47432`'s 6.4s. So it is worth attacking — but the time is in the half-plane
+differences, the `union_all(curved)`, the grid sampling and `apply`, not in
+finding the neighbours.
+
+**Measure CPU time, not wall.** This box swings a render by 40% under
+another session's load; `47432` read 9.39s and 6.4s twenty minutes apart on
+the same revision. `time.process_time` alongside `perf_counter` costs nothing
+and is what caught the vectorized version being slower.
+
+**Open, and asked for: 4592's dome.** Its silhouette is 11 straight `sil`
+chords. `arcfit.fit_edge_arcs` already fires on the part (12 arcs from its
+130 condlines) but cannot help here: the limb comes from tessellation, so
+there is no type-2 chain to fit, and the wide-pass contour recovery rejects
+it at its 0.25px gate. The projected chord endpoints do sit close to a conic
+(SVD residual rms 0.199 against a 64 scale), so fitting a run of silhouette
+chords to an ellipse is feasible — but it is a new mechanism, and nothing of
+it is built.
