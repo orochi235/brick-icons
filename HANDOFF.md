@@ -1985,9 +1985,9 @@ points that lie on no curve the library declares.
 
 ## In flight: mesh refinement, branch `smooth-subdivide` — UNBUILT
 
-Three commits, local, unmerged, cut from `bf4ae83`. Tests green; the branch
-is held back because refining a round makes several parts look **worse**, not
-because anything is failing.
+Local, unmerged, cut from `bf4ae83`; `git log --oneline bf4ae83..smooth-subdivide`
+for what is on it. Tests green — the branch is held back because refining a
+round makes several parts look **worse**, not because anything is failing.
 
 The premise, which decides every design call here: a round the library
 authored as flat triangles carries no curve for any rule to find, so
