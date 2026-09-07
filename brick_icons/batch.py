@@ -6,6 +6,7 @@ resume cannot loop on it forever.
 """
 from __future__ import annotations
 
+import ctypes
 import json
 import os
 import select
@@ -26,6 +27,31 @@ _GRACE = 5.0
 # How often the parent prices the child's process group. One `ps` costs ~3ms;
 # a render that matters runs for seconds at least.
 _MEM_POLL = 3.0
+
+# phys_footprint out of proc_pid_rusage(2), flavour 0. Offsets: 16 bytes of
+# uuid then ten uint64s, of which ri_phys_footprint is the eighth.
+_RUSAGE_V0_SIZE = 96
+_FOOTPRINT_OFFSET = 72
+_libc = ctypes.CDLL("/usr/lib/libSystem.B.dylib", use_errno=True)
+
+
+def _phys_footprint(pid: int) -> int | None:
+    """Bytes the kernel bills a process for, or None if it will not say.
+
+    Not resident size. The compressor moves a runaway's pages out of resident
+    without releasing them, so `ps -o rss=` reads a process holding 97 GB as
+    1.2 GB and a cap watching it never fires -- which is how msb-uai had to be
+    power cycled on 2026-09-07 under this module's own 8 GB cap.
+
+    A syscall rather than a subprocess, so the reading still works on a machine
+    too far gone to fork.
+    """
+    buf = ctypes.create_string_buffer(_RUSAGE_V0_SIZE)
+    if _libc.proc_pid_rusage(ctypes.c_int(pid), ctypes.c_int(0),
+                             ctypes.byref(buf)) != 0:
+        return None
+    return int.from_bytes(
+        buf.raw[_FOOTPRINT_OFFSET:_FOOTPRINT_OFFSET + 8], "little")
 
 
 def _on_alarm(signum, frame):
@@ -260,22 +286,34 @@ class Runner:
 
     @staticmethod
     def _group_kb(pgid: int) -> int:
-        """Resident kilobytes across the whole process group.
+        """Billed kilobytes across the whole process group.
 
         The group, not the child: the runaway is as often the grandchild
         `occt._unify_survives` forks as the child that is waiting on it.
+
+        The child's own reading comes from the kernel and always arrives. `ps`
+        only adds the rest of the group, so a machine that has stopped being
+        able to fork still gets a cap that fires -- it used to return 0 there,
+        which reads as a render well under its limit.
         """
+        own = _phys_footprint(pgid)
+        total = 0 if own is None else own
         try:
-            out = subprocess.run(["ps", "-o", "rss=,pgid=", "-ax"],
+            out = subprocess.run(["ps", "-o", "pid=,pgid=", "-ax"],
                                  capture_output=True, text=True, timeout=10).stdout
         except (OSError, subprocess.SubprocessError):
-            return 0
-        total = 0
+            return total >> 10
         for line in out.splitlines():
             fields = line.split()
-            if len(fields) == 2 and fields[1] == str(pgid):
-                total += int(fields[0])
-        return total
+            if len(fields) != 2 or fields[1] != str(pgid):
+                continue
+            pid = int(fields[0])
+            if pid == pgid:
+                continue  # already counted, and counted more reliably
+            member = _phys_footprint(pid)
+            if member is not None:
+                total += member
+        return total >> 10
 
     @staticmethod
     def _killpg(pid: int) -> None:
