@@ -14,19 +14,24 @@ oriented solid; neither generalizes** -- both need a closed volume, which a
 cracked part is not.
 
 Closes `79306-f1-far-end-should-be-hidden`, `4913-hole-in-base-shows-through`
-and `14653-f1-left-hole-should-be-invisible`; takes the crossing arcs off
-96904's recess floor, the extra arc out of 11090's hand, one stray arc off
-53119's base ring, the scallops off 3062b's stud collar and the crescent
-sliver out of every one of 3894's Technic holes. Outline and shaded alike,
-each read against LDView.
+and `14653-f1-left-hole-should-be-invisible`; takes the two arcs that cut
+across 96904's recess floor, one stray arc off 53119's base ring, the
+scallops off 3062b's stud collar and the crescent sliver out of every one of
+3894's Technic holes. Outline and shaded alike, each read against LDView.
 
-**Bounded on 137 sampled library parts: 44 move and not one for the worse.**
-42 of them lose strokes (321 SVG elements in all, 3894's holes and 610's
-drowned stud field the biggest); the 2 that gain one -- 44302a and 5091 --
-gain it where new occlusion splits a run in two. No errors, and no measured
-cost in time on either side. Job `01a6b72d`, task `hlr-shell-ab`, still
-grinding on 71986 (an 11L ribbed hose, slow on both sides) when this was
-written; the remaining 22 parts add nothing the first 137 have not said.
+**A differing SVG is not a moved drawing here** -- this change reorders
+elements, so 11090 and 59443 differ byte for byte and rasterize identically.
+Rasterize and diff before crediting it with anything.
+
+**Bounded on 137 sampled library parts: 44 differ in bytes, 29 move a pixel,
+and not one moves for the worse.** 15 of the 44 rasterize identically. Of the
+29, 26 lose strokes; the 2 that gain one -- 44302a and 5091 -- gain it where
+new occlusion splits a run in two. All 29 were rendered and looked at: the
+crescent inside a bore, the scallop over a stud collar, one big phantom
+ellipse inside 77813's ring. No errors, and no measured cost in time on either
+side. Job `01a6b72d`, task `hlr-shell-ab`, still grinding on 71986 (an 11L
+ribbed hose, slow on both sides) when this was written; the remaining 22 parts
+add nothing the first 137 have not said.
 
 `59443-a-strip-along-the-bottom` reorders its SVG under the fix and is pixel
 for pixel identical, so that row is untouched.
@@ -65,8 +70,8 @@ render says nothing: `35480-extra-elements-in-shaded-view`,
 `38317-left-stud-shading-is-very`, `96910-weird-dot-near-bottom-inset`.
 
 `11090-curved-lower-face-in-occt` and `11090-hand-at-top-is-missing` are
-`9fdfb72`'s (the sheared cross-section) plus this fix; they look right now and
-belong to whoever filed that commit to close.
+`9fdfb72`'s alone (the sheared cross-section), pixel-identical under this fix
+by both sessions' measurement, and belong to whoever filed that commit.
 
 `53119`'s two ticks on the dome survive. Its banding half closed overnight.
 
