@@ -1638,16 +1638,28 @@ census's slow bands (`docs/census-timings/geometry-ab-census-config.log`):
 geometry 75.77s -> 15.28s (**4.96x**), whole render 191.63s -> 125.16s
 (**1.53x**), geometry falling from 40% of a render to 12%.
 
-**Unexplained, and the reason none of this is a headline yet:** the same
-comparison over `census-engine-bench.py`'s own 14-part sample gives 1.08x, and
-0901 — in both sets, both harnesses through `process_one`, both min-of-two —
-reads 3.25s of base geometry in one and 0.95s in the other. Until that is
-explained, one of the two samples is measuring something I do not understand.
-Start there before quoting either number.
+**The 1.08x was never a base run.** `census-engine-bench.py`'s 14-part sample
+gave that figure because `python scripts/x.py` puts `scripts/` on `sys.path`
+and never the checkout root: the venv's editable install then serves
+`/Users/mike/src/brick-icons/brick_icons` from inside a worktree, so both
+sides of the A/B ran head. `--rev` said `d19f4e4` throughout, because git
+resolves that from the cwd. The fingerprint is in the rows — base and head
+agree to within noise on every part (0901 0.95 vs 0.79, 32172 1.57 vs 1.56,
+44937 3.09 vs 3.04) — and the two 0901 figures were never in conflict: the
+bench's 0.95s is a *head* number, next to ab2's head 0.74s. Only ab2 measured
+base.
+
+`158b0ab` puts each measurement script's own root on `sys.path` first and
+prints the `brick_icons` it resolved beside the rev, so a wrong-tree run says
+so in its first line. Re-verified on 6046 and 0901 with the import asserted:
+base slower in both passes, both parts. **The direction is settled and 4.96x
+is the surviving figure; the exact multiple is not re-confirmed** — this box
+was at load 16-56 with peer jobs on it all evening, and my own absolutes came
+back 5-20x inflated (6046 at 233s against an expected 9s). Quote it as "above
+4x on the geometry phase" until someone measures on a quiet box.
 
 Next, in order:
 
-- Resolve the 0901 disagreement above.
 - The dashboard wants the stacked phase chart. `scripts/census-plot-phases.py`
   builds it today as a matplotlib PNG from a 32-part probe file; with `phases`
   in the DB it should read live rows instead. That is the open request.
