@@ -211,14 +211,20 @@ Confirmed, still open, worst first:
 
 Shaded-only, so `--shade-style flat3` is needed to judge them and an outline
 render says nothing. All three now rendered that way. `38317` and
-`96910` are the stroke-width class above. **`35480` is a fill mis-assignment
-and occt-only** -- naive draws it clean. Two lens-shaped regions between the
-plate's round-end arc and a stud's base arc are absorbed into the STUD WALL's
-fill and carry its gradient down onto the light top face, as two fangs. They
-are not overdraw: the top face's own path is cut to match them exactly (both
-in `35480.svg` element 2's second and third subpaths, and element 1's
-notches), so the pair tiles. The absorb picked the wrong claimant, not too
-much area.
+`96910` are the stroke-width class above. **`35480` is FIXED by `f832da6`,
+and the earlier reading of it here was wrong** -- absorb never ran on the
+part. Its two fangs were a bore drawn where it is buried inside the plate:
+UnifySameDomain merged the stud's `stud2a` with the `4-4cyli` continuing below
+the plate top into one face straddling that plane, and `order_faces` gives a
+pair one bit. `_pierce_seams` keeps the seam. Buried-bore ink on the plate top
+is 0.00 px^2, against 605.17 for the lobe and ~42 for the limb fangs;
+`debug/35480-pierce-seam/verify.py` reprints those against the tree as it
+stands. Diagnosed independently by two sessions.
+
+**What it does NOT close: `_refine_order_clips` is one-directional.** It hands
+back area a face wrongly lost and there is no pass that takes away area a face
+wrongly kept, so any other cycle break that drops a constraint still leaves
+ink with nothing downstream to remove it.
 
 `11090-curved-lower-face-in-occt` and `11090-hand-at-top-is-missing` are
 `9fdfb72`'s alone (the sheared cross-section), pixel-identical under this fix
