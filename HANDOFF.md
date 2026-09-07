@@ -80,6 +80,48 @@ an identical camera object, neither branch of the level effect runs, and a test
 written against `pickLevel` or `levelFor` passes with the fix reverted. It needs
 a real browser or nothing.
 
+## 2026-09-07 midday: a sheared cross-section is an ellipse, not a reject
+
+`9fdfb72`, on occt. `frame()` lumped two unrelated defects together and
+dropped both. They separate cleanly:
+
+- **A skew axis** — the axis column leaves the cross-section plane — really is
+  unrepresentable, because there the axis is the extrusion direction. Still
+  rejected. 18% of parts carry one; 10126's oblique cylinders are the open
+  question, unchanged.
+- **A sheared cross-section** — `u` and `v` not square to each other, axis
+  fine — is an exact ellipse, because a linear map sends a circle to one. It
+  is now diagonalized: the singular values of `[u v]` are the semi-axes,
+  and `frame()` returns a ninth element, the phase that keeps the sector where
+  the part put it. Drop the phase and 11090's quarter swings 135 degrees.
+
+11090 is the part that showed it: its tube wall is two `1-4cylo` at 89.2
+degrees. Rejected, the wall reached the kernel as **neither a face nor
+triangles** — `hlr.flatten` recurses into a subfile only when
+`primitives.from_ref` does *not* recognize it, so a substituted primitive that
+then builds no face leaves nothing at all. The base drew as a hole with the
+bore floating inside it. 51482 also loses a hidden edge that was leaking
+across its knurled boss.
+
+538 primitives across 52 of 800 sampled parts were rejected for shear alone,
+so this reaches roughly 1,600 parts. No specimen carries one, which is why the
+corpus never saw it — and also why the corpus cannot guard it. **11090 is
+worth adding to `specimens.txt`**; nobody has, because freezing while the gate
+is red would tangle it with whatever is red.
+
+**The `=full` gate is red on 31 rows, not one.** Every one is a naive-engine
+row (no golden combo passes `--engine`), so occt work cannot move them and
+this is drift from naive-side changes that landed without a re-freeze. The
+list: `outline-flat3__` 3001, 3005, 3020, 3024, 3040b, 3040bp08, 3068bp00,
+32062, 3649, 3673, 3941, 3941p01, 3942bp01, 3960, 4019, 4070, 4589, 4740p03,
+50950, 6143, 6589, 87087, 99781; `outline__` 3001, 3941, 3942c, 4589, 6143;
+`wireframe__` 3001, 3941, 4589. Whoever re-freezes owns deciding whether each
+is an improvement.
+
+`tests/test_occt.py::test_the_stud_paints_over_the_top_face_it_sits_on` fails
+at HEAD with nothing applied (`assert 12 > 13`) — it belongs to the coplanar
+paint-order thread above, not to this.
+
 ## Overnight defect sweep, 2026-09-07: what is fixed and what the rows are lying about
 
 Mike asked for a night on `tests/goldens/defects.toml` and the census's failed
@@ -905,19 +947,26 @@ badges/captions work: build your hunks on top of `git show HEAD:<file>`, then
 `git hash-object -w` and `git update-index --cacheinfo 100644,<blob>,<path>`.
 Their `paint.test.ts` failures are theirs; the corpus suite is otherwise green.
 
-## High priority: decals on the occt path
+## Decals on the occt path: DONE, and this section used to say otherwise
 
-**occt does not draw decoration at all.** `shade.unwrap_decoration` and
-`shade.ink_prims` are called only from `hlr.py` — lines 405, 451 and 522 —
-and `occt.py` calls neither. Measured on `20308p02`: naive's palette carries
-the print colors (`#b40000`, `#f6a9bb`, `#720012`), occt's is five grays.
+`4b80035` built it. `occt._with_decoration` pulls the colored source triangles
+alongside OCCT's own faces and hands both to `shade.unwrap_decoration`, which
+finds the carrier among OCCT's planes — a sewn solid stamps every face 16, so
+the print is not in the solid and never could be.
 
-This blocks the flag flip as surely as the silhouette gap does: an engine that
-cannot draw a print cannot become the default for a library that is more than
-half printed parts. The decoration passes take faces and a projection, so the
-question is what occt hands them — its sewn-shape faces rather than `hlr`'s
-triangle faces — and whether `unwrap.bind` can carry a decal onto an exact
-surface instead of a tessellated one.
+Re-measured 2026-09-07: `20308p02` emits the same palette on both engines
+(`#b40000`, `#f6a9bb`, `#720012` and the rest, same counts), and the two SVGs
+draw the pig's eyes and snout identically. `3068bp00`, `3040bp08`, `4740p03`,
+`3941p01` and `3942bp01` agree too. Decoration is no longer a reason the flag
+cannot flip.
+
+**Read a printed part's SVG, never its `.gray.png`.** Under `--shading
+outline` the PNG modes go through `process.draw_segments` /
+`process.segments_mono`, which take strokes and contour rings and no `fills` —
+`fill_ops` is called only inside the SVG branch of `cli.process_one`. So
+`--shade-style flat3 --format png` silently produces line art with no shading
+and no print, on **both** engines. An engine A/B run on those rasters reads as
+agreement no matter how far the fills have diverged.
 
 ## In flight: the colour tint — branch `corpus-colors`, green, waiting to land
 
