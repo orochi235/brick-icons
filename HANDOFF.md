@@ -266,17 +266,40 @@ Also landed: the scratch canvas is allocated at dpr, which is what made the
 sticker badge alone render soft; `Path2D` objects are kept per path string
 rather than reparsed for every badge on a wall paint.
 
-### Still owed: the wall should use weasel's scene, not its own paint loop
+### Next: the wall's paint loop becomes weasel's scene, on `wall-scene`
+
+**Branch `wall-scene`, worktree `.claude/worktrees/wall-scene`.** Both exist.
+Mike asked for this one off the shared tree because four other sessions are in
+`/Users/mike/src/brick-icons` and the wall is the file they are most likely to
+touch. Run `npm install` in the worktree's `lab/` before trusting a test run --
+a symlinked `node_modules` shares `node_modules/.vite`, and a stale cache there
+serves modules from the wrong tree with no error.
 
 `Wall.tsx:594` is a bare `<canvas>` with a hand-written renderer; the lab
 imports weasel only for viewport math (`worldToScreen`, `zoomAt`, the drag and
 pinch actions). `@weasel-js/core` exports `createNode`, `ContainerNode`,
 `ImageNode`, `LeafNode`, `drawText`, `renderSceneToCanvas`, `registerCanvas`
 -- **`grep -rn "renderSceneToCanvas\|SceneNode\|createNode" lab/src` still
-returns nothing.** Mike knows its size. `drawText` exists so nobody writes the
-baseline arithmetic again; note that the trap it avoids is the one above, and
-the canvas badge path now gets it right, so this is a tidiness argument rather
-than a correctness one.
+returns nothing.**
+
+**Mike wants old against new benchmarked, and that decides the shape of the
+work: the hand-written loop stays, behind a flag, until the numbers are read.**
+A sequential A/B measures the box and not the change -- that is already filed
+twice in this repo, once at 36x against 18x for the same commit and once at
+0.90x on a peer's machine. So the two renderers have to be alive in one process
+and interleaved, alternating paints rather than running one suite then the
+other. Deleting the old loop first makes the measurement impossible to take.
+
+What to measure is a full wall paint in ms, at a fixed corpus, cell size and
+camera, across the zoom levels that change what gets drawn (thumbnails, then
+badges and captions, then vector). Report one line per paint as it runs; a
+silent harness is indistinguishable from a hung one.
+
+**One thing the new renderer must not give back:** badge marks are path data
+now, and `badges.ts` keeps one `Path2D` per path string rather than reparsing
+about thirty of them for every badge on every paint. `drawText` is the reason
+to do this at all -- it is where the baseline arithmetic belongs -- but a scene
+node allocated per cell per frame would cost more than the loop it replaces.
 
 **Look at the badges at `/badges.html`, not at a description of them.** It
 draws every badge as HTML at four sizes on a light ground and a dark one, the
