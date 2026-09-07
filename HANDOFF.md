@@ -96,9 +96,15 @@ which was the whole reason `geometry` had stayed one number.
   leftover twice. `stats.LEGACY_PATHS` is where that decision lives.
 - Storage did not move. Same `measurements.phases` JSON, keys gain slashes.
 
-**The tree is shallow until a census re-runs, and that is the open question.**
-Every row carrying a breakdown today predates this, so the wall draws `fill`
-and `geometry` as siblings and nothing under them. See the r6 section below.
+**The tree is shallow until r7 lands.** Every row carrying a breakdown when
+this was written predates the change, so the wall draws `fill` and `geometry`
+as siblings with nothing under them. `brick-icons-1c` relaunched the overnight
+occt census as **r7, job `4b141c6f`, at `2d256033`** -- with the
+instrumentation, 12h deadline -- so those rows will carry nested paths. They
+verified 3001 through `census-batch.sh` on studio first: 14 slash-keyed
+phases, and the same measurement r6 gave (missing 0px, extra 14584px, 99th
+0.45px), so the geometry is untouched and the two runs stay comparable on
+everything but the tree.
 
 **The footprint section counts size on disk, as `du` does** -- the bakes are
 303 MB of bytes against 615 MB of blocks, because a 32px thumbnail is mostly
@@ -115,17 +121,6 @@ It is a background process, shared with the other sessions here, so say so
 when you bounce it.
 
 ### What is not done
-
-- **The r6 census will produce rows with no granular phases, and killing it is
-  Mike's call.** `brick-icons-1c` has a 12-hour occt re-census running on
-  studio at `4905d45`, which predates `a11741a`: 8,235 parts that will become
-  the newest rows per part and carry `render`/`geometry`/`fill` and nothing
-  below. 1c has said they will kill it, re-sync a worktree at the new HEAD and
-  relaunch the same 687 batches if asked, and has written the relaunch into
-  `HANDOFF-census-occt-r6.md` either way. **I argued for killing it and was
-  wrong to**: r6 answers which of the 405 TimeoutError and 238 ProcessDied
-  parts `b5b2694` and `c673dd3` actually fixed, and the instrumentation
-  answers nothing about that. Do not re-open it as though it were settled.
 
 - **A translucent slot, both engines.** No such source exists, and **Mike has
   not said which picture he means**: `--wireframe` (occlusion off, every hidden
@@ -144,6 +139,15 @@ when you bounce it.
   with the word on its own field; no label is the old path exactly. Resist a
   DOM reimplementation of any mark -- the corner-badge lean fixed in `434cc2d`
   existed because the corner path and the strip path had already drifted.
+
+**Killing a census does not kill what it started.** `onto kill` took r6 off
+the job list and left two `compare-silhouette-truth.py` processes alive on
+studio, still writing r6 JSONLs -- the orphan case `census-batch.sh`'s
+watchdog exists for, except the watchdog dies with the job. Check
+`pgrep -f compare-silhouette-truth` on the node rather than trusting the job
+list; 1c killed these by hand, and left alone they would have competed with
+r7 for cores all night. r6's 8 completed batches are still in
+`out/census/occt-r6` and are real measurements at `4905d45`, against r7's 687.
 
 ## The census can stop a runaway now, and old failure rows cannot be trusted
 
