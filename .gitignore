@@ -17,3 +17,8 @@ corpus.db-shm
 corpus.db-wal
 corpus.db.ingest*
 .onto-fetch-cache.json
+
+# A render slot is versioned as text; a raster one is not. ldview is 130 KB
+# a part against an SVG's tens, so the library-scale slot is a gigabyte that
+# rebuilds from vendor/LDView.app in an hour.
+renders/**/*.png
