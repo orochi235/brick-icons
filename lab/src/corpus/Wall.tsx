@@ -71,11 +71,10 @@ function ongoingInvoker(action: typeof viewportDragPanAction) {
 
 const NOOP_MODIFIERS = { alt: false, ctrl: false, meta: false, shift: false };
 
-// A thumbnail is an opaque tile, so a defect's color is hidden behind it;
-// A stroke straddles its path, so inset by half the width -- otherwise it
-// overshoots the cell and eats into its neighbors. Drawn over a thumbnail as
-// readily as over an empty cell: a part that fails in another slot draws
-// perfectly well here, and the frame is the only thing that says so.
+// An undrawn cell only: a drawn one carries its state in the ground instead,
+// where a ring reads as nothing at the zooms most cells are seen at. A stroke
+// straddles its path, so inset by half the width -- otherwise it overshoots
+// the cell and eats into its neighbors.
 function strokeBorder(ctx: CanvasRenderingContext2D,
                       cmd: { dx: number; dy: number; dw: number; dh: number;
                              border: string | null; borderWidth: number;
@@ -261,7 +260,6 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
     ctx.globalAlpha = cmd.alpha ?? 1;
     ctx.fillStyle = cmd.ground;
     ctx.fillRect(dx, dy, cmd.dw, cmd.dh);
-    strokeBorder(ctx, { ...cmd, dx, dy });
     ctx.drawImage(sheet, cmd.sx, cmd.sy, cmd.sw, cmd.sh, dx, dy, cmd.dw, cmd.dh);
     if (cmd.wash) washCell(ctx, cmd.wash, { ...cmd, dx, dy });
     // After the border, not before: the badge sits in the corner the frame
@@ -272,11 +270,10 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
   } else if (cmd.kind === 'image') {
     ctx.save();
     ctx.globalAlpha = cmd.alpha ?? 1;
-    // Under the same alpha as the image, so a dimmed cell fades whole.
+    // Under the same alpha as the image, so a dimmed cell fades whole. Every
+    // rung is ink on transparency, so this is what a cell's state colors.
     ctx.fillStyle = cmd.ground;
     ctx.fillRect(dx, dy, cmd.dw, cmd.dh);
-    // Every rung is ink on transparency, so the frame sits under the drawing.
-    strokeBorder(ctx, { ...cmd, dx, dy });
     ctx.drawImage(cmd.image, dx, dy, cmd.dw, cmd.dh);
     if (cmd.wash) washCell(ctx, cmd.wash, { ...cmd, dx, dy });
     // After the border, not before: the badge sits in the corner the frame

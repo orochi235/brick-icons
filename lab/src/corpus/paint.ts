@@ -359,8 +359,11 @@ export function captionsFor(cell: Cell, cellPx: number, ink: string,
 
 export type PaintCommand =
   | { kind: 'sprite'; dx: number; dy: number; dw: number; dh: number;
-      sx: number; sy: number; sw: number; sh: number; ground: string;
-      border: string | null; borderWidth: number; alpha?: number;
+      sx: number; sy: number; sw: number; sh: number;
+      /** The state's own color where the cell has one, the ordinary thumbnail
+       *  ground otherwise: a drawn cell carries its state in the ground rather
+       *  than in a ring. */
+      ground: string; alpha?: number;
       caret?: boolean; badges?: CellBadge[]; strip?: CellBadge[];
       captions?: CellCaption[]; wash?: number }
   | { kind: 'fill'; dx: number; dy: number; dw: number; dh: number;
@@ -380,7 +383,7 @@ export type PaintCommand =
       slash: boolean; caret?: boolean }
   | { kind: 'image'; dx: number; dy: number; dw: number; dh: number;
       image: CanvasImageSource; ground: string; wash?: number;
-      border: string | null; borderWidth: number; alpha?: number;
+      alpha?: number;
       caret?: boolean; badges?: CellBadge[]; strip?: CellBadge[];
       captions?: CellCaption[] }
   | { kind: 'label'; text: string; count: number; dx: number; dy: number;
@@ -439,12 +442,14 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
     const dimmed = (highlight !== null && highlight !== state)
       || (highlightTag !== null && !(cell.tags ?? []).includes(highlightTag));
     const alpha = dimmed ? appearance.dimAlpha : undefined;
-    // A drawn cell wears its state's border too: a part that fails in another
-    // slot looks perfectly fine in this one, and the frame is the only thing
-    // saying otherwise.
+    // A part that fails in another slot draws perfectly well in this one, so
+    // the cell has to say so itself. A drawn cell says it with the ground --
+    // every rung is ink on transparency, so the state gets the whole surround
+    // -- and an undrawn one with the ring, having no drawing to carry it.
     const style = dimmed ? palette.unknown : tintFor(cell, tint, palette);
     const border = style.border;
     const borderWidth = borderWidthFor(style.weight, dw, appearance);
+    const ground = border ?? thumbGround();
     const badges = appearance.showBadges ? badgesFor(cell, dw) : NO_BADGES;
     const strip = appearance.showBadges ? stripFor(cell, dw) : NO_BADGES;
     const captions = appearance.showCaptions
@@ -453,17 +458,16 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
     const vectored = tint === 'status' ? vector?.get(cell.id) : undefined;
     const image = tint === 'status' ? (vectored ?? loose?.get(cell.id)) : undefined;
     if (image) {
-      out.push({ kind: 'image', dx, dy, dw, dh, image, ground: thumbGround(),
-                 border, borderWidth, alpha, caret: isCaret, badges, strip, captions, wash });
+      out.push({ kind: 'image', dx, dy, dw, dh, image, ground,
+                 alpha, caret: isCaret, badges, strip, captions, wash });
       continue;
     }
     const box = tint === 'status' && manifest && cell.sha && !isStale(manifest, cell)
       ? sourceBox(manifest, cell.index)
       : null;
     if (box) {
-      out.push({ kind: 'sprite', dx, dy, dw, dh, ...box, ground: thumbGround(),
-                 border, borderWidth, alpha,
-                 caret: isCaret, badges, strip, captions, wash });
+      out.push({ kind: 'sprite', dx, dy, dw, dh, ...box, ground,
+                 alpha, caret: isCaret, badges, strip, captions, wash });
       continue;
     }
     out.push({ kind: 'fill', dx, dy, dw, dh, fill: style.fill, border, borderWidth,

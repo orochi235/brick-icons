@@ -35,7 +35,7 @@ it('draws a baked cell from the sheet', () => {
     cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest,
   });
   expect(cmd).toMatchObject({ kind: 'sprite', dx: 0, dy: 0, dw: 10, dh: 10,
-                              sx: 2, sy: 2, border: null });
+                              sx: 2, sy: 2, ground: thumbGround() });
 });
 
 it('draws an unrendered cell with nothing known as unknown gray, and no border', () => {
@@ -97,9 +97,8 @@ it('draws a whole loose image when one is loaded for the cell', () => {
     cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest, loose: new Map([['a', img]]),
   });
   expect(cmd).toEqual({ kind: 'image', dx: 0, dy: 0, dw: 10, dh: 10, image: img,
-                        ground: thumbGround(), border: null,
-                        borderWidth: 0, badges: [], strip: [], captions: [],
-                        wash: undefined });
+                        ground: thumbGround(), badges: [], strip: [],
+                        captions: [], wash: undefined });
 });
 
 it('grounds every rung on the same color, so a zoom crosses no seam', () => {
@@ -139,24 +138,33 @@ it('prefers a rasterized vector over the loose image', () => {
   expect(cmd).toMatchObject({ kind: 'image', image: vectored });
 });
 
-it('frames a drawn cell in its state color, defect or trouble elsewhere', () => {
+it('grounds a drawn cell in its state color, defect or trouble elsewhere', () => {
   const img = {} as HTMLImageElement;
   const [withDefect] = paintCommands({
     cells: [cell('a', 0, 'sha-a', { open_defects: 1 })], rects, visible: [0],
     cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest, loose: new Map([['a', img]]),
   });
-  expect(withDefect).toMatchObject({ border: CELL_FILL.defect.border });
+  expect(withDefect).toMatchObject({ ground: CELL_FILL.defect.border });
   const [clean] = paintCommands({
     cells: [cell('a', 0, 'sha-a')], rects, visible: [0],
     cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest, loose: new Map([['a', img]]),
   });
-  expect(clean).toMatchObject({ border: null, borderWidth: 0 });
+  expect(clean).toMatchObject({ ground: thumbGround() });
   const [elsewhere] = paintCommands({
     cells: [cell('a', 0, 'sha-a', { error_elsewhere: true })], rects, visible: [0],
     cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest,
     loose: new Map([['a', img]]),
   });
-  expect(elsewhere).toMatchObject({ border: CELL_FILL.problemElsewhere.border });
+  expect(elsewhere).toMatchObject({ ground: CELL_FILL.problemElsewhere.border });
+});
+
+it('keeps the ring for an undrawn cell, which has no drawing to color', () => {
+  const [cmd] = paintCommands({
+    cells: [cell('b', 1, null, { open_defects: 1 })], rects: [rects[1]!], visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest,
+  });
+  expect(cmd).toMatchObject({ kind: 'fill', border: CELL_FILL.defect.border });
+  expect((cmd as { borderWidth: number }).borderWidth).toBeGreaterThanOrEqual(1);
 });
 
 it('flags a part with an open defect in ochre, whatever else is true', () => {
@@ -392,14 +400,14 @@ it('marks exactly one command as the caret', () => {
   expect(cells[2]!.caret).toBeUndefined();
 });
 
-it('lets a cell carry both the defect frame and the caret', () => {
+it('lets a cell carry both the defect ground and the caret', () => {
   const img = {} as HTMLImageElement;
   const [cmd] = paintCommands({
     cells: [cell('a', 0, 'sha-a', { open_defects: 1 })], rects, visible: [0],
     cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest,
     loose: new Map([['a', img]]), caret: 0,
   });
-  expect(cmd).toMatchObject({ border: CELL_FILL.defect.border, caret: true });
+  expect(cmd).toMatchObject({ ground: CELL_FILL.defect.border, caret: true });
 });
 
 it('badges a cell once it is drawn big enough to hold one, one tag per corner', () => {
