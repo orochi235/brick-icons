@@ -48,3 +48,21 @@ if (!('PointerEvent' in globalThis)) {
   (globalThis.window as unknown as { PointerEvent?: unknown }).PointerEvent =
     PointerEventPolyfill;
 }
+
+// jsdom's Blob predates `.text()`/`.arrayBuffer()`, and the vector rung reads
+// both -- a render travels as bytes and is only decoded as text when it is
+// SVG. FileReader is the one reader jsdom does implement.
+if (typeof Blob !== 'undefined' && !Blob.prototype.text) {
+  const read = <T>(blob: Blob, as: 'text' | 'buffer'): Promise<T> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as T);
+      reader.onerror = () => reject(reader.error);
+      if (as === 'text') reader.readAsText(blob);
+      else reader.readAsArrayBuffer(blob);
+    });
+  Blob.prototype.text = function text() { return read<string>(this, 'text'); };
+  Blob.prototype.arrayBuffer = function arrayBuffer() {
+    return read<ArrayBuffer>(this, 'buffer');
+  };
+}

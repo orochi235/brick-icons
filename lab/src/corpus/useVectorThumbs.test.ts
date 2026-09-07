@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
-import { fetchText } from '@lab/corpus/svgRaster';
+import { fetchRender } from '@lab/corpus/svgRaster';
 import {
   MAX_TARGET_PX, PIXEL_BUDGET, needsRerender, residentCap, splitWork, targetPxFor,
   useVectorThumbs, vectorUrl, wantedVector,
@@ -9,8 +9,9 @@ import { VECTOR_LEVEL } from '@lab/corpus/levels';
 import type { Cell } from '@lab/corpus/types';
 
 vi.mock('@lab/corpus/svgRaster', () => ({
-  fetchText: vi.fn(() => Promise.resolve('<svg/>')),
-  rasterizeSvg: vi.fn(() => Promise.resolve({} as CanvasImageSource)),
+  fetchRender: vi.fn(() => Promise.resolve(
+    new Blob(['<svg/>'], { type: 'image/svg+xml' }))),
+  rasterize: vi.fn(() => Promise.resolve({} as CanvasImageSource)),
 }));
 
 const cell = (id: string, sha: string | null): Cell => ({
@@ -99,10 +100,10 @@ it('rasterizes the new slot after a slot change, with the camera parked', async 
     { initialProps: { source: 'census-naive' } });
 
   await waitFor(() => expect(result.current.size).toBe(2));
-  vi.mocked(fetchText).mockClear();
+  vi.mocked(fetchRender).mockClear();
 
   rerender({ source: 'census-occt' });
-  await waitFor(() => expect(vi.mocked(fetchText).mock.calls.map((c) => c[0]))
+  await waitFor(() => expect(vi.mocked(fetchRender).mock.calls.map((c) => c[0]))
     .toEqual(expect.arrayContaining([
       expect.stringContaining('/census-occt/a.svg'),
       expect.stringContaining('/census-occt/b.svg'),

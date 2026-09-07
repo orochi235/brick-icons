@@ -23,6 +23,12 @@ from . import (cache, cells, corpus, decal, defects, diff, findings,
                stats)
 from .. import db as corpus_db_module
 
+# One entry per `db.RENDER_SUFFIXES`: a slot's renders are whatever the engine
+# that filled it wrote, and the wall's render URL ends `.svg` for every one of
+# them.
+RENDER_MEDIA_TYPES = {".svg": "image/svg+xml", ".png": "image/png",
+                      ".webp": "image/webp"}
+
 
 def _artifact_path(root: Path, key: str, name: str) -> Path:
     """A cached file under `root`, or a 400.
@@ -417,7 +423,8 @@ def create_app(root: Path | str = ".",
         path = (render_root / row["path"]).resolve()
         if render_root not in path.parents or not path.is_file():
             raise HTTPException(404, "no such render")
-        return FileResponse(path, media_type="image/svg+xml")
+        return FileResponse(path, media_type=RENDER_MEDIA_TYPES.get(
+            path.suffix, "application/octet-stream"))
 
     ldraw = app.state.ldraw_dir
     if Path(ldraw).is_dir():

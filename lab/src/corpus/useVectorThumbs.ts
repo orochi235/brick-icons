@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { fetchText, rasterizeSvg } from '@lab/corpus/svgRaster';
+import { fetchRender, rasterize } from '@lab/corpus/svgRaster';
 import { VECTOR_LEVEL } from '@lab/corpus/levels';
 import type { Cell } from '@lab/corpus/types';
 
@@ -114,9 +114,9 @@ export function useVectorThumbs(cells: Cell[], visible: number[], level: number,
   const queue = useRef<{ cell: Cell; px: number }[]>([]);
   const running = useRef(0);
   const wantedIds = useRef<Set<string>>(new Set());
-  // Fetched SVG text, so rerastering a cell the zoom drifted past costs a
+  // Fetched render bytes, so rerastering a cell the zoom drifted past costs a
   // decode rather than another few hundred KB over the wire.
-  const text = useRef<Map<string, string>>(new Map());
+  const bytes = useRef<Map<string, Blob>>(new Map());
   // Arrivals are merged once a frame: one state update for a screenful,
   // rather than one repaint of the whole wall per cell.
   const arrived = useRef<Map<string, RasterEntry>>(new Map());
@@ -127,7 +127,7 @@ export function useVectorThumbs(cells: Cell[], visible: number[], level: number,
   useEffect(() => {
     inFlight.current = new Set();
     queue.current = [];
-    text.current = new Map();
+    bytes.current = new Map();
     arrived.current = new Map();
     // The ref lags the state by a commit, and the effect below reads the ref.
     // Clearing only the state leaves that effect holding the previous slot's
@@ -144,7 +144,7 @@ export function useVectorThumbs(cells: Cell[], visible: number[], level: number,
     wantedIds.current = new Set(want.map((c) => c.id));
 
     // Residency, not a draw-call concern, so this runs even when nothing new
-    // needs fetching -- and the text cache follows the rasters out.
+    // needs fetching -- and the byte cache follows the rasters out.
     setRaster((prev) => {
       let changed = false;
       const next = new Map(prev);
@@ -153,8 +153,8 @@ export function useVectorThumbs(cells: Cell[], visible: number[], level: number,
       }
       return changed ? next : prev;
     });
-    for (const id of text.current.keys()) {
-      if (!wantedIds.current.has(id)) text.current.delete(id);
+    for (const id of bytes.current.keys()) {
+      if (!wantedIds.current.has(id)) bytes.current.delete(id);
     }
 
     const scheduleFlush = () => {
@@ -194,13 +194,13 @@ export function useVectorThumbs(cells: Cell[], visible: number[], level: number,
     const rasterOne = async (cell: Cell, px: number) => {
       try {
         const url = vectorUrl(cell, source);
-        let svg = text.current.get(cell.id);
-        if (svg === undefined) {
-          svg = await fetchText(url);
+        let render = bytes.current.get(cell.id);
+        if (render === undefined) {
+          render = await fetchRender(url);
           if (!mounted.current) return;
-          text.current.set(cell.id, svg);
+          bytes.current.set(cell.id, render);
         }
-        const image = await rasterizeSvg(svg, px, px);
+        const image = await rasterize(render, px, px);
         if (!mounted.current || !wantedIds.current.has(cell.id)) return;
         arrived.current.set(cell.id, { image, px });
         scheduleFlush();

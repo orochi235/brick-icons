@@ -464,9 +464,10 @@ def _render_client(tmp_path, render_path="out/census/renders/naive/3001.svg"):
         (db.now(), render_path))
     conn.commit()
     conn.close()
-    svg = tmp_path / "out" / "census" / "renders" / "naive" / "3001.svg"
-    svg.parent.mkdir(parents=True, exist_ok=True)
-    svg.write_text("<svg viewBox='0 0 256 170'></svg>")
+    made = tmp_path / render_path
+    made.parent.mkdir(parents=True, exist_ok=True)
+    made.write_bytes(b"RIFF\x00\x00\x00\x00WEBPVP8 " if made.suffix == ".webp"
+                     else b"<svg viewBox='0 0 256 170'></svg>")
     return TestClient(lab_app.create_app(
         root=tmp_path, cache_root=tmp_path / "cache", corpus_db=tmp_path / "corpus.db"))
 
@@ -475,6 +476,18 @@ def test_render_route_serves_a_real_render(tmp_path):
     r = _render_client(tmp_path).get("/api/corpus/render/naive/3001.svg")
     assert r.status_code == 200
     assert "<svg" in r.text
+
+
+def test_render_route_types_a_render_by_what_it_actually_is(tmp_path):
+    """The route's path says `.svg` because that is the wall's URL for a
+    render, not a claim about the bytes: the ldview slot is WebP. Typing
+    every slot `image/svg+xml` left `createImageBitmap` unable to decode
+    the blob, and the vector rung silently kept the 128px bake."""
+    r = _render_client(
+        tmp_path, render_path="out/census/renders/naive/3001.webp").get(
+            "/api/corpus/render/naive/3001.svg")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "image/webp"
 
 
 def test_render_route_404s_an_unknown_part(tmp_path):
