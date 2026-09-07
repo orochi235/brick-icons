@@ -8,10 +8,11 @@ geometry — a degenerate sliver must never kill a render.
 from __future__ import annotations
 
 import math
+import warnings
 
 import numpy as np
 import shapely
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, box
 
 GRID = 1e-3            # set_precision snap grid, px
 
@@ -324,6 +325,22 @@ def intersection(a, b):
         return _only_area(shapely.intersection(a, b))
     except Exception:
         return _EMPTY
+
+
+def window(g, x0, y0, x1, y1):
+    """`g` cut down to a rectangle, for windowing a big geometry to a work
+    area. clip_by_rect is the fast path and does the same job as intersecting
+    with the box, except on a polygon carrying a degenerate ring: it builds a
+    3-point ring out of one and throws (813c03-f2's 4e-13 hole), on input GEOS
+    itself calls valid. The box intersection is exact there."""
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            return shapely.clip_by_rect(g, x0, y0, x1, y1)
+    except Exception:
+        # not the _only_area intersection above: a caller may be windowing
+        # lines, and stripping those to empty is a wrong answer, not a safe one
+        return shapely.intersection(g, box(x0, y0, x1, y1))
 
 
 def area(g):

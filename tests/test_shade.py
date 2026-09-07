@@ -386,7 +386,10 @@ def test_fill_ops_group_gradient_kept():
         fs.append(f)
     ops = shade.fill_ops(fs, shade.Flat3Style())
     assert len(ops) == 1 and "gradient" in ops[0]
-    assert len(ops[0]["gradient"]["stops"]) == 2
+    stops = ops[0]["gradient"]["stops"]
+    # two bands plus the flat clamps at 0 and 1 (see _axis_binned_stops)
+    assert [o for o, _ in stops] == [0.0, 0.0625, 0.9375, 1.0]
+    assert stops[0][1] != stops[-1][1]
 
 
 def test_fill_ops_hairline_holes_dissolved():
@@ -1698,3 +1701,38 @@ def test_6589_spike_sliver_does_not_break_the_spur_donation():
                            strokes=strokes, line_px=cfg.line_width,
                            sil_px=cfg.silhouette_width)
     assert fills
+
+
+def test_axis_stops_bin_azimuth_instead_of_alternating_between_two_tones():
+    """44300's chamfer band emitted a stop per facet, and facets at nearly the
+    same offset but opposite azimuth alternated between #9c9c9c and #c0c0c0 --
+    67 stops, two tones, hairline stripes across the fillet. Binning averages
+    brightness within a band, so a band is one tone and the run is monotone."""
+    style = shade.make_style("flat3")
+    lit = style.light / np.linalg.norm(style.light)
+    away = np.array([-lit[0], lit[1], -lit[2]])
+    away /= np.linalg.norm(away)
+    # two normal families interleaved along the axis, as the group had them
+    samples = [(i / 40.0, lit if i % 2 else away) for i in range(40)]
+
+    stops = shade._axis_binned_stops(samples, style)
+    cols = [c for _, c in stops]
+    assert len(cols) <= 12, "a stop per facet is what banded"
+    assert len(set(cols)) <= 2, "one averaged tone per band, not two per band"
+    offs = [o for o, _ in stops]
+    assert offs == sorted(offs) and offs[0] == 0.0 and offs[-1] == 1.0
+
+
+def test_axis_stops_keep_a_monotone_ramp_monotone():
+    """The bin must not flatten a real ramp: a cylinder wall's normals turn
+    steadily along the axis and its stops have to stay ordered (3062b)."""
+    style = shade.make_style("flat3")
+    lit = style.light / np.linalg.norm(style.light)
+    perp = np.cross(lit, [0.0, 0.0, 1.0])
+    perp /= np.linalg.norm(perp)
+    angles = np.linspace(0.0, np.pi / 2, 24)      # brightness sweeps 1 -> 0
+    samples = [(float(i) / 23.0, np.cos(a) * lit + np.sin(a) * perp)
+               for i, a in enumerate(angles)]
+    stops = shade._axis_binned_stops(samples, style)
+    greys = [int(c[1:3], 16) for _, c in stops]
+    assert len(set(greys)) >= 4, "a real ramp must survive the bin"
