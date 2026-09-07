@@ -95,17 +95,30 @@ def engine_for(source: str) -> str:
 COVERAGE_ORDER = ("defect", "failed", "timeout", "drawn", "untried")
 
 
-#: Routes in `part_years.matched` whose years are an estimate rather than a
-#: walk of set inventories. There is no inventory behind them, so they carry no
-#: set count -- and a 0 read as one would tag every such part `obscure`.
-ESTIMATED_ROUTES = frozenset({"keywords"})
+#: Routes in `part_years.matched` whose `sets` and `colors` describe some
+#: OTHER part -- the base mould a print was struck from, or the moulds a design
+#: id names -- or no part at all. Only `exact` counts the part itself, and
+#: `sheet` counts the sticker sheet the part is one of, which ships with it.
+#:
+#: Reporting an inherited count is not a rounding error, it is a different
+#: claim: `3069bp1f` is one silver-arched-window print, and it read as 5,766
+#: sets and `popular` because the plain 1 x 2 tile it is printed on is.
+BORROWED_COUNT_ROUTES = frozenset({"base", "design", "design-id-base",
+                                   "keywords"})
 
 
 def sets_for(year: sqlite3.Row | None) -> int | None:
-    """How many sets a part is in, or None where nobody counted."""
-    if year is None or year["matched"] in ESTIMATED_ROUTES:
+    """How many sets this part is in, or None where the number is not its own."""
+    if year is None or year["matched"] in BORROWED_COUNT_ROUTES:
         return None
     return year["sets"]
+
+
+def colors_for(year: sqlite3.Row | None) -> int | None:
+    """How many colors this part was made in, on the same rule as `sets_for`."""
+    if year is None or year["matched"] in BORROWED_COUNT_ROUTES:
+        return None
+    return year["colors"]
 
 
 def coverage_of(*, sha: str | None, error: str | None, open_defects: int) -> str:
@@ -189,7 +202,7 @@ def cells(conn: sqlite3.Connection, source: str = "census-naive",
             "year_from": year["year_from"] if year else None,
             "year_to": year["year_to"] if year else None,
             "sets": sets_for(year),
-            "colors": year["colors"] if year else None,
+            "colors": colors_for(year),
             # The part that replaced this one, where one is known: the wall's
             # updated badge links to it.
             "successor": successor,

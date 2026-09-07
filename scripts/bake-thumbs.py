@@ -37,6 +37,14 @@ def bake_source(conn, source: str, root: Path, out: Path,
             print(f"  {source} {i}/{total} {row['part_id']} MISSING {row['path']}",
                   flush=True)
             continue
+        # resvg reads SVG and nothing else, and it fails on a raster with
+        # "provided data has not an UTF-8 encoding" -- which reads like a
+        # corrupt file rather than the wrong kind of one. LDView renders a
+        # PNG, so its slot has to skip the rasterizer, not be fed to it.
+        if svg.suffix.lower() != ".svg":
+            print(f"  {source} {i}/{total} {row['part_id']} SKIPPED "
+                  f"{svg.suffix} is not a vector render", flush=True)
+            continue
         made = thumbs.bake_part(row["part_id"], svg, slot, sha=row["sha256"])
         baked += bool(made)
         print(f"  {source} {i}/{total} {row['part_id']} "
