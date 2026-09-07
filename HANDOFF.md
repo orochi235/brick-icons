@@ -122,14 +122,19 @@ police star badge on sheet 22637), `004659a` (the fire emblem). Union the
 colored subpaths, weld hairlines with a dilate/erode, simplify, normalize on
 the bounding box.
 
-**Open, and Mike's to answer: should the legend count what is shown?** It
-counts all 24,591 library parts, not the 23,432 the filter leaves on the wall,
-so "19,928 unknown" is real but is mostly the 13,083 printed parts the census
-never targets. The state rows clearly should follow `shown`. The tag rows are
-the awkward half -- they are also filters, so counting them over `shown` means
-picking `technic` zeroes every other tag and you cannot see what else is worth
-adding. The sidebar's category counts already dodge this deliberately; there is
-a comment saying so.
+**Answered, in `6467668`: the legend counts the wall, and the tags count the
+menu.** It used to count all 24,591 library parts against a wall showing
+23,432, so "19,928 unknown" was mostly the 13,083 printed parts the census
+never targets. The state rows follow `shown` now.
+
+The tag rows could not, and that was the whole difficulty: they are the control
+that applies the filter, so over `shown` they read 0 for every tag but the one
+picked, and the list you choose the next tag from destroys its own information.
+They count over `untagged` -- the wall narrowed by everything *except* the tag
+picks. Two tags picked will not sum to the wall's total; that is what it costs
+to keep the row a menu, and the sidebar's category counts already pay it
+(`CorpusWall.tsx`, "a facet's own checkbox must not zero out the moment it is
+cleared").
 
 **Answered: better part-year data. No source beats the one we have; what we
 have is being read badly.** Sources first:
