@@ -87,14 +87,24 @@ export function CorpusWall({ client }: { client: LabClient }) {
   camRef.current = cam;
   const fittedGrouping = useRef<Selection['grouping']>('none');
 
-  // The most-populated slot is the one worth opening on; the route already
-  // orders them that way.
+  // Polled, not fetched once: a slot appears when its renders are indexed, and
+  // fetching at mount alone left a page open across an ingest showing a menu
+  // that no longer matched the store, with nothing on screen saying so. Only
+  // the opening slot is chosen from it -- the route orders by population, and
+  // the most-populated one is worth opening on -- so a later poll adds
+  // entries without moving anyone off what they are looking at.
+  const opened = useRef(false);
   useEffect(() => {
-    void client.corpusSources().then(({ sources: got }) => {
+    let live = true;
+    const load = () => void client.corpusSources().then(({ sources: got }) => {
+      if (!live) return;
       setSources(got);
-      if (got[0]) setSource(got[0].source);
+      if (!opened.current && got[0]) { opened.current = true; setSource(got[0].source); }
     }).catch(() => {});
-  }, [client]);
+    load();
+    const id = setInterval(load, params.pollMs);
+    return () => { live = false; clearInterval(id); };
+  }, [client, params.pollMs]);
 
   // What is on screen: the newest slot whose cells and sheets are both in
   // hand, which is the slot before this one until the new one has both.

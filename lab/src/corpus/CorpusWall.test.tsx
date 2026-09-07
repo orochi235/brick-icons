@@ -474,3 +474,26 @@ it('drops the card on a zoom, but keeps the one the pointer is over', async () =
   fireEvent.wheel(stage, { deltaY: -1, clientX: 10, clientY: 10 });
   expect(container.querySelector('.corpus-card')).toBeNull();
 });
+
+it('picks up a slot that appears after the page is open, without moving off yours', async () => {
+  // The slot list used to be fetched at mount alone, so a page open across an
+  // ingest showed a menu that no longer matched the store -- ldview was
+  // indexed and stayed invisible until someone reloaded.
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  let slots = [{ source: 'census-naive', n: 2 }];
+  const growing = { ...client, corpusSources: () => Promise.resolve({ sources: slots }) };
+  const { container } = render(<CorpusWall client={growing} />);
+  await findCanvas(container);
+  const picker = () => container.querySelector('.corpus-bar select') as HTMLSelectElement;
+  await waitFor(() => expect(picker()).toBeTruthy());
+  expect([...picker().options].map((o) => o.value)).toEqual(['census-naive']);
+
+  slots = [{ source: 'ldview', n: 9 }, { source: 'census-naive', n: 2 }];
+  await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+
+  await waitFor(() => expect([...picker().options].map((o) => o.value))
+    .toEqual(['ldview', 'census-naive']));
+  // ldview now sorts first, but the wall stays on what was already open.
+  expect(picker().value).toBe('census-naive');
+  vi.useRealTimers();
+});
