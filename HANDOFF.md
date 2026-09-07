@@ -140,6 +140,18 @@ when you bounce it.
   DOM reimplementation of any mark -- the corner-badge lean fixed in `434cc2d`
   existed because the corner path and the strip path had already drifted.
 
+**An agent rebuild silently resets a node's limits.** studio's agent went
+`0906.2329` to `0907.0049` mid-evening and lost both `-max-job-time` and
+`-max-work-size`: a 6h `--timeout` came back clamped to the 30m default, and
+the work quota reverted from 30G to 10G. Nothing says so except the deadline
+`onto run` prints, so read it -- 30 minutes means it happened again, and the
+fix is `onto install -max-job-time 12h -max-work-size 40G` on the node.
+
+**A pipeline hides the exit code of the thing you care about.**
+`bake-thumbs.py | grep | tail` reports *tail's* status, so the bake died
+partway through the ldview slot -- 17,371 of 21,797, stale sheets -- and the
+run was recorded as exit 0. Write to a log and grep the file.
+
 **Killing a census does not kill what it started.** `onto kill` took r6 off
 the job list and left two `compare-silhouette-truth.py` processes alive on
 studio, still writing r6 JSONLs -- the orphan case `census-batch.sh`'s
@@ -262,7 +274,20 @@ to WebP made every one of its files invisible to the rebuild, which indexed
 whatever `renders` has rows for. The list is `db.RENDER_SUFFIXES` now.
 `thumbs.bake_part` gained the raster branch that had to exist beside it: PIL
 opens a raster, resvg keeps the vector path, and that is why ldview had no
-thumbnails before. 3,896 renders indexed and baked.
+thumbnails before.
+
+**The slot is now the whole library** (`75d6a31`). 21,797 renders -- every
+in-scope part; stickers and the `|` category stay out. studio drew the 17,901
+missing ones in 26 minutes under `scripts/ldview-batch.py`, which takes a
+comma-separated batch so onto's `--each` can own the pool, and skips a part
+whose `.webp` is already there so it resumes. Two things it had to fix first:
+`process_one` wrote LDView's PNG into `renders/ldview/` before converting it,
+which `db.rebuild` would index as the render, and which raced a fleet fetch
+listing the slot -- five rounds in a row 500'd on `lstat ... no such file` and
+15,000 renders sat on the node for half an hour. The PNG goes to a temp dir
+now. `bake-thumbs.py` also died on the first zero-byte file an interrupted
+fetch left behind, abandoning the twenty thousand parts after it; it logs
+UNREADABLE and continues.
 
 **Both pages poll now** (`bd5c6de`, `0f66367`). The wall fetched its slot list
 once at mount, so a page open across an ingest showed a menu that no longer
