@@ -1116,10 +1116,25 @@ def test_the_undeclared_fallback_is_never_consulted_by_a_part_with_edges(
     assert calls == []
 
 
-def test_a_part_that_declares_an_edge_and_still_draws_nothing_still_raises():
-    """The seven formed stickers that fail with an edge declared are a
-    different fault, and swallowing them into a silhouette would hide it."""
+def test_a_part_that_declares_a_real_edge_and_draws_nothing_still_raises():
+    """A type-2 line is a claim that an edge is there. A part carrying one and
+    still producing nothing is a different fault, and swallowing it into a
+    silhouette would hide it."""
     with pytest.raises(RuntimeError, match="produced no edges"):
         occt.visible_segments({"2": [(np.zeros(3), np.zeros(3))], "5": [],
                                "tri": [], "tri_meta": [], "analytic": []},
                               np.array([1.0, 0, 0]), np.array([0, 1.0, 0]), 900)
+
+
+def test_condlines_alone_do_not_count_as_declaring_an_edge(ldraw_dir):
+    """A condline is conditional by construction -- it draws only where its two
+    faces straddle the view -- so on a flat plate seen from outside none of them
+    qualify and the part is left with no boundary at all. 36 formed stickers and
+    their composite siblings sit exactly there: type-5 and no type-2, 26 to 204
+    sharp edges from HLR, not one locus matched. Treating type-5 as a
+    declaration left every one of them blank."""
+    right, up = hlr.view_basis(30.0, 65.0)[:2]
+    for part in ("003497bc01", "164325d", "4620856b", "162275dc01"):
+        out = occt.flatten_part(part, ldraw_dir)
+        assert out["5"] and not out["2"], part
+        assert occt.visible_segments(out, right, up, 900).segs, part

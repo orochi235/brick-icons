@@ -1524,9 +1524,18 @@ def _undeclared_ops(comps):
     tessellation draws every facet boundary, which is the failure this engine
     exists to avoid -- but `build_shape` has already run UnifySameDomain, so
     a flat wall's interior facet seams are gone and what survives is the
-    part's real creases and its boundary. The guard is that the part declared
-    NOTHING: one that declares an edge and still yields no ops is a different
-    fault and still raises.
+    part's real creases and its boundary.
+
+    The guard is the absence of a type-2 line, and type-5 does not count. A
+    condline is conditional by construction -- it draws only where its two
+    faces straddle the view -- so on a flat plate seen from outside, none of
+    them qualify and the part is left with no boundary at all. 36 formed
+    stickers and their composite siblings sit exactly there: type-5 only, 26
+    to 204 sharp edges from HLR, and not one locus matched. Declaring a
+    condline is not declaring that the outline exists.
+
+    A part that declares a real type-2 edge and still yields no ops is a
+    different fault and still raises.
     """
     return [op for edge in _edges_of(comps.get("sharp"))
             for op in _edge_ops(edge, "sil")] if comps.get("sharp") else []
@@ -1554,7 +1563,7 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None):
             continue
         for edge in _edges_of(comp):
             ops += _edge_ops(edge, "sil")
-    if not ops and not out.get("2") and not out.get("5"):
+    if not ops and not out.get("2"):
         ops = _undeclared_ops(comps)
     ops = _negate_y(ops)
     if not ops:
