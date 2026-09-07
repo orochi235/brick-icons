@@ -273,3 +273,189 @@ def fit_edge_arcs(edges, condlines):
         consumed.update(chain)
     kept = [e for i, e in enumerate(edges) if i not in consumed]
     return arcs, kept
+
+
+# --- silhouette arc recovery (screen space, contour only) ---------------
+# The limb of a tessellated surface is not an authored edge, so nothing in
+# the library declares it round and fit_edge_arcs above cannot see it: what
+# reaches the drawing is a run of chords. These constants decide when such a
+# run is one ellipse drawn as a polygon rather than a polygon.
+SIL_TURN_MIN = 3.0      # deg; below: a straight continuation, not a curve
+SIL_TURN_MAX = 24.0     # deg; the library's own round step is 22.5 (a
+                        # 16-gon). Every real polygon profile in the corpus
+                        # is coarser -- a 12-sided prism turns 30, an
+                        # octagon 45 -- and at those steps a polygon and a
+                        # faceted round are the same points on the same
+                        # circle, so nothing downstream could tell them
+                        # apart. The cap is the whole defense.
+SIL_MIN_PTS = 6         # a conic has five degrees of freedom, so a
+                        # five-point fit is exact and its residual proves
+                        # nothing. Six is the first testable run.
+SIL_TOL_PX = 0.25      # max vertex-to-ellipse distance, output px at a
+                        # 256 icon -- the wide-pass contour gate's tolerance
+SIL_SPAN_MAX = 180.0    # deg; a longer sweep is a closed rim, and those
+                        # arrive as real arcs already
+
+
+def _conic(P):
+    """Least-squares conic through P (n,2) as (C, U, V) with point(t) =
+    C + cos t*U + sin t*V, or None when the fit is not an ellipse."""
+    c0 = P.mean(axis=0)
+    s = float(np.abs(P - c0).max()) or 1.0
+    Q = (P - c0) / s
+    x, y = Q[:, 0], Q[:, 1]
+    A = np.column_stack([x * x, x * y, y * y, x, y, np.ones_like(x)])
+    try:
+        a, b, c, d, e, f = np.linalg.svd(A)[2][-1]
+    except np.linalg.LinAlgError:
+        return None
+    if b * b - 4 * a * c >= 0:              # parabola or hyperbola
+        return None
+    try:
+        cx, cy = np.linalg.solve([[2 * a, b], [b, 2 * c]], [-d, -e])
+    except np.linalg.LinAlgError:
+        return None
+    fc = a * cx * cx + b * cx * cy + c * cy * cy + d * cx + e * cy + f
+    w, V = np.linalg.eigh([[a, b / 2.0], [b / 2.0, c]])
+    if np.any(-fc / w <= 0):
+        return None
+    r = np.sqrt(-fc / w)
+    return (np.array([cx, cy]) * s + c0, V[:, 0] * r[0] * s, V[:, 1] * r[1] * s)
+
+
+def _params(P, C, U, V):
+    """Ellipse parameter (degrees) per point, unwrapped to run monotonically,
+    and the max distance from a point to the ellipse."""
+    M = np.column_stack([U, V])
+    try:
+        m = np.linalg.solve(M, (P - C).T).T
+    except np.linalg.LinAlgError:
+        return None, None
+    n = np.linalg.norm(m, axis=1)
+    if np.any(n < 1e-12):
+        return None, None
+    dev = np.linalg.norm((M @ (m / n[:, None] - m).T).T, axis=1)
+    t = np.degrees(np.arctan2(m[:, 1], m[:, 0]))
+    t = t[0] + np.cumsum(np.concatenate([[0.0], (np.diff(t) + 180) % 360 - 180]))
+    return t, float(dev.max())
+
+
+def _sil_chains(sil, tol):
+    """Silhouette line ops chained end to end into point runs, each with the
+    ops it consumed."""
+    ends = [(np.array(o[1:3], float), np.array(o[3:5], float)) for o in sil]
+    lens = [float(np.linalg.norm(b - a)) for a, b in ends]
+    used, out = set(), []
+    for i in range(len(sil)):
+        if i in used or lens[i] < tol:
+            continue
+        used.add(i)
+        P, own = [ends[i][0], ends[i][1]], [i]
+        grew = True
+        while grew:
+            grew = False
+            for j in range(len(sil)):
+                if j in used or lens[j] < tol:
+                    continue
+                for a, b in (ends[j], ends[j][::-1]):
+                    if np.linalg.norm(P[-1] - a) <= tol:
+                        P.append(b); own.append(j)
+                    elif np.linalg.norm(P[0] - b) <= tol:
+                        P.insert(0, a); own.insert(0, j)
+                    else:
+                        continue
+                    used.add(j); grew = True
+                    break
+                if grew:
+                    break
+        out.append((np.array(P), own))
+    return out
+
+
+def _smooth_spans(P):
+    """Index ranges of P that turn steadily one way — candidate arc runs.
+    Splits at a corner, at a straight joint, and where the turn changes
+    sign, so a straight side or a real crease can never be swept in."""
+    d = np.diff(P, axis=0)
+    ang = np.degrees(np.arctan2(d[:, 1], d[:, 0]))
+    turn = (np.diff(ang) + 180) % 360 - 180
+    cuts = [0]
+    for i, t in enumerate(turn):
+        if not (SIL_TURN_MIN <= abs(t) <= SIL_TURN_MAX) \
+                or (i and np.sign(t) != np.sign(turn[i - 1])):
+            cuts.append(i + 1)
+    cuts.append(len(P) - 1)
+    return [(a, b) for a, b in zip(cuts, cuts[1:]) if b + 1 - a >= SIL_MIN_PTS]
+
+
+def fit_silhouette_arcs(segs):
+    """Draw a silhouette that is one ellipse as an arc, not as its chords.
+
+    Returns (segs, ellipses). The ellipses are arc-recovery candidates in
+    hlr's `ellipses` format with a per-candidate step and snap tolerance, so
+    geom2d.densify_on_arcs pulls the fill boundary onto the same curve the
+    stroke now follows — strokes and fills have to move together or the
+    divergence opens paint slivers along the run.
+
+    Only silhouette ops are eligible, and only where the fit is
+    over-determined and tight (see the constants above). A run this rule
+    accepts and a genuine polygon of the same step are the same points; the
+    turn cap, not the fit, is what separates them.
+    """
+    if not segs:
+        return segs, []
+    sil = [o for o in segs if o[0] == "line" and o[-1] == "sil"]
+    if len(sil) < SIL_MIN_PTS - 1:
+        return segs, []
+    pts = np.array([p for o in sil for p in ((o[1], o[2]), (o[3], o[4]))],
+                   float)
+    dim = float(max(pts.max(axis=0) - pts.min(axis=0))) or 1.0
+    join_tol = 0.004 * dim                       # ~1 output px at a 256 icon
+    fit_tol = SIL_TOL_PX / 256.0 * dim
+
+    # Endpoints of everything that is NOT this silhouette: a real polygon's
+    # corners are authored edges, and the crease lands on the outline right
+    # at the corner. A faceted round's limb vertices are bare -- the facet
+    # boundaries there are conditional lines, drawn only where they ARE the
+    # limb. That is the one difference between the two that the library
+    # declares rather than leaves to be inferred from the sampling.
+    creases = np.array([q for o in segs if o[0] == "line" and o[-1] != "sil"
+                        for q in ((o[1], o[2]), (o[3], o[4]))], float)
+
+    def bare(p):
+        return not len(creases) or bool(
+            np.linalg.norm(creases - p, axis=1).min() > join_tol)
+
+    drop, arcs, ells = set(), [], []
+    for P, own in _sil_chains(sil, join_tol):
+        for a, b in _smooth_spans(P):
+            if not all(bare(q) for q in P[a + 1:b]):
+                continue                     # a crease meets the run: corners
+            got = _conic(P[a:b + 1])
+            if got is None:
+                continue
+            C, U, V = got
+            t, dev = _params(P[a:b + 1], C, U, V)
+            if t is None or dev > fit_tol or abs(t[-1] - t[0]) > SIL_SPAN_MAX:
+                continue
+            t0, t1 = (t[0], t[-1]) if t[-1] > t[0] else (t[-1], t[0])
+            arcs.append(("arc", C[0], C[1], U[0], U[1], V[0], V[1],
+                         float(t0), float(t1), "sil"))
+            # the run's own coarsest sweep, so densify_on_arcs subdivides the
+            # fill edges it just took over rather than treating them as
+            # already fine enough
+            step = float(np.abs(np.diff(t)).max())
+            ells.append((C[0], C[1], U[0], U[1], V[0], V[1], step,
+                         float(max(dev, fit_tol))))
+            drop.update(own[a:b])
+    if not arcs:
+        return segs, []
+    keep, seen = [], 0
+    for op in segs:
+        if op[0] == "line" and op[-1] == "sil":
+            if seen in drop:
+                seen += 1
+                continue
+            seen += 1
+        keep.append(op)
+    return keep + arcs, ells
