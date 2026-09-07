@@ -263,6 +263,51 @@ it was the skew axis column.
 naive engine still. `BRICK_GOLDENS=1` also passes `--only 3005`, so the fast
 mode is one part. Cite `=full`, or cite `tests/test_occt.py`.
 
+### The translucent slot is rendering, and `onto` has four traps in a row
+
+**Mike said do it.** `translucent-occt` over all 8,235 census parts is running
+on msb-uai as task `translucent-full`, job `271b71e2`, 6 workers, deadline
+18:07. A fetch stream pulls into `renders/translucent-occt/`. `--opacity 0.5`
+was already declared by `0faba98`; nothing about the drawing needed writing.
+
+**`0bc8dd3` gave the store the runaway guard it never had.**
+`build-render-store.py` built its `Runner` with `isolate=False, mem_gb=0`, so a
+store run had `--timeout` and nothing else -- and that is `signal.setitimer`,
+whose handler runs only between bytecodes, so an occt render inside one OCP
+call ignores it and keeps allocating. It now passes `isolate` and an 8 GB cap,
+matching `compare-silhouette-truth.py`. The 300-part trial, run before the fix,
+wedged at 295 on 14.4 GB, which is what the guard is for.
+
+**What the slot costs, measured on the 191 trial parts that exist in both
+slots.** 2.4x the disk (79 KiB median against 34), and 1.5x the ink (0.231
+coverage against 0.158). 11 of 191 land above 0.35 and read as black masses at
+thumbnail size. The driver is stud count, not complexity -- every stud has an
+anti-stud tube beneath it and translucent draws all of them, so `47405`, a 6x12
+wedge plate, goes 0.13 to 0.39 while `63522`, a 2x4 brick, stays perfectly
+readable. Whether the slot belongs on the wall or only in a detail view is
+undecided.
+
+**Four traps, each of which cost a restart:**
+
+- **`--in brick-icons` is mandatory.** Without it the node has no venv and the
+  job exits 127 in under a minute.
+- **`out/` does not sync.** A parts list living there is not on the node; scp
+  it into `~/.config/onto/work/brick-icons/out/` first.
+- **`onto` collapses a space-separated argument list into ONE item.** Passing
+  300 part ids inline handed the renderer a single "part" 1,900 characters
+  long. Use `--each <list in the tree>` with `'{}'`.
+- **Workers sharing one `--log` share one `.inflight` and race on it**, which
+  surfaces as `FileNotFoundError: ...inflight` and spurious failures.
+  `census-batch.sh`'s header warns about this. Interpolate: `--log
+  'out/store/translucent/{}.jsonl'`.
+
+**And a fifth for syncing.** `onto sync --in brick-icons <node>` is required
+after a commit or the node runs the old code silently. It refuses while the
+node holds job output you have not fetched -- **fetch first; `--force` past
+that warning deletes the node's renders.** The fetched renders live under
+`renders/`, which is tracked, so 40 MB of them push the sync patch over its
+8 MB limit: move them aside before syncing.
+
 ### What is not done
 
 - **A translucent slot, both engines. This is the only thing waiting on Mike,
