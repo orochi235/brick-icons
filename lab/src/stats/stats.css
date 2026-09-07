@@ -166,7 +166,7 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
   font-size: 0.8125rem;
 }
 
-.stats-phase-row:hover { background: var(--wzl-gray-100); }
+.stats-phase-row:hover { background: var(--wzl-surface-hover); }
 
 .stats-phase-toggle {
   border: 0;
@@ -177,7 +177,7 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
   cursor: pointer;
 }
 
-.stats-phase-leaf { color: var(--wzl-gray-700); }
+.stats-phase-leaf { color: var(--wzl-fg); }
 
 .stats-phase-row[data-rest='true'] .stats-phase-leaf { font-style: italic; }
 
@@ -189,12 +189,12 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
 }
 
 .stats-phase-pct,
-.stats-phase-n { color: var(--wzl-gray-600); }
+.stats-phase-n { color: var(--wzl-fg-muted); }
 
 .stats-phase-bar {
   display: block;
   height: 0.6875rem;
-  background: var(--wzl-gray-200);
+  background: var(--wzl-line);
   border-radius: 1px;
   overflow: hidden;
 }
@@ -375,7 +375,7 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
 
 .stats-aside {
   margin: 0.5rem 0 1rem;
-  color: var(--wzl-gray-600);
+  color: var(--wzl-fg-muted);
   font-size: 0.8125rem;
 }
 
@@ -386,6 +386,6 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
 }
 
 .stats-slot-sizes tfoot td {
-  border-top: 1px solid var(--wzl-gray-300);
+  border-top: 1px solid var(--wzl-line);
   font-weight: 500;
 }
