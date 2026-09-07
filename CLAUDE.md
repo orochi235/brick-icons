@@ -71,3 +71,26 @@ renders through `_config_from_args` + `process_one`. Never add a lab-side
 parameter table, and never re-implement a render path there: a parameter the
 lab knows and the CLI does not is a bug by construction, and
 `tests/test_lab_schema.py` fails on it.
+
+## Long jobs go through `onto`, including on this Mac
+
+Anything running longer than a few minutes is launched with `onto run`, never as
+a backgrounded shell command. This machine is enrolled as `orochi`, so a local
+job qualifies — `--dir` runs it in place in this checkout, with no tree sync and
+no fetch back.
+
+    onto run --detach --timeout 4h --task thumb-bake --dir "$PWD" \
+      --env PATH=/opt/homebrew/bin:/usr/bin:/bin \
+      orochi -- .venv/bin/python scripts/bake-thumbs.py
+
+`--task` is the identity and it is the point. Several Claude sessions share this
+working directory and cannot see each other's background processes; two once ran
+`bake-thumbs.py` at the same time, writing the same thumbnails and racing on the
+same `sheet-*.png`. Relaunching under a task name continues that task instead of
+forking a rival, and `onto jobs` answers "is this already running?" for everyone.
+
+Two traps. The agent's PATH is not your shell's, so pass `--env PATH=...`
+covering everything the job shells out to — a missing `resvg` fails every part
+in about a second, silently. And check the deadline `onto run` prints: the agent
+clamps to 30 minutes unless it was installed with `-max-job-time`, and a
+reinstall reverts that.
