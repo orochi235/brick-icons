@@ -20,7 +20,7 @@ def _part(conn, pid, title="Brick", category="Brick", status="unreviewed"):
                  (pid, title, category, status))
 
 
-def _render(conn, pid, sha, made_at, source="census-naive"):
+def _render(conn, pid, sha, made_at, source="silhouette-naive"):
     conn.execute("INSERT INTO renders (part_id, source, config_key, made_at, "
                  "path, sha256) VALUES (?, ?, 'k', ?, ?, ?)",
                  (pid, source, made_at, f"renders/{source}/{pid}.svg", sha))
@@ -43,7 +43,7 @@ def _measure(conn, pid, engine, error=None, source=None):
                  (_run_id,))
     conn.execute("INSERT INTO measurements (run_id, part_id, engine, source, "
                  "error) VALUES (?, ?, ?, ?, ?)",
-                 (_run_id, pid, engine, source or f"census-{engine}", error))
+                 (_run_id, pid, engine, source or f"silhouette-{engine}", error))
 
 
 def test_every_part_is_a_cell_in_id_order(conn):
@@ -81,7 +81,7 @@ def test_a_render_in_another_slot_is_not_this_slot_s(conn):
     _part(conn, "3001")
     _render(conn, "3001", "deadbeef", "2026-09-05T10:00:00+00:00", source="naive")
     conn.commit()
-    assert cells.cells(conn, source="census-naive")["cells"][0]["sha"] is None
+    assert cells.cells(conn, source="silhouette-naive")["cells"][0]["sha"] is None
     assert cells.cells(conn, source="naive")["cells"][0]["sha"] == "deadbeef"
 
 
@@ -123,8 +123,8 @@ def test_a_delta_cell_keeps_the_index_it_has_on_the_wall(conn):
 def test_a_census_slot_reads_its_engine_s_measurements(conn):
     # renders.source is a slot; measurements.engine is an engine. Without the
     # mapping every metric joins to nothing and the wall sorts on all-None.
-    assert cells.engine_for("census-naive") == "naive"
-    assert cells.engine_for("census-occt") == "occt"
+    assert cells.engine_for("silhouette-naive") == "naive"
+    assert cells.engine_for("silhouette-occt") == "occt"
     assert cells.engine_for("naive") == "naive"
 
 
@@ -135,9 +135,9 @@ def test_a_cell_carries_the_metric_from_its_slot_s_engine(conn):
                  "VALUES (1, 'census', '2026-09-05T09:00:00+00:00', 'abc', '{}')")
     conn.execute("INSERT INTO measurements (run_id, part_id, engine, source, "
                  "extra_d99, secs) "
-                 "VALUES (1, '3001', 'naive', 'census-naive', 4.5, 12.0)")
+                 "VALUES (1, '3001', 'naive', 'silhouette-naive', 4.5, 12.0)")
     conn.commit()
-    cell = cells.cells(conn, source="census-naive")["cells"][0]
+    cell = cells.cells(conn, source="silhouette-naive")["cells"][0]
     assert cell["extra_d99"] == 4.5
     assert cell["secs"] == 12.0
 
@@ -154,7 +154,7 @@ def test_a_delta_with_nothing_new_is_empty(conn):
 def test_a_part_with_no_defects_reports_none_open(conn):
     _part(conn, "3001")
     conn.commit()
-    cell = cells.cells(conn, source="census-naive")["cells"][0]
+    cell = cells.cells(conn, source="silhouette-naive")["cells"][0]
     assert cell["open_defects"] == 0
     assert cell["open_defects_elsewhere"] == 0
 
@@ -163,7 +163,7 @@ def test_a_defect_naming_this_engine_counts_here_only(conn):
     _part(conn, "3001")
     _defect(conn, "d1", "3001", ["naive"])
     conn.commit()
-    cell = cells.cells(conn, source="census-naive")["cells"][0]
+    cell = cells.cells(conn, source="silhouette-naive")["cells"][0]
     assert cell["open_defects"] == 1
     assert cell["open_defects_elsewhere"] == 0
 
@@ -172,7 +172,7 @@ def test_a_defect_naming_another_engine_counts_elsewhere_only(conn):
     _part(conn, "3001")
     _defect(conn, "d1", "3001", ["occt"])
     conn.commit()
-    cell = cells.cells(conn, source="census-naive")["cells"][0]
+    cell = cells.cells(conn, source="silhouette-naive")["cells"][0]
     assert cell["open_defects"] == 0
     assert cell["open_defects_elsewhere"] == 1
 
@@ -181,7 +181,7 @@ def test_a_fixed_defect_counts_in_neither(conn):
     _part(conn, "3001")
     _defect(conn, "d1", "3001", ["naive"], status="fixed")
     conn.commit()
-    cell = cells.cells(conn, source="census-naive")["cells"][0]
+    cell = cells.cells(conn, source="silhouette-naive")["cells"][0]
     assert cell["open_defects"] == 0
     assert cell["open_defects_elsewhere"] == 0
 
@@ -279,7 +279,7 @@ def test_a_part_erroring_elsewhere_is_clean_here(conn):
     _measure(conn, "3001", "naive")
     _measure(conn, "3001", "occt", error="TimeoutError")
     conn.commit()
-    cell = cells.cells(conn, source="census-naive")["cells"][0]
+    cell = cells.cells(conn, source="silhouette-naive")["cells"][0]
     assert cell["error"] is None
     assert cell["error_elsewhere"] is True
 
@@ -321,47 +321,47 @@ def test_a_cell_with_no_catalog_entry_says_so(conn):
 
 
 def test_a_facet_slot_still_names_its_engine():
-    assert cells.engine_for("census-white-naive") == "naive"
-    assert cells.engine_for("census-occt") == "occt"
+    assert cells.engine_for("white-naive") == "naive"
+    assert cells.engine_for("silhouette-occt") == "occt"
     assert cells.engine_for("naive") == "naive"
 
 
 def test_a_facet_slot_does_not_borrow_the_oracle_s_numbers(conn):
-    """Both file under engine "naive", and census-white-* sorts last so it
+    """Both file under engine "naive", and white-* sorts last so it
     always won MAX(run_id) -- every oracle cell quietly showed white figures,
     which are ~1px larger on every part because the strokes are drawn."""
     _part(conn, "3001")
-    _measure(conn, "3001", "naive", source="census-naive")
+    _measure(conn, "3001", "naive", source="silhouette-naive")
     conn.execute("UPDATE measurements SET extra_d99 = 0.45 "
-                 "WHERE source = 'census-naive'")
-    _measure(conn, "3001", "naive", source="census-white-naive")
+                 "WHERE source = 'silhouette-naive'")
+    _measure(conn, "3001", "naive", source="white-naive")
     conn.execute("UPDATE measurements SET extra_d99 = 1.01 "
-                 "WHERE source = 'census-white-naive'")
+                 "WHERE source = 'white-naive'")
     conn.commit()
-    assert cells.cells(conn, source="census-naive")["cells"][0]["extra_d99"] == 0.45
-    assert cells.cells(conn, source="census-white-naive")["cells"][0]["extra_d99"] == 1.01
+    assert cells.cells(conn, source="silhouette-naive")["cells"][0]["extra_d99"] == 0.45
+    assert cells.cells(conn, source="white-naive")["cells"][0]["extra_d99"] == 1.01
 
 
 def test_a_slot_with_no_measurements_of_its_own_shows_none(conn):
     _part(conn, "3001")
-    _measure(conn, "3001", "naive", source="census-naive")
+    _measure(conn, "3001", "naive", source="silhouette-naive")
     conn.commit()
-    assert cells.cells(conn, source="census-white-naive")["cells"][0]["extra_d99"] is None
+    assert cells.cells(conn, source="white-naive")["cells"][0]["extra_d99"] is None
 
 
 def test_erroring_elsewhere_means_this_facet_s_other_engine(conn):
     """An oracle timeout says nothing about whether the white facet drew the
     part, so it must not mark a white cell."""
     _part(conn, "3001")
-    _measure(conn, "3001", "naive", source="census-white-naive")
-    _measure(conn, "3001", "occt", error="TimeoutError", source="census-occt")
+    _measure(conn, "3001", "naive", source="white-naive")
+    _measure(conn, "3001", "occt", error="TimeoutError", source="silhouette-occt")
     conn.commit()
-    assert cells.cells(conn, source="census-white-naive")["cells"][0][
+    assert cells.cells(conn, source="white-naive")["cells"][0][
         "error_elsewhere"] is False
     _measure(conn, "3001", "occt", error="TimeoutError",
-             source="census-white-occt")
+             source="white-occt")
     conn.commit()
-    assert cells.cells(conn, source="census-white-naive")["cells"][0][
+    assert cells.cells(conn, source="white-naive")["cells"][0][
         "error_elsewhere"] is True
 
 
@@ -415,6 +415,6 @@ def test_a_qualified_slot_files_its_measurements_under_the_last_segment():
     which joins to nothing in measurements and sorts without erroring."""
     assert cells.engine_for("translucent-naive") == "naive"
     assert cells.engine_for("translucent-occt") == "occt"
-    assert cells.engine_for("census-white-naive") == "naive"
+    assert cells.engine_for("white-naive") == "naive"
     assert cells.engine_for("naive") == "naive"
     assert cells.engine_for("ldview") == "ldview"

@@ -7,7 +7,7 @@ from brick_icons import db
 from brick_icons.lab import sizes
 
 
-def _corpus(tmp_path, rows=(("census-occt", "out/census/renders/occt/3001.svg", 4096),)):
+def _corpus(tmp_path, rows=(("silhouette-occt", "out/census/renders/occt/3001.svg", 4096),)):
     conn = db.connect(tmp_path / "corpus.db")
     conn.execute("INSERT INTO parts (id, title, category, printed, obsolete, "
                  "status) VALUES ('3001', 'Brick 2 x 4', 'Brick', 0, 0, 'good')")
@@ -25,12 +25,12 @@ def _corpus(tmp_path, rows=(("census-occt", "out/census/renders/occt/3001.svg", 
 
 def test_a_slot_carries_its_renders_and_its_bakes(tmp_path):
     conn = _corpus(tmp_path)
-    bake = tmp_path / "out" / "thumbs" / "census-occt" / "128"
+    bake = tmp_path / "out" / "thumbs" / "silhouette-occt" / "128"
     bake.mkdir(parents=True)
     (bake / "3001.png").write_bytes(b"y" * 8192)
 
     slots = sizes.footprint(conn, tmp_path)["slots"]
-    assert [s["source"] for s in slots] == ["census-occt"]
+    assert [s["source"] for s in slots] == ["silhouette-occt"]
     assert slots[0]["renders"] >= 4096
     assert slots[0]["bakes"] >= 8192
     assert slots[0]["total"] == slots[0]["renders"] + slots[0]["bakes"]
@@ -45,10 +45,10 @@ def test_a_slot_with_nothing_on_disk_is_not_a_row(tmp_path):
 
 def test_slots_come_back_biggest_first(tmp_path):
     conn = _corpus(tmp_path, rows=(
-        ("census-naive", "out/census-naive/renders/naive/3001.svg", 4096),
-        ("census-occt", "out/census/renders/occt/3001.svg", 65536)))
+        ("silhouette-naive", "out/census-naive/renders/naive/3001.svg", 4096),
+        ("silhouette-occt", "out/census/renders/occt/3001.svg", 65536)))
     assert [s["source"] for s in sizes.footprint(conn, tmp_path)["slots"]] \
-        == ["census-occt", "census-naive"]
+        == ["silhouette-occt", "silhouette-naive"]
 
 
 def test_a_render_row_whose_file_went_away_is_skipped_not_fatal(tmp_path):
@@ -75,7 +75,7 @@ def test_sizes_are_blocks_rather_than_bytes(tmp_path):
     the bakes at half what `du` says, and two cells measured differently
     cannot be compared."""
     conn = _corpus(tmp_path, rows=())
-    tiny = tmp_path / "out" / "thumbs" / "census-occt" / "32"
+    tiny = tmp_path / "out" / "thumbs" / "silhouette-occt" / "32"
     tiny.mkdir(parents=True)
     (tiny / "3001.png").write_bytes(b"q")
     walked = sizes.dir_size(tmp_path / "out" / "thumbs")

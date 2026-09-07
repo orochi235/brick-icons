@@ -11,7 +11,7 @@ const DATA: FootprintData = {
     git: 15_000_000,
   },
   slots: [
-    { source: 'census-occt', renders: 398_000_000, bakes: 155_000_000,
+    { source: 'silhouette-occt', renders: 398_000_000, bakes: 155_000_000,
       total: 553_000_000 },
     { source: 'ldview', renders: 285_000_000, bakes: 135_000_000,
       total: 420_000_000 },
@@ -40,7 +40,7 @@ it('says what a tile is as a share of out/, and never says it of out/ itself', a
 
 it('breaks each slot into renders and bakes, and totals them', async () => {
   render(<Footprint client={clientWith(async () => DATA)} />);
-  await screen.findByText('census-occt');
+  await screen.findByText('silhouette-occt');
   const foot = document.querySelector('.stats-slot-sizes tfoot')!;
   expect(foot.textContent).toContain('every slot');
   expect(foot.textContent).toContain('928 MB');          // 553 + 420

@@ -36,13 +36,13 @@ def test_it_indexes_under_the_census_source(tree):
     assert index_census.index(conn, root=root, limit=10) == 2
     rows = conn.execute("SELECT part_id, source FROM renders").fetchall()
     assert {(r["part_id"], r["source"]) for r in rows} == {
-        ("3001", "census-naive"), ("3004", "census-naive")}
+        ("3001", "silhouette-naive"), ("3004", "silhouette-naive")}
 
 
 def test_it_leaves_the_svg_where_the_census_put_it(tree):
     root, conn = tree
     index_census.index(conn, root=root, limit=10)
-    assert not (root / "renders" / "census-naive").exists()
+    assert not (root / "renders" / "silhouette-naive").exists()
     assert (root / "out" / "census-naive" / "renders" / "naive" / "3001.svg").is_file()
 
 

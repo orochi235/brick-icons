@@ -2,8 +2,8 @@ import { expect, it } from 'vitest';
 import { defectId, engineFor } from '@lab/corpus/flag';
 
 it('names the engine behind a facet slot, not the facet', () => {
-  expect(engineFor('census-white-naive')).toBe('naive');
-  expect(engineFor('census-occt')).toBe('occt');
+  expect(engineFor('white-naive')).toBe('naive');
+  expect(engineFor('silhouette-occt')).toBe('occt');
   expect(engineFor('naive')).toBe('naive');
 });
 

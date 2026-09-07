@@ -53,7 +53,7 @@ def coverage(conn, corpus: list[str], engine: str,
     counting them together reports a part the oracle drew as one this facet
     has no render for.
     """
-    source = f"census-{facet}-{engine}" if facet else f"census-{engine}"
+    source = f"{facet}-{engine}" if facet else f"silhouette-{engine}"
     drawn = {r["part_id"] for r in conn.execute(
         "SELECT part_id FROM renders WHERE source = ?", (source,))}
     ok, seen = {}, set()

@@ -29,8 +29,8 @@ PART_STATUSES = ("unreviewed", "good", "suspect", "broken", "wontfix")
 OUT_OF_SCOPE_CATEGORIES = ("Sticker", "|")
 SOURCES = ("naive", "occt", "decal", "ldview",
            "translucent-naive", "translucent-occt",
-           "census-naive", "census-occt",
-           "census-white-naive", "census-white-occt")
+           "silhouette-naive", "silhouette-occt",
+           "white-naive", "white-occt")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
@@ -258,26 +258,26 @@ _CANONICAL = {
     # carry the silhouette and no stroke overhang has to be subtracted from
     # the comparison. One source per engine because the census writes
     # out/census/renders/<engine>/<part>.svg and the path holds only one.
-    "census-naive": ["--format", "svg", "--shading", "outline",
-                     "--shade-style", "flat3", "--angle", "iso",
-                     "--engine", "naive", "--line-width", "0",
-                     "--silhouette-width", "0"],
-    "census-occt": ["--format", "svg", "--shading", "outline",
-                    "--shade-style", "flat3", "--angle", "iso",
-                    "--engine", "occt", "--line-width", "0",
-                    "--silhouette-width", "0"],
+    "silhouette-naive": ["--format", "svg", "--shading", "outline",
+                         "--shade-style", "flat3", "--angle", "iso",
+                         "--engine", "naive", "--line-width", "0",
+                         "--silhouette-width", "0"],
+    "silhouette-occt": ["--format", "svg", "--shading", "outline",
+                        "--shade-style", "flat3", "--angle", "iso",
+                        "--engine", "occt", "--line-width", "0",
+                        "--silhouette-width", "0"],
     # The white facet: opaque white fills that only occlude, strokes carrying
     # the drawing. Its own source per engine because the key is derived from
-    # the source alone -- indexed as census-<engine> it would REPLACE the
+    # the source alone -- indexed as silhouette-<engine> it would REPLACE the
     # oracle's row for every part, the drawing silently swapped underneath.
-    "census-white-naive": ["--format", "svg", "--shading", "outline",
-                           "--shade-style", "white", "--angle", "iso",
-                           "--engine", "naive", "--line-width", "2",
-                           "--silhouette-width", "2"],
-    "census-white-occt": ["--format", "svg", "--shading", "outline",
-                          "--shade-style", "white", "--angle", "iso",
-                          "--engine", "occt", "--line-width", "2",
-                          "--silhouette-width", "2"],
+    "white-naive": ["--format", "svg", "--shading", "outline",
+                    "--shade-style", "white", "--angle", "iso",
+                    "--engine", "naive", "--line-width", "2",
+                    "--silhouette-width", "2"],
+    "white-occt": ["--format", "svg", "--shading", "outline",
+                   "--shade-style", "white", "--angle", "iso",
+                   "--engine", "occt", "--line-width", "2",
+                   "--silhouette-width", "2"],
 }
 
 
@@ -492,17 +492,20 @@ def _relative(path: Path, root: Path) -> str:
 def census_source(census_dir: Path | str, engine: str) -> str:
     """The render source a census tree's drawings are filed under.
 
-    A tree gets its own source only if it names one this module knows;
-    anything else is another run of the base census and files under
-    census-<engine>, so out/census-run2 still replaces out/census part for
-    part. That fallback is what keeps the rule from swallowing a re-run: only
-    a declared facet like census-white-naive sits beside the oracle instead of
-    overwriting it, and it has to, because a render's config_key comes from
-    its source alone.
+    A tree names a FACET, not a slot: the directories all begin `census`
+    because they are census runs, and the slots dropped that word. A tree
+    gets its own source only if what is left after the prefix and the engine
+    names one this module knows; anything else is another run of the base
+    census and files under silhouette-<engine>, so out/census-run2 still
+    replaces out/census part for part. That fallback is what keeps the rule
+    from swallowing a re-run: only a declared facet like census-white-naive
+    sits beside the oracle instead of overwriting it, and it has to, because
+    a render's config_key comes from its source alone.
     """
     stem = Path(census_dir).name
-    named = stem if stem.endswith(f"-{engine}") else f"{stem}-{engine}"
-    return named if named in SOURCES else f"census-{engine}"
+    facet = stem.removeprefix("census").strip("-").removesuffix(engine).strip("-")
+    named = f"{facet}-{engine}" if facet else f"silhouette-{engine}"
+    return named if named in SOURCES else f"silhouette-{engine}"
 
 
 def census_trees(root: Path | str = ".") -> list[Path]:

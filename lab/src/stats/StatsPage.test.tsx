@@ -6,7 +6,7 @@ import type { Stats } from '@lab/stats/types';
 const body = (over: Partial<Stats> = {}): Stats => ({
   set: { size: 20, total: 24, kind: 'all', moved: false, out_of_scope: true,
          excluded: [], badges: [] },
-  coverage: [{ source: 'census-naive', engine: 'naive', size: 20,
+  coverage: [{ source: 'silhouette-naive', engine: 'naive', size: 20,
                counts: { defect: 1, failed: 2, timeout: 3, drawn: 8, untried: 6 } }],
   speed: [{ engine: 'naive', n: 14, total: 100, median: 2, p95: 30, max: 90,
             bins: [{ from: 0, to: 1, n: 4 }, { from: 1, to: null, n: 10 }] }],
@@ -176,7 +176,7 @@ describe('StatsPage', () => {
     const href = container.querySelector('a.stats-seg')?.getAttribute('href') ?? '';
     expect(href.startsWith('/corpus.html?')).toBe(true);
     expect(new URLSearchParams(href.slice(href.indexOf('?'))).get('source'))
-      .toBe('census-naive');
+      .toBe('silhouette-naive');
   });
 
   it('re-reads with the working set when a category is unticked', async () => {

@@ -355,20 +355,20 @@ def test_the_census_renders_are_their_own_sources(tmp_path):
     renders are not the drawing canonical_argv names and cannot share its
     config_key. One source per engine, because the census writes
     out/census/renders/<engine>/<part>.svg and the path has no room for both."""
-    for source, engine in (("census-naive", "naive"), ("census-occt", "occt")):
+    for source, engine in (("silhouette-naive", "naive"), ("silhouette-occt", "occt")):
         argv = db.canonical_argv("3001", source)
         assert argv[argv.index("--engine") + 1] == engine
         assert argv[argv.index("--line-width") + 1] == "0"
         assert argv[argv.index("--silhouette-width") + 1] == "0"
         assert "--out" not in argv, "a temp path would poison the config key"
-    assert db.canonical_argv("3001", "census-naive") != \
+    assert db.canonical_argv("3001", "silhouette-naive") != \
         db.canonical_argv("3001", "naive")
 
 
 def test_a_facet_tree_does_not_replace_the_oracle_it_sits_beside(tmp_path):
     """A render's config_key comes from its source alone, so two census trees
     that resolve to one source overwrite each other part for part -- the wall
-    keeps drawing census-naive and the drawing underneath has changed."""
+    keeps drawing silhouette-naive and the drawing underneath has changed."""
     lib = _library(tmp_path)
     for dirname in ("census", "census-white-naive"):
         d = tmp_path / "out" / dirname / "renders" / "naive"
@@ -381,12 +381,12 @@ def test_a_facet_tree_does_not_replace_the_oracle_it_sits_beside(tmp_path):
     conn = db.connect(tmp_path / "corpus.db")
     rows = {r["source"]: r["path"] for r in
             conn.execute("SELECT source, path FROM renders")}
-    assert rows == {"census-naive": "out/census/renders/naive/3001.svg",
-                    "census-white-naive":
+    assert rows == {"silhouette-naive": "out/census/renders/naive/3001.svg",
+                    "white-naive":
                         "out/census-white-naive/renders/naive/3001.svg"}
     assert counts["renders"] == 2 and counts["replaced"] == 0
-    assert db.canonical_argv("3001", "census-white-naive") != \
-        db.canonical_argv("3001", "census-naive")
+    assert db.canonical_argv("3001", "white-naive") != \
+        db.canonical_argv("3001", "silhouette-naive")
 
 
 def test_a_measurement_records_which_facet_it_measured(tmp_path):
@@ -406,7 +406,7 @@ def test_a_measurement_records_which_facet_it_measured(tmp_path):
     conn = db.connect(tmp_path / "corpus.db")
     got = {r["source"]: r["extra_d99"] for r in
            conn.execute("SELECT source, extra_d99 FROM measurements")}
-    assert got == {"census-naive": 0.45, "census-white-naive": 1.01}
+    assert got == {"silhouette-naive": 0.45, "white-naive": 1.01}
 
 
 def test_a_measurement_keeps_the_build_that_drew_it(tmp_path):
@@ -427,8 +427,8 @@ def test_a_measurement_keeps_the_build_that_drew_it(tmp_path):
     conn = db.connect(tmp_path / "corpus.db")
     got = {r["source"]: r["build"] for r in
            conn.execute("SELECT source, build FROM measurements")}
-    assert got == {"census-naive": "801.aaaaaaa",
-                   "census-white-naive": "808.b86e88c"}
+    assert got == {"silhouette-naive": "801.aaaaaaa",
+                   "white-naive": "808.b86e88c"}
 
 
 def test_a_row_written_before_builds_were_stamped_still_ingests(tmp_path):
@@ -448,10 +448,10 @@ def test_the_build_names_a_revision_and_flags_an_uncommitted_engine():
 
 
 def test_census_source_repeats_no_engine_it_is_already_named_with():
-    assert db.census_source("out/census", "naive") == "census-naive"
-    assert db.census_source("out/census-naive", "naive") == "census-naive"
+    assert db.census_source("out/census", "naive") == "silhouette-naive"
+    assert db.census_source("out/census-naive", "naive") == "silhouette-naive"
     assert db.census_source("out/census-white-occt", "occt") == \
-        "census-white-occt"
+        "white-occt"
 
 
 def test_a_rebuild_indexes_the_census_renders_too(tmp_path):
@@ -465,7 +465,7 @@ def test_a_rebuild_indexes_the_census_renders_too(tmp_path):
                         census_dirs=[tmp_path / "out" / "census"])
     conn = db.connect(conn_path)
     sources = {r["source"] for r in conn.execute("SELECT source FROM renders")}
-    assert sources == {"census-naive", "census-occt"}
+    assert sources == {"silhouette-naive", "silhouette-occt"}
     assert counts["renders"] == 2
     paths = {r["path"] for r in conn.execute("SELECT path FROM renders")}
     assert paths == {"out/census/renders/naive/3001.svg",
@@ -490,7 +490,7 @@ def test_rebuild_takes_several_census_directories(tmp_path):
 
     conn = db.connect(tmp_path / "corpus.db")
     assert {r["source"] for r in conn.execute("SELECT source FROM renders")} \
-        == {"census-occt", "census-naive"}
+        == {"silhouette-occt", "silhouette-naive"}
 
 
 def test_each_census_directory_is_its_own_run(tmp_path):
@@ -566,7 +566,7 @@ def test_the_default_finds_every_census_tree_under_root(tmp_path):
 
     conn = db.connect(tmp_path / "corpus.db")
     assert {r["source"] for r in conn.execute("SELECT source FROM renders")} \
-        == {"census-occt", "census-naive"}
+        == {"silhouette-occt", "silhouette-naive"}
 
 
 def test_census_trees_ignores_a_file_named_like_one(tmp_path):

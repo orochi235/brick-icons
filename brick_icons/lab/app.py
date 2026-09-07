@@ -303,7 +303,7 @@ def create_app(root: Path | str = ".",
         return Path(app.state.thumbs_root) / source
 
     @app.get("/api/corpus/cells")
-    def get_cells(source: str = "census-naive", since: str | None = None):
+    def get_cells(source: str = "silhouette-naive", since: str | None = None):
         conn = corpus_conn()
         try:
             return cells.cells(conn, source=source, since=since)

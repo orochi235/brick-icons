@@ -31,7 +31,7 @@ while :; do
       echo "$(date '+%H:%M:%S') bake failed; the database is current, the sheets are not" >&2
     echo "$(date '+%H:%M:%S') $(sqlite3 "$DB" \
       "SELECT group_concat(s, ', ') FROM (SELECT source || ' ' || count(*) AS s
-       FROM renders WHERE source LIKE 'census-white%' GROUP BY source)")"
+       FROM renders WHERE source LIKE 'white-%' GROUP BY source)")"
   else
     # Keep the database that is already there: a failed pass is a pass to skip,
     # not a reason to leave the lab with nothing to read.

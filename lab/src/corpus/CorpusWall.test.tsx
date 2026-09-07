@@ -24,11 +24,11 @@ const cell = (id: string, index: number, sha: string | null = null): Cell => ({
 
 const client = {
   corpusSources: () => Promise.resolve({
-    sources: [{ source: 'census-naive', n: 2 }],
+    sources: [{ source: 'silhouette-naive', n: 2 }],
   }),
   cells: () => Promise.resolve({
     cells: [cell('a', 0, 'sha-a'), cell('b', 1)], count: 2,
-    version: '2026-09-05T10:00:00+00:00', source: 'census-naive',
+    version: '2026-09-05T10:00:00+00:00', source: 'silhouette-naive',
   }),
   sheetManifest: () => Promise.resolve({
     level: 32, gutter: 2, pitch: 36, cols: 2, rows: 1, count: 2, size: 72,
@@ -299,7 +299,7 @@ it('holds its level through a slot change, so a zoomed-in wall stays zoomed in',
   const images = installLoadingImages();
 
   const twoSlots = { ...client, corpusSources: () => Promise.resolve({
-    sources: [{ source: 'census-naive', n: 2 }, { source: 'census-occt', n: 2 }],
+    sources: [{ source: 'silhouette-naive', n: 2 }, { source: 'silhouette-occt', n: 2 }],
   }) } as any;
 
   const fit = vi.mocked(core.fitViewToBounds);
@@ -315,11 +315,11 @@ it('holds its level through a slot change, so a zoomed-in wall stays zoomed in',
     await waitFor(() => expect(container.querySelector('canvas')).toBeTruthy());
 
     fireEvent.change(screen.getByLabelText('Slot'),
-                     { target: { value: 'census-occt' } });
+                     { target: { value: 'silhouette-occt' } });
     // A loose thumb for the new slot means the wall has actually swapped to
     // it -- those are keyed on the drawn slot, not the selected one.
     await waitFor(() => expect(images.srcs.some(
-      (s) => s.includes('/api/thumbs/census-occt/128/'))).toBe(true));
+      (s) => s.includes('/api/thumbs/silhouette-occt/128/'))).toBe(true));
 
     // Nothing but a camera change re-picks the level, so a slot change that
     // drops it lands the wall on the 32px sheet until the next zoom.
@@ -413,7 +413,7 @@ it('counts states over the wall, and keeps the tag rows a menu', async () => {
       cells: [{ ...cell('a', 0, 'sha-a'), tags: ['technic'] },
               { ...cell('b', 1), tags: ['printed'] },
               { ...cell('c', 2), tags: ['printed'] }],
-      count: 3, version: '2026-09-05T10:00:00+00:00', source: 'census-naive',
+      count: 3, version: '2026-09-05T10:00:00+00:00', source: 'silhouette-naive',
     }),
   } as any;
   const { container } = render(<CorpusWall client={tagged} />);
@@ -480,20 +480,20 @@ it('picks up a slot that appears after the page is open, without moving off your
   // ingest showed a menu that no longer matched the store -- ldview was
   // indexed and stayed invisible until someone reloaded.
   vi.useFakeTimers({ shouldAdvanceTime: true });
-  let slots = [{ source: 'census-naive', n: 2 }];
+  let slots = [{ source: 'silhouette-naive', n: 2 }];
   const growing = { ...client, corpusSources: () => Promise.resolve({ sources: slots }) };
   const { container } = render(<CorpusWall client={growing} />);
   await findCanvas(container);
   const picker = () => container.querySelector('.corpus-bar select') as HTMLSelectElement;
   await waitFor(() => expect(picker()).toBeTruthy());
-  expect([...picker().options].map((o) => o.value)).toEqual(['census-naive']);
+  expect([...picker().options].map((o) => o.value)).toEqual(['silhouette-naive']);
 
-  slots = [{ source: 'ldview', n: 9 }, { source: 'census-naive', n: 2 }];
+  slots = [{ source: 'ldview', n: 9 }, { source: 'silhouette-naive', n: 2 }];
   await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
 
   await waitFor(() => expect([...picker().options].map((o) => o.value))
-    .toEqual(['ldview', 'census-naive']));
+    .toEqual(['ldview', 'silhouette-naive']));
   // ldview now sorts first, but the wall stays on what was already open.
-  expect(picker().value).toBe('census-naive');
+  expect(picker().value).toBe('silhouette-naive');
   vi.useRealTimers();
 });

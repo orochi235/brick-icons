@@ -97,16 +97,16 @@ it('rasterizes the new slot after a slot change, with the camera parked', async 
   const visible = [0, 1];
   const { result, rerender } = renderHook(
     ({ source }) => useVectorThumbs(cells, visible, VECTOR_LEVEL, source, 256),
-    { initialProps: { source: 'census-naive' } });
+    { initialProps: { source: 'silhouette-naive' } });
 
   await waitFor(() => expect(result.current.size).toBe(2));
   vi.mocked(fetchRender).mockClear();
 
-  rerender({ source: 'census-occt' });
+  rerender({ source: 'silhouette-occt' });
   await waitFor(() => expect(vi.mocked(fetchRender).mock.calls.map((c) => c[0]))
     .toEqual(expect.arrayContaining([
-      expect.stringContaining('/census-occt/a.svg'),
-      expect.stringContaining('/census-occt/b.svg'),
+      expect.stringContaining('/silhouette-occt/a.svg'),
+      expect.stringContaining('/silhouette-occt/b.svg'),
     ])));
   await waitFor(() => expect(result.current.size).toBe(2));
 });

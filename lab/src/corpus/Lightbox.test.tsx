@@ -12,7 +12,7 @@ const detail = {
            missing_px: 3, secs: 12.0, error: null }],
   defects: [{ id: 'd1', part: '3001', title: 'rim nubs', status: 'open' }],
   slots: [
-    { source: 'census-occt', sha256: 'cafebabe0000', made_at: '2026-09-05T10:00:00+00:00' },
+    { source: 'silhouette-occt', sha256: 'cafebabe0000', made_at: '2026-09-05T10:00:00+00:00' },
     { source: 'naive', sha256: 'deadbeef0000', made_at: '2026-09-05T11:00:00+00:00' },
   ],
 };
@@ -30,7 +30,7 @@ it('shows the part title and the part as every slot drew it', async () => {
   const srcs = screen.getAllByRole('img', { name: /3001/ })
     .map((img) => img.getAttribute('src'));
   expect(srcs).toEqual([
-    '/api/corpus/render/census-occt/3001.svg?v=cafebabe',
+    '/api/corpus/render/silhouette-occt/3001.svg?v=cafebabe',
     '/api/corpus/render/naive/3001.svg?v=deadbeef',
   ]);
 });
@@ -47,21 +47,21 @@ it('marks which of the slots the wall is showing', async () => {
 it('picks a different slot without the wall having moved', async () => {
   render(box());
   await waitFor(() => screen.getByText('Brick 2 x 4'));
-  fireEvent.click(screen.getByRole('radio', { name: 'census-occt' }));
+  fireEvent.click(screen.getByRole('radio', { name: 'silhouette-occt' }));
   const current = document.querySelectorAll('[data-current="true"] .corpus-slot-name');
-  expect([...current].map((el) => el.textContent)).toEqual(['census-occt']);
+  expect([...current].map((el) => el.textContent)).toEqual(['silhouette-occt']);
 });
 
 it('files a flag against the slot you picked, not the wall\'s', async () => {
   addDefect.mockClear();
   render(box());
   await waitFor(() => screen.getByText('Brick 2 x 4'));
-  fireEvent.click(screen.getByRole('radio', { name: 'census-occt' }));
+  fireEvent.click(screen.getByRole('radio', { name: 'silhouette-occt' }));
   fireEvent.click(screen.getByText('Flag a problem'));
   fireEvent.change(screen.getByLabelText('What is wrong'),
                    { target: { value: 'the near rim is a whole circle' } });
-  expect(screen.getByText('File against census-occt')).toBeTruthy();
-  fireEvent.click(screen.getByText('File against census-occt'));
+  expect(screen.getByText('File against silhouette-occt')).toBeTruthy();
+  fireEvent.click(screen.getByText('File against silhouette-occt'));
   await waitFor(() => expect(addDefect).toHaveBeenCalled());
   expect(addDefect.mock.calls[0]?.[0]).toMatchObject({ engines: ['occt'] });
 });
@@ -69,8 +69,8 @@ it('files a flag against the slot you picked, not the wall\'s', async () => {
 it('follows the wall again when the wall changes slot', async () => {
   const { rerender } = render(box());
   await waitFor(() => screen.getByText('Brick 2 x 4'));
-  fireEvent.click(screen.getByRole('radio', { name: 'census-occt' }));
-  rerender(box({ source: 'census-occt' }));
+  fireEvent.click(screen.getByRole('radio', { name: 'silhouette-occt' }));
+  rerender(box({ source: 'silhouette-occt' }));
   rerender(box({ source: 'naive' }));
   const current = document.querySelectorAll('[data-current="true"] .corpus-slot-name');
   expect([...current].map((el) => el.textContent)).toEqual(['naive']);

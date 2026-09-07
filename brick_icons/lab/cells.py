@@ -40,8 +40,8 @@ WHERE m.source != ? AND m.source LIKE ? AND m.error IS NOT NULL
 
 
 def sibling_glob(source: str) -> str:
-    """LIKE pattern for a facet's other engines: census-white-naive ->
-    census-white-%. Dropping the engine leaves the facet, and a source that
+    """LIKE pattern for a facet's other engines: white-naive ->
+    white-%. Dropping the engine leaves the facet, and a source that
     names no facet is its own family."""
     stem = source.rsplit("-", 1)[0] if "-" in source else source
     return f"{stem}-%"
@@ -85,7 +85,7 @@ def engine_for(source: str) -> str:
     `renders.source` names a slot and `measurements.engine` names an engine, so
     a qualified slot has to drop its qualifier or every metric joins to nothing
     and the wall sorts an unsorted column without erroring. The qualifier goes
-    in front and can be more than one word -- `census-white-naive` is the naive
+    in front and can be more than one word -- `white-naive` is the naive
     engine drawing the white facet -- so it is the LAST segment that names the
     engine. A bare slot name carries no hyphen and is returned as it stands.
     """
@@ -134,7 +134,7 @@ def coverage_of(*, sha: str | None, error: str | None, open_defects: int) -> str
     return "drawn" if sha else "untried"
 
 
-def cells(conn: sqlite3.Connection, source: str = "census-naive",
+def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
           since: str | None = None) -> dict:
     """Every cell, or only those whose render landed after `since`.
 

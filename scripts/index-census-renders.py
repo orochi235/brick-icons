@@ -5,7 +5,7 @@
 
 The census's drawing is strokeless -- its fills carry the silhouette -- so it is
 not the store's `naive` render and is never recorded as one. It is indexed under
-`census-naive` and left in `out/`, which is what `db.rebuild` does with it too.
+`silhouette-naive` and left in `out/`, which is what `db.rebuild` does with it too.
 """
 from __future__ import annotations
 
@@ -20,8 +20,11 @@ sys.path.insert(0, str(ROOT))
 from brick_icons import db  # noqa: E402
 
 ENGINE = "naive"
-SOURCE = f"census-{ENGINE}"
-KEPT = Path("out") / SOURCE / "renders" / ENGINE
+# The tree is a directory and the source is a slot; they stopped sharing a
+# name when the slots dropped the `census-` they all carried.
+TREE = f"census-{ENGINE}"
+SOURCE = db.census_source(TREE, ENGINE)
+KEPT = Path("out") / TREE / "renders" / ENGINE
 
 
 def index(conn: sqlite3.Connection, root: Path | str = ".",

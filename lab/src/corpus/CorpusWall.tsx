@@ -47,7 +47,7 @@ const NO_ORDER: string[] = [];
 export function CorpusWall({ client }: { client: LabClient }) {
   const { params, setParam, reset: resetParams } = useParams();
   const [sources, setSources] = useState<{ source: string; n: number }[]>([]);
-  const [source, setSource] = useState('census-naive');
+  const [source, setSource] = useState('silhouette-naive');
   const fetched = useCells(client, source, params.pollMs);
   const loaded = useSheets(client, source);
   const [level, setLevel] = useState(32);

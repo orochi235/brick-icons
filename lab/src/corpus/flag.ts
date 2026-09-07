@@ -3,7 +3,7 @@
  *  `engines` names an engine, never a slot. */
 
 /** The engine behind a slot name. A slot's qualifier goes in front and can be
- *  more than one word -- `census-white-naive` is naive drawing the white facet
+ *  more than one word -- `white-naive` is naive drawing the white facet
  *  -- so the engine is the last segment, and a bare name carries no hyphen.
  *  Mirrors `cells.engine_for`. */
 export function engineFor(source: string): string {

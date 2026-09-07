@@ -38,7 +38,7 @@ def _measure(conn, pid, engine, source=None, error=None, secs=None,
                  "'abc1234', '{}')", (_run, finished))
     conn.execute("INSERT INTO measurements (run_id, part_id, engine, source, "
                  "error, secs, extra_d99, phases) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                 (_run, pid, engine, source or f"census-{engine}", error, secs,
+                 (_run, pid, engine, source or f"silhouette-{engine}", error, secs,
                   extra_d99, json.dumps(phases) if phases else None))
 
 
@@ -109,18 +109,18 @@ def test_the_kind_filters_pick_one_class_of_part(conn):
 def test_coverage_is_counted_per_slot_over_the_set(conn):
     _part(conn, "3001")
     _part(conn, "3002")
-    _render(conn, "3001", "census-naive")
+    _render(conn, "3001", "silhouette-naive")
     _measure(conn, "3002", "naive", error="TimeoutError")
     conn.commit()
     rows = {r["source"]: r for r in stats.stats(conn)["coverage"]}
-    assert rows["census-naive"]["counts"]["drawn"] == 1
-    assert rows["census-naive"]["counts"]["timeout"] == 1
-    assert rows["census-naive"]["size"] == 2
+    assert rows["silhouette-naive"]["counts"]["drawn"] == 1
+    assert rows["silhouette-naive"]["counts"]["timeout"] == 1
+    assert rows["silhouette-naive"]["size"] == 2
 
 
 def test_a_slot_reports_every_label_even_at_zero(conn):
     _part(conn, "3001")
-    _render(conn, "3001", "census-naive")
+    _render(conn, "3001", "silhouette-naive")
     conn.commit()
     counts = stats.stats(conn)["coverage"][0]["counts"]
     assert set(counts) == set(stats.COVERAGE_ORDER)
@@ -130,8 +130,8 @@ def test_a_slot_reports_every_label_even_at_zero(conn):
 def test_coverage_counts_only_the_working_set(conn):
     _part(conn, "3001")
     _part(conn, "s1", category="Sticker")
-    _render(conn, "3001", "census-naive")
-    _render(conn, "s1", "census-naive")
+    _render(conn, "3001", "silhouette-naive")
+    _render(conn, "s1", "silhouette-naive")
     conn.commit()
     rows = stats.stats(conn, out_of_scope=False)["coverage"]
     assert rows[0]["counts"]["drawn"] == 1

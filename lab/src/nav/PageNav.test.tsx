@@ -17,7 +17,7 @@ it('links to the other page by href, not a handler', () => {
 });
 
 it('still highlights through a query string or a trailing slash', () => {
-  expect(currentIndex('/corpus.html?source=census-occt')).toBe(0);
+  expect(currentIndex('/corpus.html?source=silhouette-occt')).toBe(0);
   expect(currentIndex('/stats.html#tiles')).toBe(1);
 });
 
