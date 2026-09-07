@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { badgeGeometry, badgesFor, captionsFor, CAPTION_ON_FILL, captionSize,
+import { badgeGeometry, badgesFor, CAPTION_INK_RISE, captionsFor, CAPTION_ON_FILL,
+  captionSize, cornerPad,
   cellState, DEFAULT_APPEARANCE, fillFor, paintCommands, PROPERTY_FIELD,
   stripFor, stripGeometry, tally, thumbGround, type Appearance }
   from '@lab/corpus/paint';
@@ -547,6 +548,22 @@ it('strikes every undrawn cell with a border, and leaves the quiet ones alone', 
   expect(struck({ open_defects: 1 }).slash).toBe(true);
   expect(struck({ error_elsewhere: true }).slash).toBe(true);
   expect(struck({}).slash).toBe(false);
+});
+
+it('centers a corner badge on the caption beside it, not on its own radius', () => {
+  // The disc used to sit at `radius + pad`, and a radius is 0.63 of the type
+  // size against a caption's half -- so the retired disc hung 0.21 of the
+  // size below the year it sits next to.
+  for (const cellPx of [60, 120, 200]) {
+    const { size, radius, inset, rise, fall } = badgeGeometry(cellPx);
+    const pad = cornerPad(cellPx, size);
+    // where drawCaption's `middle` anchor lands, less the ink's own rise
+    expect(rise).toBeCloseTo(pad + size * 0.5 - size * CAPTION_INK_RISE, 6);
+    expect(fall).toBeCloseTo(pad + size * 0.5 + size * CAPTION_INK_RISE, 6);
+    expect(rise).toBeLessThan(inset);
+    // and it still clears the cell edge
+    expect(rise).toBeGreaterThan(radius * 0.5);
+  }
 });
 
 it('washes a retired cell rather than baking it a ground of its own', () => {

@@ -12,7 +12,7 @@ import { adjacent, impliedCaret, type Direction } from '@lab/corpus/caret';
 import type { Band, Rect } from '@lab/corpus/layout';
 import { BADGE_FACE, BADGE_WEIGHT, THUMB_FACE, WEIGHT_ID, WEIGHT_TEXT,
          drawBadge } from '@lab/corpus/badges';
-import { badgeGeometry, captionSize, cornerPad, LINKED_BADGE, paintCommands,
+import { badgeGeometry, CAPTION_INK_RISE, captionSize, cornerPad, LINKED_BADGE, paintCommands,
   RETIRED_WASH, stripGeometry, type Appearance, type CellBadge, type CellCaption,
   type PaintCommand } from '@lab/corpus/paint';
 import { DEFAULT_PALETTE, readPalette, type CellState, type Palette } from '@lab/corpus/palette';
@@ -141,12 +141,12 @@ function drawSticker(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: n
  *  cannot land somewhere the disc is not drawn. */
 export function cornerBadgeAt(badge: CellBadge,
                               cmd: { dx: number; dy: number; dw: number; dh: number }) {
-  const { size, radius, inset } = badgeGeometry(cmd.dw);
+  const { size, radius, inset, rise, fall } = badgeGeometry(cmd.dw);
   const right = badge.corner === 'br' || badge.corner === 'tr';
   const bottom = badge.corner === 'br';
   return {
     cx: right ? cmd.dx + cmd.dw - inset : cmd.dx + inset,
-    cy: bottom ? cmd.dy + cmd.dh - inset : cmd.dy + inset,
+    cy: bottom ? cmd.dy + cmd.dh - fall : cmd.dy + rise,
     size, radius,
   };
 }
@@ -179,7 +179,7 @@ function drawStrip(ctx: CanvasRenderingContext2D, strip: CellBadge[],
   ctx.restore();
   // The part number's baseline, derived from where drawCaption centers it.
   const baseline = cmd.dy + cmd.dh - cornerPad(cmd.dw, size) - size * 0.5 + half;
-  const cy = baseline - half;
+  const cy = baseline - half - size * CAPTION_INK_RISE;
   let cx = startX + radius;
   for (const badge of strip) {
     if (cx + radius > limit) return;
