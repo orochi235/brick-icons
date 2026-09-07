@@ -1116,14 +1116,30 @@ def test_the_undeclared_fallback_is_never_consulted_by_a_part_with_edges(
     assert calls == []
 
 
-def test_a_part_that_declares_a_real_edge_and_draws_nothing_still_raises():
-    """A type-2 line is a claim that an edge is there. A part carrying one and
-    still producing nothing is a different fault, and swallowing it into a
-    silhouette would hide it."""
+def test_a_part_with_no_geometry_to_read_a_sharp_set_from_still_raises():
+    """The fallback reads HLR's sharp set, so it has nothing to offer a part
+    that carries no faces. Declaring an edge does not conjure one, and drawing
+    an empty icon in silence would hide the fault."""
     with pytest.raises(RuntimeError, match="produced no edges"):
         occt.visible_segments({"2": [(np.zeros(3), np.zeros(3))], "5": [],
                                "tri": [], "tri_meta": [], "analytic": []},
                               np.array([1.0, 0, 0]), np.array([0, 1.0, 0]), 900)
+
+
+def test_an_artwork_line_inside_a_face_does_not_count_as_a_declaration(
+        ldraw_dir):
+    """6342851a is a box5-12 plate with 8,888 artwork triangles coplanar on its
+    top face and two type-2 lines drawn along the artwork. UnifySameDomain
+    merges all of it into 6 faces, so both lines sit in the INTERIOR of one and
+    match none of HLR's 9 visible edges. Guarding the fallback on the mere
+    presence of a type-2 left the part blank."""
+    out = occt.flatten_part("6342851a", ldraw_dir)
+    right, up = hlr.view_basis(30.0, 65.0)[:2]
+    shape = occt.build_shape(out)
+    comps = occt.hlr_edges(shape, right, up)
+    loci = occt.authored_loci(shape, out, right, up)
+    assert out["2"] and not occt.select_authored(comps.get("sharp"), loci)
+    assert occt.visible_segments(out, right, up, 900).segs
 
 
 def test_condlines_alone_do_not_count_as_declaring_an_edge(ldraw_dir):

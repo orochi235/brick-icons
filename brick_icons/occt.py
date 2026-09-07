@@ -1526,16 +1526,16 @@ def _undeclared_ops(comps):
     a flat wall's interior facet seams are gone and what survives is the
     part's real creases and its boundary.
 
-    The guard is the absence of a type-2 line, and type-5 does not count. A
-    condline is conditional by construction -- it draws only where its two
-    faces straddle the view -- so on a flat plate seen from outside, none of
-    them qualify and the part is left with no boundary at all. 36 formed
-    stickers and their composite siblings sit exactly there: type-5 only, 26
-    to 204 sharp edges from HLR, and not one locus matched. Declaring a
-    condline is not declaring that the outline exists.
+    The guard is that nothing was drawn -- not that nothing was declared. A
+    declaration only counts where OCCT has an edge to hang it on, and two
+    kinds routinely have none. A condline is conditional by construction, so
+    on a flat plate seen from outside none qualify (36 formed stickers, type-5
+    only, 26 to 204 sharp edges from HLR and not one locus matched). And an
+    artwork line inside a face is not an edge of anything: 6342851a draws two
+    along its print, UnifySameDomain merges the print into the plate's top
+    face, and both loci sit in that face's interior.
 
-    A part that declares a real type-2 edge and still yields no ops is a
-    different fault and still raises.
+    A part with no geometry to read a sharp set from still raises.
     """
     return [op for edge in _edges_of(comps.get("sharp"))
             for op in _edge_ops(edge, "sil")] if comps.get("sharp") else []
@@ -1563,7 +1563,7 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None):
             continue
         for edge in _edges_of(comp):
             ops += _edge_ops(edge, "sil")
-    if not ops and not out.get("2"):
+    if not ops:
         ops = _undeclared_ops(comps)
     ops = _negate_y(ops)
     if not ops:
