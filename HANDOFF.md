@@ -35,8 +35,8 @@ thumbnails; it skips anything unchanged.
 **Three other sessions share this exact working directory** and one more is in
 the `defect-sweep` worktree. Stage explicit paths, never `git add -A`, and
 confirm the branch before assuming it. `tests/goldens/defects.toml` is Mike's
-and is permanently dirty; `lab/src/corpus/badges.ts` carries an uncommitted
-change nobody has claimed.
+and is permanently dirty; `lab/src/corpus/badges.ts` is `brick-icons-de`'s
+badge work in flight.
 
 ## The slots lost `census-`, and the LDView gap is stickers nobody rendered
 
@@ -58,11 +58,11 @@ migrated and `out/thumbs/<slot>` is renamed, so nothing re-renders or
 re-bakes. Anything holding a slot name -- a script, a saved URL, a lab
 bookmark -- needs the new one.
 
-**An uncommitted `labelX` change in `lab/src/corpus/badges.ts` has no owner.**
-A badge with an empty disc takes the field's padding instead of a mark's width
-of room before its first glyph; an untracked `badges.png` sits beside it. It is
-in the shared tree, in nobody's commits, and two sessions have now guessed
-wrong about whose it is. Leave it alone or claim it in writing.
+**The uncommitted `labelX` change in `lab/src/corpus/badges.ts` is
+`brick-icons-de`'s** -- it was launched to take over the lab's badge rendering,
+which its own process argv says. Leave it alone. Two sessions guessed at the
+owner before anyone read that: `ps -eo pid,command | grep '[c]laude'` prints
+every session's launch prompt and settles it in one command.
 
 **The LDView slot is complete: all 24,591 parts.** The 2,794 that were
 missing -- 2,701 of them stickers -- were coverage the slot never got, not
