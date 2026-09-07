@@ -128,7 +128,8 @@ export const BADGE_MIN_PX = 56;
 export const LABEL_MIN_PX = 110;
 
 /** A picture rather than a letter, where a letter would need explaining. */
-export type BadgeMark = 'star' | 'archive' | 'redo' | 'bolt' | 'magnet'
+export type BadgeMark = 'stickerPolice' | 'stickerFlames'
+  | 'star' | 'archive' | 'redo' | 'bolt' | 'magnet'
                       | 'brush' | 'minifig' | 'technic' | 'composite' | 'duplo';
 
 export interface CellBadge {
@@ -204,6 +205,11 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
               scale: 0.86 },
   magnet: { tag: 'magnet', mark: 'magnet', field: PROPERTY_FIELD, ink: '#e03131',
             accent: '#d8d8dc', scale: 0.97 },
+  // Navy rather than the property field: a sticker is a thing you apply, not
+  // a fact about the moulding, and the blue is the one every police sticker
+  // in the library is printed on.
+  sticker: { tag: 'sticker', mark: 'stickerPolice', field: '#1a4b8c',
+             ink: '#ffffff', accent: '#c9c9d0' },
   printed: { tag: 'printed', mark: 'brush', field: PROPERTY_FIELD, ink: '#ffffff',
              accent: '#00d8d8' },
   composite: { tag: 'composite', mark: 'composite', field: PROPERTY_FIELD,

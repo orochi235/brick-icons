@@ -349,335 +349,80 @@ const PEEL_LIFT = 0.72;
  *  laid down before the peel, so it occludes them. */
 type FaceMark = (ctx: CanvasRenderingContext2D) => void;
 
-/** A stack of rounded bars, centered on the disc both ways. */
-function bars(ctx: CanvasRenderingContext2D, widths: number[]) {
-  const h = 0.22;
-  const gap = 0.20;
-  const step = h + gap;
-  const top = -((widths.length - 1) * step) / 2;
-  widths.forEach((w, i) => {
+/** The fire emblem off sticker 004659a, in one ink. Its three flames are three
+ *  colors in the artwork and only ~19px apart in a 900px field, so monochrome
+ *  would weld them into a blob; each is pulled in 13px first, which opens the
+ *  gaps to ~45px and keeps three flames readable. One ink cannot carry the
+ *  yellow, orange and red, but it can carry their order. */
+const FLAMES: number[][] = [
+  [-0.566, 0.911, -0.442, 0.838, -0.369, 0.777, -0.268, 0.646, -0.259, 0.591, -0.291, 0.35, -0.333, 0.222, -0.376, 0.105, -0.54, -0.214, -0.552, -0.285, -0.552, -0.405, -0.672, -0.309, -0.765, -0.186, -0.795, -0.115, -0.826, 0.02, -0.816, 0.25, -0.785, 0.376, -0.687, 0.581, -0.654, 0.693, -0.631, 0.816, -0.629, 0.93],
+  [-0.142, 0.534, -0.155, 0.617, -0.061, 0.567, 0.011, 0.505, 0.071, 0.434, 0.101, 0.366, 0.121, 0.251, 0.143, 0.017, 0.132, -0.088, 0.111, -0.204, 0.003, -0.53, -0.009, -0.614, -0.005, -0.733, -0.17, -0.562, -0.221, -0.48, -0.263, -0.376, -0.294, -0.199, -0.284, -0.022, -0.186, 0.291],
+  [0.172, 0.481, 0.292, 0.444, 0.385, 0.392, 0.446, 0.342, 0.518, 0.258, 0.57, 0.176, 0.601, 0.104, 0.643, -0.064, 0.654, -0.355, 0.676, -0.578, 0.711, -0.703, 0.826, -0.93, 0.765, -0.93, 0.653, -0.899, 0.548, -0.847, 0.443, -0.784, 0.339, -0.69, 0.267, -0.597, 0.215, -0.484, 0.195, -0.403, 0.195, -0.346, 0.26, -0.129, 0.271, -0.038, 0.271, 0.15, 0.258, 0.265],
+];
+const FLAME_ALPHA = [1, 0.72, 0.48];
+
+const faceFlames: FaceMark = (ctx) => {
+  ctx.save();
+  FLAMES.forEach((ring, n) => {
+    ctx.globalAlpha = FLAME_ALPHA[n] ?? 1;
     ctx.beginPath();
-    ctx.roundRect(-w / 2, top + i * step - h / 2, w, h, h / 2);
+    ctx.moveTo(ring[0]!, ring[1]!);
+    for (let i = 2; i < ring.length; i += 2) ctx.lineTo(ring[i]!, ring[i + 1]!);
+    ctx.closePath();
     ctx.fill();
   });
-}
-
-const faceTwoBars: FaceMark = (ctx) => bars(ctx, [1.50, 1.10]);
-const faceThreeBars: FaceMark = (ctx) => bars(ctx, [1.40, 1.66, 1.06]);
-const faceStar: FaceMark = (ctx) => {
-  ctx.beginPath();
-  for (let i = 0; i < 10; i++) {
-    const reach = i % 2 === 0 ? 0.86 : 0.37;
-    const a = -Math.PI / 2 + (i * Math.PI) / 5;
-    if (i === 0) ctx.moveTo(Math.cos(a) * reach, Math.sin(a) * reach);
-    else ctx.lineTo(Math.cos(a) * reach, Math.sin(a) * reach);
-  }
-  ctx.closePath();
-  ctx.fill();
-};
-/** The card suit, as three lobes and a stem. Built from its own geometry
- *  rather than a glyph: the fonts that carry a club draw it at wildly
- *  different weights, and a 10px disc cannot afford the difference. */
-const faceClub: FaceMark = (ctx) => {
-  const r = 0.31;                       // lobes, kept lean: nothing here is
-  const up = -0.22;                     // stroked, so weight is all in the fill
-  ctx.beginPath();
-  ctx.arc(0, up - r * 0.95, r, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(-r * 1.02, up + r * 0.60, r, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(r * 1.02, up + r * 0.60, r, 0, Math.PI * 2);
-  ctx.fill();
-  // The stem: a narrow waist flaring to a small foot.
-  ctx.beginPath();
-  ctx.moveTo(-0.10, up + r * 0.40);
-  ctx.quadraticCurveTo(-0.07, up + 0.74, -0.34, up + 1.02);
-  ctx.lineTo(0.34, up + 1.02);
-  ctx.quadraticCurveTo(0.07, up + 0.74, 0.10, up + r * 0.40);
-  ctx.closePath();
-  ctx.fill();
-};
-
-/** The word every LEGO sticker says. Set from the font at a large size and
- *  scaled down, because a sub-unit font size is not reliable across engines,
- *  then squeezed to a measured width so it fits the disc whatever face the
- *  machine actually has. */
-const facePolice: FaceMark = (ctx) => {
-  const K = 100;
-  const across = 2.34;
-  ctx.save();
-  ctx.scale(1 / K, 1 / K);
-  ctx.font = `500 ${0.62 * K}px Oswald, "Arial Narrow", "Helvetica Neue", sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  const w = ctx.measureText('POLICE').width / K;
-  if (w > 0) ctx.scale(across / w, 1);
-  ctx.fillText('POLICE', 0, 0);
   ctx.restore();
 };
 
-/** Classic Space: the rocket standing inside its orbit. The most recognized
- *  print LEGO ever made, and it survives being small because it is one
- *  silhouette inside one ellipse. */
-const faceSpace: FaceMark = (ctx) => {
-  ctx.save();
-  ctx.strokeStyle = ctx.fillStyle;
-  ctx.lineWidth = 0.15;
-  ctx.beginPath();
-  ctx.ellipse(0, 0.02, 1.02, 0.46, -Math.PI * 0.17, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.restore();
-  // the rocket: a pointed body with two fins
-  ctx.beginPath();
-  ctx.moveTo(0, -0.92);
-  ctx.quadraticCurveTo(0.26, -0.34, 0.22, 0.34);
-  ctx.lineTo(-0.22, 0.34);
-  ctx.quadraticCurveTo(-0.26, -0.34, 0, -0.92);
-  ctx.closePath();
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(-0.20, 0.06);
-  ctx.lineTo(-0.52, 0.50);
-  ctx.lineTo(-0.20, 0.42);
-  ctx.closePath();
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(0.20, 0.06);
-  ctx.lineTo(0.52, 0.50);
-  ctx.lineTo(0.20, 0.42);
-  ctx.closePath();
-  ctx.fill();
-};
-
-/** The Jolly Roger, which reads at any size because it is two blobs and two
- *  crossed bars. */
-const faceSkull: FaceMark = (ctx) => {
-  ctx.save();
-  ctx.strokeStyle = ctx.fillStyle;
-  ctx.lineWidth = 0.24;
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(-0.70, 0.24); ctx.lineTo(0.70, 0.86);
-  ctx.moveTo(0.70, 0.24); ctx.lineTo(-0.70, 0.86);
-  ctx.stroke();
-  ctx.restore();
-  ctx.beginPath();
-  ctx.arc(0, -0.34, 0.62, Math.PI, 0);
-  ctx.lineTo(0.42, 0.10);
-  ctx.lineTo(-0.42, 0.10);
-  ctx.closePath();
-  ctx.fill();
-  ctx.beginPath();
-  ctx.roundRect(-0.32, 0.10, 0.64, 0.16, 0.08);
-  ctx.fill();
-  // eyes, cut back in the field
-  ctx.save();
-  ctx.globalCompositeOperation = 'destination-out';
-  ctx.beginPath();
-  ctx.arc(-0.24, -0.30, 0.17, 0, Math.PI * 2);
-  ctx.arc(0.24, -0.30, 0.17, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-};
-
-/** Hazard stripes: not a picture of anything, which is the point -- a printed
- *  tile most often carries a pattern rather than an emblem. */
-const faceHazard: FaceMark = (ctx) => {
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(-1.2, -0.62, 2.4, 1.24);
-  ctx.clip();
-  ctx.strokeStyle = ctx.fillStyle;
-  ctx.lineWidth = 0.30;
-  for (let x = -1.6; x <= 1.6; x += 0.62) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0.80);
-    ctx.lineTo(x + 0.80, -0.80);
-    ctx.stroke();
-  }
-  ctx.restore();
-};
-
-/** A racing checker, three across. */
-const faceChecker: FaceMark = (ctx) => {
-  const n = 3, w = 1.56 / n, x0 = -0.78, y0 = -0.78;
-  for (let r = 0; r < n; r++) {
-    for (let c = 0; c < n; c++) {
-      if ((r + c) % 2) continue;
-      ctx.beginPath();
-      ctx.rect(x0 + c * w, y0 + r * w, w, w);
-      ctx.fill();
-    }
-  }
-};
-
-/** A control panel: the rows of buttons and dials half the printed tiles in
- *  the library carry. */
-const facePanel: FaceMark = (ctx) => {
-  ctx.beginPath();
-  ctx.roundRect(-0.86, -0.66, 0.84, 0.30, 0.15);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.roundRect(0.10, -0.66, 0.76, 0.30, 0.15);
-  ctx.fill();
-  for (let i = 0; i < 3; i++) {
-    ctx.beginPath();
-    ctx.arc(-0.56 + i * 0.56, 0.06, 0.20, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.beginPath();
-  ctx.roundRect(-0.86, 0.50, 1.72, 0.26, 0.13);
-  ctx.fill();
-};
-
-/** M:Tron's M -- the angular one off the 1990 torsos, drawn rather than set,
- *  so its diagonals stay diagonal at 10px where a font would round them. */
-const faceMtron: FaceMark = (ctx) => {
-  ctx.save();
-  ctx.strokeStyle = ctx.fillStyle;
-  ctx.lineWidth = 0.34;
-  ctx.lineJoin = 'miter';
-  ctx.miterLimit = 4;
-  ctx.beginPath();
-  ctx.moveTo(-0.82, 0.68);
-  ctx.lineTo(-0.82, -0.66);
-  ctx.lineTo(0, 0.16);
-  ctx.lineTo(0.82, -0.66);
-  ctx.lineTo(0.82, 0.68);
-  ctx.stroke();
-  ctx.restore();
-};
-
-/** Blacktron II's B: the bold squared one, its bowls cut square rather than
- *  round, which is what separates it from an ordinary B at badge size. */
-const faceBlacktron: FaceMark = (ctx) => {
-  const x0 = -0.62, w = 1.24, y0 = -0.76, h = 1.52, t = 0.30;
-  ctx.beginPath();
-  ctx.rect(x0, y0, t, h);                 // the stem
-  ctx.fill();
-  ctx.beginPath();
-  ctx.rect(x0, y0, w * 0.86, t);          // top arm
-  ctx.fill();
-  ctx.beginPath();
-  ctx.rect(x0, -t / 2, w * 0.94, t);      // waist
-  ctx.fill();
-  ctx.beginPath();
-  ctx.rect(x0, y0 + h - t, w, t);         // bottom arm
-  ctx.fill();
-  ctx.beginPath();
-  ctx.rect(x0 + w * 0.86 - t, y0, t, h * 0.32);      // upper bowl, squared
-  ctx.fill();
-  ctx.beginPath();
-  ctx.rect(x0 + w - t, -t / 2, t, h * 0.52);         // lower bowl, deeper
-  ctx.fill();
-};
-
-/** Exploriens: the badge as a shield with a star over a split field. An
- *  approximation of the 1996 emblem -- its red and blue halves are what
- *  carried it, and a one-ink disc has no way to say that, so the split is
- *  cut in the field instead. */
-const faceExploriens: FaceMark = (ctx) => {
-  ctx.beginPath();
-  ctx.moveTo(-0.80, -0.72);
-  ctx.lineTo(0.80, -0.72);
-  ctx.lineTo(0.80, 0.16);
-  ctx.quadraticCurveTo(0.80, 0.72, 0, 0.92);
-  ctx.quadraticCurveTo(-0.80, 0.72, -0.80, 0.16);
-  ctx.closePath();
-  ctx.fill();
-  ctx.save();
-  ctx.globalCompositeOperation = 'destination-out';
-  // the split, and a star punched out of the upper half
-  ctx.beginPath();
-  ctx.rect(-0.90, 0.06, 1.80, 0.12);
-  ctx.fill();
-  ctx.beginPath();
-  for (let i = 0; i < 10; i++) {
-    const reach = i % 2 === 0 ? 0.42 : 0.18;
-    const a = -Math.PI / 2 + (i * Math.PI) / 5;
-    const x = Math.cos(a) * reach;
-    const y = Math.sin(a) * reach - 0.28;
-    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-  }
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
-};
-
-/** M:Tron's M, traced off the library's own artwork rather than drawn from
- *  memory: 3068bp68's decal, its nine red pieces unioned, the hairlines
- *  that split the letterform welded shut with a 3px dilate/erode, then
- *  simplified and normalized. The notched apexes and splayed legs are the
- *  logo's, not an approximation of it. */
-const MTRON_M = [
-  -0.93, 0.41, -0.492, 0.41, -0.375, 0.15, -0.257, 0.41, 0.257, 0.41, 0.375, 0.15, 0.492, 0.41, 0.93, 0.41, 0.553, -0.41, 0.118, -0.41, -0.0, -0.151, -0.118, -0.41, -0.553, -0.41,
+/** The word every LEGO sticker says, as outlines rather than type: converted
+ *  from Bebas Neue with fontTools, curves flattened, simplified to 131 points
+ *  and normalized so its box is the origin. Baking it means no webfont to
+ *  load, no race between the first paint and the font arriving, and no
+ *  fallback face quietly setting it at another width.
+ *
+ *  Filled `evenodd`, so the counters in P and O punch through whichever way
+ *  the contours happen to wind. */
+const POLICE_OUTLINES: number[][] = [
+  [-1.21, -0.422, -0.991, -0.422, -0.928, -0.409, -0.894, -0.393, -0.854, -0.355, -0.829, -0.304, -0.82, -0.262, -0.82, -0.082, -0.829, -0.04, -0.854, 0.011, -0.894, 0.049, -0.928, 0.065, -0.991, 0.078, -1.077, 0.079, -1.077, 0.422, -1.21, 0.422],
+  [-1.014, -0.042, -0.975, -0.052, -0.953, -0.085, -0.949, -0.122, -0.953, -0.259, -0.966, -0.284, -0.986, -0.297, -1.077, -0.302, -1.077, -0.042],
+  [-0.754, 0.222, -0.753, -0.247, -0.734, -0.331, -0.714, -0.364, -0.688, -0.392, -0.656, -0.413, -0.619, -0.427, -0.528, -0.434, -0.485, -0.427, -0.448, -0.413, -0.416, -0.392, -0.38, -0.348, -0.358, -0.292, -0.351, -0.247, -0.351, 0.247, -0.371, 0.331, -0.39, 0.364, -0.416, 0.392, -0.466, 0.421, -0.528, 0.434, -0.619, 0.427, -0.673, 0.403, -0.702, 0.379, -0.725, 0.348, -0.747, 0.292],
+  [-0.483, 0.231, -0.484, -0.25, -0.493, -0.281, -0.51, -0.302, -0.536, -0.312, -0.568, -0.312, -0.604, -0.293, -0.62, -0.25, -0.621, 0.231, -0.617, 0.267, -0.594, 0.302, -0.568, 0.312, -0.536, 0.312, -0.501, 0.293, -0.488, 0.267],
+  [-0.261, -0.422, -0.129, -0.422, -0.129, 0.302, 0.09, 0.302, 0.09, 0.422, -0.261, 0.422],
+  [0.154, -0.422, 0.287, -0.422, 0.287, 0.422, 0.154, 0.422],
+  [0.377, 0.227, 0.378, -0.251, 0.397, -0.333, 0.415, -0.366, 0.441, -0.393, 0.471, -0.413, 0.508, -0.427, 0.596, -0.434, 0.638, -0.427, 0.674, -0.413, 0.718, -0.38, 0.74, -0.35, 0.756, -0.315, 0.767, -0.251, 0.768, -0.138, 0.643, -0.138, 0.642, -0.254, 0.626, -0.294, 0.605, -0.309, 0.576, -0.314, 0.547, -0.309, 0.526, -0.294, 0.514, -0.27, 0.51, -0.235, 0.511, 0.255, 0.526, 0.294, 0.547, 0.309, 0.592, 0.313, 0.617, 0.303, 0.633, 0.284, 0.642, 0.255, 0.643, 0.107, 0.768, 0.107, 0.767, 0.251, 0.749, 0.333, 0.73, 0.366, 0.705, 0.393, 0.657, 0.421, 0.596, 0.434, 0.508, 0.427, 0.455, 0.404, 0.415, 0.366, 0.397, 0.333, 0.384, 0.295],
+  [0.848, -0.422, 1.21, -0.422, 1.21, -0.302, 0.981, -0.302, 0.981, -0.079, 1.163, -0.079, 1.163, 0.042, 0.981, 0.042, 0.981, 0.302, 1.21, 0.302, 1.21, 0.422, 0.848, 0.422],
 ];
 
-function traceMtron(ctx: CanvasRenderingContext2D) {
+const facePolice: FaceMark = (ctx) => {
   ctx.beginPath();
-  ctx.moveTo(MTRON_M[0]!, MTRON_M[1]!);
-  for (let i = 2; i < MTRON_M.length; i += 2) ctx.lineTo(MTRON_M[i]!, MTRON_M[i + 1]!);
-  ctx.closePath();
-}
-
-const faceMtronSolid: FaceMark = (ctx) => {
-  traceMtron(ctx);
-  ctx.fill();
+  for (const c of POLICE_OUTLINES) {
+    ctx.moveTo(c[0]!, c[1]!);
+    for (let i = 2; i < c.length; i += 2) ctx.lineTo(c[i]!, c[i + 1]!);
+    ctx.closePath();
+  }
+  ctx.fill('evenodd');
 };
 
-/** The same letterform hollow, which is the only way an outline survives one
- *  ink: the artwork's white keyline around a red M has nothing to separate
- *  on a field this dark. */
-const faceMtronOutline: FaceMark = (ctx) => {
-  ctx.save();
-  ctx.strokeStyle = ctx.fillStyle;
-  ctx.lineWidth = 0.17;
-  ctx.lineJoin = 'miter';
-  ctx.miterLimit = 6;
-  traceMtron(ctx);
-  ctx.stroke();
-  ctx.restore();
-};
-
-const faceChevron: FaceMark = (ctx) => {
-  ctx.save();
-  ctx.strokeStyle = ctx.fillStyle;
-  ctx.lineWidth = 0.24;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  ctx.beginPath();
-  ctx.moveTo(-0.72, 0.30);
-  ctx.lineTo(0, -0.34);
-  ctx.lineTo(0.72, 0.30);
-  ctx.stroke();
-  ctx.restore();
-};
-
-/** Every face, so a centering pass can weigh one on its own. The peel's
- *  exposed cap is drawn in the same ink, so measuring a finished badge weighs
- *  the peel too and centers the print against the wrong shape -- which is how
- *  a mark ends up shoved up and left of where it belongs. */
+/** Every face, so a centering pass can weigh one on its own. */
 export const FACE_MARKS: Record<string, FaceMark> = {
-  bars2: faceTwoBars, bars3: faceThreeBars, star: faceStar,
-  club: faceClub, chevron: faceChevron, police: facePolice,
-  space: faceSpace, skull: faceSkull, hazard: faceHazard,
-  checker: faceChecker, panel: facePanel, mtron: faceMtron,
-  blacktron: faceBlacktron, exploriens: faceExploriens,
-  mtronSolid: faceMtronSolid, mtronOutline: faceMtronOutline,
+  police: facePolice, flames: faceFlames,
 };
 
 /** Where each face's own ink sits against the disc's center, measured off
  *  `FACE_MARKS` at 400px per unit. Subtracted so the print is centered on the
  *  sticker, not on the part of it the fold left showing. */
+/** Where each face's own drawn box sits against the disc's center, measured
+ *  at 250px per unit and subtracted.
+ *
+ *  The box, not the area centroid, and never the ink left showing after the
+ *  fold: a mark reads centered when its extent is centered, so compensating
+ *  for what the flap covers shoves it visibly off -- POLICE ended up a fifth
+ *  of a unit right of where it belonged. A traced face is already centered by
+ *  the trace, which is why most of these are zero; what needs correcting is
+ *  type, where the baseline is not the cap-height center. */
 const FACE_NUDGE: Record<string, [number, number]> = {
-  bars2: [0, -0.035], bars3: [0, -0.037], star: [0, 0],
-  club: [0, -0.042], chevron: [0, 0.009], police: [0.044, -0.053],
-  space: [-0.007, 0], skull: [0, 0.032], hazard: [0, -0.006],
-  checker: [0, 0], panel: [-0.003, 0.055],
-  mtron: [0, -0.131], blacktron: [-0.040, 0.027], exploriens: [0, 0.035],
-  mtronSolid: [0, 0], mtronOutline: [0, 0],
+  police: [0, 0],
+  flames: [-0.004, -0.002],
 };
 
 const sticker = (name?: string): Mark => (ctx, field, accent) => {
@@ -692,38 +437,15 @@ const sticker = (name?: string): Mark => (ctx, field, accent) => {
   peel(ctx, field, accent, PEEL_FROM, PEEL_ARC, PEEL_LIFT);
 };
 
-export const drawStickerPlain: Mark = sticker();
-export const drawStickerBars2: Mark = sticker('bars2');
-export const drawStickerBars3: Mark = sticker('bars3');
-export const drawStickerStar: Mark = sticker('star');
-export const drawStickerChevron: Mark = sticker('chevron');
-export const drawStickerClub: Mark = sticker('club');
+
 export const drawStickerPolice: Mark = sticker('police');
-export const drawStickerSpace: Mark = sticker('space');
-export const drawStickerSkull: Mark = sticker('skull');
-export const drawStickerHazard: Mark = sticker('hazard');
-export const drawStickerChecker: Mark = sticker('checker');
-export const drawStickerPanel: Mark = sticker('panel');
-export const drawStickerMtron: Mark = sticker('mtron');
-export const drawStickerBlacktron: Mark = sticker('blacktron');
-export const drawStickerExploriens: Mark = sticker('exploriens');
-export const drawStickerMtronSolid: Mark = sticker('mtronSolid');
-export const drawStickerMtronOutline: Mark = sticker('mtronOutline');
+export const drawStickerFlames: Mark = sticker('flames');
 
 export const MARKS: Record<string, Mark> = {
   star: drawStar, archive: drawArchive, redo: drawRedo, bolt: drawBolt,
   magnet: drawMagnet, brush: drawBrush, minifig: drawMinifig,
   technic: drawTechnic, composite: drawComposite, duplo: drawDuplo,
-  stickerPlain: drawStickerPlain, stickerBars2: drawStickerBars2,
-  stickerBars3: drawStickerBars3, stickerStar: drawStickerStar,
-  stickerChevron: drawStickerChevron, stickerClub: drawStickerClub,
-  stickerPolice: drawStickerPolice, stickerSpace: drawStickerSpace,
-  stickerSkull: drawStickerSkull, stickerHazard: drawStickerHazard,
-  stickerChecker: drawStickerChecker, stickerPanel: drawStickerPanel,
-  stickerMtron: drawStickerMtron, stickerBlacktron: drawStickerBlacktron,
-  stickerExploriens: drawStickerExploriens,
-  stickerMtronSolid: drawStickerMtronSolid,
-  stickerMtronOutline: drawStickerMtronOutline,
+  stickerPolice: drawStickerPolice, stickerFlames: drawStickerFlames,
 };
 
 export function drawBadge(ctx: CanvasRenderingContext2D, badge: CellBadge,
