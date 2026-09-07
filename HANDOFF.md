@@ -120,6 +120,34 @@ walking `out/` takes about seven.
 It is a background process, shared with the other sessions here, so say so
 when you bounce it.
 
+### The C-grip filled solid because a ring was judged on a column it never reads
+
+`b0c5d85` closes `3820-c-grip-fills-solid`. Every vertex of a `ring`, `disc`
+or `edge` sits at local y=0, so the matrix's axis column is not their geometry
+-- and `occt.frame()` rejected them anyway when it was not square to the other
+two. 3820 caps its grip with two `2-4ring2` whose axis column is 14 degrees off
+the ring's own plane, so both fell back to tessellation and the grip filled
+solid with no inner rim. Those three kinds are now judged on `u . v` alone and
+take `u x v` as the axis. **`cyli` and `con` still fail on any shear** -- there
+the axis IS the extrusion direction and a skew one is a real oblique surface
+with no exact counterpart.
+
+**It is a wide change, not a narrow one.** 21.7% of a 500-part library sample
+carries at least one such primitive, and every one of them now draws
+differently. The clearest case after 3820 is 32054: its census render was a
+near-solid black blob, and it now draws its shaft, flange, slots and split end.
+
+**`2531` and `u9543` have no rejected frames, so this did not touch them**, and
+both already drew their open ring correctly. The defect entry grouped them with
+3820 and that grouping does not hold -- the discriminator was never openness,
+it was the skew axis column.
+
+**The naive golden gate says nothing about an occt change.** `hlr.py` imports
+`occt` only inside the `engine == "occt"` branch, and
+`test_frozen_hashes_still_reproduce` says in its own comment that it holds the
+naive engine still. `BRICK_GOLDENS=1` also passes `--only 3005`, so the fast
+mode is one part. Cite `=full`, or cite `tests/test_occt.py`.
+
 ### What is not done
 
 - **A translucent slot, both engines.** No such source exists, and **Mike has
@@ -127,10 +155,10 @@ when you bounce it.
   edge drawn, no fills) and `--opacity 0.5` (fills go semi-transparent,
   occlusion still applied) are different drawings. Ask before building.
 
-- **`3820-c-grip-fills-solid` and `10126-unfilled-wedge`** in
-  `tests/goldens/defects.toml`. An open C-shaped grip fills its cavity solid on
-  3820/2531/u9543; 10126 leaves a white wedge. Complete tori (36, u151) are
-  fine, so the failing case is the OPEN ring.
+- **`10126-unfilled-wedge`** in `tests/goldens/defects.toml`, filed
+  naive-only. 20 of 10126's cylinders have a genuinely oblique axis and stay
+  tessellated on occt after `b0c5d85`; the other 60 rejected primitives are
+  planar and now build exact faces. On occt it draws no white wedge.
 
 - **Badge artwork has one rendering, and it should stay that way.**
   `931b342` put the detail views on `BadgeSwatch`, which is the canvas swatch
@@ -367,9 +395,9 @@ a post-`18310b7` run before it means anything.**
 
 **Filed but uncommitted:** `3820-c-grip-fills-solid` and `10126-unfilled-wedge`
 in `tests/goldens/defects.toml`, beside Mike's own uncommitted
-`3484-occt-handle-missing-arcs-extra`. An open C-shaped grip fills its cavity
-solid on 3820/2531/u9543; 10126 leaves a white wedge. Complete tori (36, u151)
-are fine, so the failing case is the OPEN ring.
+`3484-occt-handle-missing-arcs-extra`. 3820 is fixed by `b0c5d85` and the
+reading below was wrong: the failing case was never the open ring, it was a
+skew axis column on a planar primitive -- see the section on it above.
 
 **Landed today:** `f224fdf` + `b86e88c` (TriangleOccluder vectorized, then
 culled by the ray chunk's screen box -- 3.8x at 304 tris to 21.7x at 4,240,
