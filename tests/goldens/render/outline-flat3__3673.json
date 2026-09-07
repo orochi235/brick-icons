@@ -6,9 +6,9 @@
     162.48
   ],
   "commands": {
-    "A": 156,
-    "L": 654,
-    "M": 91,
+    "A": 160,
+    "L": 653,
+    "M": 90,
     "Z": 45
   },
   "fills": {
@@ -16,12 +16,12 @@
     "#858585": 6,
     "#cccccc": 1,
     "gradient": 16,
-    "none": 47
+    "none": 46
   },
-  "gradient_stops": 144,
+  "gradient_stops": 155,
   "gradients": 16,
   "lines": 13,
-  "paths": 79,
+  "paths": 78,
   "transforms": 0,
   "viewBox": "0 0 256 170"
 }

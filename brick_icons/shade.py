@@ -366,6 +366,39 @@ def _radial_focal_stops(samples, style, nbins=8):
     return stops, (float(f[0]), float(f[1]))
 
 
+def _axis_binned_stops(samples, style, nbins=8):
+    """Binned stops for a strip's linear gradient, the way the radial path
+    bins a dome's.
+
+    A stop per facet is a stop per sample of a surface the axis only
+    approximates, so two facets at the same offset and different azimuths
+    emit two tones and the run alternates between them — 44300's chamfer
+    band spends 67 stops on #9c9c9c and #c0c0c0, and the pair renders as
+    hairline stripes across the fillet. Averaging BRIGHTNESS within a band
+    and ramping once is what makes the band one tone; ramping each sample
+    and averaging nothing is what makes it two.
+    """
+    ramp_b = getattr(style, "ramp_b", None)
+    L = getattr(style, "light", None)
+    bins = defaultdict(list)
+    for off, nv in samples:
+        bins[min(int(off * nbins), nbins - 1)].append(np.asarray(nv, float))
+    stops = []
+    for bi in sorted(bins):
+        ns = bins[bi]
+        if ramp_b is not None and L is not None:
+            Lv = np.asarray(L, float)
+            b = np.mean([max(0.0, float(n @ Lv)) for n in ns])
+            color = ramp_b(float(b))
+        else:
+            n = np.mean(ns, axis=0)
+            color = style.ramp(n / (np.linalg.norm(n) or 1.0))
+        stops.append(((bi + 0.5) / nbins, color))
+    if stops:
+        stops = [(0.0, stops[0][1])] + stops + [(1.0, stops[-1][1])]
+    return stops
+
+
 def _face_depth_probe(face, proj, fit):
     """pts(N,2) canvas px -> surface camera depth per point, or None.
 
@@ -1487,8 +1520,7 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
                                      "fx": fx, "fy": fy, "stops": stops}})
         elif "grad_axis" in f and not deco and not flat:
             p0, p1 = f["grad_axis"]
-            stops = sorted(((off, style.ramp(nv)) for off, nv in f["grad_samples"]),
-                           key=lambda s: s[0])
+            stops = _axis_binned_stops(f["grad_samples"], style)
             ops.append({"d": d, "depth": f["depth"],
                         "gradient": {"x1": p0[0], "y1": p0[1], "x2": p1[0], "y2": p1[1],
                                      "stops": stops}})
