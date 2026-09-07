@@ -50,6 +50,21 @@ reverted to 10 GiB. Both were reset with
 `onto install -max-job-time 12h -max-work-size 40G` on the node. Check the
 deadline `onto run` prints; if it is 30 minutes, that happened again.
 
+## Superseded: r6 was relaunched as r7
+
+r6 was killed at 01:15 and relaunched as `census-occt-r7`, job `4b141c6f`,
+deadline 13:15, writing `out/census/occt-r7` from the same 687 batches. The
+instrumentation landed as `a11741a`, so r7's rows carry the nested phase paths
+(`render/geometry/engine/faces`) that r6's do not. Everything below describes
+why, and still applies to reading the two against each other.
+
+`onto kill` took r6 off the job list but left two `compare-silhouette-truth.py`
+processes running on studio, still writing r6 JSONLs — the orphan case
+`census-batch.sh`'s watchdog exists for, except the watchdog dies with the job.
+They were killed by hand. **Check for them after any kill**:
+
+    ssh studio.local 'pgrep -f compare-silhouette-truth'
+
 ## The relaunch this run may be superseded by
 
 A peer session has uncommitted `hlr.py` / `occt.py` /
