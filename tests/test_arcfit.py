@@ -249,3 +249,80 @@ def test_32062_axle_end_is_still_too_lopsided_to_fit():
 
     assert worst_radius(arcfit.SYM_RATIO) == pytest.approx(6.0, abs=1e-3)
     assert worst_radius(5.0) > 6.5
+
+
+# --- silhouette arc recovery (screen space) ---
+
+def _polygon_ops(n, sweep_deg, rx=100.0, ry=100.0, kind="sil", start=0.0):
+    """A run of chords sampling an ellipse: `n` chords, `sweep_deg` apart in
+    the parameter. Circular by default, so the turn per joint is uniform and
+    a test can aim at one gate at a time."""
+    t = np.radians(start + np.arange(n + 1) * sweep_deg)
+    P = np.stack([rx * np.cos(t), ry * np.sin(t)], axis=1)
+    return [("line", a[0], a[1], b[0], b[1], kind) for a, b in zip(P, P[1:])], P
+
+
+def test_silhouette_run_on_one_circle_becomes_an_arc():
+    ops, P = _polygon_ops(7, 22.5)             # the library's own round step
+    out, ells = arcfit.fit_silhouette_arcs(ops)
+    assert [o[0] for o in out] == ["arc"]
+    assert len(ells) == 1
+    _, cx, cy, ux, uy, vx, vy, t0, t1, kind = out[0]
+    assert kind == "sil"
+    C = np.array([cx, cy]); U = np.array([ux, uy]); V = np.array([vx, vy])
+    t = np.radians(np.linspace(t0, t1, 400))
+    E = C + np.cos(t)[:, None] * U + np.sin(t)[:, None] * V
+    for q in P:                                # the arc passes through them
+        assert np.linalg.norm(E - q, axis=1).min() < 0.2
+
+
+def test_the_fit_recovers_a_foreshortened_circle():
+    """A circle seen at an angle projects to an ellipse, which is the whole
+    reason the fit is a conic and not a circle."""
+    ops, _ = _polygon_ops(7, 15.0, rx=100.0, ry=40.0, start=30.0)
+    out, ells = arcfit.fit_silhouette_arcs(ops)
+    assert len(ells) == 1
+    _, _, ux, uy, vx, vy, _, _ = ells[0]
+    axes = sorted([float(np.hypot(ux, uy)), float(np.hypot(vx, vy))])
+    assert abs(axes[0] / axes[1] - 0.4) < 0.02
+
+
+def test_a_crease_landing_on_the_run_keeps_the_chords():
+    """A real polygon's corners are authored edges and the crease meets the
+    outline there; a faceted round's limb vertices are bare. That is the
+    only thing the library declares that tells the two apart."""
+    ops, P = _polygon_ops(7, 22.5)
+    crease = ("line", P[3][0], P[3][1], P[3][0] + 20.0, P[3][1] + 20.0, "line")
+    out, ells = arcfit.fit_silhouette_arcs(ops + [crease])
+    assert not ells
+    assert out == ops + [crease]
+
+
+def test_a_coarse_polygon_is_not_a_round():
+    """An octagon turns 45 per joint. Its vertices sit exactly on a circle,
+    so only the turn cap can reject it."""
+    ops, _ = _polygon_ops(7, 45.0)
+    out, ells = arcfit.fit_silhouette_arcs(ops)
+    assert not ells and out == ops
+
+
+def test_five_points_are_not_enough_to_test_a_conic():
+    ops, _ = _polygon_ops(4, 22.5)             # 4 chords, 5 points
+    out, ells = arcfit.fit_silhouette_arcs(ops)
+    assert not ells and out == ops
+
+
+def test_a_straight_run_is_not_swept_into_the_arc():
+    ops, P = _polygon_ops(7, 22.5)
+    tail = P[-1] + (P[-1] - P[-2]) / np.linalg.norm(P[-1] - P[-2]) * 40.0
+    straight = ("line", P[-1][0], P[-1][1], tail[0], tail[1], "sil")
+    out, ells = arcfit.fit_silhouette_arcs(ops + [straight])
+    assert len(ells) == 1
+    assert straight in out                     # kept, whole
+    assert sum(1 for o in out if o[0] == "arc") == 1
+
+
+def test_edge_kind_ops_are_never_fitted():
+    ops, _ = _polygon_ops(7, 22.5, kind="line")
+    out, ells = arcfit.fit_silhouette_arcs(ops)
+    assert not ells and out == ops
