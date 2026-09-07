@@ -8,8 +8,16 @@ the shading, fill and SVG emit that follow it and are shared by all of them.
 Run it at two revisions to attribute an engine change; `--rev` is stamped on
 every row so the files stay comparable.
 """
-import argparse, glob, json, subprocess, tempfile, time
+import sys
 from pathlib import Path
+
+# Import the checkout this script lives in, not whatever the venv's editable
+# install points at. `python scripts/x.py` puts scripts/ on sys.path and never
+# the root, so from a worktree the finder serves the MAIN tree and an A/B
+# measures one revision twice -- which is how a 5x speedup once read as 1.08x.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+import argparse, glob, json, subprocess, tempfile, time
 
 from brick_icons import cli, hlr
 
@@ -46,7 +54,7 @@ for lo, hi, n in BANDS:
     pool = sorted(q for q, s in by_secs.items() if lo <= s < hi)
     step = max(1, len(pool) // n)
     sample += [(q, by_secs[q]) for q in pool[::step][:n]]
-print(f"{rev}: {len(sample)} parts across {len(BANDS)} duration bands", flush=True)
+print(f"{rev}: {len(sample)} parts across {len(BANDS)} duration bands\n      brick_icons <- {Path(hlr.__file__).parent}", flush=True)
 
 geom = [0.0]
 _orig = hlr.visible_segments

@@ -10,8 +10,16 @@ authored lines, analytic prims, sewn faces) so cost can be regressed on it.
 """
 from __future__ import annotations
 
-import argparse, json, sqlite3, time
+import sys
 from pathlib import Path
+
+# Import the checkout this script lives in, not whatever the venv's editable
+# install points at. `python scripts/x.py` puts scripts/ on sys.path and never
+# the root, so from a worktree the finder serves the MAIN tree and an A/B
+# measures one revision twice -- which is how a 5x speedup once read as 1.08x.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+import argparse, json, sqlite3, time
 
 import numpy as np
 
@@ -44,7 +52,7 @@ for lo, hi, n in bands:
         "and secs >= ? and secs < ? order by part_id", (run, args.engine, lo, hi)).fetchall()
     step = max(1, len(rows) // n)
     sample += rows[::step][:int(n)]
-print(f"run {run}: {len(sample)} {args.engine} parts across {len(bands)} bands", flush=True)
+print(f"run {run}: {len(sample)} {args.engine} parts across {len(bands)} bands\n      brick_icons <- {Path(hlr.__file__).parent}", flush=True)
 
 TIMES: dict[str, float] = {}
 COUNTS: dict[str, int] = {}
