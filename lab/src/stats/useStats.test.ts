@@ -19,13 +19,39 @@ const clientFor = (corpusStats: unknown) =>
   ({ corpusStats } as unknown as Parameters<typeof useStats>[0]);
 
 describe('useStats', () => {
-  it('reads the tallies once for a settled database', async () => {
+  it('keeps reading a settled database, slower', async () => {
+    // The database is not static between runs -- a slot is ingested, a store
+    // re-baked, rows dropped -- and stopping meant the only way to see any of
+    // it was a reload, which redraws every chart.
     const corpusStats = vi.fn(async () => body(false));
-    const { result } = renderHook(() => useStats(clientFor(corpusStats), DEFAULT_SET, 10));
+    const { result } = renderHook(
+      () => useStats(clientFor(corpusStats), DEFAULT_SET, 5, 25));
     await waitFor(() => expect(result.current.stats).not.toBeNull());
     expect(result.current.polling).toBe(false);
-    await new Promise((r) => setTimeout(r, 60));
-    expect(corpusStats).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(corpusStats.mock.calls.length).toBeGreaterThan(2));
+  });
+
+  it('reads an open run faster than a settled one', async () => {
+    const openStats = vi.fn(async () => body(true));
+    const idleStats = vi.fn(async () => body(false));
+    renderHook(() => useStats(clientFor(openStats), DEFAULT_SET, 5, 200));
+    renderHook(() => useStats(clientFor(idleStats), DEFAULT_SET, 5, 200));
+    await waitFor(() => expect(openStats.mock.calls.length).toBeGreaterThan(4));
+    expect(idleStats.mock.calls.length).toBeLessThan(openStats.mock.calls.length);
+  });
+
+  it('keeps reading after a failed read instead of stranding the page', async () => {
+    let fail = true;
+    const corpusStats = vi.fn(async () => {
+      if (fail) throw new Error('database is locked');
+      return body(false);
+    });
+    const { result } = renderHook(
+      () => useStats(clientFor(corpusStats), DEFAULT_SET, 5, 15));
+    await waitFor(() => expect(result.current.error).toBe('database is locked'));
+    fail = false;
+    await waitFor(() => expect(result.current.stats).not.toBeNull());
+    expect(result.current.error).toBeNull();
   });
 
   it('keeps re-reading while a run is open', async () => {

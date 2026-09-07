@@ -8,6 +8,13 @@ import { toQuery, type WorkingSet } from '@lab/stats/workingSet';
  *  climbing coverage bar looks live. */
 export const POLL_MS = 5000;
 
+/** How often to re-read when no run is open. The database is not static
+ *  between runs -- a slot is ingested, a store is re-baked, rows are dropped --
+ *  and the page used to stop reading entirely, so the only way to see any of
+ *  that was a reload, which redraws every chart. Slow enough to cost nothing
+ *  against an idle database. */
+export const IDLE_POLL_MS = 30000;
+
 export interface StatsView {
   stats: Stats | null;
   error: string | null;
@@ -23,7 +30,8 @@ export interface StatsView {
  *  Polling stops the moment nothing is open: the database is otherwise
  *  static, and a timer against it answers the same question forever. */
 export function useStats(client: LabClient, set: WorkingSet,
-                         intervalMs = POLL_MS): StatsView {
+                         intervalMs = POLL_MS,
+                         idleMs = IDLE_POLL_MS): StatsView {
   const [stats, setStats] = useState<Stats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -50,10 +58,13 @@ export function useStats(client: LabClient, set: WorkingSet,
         if (!live.current) return;
         setStats(next);
         setError(null);
-        if (next.runs.some((r) => r.open)) timer = setTimeout(read, intervalMs);
+        timer = setTimeout(read, next.runs.some((r) => r.open) ? intervalMs : idleMs);
       } catch (e) {
         if (!live.current) return;
         setError(e instanceof Error ? e.message : String(e));
+        // Keep the page reading through a locked database rather than
+        // stranding it on the numbers it happened to have when the lock hit.
+        timer = setTimeout(read, idleMs);
       } finally {
         if (live.current) setBusy(false);
       }
@@ -64,7 +75,7 @@ export function useStats(client: LabClient, set: WorkingSet,
       live.current = false;
       if (timer) clearTimeout(timer);
     };
-  }, [query, intervalMs, nonce]);
+  }, [query, intervalMs, idleMs, nonce]);
 
   return { stats, error, busy, polling, reload: () => setNonce((n) => n + 1) };
 }
