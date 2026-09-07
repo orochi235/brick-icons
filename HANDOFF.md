@@ -1,5 +1,32 @@
 # Handoff — `main`: the corpus lab, and the OCCT engine
 
+## The slots lost `census-`, and the LDView gap is stickers nobody rendered
+
+`5df13cb`. Every slot came out of a census run, so the prefix said nothing:
+
+    census-occt        -> silhouette-occt   (strokeless; fills carry the outline)
+    census-naive       -> silhouette-naive
+    census-white-occt  -> white-occt        (opaque white fills, strokes drawn)
+    census-white-naive -> white-naive
+
+`occt` and `naive` keep meaning flat3 with 2px strokes -- Mike's call, against
+handing those names to a different config. Both are still empty.
+
+**A census TREE is a directory and a slot is a slot, and they used to share a
+name.** The directories are all still `census-something`; `db.census_source`
+now reads the facet out of the directory name and `index-census-renders.py`
+keeps `TREE` and `SOURCE` apart. `renders` and `measurements` rows are
+migrated and `out/thumbs/<slot>` is renamed, so nothing re-renders or
+re-bakes. Anything holding a slot name -- a script, a saved URL, a lab
+bookmark -- needs the new one.
+
+**2,794 parts have no LDView render and 2,701 of them are stickers, and they
+work fine.** Sixteen of the missing rendered at 0.46s each on the first try,
+in color, artwork intact; 003238a's crown is on the slopboard. Every missing
+part is in `out/census/parts.txt`, and nothing outside that list is missing,
+so it is coverage the slot never got rather than anything refusing to draw.
+The whole gap is about twenty minutes of LDView. Nobody has filled it.
+
 ## Defect sweep, 2026-09-07 midday: the borehole class closed, and where the rest stand
 
 `b350c40` closes "something occluded is drawn anyway" on occt. **HLR reads a
