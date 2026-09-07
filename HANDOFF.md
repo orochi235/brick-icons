@@ -1983,47 +1983,60 @@ sit 0.18–0.40 off the nearest projected condline, so there is no authored
 edge or condline to key on. Smoothing it would mean drawing a curve through
 points that lie on no curve the library declares.
 
-## In flight: mesh refinement, branch `smooth-subdivide` — UNBUILT, two failures
+## In flight: mesh refinement, branch `smooth-subdivide` — UNBUILT
 
-The right fix for a round the library authored as flat triangles, and the
-reason the silhouette arc pass on `main` was the wrong shape of answer:
+Three commits, local, unmerged, cut from `bf4ae83`. Tests green; the branch
+is held back because refining a round makes several parts look **worse**, not
+because anything is failing.
+
+The premise, which decides every design call here: a round the library
+authored as flat triangles carries no curve for any rule to find, so
 **fix the mesh, not the drawing.** Both engines then see one surface, and
-strokes and fills come off the same geometry instead of having to be kept in
-step by hand.
+strokes and fills come off the same geometry instead of being kept in step by
+hand. The declaration to key on is the conditional line: a type-5 across a
+facet boundary says the two faces are meant to read as one smooth surface,
+and it holds across the cracks that make a dihedral-angle rule wrong here.
 
-The declaration to key on is the conditional line. A type-5 across a facet
-boundary says those two faces are meant to read as one smooth surface, and
-it holds across the cracks that make a dihedral-angle rule wrong here.
 `repair.smooth_subdivide` unions facets into declared-smooth patches, takes
 corner normals from the patch around each corner, and replaces each facet
 with `level**2` triangles on its curved point-normal (PN) patch. A boundary
 that is not declared smooth stays on its straight chord, so a refined patch
-still meets a flat neighbour along the same line.
+still meets a flat neighbor along the same line. On 4592 the outline stops
+reading as a polygon — 9 silhouette chords down to 3.
 
-Coverage is good: 4592 has 130 condlines over 180 triangles and 8 smooth
-patches; 30089a has 936 over 996; 3941 has 36; a plain brick has none and is
-untouched.
+Two conditions gate it, both asking only what the library declared. A patch
+is refined when it is **more than two quads**, and its edges leave their
+chords only where the mesh **pairs** them. Two quads is a chamfer, not an
+arc: the whole of it is boundary, so every corner normal is one chord's and
+PN bulges it outward — 32062's axle tips pushed past the drawn strokes and
+left a crescent the fill inked as a 25-vertex sampled boundary. The pairing
+condition is because bulging one lip of a crack widens it. The gate is per
+PATCH and must stay that way: refining part of one leaves the rest on its
+chords and cuts it in two for the fill merge, which took 3960's dish from 7
+gradient fills to 39.
 
-On 4592 the outline stops reading as a polygon — 9 silhouette chords down to
-3, 10,092 pixels changed at 4x.
+**The blocker: a round is declared as N separate strips, and nothing says
+they are one surface.** 28621's shoulder is 32 patches of 8 facets; occt
+groups it into 32 fills, one per patch, **and did so before refinement too**.
+Refinement does not break a merge that was working — it multiplies the cost
+of one that never worked, ninefold at `level=3`. The drawing comes out a
+swirl of overlapping tone fragments. 4592 loses its dome gradient for a
+flatter, harder-stepped read, and 3960's dish costs 8 gradient fills against
+3 unrefined.
 
-**Two things stop it landing, and both are in the commit message:**
+So the question to answer next is not "why did refinement break the merge"
+but **"what declares that 32 meridian strips are one surface"**. The one
+candidate set up and not tested: `shade._seam_edge_mask` matches a mesh edge
+that is only PART of a longer authored conditional line, and
+`smooth_subdivide` requires the condline to match a facet edge end to end.
+Whether that difference is what occt sees and the refiner does not is
+unmeasured.
 
-- `32062` loses an exact fill boundary to a sampled one
-  (`test_a_fill_boundary_carries_no_sampled_boundary`). A refined patch must
-  not displace an analytic surface that was already exact — gate the
-  subdivision off wherever `primitives.from_ref` already substituted one.
-- 4592 draws a black blob at the crown of the dome.
-
-`test_occt_segments_go_through_the_orphan_cull` also fails, but only because
-it counts 30162's ops and the mesh moved; re-baseline it, don't chase it.
-
-**Element count is the standing cost.** 38 → 81 on 4592. The new facets
-re-declare their own patch as condlines, without which the fill merge treats
-every sub-triangle as its own surface (38 → 405); with them it is 81, which
-is still twice what it should be. The merge is not collapsing the refined
-patch into one element the way it does an authored one — that is the next
-thing to look at.
+`render.pose_for` is on this branch too and is unrelated to any of the above:
+a sticker modelled as a flat sheet (thinnest extent under 1 LDU) is posed
+square onto its face rather than at iso. It does not make stickers render —
+003238a is still at the wrong scale under naive and raises "no edges" under
+occt, both pre-existing.
 
 **Dead ends, measured, do not re-propose:**
 
@@ -2040,3 +2053,24 @@ thing to look at.
   landed as `6f042c0`). 4592's one candidate run has no ellipse near it, and
   the gate that makes the pass safe elsewhere only accepts runs that were
   already smooth. It fires on 5 of 74 census parts for a sub-pixel change.
+- *Gating on `primitives.from_ref`.* The earlier handoff said to skip
+  refinement wherever an exact surface was already substituted. `from_ref`
+  substitutes NOTHING on 32062 — `out["analytic"]` is empty — so that gate
+  is a no-op on the part it was written for.
+- *Carrying the patch id from the refiner into `occt._group_planes`.* Tagging
+  each refined triangle with its patch and unioning faces by it took 4592
+  from 29 groups to 21, and the drawing was pixel-indistinguishable. It costs
+  a face-to-triangle mapping and a field on every plane face. The patches
+  have to get coarser before any of that pays.
+- *Blaming the cracks, `UnifySameDomain`, or vertex welding.* 28621's 64
+  unpaired condline edges are real boundaries, not cracks — the nearest
+  same-length edge is over 3 LDU away, and they carry one ancestor face with
+  refinement on and off alike. Disabling `UnifySameDomain` leaves the group
+  count at 15. Welding vertices at 2e-3 changes no patch on 28621, 4592 or
+  3960.
+
+The 128-face fill groups in an unrefined render are the **flat rings** — the
+caps, fan-triangulated and chained by the coplanar rule — not the curved
+wall. Anything comparing group counts before and after refinement has to
+separate the two, or it measures the caps and concludes something about the
+round.
