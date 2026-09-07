@@ -821,7 +821,16 @@ def _by_offset(items, tol=1e-9):
 def authored_loci(shape, out, right, up):
     """2D loci every drawable edge must lie on: type-2 lines (including the
     chains arcfit claimed), `edge` primitives, analytic creases, and condlines
-    that read as a silhouette."""
+    that read as a silhouette.
+
+    Tried and failed: skipping the primitives `shade.ink_prims` calls print
+    rather than relief. Its first rule is "color is not 16", and a printed
+    part whose BODY is authored in a color -- 9359 is a green brick with a
+    white TAXI print -- has every structural edge it owns caught by that,
+    which took the stud rims off 9359, 80400 and 6141p01. Naive needs the
+    rule because a substituted primitive there draws its own rim; nothing on
+    this side draws one, so there is no hoop to suppress.
+    """
     ax, ay = _screen_axes(right, up)
     loci = []
     for e in out.get("2", ()):
@@ -1561,12 +1570,14 @@ def _group_planes(shape, out, plane_by_idx):
 
 
 @timing.timed("faces")
-def ordered_faces(shape, proj, out=None):
+def ordered_faces(shape, proj, out=None, ellipses_out=None):
     """Every fill face of `shape`, in paint order, each curved one depth-probed
     against its own exact surface.
 
     `out` (the flattened part) supplies the type-5 conditional lines the
     planar-face grouping is keyed on; without it every plane tones alone.
+    `ellipses_out` collects the arc candidates a flat decal's circular
+    boundary recovers -- see `_with_decoration`.
     """
     from . import shade
     fmap = TopTools_IndexedMapOfShape()
@@ -1585,22 +1596,31 @@ def ordered_faces(shape, proj, out=None):
     if out is not None and plane_by_idx:
         _group_planes(shape, out, plane_by_idx)
         shade.attach_group_gradients(faces)
-    faces = _with_decoration(faces, out, proj)
+    faces = _with_decoration(faces, out, proj, own_occ, ellipses_out)
     zs = np.concatenate([f["zs"] for f in faces])
     zrange = float(zs.max() - zs.min()) or 1.0
     return shade.order_faces(faces, proj, 1e-3 * zrange, own_occ=own_occ)
 
 
 @timing.timed("decoration")
-def _with_decoration(faces, out, proj):
+def _with_decoration(faces, out, proj, own_occ=None, ellipses_out=None):
     """Print, back onto the body OCCT drew.
 
     A sewn solid carries no color: every face this module builds is stamped
     16, so a printed part came out blank while the same part through the
     faceted path came out printed. The decoration is not in the solid at all
-    -- it is in the source triangles, which is where naive reads it from too,
-    so the fix is to bring those faces along and let `unwrap_decoration` find
-    its carrier among OCCT's own planes.
+    -- it is in the source, which is where naive reads it from too, so the fix
+    is to bring those faces along and let `unwrap_decoration` bind them.
+
+    It arrives in two forms and both have to be read. Triangles carry their
+    own color. A SUBSTITUTED PRIMITIVE does not survive the sew at all: an
+    author partitions a wall into colored and color-16 sectors of the same
+    surface (3942bp01's 16 color-4 cone stripes), and UnifySameDomain merges
+    those sectors straight back into the wall they partition -- correctly, as
+    geometry. So the primitive list is the only place that color still exists,
+    and its faces are built here rather than read off the shape. 4,553 of the
+    library's 13,083 printed parts author some decoration this way and 202
+    author all of it that way.
 
     Only for a part the library describes as printed. Color alone says nothing
     -- an assembly's sub-parts each carry their own -- and running the carrier
@@ -1609,16 +1629,28 @@ def _with_decoration(faces, out, proj):
     """
     if out is None or not out.get("printed"):
         return faces
-    if not out.get("tri") or not out.get("tri_colors"):
-        return faces
     from . import shade
-    deco = [f for f in shade.faces_from_tris(
-                np.array(out["tri"]), proj, cond_edges=out.get("5"),
-                colors=out.get("tri_colors"))
-            if f.get("color", 16) != 16]
+    deco = []
+    if out.get("tri") and out.get("tri_colors"):
+        deco += [f for f in shade.faces_from_tris(
+                     np.array(out["tri"]), proj, cond_edges=out.get("5"),
+                     colors=out.get("tri_colors"))
+                 if f.get("color", 16) != 16]
+    prims = [p for p in out.get("analytic", ())
+             if getattr(p, "color", 16) != 16]
+    for f in shade.faces_from_analytic(prims, proj):
+        deco.append(f)
+        occ = f["prim"].occluder() if f.get("prim") is not None else None
+        if occ is not None and own_occ is not None:
+            own_occ[id(f)] = occ
     if not deco:
         return faces
-    return shade.unwrap_decoration(faces + deco, [], proj)
+    # carriers: the analytic list, not [] -- a decal on a cylinder or cone
+    # binds to nothing among OCCT's planes, and the unwrap is what dissolves
+    # the author's faceting. ellipses_out recovers a flat decal's circular
+    # boundary runs as arcs instead of the chords the author wrote.
+    return shade.unwrap_decoration(faces + deco, out.get("analytic", ()), proj,
+                                   ellipses_out=ellipses_out)
 
 
 def _negate_y(ops):
@@ -1782,11 +1814,20 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None):
             seen.add(k)
             ells.append(tuple(op[1:7]))
     proj = op_projection(right, up, fwd)
-    faces = ordered_faces(shape, proj, out)
+    decal_ells = []
+    faces = ordered_faces(shape, proj, out, ellipses_out=decal_ells)
     for cand in _boundary_conics(shape, proj):
         k = tuple(round(v, 4) for v in cand)
         if k not in seen:
             seen.add(k)
             ells.append(cand)
-    return VisResult(ops, bbox, s, faces=faces, analytic=(),
-                     ellipses=tuple(ells), proj=proj, sil_polys=polys)
+    # a flat decal's recovered circles carry their own (coarse) max step, so
+    # they are keyed and appended whole rather than through the 6-tuple path
+    for cand in decal_ells:
+        k = tuple(round(v, 4) for v in cand[:6])
+        if k not in seen:
+            seen.add(k)
+            ells.append(cand)
+    return VisResult(ops, bbox, s, faces=faces, analytic=out.get("analytic", ()),
+                     ellipses=tuple(ells), proj=proj, sil_polys=polys,
+                     tri=out.get("tri", ()), tri_colors=out.get("tri_colors", ()))
