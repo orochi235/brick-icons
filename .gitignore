@@ -22,3 +22,4 @@ corpus.db.ingest*
 # a part against an SVG's tens, so the library-scale slot is a gigabyte that
 # rebuilds from vendor/LDView.app in an hour.
 renders/**/*.png
+renders/**/*.webp
