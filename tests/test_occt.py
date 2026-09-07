@@ -77,6 +77,42 @@ def test_sheared_frame_is_rejected():
     assert occt.frame(P("cyli", R, np.zeros(3))) is None
 
 
+@pytest.mark.parametrize("kind", ["ring", "disc", "edge"])
+def test_a_planar_primitive_ignores_a_skew_axis_column(kind):
+    """A ring/disc/edge is entirely at local y=0, so the matrix's axis column
+    is not its geometry. 3820 caps its grip with two 2-4ring2 whose axis
+    column is 14 degrees off the plane, and rejecting them for it dropped both
+    rim annuli into tessellation."""
+    # the ring's own columns are orthonormal; only the unused axis is skew
+    R = np.array([[-2.0, 0.0, 0.0],
+                  [0.0, -1.0, -0.5008],
+                  [0.0, 0.0, 1.93629]])
+    f = occt.frame(P(kind, R, np.zeros(3)))
+    assert f is not None
+    _o, uh, ah, vh, ru, rv, _h, rh = f
+    assert (ru, rv) == pytest.approx((2.0, 2.0), rel=1e-5)
+    # the axis comes from the plane the primitive actually occupies
+    assert ah == pytest.approx(np.cross(uh, vh))
+    assert rh is True
+
+
+def test_a_planar_primitive_with_sheared_own_axes_is_still_rejected():
+    """Only the unused axis column is forgiven: u . v is the ring's own
+    geometry and a skew there is a real ellipse-plus-shear with no exact
+    counterpart."""
+    R = np.array([[1.0, 0.0, 0.3], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+    assert occt.frame(P("ring", R, np.zeros(3))) is None
+
+
+def test_the_grip_rims_of_3820_build_exact_faces(ldraw_dir):
+    """Both 2-4ring2 that cap the C-grip reach OCCT as annulus faces. With
+    them tessellated the cavity filled solid and no inner rim was drawn."""
+    out = occt.flatten_part("3820", ldraw_dir)
+    rings = [p for p in out["analytic"] if p.kind == "ring"]
+    assert len(rings) == 2
+    assert all(len(occt.occt_faces(p)) == 1 for p in rings)
+
+
 def test_cone_radii_are_n_plus_one_and_n_scaled():
     """conN is radius N+1 at the base tapering to N, BOTH in primitive units,
     so the matrix scale multiplies both. Using the scale directly as the outer

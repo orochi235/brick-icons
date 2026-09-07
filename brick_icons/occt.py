@@ -45,10 +45,15 @@ TOL = 1e-4
 ORTHO_TOL = 1e-4     # see frame(); measured noise floors are 1.2e-6 and 8.9e-6
 ROUND_TOL = 1e-4
 
+# every vertex of these sits at local y=0, so the matrix's axis column is not
+# their geometry and is not required to be square to it -- see frame()
+PLANAR_KINDS = ("edge", "disc", "ring")
+
 
 def frame(prim):
     """(origin, u_hat, a_hat, v_hat, radius_u, radius_v, height, right_handed),
-    or None if sheared.
+    or None if sheared. A planar primitive is judged on its own two columns
+    only, and takes its axis from the plane they span.
 
     ru != rv is an ellipse, not shear -- 50950's wall measures 68.3 x 84.9 at
     an orthogonality residual of exactly 0. Callers decide what to do with it;
@@ -64,6 +69,11 @@ def frame(prim):
     # built no face, so its wall was cracks and every band drew as a hoop.
     if not (abs(uh @ ah) < ORTHO_TOL and abs(vh @ ah) < ORTHO_TOL
             and abs(uh @ vh) < ORTHO_TOL):
+        # 3820 caps its grip with two 2-4ring2 whose axis column is 14 degrees
+        # off the ring's own plane. Nothing reads that column for a planar
+        # primitive, so the plane it spans is the axis.
+        if prim.kind in PLANAR_KINDS and abs(uh @ vh) < ORTHO_TOL:
+            return prim.t, uh, np.cross(uh, vh), vh, ru, rv, h, True
         return None
     rh = float(np.cross(uh, vh) @ ah) > 0
     return prim.t, uh, ah, vh, ru, rv, h, rh
