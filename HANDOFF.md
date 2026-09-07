@@ -247,10 +247,26 @@ mode is one part. Cite `=full`, or cite `tests/test_occt.py`.
 
 ### What is not done
 
-- **A translucent slot, both engines.** No such source exists, and **Mike has
-  not said which picture he means**: `--wireframe` (occlusion off, every hidden
-  edge drawn, no fills) and `--opacity 0.5` (fills go semi-transparent,
+- **A translucent slot, both engines. This is the only thing waiting on Mike,
+  and the only named item still unstarted.** No such source exists, and **he
+  has not said which picture he means**: `--wireframe` (occlusion off, every
+  hidden edge drawn, no fills) and `--opacity 0.5` (fills go semi-transparent,
   occlusion still applied) are different drawings. Ask before building.
+
+- **The island cull's 1.2% threshold is bounded on 22 specimens, not on the
+  library.** Across 133 candidate islands the rule drops nothing above 1.08% of
+  drawn extent and spares nothing below 6.99%, so it is not a marginal call
+  there -- but the specimen list is curated for curves and studs, not for small
+  features on big parts, which is the shape that would fall through. A
+  census-scale answer wants the same counter in `cull_orphan_runs` and a fleet
+  run, and the fleet is busy with r7 until 13:15.
+
+- **`3820`'s fix has an obvious next question nobody has asked yet.** `cyli`
+  and `con` still reject a skew axis, correctly, because there the axis is the
+  extrusion -- but 20 of 10126's cylinders are genuinely oblique and OCCT has
+  no exact counterpart for them. Whether an oblique cylinder is worth building
+  as a swept surface, or whether tessellating it is the right answer forever,
+  is undecided.
 
 - **`10126-unfilled-wedge`** in `tests/goldens/defects.toml`, filed
   naive-only. 20 of 10126's cylinders have a genuinely oblique axis and stay
