@@ -105,12 +105,22 @@ def _overlap_witness(pa, pb, ha=(), hb=(), grid=48):
         return None
     sx = (grid - 1) / (x1 - x0); sy = (grid - 1) / (y1 - y0)
 
+    def ring(r):
+        # A ring of under three points bounds no area, and PIL raises on one
+        # of under two rather than drawing nothing (28 census parts).
+        return [((q[0] - x0) * sx, (q[1] - y0) * sy) for q in r] \
+            if len(r) >= 3 else None
+
     def mask(p, holes):
         im = Image.new("1", (grid, grid), 0)
         draw = ImageDraw.Draw(im)
-        draw.polygon([((q[0] - x0) * sx, (q[1] - y0) * sy) for q in p], fill=1)
+        outer = ring(p)
+        if outer is None:
+            return np.zeros((grid, grid), bool)
+        draw.polygon(outer, fill=1)
         for h in holes:
-            draw.polygon([((q[0] - x0) * sx, (q[1] - y0) * sy) for q in h], fill=0)
+            if (r := ring(h)) is not None:
+                draw.polygon(r, fill=0)
         return np.array(im, bool)
 
     m = mask(pa, ha) & mask(pb, hb)

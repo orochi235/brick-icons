@@ -123,6 +123,18 @@ def test_overlap_witness_respects_holes():
     assert shade._overlap_witness(outer, other, ha=(hole,)) is None
 
 
+def test_overlap_witness_ignores_a_degenerate_hole():
+    """A one-point bore ring reached PIL and raised out of the whole render
+    (28 census parts, all pinned Technic). It bounds no area, so it takes
+    nothing away from the overlap."""
+    outer = np.array([(0, 0), (10, 0), (10, 10), (0, 10)], float)
+    other = np.array([(2, 2), (8, 2), (8, 8), (2, 8)], float)
+    plain = shade._overlap_witness(outer, other)
+    assert plain is not None
+    for bad in (np.array([(5, 5)], float), np.array([(5, 5), (6, 6)], float)):
+        assert shade._overlap_witness(outer, other, ha=(bad,)) == plain
+
+
 def test_apply_affine_remaps_holes():
     f = {"poly": np.array([(0, 0), (4, 0), (4, 4)], float),
          "holes": [np.array([(1, 1), (2, 1), (2, 2)], float)],
