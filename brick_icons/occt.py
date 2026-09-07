@@ -50,10 +50,30 @@ ROUND_TOL = 1e-4
 PLANAR_KINDS = ("edge", "disc", "ring")
 
 
+def diagonalize(U, V):
+    """(u_hat, v_hat, radius_u, radius_v, phase) for the ellipse traced by
+    cos t*U + sin t*V, whose U and V need not be square to each other.
+
+    A linear map sends the unit circle to an ellipse whatever the shear, so
+    the singular values of [U V] are its semi-axes and the left-singular
+    vectors its axis directions. `phase` carries the primitive's own parameter
+    onto that frame: t there is t + phase here, which is what keeps a sector
+    where the part put it.
+    """
+    W, S, Zt = np.linalg.svd(np.column_stack([np.asarray(U, float),
+                                              np.asarray(V, float)]),
+                             full_matrices=False)
+    ph = math.atan2(Zt[1, 0], Zt[0, 0])
+    if np.linalg.det(Zt) < 0:
+        # a reflection runs the sweep backwards; flipping v_hat turns it round
+        return W[:, 0], -W[:, 1], float(S[0]), float(S[1]), -ph
+    return W[:, 0], W[:, 1], float(S[0]), float(S[1]), ph
+
+
 def frame(prim):
-    """(origin, u_hat, a_hat, v_hat, radius_u, radius_v, height, right_handed),
-    or None if sheared. A planar primitive is judged on its own two columns
-    only, and takes its axis from the plane they span.
+    """(origin, u_hat, a_hat, v_hat, radius_u, radius_v, height, right_handed,
+    phase), or None if the axis is skew. A planar primitive is judged on its
+    own two columns only, and takes its axis from the plane they span.
 
     ru != rv is an ellipse, not shear -- 50950's wall measures 68.3 x 84.9 at
     an orthogonality residual of exactly 0. Callers decide what to do with it;
@@ -67,16 +87,26 @@ def frame(prim):
     # At 1e-6 this rejected 32 of 3942bp01's cones on residuals of 1.2e-6 --
     # float noise off accumulated subpart transforms, not shear. They then
     # built no face, so its wall was cracks and every band drew as a hoop.
-    if not (abs(uh @ ah) < ORTHO_TOL and abs(vh @ ah) < ORTHO_TOL
-            and abs(uh @ vh) < ORTHO_TOL):
+    ax_ok = abs(uh @ ah) < ORTHO_TOL and abs(vh @ ah) < ORTHO_TOL
+    ph = 0.0
+    if abs(uh @ vh) >= ORTHO_TOL:
+        # A shear WITHIN the cross-section is still an exact ellipse, so it is
+        # diagonalized rather than dropped -- 11090's tube wall is two 1-4cylo
+        # at 89.2 degrees, and rejecting them left the wall as neither a face
+        # nor triangles. A skew AXIS stays unrepresentable, because there the
+        # axis is the extrusion direction rather than a spare column.
+        if not (ax_ok or prim.kind in PLANAR_KINDS):
+            return None
+        uh, vh, ru, rv, ph = diagonalize(U, V)
+    if not ax_ok:
         # 3820 caps its grip with two 2-4ring2 whose axis column is 14 degrees
         # off the ring's own plane. Nothing reads that column for a planar
         # primitive, so the plane it spans is the axis.
-        if prim.kind in PLANAR_KINDS and abs(uh @ vh) < ORTHO_TOL:
-            return prim.t, uh, np.cross(uh, vh), vh, ru, rv, h, True
+        if prim.kind in PLANAR_KINDS:
+            return prim.t, uh, np.cross(uh, vh), vh, ru, rv, h, True, ph
         return None
     rh = float(np.cross(uh, vh) @ ah) > 0
-    return prim.t, uh, ah, vh, ru, rv, h, rh
+    return prim.t, uh, ah, vh, ru, rv, h, rh, ph
 
 
 def is_round(ru, rv):
@@ -99,19 +129,21 @@ def ellipse_axes(o, uh, vh, ru, rv):
     return ax2(o, w, vh), rv, ru, -math.pi / 2
 
 
-def ellipse_edge(o, uh, vh, ru, rv, ang):
+def ellipse_edge(o, uh, vh, ru, rv, ang, phase=0.0):
     a, maj, minr, ph = ellipse_axes(o, uh, vh, ru, rv)
     el = gp_Elips(a, float(maj), float(minr))
     if ang >= 2 * math.pi - 1e-9:
         return BRepBuilderAPI_MakeEdge(el).Edge()
-    return BRepBuilderAPI_MakeEdge(el, float(ph), float(ph + ang)).Edge()
+    s = ph + phase
+    return BRepBuilderAPI_MakeEdge(el, float(s), float(s + ang)).Edge()
 
 
-def elliptic_wall(o, uh, ah, vh, ru, rv, h, ang):
+def elliptic_wall(o, uh, ah, vh, ru, rv, h, ang, phase=0.0):
     """The lateral surface of an elliptical cylinder, which no BRepPrimAPI
     maker builds -- extrude the ellipse instead."""
     v = gp_Vec(*(float(x) for x in np.asarray(ah, float) * h))
-    prism = BRepPrimAPI_MakePrism(ellipse_edge(o, uh, vh, ru, rv, ang), v)
+    prism = BRepPrimAPI_MakePrism(
+        ellipse_edge(o, uh, vh, ru, rv, ang, phase), v)
     return TopoDS.Face_s(prism.Shape())
 
 
@@ -183,7 +215,7 @@ def occt_faces(prim):
     f = frame(prim)
     if f is None:
         return []
-    o, uh, ah, vh, ru, rv, h, rh = f
+    o, uh, ah, vh, ru, rv, h, rh, ph = f
     ang = sector_rad(prim)
     if not is_round(ru, rv):
         # Only cyli has a measured elliptical instance (50950). The rest would
@@ -191,17 +223,19 @@ def occt_faces(prim):
         if k != "cyli":
             return []
         try:
-            return [elliptic_wall(o, uh, ah, vh, ru, rv, h, ang)]
+            return [elliptic_wall(o, uh, ah, vh, ru, rv, h, ang, ph)]
         except Exception:
             return []
     r = ru
     # The axis sets the EXTRUSION direction, so it must always be +ah --
     # negating it to fix a left-handed sector sweep builds the cone/cylinder
     # backwards off its base plane, which reads as a gap between subparts.
-    # Handle the sweep by starting the x-direction at -ang instead.
+    # Handle the sweep by starting the x-direction where the sector does.
     zdir = ah
-    if not rh:
-        uh = math.cos(-ang) * np.asarray(uh, float) + math.sin(-ang) * np.cross(ah, uh)
+    start = ph if rh else ph + ang
+    if start:
+        uh = (math.cos(start) * np.asarray(uh, float)
+              + math.sin(start) * np.asarray(vh, float))
     try:
         # .Face() is the LATERAL surface; .Shape() would be a capped solid, and
         # LDraw's cyli/con are open tubes and skirts -- the caps are material
@@ -346,12 +380,15 @@ def authored_edges(out: dict, right, up):
         f = frame(prim)
         if f is None:
             continue
-        o, uh, ah, vh, ru, rv, _h, _rh = f
+        o, uh, ah, vh, ru, rv, _h, _rh, ph = f
         ang = sector_rad(prim)
         try:
             if not is_round(ru, rv):
-                hard.append(ellipse_edge(o, uh, vh, ru, rv, ang))
+                hard.append(ellipse_edge(o, uh, vh, ru, rv, ang, ph))
                 continue
+            if ph:
+                uh = (math.cos(ph) * np.asarray(uh, float)
+                      + math.sin(ph) * np.asarray(vh, float))
             circ = gp_Circ(ax2(o, ah, uh), float(ru))
             hard.append(BRepBuilderAPI_MakeEdge(circ).Edge()
                         if ang >= 2 * math.pi - 1e-9
@@ -689,7 +726,7 @@ def authored_loci(shape, out, right, up):
         f = frame(prim)
         if f is None:
             continue
-        o, uh, ah, vh, ru, rv, _h, _rh = f
+        o, uh, ah, vh, ru, rv, _h, _rh, _ph = f
         loc = _ell_locus(o, uh, vh, float(ru), float(rv), "line", ax, ay)
         if loc is not None:
             loci.append(loc)

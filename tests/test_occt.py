@@ -71,10 +71,61 @@ class P:
         self.sector, self.top, self.inner = sector, top, inner
 
 
-def test_sheared_frame_is_rejected():
-    """Non-orthogonal frames have no exact OCCT counterpart (5% of parts)."""
+def test_a_skew_axis_is_rejected():
+    """The axis column is the extrusion direction, so a cyli whose axis leaves
+    the cross-section plane is a swept surface OCCT has no maker for. A shear
+    WITHIN that plane is a different case entirely -- see below."""
     R = np.array([[1.0, 0.3, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
     assert occt.frame(P("cyli", R, np.zeros(3))) is None
+
+
+def _sheared_wall():
+    """11090's tube wall: 1-4cylo whose u and v columns sit 89.2 degrees
+    apart, with the axis exactly square to both."""
+    return np.column_stack([np.array([6.33731, 0.0, -6.25]),
+                            np.array([0.0, -20.0, 0.0]),
+                            np.array([6.33731, 0.0, 6.25])])
+
+
+def test_a_sheared_cross_section_is_diagonalized_not_dropped():
+    """A linear map sends a circle to an ellipse whatever the shear, so the
+    singular values of [u v] are exact semi-axes -- there is nothing to
+    approximate. Rejected, 11090's wall reached OCCT as neither a face nor
+    triangles, because flatten never loads a substituted primitive's mesh, and
+    the base drew hollow with the bore showing through it."""
+    f = occt.frame(P("cyli", _sheared_wall(), np.zeros(3), sector=90.0))
+    assert f is not None
+    _o, uh, _ah, vh, ru, rv, _h, _rh, ph = f
+    assert uh @ vh == pytest.approx(0.0, abs=1e-12)
+    assert (ru, rv) == pytest.approx((8.96231, 8.83883), rel=1e-5)
+    # the diagonalized frame retraces the primitive's own points: the sector
+    # rides along in `ph`, and dropping it swings the quarter 135 degrees.
+    th = np.linspace(0.0, math.radians(90.0), 64)
+    U, V = _sheared_wall()[:, 0], _sheared_wall()[:, 2]
+    assert np.cos(th)[:, None] * U + np.sin(th)[:, None] * V == pytest.approx(
+        np.cos(th + ph)[:, None] * ru * uh
+        + np.sin(th + ph)[:, None] * rv * vh, abs=1e-9)
+
+
+def test_an_unsheared_frame_carries_no_phase():
+    """ph is 0 for everything that already worked, so no sector moves."""
+    f = occt.frame(P("cyli", np.diag([4.0, 10.0, 5.0]), np.zeros(3)))
+    assert f[8] == 0.0
+
+
+def test_a_sheared_wall_builds_one_face():
+    """Area against the arc length of the primitive's OWN parameterization,
+    not of the diagonalized frame: a 90-degree span of an ellipse is a quarter
+    of its perimeter only when it is centered on an axis, and this one starts
+    at 135 degrees. Measuring the wall the other way hides a lost phase."""
+    R = _sheared_wall()
+    prim = P("cyli", R, np.zeros(3), sector=90.0)
+    faces = occt.occt_faces(prim)
+    assert len(faces) == 1
+    th = np.linspace(0.0, math.radians(90.0), 200001)
+    pts = np.cos(th)[:, None] * R[:, 0] + np.sin(th)[:, None] * R[:, 2]
+    arc = float(np.linalg.norm(np.diff(pts, axis=0), axis=1).sum())
+    assert _face_area(faces[0]) == pytest.approx(arc * 20.0, rel=1e-6)
 
 
 @pytest.mark.parametrize("kind", ["ring", "disc", "edge"])
@@ -89,19 +140,27 @@ def test_a_planar_primitive_ignores_a_skew_axis_column(kind):
                   [0.0, 0.0, 1.93629]])
     f = occt.frame(P(kind, R, np.zeros(3)))
     assert f is not None
-    _o, uh, ah, vh, ru, rv, _h, rh = f
+    _o, uh, ah, vh, ru, rv, _h, rh, _ph = f
     assert (ru, rv) == pytest.approx((2.0, 2.0), rel=1e-5)
     # the axis comes from the plane the primitive actually occupies
     assert ah == pytest.approx(np.cross(uh, vh))
     assert rh is True
 
 
-def test_a_planar_primitive_with_sheared_own_axes_is_still_rejected():
-    """Only the unused axis column is forgiven: u . v is the ring's own
-    geometry and a skew there is a real ellipse-plus-shear with no exact
-    counterpart."""
+def test_a_planar_primitive_with_sheared_own_axes_is_diagonalized():
+    """u . v is the ring's own geometry, and a shear there is an ellipse whose
+    axes are not the columns -- exact once you take the singular values, which
+    is what the axis column can never be."""
     R = np.array([[1.0, 0.0, 0.3], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
-    assert occt.frame(P("ring", R, np.zeros(3))) is None
+    f = occt.frame(P("ring", R, np.zeros(3)))
+    assert f is not None
+    _o, uh, ah, vh, ru, rv, _h, _rh, _ph = f
+    assert uh @ vh == pytest.approx(0.0, abs=1e-12)
+    assert (ru, rv) == pytest.approx((1.16119, 0.86119), rel=1e-4)
+    # the axis column is square to both here, so it stays the axis; the
+    # diagonalized pair may come out left-handed, which is what rh reports
+    assert ah == pytest.approx(np.array([0.0, 1.0, 0.0]))
+    assert abs(np.cross(uh, vh) @ ah) == pytest.approx(1.0)
 
 
 def test_the_grip_rims_of_3820_build_exact_faces(ldraw_dir):
@@ -498,6 +557,19 @@ def test_50950_wall_is_elliptical_and_reaches_the_shape(ldraw_dir):
     cylis = [p for p in out["analytic"] if p.kind == "cyli"]
     assert cylis, "50950 is expected to carry a cyli primitive"
     assert not any(occt.is_round(*occt.frame(p)[4:6]) for p in cylis)
+    assert GeomAbs_SurfaceType.GeomAbs_SurfaceOfExtrusion in _surface_types(
+        occt.build_shape(out))
+
+
+def test_11090_tube_wall_reaches_the_shape(ldraw_dir):
+    """The part-level consequence: both halves of the bar tube's wall build a
+    face, so the wall occludes the bore inside it."""
+    from OCP.GeomAbs import GeomAbs_SurfaceType
+    out = occt.flatten_part("11090", ldraw_dir)
+    walls = [p for p in out["analytic"]
+             if p.kind == "cyli" and np.linalg.norm(p.R[:, 0]) > 8.0]
+    assert len(walls) == 2, "11090's tube wall is two quarter cylinders"
+    assert all(len(occt.occt_faces(p)) == 1 for p in walls)
     assert GeomAbs_SurfaceType.GeomAbs_SurfaceOfExtrusion in _surface_types(
         occt.build_shape(out))
 
