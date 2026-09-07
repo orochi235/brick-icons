@@ -133,7 +133,12 @@ def main() -> int:
     ap.add_argument("--no-browser", dest="browser", action="store_false",
                     help="serve and wait for a page opened by hand")
     ap.add_argument("--timeout", type=float, default=0,
-                    help="seconds to wait for the page; 0 waits forever")
+                    help="seconds to wait for a batch; 0 waits forever")
+    ap.add_argument("--batch", type=int, default=200,
+                    help="parts per browser; a crash costs one batch, not the "
+                         "run")
+    ap.add_argument("--redo", action="store_true",
+                    help="re-render parts already in --out")
     args = ap.parse_args()
 
     if args.list:
@@ -145,16 +150,21 @@ def main() -> int:
         print("need --parts or --list", file=sys.stderr)
         return 2
 
-    Sink.parts, Sink.out = parts, Path(args.out)
-    Sink.px, Sink.angle = args.px, args.angle
+    out = Path(args.out)
+    Sink.out, Sink.px, Sink.angle = out, args.px, args.angle
+    asked = len(parts)
+    if not args.redo:
+        parts = [p for p in parts if not (out / f"{p}.png").is_file()]
     server = ThreadingHTTPServer(("127.0.0.1", args.port), Sink)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    print(f"sink on :{args.port}, {len(parts)} parts -> {Sink.out}", flush=True)
-    print(f"onto: plan 0/{len(parts)}", flush=True)
+    print(f"sink on :{args.port}, {asked - len(parts)} already drawn, "
+          f"{len(parts)} to draw -> {out}", flush=True)
+    print(f"onto: plan {asked - len(parts)}/{asked}", flush=True)
+    if not parts:
+        server.shutdown()
+        return 0
 
-    url = args.page or f"http://127.0.0.1:{args.port}/shot.html"
-    url += f"?sink=http://127.0.0.1:{args.port}"
-    proc = profile = None
+    exe = None
     if args.browser:
         exe = args.chrome or next((c for c in CHROME if Path(c).is_file()), None)
         if exe is None:
@@ -165,33 +175,54 @@ def main() -> int:
             print(f"{DIST / 'shot.html'} is missing; run `npm run build` in "
                   f"lab/, or pass --page", file=sys.stderr)
             return 2
-        # A throwaway profile: Chrome refuses a second headless run against a
-        # profile the user's own window already holds.
-        profile = tempfile.mkdtemp(prefix="shot-chrome-")
-        proc = subprocess.Popen(
-            [exe, *CHROME_FLAGS, f"--user-data-dir={profile}", url],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        print(f"chrome {proc.pid} on {url}", flush=True)
-    else:
-        print(f"open {url}", flush=True)
 
+    url = args.page or f"http://127.0.0.1:{args.port}/shot.html"
+    url += f"?sink=http://127.0.0.1:{args.port}"
+    size = max(1, args.batch)
+    batches = [parts[i:i + size] for i in range(0, len(parts), size)]
+    drawn = asked - len(parts)
+    bad = 0
     try:
-        ok = Sink.done.wait(args.timeout or None)
-    finally:
-        if proc is not None:
-            proc.terminate()
+        for bi, batch in enumerate(batches, 1):
+            # One browser per batch. A page that leaks or dies takes its batch
+            # with it and nothing else; the next run skips what is on disk.
+            Sink.parts, Sink.received = batch, 0
+            Sink.done.clear()
+            print(f"onto: item batch {bi}/{len(batches)} ({batch[0]})",
+                  flush=True)
+            proc = profile = None
+            if exe is not None:
+                # A throwaway profile: Chrome refuses a headless run against one
+                # the user's own window already holds.
+                profile = tempfile.mkdtemp(prefix="shot-chrome-")
+                proc = subprocess.Popen(
+                    [exe, *CHROME_FLAGS, f"--user-data-dir={profile}", url],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            else:
+                print(f"open {url}", flush=True)
             try:
-                proc.wait(10)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-        if profile:
-            shutil.rmtree(profile, ignore_errors=True)
+                ok = Sink.done.wait(args.timeout or None)
+            finally:
+                if proc is not None:
+                    proc.terminate()
+                    try:
+                        proc.wait(10)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                if profile:
+                    shutil.rmtree(profile, ignore_errors=True)
+            drawn += Sink.received
+            bad += len(batch) - Sink.received
+            if not ok:
+                print(f"batch {bi} timed out after {args.timeout}s with "
+                      f"{Sink.received}/{len(batch)}", file=sys.stderr)
+            print(f"onto: progress {drawn}/{asked}", flush=True)
+            if bad:
+                print(f"onto: failed {bad}/{asked}", flush=True)
+    finally:
         server.shutdown()
-    if not ok:
-        print(f"timed out after {args.timeout}s with "
-              f"{Sink.received}/{len(parts)}", file=sys.stderr)
-    print(f"done: {Sink.received}/{len(parts)}", flush=True)
-    return 0 if Sink.received == len(parts) else 1
+    print(f"done: {drawn}/{asked}, {bad} missing", flush=True)
+    return 0 if bad == 0 else 1
 
 
 if __name__ == "__main__":
