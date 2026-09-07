@@ -30,8 +30,7 @@ OUT_OF_SCOPE_CATEGORIES = ("Sticker", "|")
 SOURCES = ("naive", "occt", "decal", "ldview",
            "translucent-naive", "translucent-occt",
            "census-naive", "census-occt",
-           "census-white-naive", "census-white-occt",
-           "census-sticker-naive", "census-sticker-occt")
+           "census-white-naive", "census-white-occt")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
@@ -279,20 +278,6 @@ _CANONICAL = {
                           "--shade-style", "white", "--angle", "iso",
                           "--engine", "occt", "--line-width", "2",
                           "--silhouette-width", "2"],
-    # The sticker facet, drawn at the oracle's own strokeless config: unlike
-    # `white`, what makes it a facet is which parts it targets, not how they
-    # are drawn. Stickers sit in OUT_OF_SCOPE_CATEGORIES and the oracle census
-    # never reaches them, so it still needs a source of its own -- a row
-    # indexed as census-<engine> would land in the oracle's slot and read as
-    # a part the oracle drew.
-    "census-sticker-naive": ["--format", "svg", "--shading", "outline",
-                             "--shade-style", "flat3", "--angle", "iso",
-                             "--engine", "naive", "--line-width", "0",
-                             "--silhouette-width", "0"],
-    "census-sticker-occt": ["--format", "svg", "--shading", "outline",
-                            "--shade-style", "flat3", "--angle", "iso",
-                            "--engine", "occt", "--line-width", "0",
-                            "--silhouette-width", "0"],
 }
 
 
