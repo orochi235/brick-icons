@@ -12,11 +12,10 @@ all of them. **Stage explicit paths; never `git add -A` or `git commit -a`.**
 Confirm the branch before assuming it. `git log --oneline @{u}..HEAD` for what
 is unpushed; `git status --porcelain` for whose work is in flight.
 
-**`main` fails `tsc` right now and it is not the wall's fault.** Two `TS7053`
-errors in `lab/src/corpus/Lightbox.tsx`, a `string` indexing
-`Record<DefectStatus, CellBadge>`. That file is `brick-icons-37`'s live work and
-they have been told. Vitest is green because it does not typecheck -- run
-`npx tsc -b --noEmit` in `lab/` before believing a green suite.
+**Vitest does not typecheck, so a green suite is half an answer.** Run
+`npx tsc -b --noEmit` in `lab/` as well. `main` was red on
+`lab/src/corpus/Lightbox.tsx` for a while tonight and is clean again as of
+`931b342` -- the point is the habit, not that one break.
 
 **Nothing of the wall's is in flight.** Every change described below is
 committed. What is uncommitted in the tree belongs to other sessions.
@@ -44,11 +43,13 @@ committed. What is uncommitted in the tree belongs to other sessions.
   3820/2531/u9543; 10126 leaves a white wedge. Complete tori (36, u151) are
   fine, so the failing case is the OPEN ring.
 
-- **Badge artwork exists twice as of tonight.** The wall draws badges to canvas
-  through `drawBadge`; `brick-icons-37` is adding a DOM `BadgeSwatch` for the
-  lightbox. Two renderings of one design drift -- the corner-badge lean fixed
-  in `434cc2d` existed because the corner path and the strip path had already
-  drifted. Worth a shared source of truth for field, ink and mark.
+- **Badge artwork has one rendering, and it should stay that way.**
+  `931b342` put the detail views on `BadgeSwatch`, which is the canvas swatch
+  lifted out of `Legend.tsx` and draws through `drawBadge` like the wall does.
+  `drawBadge` now takes an optional `label`, stretching the disc to a stadium
+  with the word on its own field; no label is the old path exactly. Resist a
+  DOM reimplementation of any mark -- the corner-badge lean fixed in `434cc2d`
+  existed because the corner path and the strip path had already drifted.
 
 ## Superseded, 2026-09-06 late: occt only, and what is unverified
 
