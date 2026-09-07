@@ -1091,8 +1091,16 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
             from . import occt
         res = occt.visible_segments(out, right, up, render_px, cull=cull,
                                     fwd=fwd)
+        # A circle reaches here as contiguous spans -- 4740's outer rim as
+        # 225-360 plus 180-225 -- drawn as two strokes meeting at a seam that
+        # composites its antialiasing twice. Over 36 parts this drops 2,202
+        # drawn ops to 1,692. `eps` is divided by the fit scale because occt
+        # works in projected LDU where naive works in canvas px.
+        with timing.phase("dedupe"):
+            segs = dedupe_segments(res.segs, eps=0.05 / (res.s or 1.0),
+                                   keep_order=True)
         with timing.phase("arcfit"):
-            segs, sil_ells = arcfit.fit_silhouette_arcs(res.segs)
+            segs, sil_ells = arcfit.fit_silhouette_arcs(segs)
         if cull:
             with timing.phase("cull"):
                 segs = cull_orphan_runs(segs)
@@ -1142,15 +1150,24 @@ def _merge_intervals(iv, eps):
     return out
 
 
-def dedupe_segments(segs, eps=0.05):
+def dedupe_segments(segs, eps=0.05, keep_order=False):
     """Cull redundant drawn ops: collinear line spans on the same carrier
     line and arc spans on the same carrier ellipse are unioned per kind.
     LDraw subparts re-draw shared edges and rim circles many times over;
     after occlusion culling those survive as duplicate or overlapping
     elements. Exact duplicates collapse and abutting/overlapping spans merge
-    into one op; gaps (real occlusion breaks) are never bridged."""
+    into one op; gaps (real occlusion breaks) are never bridged.
+
+    `keep_order` returns the ops in the order they arrived and passes a span
+    that merged with nothing through as the op that ARRIVED, rather than
+    rebuilding it on its carrier. Both are no-ops for what this pass is for,
+    and both keep it from churning what `fill_ops` reads: the stroke list
+    decides where junction-lens pockets fall, and neither regrouping nor a
+    sub-0.001 rebuild is a change anyone asked for. Naive is byte-locked by
+    `tests/goldens/hashes.txt` and keeps the original behavior.
+    """
     lines, arcs, out = defaultdict(list), defaultdict(list), []
-    for op in segs:
+    for i, op in enumerate(segs):
         if len(op) == 5:
             op = ("line",) + tuple(op)
         if op[0] == "line":
@@ -1168,13 +1185,13 @@ def dedupe_segments(segs, eps=0.05):
             # distinct nearly-parallel lines must never share a key
             key = (kind, round(dxh * 1e3), round(dyh * 1e3), round(c * 1e3))
             t1, t2 = dxh * x1 + dyh * y1, dxh * x2 + dyh * y2
-            lines[key].append((min(t1, t2), max(t1, t2), dxh, dyh, c))
+            lines[key].append((min(t1, t2), max(t1, t2), dxh, dyh, c, op, i))
         elif op[0] == "arc":
             _, cx, cy, ux, uy, vx, vy, t0, t1, kind = op
             M = np.array([[ux, vx], [uy, vy]])
             det = M[0, 0] * M[1, 1] - M[0, 1] * M[1, 0]
             if abs(det) < 1e-9:
-                out.append(op)
+                out.append((i, op))
                 continue
             # carrier key: center + quadratic form (M M^T)^-1, invariant to
             # the (u, v) parametrization the drawing primitive happened to use
@@ -1188,27 +1205,33 @@ def dedupe_segments(segs, eps=0.05):
                 return math.degrees(math.atan2(d[1], d[0]))
             span = abs(t1 - t0)
             if span >= 359.9:
-                arcs[key].append((0.0, 360.0, op))
+                arcs[key].append((0.0, 360.0, op, i))
                 continue
             p0, p1 = polar(t0), polar(t1)
             if det * (1 if t1 >= t0 else -1) < 0:  # normalize to CCW polar
                 p0, p1 = p1, p0
             if p1 <= p0:
                 p1 += 360.0
-            arcs[key].append((p0, p1, op))
+            arcs[key].append((p0, p1, op, i))
         else:
-            out.append(op)
+            out.append((i, op))
     for key, spans in lines.items():
         kind = key[0]
-        _, _, dxh, dyh, c = spans[0]
+        _, _, dxh, dyh, c, _op, _i = spans[0]
         for a, b in _merge_intervals([s[:2] for s in spans], eps):
-            out.append(("line", dxh * a - dyh * c, dyh * a + dxh * c,
-                        dxh * b - dyh * c, dyh * b + dxh * c, kind))
+            src = [s for s in spans if a - eps <= s[0] and s[1] <= b + eps]
+            i = min((s[6] for s in src), default=len(segs))
+            if keep_order and len(src) == 1:
+                out.append((i, src[0][5]))
+                continue
+            out.append((i, ("line", dxh * a - dyh * c, dyh * a + dxh * c,
+                            dxh * b - dyh * c, dyh * b + dxh * c, kind)))
     for key, spans in arcs.items():
         kind = key[0]
         ref = spans[0][2]
         _, cx, cy, ux, uy, vx, vy, _, _, _ = ref
         Minv = np.linalg.inv(np.array([[ux, vx], [uy, vy]]))
+        i0 = min(s[3] for s in spans)
 
         def param(polar_deg):
             d = np.array([math.cos(math.radians(polar_deg)),
@@ -1218,17 +1241,22 @@ def dedupe_segments(segs, eps=0.05):
         # circular union: shift every span into [base, base+720) where base
         # is a gap edge, then merge linearly
         if any(b - a >= 360.0 for a, b in ((s[0], s[1]) for s in spans)):
-            out.append(("arc", cx, cy, ux, uy, vx, vy, 0.0, 360.0, kind))
+            out.append((i0, ("arc", cx, cy, ux, uy, vx, vy, 0.0, 360.0, kind)))
             continue
-        ivs = [(a % 360.0, a % 360.0 + (b - a)) for a, b, _ in spans]
+        ivs = [(a % 360.0, a % 360.0 + (b - a)) for a, b, _op, _i in spans]
         merged = _merge_intervals(ivs, eps)
         # rejoin a run that wraps past 360 onto the first run
         if len(merged) > 1 and merged[0][0] <= (merged[-1][1] - 360.0) + eps:
             merged[0][0] = merged[-1][0] - 360.0
             merged.pop()
         for a, b in merged:
+            src = [s for s in spans if a - eps <= s[0] and s[1] <= b + eps]
+            i = min((s[3] for s in src), default=i0)
             if b - a >= 359.9:
-                out.append(("arc", cx, cy, ux, uy, vx, vy, 0.0, 360.0, kind))
+                out.append((i, ("arc", cx, cy, ux, uy, vx, vy, 0.0, 360.0, kind)))
+                continue
+            if keep_order and len(src) == 1:
+                out.append((i, src[0][2]))
                 continue
             ta, tb = param(a), param(b)
             det = ux * vy - uy * vx
@@ -1238,8 +1266,10 @@ def dedupe_segments(segs, eps=0.05):
             else:
                 while tb >= ta:
                     tb -= 360.0
-            out.append(("arc", cx, cy, ux, uy, vx, vy, ta, tb, kind))
-    return out
+            out.append((i, ("arc", cx, cy, ux, uy, vx, vy, ta, tb, kind)))
+    if keep_order:
+        out.sort(key=lambda r: r[0])
+    return [op for _i, op in out]
 
 
 def fit_ellipses(ells, f, ox, oy):
