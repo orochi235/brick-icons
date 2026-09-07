@@ -5,12 +5,14 @@
 **occt is the engine from now on**, until Mike says otherwise. Say "on occt" in
 any report so a naive number is never mistaken for the current one.
 
-**Four other sessions share this exact working directory** -- `brick-icons-37`,
-`brick-icons-4b`, `brick-icons-1c` and `Status icon for thumbnails`. Same tree:
-their uncommitted edits appear in yours and `git switch` moves the branch under
-all of them. **Stage explicit paths; never `git add -A` or `git commit -a`.**
-Confirm the branch before assuming it. `git log --oneline @{u}..HEAD` for what
-is unpushed; `git status --porcelain` for whose work is in flight.
+**Several sessions share this exact working directory** -- `ListAgents`, or
+`node ~/.claude-msb/skills/pass-the-baton/baton.mjs successor --since 0`, for
+who is here right now; the roster turns over hourly, so do not trust a list
+written down. Same tree: their uncommitted edits appear in yours and
+`git switch` moves the branch under all of them. **Stage explicit paths; never
+`git add -A` or `git commit -a`.** Confirm the branch before assuming it.
+`git log --oneline @{u}..HEAD` for what is unpushed; `git status --porcelain`
+for whose work is in flight.
 
 **Vitest does not typecheck, so a green suite is half an answer.** Run
 `npx tsc -b --noEmit` in `lab/` as well. `main` was red on
@@ -19,6 +21,12 @@ is unpushed; `git status --porcelain` for whose work is in flight.
 
 **Nothing of the wall's is in flight.** Every change described below is
 committed. What is uncommitted in the tree belongs to other sessions.
+
+**`corpus.db` and `out/thumbs` are rebuilt and current, and neither is in
+git.** They already hold the sticker renders and the ldview slot, so a fresh
+ingest buys nothing -- and `scripts/census-ingest.sh 900` may be looping in
+another session, which is the one thing not to race. Check `pgrep -fl
+census-ingest` before starting one.
 
 **The `naive` render store is gone on purpose** (`6078305`), at Mike's ask. All
 49 of its parts are drawn by census slots too, so it covered nothing on its
@@ -30,16 +38,27 @@ were never tracked -- that reading cost a peer a false alarm.
 
 ### What is not done
 
-- **The sticker fallback.** The census settled at 1,027 drawn / 1,152 failed on
-  occt, and the failures are the engine correctly reporting parts that declare
-  no type-2 or type-5 line anywhere: 217 that declare none failed and none
-  drew; every one of the 85 that drew declares one. `43e09bd` is titled "draw
-  the parts that declare no edge of their own" -- **check what it actually
-  does before assuming the fallback shipped**, and re-run the sticker bucket if
-  it did. Seven parts declare an edge and still failed: `003497b`,
-  `003497bc01`, `004690a`, `163145bc01`, `163555bc01`, `162275dc01`,
-  `164325d`. Six of the seven are formed stickers or their flat siblings; that
-  is the class worth looking at, not the 217.
+- **The sticker fallback shipped and the bucket is re-run.** `43e09bd` draws a
+  part that declares no edge from HLR's sharp set; `cdb54ee` then stopped the
+  guard counting a type-5 condline as a declaration, which is what the seven
+  formed stickers and their hundred-odd composite siblings needed -- a condline
+  draws only where its two faces straddle the view, so on a flat plate seen
+  from outside none qualify and the part is left with no boundary at all. The
+  guard is now the absence of a type-2 alone. A part that declares a real
+  type-2 edge and still yields nothing still raises, on purpose.
+
+  Over the 2,701-part sticker corpus occt now draws **2,695**. Five are left
+  and they are a NEW class, not the old one -- do not read them as leftovers:
+  `4221407f`, `4510086c` and `6015425b` raise `ValueError: need at least one
+  array to concatenate`; `6342851a` still produces no edges; `6177970ec01`
+  died mid-render. Undiagnosed.
+
+  The fallback is byte-safe by control flow, not by luck: it is reachable only
+  where the old code raised. Measured twice, once after each guard, by
+  instrumenting `occt._undeclared_ops` over two dozen parts spanning the arc,
+  dish, fill and slow families -- 0 firings both times. Re-measure that way if
+  the guard moves again; a byte-diff against a worktree does not work here,
+  because the editable install beats `PYTHONPATH` and both sides run HEAD.
 
 - **A translucent slot, both engines.** No such source exists, and **Mike has
   not said which picture he means**: `--wireframe` (occlusion off, every hidden
@@ -58,6 +77,49 @@ were never tracked -- that reading cost a peer a false alarm.
   with the word on its own field; no label is the old path exactly. Resist a
   DOM reimplementation of any mark -- the corner-badge lean fixed in `434cc2d`
   existed because the corner path and the strip path had already drifted.
+
+## The census can stop a runaway now, and old failure rows cannot be trusted
+
+`18310b7`. A part that spends its life inside one OCP call -- OCCT's HLR does,
+for tens of minutes -- was unstoppable by every cap meant to stop it, and kept
+allocating meanwhile. studio reached 24.1 GB of 24.5 GB swap with one render at
+4.4 GB after 60 seconds and a batch's renders still alive 36 minutes into a
+300s cap.
+
+Three holes, each enough on its own:
+
+- `--timeout` arms `signal.setitimer`, whose handler runs only between
+  bytecodes. Sampling the biggest render put 1935 of 1935 samples inside a
+  single `cfunction_call` into OCP, under `HLRBRep_Data::NextEdge`. `Runner`
+  now has an `isolate` mode: the part renders in a forked child with its own
+  process group and the parent kills the **group** -- the group, because
+  `occt._unify_survives` forks a grandchild that outlives a kill aimed at its
+  parent and keeps rendering as an orphan.
+- `census-batch.sh`'s HARD watchdog had never once killed anything. `pgrep`
+  returns one pid per line and there are always at least two, so
+  `kill -9 "$py"` handed kill every pid as a single argument, which it rejects
+  outright into the `|| true`.
+- The watchdog also skipped every check when `.inflight` was missing, which is
+  exactly the orphan state: no part claimed, renders alive, nobody looking.
+
+**Memory has a cap for the first time, and it cannot be an rlimit.** Darwin
+accepts none -- `setrlimit(RLIMIT_AS)` and `setrlimit(RLIMIT_DATA)` both fail
+with EINVAL at every value, and `ulimit -d` the same. The parent prices the
+child's process group with `ps` and kills it past `--mem-gb`, 4 GB by default
+in the census. A healthy part on this corpus peaks under 1 GB.
+
+**So no `ProcessDied` count from before `18310b7` says what it appears to.**
+The runaways ran until the node was out of swap and macOS killed whatever it
+could reach; the row names whichever part held `.inflight`. Re-derive before
+quoting one.
+
+**A census job's `--out` carries the JSONLs and not the renders.** `KEEP`
+writes SVGs to `out/census/renders/<engine>` on the NODE, which no `--out`
+names, so they stay there and the part reads as `redraw` -- measured, no render
+-- forever. 1,039 sticker renders sat on msb-uai that way. The fix is a second
+fetch, not a re-render:
+`onto fetch msb-uai:brick-icons/out/census/renders/occt out/census/renders/occt`.
+Do it as part of every round.
 
 ## Superseded, 2026-09-06 late: occt only, and what is unverified
 
