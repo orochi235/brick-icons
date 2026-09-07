@@ -40,21 +40,50 @@ earlier decision here; `234100c` removed the `census-sticker-*` sources again.
 facet, so dropping the sources was the whole change and `out/census-sticker`
 files itself correctly.
 
-**What I changed but did NOT see working.** Everything below is test-verified
-and typechecks; I ran out of room to look at it. Check these first:
+**The wall is now eyeballed, not just tested.** The badge corner move, the
+Oswald captions and the badge sizes are all correct on screen at 200 px per
+cell. Two things came out of looking that the tests could not say:
 
-- **retired/replaced moved to the top-right corner**, outboard of the year,
-  which now sets to their left. Asserted in `paint.test.ts`, never eyeballed.
-- **Oswald on every thumbnail caption**, 500 for the part number and 300 for
-  the rest. `main.tsx` waits on `document.fonts` before mounting, because
-  canvas does not wait and the wall paints once.
-- **The vector ground is deliberately not the bakes' white.** Mike asked for the
-  legend border color; `--wzl-border` resolves to `#25272c` in dark mode, which
-  is the page background to within a shade and made thumbnails vanish, so it
-  reads `--wzl-gray-200` in either theme. **The cost is that a cell changes
-  shade as you cross the sprite/vector zoom threshold.** A test that used to
-  assert the two matched now asserts they differ. If the flicker is wrong, the
-  answer is to re-bake the sprites on the same gray, not to revert.
+- **The vector ground steps by 54 levels of luminance in one wheel notch.**
+  Cell `33303` reads `#ffffff` at 137 px and 151 px per cell, then `#c9cbcf` at
+  166 px; a retired cell goes `#ebebeb` to `#d1d1d3`. That is not a shade, and
+  an earlier draft of this section calling it one was wrong. The color itself is
+  right and deliberate -- `--wzl-gray-200` in either theme, never `--wzl-border`,
+  which is `#25272c` in dark mode and makes thumbnails vanish. The `#c9cbcf`
+  fallback in `vectorGround()` is that token's measured value, kept so a jsdom
+  or pre-paint call cannot silently pick something else; change one and change
+  the other. **Undecided: whether to re-bake the sprites on the same gray or
+  live with the step.** Reverting the color is not the answer.
+
+- **The Google Fonts link in `lab/corpus.html` is dead, but the font gate in
+  `main.tsx` is not.** Labkit ships `oswald-latin-variable.woff2` (200-700) and
+  that face serves both weights; all ten faces from the
+  `fonts.googleapis.com/css2?family=Oswald` stylesheet stay `unloaded`, in dev
+  and in `lab/dist`. Blocking googleapis and gstatic outright changes nothing on
+  the wall. The same dead link is in `badges.html` and `sticker-candidates.html`.
+  **Mike has not yet said to remove it.**
+
+  Removing it rests entirely on labkit shipping that face, so it is a claim
+  about a version, not a fact about the repo. `lab/package.json` pins
+  `^1.4.0`, which means a plain `npm install` can move it without anyone
+  deciding to. 1.4.2 was checked and leaves `dist/fonts/` and `styles.css`
+  byte-identical; a later bump that drops or renames the face would make the
+  removal wrong after the fact and every caption would fall back silently.
+  Re-check the face before bumping, not after.
+
+  Do not remove `thumbFontReady()` with it. Held the woff2 back 12 s and zoomed
+  to captions: with the gate stubbed out they draw in the fallback face and
+  **never repaint** -- the font arriving later changes zero pixels. With the gate
+  in place the mount waits and every caption is Oswald. A caption is drawn once
+  per zoom and keeps whatever face was loaded at that moment.
+
+**The wall opens far below every decoration threshold.** It refits to about
+6.5 px per cell; glyphs need 22, badges 56, captions 110, and the sprite-to-
+vector swap lands between 151 and 166. So an empty-looking wall is the default
+view, not a regression. One wheel notch is 1.1x regardless of `deltaY` and is
+anchored at the cursor -- which is how to crop the same cell at two zooms. About
+24 notches from refit to badges, 30 to captions, 34 to vector. `vectorGround()`
+caches on first call, so judge grounds after a full reload, never over HMR.
 
 **Two traps that cost real time tonight, both fixed, both worth knowing:**
 
