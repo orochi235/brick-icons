@@ -20,6 +20,12 @@ migrated and `out/thumbs/<slot>` is renamed, so nothing re-renders or
 re-bakes. Anything holding a slot name -- a script, a saved URL, a lab
 bookmark -- needs the new one.
 
+**An uncommitted `labelX` change in `lab/src/corpus/badges.ts` has no owner.**
+A badge with an empty disc takes the field's padding instead of a mark's width
+of room before its first glyph; an untracked `badges.png` sits beside it. It is
+in the shared tree, in nobody's commits, and two sessions have now guessed
+wrong about whose it is. Leave it alone or claim it in writing.
+
 **2,794 parts have no LDView render and 2,701 of them are stickers, and they
 work fine.** Sixteen of the missing rendered at 0.46s each on the first try,
 in color, artwork intact; 003238a's crown is on the slopboard. Every missing
