@@ -196,6 +196,42 @@ def annulus_face(origin, ah, uh, r_in, r_out, ang):
     return mf.Face()
 
 
+def _edge_ends(edge):
+    return (BRep_Tool.Pnt_s(TopExp.FirstVertex_s(edge)),
+            BRep_Tool.Pnt_s(TopExp.LastVertex_s(edge)))
+
+
+def elliptic_annulus(o, uh, vh, ru_in, rv_in, ru_out, rv_out, ang, phase=0.0):
+    """Planar elliptical disc/ring face, bounded by its own ellipses.
+
+    The radial ends of a sector are read off the arcs rather than recomputed:
+    ellipse_axes turns the frame a quarter turn when rv wins, and a second
+    derivation of that phase is a second place for it to be wrong.
+    """
+    eo = ellipse_edge(o, uh, vh, ru_out, rv_out, ang, phase)
+    if ang >= 2 * math.pi - 1e-9:
+        mf = BRepBuilderAPI_MakeFace(BRepBuilderAPI_MakeWire(eo).Wire(), True)
+        if ru_in > 1e-9:
+            wi = BRepBuilderAPI_MakeWire(
+                ellipse_edge(o, uh, vh, ru_in, rv_in, ang, phase)).Wire()
+            mf.Add(TopoDS.Wire_s(wi.Reversed()))
+        return mf.Face()
+
+    p0, p1 = _edge_ends(eo)
+    w = BRepBuilderAPI_MakeWire(eo)
+    if ru_in > 1e-9:
+        ei = ellipse_edge(o, uh, vh, ru_in, rv_in, ang, phase)
+        q0, q1 = _edge_ends(ei)
+        w.Add(BRepBuilderAPI_MakeEdge(p1, q1).Edge())
+        w.Add(ei)
+        w.Add(BRepBuilderAPI_MakeEdge(q0, p0).Edge())
+    else:
+        ctr = gp_Pnt(*map(float, o))
+        w.Add(BRepBuilderAPI_MakeEdge(p1, ctr).Edge())
+        w.Add(BRepBuilderAPI_MakeEdge(ctr, p0).Edge())
+    return BRepBuilderAPI_MakeFace(w.Wire(), True).Face()
+
+
 def _cone_radii(r, n):
     """(r_base, r_top) for a conN primitive: N+1 tapering to N, scaled by r."""
     return (n + 1.0) * r, n * r
@@ -218,14 +254,19 @@ def occt_faces(prim):
     o, uh, ah, vh, ru, rv, h, rh, ph = f
     ang = sector_rad(prim)
     if not is_round(ru, rv):
-        # Only cyli has a measured elliptical instance (50950). The rest would
-        # be guesswork, and occt_faces returning [] is the honest answer.
-        if k != "cyli":
-            return []
         try:
-            return [elliptic_wall(o, uh, ah, vh, ru, rv, h, ang, ph)]
+            if k == "cyli":
+                return [elliptic_wall(o, uh, ah, vh, ru, rv, h, ang, ph)]
+            if k in ("disc", "ring"):
+                n = float(prim.inner) if k == "ring" else 0.0
+                return [elliptic_annulus(o, uh, vh, n * ru, n * rv,
+                                         (n + 1.0) * ru, (n + 1.0) * rv,
+                                         ang, ph)]
         except Exception:
             return []
+        # An elliptical con is neither a gp_Cone nor an extrusion; nothing yet
+        # pins what it should be, so it stays [] -- see the test by that name.
+        return []
     r = ru
     # The axis sets the EXTRUSION direction, so it must always be +ah --
     # negating it to fix a left-handed sector sweep builds the cone/cylinder

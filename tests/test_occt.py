@@ -550,6 +550,42 @@ def test_elliptical_cone_is_not_guessed_at():
     assert occt.occt_faces(P("con", np.diag([4.0, 10.0, 5.0]), np.zeros(3))) == []
 
 
+def test_elliptical_disc_and_ring_build_planar_faces():
+    """Every non-round disc and ring used to return [], and 190085a -- oval
+    discs and an oval rim, no triangles at all -- drew literally nothing."""
+    disc = occt.occt_faces(P("disc", np.diag([4.0, 10.0, 5.0]), np.zeros(3)))
+    assert len(disc) == 1
+    assert _face_area(disc[0]) == pytest.approx(math.pi * 4.0 * 5.0, rel=1e-6)
+    ring = occt.occt_faces(P("ring", np.diag([4.0, 10.0, 5.0]), np.zeros(3),
+                             inner=2))
+    assert len(ring) == 1
+    assert _face_area(ring[0]) == pytest.approx(
+        math.pi * 4.0 * 5.0 * (3.0 ** 2 - 2.0 ** 2), rel=1e-6)
+
+
+def test_an_elliptical_sector_keeps_its_span():
+    """A quarter of an axis-aligned ellipse is a quarter of its area whichever
+    semi-axis is longer. ellipse_axes turns the frame when rv wins, so the
+    radial ends are read back off the arc instead of derived through that turn
+    a second time."""
+    for R in (np.diag([4.0, 10.0, 5.0]), np.diag([5.0, 10.0, 4.0])):
+        faces = occt.occt_faces(P("ring", R, np.zeros(3), sector=90.0, inner=2))
+        assert len(faces) == 1
+        assert _face_area(faces[0]) == pytest.approx(
+            math.pi * 4.0 * 5.0 * (3.0 ** 2 - 2.0 ** 2) / 4.0, rel=1e-6)
+
+
+def test_190085a_oval_discs_reach_the_shape(ldraw_dir):
+    """The part-level consequence: this sticker is primitives only, so with
+    its discs dropped the shape was the 0.25 LDU rim and nothing else."""
+    out = occt.flatten_part("190085a", ldraw_dir)
+    assert not out["tri"], "190085a is expected to carry no triangles"
+    planar = [p for p in out["analytic"] if p.kind in ("disc", "ring")]
+    assert planar and not any(occt.is_round(*occt.frame(p)[4:6]) for p in planar)
+    assert all(len(occt.occt_faces(p)) == 1 for p in planar)
+    assert occt.count_faces(occt.build_shape(out)) > 1
+
+
 def test_50950_wall_is_elliptical_and_reaches_the_shape(ldraw_dir):
     """The part-level consequence, not just the face builder."""
     from OCP.GeomAbs import GeomAbs_SurfaceType
