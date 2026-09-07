@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -31,6 +32,16 @@ sys.path.insert(0, str(ROOT))
 from brick_icons import db  # noqa: E402
 
 BUCKETS = ("drawn", "never", "errored")
+DEGENERATE = ROOT / "tests" / "goldens" / "degenerate-parts.toml"
+
+
+def degenerate() -> set[str]:
+    """Parts that take the node down rather than failing. Excluded by default:
+    the per-part memory cap cannot save a machine that stops scheduling."""
+    if not DEGENERATE.is_file():
+        return set()
+    with DEGENERATE.open("rb") as fh:
+        return {e["id"] for e in tomllib.load(fh).get("part", [])}
 
 
 def scope(conn, engine: str) -> dict[str, list[str]]:
@@ -60,12 +71,22 @@ def main() -> int:
     ap.add_argument("--per-batch", type=int, default=12)
     ap.add_argument("--only", choices=BUCKETS, action="append",
                     help="keep just these buckets (repeatable)")
+    ap.add_argument("--include-degenerate", action="store_true",
+                    help="put the node-killers back in; see "
+                         "tests/goldens/degenerate-parts.toml")
     args = ap.parse_args()
 
     with db.connect(args.db) as conn:
         buckets = scope(conn, args.engine)
     keep = args.only or list(BUCKETS)
     ids = [pid for b in BUCKETS if b in keep for pid in buckets[b]]
+    if not args.include_degenerate:
+        bad = degenerate()
+        dropped = [p for p in ids if p in bad]
+        ids = [p for p in ids if p not in bad]
+        if dropped:
+            print(f"  degenerate {len(dropped):5}  (dropped: "
+                  f"{', '.join(dropped[:6])})", flush=True)
 
     for b in BUCKETS:
         mark = "" if b in keep else "  (dropped)"
