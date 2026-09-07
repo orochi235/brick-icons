@@ -98,10 +98,12 @@ def main() -> int:
                     isolate=args.isolate, mem_gb=args.mem_gb)
     before = len(parts)
     parts = runner.remaining(parts)
-    print(f"resuming: {before - len(parts)} done, {len(parts)} left", flush=True)
-    print(f"onto: plan {before - len(parts)}/{before}", flush=True)
+    done = before - len(parts)
+    print(f"resuming: {done} done, {len(parts)} left", flush=True)
+    print(f"onto: plan {done}/{before}", flush=True)
 
     n = len(parts)
+    bad = 0
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         for i, part in enumerate(parts, 1):
@@ -111,9 +113,16 @@ def main() -> int:
             if "error" in r:
                 print(f"{i}/{n} {part} FAILED {r['error']} [{r.get('secs')}s]",
                       flush=True)
+                bad += 1
             else:
                 print(f"{i}/{n} {part} {r['sha'][:12]} {r['ink_px']}px "
                       f"[{r['secs']}s]", flush=True)
+            # The line above is for a human reading the log; these are the ones
+            # onto reads. Without them the worker's bar sits at 0 of its whole
+            # batch for the hour it takes, beside a tail line counting up.
+            print(f"onto: progress {done + i}/{before}", flush=True)
+            if bad:
+                print(f"onto: failed {bad}/{before}", flush=True)
     return 0
 
 
