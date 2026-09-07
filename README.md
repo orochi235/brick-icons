@@ -66,6 +66,9 @@ weights, and opacities — including a printed part, whose decoration keeps its
 own LDraw colors, and a strokeless fills-only render (zero stroke widths). Hover any icon for its exact command, or regenerate them
 all with `scripts/render-gallery.sh`.*
 
+Changing the code rather than using it? See [DEVELOPING.md](DEVELOPING.md) for
+the pipeline, the layout, the lab, the census and the test gates.
+
 ## Setup (macOS)
 
     python3 -m venv .venv && .venv/bin/pip install -e .
