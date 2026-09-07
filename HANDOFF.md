@@ -1,5 +1,54 @@
 # Handoff — `main`: the corpus lab, and the OCCT engine
 
+## In flight: the naive retry pass, and two slots that do not exist yet
+
+**`census-white-naive-r3` is running on msb-uai** (job `3aba42c8`, 1,800 parts
+in 150 batches, 6 workers, 300s cap, 12h deadline, fresh directory
+`out/census-white/r3`). `onto fetch --stream --every 10m census-white-naive-r3`
+is collecting into `out/census-white-naive/r3`. It is the `fails` bucket from
+`census-coverage.py --facet white`, re-run at an engine that is 4-22x faster on
+the geometry phase; the first parts are landing at 13-120s where they hit the
+300s cap before, with no timeouts yet. Run a round through the `census-round`
+skill, which holds the traps.
+
+**occt's 698 remaining parts have no node.** studio is running another
+session's `census-sticker-naive-studio`, and a working tree takes one job at a
+time. keiei has 6 of 24G free against ~2.3G per worker. That bucket is the one
+that proves `00f4e32` at scale: 149 of its rows are ProcessDied, and 57 of
+those are the segfault that commit now survives.
+
+**Two slots Mike asked for, neither built:**
+
+- **`ldview`** is already in `db.SOURCES` and `_CANONICAL`, and the wall builds
+  its slot list from `renders` rows, so nothing needs designing -- the store
+  simply has no ldview rows. One bug is in the way: `build-render-store.py`
+  hardcodes `dest = renders/<source>/<part>.svg`, and LDView emits a raster.
+- **transparent, both engines** -- no such source exists. It needs
+  `translucent-naive`/`translucent-occt` in `SOURCES` and `_CANONICAL`, and
+  **Mike has not said which picture he means**: `--wireframe` (occlusion off,
+  every hidden edge drawn, no fills) and `--opacity 0.5` (fills go
+  semi-transparent, occlusion still applied) are different drawings. Ask before
+  building.
+
+**Filed but uncommitted:** `3820-c-grip-fills-solid` and `10126-unfilled-wedge`
+in `tests/goldens/defects.toml`, beside Mike's own uncommitted
+`3484-occt-handle-missing-arcs-extra`. An open C-shaped grip fills its cavity
+solid on 3820/2531/u9543; 10126 leaves a white wedge. Complete tori (36, u151)
+are fine, so the failing case is the OPEN ring.
+
+**Landed today:** `f224fdf` + `b86e88c` (TriangleOccluder vectorized, then
+culled by the ray chunk's screen box -- 3.8x at 304 tris to 21.7x at 4,240,
+interleaved), `a2d43dc` (`measurements.build`, schema 5), `533c47a` (the
+`census-round` skill), `00f4e32` (the UnifySameDomain segfault guard). Every
+one gated byte-identical on the 22 specimens.
+
+**Measurement discipline, learned the hard way today:** never quote a speedup
+from sequential runs -- alternate the order and take the min per side -- and
+`measurements.secs` is the whole oracle pass, not the geometry phase, so a
+geometry speedup does not divide into it. `2613aeb` added
+`measurements.phases`, which makes that unmixable.
+
+
 On **`main`**, pushed through `6a780c5`, with the goldens re-freeze, its
 crash fix, and the whole `labkit/annotations-arc-5` arc committed on top and
 unpushed. A plain `pytest`
@@ -30,6 +79,86 @@ rendering `3649` at the same moment, and two of those at once is what the
 machine will not carry. A `--only <case>` loop over the 52 ids finished every
 time, and prints per-case timings worth keeping (`outline-flat3__3649` 330s,
 `4740p03` 114s, `outline__3649` 230s; everything else under 25s).
+
+## The wall, 2026-09-06 evening: what landed and what Mike still owes an answer on
+
+All merged to `main`; `git log --oneline @{u}..HEAD` shows the unpushed run.
+Nothing here is in flight -- this section exists for the decisions, which are
+not recoverable from the diff.
+
+**Stickers are their own thing now.** `6881734` stops `tags_for` calling a
+sticker printed: `partindex.printed` reads "pattern" *or* "sticker" out of the
+description, so all 2,701 sticker parts wore the printed badge. The LDraw
+category wins where it applies, and the two never both show.
+
+**The sticker badge is `239406c`.** The disc *is* the sticker and its corner
+lifts off the print. Three decisions in it that the code cannot tell you:
+
+- **POLICE, not flames, M:Tron, skull or a shield** -- Mike picked it off a
+  candidate sheet. `flames` (the fire emblem off sticker `004659a`) is kept as
+  the alternative and `lab/sticker-candidates.html` compares the two; swapping
+  `mark` on the badge in `paint.ts` is the whole change. The other fifteen
+  candidates were deleted.
+- **Outlines, never a webfont.** Mike's call, and it is the right one: no font
+  to ship, no race between first paint and the font landing, no fallback face
+  setting the word at another width.
+- **Navy, not the shared property field**, because a sticker is a thing you
+  apply rather than a fact about the moulding.
+
+**Centering a badge face means centering its drawn box.** Not its area
+centroid, and never the ink left showing after the fold. I got this wrong twice
+and Mike caught both: correcting for what the flap covers put POLICE a fifth of
+a unit right of where it belonged. A traced face is already centered by the
+trace -- all six measured [-0.002, -0.002] -- so only type needs a nudge,
+because a baseline is not the cap-height center. `FACE_NUDGE` carries the
+measurement and its reasoning.
+
+**Trace artwork, do not draw it from memory.** The M:Tron, Blacktron and
+Exploriens marks I first drew were wrong, and Mike said so. `brick-icons decal
+<part>` unwraps a printed part's decoration flat, and the library has the real
+thing: `3068bp68` (M:Tron), `2408p01` (Blacktron II), `2335p05` (Jolly Roger),
+`168135h` (the City fire shield), `003238c` (a Maltese cross), `3004p21` (the
+police star badge on sheet 22637), `004659a` (the fire emblem). Union the
+colored subpaths, weld hairlines with a dilate/erode, simplify, normalize on
+the bounding box.
+
+**Open, and Mike's to answer: should the legend count what is shown?** It
+counts all 24,591 library parts, not the 23,432 the filter leaves on the wall,
+so "19,928 unknown" is real but is mostly the 13,083 printed parts the census
+never targets. The state rows clearly should follow `shown`. The tag rows are
+the awkward half -- they are also filters, so counting them over `shown` means
+picking `technic` zeroes every other tag and you cannot see what else is worth
+adding. The sidebar's category counts already dodge this deliberately; there is
+a comment saying so.
+
+**Open, never started:** better part-year data. We use Rebrickable dumps via
+`scripts/fetch-part-years.py`. Mike trusts Brick Architect most but will not
+scrape the site without a published digest -- check BrickLink's and Brickset's
+APIs, Rebrickable's API against its dumps, and whether Brick Architect
+publishes an export at all.
+
+**occt renders decals now** (`4b80035`, gated by `cd7ce2c`). Mike was asked
+whether occt should do this corpus-wide and answered that there is no reason
+not to; the question was badly framed. The real constraint was only timing --
+do not change the engine under a running census. The gate is the same test
+`partindex` classifies the corpus with, because color-other-than-16 is not a
+print signal: every sub-part of an assembly carries its own, and running the
+carrier search over `604ac01` cost 6.8s of its 8.8s geometry phase to draw
+decoration it does not have.
+
+**Also landed:** `f5538b1` hovering a legend tag dims the wall like a hovered
+state; `d19f4e4` params moved into the sidebar and the part card leads with its
+render; `259ea5f` params rows are full-width (a row's label and readout share
+one `nowrap` flex line whose text is an *anonymous* item, so a long label
+cannot be shrunk from outside the component); `78aea11` a legend toggle in the
+topbar and cmd-0 to refit; `d2b9fb2` a zoom keeps the card the pointer is over,
+and a jump lands centered at half the viewport height.
+
+**Staging in this tree needs care.** Three or four sessions share it. My
+`paint.ts` change had to be staged apart from another session's in-flight
+badges/captions work: build your hunks on top of `git show HEAD:<file>`, then
+`git hash-object -w` and `git update-index --cacheinfo 100644,<blob>,<path>`.
+Their `paint.test.ts` failures are theirs; the corpus suite is otherwise green.
 
 ## High priority: decals on the occt path
 
