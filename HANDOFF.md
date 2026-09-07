@@ -1,6 +1,56 @@
 # Handoff — `main`: the corpus lab, and the OCCT engine
 
-## Read first, 2026-09-06 late: occt only, and what is unverified
+## Read first, 2026-09-07 early: occt only, and where the wall stands
+
+**occt is the engine from now on**, until Mike says otherwise. Say "on occt" in
+any report so a naive number is never mistaken for the current one.
+
+**Four other sessions share this exact working directory** -- `brick-icons-37`,
+`brick-icons-4b`, `brick-icons-1c` and `Status icon for thumbnails`. Same tree:
+their uncommitted edits appear in yours and `git switch` moves the branch under
+all of them. **Stage explicit paths; never `git add -A` or `git commit -a`.**
+Confirm the branch before assuming it. `git log --oneline @{u}..HEAD` for what
+is unpushed; `git status --porcelain` for whose work is in flight.
+
+**`main` fails `tsc` right now and it is not the wall's fault.** Two `TS7053`
+errors in `lab/src/corpus/Lightbox.tsx`, a `string` indexing
+`Record<DefectStatus, CellBadge>`. That file is `brick-icons-37`'s live work and
+they have been told. Vitest is green because it does not typecheck -- run
+`npx tsc -b --noEmit` in `lab/` before believing a green suite.
+
+**Nothing of the wall's is in flight.** Every change described below is
+committed. What is uncommitted in the tree belongs to other sessions.
+
+### What is not done
+
+- **The sticker fallback.** The census settled at 1,027 drawn / 1,152 failed on
+  occt, and the failures are the engine correctly reporting parts that declare
+  no type-2 or type-5 line anywhere: 217 that declare none failed and none
+  drew; every one of the 85 that drew declares one. `43e09bd` is titled "draw
+  the parts that declare no edge of their own" -- **check what it actually
+  does before assuming the fallback shipped**, and re-run the sticker bucket if
+  it did. Seven parts declare an edge and still failed: `003497b`,
+  `003497bc01`, `004690a`, `163145bc01`, `163555bc01`, `162275dc01`,
+  `164325d`. Six of the seven are formed stickers or their flat siblings; that
+  is the class worth looking at, not the 217.
+
+- **A translucent slot, both engines.** No such source exists, and **Mike has
+  not said which picture he means**: `--wireframe` (occlusion off, every hidden
+  edge drawn, no fills) and `--opacity 0.5` (fills go semi-transparent,
+  occlusion still applied) are different drawings. Ask before building.
+
+- **`3820-c-grip-fills-solid` and `10126-unfilled-wedge`** in
+  `tests/goldens/defects.toml`. An open C-shaped grip fills its cavity solid on
+  3820/2531/u9543; 10126 leaves a white wedge. Complete tori (36, u151) are
+  fine, so the failing case is the OPEN ring.
+
+- **Badge artwork exists twice as of tonight.** The wall draws badges to canvas
+  through `drawBadge`; `brick-icons-37` is adding a DOM `BadgeSwatch` for the
+  lightbox. Two renderings of one design drift -- the corner-badge lean fixed
+  in `434cc2d` existed because the corner path and the strip path had already
+  drifted. Worth a shared source of truth for field, ink and mark.
+
+## Superseded, 2026-09-06 late: occt only, and what is unverified
 
 **occt is the engine from now on**, until Mike says otherwise. He said so while
 redirecting msb-uai off a naive retry pass. naive is the reference
