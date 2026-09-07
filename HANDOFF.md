@@ -1733,9 +1733,19 @@ back 5-20x inflated (6046 at 233s against an expected 9s). Quote it as "above
 
 Next, in order:
 
-- The dashboard wants the stacked phase chart. `scripts/census-plot-phases.py`
-  builds it today as a matplotlib PNG from a 32-part probe file; with `phases`
-  in the DB it should read live rows instead. That is the open request.
+- **Done** (`7210ab3`): the dashboard draws the phase chart from live rows, under
+  "Where the time goes". Two bars per engine, because `render` is the parent of
+  geometry / decoration / fill and only 1,019 of occt's 8,446 timed parts were
+  measured after `brick_icons.timing` existed -- the split gets its own n and
+  its own bar. Mixing them puts the un-instrumented rows' whole render into the
+  leftover band: 90% against 1% once separated. `scripts/census-plot-phases.py`
+  still runs over a probe file and is now superseded by the page.
+
+  **What it says, and it is not what we assumed:** over the instrumented rows,
+  `fill` is 70% of a naive render and 67% of an occt one, against geometry's 29%
+  and 23%. The geometry prefilters landed on the smaller half. Treat that as a
+  steer, not a headline -- the instrumented rows are whatever ran most recently,
+  not a sample of the corpus.
 - What is left in `order_faces` is the pairs that genuinely overlap — 25,585 on
   10039 at ~350us each, rasterizing two 48x48 polygons per pair. Cutting it
   means changing which point inside the overlap is the witness, which is not
