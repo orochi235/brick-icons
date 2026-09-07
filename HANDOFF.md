@@ -64,6 +64,32 @@ needs the same counter and a fleet run.
 session's: `brick_icons/lab/defects.py` rewrites the whole file on every filing
 from the lab UI. Do not commit it.
 
+### The split-arc class is a naive-only defect, and occt already draws it right
+
+Started, not finished. `4524-ring-whole-circle` / `27448` / `30152a` are filed
+`engines = ["naive"]`, and an LDView A/B at iso says that is the whole story:
+naive draws 4524 as a phantom raised collar — four concentric ellipses, the
+bore's bottom rim nearly whole and offset well below the top rim — where LDView
+has a flat plate whose hole shows one thin crescent of far inner wall. occt
+draws it essentially as LDView does. Since occt is the engine of record, this
+class is worth much less than three filed entries suggest; the entries predate
+the occt switch. Picture is on the slopboard, `brick-icons` zone.
+
+Naive's arc ops for 4524: two full ellipses at cy 414 (the top face's bore rim
+and outer rim — correct, that face is wholly visible) and partials at cy 500
+(146 deg) and cy 580 (261 deg). So `dedupe_segments` is not unioning spans into
+a whole circle; the underside rims survive occlusion they should not, and the
+"whole circle" reading in the entry is a symptom rather than the rule. Anyone
+picking this up should re-file it against what the A/B shows, or close it as
+naive-only.
+
+**The one thing both engines get wrong is a stray tick inside the bore** — a
+short mark across the hole on 4524, on naive and occt alike. That is the same
+shape as `30152a-annulus-dots`, which was deliberately filed apart from the
+split-arc entry on the same part. That separation looks right, and the tick is
+the part of the class that survives the engine switch. It is the piece worth
+taking.
+
 ### The census's failure rows are stale, and "stale" is not "fine"
 
 Latest run per part, on occt: TimeoutError 413, ProcessDied 243, TypeError 29,
