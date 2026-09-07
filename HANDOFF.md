@@ -35,6 +35,14 @@ about four minutes), fetched, indexed, and the thumbnails re-baked. Four parts
 at a file that was gone, so they were not in the missing list either; drawn by
 hand and now present.
 
+**`census-ingest.sh` rebuilds `corpus.db` every 900s and it is the authority.**
+It rebuilt three minutes after the hand ingest and replaced it, keeping the
+24,002 files that were on disk when its scan started and dropping the 589 that
+the final fetch delivered mid-rebuild. Nothing was lost -- the files are the
+truth and its next pass indexes them -- but a hand ingest races it, so either
+index into it or wait a pass and check, rather than trusting a count taken a
+minute after a swap.
+
 ## Defect sweep, 2026-09-07 midday: the borehole class closed, and where the rest stand
 
 `b350c40` closes "something occluded is drawn anyway" on occt. **HLR reads a
