@@ -224,7 +224,18 @@ stands. Diagnosed independently by two sessions.
 **What it does NOT close: `_refine_order_clips` is one-directional.** It hands
 back area a face wrongly lost and there is no pass that takes away area a face
 wrongly kept, so any other cycle break that drops a constraint still leaves
-ink with nothing downstream to remove it.
+ink with nothing downstream to remove it. No part shows it right now, so it is
+here rather than in `defects.toml`.
+
+**Two rows filed off the back of it, both `35480`, both open.**
+`35480-bore-reads-flat` is the one that needs Mike: looking down a stud the
+tube has no depth because `max(0.0, n . L)` in `shade._axis_binned_stops`
+floors every bin past the terminator, and looking down a bore puts the
+terminator mid-span. Fixing it is a lighting-model change and moves every
+render in the corpus, so it is his call, like the constant stroke width --
+check a Technic pin hole first to scope it. `35480-wall-fill-hairline` is the
+visible fill-fragment seam on the plate's outer wall; `f832da6` moved it one
+pixel without touching it, which is what makes it worth a row.
 
 `11090-curved-lower-face-in-occt` and `11090-hand-at-top-is-missing` are
 `9fdfb72`'s alone (the sheared cross-section), pixel-identical under this fix

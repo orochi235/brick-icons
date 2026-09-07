@@ -9,6 +9,10 @@ import type { PartDetail } from '@lab/corpus/types';
 import { STATUS_BADGES } from '@lab/defects/statusBadges';
 import '@lab/corpus/Lightbox.css';
 
+function renderSrc(partId: string, slot: { source: string; sha256: string }) {
+  return `/api/corpus/render/${slot.source}/${partId}.svg?v=${slot.sha256.slice(0, 8)}`;
+}
+
 /** A defect's status where it is read rather than set: the same badge shape
  *  the tag row uses, so the two read as one kind of thing. A status the page
  *  does not know stays a word. */
@@ -114,13 +118,21 @@ export function Lightbox({ partId, source, client, onClose }: {
               <li key={slot.source} className="corpus-slot"
                   data-current={slot.source === shown}
                   data-retired={(detail.part.tags ?? []).includes('retired')}>
-                <label className="corpus-slot-pick">
+                {/* Capture, and stopped there: React derives a radio's onChange
+                    from the same click, so a bubble-phase handler cannot keep
+                    the shift-click from also picking the slot. */}
+                <label className="corpus-slot-pick" title="Shift-click to open this render in a new tab"
+                       onClickCapture={(e) => {
+                         if (!e.shiftKey) return;
+                         e.preventDefault();
+                         e.stopPropagation();
+                         window.open(renderSrc(detail.part.id, slot), '_blank', 'noopener');
+                       }}>
                   <input type="radio" name="corpus-slot-shown" aria-label={slot.source}
                          className="corpus-slot-radio" checked={slot.source === shown}
                          onChange={() => setShown(slot.source)} />
                   <img className="corpus-big" alt={`${detail.part.id} drawn by ${slot.source}`}
-                       src={`/api/corpus/render/${slot.source}/${detail.part.id}.svg`
-                            + `?v=${slot.sha256.slice(0, 8)}`} />
+                       src={renderSrc(detail.part.id, slot)} />
                   <span className="corpus-slot-name">{slot.source}</span>
                 </label>
               </li>

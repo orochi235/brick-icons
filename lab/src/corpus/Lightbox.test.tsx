@@ -52,6 +52,18 @@ it('picks a different slot without the wall having moved', async () => {
   expect([...current].map((el) => el.textContent)).toEqual(['silhouette-occt']);
 });
 
+it('shift-clicking a render opens it in a new tab instead of picking it', async () => {
+  const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+  render(box());
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  fireEvent.click(screen.getByRole('radio', { name: 'silhouette-occt' }), { shiftKey: true });
+  expect(open).toHaveBeenCalledWith(
+    '/api/corpus/render/silhouette-occt/3001.svg?v=cafebabe', '_blank', 'noopener');
+  const current = document.querySelectorAll('[data-current="true"] .corpus-slot-name');
+  expect([...current].map((el) => el.textContent)).toEqual(['naive']);
+  open.mockRestore();
+});
+
 it('files a flag against the slot you picked, not the wall\'s', async () => {
   addDefect.mockClear();
   render(box());
