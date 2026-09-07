@@ -1,6 +1,6 @@
 """The corpus database: part status, defects, renders and measurement history.
 
-Derived, never authoritative. The artifacts are `renders/<source>/<part>.svg`
+Derived, never authoritative. The artifacts are `renders/<source>/<part>.<ext>`
 and the git-tracked TOML; `scripts/build-corpus-db.py` rebuilds this file from
 them.
 """
@@ -292,10 +292,12 @@ def record_render(conn: sqlite3.Connection, part_id: str, source: str,
                   run_id: int | None = None) -> str:
     argv = canonical_argv(part_id, source)
     path = Path(path)
-    text = path.read_text()
+    # A slot's artifact is whatever its renderer emits -- LDView writes a PNG
+    # -- so the bytes are hashed, and only an SVG is parsed for its box.
+    raw = path.read_bytes()
     width = height = None
     if path.suffix == ".svg":
-        box = goldens.summarize_svg(text)["viewBox"]
+        box = goldens.summarize_svg(raw.decode())["viewBox"]
         if box:
             _, _, width, height = (float(v) for v in box.split())
     key = cache.key(argv)
@@ -304,7 +306,7 @@ def record_render(conn: sqlite3.Connection, part_id: str, source: str,
         "made_at, path, sha256, width, height) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (part_id, source, key, run_id, now(),
          str(path.resolve().relative_to(Path(root).resolve())),
-         goldens.sha256(text), width, height))
+         goldens.sha256(raw), width, height))
     conn.commit()
     return key
 
@@ -312,10 +314,15 @@ def record_render(conn: sqlite3.Connection, part_id: str, source: str,
 def store_render(conn: sqlite3.Connection, part_id: str, source: str,
                  made: Path | str, root: Path | str = ".",
                  run_id: int | None = None) -> Path:
-    """Copy a freshly rendered SVG into the store and index it."""
-    dest = Path(root) / "renders" / source / f"{part_id}.svg"
+    """Copy a freshly rendered artifact into the store and index it.
+
+    The extension follows what was made rather than being assumed: `ldview`
+    is a raster slot, and reading a PNG as text corrupts it.
+    """
+    made = Path(made)
+    dest = Path(root) / "renders" / source / f"{part_id}{made.suffix}"
     dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(Path(made).read_text())
+    dest.write_bytes(made.read_bytes())
     record_render(conn, part_id, source, dest, root=root, run_id=run_id)
     return dest
 
@@ -523,10 +530,11 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
     progress(f"{len(census_dirs)} census tree(s): "
              f"{', '.join(Path(d).name for d in census_dirs)}")
 
-    for svg in sorted((root / "renders").rglob("*.svg")):
-        record_render(conn, svg.stem, svg.parent.name, svg, root=root)
+    for made in sorted(p for p in (root / "renders").rglob("*")
+                       if p.suffix in (".svg", ".png")):
+        record_render(conn, made.stem, made.parent.name, made, root=root)
         counts["renders"] += 1
-        progress(f"render {counts['renders']}: {svg.parent.name}/{svg.stem}")
+        progress(f"render {counts['renders']}: {made.parent.name}/{made.stem}")
 
     # A part drawn by two trees under one engine resolves to one row, and the
     # tree sorting last wins it. Nothing today collides -- the nodes run an

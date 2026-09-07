@@ -57,6 +57,10 @@ def build_parser():
     p.add_argument("--wireframe", action="store_true", default=None,
                    help="outline strokes only with occlusion culling off "
                         "(every edge drawn, hidden or not; no fills)")
+    p.add_argument("--ldview", dest="use_ldview", action="store_true",
+                   default=None,
+                   help="draw with the vendored LDView instead of our engine, "
+                        "in LDraw's own colors — the reference slot, a PNG")
     p.add_argument("--opacity", type=float,
                    help="face-fill opacity 0-1 for SVG output "
                         "(translucent bricks; default 1)")
@@ -102,7 +106,8 @@ def _config_from_args(args) -> Config:
         "levels": tuple(args.levels) if args.levels else None,
         "shade_style": args.shade_style, "light": args.light,
         "svg_bg": args.svg_bg, "opacity": args.opacity,
-        "wireframe": args.wireframe, "weld_corners": args.weld_corners,
+        "wireframe": args.wireframe, "use_ldview": args.use_ldview,
+        "weld_corners": args.weld_corners,
         "part_label": args.part_label,
         "debug_colors": args.debug_colors,
     }
@@ -195,6 +200,13 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
     name = Path(part).stem if Path(part).suffix else part
     out_dir.mkdir(parents=True, exist_ok=True)
     label = render_tag(cfg, name) if cfg.part_label else None
+
+    if cfg.use_ldview:
+        # The reference, not a drawing of ours: LDView reads the same .dat and
+        # honors each polygon's color code, so it says what a part is supposed
+        # to look like. Raster only, and nothing below it applies.
+        render.render_part(cfg, part, out_dir / f"{name}.png")
+        return
 
     if cfg.shading == "outline" or cfg.wireframe:
         lat, long = render.resolve_latlong(cfg.angle)

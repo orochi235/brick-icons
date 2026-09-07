@@ -611,3 +611,21 @@ def test_a_rebuild_keeps_the_part_years(tmp_path):
         conn.close()
     assert (row["year_from"], row["year_to"], row["sets"], row["colors"]) == \
         (1979, 2026, 4252, 57)
+
+
+def test_a_raster_slot_keeps_its_own_extension_and_its_bytes(tmp_path):
+    """ldview is a PNG slot. A store that assumed .svg wrote the file under a
+    name it is not, and read it as text on the way in, which corrupts it."""
+    png = tmp_path / "made" / "3001.png"
+    png.parent.mkdir(parents=True)
+    raw = bytes(range(256)) * 4                    # not valid UTF-8
+    png.write_bytes(raw)
+
+    conn = db.connect(tmp_path / "corpus.db")
+    dest = db.store_render(conn, "3001", "ldview", png, root=tmp_path)
+    assert dest.name == "3001.png"
+    assert dest.read_bytes() == raw
+
+    row = conn.execute("SELECT path, width, height FROM renders").fetchone()
+    assert row["path"] == "renders/ldview/3001.png"
+    assert row["width"] is None and row["height"] is None

@@ -40,6 +40,7 @@ DEFAULTS = {
     "svg_bg": "none",        # SVG background paint; "none" = transparent
     "opacity": 1.0,          # face-fill opacity in SVG (translucent bricks)
     "wireframe": False,      # outline strokes only, occlusion culling off
+    "use_ldview": False,     # draw with the vendored LDView, not our engine
     "weld_corners": False,   # broad junction weld: ink the notch at EVERY
                              # stroke T-graze, not just stub-bridged
                              # junctions (restyles stud/limb corners)
@@ -82,6 +83,7 @@ class Config:
     svg_bg: str
     opacity: float
     wireframe: bool
+    use_ldview: bool
     weld_corners: bool
     part_label: bool
     debug_colors: bool | str
@@ -148,6 +150,7 @@ def load_config(toml_path=None, overrides=None, root="."):
         svg_bg=str(data["svg_bg"]),
         opacity=float(data["opacity"]),
         wireframe=bool(data["wireframe"]),
+        use_ldview=bool(data["use_ldview"]),
         weld_corners=bool(data["weld_corners"]),
         part_label=bool(data["part_label"]),
         debug_colors=(data["debug_colors"]

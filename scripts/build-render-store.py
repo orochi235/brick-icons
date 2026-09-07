@@ -27,19 +27,22 @@ from brick_icons.lab import runner as lab_runner  # noqa: E402
 
 
 def render_one(part: str, source: str, run_id: int, conn, force: bool) -> dict:
-    dest = ROOT / "renders" / source / f"{part}.svg"
-    if dest.exists() and not force:
+    have = [d for d in (ROOT / "renders" / source).glob(f"{part}.*")]
+    if have and not force:
         return {"part": part, "source": source, "state": "present"}
     argv = db.canonical_argv(part, source)
     lab_root = ROOT / cache.DEFAULT_ROOT
     result = lab_runner.render(argv, root=lab_root, force=force)
     if not result["ok"]:
         raise RuntimeError(result["error"])
-    svgs = [a["name"] for a in result["artifacts"] if a["name"].endswith(".svg")]
-    if not svgs:
-        raise RuntimeError(f"render produced no SVG: "
-                           f"{[a['name'] for a in result['artifacts']]}")
-    made = cache.dir_for(argv, root=lab_root) / svgs[0]
+    # An SVG where a slot draws one, the raster otherwise: ldview has no
+    # vector form, and picking by extension alone would take a thumbnail.
+    names = [a["name"] for a in result["artifacts"]]
+    drawn = ([n for n in names if n.endswith(".svg")]
+             or [n for n in names if n.endswith(".png")])
+    if not drawn:
+        raise RuntimeError(f"render produced no drawing: {names}")
+    made = cache.dir_for(argv, root=lab_root) / drawn[0]
     db.store_render(conn, part, source, made, root=ROOT, run_id=run_id)
     return {"part": part, "source": source,
             "state": "cached" if result["cached"] else "stored"}
