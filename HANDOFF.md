@@ -16,9 +16,13 @@ draws one lozenge of three, `g` draws fragments of two vent panels, and
 which color wins INSIDE the silhouette and `compare-silhouette-truth` scores
 `alpha > 128`. `scripts/render-hash.py` hashes the rasterized RGB under the
 alpha mask and is the tool; `scripts/hlr-shell-affected.py` is the model for a
-cheap in-process A/B that toggles the fix's own constant. Studio ran the
-control half as `ab-control`; check with `brick-icons-00` before duplicating
-it, and the branch `coplanar-control` must not be deleted.
+cheap in-process A/B that toggles the fix's own constant. **`brick-icons-00` is gone**, so nobody
+can be asked about its A/B; its `ab-control` output is on disk at
+`out/abhash/ctl-printed/` -- 2,812 parts, 2,794 ok, and 2,808 of them stickers,
+which makes it the control half of this exact class. It was taken by checking
+out `coplanar-control`, not by an in-process toggle, so it carries the
+editable-install question: a cross-check, not an input. The branch must not be
+deleted.
 
 `4263304ec01` is the one still wrong at HEAD: the formed sticker's near flap
 reads flatter than LDView's and the arrow loses part of its fill. Its own row
