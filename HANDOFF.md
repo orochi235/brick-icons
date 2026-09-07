@@ -1,5 +1,67 @@
 # Handoff — `main`: the corpus lab, and the OCCT engine
 
+## 2026-09-07 late morning: coplanar paint order, and an A/B the census cannot run
+
+Merged to `main` (see `git log --oneline --first-parent -8`): the coplanar
+paint-order fix, an RGB render-hash sweep, an orthographic reference renderer,
+cmd-0, and `DEVELOPING.md`. Branches `coplanar-order` and `ortho-reference` are
+merged and disposable. **`coplanar-control` is not** — see below.
+
+**Stickers lost half their artwork to the paint sort.** `shade.order_faces`
+skipped every coplanar pair with `continue`, adding no ordering edge, so the
+ready-heap's mean-depth tiebreak decided. A decoration blob on a tilted face has
+a mean depth that lands either side of its background's, so artwork in the far
+half sorted behind its own background and vanished — Mike's "it works on exactly
+half". Measured, mean depth contradicts file order in 7 of 12, 5 of 7 and 1137
+of 2195 coplanar pairs on 6155286u, 6148328ak and 6177969acc01. The fix orders
+coplanar pairs by list index, which is file order because `_with_decoration`
+appends decoration last, and LDraw draws decoration after the surface it sits
+on. 6148328ak gets its red border back; 6177969acc01's checkerboard resolves.
+
+**The census cannot see a change like this, and this is the load-bearing
+decision of the session.** `compare-silhouette-truth` builds `ours` as
+`alpha > 128`. Paint order changes which color wins *inside* the silhouette,
+never whether a pixel is opaque, so a full census would have returned
+near-identical numbers whether the fix was right or catastrophic. Mike asked for
+a census pass; what is running instead is `scripts/render-hash.py`, which hashes
+the rasterized RGB under the alpha mask. Do not "correct" this back to a census.
+
+**The A/B is half done.** `ab-control` (job `edbad6eb`, studio, deadline 7:06PM)
+sweeps all 8235 parts at the pre-fix revision, into `out/abhash/control`, with a
+fetch stream running. Still owed: sync the fix revision and run the same sweep
+as `ab-fix` into its own directory, then diff the shas — the parts that differ
+are exactly the parts whose drawing moved.
+
+The two revisions must differ **only** by the fix. `coplanar-control` is
+`f41a962` plus the sweep script and nothing else; the fix side is `f41a962` plus
+those plus the one `shade.py` hunk. Do not sync `main` for the fix run — `main`
+carries 23 other commits since `f41a962`, several of them engine changes, and
+using it conflates them into the diff. Keep `coplanar-control` until the A/B is
+read.
+
+**The goldens are red on purpose.** `outline-flat3__3005` drifted. Rendering
+3005, 3001, 4740 and 3941 before and after differs by 0, 0, 0 and 1 pixel — the
+gate is an SVG byte diff and the element order changed. Re-freezing is Mike's
+call and has not been made.
+
+**LDView stays.** Mike said "we're ripping out ldview" and then reversed it an
+hour later: leave it in so the new orthographic renderer can be compared against
+it. The new one (`lab/shot.html`, `lab/src/shot/shot.ts`,
+`scripts/shot-sink.py`) is merged but unfinished — the key light is a guess at
+LDView's `-LightVector` rather than the ortho path's own `--light` convention,
+there is no part-color override, and it has no `db.SOURCES` slot, so it is not
+a wall column yet. It works: one browser draws a list in one WebGL context.
+
+**Queued and unstarted:** Mike reports the translucent renders are "too fancy
+and are culling surfaces that need to be rendered now because everything needs
+to be rendered in this mode". Nothing has been looked at.
+
+**cmd-0 is unverified by test.** It now clears `camInitialized` so the zoom
+level resets and not just the camera. jsdom does no layout, so the refit yields
+an identical camera object, neither branch of the level effect runs, and a test
+written against `pickLevel` or `levelFor` passes with the fix reverted. It needs
+a real browser or nothing.
+
 ## Overnight defect sweep, 2026-09-07: what is fixed and what the rows are lying about
 
 Mike asked for a night on `tests/goldens/defects.toml` and the census's failed
