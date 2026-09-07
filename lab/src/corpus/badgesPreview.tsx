@@ -1,7 +1,11 @@
 import { StrictMode, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BADGE_FACE, BADGE_WEIGHT, drawBadge } from '@lab/corpus/badges';
+import { BadgeSwatch } from '@lab/corpus/BadgeSwatch';
 import { CORNER_BADGES, STRIP_BADGES, type CellBadge } from '@lab/corpus/paint';
+import { Tags } from '@lab/corpus/tags';
+import { STATUS_BADGES } from '@lab/defects/statusBadges';
+import '@lab/corpus/badgesPreview.css';
 
 /** Every badge at the sizes the wall actually draws them, on one shared
  *  baseline. The marks are canvas geometry, so a test cannot tell you a
@@ -58,6 +62,44 @@ function draw(canvas: HTMLCanvasElement, entries: [string, CellBadge][]) {
   }
 }
 
+/** The same badges the sheet above draws, as the DOM builds them. Both read
+ *  `MARK_SHAPES`, so a mark that differs between the two rows is drift, and
+ *  the point of the page is that you can see it without measuring. */
+const DOM_SIZES = [14, 17, 24, 44];
+
+function BadgeRows({ entries, ground }:
+                   { entries: [string, CellBadge][]; ground: 'light' | 'dark' }) {
+  return (
+    <div className="badge-dom" data-ground={ground}>
+      {DOM_SIZES.map((box) => (
+        <div key={box} className="badge-dom-row">
+          <span className="badge-dom-size">{box}px</span>
+          {entries.map(([tag, badge]) => (
+            <BadgeSwatch key={tag} badge={badge} label={tag} box={box} />
+          ))}
+        </div>
+      ))}
+      <div className="badge-dom-row">
+        <span className="badge-dom-size">bare</span>
+        {entries.map(([tag, badge]) => (
+          <BadgeSwatch key={tag} badge={badge} box={17} />
+        ))}
+      </div>
+      <div className="badge-dom-row">
+        <span className="badge-dom-size">status</span>
+        {Object.entries(STATUS_BADGES).map(([status, badge]) => (
+          badge && <BadgeSwatch key={status} badge={badge} label={status} box={17} />
+        ))}
+      </div>
+      {/* The tag row as a detail view builds it, wrapper CSS and all. */}
+      <div className="badge-dom-row">
+        <span className="badge-dom-size">tags</span>
+        <Tags tags={['retired', 'sticker', 'technic', 'brittle']} />
+      </div>
+    </div>
+  );
+}
+
 function BadgeSheet() {
   const ref = useRef<HTMLCanvasElement>(null);
   const entries: [string, CellBadge][] = [
@@ -66,7 +108,13 @@ function BadgeSheet() {
   useEffect(() => {
     if (ref.current) draw(ref.current, entries);
   });
-  return <canvas ref={ref} />;
+  return (
+    <>
+      <BadgeRows entries={entries} ground="light" />
+      <BadgeRows entries={entries} ground="dark" />
+      <canvas ref={ref} />
+    </>
+  );
 }
 
 createRoot(document.getElementById('root')!).render(

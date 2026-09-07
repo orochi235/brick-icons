@@ -1,49 +1,123 @@
-import { useEffect, useRef } from 'react';
-import { badgeWidth, drawBadge } from '@lab/corpus/badges';
+import { useId } from 'react';
+import { BADGE_FACE, BADGE_WEIGHT, markInk } from '@lab/corpus/badges';
+import { MARK_SHAPES, type MarkShape } from '@lab/corpus/markShapes';
 import type { CellBadge } from '@lab/corpus/paint';
+import '@lab/corpus/BadgeSwatch.css';
 
 /** Sized so a badge comes out the same 14px across as the legend's state
  *  swatches -- the two halves of that panel are one list to read down. */
 export const SWATCH_BOX = 14;
 
-/** A badge drawn through the wall's own `drawBadge`, so a detail view and a
- *  cell cannot show different artwork for the same tag. `label` sets the
- *  word on the badge's own field; without one this is the bare disc.
+/** A badge as HTML: the field and the word in CSS, the mark as inline SVG.
  *
- *  Everything about the badge -- its field, its ink, its mark -- comes off
- *  the one record in `paint.ts`. A DOM re-drawing of the same mark would
- *  drift from the canvas one, which is how the corner and strip badges came
- *  apart before. */
+ *  What a detail view and a cell must share is the *data* -- the palette
+ *  record in `paint.ts` and the geometry in `markShapes.ts` -- not the
+ *  rasterizer. Drawing this through the wall's canvas instead hand-computed a
+ *  text baseline the browser already knows, and set the word 7.5 device px
+ *  above the field's center.
+ */
 export function BadgeSwatch({ badge, label, box = SWATCH_BOX, className }:
                             { badge: CellBadge; label?: string; box?: number;
                               className?: string }) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    const canvas = ref.current;
-    if (!canvas) return;
-    const radius = box / 2;
-    const at = { cx: radius, cy: radius, size: radius / 0.72, radius, label };
-    const dpr = window.devicePixelRatio || 1;
-    // jsdom throws out of getContext rather than returning null, and a
-    // swatch that cannot draw must not take the view down with it.
-    let ctx: CanvasRenderingContext2D | null = null;
-    try {
-      ctx = canvas.getContext('2d');
-    } catch {
-      return;
-    }
-    if (!ctx) return;
-    // Measured before the canvas is sized: a stadium's width is its label's,
-    // and only a live context can measure text.
-    const w = Math.ceil(badgeWidth(ctx, badge, at));
-    canvas.width = w * dpr;
-    canvas.height = box * dpr;
-    canvas.style.width = `${w}px`;
-    canvas.style.height = `${box}px`;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, w, box);
-    drawBadge(ctx, badge, at);
-  }, [badge, label, box]);
-  return <canvas ref={ref} aria-hidden="true"
-                 className={className ?? 'corpus-badge-swatch'} />;
+  const radius = box / 2;
+  // The type size the canvas derives from a disc of this radius, so a swatch
+  // and a cell badge set their words at one size.
+  const size = radius / 0.72;
+  const scale = badge.scale ?? 1;
+  const shapes = badge.mark ? MARK_SHAPES[badge.mark] : undefined;
+  const disc = shapes != null || badge.text != null;
+  const cut = cutMask(shapes, box, radius * 0.66 * scale);
+  const vars = {
+    '--badge-box': `${box}px`,
+    '--badge-field': badge.field,
+    '--badge-stroke': badge.stroke ?? badge.field,
+    '--badge-ink': badge.ink,
+    '--badge-line': `${Math.max(1, radius * 0.16)}px`,
+    '--badge-face': BADGE_FACE,
+    '--badge-weight': `${badge.weight ?? BADGE_WEIGHT}`,
+    '--badge-text': `${size * 0.92}px`,
+    // Mark to word, and word to the end of the field.
+    '--badge-gap': `${size * 0.32}px`,
+    '--badge-pad': `${size * 0.55}px`,
+    '--badge-glyph-face': badge.font ?? BADGE_FACE,
+    '--badge-glyph': `${size * scale}px`,
+    '--badge-glyph-style': badge.style ?? 'normal',
+    '--badge-dx': `${size * (badge.dx ?? 0)}px`,
+    '--badge-dy': `${size * (badge.dy ?? 0)}px`,
+    ...(cut ? { '--badge-cut': cut } : {}),
+  } as React.CSSProperties;
+  return (
+    <span className={`corpus-badge ${className ?? ''}`} style={vars}
+          data-disc={disc} data-label={label != null} data-cut={cut != null}
+          aria-hidden="true">
+      {disc && (
+        <span className="corpus-badge-disc">
+          {shapes && <BadgeArt badge={badge} shapes={shapes} box={box} />}
+          {badge.text && <span className="corpus-badge-glyph">{badge.text}</span>}
+        </span>
+      )}
+      {label != null && <span className="corpus-badge-label">{label}</span>}
+    </span>
+  );
+}
+
+/** The mark, in px against a `box`-wide viewBox -- the frame `drawBadge`
+ *  works in too, so the two read off the same numbers. */
+function BadgeArt({ badge, shapes, box }:
+                  { badge: CellBadge; shapes: readonly MarkShape[]; box: number }) {
+  const id = useId();
+  const radius = box / 2;
+  // The mark's unit box: 1 unit is 0.66 of the radius, so a mark may run out
+  // past the field's edge, where the disc clips it.
+  const m = radius * 0.66 * (badge.scale ?? 1);
+  return (
+    <svg className="corpus-badge-art" viewBox={`0 0 ${box} ${box}`}
+         xmlns="http://www.w3.org/2000/svg" focusable="false">
+      <clipPath id={id} clipPathUnits="userSpaceOnUse">
+        <circle cx={radius} cy={radius} r={radius} />
+      </clipPath>
+      <g clipPath={`url(#${id})`}>
+        <g transform={`translate(${radius} ${radius}) scale(${m})`}>
+          {shapes.filter((s) => !s.punch)
+                 .map((s, i) => <MarkPath key={i} shape={s} badge={badge} />)}
+        </g>
+      </g>
+    </svg>
+  );
+}
+
+/** A mark that erases part of its own badge -- a sticker's peel -- as a mask
+ *  image for the whole pill. On the canvas the same path is a
+ *  `destination-out` fill; here it is subtracted from the field, so the hole
+ *  shows the page rather than a patch of another color.
+ *
+ *  Its own image rather than an SVG `<mask>` because what it cuts is the CSS
+ *  field, which the disc's `<svg>` does not paint. */
+function cutMask(shapes: readonly MarkShape[] | undefined, box: number,
+                 m: number): string | undefined {
+  const cut = shapes?.filter((s) => s.punch) ?? [];
+  if (cut.length === 0) return undefined;
+  const r = box / 2;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${box} ${box}">`
+    + `<g transform="translate(${r} ${r}) scale(${m})">`
+    + cut.map((s) => `<path d="${s.d}"/>`).join('')
+    + '</g></svg>';
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+}
+
+function MarkPath({ shape, badge }: { shape: MarkShape; badge: CellBadge }) {
+  const stroke = shape.stroke ? markInk(badge, shape.stroke) : null;
+  return (
+    <path d={shape.d}
+          fill={markInk(badge, shape.fill ?? 'ink') ?? 'none'}
+          fillRule={shape.rule}
+          fillOpacity={shape.alpha}
+          stroke={stroke ?? undefined}
+          strokeWidth={stroke ? shape.width ?? 0.1 : undefined}
+          strokeLinejoin={shape.join}
+          strokeLinecap={shape.cap}
+          strokeOpacity={stroke ? shape.alpha : undefined}
+          transform={shape.transform
+            ? `matrix(${shape.transform.join(' ')})` : undefined} />
+  );
 }

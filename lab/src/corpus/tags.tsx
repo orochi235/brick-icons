@@ -29,8 +29,8 @@ export function Tags({ tags }: { tags?: string[] }) {
         if (!badge) {
           return <li key={tag} className="corpus-tag" data-tag={tag}>{tag}</li>;
         }
-        // The canvas is aria-hidden, so the word it draws is not in the
-        // accessibility tree; the list item carries it as text instead.
+        // The badge is aria-hidden, so its word is not in the accessibility
+        // tree; the list item carries it as text instead.
         return (
           <li key={tag} className="corpus-tag-badge" data-tag={tag}>
             <BadgeSwatch badge={badge} label={tag} box={TAG_BOX} />

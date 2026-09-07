@@ -1,0 +1,72 @@
+/* The badge a detail view wears: a stadium of the badge's own field, with a
+ * disc of artwork at one end and its name set on the field beside it.
+ *
+ * The measurements are the wall's, so a legend row and a cell badge are the
+ * same picture: the disc is `--badge-box` across, the ring is 0.16 of its
+ * radius, and the word sets at 0.92 of the type size the disc implies. What
+ * is NOT the wall's is the centering -- that is line-height and flexbox here,
+ * where the canvas had to compute an ink box and got it wrong by half a line.
+ */
+
+.corpus-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: var(--badge-box);
+  border-radius: 999px;
+  background: var(--badge-field);
+  box-shadow: inset 0 0 0 var(--badge-line) var(--badge-stroke);
+  color: var(--badge-ink);
+  font-family: var(--badge-face);
+  font-size: var(--badge-text);
+  font-weight: var(--badge-weight);
+  line-height: 1;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+/* A badge with nothing in its disc -- a status like `open` carries neither a
+ * mark nor a letter -- gets the field's own padding instead of a mark's width
+ * of empty room before its first glyph. */
+.corpus-badge[data-disc='false'] { padding-left: var(--badge-pad); }
+.corpus-badge[data-label='true'] { padding-right: var(--badge-pad); }
+
+.corpus-badge-disc {
+  position: relative;
+  flex: 0 0 var(--badge-box);
+  width: var(--badge-box);
+  height: var(--badge-box);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.corpus-badge-art {
+  position: absolute;
+  inset: 0;
+  display: block;
+  overflow: visible;
+}
+
+.corpus-badge-glyph {
+  font-family: var(--badge-glyph-face);
+  font-size: var(--badge-glyph);
+  font-style: var(--badge-glyph-style);
+  /* Optical centering, where a glyph's own box is not where it looks
+   * centered -- the psi sets high in its em. */
+  translate: var(--badge-dx) var(--badge-dy);
+}
+
+.corpus-badge-label { margin-left: var(--badge-gap); }
+
+/* The sticker's peel takes a bite out of the field, and what shows through it
+ * has to be the page: a hole filled with any color reads as another piece of
+ * sticker. `exclude` is the whole badge minus the cut, the mask's two layers
+ * being the cut and a cover. */
+.corpus-badge[data-cut='true'] {
+  mask-image: var(--badge-cut), linear-gradient(#000, #000);
+  mask-position: left center, left top;
+  mask-size: var(--badge-box) var(--badge-box), 100% 100%;
+  mask-repeat: no-repeat;
+  mask-composite: exclude;
+}

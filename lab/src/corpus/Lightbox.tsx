@@ -15,7 +15,7 @@ import '@lab/corpus/Lightbox.css';
 function DefectStatusBadge({ status }: { status: string }) {
   const badge = STATUS_BADGES[status];
   if (!badge) return <em>{status}</em>;
-  // The canvas is aria-hidden, so the word it draws needs a text twin.
+  // The badge is aria-hidden, so the word it sets needs a text twin.
   return (
     <>
       <BadgeSwatch badge={badge} label={status} box={17} />

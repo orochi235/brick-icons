@@ -1,0 +1,28 @@
+/* The DOM half of the badge sheet. Deliberately plain: the page is here to
+ * show the artwork, so nothing on it should be worth looking at but badges. */
+/* Both grounds, because the sticker's peel is a hole: what shows through it
+ * is the page, and a hole is invisible against a ground its own color. */
+.badge-dom[data-ground='light'] { background: #ffffff; color: #333333; }
+.badge-dom[data-ground='dark'] { background: #000000; color: #cccccc; }
+
+.badge-dom {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1rem 0.5rem;
+  font-family: ui-monospace, monospace;
+}
+
+.badge-dom-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.badge-dom-size {
+  width: 4rem;
+  flex: 0 0 4rem;
+  font-size: 11px;
+  color: var(--wzl-fg-muted, #888);
+}
