@@ -20,8 +20,16 @@ for whose work is in flight.
 `931b342` -- the point is the habit, not that one break.
 
 **Nothing of mine is in flight.** Every change described below is committed
-and pushed. What is uncommitted in the tree belongs to other sessions --
-`tests/goldens/defects.toml` was theirs when this was written.
+and pushed.
+
+**`tests/goldens/defects.toml` is dirty because the lab writes it, and it is
+Mike's file, not a session's.** `brick_icons/lab/defects.py` holds
+`DEFAULT_PATH = tests/goldens/defects.toml`, and the `add`/`update` routes
+write the whole file straight back to disk -- so every defect filed through the
+lab UI lands there uncommitted. Three sessions in one night each read those
+lines as a peer's work in progress and stepped around them. Nobody should
+commit that file but Mike. If you have a correction to an entry, make it in the
+tree and say so; do not stage the file to carry it.
 
 **`corpus.db` and `out/thumbs` are rebuilt and current, and neither is in
 git.** They already hold the sticker renders and the ldview slot, so a fresh
