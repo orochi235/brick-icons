@@ -3,6 +3,9 @@ export interface Cell {
   index: number;
   title: string;
   category: string | null;
+  /** The sideline theme its description opens with -- Fabuland, Znap -- or
+   *  null for a mainline part. */
+  family: string | null;
   printed: boolean;
   obsolete: boolean;
   base: boolean;

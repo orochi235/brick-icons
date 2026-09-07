@@ -13,8 +13,34 @@ import type { CellBadge } from '@lab/corpus/paint';
 // Lighter than the caption it sits beside would suggest: a badge letter is
 // reversed out of a solid field, and reversed type gains weight optically --
 // at 600 the Greek psi filled its disc.
-export const BADGE_WEIGHT = 400;
-export const BADGE_FACE = 'ui-monospace, monospace';
+/** The face for everything set on a thumbnail -- badge letters, the part
+ *  number, the year range, the placeholder glyph. Condensed, so a part number
+ *  fits a small cell without dropping to a size nobody can read. */
+export const THUMB_FACE = "'Oswald', ui-sans-serif, system-ui, sans-serif";
+
+/** Two weights, and they mean different things: an identifier is something
+ *  you pick out of a grid, the rest is something you read once you have. */
+export const WEIGHT_ID = 500;
+export const WEIGHT_TEXT = 300;
+
+/** Resolve once the thumbnail face is actually usable.
+ *
+ *  Canvas does not wait: `ctx.font` with a webfont that has not arrived
+ *  silently falls back and paints, and the wall paints once -- so without
+ *  this the whole grid renders in the fallback face and stays there until
+ *  something else forces a repaint. Resolves either way; a missing font is a
+ *  worse-looking wall, not a broken one. */
+export function thumbFontReady(): Promise<void> {
+  const fonts = (globalThis as { document?: Document }).document?.fonts;
+  if (!fonts) return Promise.resolve();
+  return Promise.all([
+    fonts.load(`${WEIGHT_ID} 16px Oswald`),
+    fonts.load(`${WEIGHT_TEXT} 16px Oswald`),
+  ]).then(() => undefined, () => undefined);
+}
+
+export const BADGE_WEIGHT = WEIGHT_TEXT;
+export const BADGE_FACE = THUMB_FACE;
 
 export type Mark = (ctx: CanvasRenderingContext2D, field: string,
                     accent: string) => void;
@@ -275,7 +301,7 @@ export const drawTechnic: Mark = (ctx) => {
 // picture of one. `drawBadge` clips a mark to its own disc and hands it a
 // unit box where the field's edge sits at 1.515, so the peel is built against
 // that radius: the sticker is only the part of the disc the flap has not
-// lifted, and what shows behind it is the ink the rest of the set reverses to.
+// lifted, and behind it there is a hole rather than any ink.
 const FIELD_R = 1.515;
 
 /** One peel, at `arc` radians of the field's edge, folding `back` of the way
@@ -288,13 +314,19 @@ function peel(ctx: CanvasRenderingContext2D, field: string, accent: string,
   const [x0, y0] = p(from);
   const [x1, y1] = p(to);
 
-  // What the sticker lifted off: the cap between the chord and the edge, in
-  // the ink every other mark on this field is drawn in.
+  // What the sticker lifted off: nothing at all. The cap is erased rather
+  // than inked, so the hole shows the cell instead of a white patch that
+  // reads as another piece of sticker. `drawBadge` gives a punching mark its
+  // own scratch canvas, because this composite would otherwise cut straight
+  // through the part drawing underneath.
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-out';
   ctx.beginPath();
   ctx.moveTo(x0, y0);
   ctx.arc(0, 0, FIELD_R, from, to);
   ctx.closePath();
   ctx.fill();
+  ctx.restore();
 
   // The flap is that same cap folded over the chord, so it is the cap
   // reflected in the chord line -- not a curve drawn to look like one. `lift`
@@ -448,7 +480,48 @@ export const MARKS: Record<string, Mark> = {
   stickerPolice: drawStickerPolice, stickerFlames: drawStickerFlames,
 };
 
+/** Marks that erase part of their own badge. They need a layer of their own:
+ *  badges are painted straight onto the cell, over the render, so a
+ *  `destination-out` on that context would cut through the drawing too. */
+const PUNCHES: ReadonlySet<string> = new Set(['stickerPolice', 'stickerFlames']);
+
+/** One scratch canvas, reused. A wall paint draws thousands of badges and a
+ *  fresh canvas each time is the kind of allocation that shows up in a frame. */
+let scratch: HTMLCanvasElement | null = null;
+
+function scratchOf(size: number): CanvasRenderingContext2D | null {
+  if (typeof document === 'undefined') return null;
+  scratch ??= document.createElement('canvas');
+  if (scratch.width < size || scratch.height < size) {
+    scratch.width = scratch.height = size;
+  }
+  const sctx = scratch.getContext('2d');
+  if (!sctx) return null;
+  sctx.setTransform(1, 0, 0, 1, 0, 0);
+  sctx.clearRect(0, 0, scratch.width, scratch.height);
+  return sctx;
+}
+
 export function drawBadge(ctx: CanvasRenderingContext2D, badge: CellBadge,
+                   at: { cx: number; cy: number; size: number; radius: number;
+                         baseline?: number }) {
+  // A punching mark is composited off to the side and stamped back, so its
+  // hole ends at the edge of its own disc.
+  if (badge.mark && PUNCHES.has(badge.mark)) {
+    const box = Math.ceil(at.radius * 2) + 2;
+    const sctx = scratchOf(box);
+    if (sctx) {
+      drawBadgeDirect(sctx, badge, { ...at, cx: box / 2, cy: box / 2,
+                                     baseline: undefined });
+      ctx.drawImage(scratch!, 0, 0, box, box,
+                    at.cx - box / 2, at.cy - box / 2, box, box);
+      return;
+    }
+  }
+  drawBadgeDirect(ctx, badge, at);
+}
+
+function drawBadgeDirect(ctx: CanvasRenderingContext2D, badge: CellBadge,
                    at: { cx: number; cy: number; size: number; radius: number;
                          baseline?: number }) {
   const { cx, size, radius } = at;

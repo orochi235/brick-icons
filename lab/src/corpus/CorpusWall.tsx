@@ -10,6 +10,7 @@ import { FilterBar } from '@lab/corpus/FilterBar';
 import { bandedLayout, blockLayout } from '@lab/corpus/grouped';
 import { gridLayout } from '@lab/corpus/layout';
 import { Legend } from '@lab/corpus/Legend';
+import { PageNav } from '@lab/nav/PageNav';
 import { levelFor, pickLevel } from '@lab/corpus/levels';
 import { Lightbox } from '@lab/corpus/Lightbox';
 import type { CellState } from '@lab/corpus/palette';
@@ -275,8 +276,12 @@ export function CorpusWall({ client }: { client: LabClient }) {
 
   return (
     <LabShell title="brick-icons corpus"
-              header={cells && (
+              header={(
                 <>
+                  {/* Outside the `cells` guard: leaving is the one thing you
+                      still want while the corpus is loading. */}
+                  <PageNav />
+                  {cells && <>
                   <FilterBar sources={sources} source={source} onSource={setSource} />
                   <PartSearch client={client} onOpen={openSearchedPart} />
                   <button type="button" className="corpus-legend-toggle"
@@ -287,6 +292,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
                   {searchNotice && (
                     <span className="corpus-search-notice" role="status">{searchNotice}</span>
                   )}
+                  </>}
                 </>
               )}>
       <div className="corpus-app">

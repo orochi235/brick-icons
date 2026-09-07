@@ -71,7 +71,7 @@ export const DEFAULT_PARAMS: Params = {
   thinBorderFactor: 0.09,
   maxBorderPx: 6,
   dimAlpha: 0.25,
-  retiredWash: 0.35,
+  retiredWash: 0.5,
 
   dragThresholdPx: 4,
   levelUpHysteresis: 1.5,

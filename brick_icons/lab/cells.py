@@ -176,6 +176,9 @@ def cells(conn: sqlite3.Connection, source: str = "census-naive",
             "index": index[pid],
             "title": part["title"],
             "category": part["category"],
+            # Which sideline theme, not just that there is one -- the wall
+            # captions it, and "weird" alone does not say Fabuland or Znap.
+            "family": part_tags.weird_theme(part["title"]),
             "printed": bool(part["printed"]),
             "obsolete": bool(part["obsolete"]),
             "base": bool(part["base"]),

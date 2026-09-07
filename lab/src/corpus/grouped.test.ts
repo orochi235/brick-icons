@@ -52,7 +52,7 @@ describe('flowBlocks', () => {
 });
 
 const c = (over: Partial<Cell>): Cell => ({
-  id: 'x', index: 0, title: '', category: null, printed: false,
+  id: 'x', index: 0, title: '', category: null, family: null, printed: false,
   obsolete: false, base: false, out_of_scope: false, moved: false,
   year_from: null, year_to: null, sets: null, colors: null, tags: [],
   status: 'unreviewed', sha: null, made_at: null, extra_d99: null, secs: null,

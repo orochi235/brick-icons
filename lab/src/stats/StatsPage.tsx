@@ -5,6 +5,7 @@ import { useStats } from '@lab/stats/useStats';
 import { DEFAULT_SET, fromQuery, toQuery, wallHref,
          type WorkingSet } from '@lab/stats/workingSet';
 import '@lab/stats/stats.css';
+import { PageNav } from '@lab/nav/PageNav';
 
 const KINDS: { id: WorkingSet['kind']; label: string }[] = [
   { id: 'all', label: 'all parts' },
@@ -86,6 +87,7 @@ export function StatsPage({ client }: { client: LabClient }) {
   return (
     <div className="stats-page">
       <header className="stats-head">
+        <PageNav />
         <h1>corpus stats</h1>
         <p className="stats-asof">
           {stats

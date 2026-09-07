@@ -4,7 +4,7 @@ import { PartCard } from '@lab/corpus/PartCard';
 import type { Cell } from '@lab/corpus/types';
 
 const cell: Cell = {
-  id: '3001', index: 0, title: 'Brick 2 x 4', category: 'Brick',
+  id: '3001', index: 0, title: 'Brick 2 x 4', category: 'Brick', family: null,
   printed: false, obsolete: false, base: true, out_of_scope: false, moved: false, year_from: null, year_to: null, sets: null, colors: null, tags: [], status: 'good',
   sha: 'deadbeefcafe',
   made_at: '2026-09-05T10:00:00+00:00', extra_d99: 4.5, secs: 12, error: null,

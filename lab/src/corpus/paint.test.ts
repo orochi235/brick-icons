@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { badgeGeometry, badgesFor, captionsFor, CAPTION_ON_FILL, cellState, fillFor,
-  paintCommands, PROPERTY_FIELD, stripFor, tally, THUMB_GROUND } from '@lab/corpus/paint';
+import { badgeGeometry, badgesFor, captionsFor, CAPTION_ON_FILL, captionSize,
+  cellState, fillFor, paintCommands, PROPERTY_FIELD, stripFor, stripGeometry,
+  tally, THUMB_GROUND } from '@lab/corpus/paint';
 import { CELL_STATES, DEFAULT_PALETTE as CELL_FILL, type CellState } from '@lab/corpus/palette';
 import type { Band } from '@lab/corpus/layout';
 import { tintFor } from '@lab/corpus/tint';
@@ -8,7 +9,7 @@ import type { Cell, SheetManifest } from '@lab/corpus/types';
 
 const cell = (id: string, index: number, sha: string | null,
               overrides: Partial<Cell> = {}): Cell => ({
-  id, index, title: id, category: null, printed: false, obsolete: false, base: true, out_of_scope: false, moved: false, year_from: null, year_to: null, sets: null, colors: null, tags: [],
+  id, index, title: id, category: null, family: null, printed: false, obsolete: false, base: true, out_of_scope: false, moved: false, year_from: null, year_to: null, sets: null, colors: null, tags: [],
   status: 'unreviewed', sha, made_at: null, extra_d99: null, secs: null,
   error: null, open_defects: 0, open_defects_elsewhere: 0, accepted_defects: 0,
   error_elsewhere: false, ...overrides,
@@ -433,11 +434,21 @@ it('lets electric off the shared field, a bright bolt on black', () => {
 });
 
 it('draws a letter at twice the height of a mark in the same disc', () => {
+  // One size for every badge: the corner discs used to run to 0.14 of the
+  // cell against the strip's 0.1, so the same tag drew bigger in the corner
+  // than in the line of the part number.
   const { size, radius } = badgeGeometry(200);
-  expect(size).toBe(20);
-  expect(radius * 0.66).toBeCloseTo(size * 0.475, 2);
+  expect(size).toBe(captionSize(200));
+  expect(size).toBe(18);
+  expect(radius * 0.66).toBeCloseTo(size * 0.4158, 2);
   // At the badge floor a mark is a little over 4px across.
-  expect(badgeGeometry(56).radius * 0.66).toBeCloseTo(4.28, 2);
+  expect(badgeGeometry(56).radius * 0.66).toBeCloseTo(4.16, 2);
+});
+
+it('sizes a corner badge exactly like one in the strip', () => {
+  for (const cellPx of [56, 120, 200, 400]) {
+    expect(stripGeometry(cellPx)).toEqual(badgeGeometry(cellPx));
+  }
 });
 
 it('puts the strip on a drawn cell', () => {

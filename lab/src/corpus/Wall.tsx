@@ -10,7 +10,8 @@ import {
 import { LoupeBubble, resolveLoupe, useLoupe } from '@weasel-js/labkit/loupe';
 import { adjacent, impliedCaret, type Direction } from '@lab/corpus/caret';
 import type { Band, Rect } from '@lab/corpus/layout';
-import { BADGE_FACE, BADGE_WEIGHT, drawBadge } from '@lab/corpus/badges';
+import { BADGE_FACE, BADGE_WEIGHT, THUMB_FACE, WEIGHT_ID, WEIGHT_TEXT,
+         drawBadge } from '@lab/corpus/badges';
 import { badgeGeometry, captionSize, cornerPad, LINKED_BADGE, paintCommands,
   RETIRED_WASH, stripGeometry, type Appearance, type CellBadge, type CellCaption,
   type PaintCommand } from '@lab/corpus/paint';
@@ -191,15 +192,16 @@ function drawCaption(ctx: CanvasRenderingContext2D, caption: CellCaption,
                      cmd: { dx: number; dy: number; dw: number; dh: number }): number {
   const size = captionSize(cmd.dw);
   const right = caption.corner === 'tr';
+  const top = caption.corner[0] === 't';
   ctx.save();
-  ctx.font = `${size}px ui-monospace, monospace`;
+  ctx.font = `${caption.weight ?? WEIGHT_TEXT} ${size}px ${THUMB_FACE}`;
   ctx.textAlign = right ? 'right' : 'left';
   ctx.textBaseline = 'middle';
   const pad = cornerPad(cmd.dw, size);
   ctx.fillStyle = caption.ink;
   const x = right ? cmd.dx + cmd.dw - pad : cmd.dx + pad;
   ctx.fillText(caption.text, x,
-               right ? cmd.dy + pad + size * 0.5 : cmd.dy + cmd.dh - pad - size * 0.5);
+               top ? cmd.dy + pad + size * 0.5 : cmd.dy + cmd.dh - pad - size * 0.5);
   const width = ctx.measureText(caption.text).width;
   ctx.restore();
   return right ? x - width : x + width;
@@ -282,7 +284,7 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
       // The category's initial, sized to the cell: a block of S says sticker
       // at a glance, and no filled square competes with the drawings around it.
       ctx.save();
-      ctx.font = `600 ${cmd.dh * GLYPH_SCALE}px ui-monospace, monospace`;
+      ctx.font = `${WEIGHT_ID} ${cmd.dh * GLYPH_SCALE}px ${THUMB_FACE}`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(cmd.glyph, dx + cmd.dw / 2, dy + cmd.dh / 2 + cmd.dh * 0.03);

@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Lightbox } from '@lab/corpus/Lightbox';
 
 const detail = {
-  part: { id: '3001', title: 'Brick 2 x 4', category: 'Brick',
+  part: { id: '3001', title: 'Brick 2 x 4', category: 'Brick', family: null,
           status: 'good', status_note: null },
   findings: [{ part_id: '3001', engine: 'naive', extra_d99: 1.5,
                missing_px: 3, secs: 12.0, error: null }],

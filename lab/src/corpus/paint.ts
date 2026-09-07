@@ -6,6 +6,7 @@ import { isStale, sourceBox } from '@lab/corpus/sheet';
 import { tintFor, type TintMode } from '@lab/corpus/tint';
 import type { Cell, SheetManifest } from '@lab/corpus/types';
 import { yearRange } from '@lab/corpus/years';
+import { WEIGHT_ID, WEIGHT_TEXT } from '@lab/corpus/badges';
 
 export type { CellStyle } from '@lab/corpus/palette';
 
@@ -84,6 +85,29 @@ function borderWidthFor(weight: CellStyle['weight'], cellPx: number,
  *  same ground, or zooming past the loose PNG swaps the surround to the
  *  wall's dark canvas. */
 export const THUMB_GROUND = '#ffffff';
+
+/** The ground a vector cell is drawn on, once the wall is zoomed far enough
+ *  to swap the bakes for SVG. The legend's border color -- but the light one
+ *  (`--wzl-gray-200`) in either theme, never `--wzl-border` itself: in dark
+ *  mode that token resolves to #25272c, which is the page background to
+ *  within a shade, and a thumbnail drawn on it disappears. The art is dark
+ *  lines on a light ground and does not invert with the theme, so neither
+ *  does what it sits on.
+ *
+ *  Only the vector path: a baked sprite carries white in its pixels, so
+ *  changing the sheet's ground would leave a white square inside a gray one.
+ */
+let vectorGroundCache: string | null = null;
+
+export function vectorGround(): string {
+  if (vectorGroundCache) return vectorGroundCache;
+  const root = (globalThis as { document?: Document }).document?.documentElement;
+  const read = root
+    ? getComputedStyle(root).getPropertyValue('--wzl-gray-200').trim()
+    : '';
+  vectorGroundCache = read || '#c9cbcf';
+  return vectorGroundCache;
+}
 
 /** What a retired cell is washed with, over the drawing rather than under it:
  *  every rung draws the same white bake, and the viewer decides how faded a
@@ -236,8 +260,11 @@ export function isRetired(cell: Cell): boolean {
  *  hit-tests them against it, so a click cannot land somewhere the disc
  *  isn't. */
 export function badgeGeometry(cellPx: number) {
-  const size = Math.max(9, Math.min(20, cellPx * 0.14));
-  const radius = size * 0.72;
+  // Sized off the caption, not off the cell: a corner badge used to run to
+  // 0.14 of the cell against the strip's 0.1, so the same tag drew larger in
+  // the corner than it did in the line of the part number. One size for both.
+  const size = captionSize(cellPx);
+  const radius = size * 0.63;
   return { size, radius, inset: radius + cornerPad(cellPx, size) };
 }
 
@@ -250,10 +277,7 @@ export function captionSize(cellPx: number): number {
  *  reads as part of `4761 T`, not as a separate ornament beside it. Its
  *  inset stays the corner badges', so the row lines up with them. */
 export function stripGeometry(cellPx: number) {
-  const size = captionSize(cellPx);
-  // Tighter to its type than a corner badge is: the strip sits in the line
-  // of the part number, where a disc sized like a corner one crowds it.
-  return { size, radius: size * 0.63, inset: badgeGeometry(cellPx).inset };
+  return badgeGeometry(cellPx);
 }
 
 /** How far a corner mark sits off the cell's edge. A fraction of the cell
@@ -283,9 +307,11 @@ export function stripFor(cell: Cell, cellPx: number,
 
 export interface CellCaption {
   text: string;
-  /** The two corners the badges leave free. */
-  corner: 'tr' | 'bl';
+  /** The corners the badges leave free -- the strip owns the bottom right. */
+  corner: 'tl' | 'tr' | 'bl';
   ink: string;
+  /** Heavier for the part number than for what it is captioned with. */
+  weight?: number;
 }
 
 /** Dark on a thumbnail's white ground, white on a state fill -- the same two
@@ -300,8 +326,13 @@ export function captionsFor(cell: Cell, cellPx: number, ink: string,
   if (cellPx < minPx) return [];
   const out: CellCaption[] = [];
   const years = yearRange(cell.year_from, cell.year_to, isRetired(cell));
-  if (years) out.push({ text: years, corner: 'tr', ink });
-  out.push({ text: cell.id, corner: 'bl', ink });
+  if (years) out.push({ text: years, corner: 'tr', ink, weight: WEIGHT_TEXT });
+  // The sideline theme, opposite the years: a Fabuland part is only legible
+  // as one if the wall says so, and the badge alone says "weird".
+  if (cell.family) {
+    out.push({ text: cell.family, corner: 'tl', ink, weight: WEIGHT_TEXT });
+  }
+  out.push({ text: cell.id, corner: 'bl', ink, weight: WEIGHT_ID });
   return out;
 }
 
@@ -404,7 +435,7 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
     const vectored = tint === 'status' ? vector?.get(cell.id) : undefined;
     const image = tint === 'status' ? (vectored ?? loose?.get(cell.id)) : undefined;
     if (image) {
-      out.push({ kind: 'image', dx, dy, dw, dh, image, ground: THUMB_GROUND,
+      out.push({ kind: 'image', dx, dy, dw, dh, image, ground: vectorGround(),
                  translucent: vectored !== undefined,
                  border, borderWidth, alpha, caret: isCaret, badges, strip, captions, wash });
       continue;

@@ -35,8 +35,9 @@ const PRE_TASK_LITERALS: Params = {
   maxBorderPx: 6,
   dimAlpha: 0.25,
   // Post-snapshot, like the out-of-scope fill: the wash replaced a ground
-  // that used to be baked into the sprites.
-  retiredWash: 0.35,
+  // that used to be baked into the sprites. Deepened from 0.35 on request --
+  // a retired part was not reading as retired across a wall.
+  retiredWash: 0.5,
 
   dragThresholdPx: 4,
   levelUpHysteresis: 1.5,

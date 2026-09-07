@@ -70,12 +70,24 @@ def clean_category(category: str | None) -> str:
     return plain or NO_CATEGORY
 
 
+def weird_theme(title: str | None) -> str | None:
+    """The sideline theme a description opens by naming, if any.
+
+    The name itself, not just the fact of one: "weird" says a part is off the
+    mainline, which is not much use on a wall where the next question is
+    always *which* sideline.
+    """
+    if not title:
+        return None
+    for word in title.lstrip("~=_|").lower().split()[:_LEAD_WORDS]:
+        if word in WEIRD_THEMES:
+            return word.title()
+    return None
+
+
 def is_weird(title: str | None) -> bool:
     """Whether a description opens by naming a sideline theme."""
-    if not title:
-        return False
-    return bool(WEIRD_THEMES.intersection(
-        title.lstrip("~=_|").lower().split()[:_LEAD_WORDS]))
+    return weird_theme(title) is not None
 
 
 def is_composite(part_id: str | None) -> bool:
