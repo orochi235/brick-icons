@@ -163,7 +163,7 @@ export interface CellBadge {
   /** A letter, or a shape where a letter would need explaining. */
   text?: string;
   mark?: BadgeMark;
-  corner?: 'tl' | 'br';
+  corner?: 'tl' | 'tr' | 'br';
   field: string;
   ink: string;
   /** Only where the field would vanish: duplo is red on white and
@@ -193,8 +193,11 @@ export interface CellBadge {
  *  today. */
 export const CORNER_BADGES: Record<string, CellBadge> = {
   popular: { tag: 'popular', mark: 'star', corner: 'tl', field: '#ff7a00', ink: '#ffffff' },
-  retired: { tag: 'retired', mark: 'archive', corner: 'br', field: '#6b6b72', ink: '#ffffff' },
-  replaced: { tag: 'replaced', mark: 'redo', corner: 'br', field: '#2f7d4f',
+  // Top right, outboard of the year: what these two say is when the part
+  // stopped, so they belong beside the dates rather than in the opposite
+  // corner from them. The year caption gives way and sets to their left.
+  retired: { tag: 'retired', mark: 'archive', corner: 'tr', field: '#6b6b72', ink: '#ffffff' },
+  replaced: { tag: 'replaced', mark: 'redo', corner: 'tr', field: '#2f7d4f',
              ink: '#ffffff', accent: '#ffffff', scale: 1.14 },
 };
 

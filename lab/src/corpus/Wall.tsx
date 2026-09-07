@@ -142,9 +142,11 @@ function drawSticker(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: n
 export function cornerBadgeAt(badge: CellBadge,
                               cmd: { dx: number; dy: number; dw: number; dh: number }) {
   const { size, radius, inset } = badgeGeometry(cmd.dw);
+  const right = badge.corner === 'br' || badge.corner === 'tr';
+  const bottom = badge.corner === 'br';
   return {
-    cx: badge.corner === 'br' ? cmd.dx + cmd.dw - inset : cmd.dx + inset,
-    cy: badge.corner === 'br' ? cmd.dy + cmd.dh - inset : cmd.dy + inset,
+    cx: right ? cmd.dx + cmd.dw - inset : cmd.dx + inset,
+    cy: bottom ? cmd.dy + cmd.dh - inset : cmd.dy + inset,
     size, radius,
   };
 }
@@ -189,7 +191,8 @@ function drawStrip(ctx: CanvasRenderingContext2D, strip: CellBadge[],
 // A caption in one of the corners the badges leave free, set straight onto
 // the cell: the drawing is centered and letterboxed, so its corners are empty.
 function drawCaption(ctx: CanvasRenderingContext2D, caption: CellCaption,
-                     cmd: { dx: number; dy: number; dw: number; dh: number }): number {
+                     cmd: { dx: number; dy: number; dw: number; dh: number },
+                     rightPad = 0): number {
   const size = captionSize(cmd.dw);
   const right = caption.corner === 'tr';
   const top = caption.corner[0] === 't';
@@ -199,7 +202,7 @@ function drawCaption(ctx: CanvasRenderingContext2D, caption: CellCaption,
   ctx.textBaseline = 'middle';
   const pad = cornerPad(cmd.dw, size);
   ctx.fillStyle = caption.ink;
-  const x = right ? cmd.dx + cmd.dw - pad : cmd.dx + pad;
+  const x = right ? cmd.dx + cmd.dw - pad - rightPad : cmd.dx + pad;
   ctx.fillText(caption.text, x,
                top ? cmd.dy + pad + size * 0.5 : cmd.dy + cmd.dh - pad - size * 0.5);
   const width = ctx.measureText(caption.text).width;
@@ -231,8 +234,14 @@ function drawOverlays(ctx: CanvasRenderingContext2D,
                       box: { dx: number; dy: number; dw: number; dh: number }) {
   const { size, radius } = stripGeometry(box.dw);
   let stripX = box.dx + cornerPad(box.dw, size);
+  // The top-right discs are drawn at the corner, so the year has to set to
+  // their left or the two overlap. Measured off the same geometry the discs
+  // are placed with, never a guess at how many there are.
+  const topRight = (cmd.badges ?? []).filter((b) => b.corner === 'tr').length;
+  const trPad = topRight === 0 ? 0
+    : topRight * badgeGeometry(box.dw).radius * 2 + radius * 0.6;
   for (const caption of cmd.captions ?? []) {
-    const end = drawCaption(ctx, caption, box);
+    const end = drawCaption(ctx, caption, box, caption.corner === 'tr' ? trPad : 0);
     if (caption.corner === 'bl') stripX = end + radius * 0.6;
   }
   for (const badge of cmd.badges ?? []) drawBadge(ctx, badge, cornerBadgeAt(badge, box));

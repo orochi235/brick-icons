@@ -400,16 +400,16 @@ it('lets a cell carry both the defect frame and the caret', () => {
 it('badges a cell once it is drawn big enough to hold one, one tag per corner', () => {
   const both = cell('a', 0, 'sha-a', { tags: ['retired', 'popular'] });
   expect(badgesFor(both, 200).map((b) => [b.text ?? b.mark, b.corner]))
-    .toEqual([['archive', 'br'], ['star', 'tl']]);
+    .toEqual([['archive', 'tr'], ['star', 'tl']]);
   expect(badgesFor(both, 20)).toEqual([]);
   expect(badgesFor(cell('b', 1, 'sha-b', { tags: ['minifig'] }), 200)).toEqual([]);
 });
 
-it('gives retired and replaced the same corner, never both at once', () => {
+it('puts retired and replaced beside the year, never both at once', () => {
   const stopped = badgesFor(cell('a', 0, 'sha-a', { tags: ['retired'] }), 200);
   const replaced = badgesFor(cell('b', 1, 'sha-b', { tags: ['replaced'] }), 200);
-  expect(stopped.map((b) => [b.tag, b.mark, b.corner])).toEqual([['retired', 'archive', 'br']]);
-  expect(replaced.map((b) => [b.tag, b.mark, b.corner])).toEqual([['replaced', 'redo', 'br']]);
+  expect(stopped.map((b) => [b.tag, b.mark, b.corner])).toEqual([['retired', 'archive', 'tr']]);
+  expect(replaced.map((b) => [b.tag, b.mark, b.corner])).toEqual([['replaced', 'redo', 'tr']]);
 });
 
 it('strips the kind badges in tag order, system before property', () => {
@@ -489,7 +489,7 @@ it('carries the badge on the drawn cell, not the empty one', () => {
     cells, rects, visible: [0], cam: { x: 0, y: 0, scale: { x: 20, y: 20 } },
     palette: CELL_FILL, manifest, loose: new Map([['a', {} as HTMLImageElement]]),
   });
-  expect(cmd).toMatchObject({ kind: 'image', badges: [{ mark: 'archive', corner: 'br' }] });
+  expect(cmd).toMatchObject({ kind: 'image', badges: [{ mark: 'archive', corner: 'tr' }] });
 });
 
 it('strikes every undrawn cell with a border, and leaves the quiet ones alone', () => {

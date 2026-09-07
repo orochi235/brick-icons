@@ -130,3 +130,19 @@ it('sorts by set count, most-used first', () => {
   expect(applySelection(parts, { sort: 'sets', filter: 'all', shown: DEFAULT_SHOWN, ...base })
     .map((c) => c.id)).toEqual(['b', 'a', 'c']);
 });
+
+it('keeps a cell carrying ANY of the picked tags, not all of them', () => {
+  const tagged = [
+    cell({ id: 'a', index: 0, tags: ['technic'] }),
+    cell({ id: 'b', index: 1, tags: ['duplo'] }),
+    cell({ id: 'c', index: 2, tags: ['sticker'] }),
+  ];
+  const pick = (badges: string[]) => applySelection(tagged,
+    { sort: 'id', filter: 'all', shown: DEFAULT_SHOWN, ...base, badges })
+    .map((c) => c.id);
+  // No part is both technic and duplo, so narrowing would empty the wall --
+  // picking a second badge asks to see that family too.
+  expect(pick(['technic', 'duplo'])).toEqual(['a', 'b']);
+  expect(pick(['technic'])).toEqual(['a']);
+  expect(pick([])).toEqual(['a', 'b', 'c']);
+});

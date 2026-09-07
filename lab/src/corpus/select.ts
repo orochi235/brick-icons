@@ -39,9 +39,9 @@ export interface Selection {
   tint: TintMode;
   /** Clean category names to leave off the wall entirely. */
   excluded: string[];
-  /** Badge tags a cell must carry to stay on the wall. Every one of them,
-   *  not any: each click narrows, which is what picking a second badge off
-   *  the legend is asking for. */
+  /** Badge tags that keep a cell on the wall. Any one of them, not all:
+   *  picking `technic` and then `duplo` asks to see both families, and no
+   *  part is ever both, so narrowing would empty the wall. */
   badges: string[];
   /** Which way `release` runs, and nothing else. */
   desc: boolean;
@@ -82,7 +82,8 @@ export function applySelection(cells: Cell[], selection: Selection): Cell[] {
   const badges = selection.badges ?? [];
   const kept = cells.filter((c) => KEEP[selection.filter](c)
                                    && !hidden.some((h) => IN_CLASS[h](c))
-                                   && badges.every((t) => c.tags?.includes(t))
+                                   && (badges.length === 0
+                                       || badges.some((t) => c.tags?.includes(t)))
                                    && !off.has(categoryOf(c)));
   const desc = DESCENDING.has(selection.sort);
   return kept.slice().sort((a, b) => {
