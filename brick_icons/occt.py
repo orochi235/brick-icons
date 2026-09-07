@@ -851,6 +851,19 @@ def locus_arc(edge, locus, kind):
             math.degrees(th[0]), math.degrees(th[-1]), kind)
 
 
+def _loose_faces(shape):
+    """The same faces, in a compound rather than in the sewn shell.
+
+    Connected, HLR reads a face's orientation and lets a back-facing one
+    occlude nothing -- and sewing leaves an LDraw part inward, so its own
+    front faces read as backs. 79306-f1 then drew 3 LDU of its bore's limb
+    across the end annulus that hides it. Loose faces claim nothing about
+    which side is solid, so each occludes on its own; orienting the shell
+    instead only answers for a closed volume, which a cracked part is not.
+    """
+    return _compound(_shape_faces(shape))
+
+
 @timing.timed("hlr")
 def hlr_edges(shape, right, up, cull=True, edges=None, cond=None):
     """Exact hidden-line removal, keyed 'sharp'/'cond'/'outline' -> a
@@ -866,7 +879,7 @@ def hlr_edges(shape, right, up, cull=True, edges=None, cond=None):
     z, x = projector_axes(right, up)
     a = ax2((0.0, 0.0, 0.0), z, x)
     algo = HLRBRep_Algo()
-    algo.Add(shape)
+    algo.Add(_loose_faces(shape))
     for extra in (edges, cond):
         if extra is not None:
             algo.Add(extra)

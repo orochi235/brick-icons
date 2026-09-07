@@ -1262,3 +1262,44 @@ def test_condlines_alone_do_not_count_as_declaring_an_edge(ldraw_dir):
         out = occt.flatten_part(part, ldraw_dir)
         assert out["5"] and not out["2"], part
         assert occt.visible_segments(out, right, up, 900).segs, part
+
+
+def test_an_end_face_hides_the_bore_limb_behind_it(ldraw_dir):
+    """79306-f1 is a pneumatic tube: two cylinders and an annulus at each end.
+    Its bore's limb runs the whole 40 LDU and every point of it is hidden --
+    the far 29 by the outer wall, the near 3 by the end annulus. Sewn into a
+    shell those 3 came back visible, two ticks drawn across the annulus, and
+    it is orientation that decides it: reversing the shell hides them again.
+    So the limbs left are the outer wall's, both full length."""
+    out = occt.flatten_part("79306-f1", ldraw_dir)
+    right, up = hlr.view_basis(30.0, 45.0)[:2]
+    res = occt.visible_segments(out, right, up, 512)
+    limbs = sorted(round(float(np.hypot(op[3] - op[1], op[4] - op[2])), 2)
+                   for op in res.segs if op[0] == "line" and op[-1] == "sil")
+    assert limbs == [31.62, 31.62], limbs
+
+
+def test_hlr_occludes_with_loose_faces_whatever_the_shell_says(ldraw_dir):
+    """The mechanism behind the test above, pinned on its own: HLR drops a
+    back-facing occluder once the faces are connected, and sewing leaves this
+    part inward. Handed the shell it keeps 2.45 of each bore limb; handed the
+    same faces loose, or the shell reversed, it hides them."""
+    out = occt.flatten_part("79306-f1", ldraw_dir)
+    right, up = hlr.view_basis(30.0, 45.0)[:2]
+    shell = occt.build_shape(out)
+
+    def visible_limbs(shape):
+        algo = occt.HLRBRep_Algo()
+        algo.Add(shape)
+        algo.Projector(occt.HLRAlgo_Projector(
+            occt.ax2((0.0, 0.0, 0.0), *occt.projector_axes(right, up))))
+        algo.Update()
+        algo.Hide()
+        comp = occt.HLRBRep_HLRToShape(algo).OutLineVCompound()
+        return sorted(round(float(np.hypot(op[3] - op[1], op[4] - op[2])), 2)
+                      for e in occt._edges_of(comp)
+                      for op in occt._edge_ops(e, "sil"))
+
+    assert visible_limbs(shell) == [2.45, 2.45, 31.62, 31.62]
+    assert visible_limbs(shell.Reversed()) == [31.62, 31.62]
+    assert visible_limbs(occt._loose_faces(shell)) == [31.62, 31.62]
