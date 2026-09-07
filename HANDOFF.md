@@ -1,5 +1,54 @@
 # Handoff — `main`: the corpus lab, and the OCCT engine
 
+## Baton, 2026-09-07 evening: occt drops naive's decal unwrap, and the audit that follows
+
+**Do this first: go through the naive engine's tricks and check each has an
+analog in occt.** Mike's ask, and the one below is the first row of that table
+-- found by reading the two call sites side by side, so the rest of the audit
+is the same exercise over `hlr.py` against `occt.py`.
+
+**`occt` hands `unwrap_decoration` an empty carrier list and throws away the
+recovered ellipses; naive passes both.**
+
+    hlr.py:523   shade.unwrap_decoration(tri_faces, analytic, proj,
+                                         ellipses_out=decal_ells)
+    occt.py:1621 shade.unwrap_decoration(faces + deco, [], proj)
+
+`unwrap.py` already IS the "scrape the decal off and draw it back as one
+piece" machinery Mike asked for -- it maps a decal into its carrier's
+parameter space, unions it there at full precision, and re-projects onto the
+exact surface, dissolving the author's faceting on the way (its own docstring:
+3941p01's 36-quad panel becomes one rounded rectangle in (theta, h)). It
+covers planar, cylinder and cone. On occt the analytic carriers never reach
+it, so a decal can only bind to a plane OCCT happens to have built, and
+`ellipses_out` -- the planar arc recovery for printed shapes -- is collected
+nowhere.
+
+**Two parts to work against, both from tonight's sheets.** `004490h`
+("WANTED DEAD OR ALIVE"): the bottom line of small text draws as dashes and
+dots where LDView draws letters, and the rule under it is dotted. Setting
+`shade.RESIDUE_CRUMB` to 0 recovers some glyph pieces and NOT the start of the
+line, so the crumb cull is a contributor and something upstream fragments it
+too -- do not stop at the cull. `003428d` is Mike's named case for planar arc
+recovery: an oval printed plate whose decal circles should come back as arcs.
+
+**Tonight's landed work is `73af254`, pushed.** occt_faces built no face for
+any non-round disc or ring; 2,619 of 24,591 parts carry one. All 576 parts
+with a stored `silhouette-occt` render were re-rendered (`ellip-restage`, plus
+a 10-part retry at MEM_GB=12 for the ones the 4GB cap killed). 523 of 576
+moved: 135 changed the silhouette, which is this fix; the other 388 only
+repainted inside an unchanged silhouette, which is the coplanar paint-order
+fix landing, not this one.
+
+**`out/ellip-before/` is the only copy of the pre-restage SVGs and is
+untracked.** The originals were overwritten. Without it the before/after
+sheets in `out/restage/ellip-sheets/` cannot be rebuilt.
+
+Still returning `[]` from `occt_faces`, each its own problem: an elliptical
+`con` (four of them are `71689`'s residual 233,860 missing px) and a skew
+axis (`4609`'s 149,786).
+
+
 ## Baton, 2026-09-07 afternoon: what is running and what to do first
 
 On `main`, in the shared checkout. `git log --oneline @{u}..HEAD` for anything
