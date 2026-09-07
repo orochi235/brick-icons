@@ -176,6 +176,46 @@ by both sessions' measurement, and belong to whoever filed that commit.
 
 `53119`'s two ticks on the dome survive. Its banding half closed overnight.
 
+## Next up: the badges are a hand-rolled canvas, and it shows
+
+Three defects Mike reported, one cause. **Do them in this order.**
+
+**1. Detail-view badges must become HTML.** `931b342` made the Legend, the tag
+pills (`tags.tsx`) and the Lightbox status render a `<canvas>` each, through
+`BadgeSwatch`, so they would not drift from the wall's artwork. That is a real
+risk answered backwards: share the *data* — the palette record in `paint.ts`
+and the mark geometry — not the rasterizer. Rewrite those three as HTML + CSS
+with the mark as inline SVG. It removes two of the three defects outright:
+
+- *Text sits high.* `drawBadge` hand-computes a baseline from
+  `measureText().actualBoundingBoxAscent`. Measured on Mike's screenshot of the
+  `retired` pill: the word's ink centre is **7.5 device px above** the pill's
+  centre while the icon's is +0.5. CSS does not have this bug.
+- *A markless badge reserves a mark's width.* Fixed for the canvas path in
+  `0c8f559` (`labelX`), but the DOM should not be running that code at all.
+
+**2. `MARKS` becomes path data.** Twelve entries in `badges.ts`, each a
+function that draws into a 2D context. Turn them into path strings both an
+`<svg>` and the canvas can render, so nothing can drift. This is what makes (1)
+safe and it is the bulk of the work. Note `stickerPolice` and `stickerFlames`
+punch holes in themselves with `destination-out` — as SVG that is a mask.
+
+**3. The wall should use weasel's scene, not its own paint loop.**
+`Wall.tsx:594` is a bare `<canvas>` with a hand-written renderer; the lab
+imports weasel only for viewport math (`worldToScreen`, `zoomAt`, the drag and
+pinch actions). `@weasel-js/core` exports `createNode`, `ContainerNode`,
+`ImageNode`, `LeafNode`, `drawText`, `renderSceneToCanvas`, `registerCanvas`
+— **`grep -rn "renderSceneToCanvas\|SceneNode\|createNode" lab/src` returns
+nothing.** `drawText` exists so nobody writes the baseline arithmetic in (1).
+This is the big one; Mike knows its size.
+
+**A separate bug, cheap, in the canvas path either way:** `scratchOf(size)` in
+`badges.ts` allocates `size × size` device pixels from a CSS-pixel size with no
+dpr factor, then composites into a dpr-scaled context. The two `PUNCHES` marks
+are the only ones routed through it, which is why the sticker badge alone
+renders soft. Fixing (3) does not remove this; fix it wherever the canvas path
+survives.
+
 ## 2026-09-07 late morning: coplanar paint order, and an A/B the census cannot run
 
 Merged to `main` (see `git log --oneline --first-parent -8`): the coplanar
