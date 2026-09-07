@@ -36,29 +36,40 @@ being listed. It is a committed deletion, not lost files:
 coming back empty is what a committed deletion looks like, not proof the files
 were never tracked -- that reading cost a peer a false alarm.
 
+**Every sticker draws now, and the last five were three separate faults.**
+`43e09bd` and `cdb54ee` built the undeclared-edge fallback and took the
+2,701-part bucket to 2,695. `c673dd3` and `b5b2694` finish it. All five were
+rendered and looked at: each draws its plate outline, no facet cloud.
+
+- `4221407f`, `4510086c`, `6015425b` -- `ValueError: need at least one array
+  to concatenate` out of `cull_orphan_runs`. OCCT's entire visible edge set
+  for each is two 0.22 LDU stubs, the plate thickness seen edge-on at the far
+  left and far right. They sit at opposite ends of a 276-314 LDU bbox, so the
+  ghost length lands at 0.55-0.63 and no op clears it; `real` came out empty
+  and `np.vstack` had nothing to stack. The cull only ever removes, so with no
+  stroke graph it now returns the segments untouched.
+- `6342851a` -- "produced no edges". A `box5-12` plate with 8,888 artwork
+  triangles coplanar on its top face and two type-2 lines drawn along the
+  print. UnifySameDomain merges all of it into 6 faces, so both lines land in
+  the INTERIOR of one and match none of HLR's 9 visible edges. **A declaration
+  only counts where OCCT has an edge to hang it on**, so the fallback's guard
+  is now that nothing was drawn, not that nothing was declared. This
+  deliberately reverses `cdb54ee`'s "a real type-2 and still nothing is a
+  different fault and still raises" -- 6342851a was the only part in the
+  census on that row (5241, the other, has drawn since `43e09bd`) and it is
+  not a fault. Restore the guard by putting `and not out.get("2")` back on
+  `occt.visible_segments`'s fallback line.
+- `6177970ec01` -- nothing wrong with it. Renders in 90 s at 823 MB peak. Its
+  `ProcessDied` row is exactly the stale-row trap below: collateral from a
+  pre-`18310b7` runaway that named whichever part held `.inflight`.
+
+Both fixes are byte-safe by control flow, not by sampling: each branch is
+entered only where the old code raised. (`43e09bd`/`cdb54ee` were measured by
+instrumenting `occt._undeclared_ops` -- a byte-diff against a worktree does
+not work here, because the editable install beats `PYTHONPATH` and both sides
+run HEAD.)
+
 ### What is not done
-
-- **The sticker fallback shipped and the bucket is re-run.** `43e09bd` draws a
-  part that declares no edge from HLR's sharp set; `cdb54ee` then stopped the
-  guard counting a type-5 condline as a declaration, which is what the seven
-  formed stickers and their hundred-odd composite siblings needed -- a condline
-  draws only where its two faces straddle the view, so on a flat plate seen
-  from outside none qualify and the part is left with no boundary at all. The
-  guard is now the absence of a type-2 alone. A part that declares a real
-  type-2 edge and still yields nothing still raises, on purpose.
-
-  Over the 2,701-part sticker corpus occt now draws **2,695**. Five are left
-  and they are a NEW class, not the old one -- do not read them as leftovers:
-  `4221407f`, `4510086c` and `6015425b` raise `ValueError: need at least one
-  array to concatenate`; `6342851a` still produces no edges; `6177970ec01`
-  died mid-render. Undiagnosed.
-
-  The fallback is byte-safe by control flow, not by luck: it is reachable only
-  where the old code raised. Measured twice, once after each guard, by
-  instrumenting `occt._undeclared_ops` over two dozen parts spanning the arc,
-  dish, fill and slow families -- 0 firings both times. Re-measure that way if
-  the guard moves again; a byte-diff against a worktree does not work here,
-  because the editable install beats `PYTHONPATH` and both sides run HEAD.
 
 - **A translucent slot, both engines.** No such source exists, and **Mike has
   not said which picture he means**: `--wireframe` (occlusion off, every hidden
