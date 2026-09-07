@@ -132,17 +132,37 @@ take `u x v` as the axis. **`cyli` and `con` still fail on any shear** -- there
 the axis IS the extrusion direction and a skew one is a real oblique surface
 with no exact counterpart.
 
-**It is a wide change, not a narrow one.** 21.7% of a 500-part library sample
-carries at least one such primitive.
+**It is a wide change, not a narrow one.** 4,479 of the library's 24,591
+parts carry at least one such primitive -- 18.2%, a median of 6 each, 43,768
+in all. 2,169 of those parts are printed, so 2,310 are in the engine loop
+today.
 
 **A/B the change in-process, never against a census render.** Setting
-`occt.PLANAR_KINDS = ()` before a render restores `frame()`'s old behaviour
+`occt.PLANAR_KINDS = ()` before a render restores `frame()`'s old behavior
 exactly, so one process draws the before and another the after -- a worktree
 cannot, because the editable install beats `PYTHONPATH` and both sides run
 HEAD. Read against its census render, 32054 looked like this fix turned a
 near-solid black blob into a clean shaft; A/B'd, it is the same drawing either
 way and something else on main had already fixed it. `b0c5d85`'s message
 claims it and is wrong. 3820 A/B's exactly as advertised.
+
+**98642 is the second case and it A/B's.** A minifig torso carrying two 3820
+hands: with the fix off its left hand is two disconnected slivers floating in
+space, with it on the hand is a C-grip ring. Missing area against LDView goes
+17,947px in 1 component to 4,905px in 2 -- the component count RISES because
+what was one missing blob is now the two thin slivers either side of a drawn
+ring. Numbers from `scripts/compare-silhouette-truth.py`'s own scoring at
+default stroke widths, so they are comparable to each other and NOT to a
+strokeless census row.
+
+**That comparator gates coverage, not tone.** `ours` is the alpha channel
+thresholded at 128, so a fill going from one flat gray to a lit band does not
+move it at all: 3820 scores missing 0px both with the fix and without, while
+the picture is the whole defect. Use it to catch a hole appearing, never to
+decide whether a fill got better. Of the 39 affected parts swept, the only one
+whose coverage moved is 98642; 4600, 32054, 41334 and 35485 score byte-identical
+with the fix armed and disarmed, 41334's 188,496px in 23 components included --
+that one is a pre-existing defect this does not touch.
 
 **`2531` and `u9543` have no rejected frames, so this did not touch them**, and
 both already drew their open ring correctly. The defect entry grouped them with
