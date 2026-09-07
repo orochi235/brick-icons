@@ -23,7 +23,6 @@ import subprocess
 import sys
 import tempfile
 import time
-import traceback
 from pathlib import Path
 
 import numpy as np
@@ -33,6 +32,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from brick_icons import cli  # noqa: E402
+from brick_icons.batch import Runner  # noqa: E402
 
 
 def one(part: str, args, tmp: Path) -> dict:
@@ -70,6 +70,9 @@ def main() -> int:
     ap.add_argument("--render-px", type=int, default=512)
     ap.add_argument("--zoom", type=float, default=1.0)
     ap.add_argument("--timeout", type=float, default=120.0)
+    ap.add_argument("--isolate", action="store_true",
+                    help="render in a forked child, so --timeout can stop it")
+    ap.add_argument("--mem-gb", dest="mem_gb", type=float, default=8)
     args = ap.parse_args()
 
     if args.parts:
@@ -90,32 +93,27 @@ def main() -> int:
         print("need --out or --out-dir", file=sys.stderr)
         return 2
     out.parent.mkdir(parents=True, exist_ok=True)
-    done = set()
-    if out.exists():
-        for ln in out.read_text().splitlines():
-            try:
-                done.add(json.loads(ln)["part"])
-            except Exception:  # noqa: BLE001
-                pass
+
+    runner = Runner(out, timeout=args.timeout, key="part",
+                    isolate=args.isolate, mem_gb=args.mem_gb)
+    before = len(parts)
+    parts = runner.remaining(parts)
+    print(f"resuming: {before - len(parts)} done, {len(parts)} left", flush=True)
+    print(f"onto: plan {before - len(parts)}/{before}", flush=True)
 
     n = len(parts)
-    with out.open("a") as fh:
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
         for i, part in enumerate(parts, 1):
-            if part in done:
-                print(f"{i}/{n} {part} skip", flush=True)
-                continue
-            with tempfile.TemporaryDirectory() as td:
-                try:
-                    row = one(part, args, Path(td))
-                    print(f"{i}/{n} {part} {row['sha'][:12]} "
-                          f"{row['ink_px']}px [{row['secs']}s]", flush=True)
-                except Exception as e:  # noqa: BLE001
-                    row = {"part": part, "error": type(e).__name__,
-                           "detail": str(e)[:200],
-                           "trace": traceback.format_exc()[-400:]}
-                    print(f"{i}/{n} {part} ERROR {type(e).__name__}", flush=True)
-            fh.write(json.dumps(row) + "\n")
-            fh.flush()
+            def work(pid, tmp=tmp):
+                return one(pid, args, tmp)
+            r = runner.run(part, work)
+            if "error" in r:
+                print(f"{i}/{n} {part} FAILED {r['error']} [{r.get('secs')}s]",
+                      flush=True)
+            else:
+                print(f"{i}/{n} {part} {r['sha'][:12]} {r['ink_px']}px "
+                      f"[{r['secs']}s]", flush=True)
     return 0
 
 
