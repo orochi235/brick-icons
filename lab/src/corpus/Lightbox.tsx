@@ -5,12 +5,29 @@ import { BadgeSwatch } from '@lab/corpus/BadgeSwatch';
 import { CATALOGS } from '@lab/corpus/catalogs';
 import { Tags, yearRange } from '@lab/corpus/tags';
 import { defectId, engineFor } from '@lab/corpus/flag';
+import { cellState } from '@lab/corpus/paint';
+import type { CellState } from '@lab/corpus/palette';
 import type { PartDetail } from '@lab/corpus/types';
 import { STATUS_BADGES } from '@lab/defects/statusBadges';
 import '@lab/corpus/Lightbox.css';
 
 function renderSrc(partId: string, slot: { source: string; sha256: string }) {
   return `/api/corpus/render/${slot.source}/${partId}.svg?v=${slot.sha256.slice(0, 8)}`;
+}
+
+/** The state the wall would color this slot's cell. An API older than the
+ *  state fields sends none, and every slot here has a render, so the honest
+ *  answer for a slot that says nothing is the ground a clean one gets. */
+function slotState(slot: PartDetail['slots'][number],
+                   part: PartDetail['part']): CellState {
+  return cellState({
+    out_of_scope: part.out_of_scope ?? false,
+    open_defects: slot.open_defects ?? 0,
+    error: slot.error ?? null,
+    accepted_defects: slot.accepted_defects ?? 0,
+    open_defects_elsewhere: slot.open_defects_elsewhere ?? 0,
+    error_elsewhere: slot.error_elsewhere ?? false,
+  });
 }
 
 /** A defect's status where it is read rather than set: the same badge shape
@@ -117,6 +134,7 @@ export function Lightbox({ partId, source, client, onClose }: {
             {slots.map((slot) => (
               <li key={slot.source} className="corpus-slot"
                   data-current={slot.source === shown}
+                  data-state={slotState(slot, detail.part)}
                   data-retired={(detail.part.tags ?? []).includes('retired')}>
                 {/* Capture, and stopped there: React derives a radio's onChange
                     from the same click, so a bubble-phase handler cannot keep

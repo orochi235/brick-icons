@@ -418,3 +418,48 @@ def test_a_qualified_slot_files_its_measurements_under_the_last_segment():
     assert cells.engine_for("white-naive") == "naive"
     assert cells.engine_for("naive") == "naive"
     assert cells.engine_for("ldview") == "ldview"
+
+
+def test_slot_states_reads_each_slot_on_its_own_source(conn):
+    _part(conn, "3001")
+    _render(conn, "3001", "a", "2026-09-05T00:00:00+00:00", "silhouette-occt")
+    _render(conn, "3001", "b", "2026-09-05T00:00:00+00:00", "white-occt")
+    _measure(conn, "3001", "occt", error="TimeoutError", source="silhouette-occt")
+    _measure(conn, "3001", "occt", source="white-occt")
+    conn.commit()
+    states = cells.slot_states(conn, "3001", ["silhouette-occt", "white-occt"])
+    assert states["silhouette-occt"]["error"] == "TimeoutError"
+    assert states["white-occt"]["error"] is None
+
+
+def test_slot_states_counts_a_defect_here_and_elsewhere(conn):
+    _part(conn, "3001")
+    _defect(conn, "d1", "3001", ["occt"])
+    conn.commit()
+    states = cells.slot_states(conn, "3001",
+                               ["silhouette-occt", "silhouette-naive"])
+    assert states["silhouette-occt"]["open_defects"] == 1
+    assert states["silhouette-occt"]["open_defects_elsewhere"] == 0
+    assert states["silhouette-naive"]["open_defects"] == 0
+    assert states["silhouette-naive"]["open_defects_elsewhere"] == 1
+
+
+def test_slot_states_marks_a_wontfix_as_accepted_only_on_its_own_engine(conn):
+    _part(conn, "3001")
+    _defect(conn, "d1", "3001", ["occt"], status="wontfix")
+    conn.commit()
+    states = cells.slot_states(conn, "3001",
+                               ["silhouette-occt", "silhouette-naive"])
+    assert states["silhouette-occt"]["accepted_defects"] == 1
+    assert states["silhouette-naive"]["accepted_defects"] == 0
+
+
+def test_slot_states_reads_error_elsewhere_within_the_facet_only(conn):
+    """A white slot failing says nothing about the oracle slot -- the wall
+    marks siblings, and `white-*` is not `silhouette-*`'s family."""
+    _part(conn, "3001")
+    _measure(conn, "3001", "naive", error="MemoryError", source="white-naive")
+    conn.commit()
+    states = cells.slot_states(conn, "3001", ["white-occt", "silhouette-occt"])
+    assert states["white-occt"]["error_elsewhere"] is True
+    assert states["silhouette-occt"]["error_elsewhere"] is False

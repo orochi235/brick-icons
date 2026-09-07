@@ -388,6 +388,8 @@ def create_app(root: Path | str = ".",
             slots = [dict(r) for r in conn.execute(
                 "SELECT source, sha256, made_at FROM renders WHERE part_id = ? "
                 "ORDER BY source", (part_id,))]
+            states = cells.slot_states(conn, part_id,
+                                       [s["source"] for s in slots])
             years = conn.execute(
                 "SELECT year_from, year_to, sets FROM part_years WHERE part_id = ?",
                 (part_id,)).fetchone()
@@ -400,6 +402,9 @@ def create_app(root: Path | str = ".",
         part["tags"] = tags.tags_for(part["category"], bool(part["printed"]),
                                      bool(part["obsolete"]),
                                      part["year_to"], part["sets"])
+        part["out_of_scope"] = part["category"] in cells.OUT_OF_SCOPE_CATEGORIES
+        for slot in slots:
+            slot.update(states[slot["source"]])
         return {"part": part, "findings": found, "runs": runs,
                 "slots": slots,
                 "defects": [d for d in defects.load(app.state.defects_path)

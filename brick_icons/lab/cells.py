@@ -228,3 +228,32 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
         })
     return {"cells": rows, "count": len(order), "version": version,
             "source": source}
+
+
+def slot_states(conn: sqlite3.Connection, part_id: str,
+                sources: list[str]) -> dict[str, dict]:
+    """What each of a part's slots would color its cell, keyed by source.
+
+    The same four reads `cells` makes, narrowed to one part, so the detail
+    view cannot drift from the wall it was opened from. `out_of_scope` is the
+    part's and belongs to the caller that already has the row.
+    """
+    out: dict[str, dict] = {}
+    for source in sources:
+        engine = engine_for(source)
+        siblings = sibling_glob(source)
+        measure = conn.execute(
+            _LATEST_MEASURE + " AND m.part_id = ?",
+            (source, source, part_id)).fetchone()
+        elsewhere = conn.execute(
+            _LATEST_OTHER_ERRORS + " AND m.part_id = ?",
+            (source, siblings, source, siblings, part_id)).fetchone()
+        bucket = _open_defects(conn, [part_id], engine).get(part_id, _NO_DEFECTS)
+        out[source] = {
+            "error": measure["error"] if measure else None,
+            "open_defects": bucket["here"],
+            "open_defects_elsewhere": bucket["elsewhere"],
+            "accepted_defects": bucket["accepted"],
+            "error_elsewhere": elsewhere is not None,
+        }
+    return out

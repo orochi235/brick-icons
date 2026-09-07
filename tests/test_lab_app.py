@@ -525,3 +525,31 @@ def test_sizes_route_holds_its_answer_until_asked_again(tmp_path):
         b"x" * 100_000)
     assert client.get("/api/corpus/sizes").json()["as_of"] == first["as_of"]
     assert client.get("/api/corpus/sizes?refresh=1").json()["as_of"] != first["as_of"]
+
+
+def test_part_route_gives_every_slot_what_the_wall_colors_a_cell_by(tmp_path):
+    """The detail view draws each render on its slot's state ground, so the
+    state has to arrive per slot rather than per part."""
+    from brick_icons import db
+    client = _corpus_client(tmp_path)
+    conn = db.connect(tmp_path / "corpus.db")
+    for source in ("silhouette-occt", "white-occt"):
+        conn.execute("INSERT INTO renders (part_id, source, config_key, "
+                     "made_at, path, sha256) VALUES ('3001', ?, 'k', "
+                     "'2026-09-05T00:00:00+00:00', ?, 'abcdef1234')",
+                     (source, f"renders/{source}/3001.svg"))
+    conn.execute("INSERT INTO runs (id, kind, started, commit_sha, args) "
+                 "VALUES (1, 'census', '2026-09-05T09:00:00+00:00', 'abc', '{}')")
+    conn.execute("INSERT INTO measurements (run_id, part_id, engine, source, "
+                 "error) VALUES (1, '3001', 'occt', 'silhouette-occt', "
+                 "'TimeoutError')")
+    conn.commit()
+    conn.close()
+
+    body = client.get("/api/corpus/part/3001").json()
+    assert body["part"]["out_of_scope"] is False
+    slots = {s["source"]: s for s in body["slots"]}
+    assert slots["silhouette-occt"]["error"] == "TimeoutError"
+    assert slots["white-occt"]["error"] is None
+    assert slots["white-occt"]["open_defects"] == 0
+    assert slots["white-occt"]["error_elsewhere"] is False

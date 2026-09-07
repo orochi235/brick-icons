@@ -33,6 +33,29 @@
   background: var(--corpus-thumb-ground, #ffffff);
 }
 
+/* The wall's `ground = border ?? thumbGround()` (paint.ts): a drawn cell says
+ * its state with the surround, because the drawing itself is ink on
+ * transparency. Every slot here is drawn, so the two states with no border --
+ * unknown and outOfScope -- keep the plain ground above. */
+.corpus-slot[data-state='timeout'] .corpus-big {
+  background: var(--corpus-cell-timeout-border);
+}
+.corpus-slot[data-state='failed'] .corpus-big {
+  background: var(--corpus-cell-failed-border);
+}
+.corpus-slot[data-state='defect'] .corpus-big {
+  background: var(--corpus-cell-defect-border);
+}
+.corpus-slot[data-state='accepted'] .corpus-big {
+  background: var(--corpus-cell-accepted-border);
+}
+.corpus-slot[data-state='problemElsewhere'] .corpus-big {
+  background: var(--corpus-cell-problem-elsewhere-border);
+}
+.corpus-slot[data-state='defectElsewhere'] .corpus-big {
+  background: var(--corpus-cell-defect-elsewhere-border);
+}
+
 .corpus-slots {
   display: flex;
   flex-wrap: wrap;
@@ -53,7 +76,10 @@
   clip: rect(0, 0, 0, 0);
 }
 .corpus-slot-pick:focus-within .corpus-big { outline: 2px dashed var(--wzl-accent, currentColor); }
-.corpus-slot[data-retired='true'] .corpus-big {
+/* Only where the state left the ground plain. A retired part that also has an
+ * open defect is still a defect, and the wall says so with the surround. */
+.corpus-slot[data-retired='true']:is([data-state='unknown'], [data-state='outOfScope'])
+  .corpus-big {
   background: var(--corpus-thumb-ground-retired, #d8d8d8);
 }
 .corpus-slot-name { color: var(--wzl-fg-muted); }

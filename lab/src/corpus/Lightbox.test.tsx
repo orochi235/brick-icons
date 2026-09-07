@@ -156,3 +156,31 @@ it('files a defect against the slot being viewed', async () => {
     title: 'the rim is drawn whole',
   });
 });
+
+it('marks each slot with the state the wall would color its cell', async () => {
+  const detailed = {
+    ...detail,
+    part: { ...detail.part, out_of_scope: false },
+    slots: [
+      { ...detail.slots[0], error: 'TimeoutError', open_defects: 0,
+        open_defects_elsewhere: 0, accepted_defects: 0, error_elsewhere: false },
+      { ...detail.slots[1], error: null, open_defects: 2,
+        open_defects_elsewhere: 0, accepted_defects: 0, error_elsewhere: false },
+    ],
+  };
+  render(box({ client: { corpusPart: () => Promise.resolve(detailed), addDefect } }));
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  const states = [...document.querySelectorAll('.corpus-slot')]
+    .map((el) => el.getAttribute('data-state'));
+  expect(states).toEqual(['timeout', 'defect']);
+});
+
+it('leaves a slot from an API older than the state fields unmarked', async () => {
+  // Every slot listed has a render, so the honest state for one that says
+  // nothing is the clean one -- not a defect the server never claimed.
+  render(box());
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  const states = [...document.querySelectorAll('.corpus-slot')]
+    .map((el) => el.getAttribute('data-state'));
+  expect(states).toEqual(['unknown', 'unknown']);
+});

@@ -10,11 +10,24 @@ import { WEIGHT_ID, WEIGHT_TEXT } from '@lab/corpus/badges';
 
 export type { CellStyle } from '@lab/corpus/palette';
 
+/** Everything `cellState` reads. A `Cell` satisfies it, and so does one of a
+ *  part's slots in the detail view -- which is a cell on a wall nobody is
+ *  looking at. */
+export interface StateFacts {
+  out_of_scope: boolean;
+  open_defects: number;
+  error: string | null;
+  accepted_defects: number;
+  open_defects_elsewhere: number;
+  error_elsewhere: boolean;
+}
+
 /** What a cell's color says about it: out of scope first, then
  *  worst-here-first and worst-elsewhere.
- *  The single precedence table -- `fillFor`, the legend and `PartCard` all
- *  read a cell's state through this, so they cannot drift apart. */
-export function cellState(cell: Cell): CellState {
+ *  The single precedence table -- `fillFor`, the legend, `PartCard` and the
+ *  lightbox all read a cell's state through this, so they cannot drift
+ *  apart. */
+export function cellState(cell: StateFacts): CellState {
   // Ahead of every problem state: a part the project is not drawing yet has
   // not failed at anything, and a wall of red stickers would say it had.
   if (cell.out_of_scope) return 'outOfScope';
