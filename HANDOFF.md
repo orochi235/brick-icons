@@ -42,6 +42,46 @@ LDView's "hexagonal recess" is `-AllowPrimitiveSubstitution` drawing the r=4
 `stud2a` collar's inner rim. What ours actually misses is the recess behind
 it -- nothing at all is drawn inside the collar bore where LDView shows wall.
 
+### The re-render list, and how to get one for the next engine change
+
+`scripts/hlr-shell-affected.py` names the parts `b350c40` moves without
+rendering any of them: HLR twice a part, shell against loose faces, visible
+edge sequences compared, 0.3s against up to 40s for two renders. Against a
+full render A/B of 160 parts it caught all 49 whose SVG changed and named 13
+more that did not -- a superset by design, because a wasted re-render costs
+seconds and a missed one leaves a stale drawing on the wall. Its output is
+`restage/hlr-loose-faces.txt`, and it feeds
+
+    .venv/bin/python scripts/build-render-store.py \
+        --list restage/hlr-loose-faces.txt --sources occt --force
+
+**Compare the SEQUENCE, not a sorted set.** Sorting first looked like the
+honest comparison and missed 9 of 33 parts whose pixels move: the stages under
+HLR read ops in order, so the same edges in a different order still trace
+differently. That is the same trap as reading a byte diff as a moved drawing,
+from the other side.
+
+### 2310 and 39789 are confirmed and neither is a hidden-line miss
+
+Both were ray-tested against the shape occt itself builds, with
+`IntCurvesFace_ShapeIntersector` and the projector's own view direction --
+**HLR's answer is right for that shape in both.** So the disagreement with
+LDView sits upstream, in which surfaces reach HLR at all, and no visibility
+rule will move it.
+
+- `2310` -- naive draws it stroke for stroke the same, so it is not an occt
+  fault at all. `compare-silhouette-truth` gives 0px missing against the
+  part's own triangles, so our outline is exactly our geometry. What LDView
+  shows is a flat wall where both engines draw a half cylinder: the r=6
+  circle at (0,12,0), which is outside the material in every direction tested
+  (every ray count even). Its filed engine list should say `naive` too.
+- `39789` -- occt alone draws four ~85-degree arcs of the r=8 recess rim at
+  each of the three axle holes, curving across the stud in front. naive draws
+  none of them and LDView shows none. Ray-tested, 34 of 36 samples of what
+  occt draws are genuinely clear to the camera in occt's shape, and the 2 that
+  are not sit at exact tangency. The lead is the occluder set: compare what
+  `occt.build_shape` holds against `primitives`' occluders for this part.
+
 ### Every occt row, rendered at iso and read against LDView
 
 Confirmed, still open, worst first:
@@ -54,12 +94,8 @@ Confirmed, still open, worst first:
   (its fork is drawn straight-sided, cavity gone) and
   `35485-ring-is-broken`, both of which are `s\*s01` subfiles plus a `cyli`.
   Analytic torus is the shared answer and it is a feature, not a fix.
-- `2310-crap-on-darkest-face-and` -- 2310 is a 45-degree INVERTED slope and we
-  draw no slope face at all: the outline runs left corner -> bottom corner and
-  then back up inside, a sliver where LDView has a wide lit plane. It is one
-  traced polyline, `M 121.02 22.56 ... L 168.11 164.00 L 87.89 105.86` in the
-  SVG, so the bad run is a declared edge HLR calls visible, not contour.
-- `39789-occt-has-issues-with-top` -- stray ticks around several studs.
+- `2310-crap-on-darkest-face-and` and `39789-occt-has-issues-with-top` --
+  both confirmed, both diagnosed above; neither is a visibility fault.
 - `92692-joint-where-front-tube-meets` -- the tube/ring joints read as
   separate capped cylinders.
 - `96904` keeps its slot drawn far fatter than LDView's hairline; the annulus
