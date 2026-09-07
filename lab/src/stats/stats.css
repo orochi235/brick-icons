@@ -223,10 +223,11 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
 
 /* -- histograms --------------------------------------------------------- */
 
-.stats-multiples { display: flex; gap: 2rem; flex-wrap: wrap; }
-
-.stats-histogram { margin: 0; flex: 1 1 20rem; }
+.stats-histogram { margin: 0; }
 .stats-histogram figcaption { margin-bottom: 0.5rem; font-size: 0.9rem; }
+
+.stats-overlay-keys { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+.stats-overlay-key { display: flex; align-items: center; gap: 0.4rem; }
 
 .stats-bins {
   display: flex;
@@ -244,12 +245,43 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
   position: relative;
 }
 
+/* The two series share the column and overlap. The shorter one is drawn over
+ * the taller, so a bin where one engine is far ahead still shows both. */
+.stats-bin-stack {
+  display: flex;
+  align-items: flex-end;
+  height: 100%;
+  position: relative;
+}
+
 .stats-bin-fill {
   display: block;
-  background: var(--stats-bin);
   border-radius: 3px 3px 0 0;
   min-height: 1px;
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
 }
+
+/* The ring is what keeps the front bar's edge readable where it sits inside
+ * the back one; without it two bars of the same color read as one. */
+.stats-bin-fill[data-front] {
+  box-shadow: 0 -2px 0 var(--wzl-surface-sunken, #0e0f12),
+              2px 0 0 var(--wzl-surface-sunken, #0e0f12),
+              -2px 0 0 var(--wzl-surface-sunken, #0e0f12);
+}
+
+.stats-bin-mark { background: var(--stats-bin); }
+/* Fine and low-contrast on purpose. A bold hatch across a bar this wide reads
+ * as "disabled" rather than as a second series. */
+.stats-bin-mark[data-fill="hatch"] {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--stats-bin) 0 2px,
+    color-mix(in srgb, var(--stats-bin) 62%, var(--wzl-surface-sunken, #0e0f12)) 2px 5px);
+}
+
+.stats-bins { border-bottom: 1px solid var(--wzl-border, #333); }
 
 .stats-bin-label {
   font-size: 0.65rem;

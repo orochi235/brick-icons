@@ -97,29 +97,66 @@ export function CoverageLegend() {
 const binLabel = (from: number, to: number | null) =>
   to === null ? `${from}s+` : `${from}–${to}s`;
 
-/** One engine's render times. A small multiple per engine rather than two
- *  series in one plot: the counts are what matter and overlapping them would
- *  need a second scale. */
-export function SecsHistogram({ row }: { row: SpeedRow }) {
-  const tallest = Math.max(1, ...row.bins.map((b) => b.n));
+/** Every engine's render times in one plot, sharing bins and one count scale.
+ *
+ *  Overlaid rather than a small multiple per engine, because the question the
+ *  section asks is which engine is faster and a reader cannot answer it across
+ *  a gap. Scaling each panel to its own tallest bin actively lied: naive's
+ *  10-30s bin and occt's drew the same height on different counts.
+ *
+ *  Identity is fill against hatch, not two hues. The status palette already
+ *  spends gold, red and cyan and the phase palette blue, orange, green and
+ *  purple; a spare hue on this page is one the reader has just been taught to
+ *  read as something else. The hatch also survives being printed and being
+ *  colorblind, which a hue pair does not. */
+const SERIES_FILL = ['solid', 'hatch'] as const;
+
+export function SecsOverlay({ rows }: { rows: SpeedRow[] }) {
+  const bins = rows[0]?.bins ?? [];
+  const tallest = Math.max(1, ...rows.flatMap((r) => r.bins.map((b) => b.n)));
   return (
-    <figure className="stats-histogram">
-      <figcaption>
-        <strong>{row.engine}</strong>
-        <span className="stats-muted">
-          {' '}median {row.median?.toFixed(1)}s · p95 {row.p95?.toFixed(0)}s ·
-          {' '}max {row.max?.toFixed(0)}s · {row.n.toLocaleString()} parts
-        </span>
+    <figure className="stats-histogram stats-overlay">
+      <figcaption className="stats-overlay-keys">
+        {rows.map((row, i) => (
+          <span key={row.engine} className="stats-overlay-key">
+            <span className="stats-swatch stats-bin-mark" aria-hidden="true"
+                  data-fill={SERIES_FILL[i] ?? 'solid'} />
+            <strong>{row.engine}</strong>
+            <span className="stats-muted">
+              {' '}median {row.median?.toFixed(1)}s · p95 {row.p95?.toFixed(0)}s ·
+              {' '}max {row.max?.toFixed(0)}s · {row.n.toLocaleString()} parts
+            </span>
+          </span>
+        ))}
       </figcaption>
       <div className="stats-bins">
-        {row.bins.map((bin) => (
-          <div key={bin.from} className="stats-bin"
-               title={`${bin.n.toLocaleString()} parts took ${binLabel(bin.from, bin.to)}`}>
-            <span className="stats-bin-fill"
-                  style={{ height: `${pct(bin.n, tallest)}%` }} />
-            <span className="stats-bin-label">{binLabel(bin.from, bin.to)}</span>
-          </div>
-        ))}
+        {bins.map((bin, b) => {
+          const counts = rows.map((row) => row.bins[b]?.n ?? 0);
+          // Both bars stand on the baseline, so the taller one hides the
+          // shorter completely unless the shorter is the one in front. Which
+          // engine that is changes bin by bin -- that is the whole point of
+          // the chart -- so it cannot be a fixed order.
+          const shortest = Math.min(...counts);
+          return (
+            <div key={bin.from} className="stats-bin">
+              <span className="stats-bin-stack">
+                {rows.map((row, i) => {
+                  const n = counts[i] ?? 0;
+                  return (
+                    <span key={row.engine} className="stats-bin-fill stats-bin-mark"
+                          data-engine={row.engine} data-fill={SERIES_FILL[i] ?? 'solid'}
+                          data-front={n === shortest || undefined}
+                          style={{ height: `${pct(n, tallest)}%`,
+                                   zIndex: n === shortest ? 2 : 1 }}
+                          title={`${row.engine}: ${n.toLocaleString()} parts took `
+                                 + binLabel(bin.from, bin.to)} />
+                  );
+                })}
+              </span>
+              <span className="stats-bin-label">{binLabel(bin.from, bin.to)}</span>
+            </div>
+          );
+        })}
       </div>
     </figure>
   );

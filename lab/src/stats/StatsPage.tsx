@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { LabClient } from '@lab/api/client';
 import { CoverageBars, CoverageLegend, PhaseBars, PhaseColumns, PhaseLegend,
-         SecsHistogram } from '@lab/stats/charts';
+         SecsOverlay } from '@lab/stats/charts';
 import { useStats } from '@lab/stats/useStats';
 import { DEFAULT_SET, fromQuery, toQuery, wallHref,
          type WorkingSet } from '@lab/stats/workingSet';
@@ -128,9 +128,7 @@ export function StatsPage({ client }: { client: LabClient }) {
             {stats.speed.length === 0
               ? <p className="stats-empty">nothing in this set has been timed</p>
               : (
-                <div className="stats-multiples">
-                  {stats.speed.map((row) => <SecsHistogram key={row.engine} row={row} />)}
-                </div>
+                <SecsOverlay rows={stats.speed} />
               )}
           </section>
 

@@ -99,6 +99,41 @@ describe('StatsPage', () => {
     expect((columns[0] as HTMLElement).style.height).toBe('33.33333333333333%');
   });
 
+  it('scales both engines to one count, so their bars are comparable', async () => {
+    const two = body();
+    two.speed = [
+      { engine: 'naive', n: 14, total: 100, median: 2, p95: 30, max: 90,
+        bins: [{ from: 0, to: 1, n: 4 }, { from: 1, to: null, n: 10 }] },
+      { engine: 'occt', n: 25, total: 60, median: 1, p95: 9, max: 20,
+        bins: [{ from: 0, to: 1, n: 20 }, { from: 1, to: null, n: 5 }] },
+    ];
+    const { container } = render(<StatsPage client={clientWith(async () => two)} />);
+    await waitFor(() => container.querySelector('.stats-bin-fill'));
+    const heights = [...container.querySelectorAll('.stats-bin-fill')]
+      .map((el) => [(el as HTMLElement).dataset.engine, (el as HTMLElement).style.height]);
+    // 20 is the tallest bar anywhere, so it is the 100% both engines divide by.
+    // Per-panel scaling drew naive's 10 and occt's 20 at the same height.
+    expect(heights).toEqual([
+      ['naive', '20%'], ['occt', '100%'],
+      ['naive', '50%'], ['occt', '25%'],
+    ]);
+  });
+
+  it('names both engines rather than leaving the fills to say which is which',
+     async () => {
+    const two = body();
+    two.speed = [
+      { engine: 'naive', n: 14, total: 100, median: 2, p95: 30, max: 90,
+        bins: [{ from: 0, to: 1, n: 4 }, { from: 1, to: null, n: 10 }] },
+      { engine: 'occt', n: 25, total: 60, median: 1, p95: 9, max: 20,
+        bins: [{ from: 0, to: 1, n: 20 }, { from: 1, to: null, n: 5 }] },
+    ];
+    const { container } = render(<StatsPage client={clientWith(async () => two)} />);
+    await waitFor(() => container.querySelector('.stats-overlay-key'));
+    expect([...container.querySelectorAll('.stats-overlay-key strong')]
+      .map((el) => el.textContent)).toEqual(['naive', 'occt']);
+  });
+
   it('says so rather than drawing an empty chart when nothing is timed', async () => {
     const none = body();
     none.phases = [];
