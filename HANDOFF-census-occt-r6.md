@@ -49,3 +49,39 @@ limits — a 6h timeout came back clamped to 30 minutes and the work quota
 reverted to 10 GiB. Both were reset with
 `onto install -max-job-time 12h -max-work-size 40G` on the node. Check the
 deadline `onto run` prints; if it is 30 minutes, that happened again.
+
+## The relaunch this run may be superseded by
+
+A peer session has uncommitted `hlr.py` / `occt.py` /
+`compare-silhouette-truth.py` work that breaks the render phase into named
+subpaths — `render/geometry/engine/hlr` rather than a flat `geometry`. Mike
+asked for that granularity, and for the dashboard to show it, on the night r6
+launched. r6 is at `4905d45` and carries none of it, so its 8,235 rows are the
+newest per part and the finer chart has little to draw until a run at the newer
+code replaces them.
+
+r6 was left running anyway: it answers a question the instrumentation does not,
+which of the 405 `TimeoutError` and 238 `ProcessDied` parts `b5b2694` and
+`c673dd3` fixed. It was not relaunched against the peer's work because that work
+is uncommitted, and an unattended overnight run has to name a revision that can
+be checked out later.
+
+Once that work is on `main`, the relaunch is:
+
+    git worktree add -q --detach <tmp>/clean HEAD
+    cd <tmp>/clean && onto sync -in brick-icons --ref origin/main studio
+    onto kill 8ff9b314        # or let it finish; the new rows win either way
+    onto run --detach --timeout 12h --in brick-icons --task census-occt-r7 \
+      --each out/census/occt-r6-batches.txt --workers 8 --retries 1 --yield \
+      --env PATH=/Users/mike/.local/bin:/opt/homebrew/bin:/usr/bin:/bin \
+      --out out/census/occt-r7 --to out/census/occt-r7 \
+      studio -- scripts/census-batch.sh occt 300 out/census/occt-r7 {}
+
+Its own directory, per `census-round` step 5: a retry beginning with a part that
+began an r6 batch would otherwise append to r6's JSONL and `--skip-done` would
+read the old rows as done.
+
+Reading the two runs against each other: the OCP import is 0.783s paid once per
+worker process, by whichever part a worker draws first. In the new build it is
+its own phase; in r6 it is inside that part's geometry. With 8 workers over 687
+batches it is a per-batch constant, not a per-part cost.
