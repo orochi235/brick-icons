@@ -118,9 +118,23 @@ list: `outline-flat3__` 3001, 3005, 3020, 3024, 3040b, 3040bp08, 3068bp00,
 `wireframe__` 3001, 3941, 4589. Whoever re-freezes owns deciding whether each
 is an improvement.
 
+**11090's second defect is real and untouched by this.**
+`11090-curved-lower-face-in-occt` is the base, closed. `11090-hand-at-top-is-
+missing-a-curve-too` is the clip, and it is a different fault: occt emits 3
+arcs against naive's 8 on this part, and the missing one runs the length of
+the clip's right lobe — the limb where its 225-degree cylinder turns away.
+There is a second, shorter one at the base collar. The fix above moves 8
+pixels at the clip (antialias) and 2598 at the base, so the two do not touch.
+
 `tests/test_occt.py::test_the_stud_paints_over_the_top_face_it_sits_on` fails
 at HEAD with nothing applied (`assert 12 > 13`) — it belongs to the coplanar
 paint-order thread above, not to this.
+
+**Diff renders composited onto white.** A `--shade-style none` SVG has a
+transparent ground, and resvg leaves the RGB under it at zero, so
+`Image.convert("L")` reads the whole frame as black and every diff comes back
+0 changed pixels. Two comparisons here read as perfect agreement that way and
+were 1040 and 2598 pixels once composited.
 
 ## Overnight defect sweep, 2026-09-07: what is fixed and what the rows are lying about
 
