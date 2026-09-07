@@ -125,9 +125,15 @@ Confirmed, still open, worst first:
   itself is present and always was.
 
 Shaded-only, so `--shade-style flat3` is needed to judge them and an outline
-render says nothing. All three now rendered that way: `35480` is three
-hairline ticks on the top face under the left stud; `38317` and `96910` are
-the stroke-width class above.
+render says nothing. All three now rendered that way. `38317` and
+`96910` are the stroke-width class above. **`35480` is a fill mis-assignment
+and occt-only** -- naive draws it clean. Two lens-shaped regions between the
+plate's round-end arc and a stud's base arc are absorbed into the STUD WALL's
+fill and carry its gradient down onto the light top face, as two fangs. They
+are not overdraw: the top face's own path is cut to match them exactly (both
+in `35480.svg` element 2's second and third subpaths, and element 1's
+notches), so the pair tiles. The absorb picked the wrong claimant, not too
+much area.
 
 `11090-curved-lower-face-in-occt` and `11090-hand-at-top-is-missing` are
 `9fdfb72`'s alone (the sheared cross-section), pixel-identical under this fix
