@@ -1,5 +1,86 @@
 # Handoff — `main`: the corpus lab, and the OCCT engine
 
+## Baton, 2026-09-07 evening: the orthographic reference is a real slot now
+
+**LDView is being replaced, and Mike has said so plainly** -- "it has a
+ceremonial place on the board because nobody has the heart to fire it but it is
+not fit for purpose". It disagrees with the library three ways and none is
+tunable: it renders perspective where our projector is orthographic, so no
+pixel comparison means anything; `-CurveQuality` only applies with
+`-AllowPrimitiveSubstitution`, so what it draws is not the part's geometry
+(4070's "hexagonal recess" was LDView redrawing an r=4 `4-4cyli`); and its
+internal color table overrides LDConfig. That is why every finding taken from
+it has been structural. It stays on the board for now.
+
+**The replacement is `ortho`, and it bakes.** `fa4c653` gave it a headless
+driver -- `scripts/shot-sink.py` serves `lab/dist` beside the library and
+launches its own Chrome, so no dev server and no person opening a tab.
+`e278a7a` made it a slot: `ortho` is in `db.SOURCES`, renders index at
+`renders/ortho/<part>.png`, and the bake is
+
+    .venv/bin/python scripts/shot-sink.py --list <parts> --out renders/ortho
+
+resumable by re-running it. **Its `_CANONICAL` argv is a config key and nothing
+runs it** -- the renderer is a browser drawing a whole list in one WebGL
+context, and a per-part CLI flag would launch Chrome 24,591 times.
+
+**Two traps it cost to find.** Headless Chrome has no GPU, so WebGL is off
+unless SwiftShader is named: `--use-angle=swiftshader` **and**
+`--enable-unsafe-swiftshader`, mandatory since Chrome 131. Without them the
+page loads and renders nothing, which reads as a broken renderer. And
+`shot.html` was not in vite's rollup inputs, so `lab/dist` had no page to
+serve; `npm run build` in `lab/` after touching `shot.ts`.
+
+### What is next, in order
+
+1. **Bake the corpus.** Nothing has run past five parts. `--batch` restarts the
+   browser per batch so a leak costs one batch; sizing it is unmeasured.
+2. **Frame registration, and it is the one that decides whether this is worth
+   it.** Mike: "we'll be using it to drive our gradient fill sampling too."
+   `shot.ts` fits its own bounding box with a 1.02 pad, so a pixel in the
+   reference does NOT map to a point on our face. Sampling needs it to share
+   our pixel fit exactly, not approximately.
+3. **Shading, explicitly deferred by Mike.** `LDrawLoader.smoothNormals` is at
+   its default `true`, so a faceted cylinder shades smooth while our `flat3`
+   tones per facet group. The key light is a guess at LDView's `-LightVector`;
+   the `0.55` ambient already matches `shade.ramp_b`'s floor exactly.
+4. Part color has no override. Cosmetic, last.
+
+**The slot is named `ortho` and renaming costs a migration** -- the `census-`
+rename this week moved `renders` and `measurements` rows and re-baked thumbs.
+`mesh` and `datum` were the alternatives; `ortho` won because it names the
+property that makes the thing usable.
+
+## The coplanar sticker measurement is done, and `f832da6` has two regressions
+
+**The coplanar paint-order fix redraws 87% of the sticker class**: 3,884 of
+4,454 measured parts move pixels, 4,091 change paint order, median 2,740 px or
+6.3% of the frame. 59 parts errored (51 timeouts, 3 GEOS, 5 killed by a
+relaunch) and cannot move the answer -- 86.1% to 87.4% whichever way they fall.
+`scripts/coplanar-affected.py` (`f130bf8`) is the tool; rows in `out/coplanar/`,
+the 59 in `out/coplanar/retry-batches.txt`, already on studio and never run
+because a peer took the tree.
+
+**Consequence nobody has acted on: the wall's `silhouette-occt` slot is stale
+for about 3,900 stickers**, several stored as blank grey discs that now draw
+their artwork.
+
+**`f832da6` fixed 35480 and broke two other parts.** Filed as
+`3626bpsk-tab-under-neck-stud` and `67811-notch-through-hub-wall`, both open,
+both with the in-process reproduction and both narrowings that are already
+disproven. Mike's call was **leave it and file them**, not revert. The sample
+was 60 parts: seams kept on 14, pixels move on 5, 2 better, 2 worse, 1 neutral.
+A full-corpus bound is cheap -- `_pierce_seams` fires without rendering.
+
+**`35480-bore-reads-flat` is waiting on Mike and nobody else.** Looking down a
+bore, `max(0.0, n . L)` in `shade._axis_binned_stops` floors every bin past the
+terminator and a quarter of the visible tube pins to one tone. Fixing it is a
+lighting-model change that moves every render in the corpus.
+
+**`tests/goldens/defects.toml` carries four rows written this session and is
+unstaged by design.** It is Mike's file. If it is ever reverted, those rows go.
+
+
 ## Baton, 2026-09-07 evening: occt drops naive's decal unwrap, and the audit that follows
 
 **Do this first: go through the naive engine's tricks and check each has an
