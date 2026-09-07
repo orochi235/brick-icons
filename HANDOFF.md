@@ -1,5 +1,43 @@
 # Handoff — `main`: the corpus lab, and the OCCT engine
 
+## Baton, 2026-09-07 afternoon: what is running and what to do first
+
+On `main`, in the shared checkout. `git log --oneline @{u}..HEAD` for anything
+unpushed; nothing of mine is uncommitted.
+
+**Do this first: measure how many stickers the coplanar paint-order fix
+actually changes.** `a38e5a8`, gated to same-color pairs by `83ba303`. The
+whole `4263304` family reads as fixed at HEAD and broken in the stored
+`silhouette-occt` renders -- `4263304a` stored says `SF` and draws `BNSF` at
+HEAD, `c` says `56` and draws `2256`, `d`'s cross is gray and draws yellow, `f`
+draws one lozenge of three, `g` draws fragments of two vent panels, and
+`ec01`'s far half is blank. The question is the size of that class over the
+4,513 sticker parts. **Do not measure it with a census** -- paint order changes
+which color wins INSIDE the silhouette and `compare-silhouette-truth` scores
+`alpha > 128`. `scripts/render-hash.py` hashes the rasterized RGB under the
+alpha mask and is the tool; `scripts/hlr-shell-affected.py` is the model for a
+cheap in-process A/B that toggles the fix's own constant. Studio ran the
+control half as `ab-control`; check with `brick-icons-00` before duplicating
+it, and the branch `coplanar-control` must not be deleted.
+
+`4263304ec01` is the one still wrong at HEAD: the formed sticker's near flap
+reads flatter than LDView's and the arrow loses part of its fill. Its own row
+if anyone wants it chased.
+
+**Two jobs were running when this was written** -- `onto jobs` for the truth.
+`hlr-restage-list` (orochi, 6 shards) writes `restage/hlr-loose-faces.txt`,
+the re-render list for `b350c40`; when it finishes, re-run
+`scripts/hlr-shell-affected.py` over `out/restage/occt-parts.txt` with
+`--log` pointed at the merged shard logs and `--out restage/hlr-loose-faces.txt`
+and the resume path does the merge for you. `ldview-bake` re-bakes the LDView
+thumbnails; it skips anything unchanged.
+
+**Three other sessions share this exact working directory** and one more is in
+the `defect-sweep` worktree. Stage explicit paths, never `git add -A`, and
+confirm the branch before assuming it. `tests/goldens/defects.toml` is Mike's
+and is permanently dirty; `lab/src/corpus/badges.ts` carries an uncommitted
+change nobody has claimed.
+
 ## The slots lost `census-`, and the LDView gap is stickers nobody rendered
 
 `5df13cb`. Every slot came out of a census run, so the prefix said nothing:
