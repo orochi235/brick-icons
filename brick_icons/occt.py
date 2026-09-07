@@ -527,6 +527,86 @@ def analytic_creases(shape: TopoDS_Shape, out: dict) -> TopoDS_Shape:
     return _compound(keep)
 
 
+PIERCE_TOL = 1e-3      # LDU: a seam either lies in the plane or it does not
+
+
+def _planar_planes(shape):
+    """Every distinct world plane a planar face of `shape` lies in."""
+    seen, out = set(), []
+    for face in _faces_of_type(shape, GeomAbs_SurfaceType.GeomAbs_Plane):
+        try:
+            ax = BRepAdaptor_Surface(face).Plane().Axis()
+        except Exception:
+            continue
+        d, p = ax.Direction(), ax.Location()
+        n = np.array([d.X(), d.Y(), d.Z()], float)
+        off = float(n @ np.array([p.X(), p.Y(), p.Z()], float))
+        if off < 0 or (off == 0 and n[0] < 0):    # one representative per plane
+            n, off = -n, -off
+        key = (round(n[0], 5), round(n[1], 5), round(n[2], 5), round(off, 4))
+        if key not in seen:
+            seen.add(key)
+            out.append((n, off))
+    return out
+
+
+def _pierce_seams(shape):
+    """Seams where one curved surface passes THROUGH another face's plane.
+
+    A stud's bore is authored twice: `stud2a` above the plate and a `4-4cyli`
+    continuing four units below it. Both lie on one cylinder, so
+    UnifySameDomain merges them -- and the merged face then lives on both
+    sides of the plate's top plane, in front of it above and buried behind it
+    below. `order_faces` settles a pair with a single bit, so whichever side
+    its witness lands on wins the whole overlap and the buried half is painted
+    over the plate top (35480's fangs). Keeping the seam leaves two faces,
+    each wholly in front of or wholly behind that plane.
+
+    Both sides of the seam must be curved: a curve meeting a PLANAR face there
+    is an ordinary rim, and the plane it ends at is its own.
+    """
+    planes = _planar_planes(shape)
+    if not planes:
+        return []
+    amap = TopTools_IndexedDataMapOfShapeListOfShape()
+    TopExp.MapShapesAndAncestors_s(shape, TopAbs_ShapeEnum.TopAbs_EDGE,
+                                   TopAbs_ShapeEnum.TopAbs_FACE, amap)
+    keep = []
+    for i in range(1, amap.Extent() + 1):
+        fl = amap.FindFromIndex(i)          # never list(): see analytic_creases
+        if fl.Size() != 2:
+            continue
+        faces = (fl.First(), fl.Last())
+        if faces[0].IsSame(faces[1]):
+            continue                        # a parametric seam, not a junction
+        try:
+            kinds = [BRepAdaptor_Surface(TopoDS.Face_s(f)).GetType()
+                     for f in faces]
+        except Exception:
+            continue
+        if any(k == GeomAbs_SurfaceType.GeomAbs_Plane for k in kinds):
+            continue
+        edge = TopoDS.Edge_s(amap.FindKey(i))
+        try:
+            c = BRepAdaptor_Curve(edge)
+            if c.GetType() == GeomAbs_CurveType.GeomAbs_Line:
+                # A straight seam in a plane is a RULING -- two sector patches
+                # of one wall meeting along a generatrix, which unify should
+                # merge. 72632 has one, and keeping it splits a cylinder down
+                # the middle into two fills with two gradients.
+                continue
+            t0, t1 = c.FirstParameter(), c.LastParameter()
+            pts = np.array([[(v := c.Value(t0 + (t1 - t0) * k / 4.0)).X(),
+                             v.Y(), v.Z()] for k in range(5)], float)
+        except Exception:
+            continue
+        for n, off in planes:
+            if np.abs(pts @ n - off).max() <= PIERCE_TOL:
+                keep.append(edge)
+                break
+    return keep
+
+
 @timing.timed("build_shape")
 def build_shape(out: dict) -> TopoDS_Shape:
     """The sewn faces. They exist to occlude; their boundaries are not drawn
@@ -544,6 +624,8 @@ def build_shape(out: dict) -> TopoDS_Shape:
 
     if _unify_survives(shape):
         u = ShapeUpgrade_UnifySameDomain(shape, True, True, True)
+        for edge in _pierce_seams(shape):
+            u.KeepShape(edge)
         u.Build()
         shape = u.Shape()
     return shape
