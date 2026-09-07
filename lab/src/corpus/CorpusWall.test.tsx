@@ -406,6 +406,28 @@ it('closes the legend and gets it back from the topbar', async () => {
   expect(container.querySelector('.corpus-legend')).toBeTruthy();
 });
 
+it('counts states over the wall, and keeps the tag rows a menu', async () => {
+  const tagged = {
+    ...client,
+    cells: () => Promise.resolve({
+      cells: [{ ...cell('a', 0, 'sha-a'), tags: ['technic'] },
+              { ...cell('b', 1), tags: ['printed'] },
+              { ...cell('c', 2), tags: ['printed'] }],
+      count: 3, version: '2026-09-05T10:00:00+00:00', source: 'census-naive',
+    }),
+  } as any;
+  const { container } = render(<CorpusWall client={tagged} />);
+  await waitFor(() => expect(container.querySelector('.corpus-legend')).toBeTruthy());
+  expect(screen.getByRole('button', { name: 'printed, 2 parts' })).toBeTruthy();
+  expect(screen.getByLabelText('unknown, 3 parts')).toBeTruthy();
+
+  fireEvent.click(screen.getByRole('button', { name: /^technic/ }));
+  // The state rows describe what is left on the wall...
+  await waitFor(() => expect(screen.getByLabelText('unknown, 1 parts')).toBeTruthy());
+  // ...while `printed` still says where the other two went, instead of 0.
+  expect(screen.getByRole('button', { name: 'printed, 2 parts' })).toBeTruthy();
+});
+
 it('refits the wall on cmd-0, even after the camera was touched', async () => {
   const fit = vi.mocked(core.fitViewToBounds);
   const { container } = render(<CorpusWall client={client} />);

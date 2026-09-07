@@ -87,7 +87,7 @@ it('filters the wall by a badge, and stacks two picks', () => {
   expect(update(['technic'])).toEqual([]);
 });
 
-it('counts every badge over the whole corpus', () => {
+it('counts every badge over `tagCells`, falling back to the wall itself', () => {
   render(<Legend cells={[cell('a', { tags: ['technic'] }), cell('b', { tags: ['technic', 'printed'] })]}
                  highlight={null} onHighlight={vi.fn()}
                  badges={[]} onBadges={vi.fn()}
@@ -95,6 +95,23 @@ it('counts every badge over the whole corpus', () => {
   expect(screen.getByRole('button', { name: 'technic, 2 parts' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'printed, 1 parts' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'magnet, 0 parts' })).toBeTruthy();
+});
+
+it('counts states over the wall and tags over `tagCells`', () => {
+  // The two lists answer different questions: the states describe what is on
+  // the wall, the tags stay a menu of where you could go next.
+  render(<Legend cells={[cell('a', { tags: ['technic'] })]}
+                 tagCells={[cell('a', { tags: ['technic'] }),
+                            cell('b', { tags: ['printed'] }),
+                            cell('c', { tags: ['printed'] })]}
+                 highlight={null} onHighlight={vi.fn()}
+                 badges={['technic']} onBadges={vi.fn()}
+                 highlightTag={null} onHighlightTag={vi.fn()} onClose={vi.fn()} />);
+  expect(screen.getByLabelText('unknown, 1 parts')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'technic, 1 parts' })).toBeTruthy();
+  // The point of the whole change: `printed` does not read 0 just because
+  // `technic` is the pick currently narrowing the wall.
+  expect(screen.getByRole('button', { name: 'printed, 2 parts' })).toBeTruthy();
 });
 
 it('reports the hovered tag, and null once the pointer leaves', () => {

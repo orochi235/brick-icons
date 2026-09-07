@@ -8,6 +8,13 @@ import '@lab/corpus/Legend.css';
 
 export interface LegendProps {
   cells: Cell[];
+  /** What the tag rows count over. They are filters as well as a readout, so
+   *  counting them over `cells` collapses every other row to 0 the moment one
+   *  is picked -- the menu destroys the information you would pick from next.
+   *  Pass the wall narrowed by everything *except* the tag picks. Two tags
+   *  picked will not sum to the wall's total; that is the price of the row
+   *  staying a menu, and the sidebar's category counts already pay it. */
+  tagCells?: Cell[];
   highlight: CellState | null;
   onHighlight: (state: CellState | null) => void;
   /** Badge tags the wall is filtered to, and a way to change them. Takes an
@@ -60,23 +67,24 @@ function BadgeSwatch({ badge }: { badge: CellBadge }) {
   return <canvas ref={ref} className="corpus-legend-badge" aria-hidden="true" />;
 }
 
-/** The wall's cell states, with a swatch, a name and a corpus-wide count.
+/** The wall's cell states, with a swatch, a name and a count over the wall.
  *  Hovering or focusing a row raises `highlight`; `Wall` dims every cell
  *  that isn't in that state rather than brightening the ones that are. */
-export function Legend({ cells, highlight, onHighlight,
+export function Legend({ cells, tagCells, highlight, onHighlight,
                         badges, onBadges,
                         highlightTag, onHighlightTag, onClose }: LegendProps) {
   const counts = useMemo(() => tally(cells), [cells]);
+  const forTags = tagCells ?? cells;
   const badgeCounts = useMemo(() => {
     const out: Record<string, number> = {};
     for (const tag of Object.keys(ALL_BADGES)) out[tag] = 0;
-    for (const cell of cells) {
+    for (const cell of forTags) {
       for (const tag of cell.tags ?? []) {
         if (tag in out) out[tag] = (out[tag] ?? 0) + 1;
       }
     }
     return out;
-  }, [cells]);
+  }, [forTags]);
   const toggle = (tag: string) => {
     onBadges((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag)
                                            : [...prev, tag]));

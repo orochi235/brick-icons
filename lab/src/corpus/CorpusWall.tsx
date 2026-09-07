@@ -116,6 +116,17 @@ export function CorpusWall({ client }: { client: LabClient }) {
     () => (cells ? applySelection(cells, selection) : []),
     [cells, selection]);
 
+  // The wall as it would be with no tag picked. The legend's tag rows count
+  // over this rather than over `shown`, because they are the control that
+  // applies the picks: counted over `shown`, picking `technic` reads every
+  // other tag as 0 and the menu stops saying where you could go next.
+  const untagged = useMemo(
+    () => (cells ? (selection.badges.length === 0
+                    ? shown
+                    : applySelection(cells, { ...selection, badges: [] }))
+                 : []),
+    [cells, selection, shown]);
+
   // Counted over the whole slot, not over `shown` -- a facet's own checkbox
   // must not zero out the moment it is cleared.
   const counts = useMemo(() => {
@@ -319,7 +330,8 @@ export function CorpusWall({ client }: { client: LabClient }) {
                       onHoverChange={(over) => { overCard.current = over; }} />
           )}
           {cells && legendOpen && (
-            <Legend cells={cells} highlight={highlight} onHighlight={setHighlight}
+            <Legend cells={shown} tagCells={untagged}
+                    highlight={highlight} onHighlight={setHighlight}
                     badges={selection.badges}
                     onBadges={(update) => setSelection((s) => ({ ...s, badges: update(s.badges) }))}
                     highlightTag={highlightTag} onHighlightTag={setHighlightTag}
