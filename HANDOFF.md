@@ -226,45 +226,63 @@ by both sessions' measurement, and belong to whoever filed that commit.
 
 `53119`'s two ticks on the dome survive. Its banding half closed overnight.
 
-## Next up: the badges are a hand-rolled canvas, and it shows
+## The badges: 1 and 2 are landed, the wall is still a hand-written paint loop
 
-Three defects Mike reported, one cause. **Do them in this order.**
+`f721151`. The three defects Mike reported had one cause and two of them are
+gone.
 
-**1. Detail-view badges must become HTML.** `931b342` made the Legend, the tag
-pills (`tags.tsx`) and the Lightbox status render a `<canvas>` each, through
-`BadgeSwatch`, so they would not drift from the wall's artwork. That is a real
-risk answered backwards: share the *data* — the palette record in `paint.ts`
-and the mark geometry — not the rasterizer. Rewrite those three as HTML + CSS
-with the mark as inline SVG. It removes two of the three defects outright:
+**The marks are path data now.** All twelve live in `lab/src/corpus/markShapes.ts`
+as SVG path strings with a fill/stroke/alpha spec; `badges.ts` fills them into
+a canvas and `BadgeSwatch.tsx` emits them as `<path>`. **Nothing in the set is
+allowed to be a draw call again** -- that is what put a rasterizer behind the
+legend. Two escapes are declared rather than baked, and both are load-bearing:
+technic keeps a `transform` because a shear thickens a stroke's pen and baking
+the shear into the endpoints would not, and the sticker's peel keeps `punch`,
+which is `destination-out` on the canvas and a mask in the DOM.
 
-- *Text sits high.* `drawBadge` hand-computes a baseline from
-  `measureText().actualBoundingBoxAscent`. Measured on Mike's screenshot of the
-  `retired` pill: the word's ink centre is **7.5 device px above** the pill's
-  centre while the icon's is +0.5. CSS does not have this bug.
-- *A markless badge reserves a mark's width.* Fixed for the canvas path in
-  `0c8f559` (`labelX`), but the DOM should not be running that code at all.
+**The Legend, `tags.tsx` and the Lightbox status are HTML.** `BadgeSwatch`
+renders a CSS stadium with the mark as inline SVG; `labelX` is gone from that
+path entirely. The peel's hole is a CSS `mask-image` with two layers and
+`mask-composite: exclude`, because what it cuts is the field, which the disc's
+`<svg>` does not paint.
 
-**2. `MARKS` becomes path data.** Twelve entries in `badges.ts`, each a
-function that draws into a 2D context. Turn them into path strings both an
-`<svg>` and the canvas can render, so nothing can drift. This is what makes (1)
-safe and it is the bulk of the work. Note `stickerPolice` and `stickerFlames`
-punch holes in themselves with `destination-out` — as SVG that is a mask.
+**The misaligned text was `measureText`, and it is fixed on the canvas too.**
+`actualBoundingBoxAscent` is reported FROM the current baseline, and
+`drawBadgeDirect` measured the label under `middle` and painted it under
+`alphabetic`. Measured on the render, not on the formula: the word sat 7.0
+device px high on a 17px badge and 18.0 on a 44px one -- a constant fifth of
+the badge, which is why it looked like a fixed offset at one size. Measuring
+under the baseline it paints on brings the canvas to within 1 device px of the
+HTML. **The earlier note that the arithmetic was provably exact was measured
+with the default baseline in force, not the one the code sets.**
 
-**3. The wall should use weasel's scene, not its own paint loop.**
+**A/B, in process, both paths from one set of badge records:** nine of twelve
+marks are byte-identical on the canvas; the other three (archive, minifig's
+eyes, the sticker's cap) differ only in antialias coverage where a rect or an
+arc now rasterizes as a path -- 185 px of 756,000, worst channel delta 47.
+A moved shape would read 255 where white ink meets a gray field.
+
+Also landed: the scratch canvas is allocated at dpr, which is what made the
+sticker badge alone render soft; `Path2D` objects are kept per path string
+rather than reparsed for every badge on a wall paint.
+
+### Still owed: the wall should use weasel's scene, not its own paint loop
+
 `Wall.tsx:594` is a bare `<canvas>` with a hand-written renderer; the lab
 imports weasel only for viewport math (`worldToScreen`, `zoomAt`, the drag and
 pinch actions). `@weasel-js/core` exports `createNode`, `ContainerNode`,
 `ImageNode`, `LeafNode`, `drawText`, `renderSceneToCanvas`, `registerCanvas`
-— **`grep -rn "renderSceneToCanvas\|SceneNode\|createNode" lab/src` returns
-nothing.** `drawText` exists so nobody writes the baseline arithmetic in (1).
-This is the big one; Mike knows its size.
+-- **`grep -rn "renderSceneToCanvas\|SceneNode\|createNode" lab/src` still
+returns nothing.** Mike knows its size. `drawText` exists so nobody writes the
+baseline arithmetic again; note that the trap it avoids is the one above, and
+the canvas badge path now gets it right, so this is a tidiness argument rather
+than a correctness one.
 
-**A separate bug, cheap, in the canvas path either way:** `scratchOf(size)` in
-`badges.ts` allocates `size × size` device pixels from a CSS-pixel size with no
-dpr factor, then composites into a dpr-scaled context. The two `PUNCHES` marks
-are the only ones routed through it, which is why the sticker badge alone
-renders soft. Fixing (3) does not remove this; fix it wherever the canvas path
-survives.
+**Look at the badges at `/badges.html`, not at a description of them.** It
+draws every badge as HTML at four sizes on a light ground and a dark one, the
+real `<Tags>` row, the status pills, and the canvas sheet underneath. The
+sticker's peel is a hole, so it is invisible against a ground its own color --
+that is what the two grounds are for.
 
 ## 2026-09-07 late morning: coplanar paint order, and an A/B the census cannot run
 
