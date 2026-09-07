@@ -1,5 +1,78 @@
 # Handoff — `main`: the corpus lab, and the OCCT engine
 
+## Read first, 2026-09-06 late: occt only, and what is unverified
+
+**occt is the engine from now on**, until Mike says otherwise. He said so while
+redirecting msb-uai off a naive retry pass. naive is the reference
+implementation, not the product; spending a node on a naive bucket spends it on
+the engine we are not shipping. Say "on occt" in any report so a naive number is
+never mistaken for the current one.
+
+**The sticker census answered its question and is finished.** `census-sticker-occt-r2`
+ran the 2,201 stickers occt had not attempted: **1,027 drew, 1,152 failed**.
+Ignore any 76% figure -- that was an early slice, and the settled rate is 53%.
+
+**The failures are one thing, and the library says so itself.** A sticker built
+on `box5-12.dat` failed 185 of 185, and that primitive's own first line reads
+"Box with 5 Faces without Any Edges". Generalized through the subfile tree the
+rule is near-exact: of the parts measured, **217 that declare no type-2 or
+type-5 line anywhere failed and none drew; every one of the 85 that drew
+declares one.** So `OCCT engine produced no edges` is the engine correctly
+reporting a part that declared nothing -- not a bug, and not worth chasing part
+by part.
+
+- **The fix, if it is wanted, is engine-side and is one change**: where a shape
+  has declared faces and an empty authored-edge set, fall back to the silhouette
+  of the fused solid. That converts ~200 errors into renders.
+- **Seven parts declare an edge and still failed** -- `003497b`, `003497bc01`,
+  `004690a`, `163145bc01`, `163555bc01`, `162275dc01`, `164325d`. Six of the
+  seven are *formed* stickers or their flat siblings. That is the class worth
+  looking at; the 217 are not.
+- **Minifig torsos are not the problem** -- they are in the drawn column. The
+  failures are flat: plain N x M rectangles, round discs, flags.
+- Reference photos: a sticker id is its sheet number plus a letter, and the
+  sheet is the catalog entry, whose Rebrickable name gives the set. e.g.
+  `003497b` -> sheet `003497` -> set `271-1`.
+
+**Stickers file under `census-occt`, not a slot of their own.** Mike reversed an
+earlier decision here; `234100c` removed the `census-sticker-*` sources again.
+`census_source` falls back to `census-<engine>` for any tree naming no declared
+facet, so dropping the sources was the whole change and `out/census-sticker`
+files itself correctly.
+
+**What I changed but did NOT see working.** Everything below is test-verified
+and typechecks; I ran out of room to look at it. Check these first:
+
+- **retired/replaced moved to the top-right corner**, outboard of the year,
+  which now sets to their left. Asserted in `paint.test.ts`, never eyeballed.
+- **Oswald on every thumbnail caption**, 500 for the part number and 300 for
+  the rest. `main.tsx` waits on `document.fonts` before mounting, because
+  canvas does not wait and the wall paints once.
+- **The vector ground is deliberately not the bakes' white.** Mike asked for the
+  legend border color; `--wzl-border` resolves to `#25272c` in dark mode, which
+  is the page background to within a shade and made thumbnails vanish, so it
+  reads `--wzl-gray-200` in either theme. **The cost is that a cell changes
+  shade as you cross the sprite/vector zoom threshold.** A test that used to
+  assert the two matched now asserts they differ. If the flicker is wrong, the
+  answer is to re-bake the sprites on the same gray, not to revert.
+
+**Two traps that cost real time tonight, both fixed, both worth knowing:**
+
+- **A stale lab server 500s every DB route.** `db.connect` raises when the file
+  is at a higher schema than the code, so a server started before a schema bump
+  fails every request. Restart it after a bump.
+- **`bake-thumbs.py` fed every render to resvg**, which reads SVG only. LDView
+  emits PNG, so one ldview row killed the whole bake with "provided data has not
+  an UTF-8 encoding" -- which reads like a corrupt file rather than the wrong
+  kind of one. It skips rasters now.
+
+**Sharing this tree:** `brick-icons-4b`, `brick-icons-b8`, `brick-icons-40` and
+`Status icon for thumbnails` are all in this same directory. Stage explicit
+paths, never `git add -A`; their uncommitted work in `paint.ts`, `Wall.tsx`,
+`params.ts` and the stats files is not yours. `tests/goldens/part-status.toml`
+and `wall-census-naive.png` sit *staged* in the shared index and are someone
+else's -- keep them out of your commits.
+
 ## In flight: the naive retry pass, and two slots that do not exist yet
 
 **`census-white-naive-r3` is running on msb-uai** (job `3aba42c8`, 1,800 parts
