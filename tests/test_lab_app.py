@@ -506,3 +506,22 @@ def test_render_route_refuses_escaping_the_store(tmp_path):
     r = _render_client(tmp_path, render_path="../outside-3001.svg").get(
         "/api/corpus/render/naive/3001.svg")
     assert r.status_code == 404
+
+
+def test_sizes_route_answers_with_tiles_and_slots(tmp_path):
+    r = _render_client(tmp_path).get("/api/corpus/sizes")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["tiles"]["renders"] > 0
+    assert [s["source"] for s in body["slots"]] == ["naive"]
+
+
+def test_sizes_route_holds_its_answer_until_asked_again(tmp_path):
+    """Walking `out/` is seconds over a few hundred thousand files, and the
+    dashboard's Reload is one click. The numbers move when a census lands."""
+    client = _render_client(tmp_path)
+    first = client.get("/api/corpus/sizes").json()
+    (tmp_path / "out" / "census" / "renders" / "naive" / "3001.svg").write_bytes(
+        b"x" * 100_000)
+    assert client.get("/api/corpus/sizes").json()["as_of"] == first["as_of"]
+    assert client.get("/api/corpus/sizes?refresh=1").json()["as_of"] != first["as_of"]

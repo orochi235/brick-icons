@@ -1,6 +1,6 @@
 import type { Artifact, JobState, LabConfig, LdrawColor, PartHit, RenderResult,
   SchemaField } from '@lab/api/types';
-import type { Stats } from '@lab/stats/types';
+import type { Footprint, Stats } from '@lab/stats/types';
 import type { CellsBody, PartDetail, SheetManifest } from '@lab/corpus/types';
 
 export interface ClientOptions {
@@ -147,6 +147,10 @@ export function createClient({ base = '', fetchImpl = fetch }: ClientOptions = {
     async corpusStats(query: URLSearchParams): Promise<Stats> {
       const q = query.toString();
       return json(fetchImpl, at(`/api/corpus/stats${q ? `?${q}` : ''}`));
+    },
+
+    async corpusSizes(refresh = false): Promise<Footprint> {
+      return json(fetchImpl, at(`/api/corpus/sizes${refresh ? '?refresh=1' : ''}`));
     },
 
     async corpusPart(id: string): Promise<PartDetail> {

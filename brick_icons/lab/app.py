@@ -6,6 +6,7 @@ server, and nothing here decides anything about rendering.
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
@@ -19,7 +20,7 @@ from .. import colors as ldraw_colors
 from .. import tags
 from ..config import load_config
 from . import (cache, cells, corpus, decal, defects, diff, findings,
-               goldens_status, jobs, partindex, reference, runner, schema,
+               goldens_status, jobs, partindex, reference, runner, schema, sizes,
                stats)
 from .. import db as corpus_db_module
 
@@ -28,6 +29,10 @@ from .. import db as corpus_db_module
 # them.
 RENDER_MEDIA_TYPES = {".svg": "image/svg+xml", ".png": "image/png",
                       ".webp": "image/webp"}
+
+# How long a footprint answer stands before the next request walks again. The
+# numbers move when a census lands, not between two clicks of Reload.
+SIZES_TTL = 300.0
 
 
 def _artifact_path(root: Path, key: str, name: str) -> Path:
@@ -71,6 +76,7 @@ def create_app(root: Path | str = ".",
     app.state.cache_root = Path(cache_root)
     app.state.ldraw_dir = load_config(root=str(root)).ldraw_dir
     app.state.index = None
+    app.state.sizes = None
     app.state.jobs = jobs.Registry()
     app.state.defects_path = Path(defects_path) if defects_path else (
         root / defects.DEFAULT_PATH)
@@ -338,6 +344,27 @@ def create_app(root: Path | str = ".",
                                excluded=tuple(excluded), badges=tuple(badges))
         finally:
             conn.close()
+
+    @app.get("/api/corpus/sizes")
+    def get_corpus_sizes(refresh: bool = False):
+        """What the corpus costs on disk.
+
+        Its own route rather than a field on `/api/corpus/stats`, because
+        that one re-polls while a run is open and this walks `out/` -- seven
+        seconds over a few hundred thousand files. Memoized for
+        `SIZES_TTL`; `?refresh=1` forces the walk.
+        """
+        held = app.state.sizes
+        if held is not None and not refresh and \
+                time.monotonic() - held[0] < SIZES_TTL:
+            return held[1]
+        conn = corpus_conn()
+        try:
+            answer = sizes.footprint(conn, root, app.state.ldraw_dir)
+        finally:
+            conn.close()
+        app.state.sizes = (time.monotonic(), answer)
+        return answer
 
     @app.get("/api/corpus/part/{part_id}")
     def get_corpus_part(part_id: str):
