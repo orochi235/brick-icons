@@ -39,10 +39,17 @@ carries 23 other commits since `f41a962`, several of them engine changes, and
 using it conflates them into the diff. Keep `coplanar-control` until the A/B is
 read.
 
-**The goldens are red on purpose.** `outline-flat3__3005` drifted. Rendering
-3005, 3001, 4740 and 3941 before and after differs by 0, 0, 0 and 1 pixel — the
-gate is an SVG byte diff and the element order changed. Re-freezing is Mike's
-call and has not been made.
+**The goldens are green, and the earlier red was mine.** The first version of
+the coplanar rule applied the index tiebreak to *every* coplanar pair, which
+also reordered two faces of the same body — `3005`'s stud wall and the top face
+it stands on are coplanar where they meet, and index order painted the stud
+under the brick. That broke
+`tests/test_occt.py::test_the_stud_paints_over_the_top_face_it_sits_on` and
+drifted `outline-flat3__3005`; `brick-icons-c6` caught the unit test. The rule
+now fires only when the two faces carry different colors, which is what makes
+one decoration on the other and the only case where LDraw's emission order is
+an instruction about paint order. Sticker renders are unchanged from the broad
+rule; goldens need no re-freeze.
 
 **LDView stays.** Mike said "we're ripping out ldview" and then reversed it an
 hour later: leave it in so the new orthographic renderer can be compared against
