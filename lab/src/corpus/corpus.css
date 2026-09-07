@@ -13,8 +13,9 @@ body { margin: 0; }
   --corpus-panel-width: 17rem;
 
   /* What every render is drawn on, canvas and DOM alike -- `thumbGround()`
-   * in paint.ts reads the same token for the canvas. */
-  --corpus-thumb-ground: var(--wzl-gray-200);
+   * in paint.ts reads this token. Change the ground here and nowhere else;
+   * nothing is baked, so it costs a repaint rather than a rebake. */
+  --corpus-thumb-ground: #ffffff;
   --corpus-thumb-ground-retired: #d8d8d8;
 
   --corpus-cell-unknown-fill: #3a3a3f;

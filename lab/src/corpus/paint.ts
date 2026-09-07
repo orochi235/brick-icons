@@ -81,22 +81,22 @@ function borderWidthFor(weight: CellStyle['weight'], cellPx: number,
 
 /** The ground every thumbnail is drawn on, at every rung. A bake carries ink
  *  and nothing else, so the sheet, the loose PNG and the live SVG all land on
- *  this and a zoom crosses no seam. The legend's border color -- but the light one
- *  (`--wzl-gray-200`) in either theme, never `--wzl-border` itself: in dark
- *  mode that token resolves to #25272c, which is the page background to
- *  within a shade, and a thumbnail drawn on it disappears. The art is dark
+ *  this and a zoom crosses no seam.
+ *
+ *  It must clear the fills, not just the page. A renderer's lit face is
+ *  #cccccc, so grounding on `--wzl-gray-200` (#c9cbcf) hid 13% of all drawn
+ *  ink at 1.01:1 -- and on a pale part, two thirds of it. The art is dark
  *  lines on a light ground and does not invert with the theme, so neither
- *  does what it sits on.
- */
+ *  does what it sits on. */
 let thumbGroundCache: string | null = null;
 
 export function thumbGround(): string {
   if (thumbGroundCache) return thumbGroundCache;
   const root = (globalThis as { document?: Document }).document?.documentElement;
   const read = root
-    ? getComputedStyle(root).getPropertyValue('--wzl-gray-200').trim()
+    ? getComputedStyle(root).getPropertyValue('--corpus-thumb-ground').trim()
     : '';
-  thumbGroundCache = read || '#c9cbcf';
+  thumbGroundCache = read || '#ffffff';
   return thumbGroundCache;
 }
 
