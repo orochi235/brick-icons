@@ -908,11 +908,16 @@ def cull_orphan_runs(segs, cap=None, tol=None, join_tol=0.75, protect=()):
 
     alive = set(real)
 
-    def anchored(i, P):
+    def nearest(i, P, exclude):
         u = np.clip(np.einsum("ij,ij->i", P - A, D) / dd, 0.0, 1.0)
         dist = np.linalg.norm(P - (A + u[:, None] * D), axis=1)
-        dist[(owner == i) | ~np.isin(owner, list(alive))] = np.inf
-        return float(dist.min()) <= max(tol, lens[i] / 63.0)
+        dist[np.isin(owner, list(exclude)) | ~np.isin(owner, list(alive))] = np.inf
+        k = int(dist.argmin())
+        return float(dist[k]), int(owner[k])
+
+    def anchored(i, P):
+        d, _ = nearest(i, P, {i})
+        return d <= max(tol, lens[i] / 63.0)
 
     # peel dangling branches: a leaf op whose tip node holds no other
     # living op and whose tip is unanchored is fray — remove it and carry
@@ -946,6 +951,50 @@ def cull_orphan_runs(segs, cap=None, tol=None, join_tol=0.75, protect=()):
                         carry[j] = max(carry[j], carry[i] + lens[i])
                 changed = True
                 break
+
+    # Floating islands. The peel leaves a run that has no free tip to start
+    # from, and it never starts on a `sil` op at all, so a short run that
+    # touches nothing else survives both — 44874's peg-tip chord, ~2 output
+    # px of ink with nothing to read it against. Below a stroke width that is
+    # a dot, not an outline, so the silhouette exemption does not apply.
+    root = {i: i for i in alive}
+
+    def find(a):
+        while root[a] != a:
+            root[a] = root[root[a]]
+            a = root[a]
+        return a
+
+    def join(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            root[ra] = rb
+
+    by_node = defaultdict(list)
+    for i in alive:
+        if ends[i] is None:
+            continue
+        for slot in (0, 1):
+            by_node[node_of[(i, slot)]].append(i)
+    for members in by_node.values():
+        for j in members[1:]:
+            join(members[0], j)
+    for i in alive:                              # T-junctions bind too
+        if ends[i] is None:
+            continue
+        for slot in (0, 1):
+            d, j = nearest(i, ends[i][slot], {i})
+            if d <= max(tol, lens[i] / 63.0):
+                join(i, j)
+
+    island = defaultdict(list)
+    for i in alive:
+        island[find(i)].append(i)
+    for members in island.values():
+        if all(ends[i] is None for i in members):
+            continue                             # full ellipses are not fray
+        if sum(lens[i] for i in members) <= 0.012 * dim:
+            alive.difference_update(members)
 
     return [orig for i, orig in enumerate(segs)
             if ends[i] is None or lens[i] < ghost_len or i in alive]
@@ -1029,8 +1078,11 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
     right, up, fwd = view_basis(lat, long)
     if engine == "occt":
         from . import occt
-        return occt.visible_segments(out, right, up, render_px, cull=cull,
-                                     fwd=fwd)
+        res = occt.visible_segments(out, right, up, render_px, cull=cull,
+                                    fwd=fwd)
+        if cull:
+            res = res._replace(segs=cull_orphan_runs(res.segs))
+        return res
     if engine == "cadquery":
         from . import cqsvg
         return cqsvg.visible_segments(out, right, up, render_px, cull=cull)

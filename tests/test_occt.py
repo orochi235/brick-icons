@@ -854,6 +854,18 @@ def test_a_flat_face_gets_no_occluder(ldraw_dir):
     assert occt._face_occluder(face) is None
 
 
+def test_occt_segments_go_through_the_orphan_cull(ldraw_dir):
+    """The stylization tail ran only on the naive branch, so occt drew
+    dashes naive had already dropped -- 30162's dot on the barrel."""
+    out = occt.flatten_part("30162", ldraw_dir)
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    raw = occt.visible_segments(out, right, up, 512, cull=True, fwd=fwd).segs
+    kept = hlr.visible_segments("30162", ldraw_dir, render_px=512,
+                                engine="occt").segs
+    assert len(kept) < len(raw)
+    assert list(kept) == hlr.cull_orphan_runs(list(raw))
+
+
 def test_a_zero_height_cylinder_face_gets_no_occluder(ldraw_dir):
     """72632's sensor body carries a cylinder face of zero height. Its local
     frame is singular, and building an occluder from it raised LinAlgError
