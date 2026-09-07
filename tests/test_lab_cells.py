@@ -186,6 +186,34 @@ def test_a_fixed_defect_counts_in_neither(conn):
     assert cell["open_defects_elsewhere"] == 0
 
 
+def _years(conn, pid, year_from, year_to, sets, matched):
+    conn.execute("INSERT INTO part_years (part_id, year_from, year_to, sets, "
+                 "colors, matched) VALUES (?, ?, ?, ?, 0, ?)",
+                 (pid, year_from, year_to, sets, matched))
+
+
+def test_a_counted_part_reports_the_sets_it_is_in(conn):
+    _part(conn, "3001")
+    _years(conn, "3001", 1979, 2026, 320, "exact")
+    row = cells.cells(conn)["cells"][0]
+    assert row["sets"] == 320
+    assert "popular" in row["tags"]
+
+
+def test_an_estimated_year_reports_no_set_count(conn):
+    # `keywords` reads the sets off LDraw's own !KEYWORDS line, so there is no
+    # inventory behind the row and its 0 is an absence, not a count. Reported
+    # as one it would tag every such part `obscure`, which is how 6,586 parts
+    # came to look rare.
+    _part(conn, "003238a", title="Sticker Shield", category="Sticker")
+    _years(conn, "003238a", 1978, 1981, 0, "keywords")
+    row = cells.cells(conn)["cells"][0]
+    assert row["year_from"] == 1978
+    assert row["sets"] is None
+    assert "obscure" not in row["tags"]
+    assert "retired" in row["tags"]
+
+
 def test_a_plain_part_is_base(conn):
     _part(conn, "3001")
     conn.commit()

@@ -38,7 +38,7 @@ from brick_icons import db  # noqa: E402
 
 BASE = "https://cdn.rebrickable.com/media/downloads"
 DUMPS = ("parts", "sets", "inventories", "inventory_parts",
-         "part_relationships")
+         "part_relationships", "elements")
 DEFAULT_CACHE = Path("out") / "rebrickable"
 DEFAULT_OUT = Path("tests") / "goldens" / "part-years.csv"
 DEFAULT_SUCCESSORS = Path("tests") / "goldens" / "part-successors.csv"
@@ -53,6 +53,15 @@ SUCCESSOR_RELS = ("M", "A")
 # Rebrickable numbers the print differently or not at all, so the base part's
 # years are the best answer available for it.
 _PRINT_SUFFIX = re.compile(r"^(\d{3,}[a-z]?)(p[0-9a-z]+|pr\d+)$")
+
+# A sticker's own id is the sheet number plus a letter -- `003238a` is one
+# sticker off sheet `003238`, and the sheet is what Rebrickable inventories.
+_STICKER = re.compile(r"^(\d+)[a-z]+$")
+
+#: LDraw names the sets a part was made for in its `!KEYWORDS` line, with or
+#: without the variant suffix: "set 375-2", "Set 1620-2", "set 6075".
+_KW_LINE = re.compile(r"^0\s+!KEYWORDS\s+(.*)$", re.IGNORECASE)
+_KW_SET = re.compile(r"\bset\s+(\d{2,7}(?:-\d+)?)\b", re.IGNORECASE)
 
 
 def fetch(name: str, cache: Path, refresh: bool) -> Path:
@@ -105,14 +114,76 @@ def part_facts(cache: Path) -> dict[str, tuple[int, int, int, int]]:
     return out
 
 
-def match(part_id: str, facts: dict[str, tuple[int, int, int, int]]) -> tuple[str, str] | None:
-    """The Rebrickable number to read `part_id`'s years off, and how it matched."""
+def design_index(cache: Path) -> dict[str, set[str]]:
+    """LEGO design number -> the Rebrickable parts made from that mould.
+
+    LDraw names modern parts by their LEGO design number, which is not what
+    Rebrickable numbers them by; `elements.csv` is the only dump that carries
+    both. Worth about 2,000 parts that match no other way.
+    """
+    out: dict[str, set[str]] = defaultdict(set)
+    for r in rows(cache / "elements.csv.gz"):
+        design = (r.get("design_id") or "").strip()
+        if design:
+            out[design].add(r["part_num"])
+    print(f"  {len(out):,} design ids", flush=True)
+    return out
+
+
+def match(part_id: str, facts: dict[str, tuple[int, int, int, int]],
+          designs: dict[str, set[str]]) -> tuple[set[str], str] | None:
+    """The Rebrickable numbers to read `part_id`'s years off, and how they
+    matched. A set rather than one number: a design id names every mould cut
+    from it, and the part's span is the span of all of them."""
     if part_id in facts:
-        return part_id, "exact"
+        return {part_id}, "exact"
     printed = _PRINT_SUFFIX.match(part_id)
     if printed and printed.group(1) in facts:
-        return printed.group(1), "base"
+        return {printed.group(1)}, "base"
+    sticker = _STICKER.match(part_id)
+    if sticker and sticker.group(1) in facts:
+        return {sticker.group(1)}, "sheet"
+    for candidate in (part_id, printed.group(1) if printed else None):
+        if candidate and candidate in designs:
+            hits = {q for q in designs[candidate] if q in facts}
+            if hits:
+                return hits, "design"
     return None
+
+
+def keyword_years(dat: Path, set_year: dict[str, int],
+                  bare: dict[str, list[int]]) -> tuple[int, int] | None:
+    """The years of the sets LDraw's own `!KEYWORDS` line names, if any.
+
+    An estimate, and only ever a fallback: keywords name a couple of
+    illustrative sets rather than an inventory, so for a part in hundreds of
+    sets the earliest named is nowhere near the earliest. Measured against the
+    inventory years we already trust, the error tracks how many sets a part is
+    in -- a median of one year at 1-2 sets, fourteen at over a hundred. Every
+    part reaching this route is absent from every inventory, which is the
+    regime where it holds up; stickers checked at 95% exact.
+    """
+    if not dat.is_file():
+        return None
+    named: list[str] = []
+    for line in dat.read_text(errors="ignore").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if not stripped.startswith("0 "):
+            break          # past the header; the geometry starts here
+        found = _KW_LINE.match(stripped)
+        if found:
+            named.append(found.group(1))
+    if not named:
+        return None
+    years: list[int] = []
+    for ref in _KW_SET.findall(" ; ".join(named)):
+        if ref in set_year:
+            years.append(set_year[ref])
+        else:
+            years.extend(bare.get(ref.split("-")[0], ()))
+    return (min(years), max(years)) if years else None
 
 
 def successors(cache: Path, facts: dict[str, tuple[int, int, int, int]],
@@ -161,6 +232,8 @@ def main() -> int:
     ap.add_argument("--cache", default=str(ROOT / DEFAULT_CACHE))
     ap.add_argument("--out", default=str(ROOT / DEFAULT_OUT))
     ap.add_argument("--successors-out", default=str(ROOT / DEFAULT_SUCCESSORS))
+    ap.add_argument("--ldraw-dir", default=str(ROOT / "vendor" / "ldraw"),
+                    help="the library to read `!KEYWORDS` set references from")
     ap.add_argument("--refresh", action="store_true",
                     help="pull the dumps again instead of using the cache")
     args = ap.parse_args()
@@ -171,6 +244,12 @@ def main() -> int:
         fetch(name, cache, args.refresh)
 
     facts = part_facts(cache)
+    designs = design_index(cache)
+    set_year = {r["set_num"]: int(r["year"])
+                for r in rows(cache / "sets.csv.gz") if r["year"]}
+    bare: dict[str, list[int]] = defaultdict(list)
+    for set_num, year in set_year.items():
+        bare[set_num.split("-")[0]].append(year)
 
     conn = db.connect(args.db)
     try:
@@ -179,16 +258,29 @@ def main() -> int:
         conn.close()
     print(f"{len(ids):,} parts in the corpus", flush=True)
 
+    parts_dir = Path(args.ldraw_dir) / "parts"
     matched = []
     for i, part_id in enumerate(ids, 1):
         if i % 5000 == 0:
             print(f"  matched {i:,}/{len(ids):,}", flush=True)
-        hit = match(part_id, facts)
-        if hit is None:
+        hit = match(part_id, facts, designs)
+        if hit is not None:
+            part_nums, how = hit
+            spans = [facts[n] for n in part_nums]
+            # A design id can name several moulds. The span is all of them;
+            # the counts are the largest single mould's, because summing them
+            # would count one set once per mould cut from it.
+            best = max(spans, key=lambda s: s[2])
+            matched.append((part_id, min(s[0] for s in spans),
+                            max(s[1] for s in spans), best[2], how, best[3]))
             continue
-        part_num, how = hit
-        first, last, sets, colors = facts[part_num]
-        matched.append((part_id, first, last, sets, how, colors))
+        # Nothing in any inventory. LDraw's own keywords are the last resort,
+        # and the row is marked so the wall can tell an estimate from a count:
+        # `sets` and `colors` stay 0 because there is no inventory behind them,
+        # which is also why `cells` must not read a popularity out of them.
+        span = keyword_years(parts_dir / f"{part_id}.dat", set_year, bare)
+        if span is not None:
+            matched.append((part_id, span[0], span[1], 0, "keywords", 0))
 
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -197,9 +289,13 @@ def main() -> int:
         w.writerow(["part_id", "year_from", "year_to", "sets", "matched",
                     "colors"])
         w.writerows(matched)
-    exact = sum(1 for m in matched if m[4] == "exact")
-    print(f"wrote {out}: {len(matched):,} of {len(ids):,} parts "
-          f"({exact:,} exact, {len(matched) - exact:,} via base part)", flush=True)
+    by_route: dict[str, int] = defaultdict(int)
+    for m in matched:
+        by_route[m[4]] += 1
+    routes = ", ".join(f"{n:,} {route}" for route, n in sorted(
+        by_route.items(), key=lambda kv: -kv[1]))
+    print(f"wrote {out}: {len(matched):,} of {len(ids):,} parts ({routes})",
+          flush=True)
 
     found = successors(cache, facts, set(ids))
     succ_out = Path(args.successors_out)

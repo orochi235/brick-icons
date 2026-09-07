@@ -193,6 +193,13 @@ mould number* -- which is why our Brick 2x4 reads 1979 and not 1958. If those
 few matter, a hand-curated exception list is the honest fix, not an inferred
 rule.
 
+**All of this is built and loaded** -- `scripts/fetch-part-years.py` carries the
+routes, and `part_years` went from 9,269 rows to **19,033 of 24,591 (38% ->
+77%)**: 5,051 exact, 4,218 base, 2,020 design, 1,158 sheet, 6,586 keywords.
+Printed parts reach 95%, stickers 95%, plain 61%. The CSV under
+`tests/goldens/` is the durable form and `db.rebuild` reloads it, so the census
+ingest's next swap of `corpus.db` keeps it rather than clobbering it.
+
 **Stickers are not unfixable -- that claim was wrong.** Two routes give 2,680 of
 2,810 sticker parts a year:
 
@@ -221,9 +228,14 @@ Stickers sit at the top of that table and hit **95% exact** against the 691 with
 a sheet-derived year to check against. So use `!KEYWORDS` only where the
 inventories give nothing -- a part absent from every inventory is by
 construction a part in few sets, the regime where keywords are good. Mixing it
-into parts that already have inventory years would make them worse. Label the
-route in `part_years.matched` so the wall can tell an estimate from a count;
-that column already carries `exact` and `base`.
+into parts that already have inventory years would make them worse. The route is labelled in
+`part_years.matched`, and `cells.sets_for` returns None for an estimated row so
+the wall cannot read a popularity out of it. That guard is load-bearing:
+`part_years.sets` is `NOT NULL DEFAULT 0` and `tags_for` calls `sets <= 2`
+obscure, so serving the 0 tagged all 6,586 estimates obscure -- 8,517 against a
+true 1,931. Making the column nullable would have meant a schema bump, and one
+of those had just 500'd the lab for every session; suppressing at the read is
+the same answer without it.
 
 **occt renders decals now** (`4b80035`, gated by `cd7ce2c`). Mike was asked
 whether occt should do this corpus-wide and answered that there is no reason

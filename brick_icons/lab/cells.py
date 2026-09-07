@@ -95,6 +95,19 @@ def engine_for(source: str) -> str:
 COVERAGE_ORDER = ("defect", "failed", "timeout", "drawn", "untried")
 
 
+#: Routes in `part_years.matched` whose years are an estimate rather than a
+#: walk of set inventories. There is no inventory behind them, so they carry no
+#: set count -- and a 0 read as one would tag every such part `obscure`.
+ESTIMATED_ROUTES = frozenset({"keywords"})
+
+
+def sets_for(year: sqlite3.Row | None) -> int | None:
+    """How many sets a part is in, or None where nobody counted."""
+    if year is None or year["matched"] in ESTIMATED_ROUTES:
+        return None
+    return year["sets"]
+
+
 def coverage_of(*, sha: str | None, error: str | None, open_defects: int) -> str:
     """How far this slot got with a part, worst news first. Mirrored by
     `Coverage` in the wall's `facts.ts`, which reads this rather than deriving
@@ -136,7 +149,8 @@ def cells(conn: sqlite3.Connection, source: str = "census-naive",
 
     defects = _open_defects(conn, wanted, engine)
     years = {r["part_id"]: r for r in conn.execute(
-        "SELECT part_id, year_from, year_to, sets, colors FROM part_years")}
+        "SELECT part_id, year_from, year_to, sets, colors, matched "
+        "FROM part_years")}
     successors = {r["part_id"]: r["successor"] for r in conn.execute(
         "SELECT part_id, successor FROM part_successors")}
 
@@ -171,7 +185,7 @@ def cells(conn: sqlite3.Connection, source: str = "census-naive",
             "moved": bool(part["moved"]),
             "year_from": year["year_from"] if year else None,
             "year_to": year["year_to"] if year else None,
-            "sets": year["sets"] if year else None,
+            "sets": sets_for(year),
             "colors": year["colors"] if year else None,
             # The part that replaced this one, where one is known: the wall's
             # updated badge links to it.
@@ -179,7 +193,7 @@ def cells(conn: sqlite3.Connection, source: str = "census-naive",
             "tags": part_tags.tags_for(
                 part["category"], bool(part["printed"]), bool(part["obsolete"]),
                 year["year_to"] if year else None,
-                year["sets"] if year else None,
+                sets_for(year),
                 title=part["title"], part_id=pid, successor=successor),
             "status": part["status"],
             "sha": render["sha256"] if render else None,
