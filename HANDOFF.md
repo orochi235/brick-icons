@@ -1830,11 +1830,18 @@ another session's load; `47432` read 9.39s and 6.4s twenty minutes apart on
 the same revision. `time.process_time` alongside `perf_counter` costs nothing
 and is what caught the vectorized version being slower.
 
-**Open, and asked for: 4592's dome.** Its silhouette is 11 straight `sil`
-chords. `arcfit.fit_edge_arcs` already fires on the part (12 arcs from its
-130 condlines) but cannot help here: the limb comes from tessellation, so
-there is no type-2 chain to fit, and the wide-pass contour recovery rejects
-it at its 0.25px gate. The projected chord endpoints do sit close to a conic
-(SVD residual rms 0.199 against a 64 scale), so fitting a run of silhouette
-chords to an ellipse is feasible — but it is a new mechanism, and nothing of
-it is built.
+**4592's dome: the mechanism is built, and 4592 is not one of its
+customers.** `arcfit.fit_silhouette_arcs` chains the drawn silhouette ops,
+splits where the chain stops turning steadily one way, and replaces a run
+that lies on one ellipse with a single arc plus an arc-recovery candidate,
+so the fill follows the same curve. It fires on 5 of 74 census parts.
+
+4592 is not one of them, and the reason is not the gates: its one candidate
+run's least-squares conic **is not an ellipse** — no ellipse passes near
+those seven points. The outline is a rounded rectangle in plan whose corner
+arcs are covered by two or three chords each, too few to identify. Nothing
+in the part declares the surface round where the limb runs, either: the
+chord vertices are 0.45–1.2 LDU from the nearest mesh vertex and the chords
+sit 0.18–0.40 off the nearest projected condline, so there is no authored
+edge or condline to key on. Smoothing it would mean drawing a curve through
+points that lie on no curve the library declares.
