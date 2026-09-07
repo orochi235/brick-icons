@@ -1586,7 +1586,7 @@ No defects filed.
 
 ## 2026-09-06 evening: the geometry phase, and what is still unmeasured
 
-Three commits of mine are on `main`, unpushed with everyone else's:
+On branch `main`, unpushed with everyone else's evening — `git log --oneline @{u}..HEAD` for the current list:
 
 - `9493b33` prefilters the two all-pairs scans in the geometry phase.
   `shade.order_faces` tested every face pair and recomputed each polygon's
