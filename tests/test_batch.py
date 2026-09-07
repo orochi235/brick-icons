@@ -2,6 +2,7 @@ import json
 import os
 import signal
 import time
+from pathlib import Path
 
 from brick_icons import batch
 
@@ -179,3 +180,30 @@ def test_isolate_kills_a_group_that_outgrows_the_memory_cap(tmp_path):
     assert row["error"] == "MemoryError", row
     assert "1GB" in row["detail"]
     assert time.time() - started < 60      # the cap, not the 120s timeout
+
+
+def test_the_render_store_isolates_and_caps_memory(monkeypatch, tmp_path):
+    """A store run is unattended for hours on a shared node, and its --timeout
+    is setitimer, whose handler runs only between bytecodes -- an occt render
+    stuck inside one OCP call ignores it while it keeps allocating. Runner
+    already carries the fork + external watchdog 18310b7 built for the census;
+    the store has to ask for them."""
+    import importlib
+    import sys
+    root = Path(__file__).resolve().parent.parent
+    sys.path.insert(0, str(root / "scripts"))
+    store = importlib.import_module("build-render-store")
+    seen = {}
+
+    class FakeRunner:
+        def __init__(self, log, **kw):
+            seen.update(kw)
+
+        def remaining(self, ids, retry_errors=False):
+            return []
+
+    monkeypatch.setattr(store, "Runner", FakeRunner)
+    store.main(["3001", "--sources", "occt", "--log", str(tmp_path / "l.jsonl"),
+                "--db", str(tmp_path / "c.db")])
+    assert seen["isolate"] is True
+    assert seen["mem_gb"] > 0

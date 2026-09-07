@@ -48,12 +48,16 @@ def render_one(part: str, source: str, run_id: int, conn, force: bool) -> dict:
             "state": "cached" if result["cached"] else "stored"}
 
 
-def main() -> int:
+def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("parts", nargs="*")
     ap.add_argument("--list")
     ap.add_argument("--sources", default="naive,occt")
     ap.add_argument("--timeout", type=float, default=180)
+    ap.add_argument("--mem-gb", dest="mem_gb", type=float, default=8,
+                    help="kill a render that grows past this, from outside it")
+    ap.add_argument("--no-isolate", dest="isolate", action="store_false",
+                    help="render in-process; a crash then takes the run with it")
     ap.add_argument("--log", default=str(ROOT / "out" / "store" / "store.jsonl"))
     ap.add_argument("--db", default=str(ROOT / db.DEFAULT_PATH))
     ap.add_argument("--force", action="store_true",
@@ -61,7 +65,7 @@ def main() -> int:
     ap.add_argument("--retry-failed", action="store_true",
                     help="also take the parts a previous pass timed out or "
                          "errored on, which resume otherwise treats as done")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     ids = list(args.parts)
     if args.list:
@@ -81,8 +85,13 @@ def main() -> int:
     run_id = db.start_run(conn, "render", {"sources": sources}, sha or "unknown")
 
     for source in sources:
+        # --timeout alone is setitimer, whose handler runs only between
+        # bytecodes: an occt render stuck inside one OCP call ignores it and
+        # keeps allocating. isolate + mem_gb are the fork and the external
+        # watchdog that stop it, and a store run is unattended for hours.
         batch = Runner(f"{args.log}.{source}", timeout=args.timeout, key="part",
-                       extra={"source": source})
+                       extra={"source": source}, isolate=args.isolate,
+                       mem_gb=args.mem_gb)
         todo = batch.remaining(ids, retry_errors=args.retry_failed)
         print(f"{source}: {len(todo)} of {len(ids)} to render", flush=True)
         for n, part in enumerate(todo, 1):
