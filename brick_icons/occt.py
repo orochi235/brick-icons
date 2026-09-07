@@ -1510,6 +1510,28 @@ def _union_bbox(bbox, polys):
             max(bbox[2], P[:, 0].max()), max(bbox[3], P[:, 1].max()))
 
 
+def _undeclared_ops(comps):
+    """What to draw for a part that declared no edge of its own.
+
+    1,407 of the library's stickers and a handful of ordinary parts carry
+    faces and not one type-2 or type-5 line -- `box5-12.dat`, which 185 of
+    them are built on, says so in its own first line: "Box with 5 Faces
+    without Any Edges". The engine reported that honestly and drew nothing,
+    which is a blank icon rather than an answer.
+
+    HLR's sharp set is the only material such a part has, and it is safe
+    HERE and nowhere else. It is normally off limits -- reading a crease off
+    tessellation draws every facet boundary, which is the failure this engine
+    exists to avoid -- but `build_shape` has already run UnifySameDomain, so
+    a flat wall's interior facet seams are gone and what survives is the
+    part's real creases and its boundary. The guard is that the part declared
+    NOTHING: one that declares an edge and still yields no ops is a different
+    fault and still raises.
+    """
+    return [op for edge in _edges_of(comps.get("sharp"))
+            for op in _edge_ops(edge, "sil")] if comps.get("sharp") else []
+
+
 def visible_segments(out, right, up, render_px, cull=True, fwd=None):
     from .hlr import VisResult, _ops_bbox
     if fwd is None:
@@ -1532,6 +1554,8 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None):
             continue
         for edge in _edges_of(comp):
             ops += _edge_ops(edge, "sil")
+    if not ops and not out.get("2") and not out.get("5"):
+        ops = _undeclared_ops(comps)
     ops = _negate_y(ops)
     if not ops:
         raise RuntimeError("OCCT engine produced no edges")

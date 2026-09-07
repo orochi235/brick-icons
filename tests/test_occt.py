@@ -1086,3 +1086,40 @@ def test_a_fill_boundary_carries_no_sampled_boundary(part, tmp_path, ldraw_dir):
     assert worst <= 4, (
         f"{part}: {worst} sub-quarter-pixel fill segments in a row "
         f"({short} of {total}) -- a buffer boundary reached the path")
+
+
+def test_a_part_declaring_no_edge_draws_instead_of_raising(ldraw_dir):
+    """1,407 stickers and a few ordinary parts carry faces and not one type-2
+    or type-5 line -- `box5-12.dat`, which 185 of them are built on, is named
+    "Box with 5 Faces without Any Edges". `5241` is the unprinted one: 14
+    triangles, no lines, no condlines. The engine used to report that honestly
+    and draw nothing, which is a blank icon rather than an answer."""
+    out = occt.flatten_part("5241", ldraw_dir)
+    assert not out.get("2") and not out.get("5")
+    right, up = hlr.view_basis(30.0, 65.0)[:2]
+    assert occt.visible_segments(out, right, up, 900).segs
+
+
+def test_the_undeclared_fallback_is_never_consulted_by_a_part_with_edges(
+        ldraw_dir, monkeypatch):
+    """It may only run where the old code raised. A part that declares an edge
+    reaches ops of its own, so the fallback cannot touch what it draws -- which
+    is what makes the change byte-safe for the rest of the library."""
+    calls = []
+    real = occt._undeclared_ops
+    monkeypatch.setattr(occt, "_undeclared_ops",
+                        lambda comps: (calls.append(1), real(comps))[1])
+    right, up = hlr.view_basis(30.0, 65.0)[:2]
+    for part in ("3001", "3941", "4740"):
+        assert occt.visible_segments(
+            occt.flatten_part(part, ldraw_dir), right, up, 900).segs
+    assert calls == []
+
+
+def test_a_part_that_declares_an_edge_and_still_draws_nothing_still_raises():
+    """The seven formed stickers that fail with an edge declared are a
+    different fault, and swallowing them into a silhouette would hide it."""
+    with pytest.raises(RuntimeError, match="produced no edges"):
+        occt.visible_segments({"2": [(np.zeros(3), np.zeros(3))], "5": [],
+                               "tri": [], "tri_meta": [], "analytic": []},
+                              np.array([1.0, 0, 0]), np.array([0, 1.0, 0]), 900)
