@@ -52,6 +52,11 @@ export interface Appearance {
   maxBorderPx: number;
   dimAlpha: number;
   retiredWash: number;
+  /** What a cell says about itself beyond its drawing. Off, the wall is the
+   *  renders and their state colors and nothing else -- which is what you
+   *  want when judging the drawings rather than reading the corpus. */
+  showBadges: boolean;
+  showCaptions: boolean;
 }
 
 // A label narrower than its own text is ink, not a word.
@@ -64,13 +69,20 @@ const LABEL_FILL = 0.8;
 // Set smaller than this a label is a gray smear over the block it names.
 const MIN_LABEL_SIZE_PX = 7;
 
-const DEFAULT_APPEARANCE: Appearance = {
+export const DEFAULT_APPEARANCE: Appearance = {
   thickBorderFactor: DEFAULT_PARAMS.thickBorderFactor,
   thinBorderFactor: DEFAULT_PARAMS.thinBorderFactor,
   maxBorderPx: DEFAULT_PARAMS.maxBorderPx,
   dimAlpha: DEFAULT_PARAMS.dimAlpha,
   retiredWash: DEFAULT_PARAMS.retiredWash,
+  showBadges: DEFAULT_PARAMS.showBadges,
+  showCaptions: DEFAULT_PARAMS.showCaptions,
 };
+
+// Switched off, every cell shares one empty -- `Wall` memoizes on the command
+// list, and a fresh array per cell per frame would defeat that.
+const NO_BADGES: CellBadge[] = [];
+const NO_CAPTIONS: CellCaption[] = [];
 
 function borderWidthFor(weight: CellStyle['weight'], cellPx: number,
                         appearance: Appearance): number {
@@ -431,9 +443,10 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
     const style = dimmed ? palette.unknown : tintFor(cell, tint, palette);
     const border = style.border;
     const borderWidth = borderWidthFor(style.weight, dw, appearance);
-    const badges = badgesFor(cell, dw);
-    const strip = stripFor(cell, dw);
-    const captions = captionsFor(cell, dw, CAPTION_ON_THUMB);
+    const badges = appearance.showBadges ? badgesFor(cell, dw) : NO_BADGES;
+    const strip = appearance.showBadges ? stripFor(cell, dw) : NO_BADGES;
+    const captions = appearance.showCaptions
+      ? captionsFor(cell, dw, CAPTION_ON_THUMB) : NO_CAPTIONS;
     const wash = isRetired(cell) ? appearance.retiredWash : undefined;
     const vectored = tint === 'status' ? vector?.get(cell.id) : undefined;
     const image = tint === 'status' ? (vectored ?? loose?.get(cell.id)) : undefined;
@@ -457,8 +470,9 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
                mark: state === 'outOfScope' ? markFor(cell) : undefined,
                // Not on an out-of-scope cell: it is deliberately the quietest
                // thing on the wall, and captions would undo that.
-               captions: state === 'outOfScope'
-                 ? undefined : captionsFor(cell, dw, CAPTION_ON_FILL),
+               captions: state === 'outOfScope' ? undefined
+                 : appearance.showCaptions
+                   ? captionsFor(cell, dw, CAPTION_ON_FILL) : NO_CAPTIONS,
                slash: border !== null, caret: isCaret });
   }
   for (const b of bands ?? []) {

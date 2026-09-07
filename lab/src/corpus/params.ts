@@ -28,6 +28,9 @@ export interface Params {
   defectElsewhereBorder: string;
   caretColor: string;
 
+  showBadges: boolean;
+  showCaptions: boolean;
+
   thickBorderFactor: number;
   thinBorderFactor: number;
   maxBorderPx: number;
@@ -66,6 +69,9 @@ export const DEFAULT_PARAMS: Params = {
   defectElsewhereFill: '#453c27',
   defectElsewhereBorder: '#c7b78f',
   caretColor: '#ffffff',
+
+  showBadges: true,
+  showCaptions: true,
 
   thickBorderFactor: 0.18,
   thinBorderFactor: 0.09,
@@ -129,6 +135,13 @@ export const LAYOUT_FIELDS: ConfigField[] = [
     default: DEFAULT_PARAMS.cols, min: 0, max: 64, step: 1 },
 ];
 
+export const CELL_FIELDS: ConfigField[] = [
+  { key: 'showBadges', label: 'Badges', type: 'checkbox',
+    default: DEFAULT_PARAMS.showBadges },
+  { key: 'showCaptions', label: 'Captions', type: 'checkbox',
+    default: DEFAULT_PARAMS.showCaptions },
+];
+
 export const APPEARANCE_FIELDS: ConfigField[] = [
   ...COLOR_PARAM_KEYS.map((key): ConfigField => ({
     key, label: COLOR_LABEL[key], type: 'color', default: DEFAULT_PARAMS[key],
@@ -160,6 +173,7 @@ export interface ParamGroup { label: string; fields: ConfigField[] }
 
 export const PARAM_GROUPS: ParamGroup[] = [
   { label: 'Layout', fields: LAYOUT_FIELDS },
+  { label: 'Cell', fields: CELL_FIELDS },
   { label: 'Appearance', fields: APPEARANCE_FIELDS },
   { label: 'Feel', fields: FEEL_FIELDS },
 ];

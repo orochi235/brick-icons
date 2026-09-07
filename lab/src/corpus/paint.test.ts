@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { badgeGeometry, badgesFor, captionsFor, CAPTION_ON_FILL, captionSize,
-  cellState, fillFor, paintCommands, PROPERTY_FIELD, stripFor, stripGeometry,
-  tally, THUMB_GROUND } from '@lab/corpus/paint';
+  cellState, DEFAULT_APPEARANCE, fillFor, paintCommands, PROPERTY_FIELD,
+  stripFor, stripGeometry, tally, THUMB_GROUND, vectorGround,
+  type Appearance }
+  from '@lab/corpus/paint';
 import { CELL_STATES, DEFAULT_PALETTE as CELL_FILL, type CellState } from '@lab/corpus/palette';
 import type { Band } from '@lab/corpus/layout';
 import { tintFor } from '@lab/corpus/tint';
@@ -95,18 +97,23 @@ it('draws a whole loose image when one is loaded for the cell', () => {
     cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest, loose: new Map([['a', img]]),
   });
   expect(cmd).toEqual({ kind: 'image', dx: 0, dy: 0, dw: 10, dh: 10, image: img,
-                        ground: THUMB_GROUND, translucent: false, border: null,
+                        ground: vectorGround(), translucent: false, border: null,
                         borderWidth: 0, badges: [], strip: [], captions: [],
                         wash: undefined });
 });
 
-it('grounds a vector cell on what the thumbnails were baked against', () => {
+it('grounds a vector cell on the legend gray, not on the bakes\' white', () => {
+  // Deliberately NOT `THUMB_GROUND`: a vector cell is the zoomed-in drawing
+  // and gets its own ground, so the cell changes shade as you cross the
+  // sprite/vector threshold. That is the point -- it says which one you are
+  // looking at -- but it is why this is asserted rather than shared.
   const [cmd] = paintCommands({
     cells: [cell('a', 0, 'sha-a')], rects, visible: [0],
     cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest,
     vector: new Map([['a', {} as CanvasImageSource]]),
   });
-  expect(cmd).toMatchObject({ kind: 'image', ground: '#ffffff' });
+  expect(cmd).toMatchObject({ kind: 'image', ground: vectorGround() });
+  expect((cmd as { ground: string }).ground).not.toBe(THUMB_GROUND);
 });
 
 it('prefers the loose image over the sheet', () => {
@@ -483,6 +490,44 @@ it('captions an undrawn cell in white, and leaves an out-of-scope one alone', ()
   expect(at({ out_of_scope: true, category: 'Sticker' }).captions).toBeUndefined();
 });
 
+const OFF = { ...DEFAULT_APPEARANCE, showBadges: false, showCaptions: false };
+
+it('draws a bare cell when badges and captions are switched off', () => {
+  // Baked, so this is a sprite: a fill cell carries no badges to begin with.
+  const part = cell('a', 0, 'sha-a',
+    { tags: ['retired', 'popular', 'technic'], year_from: 1979, year_to: 2026 });
+  const [cmd] = paintCommands({
+    cells: [part], rects, visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 20, y: 20 } }, palette: CELL_FILL, manifest,
+    appearance: OFF,
+  });
+  expect(cmd).toMatchObject({ badges: [], strip: [], captions: [] });
+});
+
+it('switches the two off one at a time', () => {
+  const part = cell('a', 0, 'sha-a', { tags: ['popular'], year_from: 1979 });
+  const at = (appearance: Appearance) => paintCommands({
+    cells: [part], rects, visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 20, y: 20 } }, palette: CELL_FILL, manifest,
+    appearance,
+  })[0] as { badges?: unknown[]; captions?: unknown[] };
+  const noBadges = at({ ...DEFAULT_APPEARANCE, showBadges: false });
+  expect(noBadges.badges).toEqual([]);
+  expect(noBadges.captions!.length).toBeGreaterThan(0);
+  const noCaptions = at({ ...DEFAULT_APPEARANCE, showCaptions: false });
+  expect(noCaptions.captions).toEqual([]);
+  expect(noCaptions.badges!.length).toBeGreaterThan(0);
+});
+
+it('leaves an undrawn cell its state, and only drops its caption', () => {
+  const [cmd] = paintCommands({
+    cells: [cell('3001', 0, null, { error: 'TimeoutError' })], rects, visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 20, y: 20 } }, palette: CELL_FILL, manifest: null,
+    appearance: OFF,
+  });
+  expect(cmd).toMatchObject({ kind: 'fill', captions: [], slash: true });
+});
+
 it('carries the badge on the drawn cell, not the empty one', () => {
   const cells = [cell('a', 0, 'sha-a', { tags: ['retired'] })];
   const [cmd] = paintCommands({
@@ -513,13 +558,13 @@ it('washes a retired cell rather than baking it a ground of its own', () => {
     cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest,
     vector: new Map([['a', {} as CanvasImageSource]]),
   });
-  expect(plain).toMatchObject({ ground: THUMB_GROUND, wash: undefined });
+  expect(plain).toMatchObject({ ground: vectorGround(), wash: undefined });
   const [retired] = paintCommands({
     cells: [cell('b', 1, 'sha-b', { tags: ['retired'] })], rects, visible: [0],
     cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest,
     vector: new Map([['b', {} as CanvasImageSource]]),
   });
-  expect(retired).toMatchObject({ ground: THUMB_GROUND, translucent: true });
+  expect(retired).toMatchObject({ ground: vectorGround(), translucent: true });
   expect((retired as { wash?: number }).wash).toBeGreaterThan(0);
 });
 

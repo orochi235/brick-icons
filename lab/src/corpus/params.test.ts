@@ -30,6 +30,11 @@ const PRE_TASK_LITERALS: Params = {
   defectElsewhereBorder: '#c7b78f',
   caretColor: '#ffffff',
 
+  // Both post-snapshot, and both on: a cell wore its badges and captions
+  // before there was a switch, so the switch has to arrive already flipped.
+  showBadges: true,
+  showCaptions: true,
+
   thickBorderFactor: 0.18,
   thinBorderFactor: 0.09,
   maxBorderPx: 6,
