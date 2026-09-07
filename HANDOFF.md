@@ -1,5 +1,67 @@
 # Handoff — `main`: the corpus lab, and the OCCT engine
 
+## Overnight defect sweep, 2026-09-07: what is fixed and what the rows are lying about
+
+Mike asked for a night on `tests/goldens/defects.toml` and the census's failed
+parts. Branch `defect-sweep` (pushed, `origin/defect-sweep`) holds two commits
+off `84b1706`, both a clean fast-forward onto `main`; `brick-icons-11` was asked
+to merge them, because `main` is checked out in the shared tree and a worktree
+session cannot move it.
+
+- `d8181bf` **GEOSException is fixed.** `shapely.clip_by_rect` is GEOS's fast
+  rectangle clipper and does not check its input: handed a polygon carrying a
+  zero-area interior ring it builds a 3-point LinearRing out of that hole and
+  throws, on input GEOS itself calls valid. 813c03-f2's fill carries a
+  three-point hole of area 4e-13. `geom2d.window()` falls back to intersecting
+  with the box, and shade's four `clip_by_rect` sites go through it. It is
+  deliberately NOT the module's `_only_area` intersection — one caller windows a
+  MultiLineString, and stripping that to empty is a wrong answer, not a safe
+  one. Reachable only where the old code raised. 813c03-f2 draws its rails,
+  sleepers and uprights correctly now.
+
+- `0a39ae8` **Gradient banding is fixed, and the filed cause was wrong.** The
+  linear path emitted a stop per facet through `style.ramp(nv)`, so two facets
+  at nearly the same offset and opposite azimuth wrote two tones and the run
+  ALTERNATED between them. 44300's chamfer band: 67 stops, two colors, hairline
+  stripes across the fillet. `curved-surface-gradient-banding` proposed "merging
+  equal-color runs"; that would not have touched it, because the tones alternate
+  rather than repeat. `_axis_binned_stops` bins by offset, averages BRIGHTNESS
+  in the bin and ramps once — exactly what the radial path already did. 44300 is
+  now 10 stops over 4 tones and one flat surface; 7037's rounded face loses its
+  striping. Cylinder-wall ramps are unchanged to the eye at 6x (3062b, 3005),
+  and a unit test pins a monotone sweep against being flattened.
+
+  Closes `7037-gradient-banding` and `curved-surface-gradient-banding`, and the
+  shaded half of `53119-occt-has-a-bunch-of`. Its stray lines are untouched.
+
+### `outline__3673` lost an arc on the naive path and nothing caught it
+
+Not the gradient change: freeze that one case with the change stashed and it
+moves anyway — `A 50 -> 49`, `M 47 -> 46`, `paths 47 -> 46`, `gradient_stops: 0`
+throughout. `combo.outline` is strokes-only with occlusion on, which is the one
+combo that exists to catch exactly this. It slipped because `BRICK_GOLDENS=1`
+freezes 3005 alone, so every other row in `hashes.txt` is decorative. 3673
+renders in about a second, so a bisect over the naive path is cheap. Its row and
+artifacts were deliberately left at their committed values so the regression
+stays visible. **`BRICK_GOLDENS=full` is the only run that bounds a `shade.py`
+or `hlr.py` change**; a green `=1` does not.
+
+### The census's failure rows are stale, and "stale" is not "fine"
+
+Latest run per part, on occt: TimeoutError 413, ProcessDied 243, TypeError 29,
+LinAlgError 4, ValueError 3, RuntimeError 2, GEOSException 2.
+
+All 29 `TypeError: coordinate list must contain at least 2 coordinates` rows are
+build `830.557ae4d` and the crash is gone. **Do not read them as clean.**
+Re-running them at HEAD under a 120s cap: 2393, 4273a, 32208 and 15092 draw,
+while 15461, 18942, 19086, 19159 and 28578 now hit the TIMEOUT instead. The
+crash became slowness on at least five. Same shape as `6177970ec01`'s
+ProcessDied: re-derive a failure row before quoting it.
+
+Also verified healed at HEAD: the three `ValueError` stickers (4221407f,
+4510086c, 6015425b) by `c673dd3`, 6342851a by `b5b2694`, 5241, 2976c01 and
+72632. Still failing: 41896c01 and 72632c01/c02 on time, not on a crash.
+
 ## Read first, 2026-09-07 early: occt only, and where the wall stands
 
 **occt is the engine from now on**, until Mike says otherwise. Say "on occt" in
