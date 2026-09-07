@@ -1983,107 +1983,10 @@ agree to within noise on every part (0901 0.95 vs 0.79, 32172 1.57 vs 1.56,
 44937 3.09 vs 3.04) — and the two 0901 figures were never in conflict: the
 bench's 0.95s is a *head* number, next to ab2's head 0.74s. Only ab2 measured
 base.
-
-`158b0ab` puts each measurement script's own root on `sys.path` first and
-prints the `brick_icons` it resolved beside the rev, so a wrong-tree run says
-so in its first line. Re-verified on 6046 and 0901 with the import asserted:
-base slower in both passes, both parts. **The direction is settled and 4.96x
-is the surviving figure; the exact multiple is not re-confirmed** — this box
-was at load 16-56 with peer jobs on it all evening, and my own absolutes came
-back 5-20x inflated (6046 at 233s against an expected 9s). Quote it as "above
-4x on the geometry phase" until someone measures on a quiet box.
-
-Next, in order:
-
-- **Done** (`7210ab3`): the dashboard draws the phase chart from live rows, under
-  "Where the time goes". Two bars per engine, because `render` is the parent of
-  geometry / decoration / fill and only 1,019 of occt's 8,446 timed parts were
-  measured after `brick_icons.timing` existed -- the split gets its own n and
-  its own bar. Mixing them puts the un-instrumented rows' whole render into the
-  leftover band: 90% against 1% once separated. `scripts/census-plot-phases.py`
-  still runs over a probe file and is now superseded by the page.
-
-  **What it says, and it is not what we assumed:** over the instrumented rows,
-  `fill` is 70% of a naive render and 67% of an occt one, against geometry's 29%
-  and 23%. The geometry prefilters landed on the smaller half. Treat that as a
-  steer, not a headline -- the instrumented rows are whatever ran most recently,
-  not a sample of the corpus.
-- What is left in `order_faces` is the pairs that genuinely overlap — 25,585 on
-  10039 at ~350us each, rasterizing two 48x48 polygons per pair. Cutting it
-  means changing which point inside the overlap is the witness, which is not
-  byte-safe by construction: a different point can flip a near-tie depth
-  comparison and change paint order. Golden re-baseline, not a byte gate.
-
-## 2026-09-06 night: the floating dots, three crashes, and one disproof
-
-Landed on `main`, `c0c321e..0db788b`. All of it came out of the census DB:
-every failure in the finished occt run is `TimeoutError` (603) or
-`ProcessDied` (171) except 33 parts, and those 33 were three bugs.
-
-**What the dots were.** A short stroke run with 2-unit round caps on a peg
-barrel, and it had two separate causes:
-
-- The occt branch of `hlr.visible_segments` returned before the stylization
-  tail, so `cull_orphan_runs` had only ever run on naive. Over 300 census
-  parts rendered by both engines, occt carried a sub-200px isolated speck on
-  5.3% against naive's 3.0%, and 14 of the 16 were occt-only (30162).
-- The rest neither engine dropped. The peel starts at a free tip and never
-  starts on a `sil` op, so a short run touching nothing survives both rules.
-  `cull_orphan_runs` now also drops a whole connected island under 1.2% of
-  the drawn extent, whatever its kind (44874). Anything landing on other ink
-  still anchors.
-
-Across a 500-part sample of `out/census-white-occt`, 6.6% of parts carried at
-least one sub-200px isolated component before this.
-
-**Still crashing: 5241 only.** `RuntimeError: OCCT engine produced no edges`
-on a part with 14 healthy triangles, no type-2 lines and no condlines; naive
-draws it in 1.1s. Not diagnosed.
-
-**Disproved: prefiltering the `near` scan in `_refine_order_clips`.** That
-scan tests `lost` against every other face with a real GEOS intersection —
-272,549 calls on `30201`, 628,877 on `15624`, and 94% of them are
-bbox-disjoint. Both obvious fixes were written and both measured at or below
-parity: an STRtree envelope query (1.03x / 1.02x / 0.96x / 1.00x wall,
-byte-identical over 35 parts) and a vectorized `shapely.intersects` +
-`intersection` over an object array (0.98x / 1.00x / 1.01x / 1.00x wall,
-and 0.91x / 1.00x on CPU time, where it is if anything slower). Neither
-landed. cProfile is what made this look like a hot spot:
-at 600k calls its per-call overhead is most of what it reports.
-
-**The 30% is real, the target inside it is not the scan.** Timed with a
-single wrapper around `shade._refine_order_clips` (no per-call
-instrumentation), the whole pass is 1.83s of `30201`'s 6.2s and 2.07s of
-`47432`'s 6.4s. So it is worth attacking — but the time is in the half-plane
-differences, the `union_all(curved)`, the grid sampling and `apply`, not in
-finding the neighbours.
-
-**Measure CPU time, not wall.** This box swings a render by 40% under
-another session's load; `47432` read 9.39s and 6.4s twenty minutes apart on
-the same revision. `time.process_time` alongside `perf_counter` costs nothing
-and is what caught the vectorized version being slower.
-
-**4592's dome: the mechanism is built, and 4592 is not one of its
-customers.** `arcfit.fit_silhouette_arcs` chains the drawn silhouette ops,
-splits where the chain stops turning steadily one way, and replaces a run
-that lies on one ellipse with a single arc plus an arc-recovery candidate,
-so the fill follows the same curve. It fires on 5 of 74 census parts.
-
-4592 is not one of them, and the reason is not the gates: its one candidate
-run's least-squares conic **is not an ellipse** — no ellipse passes near
-those seven points. The outline is a rounded rectangle in plan whose corner
-arcs are covered by two or three chords each, too few to identify. Nothing
-in the part declares the surface round where the limb runs, either: the
-chord vertices are 0.45–1.2 LDU from the nearest mesh vertex and the chords
-sit 0.18–0.40 off the nearest projected condline, so there is no authored
-edge or condline to key on. Smoothing it would mean drawing a curve through
-points that lie on no curve the library declares.
-
 ## In flight: mesh refinement, branch `smooth-subdivide` — UNBUILT
 
 Local, unmerged, cut from `bf4ae83`; `git log --oneline bf4ae83..smooth-subdivide`
-for what is on it. Tests green — the branch is held back because refining a
-round makes several parts look **worse**, not because anything is failing.
+for what is on it.
 
 The premise, which decides every design call here: a round the library
 authored as flat triangles carries no curve for any rule to find, so
@@ -2097,36 +2000,43 @@ and it holds across the cracks that make a dihedral-angle rule wrong here.
 corner normals from the patch around each corner, and replaces each facet
 with `level**2` triangles on its curved point-normal (PN) patch. A boundary
 that is not declared smooth stays on its straight chord, so a refined patch
-still meets a flat neighbor along the same line. On 4592 the outline stops
-reading as a polygon — 9 silhouette chords down to 3.
+still meets a flat neighbor along the same line.
 
-Two conditions gate it, both asking only what the library declared. A patch
-is refined when it is **more than two quads**, and its edges leave their
-chords only where the mesh **pairs** them. Two quads is a chamfer, not an
-arc: the whole of it is boundary, so every corner normal is one chord's and
-PN bulges it outward — 32062's axle tips pushed past the drawn strokes and
-left a crescent the fill inked as a 25-vertex sampled boundary. The pairing
-condition is because bulging one lip of a crack widens it. The gate is per
-PATCH and must stay that way: refining part of one leaves the rest on its
-chords and cuts it in two for the fill merge, which took 3960's dish from 7
-gradient fills to 39.
+**What split a round into N strips was our own quad diagonal, not a missing
+declaration.** A type-4 becomes two triangles across the 0-2 diagonal, and no
+type-5 line describes that diagonal because the library never had an edge
+there — so union-find over declared edges could not cross it, and a quad grid
+whose sides are all declared smooth still fell into diagonal staircase
+chains. On 28621, 128 of its edges were shared between two "strips" and
+carried no condline; there are exactly 128 quads. `flatten` now stamps both
+halves of a quad with its id and the refiner joins them: 28621's shoulder
+goes from 32 patches of 8 facets to 2 of 128, 3960's dish from 72 of 14 to
+424 + 384. The swirl of overlapping tone fragments is gone, and 4592 draws a
+round silhouette while keeping its radial dome gradient.
 
-**The blocker: a round is declared as N separate strips, and nothing says
-they are one surface.** 28621's shoulder is 32 patches of 8 facets; occt
-groups it into 32 fills, one per patch, **and did so before refinement too**.
-Refinement does not break a merge that was working — it multiplies the cost
-of one that never worked, ninefold at `level=3`. The drawing comes out a
-swirl of overlapping tone fragments. 4592 loses its dome gradient for a
-flatter, harder-stepped read, and 3960's dish costs 8 gradient fills against
-3 unrefined.
+Two conditions gate refinement, both asking only what the library declared. A
+patch is refined when it **surrounds a vertex** — one whose every incident
+edge is declared smooth — and its edges leave their chords only where the
+mesh **pairs** them. The first replaces a triangle-count gate that was a
+proxy for it: only at a surrounded vertex is a corner normal the patch's
+rather than one chord's, and a patch that is all boundary hands PN a single
+facet plane at every corner, so it invents the curve — 32062's axle bevel
+pushed past the drawn strokes and left a crescent the fill inked as a
+25-vertex sampled boundary. The pairing condition is because bulging one lip
+of a crack widens it. The gate is per PATCH and must stay that way: refining
+part of one leaves the rest on its chords and cuts it in two for the fill
+merge. Over `parts.txt` the surrounded-vertex gate refines every triangle the
+count gate did and more (60474 2428 → 2672, 3960 736 → 808), and 32062 none.
 
-So the question to answer next is not "why did refinement break the merge"
-but **"what declares that 32 meridian strips are one surface"**. The one
-candidate set up and not tested: `shade._seam_edge_mask` matches a mesh edge
-that is only PART of a longer authored conditional line, and
-`smooth_subdivide` requires the condline to match a facet edge end to end.
-Whether that difference is what occt sees and the refiner does not is
-unmeasured.
+**What is left before this can merge:** a contact sheet over `parts.txt`
+against `bf4ae83`, then the full suite. Four parts have been looked at
+(28621, 4592, 3960, 32062); nothing else is known to be blocking.
+
+⚠️ `occt.flatten_part` does its own flatten and does NOT refine, so any test
+comparing it against `hlr.visible_segments` compares an unrefined mesh
+against a refined one. `test_occt_segments_go_through_the_orphan_cull` broke
+exactly that way while an intermediate gate refined 30162. Aligning the two
+paths changes the input of 32 occt tests, so it has not been done.
 
 `render.pose_for` is on this branch too and is unrelated to any of the above:
 a sticker modelled as a flat sheet (thinnest extent under 1 LDU) is posed
@@ -2136,6 +2046,15 @@ occt, both pre-existing.
 
 **Dead ends, measured, do not re-propose:**
 
+- *`shade._seam_edge_mask`'s partial-lie matching.* It matches a mesh edge
+  lying anywhere ON a conditional line, where the refiner requires the
+  condline to match a facet edge end to end. On 28621 the two tests select
+  the SAME 288 mesh edges — zero partial-lie-only ones — and all 320 of its
+  condlines land exactly on a mesh edge; 4592 likewise. Only 3960 has any (16
+  edges, merging 12 patches). The difference is not what let occt see a
+  surface the refiner split.
+- *Rejecting a patch that has a face attached to it by a single seam.* Kills
+  60474 and 3960 outright, and refines nothing anywhere else in `parts.txt`.
 - *Fitting an analytic surface to the patch.* 4592's two big patches fit a
   sphere to 2.44px and everything else worse (plane 45, cone 22, cylinder
   35). No quadric is that surface, and PN triangles do not need one — they
