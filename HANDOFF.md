@@ -168,11 +168,57 @@ the rest, both from dumps, no key:
   1985->1954, `3068b` 1975->1965. The closure is well behaved -- every family is
   variants of one part, the largest is 9.
 
-**Open, and Mike's to answer:** the mould union is right when the LDraw file is
-the generic part and wrong when it is one specific mould. `3001` should say 1954
-because LDraw's `3001` *is* the 2x4 brick. `6947` is the vented-stud minifig
-head, a later mould, and the union hands it 1975 -- when its family started, not
-when that head existed. Union every part, or only ids with no letter suffix?
+**Decided against: the mould union.** Mike left the call to me. It is right when
+the LDraw file is the generic part and wrong when it is one specific mould, and
+no rule separates the two. Three were tried and all fail on parts whose names
+say outright that they are late moulds:
+
+- *union everything* -- gives `6947`, the vented-stud minifig head, 1975.
+- *only where LDraw does not model the siblings* -- holds back `3001`, the one
+  case that most obviously should union.
+- *only plain numeric ids*, and *only the shortest name in the family* -- both
+  hand `50665`, "Helmet Classic, New Mold 2019", a start year of 1979, and
+  `3556`, "Brick 2 x 4 without Cross Supports [Modern]", 1954.
+
+Right on maybe three parts (`3001`, `3002`, `3003` -> 1954), wrong on hundreds,
+and the failure is silent: a modern mould backdated forty years is exactly what
+`retired` and `obscure` key off. So `year_from` keeps a definition that is
+consistent and explainable -- *the first year Rebrickable inventories this exact
+mould number* -- which is why our Brick 2x4 reads 1979 and not 1958. If those
+few matter, a hand-curated exception list is the honest fix, not an inferred
+rule.
+
+**Stickers are not unfixable -- that claim was wrong.** Two routes give 2,680 of
+2,810 sticker parts a year:
+
+- **The sheet number.** Strip a sticker's trailing letter and the sheet is in
+  the Rebrickable catalog (`003381` is "Sticker Sheet for Set 663-1"), with set
+  inventories behind it. Worth 795 parts, plus 16 more from parsing the set out
+  of the sheet's own name.
+- **LDraw's `!KEYWORDS` line names the sets.** `003238a` carries
+  `Castle, part 3846, set 375-2, set 6075-2`; those numbers go straight into
+  `sets.csv`. Never touched before, and it is in `vendor/ldraw` already.
+
+**`!KEYWORDS` is a fallback source only, and the gate is not negotiable.**
+Against the years we already trust it is poor in general -- 3,865 parts overlap,
+median 10 years off -- because a common part's keywords name two illustrative
+sets out of thousands, not the earliest. Accuracy is a clean function of how
+many sets the part is in:
+
+| sets the part is in | exact | median error |
+|---|---|---|
+| 1-2 | 49% | 1 yr |
+| 3-10 | 46% | 1 yr |
+| 11-100 | 18% | 4 yr |
+| >100 | 1% | 14 yr |
+
+Stickers sit at the top of that table and hit **95% exact** against the 691 with
+a sheet-derived year to check against. So use `!KEYWORDS` only where the
+inventories give nothing -- a part absent from every inventory is by
+construction a part in few sets, the regime where keywords are good. Mixing it
+into parts that already have inventory years would make them worse. Label the
+route in `part_years.matched` so the wall can tell an estimate from a count;
+that column already carries `exact` and `base`.
 
 **occt renders decals now** (`4b80035`, gated by `cd7ce2c`). Mike was asked
 whether occt should do this corpus-wide and answered that there is no reason
