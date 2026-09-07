@@ -83,13 +83,13 @@ def engine_for(source: str) -> str:
     """The engine a slot's measurements are filed under.
 
     `renders.source` names a slot and `measurements.engine` names an engine, so
-    the census slots have to drop their prefix or every metric joins to nothing
-    and the wall sorts an unsorted column without erroring. A facet puts its
-    own name in the middle -- `census-white-naive` is the naive engine drawing
-    the white facet -- so it is the last segment that names the engine, not
-    everything after `census-`.
+    a qualified slot has to drop its qualifier or every metric joins to nothing
+    and the wall sorts an unsorted column without erroring. The qualifier goes
+    in front and can be more than one word -- `census-white-naive` is the naive
+    engine drawing the white facet -- so it is the LAST segment that names the
+    engine. A bare slot name carries no hyphen and is returned as it stands.
     """
-    return source.rsplit("-", 1)[-1] if source.startswith("census-") else source
+    return source.rsplit("-", 1)[-1] if "-" in source else source
 
 
 COVERAGE_ORDER = ("defect", "failed", "timeout", "drawn", "untried")

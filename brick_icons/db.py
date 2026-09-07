@@ -28,6 +28,7 @@ PART_STATUSES = ("unreviewed", "good", "suspect", "broken", "wontfix")
 # nobody at LEGO made -- third-party electronics and wheels that fit LEGO.
 OUT_OF_SCOPE_CATEGORIES = ("Sticker", "|")
 SOURCES = ("naive", "occt", "decal", "ldview",
+           "translucent-naive", "translucent-occt",
            "census-naive", "census-occt",
            "census-white-naive", "census-white-occt")
 
@@ -242,6 +243,17 @@ _CANONICAL = {
              "--shade-style", "flat3", "--angle", "iso", "--format", "svg"],
     "decal": ["--decal", "--angle", "iso", "--format", "svg"],
     "ldview": ["--ldview", "--angle", "iso"],
+    # See-through bricks: the ordinary drawing with its fills let down, so
+    # what the far side of a part does is visible against what the near side
+    # draws. Opacity is stated rather than inherited -- a translucent LDraw
+    # color otherwise supplies it, and the slot would be see-through for
+    # some parts and solid for others.
+    "translucent-naive": ["--engine", "naive", "--shading", "outline",
+                          "--shade-style", "flat3", "--angle", "iso",
+                          "--format", "svg", "--opacity", "0.5"],
+    "translucent-occt": ["--engine", "occt", "--shading", "outline",
+                         "--shade-style", "flat3", "--angle", "iso",
+                         "--format", "svg", "--opacity", "0.5"],
     # The census's oracle drawing, not the store's: strokeless, so the fills
     # carry the silhouette and no stroke overhang has to be subtracted from
     # the comparison. One source per engine because the census writes

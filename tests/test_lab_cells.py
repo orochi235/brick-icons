@@ -365,3 +365,14 @@ def test_an_open_defect_outranks_a_clean_render(conn):
     _defect(conn, "d1", "3001", ["naive"])
     conn.commit()
     assert cells.cells(conn)["cells"][0]["coverage"] == "defect"
+
+
+def test_a_qualified_slot_files_its_measurements_under_the_last_segment():
+    """The qualifier leads and can be several words; the engine trails. A rule
+    keyed on `census-` left every later slot naming itself as its own engine,
+    which joins to nothing in measurements and sorts without erroring."""
+    assert cells.engine_for("translucent-naive") == "naive"
+    assert cells.engine_for("translucent-occt") == "occt"
+    assert cells.engine_for("census-white-naive") == "naive"
+    assert cells.engine_for("naive") == "naive"
+    assert cells.engine_for("ldview") == "ldview"

@@ -253,6 +253,9 @@ def test_rebuild_walks_renders_and_toml_and_jsonl(tmp_path):
                         root=tmp_path, census_dirs=[tmp_path / "census"],
                         defects_path=defects, years_path=tmp_path / "none.csv",
                         successors_path=tmp_path / "none.csv",
+                        # without this the rebuild reads the repo's own status
+                        # file, so the count is whatever the lab last filed
+                        status_path=tmp_path / "none.toml",
                         commit_sha="abc1234")
     assert counts == {"parts": 4, "renders": 1, "measurements": 1,
                       "skipped": 0, "replaced": 0, "defects": 0,

@@ -15,3 +15,9 @@ it('reads a filed defect id the way the hand-written ones read', () => {
 it('falls back to the part alone when the title slugs to nothing', () => {
   expect(defectId('3001', '???')).toBe('3001');
 });
+
+it('reads the engine off a slot whose qualifier is not the census', () => {
+  expect(engineFor('translucent-naive')).toBe('naive');
+  expect(engineFor('translucent-occt')).toBe('occt');
+  expect(engineFor('ldview')).toBe('ldview');
+});
