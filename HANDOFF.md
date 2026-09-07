@@ -131,11 +131,48 @@ picking `technic` zeroes every other tag and you cannot see what else is worth
 adding. The sidebar's category counts already dodge this deliberately; there is
 a comment saying so.
 
-**Open, never started:** better part-year data. We use Rebrickable dumps via
-`scripts/fetch-part-years.py`. Mike trusts Brick Architect most but will not
-scrape the site without a published digest -- check BrickLink's and Brickset's
-APIs, Rebrickable's API against its dumps, and whether Brick Architect
-publishes an export at all.
+**Answered: better part-year data. No source beats the one we have; what we
+have is being read badly.** Sources first:
+
+- **Brick Architect publishes no export**, and its terms prohibit reuse without
+  permission. Its year ranges come from *Brickset*, and Tom Alphin says on the
+  site that they get less accurate before the 1990s and that he intended to
+  switch to Rebrickable. He gives `3005` as his worked example of a wrong start
+  year; ours already reads 1954-2026.
+- **Brickset's API has no parts methods** -- sets, minifigs, collections,
+  themes. The year data Brick Architect takes from it is not reachable per part.
+- **BrickLink's API returns `year_released`** per catalog item and only that:
+  no end year, OAuth1 with a registered consumer and an IP whitelist, ~5k calls
+  a day. Its bulk catalog download sits behind a login, so whether the parts
+  file carries a year is unchecked -- that one needs Mike's account.
+- **Rebrickable's API takes an `ldraw_id` filter**, which the dumps do not
+  expose. That is from its own OpenAPI schema
+  (`/api/v3/swagger/?format=openapi`), not from the docs prose. Whether the part
+  object also carries `year_from`/`year_to` is unverified -- the schema declares
+  no response models and the site is behind Cloudflare. A free key settles it in
+  one request.
+
+**The gap is ours.** 9,269 of 24,591 parts (38%) have years. Of the 15,322
+without, 7,593 are LDraw constructs no catalog will ever hold: 3,306 shadow
+parts, 2,701 stickers, 1,127 composites, 459 aliases. Two routes close much of
+the rest, both from dumps, no key:
+
+- **`elements.csv`'s `design_id` column** maps LEGO design numbers -- what LDraw
+  uses for modern parts -- onto Rebrickable part numbers. **+2,020 parts**, to
+  11,289 (46%). It is not in `DUMPS` yet; one more download.
+- **`part_relationships`' mould rows (`M`)**, which the script already pulls for
+  successors. Rebrickable splits early moulds off under their own numbers, so a
+  1958 set is inventoried against `3001a`, not `3001` -- which is why our Brick
+  2x4 reads 1979. Unioning a part's mould family moves the start year earlier on
+  **1,610 parts** and the end year later on 850: `3001` 1979->1954, `3003`
+  1985->1954, `3068b` 1975->1965. The closure is well behaved -- every family is
+  variants of one part, the largest is 9.
+
+**Open, and Mike's to answer:** the mould union is right when the LDraw file is
+the generic part and wrong when it is one specific mould. `3001` should say 1954
+because LDraw's `3001` *is* the 2x4 brick. `6947` is the vented-stud minifig
+head, a later mould, and the union hands it 1975 -- when its family started, not
+when that head existed. Union every part, or only ids with no letter suffix?
 
 **occt renders decals now** (`4b80035`, gated by `cd7ce2c`). Mike was asked
 whether occt should do this corpus-wide and answered that there is no reason
