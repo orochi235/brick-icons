@@ -282,7 +282,10 @@ def _sum_trees(rows: list[dict]) -> list[dict]:
 
     def stamp(nodes):
         for node in nodes:
-            node["n"] = seen.get(node["path"], 0)
+            # `rest` is derived, not measured. An `n` on it would answer a
+            # question nobody asked with a 0 that reads as "no part got here".
+            if node["name"] != REST:
+                node["n"] = seen.get(node["path"], 0)
             stamp(node["children"])
     stamp(summed)
     return summed

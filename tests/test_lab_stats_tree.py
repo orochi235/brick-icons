@@ -124,3 +124,12 @@ def test_a_rest_is_re_derived_when_summing_rather_than_added_up():
 def test_normalize_folds_a_legacy_name_onto_a_path_already_present():
     assert stats.normalize({"geometry": 0.2, "render/geometry": 0.3}) \
         == {"render/geometry": 0.5}
+
+
+def test_a_derived_rest_carries_no_part_count():
+    """`n` says how many parts reached a stage. `rest` is arithmetic, so a 0
+    there reads as "no part got here" rather than "this is not measured"."""
+    rows = [{"nodes": stats.tree({"render": 1.0, "render/geometry": 0.6})}]
+    summed = stats._sum_trees(rows)
+    assert "n" not in at(summed, "render/rest")
+    assert at(summed, "render/geometry")["n"] == 1
