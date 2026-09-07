@@ -1,7 +1,8 @@
 import { expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { Legend } from '@lab/corpus/Legend';
-import { CELL_STATES } from '@lab/corpus/palette';
+import { CELL_STATES, STATE_LABEL } from '@lab/corpus/palette';
+import { stateKeys } from '@lab/corpus/states';
 import type { Cell } from '@lab/corpus/types';
 
 const cell = (id: string, overrides: Partial<Cell> = {}): Cell => ({
@@ -28,6 +29,18 @@ it('renders a row per state with its own count', () => {
   expect(screen.getByLabelText('render error, 0 parts')).toBeTruthy();
   expect(screen.getByLabelText('problem in another slot, 0 parts')).toBeTruthy();
   expect(screen.getByLabelText('defect in another slot, 0 parts')).toBeTruthy();
+});
+
+it('renders one row per state, in the table\'s own legend order', () => {
+  const { container } = render(<Legend cells={cells} highlight={null} onHighlight={() => {}}
+                 badges={[]} onBadges={vi.fn()}
+                 highlightTag={null} onHighlightTag={vi.fn()} onClose={vi.fn()} />);
+  // The state rows are the `[data-state]` divs. A role query would answer with
+  // the close button and the badge rows, which are the only buttons here.
+  const rows = [...container.querySelectorAll('[data-state]')];
+  expect(rows.map((row) => row.getAttribute('data-state'))).toEqual(stateKeys());
+  expect(rows.map((row) => row.querySelector('.corpus-legend-name')?.textContent))
+    .toEqual(stateKeys().map((state) => STATE_LABEL[state]));
 });
 
 it('reports the hovered state, and null once the pointer leaves', () => {
