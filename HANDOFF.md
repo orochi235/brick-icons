@@ -133,9 +133,16 @@ the axis IS the extrusion direction and a skew one is a real oblique surface
 with no exact counterpart.
 
 **It is a wide change, not a narrow one.** 21.7% of a 500-part library sample
-carries at least one such primitive, and every one of them now draws
-differently. The clearest case after 3820 is 32054: its census render was a
-near-solid black blob, and it now draws its shaft, flange, slots and split end.
+carries at least one such primitive.
+
+**A/B the change in-process, never against a census render.** Setting
+`occt.PLANAR_KINDS = ()` before a render restores `frame()`'s old behaviour
+exactly, so one process draws the before and another the after -- a worktree
+cannot, because the editable install beats `PYTHONPATH` and both sides run
+HEAD. Read against its census render, 32054 looked like this fix turned a
+near-solid black blob into a clean shaft; A/B'd, it is the same drawing either
+way and something else on main had already fixed it. `b0c5d85`'s message
+claims it and is wrong. 3820 A/B's exactly as advertised.
 
 **`2531` and `u9543` have no rejected frames, so this did not touch them**, and
 both already drew their open ring correctly. The defect entry grouped them with
