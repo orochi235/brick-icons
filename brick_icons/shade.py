@@ -275,13 +275,20 @@ def order_faces(faces, proj=None, eps=1e-6, own_occ=None):
             continue
         di, dj = depth_at(i, *w), depth_at(j, *w)
         if abs(di - dj) <= eps:
-            # Coplanar: depth cannot separate them, and the ready-heap's
-            # mean-depth tiebreak is actively wrong -- a decoration blob on a
-            # tilted face has a mean depth that lands either side of its
-            # background's, so the artwork sinks under exactly the half of a
-            # sticker that is farther away. LDraw draws decoration after the
-            # surface it sits on, and `_with_decoration` appends in that order,
-            # so the index IS that instruction. Index edges alone cannot cycle.
+            # Coplanar, so depth cannot separate them. Where the two carry
+            # different colors one is decoration on the other, and LDraw draws
+            # decoration after the surface it sits on -- the emission index is
+            # that instruction, and index edges alone cannot cycle. Without it
+            # the ready-heap's mean-depth tiebreak decides, and that splits a
+            # tilted face down the middle: artwork in the far half sorts behind
+            # its own background and vanishes.
+            #
+            # Same color means both are body, and the index is then OCCT's face
+            # enumeration order, which says nothing -- 3005's stud wall and the
+            # top face it stands on are coplanar where they meet, and ordering
+            # those by index paints the stud under the brick.
+            if faces[i].get("color", 16) == faces[j].get("color", 16):
+                continue
             a, b = (i, j) if i < j else (j, i)
         else:
             a, b = (i, j) if di > dj else (j, i)  # farther paints first
