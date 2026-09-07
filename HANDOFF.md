@@ -34,17 +34,35 @@ session cannot move it.
   Closes `7037-gradient-banding` and `curved-surface-gradient-banding`, and the
   shaded half of `53119-occt-has-a-bunch-of`. Its stray lines are untouched.
 
-### `outline__3673` lost an arc on the naive path and nothing caught it
+### `outline__3673` was stale, not broken — and the gate is why nobody knew
 
-Not the gradient change: freeze that one case with the change stashed and it
-moves anyway — `A 50 -> 49`, `M 47 -> 46`, `paths 47 -> 46`, `gradient_stops: 0`
-throughout. `combo.outline` is strokes-only with occlusion on, which is the one
-combo that exists to catch exactly this. It slipped because `BRICK_GOLDENS=1`
-freezes 3005 alone, so every other row in `hashes.txt` is decorative. 3673
-renders in about a second, so a bisect over the naive path is cheap. Its row and
-artifacts were deliberately left at their committed values so the regression
-stays visible. **`BRICK_GOLDENS=full` is the only run that bounds a `shade.py`
-or `hlr.py` change**; a green `=1` does not.
+Resolved and re-frozen in `145c345`. It read as a naive regression: an arc and a
+subpath gone from the strokes-only combo, which is the one that exists to catch
+that. Bisected over 323 revisions, eight steps, with the freeze of that single
+case as the test — first bad commit `1d0450b`, "run the orphan cull on the occt
+path, and drop floating islands". Rendered either side, the dropped run is one
+2-output-px dot on the pin's barrel: the rule working, on exactly the case it
+names. The drawing is better without it.
+
+**The bookkeeping is the finding.** `BRICK_GOLDENS=1` freezes 3005 alone, so
+every other row in `hashes.txt` is decorative until someone runs `=full`. For
+three days nobody did, and the corpus described a pre-`1d0450b` engine.
+**`=full` is the only run that bounds a `shade.py` or `hlr.py` change**; a green
+`=1` does not, and should not be cited as if it did.
+
+**The island threshold has room on both sides.** It is relative — a run under
+1.2% of drawn extent goes whatever its kind — so the parts it can reach are
+those whose real features are small against their overall size, and a pin is the
+worst case. Instrumented and swept over all 22 specimens on both engines, 133
+candidate islands: the three dropped are 1.077% (3673 naive), 0.902% (3941p01
+occt) and 0.585% (6589 naive); the smallest one KEPT is 6.988% (99781 occt).
+The threshold could sit anywhere between 1.1% and 7% and change no decision on
+this corpus. That bounds the specimens, not the library — a census-scale answer
+needs the same counter and a fleet run.
+
+`tests/goldens/defects.toml`'s uncommitted block is **Mike's**, not any
+session's: `brick_icons/lab/defects.py` rewrites the whole file on every filing
+from the lab UI. Do not commit it.
 
 ### The census's failure rows are stale, and "stale" is not "fine"
 
