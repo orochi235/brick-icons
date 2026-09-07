@@ -502,19 +502,49 @@ function scratchOf(size: number): CanvasRenderingContext2D | null {
   return sctx;
 }
 
+export interface BadgeAt {
+  cx: number; cy: number; size: number; radius: number; baseline?: number;
+  /** A word set beside the mark on the badge's OWN field, which stretches to
+   *  a stadium to hold it. The wall never passes one -- a cell has no room
+   *  for words -- but a detail view has, and reading the tag off the same
+   *  badge the thumbnail wears beats printing it in a pill of its own. */
+  label?: string;
+}
+
+/** How wide `drawBadge` will draw `badge` with `at.label` set. The text has
+ *  to be measured before a canvas can be sized to hold it, so the caller
+ *  measures with the same ctx it will draw on. */
+export function badgeWidth(ctx: CanvasRenderingContext2D, badge: CellBadge,
+                           at: BadgeAt): number {
+  if (!at.label) return at.radius * 2;
+  ctx.save();
+  ctx.font = labelFont(badge, at.size);
+  const w = ctx.measureText(at.label).width;
+  ctx.restore();
+  return at.radius * 2 + LABEL_GAP * at.size + w + LABEL_PAD * at.size;
+}
+
+const LABEL_GAP = 0.32;     // multiples of the type size, mark to word
+const LABEL_PAD = 0.55;     // and word to the end of the field
+
+function labelFont(badge: CellBadge, size: number) {
+  return `${badge.weight ?? BADGE_WEIGHT} ${size * 0.92}px ${BADGE_FACE}`;
+}
+
 export function drawBadge(ctx: CanvasRenderingContext2D, badge: CellBadge,
-                   at: { cx: number; cy: number; size: number; radius: number;
-                         baseline?: number }) {
+                          at: BadgeAt) {
   // A punching mark is composited off to the side and stamped back, so its
-  // hole ends at the edge of its own disc.
+  // hole ends at the edge of its own field and shows what is behind the
+  // badge rather than the field's own color.
   if (badge.mark && PUNCHES.has(badge.mark)) {
-    const box = Math.ceil(at.radius * 2) + 2;
-    const sctx = scratchOf(box);
+    const w = Math.ceil(badgeWidth(ctx, badge, at)) + 2;
+    const h = Math.ceil(at.radius * 2) + 2;
+    const sctx = scratchOf(Math.max(w, h));
     if (sctx) {
-      drawBadgeDirect(sctx, badge, { ...at, cx: box / 2, cy: box / 2,
+      drawBadgeDirect(sctx, badge, { ...at, cx: at.radius + 1, cy: h / 2,
                                      baseline: undefined });
-      ctx.drawImage(scratch!, 0, 0, box, box,
-                    at.cx - box / 2, at.cy - box / 2, box, box);
+      ctx.drawImage(scratch!, 0, 0, w, h,
+                    at.cx - at.radius - 1, at.cy - h / 2, w, h);
       return;
     }
   }
@@ -522,8 +552,7 @@ export function drawBadge(ctx: CanvasRenderingContext2D, badge: CellBadge,
 }
 
 function drawBadgeDirect(ctx: CanvasRenderingContext2D, badge: CellBadge,
-                   at: { cx: number; cy: number; size: number; radius: number;
-                         baseline?: number }) {
+                         at: BadgeAt) {
   const { cx, size, radius } = at;
   const font = `${badge.style ?? 'normal'} ${badge.weight ?? BADGE_WEIGHT} `
     + `${size * (badge.scale ?? 1)}px ${badge.font ?? BADGE_FACE}`;
@@ -548,8 +577,18 @@ function drawBadgeDirect(ctx: CanvasRenderingContext2D, badge: CellBadge,
   // ring because red on white would vanish into the cell, and a ring only it
   // carries would make its disc the largest on the strip.
   const line = Math.max(1, radius * 0.16);
+  const r = radius - line / 2;
   ctx.beginPath();
-  ctx.arc(cx, cy, radius - line / 2, 0, Math.PI * 2);
+  if (at.label) {
+    // The same disc, stretched right to carry the word: one field, so the
+    // mark and its name read as one badge rather than a badge and a caption.
+    const end = cx + badgeWidth(ctx, badge, at) - radius * 2 + line / 2;
+    ctx.arc(cx, cy, r, Math.PI / 2, -Math.PI / 2);
+    ctx.arc(end, cy, r, -Math.PI / 2, Math.PI / 2);
+    ctx.closePath();
+  } else {
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  }
   ctx.fillStyle = badge.field;
   ctx.fill();
   ctx.lineWidth = line;
@@ -581,6 +620,21 @@ function drawBadgeDirect(ctx: CanvasRenderingContext2D, badge: CellBadge,
       ctx.textBaseline = 'alphabetic';
       ctx.fillText(badge.text, cx + size * (badge.dx ?? 0), textY);
     }
+  }
+  if (at.label) {
+    ctx.font = labelFont(badge, size);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    // Off the ink box, not the em box: the field is a stadium and the word
+    // has to sit on its axis whatever the label's own ascenders and
+    // descenders come to.
+    const m = ctx.measureText(at.label);
+    const asc = m.actualBoundingBoxAscent;
+    const desc = m.actualBoundingBoxDescent;
+    const y = Number.isFinite(asc) && Number.isFinite(desc)
+      ? cy + (asc - desc) / 2 : cy;
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(at.label, cx + radius + LABEL_GAP * size, y);
   }
   ctx.restore();
 }

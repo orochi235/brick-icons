@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useMemo } from 'react';
 import { FloatingPanel } from '@weasel-js/labkit';
-import { drawBadge } from '@lab/corpus/badges';
-import { ALL_BADGES, tally, type CellBadge } from '@lab/corpus/paint';
+import { BadgeSwatch } from '@lab/corpus/BadgeSwatch';
+import { ALL_BADGES, tally } from '@lab/corpus/paint';
 import { CELL_STATES, STATE_LABEL, type CellState } from '@lab/corpus/palette';
 import type { Cell } from '@lab/corpus/types';
 import '@lab/corpus/Legend.css';
@@ -30,41 +30,6 @@ export interface LegendProps {
   /** Dismissal is the topbar's to own: a legend that closed itself had no way
    *  back short of a reload. */
   onClose: () => void;
-}
-
-/** Sized so a badge comes out the same 14px across as the state swatches
- *  above it -- the two halves of the legend are one list to read down. */
-const SWATCH_BOX = 14;
-
-/** The badge itself, drawn through the wall's own `drawBadge`. A second
- *  rendering of the same mark would drift from the one on the cells, which
- *  is the only thing this row is here to explain. */
-function BadgeSwatch({ badge }: { badge: CellBadge }) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    const canvas = ref.current;
-    if (!canvas) return;
-    const radius = SWATCH_BOX / 2;
-    const box = SWATCH_BOX;
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = box * dpr;
-    canvas.height = box * dpr;
-    canvas.style.width = `${box}px`;
-    canvas.style.height = `${box}px`;
-    // jsdom throws out of getContext rather than returning null, and a
-    // swatch that cannot draw must not take the wall down with it.
-    let ctx: CanvasRenderingContext2D | null = null;
-    try {
-      ctx = canvas.getContext('2d');
-    } catch {
-      return;
-    }
-    if (!ctx) return;
-    ctx.scale(dpr, dpr);
-    ctx.clearRect(0, 0, box, box);
-    drawBadge(ctx, badge, { cx: box / 2, cy: box / 2, size: radius / 0.72, radius });
-  }, [badge]);
-  return <canvas ref={ref} className="corpus-legend-badge" aria-hidden="true" />;
 }
 
 /** The wall's cell states, with a swatch, a name and a count over the wall.
@@ -135,7 +100,7 @@ export function Legend({ cells, tagCells, highlight, onHighlight,
                     onMouseLeave={() => onHighlightTag(null)}
                     onFocus={() => onHighlightTag(tag)}
                     onBlur={() => onHighlightTag(null)}>
-              <BadgeSwatch badge={badge} />
+              <BadgeSwatch badge={badge} className="corpus-legend-badge" />
               <span className="corpus-legend-name">{tag}</span>
               <span className="corpus-legend-count">
                 {badgeCounts[tag]!.toLocaleString()}

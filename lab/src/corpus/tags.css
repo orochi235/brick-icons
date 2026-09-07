@@ -19,3 +19,25 @@
  * their own; the rest are labels. */
 .corpus-tag[data-tag='retired'] { border-color: #c7b78f; color: #c7b78f; }
 .corpus-tag[data-tag='popular'] { border-color: #97bcc5; color: #97bcc5; }
+
+/* A badged tag is one canvas: the mark and the word share the badge's own
+ * field, so the pill's border and padding would draw a second frame around
+ * artwork that already has one. */
+.corpus-tag-badge {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+
+/* The canvas is aria-hidden, so the word it draws reaches a screen reader
+ * only through the text beside it. */
+.corpus-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

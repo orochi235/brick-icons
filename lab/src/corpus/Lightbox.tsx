@@ -1,11 +1,28 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { LabClient } from '@lab/api/client';
+import { BadgeSwatch } from '@lab/corpus/BadgeSwatch';
 import { CATALOGS } from '@lab/corpus/catalogs';
 import { Tags, yearRange } from '@lab/corpus/tags';
 import { defectId, engineFor } from '@lab/corpus/flag';
 import type { PartDetail } from '@lab/corpus/types';
+import { STATUS_BADGES } from '@lab/defects/statusBadges';
 import '@lab/corpus/Lightbox.css';
+
+/** A defect's status where it is read rather than set: the same badge shape
+ *  the tag row uses, so the two read as one kind of thing. A status the page
+ *  does not know stays a word. */
+function DefectStatusBadge({ status }: { status: string }) {
+  const badge = STATUS_BADGES[status];
+  if (!badge) return <em>{status}</em>;
+  // The canvas is aria-hidden, so the word it draws needs a text twin.
+  return (
+    <>
+      <BadgeSwatch badge={badge} label={status} box={17} />
+      <span className="corpus-visually-hidden">{status}</span>
+    </>
+  );
+}
 
 export function Lightbox({ partId, source, client, onClose }: {
   partId: string;
@@ -161,7 +178,10 @@ export function Lightbox({ partId, source, client, onClose }: {
           {detail.defects.length === 0 ? <p>none</p> : (
             <ul>
               {detail.defects.map((d) => (
-                <li key={d.id}>{d.title} <em>{d.status}</em></li>
+                <li key={d.id} className="corpus-defect">
+                  <span>{d.title}</span>
+                  <DefectStatusBadge status={d.status} />
+                </li>
               ))}
             </ul>
           )}

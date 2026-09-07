@@ -94,3 +94,10 @@
 .corpus-flag label { display: flex; flex-direction: column; gap: 0.2rem; }
 .corpus-flag input { min-width: 32ch; font: inherit; }
 .corpus-flag-error { color: var(--corpus-cell-failed-border, #e03030); }
+
+/* Title and status on one line, the badge riding the text's own baseline. */
+.corpus-defect {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
