@@ -26,12 +26,14 @@ of room before its first glyph; an untracked `badges.png` sits beside it. It is
 in the shared tree, in nobody's commits, and two sessions have now guessed
 wrong about whose it is. Leave it alone or claim it in writing.
 
-**2,794 parts have no LDView render and 2,701 of them are stickers, and they
-work fine.** Sixteen of the missing rendered at 0.46s each on the first try,
-in color, artwork intact; 003238a's crown is on the slopboard. Every missing
-part is in `out/census/parts.txt`, and nothing outside that list is missing,
-so it is coverage the slot never got rather than anything refusing to draw.
-The whole gap is about twenty minutes of LDView. Nobody has filled it.
+**The LDView slot is complete: all 24,591 parts.** The 2,794 that were
+missing -- 2,701 of them stickers -- were coverage the slot never got, not
+anything refusing to draw: they render at 0.2-0.6s each, in color, artwork
+intact. Filled on studio as task `ldview-fill` (112 batches of 25, 5 workers,
+about four minutes), fetched, indexed, and the thumbnails re-baked. Four parts
+(`11055df1`, `11244p05`, `11408p03`, `11477d0u`) had a database row pointing
+at a file that was gone, so they were not in the missing list either; drawn by
+hand and now present.
 
 ## Defect sweep, 2026-09-07 midday: the borehole class closed, and where the rest stand
 
