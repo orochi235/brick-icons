@@ -1845,3 +1845,61 @@ chord vertices are 0.45–1.2 LDU from the nearest mesh vertex and the chords
 sit 0.18–0.40 off the nearest projected condline, so there is no authored
 edge or condline to key on. Smoothing it would mean drawing a curve through
 points that lie on no curve the library declares.
+
+## In flight: mesh refinement, branch `smooth-subdivide` — UNBUILT, two failures
+
+The right fix for a round the library authored as flat triangles, and the
+reason the silhouette arc pass on `main` was the wrong shape of answer:
+**fix the mesh, not the drawing.** Both engines then see one surface, and
+strokes and fills come off the same geometry instead of having to be kept in
+step by hand.
+
+The declaration to key on is the conditional line. A type-5 across a facet
+boundary says those two faces are meant to read as one smooth surface, and
+it holds across the cracks that make a dihedral-angle rule wrong here.
+`repair.smooth_subdivide` unions facets into declared-smooth patches, takes
+corner normals from the patch around each corner, and replaces each facet
+with `level**2` triangles on its curved point-normal (PN) patch. A boundary
+that is not declared smooth stays on its straight chord, so a refined patch
+still meets a flat neighbour along the same line.
+
+Coverage is good: 4592 has 130 condlines over 180 triangles and 8 smooth
+patches; 30089a has 936 over 996; 3941 has 36; a plain brick has none and is
+untouched.
+
+On 4592 the outline stops reading as a polygon — 9 silhouette chords down to
+3, 10,092 pixels changed at 4x.
+
+**Two things stop it landing, and both are in the commit message:**
+
+- `32062` loses an exact fill boundary to a sampled one
+  (`test_a_fill_boundary_carries_no_sampled_boundary`). A refined patch must
+  not displace an analytic surface that was already exact — gate the
+  subdivision off wherever `primitives.from_ref` already substituted one.
+- 4592 draws a black blob at the crown of the dome.
+
+`test_occt_segments_go_through_the_orphan_cull` also fails, but only because
+it counts 30162's ops and the mesh moved; re-baseline it, don't chase it.
+
+**Element count is the standing cost.** 38 → 81 on 4592. The new facets
+re-declare their own patch as condlines, without which the fill merge treats
+every sub-triangle as its own surface (38 → 405); with them it is 81, which
+is still twice what it should be. The merge is not collapsing the refined
+patch into one element the way it does an authored one — that is the next
+thing to look at.
+
+**Dead ends, measured, do not re-propose:**
+
+- *Fitting an analytic surface to the patch.* 4592's two big patches fit a
+  sphere to 2.44px and everything else worse (plane 45, cone 22, cylinder
+  35). No quadric is that surface, and PN triangles do not need one — they
+  only need to know which edges are smooth, which the file declares.
+- *LDView's `-CurveQuality`.* It only re-tessellates primitive references,
+  and this engine already substitutes those with exact analytic surfaces,
+  which beats any tessellation. 4592's dome is inline triangles: LDView
+  would export the same 180 of them at any quality. There is no
+  tessellation knob on our own path — `--curve-quality` feeds LDView alone.
+- *Fitting the drawn chords to an ellipse* (`arcfit.fit_silhouette_arcs`,
+  landed as `6f042c0`). 4592's one candidate run has no ellipse near it, and
+  the gate that makes the pass safe elsewhere only accepts runs that were
+  already smooth. It fires on 5 of 74 census parts for a sub-pixel change.
