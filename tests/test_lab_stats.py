@@ -284,6 +284,17 @@ def test_an_engine_with_no_phases_at_all_is_not_a_row(conn):
 
 # -- the render's own split, which most rows predate ----------------------
 
+def _at(nodes, path):
+    """The node at `path` in a phase tree, or None."""
+    for node in nodes or ():
+        if node["path"] == path:
+            return node
+        found = _at(node["children"], path)
+        if found:
+            return found
+    return None
+
+
 def test_the_split_reports_its_own_smaller_n(conn):
     _part(conn, "3001")
     _part(conn, "3002")
@@ -294,10 +305,11 @@ def test_the_split_reports_its_own_smaller_n(conn):
     row = stats.stats(conn)["phases"][0]
     assert row["n"] == 2
     assert row["split"]["n"] == 1
-    assert row["split"]["totals"]["geometry"] == pytest.approx(0.4)
+    assert _at(row["split"]["nodes"], "render/geometry")["secs"] \
+        == pytest.approx(0.4)
     # The row that never named a split contributes nothing to it -- its 2.0s
     # of render would otherwise land in `rest` and swamp the band.
-    assert row["split"]["totals"]["rest"] == pytest.approx(0.3)
+    assert _at(row["split"]["nodes"], "render/rest")["secs"] == pytest.approx(0.3)
     assert row["split"]["total"] == pytest.approx(1.0)
 
 
@@ -306,17 +318,19 @@ def test_rest_is_the_part_of_render_the_split_does_not_name(conn):
     _measure(conn, "3001", "occt", secs=1.0, phases={
         "render": 1.0, "geometry": 0.4, "fill": 0.2})
     conn.commit()
-    assert stats.stats(conn)["phases"][0]["split"]["totals"]["rest"] == pytest.approx(0.4)
+    nodes = stats.stats(conn)["phases"][0]["split"]["nodes"]
+    assert _at(nodes, "render/rest")["secs"] == pytest.approx(0.4)
 
 
-def test_rest_never_goes_negative_on_rounding(conn):
+def test_rounding_noise_does_not_invent_a_rest(conn):
     _part(conn, "3001")
     # Each phase is rounded independently, so the children can out-total the
-    # parent by a millisecond and a stacked band cannot be negative.
+    # parent by a millisecond. That is noise, not an unnamed stage.
     _measure(conn, "3001", "occt", secs=1.0, phases={
         "render": 0.5, "geometry": 0.31, "fill": 0.2})
     conn.commit()
-    assert stats.stats(conn)["phases"][0]["split"]["totals"]["rest"] == 0.0
+    nodes = stats.stats(conn)["phases"][0]["split"]["nodes"]
+    assert _at(nodes, "render/rest") is None
 
 
 def test_an_engine_whose_rows_all_predate_the_split_has_none(conn):
@@ -334,5 +348,6 @@ def test_a_slowest_row_carries_its_split_when_it_has_one(conn):
     _measure(conn, "3002", "occt", secs=1.0, phases={"render": 1.0})
     conn.commit()
     slowest = {r["part_id"]: r for r in stats.stats(conn)["phases"][0]["slowest"]}
-    assert slowest["3001"]["split"]["geometry"] == pytest.approx(5.0)
+    assert _at(slowest["3001"]["split"], "render/geometry")["secs"] \
+        == pytest.approx(5.0)
     assert slowest["3002"]["split"] is None

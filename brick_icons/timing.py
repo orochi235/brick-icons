@@ -1,10 +1,16 @@
 """Phase timings for one render, collected where the work happens.
 
-`measurements.secs` says a part was slow; the phases say which half of the
+`measurements.secs` says a part was slow; the phases say which part of the
 engine was slow, which is the difference between a census row you can act on
 and one you have to reproduce by hand. The accumulator is process-global and
 explicitly reset, because the render path threads no context object and one
 `with` at each site is the whole cost.
+
+A phase names its parent: opening `geometry` inside `render` records
+`render/geometry`, and a phase's time is INCLUSIVE of everything under it.
+That is what lets a new seam be added at any depth without redefining the
+band above it -- a level's own leftover is `parent - sum(children)`, worked
+out once when the tree is read rather than at every `with`.
 """
 from __future__ import annotations
 
@@ -12,8 +18,10 @@ import time
 from contextlib import contextmanager
 from functools import wraps
 
+SEP = "/"
+
 _phases: dict[str, float] = {}
-_stack: list[float] = []
+_stack: list[str] = []
 
 
 def reset() -> None:
@@ -27,19 +35,22 @@ def phases() -> dict[str, float]:
 
 @contextmanager
 def phase(name: str):
-    """Time this block, EXCLUDING any nested phase. Decoration runs inside the
-    geometry phase, so without this the two would double-count and a stacked
-    chart of them would not sum to the render."""
+    """Time this block under whatever phase is already open.
+
+    Inclusive: a parent keeps the time its children spent. Two blocks opened
+    with the same path accumulate into one entry, so a phase entered once per
+    subpart reports the total rather than the last one.
+    """
+    if SEP in name:
+        raise ValueError(f"a phase name cannot contain {SEP!r}: {name!r}")
+    _stack.append(name)
+    path = SEP.join(_stack)
     t = time.perf_counter()
-    _stack.append(0.0)
     try:
         yield
     finally:
-        elapsed = time.perf_counter() - t
-        nested = _stack.pop()
-        _phases[name] = _phases.get(name, 0.0) + elapsed - nested
-        if _stack:
-            _stack[-1] += elapsed
+        _phases[path] = _phases.get(path, 0.0) + time.perf_counter() - t
+        _stack.pop()
 
 
 def timed(name: str):

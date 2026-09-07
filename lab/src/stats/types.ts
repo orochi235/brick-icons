@@ -37,9 +37,23 @@ export interface ErrorRow {
 /** The four exclusive phases every timed row carries. */
 export type Phase = 'render' | 'rasterize' | 'truth_mask' | 'compare';
 
-/** How `render` itself divides, for rows measured since `brick_icons.timing`
- *  existed. `rest` is what the three named stages leave over. */
-export type SplitPhase = 'geometry' | 'decoration' | 'fill' | 'rest';
+/** One stage of a render, and whatever the engine names inside it.
+ *
+ *  `secs` is INCLUSIVE of every descendant, so a seam added below a node
+ *  narrows what that node leaves unnamed rather than shrinking the node. The
+ *  leftover arrives as a synthetic `rest` child; a leaf never has one. */
+export interface PhaseNode {
+  name: string;
+  /** Slash-separated, e.g. `render/geometry/engine/hlr`. Unique in a tree,
+   *  which is what lets a row be expanded and collapsed by identity. */
+  path: string;
+  secs: number;
+  /** How many parts reached this stage. Present only on a summed tree, and
+   *  the only honest way to read a node's share: a seam added halfway
+   *  through a census is measured over fewer parts than its parent. */
+  n?: number;
+  children: PhaseNode[];
+}
 
 export interface PhaseRow {
   engine: string;
@@ -47,9 +61,9 @@ export interface PhaseRow {
   n: number;
   total: number;
   totals: Record<Phase, number>;
-  /** Null until some row in the set was measured with the split in place. Its
-   *  own `n` is smaller again, so it is never mixed into `totals`. */
-  split: { n: number; total: number; totals: Record<SplitPhase, number> } | null;
+  /** Null until some row in the set named anything below the top four bands.
+   *  Its own `n` is smaller again, so it is never mixed into `totals`. */
+  split: { n: number; total: number; nodes: PhaseNode[] } | null;
   slowest: SlowestRow[];
 }
 
@@ -57,7 +71,7 @@ export interface SlowestRow {
   part_id: string;
   total: number;
   secs: Record<Phase, number>;
-  split: Record<SplitPhase, number> | null;
+  split: PhaseNode[] | null;
 }
 
 export interface RunRow {
@@ -95,5 +109,31 @@ export interface Stats {
   phases: PhaseRow[];
   runs: RunRow[];
   shape: Shape;
+  as_of: string;
+}
+
+/** What each footprint tile counts. Size on disk everywhere, never apparent
+ *  size -- a 32px thumbnail is mostly block overhead, and two cells measured
+ *  differently cannot be compared. */
+export interface FootprintTiles {
+  out: number;
+  renders: number;
+  bakes: number;
+  lab_cache: number;
+  library: number;
+  corpus_db: number;
+  git: number;
+}
+
+export interface SlotSize {
+  source: string;
+  renders: number;
+  bakes: number;
+  total: number;
+}
+
+export interface Footprint {
+  tiles: FootprintTiles;
+  slots: SlotSize[];
   as_of: string;
 }

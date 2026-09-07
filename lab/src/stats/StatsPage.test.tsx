@@ -15,12 +15,22 @@ const body = (over: Partial<Stats> = {}): Stats => ({
             missing_px: { n: 14, total: 0, median: 3, p95: 8, max: 20 } }],
   phases: [{ engine: 'naive', n: 14, total: 100,
              totals: { render: 70, rasterize: 10, truth_mask: 15, compare: 5 },
-             split: { n: 3, total: 40,
-                      totals: { geometry: 20, decoration: 4, fill: 14, rest: 2 } },
+             split: { n: 3, total: 40, nodes: [
+               { name: 'render', path: 'render', secs: 40, n: 3, children: [
+                 { name: 'geometry', path: 'render/geometry', secs: 24, n: 3,
+                   children: [
+                     { name: 'engine', path: 'render/geometry/engine', secs: 20,
+                       n: 3, children: [] },
+                     { name: 'rest', path: 'render/geometry/rest', secs: 4,
+                       children: [] }] },
+                 { name: 'fill', path: 'render/fill', secs: 14, n: 2,
+                   children: [] },
+                 { name: 'rest', path: 'render/rest', secs: 2, children: [] }] }] },
              slowest: [
                { part_id: '3001', total: 30,
                  secs: { render: 20, rasterize: 4, truth_mask: 5, compare: 1 },
-                 split: { geometry: 12, decoration: 0, fill: 7, rest: 1 } },
+                 split: [{ name: 'render', path: 'render', secs: 20,
+                           children: [] }] },
                { part_id: '3002', total: 10,
                  secs: { render: 7, rasterize: 1, truth_mask: 1, compare: 1 },
                  split: null }] }],
@@ -34,8 +44,19 @@ const body = (over: Partial<Stats> = {}): Stats => ({
   ...over,
 });
 
+// The footprint reads its own route. Without a stub it fails and raises a
+// second alert, which is indistinguishable from the one a stats error raises.
+const EMPTY_FOOTPRINT = {
+  tiles: { out: 0, renders: 0, bakes: 0, lab_cache: 0, library: 0,
+           corpus_db: 0, git: 0 },
+  slots: [],
+  as_of: '2026-09-06T18:42:00+00:00',
+};
+
+type Client = Parameters<typeof StatsPage>[0]['client'];
+
 const clientWith = (corpusStats: (q: URLSearchParams) => Promise<Stats>) =>
-  ({ corpusStats } as unknown as Parameters<typeof StatsPage>[0]['client']);
+  ({ corpusStats, corpusSizes: async () => EMPTY_FOOTPRINT } as unknown as Client);
 
 describe('StatsPage', () => {
   it('says how big the working set is and when it was read', async () => {
@@ -70,22 +91,29 @@ describe('StatsPage', () => {
     expect(phases).toEqual(['render', 'rasterize', 'truth_mask', 'compare']);
   });
 
-  it('gives the render split its own bar and says how few rows it covers', async () => {
+  it('breaks the render down at every depth the engine named', async () => {
     const { container } = render(<StatsPage client={clientWith(async () => body())} />);
-    await waitFor(() => container.querySelector('.stats-phase-split'));
-    const split = [...container.querySelectorAll('.stats-seg[data-split]')]
-      .map((el) => el.getAttribute('data-split'));
-    expect(split).toEqual(['geometry', 'decoration', 'fill', 'rest']);
-    expect(screen.getByText(/3 of 14 parts measured since the split existed/))
+    await waitFor(() => container.querySelector('.stats-phase-tree'));
+    const names = [...container.querySelectorAll('.stats-phase-row')]
+      .map((el) => el.querySelector('.stats-phase-name')!.textContent!.trim());
+    expect(names).toEqual(['▾ render', '▾ geometry', 'engine', 'rest',
+                           'fill', 'rest']);
+  });
+
+  it('says how few of the set carry a breakdown at all', async () => {
+    render(<StatsPage client={clientWith(async () => body())} />);
+    expect(await screen.findByText(/3 of 14 parts whose render named its stages/))
       .toBeTruthy();
   });
 
-  it('leaves the split bar out when no row in the set carries one', async () => {
+  it('says so rather than drawing a tree when no row carries one', async () => {
     const none = body();
     none.phases[0]!.split = null;
     const { container } = render(<StatsPage client={clientWith(async () => none)} />);
     await waitFor(() => container.querySelector('.stats-phases'));
-    expect(container.querySelector('.stats-phase-split')).toBe(null);
+    expect(container.querySelector('.stats-phase-tree')).toBe(null);
+    expect(screen.getByText(/nothing in this set was measured with the render/))
+      .toBeTruthy();
   });
 
   it('draws the slowest parts shortest first, scaled to the tallest', async () => {

@@ -1,5 +1,5 @@
 import type { Coverage } from '@lab/corpus/facts';
-import type { CoverageRow, Phase, PhaseRow, SpeedRow, SplitPhase } from '@lab/stats/types';
+import type { CoverageRow, Phase, PhaseRow, SpeedRow } from '@lab/stats/types';
 
 /** Stack order, worst news leftmost, so the eye lands on the problems before
  *  the bulk. Matches `COVERAGE_ORDER` in facts.ts and cells.py. */
@@ -173,24 +173,15 @@ export const PHASE_LABEL: Record<Phase, string> = {
 };
 
 /** How `render` divides, in pipeline order. */
-export const SPLIT_STACK: SplitPhase[] = ['geometry', 'decoration', 'fill', 'rest'];
-
-export const SPLIT_LABEL: Record<SplitPhase, string> = {
-  geometry: 'geometry',
-  decoration: 'decoration',
-  fill: 'fill',
-  rest: 'rest of the render',
-};
-
 const secs = (v: number) =>
   v >= 3600 ? `${(v / 3600).toFixed(1)}h` : v >= 60 ? `${(v / 60).toFixed(0)}m` : `${v.toFixed(1)}s`;
 
 /** Where a working set's wall-clock went, one bar per engine.
  *
- *  The render band carries a second bar beneath it rather than sub-segments
- *  inside it: the split is tallied over its own much smaller n -- most of the
- *  census predates the instrumentation -- and nesting one denominator inside
- *  another reads as a single whole it is not. */
+ *  The four bands only. How `render` divides is `PhaseTree`'s: it is tallied
+ *  over its own much smaller n -- most of the census predates the
+ *  instrumentation -- and nesting one denominator inside another reads as a
+ *  single whole it is not. */
 export function PhaseBars({ rows }: { rows: PhaseRow[] }) {
   if (rows.length === 0) {
     return <p className="stats-empty">nothing in this set carries phase timings</p>;
@@ -219,35 +210,6 @@ export function PhaseBars({ rows }: { rows: PhaseRow[] }) {
               );
             })}
           </div>
-          {row.split && (
-            <div className="stats-phase-split">
-              <p className="stats-muted stats-phase-note">
-                render splits, over the {row.split.n.toLocaleString()} of{' '}
-                {row.n.toLocaleString()} parts measured since the split existed
-              </p>
-              <div className="stats-bar" role="img"
-                   aria-label={`render splits into ${SPLIT_STACK
-                     .map((k) => `${SPLIT_LABEL[k]} ${secs(row.split!.totals[k])}`)
-                     .join(', ')}`}>
-                {SPLIT_STACK.map((phase) => {
-                  const v = row.split!.totals[phase];
-                  if (v === 0) return null;
-                  const share = pct(v, row.split!.total);
-                  return (
-                    <span key={phase} className="stats-seg" data-split={phase}
-                          style={{ width: `${share}%` }}
-                          title={`${SPLIT_LABEL[phase]} — ${secs(v)}, ${share.toFixed(1)}%`}>
-                      {share >= 5 && (
-                        <span className="stats-seg-label">
-                          {SPLIT_LABEL[phase]}{share >= 12 && ` ${share.toFixed(0)}%`}
-                        </span>
-                      )}
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </figure>
       ))}
     </div>

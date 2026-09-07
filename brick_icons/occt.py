@@ -439,6 +439,7 @@ def analytic_creases(shape: TopoDS_Shape, out: dict) -> TopoDS_Shape:
     return _compound(keep)
 
 
+@timing.timed("build_shape")
 def build_shape(out: dict) -> TopoDS_Shape:
     """The sewn faces. They exist to occlude; their boundaries are not drawn
     -- see authored_edges."""
@@ -646,6 +647,7 @@ def _by_offset(items, tol=1e-9):
     return [(np.mean([r[2] for r in rows]), rows) for _o, rows in out]
 
 
+@timing.timed("loci")
 def authored_loci(shape, out, right, up):
     """2D loci every drawable edge must lie on: type-2 lines (including the
     chains arcfit claimed), `edge` primitives, analytic creases, and condlines
@@ -802,6 +804,7 @@ def locus_arc(edge, locus, kind):
             math.degrees(th[0]), math.degrees(th[-1]), kind)
 
 
+@timing.timed("hlr")
 def hlr_edges(shape, right, up, cull=True, edges=None, cond=None):
     """Exact hidden-line removal, keyed 'sharp'/'cond'/'outline' -> a
     TopoDS_Compound or None. With cull=False also '..._hidden' compounds.
@@ -1374,6 +1377,7 @@ def _group_planes(shape, out, plane_by_idx):
         f["group"] = find(id(f))
 
 
+@timing.timed("faces")
 def ordered_faces(shape, proj, out=None):
     """Every fill face of `shape`, in paint order, each curved one depth-probed
     against its own exact surface.
@@ -1469,6 +1473,7 @@ def edges_to_ops(compounds):
     return _negate_y(ops)
 
 
+@timing.timed("face_polys")
 def face_polys(shape, right, up, deflection):
     """Every face of `shape` as a projected polygon in op space (Y already
     negated, like the segment ops).
@@ -1541,6 +1546,7 @@ def _undeclared_ops(comps):
             for op in _edge_ops(edge, "sil")] if comps.get("sharp") else []
 
 
+@timing.timed("engine")
 def visible_segments(out, right, up, render_px, cull=True, fwd=None):
     from .hlr import VisResult, _ops_bbox
     if fwd is None:

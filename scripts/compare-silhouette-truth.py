@@ -115,13 +115,14 @@ def one(part: str, args, tmp: Path) -> dict:
     # Timed per phase, because `secs` alone cannot say whether a slow part is
     # slow to draw or slow to build a reference for, and those have different
     # fixes.
-    phase, t0 = {}, time.perf_counter()
+    phase = {}
     timing.reset()
-    cli.process_one(cfg, part, tmp)
-    phase["render"] = round(time.perf_counter() - t0, 2)
-    # The render's own split (geometry / decoration / fill), each exclusive of
-    # the others. What it does not name is the SVG emit, so these sum to less
-    # than `render`.
+    with timing.phase("render"):
+        cli.process_one(cfg, part, tmp)
+    # Paths, not names: `render/geometry/engine/hlr` says where in the render
+    # the time went and at what depth. A parent's time includes its children,
+    # so what a level does not name is its own leftover -- for `render` that
+    # is the SVG emit.
     phase.update(timing.phases())
 
     t0 = time.perf_counter()

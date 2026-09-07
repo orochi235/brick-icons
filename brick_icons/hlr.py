@@ -1067,41 +1067,57 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
     # through the unwrap for nothing. The description line is the signal
     # -- see partindex, which classifies the corpus the same way.
     out["printed"] = _is_printed(path)
-    flatten(path, np.eye(3), np.zeros(3), out, roots)
+    with timing.phase("flatten"):
+        flatten(path, np.eye(3), np.zeros(3), out, roots)
     if out["tri"]:
         # Repair returns outward-oriented tris as float32 (cache dtype); the
         # ~7 sig-fig precision is ample at icon scale. Keep out["tri"] a LIST
         # of (3,3) rows — _visible_segments_* test it with `if out["tri"]:`.
-        fixed = repair.repaired_tris(np.array(out["tri"]), out["tri_meta"],
-                                     MESH_CACHE_DIR)
+        with timing.phase("repair"):
+            fixed = repair.repaired_tris(np.array(out["tri"]),
+                                         out["tri_meta"], MESH_CACHE_DIR)
         out["tri"] = list(fixed)
         out["tri_colors"] = [m["color"] for m in out["tri_meta"]]
     # hand-faceted rounds (condline-marked type-2 chains) become true arcs;
     # any part that gains one needs the analytic pipeline to draw it
-    out["fit_arcs"], out["2"] = arcfit.fit_edge_arcs(out["2"], out["5"])
+    with timing.phase("arcfit"):
+        out["fit_arcs"], out["2"] = arcfit.fit_edge_arcs(out["2"], out["5"])
     right, up, fwd = view_basis(lat, long)
     if engine == "occt":
-        from . import occt
+        # Its own phase: OCP is a 0.65s import, paid once per process by
+        # whichever part a worker happens to draw first. Left unnamed it
+        # reads as that part's geometry.
+        with timing.phase("import"):
+            from . import occt
         res = occt.visible_segments(out, right, up, render_px, cull=cull,
                                     fwd=fwd)
-        segs, sil_ells = arcfit.fit_silhouette_arcs(res.segs)
+        with timing.phase("arcfit"):
+            segs, sil_ells = arcfit.fit_silhouette_arcs(res.segs)
         if cull:
-            segs = cull_orphan_runs(segs)
+            with timing.phase("cull"):
+                segs = cull_orphan_runs(segs)
         return res._replace(segs=segs,
                             ellipses=list(res.ellipses) + sil_ells)
     if engine == "cadquery":
         from . import cqsvg
         return cqsvg.visible_segments(out, right, up, render_px, cull=cull)
     if out["analytic"] or out["fit_arcs"]:
-        res = _visible_segments_analytic(out, right, up, fwd, render_px, cull=cull)
+        with timing.phase("engine"):
+            res = _visible_segments_analytic(out, right, up, fwd, render_px,
+                                             cull=cull)
     else:
-        res = _visible_segments_faceted(out, right, up, fwd, render_px, cull=cull)
-    segs, refits = _snap_rim_crossings(dedupe_segments(res.segs))
-    segs, sil_ells = arcfit.fit_silhouette_arcs(segs)
+        with timing.phase("engine"):
+            res = _visible_segments_faceted(out, right, up, fwd, render_px,
+                                            cull=cull)
+    with timing.phase("snap"):
+        segs, refits = _snap_rim_crossings(dedupe_segments(res.segs))
+    with timing.phase("arcfit"):
+        segs, sil_ells = arcfit.fit_silhouette_arcs(segs)
     if sil_ells:
         res = res._replace(ellipses=list(res.ellipses) + sil_ells)
     if cull:
-        segs = cull_orphan_runs(segs, protect=set(res.fold_ells or ()))
+        with timing.phase("cull"):
+            segs = cull_orphan_runs(segs, protect=set(res.fold_ells or ()))
     if refits:
         # refit separators are arc-recovery candidates too, so the moved
         # fill seam emits as a true arc (25 deg step, like the rim ones)

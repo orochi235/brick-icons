@@ -20,15 +20,24 @@ SECS_EDGES = (1.0, 3.0, 10.0, 30.0, 60.0, 120.0)
 # breaks every slot out that way.
 KINDS = ("all", "printed", "obsolete", "base")
 
-# Where one render's wall-clock went, in stacking order. Every row that
-# carries phases at all carries these four, and they are exclusive.
+# The top of the tree, in stacking order. Every row that carries phases at
+# all carries these four, and they are exclusive of one another.
 PHASE_ORDER = ("render", "rasterize", "truth_mask", "compare")
 
-# How `render` itself divides, for the rows measured since `brick_icons.timing`
-# existed. Most of the census predates it, so this is tallied over its own
-# smaller n rather than mixed into the four above -- a row that never named a
-# split would otherwise donate its whole render to `rest`.
-SPLIT_ORDER = ("geometry", "decoration", "fill", "rest")
+# Where a phase measured before `brick_icons.timing` recorded paths belongs.
+# All three sit directly under `render` because that is how they were
+# measured: the old accumulator subtracted nested time, so `decoration` ran
+# inside `geometry` but was not counted in it. Nesting it where it actually
+# runs would read that exclusive number as an inclusive one and take the
+# same tenth of a second off `render`'s leftover twice.
+LEGACY_PATHS = {"geometry": "render/geometry",
+                "decoration": "render/decoration",
+                "fill": "render/fill"}
+
+# What a level's unnamed remainder is called. Never stored -- it is
+# `parent - sum(children)`, worked out here so a new seam anywhere in the
+# engine narrows `rest` instead of redefining the band above it.
+REST = "rest"
 
 # How many parts the per-part strip draws. Enough that the tail has a shape,
 # few enough to stay one screen wide.
@@ -190,54 +199,144 @@ def _speed_and_error(rows: list[sqlite3.Row],
     return speed, error
 
 
+def normalize(phases: dict) -> dict[str, float]:
+    """One row's phases as paths, whenever it was measured.
+
+    A row written before `timing` recorded paths names bare `geometry` and
+    `fill`; `LEGACY_PATHS` puts each where it actually ran. A path already
+    carrying a separator is passed through, and an unrecognized bare name
+    stays at the top rather than being guessed at.
+    """
+    out: dict[str, float] = {}
+    for name, secs in phases.items():
+        path = name if "/" in name else LEGACY_PATHS.get(name, name)
+        out[path] = out.get(path, 0.0) + float(secs)
+    return out
+
+
+def tree(phases: dict) -> list[dict]:
+    """One row's phases as the nested thing they describe.
+
+    Each node is `{name, path, secs, children}` with `secs` inclusive of
+    everything beneath it. A node whose children do not fill it gains a
+    `rest` child for the difference, which is how an unnamed seam shows up as
+    a gap rather than as a missing summand. A path whose parent was never
+    recorded is grafted on at the depth it names, so a partial row still
+    draws.
+    """
+    paths = normalize(phases)
+    nodes: dict[str, dict] = {}
+    for path in sorted(paths, key=lambda p: p.count("/")):
+        parts = path.split("/")
+        for i in range(len(parts)):
+            at = "/".join(parts[:i + 1])
+            nodes.setdefault(at, {"name": parts[i], "path": at,
+                                  "secs": round(paths.get(at, 0.0), 3),
+                                  "children": []})
+    roots = []
+    for path, node in nodes.items():
+        parent = path.rsplit("/", 1)[0] if "/" in path else None
+        (nodes[parent]["children"] if parent in nodes else roots).append(node)
+
+    for node in nodes.values():
+        node["children"].sort(key=lambda c: -c["secs"])
+        named = sum(c["secs"] for c in node["children"])
+        gap = round(node["secs"] - named, 3)
+        # A hair over is float noise on three decimals, not an unnamed stage.
+        if node["children"] and gap > 0.001:
+            node["children"].append({"name": REST, "path": f"{node['path']}/{REST}",
+                                     "secs": gap, "children": []})
+    order = {name: i for i, name in enumerate(PHASE_ORDER)}
+    roots.sort(key=lambda n: (order.get(n["name"], len(order)), n["name"]))
+    return roots
+
+
 def _bands(phases: dict) -> dict[str, float]:
-    return {k: float(phases.get(k, 0.0)) for k in PHASE_ORDER}
+    """The four top-level bands, for the stacked bar that compares engines."""
+    named = normalize(phases)
+    return {k: float(named.get(k, 0.0)) for k in PHASE_ORDER}
 
 
-def _render_split(phases: dict) -> dict[str, float] | None:
-    """How `render` divides, or None if this row was measured before it did.
+def _sum_trees(rows: list[dict]) -> list[dict]:
+    """One tree over many parts: the same path added up wherever it appears.
 
-    `geometry` is the marker: `decoration` only appears on a printed part and
-    `fill` only where there is a shaded face, so neither says whether the row
-    was instrumented."""
-    if "geometry" not in phases:
+    A part that never reached a stage simply has no node for it, so a seam
+    added halfway through a census tallies over the parts that carry it
+    rather than being diluted by the ones that do not. `n` says how many
+    those were, which is the only honest way to read a node's share.
+    """
+    secs: dict[str, float] = {}
+    seen: dict[str, int] = {}
+
+    def walk(nodes):
+        for node in nodes:
+            if node["name"] == REST:
+                continue          # re-derived below, never carried forward
+            secs[node["path"]] = secs.get(node["path"], 0.0) + node["secs"]
+            seen[node["path"]] = seen.get(node["path"], 0) + 1
+            walk(node["children"])
+
+    for row in rows:
+        walk(row["nodes"])
+    summed = tree(secs)
+
+    def stamp(nodes):
+        for node in nodes:
+            node["n"] = seen.get(node["path"], 0)
+            stamp(node["children"])
+    stamp(summed)
+    return summed
+
+
+def _split_of(phases: dict) -> list[dict] | None:
+    """The tree below the top four bands, or None if this row never named one.
+
+    Most of the census predates `brick_icons.timing`, and those rows carry
+    `render` and nothing under it. Folding them in would put every unmeasured
+    second into `rest` -- so the split is tallied over its own smaller `n`,
+    and the node-level `n` says which of those parts reached each stage.
+    """
+    named = normalize(phases)
+    if not any("/" in path for path in named):
         return None
-    named = {k: float(phases.get(k, 0.0)) for k in SPLIT_ORDER if k != "rest"}
-    named["rest"] = max(0.0, float(phases.get("render", 0.0)) - sum(named.values()))
-    return named
+    return tree(phases)
 
 
 def _phases(rows: list[sqlite3.Row], ids: set[str]) -> list[dict]:
-    per_engine: dict[str, list[tuple[str, dict, dict | None]]] = {}
+    per_engine: dict[str, list[dict]] = {}
     for row in rows:
         if row["part_id"] not in ids or not row["phases"]:
             continue
         phases = json.loads(row["phases"])
-        per_engine.setdefault(row["engine"], []).append(
-            (row["part_id"], _bands(phases), _render_split(phases)))
+        bands = _bands(phases)
+        per_engine.setdefault(row["engine"], []).append({
+            "part_id": row["part_id"],
+            "bands": bands,
+            "total": round(sum(bands.values()), 3),
+            "nodes": _split_of(phases),
+        })
 
     out = []
     for engine, measured in sorted(per_engine.items()):
-        totals = {k: round(sum(b[k] for _, b, _ in measured), 3) for k in PHASE_ORDER}
-        splits = [s for _, _, s in measured if s is not None]
-        ranked = sorted(measured, key=lambda m: -sum(m[1].values()))
+        totals = {k: round(sum(m["bands"][k] for m in measured), 3)
+                  for k in PHASE_ORDER}
+        ranked = sorted(measured, key=lambda m: -m["total"])
+        split = [m for m in measured if m["nodes"] is not None]
         out.append({
             "engine": engine,
             "n": len(measured),
             "total": round(sum(totals.values()), 3),
             "totals": totals,
             "split": {
-                "n": len(splits),
-                "total": round(sum(sum(s.values()) for s in splits), 3),
-                "totals": {k: round(sum(s[k] for s in splits), 3)
-                           for k in SPLIT_ORDER},
-            } if splits else None,
-            "slowest": [{"part_id": pid,
-                         "total": round(sum(bands.values()), 3),
-                         "secs": {k: round(v, 3) for k, v in bands.items()},
-                         "split": ({k: round(v, 3) for k, v in split.items()}
-                                   if split else None)}
-                        for pid, bands, split in ranked[:SLOWEST_N]],
+                "n": len(split),
+                "total": round(sum(n["secs"] for m in split
+                                   for n in m["nodes"]), 3),
+                "nodes": _sum_trees(split),
+            } if split else None,
+            "slowest": [{"part_id": m["part_id"], "total": m["total"],
+                         "secs": {k: round(v, 3) for k, v in m["bands"].items()},
+                         "split": m["nodes"]}
+                        for m in ranked[:SLOWEST_N]],
         })
     return out
 

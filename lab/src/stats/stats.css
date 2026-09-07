@@ -149,10 +149,69 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
 .stats-phase-mark[data-phase='truth_mask'] { background: var(--stats-phase-truth_mask); }
 .stats-phase-mark[data-phase='compare'] { background: var(--stats-phase-compare); }
 
-.stats-seg[data-split='geometry'] { background: var(--stats-split-geometry); }
-.stats-seg[data-split='decoration'] { background: var(--stats-split-decoration); }
-.stats-seg[data-split='fill'] { background: var(--stats-split-fill); }
-.stats-seg[data-split='rest'] { background: var(--stats-split-rest); }
+/* Phase tree ---------------------------------------------------------- */
+
+.stats-phase-rows {
+  list-style: none;
+  margin: 0 0 1.25rem;
+  padding: 0;
+}
+
+.stats-phase-row {
+  display: grid;
+  grid-template-columns: minmax(11rem, 18rem) 4.5rem 1fr 3.5rem 4rem;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.0625rem 0;
+  font-size: 0.8125rem;
+}
+
+.stats-phase-row:hover { background: var(--wzl-gray-100); }
+
+.stats-phase-toggle {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.stats-phase-leaf { color: var(--wzl-gray-700); }
+
+.stats-phase-row[data-rest='true'] .stats-phase-leaf { font-style: italic; }
+
+.stats-phase-secs,
+.stats-phase-pct,
+.stats-phase-n {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-phase-pct,
+.stats-phase-n { color: var(--wzl-gray-600); }
+
+.stats-phase-bar {
+  display: block;
+  height: 0.6875rem;
+  background: var(--wzl-gray-200);
+  border-radius: 1px;
+  overflow: hidden;
+}
+
+.stats-phase-fill {
+  display: block;
+  height: 100%;
+  background: var(--stats-split-geometry);
+}
+
+.stats-phase-row[data-rest='true'] .stats-phase-fill {
+  background: var(--stats-split-rest);
+}
+
+.stats-phase-row[data-depth='0'] .stats-phase-fill {
+  background: var(--stats-split-fill);
+}
 
 .stats-phases { display: flex; flex-direction: column; gap: 1.5rem; }
 .stats-phase-engine { margin: 0; }
@@ -304,3 +363,29 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
 
 .stats-page th { color: var(--wzl-fg-muted); font-weight: 600; }
 .stats-page tr[data-open='true'] td { color: var(--stats-defect); }
+
+/* Footprint ---------------------------------------------------------- */
+
+.stats-footprint h2 button {
+  margin-left: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 400;
+  vertical-align: middle;
+}
+
+.stats-aside {
+  margin: 0.5rem 0 1rem;
+  color: var(--wzl-gray-600);
+  font-size: 0.8125rem;
+}
+
+.stats-slot-sizes td:not(:first-child),
+.stats-slot-sizes th:not(:first-child) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-slot-sizes tfoot td {
+  border-top: 1px solid var(--wzl-gray-300);
+  font-weight: 500;
+}

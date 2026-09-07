@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import type { LabClient } from '@lab/api/client';
 import { CoverageBars, CoverageLegend, PhaseBars, PhaseColumns, PhaseLegend,
          SecsOverlay } from '@lab/stats/charts';
+import { Footprint } from '@lab/stats/Footprint';
+import { PhaseTree } from '@lab/stats/PhaseTree';
 import { useStats } from '@lab/stats/useStats';
 import { DEFAULT_SET, fromQuery, toQuery, wallHref,
          type WorkingSet } from '@lab/stats/workingSet';
@@ -142,6 +144,23 @@ export function StatsPage({ client }: { client: LabClient }) {
           </section>
 
           <section>
+            <h2>Inside a render</h2>
+            {stats.phases.every((row) => row.split === null)
+              ? <p className="stats-empty">
+                  nothing in this set was measured with the render broken down
+                </p>
+              : stats.phases.map((row) => row.split && (
+                <PhaseTree
+                  key={row.engine}
+                  nodes={row.split.nodes}
+                  caption={`${row.engine} — over the `
+                    + `${row.split.n.toLocaleString()} of `
+                    + `${row.n.toLocaleString()} parts whose render named its `
+                    + 'stages'} />
+              ))}
+          </section>
+
+          <section>
             <h2>How far off</h2>
             <table>
               <thead>
@@ -183,6 +202,8 @@ export function StatsPage({ client }: { client: LabClient }) {
               </tbody>
             </table>
           </section>
+
+          <Footprint client={client} />
 
           <section>
             <h2>What the set is made of</h2>
