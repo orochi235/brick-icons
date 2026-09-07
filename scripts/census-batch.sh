@@ -83,10 +83,32 @@ while :; do
 
   # .inflight's mtime is the current part's start time, and the only clock a
   # watchdog can read from outside the process.
+  # onto can stop this job mid-part so a test run gets a quiet machine, and
+  # while it is stopped the wall clock keeps going but this part does not. Left
+  # uncorrected, every part in flight is instantly older than HARD the moment
+  # the job resumes and the watchdog kills all of them — losing exactly the work
+  # the pause existed to keep. $ONTO_PAUSED holds the job's cumulative stopped
+  # seconds; what matters is how much of it accrued since this part started.
+  paused_now() {
+    if [ -n "${ONTO_PAUSED:-}" ] && [ -r "${ONTO_PAUSED:-}" ]; then
+      cat "$ONTO_PAUSED" 2>/dev/null || echo 0
+    else
+      echo 0
+    fi
+  }
+  last_start=
+  paused_at=0
   while kill -0 "$worker" 2>/dev/null; do
     sleep "$POLL"
     [ -f "$inflight" ] || continue
-    age=$(( $(date +%s) - $(stat -f %m "$inflight") ))
+    started=$(stat -f %m "$inflight")
+    # A new part: note what the job had already spent stopped, so only time lost
+    # during *this* part is subtracted.
+    if [ "$started" != "$last_start" ]; then
+      last_start=$started
+      paused_at=$(paused_now)
+    fi
+    age=$(( $(date +%s) - started - ($(paused_now) - paused_at) ))
     [ "$age" -lt "$HARD" ] && continue
     # The pipeline's pid is grep's, so the python is found by the jsonl path it
     # was handed, which is unique to this batch.
