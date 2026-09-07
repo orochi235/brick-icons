@@ -1,5 +1,5 @@
 import type { Coverage } from '@lab/corpus/facts';
-import type { CoverageRow, SpeedRow } from '@lab/stats/types';
+import type { CoverageRow, Phase, PhaseRow, SpeedRow, SplitPhase } from '@lab/stats/types';
 
 /** Stack order, worst news leftmost, so the eye lands on the problems before
  *  the bulk. Matches `COVERAGE_ORDER` in facts.ts and cells.py. */
@@ -120,6 +120,143 @@ export function SecsHistogram({ row }: { row: SpeedRow }) {
             <span className="stats-bin-label">{binLabel(bin.from, bin.to)}</span>
           </div>
         ))}
+      </div>
+    </figure>
+  );
+}
+
+/** The four exclusive phases, in the order a census row runs them. */
+export const PHASE_STACK: Phase[] = ['render', 'rasterize', 'truth_mask', 'compare'];
+
+export const PHASE_LABEL: Record<Phase, string> = {
+  render: 'render',
+  rasterize: 'rasterize',
+  truth_mask: 'truth mask',
+  compare: 'compare',
+};
+
+/** How `render` divides, in pipeline order. */
+export const SPLIT_STACK: SplitPhase[] = ['geometry', 'decoration', 'fill', 'rest'];
+
+export const SPLIT_LABEL: Record<SplitPhase, string> = {
+  geometry: 'geometry',
+  decoration: 'decoration',
+  fill: 'fill',
+  rest: 'rest of the render',
+};
+
+const secs = (v: number) =>
+  v >= 3600 ? `${(v / 3600).toFixed(1)}h` : v >= 60 ? `${(v / 60).toFixed(0)}m` : `${v.toFixed(1)}s`;
+
+/** Where a working set's wall-clock went, one bar per engine.
+ *
+ *  The render band carries a second bar beneath it rather than sub-segments
+ *  inside it: the split is tallied over its own much smaller n -- most of the
+ *  census predates the instrumentation -- and nesting one denominator inside
+ *  another reads as a single whole it is not. */
+export function PhaseBars({ rows }: { rows: PhaseRow[] }) {
+  if (rows.length === 0) {
+    return <p className="stats-empty">nothing in this set carries phase timings</p>;
+  }
+  return (
+    <div className="stats-phases">
+      {rows.map((row) => (
+        <figure key={row.engine} className="stats-phase-engine">
+          <figcaption>
+            <strong>{row.engine}</strong>
+            <span className="stats-muted">
+              {' '}{secs(row.total)} over {row.n.toLocaleString()} parts
+            </span>
+          </figcaption>
+          <div className="stats-bar" role="img"
+               aria-label={`${row.engine}: ${PHASE_STACK
+                 .map((k) => `${PHASE_LABEL[k]} ${secs(row.totals[k])}`).join(', ')}`}>
+            {PHASE_STACK.map((phase) => {
+              const v = row.totals[phase];
+              if (v === 0) return null;
+              return (
+                <span key={phase} className="stats-seg stats-phase-mark" data-phase={phase}
+                      style={{ width: `${pct(v, row.total)}%` }}
+                      title={`${PHASE_LABEL[phase]} — ${secs(v)}, `
+                             + `${pct(v, row.total).toFixed(1)}%`} />
+              );
+            })}
+          </div>
+          {row.split && (
+            <div className="stats-phase-split">
+              <p className="stats-muted stats-phase-note">
+                render splits, over the {row.split.n.toLocaleString()} of{' '}
+                {row.n.toLocaleString()} parts measured since the split existed
+              </p>
+              <div className="stats-bar" role="img"
+                   aria-label={`render splits into ${SPLIT_STACK
+                     .map((k) => `${SPLIT_LABEL[k]} ${secs(row.split!.totals[k])}`)
+                     .join(', ')}`}>
+                {SPLIT_STACK.map((phase) => {
+                  const v = row.split!.totals[phase];
+                  if (v === 0) return null;
+                  const share = pct(v, row.split!.total);
+                  return (
+                    <span key={phase} className="stats-seg" data-split={phase}
+                          style={{ width: `${share}%` }}
+                          title={`${SPLIT_LABEL[phase]} — ${secs(v)}, ${share.toFixed(1)}%`}>
+                      {share >= 5 && (
+                        <span className="stats-seg-label">
+                          {SPLIT_LABEL[phase]}{share >= 12 && ` ${share.toFixed(0)}%`}
+                        </span>
+                      )}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </figure>
+      ))}
+    </div>
+  );
+}
+
+export function PhaseLegend() {
+  return (
+    <ul className="stats-legend">
+      {PHASE_STACK.map((phase) => (
+        <li key={phase}>
+          <span className="stats-swatch stats-phase-mark" data-phase={phase} aria-hidden="true" />
+          {PHASE_LABEL[phase]}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** The slowest parts in the set, one stacked column each, longest last so the
+ *  climb reads left to right the way the matplotlib probe drew it. */
+export function PhaseColumns({ row }: { row: PhaseRow }) {
+  const columns = [...row.slowest].reverse();
+  const tallest = Math.max(1, ...columns.map((c) => c.total));
+  return (
+    <figure className="stats-columns">
+      <figcaption className="stats-muted">
+        the {columns.length} longest parts in this set — {row.engine},
+        {' '}{secs(columns[columns.length - 1]?.total ?? 0)} at the tall end
+      </figcaption>
+      <div className="stats-column-plot">
+        {columns.map((col) => {
+          const label = `${col.part_id} — ${secs(col.total)}`;
+          const body = PHASE_STACK.map((phase) => {
+            const v = col.secs[phase];
+            if (v === 0) return null;
+            return <span key={phase} className="stats-col-seg stats-phase-mark" data-phase={phase}
+                         style={{ height: `${pct(v, col.total)}%` }} />;
+          });
+          return (
+            <div key={col.part_id} className="stats-column"
+                 style={{ height: `${pct(col.total, tallest)}%` }} title={label}>
+              <span className="stats-column-stack" aria-label={label}>{body}</span>
+            </div>
+          );
+        })}
       </div>
     </figure>
   );

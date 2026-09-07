@@ -10,6 +10,25 @@
    * not a state, and painting it cyan would say "timed out" to anyone who
    * just read the coverage legend. */
   --stats-bin: #7f8ca6;
+
+  /* The phase palette: categorical, four exclusive stages. Validated with the
+   * dataviz validator against this page's sunken surface -- lightness band,
+   * chroma floor, adjacent CVD separation, normal-vision separation and
+   * contrast all pass. */
+  --stats-phase-render: #3987e5;
+  --stats-phase-rasterize: #d95926;
+  --stats-phase-truth_mask: #199e70;
+  --stats-phase-compare: #9085e9;
+
+  /* How render divides: one hue, light to dark, because these are ordered
+   * pieces of the band above rather than four unrelated things -- and seven
+   * categorical hues on a page that already spends three on status is how a
+   * reader stops being able to tell any of them apart. Identity comes from
+   * the labels written into the bands, not from the color. */
+  --stats-split-geometry: #a9cff8;
+  --stats-split-decoration: #7bb0f0;
+  --stats-split-fill: #4f92e2;
+  --stats-split-rest: #2f6fbe;
   padding: 1rem 1.5rem 4rem;
   max-width: 72rem;
   margin: 0 auto;
@@ -104,7 +123,7 @@
   height: 1.5rem;
   border-radius: 3px;
   overflow: hidden;
-  background: var(--wzl-bg-sunken, #111);
+  background: var(--wzl-surface-sunken, #111);
 }
 
 .stats-seg { display: block; height: 100%; min-width: 2px; }
@@ -120,6 +139,65 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
 .stats-swatch[data-label='timeout'] { background: var(--stats-timeout); }
 .stats-swatch[data-label='drawn'] { background: var(--stats-drawn); }
 .stats-swatch[data-label='untried'] { background: var(--stats-untried); }
+
+/* -- phases ------------------------------------------------------------- */
+
+/* One rule per phase across every mark that wears it -- the full-width bar,
+ * the legend swatch and a column segment in the per-part strip. */
+.stats-phase-mark[data-phase='render'] { background: var(--stats-phase-render); }
+.stats-phase-mark[data-phase='rasterize'] { background: var(--stats-phase-rasterize); }
+.stats-phase-mark[data-phase='truth_mask'] { background: var(--stats-phase-truth_mask); }
+.stats-phase-mark[data-phase='compare'] { background: var(--stats-phase-compare); }
+
+.stats-seg[data-split='geometry'] { background: var(--stats-split-geometry); }
+.stats-seg[data-split='decoration'] { background: var(--stats-split-decoration); }
+.stats-seg[data-split='fill'] { background: var(--stats-split-fill); }
+.stats-seg[data-split='rest'] { background: var(--stats-split-rest); }
+
+.stats-phases { display: flex; flex-direction: column; gap: 1.5rem; }
+.stats-phase-engine { margin: 0; }
+.stats-phase-engine figcaption { margin-bottom: 0.4rem; font-size: 0.9rem; }
+.stats-phase-split { margin-top: 0.5rem; }
+.stats-phase-note { margin: 0 0 0.3rem; font-size: 0.8rem; }
+
+/* The split bands carry their own names, so the shared hue never has to be
+ * the identity channel. Dark ink because every step of the ramp is well
+ * clear of 3:1 against it. */
+.stats-seg-label {
+  display: block;
+  padding: 0 0.4rem;
+  line-height: 1.5rem;
+  font-size: 0.72rem;
+  color: #0e0f12;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* -- the slowest parts, one column each --------------------------------- */
+
+.stats-columns { margin: 1rem 0 0; }
+.stats-columns figcaption { margin-bottom: 0.4rem; font-size: 0.8rem; }
+
+.stats-column-plot {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 9rem;
+  border-bottom: 1px solid var(--wzl-line, #333);
+}
+
+.stats-column { flex: 1; min-width: 3px; }
+
+.stats-column-stack {
+  display: flex;
+  flex-direction: column-reverse;
+  height: 100%;
+  width: 100%;
+  border-radius: 3px 3px 0 0;
+  overflow: hidden;
+}
+
+.stats-col-seg { display: block; width: 100%; }
 
 /* -- tiles -------------------------------------------------------------- */
 

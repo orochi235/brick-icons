@@ -13,6 +13,17 @@ const body = (over: Partial<Stats> = {}): Stats => ({
   error: [{ engine: 'naive',
             d99: { n: 14, total: 0, median: 1.25, p95: 4, max: 9 },
             missing_px: { n: 14, total: 0, median: 3, p95: 8, max: 20 } }],
+  phases: [{ engine: 'naive', n: 14, total: 100,
+             totals: { render: 70, rasterize: 10, truth_mask: 15, compare: 5 },
+             split: { n: 3, total: 40,
+                      totals: { geometry: 20, decoration: 4, fill: 14, rest: 2 } },
+             slowest: [
+               { part_id: '3001', total: 30,
+                 secs: { render: 20, rasterize: 4, truth_mask: 5, compare: 1 },
+                 split: { geometry: 12, decoration: 0, fill: 7, rest: 1 } },
+               { part_id: '3002', total: 10,
+                 secs: { render: 7, rasterize: 1, truth_mask: 1, compare: 1 },
+                 split: null }] }],
   runs: [{ id: 1, kind: 'census', started: '2026-09-06T09:00:00+00:00',
            finished: '2026-09-06T10:00:00+00:00', open: false,
            commit_sha: 'abc1234def', args: '{}', note: null, parts: 14 }],
@@ -35,8 +46,9 @@ describe('StatsPage', () => {
 
   it('draws a segment per coverage label, none of them zero-width', async () => {
     const { container } = render(<StatsPage client={clientWith(async () => body())} />);
-    await waitFor(() => expect(container.querySelectorAll('.stats-seg').length).toBe(5));
-    const labels = [...container.querySelectorAll('.stats-seg')]
+    await waitFor(() =>
+      expect(container.querySelectorAll('.stats-bars .stats-seg').length).toBe(5));
+    const labels = [...container.querySelectorAll('.stats-bars .stats-seg')]
       .map((el) => el.getAttribute('data-label'));
     expect(labels).toEqual(['defect', 'failed', 'timeout', 'drawn', 'untried']);
   });
@@ -45,7 +57,54 @@ describe('StatsPage', () => {
     const none = body();
     none.coverage[0]!.counts.defect = 0;
     const { container } = render(<StatsPage client={clientWith(async () => none)} />);
-    await waitFor(() => expect(container.querySelectorAll('.stats-seg').length).toBe(4));
+    await waitFor(() =>
+      expect(container.querySelectorAll('.stats-bars .stats-seg').length).toBe(4));
+  });
+
+
+  it('stacks the four phases per engine, longest first in the data order', async () => {
+    const { container } = render(<StatsPage client={clientWith(async () => body())} />);
+    await waitFor(() => container.querySelector('.stats-phases'));
+    const phases = [...container.querySelectorAll('.stats-phases .stats-bar')[0]!
+      .querySelectorAll('.stats-seg')].map((el) => el.getAttribute('data-phase'));
+    expect(phases).toEqual(['render', 'rasterize', 'truth_mask', 'compare']);
+  });
+
+  it('gives the render split its own bar and says how few rows it covers', async () => {
+    const { container } = render(<StatsPage client={clientWith(async () => body())} />);
+    await waitFor(() => container.querySelector('.stats-phase-split'));
+    const split = [...container.querySelectorAll('.stats-seg[data-split]')]
+      .map((el) => el.getAttribute('data-split'));
+    expect(split).toEqual(['geometry', 'decoration', 'fill', 'rest']);
+    expect(screen.getByText(/3 of 14 parts measured since the split existed/))
+      .toBeTruthy();
+  });
+
+  it('leaves the split bar out when no row in the set carries one', async () => {
+    const none = body();
+    none.phases[0]!.split = null;
+    const { container } = render(<StatsPage client={clientWith(async () => none)} />);
+    await waitFor(() => container.querySelector('.stats-phases'));
+    expect(container.querySelector('.stats-phase-split')).toBe(null);
+  });
+
+  it('draws the slowest parts shortest first, scaled to the tallest', async () => {
+    const { container } = render(<StatsPage client={clientWith(async () => body())} />);
+    await waitFor(() => container.querySelector('.stats-column-plot'));
+    const columns = [...container.querySelectorAll('.stats-column')];
+    expect(columns.map((el) => el.getAttribute('title')))
+      .toEqual(['3002 — 10.0s', '3001 — 30.0s']);
+    // The tallest part fills the plot; a third of its cost is a third as tall.
+    expect((columns[1] as HTMLElement).style.height).toBe('100%');
+    expect((columns[0] as HTMLElement).style.height).toBe('33.33333333333333%');
+  });
+
+  it('says so rather than drawing an empty chart when nothing is timed', async () => {
+    const none = body();
+    none.phases = [];
+    render(<StatsPage client={clientWith(async () => none)} />);
+    await waitFor(() =>
+      screen.getByText('nothing in this set carries phase timings'));
   });
 
   it('sends a bar into the wall showing the same slot', async () => {

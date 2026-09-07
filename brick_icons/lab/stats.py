@@ -5,6 +5,7 @@ the same function the wall's own grouping reads, so the two pages cannot come
 to disagree about what `drawn` means.
 """
 import datetime as dt
+import json
 import sqlite3
 
 from brick_icons import tags as part_tags
@@ -18,6 +19,20 @@ SECS_EDGES = (1.0, 3.0, 10.0, 30.0, 60.0, 120.0)
 # not here: each is a statement about one slot, and the coverage chart already
 # breaks every slot out that way.
 KINDS = ("all", "printed", "obsolete", "base")
+
+# Where one render's wall-clock went, in stacking order. Every row that
+# carries phases at all carries these four, and they are exclusive.
+PHASE_ORDER = ("render", "rasterize", "truth_mask", "compare")
+
+# How `render` itself divides, for the rows measured since `brick_icons.timing`
+# existed. Most of the census predates it, so this is tallied over its own
+# smaller n rather than mixed into the four above -- a row that never named a
+# split would otherwise donate its whole render to `rest`.
+SPLIT_ORDER = ("geometry", "decoration", "fill", "rest")
+
+# How many parts the per-part strip draws. Enough that the tail has a shape,
+# few enough to stay one screen wide.
+SLOWEST_N = 40
 
 
 def _quantile(sorted_values: list[float], q: float) -> float | None:
@@ -142,7 +157,8 @@ def _coverage(conn: sqlite3.Connection, ids: set[str]) -> list[dict]:
 
 def _latest_measurements(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return list(conn.execute(
-        "SELECT m.part_id, m.engine, m.secs, m.extra_d99, m.missing_px "
+        "SELECT m.part_id, m.engine, m.secs, m.extra_d99, m.missing_px, "
+        "m.phases "
         "FROM measurements m JOIN "
         "(SELECT part_id, engine, MAX(run_id) AS run_id FROM measurements "
         " GROUP BY part_id, engine) latest "
@@ -150,12 +166,12 @@ def _latest_measurements(conn: sqlite3.Connection) -> list[sqlite3.Row]:
         "AND m.run_id = latest.run_id"))
 
 
-def _speed_and_error(conn: sqlite3.Connection,
+def _speed_and_error(rows: list[sqlite3.Row],
                      ids: set[str]) -> tuple[list[dict], list[dict]]:
     secs: dict[str, list[float]] = {}
     d99: dict[str, list[float]] = {}
     missing: dict[str, list[float]] = {}
-    for row in _latest_measurements(conn):
+    for row in rows:
         if row["part_id"] not in ids:
             continue
         engine = row["engine"]
@@ -172,6 +188,58 @@ def _speed_and_error(conn: sqlite3.Connection,
               "missing_px": _spread(missing.get(e, []))}
              for e in sorted(set(d99) | set(missing))]
     return speed, error
+
+
+def _bands(phases: dict) -> dict[str, float]:
+    return {k: float(phases.get(k, 0.0)) for k in PHASE_ORDER}
+
+
+def _render_split(phases: dict) -> dict[str, float] | None:
+    """How `render` divides, or None if this row was measured before it did.
+
+    `geometry` is the marker: `decoration` only appears on a printed part and
+    `fill` only where there is a shaded face, so neither says whether the row
+    was instrumented."""
+    if "geometry" not in phases:
+        return None
+    named = {k: float(phases.get(k, 0.0)) for k in SPLIT_ORDER if k != "rest"}
+    named["rest"] = max(0.0, float(phases.get("render", 0.0)) - sum(named.values()))
+    return named
+
+
+def _phases(rows: list[sqlite3.Row], ids: set[str]) -> list[dict]:
+    per_engine: dict[str, list[tuple[str, dict, dict | None]]] = {}
+    for row in rows:
+        if row["part_id"] not in ids or not row["phases"]:
+            continue
+        phases = json.loads(row["phases"])
+        per_engine.setdefault(row["engine"], []).append(
+            (row["part_id"], _bands(phases), _render_split(phases)))
+
+    out = []
+    for engine, measured in sorted(per_engine.items()):
+        totals = {k: round(sum(b[k] for _, b, _ in measured), 3) for k in PHASE_ORDER}
+        splits = [s for _, _, s in measured if s is not None]
+        ranked = sorted(measured, key=lambda m: -sum(m[1].values()))
+        out.append({
+            "engine": engine,
+            "n": len(measured),
+            "total": round(sum(totals.values()), 3),
+            "totals": totals,
+            "split": {
+                "n": len(splits),
+                "total": round(sum(sum(s.values()) for s in splits), 3),
+                "totals": {k: round(sum(s[k] for s in splits), 3)
+                           for k in SPLIT_ORDER},
+            } if splits else None,
+            "slowest": [{"part_id": pid,
+                         "total": round(sum(bands.values()), 3),
+                         "secs": {k: round(v, 3) for k, v in bands.items()},
+                         "split": ({k: round(v, 3) for k, v in split.items()}
+                                   if split else None)}
+                        for pid, bands, split in ranked[:SLOWEST_N]],
+        })
+    return out
 
 
 def _runs(conn: sqlite3.Connection, ids: set[str]) -> list[dict]:
@@ -215,7 +283,8 @@ def stats(conn: sqlite3.Connection, *, kind: str = "all", moved: bool = False,
                         out_of_scope=out_of_scope, excluded=tuple(excluded),
                         badges=tuple(badges))
     total = conn.execute("SELECT count(*) FROM parts").fetchone()[0]
-    speed, error = _speed_and_error(conn, ids)
+    latest = _latest_measurements(conn)
+    speed, error = _speed_and_error(latest, ids)
     return {
         "set": {"size": len(ids), "total": total, "kind": kind,
                 "moved": moved, "out_of_scope": out_of_scope,
@@ -223,6 +292,7 @@ def stats(conn: sqlite3.Connection, *, kind: str = "all", moved: bool = False,
         "coverage": _coverage(conn, ids),
         "speed": speed,
         "error": error,
+        "phases": _phases(latest, ids),
         "runs": _runs(conn, ids),
         "shape": _shape(conn, rows, ids),
         "as_of": dt.datetime.now(dt.timezone.utc).isoformat(),

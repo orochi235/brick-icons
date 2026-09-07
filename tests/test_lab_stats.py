@@ -30,16 +30,16 @@ _run = 0
 
 
 def _measure(conn, pid, engine, source=None, error=None, secs=None,
-             extra_d99=None, finished="2026-09-05T09:30:00+00:00"):
+             extra_d99=None, finished="2026-09-05T09:30:00+00:00", phases=None):
     global _run
     _run += 1
     conn.execute("INSERT INTO runs (id, kind, started, finished, commit_sha, "
                  "args) VALUES (?, 'census', '2026-09-05T09:00:00+00:00', ?, "
                  "'abc1234', '{}')", (_run, finished))
     conn.execute("INSERT INTO measurements (run_id, part_id, engine, source, "
-                 "error, secs, extra_d99) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                 "error, secs, extra_d99, phases) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                  (_run, pid, engine, source or f"census-{engine}", error, secs,
-                  extra_d99))
+                  extra_d99, json.dumps(phases) if phases else None))
 
 
 def _defect(conn, did, pid, engines):
@@ -215,3 +215,124 @@ def test_the_tallies_say_when_they_were_read(conn):
     _part(conn, "3001")
     conn.commit()
     assert stats.stats(conn)["as_of"].endswith("+00:00")
+
+
+# -- where the seconds went -----------------------------------------------
+
+def test_phases_are_totalled_per_engine_over_the_set(conn):
+    _part(conn, "3001")
+    _part(conn, "3002")
+    _measure(conn, "3001", "occt", secs=2.0, phases={
+        "render": 1.0, "rasterize": 0.4, "truth_mask": 0.3, "compare": 0.3})
+    _measure(conn, "3002", "occt", secs=1.0, phases={
+        "render": 0.5, "rasterize": 0.2, "truth_mask": 0.2, "compare": 0.1})
+    conn.commit()
+    row = stats.stats(conn)["phases"][0]
+    assert row["engine"] == "occt"
+    assert row["n"] == 2
+    assert row["totals"]["render"] == pytest.approx(1.5)
+    assert row["totals"]["rasterize"] == pytest.approx(0.6)
+    assert row["total"] == pytest.approx(sum(row["totals"].values()))
+
+
+def test_a_measurement_without_phases_is_not_counted(conn):
+    _part(conn, "3001")
+    _part(conn, "3002")
+    _measure(conn, "3001", "occt", secs=2.0, phases={"render": 1.0})
+    _measure(conn, "3002", "occt", secs=9.0)
+    conn.commit()
+    row = stats.stats(conn)["phases"][0]
+    assert row["n"] == 1
+    assert row["totals"]["render"] == pytest.approx(1.0)
+
+
+def test_phases_count_only_the_working_set(conn):
+    _part(conn, "3001")
+    _part(conn, "3002", category="Sticker")
+    _measure(conn, "3001", "occt", secs=1.0, phases={"render": 0.5})
+    _measure(conn, "3002", "occt", secs=1.0, phases={"render": 0.9})
+    conn.commit()
+    row = stats.stats(conn, excluded=("Sticker",))["phases"][0]
+    assert row["n"] == 1
+    assert row["totals"]["render"] == pytest.approx(0.5)
+
+
+def test_the_slowest_parts_come_back_longest_first(conn):
+    for i, render in enumerate([0.1, 0.9, 0.5]):
+        _part(conn, f"300{i}")
+        _measure(conn, f"300{i}", "occt", secs=1.0, phases={"render": render})
+    conn.commit()
+    slowest = stats.stats(conn)["phases"][0]["slowest"]
+    assert [r["part_id"] for r in slowest] == ["3001", "3002", "3000"]
+    assert slowest[0]["secs"]["render"] == pytest.approx(0.9)
+
+
+def test_the_slowest_list_is_capped(conn):
+    for i in range(stats.SLOWEST_N + 5):
+        _part(conn, f"p{i}")
+        _measure(conn, f"p{i}", "occt", secs=1.0, phases={"render": float(i)})
+    conn.commit()
+    assert len(stats.stats(conn)["phases"][0]["slowest"]) == stats.SLOWEST_N
+
+
+def test_an_engine_with_no_phases_at_all_is_not_a_row(conn):
+    _part(conn, "3001")
+    _measure(conn, "3001", "naive", secs=1.0)
+    conn.commit()
+    assert stats.stats(conn)["phases"] == []
+
+
+# -- the render's own split, which most rows predate ----------------------
+
+def test_the_split_reports_its_own_smaller_n(conn):
+    _part(conn, "3001")
+    _part(conn, "3002")
+    _measure(conn, "3001", "occt", secs=1.0, phases={
+        "render": 1.0, "geometry": 0.4, "decoration": 0.1, "fill": 0.2})
+    _measure(conn, "3002", "occt", secs=1.0, phases={"render": 2.0})
+    conn.commit()
+    row = stats.stats(conn)["phases"][0]
+    assert row["n"] == 2
+    assert row["split"]["n"] == 1
+    assert row["split"]["totals"]["geometry"] == pytest.approx(0.4)
+    # The row that never named a split contributes nothing to it -- its 2.0s
+    # of render would otherwise land in `rest` and swamp the band.
+    assert row["split"]["totals"]["rest"] == pytest.approx(0.3)
+    assert row["split"]["total"] == pytest.approx(1.0)
+
+
+def test_rest_is_the_part_of_render_the_split_does_not_name(conn):
+    _part(conn, "3001")
+    _measure(conn, "3001", "occt", secs=1.0, phases={
+        "render": 1.0, "geometry": 0.4, "fill": 0.2})
+    conn.commit()
+    assert stats.stats(conn)["phases"][0]["split"]["totals"]["rest"] == pytest.approx(0.4)
+
+
+def test_rest_never_goes_negative_on_rounding(conn):
+    _part(conn, "3001")
+    # Each phase is rounded independently, so the children can out-total the
+    # parent by a millisecond and a stacked band cannot be negative.
+    _measure(conn, "3001", "occt", secs=1.0, phases={
+        "render": 0.5, "geometry": 0.31, "fill": 0.2})
+    conn.commit()
+    assert stats.stats(conn)["phases"][0]["split"]["totals"]["rest"] == 0.0
+
+
+def test_an_engine_whose_rows_all_predate_the_split_has_none(conn):
+    _part(conn, "3001")
+    _measure(conn, "3001", "occt", secs=1.0, phases={"render": 1.0, "compare": 0.2})
+    conn.commit()
+    assert stats.stats(conn)["phases"][0]["split"] is None
+
+
+def test_a_slowest_row_carries_its_split_when_it_has_one(conn):
+    _part(conn, "3001")
+    _part(conn, "3002")
+    _measure(conn, "3001", "occt", secs=1.0, phases={
+        "render": 9.0, "geometry": 5.0, "fill": 1.0})
+    _measure(conn, "3002", "occt", secs=1.0, phases={"render": 1.0})
+    conn.commit()
+    slowest = {r["part_id"]: r for r in stats.stats(conn)["phases"][0]["slowest"]}
+    assert slowest["3001"]["split"]["geometry"] == pytest.approx(5.0)
+    assert slowest["3002"]["split"] is None

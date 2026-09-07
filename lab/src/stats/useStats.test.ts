@@ -7,7 +7,7 @@ import type { Stats } from '@lab/stats/types';
 const body = (open: boolean): Stats => ({
   set: { size: 2, total: 3, kind: 'all', moved: false, out_of_scope: true,
          excluded: [], badges: [] },
-  coverage: [], speed: [], error: [],
+  coverage: [], speed: [], error: [], phases: [],
   runs: [{ id: 1, kind: 'census', started: 's', finished: open ? null : 'f',
            open, commit_sha: 'abc1234', args: '{}', note: null, parts: 2 }],
   shape: { categories: [], kinds: { printed: 0, obsolete: 0, base: 0,

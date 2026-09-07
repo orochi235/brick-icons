@@ -34,6 +34,32 @@ export interface ErrorRow {
   missing_px: Spread;
 }
 
+/** The four exclusive phases every timed row carries. */
+export type Phase = 'render' | 'rasterize' | 'truth_mask' | 'compare';
+
+/** How `render` itself divides, for rows measured since `brick_icons.timing`
+ *  existed. `rest` is what the three named stages leave over. */
+export type SplitPhase = 'geometry' | 'decoration' | 'fill' | 'rest';
+
+export interface PhaseRow {
+  engine: string;
+  /** Rows carrying phases at all -- fewer than the engine's timed parts. */
+  n: number;
+  total: number;
+  totals: Record<Phase, number>;
+  /** Null until some row in the set was measured with the split in place. Its
+   *  own `n` is smaller again, so it is never mixed into `totals`. */
+  split: { n: number; total: number; totals: Record<SplitPhase, number> } | null;
+  slowest: SlowestRow[];
+}
+
+export interface SlowestRow {
+  part_id: string;
+  total: number;
+  secs: Record<Phase, number>;
+  split: Record<SplitPhase, number> | null;
+}
+
 export interface RunRow {
   id: number;
   kind: string;
@@ -66,6 +92,7 @@ export interface Stats {
   coverage: CoverageRow[];
   speed: SpeedRow[];
   error: ErrorRow[];
+  phases: PhaseRow[];
   runs: RunRow[];
   shape: Shape;
   as_of: string;

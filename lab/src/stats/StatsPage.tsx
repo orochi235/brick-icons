@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { LabClient } from '@lab/api/client';
-import { CoverageBars, CoverageLegend, SecsHistogram } from '@lab/stats/charts';
+import { CoverageBars, CoverageLegend, PhaseBars, PhaseColumns, PhaseLegend,
+         SecsHistogram } from '@lab/stats/charts';
 import { useStats } from '@lab/stats/useStats';
 import { DEFAULT_SET, fromQuery, toQuery, wallHref,
          type WorkingSet } from '@lab/stats/workingSet';
@@ -131,6 +132,15 @@ export function StatsPage({ client }: { client: LabClient }) {
                   {stats.speed.map((row) => <SecsHistogram key={row.engine} row={row} />)}
                 </div>
               )}
+          </section>
+
+          <section>
+            <h2>Where the time goes</h2>
+            <PhaseLegend />
+            <PhaseBars rows={stats.phases} />
+            {stats.phases.map((row) => (
+              <PhaseColumns key={row.engine} row={row} />
+            ))}
           </section>
 
           <section>
