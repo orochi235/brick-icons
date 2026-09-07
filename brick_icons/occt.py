@@ -1150,6 +1150,8 @@ def _face_occluder(face):
         A = math.cos(u0) * maj * X + math.sin(u0) * minr * Y
         C = -math.sin(u0) * maj * X + math.cos(u0) * minr * Y
         R = np.column_stack([A, (v1 - v0) * D, C])
+        if abs(np.linalg.det(R)) < 1e-9:
+            return None                  # zero height or radius: occludes nothing
         return primitives.CylinderOccluder(R, o + v0 * D,
                                            math.degrees(u1 - u0))
     if kind not in (GeomAbs_SurfaceType.GeomAbs_Cylinder,
@@ -1171,6 +1173,8 @@ def _face_occluder(face):
     if kind == GeomAbs_SurfaceType.GeomAbs_Cylinder:
         r = g.Radius()
         R = np.column_stack([r * Xs, h * Z, r * Ys])
+        if abs(np.linalg.det(R)) < 1e-9:
+            return None                  # zero height or radius: occludes nothing
         return primitives.CylinderOccluder(R, o + v0 * Z, sector)
 
     semi = g.SemiAngle()

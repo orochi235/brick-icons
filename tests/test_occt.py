@@ -854,6 +854,22 @@ def test_a_flat_face_gets_no_occluder(ldraw_dir):
     assert occt._face_occluder(face) is None
 
 
+def test_a_zero_height_cylinder_face_gets_no_occluder(ldraw_dir):
+    """72632's sensor body carries a cylinder face of zero height. Its local
+    frame is singular, and building an occluder from it raised LinAlgError
+    out of the render (the 72632 family, four census parts)."""
+    out = occt.flatten_part("72632", ldraw_dir)
+    shape = occt.build_shape(out)
+    flat = [f for f in occt._faces_of_type(
+        shape, occt.GeomAbs_SurfaceType.GeomAbs_Cylinder)
+        if abs(occt.BRepTools.UVBounds_s(f)[3]
+               - occt.BRepTools.UVBounds_s(f)[2]) < 1e-9]
+    assert flat, "expected a zero-height cylinder face on 72632"
+    assert all(occt._face_occluder(f) is None for f in flat)
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    assert occt.visible_segments(out, right, up, 512, cull=True, fwd=fwd).segs
+
+
 def test_faces_come_back_in_paint_order(ldraw_dir):
     out = occt.flatten_part("3005", ldraw_dir)
     right, up, fwd = hlr.view_basis(30.0, 45.0)
