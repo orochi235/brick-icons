@@ -237,6 +237,11 @@ export function CorpusWall({ client }: { client: LabClient }) {
       if (e.key !== '0' || !(e.metaKey || e.ctrlKey) || e.altKey) return;
       e.preventDefault();
       touched.current = false;
+      // Also the zoom level, not just the camera: leaving `camInitialized` set
+      // sends the refit through pickLevel's hysteresis, which holds whatever
+      // rung the last camera move reached. Clearing it takes the direct
+      // `levelFor` branch -- the same one the wall opens on.
+      camInitialized.current = false;
       fitToWall();
     };
     window.addEventListener('keydown', onKey);
