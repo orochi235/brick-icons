@@ -1,4 +1,40 @@
 import type { ConfigField } from '@weasel-js/labkit';
+import { STATES, kebabKey, paramKeys } from '@lab/corpus/states';
+
+type Spec = (typeof STATES)[number];
+
+/** The params a color row writes as a CSS custom property on `.lk-root`
+ *  instead of passing down as a prop -- see `useParams` and `palette.ts`'s
+ *  `PARAM_CSS_VAR`. One per color a state declares, so a borderless state
+ *  gets no border row; `caretColor` is chrome rather than a state. */
+export type ColorParamKey =
+  | `${Spec['key']}Fill`
+  | `${Extract<Spec, { border: string }>['key']}Border`
+  | 'caretColor';
+
+interface ColorRow {
+  key: ColorParamKey;
+  /** The state's own name, kebab-cased the way the CSS properties spell it. */
+  name: string;
+  kind: 'fill' | 'border';
+  color: string;
+}
+
+/** Every color param of every state, in legend order, fill before border. */
+function colorRows(): ColorRow[] {
+  return STATES.flatMap((spec) => {
+    const param = paramKeys(spec);
+    const name = kebabKey(spec.key);
+    const rows: ColorRow[] = [
+      { key: param.fill as ColorParamKey, name, kind: 'fill', color: spec.fill },
+    ];
+    if (param.border !== null && spec.border !== null) {
+      rows.push({ key: param.border as ColorParamKey, name, kind: 'border',
+                  color: spec.border });
+    }
+    return rows;
+  });
+}
 
 /** The wall's view parameters -- every tuning constant that governs layout,
  *  color or feel, and was a literal scattered across `CorpusWall.tsx`,
@@ -6,27 +42,11 @@ import type { ConfigField } from '@weasel-js/labkit';
  *  this schema existed. These are view parameters, not the CLI's render
  *  flags -- `lab/src/config/nodes.ts` is a different schema for a different
  *  world and this one never touches it. */
-export interface Params {
+interface FixedParams {
   cell: number;
   gap: number;
   /** 0 means auto: `ceil(sqrt(n))`. */
   cols: number;
-
-  unknownFill: string;
-  outOfScopeFill: string;
-  timeoutFill: string;
-  timeoutBorder: string;
-  failedFill: string;
-  failedBorder: string;
-  defectFill: string;
-  defectBorder: string;
-  acceptedFill: string;
-  acceptedBorder: string;
-  problemElsewhereFill: string;
-  problemElsewhereBorder: string;
-  defectElsewhereFill: string;
-  defectElsewhereBorder: string;
-  caretColor: string;
 
   showBadges: boolean;
   showCaptions: boolean;
@@ -43,6 +63,15 @@ export interface Params {
   pollMs: number;
 }
 
+/** The fixed fields stay a strict interface -- widening the whole shape to
+ *  admit generated color keys would cost `params.cell` its `number`. */
+export type Params = FixedParams & Record<ColorParamKey, string>;
+
+const COLOR_DEFAULTS = Object.fromEntries([
+  ...colorRows().map((row) => [row.key, row.color]),
+  ['caretColor', '#ffffff'],
+]) as Record<ColorParamKey, string>;
+
 /**
  * What every field above used to be hard-coded to. The single source of
  * truth: every literal this schema replaces now imports its default from
@@ -54,21 +83,7 @@ export const DEFAULT_PARAMS: Params = {
   gap: 4,
   cols: 0,
 
-  unknownFill: '#3a3a3f',
-  outOfScopeFill: '#b2a3dd',
-  timeoutFill: '#26383f',
-  timeoutBorder: '#30b0d0',
-  failedFill: '#4a2626',
-  failedBorder: '#e03030',
-  defectFill: '#453c27',
-  defectBorder: '#daa520',
-  acceptedFill: '#26382c',
-  acceptedBorder: '#6f9e78',
-  problemElsewhereFill: '#26383f',
-  problemElsewhereBorder: '#97bcc5',
-  defectElsewhereFill: '#453c27',
-  defectElsewhereBorder: '#c7b78f',
-  caretColor: '#ffffff',
+  ...COLOR_DEFAULTS,
 
   showBadges: true,
   showCaptions: true,
@@ -85,34 +100,15 @@ export const DEFAULT_PARAMS: Params = {
   pollMs: 10_000,
 };
 
-/** The params a color row writes as a CSS custom property on `.lk-root`
- *  instead of passing down as a prop -- see `useParams` and `palette.ts`'s
- *  `PARAM_CSS_VAR`. */
-export const COLOR_PARAM_KEYS = [
-  'unknownFill', 'outOfScopeFill', 'timeoutFill', 'timeoutBorder', 'failedFill', 'failedBorder',
-  'defectFill', 'defectBorder', 'acceptedFill', 'acceptedBorder', 'problemElsewhereFill', 'problemElsewhereBorder',
-  'defectElsewhereFill', 'defectElsewhereBorder', 'caretColor',
-] as const satisfies readonly (keyof Params)[];
+export const COLOR_PARAM_KEYS: readonly ColorParamKey[] =
+  [...colorRows().map((row) => row.key), 'caretColor'];
 
-export type ColorParamKey = (typeof COLOR_PARAM_KEYS)[number];
-
-const COLOR_LABEL: Record<ColorParamKey, string> = {
-  unknownFill: 'Unknown fill',
-  outOfScopeFill: 'Out-of-scope fill',
-  timeoutFill: 'Timeout fill',
-  timeoutBorder: 'Timeout border',
-  failedFill: 'Failed fill',
-  failedBorder: 'Failed border',
-  defectFill: 'Defect fill',
-  defectBorder: 'Defect border',
-  acceptedFill: 'Accepted fill',
-  acceptedBorder: 'Accepted border',
-  problemElsewhereFill: 'Problem-elsewhere fill',
-  problemElsewhereBorder: 'Problem-elsewhere border',
-  defectElsewhereFill: 'Defect-elsewhere fill',
-  defectElsewhereBorder: 'Defect-elsewhere border',
-  caretColor: 'Caret color',
-};
+const COLOR_LABEL = Object.fromEntries([
+  ...colorRows().map((row) => [
+    row.key, `${row.name.charAt(0).toUpperCase()}${row.name.slice(1)} ${row.kind}`,
+  ]),
+  ['caretColor', 'Caret color'],
+]) as Record<ColorParamKey, string>;
 
 /** The unit each numeric row shows after its value. A legacy `ConfigField`
  *  cannot carry one -- `ParamsPanel` resolves the fields and annotates them

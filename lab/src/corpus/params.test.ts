@@ -1,5 +1,8 @@
 import { expect, it } from 'vitest';
-import { ALL_PARAM_FIELDS, DEFAULT_PARAMS, type Params } from '@lab/corpus/params';
+import {
+  ALL_PARAM_FIELDS, APPEARANCE_FIELDS, COLOR_PARAM_KEYS, DEFAULT_PARAMS, type Params,
+} from '@lab/corpus/params';
+import { STATES, paramKeys } from '@lab/corpus/states';
 
 // The values every one of these fields replaced -- CELL/GAP in
 // CorpusWall.tsx, the six-state palette in palette.ts/corpus.css, the border
@@ -67,4 +70,45 @@ it('leaves no field without a default', () => {
   for (const f of ALL_PARAM_FIELDS) {
     expect(f.default).not.toBeUndefined();
   }
+});
+
+it('gives every color a state declares one param, and carries no orphans', () => {
+  const expected = [
+    ...STATES.flatMap((spec) => {
+      const param = paramKeys(spec);
+      return param.border === null ? [param.fill] : [param.fill, param.border];
+    }),
+    'caretColor',
+  ];
+  expect([...COLOR_PARAM_KEYS]).toEqual(expected);
+});
+
+it('defaults every state color to the table\'s own value', () => {
+  for (const spec of STATES) {
+    const param = paramKeys(spec);
+    expect(DEFAULT_PARAMS[param.fill as keyof Params]).toBe(spec.fill);
+    if (param.border !== null) {
+      expect(DEFAULT_PARAMS[param.border as keyof Params]).toBe(spec.border);
+    }
+  }
+});
+
+it('gives every color param a labelled row in the appearance panel', () => {
+  const rows = new Map(APPEARANCE_FIELDS.map((f) => [f.key, f.label]));
+  for (const key of COLOR_PARAM_KEYS) {
+    const label = rows.get(key);
+    expect(label, `no appearance row for ${key}`).toBeTruthy();
+    expect(label).not.toBe(key);
+  }
+});
+
+it('keeps the color row labels the panel already showed', () => {
+  const rows = new Map(APPEARANCE_FIELDS.map((f) => [f.key, f.label]));
+  expect(COLOR_PARAM_KEYS.map((key) => rows.get(key))).toEqual([
+    'Unknown fill', 'Out-of-scope fill', 'Timeout fill', 'Timeout border',
+    'Failed fill', 'Failed border', 'Defect fill', 'Defect border',
+    'Accepted fill', 'Accepted border', 'Problem-elsewhere fill',
+    'Problem-elsewhere border', 'Defect-elsewhere fill', 'Defect-elsewhere border',
+    'Caret color',
+  ]);
 });
