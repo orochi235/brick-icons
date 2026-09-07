@@ -20,6 +20,14 @@ is unpushed; `git status --porcelain` for whose work is in flight.
 **Nothing of the wall's is in flight.** Every change described below is
 committed. What is uncommitted in the tree belongs to other sessions.
 
+**The `naive` render store is gone on purpose** (`6078305`), at Mike's ask. All
+49 of its parts are drawn by census slots too, so it covered nothing on its
+own. It stays in `SOURCES` and `_CANONICAL`, so with no rows it just stops
+being listed. It is a committed deletion, not lost files:
+`git checkout 6078305^ -- renders/naive` restores all 49. A `git ls-tree HEAD`
+coming back empty is what a committed deletion looks like, not proof the files
+were never tracked -- that reading cost a peer a false alarm.
+
 ### What is not done
 
 - **The sticker fallback.** The census settled at 1,027 drawn / 1,152 failed on
