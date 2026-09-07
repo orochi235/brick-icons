@@ -82,6 +82,29 @@ rule will move it.
   are not sit at exact tangency. The lead is the occluder set: compare what
   `occt.build_shape` holds against `primitives`' occluders for this part.
 
+### The constant stroke width is the biggest remaining cause, and it is already filed
+
+Rendered at `--line-width 1 --silhouette-width 1` against the 2 the config
+ships, all shaded, all read against LDView:
+
+**`38317-left-stud-shading-is-very` is that and nothing else.** At 2 its two
+studs are solid black lozenges -- four `#000000` pockets out of seven fills in
+the SVG, the junction-lens inking filling what the strokes leave -- and the
+right one carries black bars across its wall. At 1 both are clean rings. It
+is not a shading fault; re-file it under `3832-doubled-stud-ellipses` /
+`65068-studs-drowned`, on occt.
+
+`96904`'s fat slot and `96910`'s heavy insets lighten at 1 and still sit
+wider than LDView's hairline, so they are that class plus something else.
+`39789`'s bracket arcs are unchanged at 1, which is the other half of the
+ray-test finding above: they are real geometry, not ink.
+
+**The class reaches both engines and every part small in its own frame**, and
+the filed measurement (3832) is naive-only and from before the switch. Fixing
+it means scaling the stroke to the drawing rather than pinning it at 2 output
+px -- which moves every render in the corpus, so it is Mike's call, not a
+session's.
+
 ### Every occt row, rendered at iso and read against LDView
 
 Confirmed, still open, worst first:
@@ -102,8 +125,9 @@ Confirmed, still open, worst first:
   itself is present and always was.
 
 Shaded-only, so `--shade-style flat3` is needed to judge them and an outline
-render says nothing: `35480-extra-elements-in-shaded-view`,
-`38317-left-stud-shading-is-very`, `96910-weird-dot-near-bottom-inset`.
+render says nothing. All three now rendered that way: `35480` is three
+hairline ticks on the top face under the left stud; `38317` and `96910` are
+the stroke-width class above.
 
 `11090-curved-lower-face-in-occt` and `11090-hand-at-top-is-missing` are
 `9fdfb72`'s alone (the sheared cross-section), pixel-identical under this fix
