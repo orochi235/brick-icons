@@ -37,7 +37,15 @@ def bake_source(conn, source: str, root: Path, out: Path,
             print(f"  {source} {i}/{total} {row['part_id']} MISSING {row['path']}",
                   flush=True)
             continue
-        made = thumbs.bake_part(row["part_id"], render, slot, sha=row["sha256"])
+        try:
+            made = thumbs.bake_part(row["part_id"], render, slot, sha=row["sha256"])
+        except Exception as e:  # noqa: BLE001
+            # An interrupted fleet fetch leaves zero-byte files behind. One
+            # unreadable render is a part to re-fetch, not a reason to abandon
+            # the twenty thousand after it in the slot.
+            print(f"  {source} {i}/{total} {row['part_id']} UNREADABLE "
+                  f"{type(e).__name__}: {e}", flush=True)
+            continue
         baked += bool(made)
         print(f"  {source} {i}/{total} {row['part_id']} "
               f"{'baked' if made else 'fresh'}", flush=True)

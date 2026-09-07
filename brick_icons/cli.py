@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -196,7 +197,8 @@ def render_tag(cfg: Config, name: str) -> str:
     return "  ".join(bits)
 
 
-def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
+def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
+                timeout: float | None = None) -> None:
     name = Path(part).stem if Path(part).suffix else part
     out_dir.mkdir(parents=True, exist_ok=True)
     label = render_tag(cfg, name) if cfg.part_label else None
@@ -205,7 +207,21 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
         # The reference, not a drawing of ours: LDView reads the same .dat and
         # honors each polygon's color code, so it says what a part is supposed
         # to look like. Raster only, and nothing below it applies.
-        render.render_part(cfg, part, out_dir / f"{name}.png")
+        #
+        # LDView's PNG lands in a temp dir, never in the slot. `db.rebuild`
+        # indexes a .png as readily as a .webp, and a fleet fetch lists the
+        # slot while this is running: a transient one there is recorded as the
+        # render, or vanishes between the lister's readdir and its stat.
+        with tempfile.TemporaryDirectory() as td:
+            png = render.render_part(cfg, part, Path(td) / f"{name}.png",
+                                     timeout=timeout)
+            # LDView writes 2048px PNGs at ~128 KB, and this slot is the
+            # corpus's single largest asset -- 1.5 GB over the library,
+            # against 0.35 GB as WebP at q90, which is indistinguishable at
+            # 1:1 on the stud embossing. It is read structurally, never
+            # pixelwise.
+            with Image.open(png) as im:
+                im.save(out_dir / f"{name}.webp", "WEBP", quality=90, method=4)
         return
 
     if cfg.shading == "outline" or cfg.wireframe:

@@ -53,10 +53,12 @@ def build_argv(cfg: Config, part_file: Path, out_png: Path) -> list[str]:
     return argv
 
 
-def render_part(cfg: Config, part: str, out_png: Path) -> Path:
+def render_part(cfg: Config, part: str, out_png: Path,
+                timeout: float | None = None) -> Path:
     part_file = resolve_part(cfg, part)
     out_png.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(build_argv(cfg, part_file, out_png), check=True, capture_output=True)
+    subprocess.run(build_argv(cfg, part_file, out_png), check=True,
+                   capture_output=True, timeout=timeout)
     if not out_png.exists():
         raise RuntimeError(f"LDView did not write {out_png}")
     return out_png
