@@ -521,11 +521,20 @@ export function badgeWidth(ctx: CanvasRenderingContext2D, badge: CellBadge,
   ctx.font = labelFont(badge, at.size);
   const w = ctx.measureText(at.label).width;
   ctx.restore();
-  return at.radius * 2 + LABEL_GAP * at.size + w + LABEL_PAD * at.size;
+  return at.radius + labelX(badge, at) - at.cx + w + LABEL_PAD * at.size;
 }
 
 const LABEL_GAP = 0.32;     // multiples of the type size, mark to word
 const LABEL_PAD = 0.55;     // and word to the end of the field
+
+/** Where the word starts. A badge with nothing in its disc -- a status like
+ *  `open` carries neither a mark nor a letter -- gets the field's own padding
+ *  instead of a mark's width of empty room before its first glyph. */
+function labelX(badge: CellBadge, at: BadgeAt): number {
+  const filled = badge.mark != null || badge.text != null;
+  return filled ? at.cx + at.radius + LABEL_GAP * at.size
+                : at.cx - at.radius + LABEL_PAD * at.size;
+}
 
 function labelFont(badge: CellBadge, size: number) {
   return `${badge.weight ?? BADGE_WEIGHT} ${size * 0.92}px ${BADGE_FACE}`;
@@ -634,7 +643,7 @@ function drawBadgeDirect(ctx: CanvasRenderingContext2D, badge: CellBadge,
     const y = Number.isFinite(asc) && Number.isFinite(desc)
       ? cy + (asc - desc) / 2 : cy;
     ctx.textBaseline = 'alphabetic';
-    ctx.fillText(at.label, cx + radius + LABEL_GAP * size, y);
+    ctx.fillText(at.label, labelX(badge, at), y);
   }
   ctx.restore();
 }
