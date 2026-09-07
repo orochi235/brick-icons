@@ -191,6 +191,13 @@ def main() -> int:
                     help="with --jsonl, skip parts already in that file")
     ap.add_argument("--timeout", type=float, default=0,
                     help="seconds a single part may take (0 = no limit)")
+    ap.add_argument("--no-isolate", dest="isolate", action="store_false",
+                    help="render in this process. --timeout then cannot stop a "
+                         "part that spends its life inside one OCP call, which "
+                         "is what the slow ones do")
+    ap.add_argument("--mem-gb", dest="mem_gb", type=float, default=8,
+                    help="resident GB a single render may reach before it is "
+                         "killed (0 = no limit)")
     ap.add_argument("--keep", metavar="DIR",
                     help="save every render and its camera under DIR/<engine>/, "
                          "so a finding can be looked at without re-rendering")
@@ -223,8 +230,9 @@ def main() -> int:
     if not ids:
         ap.error("name at least one part, or pass --list")
 
-    runner = Runner(args.jsonl, timeout=args.timeout, key="part",
-                    extra=extra) if args.jsonl else None
+    runner = Runner(args.jsonl, timeout=args.timeout, key="part", extra=extra,
+                    isolate=args.isolate,
+                    mem_gb=args.mem_gb) if args.jsonl else None
     if runner and args.skip_done:
         before = len(ids)
         ids = runner.remaining(ids)

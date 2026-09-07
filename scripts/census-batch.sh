@@ -15,13 +15,13 @@
 # part from another as ProcessDied, and their appends would interleave.
 #
 # HARD (default 240s) is a watchdog, not a second measurement cap. --timeout
-# arms signal.setitimer, whose handler runs only between bytecodes, so a part
-# inside one long OCCT call runs past it forever: one reached a 185.9 GB
-# footprint over 2h58m and nearly filled studio's boot disk. A pool sized from
-# free cores can have several workers inside such a part at once, so this
-# matters more here than it did for five fixed shards. Parts it kills are not
-# lost — this script buries the one named in .inflight as ProcessDied before it
-# exits, and a re-run steps over it.
+# now renders each part in a forked child and kills its process group, so a
+# part inside one long OCCT call is stopped where signal.setitimer alone never
+# reached it -- one had a 185.9 GB footprint over 2h58m and nearly filled
+# studio's boot disk. HARD is what is left for the pass itself wedging, and
+# for renders orphaned by a kill from outside this script. Parts it kills are
+# not lost: this script buries the one named in .inflight as ProcessDied
+# before it exits, and a re-run steps over it.
 set -eu
 cd "$(dirname "$0")/.."
 engine=${1:?engine}
@@ -31,6 +31,10 @@ batch=${4:?comma-separated part ids}
 KEEP=${KEEP:-out/census/renders}
 HARD=${HARD:-240}
 POLL=${POLL:-15}
+# Resident GB one render may reach. A healthy part on this corpus peaks under
+# 1 GB; the parts that wedge a node pass 4 GB inside a minute and keep going,
+# so this separates them without touching anything that works.
+MEM_GB=${MEM_GB:-4}
 EXTRA=${EXTRA:-}
 
 mkdir -p "$dir"
@@ -66,8 +70,8 @@ while :; do
     # onto passes it through --env as one variable.
     # shellcheck disable=SC2086
     .venv/bin/python scripts/compare-silhouette-truth.py "$@" \
-      --engine "$engine" --timeout "$timeout" --jsonl "$jsonl" --skip-done \
-      --keep "$KEEP" ${EXTRA:-}
+      --engine "$engine" --timeout "$timeout" --mem-gb "$MEM_GB" \
+      --jsonl "$jsonl" --skip-done --keep "$KEEP" ${EXTRA:-}
     echo $? > "$rc"
   } | awk '
       /^onto: plan / { print; fflush(); next }
@@ -96,32 +100,62 @@ while :; do
       echo 0
     fi
   }
+  # Every process this batch's renders run in. The pipeline's pid is grep's, so
+  # they are found by the jsonl path they were handed, which is unique to this
+  # batch. There is always more than one: the pass's python, the child it forks
+  # per part, and the grandchild occt._unify_survives forks inside that.
+  batch_pids() {
+    pgrep -f "compare-silhouette-truth.py .* --jsonl $jsonl " 2>/dev/null || true
+  }
+
   last_start=
   paused_at=0
+  idle_at=
   while kill -0 "$worker" 2>/dev/null; do
     sleep "$POLL"
-    [ -f "$inflight" ] || continue
-    started=$(stat -f %m "$inflight")
-    # A new part: note what the job had already spent stopped, so only time lost
-    # during *this* part is subtracted.
-    if [ "$started" != "$last_start" ]; then
-      last_start=$started
-      paused_at=$(paused_now)
+    now=$(date +%s)
+    if [ -f "$inflight" ]; then
+      idle_at=
+      started=$(stat -f %m "$inflight")
+      # A new part: note what the job had already spent stopped, so only time
+      # lost during *this* part is subtracted.
+      if [ "$started" != "$last_start" ]; then
+        last_start=$started
+        paused_at=$(paused_now)
+      fi
+      age=$(( now - started - ($(paused_now) - paused_at) ))
+      stuck=$(cat "$inflight" 2>/dev/null || echo "?")
+    else
+      # No part is claimed and renders for this batch are still alive: they were
+      # orphaned, and nothing will ever write their row or reap them. Skipping
+      # the check here — which is what `[ -f "$inflight" ] || continue` did — is
+      # how a node ends up carrying renders no watchdog is looking at. Between
+      # parts the same state lasts a second or two, so it gets the same grace as
+      # a stuck part rather than an instant kill.
+      if [ -z "$(batch_pids)" ]; then
+        idle_at=
+        continue
+      fi
+      [ -n "$idle_at" ] || idle_at=$now
+      age=$(( now - idle_at ))
+      stuck="an orphan; no part claimed"
     fi
-    age=$(( $(date +%s) - started - ($(paused_now) - paused_at) ))
     [ "$age" -lt "$HARD" ] && continue
-    # The pipeline's pid is grep's, so the python is found by the jsonl path it
-    # was handed, which is unique to this batch.
-    py=$(pgrep -f "compare-silhouette-truth.py .* --jsonl $jsonl " || true)
+    py=$(batch_pids)
     if [ -z "$py" ]; then
       # Never fall back to $worker. That is grep, and killing it returns 137
       # while the runaway keeps growing — the watchdog causing the failure it
       # exists to prevent, and onto would start another worker beside it.
-      echo "--- $first batch: $(cat "$inflight") stuck ${age}s but no worker matched; NOT killing ---" >&2
+      echo "--- $first batch: $stuck stuck ${age}s but no worker matched; NOT killing ---" >&2
       continue
     fi
-    echo "--- $first batch: $(cat "$inflight") stuck ${age}s > ${HARD}s, killing $py ---" >&2
-    kill -9 "$py" 2>/dev/null || true
+    echo "--- $first batch: $stuck stuck ${age}s > ${HARD}s, killing $py ---" >&2
+    # Unquoted, and this is the whole reason the watchdog had never once killed
+    # anything: pgrep returns one pid per line, and "$py" handed kill every pid
+    # as a single argument, which it rejects outright ("arguments must be
+    # process or job IDs") into the `|| true`.
+    # shellcheck disable=SC2086
+    kill -9 $py 2>/dev/null || true
     break
   done
 
