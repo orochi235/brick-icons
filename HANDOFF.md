@@ -19,8 +19,9 @@ for whose work is in flight.
 `lab/src/corpus/Lightbox.tsx` for a while tonight and is clean again as of
 `931b342` -- the point is the habit, not that one break.
 
-**Nothing of the wall's is in flight.** Every change described below is
-committed. What is uncommitted in the tree belongs to other sessions.
+**Nothing of mine is in flight.** Every change described below is committed
+and pushed. What is uncommitted in the tree belongs to other sessions --
+`tests/goldens/defects.toml` was theirs when this was written.
 
 **`corpus.db` and `out/thumbs` are rebuilt and current, and neither is in
 git.** They already hold the sticker renders and the ldview slot, so a fresh
@@ -69,7 +70,62 @@ instrumenting `occt._undeclared_ops` -- a byte-diff against a worktree does
 not work here, because the editable install beats `PYTHONPATH` and both sides
 run HEAD.)
 
+## The dashboard now says where the time goes and what it costs on disk
+
+Two things Mike asked for tonight, both landed and pushed. `git log --oneline
+@{u}..HEAD` for what is unpushed; the commits are `a11741a` (phases),
+`9f9282b` (footprint) and `2d25603`.
+
+**A phase records under the path of the phases open around it**, and a
+parent's time now INCLUDES its children -- `render/geometry/engine/hlr`. The
+nested-subtraction the old accumulator did is gone with it: a level's leftover
+is `parent - sum(children)`, worked out once when the tree is read. That is
+what lets a seam be added at any depth without redefining the band above it,
+which was the whole reason `geometry` had stayed one number.
+
+- Seams are `flatten`, `repair`, `arcfit`, `engine`, `cull` under geometry,
+  and `build_shape`, `hlr`, `loci`, `faces`, `face_polys` inside the engine.
+- **The OCP import is 0.783s, paid once per process** by whichever part a
+  worker draws first, and unnamed it read as that part's geometry -- 78% of
+  it on 3001. It is its own phase now. Read it as a per-batch constant, not a
+  per-part one.
+- **Legacy rows all sit directly under `render`**, including `decoration`.
+  It runs inside `geometry`, but the old accumulator subtracted nested time so
+  a legacy `geometry` does not contain it. Nesting it where it runs would read
+  that exclusive number as inclusive and take the same tenth off `render`'s
+  leftover twice. `stats.LEGACY_PATHS` is where that decision lives.
+- Storage did not move. Same `measurements.phases` JSON, keys gain slashes.
+
+**The tree is shallow until a census re-runs, and that is the open question.**
+Every row carrying a breakdown today predates this, so the wall draws `fill`
+and `geometry` as siblings and nothing under them. See the r6 section below.
+
+**The footprint section counts size on disk, as `du` does** -- the bakes are
+303 MB of bytes against 615 MB of blocks, because a 32px thumbnail is mostly
+block overhead, and two cells measured differently cannot be compared.
+Per-slot render sizes come from `renders.path` in the database rather than a
+directory walk, so they count exactly what the wall can reach and follow an
+ingest without any change. It is its own route with a five-minute memo:
+`/api/corpus/stats` re-polls every few seconds while a census is open and
+walking `out/` takes about seven.
+
+**The lab API has no `--reload`.** Anything server-side needs
+`pkill -f "brick_icons.lab --port 8792"` and a relaunch before you can see it.
+It is a background process, shared with the other sessions here, so say so
+when you bounce it.
+
 ### What is not done
+
+- **The r6 census will produce rows with no granular phases, and killing it is
+  Mike's call.** `brick-icons-1c` has a 12-hour occt re-census running on
+  studio at `4905d45`, which predates `a11741a`: 8,235 parts that will become
+  the newest rows per part and carry `render`/`geometry`/`fill` and nothing
+  below. 1c has said they will kill it, re-sync a worktree at the new HEAD and
+  relaunch the same 687 batches if asked, and has written the relaunch into
+  `HANDOFF-census-occt-r6.md` either way. **I argued for killing it and was
+  wrong to**: r6 answers which of the 405 TimeoutError and 238 ProcessDied
+  parts `b5b2694` and `c673dd3` actually fixed, and the instrumentation
+  answers nothing about that. Do not re-open it as though it were settled.
 
 - **A translucent slot, both engines.** No such source exists, and **Mike has
   not said which picture he means**: `--wireframe` (occlusion off, every hidden
