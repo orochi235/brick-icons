@@ -882,6 +882,10 @@ def cull_orphan_runs(segs, cap=None, tol=None, join_tol=0.75, protect=()):
         ends.append(None if full else (pts[0].copy(), pts[-1].copy()))
 
     real = [i for i in range(len(ops)) if lens[i] >= ghost_len]
+    # No real op is no graph, and the cull only ever removes -- 4221407f's
+    # whole visible set is two 0.22 LDU stubs at the ends of a 276 LDU plate.
+    if not real:
+        return segs
 
     # junction nodes: cluster coincident endpoints of real ops
     node_of = {}                       # (op, slot) -> node id

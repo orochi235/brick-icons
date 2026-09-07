@@ -1006,6 +1006,16 @@ def test_orphan_cull_protected_fold_spans_never_peel():
         == [outline, hook]
 
 
+def test_orphan_cull_survives_when_every_op_is_a_ghost():
+    # 4221407f: HLR's whole visible set for the sticker is two 0.22 LDU
+    # thickness stubs at opposite ends of a 276 LDU plate. Both are under
+    # the ghost length, so the graph has no real op to build on -- and the
+    # cull only ever removes, so with no graph there is nothing to remove.
+    stubs = [("line", -137.9413, -14.8006, -137.9413, -14.5841, "sil"),
+             ("line", 137.9413, 14.3676, 137.9413, 14.5841, "sil")]
+    assert hlr.cull_orphan_runs(list(stubs)) == stubs
+
+
 def test_refit_candidates_carry_measured_snap_tol():
     # fill boundaries are authored along the OLD separator curve; the fill
     # arc-candidate for the refit must carry a snap tolerance (8th element)
