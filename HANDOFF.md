@@ -1,5 +1,75 @@
 # Handoff — `main`: the corpus lab, and the OCCT engine
 
+## Defect sweep, 2026-09-07 midday: the borehole class closed, and where the rest stand
+
+`b350c40` closes "something occluded is drawn anyway" on occt. **HLR reads a
+face's orientation once the faces are connected in a shell and lets a
+back-facing one occlude nothing** -- and `build_shape`'s sewing leaves an LDraw
+part inward, so its own front faces stop hiding anything. 79306-f1 drew 3 LDU
+of its bore's limb straight across the end annulus that hides it; ray-traced,
+every point of that run is occluded, and the run stops exactly where the outer
+wall takes over. `hlr_edges` now hands HLR `_loose_faces(shape)`, the same
+faces in a compound. **Reversing the shell fixes 79306-f1 too, and so does an
+oriented solid; neither generalizes** -- both need a closed volume, which a
+cracked part is not.
+
+Closes `79306-f1-far-end-should-be-hidden`, `4913-hole-in-base-shows-through`
+and `14653-f1-left-hole-should-be-invisible`; takes the crossing arcs off
+96904's recess floor, the extra arc out of 11090's hand, one stray arc off
+53119's base ring, the scallops off 3062b's stud collar and the crescent
+sliver out of every one of 3894's Technic holes. Outline and shaded alike,
+each read against LDView.
+
+**Bounded on 137 sampled library parts: 44 move and not one for the worse.**
+42 of them lose strokes (321 SVG elements in all, 3894's holes and 610's
+drowned stud field the biggest); the 2 that gain one -- 44302a and 5091 --
+gain it where new occlusion splits a run in two. No errors, and no measured
+cost in time on either side. Job `01a6b72d`, task `hlr-shell-ab`, still
+grinding on 71986 (an 11L ribbed hose, slow on both sides) when this was
+written; the remaining 22 parts add nothing the first 137 have not said.
+
+`59443-a-strip-along-the-bottom` reorders its SVG under the fix and is pixel
+for pixel identical, so that row is untouched.
+
+**4070 is byte-identical under it and its verbal description is wrong.**
+LDView's "hexagonal recess" is `-AllowPrimitiveSubstitution` drawing the r=4
+`4-4cyli` at low curve quality; the innermost ring is a real circle, the
+`stud2a` collar's inner rim. What ours actually misses is the recess behind
+it -- nothing at all is drawn inside the collar bore where LDView shows wall.
+
+### Every occt row, rendered at iso and read against LDView
+
+Confirmed, still open, worst first:
+
+- `49492-occt-deletes-several-extruded-segments` -- **the crook is barely
+  drawn**: a thin malformed loop where LDView has a fat smooth hook. The part
+  is `t16o`/`t16i`/`t04o`/`t04i`/`t16q` and nothing else round;
+  `occt_faces` handles `edge`/`cyli`/`con`/`disc`/`ring` and no torus, so all
+  of it falls to tessellation. Same for `3484-occt-handle-missing-arcs-extra`
+  (its fork is drawn straight-sided, cavity gone) and
+  `35485-ring-is-broken`, both of which are `s\*s01` subfiles plus a `cyli`.
+  Analytic torus is the shared answer and it is a feature, not a fix.
+- `2310-crap-on-darkest-face-and` -- 2310 is a 45-degree INVERTED slope and we
+  draw no slope face at all: the outline runs left corner -> bottom corner and
+  then back up inside, a sliver where LDView has a wide lit plane. It is one
+  traced polyline, `M 121.02 22.56 ... L 168.11 164.00 L 87.89 105.86` in the
+  SVG, so the bad run is a declared edge HLR calls visible, not contour.
+- `39789-occt-has-issues-with-top` -- stray ticks around several studs.
+- `92692-joint-where-front-tube-meets` -- the tube/ring joints read as
+  separate capped cylinders.
+- `96904` keeps its slot drawn far fatter than LDView's hairline; the annulus
+  itself is present and always was.
+
+Shaded-only, so `--shade-style flat3` is needed to judge them and an outline
+render says nothing: `35480-extra-elements-in-shaded-view`,
+`38317-left-stud-shading-is-very`, `96910-weird-dot-near-bottom-inset`.
+
+`11090-curved-lower-face-in-occt` and `11090-hand-at-top-is-missing` are
+`9fdfb72`'s (the sheared cross-section) plus this fix; they look right now and
+belong to whoever filed that commit to close.
+
+`53119`'s two ticks on the dome survive. Its banding half closed overnight.
+
 ## 2026-09-07 late morning: coplanar paint order, and an A/B the census cannot run
 
 Merged to `main` (see `git log --oneline --first-parent -8`): the coplanar
