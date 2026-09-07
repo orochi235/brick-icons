@@ -287,6 +287,13 @@ def canonical_argv(part_id: str, source: str) -> list[str]:
     return [part_id, *_CANONICAL[source]]
 
 
+#: What the rebuild will index. A slot's artifact is whatever its renderer
+#: emits, and a format missing here is silently invisible: re-encoding the
+#: ldview slot to WebP dropped all 3,896 of its rows and took the slot out of
+#: the wall's picker, which reads `SELECT source, count(*) FROM renders`.
+RENDER_SUFFIXES = (".svg", ".png", ".webp")
+
+
 def record_render(conn: sqlite3.Connection, part_id: str, source: str,
                   path: Path | str, root: Path | str = ".",
                   run_id: int | None = None) -> str:
@@ -531,7 +538,7 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
              f"{', '.join(Path(d).name for d in census_dirs)}")
 
     for made in sorted(p for p in (root / "renders").rglob("*")
-                       if p.suffix in (".svg", ".png")):
+                       if p.suffix in RENDER_SUFFIXES):
         record_render(conn, made.stem, made.parent.name, made, root=root)
         counts["renders"] += 1
         progress(f"render {counts['renders']}: {made.parent.name}/{made.stem}")

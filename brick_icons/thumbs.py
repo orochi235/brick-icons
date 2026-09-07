@@ -97,6 +97,35 @@ def _write_baked(out: Path, shas: dict[str, str]) -> None:
     _write_json(out / BAKED, shas)
 
 
+def _drawn(part_id: str, render: Path, out: Path) -> Image.Image:
+    """The render at `LOOSE_LEVEL` wide, as RGBA.
+
+    A vector slot goes through resvg -- the project's antialias reference, the
+    same rasterizer the census, the contact sheet and the differ use. It has no
+    letterbox flag (`-w`, `-h`, `-z` only) and passing both -w and -h stretches
+    a 256x170 render, so it is asked for a width and squared by `_square`.
+
+    A raster slot has no SVG to rasterize; ldview writes WebP. Feeding one to
+    resvg fails with "provided data has not an UTF-8 encoding", which reads
+    like a corrupt file rather than the wrong kind of one.
+    """
+    if render.suffix.lower() != ".svg":
+        with Image.open(render) as img:
+            return img.convert("RGBA")
+    wide = out / f".{part_id}.wide.png"
+    proc = subprocess.run(
+        ["resvg", "--width", str(LOOSE_LEVEL), str(render), str(wide)],
+        capture_output=True, text=True)
+    if proc.returncode != 0 or not wide.is_file():
+        raise RuntimeError(f"resvg failed on {part_id}: "
+                           f"{(proc.stderr or proc.stdout).strip()[:200]}")
+    try:
+        with Image.open(wide) as img:
+            return img.convert("RGBA")
+    finally:
+        wide.unlink(missing_ok=True)
+
+
 def bake_part(part_id: str, svg: Path | str, out: Path | str,
               sha: str) -> list[int]:
     """Rasterize one part at every level. Returns the levels written.
@@ -108,27 +137,12 @@ def bake_part(part_id: str, svg: Path | str, out: Path | str,
     shas = baked_shas(out)
     if shas.get(part_id) == sha:
         return []
-    # resvg is the project's antialias reference -- the same rasterizer the
-    # census, the contact sheet and the differ use. It has no letterbox flag
-    # (`-w`, `-h`, `-z` only) and passing both -w and -h stretches a 256x170
-    # render, so it is asked for a width and squared here.
     out.mkdir(parents=True, exist_ok=True)
-    wide = out / f".{part_id}.wide.png"
-    proc = subprocess.run(
-        ["resvg", "--width", str(LOOSE_LEVEL), str(svg), str(wide)],
-        capture_output=True, text=True)
-    if proc.returncode != 0 or not wide.is_file():
-        raise RuntimeError(f"resvg failed on {part_id}: "
-                           f"{(proc.stderr or proc.stdout).strip()[:200]}")
-    try:
-        with Image.open(wide) as img:
-            drawn = img.convert("RGBA")
-        for level in LEVELS:
-            path = out / str(level) / f"{part_id}.png"
-            path.parent.mkdir(parents=True, exist_ok=True)
-            _square(drawn, level).save(path)
-    finally:
-        wide.unlink(missing_ok=True)
+    drawn = _drawn(part_id, Path(svg), out)
+    for level in LEVELS:
+        path = out / str(level) / f"{part_id}.png"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        _square(drawn, level).save(path)
     _write_baked(out, {**shas, part_id: sha})
     return list(LEVELS)
 

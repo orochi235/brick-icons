@@ -106,6 +106,20 @@ def test_a_baked_cell_carries_ink_and_no_ground(tmp_path):
         assert rgba.getpixel((64, 64))[3] == 255    # ink is not
 
 
+def test_it_bakes_a_raster_slot_without_going_near_resvg(tmp_path):
+    # ldview writes WebP, and resvg reads SVG only -- it fails on a raster with
+    # "provided data has not an UTF-8 encoding", which reads like a corrupt
+    # file rather than the wrong kind of one.
+    src = tmp_path / "3001.webp"
+    Image.new("RGBA", (256, 170), (0, 0, 0, 255)).save(src, "WEBP")
+    out = tmp_path / "thumbs"
+    assert sorted(thumbs.bake_part("3001", src, out, sha="abc123")) == [8, 32, 128]
+    with Image.open(out / "128" / "3001.png") as img:
+        assert img.size == (128, 128)
+        assert img.convert("RGBA").getpixel((2, 2))[3] == 0     # letterboxed
+        assert img.convert("RGBA").getpixel((64, 64))[3] == 255  # ink
+
+
 def test_it_skips_a_part_whose_sha_is_unchanged(tmp_path):
     svg = tmp_path / "3001.svg"
     svg.write_text(SVG)

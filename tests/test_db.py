@@ -629,3 +629,14 @@ def test_a_raster_slot_keeps_its_own_extension_and_its_bytes(tmp_path):
     row = conn.execute("SELECT path, width, height FROM renders").fetchone()
     assert row["path"] == "renders/ldview/3001.png"
     assert row["width"] is None and row["height"] is None
+
+
+def test_the_rebuild_indexes_every_render_format_it_declares():
+    """A format missing from `RENDER_SUFFIXES` is silently invisible.
+
+    Re-encoding the ldview slot to WebP dropped all 3,896 of its rows on the
+    next rebuild and took the slot out of the wall's picker, which lists
+    whatever `renders` has rows for.
+    """
+    assert ".webp" in db.RENDER_SUFFIXES
+    assert set(db.RENDER_SUFFIXES) >= {".svg", ".png", ".webp"}
