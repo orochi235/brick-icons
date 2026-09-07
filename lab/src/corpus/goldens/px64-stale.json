@@ -1,0 +1,220 @@
+[
+  {
+    "kind": "fill",
+    "dx": 0,
+    "dy": 0,
+    "dw": 64,
+    "dh": 64,
+    "fill": "#3a3a3f",
+    "border": null,
+    "borderWidth": 0,
+    "shape": "square",
+    "captions": [],
+    "slash": false
+  },
+  {
+    "kind": "fill",
+    "dx": 68,
+    "dy": 0,
+    "dw": 64,
+    "dh": 64,
+    "fill": "#b2a3dd",
+    "border": null,
+    "borderWidth": 0,
+    "shape": "circle",
+    "mark": "sticker",
+    "slash": false
+  },
+  {
+    "kind": "fill",
+    "dx": 136,
+    "dy": 0,
+    "dw": 64,
+    "dh": 64,
+    "fill": "#26383f",
+    "border": "#30b0d0",
+    "borderWidth": 6,
+    "shape": "square",
+    "captions": [],
+    "slash": true
+  },
+  {
+    "kind": "fill",
+    "dx": 204,
+    "dy": 0,
+    "dw": 64,
+    "dh": 64,
+    "fill": "#4a2626",
+    "border": "#e03030",
+    "borderWidth": 6,
+    "shape": "square",
+    "captions": [],
+    "slash": true
+  },
+  {
+    "kind": "fill",
+    "dx": 0,
+    "dy": 68,
+    "dw": 64,
+    "dh": 64,
+    "fill": "#453c27",
+    "border": "#daa520",
+    "borderWidth": 6,
+    "shape": "square",
+    "captions": [],
+    "slash": true
+  },
+  {
+    "kind": "sprite",
+    "dx": 68,
+    "dy": 68,
+    "dw": 64,
+    "dh": 64,
+    "sx": 38,
+    "sy": 38,
+    "sw": 32,
+    "sh": 32,
+    "ground": "#6f9e78",
+    "badges": [],
+    "strip": [],
+    "captions": []
+  },
+  {
+    "kind": "sprite",
+    "dx": 136,
+    "dy": 68,
+    "dw": 64,
+    "dh": 64,
+    "sx": 74,
+    "sy": 38,
+    "sw": 32,
+    "sh": 32,
+    "ground": "#97bcc5",
+    "badges": [],
+    "strip": [],
+    "captions": []
+  },
+  {
+    "kind": "sprite",
+    "dx": 204,
+    "dy": 68,
+    "dw": 64,
+    "dh": 64,
+    "sx": 110,
+    "sy": 38,
+    "sw": 32,
+    "sh": 32,
+    "ground": "#c7b78f",
+    "badges": [],
+    "strip": [],
+    "captions": []
+  },
+  {
+    "kind": "sprite",
+    "dx": 0,
+    "dy": 136,
+    "dw": 64,
+    "dh": 64,
+    "sx": 2,
+    "sy": 74,
+    "sw": 32,
+    "sh": 32,
+    "ground": "#ffffff",
+    "badges": [
+      {
+        "tag": "retired",
+        "mark": "archive",
+        "corner": "tr",
+        "field": "#6b6b72",
+        "ink": "#ffffff"
+      }
+    ],
+    "strip": [],
+    "captions": [],
+    "wash": 0.5
+  },
+  {
+    "kind": "sprite",
+    "dx": 68,
+    "dy": 136,
+    "dw": 64,
+    "dh": 64,
+    "sx": 38,
+    "sy": 74,
+    "sw": 32,
+    "sh": 32,
+    "ground": "#ffffff",
+    "badges": [
+      {
+        "tag": "popular",
+        "mark": "star",
+        "corner": "tl",
+        "field": "#ff7a00",
+        "ink": "#ffffff"
+      }
+    ],
+    "strip": [
+      {
+        "tag": "technic",
+        "mark": "technic",
+        "field": "#1b2a5e",
+        "ink": "#ffffff"
+      }
+    ],
+    "captions": []
+  },
+  {
+    "kind": "sprite",
+    "dx": 136,
+    "dy": 136,
+    "dw": 64,
+    "dh": 64,
+    "sx": 74,
+    "sy": 74,
+    "sw": 32,
+    "sh": 32,
+    "ground": "#ffffff",
+    "badges": [
+      {
+        "tag": "replaced",
+        "mark": "redo",
+        "corner": "tr",
+        "field": "#2f7d4f",
+        "ink": "#ffffff",
+        "accent": "#ffffff",
+        "scale": 1.14
+      }
+    ],
+    "strip": [],
+    "captions": [],
+    "wash": 0.5
+  },
+  {
+    "kind": "fill",
+    "dx": 204,
+    "dy": 136,
+    "dw": 64,
+    "dh": 64,
+    "fill": "#3a3a3f",
+    "border": null,
+    "borderWidth": 0,
+    "shape": "square",
+    "captions": [],
+    "slash": false
+  },
+  {
+    "kind": "sprite",
+    "dx": 0,
+    "dy": 204,
+    "dw": 64,
+    "dh": 64,
+    "sx": 2,
+    "sy": 110,
+    "sw": 32,
+    "sh": 32,
+    "ground": "#ffffff",
+    "badges": [],
+    "strip": [],
+    "captions": []
+  }
+]
