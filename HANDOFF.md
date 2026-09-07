@@ -1371,3 +1371,59 @@ No defects filed.
   an alphabetical prefix containing no classic brick, plate or tile. Ask what
   a gate would MISS before trusting it.
 - LDView color is not evidence; a proof sheet is not the renderer.
+
+## 2026-09-06 evening: the geometry phase, and what is still unmeasured
+
+Three commits of mine are on `main`, unpushed with everyone else's:
+
+- `9493b33` prefilters the two all-pairs scans in the geometry phase.
+  `shade.order_faces` tested every face pair and recomputed each polygon's
+  extent inside the test; `occt.select_authored` tested every HLR fragment
+  against every locus; `_overlap_witness`'s erosion allocated four padded
+  copies per pass. Gated BYTE-IDENTICAL over 120 occt parts and 25 naive parts.
+- `454cd51` stops `census-render-diff.sh` running over a dirty `brick_icons/` —
+  it swaps files with `git checkout` and had been overwriting whatever another
+  session had uncommitted in this shared checkout.
+- `2613aeb` adds `measurements.phases` (JSON, SCHEMA_VERSION 6) and a
+  `brick_icons.timing` accumulator splitting a render into geometry /
+  decoration / fill, exclusive of each other. The census's own `phase` dict was
+  already in every JSONL row and being dropped at ingest, so a rebuild
+  backfills render/rasterize/truth_mask/compare for both finished runs.
+
+**The performance numbers are not settled, and I have published two that
+moved.** What is load- and config-independent, and safe: the byte-identity
+gates, and the call counts — 1,253,615 of 10039's 1,279,200 face pairs rejected
+at 8.9us each, and 663,145 `_on_locus` calls on 32531b for 279 matches.
+
+The ratios need care, and the trap caught me twice:
+
+1. A *sequential* gate (new revision, then old) measures two revisions and two
+   machine states. Mine read 0.90x on a change that alternating passes put
+   above 4x. Alternate the sides, min of two.
+2. `hlr.visible_segments`'s **default `render_px` is 900; the census renders at
+   2048**. A harness that calls it directly measures a render nobody performs.
+   Measure through `cli.process_one` with the census's own argv.
+
+Measured through `process_one`, alternating, min of two, on 8 parts from the
+census's slow bands (`docs/census-timings/geometry-ab-census-config.log`):
+geometry 75.77s -> 15.28s (**4.96x**), whole render 191.63s -> 125.16s
+(**1.53x**), geometry falling from 40% of a render to 12%.
+
+**Unexplained, and the reason none of this is a headline yet:** the same
+comparison over `census-engine-bench.py`'s own 14-part sample gives 1.08x, and
+0901 — in both sets, both harnesses through `process_one`, both min-of-two —
+reads 3.25s of base geometry in one and 0.95s in the other. Until that is
+explained, one of the two samples is measuring something I do not understand.
+Start there before quoting either number.
+
+Next, in order:
+
+- Resolve the 0901 disagreement above.
+- The dashboard wants the stacked phase chart. `scripts/census-plot-phases.py`
+  builds it today as a matplotlib PNG from a 32-part probe file; with `phases`
+  in the DB it should read live rows instead. That is the open request.
+- What is left in `order_faces` is the pairs that genuinely overlap — 25,585 on
+  10039 at ~350us each, rasterizing two 48x48 polygons per pair. Cutting it
+  means changing which point inside the overlap is the witness, which is not
+  byte-safe by construction: a different point can flip a near-tie depth
+  comparison and change paint order. Golden re-baseline, not a byte gate.
