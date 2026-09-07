@@ -466,7 +466,10 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
                          currentTarget: HTMLCanvasElement }) => {
     const [sx, sy] = clientToCanvas(e.currentTarget, e.clientX, e.clientY);
     const visible = visibleRange(rects, cam, { width, height });
-    const cmds = paintCommands({ cells, rects, visible, cam, manifest, palette });
+    // `appearance` and not the default: with badges switched off the command
+    // carries none, and a click must not find one the wall never drew.
+    const cmds = paintCommands({ cells, rects, visible, cam, manifest, palette,
+                                 appearance });
     for (let i = cmds.length - 1; i >= 0; i--) {
       const c = cmds[i]!;
       if (c.kind === 'label') continue;

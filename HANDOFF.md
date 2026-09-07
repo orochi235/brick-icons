@@ -102,22 +102,29 @@ paths, never `git add -A`; their uncommitted work in `paint.ts`, `Wall.tsx`,
 and `wall-census-naive.png` sit *staged* in the shared index and are someone
 else's -- keep them out of your commits.
 
-## In flight: the naive retry pass, and two slots that do not exist yet
+## Finished, badly: the naive retry passes, and two slots that do not exist yet
 
-**`census-white-naive-r3` is running on msb-uai** (job `3aba42c8`, 1,800 parts
-in 150 batches, 6 workers, 300s cap, 12h deadline, fresh directory
-`out/census-white/r3`). `onto fetch --stream --every 10m census-white-naive-r3`
-is collecting into `out/census-white-naive/r3`. It is the `fails` bucket from
-`census-coverage.py --facet white`, re-run at an engine that is 4-22x faster on
-the geometry phase; the first parts are landing at 13-120s where they hit the
-300s cap before, with no timeouts yet. Run a round through the `census-round`
-skill, which holds the traps.
+**Both naive retry passes are over and neither is worth re-reading.**
+`census-white-naive-r3` was cancelled and pruned; `-r4` timed out after 2h12m
+of CPU with its batch counter still at `0/134` -- every logged item reads
+`FAILED TimeoutError: exceeded 300.0s`. msb-uai is idle, carrying one stale
+record (`475fecdf`, "the supervisor is gone and wrote no result") from a pass
+that was scoring stickers at a false `missing 0px / extra 0px`. Both passes
+ran naive, against the occt-only decision at the top of this file.
 
-**occt's 698 remaining parts have no node.** studio is running another
-session's `census-sticker-naive-studio`, and a working tree takes one job at a
-time. keiei has 6 of 24G free against ~2.3G per worker. That bucket is the one
-that proves `00f4e32` at scale: 149 of its rows are ProcessDied, and 57 of
-those are the segfault that commit now survives.
+studio's `census-white-occt-r3` reached 19 of 59 batches and is also gone. Run
+the next round through the `census-round` skill, which holds the traps.
+
+**Do not quote a ProcessDied count from any run before `18310b7`.** The
+watchdog that produced those rows had never killed anything -- `pgrep` returns
+one pid per line and `kill -9 "$py"` handed kill every pid as a single
+argument, which it rejects outright into the `|| true`. So the runaways were
+never stopped, the node ran out of swap, and macOS killed whatever it could
+reach: a `ProcessDied` row names whichever part happened to be holding
+`.inflight`, not the part at fault. That includes the claim this section used
+to make -- that 149 of occt's remaining 698 rows are ProcessDied and 57 of
+those are the segfault `00f4e32` survives. **The 57 has to be re-derived from
+a post-`18310b7` run before it means anything.**
 
 **Two slots Mike asked for, neither built:**
 
