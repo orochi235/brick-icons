@@ -1,16 +1,12 @@
 import { DEFAULT_PARAMS, type ColorParamKey } from '@lab/corpus/params';
+import {
+  STATES, cssVarTable, labelTable, paramKeys, stateKeys, styleTable,
+  type CellStyle, type StateKey,
+} from '@lab/corpus/states';
 
-export type CellState =
-  'unknown' | 'outOfScope' | 'timeout' | 'failed' | 'defect' | 'accepted'
-  | 'problemElsewhere' | 'defectElsewhere';
+export type { CellStyle } from '@lab/corpus/states';
 
-export interface CellStyle {
-  fill: string;
-  /** null means the state gets no border at all -- the unknown field color
-   *  recedes rather than competing with everything drawn on top of it. */
-  border: string | null;
-  weight: 'thick' | 'thin' | null;
-}
+export type CellState = StateKey;
 
 /** The cell-state fills, plus the chrome the wall draws over them -- the
  *  caret and the band headers are not cell states, so none of them appears
@@ -26,35 +22,7 @@ export type Palette = Record<CellState, CellStyle> & {
   unmatched: CellStyle;
 };
 
-// Lightness is reserved for "has been rendered" -- a rendered thumbnail is
-// the brightest thing on the wall, so a problem fill has to stay dark enough
-// to sit in the gray field. The border carries the state instead, brighter
-// and more saturated than the fill it sits on. Tuned by eye over two rounds;
-// none of the six values coincides with a `--wzl-*` token, so they stay
-// literal rather than drifting to a close-but-different one. The literals
-// themselves live in `params.ts`'s `DEFAULT_PARAMS`, the wall's own params
-// panel being the other reader of them.
-const CELL_PALETTE: Record<CellState, CellStyle> = {
-  unknown: { fill: DEFAULT_PARAMS.unknownFill, border: null, weight: null },
-  // Borderless like `unknown`, and light where every other state is dark:
-  // the cell is drawn as a small circle, so it is a mark rather than a field
-  // and cannot be mistaken for a rendered thumbnail.
-  outOfScope: { fill: DEFAULT_PARAMS.outOfScopeFill, border: null, weight: null },
-  timeout: { fill: DEFAULT_PARAMS.timeoutFill, border: DEFAULT_PARAMS.timeoutBorder,
-             weight: 'thick' },
-  failed: { fill: DEFAULT_PARAMS.failedFill, border: DEFAULT_PARAMS.failedBorder,
-            weight: 'thick' },
-  defect: { fill: DEFAULT_PARAMS.defectFill, border: DEFAULT_PARAMS.defectBorder,
-            weight: 'thick' },
-  // Thin, because nothing here needs doing: the fault is known and the
-  // decision was to keep it.
-  accepted: { fill: DEFAULT_PARAMS.acceptedFill, border: DEFAULT_PARAMS.acceptedBorder,
-              weight: 'thin' },
-  problemElsewhere: { fill: DEFAULT_PARAMS.problemElsewhereFill,
-                       border: DEFAULT_PARAMS.problemElsewhereBorder, weight: 'thin' },
-  defectElsewhere: { fill: DEFAULT_PARAMS.defectElsewhereFill,
-                      border: DEFAULT_PARAMS.defectElsewhereBorder, weight: 'thin' },
-};
+const CELL_PALETTE: Record<CellState, CellStyle> = styleTable();
 
 const CARET_PROPERTY = '--corpus-caret-color';
 const LABEL_PROPERTY = '--corpus-label';
@@ -69,57 +37,29 @@ export const DEFAULT_PALETTE: Palette = {
   unmatched: { fill: '#2a2a2e', border: null, weight: null },
 };
 
-const PROPERTY: Record<CellState, { fill: string; border: string | null }> = {
-  unknown: { fill: '--corpus-cell-unknown-fill', border: null },
-  outOfScope: { fill: '--corpus-cell-out-of-scope-fill', border: null },
-  timeout: { fill: '--corpus-cell-timeout-fill', border: '--corpus-cell-timeout-border' },
-  failed: { fill: '--corpus-cell-failed-fill', border: '--corpus-cell-failed-border' },
-  defect: { fill: '--corpus-cell-defect-fill', border: '--corpus-cell-defect-border' },
-  accepted: { fill: '--corpus-cell-accepted-fill',
-              border: '--corpus-cell-accepted-border' },
-  problemElsewhere: { fill: '--corpus-cell-problem-elsewhere-fill',
-                       border: '--corpus-cell-problem-elsewhere-border' },
-  defectElsewhere: { fill: '--corpus-cell-defect-elsewhere-fill',
-                      border: '--corpus-cell-defect-elsewhere-border' },
-};
+const PROPERTY: Record<CellState, { fill: string; border: string | null }> = cssVarTable();
 
 /** Where a params panel's color row writes each color param -- the same CSS
  *  custom properties `readPalette` reads, keyed the way `Params` names them
  *  rather than by state, so `useParams` can iterate `COLOR_PARAM_KEYS`
  *  without a state/fill-or-border switch of its own. */
 export const PARAM_CSS_VAR: Record<ColorParamKey, string> = {
-  unknownFill: PROPERTY.unknown.fill,
-  outOfScopeFill: PROPERTY.outOfScope.fill,
-  timeoutFill: PROPERTY.timeout.fill,
-  timeoutBorder: PROPERTY.timeout.border as string,
-  failedFill: PROPERTY.failed.fill,
-  failedBorder: PROPERTY.failed.border as string,
-  defectFill: PROPERTY.defect.fill,
-  defectBorder: PROPERTY.defect.border as string,
-  acceptedFill: PROPERTY.accepted.fill,
-  acceptedBorder: PROPERTY.accepted.border as string,
-  problemElsewhereFill: PROPERTY.problemElsewhere.fill,
-  problemElsewhereBorder: PROPERTY.problemElsewhere.border as string,
-  defectElsewhereFill: PROPERTY.defectElsewhere.fill,
-  defectElsewhereBorder: PROPERTY.defectElsewhere.border as string,
+  ...Object.fromEntries(STATES.flatMap((state) => {
+    const param = paramKeys(state);
+    const prop = PROPERTY[state.key];
+    const rows: [string, string][] = [[param.fill, prop.fill]];
+    if (param.border !== null && prop.border !== null) rows.push([param.border, prop.border]);
+    return rows;
+  })),
   caretColor: CARET_PROPERTY,
-};
+} as Record<ColorParamKey, string>;
 
-/** Iteration order for every table keyed by state -- out of scope, then
- *  worst-here-first and worst-elsewhere, matching `cellState`'s precedence. */
-export const CELL_STATES = Object.keys(CELL_PALETTE) as CellState[];
+/** Legend order, which is not match order -- see `states.ts`. Every table
+ *  keyed by state iterates this. */
+export const CELL_STATES: CellState[] = stateKeys();
 
 /** What each state is called on the legend. */
-export const STATE_LABEL: Record<CellState, string> = {
-  unknown: 'unknown',
-  outOfScope: 'currently out of scope',
-  timeout: 'timed out',
-  failed: 'render error',
-  defect: 'open defect',
-  accepted: 'known issue, not fixing',
-  problemElsewhere: 'problem in another slot',
-  defectElsewhere: 'defect in another slot',
-};
+export const STATE_LABEL: Record<CellState, string> = labelTable();
 
 function readVar(styles: CSSStyleDeclaration, prop: string, fallback: string): string {
   const value = styles.getPropertyValue(prop).trim();
