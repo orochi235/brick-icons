@@ -960,7 +960,7 @@ def _donate_escaped_spurs(merged, order, strokes, sil, line_px, sil_px):
         # window a big geometry down to the work area; snap the cut back
         # onto the precision grid (off-grid booleans: see geom2d.opened)
         x0, y0, x1, y1 = bounds
-        c = _sh.clip_by_rect(g, x0 - pad, y0 - pad, x1 + pad, y1 + pad)
+        c = geom2d.window(g, x0 - pad, y0 - pad, x1 + pad, y1 + pad)
         return _sh.set_precision(c, geom2d.GRID)
 
     # a donation can surface the NEXT seam: the pocket handed from the wall
@@ -1088,7 +1088,7 @@ def _ink_lens_pockets(base, vis, strokes, sil, line_px, sil_px):
         if not geom2d.opened(p, 0.5 * line_px).is_empty:
             continue
         x0, y0, x1, y1 = p.bounds
-        inkp = _sh.clip_by_rect(ink, x0 - 1, y0 - 1, x1 + 1, y1 + 1)
+        inkp = geom2d.window(ink, x0 - 1, y0 - 1, x1 + 1, y1 + 1)
         exposed = p.boundary.difference(inkp.buffer(0.1))
         if exposed.length > 0.1 * p.boundary.length:
             continue
@@ -1561,7 +1561,7 @@ def silhouette_spur_trim(faces, ellipses, sil_px, strokes=None):
         ex, ey = abs(e[2]) + abs(e[4]), abs(e[3]) + abs(e[5])
         x0, y0 = c[0] - ex - 3 * sil_px, c[1] - ey - 3 * sil_px
         x1, y1 = c[0] + ex + 3 * sil_px, c[1] + ey + 3 * sil_px
-        w = _sh.clip_by_rect(sil, x0, y0, x1, y1)
+        w = geom2d.window(sil, x0, y0, x1, y1)
         if w.is_empty:
             continue
         disk = _Poly(np.stack([c[0] + np.cos(ts) * e[2] + np.sin(ts) * e[4],
@@ -1607,8 +1607,8 @@ def silhouette_spur_trim(faces, ellipses, sil_px, strokes=None):
                 # ending mid-sliver) leaves them poking past a bare outline.
                 base_line = disk.boundary.intersection(pb)
                 gx0, gy0, gx1, gy1 = pb.bounds
-                near = _sh.clip_by_rect(dmls, gx0 - 2, gy0 - 2,
-                                        gx1 + 2, gy1 + 2)
+                near = geom2d.window(dmls, gx0 - 2, gy0 - 2,
+                                     gx1 + 2, gy1 + 2)
                 bare = base_line.difference(near.buffer(0.6))
                 if bare.length > max(0.3, 0.1 * base_line.length):
                     continue                 # bare base: stubs become barbs
