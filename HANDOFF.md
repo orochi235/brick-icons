@@ -2011,8 +2011,12 @@ chains. On 28621, 128 of its edges were shared between two "strips" and
 carried no condline; there are exactly 128 quads. `flatten` now stamps both
 halves of a quad with its id and the refiner joins them: 28621's shoulder
 goes from 32 patches of 8 facets to 2 of 128, 3960's dish from 72 of 14 to
-424 + 384. The swirl of overlapping tone fragments is gone, and 4592 draws a
-round silhouette while keeping its radial dome gradient.
+424 + 384.
+
+Two parts of four are now right. 28621's swirl of overlapping tone fragments
+is gone; 4592 draws a round silhouette while keeping its radial dome
+gradient; 32062 comes out byte-identical to an unrefined render, which is
+what the gate is for. **3960 is worse** — see below.
 
 Two conditions gate refinement, both asking only what the library declared. A
 patch is refined when it **surrounds a vertex** — one whose every incident
@@ -2028,9 +2032,17 @@ part of one leaves the rest on its chords and cuts it in two for the fill
 merge. Over `parts.txt` the surrounded-vertex gate refines every triangle the
 count gate did and more (60474 2428 → 2672, 3960 736 → 808), and 32062 none.
 
-**What is left before this can merge:** a contact sheet over `parts.txt`
-against `bf4ae83`, then the full suite. Four parts have been looked at
-(28621, 4592, 3960, 32062); nothing else is known to be blocking.
+**The blocker is now 3960.** Refined, its dish carries four un-inked dark
+wedges and a spike floating on the dome, a faint hexagonal ghost around the
+stud, and a sawtooth dark band along the far rim — the band this repo has
+fixed once already, so refinement is re-triggering a known HLR failure
+rather than a new one. Unrefined it is clean. 808 of its 1032 triangles
+refine, into 7272; that is the largest patch pair in the corpus so far, so
+whatever the far rim does at 1032 it does much harder at 7272. Start there,
+not at the gate: the gate is the reason 32062 and the rest are safe.
+
+After that: a contact sheet over `parts.txt` against `bf4ae83`, then the full
+suite. Four parts have been looked at (28621, 4592, 3960, 32062).
 
 ⚠️ `occt.flatten_part` does its own flatten and does NOT refine, so any test
 comparing it against `hlr.visible_segments` compares an unrefined mesh
