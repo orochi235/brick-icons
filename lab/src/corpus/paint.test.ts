@@ -255,6 +255,14 @@ it('calls a sticker out of scope, not broken, whatever else it carries', () => {
     .toBe('outOfScope');
 });
 
+it('resolves a cell carrying several states through the table\'s own order', () => {
+  const loaded = { out_of_scope: true, open_defects: 1, error: 'TimeoutError' };
+  expect(cellState(cell('a', 0, null, loaded))).toBe('outOfScope');
+  expect(cellState(cell('b', 1, null, { ...loaded, out_of_scope: false }))).toBe('defect');
+  expect(cellState(cell('c', 2, null, { ...loaded, out_of_scope: false, open_defects: 0 })))
+    .toBe('timeout');
+});
+
 it('tallies each cell into its own state, and nowhere else', () => {
   const cells: Cell[] = [
     cell('a', 0, null, { open_defects: 1 }),

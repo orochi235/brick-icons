@@ -1,6 +1,7 @@
 import { worldToScreen, viewToTransform, type View } from '@weasel-js/core';
 import type { Band, Rect } from '@lab/corpus/layout';
 import { CELL_STATES, type CellState, type CellStyle, type Palette } from '@lab/corpus/palette';
+import { BY_PRECEDENCE, type StateFacts } from '@lab/corpus/states';
 import { DEFAULT_PARAMS } from '@lab/corpus/params';
 import { isStale, sourceBox } from '@lab/corpus/sheet';
 import { tintFor, type TintMode } from '@lab/corpus/tint';
@@ -9,37 +10,17 @@ import { yearRange } from '@lab/corpus/years';
 import { WEIGHT_ID, WEIGHT_TEXT } from '@lab/corpus/badges';
 
 export type { CellStyle } from '@lab/corpus/palette';
-
-/** Everything `cellState` reads. A `Cell` satisfies it, and so does one of a
- *  part's slots in the detail view -- which is a cell on a wall nobody is
- *  looking at. */
-export interface StateFacts {
-  out_of_scope: boolean;
-  open_defects: number;
-  error: string | null;
-  accepted_defects: number;
-  open_defects_elsewhere: number;
-  error_elsewhere: boolean;
-}
+export type { StateFacts } from '@lab/corpus/states';
 
 /** What a cell's color says about it: out of scope first, then
- *  worst-here-first and worst-elsewhere.
+ *  worst-here-first and worst-elsewhere -- `states.ts` holds the order and
+ *  the predicates.
  *  The single precedence table -- `fillFor`, the legend, `PartCard` and the
  *  lightbox all read a cell's state through this, so they cannot drift
  *  apart. */
 export function cellState(cell: StateFacts): CellState {
-  // Ahead of every problem state: a part the project is not drawing yet has
-  // not failed at anything, and a wall of red stickers would say it had.
-  if (cell.out_of_scope) return 'outOfScope';
-  if (cell.open_defects > 0) return 'defect';
-  if (cell.error === 'TimeoutError') return 'timeout';
-  if (cell.error) return 'failed';
-  // Below every live fault and above anything happening in another slot: it
-  // is this slot's problem, and it is settled.
-  if (cell.accepted_defects > 0) return 'accepted';
-  if (cell.open_defects_elsewhere > 0) return 'defectElsewhere';
-  if (cell.error_elsewhere) return 'problemElsewhere';
-  return 'unknown';
+  // `unknown` matches unconditionally and sorts last, so there is always one.
+  return BY_PRECEDENCE.find((state) => state.match(cell))!.key;
 }
 
 export function fillFor(cell: Cell, palette: Palette): CellStyle {

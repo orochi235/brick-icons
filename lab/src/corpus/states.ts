@@ -8,9 +8,11 @@ export interface CellStyle {
   weight: 'thick' | 'thin' | null;
 }
 
-/** Everything a state's `match` may read. Deliberately narrower than `Cell`:
- *  it is what a host outside this project would have to supply, so a
- *  predicate that reached past it would not survive the move. */
+/** Everything a state's `match` may read. A `Cell` satisfies it, and so does
+ *  one of a part's slots in the detail view -- which is a cell on a wall
+ *  nobody is looking at. Deliberately narrower than `Cell`: it is what a host
+ *  outside this project would have to supply, so a predicate that reached
+ *  past it would not survive the move. */
 export interface StateFacts {
   out_of_scope: boolean;
   open_defects: number;
