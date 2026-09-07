@@ -275,8 +275,16 @@ def order_faces(faces, proj=None, eps=1e-6, own_occ=None):
             continue
         di, dj = depth_at(i, *w), depth_at(j, *w)
         if abs(di - dj) <= eps:
-            continue                             # coplanar at witness: no edge
-        a, b = (i, j) if di > dj else (j, i)      # farther paints first
+            # Coplanar: depth cannot separate them, and the ready-heap's
+            # mean-depth tiebreak is actively wrong -- a decoration blob on a
+            # tilted face has a mean depth that lands either side of its
+            # background's, so the artwork sinks under exactly the half of a
+            # sticker that is farther away. LDraw draws decoration after the
+            # surface it sits on, and `_with_decoration` appends in that order,
+            # so the index IS that instruction. Index edges alone cannot cycle.
+            a, b = (i, j) if i < j else (j, i)
+        else:
+            a, b = (i, j) if di > dj else (j, i)  # farther paints first
         if b not in succ[a]:
             succ[a].add(b)
             indeg[b] += 1
