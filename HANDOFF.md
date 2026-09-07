@@ -52,6 +52,17 @@ LDView's `-LightVector` rather than the ortho path's own `--light` convention,
 there is no part-color override, and it has no `db.SOURCES` slot, so it is not
 a wall column yet. It works: one browser draws a list in one WebGL context.
 
+**Mike named a fourth case of "occluded thing drawn anyway", verbally, so it is
+in no defect row: 4070.** Its icon draws three concentric circles at the bore —
+collar outer edge, bore mouth, and an innermost ring that should not be a circle
+at all, because the bore interior is the hexagonal LDraw recess and its far
+geometry sits behind the near wall. He said it generalizes: "there are lots of
+cases where there's a borehole somewhere that we're not properly occluding".
+Worth testing against `79306-f1`, `4913`, `14653-f1` and `59443` as one fault
+rather than four. Note the older finding that 4070's *dropped ledge edge* is an
+HLR visibility misjudgement with 0 ABSENT edges — that is the same stage failing
+in the other direction, culling what it should draw.
+
 **Queued and unstarted:** Mike reports the translucent renders are "too fancy
 and are culling surfaces that need to be rendered now because everything needs
 to be rendered in this mode". Nothing has been looked at.
