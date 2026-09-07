@@ -190,11 +190,16 @@ is an improvement.
 
 **11090's second defect is real and untouched by this.**
 `11090-curved-lower-face-in-occt` is the base, closed. `11090-hand-at-top-is-
-missing-a-curve-too` is the clip, and it is a different fault: occt emits 3
-arcs against naive's 8 on this part, and the missing one runs the length of
-the clip's right lobe — the limb where its 225-degree cylinder turns away.
-There is a second, shorter one at the base collar. The fix above moves 8
-pixels at the clip (antialias) and 2598 at the base, so the two do not touch.
+missing-a-curve-too` is the clip, and it is a different fault: **in the clip
+region occt draws 3 arcs against naive's 7**, unchanged by the fix above (3
+either way, 8 pixels of antialias). The one to look at runs the length of the
+clip's right lobe — the limb where its 225-degree cylinder turns away.
+
+Count arcs by region on this part, never over the whole drawing. Whole-part it
+reads 3 against naive's 8, which looks like the clip gap and is not: the fix
+above takes occt's base arcs from 5 to 0, and those 5 were bore limbs only
+visible through the hole in the wall. Naive draws 1 base arc there, so the
+base is a separate 1-arc gap, the short curve at the collar.
 
 `tests/test_occt.py::test_the_stud_paints_over_the_top_face_it_sits_on` fails
 at HEAD with nothing applied (`assert 12 > 13`) — it belongs to the coplanar
