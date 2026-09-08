@@ -384,3 +384,32 @@ def test_colorize_uses_the_requested_mode(tmp_path):
     _trace.segments_to_svg(segs, 100, 100, out, debug_colors="ramp")
     txt = out.read_text()
     assert _trace.ramp_color(0) in txt and _trace.DEBUG_PALETTE[0] not in txt
+
+
+def test_the_debug_cycle_never_repeats_a_color_inside_one_render():
+    """A debug color answers "which element owns this pixel", so two elements
+    anywhere in one render must not read alike. The hand-picked palette held 12
+    and 2947bc01 draws 48, so its rings came out in three passes of the same
+    six colors. Floors: dE 25 between any pair, and neighbors no closer than
+    that -- scripts/gen-debug-palette.py packs the set and orders it."""
+    pal = _trace.DEBUG_PALETTE
+    assert len(set(pal)) == len(pal) >= 48
+
+    def lab(h):
+        c = np.array([int(h[i:i + 2], 16) for i in (1, 3, 5)], float) / 255.0
+        c = np.where(c <= 0.04045, c / 12.92, ((c + 0.055) / 1.055) ** 2.4)
+        M = np.array([[0.4124, 0.3576, 0.1805],
+                      [0.2126, 0.7152, 0.0722],
+                      [0.0193, 0.1192, 0.9505]])
+        xyz = (c @ M.T) / np.array([0.95047, 1.0, 1.08883])
+        f = np.where(xyz > 0.008856, np.cbrt(xyz), 7.787 * xyz + 16 / 116)
+        return np.array([116 * f[1] - 16, 500 * (f[0] - f[1]), 200 * (f[1] - f[2])])
+
+    L = [lab(h) for h in pal]
+    pair = min(float(np.linalg.norm(L[i] - L[j]))
+               for i in range(len(L)) for j in range(i + 1, len(L)))
+    nbr = min(float(np.linalg.norm(L[i] - L[i + 1])) for i in range(len(L) - 1))
+    assert pair >= 25.0, f"two colors {pair:.1f} apart read alike"
+    assert nbr >= 25.0, f"neighbors {nbr:.1f} apart"
+    # off the page and off the ink: a fill at either end reads as background
+    assert all(30.0 <= p[0] <= 85.0 for p in L)

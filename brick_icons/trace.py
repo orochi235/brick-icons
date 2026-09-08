@@ -258,11 +258,22 @@ def _chain_line_ops(ops, stub_len=0.0):
     return chains, elbows, singles
 
 
-# 12 hues at fixed saturation/lightness, for --debug-colors. Adjacent entries
-# are 30 degrees apart so consecutive elements never read as the same color.
-DEBUG_PALETTE = ("#e6194b", "#f58231", "#ffe119", "#bfef45", "#3cb44b",
-                 "#42d4f4", "#4363d8", "#911eb4", "#f032e6", "#a9a9a9",
-                 "#9a6324", "#469990")
+# --debug-colors cycle: the 48 most separated colors the page allows, so two
+# elements anywhere in one render never read alike. Hand-picked hues capped at
+# a dozen because hue is one axis; this packs CIELAB, which has lightness and
+# chroma too -- min dE 26.7 between ANY pair and 29.8 between neighbors, against
+# the old palette's 29.3 between neighbors and 0 past the twelfth element.
+# scripts/gen-debug-palette.py regenerates it and re-derives both numbers.
+DEBUG_PALETTE = (
+    "#0000fc", "#00f600", "#ea00fc", "#7ed800", "#664efc", "#d2de00",
+    "#720c9c", "#42f06c", "#cc06ba", "#129600", "#fc009c", "#30f0ae",
+    "#fc0018", "#0072f6", "#fccc30", "#c078fc", "#84a206", "#1e429c",
+    "#f69606", "#006cae", "#c64200", "#2ac6f6", "#cc0c30", "#4ea866",
+    "#fc006c", "#005a12", "#fc6cd2", "#ae9006", "#8a54a2", "#c0d884",
+    "#900654", "#96decc", "#8a2418", "#ccb4fc", "#666600", "#ea7e9c",
+    "#007260", "#fc8460", "#004e60", "#f6c06c", "#5a425a", "#a26006",
+    "#7e96b4", "#424e2a", "#fcc6b4", "#964854", "#8a9c78", "#966c4e",
+)
 
 
 RAMP_LEN = 6           # elements per light-to-dark ramp
