@@ -97,6 +97,17 @@ def components(m: np.ndarray, zoom: int, floor_px: int):
     return out
 
 
+def drawn_as(args) -> dict:
+    """What this run drew, as the fields every row carries. One definition:
+    three sites build these rows and a field added to two of them says
+    nothing about the third's."""
+    fields = {"style": args.shade_style,
+              "strokes": [args.line_width, args.silhouette_width]}
+    if args.opacity is not None:
+        fields["opacity"] = args.opacity
+    return fields
+
+
 def one(part: str, args, tmp: Path) -> dict:
     """Render and compare against the reference.
 
@@ -109,6 +120,7 @@ def one(part: str, args, tmp: Path) -> dict:
             "--shade-style", args.shade_style, "--angle", args.angle,
             "--engine", args.engine, "--line-width", str(args.line_width),
             "--silhouette-width", str(args.silhouette_width),
+            *(["--opacity", str(args.opacity)] if args.opacity is not None else []),
             "--out", str(tmp)]
     parsed = cli.build_parser().parse_args(argv)
     cfg = cli._config_from_args(parsed)
@@ -143,8 +155,7 @@ def one(part: str, args, tmp: Path) -> dict:
     pct = {str(p): round(float(np.percentile(dist[extra], p)) / args.zoom, 2)
            for p in (50, 90, 99, 100)} if extra.any() else {}
     row = {"part": part, "engine": args.engine, "angle": args.angle,
-           "style": args.shade_style,
-           "strokes": [args.line_width, args.silhouette_width],
+           **drawn_as(args),
            "extra_px": int(extra.sum()), "missing_px": int(missing.sum()),
            "extra_dist_px": pct,
            "missing": components(missing, args.zoom, args.floor),
@@ -165,8 +176,7 @@ def _bare(part: str, work, args) -> dict:
         r = work(part)
     except BaseException as exc:  # a part must not end the run
         r = {"part": part, "engine": args.engine, "angle": args.angle,
-             "style": args.shade_style, "build": build(),
-             "strokes": [args.line_width, args.silhouette_width],
+             **drawn_as(args), "build": build(),
              "error": type(exc).__name__, "detail": str(exc)[:300],
              "traceback": traceback.format_exc()[-1200:]}
     r["secs"] = round(time.time() - t0, 1)
@@ -185,6 +195,11 @@ def main() -> int:
                          "one opaque white, so the strokes carry the drawing")
     ap.add_argument("--line-width", dest="line_width", type=int, default=0,
                     help="interior stroke, output px (0 = strokeless oracle)")
+    ap.add_argument("--opacity", type=float,
+                    help="face-fill opacity for the translucent slots. The "
+                         "far side draws INSIDE the silhouette, so it adds no "
+                         "EXTRA: the row scores the outline, not the "
+                         "translucency")
     ap.add_argument("--silhouette-width", dest="silhouette_width", type=int,
                     default=0, help="contour stroke, output px")
     ap.add_argument("--zoom", type=int, default=8, help="raster px per canvas px")
@@ -216,8 +231,7 @@ def main() -> int:
     # see its own checkout, so provenance has to be written where the render
     # happens or it is gone.
     extra = {"engine": args.engine, "angle": args.angle,
-             "style": args.shade_style, "build": build(),
-             "strokes": [args.line_width, args.silhouette_width]}
+             **drawn_as(args), "build": build()}
     # A part the watchdog kills leaves .inflight behind with no row, and the
     # burial only happens on the way into a re-run of that same batch. Where
     # none comes, the part is in no census at all -- neither drawn nor failed,

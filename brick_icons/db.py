@@ -22,12 +22,15 @@ from brick_icons.lab import defects as defects_toml
 DEFAULT_PATH = Path("corpus.db")
 SCHEMA_VERSION = 6
 PART_STATUSES = ("unreviewed", "good", "suspect", "broken", "wontfix")
-# Part categories the project is not trying to draw yet. A rule over the
-# library's own category, not a list of ids: it covers parts nobody has seen
-# yet, and it is not a judgment about any one part, so it stays out of
-# `parts.status` and its hand-written record. `|` is LDraw's mark for a part
-# nobody at LEGO made -- third-party electronics and wheels that fit LEGO.
-OUT_OF_SCOPE_CATEGORIES = ("Sticker", "|")
+# Part categories the project is not trying to draw. A rule over the library's
+# own category, not a list of ids: it covers parts nobody has seen yet, and it
+# is not a judgment about any one part, so it stays out of `parts.status` and
+# its hand-written record. `|` is LDraw's mark for a part nobody at LEGO made
+# -- third-party electronics and wheels that fit LEGO.
+#
+# Stickers were here and are not any more: occt draws 2,695 of the 2,701, so
+# the exclusion was hiding a drawn category from every coverage number.
+OUT_OF_SCOPE_CATEGORIES = ("|",)
 SOURCES = ("naive", "occt", "decal", "ldview", "reference",
            "translucent-naive", "translucent-occt",
            "silhouette-naive", "silhouette-occt",
@@ -607,19 +610,38 @@ def _relative(path: Path, root: Path) -> str:
         return str(path)
 
 
+#: A tree may state its slot outright, in this file, rather than spelling it
+#: in the directory name. Written by the job that filled the tree and fetched
+#: home with it, so nothing on this side has to remember what a directory was
+#: for. It is the only way to name the slots whose names carry no facet word
+#: -- `occt` derives to `silhouette-occt` and always will, because that
+#: fallback is what keeps a re-run like out/census-run2 replacing out/census
+#: part for part instead of becoming a slot of its own.
+SOURCE_MARKER = "SOURCE"
+
+
 def census_source(census_dir: Path | str, engine: str) -> str:
     """The render source a census tree's drawings are filed under.
 
-    A tree names a FACET, not a slot: the directories all begin `census`
-    because they are census runs, and the slots dropped that word. A tree
-    gets its own source only if what is left after the prefix and the engine
-    names one this module knows; anything else is another run of the base
+    A `SOURCE` file in the tree wins, naming the slot outright. Otherwise the
+    directory name is read as a FACET, not a slot: the directories all begin
+    `census` because they are census runs, and the slots dropped that word. A
+    tree gets its own source only if what is left after the prefix and the
+    engine names one this module knows; anything else is another run of the base
     census and files under silhouette-<engine>, so out/census-run2 still
     replaces out/census part for part. That fallback is what keeps the rule
     from swallowing a re-run: only a declared facet like census-white-naive
     sits beside the oracle instead of overwriting it, and it has to, because
     a render's config_key comes from its source alone.
     """
+    marker = Path(census_dir) / SOURCE_MARKER
+    try:
+        stated = marker.read_text().strip()
+    except OSError:
+        stated = ""
+    if stated in SOURCES:
+        return stated
+
     stem = Path(census_dir).name
     facet = stem.removeprefix("census").strip("-").removesuffix(engine).strip("-")
     named = f"{facet}-{engine}" if facet else f"silhouette-{engine}"
@@ -632,8 +654,17 @@ def census_trees(root: Path | str = ".") -> list[Path]:
     A node added later needs no edit. There is one definition of this and it
     lives here -- a caller with its own idea of where the trees are indexes the
     ones it knows and returns a smaller number than it should, with no error.
+
+    A tree carrying a SOURCE_MARKER counts whatever it is called: a slot fill
+    is named for its slot, not for the census, and a tree the rebuild cannot
+    see is renders that came all the way home and indexed as nothing.
     """
-    return sorted(d for d in (Path(root) / "out").glob("census*") if d.is_dir())
+    out = Path(root) / "out"
+    if not out.is_dir():
+        return []
+    return sorted(d for d in out.iterdir() if d.is_dir()
+                  and (d.name.startswith("census")
+                       or (d / SOURCE_MARKER).is_file()))
 
 
 def store_logs(tree: Path) -> list[Path]:

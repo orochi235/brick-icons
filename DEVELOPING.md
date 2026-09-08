@@ -127,5 +127,8 @@ into black blobs that read as an engine bug.
 both for "no exact surface exists" and "my tolerance was too tight". Remove the
 `except` and look before believing it.
 
-**Stickers and printed parts fail for their own reasons.** A fix motivated only
-by a printed part is not yet motivated; test on unprinted ones.
+**Stickers and printed parts are in the engine loop, and naive is the one that
+still fails them.** occt draws 2,695 of the 2,701 stickers and errors on 397 of
+12,429 printed parts; naive errors on 117 stickers. So a sticker that fails
+under naive is the known fault, not a finding — reproduce it under occt before
+chasing it.

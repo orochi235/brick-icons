@@ -284,8 +284,15 @@ def test_a_part_erroring_elsewhere_is_clean_here(conn):
     assert cell["error_elsewhere"] is True
 
 
-def test_a_sticker_is_out_of_scope(conn):
+def test_a_sticker_is_in_scope(conn):
+    # occt draws 2,695 of the 2,701; the exclusion outlived the fix.
     _part(conn, "003238a", title="Sticker Minifig Shield", category="Sticker")
+    conn.commit()
+    assert cells.cells(conn)["cells"][0]["out_of_scope"] is False
+
+
+def test_a_part_nobody_at_lego_made_is_out_of_scope(conn):
+    _part(conn, "t1008", title="Brickstuff Pico LED", category="|")
     conn.commit()
     assert cells.cells(conn)["cells"][0]["out_of_scope"] is True
 

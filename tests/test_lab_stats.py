@@ -68,7 +68,7 @@ def test_redirects_come_back_when_asked_for(conn):
 
 def test_out_of_scope_parts_can_be_dropped(conn):
     _part(conn, "3001")
-    _part(conn, "s1", category="Sticker")
+    _part(conn, "s1", category="|")
     conn.commit()
     assert stats.stats(conn)["set"]["size"] == 2
     assert stats.stats(conn, out_of_scope=False)["set"]["size"] == 1
@@ -129,7 +129,7 @@ def test_a_slot_reports_every_label_even_at_zero(conn):
 
 def test_coverage_counts_only_the_working_set(conn):
     _part(conn, "3001")
-    _part(conn, "s1", category="Sticker")
+    _part(conn, "s1", category="|")
     _render(conn, "3001", "silhouette-naive")
     _render(conn, "s1", "silhouette-naive")
     conn.commit()
@@ -160,7 +160,7 @@ def test_speed_reports_the_spread_per_engine(conn):
 
 def test_speed_ignores_a_part_outside_the_set(conn):
     _part(conn, "3001")
-    _part(conn, "s1", category="Sticker")
+    _part(conn, "s1", category="|")
     _measure(conn, "3001", "naive", secs=1.0)
     _measure(conn, "s1", "naive", secs=50.0)
     conn.commit()

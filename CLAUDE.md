@@ -48,11 +48,16 @@ fine as a fast path, never as the authority.
 `4740p03` → `4740`, and the base exists for 8615 of 8639. That is a free oracle
 for the decal-stripping stage over thousands of parts with nothing to label.
 
-## Test on unprinted parts
+## Printed parts and stickers are in scope
 
-Printed parts are out of the engine loop until the decal work is picked up;
-decoration fails for its own reasons and drags debugging onto the wrong
-problem. A fix motivated only by a printed part is not yet motivated.
+Both were excluded once and are not any more — the decal work landed, and
+`scripts/census-scope.py` takes every non-obsolete part. occt errors on 397 of
+12,429 printed parts and 6 of 2,701 stickers; naive still errors on 117
+stickers. **So a decorated part that fails under naive is the known fault**;
+reproduce it under occt before treating it as a finding.
+
+`db.OUT_OF_SCOPE_CATEGORIES` is down to `|`, LDraw's mark for a part nobody at
+LEGO made — third-party electronics and wheels that fit LEGO.
 
 ## Look at renders; never describe them from memory
 

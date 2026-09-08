@@ -548,6 +548,25 @@ def test_census_source_repeats_no_engine_it_is_already_named_with():
         "white-occt"
 
 
+def test_a_tree_can_state_its_slot_when_the_name_cannot(tmp_path):
+    # `occt` carries no facet word, so the name rule can only ever derive
+    # silhouette-occt for it. The marker is how that slot gets named at all.
+    tree = tmp_path / "census-anything"
+    tree.mkdir()
+    assert db.census_source(tree, "occt") == "silhouette-occt"
+    (tree / db.SOURCE_MARKER).write_text("occt\n")
+    assert db.census_source(tree, "occt") == "occt"
+
+
+def test_a_stated_slot_has_to_be_one_we_know(tmp_path):
+    # A typo must not invent a source: renders under it would be indexed and
+    # then invisible to every query that lists the slots.
+    tree = tmp_path / "census-white-occt"
+    tree.mkdir()
+    (tree / db.SOURCE_MARKER).write_text("ocupied\n")
+    assert db.census_source(tree, "occt") == "white-occt"
+
+
 def test_a_rebuild_indexes_the_census_renders_too(tmp_path):
     conn_path = tmp_path / "corpus.db"
     lib = _library(tmp_path)
@@ -564,6 +583,25 @@ def test_a_rebuild_indexes_the_census_renders_too(tmp_path):
     paths = {r["path"] for r in conn.execute("SELECT path FROM renders")}
     assert paths == {"out/census/renders/naive/3001.svg",
                      "out/census/renders/occt/3001.svg"}
+
+
+def test_a_stated_slot_files_both_the_renders_and_the_rows(tmp_path):
+    # The drawing and the numbers that describe it must not land under
+    # different slots: the wall reads one and the coverage list the other.
+    lib = _library(tmp_path)
+    tree = tmp_path / "out" / "census-store-occt"
+    (tree / "renders" / "occt").mkdir(parents=True)
+    (tree / "renders" / "occt" / "3001.svg").write_text(SVG)
+    (tree / db.SOURCE_MARKER).write_text("occt\n")
+    (tree / "occt-r0.jsonl").write_text(
+        json.dumps({**MEASURED, "engine": "occt"}) + "\n")
+
+    db.rebuild(tmp_path / "corpus.db", lib, root=tmp_path, census_dirs=[tree])
+    conn = db.connect(tmp_path / "corpus.db")
+    assert {r["source"] for r in conn.execute("SELECT source FROM renders")} \
+        == {"occt"}
+    assert {r["source"] for r in conn.execute("SELECT source FROM measurements")} \
+        == {"occt"}
 
 
 def test_rebuild_takes_several_census_directories(tmp_path):
@@ -735,6 +773,16 @@ def test_census_trees_ignores_a_file_named_like_one(tmp_path):
     (tmp_path / "out" / "census").mkdir()
     (tmp_path / "out" / "census-stream.log").write_text("not a tree\n")
     assert db.census_trees(tmp_path) == [tmp_path / "out" / "census"]
+
+
+def test_census_trees_finds_a_tree_that_states_its_slot(tmp_path):
+    # A slot fill is named for its slot. Without this it is invisible to the
+    # rebuild -- renders that came all the way home and indexed as nothing.
+    (tmp_path / "out").mkdir()
+    (tmp_path / "out" / "slot-occt").mkdir()
+    assert db.census_trees(tmp_path) == []
+    (tmp_path / "out" / "slot-occt" / db.SOURCE_MARKER).write_text("occt\n")
+    assert db.census_trees(tmp_path) == [tmp_path / "out" / "slot-occt"]
 
 
 def test_one_part_in_two_trees_is_counted_not_swallowed(tmp_path):

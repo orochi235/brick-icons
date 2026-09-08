@@ -36,8 +36,17 @@ POLL=${POLL:-15}
 # so this separates them without touching anything that works.
 MEM_GB=${MEM_GB:-4}
 EXTRA=${EXTRA:-}
+# The slot this tree's drawings and rows belong to, for the slots whose names
+# carry no facet word -- `out/census-occt` derives to silhouette-occt and
+# always will. Stated here, the label rides home with the tree. Written via mv
+# because every worker on the job runs this line against the same directory.
+SOURCE=${SOURCE:-}
 
 mkdir -p "$dir"
+if [ -n "$SOURCE" ] && [ ! -f "$dir/SOURCE" ]; then
+  tmp_src="$dir/.SOURCE.$$"
+  printf '%s\n' "$SOURCE" > "$tmp_src" && mv -f "$tmp_src" "$dir/SOURCE"
+fi
 first=${batch%%,*}
 jsonl="$dir/$engine-$first.jsonl"
 inflight="$jsonl.inflight"
