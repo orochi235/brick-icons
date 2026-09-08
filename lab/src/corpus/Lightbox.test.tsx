@@ -15,6 +15,7 @@ const detail = {
     { source: 'silhouette-occt', sha256: 'cafebabe0000', made_at: '2026-09-05T10:00:00+00:00' },
     { source: 'naive', sha256: 'deadbeef0000', made_at: '2026-09-05T11:00:00+00:00' },
   ],
+  features: { stud: null, elliptical: null, tris: 384, 'skew-deg': 0 },
 };
 
 const addDefect = vi.fn(async (r: unknown) => r);
@@ -183,4 +184,19 @@ it('leaves a slot from an API older than the state fields unmarked', async () =>
   const states = [...document.querySelectorAll('.corpus-slot')]
     .map((el) => el.getAttribute('data-state'));
   expect(states).toEqual(['unknown', 'unknown']);
+});
+
+it('says what the part is built from', async () => {
+  render(box());
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  expect(screen.getByText('elliptical')).toBeTruthy();
+  expect(screen.getByText('384')).toBeTruthy();
+});
+
+it('survives an API too old to send the features', async () => {
+  const { features, ...older } = detail;
+  const stale = { corpusPart: () => Promise.resolve(older), addDefect } as any;
+  render(box({ client: stale }));
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  expect(document.querySelector('.corpus-built')).toBeNull();
 });

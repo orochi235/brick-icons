@@ -1,0 +1,63 @@
+.corpus-built {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.6rem;
+  align-items: flex-start;
+}
+
+.corpus-built-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-width: 34rem;
+}
+
+/* Square where a tag pill is round, and unbadged: these sit under the same
+ * heading as the tag row on some views, and a reader must not take
+ * `elliptical` for something a part was catalogued as. */
+.corpus-built-flag {
+  padding: 0.05rem 0.4rem;
+  border: 1px solid var(--wzl-border, currentColor);
+  border-radius: 0.15rem;
+  font-size: 0.85em;
+  color: var(--wzl-fg-muted);
+}
+
+/* The three the drawing turns on: what the enclosing matrices did to a
+ * primitive, which is not visible in any file name. */
+.corpus-built-flag:is([data-feature='off-axis'], [data-feature='elliptical'],
+                      [data-feature='mirrored']) {
+  border-color: #97bcc5;
+  color: #97bcc5;
+}
+
+.corpus-built-measures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 0 1.6rem;
+  margin: 0;
+  flex: 1 1 22rem;
+}
+
+.corpus-built-measure {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.corpus-built-measure dt {
+  color: var(--wzl-fg-muted);
+  font-size: 0.85em;
+}
+
+/* Read down the column, not across: same width per digit and the same number
+ * of decimals in every cell, so two parts compare at a glance. */
+.corpus-built-measure dd {
+  margin: 0;
+  font-size: 0.85em;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}

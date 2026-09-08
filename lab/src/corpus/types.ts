@@ -83,4 +83,8 @@ export interface PartDetail {
           engine: string; extra_d99: number | null; missing_px: number | null;
           secs: number | null; error: string | null }[];
   defects: { id: string; part: string; title: string; status: string }[];
+  /** How the part is built, from `part_features`: a null value is a flag the
+   *  part carries, a number is a measure every part has. Absent from an API
+   *  older than the field. */
+  features?: Record<string, number | null>;
 }
