@@ -42,17 +42,33 @@ keys on the drawn cell size and the viewport instead.
 
 ### Open, in the order I would take them
 
-1. **`snap-ab-occt` is running and will want reading** (`onto jobs`, in place on
-   orochi -- `renders/` is 2.8 GB untracked, so `onto sync` would go far over
-   its 8 MiB limit). It appends one JSON Lines row per part to
-   `out/snap-render-ab.jsonl` and resumes on a re-run under the same `--task`,
-   so a deadline is not a loss. **Then the actual question**, which no amount of
-   rendering answers by itself: are occt's pass-1 moves REPAIRS? A part with a
-   chunky diff has to be looked at, not counted.
-2. **studio is still baking** (`store-occt-studio`, 10h+). When it finishes run
-   `out/ingest-bake.sh` once -- rebuild-checkpoint-swap *then* bake, and the
-   order matters because the bake reads the database.
-3. **Printed and sticker parts want a `decal` slot** holding a 2D extraction of
+1. **studio's bake and its fetch BOTH exited 1, and nothing has been ingested
+   since.** `store-occt-studio` reached 610 of 617 batches over 11h43m before
+   it exited 1 -- most of the work landed, and the tail of its log is ordinary
+   `stored` lines with the odd `TimeoutError` per part, not a crash.
+   `fetch-occt-studio` exited 1 too, having brought 6,803 files / 465 MiB home.
+   So: find what is actually on disk against what the queue asked for
+   (`store-queue/occt-gap-studio.txt`), re-fetch the remainder, and only then
+   run `out/ingest-bake.sh` -- it does rebuild-checkpoint-swap *then* bake, and
+   the order matters because the bake reads the database. Until that runs the
+   wall is showing renders older than this work.
+2. **`snap-ab-occt` is still running** (`onto jobs`), appending a row per part
+   to `out/snap-render-ab.jsonl`; re-launching under the same `--task` resumes
+   rather than restarting. **The verdict is already written up** in
+   `OCCT-MIGRATION.md` under "The snap passes on occt" and the remaining parts
+   can only confirm or overturn it -- read the finished file against it rather
+   than starting the analysis again. **One loose thread:** `24130` is changed
+   by pass 1 alone (zero refits) with a 2,053px diff component that I could not
+   see when I looked. "Pass 1 is pointless" is solid; "pass 1 is harmless"
+   wants a second pair of eyes.
+3. **Pass 2's sweep-direction bug is fixable and nobody has said whether to
+   fix it.** The refit emits the circumcircle through (pinch1, pinch2, apex)
+   the long way round: 23801 goes from a 41.7-degree separator to 288.7. The
+   fix is to pick the sweep that keeps the apex BETWEEN the pinch points --
+   NOT to tune `SEP_REFIT_MAX_GROWTH`, which does not separate the damaged
+   parts from the clean ones. Mike has seen this and not yet called it; pass 2
+   is stylization, so fixing the bug still leaves whether the effect is wanted.
+4. **Printed and sticker parts want a `decal` slot** holding a 2D extraction of
    the printing (Mike). Not started, not designed, and a peer has uncommitted
    decal-binding work in `brick_icons/shade.py` and `unwrap.py` -- same seam,
    so agree who owns it first.
