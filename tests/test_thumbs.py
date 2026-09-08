@@ -211,3 +211,24 @@ def test_a_sidecar_is_written_whole_or_not_at_all(tmp_path):
     assert json.loads((tmp_path / "x.json").read_text()) == {"a": "1"}
     # nothing left behind to be mistaken for a slot's own file
     assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_a_format_change_rebakes_rather_than_composing_missing_tiles(tmp_path,
+                                                                    monkeypatch):
+    """An unchanged sha must not skip a part whose tiles are in the old format.
+
+    `baked.json` records the render's sha and says nothing about how the tile
+    was encoded, so without this the first run after a THUMB_EXT change skips
+    everything and `compose` builds an empty sheet.
+    """
+    out = tmp_path / "slot"
+    svg = tmp_path / "3001.svg"
+    svg.write_text(SVG)
+    assert thumbs.bake_part("3001", svg, out, sha="abc") == list(thumbs.LEVELS)
+    assert thumbs.bake_part("3001", svg, out, sha="abc") == []
+
+    monkeypatch.setattr(thumbs, "THUMB_EXT", "png")
+    monkeypatch.setattr(thumbs, "THUMB_SAVE", {"format": "PNG"})
+    assert thumbs.bake_part("3001", svg, out, sha="abc") == list(thumbs.LEVELS)
+    for level in thumbs.LEVELS:
+        assert (out / str(level) / "3001.png").is_file()

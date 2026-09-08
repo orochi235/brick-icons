@@ -141,7 +141,12 @@ def bake_part(part_id: str, svg: Path | str, out: Path | str,
     """
     out = Path(out)
     shas = baked_shas(out)
-    if shas.get(part_id) == sha:
+    # The sha covers the render, not the encoding, so the tiles have to be
+    # there in the format being written now -- otherwise changing THUMB_EXT
+    # skips every part and composes a sheet out of tiles that do not exist.
+    if shas.get(part_id) == sha and all(
+            (out / str(level) / f"{part_id}.{THUMB_EXT}").is_file()
+            for level in LEVELS):
         return []
     out.mkdir(parents=True, exist_ok=True)
     drawn = _drawn(part_id, Path(svg), out)
