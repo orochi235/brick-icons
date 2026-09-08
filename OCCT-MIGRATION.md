@@ -142,6 +142,15 @@ enough for this, and the element count is, at no cost.
 So pass 1 on occt is inert at best and destructive at worst, and never a
 repair.
 
+**It is not a problem on naive, which is the engine that runs it.** The eight
+parts above, drawn on naive with `hlr._snap_rim_crossings` stubbed out: four of
+the six that have no pass-2 refit there lose nothing, and the other two lose one
+element to a fringe -- `33089` 192px over 87 components, `30124b` 964px over
+351, largest 63px and 117px. occt's are single components of 1,916 to 2,053px.
+The pass does on sampled occlusion what it was written for; exact hidden-line
+removal hands it endpoints the sampled path never produces. Nothing to fix in
+the default engine, and no reason to look again.
+
 **Pass 2's separator refit is what draws the stray arcs**, and the mechanism is
 its sweep direction, not its size. Radii barely move (0.6-1.2x of the arc being
 replaced), but every refit lands at a span of 238-343 degrees whatever it
@@ -187,7 +196,7 @@ both; occt appends bare 6-tuples, so every candidate it emits takes the default
 
 | naive does | occt does | |
 |---|---|---|
-| every drawn circle is a candidate at a 25° max step, because a face authored as an LDraw 16-gon rings a hole in 22.5° chords and cannot recover as an arc under 15° | bare 6-tuples: `MAX_STEP` 15° | **absent.** occt's own surface boundaries sample at `BOUNDARY_STEP_DEG` 9° and do recover unaided, but a triangle is sewn into a planar face whose boundary is still the authored chord polygon. Giving occt's candidates naive's 25°: `32062` 43 arc commands to 75 and 26,360 bytes to 21,573 with the raster unchanged; `3941` 141 to 164, and two kinks in the counterbore band become curves. 4 of 6 faceted specimens move |
+| every drawn circle is a candidate at a 25° max step, because a face authored as an LDraw 16-gon rings a hole in 22.5° chords and cannot recover as an arc under 15° | `RIM_STEP_DEG` 25° on a drawn circle; `_boundary_conics` still appends bare 6-tuples at `MAX_STEP` 15° | **CLOSED for drawn circles, `b3554a2`.** occt's own surface boundaries sample at `BOUNDARY_STEP_DEG` 9° and recover unaided, but a triangle is sewn into a planar face whose boundary is still the authored chord polygon. At 25°: `32062` 43 arc commands to 75 and 26,360 bytes to 21,573 with the raster unchanged; `3941` 141 to 164, and two kinks in the counterbore band become curves. 4 of 6 faceted specimens moved |
 | `fit_ells` carries a MEASURED snap tolerance so a fill seam authored along the facet chain snaps onto the DRAWN arc | no tolerance | **absent**, follows the row above |
 
 ### The junction-lens layer is not a fill
