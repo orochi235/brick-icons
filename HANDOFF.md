@@ -1,5 +1,44 @@
 # Handoff — `main`: the corpus lab, and the OCCT engine
 
+## Baton, 2026-09-07 late: the reference is calibrated and the corpus is baking
+
+`renders/reference` is baking on msb-uai as task `reference-bake-corpus`, with
+`onto fetch -stream -every 10m reference-bake-corpus` pulling it back. About 20
+minutes for 24,591 parts. If it is gone when you read this, `onto jobs --all`
+says how it ended and re-running the same command resumes -- the sink skips
+whatever is already in `--out`.
+
+**The slot is `reference` now, not `ortho`.** It cost nothing: no rows were
+indexed and `renders/ortho` never existed.
+
+**The shot page frames itself with the engine's own fit.** `viewBasis` and
+`fitAffine` in `lab/src/panes/viewport.ts` are ports of `hlr.view_basis` and
+`hlr.fit_affine`; every render POSTs a `<part>.fit.json` in the schema the CLI
+writes beside an SVG. Reference and engine register through world space --
+their fits share a basis, so the map between them is a 2D similarity. Warping
+the reference into occt's viewBox gives IoU 0.9899 / 0.9854 / 0.9703 on
+3001 / 3941 / 4740, with ref-only 0 on all three: the disagreement is entirely
+our analytic circle standing outside the library's inscribed polygon, which is
+the intended difference.
+
+**The reference frames itself from the part and must keep doing so.** Frame it
+from the drawn-ops bbox instead and every engine change invalidates the whole
+bake.
+
+**Two traps that cost real time, both silent.** `LDrawLoader.preloadMaterials`
+resolves against `this.path`, so it has to run before `setPath`; and `load`
+opens with `setMaterials([])`, which throws the preloaded color table away
+before every part -- parts come in through `parse` for that reason. Miss either
+and a quarter of the library draws in three's missing-material magenta with no
+error anywhere.
+
+**`onto sync` to msb-uai refuses over 4,801 translucent-occt SVGs.** They are
+ignored here by `.git/info/exclude` and not there, so the node counts them as
+untracked files in tracked space. All 4,799 checked byte-identical to what is
+already in `renders/translucent-occt`, so `-force` is safe today, but the fix is
+a committed ignore rule -- `renders/**/*.fit.json` was added for exactly this
+reason before the bake could repeat it 24,591 times.
+
 ## Baton, 2026-09-07 night: naive's tail is audited, half of it landed
 
 On `main`, in the shared checkout. `git log --oneline @{u}..HEAD` for anything
@@ -126,12 +165,12 @@ serve; `npm run build` in `lab/` after touching `shot.ts`.
    its default `true`, so a faceted cylinder shades smooth while our `flat3`
    tones per facet group. The key light is a guess at LDView's `-LightVector`;
    the `0.55` ambient already matches `shade.ramp_b`'s floor exactly.
-4. Part color has no override. Cosmetic, last.
+4. Part color has no override -- the render is whatever colors the part file
+   names. Still true, but no longer the magenta bug it looked like; see the
+   late baton.
 
-**The slot is named `ortho` and renaming costs a migration** -- the `census-`
-rename this week moved `renders` and `measurements` rows and re-baked thumbs.
-`mesh` and `datum` were the alternatives; `ortho` won because it names the
-property that makes the thing usable.
+Items 1 and 2 are done: see the late baton at the top. The slot was renamed to
+`reference` there, so the migration this section warned about never came due.
 
 ## The coplanar sticker measurement is done, and `f832da6` has two regressions
 
