@@ -20,7 +20,8 @@ just timed out. It marks 5,400 now. **The other zero is still there:**
 rows with that source at all -- `rebuild` reads `renders/**` and `out/census*/**`
 and nothing else, so the store's own failure logs in `out/store/*/` have never
 been ingested. The census logs largely cover the same parts (619 of the 661
-already carry an occt error row), which is why this has gone unnoticed.
+already carry an occt error row), which is why this has gone unnoticed. **A
+peer is fixing this right now in uncommitted work** -- see item 3.
 
 **The snap verdict in `OCCT-MIGRATION.md` was wrong twice and is now right.**
 First reading: pass 1 is inert on occt. Second: pass 1 deletes edges. Both
@@ -41,10 +42,12 @@ costs nothing, and is `scripts/snap-element-delta.py`.
    below, which carries the numbers and the disproof.
 2. **The wall's hash should carry its whole client state** -- designed, unbuilt,
    `docs/superpowers/specs/2026-09-08-wall-hash-state-design.md`.
-3. **The store's failure logs are never ingested.** `rebuild` would need to walk
-   `out/store/*/`; `measurements`' primary key is `(run_id, part_id, engine)`
-   and the store's rows are keyed by source, so it needs either source-keyed
-   rows or its own table.
+3. **The store's failure logs are never ingested -- BUT A PEER IS ON IT
+   ALREADY, uncommitted. Do not start this without asking them.** As of this
+   writing `brick_icons/db.py` has unstaged `store_trees`, `store_logs`,
+   `store_run` and `ingest_store`, and `scripts/index-store-attempts.py` is
+   untracked beside them. Read the working tree before the committed file: the
+   sentence above is true of `HEAD` and may already be false on disk.
 4. **The 660 timeouts want a 300s cap**, not another fetch.
 
 **One thing needs a person:** the lab API on `127.0.0.1:8792` was started before
