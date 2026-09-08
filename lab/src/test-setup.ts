@@ -66,3 +66,35 @@ if (typeof Blob !== 'undefined' && !Blob.prototype.text) {
     return read<ArrayBuffer>(this, 'buffer');
   };
 }
+
+// jsdom implements no CSS.escape, and react-aria-components reaches into a
+// selection collection by escaped id -- so any test that opens a Select,
+// Menu or ComboBox listbox throws on `escape` before it renders a row.
+// The spec's own algorithm, which is all RAC wants of it.
+if (typeof window !== 'undefined'
+    && !(window as unknown as { CSS?: { escape?: unknown } }).CSS?.escape) {
+  const host = window as unknown as { CSS?: { escape?: (s: string) => string } };
+  const CSSObj = host.CSS ?? {};
+  CSSObj.escape = (value: string): string => {
+    const str = String(value);
+    const first = str.charCodeAt(0);
+    let out = '';
+    for (let i = 0; i < str.length; i++) {
+      const c = str.charCodeAt(i);
+      if (c === 0) { out += '�'; continue; }
+      if ((c >= 1 && c <= 0x1f) || c === 0x7f
+          || (i === 0 && c >= 0x30 && c <= 0x39)
+          || (i === 1 && c >= 0x30 && c <= 0x39 && first === 0x2d)) {
+        out += '\\' + c.toString(16) + ' ';
+        continue;
+      }
+      if (i === 0 && str.length === 1 && c === 0x2d) { out += '\\' + str[i]; continue; }
+      if (c >= 0x80 || c === 0x2d || c === 0x5f
+          || (c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x5a)
+          || (c >= 0x61 && c <= 0x7a)) { out += str[i]; continue; }
+      out += '\\' + str[i];
+    }
+    return out;
+  };
+  host.CSS = CSSObj;
+}

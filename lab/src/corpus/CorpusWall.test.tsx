@@ -336,8 +336,8 @@ it('holds its level through a slot change, so a zoomed-in wall stays zoomed in',
     const { container } = render(<CorpusWall client={twoSlots} />);
     await waitFor(() => expect(container.querySelector('canvas')).toBeTruthy());
 
-    fireEvent.change(screen.getByLabelText('Slot'),
-                     { target: { value: 'silhouette-occt' } });
+    act(() => { fireEvent.click(screen.getByRole('button', { name: /Slot/ })); });
+    fireEvent.click(screen.getByRole('option', { name: 'silhouette-occt (2)' }));
     // A loose thumb for the new slot means the wall has actually swapped to
     // it -- those are keyed on the drawn slot, not the selected one.
     await waitFor(() => expect(images.srcs.some(
@@ -506,16 +506,22 @@ it('picks up a slot that appears after the page is open, without moving off your
   const growing = { ...client, corpusSources: () => Promise.resolve({ sources: slots }) };
   const { container } = render(<CorpusWall client={growing} />);
   await findCanvas(container);
-  const picker = () => container.querySelector('.corpus-bar select') as HTMLSelectElement;
-  await waitFor(() => expect(picker()).toBeTruthy());
-  expect([...picker().options].map((o) => o.value)).toEqual(['silhouette-naive']);
+  const trigger = () => screen.getByRole('button', { name: /Slot/ });
+  await waitFor(() => expect(trigger()).toBeTruthy());
 
   slots = [{ source: 'ldview', n: 9 }, { source: 'silhouette-naive', n: 2 }];
   await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
 
-  await waitFor(() => expect([...picker().options].map((o) => o.value))
-    .toEqual(['ldview', 'silhouette-naive']));
   // ldview now sorts first, but the wall stays on what was already open.
-  expect(picker().value).toBe('silhouette-naive');
+  expect(trigger().textContent).toContain('silhouette-naive');
+
+  // The Select builds its rows in a popover, so the menu is read by opening
+  // it -- and an open one hides the rest of the page from the a11y tree, so
+  // the trigger is read before this and not after.
+  act(() => { fireEvent.click(trigger()); });
+  // The rows join name and count with a non-breaking space.
+  await waitFor(() => expect(screen.getAllByRole('option')
+    .map((o) => o.textContent?.replace(/\u00a0/g, ' ')))
+    .toEqual(['ldview (9)', 'silhouette-naive (2)']));
   vi.useRealTimers();
 });

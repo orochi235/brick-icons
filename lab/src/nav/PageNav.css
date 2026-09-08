@@ -1,25 +1,63 @@
-.lab-nav {
+/* One height for every control in the header row. `--wzl-control-h` is the
+   kit's own hook -- the Select trigger, the search field and ToggleBar all
+   read it -- so setting it is what makes the row agree rather than four
+   components each landing where their own padding puts them.
+   On the header and not `:root`: labkit sets the same token on `:root` at
+   24px, which wins on source order, and a global override would also resize
+   every field in the sidebar. */
+.lk-shell-header { --wzl-control-h: 26px; }
+
+/* `.lab-nav-alike` is for a control that is not navigation but belongs to the
+   same row of them -- the wall's Legend toggle. It takes the frame; its own
+   children take the segment rules below through `.lab-nav-alike > *`. */
+.lab-nav, .lab-nav-alike {
   display: inline-flex;
+  align-items: stretch;
+  box-sizing: border-box;
+  height: var(--wzl-control-h);
   border: 1px solid var(--wzl-border);
   border-radius: 6px;
   overflow: hidden;
+  background: none;
+  padding: 0;
 }
 
-.lab-nav-link {
-  padding: 0.2rem 0.7rem;
+/* Centered by flex rather than by padding: the frame owns the height, and a
+   padded line box cannot hit it on both sides at once. */
+.lab-nav-link, .lab-nav-alike > * {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.7rem;
   font-size: 0.85rem;
-  line-height: 1.6;
+  line-height: 1;
   color: var(--wzl-fg-muted);
   text-decoration: none;
   white-space: nowrap;
 }
 
-.lab-nav-link + .lab-nav-link { border-left: 1px solid var(--wzl-border); }
+.lab-nav-link + .lab-nav-link,
+.lab-nav-alike > * + * { border-left: 1px solid var(--wzl-border); }
 
-.lab-nav-link:hover { background: var(--wzl-bg-raised); color: var(--wzl-fg); }
+.lab-nav-link:hover,
+.lab-nav-alike > *:hover { background: var(--wzl-bg-raised); color: var(--wzl-fg); }
 
-.lab-nav-link[aria-current='page'] {
+.lab-nav-link[aria-current='page'],
+.lab-nav-alike > *[aria-pressed='true'] {
   background: var(--wzl-bg-raised);
   color: var(--wzl-fg);
   font-weight: 600;
 }
+
+/* ToggleBar brings its own track, height and radius; the frame above is the
+   look here, so they are turned off rather than layered under it. Its
+   segments carry their own height too, and a segment shorter than the frame
+   leaves the hover and pressed fills floating inside it. */
+.lab-nav-alike > * {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  height: auto;
+  box-shadow: none;
+}
+
+.lab-nav-alike button { height: 100%; border-radius: 0; }

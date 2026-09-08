@@ -1,13 +1,38 @@
 .corpus-bar {
   display: flex;
-  gap: 1rem;
-  align-items: baseline;
-  padding: 0.4rem 0.6rem;
-  font: 12px/1.4 ui-monospace, monospace;
+  gap: 0.4rem;
+  align-items: center;
 }
-.corpus-bar label { display: flex; gap: 0.3rem; align-items: baseline; }
 
-/* A checkbox has no text baseline -- it would align by its bottom margin
-   edge and drag its whole label down with it, so it is taken out of the
-   baseline set and centered against the line instead. */
-.corpus-bar input[type="checkbox"] { align-self: center; }
+/* The Select is a `fill` field: it takes the width of the row it sits in,
+   which in a toolbar is all of it, and it pushed search and the legend off
+   the end. The popover then takes the trigger's width, so the min-width here
+   is really the menu's. `width: fit` does both in @weasel-js/ui 1.4.1; until
+   the lab is on it, the row does the sizing. */
+.corpus-bar > * { flex: 0 0 auto; width: max-content; min-width: 15rem; }
+
+/* Not scoped to .corpus-bar: the listbox is portaled out of it, and the
+   trigger and its rows have to read the same. Oswald tops out at 700 -- it
+   ships as one variable face spanning 200-700 -- and the slot name is what
+   the eye scans this menu for, the same call PartSearch makes for a part id.
+   `corpus-pick`, not `corpus-slot`: the lightbox owns that name for its
+   per-slot tiles, and its `flex-direction: column` stacked the count under
+   the name here. */
+.corpus-pick {
+  display: block;
+  white-space: nowrap;
+  font-family: 'Oswald', ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
+}
+
+.corpus-pick__n { font-weight: 300; color: var(--wzl-fg-muted); }
+
+/* Oswald's ascent and descent together run taller than one em, so the kit's
+   `line-height: 1` left the trigger's own value clipped along the bottom
+   inside a `overflow: hidden` box -- the count's parentheses lost their feet.
+   The line box has to be given the room and then centered in the control. */
+.corpus-bar [class*='_value_'] {
+  display: flex;
+  align-items: center;
+  line-height: 1.5;
+}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Input } from '@weasel-js/ui';
 import type { LabClient, PartHit } from '@lab/api/client';
 import '@lab/shared/PartSearch.css';
 
@@ -34,11 +35,12 @@ export function PartSearch({ client, onOpen }: PartSearchProps) {
 
   return (
     <div className="part-search">
-      <input
+      <Input
         type="search"
+        aria-label="Search parts"
         placeholder="part id or description"
         value={query}
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={setQuery}
         onKeyDown={(e) => { if (e.key === 'Enter') open(query); }}
       />
       {hits.length > 0 ? (
