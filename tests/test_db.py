@@ -166,6 +166,7 @@ DEFECT = {
     "engines": ["occt"],
     "status": "open",
     "title": "borehole rim not drawn",
+    "classes": ["arc-loss"],
     "mark": {"x": 0.42, "y": 0.55, "w": 0.11, "h": 0.09},
     "filed": "2026-08-31",
     "notes": "occt draws nothing at all",
@@ -188,6 +189,73 @@ def test_defects_round_trip_through_the_database(tmp_path):
     out = tmp_path / "again.toml"
     db.export_defects(conn, out)
     assert defects_toml.load(out) == [DEFECT]
+
+
+def test_a_defect_can_carry_two_symptom_classes(tmp_path):
+    """53119 shows stray lines and banding at once; one column would have to
+    drop one of them."""
+    from brick_icons.lab import defects as defects_toml
+
+    conn = db.connect(tmp_path / "corpus.db")
+    path = tmp_path / "defects.toml"
+    defects_toml.save(path, [{**DEFECT, "classes": ["stray-ink", "banding"]}])
+    db.import_defects(conn, path)
+    row = conn.execute("SELECT classes FROM defects").fetchone()
+    assert json.loads(row["classes"]) == ["stray-ink", "banding"]
+
+
+def test_an_unclassed_defect_stores_null_not_an_empty_list(tmp_path):
+    """`classes IS NOT NULL` is how the crossing query finds the classed rows;
+    an empty list would pass that test and contribute nothing."""
+    from brick_icons.lab import defects as defects_toml
+
+    conn = db.connect(tmp_path / "corpus.db")
+    path = tmp_path / "defects.toml"
+    bare = {k: v for k, v in DEFECT.items() if k != "classes"}
+    defects_toml.save(path, [bare])
+    db.import_defects(conn, path)
+    assert conn.execute("SELECT classes FROM defects").fetchone()[0] is None
+
+
+def test_a_database_made_before_classes_existed_gains_the_column(tmp_path):
+    """Several sessions share one corpus.db, so an additive column has to
+    arrive without a rebuild."""
+    import sqlite3
+
+    path = tmp_path / "corpus.db"
+    conn = db.connect(path)
+    conn.execute("ALTER TABLE defects DROP COLUMN classes")
+    conn.commit()
+    conn.close()
+    conn = sqlite3.connect(path)
+    assert "classes" not in {r[1] for r in
+                             conn.execute("PRAGMA table_info(defects)")}
+    conn.close()
+
+    conn = db.connect(path)
+    assert "classes" in {r["name"] for r in
+                         conn.execute("PRAGMA table_info(defects)")}
+
+
+def test_part_features_are_derived_and_replaced_whole(tmp_path):
+    conn = db.connect(tmp_path / "corpus.db")
+    ldraw = _library(tmp_path)
+    (ldraw / "p").mkdir()
+    (ldraw / "p" / "4-4cyli.dat").write_text("0 Cylinder\n")
+    (ldraw / "parts" / "3001.dat").write_text(
+        "0 Brick  2 x  4\n1 16 0 0 0  3 0 0  0 1 0  0 0 1 4-4cyli.dat\n")
+
+    assert db.seed_part_features(conn, ldraw) > 0
+    got = {r["feature"] for r in conn.execute(
+        "SELECT feature FROM part_features WHERE part_id='3001'")}
+    assert {"cylinder", "round", "elliptical"} <= got
+
+    # A part that stops carrying a feature must stop reporting it.
+    (ldraw / "parts" / "3001.dat").write_text("0 Brick  2 x  4\n")
+    db.seed_part_features(conn, ldraw)
+    got = {r["feature"] for r in conn.execute(
+        "SELECT feature FROM part_features WHERE part_id='3001'")}
+    assert "cylinder" not in got and "tris" in got
 
 
 def test_setting_a_status_and_adding_notes(tmp_path):
@@ -257,6 +325,9 @@ def test_rebuild_walks_renders_and_toml_and_jsonl(tmp_path):
                         # file, so the count is whatever the lab last filed
                         status_path=tmp_path / "none.toml",
                         commit_sha="abc1234")
+    # Popped rather than pinned: the number is one row per feature per part,
+    # so pinning it would make every new feature a failing rebuild test.
+    assert counts.pop("features") > 0
     assert counts == {"parts": 4, "renders": 1, "measurements": 1,
                       "skipped": 0, "replaced": 0, "defects": 0,
                       "statuses": 0, "years": 0, "successors": 0}

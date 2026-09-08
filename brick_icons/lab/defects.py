@@ -11,8 +11,14 @@ from pathlib import Path
 
 DEFAULT_PATH = Path("tests/goldens/defects.toml")
 STATUSES = ("open", "fixed", "wontfix", "notabug")
-_ORDER = ("id", "part", "engines", "status", "title", "mark", "kind", "points",
-          "seen", "filed", "notes")
+
+#: Symptom families, in the order they read best: what is drawn that should
+#: not be, then what is not drawn that should be, then how it is painted.
+CLASSES = ("hidden-leak", "stray-ink", "arc-split", "fill-solid",
+           "over-cull", "arc-loss", "fill-hole",
+           "banding", "shading", "seam", "stroke-scale", "decal")
+_ORDER = ("id", "part", "engines", "status", "title", "classes", "mark",
+          "kind", "points", "seen", "filed", "notes")
 
 _HEADER = """\
 # Defects found in corpus renders, filed from the lab.
@@ -22,6 +28,10 @@ _HEADER = """\
 # `points` are absent on a plain rectangle, which is every defect filed before
 # 2026-09. `seen` is retained for records that carry it; the lab now asks
 # labkit whether a mark is stale.
+#
+# `classes` is the symptom family, from defects.CLASSES: what the drawing
+# does wrong, never what causes it. A row nobody can class from its own
+# title has none, and there is no `misc`.
 
 """
 
@@ -64,12 +74,19 @@ def save(path: Path | str, records: list[dict]) -> None:
     path.write_text("\n".join(chunks))
 
 
+def check_classes(classes) -> None:
+    unknown = [c for c in classes or () if c not in CLASSES]
+    if unknown:
+        raise ValueError(f"unknown class(es) {unknown}; expected {CLASSES}")
+
+
 def add(path: Path | str, record: dict) -> dict:
     records = load(path)
     if any(r["id"] == record["id"] for r in records):
         raise ValueError(f"defect {record['id']!r} already exists")
     if record.get("status", "open") not in STATUSES:
         raise ValueError(f"status must be one of {STATUSES}")
+    check_classes(record.get("classes"))
     records.append(record)
     save(path, records)
     return record
@@ -78,6 +95,8 @@ def add(path: Path | str, record: dict) -> dict:
 def update(path: Path | str, defect_id: str, changes: dict) -> dict:
     if "status" in changes and changes["status"] not in STATUSES:
         raise ValueError(f"status must be one of {STATUSES}")
+    if "classes" in changes:
+        check_classes(changes["classes"])
     records = load(path)
     for record in records:
         if record["id"] == defect_id:
