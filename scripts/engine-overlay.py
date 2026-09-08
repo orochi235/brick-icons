@@ -61,6 +61,8 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("parts", nargs="*", default=None)
     ap.add_argument("--angle", default=None)
+    ap.add_argument("--title", default=None,
+                    help="names what this GROUP of parts has in common")
     ap.add_argument("--out", type=Path, default=Path("/tmp/engine-overlay.png"))
     ns = ap.parse_args()
     parts = ns.parts or DEFAULT_PARTS
@@ -105,8 +107,10 @@ def main():
     sheet = Image.new("RGB", (sheet_w, sheet_h), (250, 250, 250))
     d = ImageDraw.Draw(sheet)
     pose = ns.angle or "iso"
-    d.text((pad, 8), f"engine overlay - red = naive only, blue = occt only, "
-                     f"black = both   (--shading outline, {pose})",
+    head = f"engine overlay - red = naive only, blue = occt only, black = both"
+    if ns.title:
+        head = f"{ns.title}  |  {head}"
+    d.text((pad, 8), f"{head}   (--shading outline, {pose})",
            fill=(10, 10, 10), font=title_font)
     y = top
     for r in rows:
