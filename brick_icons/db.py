@@ -28,7 +28,7 @@ PART_STATUSES = ("unreviewed", "good", "suspect", "broken", "wontfix")
 # `parts.status` and its hand-written record. `|` is LDraw's mark for a part
 # nobody at LEGO made -- third-party electronics and wheels that fit LEGO.
 OUT_OF_SCOPE_CATEGORIES = ("Sticker", "|")
-SOURCES = ("naive", "occt", "decal", "ldview", "ortho",
+SOURCES = ("naive", "occt", "decal", "ldview", "reference",
            "translucent-naive", "translucent-occt",
            "silhouette-naive", "silhouette-occt",
            "white-naive", "white-occt")
@@ -308,9 +308,9 @@ _CANONICAL = {
     #
     # This argv is a config KEY and nothing runs it: the renderer is a browser,
     # and one page draws a whole list in one WebGL context. Bake the slot with
-    # `scripts/shot-sink.py --list <parts> --out renders/ortho`; a per-part CLI
-    # flag would launch Chrome 24,591 times.
-    "ortho": ["--ortho", "--angle", "iso"],
+    # `scripts/shot-sink.py --list <parts> --out renders/reference`; a per-part
+    # CLI flag would launch Chrome 24,591 times.
+    "reference": ["--reference", "--angle", "iso"],
     # See-through bricks: the ordinary drawing with its fills let down, so
     # what the far side of a part does is visible against what the near side
     # draws. Opacity is stated rather than inherited -- a translucent LDraw

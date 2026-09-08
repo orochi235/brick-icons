@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { HOME, panBy, zoomAt } from '@lab/panes/camera';
 import { orbitFromAngle } from '@lab/panes/orbit';
 import {
-  eyeFor, fromScreen, frustum, isRenderFit, letterbox, lightPosition,
-  partColorHex, screenMap, strokePx, threeStyle, toScreen, toThree,
-  type RenderFit, type Vec3Tuple,
+  eyeFor, fitAffine, fromScreen, frustum, isRenderFit, letterbox, lightPosition,
+  partColorHex, projectPoint, screenMap, strokePx, threeStyle, toScreen, toThree,
+  viewBasis, type RenderFit, type Vec3Tuple,
 } from '@lab/panes/viewport';
 
 /** `brick-icons 3005 --shading outline --format svg`, verbatim. Real numbers
@@ -208,5 +208,55 @@ describe('threeStyle', () => {
   it('clamps an opacity the settings panel let through', () => {
     expect(threeStyle({ opacity: 4 }).opacity).toBe(1);
     expect(threeStyle({ opacity: -1 }).opacity).toBe(0);
+  });
+});
+
+
+/** The reference bake frames itself, so these two are the engine's own
+ *  `hlr.view_basis` and `hlr.fit_affine` ported. Expectations are what
+ *  Python prints, not what this file computes a second time. */
+describe('the engine framing the bake reproduces', () => {
+  it('builds the iso basis view_basis builds', () => {
+    const b = viewBasis({ lat: 30, long: 45 });
+    expect(b.right).toEqual(FIT_3005.right.map((v) => expect.closeTo(v, 12)));
+    expect(b.up).toEqual(FIT_3005.up.map((v) => expect.closeTo(v, 12)));
+    expect(b.fwd).toEqual(FIT_3005.fwd.map((v) => expect.closeTo(v, 12)));
+  });
+
+  it('projects a point to A and B, B pointing down', () => {
+    const b = viewBasis({ lat: 30, long: 45 });
+    // Straight down in LDraw (+Y) has to come out below, so B is positive.
+    expect(projectPoint(b, 0, 10, 0)[1]).toBeCloseTo(8.660254037844387, 12);
+    expect(projectPoint(b, 0, 10, 0)[0]).toBeCloseTo(0, 12);
+  });
+
+  it('fits a box the way fit_affine does', () => {
+    // `hlr.fit_affine((-10, -4, 30, 16), 256, 170, 6)` -> (6.1, 67.0, 48.4).
+    const fit = fitAffine({ a0: -10, b0: -4, a1: 30, b1: 16 }, 256, 170, 6);
+    expect(fit.k).toBeCloseTo(6.1, 12);
+    expect(fit.kx).toBeCloseTo(67.0, 12);
+    expect(fit.ky).toBeCloseTo(48.4, 12);
+  });
+
+  it('puts the fitted box inside the canvas, margin clear, centred', () => {
+    const box = { a0: -10, b0: -4, a1: 30, b1: 16 };
+    const fit = fitAffine(box, 256, 170, 6);
+    const x0 = box.a0 * fit.k + fit.kx, x1 = box.a1 * fit.k + fit.kx;
+    const y0 = box.b0 * fit.k + fit.ky, y1 = box.b1 * fit.k + fit.ky;
+    expect(x0).toBeCloseTo(6, 9);          // the wide axis takes the margin
+    expect(x1).toBeCloseTo(250, 9);
+    expect(y0 + y1).toBeCloseTo(170, 9);   // the other is centred
+  });
+
+  it('frames a self-fitted square canvas with no letterbox to undo', () => {
+    const box = { a0: -10, b0: -4, a1: 30, b1: 16 };
+    const fit: RenderFit = {
+      ...viewBasis({ lat: 30, long: 45 }),
+      ...fitAffine(box, 512, 512, 6), width: 512, height: 512,
+    };
+    const f = frustum(fit, { width: 512, height: 512 }, HOME);
+    // A pixel is one unit of A both ways round: no anisotropy left in it.
+    expect((f.right - f.left) / 512).toBeCloseTo(1 / fit.k, 12);
+    expect((f.top - f.bottom) / 512).toBeCloseTo(1 / fit.k, 12);
   });
 });

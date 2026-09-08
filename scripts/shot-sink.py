@@ -2,12 +2,15 @@
 """Serve the LDraw library to the shot page, drive it headless, and take back
 the PNGs it renders.
 
-    .venv/bin/python scripts/shot-sink.py --parts 3001,3030 --out out/ortho
+    .venv/bin/python scripts/shot-sink.py --parts 3001,3030 --out out/reference
 
 The shot page (`lab/shot.html`) is a browser, so it cannot read the library off
 disk or write a render to one. This gives it both ends over HTTP: `/ldraw/...`
 is the vendored library, `/work.json` is the list of parts to draw, and a POST
-to `/shot/<part>.png` lands the render in `--out`.
+to `/shot/<part>.png` lands the render in `--out`. A second POST to
+`/fit/<part>.fit.json` lands the world -> pixel map beside it, in the schema
+the CLI writes beside an SVG: without it a pixel of the reference names no
+point on the part.
 
 One browser renders the whole list in one WebGL context; a page load per part
 costs more than the render does.
@@ -61,6 +64,7 @@ class Sink(BaseHTTPRequestHandler):
     out: Path = Path(".")
     px: int = 512
     angle: str = "iso"
+    margin: int = 6
     done: threading.Event = threading.Event()
     received = 0
 
@@ -79,7 +83,8 @@ class Sink(BaseHTTPRequestHandler):
         path = self.path.split("?")[0]
         if path == "/work.json":
             body = json.dumps({"parts": Sink.parts, "px": Sink.px,
-                               "angle": Sink.angle}).encode()
+                               "angle": Sink.angle,
+                               "margin": Sink.margin}).encode()
             return self._send(200, body, "application/json")
         if path.startswith("/ldraw/"):
             # `resolve` under LDRAW is the containment check: a part name comes
@@ -105,6 +110,11 @@ class Sink(BaseHTTPRequestHandler):
         if path == "/done":
             Sink.done.set()
             return self._send(200, b"ok", "text/plain")
+        if path.startswith("/fit/"):
+            n = int(self.headers.get("Content-Length", 0))
+            Sink.out.mkdir(parents=True, exist_ok=True)
+            (Sink.out / Path(path[len("/fit/"):]).name).write_bytes(self.rfile.read(n))
+            return self._send(200, b"ok", "text/plain")
         if not path.startswith("/shot/"):
             return self._send(404, b"no", "text/plain")
         name = Path(path[len("/shot/"):]).name
@@ -122,9 +132,12 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--parts", help="comma-separated part ids")
     ap.add_argument("--list", help="file with one part per line")
-    ap.add_argument("--out", default="out/ortho")
+    ap.add_argument("--out", default="out/reference")
     ap.add_argument("--px", type=int, default=512)
     ap.add_argument("--angle", default="iso")
+    ap.add_argument("--margin", type=int, default=6,
+                    help="pixels kept clear around the part, as --margin does "
+                         "for the CLI's viewBox")
     ap.add_argument("--port", type=int, default=8801)
     ap.add_argument("--page", help="page URL; default is the sink's own copy "
                                    "of lab/dist/shot.html")
@@ -152,6 +165,7 @@ def main() -> int:
 
     out = Path(args.out)
     Sink.out, Sink.px, Sink.angle = out, args.px, args.angle
+    Sink.margin = args.margin
     asked = len(parts)
     if not args.redo:
         parts = [p for p in parts if not (out / f"{p}.png").is_file()]
