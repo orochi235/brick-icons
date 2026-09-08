@@ -130,26 +130,30 @@ Then, with the three values step 2 printed:
   batch appends to that pass's file — and `--skip-done` reads the old timeout
   rows as done and skips exactly the parts being retried.
 
-### 5. Turn the results around before you wait
+### 5. Check the results are coming home, do not assume they are not
 
-**`--out` and `--to` do not move anything.** They record where results should
-land for a later fetch, and a job launched with only those holds its whole
-output on the node until it ends -- which is how a round that dies at hour
-three comes home with nothing. `onto run` has no cadence flag, so both halves
-are separate commands, and both are easy to forget:
+**A detached job that names `--out` and `--to` already delivers as it goes.**
+Measured on this round: the job launched at 17:05 and its first renders were
+on this machine at 17:06:32, with nobody running a fetch. `readCadence`
+defaults to items when no cadence file exists, and `recordDelivery` fires
+whenever `--to` is set.
 
-    onto deliver --at items <job-id>              # node pushes as it finishes
-    nohup onto fetch --stream <task> > out/<task>-stream.log 2>&1 &
+The help text says otherwise and it is worth not believing: `-out` reads
+"path under the tree holding this job's results, for a later fetch", and the
+launch banner prints `onto fetch --stream <task>` as though that were the step
+that starts delivery. It is not -- it is the controller-side pull, useful when
+you want a guaranteed-quiet pass after the job stops, and redundant with the
+push the rest of the time.
 
-Do them in the same breath as the launch. The push and the pull overlap
-harmlessly -- both are idempotent by content -- and the stream's pass after
-the job stops is the only one guaranteed to see a tree nobody is writing to,
-which is what the ingest waits for.
+So the check is a check, not a ritual:
 
-**Do not start a second stream on a task that already has one.** Sessions
-share this repo. `pgrep -f "onto fetch --stream"` -- and read it, because
-every Claude session's launch prompt contains that string too, so a plain
-`pgrep -fl "onto fetch"` matches sessions rather than fetches.
+    find out/<task>/renders -name '*.svg' | wc -l     # against the job's own count
+    onto logs <job-id> | grep -c 'occt@iso'
+
+If those two track each other, delivery is working and there is nothing to
+start. If the first stays at zero while the second climbs, THEN something is
+wrong -- and `onto deliver --at items <job-id>` is how you turn it on for a
+job that somehow has it off.
 
 ### 6. Wait, and watch for the two silent failures
 

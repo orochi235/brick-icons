@@ -40,6 +40,12 @@ UNFILLABLE = {
     "decal": "--decal is not a flag the census pass takes",
 }
 
+#: Why the estimate is a floor and not a forecast: it is built from the parts
+#: the slot has ALREADY drawn, and those are the ones that were cheap enough
+#: to finish. What is left over-represents whatever was slow or failed --
+#: printed parts, mostly -- so the true mean of the remainder is higher than
+#: the mean of the history, and nothing here can see by how much.
+
 #: How much of a part's recorded cost a fresh pass pays. The census row times
 #: the whole oracle -- render, rasterize, truth mask, compare -- and a fill
 #: pass runs exactly that, so the figure transfers as it stands. It is a
@@ -89,6 +95,12 @@ def flags_for(slot: str) -> dict:
 def owed(conn, slot: str, scope: list[str]) -> dict:
     """The slot's parts split by how much is known about each.
 
+    The per-part figure is the MEAN, not the median. Render cost is savagely
+    skewed -- a measured white-occt round came in at a 2.7s median against a
+    26.4s mean, p99 223s -- and a total is n times the mean. Budgeting on the
+    median underestimated a 12,987-part round as 4.2h when it was closer to
+    12h.
+
     `never` before `errored`, which is the order a run cut short by its
     deadline should spend its time in: a part that timed out costs its whole
     cap and yields nothing.
@@ -108,12 +120,12 @@ def owed(conn, slot: str, scope: list[str]) -> dict:
     engine = slot.rsplit("-", 1)[-1]
     borrowed = False
     if cost:
-        median = statistics.median(cost)
+        median = statistics.mean(cost)
     else:
         peers = [r["secs"] for r in conn.execute(
             "SELECT secs FROM measurements WHERE engine = ? AND error IS NULL "
             "AND secs IS NOT NULL", (engine,))]
-        median = statistics.median(peers) if peers else FALLBACK_SECS
+        median = statistics.mean(peers) if peers else FALLBACK_SECS
         borrowed = bool(peers)
 
     out = {"drawn": [], "never": [], "errored": [], "median": median,
@@ -197,7 +209,7 @@ def main() -> int:
     print(f"  errored    {len(o['errored']):6}", flush=True)
     origin = f"borrowed from every {flags['engine']} row" if o["borrowed"] \
         else "this slot's own rows"
-    print(f"  median     {o['median']:6.1f}s per part  ({origin})", flush=True)
+    print(f"  mean       {o['median']:6.1f}s per part  ({origin})", flush=True)
     print(f"\n  batch of {len(picked)}: about {spent / 3600:5.1f} core-hours, "
           f"{spent / 3600 / args.workers:5.1f}h on {args.workers} workers",
           flush=True)
