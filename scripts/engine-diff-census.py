@@ -118,6 +118,13 @@ def main() -> int:
     ap.add_argument("--timeout", type=float, default=180.0)
     ap.add_argument("--mem-gb", type=float, default=6.0)
     ap.add_argument("--retry-errors", action="store_true")
+    ap.add_argument("--shard", type=int, help="0-based shard index")
+    ap.add_argument("--of", type=int, help="how many shards in total")
+    ap.add_argument("--from-library", action="store_true",
+                    help="take the part list from the vendored LDraw tree "
+                         "rather than corpus.db -- the library is synced to "
+                         "every node and identical, where a node's corpus.db "
+                         "may be an older copy and would shard differently")
     ap.add_argument("--resvg", default=None,
                     help="path to resvg; no fleet node carries it on the "
                          "agent PATH, so a job passes it explicitly")
@@ -130,13 +137,22 @@ def main() -> int:
         ap.error(f"resvg not found at {RESVG!r}; pass --resvg")
 
     parts = [q for p in (a.parts or []) for q in p.split(",") if q]
+    if not parts and a.from_library:
+        from brick_icons import config as _cfg
+        pdir = _cfg.load_config().ldraw_dir / "parts"
+        parts = sorted(f.stem for f in pdir.glob("*.dat"))
     if not parts:
         con = sqlite3.connect(a.db)
         parts = [r[0] for r in con.execute(
             "select id from parts order by id")]
+    if a.of:
+        if a.shard is None or not 0 <= a.shard < a.of:
+            ap.error(f"--shard must be 0..{a.of - 1}")
+        parts = parts[a.shard::a.of]
     if not (a.out or a.out_dir):
         ap.error("pass --out or --out-dir")
-    out = a.out or (a.out_dir / f"rows-{parts[0]}.jsonl")
+    tag = f"shard{a.shard:04d}" if a.of else f"rows-{parts[0]}"
+    out = a.out or (a.out_dir / f"{tag}.jsonl")
     out.parent.mkdir(parents=True, exist_ok=True)
     a.out = out
     runner = batch.Runner(a.out, timeout=a.timeout, key="part",
