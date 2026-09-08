@@ -45,9 +45,9 @@ export const FRESH_MANIFEST: SheetManifest = {
   ),
 };
 
-/** One entry behind the store and one gone altogether -- a lost sidecar entry
- *  reaches `isStale` differently from a stale one, and both drop the cell back
- *  to a fill. */
+/** One entry behind the store and one gone altogether. These now part ways:
+ *  a stale entry still has a tile and draws it, while a missing one has no
+ *  tile and is the only case that drops back to a fill. */
 export const STALE_MANIFEST: SheetManifest = (() => {
   const baked: Record<string, string> =
     { ...FRESH_MANIFEST.baked, unknown: 'sha-unknown-older' };

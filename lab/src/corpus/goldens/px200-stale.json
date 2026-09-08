@@ -1,29 +1,31 @@
 [
   {
-    "kind": "fill",
+    "kind": "sprite",
     "dx": 0,
     "dy": 0,
     "dw": 200,
     "dh": 200,
-    "fill": "#3a3a3f",
-    "border": null,
-    "borderWidth": 0,
-    "shape": "square",
+    "sx": 2,
+    "sy": 2,
+    "sw": 32,
+    "sh": 32,
+    "ground": "#ffffff",
+    "badges": [],
+    "strip": [],
     "captions": [
       {
         "text": "1978–",
         "corner": "tr",
-        "ink": "#ffffff",
+        "ink": "#4a4a4f",
         "weight": 300
       },
       {
         "text": "unknown",
         "corner": "bl",
-        "ink": "#ffffff",
+        "ink": "#4a4a4f",
         "weight": 500
       }
-    ],
-    "slash": false
+    ]
   },
   {
     "kind": "fill",

@@ -49,12 +49,17 @@ it('draws an unrendered cell with nothing known as unknown gray, and no border',
                         captions: [] });
 });
 
-it('draws a stale cell as a fill, not as last week’s picture', () => {
+it('draws last week’s picture for a stale cell rather than a blank box', () => {
+  /* This asserted the opposite until a re-encode of one slot moved every
+     sha at once: each tile read as stale, every cell fell through to a
+     flat fill, and the wall showed an empty grid with nothing anywhere
+     saying why. A stale picture is worth drawing; freshness belongs to the
+     decision to FETCH a better tile. `staleCount` is what reports it. */
   const [cmd] = paintCommands({
     cells: [cell('a', 0, 'sha-newer')], rects, visible: [0],
     cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest,
   });
-  expect(cmd!.kind).toBe('fill');
+  expect(cmd!.kind).toBe('sprite');
 });
 
 it('applies the camera to every command', () => {

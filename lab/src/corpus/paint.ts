@@ -3,7 +3,7 @@ import type { Band, Rect } from '@lab/corpus/layout';
 import { CELL_STATES, type CellState, type CellStyle, type Palette } from '@lab/corpus/palette';
 import { BY_PRECEDENCE, type StateFacts } from '@lab/corpus/states';
 import { DEFAULT_PARAMS } from '@lab/corpus/params';
-import { isStale, sourceBox } from '@lab/corpus/sheet';
+import { hasTile, sourceBox } from '@lab/corpus/sheet';
 import { tintFor, type TintMode } from '@lab/corpus/tint';
 import type { Cell, SheetManifest } from '@lab/corpus/types';
 import { yearRange } from '@lab/corpus/years';
@@ -456,7 +456,9 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
                  alpha, caret: isCaret, badges, strip, captions, wash });
       continue;
     }
-    const box = tint === 'status' && manifest && cell.sha && !isStale(manifest, cell)
+    // Drawn whenever the sheet has a tile, stale or not. Freshness decides
+    // whether to fetch a better one, never whether to show a picture.
+    const box = tint === 'status' && manifest && hasTile(manifest, cell)
       ? sourceBox(manifest, cell.index)
       : null;
     if (box) {

@@ -1,16 +1,18 @@
 [
   {
-    "kind": "fill",
+    "kind": "sprite",
     "dx": 0,
     "dy": 0,
     "dw": 64,
     "dh": 64,
-    "fill": "#3a3a3f",
-    "border": null,
-    "borderWidth": 0,
-    "shape": "square",
-    "captions": [],
-    "slash": false
+    "sx": 2,
+    "sy": 2,
+    "sw": 32,
+    "sh": 32,
+    "ground": "#ffffff",
+    "badges": [],
+    "strip": [],
+    "captions": []
   },
   {
     "kind": "fill",

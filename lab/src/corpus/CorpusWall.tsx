@@ -25,6 +25,7 @@ import { useParams } from '@lab/corpus/useParams';
 import { useSheets, type Sheet } from '@lab/corpus/useSheets';
 import { useVectorThumbs } from '@lab/corpus/useVectorThumbs';
 import type { Cell } from '@lab/corpus/types';
+import { staleCount } from '@lab/corpus/sheet';
 import { visibleRange } from '@lab/corpus/visible';
 import { Wall } from '@lab/corpus/Wall';
 import { PartSearch } from '@lab/shared/PartSearch';
@@ -278,6 +279,24 @@ export function CorpusWall({ client }: { client: LabClient }) {
   // The 128 rung still draws from the 32px bake underneath -- a cell whose
   // loose image hasn't arrived yet needs something to show.
   const active = sheets[level === 8 ? 8 : 32] ?? null;
+
+  // A slot whose sheet disagrees with the store on most of its cells is a
+  // bake that did not finish or a re-encode that moved every sha. The wall
+  // draws the stale tiles anyway, so without this the only symptom is that
+  // the pictures are quietly out of date.
+  const reported = useRef<string>('');
+  useEffect(() => {
+    if (!active?.manifest || !shown.length) return;
+    const key = `${drawnSource}:${active.manifest.level}`;
+    if (reported.current === key) return;
+    reported.current = key;
+    const { stale, missing, total } = staleCount(active.manifest, shown);
+    if (stale + missing > total / 10) {
+      console.warn(`[corpus] ${drawnSource} sheet-${active.manifest.level}: `
+        + `${stale} of ${total} cells stale, ${missing} with no tile. `
+        + `Re-run scripts/bake-thumbs.py.`);
+    }
+  }, [active, shown, drawnSource]);
 
   // Stable across renders that don't touch these four -- `Wall`'s paint
   // effects key on this object, and a fresh one every render would repaint
