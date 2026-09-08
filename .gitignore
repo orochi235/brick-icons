@@ -23,3 +23,8 @@ corpus.db.ingest*
 # rebuilds from vendor/LDView.app in an hour.
 renders/**/*.png
 renders/**/*.webp
+# The reference bake's world -> pixel maps, one per render and regenerated with
+# it. Ignored HERE rather than in .git/info/exclude so a node agrees: a file a
+# node does not ignore but we do is untracked in tracked space there, and every
+# later `onto sync` refuses rather than delete it.
+renders/**/*.fit.json
