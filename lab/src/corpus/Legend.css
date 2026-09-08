@@ -49,62 +49,22 @@
   width: 14px;
   height: 14px;
   border-radius: 2px;
-  border: 2px solid transparent;
   box-sizing: border-box;
+  /* One rule for every state. `Legend` sets these two from the state table,
+   * so a condition added there needs nothing here -- enumerating states by
+   * hand is what left four of eleven swatches blank. */
+  background-color: var(--swatch-fill);
+  border: 2px solid var(--swatch-line);
+  color: var(--swatch-line);
 }
-.corpus-legend-row[data-state="unknown"] .corpus-legend-swatch {
-  background: var(--corpus-cell-unknown-fill);
-}
-.corpus-legend-row[data-state="outOfScope"] .corpus-legend-swatch {
-  background: var(--corpus-cell-out-of-scope-fill);
-}
-.corpus-legend-row[data-state="timeout"] .corpus-legend-swatch {
-  background: var(--corpus-cell-timeout-fill);
-  border-color: var(--corpus-cell-timeout-border);
-}
-.corpus-legend-row[data-state="failed"] .corpus-legend-swatch {
-  background: var(--corpus-cell-failed-fill);
-  border-color: var(--corpus-cell-failed-border);
-}
-.corpus-legend-row[data-state="defect"] .corpus-legend-swatch {
-  background: var(--corpus-cell-defect-fill);
-  border-color: var(--corpus-cell-defect-border);
-}
-.corpus-legend-row[data-state="failedElsewhere"] .corpus-legend-swatch {
-  background: var(--corpus-cell-failed-elsewhere-fill);
-  border-color: var(--corpus-cell-failed-elsewhere-border);
-  border-width: 1px;
-}
-.corpus-legend-row[data-state="defectElsewhere"] .corpus-legend-swatch {
-  background: var(--corpus-cell-defect-elsewhere-fill);
-  border-color: var(--corpus-cell-defect-elsewhere-border);
-  border-width: 1px;
-}
-/* Struck corner to corner, the way `Wall` strikes an undrawn cell in one of
- * these states. `currentColor` is the border color, set per state below. */
-.corpus-legend-row[data-state="timeout"] .corpus-legend-swatch,
-.corpus-legend-row[data-state="failed"] .corpus-legend-swatch,
-.corpus-legend-row[data-state="defect"] .corpus-legend-swatch,
-.corpus-legend-row[data-state="failedElsewhere"] .corpus-legend-swatch,
-.corpus-legend-row[data-state="defectElsewhere"] .corpus-legend-swatch {
+/* An other-slot twin wears a thinner ring, the way the wall draws it. */
+.corpus-legend-row[data-weight="thin"] .corpus-legend-swatch { border-width: 1px; }
+/* Struck corner to corner, the way `Wall` strikes an undrawn cell that has a
+ * border. `currentColor` is that border color, set above. */
+.corpus-legend-row[data-struck="true"] .corpus-legend-swatch {
   background-image: linear-gradient(to top right,
     transparent calc(50% - 1px), currentColor calc(50% - 1px),
     currentColor calc(50% + 1px), transparent calc(50% + 1px));
-}
-.corpus-legend-row[data-state="timeout"] .corpus-legend-swatch {
-  color: var(--corpus-cell-timeout-border);
-}
-.corpus-legend-row[data-state="failed"] .corpus-legend-swatch {
-  color: var(--corpus-cell-failed-border);
-}
-.corpus-legend-row[data-state="defect"] .corpus-legend-swatch {
-  color: var(--corpus-cell-defect-border);
-}
-.corpus-legend-row[data-state="failedElsewhere"] .corpus-legend-swatch {
-  color: var(--corpus-cell-failed-elsewhere-border);
-}
-.corpus-legend-row[data-state="defectElsewhere"] .corpus-legend-swatch {
-  color: var(--corpus-cell-defect-elsewhere-border);
 }
 
 .corpus-legend-name { min-width: 0; }

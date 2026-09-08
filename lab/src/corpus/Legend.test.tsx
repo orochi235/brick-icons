@@ -162,3 +162,27 @@ it('marks the hovered tag row the way a hovered state row is marked', () => {
   const row = screen.getByRole('button', { name: /^technic/ });
   expect(row.getAttribute('data-highlighted')).toBe('true');
 });
+
+it('gives every state a swatch, however the table grows', () => {
+  // The CSS enumerated a rule per state and fell four behind the table:
+  // `review`, `accepted`, `reviewElsewhere` and `timeoutElsewhere` drew no
+  // swatch at all, the last of them over 1,930 parts. Colors come off the
+  // table now, so a condition added there needs no CSS.
+  const { container } = render(
+    <Legend cells={cells} highlight={null} onHighlight={() => {}} badges={[]} onBadges={vi.fn()}
+            highlightTag={null} onHighlightTag={vi.fn()} onClose={vi.fn()} />);
+  const rows = container.querySelectorAll<HTMLElement>('.corpus-legend-row[data-state]');
+  expect(rows.length).toBe(CELL_STATES.length);
+  for (const row of rows) {
+    const state = row.dataset.state!;
+    expect(row.style.getPropertyValue('--swatch-fill'),
+           `${state} has no fill`).toMatch(/^var\(--corpus-cell-/);
+    const line = row.style.getPropertyValue('--swatch-line');
+    expect(line, `${state} has no line color`).not.toBe('');
+    // A state the wall strikes must say so, or the swatch is a plain square
+    // where the cell is struck corner to corner.
+    const struck = row.dataset.struck === 'true';
+    expect(struck, `${state} strike disagrees with its border`)
+      .toBe(line !== 'transparent');
+  }
+});

@@ -2,7 +2,8 @@ import { useMemo } from 'react';
 import { FloatingPanel } from '@weasel-js/labkit';
 import { BadgeSwatch } from '@lab/corpus/BadgeSwatch';
 import { ALL_BADGES, tally } from '@lab/corpus/paint';
-import { CELL_STATES, STATE_LABEL, type CellState } from '@lab/corpus/palette';
+import { CELL_STATES, DEFAULT_PALETTE, STATE_CSS_VAR, STATE_LABEL,
+         type CellState } from '@lab/corpus/palette';
 import type { Cell } from '@lab/corpus/types';
 import '@lab/corpus/Legend.css';
 
@@ -65,9 +66,20 @@ export function Legend({ cells, tagCells, highlight, onHighlight,
         </button>
       </div>
       <ul className="corpus-legend-list">
+        {/* Swatch colors come from the state table, not from a rule per
+            state: the CSS enumerated seven of eleven, so `timeoutElsewhere`
+            drew blank with 1,930 parts in it. `var(...)` rather than a literal
+            keeps the params panel's live tuning reaching the swatch. */}
         {CELL_STATES.map((state) => (
           <li key={state} className="corpus-legend-item">
             <div className="corpus-legend-row" data-state={state}
+                 data-struck={DEFAULT_PALETTE[state].border !== null}
+                 data-weight={DEFAULT_PALETTE[state].weight ?? 'none'}
+                 style={{
+                   ['--swatch-fill' as string]: `var(${STATE_CSS_VAR[state].fill})`,
+                   ['--swatch-line' as string]: STATE_CSS_VAR[state].border === null
+                     ? 'transparent' : `var(${STATE_CSS_VAR[state].border})`,
+                 } as React.CSSProperties}
                  data-highlighted={highlight === state} tabIndex={0}
                  aria-label={`${STATE_LABEL[state]}, ${counts[state].toLocaleString()} parts`}
                  onMouseEnter={() => onHighlight(state)}

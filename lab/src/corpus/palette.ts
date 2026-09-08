@@ -37,7 +37,13 @@ export const DEFAULT_PALETTE: Palette = {
   unmatched: { fill: '#2a2a2e', border: null, weight: null },
 };
 
-const PROPERTY: Record<CellState, { fill: string; border: string | null }> = cssVarTable();
+/** The CSS custom property each state's fill and border live in. Exported so
+ *  a consumer can name a state's variables without hand-writing them: the
+ *  legend's swatches did, and fell four states behind the table. */
+export const STATE_CSS_VAR: Record<CellState, { fill: string; border: string | null }> =
+  cssVarTable();
+
+const PROPERTY = STATE_CSS_VAR;
 
 /** Where a params panel's color row writes each color param -- the same CSS
  *  custom properties `readPalette` reads, keyed the way `Params` names them
