@@ -684,6 +684,50 @@ def store_trees(root: Path | str = ".") -> list[Path]:
     return [d for d in [store, *here] if store_logs(d)]
 
 
+def store_run(conn: sqlite3.Connection, tree: Path | str,
+              root: Path | str = ".", commit_sha: str = "unknown",
+              create: bool = True) -> int | None:
+    """The run a store tree's rows belong to, reused if it already has one.
+
+    One run per tree, so re-ingesting a tree replaces its rows through the
+    primary key instead of stacking a second copy under a fresh id. With
+    `create` false this only asks, which is what a caller deciding whether the
+    tree has been taken up wants.
+    """
+    where = _relative(Path(tree), Path(root))
+    row = conn.execute(
+        "SELECT id FROM runs WHERE kind = 'store' "
+        "AND json_extract(args, '$.dir') = ? ORDER BY id LIMIT 1",
+        (where,)).fetchone()
+    if row:
+        return row["id"]
+    return start_run(conn, "store", {"dir": where}, commit_sha) if create else None
+
+
+def ingest_store(conn: sqlite3.Connection, root: Path | str = ".",
+                 commit_sha: str = "unknown",
+                 progress=lambda msg: None) -> int:
+    """Take up every render-store log under `out/store`. Returns rows written.
+
+    Idempotent, so it runs against a live database as well as inside a
+    rebuild: a tree keeps its run, and a log re-read replaces the rows it
+    wrote before.
+    """
+    root = Path(root)
+    total = 0
+    for tree in store_trees(root):
+        logs = store_logs(tree)
+        where = _relative(tree, root)
+        run_id = store_run(conn, tree, root, commit_sha)
+        n = 0
+        for log in logs:
+            n += import_store_jsonl(conn, run_id, log)
+            progress(f"{log.name}: {n} attempts")
+        finish_run(conn, run_id, note=f"{len(logs)} logs in {where}")
+        total += n
+    return total
+
+
 def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
             census_dirs: Sequence[Path | str] | None = None,
             defects_path: Path | str = defects_toml.DEFAULT_PATH,
@@ -771,17 +815,7 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
 
     # The store's own logs, which no census tree carries: a part that timed
     # out here has no render to index and no measurement to import.
-    for tree in store_trees(root):
-        logs = store_logs(tree)
-        where = _relative(tree, root)
-        run_id = start_run(conn, "store", {"dir": where, "logs": len(logs)},
-                           commit_sha)
-        for log in logs:
-            n = import_store_jsonl(conn, run_id, log)
-            counts["attempts"] += n
-            progress(f"{log.name}: {n} attempts")
-        finish_run(conn, run_id,
-                   note=f"rebuilt from {len(logs)} logs in {where}")
+    counts["attempts"] = ingest_store(conn, root, commit_sha, progress)
 
     counts["defects"] = import_defects(conn, defects_path)
     counts["statuses"] = import_statuses(conn, status_path)

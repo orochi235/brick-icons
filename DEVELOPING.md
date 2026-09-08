@@ -79,8 +79,15 @@ parameter the lab knows and the CLI does not is a bug by construction, and
 run tried, drawn or not — the only record of a part that timed out, since it
 leaves neither a render nor a measurement). Source slots are `db.SOURCES`.
 
-Rebuild it into a temp file and swap — never in place, because a running lab
-server reads it on every request:
+Adding to it rarely needs a rebuild: `connect()` creates a new table and
+ALTERs in a declared column on every open, `scripts/index-slot-renders.py`
+indexes a slot's renders where they lie, and `scripts/index-store-attempts.py`
+takes up the store's logs — all against a live database. `scripts/snap-corpus.sh`
+clones it with `VACUUM INTO` in about a second.
+
+Rebuild it — from scratch, when the file is lost or the schema changes shape —
+into a temp file and swap, never in place, because a running lab server reads
+it on every request:
 
     tmp=corpus.db.ingest.$$
     .venv/bin/python scripts/build-corpus-db.py --out "$tmp"

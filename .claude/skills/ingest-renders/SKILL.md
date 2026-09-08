@@ -110,13 +110,19 @@ can then only fall back to the engine, which does not tell two facets of one
 engine apart. `build-corpus-db.py` passes the directory; a hand call to
 `import_census_jsonl` has to be given it.
 
-**A render-store run's outcomes ingest as `attempts`, on the same rebuild.**
+**A render-store run's outcomes ingest as `attempts`:**
+
+    .venv/bin/python scripts/index-store-attempts.py
+
 `store-batch.sh` writes one row per part — `state`, `secs`, `error` — to
-`out/store/<dir>/<source>-<part>.jsonl.<source>`, and `db.rebuild` takes up
-every log under `out/store` as a run of kind `store`. They are not
-measurements and must not be: every reader takes the newest run per part and
-engine, so a store row in that table would hand each occt finding a null where
-its d99 was.
+`out/store/<dir>/<source>-<part>.jsonl.<source>`, and this takes up every log
+under `out/store` into a live database, one run per tree. Idempotent: a second
+pass replaces its own rows instead of stacking a copy, so run it whenever a
+fetch lands. `db.rebuild` reads the same logs through the same function.
+
+They are not measurements and must not be: every reader there takes the newest
+run per part and engine, so a store row would hand each occt finding a null
+where its d99 was.
 
     sqlite3 corpus.db "SELECT source, COALESCE(error, state) AS outcome, \
       count(*) n, ROUND(AVG(secs),1) avg FROM attempts GROUP BY 1,2 \
@@ -129,17 +135,34 @@ what the next pass is owed:
     sqlite3 corpus.db "SELECT part_id, secs FROM attempts \
       WHERE source = 'occt' AND error = 'TimeoutError' ORDER BY part_id;"
 
-There is no in-place route for these: a rebuild is what takes them up, so a
-slot indexed with `index-slot-renders.py` has its drawings and not yet its
-outcomes.
-
 **`scripts/render-store-report.sh` will not tell you this.** It globs
 `out/store/s*.jsonl.*` and `shard-*.txt` — the old local-shard layout — so
 against a fleet run's directory it reports an older run's numbers rather than
 finding nothing, which is the worse failure of the two. The `attempts` query
 above is the honest version.
 
-### 5. Verify against the files, not against the run
+### 5. Prune a finished tree's logs, once the rows are somewhere else
+
+The logs are two things at once — the record we ingest, and the resume state
+`Runner.remaining()` reads to decide what a relaunch still owes. So a live
+task's logs stay, and pruning is per finished tree:
+
+    sh scripts/snap-corpus.sh                       # VACUUM INTO, about a second
+    .venv/bin/python scripts/prune-store-logs.py out/store/<dir>
+    .venv/bin/python scripts/prune-store-logs.py out/store/<dir> --delete
+
+Dry run without `--delete`. It refuses on a marker written in the last half
+hour, on logs still being written, on any row not in `attempts`, and unless a
+snapshot under `out/snapshots` **holds those rows itself** — checked by
+counting them there, because a snapshot taken after the logs can still predate
+the ingest.
+
+**Deleting a log makes the database the only copy**, which is why the snapshot
+is not optional: `db.rebuild` drops `corpus.db` and re-derives it from files,
+and the file it derived `attempts` from is the one being deleted. The node
+keeps its own tree, so pruning here does not stop a relaunch resuming there.
+
+### 6. Verify against the files, not against the run
 
     ls renders/<slot> | wc -l
     sqlite3 corpus.db "SELECT source, count(*) FROM renders GROUP BY source ORDER BY 2 DESC;"
@@ -147,7 +170,7 @@ above is the honest version.
 A job's own summary counts what it believes it wrote. These two count what is
 there. Where they disagree, the disagreement is the finding.
 
-### 6. Restart the lab server after a schema bump
+### 7. Restart the lab server after a schema bump
 
 `db.connect` raises when the file is at a higher schema than the code, so a
 server started before a bump 500s every database route — the blank wall that
@@ -159,7 +182,7 @@ reads like an ingest failure. There is no `--reload`:
 It is shared with the other sessions in this directory, so say so when you
 bounce it.
 
-### 7. Report what is owed, not that it finished
+### 8. Report what is owed, not that it finished
 
 An ingest ends with four numbers: what came back, what indexed, what failed,
 and what is still missing from the slot. "Ingested and baked" without them

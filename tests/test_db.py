@@ -739,6 +739,29 @@ def test_an_inflight_marker_is_not_read_as_an_attempt(tmp_path):
     assert counts["attempts"] == 1
 
 
+def test_taking_up_the_store_twice_keeps_one_run(tmp_path):
+    # The in-place route runs against a live database, so a second pass has to
+    # replace the rows it wrote rather than stack a copy under a fresh run.
+    conn = db.connect(tmp_path / "corpus.db")
+    _store_log(tmp_path / "out" / "store" / "occt-studio", "occt-3001.jsonl.occt",
+               [{"source": "occt", "part": "3001", "state": "stored",
+                 "secs": 40.0}])
+    assert db.ingest_store(conn, tmp_path) == 1
+    assert db.ingest_store(conn, tmp_path) == 1
+    assert conn.execute("SELECT count(*) FROM attempts").fetchone()[0] == 1
+    assert conn.execute(
+        "SELECT count(*) FROM runs WHERE kind = 'store'").fetchone()[0] == 1
+
+
+def test_asking_for_a_store_run_does_not_make_one(tmp_path):
+    # What a prune asks before deleting a log: has this tree been taken up?
+    conn = db.connect(tmp_path / "corpus.db")
+    tree = tmp_path / "out" / "store" / "occt-studio"
+    assert db.store_run(conn, tree, tmp_path, create=False) is None
+    assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
+    assert db.store_run(conn, tree, tmp_path) is not None
+
+
 def test_a_census_directory_that_is_not_there_is_skipped(tmp_path):
     # The naive node's tree does not exist on a machine that never ran it.
     lib = _library(tmp_path)
