@@ -635,6 +635,95 @@ def _pierce_seams(shape):
     return keep
 
 
+CHORD_TOL = 1e-3       # LDU; a mesh vertex sits ON a rim circle or it does not
+MAX_CHORD_DEG = 46.0   # LDraw's coarsest round is an 8-gon, so 45 deg
+
+
+def _rim_circles(shape):
+    """One gp_Circ per circular edge of the shape. A triangle has none, so
+    these are the substituted primitives' rims and nothing else."""
+    out, seen = [], set()
+    for e in _edges_of(shape):
+        try:
+            a = BRepAdaptor_Curve(e)
+            if a.GetType() != GeomAbs_CurveType.GeomAbs_Circle:
+                continue
+            g = a.Circle()
+        except Exception:
+            continue
+        p, d = g.Location(), g.Axis().Direction()
+        k = tuple(round(v, 6) for v in (p.X(), p.Y(), p.Z(),
+                                        abs(d.X()), abs(d.Y()), abs(d.Z()),
+                                        g.Radius()))
+        if k not in seen:
+            seen.add(k)
+            out.append(g)
+    return out
+
+
+@timing.timed("crescents")
+def chord_crescents(shape, tris):
+    """Faces closing the gap between a substituted primitive's rim circle and
+    the chords the hand mesh still meets it with.
+
+    LDraw's 4-4 rounds are 16-gons and a mesh abutting one carries the same
+    chords, so replacing the primitive with an exact surface opens 16
+    crescents along the join -- 0.19 LDU deep at r=10. That is a hole in the
+    shell: a view ray threads one and HLR calls a slice of whatever lies
+    behind it visible, which is how 53119 drew six 2-4 degree slivers of its
+    own hidden underside rims. Both endpoints on the circle is a declaration,
+    so an unwelded mesh is no obstacle -- the crescent is the material between
+    a stated chord and the arc it approximates, whatever else is broken.
+
+    They occlude and nothing else. Sewn into the shape they gave the join a
+    second exact surface, `analytic_creases` read the junction as a crease,
+    and 53119 drew a full rim circle round its skirt that no edge of the part
+    states.
+    """
+    if not len(tris):
+        return []
+    V = np.asarray(tris, float).reshape(-1, 3, 3)
+    seg = np.concatenate([V[:, [0, 1]], V[:, [1, 2]], V[:, [2, 0]]])
+    out, seen = [], set()
+    for g in _rim_circles(shape):
+        pos = g.Position()
+        c = np.array([g.Location().X(), g.Location().Y(), g.Location().Z()])
+        n = np.array([pos.Direction().X(), pos.Direction().Y(),
+                      pos.Direction().Z()])
+        u = np.array([pos.XDirection().X(), pos.XDirection().Y(),
+                      pos.XDirection().Z()])
+        v = np.array([pos.YDirection().X(), pos.YDirection().Y(),
+                      pos.YDirection().Z()])
+        d = seg - c
+        on = ((np.abs(d @ n) <= CHORD_TOL)
+              & (np.abs(np.hypot(d @ u, d @ v) - g.Radius()) <= CHORD_TOL))
+        for p, q in seg[on.all(axis=1)]:
+            a0 = math.atan2((p - c) @ v, (p - c) @ u)
+            a1 = math.atan2((q - c) @ v, (q - c) @ u)
+            if (a1 - a0) % (2 * math.pi) > math.pi:
+                a0, a1 = a1, a0
+            sweep = (a1 - a0) % (2 * math.pi)
+            if not 1e-6 < sweep <= math.radians(MAX_CHORD_DEG):
+                continue
+            if g.Radius() * (1.0 - math.cos(sweep / 2.0)) <= TOL:
+                continue
+            k = tuple(round(x, 6) for x in (*c, *np.abs(n), g.Radius(), a0, a1))
+            if k in seen:
+                continue
+            seen.add(k)
+            try:
+                arc = BRepBuilderAPI_MakeEdge(g, a0, a1).Edge()
+                s, e = _edge_ends(arc)
+                w = BRepBuilderAPI_MakeWire(arc)
+                w.Add(BRepBuilderAPI_MakeEdge(e, s).Edge())
+                mf = BRepBuilderAPI_MakeFace(w.Wire(), True)
+                if mf.IsDone():
+                    out.append(mf.Face())
+            except Exception:
+                continue
+    return out
+
+
 @timing.timed("build_shape")
 def build_shape(out: dict) -> TopoDS_Shape:
     """The sewn faces. They exist to occlude; their boundaries are not drawn
@@ -1123,7 +1212,8 @@ def _loose_faces(shape):
 
 
 @timing.timed("hlr")
-def hlr_edges(shape, right, up, cull=True, edges=None, cond=None, lines=None):
+def hlr_edges(shape, right, up, cull=True, edges=None, cond=None, lines=None,
+              occluders=None):
     """Exact hidden-line removal, keyed 'sharp'/'cond'/'outline' -> a
     TopoDS_Compound or None. With cull=False also '..._hidden' compounds.
 
@@ -1138,13 +1228,16 @@ def hlr_edges(shape, right, up, cull=True, edges=None, cond=None, lines=None):
     'sharp' alone: it answers where a straight authored line is visible
     without changing what the shape's own fragments say -- see
     _visible_line_spans.
+
+    `occluders` hide and are never read back -- no compound is asked for
+    them, so not one of their edges can reach a drawing. See chord_crescents.
     """
     z, x = projector_axes(right, up)
     a = ax2((0.0, 0.0, 0.0), z, x)
     algo = HLRBRep_Algo()
     faces = _loose_faces(shape)
     algo.Add(faces)
-    for extra in (edges, cond, lines):
+    for extra in (edges, cond, lines, occluders):
         if extra is not None:
             algo.Add(extra)
     algo.Projector(HLRAlgo_Projector(a))
@@ -2181,7 +2274,9 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None):
         fwd = -z / np.linalg.norm(z)
     shape = build_shape(out)
     lines, _cond = _straight_lines(out, right, up) if cull else (None, None)
-    comps = hlr_edges(shape, right, up, cull=cull, lines=lines)
+    crescents = chord_crescents(shape, out.get("tri", ()))
+    comps = hlr_edges(shape, right, up, cull=cull, lines=lines,
+                      occluders=_compound(crescents) if crescents else None)
     loci = authored_loci(shape, out, right, up)
     picked = select_authored(comps.get("sharp"), loci)
     if cull:

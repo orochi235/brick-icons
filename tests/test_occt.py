@@ -1742,3 +1742,77 @@ def test_a_dome_keeps_its_radial_ramp():
     occt._relax_facet_cylinders(faces, proj)
     assert all(f["grad_radial"] is spec for f in faces)
     assert not [f for f in faces if "grad_axis" in f]
+
+
+def _sees_camera(occluders, pnt, eye):
+    from OCP.BRepIntCurveSurface import BRepIntCurveSurface_Inter
+    from OCP.gp import gp_Lin, gp_Pnt, gp_Dir
+    inter = BRepIntCurveSurface_Inter()
+    p = np.asarray(pnt, float) + eye * 1e-3
+    inter.Init(occluders, gp_Lin(gp_Pnt(*p), gp_Dir(*eye)), 1e-6)
+    while inter.More():
+        if inter.W() > 1e-3:
+            return False
+        inter.Next()
+    return True
+
+
+def _underside_rim(shape, radius):
+    """Points all the way round 53119's r={radius} rim in the y=3 underside."""
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.GeomAbs import GeomAbs_CurveType
+    for e in occt._edges_of(shape):
+        c = BRepAdaptor_Curve(e)
+        if c.GetType() != GeomAbs_CurveType.GeomAbs_Circle:
+            continue
+        g = c.Circle()
+        if abs(g.Location().Y() - 3.0) < 1e-6 and abs(g.Radius() - radius) < 1e-6:
+            return [(p.X(), p.Y(), p.Z()) for p in
+                    (c.Value(float(t))
+                     for t in np.linspace(0.0, 2 * math.pi, 721))]
+    raise AssertionError(f"53119 must carry an r={radius} rim at y=3")
+
+
+def test_a_chord_crescent_closes_the_join_a_substitution_opens(ldraw_dir):
+    """Swapping LDraw's 16-gon for an exact surface leaves the abutting mesh
+    still meeting it in chords, so the join opens 16 crescents -- 0.19 LDU at
+    r=10. They are holes in the shell: a ray threads one and HLR reports a
+    slice of whatever lies behind it, which is how 53119 drew slivers of its
+    own hidden underside rims."""
+    out = occt.flatten_part("53119", ldraw_dir)
+    shape = occt.build_shape(out)
+    _right, _up, fwd = hlr.view_basis(30.0, 45.0)
+    eye = -np.asarray(fwd, float) / np.linalg.norm(fwd)
+    pts = _underside_rim(shape, 8.0)
+
+    bare = occt._loose_faces(shape)
+    leaks = [p for p in pts if _sees_camera(bare, p, eye)]
+    assert leaks, "the join must leak for this test to mean anything"
+
+    crescents = occt.chord_crescents(shape, out["tri"])
+    assert crescents, "the 16-gon swirl must meet the substituted skirt"
+    sealed = occt._compound(list(occt._shape_faces(shape)) + crescents)
+    assert not [p for p in pts if _sees_camera(sealed, p, eye)]
+
+
+def test_a_chord_crescent_only_hides(ldraw_dir):
+    """They go to HLR as occluders and no compound is asked for them. Sewn
+    into the shape instead they gave the join a second exact surface,
+    analytic_creases read it as a crease, and 53119 gained a full rim circle
+    round its skirt that no edge of the part states."""
+    out = occt.flatten_part("53119", ldraw_dir)
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    armed = occt.visible_segments(out, right, up, 700, fwd=fwd)
+    real = occt.chord_crescents
+    try:
+        occt.chord_crescents = lambda *a, **k: []
+        bare = occt.visible_segments(out, right, up, 700, fwd=fwd)
+    finally:
+        occt.chord_crescents = real
+    assert len(armed.segs) < len(bare.segs), "the slivers must go"
+    kept = collections.Counter(tuple(np.round(np.asarray(op[1:-1], float), 6))
+                               for op in bare.segs if op[0] == "arc")
+    for op in armed.segs:
+        if op[0] == "arc":
+            k = tuple(np.round(np.asarray(op[1:-1], float), 6))
+            assert kept[k], "sealing the join must never ADD an arc"
