@@ -114,6 +114,15 @@
   margin: 0.6rem 0;
 }
 
+/* Filing a defect is the one destructive-feeling action here, and it sat in
+   the same grey as "Open in lab". Red only while it offers to flag: the same
+   button says "Cancel" once the form is open, and backing out is not. */
+.corpus-action-flag {
+  background: var(--corpus-cell-failed-border, #e03030);
+  border-color: var(--corpus-cell-failed-border, #e03030);
+  color: #ffffff;
+}
+
 .corpus-flag {
   display: flex;
   gap: 0.6rem;

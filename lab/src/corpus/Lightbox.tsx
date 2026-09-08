@@ -161,7 +161,8 @@ export function Lightbox({ partId, source, client, onClose }: {
           <div className="corpus-actions">
             <a className="corpus-action" href={`/index.html?part=${encodeURIComponent(partId)}`}
                target="_blank" rel="noopener noreferrer">Open in lab</a>
-            <button type="button" className="corpus-action"
+            <button type="button"
+                    className={flagging ? 'corpus-action' : 'corpus-action corpus-action-flag'}
                     onClick={() => setFlagging((was) => !was)}>
               {flagging ? 'Cancel' : 'Flag a problem'}
             </button>
