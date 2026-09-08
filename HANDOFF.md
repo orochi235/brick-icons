@@ -1,5 +1,117 @@
 # Handoff — `main`: the corpus lab, and the OCCT engine
 
+## Baton, 2026-09-08 morning: the wall does not fetch its 128px tiles
+
+On `main`, in the shared checkout. Live jobs are in `onto jobs`.
+
+**Do this first: the corpus wall never requests a loose 128px thumbnail.**
+Mike reported three symptoms and they are one area: the reference grid reads
+blank, moving the cell-size slider does not pull the sprites the new size
+needs, and zooming to the SVG rung leaves one cell drawn while the rest stay
+stale. The backend is not at fault -- every route was checked by hand and
+returns 200 for `reference` at levels 8, 32 and 128, both `.webp` and `.png`,
+and `/api/corpus/cells` returns a `sha` for all 24,591 cells (which
+`useLooseThumbs.wanted` requires).
+
+Two separate faults, both in `lab/src/corpus/`:
+
+1. **`levelFor(128)` returns 512, not 128.** `BANDS` has `[128, 128]` and the
+   test is `px < top`, so the 128 rung covers 64..127 and the slider's own
+   maximum (`params.ts`: `max: 128`) falls through to `VECTOR_LEVEL`. The top
+   notch lands on the vector rung and skips the 128 raster entirely -- which
+   is exactly "zooming to svg level leaves a cell populated".
+2. **The loose fetch never fires at all.** At cell size 100, squarely inside
+   the 128 band, a headless run recorded ZERO requests to
+   `/api/thumbs/reference/128/...`. Only `sheet-8` and `sheet-32` are ever
+   fetched, so the wall upscales the 32px sheet at every size above it. Fault
+   1 does not explain this one; `useLooseThumbs` is wired to `visible` and
+   `level`, and which of those is wrong is not yet established.
+
+Reproduce headless -- the site is vite on **`[::1]:5178`** (IPv6 only, so
+`http://127.0.0.1:5178` refuses; `localhost` works), and the API is FastAPI on
+`127.0.0.1:8792`. Port 5173 is a different project's app. Set the cell-size
+slider through the native value setter plus an `input` event, then read the
+network log filtered to `api/thumbs`.
+
+**`lab/` has a peer's uncommitted work in it** (`shade.py`, `unwrap.py`, and an
+unpushed commit `7b5e062`), so check who owns a file before editing.
+
+## What landed overnight
+
+- `d9e10ad` records the parts occt draws with their faces unmerged.
+  `timing.count()` sits beside `phases()`, `occt._unify_survives` counts
+  `unify_crash`, and it reaches `measurements.counts`. Exactly 1 part in 500
+  trips it: **23799**.
+- `b3554a2` gives occt's drawn circles the 25 deg facet arc-candidate step.
+  `32062` 43 arc commands to 75 and 26,360 bytes to 21,573 with the raster
+  unchanged; `3941` loses two kinks in the counterbore band.
+- `1d4593b` adds the arc-candidate row the pipeline audit never had. The audit
+  is otherwise complete as an enumeration -- both pipelines were re-read
+  against it.
+- `49f2ed5` fixes a test `8e436a5` had left red on main.
+- `aac8a1b`, `ce1699f` are the measurement scripts and the store batch runner.
+
+## The occt render slot, and the jobs still running
+
+The canonical `occt` slot had 12 renders against 24,591 for `reference` and
+`ldview`. Overnight: msb-uai did 1,800 parts and exited clean; **studio is
+still going** (`e6e1db65`, deadline 12:38, 7,397 unprinted parts, ~443/617
+batches at last look). `f15f9547` streams its output home every 5 minutes.
+
+**Nothing fetches on its own.** `--out`/`--to` only record a destination. The
+r8 census sat unfetched on both nodes for hours, and studio's first fetch
+stream timed out mid-run and stranded 656 files. A `fetch --stream` must
+outlive the job it follows.
+
+- **When studio finishes: run one more ingest + bake.** `out/ingest-bake.sh`
+  does both in order. The pass running now (`7f3e9df5`) started while studio
+  was still writing, so the last batches will be indexed but unbaked.
+- r8 is fetched and ingested (934 shards, `out/census/r8-studio` and
+  `r8-uai`). `census-ingest.sh` was NOT running; start it if you want the
+  database live again.
+- `store-queue/` holds the batch lists and is untracked-but-not-ignored, which
+  is the only reason `onto sync` carries them (`out/` is ignored). **10,708
+  printed parts of the gap are still unrendered.**
+
+## The four naive-tail rows: measured, not yet decided
+
+`scripts/measure-snap-gaps.py` over 500 random parts, both engines:
+
+    engine   move >= 0.5px    pass-2 refits   median move
+    occt     177 (35.4%)      53              0.013 px
+    naive    201 (40.2%)      59              0.098 px
+
+So pass 1 is **not** vacuous on occt, and the two populations are far closer
+than the goldens implied. What is still missing is whether occt's moves are
+REPAIRS: on `4019` three were checked by eye and all three were (a spur, a
+T-stub, a broken corner), but that is one part.
+
+**`scripts/snap-render-ab.py` timed out at 9h38m over the 177 affected parts
+and wrote nothing** -- it only writes `--results` at the end. Fix that to
+append per part before re-running it; the repo's own rule is that a harness
+reports as it goes.
+
+## Traps worth keeping
+
+- **`onto fetch <node>:<path> .` FLATTENS.** It dumped 659 SVGs into the repo
+  root. Give it the matching directory, not `.`.
+- **`onto sync` stages untracked files to build its patch**, so `renders/`
+  (untracked, and `*.svg` deliberately not ignored) travels with every sync
+  and once put one 111 MiB over its 8 MiB limit. It also ships a peer's
+  uncommitted edits to a render node -- which is why studio was given the
+  unprinted gap only.
+- **`onto sync --force` deletes node files the sync is not sending.** Three
+  files existed ONLY on studio (`lab/ab.html`, `lab/src/corpus/abBadges.tsx`,
+  `abOldBadges.ts`); they are rescued into the working tree, untracked, and
+  want committing or deleting by whoever wrote them.
+- **`onto` has no dependency primitive.** It refuses with a 409 while a tree is
+  locked. Do not build a poll-and-submit job for it; check whether the running
+  job is nearly done instead.
+- **A crash report from `IntUnifyFaces` is by design** -- `_unify_survives`
+  probes UnifySameDomain in a forked child because it segfaults on cracked
+  meshes.
+
+
 ## occt draws a curved decal whole now, and the trap that hid it
 
 `3941p01`'s panel kept 14,651 navy pixels against naive's 64,562; it draws
