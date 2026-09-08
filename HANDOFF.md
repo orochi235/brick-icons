@@ -104,9 +104,7 @@ keys on the drawn cell size and the viewport instead.
    ran; the occt slot holds 7,931 renders and 1,689 new thumbnails are baked.
    **What is left is the 660 timeouts**, which want a longer per-part cap or a
    faster path, not another fetch.
-2. **`snap-ab-occt` is still running** (`onto jobs`), appending a row per part
-   to `out/snap-render-ab.jsonl`; re-launching under the same `--task` resumes
-   rather than restarting. **The verdict is already written up** in
+2. **CLOSED. `snap-ab-occt` finished 177 of 177.** **The verdict is written up** in
    `OCCT-MIGRATION.md` under "The snap passes on occt" and the remaining parts
    can only confirm or overturn it -- read the finished file against it rather
    than starting the analysis again. **The loose thread is answered, and it went
@@ -114,7 +112,7 @@ keys on the drawn cell size and the viewport instead.
    foot ring's whole front arc, and 13 of the 106 parts pass 2 never touches
    come out with fewer drawn elements than they went in with.
    `scripts/snap-element-delta.py` re-derives the list; the section carries it.
-   The count still moves as rows land, so refresh the table when the job ends.
+   **CLOSED:** the job finished 177 of 177 and the table is the final one.
 3. **Pass 2's sweep-direction bug is fixable and nobody has said whether to
    fix it.** The refit emits the circumcircle through (pinch1, pinch2, apex)
    the long way round: 23801 goes from a 41.7-degree separator to 288.7. The
