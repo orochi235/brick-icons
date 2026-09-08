@@ -86,11 +86,40 @@ The `occt` branch of `hlr.visible_segments` runs `fit_silhouette_arcs` and
 | naive does | occt does | |
 |---|---|---|
 | `dedupe_segments` unions abutting and overlapping spans on one carrier line or ellipse | not called | **CLOSED, `b4b3c62`.** 2,202 drawn ops to 1,692 over 36 parts. It takes `eps=0.05/res.s` because occt works in LDU, and a new occt-only `keep_order` that stops the pass regrouping the list and rebuilding ops it did not merge |
-| `_snap_rim_crossings` pass 1 snaps a partial arc's ends onto the junction they graze | not called | **absent.** `max_snap` is degrees and scale-free; `vertex_tol=0.25` is op units and needs the same scaling |
+| `_snap_rim_crossings` pass 1 snaps a partial arc's ends onto the junction they graze | not called | **CLOSED as WRONG, do not port** -- see below |
 | `_snap_rim_crossings` pass 2 refits a counterbore separator, and `fill_ops(refits=)` moves the fill seam to follow it | `refits=()`, so `refit_fill_boundaries` never fires | **absent** |
 | `_refit_candidates(refits)` makes the moved seam an arc candidate | — | **absent**, follows the row above |
 | `_fold_arc_loops` turns chained fold-arc spans into `fill_ops(loops=)` sub-region outlines | `loops=()` | **absent.** `fold_ells` is built from `fit_ells` inside `_visible_segments_analytic`, which occt never enters |
 | `cull_orphan_runs(protect=fold_ells)` | called with no `protect` | present but unprotected; vacuous while `fold_ells` is empty, wrong the moment it is not |
+
+#### `_snap_rim_crossings` pass 1 is damage on occt, not a repair
+
+The pass exists because naive's occlusion is SAMPLED: `visible_subops(n=64)`
+stops up to a sample short of the true graze, so an arc end lands beside the
+stroke it should touch. occt does real hidden-line removal and lands the graze
+exactly, so there is nothing for the pass to fix -- and where it does anything
+visible, it draws stray arcs.
+
+Measured with `scripts/snap-render-ab.py`, which splices the pass in ahead of
+`arcfit.fit_silhouette_arcs` (naive's own order) without editing the tree, over
+the 177 parts `scripts/measure-snap-gaps.py` says it would move. Of the first 81:
+
+    55  a change with a component >= 12px
+    26  nothing chunky
+     3  byte-identical
+
+Looking is what decides it, and the two populations are clean. The four largest
+movers -- `32291`, `23801`, `35c01`, `24130` -- all gain **spurious arcs**:
+23801's runs clear off the part past its own silhouette, and 35c01 gets long
+curves drawn across the wheel spokes. That is the failure `test_goldens.py`'s
+KNOWN_STRAY note already records for pass 2 on `4019`, a short arc re-emitted as
+its long complement, and `hlr.SEP_REFIT_MAX_GROWTH` is the guard against it.
+Mid-range movers (`18585`, `67887`, `33089`, `47712`) are visually identical off
+and on -- sub-pixel shifts, neither repair nor damage.
+
+So the row is closed the way `ink_prims` was: not done, wrong. Porting it would
+need `SEP_REFIT_MAX_GROWTH`'s guard extended to pass 1 first, and even then it
+would be machinery guarding against damage it alone introduces.
 
 ### Present under another mechanism — do not port
 
