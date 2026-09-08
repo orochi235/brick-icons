@@ -314,3 +314,25 @@ def test_window_survives_a_zero_area_hole_the_rect_clipper_chokes_on():
     rect = (122.643, 111.644, 134.01, 119.342)
     w = geom2d.window(g, *rect)
     assert abs(w.area - g.intersection(box(*rect)).area) < 1e-9
+
+
+def test_a_self_intersecting_ring_survives_to_geom():
+    """set_precision empties an invalid polygon, so the repair has to come
+    first -- the ordering `region` documents. A decal wrapped around a
+    cylinder re-projects to a folded ring (3626cp7d's glasses run from the
+    front of the head to the side), and the whole fill was dropped."""
+    bowtie = [(0, 0), (10, 10), (10, 0), (0, 10)]
+    g = geom2d.to_geom(np.array(bowtie, float))
+    assert not g.is_empty
+    assert geom2d.area(g) > 0
+
+
+def test_a_self_intersecting_ring_keeps_its_holes():
+    """The glasses carry their lens openings, and a hole ring is where a
+    precision collapse is likeliest to re-break the repaired polygon."""
+    bowtie = [(0, 0), (10, 10), (10, 0), (0, 10)]
+    hole = [(1.0, 4.0), (2.0, 4.0), (2.0, 5.0), (1.0, 5.0)]   # inside the left lobe
+    solid = geom2d.area(geom2d.to_geom(np.array(bowtie, float)))
+    g = geom2d.to_geom(np.array(bowtie, float), holes=[np.array(hole, float)])
+    assert not g.is_empty
+    assert geom2d.area(g) < solid

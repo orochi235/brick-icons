@@ -258,6 +258,11 @@ def to_geom(poly, holes=None):
         if len(p) < 3:
             return _EMPTY
         g = Polygon(p, [np.asarray(h, float) for h in (holes or []) if len(h) >= 3])
+        # repair BEFORE snapping: set_precision empties an invalid polygon
+        # rather than fixing it, and a decal wrapped around a cylinder
+        # re-projects to a folded ring (see `region`'s note)
+        if not g.is_valid:
+            g = shapely.make_valid(g)
         g = shapely.set_precision(g, GRID)
         if not g.is_valid:
             g = shapely.make_valid(g)
