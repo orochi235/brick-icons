@@ -1682,3 +1682,63 @@ def test_a_side_on_cylinder_is_two_spans_and_that_is_the_answer(ldraw_dir):
     down = _cyl_spans_of("4740", ldraw_dir, 90.0)
     assert down and all(f["span_deg"] > 359.9 for f in down)
     assert all("grad_radial" in f for f in down)
+
+
+def _facet_turn_case(dome=False, n_facets=16):
+    """A closed faceted turn about the world Y axis, as _relax_facet_cylinders
+    reads it: view normals already flipped toward the camera (_plane_face),
+    world normals still saying which facets face it. `dome` tilts each facet
+    out of the cross-section plane by a second parameter, which is what takes
+    the normal cloud off the plane through the origin."""
+    proj = occt.op_projection((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
+    spec = {"cx": 0.0, "cy": 0.0, "r": 10.0, "ratio": 1.0}
+    faces = []
+    for i in range(n_facets):
+        th = 2 * math.pi * (i + 0.5) / n_facets
+        tilt = 0.7 * math.cos(2 * th) if dome else 0.0
+        n = np.array([math.cos(th), tilt, math.sin(th)])
+        n /= np.linalg.norm(n)
+        nv = -n if n[2] > 0 else n
+        cx = 10.0 * math.cos(th)
+        faces.append({"poly": np.array([[cx - 1.0, -5.0], [cx + 1.0, -5.0],
+                                        [cx + 1.0, 5.0], [cx - 1.0, 5.0]]),
+                      "normal": nv, "_plane3": (np.zeros((3, 3)), n),
+                      "group": ("turn", 1), "grad_radial": spec,
+                      "grad_samples": [((0.0, 0.0), nv)]})
+    return faces, proj, spec
+
+
+def test_a_faceted_cylinder_is_ramped_across_the_tube_not_bullseyed():
+    """A full turn of cylinder facets spreads its normals in 2-D, so the dome
+    test claims it. 92692's two 4-4cylse knuckles were fitted a radial ramp
+    over the whole ring, and the crescent that shows past the knuckle painted
+    the bullseye's bright centre."""
+    faces, proj, _ = _facet_turn_case()
+    occt._relax_facet_cylinders(faces, proj)
+    assert not [f for f in faces if "grad_radial" in f]
+    (p0, p1) = faces[0]["grad_axis"]
+    assert all(f["grad_axis"] == (p0, p1) for f in faces)   # one ramp, shared
+    assert abs(p1[0] - p0[0]) > 5.0 * abs(p1[1] - p0[1])    # across the tube
+
+
+def test_the_ramp_reads_only_the_facets_that_face_the_camera():
+    """A plane face's view normal is flipped toward the camera, so a facet on
+    the far side of the turn carries its mirror's tone at the mirror's screen
+    position. Fit across the whole ring and the two cancel; the sampled tones
+    then stop running with the offset, which is the ramp reading flat."""
+    faces, proj, _ = _facet_turn_case()
+    occt._relax_facet_cylinders(faces, proj)
+    lit = [nv[0] for _, nv in faces[0]["grad_samples"]]
+    assert lit == sorted(lit) or lit == sorted(lit, reverse=True)
+    assert max(lit) - min(lit) > 1.0        # limb to limb, not a cancelled fit
+
+
+def test_a_dome_keeps_its_radial_ramp():
+    """The origin is what separates the two: a cylinder's normals lie in the
+    one plane perpendicular to its axis, a dome's do not. Measured s2/s0 is
+    0.0000 on every faceted cylinder in the specimens against 0.22 on 3960's
+    dish, so the cut takes only the exactly-planar clouds."""
+    faces, proj, spec = _facet_turn_case(dome=True)
+    occt._relax_facet_cylinders(faces, proj)
+    assert all(f["grad_radial"] is spec for f in faces)
+    assert not [f for f in faces if "grad_axis" in f]

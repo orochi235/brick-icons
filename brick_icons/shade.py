@@ -2366,32 +2366,42 @@ def attach_group_gradients(faces, min_spread=0.002):
         if len(sn) > 1 and sn[0] > 1e-9 and sn[1] / sn[0] > 0.35:
             _attach_radial_gradient(faces, ks, front, nvs)
             continue
-        # gradient axis = screen direction along which the NORMALS change
-        # (first left singular vector of the centroid<->normal cross-
-        # covariance): iso-tone lines on a curved strip are its straight
-        # rulings, so the axis must follow the curve. The footprint's long
-        # axis only coincides with it on narrow strips — a wide, short curve
-        # would shade ACROSS the rulings. Degenerate correlation falls back
-        # to the footprint axis.
-        C = np.asarray(cs, float)
-        Cc = C - C.mean(axis=0)
-        X = Nn - Nn.mean(axis=0)
-        Uc, sc, _ = np.linalg.svd(Cc.T @ X, full_matrices=False)
-        if sc[0] > 1e-9:
-            d0 = Uc[:, 0]
-        else:
-            _, _, Vt = np.linalg.svd(Cc, full_matrices=False)
-            d0 = Vt[0]
-        t = Cc @ d0
-        p0 = tuple((C.mean(axis=0) + t.min() * d0).tolist())
-        p1 = tuple((C.mean(axis=0) + t.max() * d0).tolist())
-        axis = np.array([p1[0] - p0[0], p1[1] - p0[1]])
-        L2 = float(axis @ axis) or 1.0
-        samples = sorted(
-            ((float(np.clip(((c[0] - p0[0]) * axis[0] + (c[1] - p0[1]) * axis[1])
-                            / L2, 0.0, 1.0)), nv)
-             for c, nv in zip(cs, nvs)), key=lambda t: t[0])
-        ga = (p0, p1)
-        for k in ks:
-            faces[k]["grad_axis"] = ga
-            faces[k]["grad_samples"] = samples
+        attach_axis_gradient(faces, ks, cs, nvs)
+
+
+def attach_axis_gradient(faces, ks, cs, nvs):
+    """One linear ramp fitted to `cs`/`nvs`, stamped on every face in `ks`.
+
+    The samples need not come from every member: occt fits a faceted
+    cylinder's ramp to the camera-facing half and stamps the whole turn.
+    """
+    # gradient axis = screen direction along which the NORMALS change
+    # (first left singular vector of the centroid<->normal cross-
+    # covariance): iso-tone lines on a curved strip are its straight
+    # rulings, so the axis must follow the curve. The footprint's long
+    # axis only coincides with it on narrow strips — a wide, short curve
+    # would shade ACROSS the rulings. Degenerate correlation falls back
+    # to the footprint axis.
+    C = np.asarray(cs, float)
+    Cc = C - C.mean(axis=0)
+    Nn = np.asarray(nvs, float)
+    X = Nn - Nn.mean(axis=0)
+    Uc, sc, _ = np.linalg.svd(Cc.T @ X, full_matrices=False)
+    if sc[0] > 1e-9:
+        d0 = Uc[:, 0]
+    else:
+        _, _, Vt = np.linalg.svd(Cc, full_matrices=False)
+        d0 = Vt[0]
+    t = Cc @ d0
+    p0 = tuple((C.mean(axis=0) + t.min() * d0).tolist())
+    p1 = tuple((C.mean(axis=0) + t.max() * d0).tolist())
+    axis = np.array([p1[0] - p0[0], p1[1] - p0[1]])
+    L2 = float(axis @ axis) or 1.0
+    samples = sorted(
+        ((float(np.clip(((c[0] - p0[0]) * axis[0] + (c[1] - p0[1]) * axis[1])
+                        / L2, 0.0, 1.0)), nv)
+         for c, nv in zip(cs, nvs)), key=lambda t: t[0])
+    ga = (p0, p1)
+    for k in ks:
+        faces[k]["grad_axis"] = ga
+        faces[k]["grad_samples"] = samples
