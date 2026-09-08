@@ -1,5 +1,50 @@
 # Handoff — `main`: the corpus lab, and the OCCT engine
 
+## Next: one head sector misses the full-turn merge (3626cp7d)
+
+**Diagnosed, not fixed.** The panel on the right of `3626cp7d`'s head is two
+gradient models on one surface. The wall closes a full turn and takes a RADIAL
+dome ramp (`g0`, `#cecece` to `#7e7e7e`); one sector stayed out of that merge
+and kept a LINEAR axis gradient (`g16`) whose stops run `#565656` to `#5a5a5a`
+-- nearly flat, and its entire range sits BELOW the radial's darkest stop. That
+is why it reads as a dark panel rather than as a seam.
+
+The head body is two coaxial cylinder primitives with identical axis, radius,
+height and origin -- sectors of one surface -- so the merge has everything it
+needs to identify them. Find why one span is left out.
+
+**Two things are disproved; do not re-derive them.** `absorb_wall_facets` is
+not involved: the part has zero flat color-16 triangle faces, every body
+triangle already carries a gradient. And the three flat `#cccccc` paths in the
+SVG are the stud's discs and rings, not the panel -- repaint those paths
+magenta and they land on the stud. The full write-up is on the
+`3626cp7d-cheek-patch-flat-toned` defect entry.
+
+To see it: render the part to SVG (`--format svg --shading outline
+--shade-style flat3`) and recolor each `fill="url(#gN)"` a distinct flat color.
+That is what separated `g0` from `g16` in one look.
+
+## Two decal fixes landed and are pushed
+
+`match a decal's flat carrier by proximity` and `repair a ring before snapping
+it to the precision grid` -- see `git log` for both; each commit message
+carries its own measurements and blast radius. `BRICK_GOLDENS=full` was green
+at the second one, with both seams re-frozen.
+
+**`tests/goldens/defects.toml` is dirty and shared.** It holds work from at
+least three concurrent sessions in this one checkout -- two `3626cp7d` entries
+of mine plus other sessions' `classes` edits and new rows. Commit it if you
+like, but you will carry everyone's; never revert it. This is why every commit
+here used `git commit -F - -- <paths>`: a bare `git commit` takes the whole
+shared index, which is how a decal fix once landed inside a commit about
+`onto`.
+
+**A peer session (`brick-icons-30`) was told the ingest is clear to run.** It
+rebuilds `corpus.db` into a temp file and `mv`s it over the live one. Nothing
+in the decal or shading work touches that database, but do not open it
+expecting stability while that is in flight.
+
+
 ## Baton, 2026-09-08 midday: hands, wall and pinch fixed; three things open
 
 On `main`, in the shared checkout. `git log --oneline @{u}..HEAD` for what is
