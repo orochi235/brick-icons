@@ -27,9 +27,17 @@ _text_cache: dict[Path, list[str]] = {}
 
 
 def default_roots(ldraw_dir: Path) -> list[Path]:
+    """The subfile search path, official trees first.
+
+    `Unofficial/` is last so a shipped file always wins, and it is searched at
+    all because the library ships parts it cannot itself resolve: 2374b and
+    5241 are official, their subparts were never promoted off the Parts
+    Tracker, and `flatten` drops what it cannot find without a word.
+    """
     ldraw_dir = Path(ldraw_dir)
-    return [ldraw_dir / "p" / "48", ldraw_dir / "p",
-            ldraw_dir / "parts", ldraw_dir / "parts" / "s", ldraw_dir / "models"]
+    official = ["p/48", "p", "parts", "parts/s", "models"]
+    return ([ldraw_dir / d for d in official]
+            + [ldraw_dir / "Unofficial" / d for d in official])
 
 
 def resolve(name: str, roots: list[Path]) -> Path | None:
