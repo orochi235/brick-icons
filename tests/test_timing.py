@@ -90,3 +90,21 @@ def _spin():
     t = time.perf_counter()
     while time.perf_counter() - t < 0.002:
         pass
+
+
+def test_a_count_survives_a_phase_that_took_the_same_time_either_way():
+    """`unify_crash` is the case: the forked probe runs and costs its seconds
+    whether or not it dies, so the phase around it reads identically and only
+    the count says the faces were left unmerged."""
+    with timing.phase("build_shape"):
+        timing.count("unify_crash")
+    assert timing.counts() == {"unify_crash": 1}
+    assert "unify_crash" not in timing.phases()
+
+
+def test_counts_accumulate_and_reset_with_the_phases():
+    timing.count("unify_crash")
+    timing.count("unify_crash", 2)
+    assert timing.counts() == {"unify_crash": 3}
+    timing.reset()
+    assert timing.counts() == {}

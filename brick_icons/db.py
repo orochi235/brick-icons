@@ -89,6 +89,11 @@ CREATE TABLE IF NOT EXISTS measurements (
   -- than columns because the phases follow the engine: three landed in one
   -- evening, and each would otherwise have been a migration.
   phases TEXT,
+  -- Render facts that are not times, as the census's own `count` dict --
+  -- today whether `UnifySameDomain` crashed and the engine drew the part
+  -- with its faces unmerged. A phase cannot say that: the call took
+  -- seconds either way.
+  counts TEXT,
   error TEXT, detail TEXT,
   PRIMARY KEY (run_id, part_id, engine)
 );
@@ -168,7 +173,8 @@ def now() -> str:
 #: corpus.db, so a rebuild is not a thing to make them all do. Nullable and
 #: additive only: SCHEMA_VERSION is deliberately not bumped for these, because
 #: older code cannot misread a column it never selects.
-_ADDED_COLUMNS = (("defects", "classes", "TEXT"),)
+_ADDED_COLUMNS = (("defects", "classes", "TEXT"),
+                  ("measurements", "counts", "TEXT"))
 
 
 def _add_missing_columns(conn: sqlite3.Connection) -> None:
@@ -281,12 +287,13 @@ def import_census_jsonl(conn: sqlite3.Connection, run_id: int,
                      dist.get("99"), dist.get("100"),
                      r.get("secs"),
                      json.dumps(r["phase"]) if r.get("phase") else None,
+                     json.dumps(r["counts"]) if r.get("counts") else None,
                      r.get("error"), r.get("detail")))
     conn.executemany(
         "INSERT OR REPLACE INTO measurements (run_id, part_id, engine, source, "
         "build, missing_px, extra_px, missing_comps, extra_d99, extra_d100, "
-        "secs, phases, error, detail) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+        "secs, phases, counts, error, detail) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
     conn.commit()
     return len(rows)
 

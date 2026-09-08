@@ -151,6 +151,10 @@ def one(part: str, args, tmp: Path) -> dict:
            "extra": components(extra, args.zoom, args.floor)}
     phase["compare"] = round(time.perf_counter() - t0, 2)
     row["phase"] = phase
+    # Facts about the render that are not times -- a kernel call the engine
+    # had to work around still took seconds, so no phase can carry one.
+    if timing.counts():
+        row["counts"] = timing.counts()
     return row
 
 
