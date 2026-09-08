@@ -1,28 +1,27 @@
 # Handoff — `main`: the corpus lab, and the OCCT engine
 
-## Next: one head sector misses the full-turn merge (3626cp7d)
+## occt still draws the head band that naive no longer does
 
-**Diagnosed, not fixed.** The panel on the right of `3626cp7d`'s head is two
-gradient models on one surface. The wall closes a full turn and takes a RADIAL
-dome ramp (`g0`, `#cecece` to `#7e7e7e`); one sector stayed out of that merge
-and kept a LINEAR axis gradient (`g16`) whose stops run `#565656` to `#5a5a5a`
--- nearly flat, and its entire range sits BELOW the radial's darkest stop. That
-is why it reads as a dark panel rather than as a seam.
+**Naive is fixed** (`2f54f58`): a part authored as a facet dome AND substituted
+as a barrel gave the dome a radial ramp and the barrel its own linear one, whose
+stops sat entirely below the dome's darkest. `absorb_wall_facets` now runs the
+same on-surface test in reverse, per FACE rather than per group -- a dome's
+members mostly leave the barrel's surface, so the group-wide intersection can
+never see it.
 
-The head body is two coaxial cylinder primitives with identical axis, radius,
-height and origin -- sectors of one surface -- so the merge has everything it
-needs to identify them. Find why one span is left out.
+**occt shows the same band and needs a different fix.** It has no substituted
+primitives for that test to match; its faces come off the sewn solid and carry
+no `prim`. It emits six gradient fills on `3626cp7d` against naive's four, four
+of them linear spans of one wall, so look at `_merge_turn_gradients` leaving
+spans out of the coaxial merge. Filed as `3626cp7d-occt-barrel-dark-band`.
 
-**Two things are disproved; do not re-derive them.** `absorb_wall_facets` is
-not involved: the part has zero flat color-16 triangle faces, every body
-triangle already carries a gradient. And the three flat `#cccccc` paths in the
-SVG are the stud's discs and rings, not the panel -- repaint those paths
-magenta and they land on the stud. The full write-up is on the
-`3626cp7d-cheek-patch-flat-toned` defect entry.
+**The golden manifest holds no part of this shape**, so neither the fix nor a
+regression in it moves the gate. Its two unit tests in `test_shade.py` are the
+only cover; a manifest part with a domed, substituted wall would be worth
+adding.
 
-To see it: render the part to SVG (`--format svg --shading outline
---shade-style flat3`) and recolor each `fill="url(#gN)"` a distinct flat color.
-That is what separated `g0` from `g16` in one look.
+The way to see any of this: render to SVG and recolor each `fill="url(#gN)"` a
+distinct flat color. That separated the dome from the barrel in one look.
 
 ## Two decal fixes landed and are pushed
 
