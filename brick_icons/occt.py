@@ -947,6 +947,74 @@ def _locus_bboxes(loci):
     return bb
 
 
+def _straight_lines(out):
+    """Every type-2 line as its own edge, or None if the part states none.
+
+    Only the straight ones, and not the chords arcfit claimed: a chord lies
+    inside the material its arc bulges out of, so HLR calls it hidden and it
+    would mask away every fitted arc.
+    """
+    eds = []
+    for e in out.get("2", ()):
+        seg = np.asarray(e, float)
+        ed = _line_edge(seg[0], seg[1])
+        if ed is not None:
+            eds.append(ed)
+    return _compound(eds) if eds else None
+
+
+def _visible_line_spans(comp):
+    """The 2D spans of the straight authored lines HLR calls visible."""
+    spans = []
+    for e in _edges_of(comp) if comp is not None else ():
+        try:
+            c = BRepAdaptor_Curve(e)
+            p = c.Value(c.FirstParameter())
+            q = c.Value(c.LastParameter())
+        except Exception:
+            continue
+        spans.append((np.array([p.X(), p.Y()]), np.array([q.X(), q.Y()])))
+    return spans
+
+
+def _on_a_visible_line(pts, spans) -> bool:
+    mid = pts[len(pts) // 2]
+    for a, b in spans:
+        if _on_locus(np.array([mid]), ("seg", a, b, "line", None)):
+            return True
+    return False
+
+
+def _drop_lines_hlr_hides(picked, spans):
+    """Fragments matched to a straight authored locus that HLR says is hidden.
+
+    A locus is a 2-D path, so any tessellation crease that projects onto one
+    is drawn as though it were the authored edge. 49612 states two vertical
+    corner lines, both entirely behind the dome, and the dome's own front
+    meridian projects along them: seven facet creases came out as a line down
+    the middle of the dome, which no engine and no reference draws.
+
+    Only straight lines are masked. A rim circle is coincident with the
+    cylinder it bounds, and a loose copy of it defeats HLR's tie -- which is
+    why select_authored reads the shape's own fragments in the first place --
+    but a plane cannot hide its own boundary, so for a line the loose copy is
+    a straight answer.
+    """
+    keep = []
+    for edge, locus in picked:
+        if locus[0] != "seg" or (len(locus) > 4 and locus[4] is not None):
+            keep.append((edge, locus))
+            continue
+        try:
+            pts = _fragment_points(edge)
+        except Exception:
+            keep.append((edge, locus))
+            continue
+        if _on_a_visible_line(pts, spans):
+            keep.append((edge, locus))
+    return keep
+
+
 def select_authored(comp, loci):
     """(edge, kind) for every fragment lying on an authored locus.
 
@@ -1023,7 +1091,7 @@ def _loose_faces(shape):
 
 
 @timing.timed("hlr")
-def hlr_edges(shape, right, up, cull=True, edges=None, cond=None):
+def hlr_edges(shape, right, up, cull=True, edges=None, cond=None, lines=None):
     """Exact hidden-line removal, keyed 'sharp'/'cond'/'outline' -> a
     TopoDS_Compound or None. With cull=False also '..._hidden' compounds.
 
@@ -1033,26 +1101,37 @@ def hlr_edges(shape, right, up, cull=True, edges=None, cond=None):
     them 'sharp' is every edge HLR calls a crease, which on a triangulated
     part is the whole tessellation -- 4740p03 at 13359 lines against naive's
     2.
+
+    `lines` is projected the same way but keyed 'lines' on its own, leaving
+    'sharp' alone: it answers where a straight authored line is visible
+    without changing what the shape's own fragments say -- see
+    _visible_line_spans.
     """
     z, x = projector_axes(right, up)
     a = ax2((0.0, 0.0, 0.0), z, x)
     algo = HLRBRep_Algo()
-    algo.Add(_loose_faces(shape))
-    for extra in (edges, cond):
+    faces = _loose_faces(shape)
+    algo.Add(faces)
+    for extra in (edges, cond, lines):
         if extra is not None:
             algo.Add(extra)
     algo.Projector(HLRAlgo_Projector(a))
     algo.Update()
     algo.Hide()
     hs = HLRBRep_HLRToShape(algo)
+    # every compound is asked for a SHAPE: with a second shape added, a bare
+    # VCompound() also returns the edges of that one, and the authored lines
+    # came back beside the shape's own fragments to be drawn twice.
     wanted = [("sharp", (lambda: hs.VCompound(edges)) if edges is not None
-                        else hs.VCompound),
+                        else (lambda: hs.VCompound(faces))),
               ("outline", hs.OutLineVCompound)]
     if cond is not None:
         wanted.append(("cond", lambda: hs.VCompound(cond)))
+    if lines is not None:
+        wanted.append(("lines", lambda: hs.VCompound(lines)))
     if not cull:
         wanted += [("sharp_hidden", (lambda: hs.HCompound(edges))
-                    if edges is not None else hs.HCompound),
+                    if edges is not None else (lambda: hs.HCompound(faces))),
                    ("outline_hidden", hs.OutLineHCompound)]
         if cond is not None:
             wanted.append(("cond_hidden", lambda: hs.HCompound(cond)))
@@ -1955,10 +2034,14 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None):
         z, _ = projector_axes(right, up)
         fwd = -z / np.linalg.norm(z)
     shape = build_shape(out)
-    comps = hlr_edges(shape, right, up, cull=cull)
+    comps = hlr_edges(shape, right, up, cull=cull,
+                      lines=_straight_lines(out) if cull else None)
     loci = authored_loci(shape, out, right, up)
     picked = select_authored(comps.get("sharp"), loci)
-    if not cull:
+    if cull:
+        picked = _drop_lines_hlr_hides(picked,
+                                       _visible_line_spans(comps.get("lines")))
+    else:
         picked += select_authored(comps.get("sharp_hidden"), loci)
     ops = []
     for edge, locus in picked:

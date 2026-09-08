@@ -661,6 +661,23 @@ def _occt_render(part, ldraw_dir):
     return occt.visible_segments(out, *hlr.view_basis(30.0, 45.0)[:2], 1024)
 
 
+def test_a_crease_on_a_hidden_authored_line_is_not_drawn(ldraw_dir):
+    """A locus is a 2-D path, so a tessellation crease that projects onto one
+    is drawn as if it were the authored edge.
+
+    49612 states two vertical corner lines, both entirely behind its dome --
+    HLR puts them in the hidden compound whole -- and the dome's own front
+    meridian projects along them. Seven facet creases came back as a line down
+    the middle of the dome, which neither naive nor LDView draws.
+    """
+    res = _occt_render("49612", ldraw_dir)
+    meridian = [o for o in res.segs
+                if o[0] == "line" and abs(o[1]) < 0.05 and abs(o[3]) < 0.05
+                and abs(o[2] - o[4]) > 0.5]
+    assert not meridian, f"{len(meridian)} facet creases drawn as the corner line"
+    assert len(res.segs) > 40, "the part's real edges are still drawn"
+
+
 def test_50950_wall_draws_as_one_arc(ldraw_dir):
     """HLR hands a projected ELLIPSE back as a BSpline approximation -- only a
     projected circle survives as a conic -- so the wall drew as 31 straight
