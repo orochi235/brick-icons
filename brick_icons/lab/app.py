@@ -17,6 +17,7 @@ from PIL import Image
 from pydantic import BaseModel
 
 from .. import colors as ldraw_colors
+from .. import features
 from .. import tags
 from ..config import load_config
 from . import (cache, cells, corpus, decal, defects, diff, findings,
@@ -393,6 +394,15 @@ def create_app(root: Path | str = ".",
             years = conn.execute(
                 "SELECT year_from, year_to, sets FROM part_years WHERE part_id = ?",
                 (part_id,)).fetchone()
+            # In the module's own order, and a flag keeps its null value: the
+            # page tells a flag from a measure by that null and so never has
+            # to carry a copy of the vocabulary.
+            held = {r["feature"]: r["value"] for r in conn.execute(
+                "SELECT feature, value FROM part_features WHERE part_id = ?",
+                (part_id,))}
+            built = {name: held[name]
+                     for name in (*features.FLAGS, *features.MEASURES)
+                     if name in held}
         finally:
             conn.close()
         part = dict(row)
@@ -406,7 +416,7 @@ def create_app(root: Path | str = ".",
         for slot in slots:
             slot.update(states[slot["source"]])
         return {"part": part, "findings": found, "runs": runs,
-                "slots": slots,
+                "slots": slots, "features": built,
                 "defects": [d for d in defects.load(app.state.defects_path)
                             if d["part"] == part_id]}
 

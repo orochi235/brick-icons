@@ -13,7 +13,7 @@ from PIL import Image
 
 occt = pytest.importorskip("brick_icons.occt", reason="needs the [occt] extra")
 
-from brick_icons import hlr, goldens  # noqa: E402
+from brick_icons import arcfit, hlr, goldens  # noqa: E402
 from brick_icons.cli import process_one  # noqa: E402
 from brick_icons.config import load_config  # noqa: E402
 
@@ -1000,14 +1000,22 @@ def test_a_flat_face_gets_no_occluder(ldraw_dir):
 
 def test_occt_segments_go_through_the_orphan_cull(ldraw_dir):
     """The stylization tail ran only on the naive branch, so occt drew
-    dashes naive had already dropped -- 30162's dot on the barrel."""
+    dashes naive had already dropped -- 30162's dot on the barrel.
+
+    Spelled out as the composition rather than a count, so a stage added to
+    the tail has to be added here too: this is the record of what occt's
+    output goes through between the engine and the caller.
+    """
     out = occt.flatten_part("30162", ldraw_dir)
     right, up, fwd = hlr.view_basis(30.0, 45.0)
-    raw = occt.visible_segments(out, right, up, 512, cull=True, fwd=fwd).segs
+    res = occt.visible_segments(out, right, up, 512, cull=True, fwd=fwd)
     kept = hlr.visible_segments("30162", ldraw_dir, render_px=512,
                                 engine="occt").segs
-    assert len(kept) < len(raw)
-    assert list(kept) == hlr.cull_orphan_runs(list(raw))
+    assert len(kept) < len(res.segs)
+    tail = hlr.dedupe_segments(list(res.segs), eps=0.05 / res.s,
+                               keep_order=True)
+    tail, _sil = arcfit.fit_silhouette_arcs(tail)
+    assert list(kept) == hlr.cull_orphan_runs(tail)
 
 
 def test_a_zero_height_cylinder_face_gets_no_occluder(ldraw_dir):
@@ -1194,6 +1202,15 @@ def test_a_fill_boundary_carries_no_sampled_boundary(part, tmp_path, ldraw_dir):
     these three, and only for occt. Parts whose refine regions genuinely
     involve a CURVED coverer still run the grid and still carry such runs
     (3941 51, 4019 64), and so does the naive path (32062 18).
+
+    The junction-lens layer is exempt and not an oversight. A lens pocket IS
+    a difference against the buffered stroke band (`_ink_lens_pockets`), so
+    its boundary is a buffer boundary by construction; it is capped in area,
+    must vanish under an opening at half a stroke width, and paints black
+    beneath the ink that encloses it. Counting it measures how gnarly the
+    pockets are, not whether a surface fill inherited a sampling. `flat3`
+    derives every surface tone from part_color, so pure black is the lens
+    layer and nothing else.
     """
     from brick_icons.cli import build_parser, _config_from_args, process_one
 
@@ -1207,6 +1224,8 @@ def test_a_fill_boundary_carries_no_sampled_boundary(part, tmp_path, ldraw_dir):
     for m in re.finditer(r"<path\b([^>]*)>", (out / f"{part}.svg").read_text()):
         attrs = dict(re.findall(r'([\w:-]+)="([^"]*)"', m.group(1)))
         if attrs.get("fill") in (None, "none"):        # fills, not strokes
+            continue
+        if attrs.get("fill") == "#000000":            # lens layer, see above
             continue
         run, cur = 0, None
         for c in re.finditer(r"([MLAZ])([^MLAZ]*)", attrs.get("d", "")):

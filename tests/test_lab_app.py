@@ -429,6 +429,33 @@ def test_part_route_carries_measurements_and_defects(tmp_path):
     assert body["defects"] == []
 
 
+def test_part_route_carries_the_construction_features(tmp_path):
+    from brick_icons import db
+
+    client = _corpus_client(tmp_path)
+    conn = db.connect(tmp_path / "corpus.db")
+    conn.executemany(
+        "INSERT INTO part_features (part_id, feature, value) VALUES (?, ?, ?)",
+        [("3001", "tris", 384.0), ("3001", "elliptical", None),
+         ("3001", "stud", None)])
+    conn.commit()
+    conn.close()
+
+    got = client.get("/api/corpus/part/3001").json()["features"]
+    assert got["tris"] == 384.0
+    # The null is what the page reads a flag by, so it has to survive the
+    # round trip rather than being dropped or turned into a 0.
+    assert got["elliptical"] is None
+    # Flags before measures, in the extractor's order, so the page can render
+    # what it is given without sorting.
+    assert list(got) == ["stud", "elliptical", "tris"]
+
+
+def test_part_route_sends_no_features_for_a_part_that_has_none(tmp_path):
+    assert _corpus_client(tmp_path).get(
+        "/api/corpus/part/3001").json()["features"] == {}
+
+
 def test_part_route_404s_on_an_unknown_part(tmp_path):
     assert _corpus_client(tmp_path).get("/api/corpus/part/nope").status_code == 404
 

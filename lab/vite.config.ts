@@ -23,6 +23,9 @@ export default defineConfig({
         corpus: fileURLToPath(new URL('./corpus.html', import.meta.url)),
         badges: fileURLToPath(new URL('./badges.html', import.meta.url)),
         stats: fileURLToPath(new URL('./stats.html', import.meta.url)),
+        // Built so `scripts/shot-sink.py` can serve the page itself. A bake of
+        // the whole library must not need a dev server running beside it.
+        shot: fileURLToPath(new URL('./shot.html', import.meta.url)),
       },
     },
   },

@@ -16,6 +16,7 @@ from pathlib import Path
 
 from brick_icons import goldens
 from brick_icons.lab import cache, partindex
+from brick_icons import features
 from brick_icons.lab import defects as defects_toml
 
 DEFAULT_PATH = Path("corpus.db")
@@ -27,7 +28,7 @@ PART_STATUSES = ("unreviewed", "good", "suspect", "broken", "wontfix")
 # `parts.status` and its hand-written record. `|` is LDraw's mark for a part
 # nobody at LEGO made -- third-party electronics and wheels that fit LEGO.
 OUT_OF_SCOPE_CATEGORIES = ("Sticker", "|")
-SOURCES = ("naive", "occt", "decal", "ldview",
+SOURCES = ("naive", "occt", "decal", "ldview", "ortho",
            "translucent-naive", "translucent-occt",
            "silhouette-naive", "silhouette-occt",
            "white-naive", "white-occt")
@@ -98,6 +99,11 @@ CREATE TABLE IF NOT EXISTS defects (
   engines TEXT NOT NULL,
   status TEXT NOT NULL,
   title TEXT NOT NULL,
+  -- The symptom families this defect belongs to, as a JSON list. A list and
+  -- not a column because a row can show two independent faults -- 53119 has
+  -- stray lines AND banding -- and splitting it would lose that they were
+  -- seen together.
+  classes TEXT,
   mark TEXT, kind TEXT, points TEXT,
   filed TEXT NOT NULL,
   notes TEXT
@@ -124,6 +130,17 @@ CREATE TABLE IF NOT EXISTS part_years (
   matched TEXT NOT NULL
 );
 
+-- How a part is built, from brick_icons.features: one row per feature, with
+-- a value only where the feature is a measure. Derived from the library and
+-- rebuilt whole, so nothing here is ever edited by hand -- a typed label would
+-- outlive the extractor that disagreed with it, and say nothing.
+CREATE TABLE IF NOT EXISTS part_features (
+  part_id TEXT NOT NULL,
+  feature TEXT NOT NULL,
+  value REAL,
+  PRIMARY KEY (part_id, feature)
+);
+
 -- The part that replaced this one, from Rebrickable's part_relationships
 -- dump. LDraw records no such thing: `~Moved to` is a file rename, and 2780
 -- has no redirect because 2780 and 61332 are genuinely different parts.
@@ -135,11 +152,30 @@ CREATE TABLE IF NOT EXISTS part_successors (
 
 CREATE INDEX IF NOT EXISTS measurements_by_part ON measurements(part_id, engine);
 CREATE INDEX IF NOT EXISTS renders_by_part ON renders(part_id);
+-- Feature first: the question this table exists for is "which parts have
+-- X", and part-first would scan every row to answer it.
+CREATE INDEX IF NOT EXISTS part_features_by_feature
+  ON part_features(feature, part_id);
 """
 
 
 def now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+#: Columns added to a table that already existed. `CREATE TABLE IF NOT
+#: EXISTS` leaves an old table alone, and several sessions share one
+#: corpus.db, so a rebuild is not a thing to make them all do. Nullable and
+#: additive only: SCHEMA_VERSION is deliberately not bumped for these, because
+#: older code cannot misread a column it never selects.
+_ADDED_COLUMNS = (("defects", "classes", "TEXT"),)
+
+
+def _add_missing_columns(conn: sqlite3.Connection) -> None:
+    for table, column, decl in _ADDED_COLUMNS:
+        have = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in have:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
 
 
 def connect(path: Path | str = DEFAULT_PATH) -> sqlite3.Connection:
@@ -166,6 +202,7 @@ def connect(path: Path | str = DEFAULT_PATH) -> sqlite3.Connection:
                 f"{path} is at schema version {row[0]}; this code speaks "
                 f"{SCHEMA_VERSION}")
     conn.executescript(_SCHEMA)
+    _add_missing_columns(conn)
     conn.execute("INSERT OR IGNORE INTO meta VALUES ('schema_version', ?)",
                  (str(SCHEMA_VERSION),))
     conn.commit()
@@ -188,6 +225,26 @@ def seed_parts(conn: sqlite3.Connection, ldraw_dir: Path | str) -> int:
         rows)
     conn.commit()
     return len(rows)
+
+
+def seed_part_features(conn: sqlite3.Connection, ldraw_dir: Path | str,
+                       progress=lambda msg: None) -> int:
+    """Derive every part's construction features and replace the table.
+
+    Cleared first rather than upserted: a feature the extractor stops emitting
+    has to disappear, and an ON CONFLICT update leaves it behind looking
+    current.
+    """
+    conn.execute("DELETE FROM part_features")
+    n = 0
+    for part_id, feats in features.build(ldraw_dir, progress=progress):
+        conn.executemany(
+            "INSERT OR REPLACE INTO part_features (part_id, feature, value) "
+            "VALUES (?, ?, ?)",
+            [(part_id, name, value) for name, value in feats.items()])
+        n += len(feats)
+    conn.commit()
+    return n
 
 
 def start_run(conn: sqlite3.Connection, kind: str, args: dict,
@@ -243,6 +300,17 @@ _CANONICAL = {
              "--shade-style", "flat3", "--angle", "iso", "--format", "svg"],
     "decal": ["--decal", "--angle", "iso", "--format", "svg"],
     "ldview": ["--ldview", "--angle", "iso"],
+    # The reference that is mathematically compatible with the library:
+    # orthographic, and three.js's LDrawLoader substitutes no primitives, so
+    # what it draws is the authored tessellation our own engine reads. LDView
+    # is neither -- it renders perspective, and `-AllowPrimitiveSubstitution`
+    # redraws a `4-4cyli` at whatever curve quality it likes.
+    #
+    # This argv is a config KEY and nothing runs it: the renderer is a browser,
+    # and one page draws a whole list in one WebGL context. Bake the slot with
+    # `scripts/shot-sink.py --list <parts> --out renders/ortho`; a per-part CLI
+    # flag would launch Chrome 24,591 times.
+    "ortho": ["--ortho", "--angle", "iso"],
     # See-through bricks: the ordinary drawing with its fills let down, so
     # what the far side of a part does is visible against what the near side
     # draws. Opacity is stated rather than inherited -- a translucent LDraw
@@ -338,9 +406,11 @@ def import_defects(conn: sqlite3.Connection, path: Path | str) -> int:
     records = defects_toml.load(path)
     conn.executemany(
         "INSERT OR REPLACE INTO defects (id, part_id, engines, status, title, "
-        "mark, kind, points, filed, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "classes, mark, kind, points, filed, notes) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         [(r["id"], r["part"], json.dumps(r.get("engines", [])),
           r.get("status", "open"), r["title"],
+          json.dumps(r["classes"]) if r.get("classes") else None,
           json.dumps(r["mark"]) if "mark" in r else None,
           r.get("kind"),
           json.dumps(r["points"]) if "points" in r else None,
@@ -355,6 +425,8 @@ def export_defects(conn: sqlite3.Connection, path: Path | str) -> int:
         record = {"id": row["id"], "part": row["part_id"],
                   "engines": json.loads(row["engines"]),
                   "status": row["status"], "title": row["title"]}
+        if row["classes"]:
+            record["classes"] = json.loads(row["classes"])
         if row["mark"]:
             record["mark"] = json.loads(row["mark"])
         if row["kind"]:
@@ -531,8 +603,12 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
     conn = connect(path)
     counts = {"parts": seed_parts(conn, ldraw_dir), "renders": 0,
               "measurements": 0, "skipped": 0, "replaced": 0,
-              "defects": 0, "statuses": 0, "years": 0, "successors": 0}
+              "defects": 0, "statuses": 0, "years": 0, "successors": 0,
+              "features": 0}
     progress(f"seeded {counts['parts']} parts")
+    counts["features"] = seed_part_features(
+        conn, ldraw_dir, progress=lambda m: progress(f"features {m}"))
+    progress(f"derived {counts['features']} part features")
 
     root = Path(root)
     if census_dirs is None:

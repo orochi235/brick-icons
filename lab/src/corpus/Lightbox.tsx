@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import type { LabClient } from '@lab/api/client';
 import { BadgeSwatch } from '@lab/corpus/BadgeSwatch';
 import { CATALOGS } from '@lab/corpus/catalogs';
+import { Fingerprint } from '@lab/corpus/Fingerprint';
 import { Tags, yearRange } from '@lab/corpus/tags';
 import { defectId, engineFor } from '@lab/corpus/flag';
 import { cellState } from '@lab/corpus/paint';
@@ -186,6 +187,8 @@ export function Lightbox({ partId, source, client, onClose }: {
               </li>
             ))}
           </ul>
+          <h3>Built from</h3>
+          <Fingerprint features={detail.features} />
           <h3>Measurements</h3>
           <table>
             <thead>

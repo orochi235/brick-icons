@@ -1,5 +1,168 @@
 # Handoff — `main`: the corpus lab, and the OCCT engine
 
+## Baton, 2026-09-07 night: naive's tail is audited, half of it landed
+
+On `main`, in the shared checkout. `git log --oneline @{u}..HEAD` for anything
+unpushed.
+
+**Do this first: work the rest of naive's post-processing tail.** The audit
+that names every row is `OCCT-MIGRATION.md`, section "What naive does that occt
+does not" -- read that, not this. Four rows are still open and they are one
+cluster:
+
+    _snap_rim_crossings pass 1   snap a partial arc's ends onto the junction
+                                 it grazes
+    _snap_rim_crossings pass 2   counterbore separator refit -> `refits`
+    _refit_candidates            the moved seam as an arc candidate
+    _fold_arc_loops              chained fold-arc spans -> `loops`
+
+`hlr.visible_segments` runs all four on the naive branch and none on the occt
+branch, so `fill_ops` gets `refits=()` and `loops=()` and their downstream
+passes (`shade.refit_fill_boundaries`, the `loops=` sub-region outlines) never
+fire. `fold_ells` is built from `fit_ells` inside `_visible_segments_analytic`,
+which occt never enters, so `cull_orphan_runs(protect=...)` is vacuous there
+too.
+
+**The question is whether they are NEEDED, not how to port them.**
+`OCCT-MIGRATION.md` item 4 has said so since the port started and it is still
+the right instruction. Pass 1 exists because naive's occlusion is SAMPLED --
+`visible_subops(n=64)` stops up to a sample short of the true graze, leaving an
+arc end "just next to" the stroke it should touch. occt does real hidden-line
+removal and may land the graze exactly; if it does, pass 1 is machinery with no
+defect to fix. Establish that with a measurement on a counterbore part before
+writing any code. Pass 2 is a different animal -- it is stylization (make the
+separator read concentric with the bore), not a repair, so it is a design call
+rather than a gap.
+
+**Two traps if you do port any of it.** The engines emit ops in different
+spaces: naive in canvas px at `render_px`, occt in projected LDU normalized
+later by `fit_segments`. `_snap_rim_crossings`'s `max_snap` is degrees and
+carries over; its `vertex_tol=0.25` is op units and does not. And the pass runs
+BEFORE `fit_silhouette_arcs` on naive -- match that order rather than inventing
+one.
+
+**What landed tonight** -- `git log` for the shas; the audit doc marks each row.
+
+- Decoration authored as an analytic primitive is drawn. It never survived the
+  sew: an author partitions a wall into colored and color-16 sectors of the
+  same surface, `UnifySameDomain` merges them back (correctly, as geometry),
+  and the color is gone. The faces are built from the primitive list instead.
+  `unwrap_decoration` also gets naive's two arguments now -- the analytic list
+  as carriers, and `ellipses_out`.
+- occt's drawn ops go through `dedupe_segments`, with a new occt-only
+  `keep_order`. A circle arrived as contiguous spans of itself and each was
+  stroked separately.
+
+**Two rows are closed as WRONG, not as done.** Do not re-propose either.
+`ink_prims` cannot be ported: its first rule is "color is not 16", and a
+printed part whose *body* is authored in a color (`9359`, a green brick with a
+white TAXI print) has every structural edge it owns caught by it -- porting it
+took the stud rims off `9359`, `80400`, `6141p01`. And
+`test_a_fill_boundary_carries_no_sampled_boundary` now skips pure-black fills:
+a junction-lens pocket is a difference against the buffered stroke band, so its
+boundary is a buffer boundary by construction and counting it measures pocket
+gnarliness rather than the defect the test is for. **Mike has not signed off on
+that test amendment** -- it is a two-line skip in `tests/test_occt.py` and
+reverting it fails the dedupe on `32062` alone.
+
+**Not in scope and still open:** `004490h`'s bottom line of small text draws as
+dots and dashes where LDView draws letters. `shade.RESIDUE_CRUMB` set to 0
+recovers a few glyph pieces and not the start of the line, so the cull is a
+contributor and something upstream fragments the text as well. Its `$` glyphs
+came back with the decal arc recovery; the line did not.
+
+**`out/ellip-before/` is untracked and is the only copy of the pre-restage
+SVGs.** The originals were overwritten. Do not clean it up. `out/audit-2a/`
+holds tonight's A/B sheets and is disposable.
+
+**Four other sessions share this exact working directory** -- `brick-icons-60`,
+`brick-icons-4b`, `brick-icons-9d`, `brick-icons-bb` -- and "Status icon for
+thumbnails" is in the `.claude/worktrees/defect-sweep` worktree. Stage explicit
+paths, never `git add -A` or `git commit -a`, and confirm the branch before
+assuming it. `tests/goldens/defects.toml` is Mike's, written by the lab UI, and
+is permanently dirty.
+
+## Baton, 2026-09-07 evening: the orthographic reference is a real slot now
+
+**LDView is being replaced, and Mike has said so plainly** -- "it has a
+ceremonial place on the board because nobody has the heart to fire it but it is
+not fit for purpose". It disagrees with the library three ways and none is
+tunable: it renders perspective where our projector is orthographic, so no
+pixel comparison means anything; `-CurveQuality` only applies with
+`-AllowPrimitiveSubstitution`, so what it draws is not the part's geometry
+(4070's "hexagonal recess" was LDView redrawing an r=4 `4-4cyli`); and its
+internal color table overrides LDConfig. That is why every finding taken from
+it has been structural. It stays on the board for now.
+
+**The replacement is `ortho`, and it bakes.** `fa4c653` gave it a headless
+driver -- `scripts/shot-sink.py` serves `lab/dist` beside the library and
+launches its own Chrome, so no dev server and no person opening a tab.
+`e278a7a` made it a slot: `ortho` is in `db.SOURCES`, renders index at
+`renders/ortho/<part>.png`, and the bake is
+
+    .venv/bin/python scripts/shot-sink.py --list <parts> --out renders/ortho
+
+resumable by re-running it. **Its `_CANONICAL` argv is a config key and nothing
+runs it** -- the renderer is a browser drawing a whole list in one WebGL
+context, and a per-part CLI flag would launch Chrome 24,591 times.
+
+**Two traps it cost to find.** Headless Chrome has no GPU, so WebGL is off
+unless SwiftShader is named: `--use-angle=swiftshader` **and**
+`--enable-unsafe-swiftshader`, mandatory since Chrome 131. Without them the
+page loads and renders nothing, which reads as a broken renderer. And
+`shot.html` was not in vite's rollup inputs, so `lab/dist` had no page to
+serve; `npm run build` in `lab/` after touching `shot.ts`.
+
+### What is next, in order
+
+1. **Bake the corpus.** Nothing has run past five parts. `--batch` restarts the
+   browser per batch so a leak costs one batch; sizing it is unmeasured.
+2. **Frame registration, and it is the one that decides whether this is worth
+   it.** Mike: "we'll be using it to drive our gradient fill sampling too."
+   `shot.ts` fits its own bounding box with a 1.02 pad, so a pixel in the
+   reference does NOT map to a point on our face. Sampling needs it to share
+   our pixel fit exactly, not approximately.
+3. **Shading, explicitly deferred by Mike.** `LDrawLoader.smoothNormals` is at
+   its default `true`, so a faceted cylinder shades smooth while our `flat3`
+   tones per facet group. The key light is a guess at LDView's `-LightVector`;
+   the `0.55` ambient already matches `shade.ramp_b`'s floor exactly.
+4. Part color has no override. Cosmetic, last.
+
+**The slot is named `ortho` and renaming costs a migration** -- the `census-`
+rename this week moved `renders` and `measurements` rows and re-baked thumbs.
+`mesh` and `datum` were the alternatives; `ortho` won because it names the
+property that makes the thing usable.
+
+## The coplanar sticker measurement is done, and `f832da6` has two regressions
+
+**The coplanar paint-order fix redraws 87% of the sticker class**: 3,884 of
+4,454 measured parts move pixels, 4,091 change paint order, median 2,740 px or
+6.3% of the frame. 59 parts errored (51 timeouts, 3 GEOS, 5 killed by a
+relaunch) and cannot move the answer -- 86.1% to 87.4% whichever way they fall.
+`scripts/coplanar-affected.py` (`f130bf8`) is the tool; rows in `out/coplanar/`,
+the 59 in `out/coplanar/retry-batches.txt`, already on studio and never run
+because a peer took the tree.
+
+**Consequence nobody has acted on: the wall's `silhouette-occt` slot is stale
+for about 3,900 stickers**, several stored as blank grey discs that now draw
+their artwork.
+
+**`f832da6` fixed 35480 and broke two other parts.** Filed as
+`3626bpsk-tab-under-neck-stud` and `67811-notch-through-hub-wall`, both open,
+both with the in-process reproduction and both narrowings that are already
+disproven. Mike's call was **leave it and file them**, not revert. The sample
+was 60 parts: seams kept on 14, pixels move on 5, 2 better, 2 worse, 1 neutral.
+A full-corpus bound is cheap -- `_pierce_seams` fires without rendering.
+
+**`35480-bore-reads-flat` is waiting on Mike and nobody else.** Looking down a
+bore, `max(0.0, n . L)` in `shade._axis_binned_stops` floors every bin past the
+terminator and a quarter of the visible tube pins to one tone. Fixing it is a
+lighting-model change that moves every render in the corpus.
+
+**`tests/goldens/defects.toml` carries four rows written this session and is
+unstaged by design.** It is Mike's file. If it is ever reverted, those rows go.
+
+
 ## Baton, 2026-09-07 evening: occt drops naive's decal unwrap, and the audit that follows
 
 **Do this first: go through the naive engine's tricks and check each has an

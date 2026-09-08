@@ -48,16 +48,78 @@ the corpus grows one the producer does not know.
 2. **`proj`. DONE**, with item 1 rather than after it: a curved face bows
    toward the camera between its edges, which is exactly where it overlaps a
    neighbour, so a flat depth is wrong at the point that decides the order.
-3. **Decide about the naive stylizations.** `refits` (the counterbore
-   separator refit), `loops` and `fold_ells` (fold-arc sub-region outlines) are
-   all empty under `occt`. Either port them or establish that exact faces make
-   them unnecessary — do not port them on the assumption that they are needed.
-4. **`tri` / `tri_colors`.** Empty under `occt`, which turns off
-   `--debug-dir`'s unwrap emission (`cli._emit_unwrap`) and
-   `shade.unwrap_decoration`, so bound decoration never reaches the render
-   path. Needed before printed parts can gate anything but `outline-flat3`.
+3. **Decoration. DONE** (`175bc8f`), except `ink_prims`, which was tried and
+   is wrong here — see the table.
+4. **Decide about the naive stylizations.** `refits`, `loops` and `fold_ells`
+   are still empty under `occt`. Either port them or establish that exact
+   faces make them unnecessary — do not port them on the assumption that they
+   are needed. `dedupe_segments` was the one stage of that tail that clearly
+   belonged, and it landed in `b4b3c62`.
 5. **Retire the silhouette contour.** It exists because `occt` has no faces;
    check whether real faces make it redundant before leaving it in.
+
+## What naive does that occt does not
+
+Read the two pipelines against each other — `hlr._visible_segments_analytic`
+plus the tail of `hlr.visible_segments`, against `occt.visible_segments` and
+`occt.ordered_faces`.
+
+**Four of these are closed** (`175bc8f`, `b4b3c62`). Two were tried and are
+wrong for this engine, and the rows say why so nobody re-proposes them. The
+rest of the tail is still open and is item 4 above.
+
+### Decoration
+
+| naive does | occt does | |
+|---|---|---|
+| `faces_from_analytic` keeps `prim.color`, so a substituted disc or cone that is *print* paints as print | `build_shape` sews every face and stamps it `color: 16`; `_with_decoration` re-reads colors from `out["tri_colors"]` only | **CLOSED, `175bc8f`** — the faces are built from the primitive list instead, with their own occluders. 4,553 of 13,083 printed parts author some decoration as an analytic primitive, and 202 author *all* of it that way. `3942bp01`'s cone stripes are 16 color-4 `con` prims and no colored triangle at all, so occt draws a bare gray cone; `3040bp08` keeps its yellow border (triangles) and loses its three yellow discs (`disc` prims) |
+| `unwrap_decoration(carriers=analytic)` — a decal binds to the cylinder or cone it is printed on | `carriers=[]` — a decal can only bind to a plane OCCT happened to build | **CLOSED, `175bc8f`** |
+| `unwrap_decoration(ellipses_out=decal_ells)` — a flat decal's circular boundary runs come back as arcs instead of the author's chords | `ellipses_out` not passed, so `_decal_arc_candidates` never runs | **CLOSED, `175bc8f`.** 3 candidates recovered on `003428d`, 108 on `004490h` |
+| `ink_prims` — a print's boundary is ink, not a crease, so its primitive does not stroke | no analog; `authored_loci` takes every `edge` primitive | **TRIED AND WRONG.** Its first rule is "color is not 16", and a printed part whose *body* is authored in a color — `9359` is a green brick with a white TAXI print — has every structural edge it owns caught by it. Porting it took the stud rims off `9359`, `80400` and `6141p01`. Naive needs the rule because a substituted primitive there draws its own rim; nothing on this side draws one |
+| `res.tri` / `res.tri_colors` reach `cli._emit_unwrap` | `()` | **CLOSED, `175bc8f`.** `--debug-dir` now writes the `.unwrap.svg` under `occt` |
+
+### Stroke post-processing
+
+The `occt` branch of `hlr.visible_segments` runs `fit_silhouette_arcs` and
+`cull_orphan_runs` and returns. Everything else in that tail is naive-only.
+
+| naive does | occt does | |
+|---|---|---|
+| `dedupe_segments` unions abutting and overlapping spans on one carrier line or ellipse | not called | **CLOSED, `b4b3c62`.** 2,202 drawn ops to 1,692 over 36 parts. It takes `eps=0.05/res.s` because occt works in LDU, and a new occt-only `keep_order` that stops the pass regrouping the list and rebuilding ops it did not merge |
+| `_snap_rim_crossings` pass 1 snaps a partial arc's ends onto the junction they graze | not called | **absent.** `max_snap` is degrees and scale-free; `vertex_tol=0.25` is op units and needs the same scaling |
+| `_snap_rim_crossings` pass 2 refits a counterbore separator, and `fill_ops(refits=)` moves the fill seam to follow it | `refits=()`, so `refit_fill_boundaries` never fires | **absent** |
+| `_refit_candidates(refits)` makes the moved seam an arc candidate | — | **absent**, follows the row above |
+| `_fold_arc_loops` turns chained fold-arc spans into `fill_ops(loops=)` sub-region outlines | `loops=()` | **absent.** `fold_ells` is built from `fit_ells` inside `_visible_segments_analytic`, which occt never enters |
+| `cull_orphan_runs(protect=fold_ells)` | called with no `protect` | present but unprotected; vacuous while `fold_ells` is empty, wrong the moment it is not |
+
+### Present under another mechanism — do not port
+
+| naive | occt |
+|---|---|
+| `visible_subops` sampled occlusion against analytic occluders | real hidden-line removal (`hlr_edges`) |
+| `smooth_rim_skips` per-angular-bin seam suppression | `UnifySameDomain` plus `analytic_creases`'s `TANGENT_DEG` |
+| `faces_from_analytic` | `_faces_for` / `curved_faces` |
+| `fit_arcs` drawn as arcs, occluded along a chord proxy | `authored_loci` matches the authored chords and `locus_arc` re-reads them against the arc |
+| `absorb_wall_facets` | not applicable: occt's walls are OCCT surfaces, and an authored color-16 wall quad never becomes an occt face |
+| rim arc candidates carry a 25° max step so a 16-gon's chords are recognized | occt samples its own boundaries at `BOUNDARY_STEP_DEG` 9°, under `geom2d.MAX_STEP` 15°, so they recover without help. The coarser step still matters for the faces occt derives from triangles |
+
+### The junction-lens layer is not a fill
+
+`test_a_fill_boundary_carries_no_sampled_boundary` reads every filled path and
+fails on a run of sub-quarter-pixel segments. A junction-lens pocket
+(`shade._ink_lens_pockets`) is a difference against the buffered stroke band,
+so its boundary is a buffer boundary *by construction*; it is area-capped,
+must vanish under an opening at half a stroke width, and paints black beneath
+the ink enclosing it. Counting it measures how gnarly the pockets are, not
+whether a surface fill inherited a sampling — which is what cost `32062` a
+2→17 reading against a non-black worst run of 1. The gate skips pure black,
+which under `flat3` is that layer and nothing else.
+
+### occt-only, with no naive analog
+
+`_undeclared_ops` (1,407 stickers declare no edge and naive draws them blank),
+`_pierce_seams`, `_group_planes`, `_boundary_conics`, and the `sil_polys`
+silhouette contour.
 
 ## The gate that has to exist first
 
@@ -76,9 +138,11 @@ diffs the raster and the structural summary.
 
 - **The two engines emit ops in different spaces.** `naive` works in canvas px
   at `render_px`; `occt` returns projected LDU and lets `fit_segments`
-  normalize. Harmless until post-processing is shared: `dedupe_segments`
-  (`eps=0.05`), `_snap_rim_crossings` (`max_snap=4.0`) and `cull_orphan_runs`
-  are px-scale constants and run only on the `naive` branch.
+  normalize. This is what makes porting the post-processing tail more than a
+  call: `dedupe_segments`'s `eps=0.05` and `_snap_rim_crossings`'s
+  `vertex_tol=0.25` are canvas px and mean something else in LDU.
+  `cull_orphan_runs` already runs on both because it derives its thresholds
+  from the ops bbox, and `_snap_rim_crossings`'s `max_snap` is in degrees.
 - **`arcfit` MOVES its chains out of `out["2"]`.** Anything reading authored
   type-2 edges must also read `out["fit_arcs"]`; `occt.authored_loci` did not,
   and every axle hole, gear hub and notch pocket was undrawable — silently,
