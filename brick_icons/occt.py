@@ -168,13 +168,23 @@ def sector_rad(prim):
 
 
 def sector_face(origin, ah, uh, r_in, r_out, ang):
-    """Planar disc/ring sector face bounded by two arcs and two radial lines."""
+    """Planar disc/ring sector face bounded by two arcs and two radial lines.
+
+    The radial ends are read off the SAME gp_Ax2 the arcs use. gp_Ax2 squares
+    the x-direction against the axis, so with a frame orthonormal only to
+    LDraw's three decimals its X sits a fraction of a degree off `uh` -- 6e-5
+    LDU at 92692's r=6 ring, which is 600x MakeWire's tolerance, so the wire
+    did not close and the ring built no face at all.
+    """
     a = ax2(origin, ah, uh)
+    xd, yd = a.XDirection(), a.YDirection()
+    ux = np.array([xd.X(), xd.Y(), xd.Z()], float)
+    uy = np.array([yd.X(), yd.Y(), yd.Z()], float)
     c_out = gp_Circ(a, r_out)
     eo = BRepBuilderAPI_MakeEdge(c_out, 0.0, ang).Edge()
     def pt(r, th):
-        d = np.array(origin, float) + r * (math.cos(th) * np.array(uh, float)
-                                           + math.sin(th) * np.cross(np.array(ah, float), np.array(uh, float)))
+        d = np.array(origin, float) + r * (math.cos(th) * ux
+                                           + math.sin(th) * uy)
         return gp_Pnt(*map(float, d))
     w = BRepBuilderAPI_MakeWire(eo)
     if r_in > 1e-9:

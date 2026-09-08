@@ -174,6 +174,24 @@ def test_a_sheared_wall_builds_one_face():
     assert _face_area(faces[0]) == pytest.approx(arc * 20.0, rel=1e-6)
 
 
+def test_a_ring_sector_closes_its_wire_under_a_rounded_rotation():
+    """The radial ends and the arcs have to come off ONE frame.
+
+    gp_Ax2 squares the x-direction against the axis, so a placement written to
+    LDraw's three decimals leaves its X a fraction of a degree off the `uh` the
+    radial ends were computed from -- 6e-5 LDU at 92692's r=6 ring, which is
+    600x MakeWire's tolerance. The wire did not close, occt_faces swallowed the
+    failure, and the ring contributed no face at all: the joint where the front
+    tube meets the rings drew with a hole in its outline.
+    """
+    R = np.array([[0.6772, -0.9304, -0.2805],
+                  [-0.7654, 0.0, -1.8478],
+                  [1.7192, 0.3665, -0.7121]])
+    prim = P("ring", R, np.array([-22.149, 2.0, -35.098]), sector=67.5, inner=2)
+    assert occt.frame(prim) is not None
+    assert len(occt.occt_faces(prim)) == 1
+
+
 @pytest.mark.parametrize("kind", ["ring", "disc", "edge"])
 def test_a_planar_primitive_ignores_a_skew_axis_column(kind):
     """A ring/disc/edge is entirely at local y=0, so the matrix's axis column
