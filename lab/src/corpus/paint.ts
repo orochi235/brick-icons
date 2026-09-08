@@ -222,7 +222,7 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
   technic: { tag: 'technic', mark: 'technic', field: '#1b2a5e', ink: '#ffffff' },
   duplo: { tag: 'duplo', mark: 'duplo', field: '#c8102e', ink: '#ffffff' },
   weird: { tag: 'weird', text: '\u03a8', field: '#5b3a86', ink: '#ffffff',
-           font: WEIRD_FACE, weight: 300, scale: 1.22, dy: 0.035 },
+           font: WEIRD_FACE, weight: 300, scale: 1.22, dy: 0.095 },
   // The one property badge off the shared field: a gold bolt on black is
   // what a live circuit looks like everywhere else, and it earns the break.
   electric: { tag: 'electric', mark: 'bolt', field: '#101014', ink: '#ffd60a',
@@ -234,8 +234,11 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
   // in the library is printed on.
   sticker: { tag: 'sticker', mark: 'stickerPolice', field: '#1a4b8c',
              ink: '#ffffff', accent: '#c9c9d0' },
+  // The one badge whose ink runs to its own edge, so the ring is what gives
+  // it an edge at all: without it the outermost dots are the silhouette and
+  // the disc reads as a torn patch rather than a printed one.
   printed: { tag: 'printed', mark: 'printed', field: PROPERTY_FIELD,
-             ink: '#ffffff' },
+             ink: '#ffffff', stroke: '#ffffff' },
   composite: { tag: 'composite', mark: 'composite', field: PROPERTY_FIELD,
                ink: '#22c8dc', accent: '#f5a623' },
 };

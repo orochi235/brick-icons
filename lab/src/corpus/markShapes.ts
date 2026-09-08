@@ -308,7 +308,7 @@ const composite: MarkShape[] = [
       [0, -0.3, 0.6, -0.3, 0.6, 0.9, -0.6, 0.9, -0.6, 0.3, 0, 0.3])),
     fill: 'accent' },
   { d: line(through(COMPOSITE_FRAME, [0.6, -0.3, 0, -0.3, 0, 0.3, -0.6, 0.3])),
-    fill: 'none', stroke: 'field', width: 0.16, join: 'miter' },
+    fill: 'none', stroke: 'field', width: 0.30, join: 'miter' },
 ];
 
 // Duplo's d, in the weight its logotype uses: a heavy rounded geometric with a
