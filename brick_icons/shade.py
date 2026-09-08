@@ -1951,7 +1951,13 @@ def _filled(g):
 
 def _body_planes(faces):
     """A Plane per distinct body-face plane. Planes are not primitives, so a
-    flat carrier has to be derived from the geometry that sits on it."""
+    flat carrier has to be derived from the geometry that sits on it.
+
+    The `plane` key is a rounded grid, which splits one flat face into several
+    carriers whenever facet-normal noise straddles a cell boundary — and a
+    decal then binds a few facets to each, reaching the SVG as fragments with
+    a seam between them. 10049p01's claw print came out over 36 carriers.
+    """
     seen = {}
     for f in faces:
         k = f.get("plane")
@@ -1959,7 +1965,7 @@ def _body_planes(faces):
             continue
         seen[k] = unwrap.Plane(normal=np.array(k[:3], float),
                                offset=float(k[3]))
-    return list(seen.values())
+    return unwrap.dedupe_planes(seen.values())
 
 
 def unwrap_decoration(faces, carriers, proj, step=0.25, ellipses_out=None):

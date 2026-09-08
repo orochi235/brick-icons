@@ -452,6 +452,34 @@ def densify(ring, step=0.25):
 
 PLANE_COS = 0.9994      # ~2 deg; an LDraw 16-gon steps 22.5, so merging this
                         # tightly cannot flatten a faceted wall into one plane
+PLANE_OFF = 0.05        # LDU between two planes that are the same plane
+
+
+def _plane_seen(norms, offs, n, d) -> bool:
+    """Whether (n, d) is already in the parallel arrays, by proximity."""
+    return bool(len(norms) and np.any((norms @ n > PLANE_COS)
+                                      & (np.abs(offs - d) <= PLANE_OFF)))
+
+
+def dedupe_planes(planes):
+    """`planes` with near-duplicates of one surface dropped, first kept.
+
+    A rounded key is not enough: two facets of one face differ in the 4th
+    decimal, and a grid splits them whenever that noise straddles a boundary.
+    """
+    out, norms, offs = [], np.empty((0, 3)), np.empty(0)
+    for p in planes:
+        n = np.asarray(p.normal, float)
+        ln = float(np.linalg.norm(n))
+        if ln < 1e-9:
+            continue
+        n, d = n / ln, float(p.offset) / ln
+        if _plane_seen(norms, offs, n, d):
+            continue
+        out.append(p)
+        norms = np.vstack([norms, n])
+        offs = np.append(offs, d)
+    return out
 
 
 def planes_from(polys, inside=None):
@@ -475,12 +503,9 @@ def planes_from(polys, inside=None):
         d = float(n @ p[0])
         if float(n @ inside) > d:
             n, d = -n, -d
-        # matched by proximity, not by a rounded key: two facets of one face
-        # differ in the 4th decimal, and a grid splits them whenever that
-        # noise straddles a boundary — 10049p01's front came out as four
-        # planes and took the decal's dominant group down with it
-        if len(out) and np.any((norms @ n > PLANE_COS)
-                               & (np.abs(offs - d) <= 0.05)):
+        # matched by proximity, not by a rounded key: 10049p01's front came
+        # out as four planes and took the decal's dominant group down with it
+        if _plane_seen(norms, offs, n, d):
             continue
         out.append(Plane(normal=n, offset=d))
         norms = np.vstack([norms, n])

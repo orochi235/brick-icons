@@ -6,23 +6,23 @@
     156.35
   ],
   "commands": {
-    "A": 105,
-    "L": 5055,
-    "M": 316,
-    "Z": 311
+    "A": 109,
+    "L": 4712,
+    "M": 231,
+    "Z": 226
   },
   "fills": {
-    "#767676": 61,
+    "#767676": 51,
     "#cccccc": 4,
-    "#cda4de": 170,
-    "#f4f4f4": 54,
+    "#cda4de": 104,
+    "#f4f4f4": 46,
     "gradient": 5,
     "none": 6
   },
   "gradient_stops": 46,
   "gradients": 5,
   "lines": 4,
-  "paths": 300,
+  "paths": 216,
   "transforms": 0,
   "viewBox": "0 0 256 170"
 }

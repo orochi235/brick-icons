@@ -641,3 +641,27 @@ def test_a_part_at_the_cap_still_emits():
 def test_a_single_print_is_never_treated_as_shatter():
     groups = [_group(12.0)]
     assert unwrap.significant_groups(groups) == groups
+
+
+def test_facet_normal_noise_does_not_split_one_plane():
+    """The `plane` key shade builds is a rounded grid, and one flat face's
+    facets differ in the 4th decimal — 10049p01's claw print bound a few
+    facets to each of 36 carriers and reached the SVG as fragments."""
+    n = np.array([0.0, -0.7071, -0.7071])
+    planes = [unwrap.Plane(normal=n + np.array([d, 0.0, 0.0]), offset=7.07)
+              for d in (0.0, -1e-4, -2e-4)]
+    assert len(unwrap.dedupe_planes(planes)) == 1
+
+
+def test_planes_a_facet_apart_stay_apart():
+    """An LDraw 16-gon steps 22.5 degrees, so the merge must not flatten a
+    faceted wall into one plane."""
+    planes = [unwrap.Plane(normal=np.array([1.0, 0.0, 0.0]), offset=0.0),
+              unwrap.Plane(normal=np.array([0.924, 0.383, 0.0]), offset=0.0)]
+    assert len(unwrap.dedupe_planes(planes)) == 2
+
+
+def test_parallel_planes_at_different_offsets_stay_apart():
+    planes = [unwrap.Plane(normal=np.array([0.0, 1.0, 0.0]), offset=0.0),
+              unwrap.Plane(normal=np.array([0.0, 1.0, 0.0]), offset=4.0)]
+    assert len(unwrap.dedupe_planes(planes)) == 2
