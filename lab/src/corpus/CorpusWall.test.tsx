@@ -114,11 +114,29 @@ function installLoadingImages() {
 
 afterEach(() => { vi.restoreAllMocks(); });
 
+const pending = () => ({ cells: () => new Promise(() => {}),
+                         corpusSources: () => new Promise(() => {}),
+                         sheetManifest: () => new Promise(() => {}) } as any);
+
 it('says it is loading before the cells arrive', () => {
-  render(<CorpusWall client={{ cells: () => new Promise(() => {}),
-                               corpusSources: () => new Promise(() => {}),
-                               sheetManifest: () => new Promise(() => {}) } as any} />);
+  render(<CorpusWall client={pending()} />);
   expect(screen.getByText(/loading the corpus/i)).toBeTruthy();
+});
+
+it('lays out the wall it is about to draw rather than a blank page', () => {
+  // A cell's size is a parameter, so the grid can be drawn while the fetch is
+  // still out. 24,591 rows is a long time to look at nothing.
+  const { container } = render(<CorpusWall client={pending()} />);
+  expect(container.querySelectorAll('.corpus-skeleton__cell').length)
+    .toBeGreaterThan(0);
+});
+
+it('keeps the chrome usable while the cells are out', () => {
+  // None of it needs cells: the slot picker has its own poll, search goes
+  // straight to the API, and the sidebar's counts start empty either way.
+  render(<CorpusWall client={pending()} />);
+  expect(screen.getByRole('button', { name: /legend/i })).toBeTruthy();
+  expect(document.querySelector('.corpus-side')).toBeTruthy();
 });
 
 it('draws a canvas once the cells arrive', async () => {

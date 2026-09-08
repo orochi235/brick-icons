@@ -48,10 +48,39 @@ body { margin: 0; }
   --lk-workspace-pad: 0;
 }
 
-.corpus-loading {
-  padding: 1rem;
+/* The wall's shape while its cells are still out. Clipped to the stage and
+   under everything, so the real canvas simply lands on top of it. */
+.corpus-skeleton {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  align-content: start;
+  justify-content: start;
+  overflow: hidden;
+  padding: 1px;
+}
+
+.corpus-skeleton__cell {
+  background: rgb(128 128 128 / 14%);
+  border-radius: 2px;
+  animation: corpus-skeleton-pulse 1.6s ease-in-out infinite;
+}
+
+.corpus-skeleton__say {
+  position: absolute;
+  inset-inline-start: 1rem;
+  inset-block-start: 1rem;
   font: 13px/1.4 ui-monospace, monospace;
   color: var(--wzl-fg-muted);
+}
+
+@keyframes corpus-skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .corpus-skeleton__cell { animation: none; }
 }
 
 .corpus-search-notice {

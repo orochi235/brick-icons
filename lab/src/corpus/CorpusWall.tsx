@@ -57,6 +57,30 @@ const SLICE_PAD = 0.25;
 /** The whole app, minus its mount -- including labkit's `<LabShell>`, so this
  *  is a standalone lab and must not be nested inside a `<Lab>` or another
  *  `<LabShell>`. */
+/** The wall's shape before its cells arrive.
+
+ *  A cell's size is a parameter, not something the corpus tells us, so the
+ *  grid can be drawn while the fetch is still out -- and everything around it
+ *  (the slot picker, search, the sidebar) needs no cells either. Blocking on
+ *  the whole corpus meant a blank page for as long as 24,591 rows take. */
+function WallSkeleton({ cell, gap, width, height }: {
+  cell: number; gap: number; width: number; height: number;
+}) {
+  const pitch = cell + gap;
+  const cols = Math.max(1, Math.ceil((width || 800) / pitch));
+  const rows = Math.max(1, Math.ceil((height || 600) / pitch));
+  return (
+    <div className="corpus-skeleton" aria-busy="true" role="status"
+         style={{ gridTemplateColumns: `repeat(${cols}, ${cell}px)`, gap: `${gap}px` }}>
+      <span className="corpus-skeleton__say">loading the corpus…</span>
+      {Array.from({ length: cols * rows }, (_, i) => (
+        <span key={i} className="corpus-skeleton__cell" style={{ height: `${cell}px` }} />
+      ))}
+    </div>
+  );
+}
+
+
 export function CorpusWall({ client }: { client: LabClient }) {
   const { params, setParam, reset: resetParams } = useParams();
   // Read once, at the first render: restoring the slot through an effect would
@@ -380,7 +404,6 @@ export function CorpusWall({ client }: { client: LabClient }) {
                   {/* Outside the `cells` guard: leaving is the one thing you
                       still want while the corpus is loading. */}
                   <PageNav />
-                  {cells && <>
                   <FilterBar sources={sources} source={source} onSource={setSource} />
                   <PartSearch client={client} onOpen={openSearchedPart} />
                   <button type="button" className="corpus-legend-toggle"
@@ -391,15 +414,12 @@ export function CorpusWall({ client }: { client: LabClient }) {
                   {searchNotice && (
                     <span className="corpus-search-notice" role="status">{searchNotice}</span>
                   )}
-                  </>}
                 </>
               )}>
       <div className="corpus-app">
-        {cells && (
-          <Sidebar selection={selection} onChange={setSelection} counts={counts}
-                   shown={shown.length} total={cells.length}
-                   params={params} setParam={setParam} resetParams={resetParams} />
-        )}
+        <Sidebar selection={selection} onChange={setSelection} counts={counts}
+                 shown={shown.length} total={all.length}
+                 params={params} setParam={setParam} resetParams={resetParams} />
         {/* `useCanvasSize` measures the stage once, on its own first mount --
             it has to exist from the start, not appear once cells arrive. */}
         <div className="corpus-stage" ref={box}
@@ -413,7 +433,8 @@ export function CorpusWall({ client }: { client: LabClient }) {
                if (!overCard.current) setCarded(null);
                updateCam(zoomAt(cam, { x: sx, y: sy }, e.deltaY < 0 ? 1.1 : 1 / 1.1));
              }}>
-          {!cells && <p className="corpus-loading">loading the corpus…</p>}
+          {!cells && <WallSkeleton cell={params.cell} gap={params.gap}
+                                   width={size.width} height={size.height} />}
           {cam && (
             <Wall cells={shown} rects={laid.rects} cam={cam}
                   sheet={active?.image ?? null} manifest={active?.manifest ?? null}
