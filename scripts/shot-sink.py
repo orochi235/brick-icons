@@ -108,6 +108,10 @@ class Sink(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         path = self.path.split("?")[0]
         if path == "/done":
+            n = int(self.headers.get("Content-Length", 0))
+            if n:
+                print(f"  page failed: {self.rfile.read(n).decode()[:400]}",
+                      file=sys.stderr, flush=True)
             Sink.done.set()
             return self._send(200, b"ok", "text/plain")
         if path.startswith("/fit/"):
