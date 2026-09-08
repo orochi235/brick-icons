@@ -77,7 +77,7 @@ export function PartCard({ cell, source, at, viewport, onOpen, onClose,
       <div className="corpus-card-head">
         {cell.sha ? (
           <img className="corpus-card-thumb" alt={`${cell.id} render`}
-               src={`/api/thumbs/${source}/128/${cell.id}.png`} />
+               src={`/api/thumbs/${source}/128/${cell.id}.webp`} />
         ) : (
           <p className="corpus-card-none">not rendered</p>
         )}

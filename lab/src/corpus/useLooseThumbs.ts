@@ -6,7 +6,7 @@ export const MAX_IN_FLIGHT = 200;
 
 export function thumbUrl(cell: Cell, source: string): string {
   const v = cell.sha ? cell.sha.slice(0, 8) : '';
-  return `/api/thumbs/${source}/128/${cell.id}.png?v=${v}`;
+  return `/api/thumbs/${source}/128/${cell.id}.webp?v=${v}`;
 }
 
 /** Visible cells worth a loose fetch: only once the wall is at the level

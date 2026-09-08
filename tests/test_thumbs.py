@@ -76,7 +76,7 @@ def test_it_rasterizes_every_level_for_one_part(tmp_path):
     made = thumbs.bake_part("3001", svg, out, sha="abc123")
     assert sorted(made) == [8, 32, 128]
     for level in (8, 32, 128):
-        with Image.open(out / str(level) / "3001.png") as img:
+        with Image.open(out / str(level) / f"3001.{thumbs.THUMB_EXT}") as img:
             assert img.size == (level, level)
 
 
@@ -87,7 +87,7 @@ def test_a_wide_render_is_padded_square_not_stretched(tmp_path):
     svg.write_text(SVG)
     out = tmp_path / "thumbs"
     thumbs.bake_part("3001", svg, out, sha="abc123")
-    with Image.open(out / "128" / "3001.png") as img:
+    with Image.open(out / "128" / f"3001.{thumbs.THUMB_EXT}") as img:
         assert img.size == (128, 128)
         assert img.getpixel((2, 2)) == (0, 0, 0, 0)  # letterbox, not ink
 
@@ -100,7 +100,7 @@ def test_a_baked_cell_carries_ink_and_no_ground(tmp_path):
     svg.write_text(SVG)
     out = tmp_path / "thumbs"
     thumbs.bake_part("3001", svg, out, sha="abc123")
-    with Image.open(out / "128" / "3001.png") as img:
+    with Image.open(out / "128" / f"3001.{thumbs.THUMB_EXT}") as img:
         rgba = img.convert("RGBA")
         assert rgba.getpixel((2, 2))[3] == 0        # letterbox is clear
         assert rgba.getpixel((64, 64))[3] == 255    # ink is not
@@ -114,7 +114,7 @@ def test_it_bakes_a_raster_slot_without_going_near_resvg(tmp_path):
     Image.new("RGBA", (256, 170), (0, 0, 0, 255)).save(src, "WEBP")
     out = tmp_path / "thumbs"
     assert sorted(thumbs.bake_part("3001", src, out, sha="abc123")) == [8, 32, 128]
-    with Image.open(out / "128" / "3001.png") as img:
+    with Image.open(out / "128" / f"3001.{thumbs.THUMB_EXT}") as img:
         assert img.size == (128, 128)
         assert img.convert("RGBA").getpixel((2, 2))[3] == 0     # letterboxed
         assert img.convert("RGBA").getpixel((64, 64))[3] == 255  # ink
@@ -151,7 +151,7 @@ def test_the_sheet_is_one_page_sized_from_the_part_count(tmp_path):
     thumbs.compose(out, order=["a", "b", "c", "d"])
     for level in (8, 32):
         g = thumbs.geometry(4, level)
-        with Image.open(out / f"sheet-{level}.png") as img:
+        with Image.open(out / f"sheet-{level}.{thumbs.THUMB_EXT}") as img:
             assert img.size == (g.size, g.size)
 
 
@@ -168,7 +168,7 @@ def test_a_part_with_no_thumbnail_leaves_its_cell_empty(tmp_path):
     out = _baked(tmp_path, ["a"])
     thumbs.compose(out, order=["a", "b"])
     g = thumbs.geometry(2, 32)
-    with Image.open(out / "sheet-32.png") as img:
+    with Image.open(out / f"sheet-32.{thumbs.THUMB_EXT}") as img:
         assert img.crop(g.cell_box(0)).getextrema()[3][1] > 0   # a is drawn
         assert img.crop(g.cell_box(1)).getextrema()[3][1] == 0  # b is empty
 
@@ -176,7 +176,7 @@ def test_a_part_with_no_thumbnail_leaves_its_cell_empty(tmp_path):
 def test_the_gutter_replicates_the_cell_edge(tmp_path):
     out = _baked(tmp_path, ["a"])
     thumbs.compose(out, order=["a", "b"])
-    with Image.open(out / "sheet-32.png") as img:
+    with Image.open(out / f"sheet-32.{thumbs.THUMB_EXT}") as img:
         x0, y0, _, _ = thumbs.geometry(2, 32).cell_box(0)
         assert img.getpixel((x0 - 1, y0)) == img.getpixel((x0, y0))
 

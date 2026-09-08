@@ -126,6 +126,12 @@ def _drawn(part_id: str, render: Path, out: Path) -> Image.Image:
         wide.unlink(missing_ok=True)
 
 
+#: Thumbnails and sheets are WebP q90, as the raster render slots are: sheet-32
+#: is 24 MB as PNG against 12 MB here, and the wall fetches it on every open.
+THUMB_EXT = "webp"
+THUMB_SAVE = {"format": "WEBP", "quality": 90, "method": 4}
+
+
 def bake_part(part_id: str, svg: Path | str, out: Path | str,
               sha: str) -> list[int]:
     """Rasterize one part at every level. Returns the levels written.
@@ -140,9 +146,9 @@ def bake_part(part_id: str, svg: Path | str, out: Path | str,
     out.mkdir(parents=True, exist_ok=True)
     drawn = _drawn(part_id, Path(svg), out)
     for level in LEVELS:
-        path = out / str(level) / f"{part_id}.png"
+        path = out / str(level) / f"{part_id}.{THUMB_EXT}"
         path.parent.mkdir(parents=True, exist_ok=True)
-        _square(drawn, level).save(path)
+        _square(drawn, level).save(path, **THUMB_SAVE)
     _write_baked(out, {**shas, part_id: sha})
     return list(LEVELS)
 
@@ -160,7 +166,7 @@ def compose(out: Path | str, order: list[str]) -> list[Path]:
         g = geometry(len(order), level)
         sheet = Image.new("RGBA", (g.size, g.size), (0, 0, 0, 0))
         for index, part_id in enumerate(order):
-            tile = out / str(level) / f"{part_id}.png"
+            tile = out / str(level) / f"{part_id}.{THUMB_EXT}"
             if not tile.is_file():
                 continue
             with Image.open(tile) as img:
@@ -169,8 +175,8 @@ def compose(out: Path | str, order: list[str]) -> list[Path]:
             sheet.paste(cell, (x0, y0))
             if g.gutter:
                 _replicate_edges(sheet, cell, x0, y0, g.gutter)
-        path = out / f"sheet-{level}.png"
-        sheet.save(path)
+        path = out / f"sheet-{level}.{THUMB_EXT}"
+        sheet.save(path, **THUMB_SAVE)
         (out / f"sheet-{level}.json").write_text(json.dumps({
             "level": level, "gutter": g.gutter, "pitch": g.pitch,
             "cols": g.cols, "rows": g.rows, "count": len(order),

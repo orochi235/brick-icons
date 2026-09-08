@@ -27,7 +27,7 @@ it('shows what the wall already knows, without fetching', () => {
 it('shows the thumbnail for the slot being viewed', () => {
   render(card());
   expect(screen.getByRole('img', { name: /3001/ })
-    .getAttribute('src')).toContain('/api/thumbs/naive/128/3001.png');
+    .getAttribute('src')).toContain('/api/thumbs/naive/128/3001.webp');
 });
 
 it('says so when a part has no render rather than showing a broken image', () => {

@@ -38,7 +38,7 @@ export function useSheets(client: LabClient, source: string): SheetsState {
         // A slot with no sheet baked yet settles too, or the wall would hold
         // the previous slot's drawings for the rest of the session.
         img.onerror = () => settle();
-        img.src = `/api/thumbs/${source}/sheet-${level}.png`;
+        img.src = `/api/thumbs/${source}/sheet-${level}.webp`;
       }).catch(settle);
     }
     return () => { live = false; };

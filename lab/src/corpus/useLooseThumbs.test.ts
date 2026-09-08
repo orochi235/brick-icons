@@ -12,7 +12,7 @@ const cell = (id: string, index: number, sha: string | null): Cell => ({
 
 it('names the slot and cache-busts on the render sha', () => {
   expect(thumbUrl(cell('3001', 0, 'deadbeefcafe'), 'naive'))
-    .toBe('/api/thumbs/naive/128/3001.png?v=deadbeef');
+    .toBe('/api/thumbs/naive/128/3001.webp?v=deadbeef');
 });
 
 it('wants nothing below the loose level', () => {

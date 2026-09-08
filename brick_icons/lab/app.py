@@ -420,26 +420,35 @@ def create_app(root: Path | str = ".",
                 "defects": [d for d in defects.load(app.state.defects_path)
                             if d["part"] == part_id]}
 
-    @app.get("/api/thumbs/{source}/sheet-{level}.png")
-    def get_sheet(source: str, level: int):
-        path = _slot(source) / f"sheet-{level}.png"
-        if not path.is_file():
-            raise HTTPException(404, "no such sheet; run scripts/bake-thumbs.py")
-        return FileResponse(path)
+    def _thumb_file(slot: Path, stem: str) -> Path | None:
+        """The baked file for `stem`, whatever it was encoded as.
 
-    @app.get("/api/thumbs/{source}/sheet-{level}.json")
-    def get_sheet_manifest(source: str, level: int):
-        path = _slot(source) / f"sheet-{level}.json"
-        if not path.is_file():
-            raise HTTPException(404, "no such sheet manifest")
+        Bakes are WebP now and older slots are still PNG, so the extension in
+        the request is a name rather than a format claim."""
+        for ext in ("webp", "png"):
+            path = slot / f"{stem}.{ext}"
+            if path.is_file():
+                return path
+        return None
+
+    @app.get("/api/thumbs/{source}/sheet-{level}.{ext}")
+    def get_sheet(source: str, level: int, ext: str):
+        if ext == "json":
+            path = _slot(source) / f"sheet-{level}.json"
+            if not path.is_file():
+                raise HTTPException(404, "no such sheet manifest")
+            return FileResponse(path)
+        path = _thumb_file(_slot(source), f"sheet-{level}")
+        if path is None:
+            raise HTTPException(404, "no such sheet; run scripts/bake-thumbs.py")
         return FileResponse(path)
 
     @app.get("/api/thumbs/{source}/{level}/{name}")
     def get_thumb(source: str, level: int, name: str):
-        if "/" in name or ".." in name or not name.endswith(".png"):
+        if "/" in name or ".." in name or not name.endswith((".png", ".webp")):
             raise HTTPException(400, "bad thumbnail path")
-        path = _slot(source) / str(level) / name
-        if not path.is_file():
+        path = _thumb_file(_slot(source) / str(level), Path(name).stem)
+        if path is None:
             raise HTTPException(404, "no such thumbnail")
         return FileResponse(path)
 
