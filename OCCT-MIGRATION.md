@@ -92,7 +92,7 @@ The `occt` branch of `hlr.visible_segments` runs `fit_silhouette_arcs` and
 | `_fold_arc_loops` turns chained fold-arc spans into `fill_ops(loops=)` sub-region outlines | `loops=()` | **absent.** `fold_ells` is built from `fit_ells` inside `_visible_segments_analytic`, which occt never enters |
 | `cull_orphan_runs(protect=fold_ells)` | called with no `protect` | present but unprotected; vacuous while `fold_ells` is empty, wrong the moment it is not |
 
-#### The snap passes on occt: pass 1 does nothing, pass 2 draws the strays
+#### The snap passes on occt: pass 1 deletes edges, pass 2 draws the strays
 
 `scripts/snap-render-ab.py` splices in `_snap_rim_crossings`, which runs BOTH
 passes -- so its rendered A/B measures the pair, and the first reading of it
@@ -101,15 +101,37 @@ moves an endpoint by at most `max_snap` = 4 degrees, so a span can change by 8;
 measured over the eight parts below it never changed one by more, and it cannot
 turn a short arc into a long one.
 
-**Pass 1 is not a repair on occt, because there is nothing to repair.** It
-exists for naive's SAMPLED occlusion: `visible_subops(n=64)` stops up to a
-sample short of the true graze, leaving an arc end beside the stroke it should
-touch. occt does real hidden-line removal and lands it. The pass still moves
-8-28 arcs per part, all within its 4 degrees, and none of it is visible --
-`18585`, `67887`, `33089` and `47712` are identical to the eye off and on. The
-one part changed by pass 1 alone (`24130`, no refits) has a 2,053px component
-in its diff that I could not see when I looked; worth a second pair of eyes
-before the row is called closed rather than merely pointless.
+**Pass 1 drops a drawn element on one occt part in ten, and visible ink on
+one in twenty.** It exists for naive's SAMPLED occlusion: `visible_subops(n=64)` stops up to a sample short of
+the true graze, leaving an arc end beside the stroke it should touch. occt does
+real hidden-line removal and lands it, so there is nothing for the pass to
+repair -- but it still fires, and where it fires it can drop an element rather
+than move one.
+
+**Count the SVG's elements, off against on.** Over the 86 A/B parts with zero
+pass-2 refits -- so pass 1 is the only thing running -- 9 come out with fewer
+`<path>` plus `<line>` elements than they went in with:
+
+    part        elements   largest diff component
+    33089            -7      823 px
+    67887            -4      928 px
+    24130            -3    2,053 px
+    18970            -3      254 px
+    48812            -2    1,916 px
+    3648a            -2    1,288 px
+    43368            -1      115 px
+    87616            -1        5 px
+    93087k01         -1       68 px
+
+Four of them lose an edge you cannot miss: `24130`'s foot ring loses its whole
+front arc (three arcs, ~230px, replaced by a 16px `<line>` stub), `67887` loses
+a closed panel outline, and `33089` and `48812` each lose a long silhouette
+stroke. **`67887` and `33089` were previously recorded here as "identical to
+the eye"; they are not** -- an eyeball pass over a full-frame render is not
+sensitive enough for this, and the element count is, at no cost.
+
+So pass 1 on occt is inert at best and destructive at worst, and never a
+repair.
 
 **Pass 2's separator refit is what draws the stray arcs**, and the mechanism is
 its sweep direction, not its size. Radii barely move (0.6-1.2x of the arc being
