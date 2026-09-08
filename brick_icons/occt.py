@@ -698,6 +698,7 @@ def projector_axes(right, up):
 
 
 MATCH_TOL = 1e-3       # 2D LDU; a fragment lies exactly on its own curve
+RIM_STEP_DEG = 25.0    # arc-candidate max step for a drawn circle, as naive
 
 
 def _screen_axes(right, up):
@@ -1908,6 +1909,10 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None):
     # 1..6 are already the (cx, cy, ux, uy, vx, vy) arc_candidates takes.
     # Without them contour_d traces the raw tessellation and 3005's silhouette
     # came out as 147 path commands against naive's 21.
+    # A face sewn from triangles keeps the authored chord polygon as its
+    # boundary, and an LDraw 16-gon rings a hole in 22.5 deg chords -- under
+    # the default MAX_STEP 15 those runs stay polylines. occt's own surface
+    # boundaries sample at BOUNDARY_STEP_DEG and do not need this.
     ells, seen = [], set()
     for op in ops:
         if op[0] != "arc":
@@ -1915,7 +1920,7 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None):
         k = tuple(round(v, 4) for v in op[1:7])
         if k not in seen:
             seen.add(k)
-            ells.append(tuple(op[1:7]))
+            ells.append(tuple(op[1:7]) + (RIM_STEP_DEG,))
     proj = op_projection(right, up, fwd)
     decal_ells = []
     faces = ordered_faces(shape, proj, out, ellipses_out=decal_ells)

@@ -1464,3 +1464,20 @@ def test_a_unify_that_survives_its_probe_is_not_counted():
         assert timing.counts() == {}
     finally:
         timing.reset()
+
+
+def test_a_drawn_circle_is_an_arc_candidate_at_the_facet_step(ldraw_dir):
+    """A triangle is sewn into a planar face whose boundary is still the
+    authored chord polygon, and an LDraw 16-gon rings a hole in 22.5 deg
+    chords -- under geom2d.MAX_STEP 15 those runs stay polylines. occt's own
+    surface boundaries sample finer and are appended without a step.
+    """
+    out = occt.flatten_part("3941", ldraw_dir)
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    res = occt.visible_segments(out, right, up, 512, cull=True, fwd=fwd)
+    drawn = {tuple(round(v, 4) for v in op[1:7])
+             for op in res.segs if op[0] == "arc"}
+    steps = {round(e[6], 4) for e in res.ellipses
+             if len(e) > 6 and tuple(round(v, 4) for v in e[:6]) in drawn}
+    assert steps == {occt.RIM_STEP_DEG}
+    assert drawn <= {tuple(round(v, 4) for v in e[:6]) for e in res.ellipses}
