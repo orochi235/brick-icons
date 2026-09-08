@@ -49,9 +49,9 @@ DEFAULT_SUCCESSORS = Path("tests") / "goldens" / "part-successors.csv"
 #: its mould is 61332, the part that actually replaced it.
 SUCCESSOR_RELS = ("M", "A")
 
-# A printed part's decoration suffix -- `4740p03` is drawn from `4740`, and
-# Rebrickable numbers the print differently or not at all, so the base part's
-# years are the best answer available for it.
+# A printed part's decoration suffix -- `4740p03` is drawn from `4740`. The
+# base part's years are a last resort for a print, not a good answer: see
+# keyword_parts() for the id that actually names it.
 _PRINT_SUFFIX = re.compile(r"^(\d{3,}[a-z]?)(p[0-9a-z]+|pr\d+)$")
 
 # A sticker's own id is the sheet number plus a letter -- `003238a` is one
@@ -62,6 +62,11 @@ _STICKER = re.compile(r"^(\d+)[a-z]+$")
 #: without the variant suffix: "set 375-2", "Set 1620-2", "set 6075".
 _KW_LINE = re.compile(r"^0\s+!KEYWORDS\s+(.*)$", re.IGNORECASE)
 _KW_SET = re.compile(r"\bset\s+(\d{2,7}(?:-\d+)?)\b", re.IGNORECASE)
+
+#: The same line names the part in the two big catalogs: "BrickLink 3005pb031,
+#: Rebrickable 3005pr0018". See keyword_parts().
+_KW_PART = re.compile(r"\b(Rebrickable|BrickLink)\s+([A-Za-z0-9][A-Za-z0-9._-]*)",
+                      re.IGNORECASE)
 
 
 def fetch(name: str, cache: Path, refresh: bool) -> Path:
@@ -130,13 +135,56 @@ def design_index(cache: Path) -> dict[str, set[str]]:
     return out
 
 
+def keyword_lines(dat: Path) -> list[str]:
+    """Every !KEYWORDS line in the .dat's header."""
+    if not dat.is_file():
+        return []
+    out = []
+    for line in dat.read_text(errors="ignore").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if not stripped.startswith("0 "):
+            break          # past the header; the geometry starts here
+        found = _KW_LINE.match(stripped)
+        if found:
+            out.append(found.group(1))
+    return out
+
+
+def keyword_parts(dat: Path) -> list[str]:
+    """The catalog numbers LDraw's own `!KEYWORDS` line gives this part.
+
+    A print is the case that needs it. LDraw numbers the Gryffindor 1x1 brick
+    `3005pz0` and Rebrickable numbers it `3005pr0018`, so nothing about the id
+    matches and the part falls through to the plain brick -- which has been
+    made since 1954, in 77 colors, and never carried that crest. The .dat says
+    which part it is: "Rebrickable 3005pr0018". Rebrickable's own number is
+    preferred because the inventories are keyed by it; BrickLink's is a
+    fallback for the parts whose numbering the two catalogs share.
+    """
+    hits: dict[str, str] = {}
+    for source, number in _KW_PART.findall(" ; ".join(keyword_lines(dat))):
+        hits.setdefault(source.lower(), number)
+    return [n for n in (hits.get("rebrickable"), hits.get("bricklink")) if n]
+
+
 def match(part_id: str, facts: dict[str, tuple[int, int, int, int]],
-          designs: dict[str, set[str]]) -> tuple[set[str], str] | None:
+          designs: dict[str, set[str]],
+          named: list[str] = ()) -> tuple[set[str], str] | None:
     """The Rebrickable numbers to read `part_id`'s years off, and how they
     matched. A set rather than one number: a design id names every mould cut
-    from it, and the part's span is the span of all of them."""
+    from it, and the part's span is the span of all of them.
+
+    `named` is what the .dat's own !KEYWORDS line calls this part, best first,
+    and it outranks every route that widens the part -- a print's own numbers
+    are the print's, where the base and design routes give it the plain
+    mould's."""
     if part_id in facts:
         return {part_id}, "exact"
+    for number in named:
+        if number in facts:
+            return {number}, "named"
     printed = _PRINT_SUFFIX.match(part_id)
     if printed and printed.group(1) in facts:
         return {printed.group(1)}, "base"
@@ -163,18 +211,7 @@ def keyword_years(dat: Path, set_year: dict[str, int],
     part reaching this route is absent from every inventory, which is the
     regime where it holds up; stickers checked at 95% exact.
     """
-    if not dat.is_file():
-        return None
-    named: list[str] = []
-    for line in dat.read_text(errors="ignore").splitlines():
-        stripped = line.strip()
-        if not stripped:
-            continue
-        if not stripped.startswith("0 "):
-            break          # past the header; the geometry starts here
-        found = _KW_LINE.match(stripped)
-        if found:
-            named.append(found.group(1))
+    named = keyword_lines(dat)
     if not named:
         return None
     years: list[int] = []
@@ -263,7 +300,8 @@ def main() -> int:
     for i, part_id in enumerate(ids, 1):
         if i % 5000 == 0:
             print(f"  matched {i:,}/{len(ids):,}", flush=True)
-        hit = match(part_id, facts, designs)
+        hit = match(part_id, facts, designs,
+                    keyword_parts(parts_dir / f"{part_id}.dat"))
         if hit is not None:
             part_nums, how = hit
             spans = [facts[n] for n in part_nums]
