@@ -282,13 +282,15 @@ function halftone(pitch: number,
 }
 
 /** Dots the same size everywhere. A decorated part is a flat tint -- printing
- *  over the whole face -- so the screen renders no tone and needs no ramp.
+ *  over the whole face -- so the screen renders no tone. `halftone` takes a
+ *  radius per dot, so one that does is a function away.
  *
- *  Coarse on purpose: the wall draws this from 9px up, and at a finer pitch
- *  the dots stop resolving and the badge is a gray disc a reader has to tell
- *  apart from `retired` by its color alone. These hold as dots to about 14.
+ *  Nearest neighbors sit exactly `pitch` apart, so the dots stay clear of each
+ *  other below half of it; a third is the coverage that reads as a screen
+ *  rather than as a grid of holes.
  */
-const printed: MarkShape[] = [{ d: halftone(0.86, () => 0.30) }];
+const PRINT_PITCH = 0.62;
+const printed: MarkShape[] = [{ d: halftone(PRINT_PITCH, () => 0.21) }];
 
 // Composite: two L-trominoes interlocked into a 2x3 block -- the smallest
 // rectangle two identical pieces can tile, and it says assembled-from-parts
