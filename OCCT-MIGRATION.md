@@ -92,34 +92,50 @@ The `occt` branch of `hlr.visible_segments` runs `fit_silhouette_arcs` and
 | `_fold_arc_loops` turns chained fold-arc spans into `fill_ops(loops=)` sub-region outlines | `loops=()` | **absent.** `fold_ells` is built from `fit_ells` inside `_visible_segments_analytic`, which occt never enters |
 | `cull_orphan_runs(protect=fold_ells)` | called with no `protect` | present but unprotected; vacuous while `fold_ells` is empty, wrong the moment it is not |
 
-#### `_snap_rim_crossings` pass 1 is damage on occt, not a repair
+#### The snap passes on occt: pass 1 does nothing, pass 2 draws the strays
 
-The pass exists because naive's occlusion is SAMPLED: `visible_subops(n=64)`
-stops up to a sample short of the true graze, so an arc end lands beside the
-stroke it should touch. occt does real hidden-line removal and lands the graze
-exactly, so there is nothing for the pass to fix -- and where it does anything
-visible, it draws stray arcs.
+`scripts/snap-render-ab.py` splices in `_snap_rim_crossings`, which runs BOTH
+passes -- so its rendered A/B measures the pair, and the first reading of it
+here blamed pass 1 for what pass 2 does. What separates them is that pass 1
+moves an endpoint by at most `max_snap` = 4 degrees, so a span can change by 8;
+measured over the eight parts below it never changed one by more, and it cannot
+turn a short arc into a long one.
 
-Measured with `scripts/snap-render-ab.py`, which splices the pass in ahead of
-`arcfit.fit_silhouette_arcs` (naive's own order) without editing the tree, over
-the 177 parts `scripts/measure-snap-gaps.py` says it would move. Of the first 81:
+**Pass 1 is not a repair on occt, because there is nothing to repair.** It
+exists for naive's SAMPLED occlusion: `visible_subops(n=64)` stops up to a
+sample short of the true graze, leaving an arc end beside the stroke it should
+touch. occt does real hidden-line removal and lands it. The pass still moves
+8-28 arcs per part, all within its 4 degrees, and none of it is visible --
+`18585`, `67887`, `33089` and `47712` are identical to the eye off and on. The
+one part changed by pass 1 alone (`24130`, no refits) has a 2,053px component
+in its diff that I could not see when I looked; worth a second pair of eyes
+before the row is called closed rather than merely pointless.
 
-    55  a change with a component >= 12px
-    26  nothing chunky
-     3  byte-identical
+**Pass 2's separator refit is what draws the stray arcs**, and the mechanism is
+its sweep direction, not its size. Radii barely move (0.6-1.2x of the arc being
+replaced), but every refit lands at a span of 238-343 degrees whatever it
+started from:
 
-Looking is what decides it, and the two populations are clean. The four largest
-movers -- `32291`, `23801`, `35c01`, `24130` -- all gain **spurious arcs**:
-23801's runs clear off the part past its own silhouette, and 35c01 gets long
-curves drawn across the wheel spokes. That is the failure `test_goldens.py`'s
-KNOWN_STRAY note already records for pass 2 on `4019`, a short arc re-emitted as
-its long complement, and `hlr.SEP_REFIT_MAX_GROWTH` is the guard against it.
-Mid-range movers (`18585`, `67887`, `33089`, `47712`) are visually identical off
-and on -- sub-pixel shifts, neither repair nor damage.
+    part      old r   new r   old span   new span   growth
+    23801     20.15   13.69       41.7      288.7      6.9
+    23801      6.75    6.93       45.0      335.1      7.4
+    35c01     35.47   21.97      180.0      339.8      1.9
+    18585      6.45    5.55      119.9      281.6      2.3
 
-So the row is closed the way `ink_prims` was: not done, wrong. Porting it would
-need `SEP_REFIT_MAX_GROWTH`'s guard extended to pass 1 first, and even then it
-would be machinery guarding against damage it alone introduces.
+That is the short-arc-as-its-long-complement failure `test_goldens.py`'s
+KNOWN_STRAY note records for `4019`: the circumcircle through (pinch1, pinch2,
+M's apex) is emitted the long way round instead of through the apex.
+
+**`SEP_REFIT_MAX_GROWTH` cannot be tuned out of it.** At 10.0 it passes all of
+these, but growth does not separate the damaged parts from the clean ones --
+`32291` is visibly wrong at 2.6x while `18585` is clean at 2.3x. The fix is to
+pick the sweep that keeps the apex BETWEEN the pinch points, which is what the
+refit means; a threshold only hides how often it picks the other one.
+
+So neither row is worth porting as it stands. Pass 1 is machinery with no
+defect to fix, and pass 2 is stylization -- making a separator read concentric
+with its bore -- carrying a live direction bug. Fix the sweep before anyone
+argues about whether the stylization is wanted.
 
 ### Present under another mechanism — do not port
 
