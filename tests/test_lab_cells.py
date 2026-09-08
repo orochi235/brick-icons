@@ -349,20 +349,34 @@ def test_a_slot_with_no_measurements_of_its_own_shows_none(conn):
     assert cells.cells(conn, source="white-naive")["cells"][0]["extra_d99"] is None
 
 
-def test_erroring_elsewhere_means_this_facet_s_other_engine(conn):
-    """An oracle timeout says nothing about whether the white facet drew the
-    part, so it must not mark a white cell."""
+def test_erroring_in_any_other_slot_marks_the_cell(conn):
+    """Every slot counts, not just the facet's other engine: a part that falls
+    over anywhere is a part worth looking at, and narrowing the relation to a
+    family left the wall silent about it."""
     _part(conn, "3001")
     _measure(conn, "3001", "naive", source="white-naive")
     _measure(conn, "3001", "occt", error="TimeoutError", source="silhouette-occt")
     conn.commit()
     assert cells.cells(conn, source="white-naive")["cells"][0][
-        "error_elsewhere"] is False
-    _measure(conn, "3001", "occt", error="TimeoutError",
-             source="white-occt")
-    conn.commit()
-    assert cells.cells(conn, source="white-naive")["cells"][0][
         "error_elsewhere"] is True
+
+
+def test_a_slot_that_names_no_facet_still_has_an_elsewhere(conn):
+    """`occt` carries no qualifier, so under a family rule its family was
+    itself and the cell read clean however badly the part failed next door."""
+    _part(conn, "3001")
+    _measure(conn, "3001", "occt", error="TimeoutError", source="white-occt")
+    conn.commit()
+    assert cells.cells(conn, source="occt")["cells"][0][
+        "error_elsewhere"] is True
+
+
+def test_a_slot_s_own_error_is_not_elsewhere(conn):
+    _part(conn, "3001")
+    _measure(conn, "3001", "occt", error="TimeoutError", source="occt")
+    conn.commit()
+    assert cells.cells(conn, source="occt")["cells"][0][
+        "error_elsewhere"] is False
 
 
 def test_a_third_party_part_is_out_of_scope(conn):
@@ -454,12 +468,11 @@ def test_slot_states_marks_a_wontfix_as_accepted_only_on_its_own_engine(conn):
     assert states["silhouette-naive"]["accepted_defects"] == 0
 
 
-def test_slot_states_reads_error_elsewhere_within_the_facet_only(conn):
-    """A white slot failing says nothing about the oracle slot -- the wall
-    marks siblings, and `white-*` is not `silhouette-*`'s family."""
+def test_slot_states_reads_error_elsewhere_across_every_slot(conn):
+    """One slot failing marks every other slot's view of the part."""
     _part(conn, "3001")
     _measure(conn, "3001", "naive", error="MemoryError", source="white-naive")
     conn.commit()
     states = cells.slot_states(conn, "3001", ["white-occt", "silhouette-occt"])
     assert states["white-occt"]["error_elsewhere"] is True
-    assert states["silhouette-occt"]["error_elsewhere"] is False
+    assert states["silhouette-occt"]["error_elsewhere"] is True

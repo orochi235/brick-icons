@@ -579,4 +579,5 @@ def test_part_route_gives_every_slot_what_the_wall_colors_a_cell_by(tmp_path):
     assert slots["silhouette-occt"]["error"] == "TimeoutError"
     assert slots["white-occt"]["error"] is None
     assert slots["white-occt"]["open_defects"] == 0
-    assert slots["white-occt"]["error_elsewhere"] is False
+    # The oracle slot timed out on this part, and every other slot says so.
+    assert slots["white-occt"]["error_elsewhere"] is True

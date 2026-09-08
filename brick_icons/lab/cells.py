@@ -25,26 +25,16 @@ JOIN (SELECT part_id, MAX(run_id) AS run_id FROM measurements
 WHERE m.source = ?
 """
 
-# Newest run per sibling source -- never the newest run overall, or a part
-# whose other engine has since gone clean would still read as erroring
-# elsewhere. Siblings are the same facet's other engines, so a white cell is
-# not marked by an oracle failure it says nothing about.
+# Newest run per other source -- never the newest run overall, or a part whose
+# other slot has since gone clean would still read as erroring elsewhere.
 _LATEST_OTHER_ERRORS = """
 SELECT m.part_id FROM measurements m
 JOIN (SELECT part_id, source, MAX(run_id) AS run_id FROM measurements
-      WHERE source != ? AND source LIKE ? GROUP BY part_id, source) latest
+      WHERE source != ? GROUP BY part_id, source) latest
   ON m.part_id = latest.part_id AND m.source = latest.source
  AND m.run_id = latest.run_id
-WHERE m.source != ? AND m.source LIKE ? AND m.error IS NOT NULL
+WHERE m.source != ? AND m.error IS NOT NULL
 """
-
-
-def sibling_glob(source: str) -> str:
-    """LIKE pattern for a facet's other engines: white-naive ->
-    white-%. Dropping the engine leaves the facet, and a source that
-    names no facet is its own family."""
-    stem = source.rsplit("-", 1)[0] if "-" in source else source
-    return f"{stem}-%"
 
 
 _NO_DEFECTS = {"here": 0, "elsewhere": 0, "accepted": 0}
@@ -148,11 +138,10 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
         "SELECT part_id, sha256, made_at FROM renders WHERE source = ?",
         (source,))}
     engine = engine_for(source)
-    siblings = sibling_glob(source)
     measures = {r["part_id"]: r for r in conn.execute(
         _LATEST_MEASURE, (source, source))}
     error_elsewhere = {r["part_id"] for r in conn.execute(
-        _LATEST_OTHER_ERRORS, (source, siblings, source, siblings))}
+        _LATEST_OTHER_ERRORS, (source, source))}
 
     version = max((r["made_at"] for r in renders.values()), default="")
     wanted = order
@@ -241,13 +230,12 @@ def slot_states(conn: sqlite3.Connection, part_id: str,
     out: dict[str, dict] = {}
     for source in sources:
         engine = engine_for(source)
-        siblings = sibling_glob(source)
         measure = conn.execute(
             _LATEST_MEASURE + " AND m.part_id = ?",
             (source, source, part_id)).fetchone()
         elsewhere = conn.execute(
             _LATEST_OTHER_ERRORS + " AND m.part_id = ?",
-            (source, siblings, source, siblings, part_id)).fetchone()
+            (source, source, part_id)).fetchone()
         bucket = _open_defects(conn, [part_id], engine).get(part_id, _NO_DEFECTS)
         out[source] = {
             "error": measure["error"] if measure else None,
