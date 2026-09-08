@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { fetchRender, injectSize, sizedBlob } from '@lab/corpus/svgRaster';
+import { contain, fetchRender, injectSize, sizedBlob } from '@lab/corpus/svgRaster';
 
 const RENDER = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 170" '
   + 'preserveAspectRatio="xMidYMid meet">\n<g></g>\n</svg>';
@@ -51,4 +51,25 @@ it('refuses a render the API could not find', async () => {
   vi.stubGlobal('fetch', async () => new Response('', { status: 404 }));
   await expect(fetchRender('/api/corpus/render/ldview/9999.svg')).rejects.toThrow('404');
   vi.unstubAllGlobals();
+});
+
+it('fits a tall render inside a square without changing its shape', () => {
+  // ldview's narrowest: 936x2048 stretched 2.19x wide before this.
+  const at = contain(936, 2048, 256, 256);
+  expect(at.h).toBe(256);
+  expect(Math.round(at.w)).toBe(117);
+  expect(at.w / at.h).toBeCloseTo(936 / 2048, 5);
+  expect(at.x).toBeCloseTo((256 - at.w) / 2, 5);
+  expect(at.y).toBe(0);
+});
+
+it('fits a wide render the same way', () => {
+  const at = contain(2048, 1629, 256, 256);
+  expect(at.w).toBe(256);
+  expect(at.w / at.h).toBeCloseTo(2048 / 1629, 5);
+  expect(at.x).toBe(0);
+});
+
+it('fills the box for a source with no size to preserve', () => {
+  expect(contain(0, 0, 256, 256)).toEqual({ x: 0, y: 0, w: 256, h: 256 });
 });

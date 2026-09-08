@@ -30,6 +30,11 @@
 .corpus-big {
   width: 256px;
   height: 256px;
+  /* A slot's render is not square and no two slots agree: the drawings are
+   * 256x170, and LDView frames its shot to the part, from 936x2048 up. `fill`
+   * -- the default -- squashes each to this box, so the same part reads as a
+   * different shape in every pane it appears in. */
+  object-fit: contain;
   background: var(--corpus-thumb-ground, #ffffff);
 }
 
