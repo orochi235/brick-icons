@@ -47,13 +47,14 @@ frame on merge (the 643.5x843.5 pane whose drawing sat at y 208.1..635.4).
 Reviving the fix means giving labkit the drawing's box instead, and moving
 every mark filed before it.
 
-## Baton, 2026-09-07 late: the reference is calibrated and the corpus is baking
+## Baton, 2026-09-07 late: the reference is calibrated, baked and indexed
 
-`renders/reference` is baking on msb-uai as task `reference-bake-corpus`, with
-`onto fetch -stream -every 10m reference-bake-corpus` pulling it back. About 20
-minutes for 24,591 parts. If it is gone when you read this, `onto jobs --all`
-says how it ended and re-running the same command resumes -- the sink skips
-whatever is already in `--out`.
+**Done: `renders/reference` holds all 24,591 parts and corpus.db indexes them**
+(1.0 GB, gitignored). The bake ran on msb-uai in 45 minutes of CPU. Re-baking a
+slot is `scripts/shot-sink.py --list <parts> --out renders/<slot>`, resumable by
+rerunning; indexing it afterwards is `scripts/index-slot-renders.py --source
+<slot>`, which records renders where they lie instead of dropping the database
+the way `db.rebuild` does.
 
 **The slot is `reference` now, not `ortho`.** It cost nothing: no rows were
 indexed and `renders/ortho` never existed.
@@ -78,6 +79,24 @@ opens with `setMaterials([])`, which throws the preloaded color table away
 before every part -- parts come in through `parse` for that reason. Miss either
 and a quarter of the library draws in three's missing-material magenta with no
 error anywhere.
+
+**Two parts are drawn wrong by our engine, in every slot, silently.** 2374b
+(Boat Cargo Loading Plate, 1987-1991) and 5241 (Windscreen Wedge, 2024) are
+official LDraw parts whose subparts were never promoted out of the Parts
+Tracker; the official release ships them with references it does not contain.
+`hlr.default_roots` never looks in `vendor/ldraw/Unofficial/`, and `flatten`
+skips an unresolvable subfile without a word (hlr.py:118) -- so 2374b loses all
+four mirrored corners and 5241 loses its whole shell. Scanned: exactly these two
+across 24,591 parts, and all three missing subfiles are in `Unofficial/`.
+Appending that tree to `default_roots` fixes it with a blast radius of two,
+since official roots are tried first. **Not done -- it changes resolution for
+every render in the repo and is Mike's call.** The reference bake works around
+it in the sink, so the reference slot draws them right and our slots do not.
+
+**`vendor/ldraw/Unofficial/` has three files and no node has them.** They are
+untracked (`/vendor` is gitignored) and were dropped there by hand on 2026-09-06
+without a note. A fleet bake fails those two parts again until they are rsynced
+to the node, or until they stop living somewhere git ignores.
 
 **`onto sync` to msb-uai refuses over 4,801 translucent-occt SVGs.** They are
 ignored here by `.git/info/exclude` and not there, so the node counts them as

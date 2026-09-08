@@ -480,6 +480,28 @@ def test_a_measurement_records_which_facet_it_measured(tmp_path):
     assert got == {"silhouette-naive": 0.45, "white-naive": 1.01}
 
 
+def test_a_measurement_records_a_kernel_call_the_engine_worked_around(tmp_path):
+    """`UnifySameDomain` segfaults on cracked meshes, so occt probes it in a
+    forked child and draws the part with its faces unmerged when the child
+    dies. The child leaves a crash report naming no part; without this column
+    nothing in the corpus says which parts were drawn that way."""
+    lib = _library(tmp_path)
+    d = tmp_path / "out" / "census"
+    d.mkdir(parents=True)
+    (d / "occt-r0.jsonl").write_text("\n".join(
+        json.dumps(r) for r in (
+            {**MEASURED, "part": "93064", "engine": "occt",
+             "counts": {"unify_crash": 1}},
+            {**MEASURED, "part": "3001", "engine": "occt"})) + "\n")
+
+    db.rebuild(tmp_path / "corpus.db", lib, root=tmp_path,
+               census_dirs=[d])
+    conn = db.connect(tmp_path / "corpus.db")
+    got = {r["part_id"]: r["counts"] for r in
+           conn.execute("SELECT part_id, counts FROM measurements")}
+    assert got == {"93064": '{"unify_crash": 1}', "3001": None}
+
+
 def test_a_measurement_keeps_the_build_that_drew_it(tmp_path):
     """Two passes over the same part at different engine revisions land in one
     tree, and the ingest sees only its own checkout -- so without the row's

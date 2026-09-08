@@ -1429,3 +1429,38 @@ def test_hlr_occludes_with_loose_faces_whatever_the_shell_says(ldraw_dir):
     assert visible_limbs(shell) == [2.45, 2.45, 31.62, 31.62]
     assert visible_limbs(shell.Reversed()) == [31.62, 31.62]
     assert visible_limbs(occt._loose_faces(shell)) == [31.62, 31.62]
+
+
+def test_a_unify_that_kills_its_probe_is_counted(monkeypatch):
+    """The probe child dies on a SIGSEGV, which leaves a crash report naming
+    no part and nothing else. Counting the skip is the only record that this
+    part drew with its faces unmerged."""
+    from brick_icons import timing
+
+    class _Crashes:
+        def __init__(self, *a, **k):
+            import os
+            import signal
+            # SIGKILL rather than a real abort: `_unify_survives` reads
+            # WIFEXITED, so any death by signal takes the same branch, and
+            # aborting would file a crash report per test run.
+            os.kill(os.getpid(), signal.SIGKILL)
+
+    monkeypatch.setattr(occt, "ShapeUpgrade_UnifySameDomain", _Crashes)
+    timing.reset()
+    try:
+        assert occt._unify_survives(occt.TopoDS_Shape()) is False
+        assert timing.counts() == {"unify_crash": 1}
+    finally:
+        timing.reset()
+
+
+def test_a_unify_that_survives_its_probe_is_not_counted():
+    from brick_icons import timing
+
+    timing.reset()
+    try:
+        assert occt._unify_survives(occt.TopoDS_Shape()) is True
+        assert timing.counts() == {}
+    finally:
+        timing.reset()

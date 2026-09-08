@@ -640,6 +640,10 @@ def _unify_survives(shape) -> bool:
     parts on both sides of the crash share every statistic. A SIGSEGV is not
     catchable, so the call is tried in a forked child, which inherits the sewn
     shape copy-on-write and costs one extra unify and no serialization.
+
+    The child leaves a crash report naming no part, so the skip is counted:
+    without it, a part whose faces were never merged is indistinguishable
+    from one that had nothing to merge.
     """
     import os
     pid = os.fork()
@@ -652,7 +656,10 @@ def _unify_survives(shape) -> bool:
         except BaseException:
             os._exit(1)
     _, status = os.waitpid(pid, 0)
-    return os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0
+    survived = os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0
+    if not survived:
+        timing.count("unify_crash")
+    return survived
 
 
 def count_faces(shape: TopoDS_Shape) -> int:
