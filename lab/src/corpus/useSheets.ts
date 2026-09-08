@@ -38,7 +38,11 @@ export function useSheets(client: LabClient, source: string): SheetsState {
         // A slot with no sheet baked yet settles too, or the wall would hold
         // the previous slot's drawings for the rest of the session.
         img.onerror = () => settle();
-        img.src = `/api/thumbs/${source}/sheet-${level}.webp`;
+        // Versioned off the manifest: the atlas is rewritten by every bake
+        // at this same URL, and a cached image against a fresh manifest reads
+        // every tile at the wrong offset.
+        const v = manifest.version ? `?v=${manifest.version}` : '';
+        img.src = `/api/thumbs/${source}/sheet-${level}.webp${v}`;
       }).catch(settle);
     }
     return () => { live = false; };

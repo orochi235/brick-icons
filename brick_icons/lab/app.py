@@ -11,7 +11,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from pydantic import BaseModel
@@ -437,7 +437,15 @@ def create_app(root: Path | str = ".",
             path = _slot(source) / f"sheet-{level}.json"
             if not path.is_file():
                 raise HTTPException(404, "no such sheet manifest")
-            return FileResponse(path)
+            # The image is rewritten by every bake at a URL the client would
+            # otherwise never vary, so a browser can hold last week's atlas
+            # against this manifest and read every tile at the wrong offset.
+            # Its mtime is the version, and it costs no re-bake to publish.
+            manifest = json.loads(path.read_text())
+            image = _thumb_file(_slot(source), f"sheet-{level}")
+            if image is not None:
+                manifest["version"] = str(int(image.stat().st_mtime))
+            return JSONResponse(manifest)
         path = _thumb_file(_slot(source), f"sheet-{level}")
         if path is None:
             raise HTTPException(404, "no such sheet; run scripts/bake-thumbs.py")

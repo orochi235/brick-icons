@@ -28,3 +28,15 @@ it('caps how many it asks for at once', () => {
   const many = Array.from({ length: 300 }, (_, i) => cell(`p${i}`, i, 'x'));
   expect(wanted(many, many.map((_, i) => i), 128).length).toBe(200);
 });
+
+it('keeps asking for cells behind the cap once the front of the view is in hand', () => {
+  /* The cap used to count cells already in hand, so a viewport holding more
+     than MAX_IN_FLIGHT of them starved everything behind them -- and the
+     requested set only grows, so the wall stopped loading for good. */
+  const many = Array.from({ length: 500 }, (_, i) => cell(`c${i}`, i, `sha${i}`));
+  const all = many.map((_, i) => i);
+  const have = new Set(many.slice(0, 200).map((c) => c.id));
+  const next = wanted(many, all, 128, have);
+  expect(next.length).toBe(200);
+  expect(next[0]!.id).toBe('c200');
+});

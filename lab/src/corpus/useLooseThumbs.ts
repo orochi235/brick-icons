@@ -12,13 +12,20 @@ export function thumbUrl(cell: Cell, source: string): string {
 /** Visible cells worth a loose fetch: only once the wall is at the level
  *  where individual files replace the sheet, and only for cells that have
  *  something rendered to fetch. Capped so a big viewport at 128px never
- *  fires hundreds of requests in one frame. */
-export function wanted(cells: Cell[], visible: number[], level: number): Cell[] {
+ *  fires hundreds of requests in one frame.
+ *
+ *  `have` is what is already requested, and it is skipped BEFORE the cap.
+ *  Counting it toward the cap is what made the wall stop loading after
+ *  enough panning: the first 200 visible cells were all already in hand, the
+ *  cap was reached on them, and every un-fetched cell behind them in the
+ *  viewport was cut off -- permanently, since the set only grows. */
+export function wanted(cells: Cell[], visible: number[], level: number,
+                       have: ReadonlySet<string> = new Set()): Cell[] {
   if (level < LOOSE_LEVEL) return [];
   const out: Cell[] = [];
   for (const i of visible) {
     const cell = cells[i];
-    if (!cell || !cell.sha) continue;
+    if (!cell || !cell.sha || have.has(cell.id)) continue;
     out.push(cell);
     if (out.length >= MAX_IN_FLIGHT) break;
   }
@@ -48,8 +55,7 @@ export function useLooseThumbs(cells: Cell[], visible: number[], level: number,
   }, [source]);
 
   useEffect(() => {
-    for (const cell of wanted(cells, visible, level)) {
-      if (requested.current.has(cell.id)) continue;
+    for (const cell of wanted(cells, visible, level, requested.current)) {
       requested.current.add(cell.id);
       const img = new Image();
       img.onload = () => {

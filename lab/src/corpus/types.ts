@@ -56,6 +56,10 @@ export interface SheetManifest {
   count: number;
   size: number;
   baked: Record<string, string>;
+  /** Stamped by the server from the atlas image's mtime, so a rewritten sheet
+   *  is not served from cache against a fresh manifest. Absent on a manifest
+   *  read straight off disk. */
+  version?: string;
 }
 
 export interface PartDetail {

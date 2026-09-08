@@ -5,6 +5,7 @@ it('picks the coarsest level that covers the on-screen cell size', () => {
   expect(levelFor(4)).toBe(8);
   expect(levelFor(20)).toBe(32);
   expect(levelFor(100)).toBe(128);
+  expect(levelFor(128)).toBe(128);   // the slider's own maximum, not the vector rung
   expect(levelFor(200)).toBe(VECTOR_LEVEL);
 });
 
