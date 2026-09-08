@@ -1,3 +1,62 @@
+## Working through the open occt defect rows: two landed, and what each probe settled
+
+Both fixes are committed on `main` (`bd537b1`, `c95e2c9`) with their own
+measurements; `tests/goldens/defects.toml` carries a note per row.
+
+**An oblique cylinder builds now** (`bd537b1`). A cyli whose axis leans out of
+its cross-section plane was rejected, and a rejected primitive is a HOLE in the
+sewn shape -- so 49492 drew as three disconnected pieces of a shepherd's crook
+and 28660's elbow drew stitched across. Both rows are closed. The same
+rejection still drops 101 oblique CONES in the 150 highest-skew parts, which is
+what `35485-ring-is-broken` is: an oblique cone is a ruled surface whose normal
+turns with height, so `_limb_params` does not hold and `_curved_frame` has no
+case for it. `scripts/oblique-cohort.py` names the cohort.
+
+**A facet crease lying on a hidden authored line is no longer drawn**
+(`c95e2c9`). `select_authored` matches in 2-D, so any tessellation crease
+projecting along an authored line's screen path was drawn as that edge. That
+was `49612`'s line down the dome (seven creases) and `53119`'s stray lines (77
+ops to 34); it also cleans the cheeks and brow on `3626bpsk` (40 ops to 15) and
+the hub diagonals on `3649`. It never adds ink. **Cost:** the lines ride the
+same HLR pass, which is 1.0-1.1x on most parts, 1.26x on 4019 (471 authored
+lines) and 1.59x on 3649. If that ever matters, the prune to look for is which
+lines can be confused at all -- not a second HLR pass, which doubles the phase.
+
+### Settled by probe, so nobody re-derives them
+
+- **The tube rows (`79306-f1`, `14653-f1`) are not hidden-line misses.**
+  Per-face renders against naive: naive draws the whole tube as ONE outer-wall
+  face, occt splits each cylinder at the limb and the far-end crescent falls to
+  the back span plus the far annulus -- both of which a ray there really does
+  hit. Their TONE is what reads as a scoop cut out of the tube. Same question
+  as `35480-bore-reads-flat`, and it is Mike's to answer.
+- **`3626bpsk`'s tab is one pierce seam; `67811`'s notch is none of them.**
+  `scripts/pierce-seam-ab.py` drops each kept seam in turn. On 3626bpsk seam 2
+  alone draws the tab (5089 px); on 67811 dropping any one of 17 moves at most
+  16 px while all-vs-none moves 4905. Four narrowings are now disproven --
+  straddling, containment in a real face, distance to the plane's material
+  (2.0 LDU on the bad part against 1.99 on the good one), and same-surface
+  (every seam on all three parts is cylinder-to-cylinder at one radius and
+  axis). The pass has no test left that separates them, which points at
+  `order_faces`' single witness rather than at the seam.
+- **`39789`'s dark fans are the stud logo, and naive draws them identically.**
+  Only the cup-handle loop off each stud rim is occt's; undiagnosed.
+- **`3484` and `6589` drop no surface at all** -- every cyli, con, disc and
+  ring builds a face, so neither is the 49492 class.
+
+### Where to pick it up
+
+1. **32 occt rows are still open.** `scripts/surface-drop-probe.py <part>` is
+   the first question to ask of any "missing wall / shows through" row; it
+   takes a second and it answered 49492 outright.
+2. **The oblique CONE is the next real surface gap** (35485, plus 101 of them
+   in the high-skew cohort). Decide whether a ruled surface can carry a fill
+   before building one -- a BSpline through ThruSections would occlude,
+   contribute no fill, and trip
+   `test_every_corpus_surface_kind_is_one_the_face_producer_handles`.
+3. **The stored `renders/occt` slot is stale** for every part these two fixes
+   move. Re-render before reading a wall sheet as current.
+
 ## Baton, 2026-09-08 afternoon: store ingested, and the snap verdict was wrong
 
 On `main`, in the shared checkout with two peers. `tests/goldens/defects.toml`
