@@ -42,7 +42,9 @@ title = "this is weird"
 mark = { x = 0.3369, y = 0.4772, w = 0.0463, h = 0.0215 }
 seen = { angle = "iso", shading = "outline", shade_style = "flat3" }
 filed = "2026-09-03"
-notes = "Unexamined."
+notes = """Still weird after c95e2c9 (138 ops to 134). No surface is dropped -- 1 con,
+4 cyli, 4 ring all build. The mess is in the hub, where the ink bunches
+black."""
 
 [[defect]]
 id = "4524-ring-whole-circle"
@@ -190,6 +192,9 @@ status = "open"
 title = "occt handle missing arcs; extra garbage below R hook hand on both engines"
 classes = ["arc-loss", "stray-ink"]
 filed = "2026-09-06"
+notes = """Not a dropped surface: every cyli and disc builds a face (5 edge prims are
+stroke-only). c95e2c9 removed 2 ops here and did not close it. Still open with
+no diagnosis."""
 
 [[defect]]
 id = "3820-c-grip-fills-solid"
@@ -228,15 +233,44 @@ status = "open"
 title = "ring is broken"
 classes = ["arc-loss"]
 filed = "2026-09-07"
+notes = """The ring is 8 cones whose axis leans 1.2 degrees out of the cross-section
+plane, and occt.frame rejects every one, so the shape has holes where they
+should be. bd537b1 fixed the cylinder form of this.
+
+THE LIMB MATH IS NOT THE BLOCKER -- an earlier note here said it was and that
+is wrong. For a ruled surface between two parallel circles (centres offset by
+D, radii r0 and r1, section axes X and Y) the normal is
+  n(u, v) = rho(v) * [cos u (Y x D) - sin u (X x D) - (r1 - r0)(X x Y)]
+so its DIRECTION does not depend on v at all, and it is exactly the
+cos/sin/constant form _limb_params solves: a = Y x D, b = -(X x D),
+c = -(r1 - r0)(X x Y). Checked numerically against a finite-difference normal
+to 1e-10. The cylinder case is this with r0 = r1, which is why the extrusion
+path already works.
+
+What blocks it is REPRESENTATION: OCCT has no analytic type for an oblique
+cone (gp_Cone is right circular), so a face built through ThruSections comes
+back a BSpline, and _curved_frame reads the surface rather than a record of
+what built it -- it would occlude correctly, contribute no fill, and trip
+test_every_corpus_surface_kind_is_one_the_face_producer_handles. So the choice
+is: recognise a degree-1-in-v BSpline whose two boundary curves are parallel
+circles, or carry the primitive's own description alongside the face. 101
+oblique cones sit behind this in the 150 highest-skew parts."""
 
 [[defect]]
 id = "49492-occt-deletes-several-extruded-segments"
 part = "49492"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "occt deletes several extruded segments"
 classes = ["over-cull"]
 filed = "2026-09-07"
+notes = """FIXED, bd537b1. Two of the hook's six cyli lean their axis out of the
+cross-section plane (|v.a| 0.055 and 0.150, i.e. 3 and 8.6 degrees), and
+occt.frame rejected both as unrepresentable. A dropped primitive is a hole in
+the sewn shape rather than a coarse version of it, so the shaft drew as three
+disconnected pieces. occt_faces now sweeps the circle along the skew axis with
+the same BRepPrimAPI_MakePrism elliptic_wall uses. Still open on this part
+afterwards: a stray chord across the hook's opening."""
 
 [[defect]]
 id = "4913-hole-in-base-shows-through"
@@ -282,6 +316,12 @@ status = "open"
 title = "crap on darkest face and inside hollow stud"
 classes = ["stray-ink"]
 filed = "2026-09-07"
+notes = """Paint order, not geometry. Rendered per face
+(scripts/render-face-sheet.py): the slope's big front face and a stud behind it
+overlap, and the stud is painted over the slope that hides it. order_faces
+settles a screen-overlapping pair on ONE witness point, which is the same
+single-bit decision the pierce-seam rows come back to. Nothing is dropped here
+-- every primitive builds a face."""
 
 [[defect]]
 id = "38317-left-stud-shading-is-very"
@@ -299,6 +339,13 @@ engines = ["occt"]
 status = "open"
 title = "occt has issues with top main face"
 filed = "2026-09-07"
+notes = """Two different things, and only one is occt's. The dark fans between the
+studs are the stud logo geometry, and NAIVE DRAWS THEM THE SAME at iso -- so
+they are the constant-stroke-width row, not an occt defect. What is occt-only
+is a cup-handle loop hanging off each stud rim: small arcs at 8 centres with
+projected axes (4.80, 2.80), (3.53, 4.29) and (3.33, 5.32), none of which is
+the 2:1 a horizontal circle projects to at this view. Undiagnosed; start by
+naming which primitive owns those centres."""
 
 [[defect]]
 id = "53119-occt-has-a-bunch-of"
@@ -308,6 +355,9 @@ status = "open"
 title = "occt has a bunch of stray lines and shaded version has bad banding"
 classes = ["stray-ink", "banding"]
 filed = "2026-09-07"
+notes = """The stray lines are FIXED by c95e2c9 -- 77 drawn ops to 34, and the swirl
+reads clean against LDView at iso. THE BANDING IS NOT: this row stays open for
+the shaded half. Same 2-D locus match as 49612."""
 
 [[defect]]
 id = "96910-weird-dot-near-bottom-inset"
@@ -331,10 +381,17 @@ filed = "2026-09-07"
 id = "92692-joint-where-front-tube-meets"
 part = "92692"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "joint where front tube meets rings"
 classes = ["seam"]
 filed = "2026-09-07"
+notes = """The joint is FIXED, 99a9693: one 67.5-degree ring sector built no face at
+all, because sector_face drew its arcs off a gp_Ax2 and computed its radial
+ends from `uh` by hand, and the two frames differ by 6e-5 LDU under this
+part's rotated placement -- 600x MakeWire's tolerance, so the wire never
+closed. The ring's outline is continuous now. What is left on this part is the
+concentric banding on the tube's end disc, which is the gradient class, not
+this row."""
 
 [[defect]]
 id = "79306-f1-far-end-should-be-hidden"
@@ -344,6 +401,16 @@ status = "open"
 title = "far end should be hidden"
 classes = ["hidden-leak"]
 filed = "2026-09-07"
+notes = """NOT a hidden-line miss, and the same finding covers 14653-f1. Rendered
+per-face (scripts/render-face-sheet.py) against naive: naive draws the whole
+tube as ONE outer-wall face, while occt splits each cylinder at the limb and
+the far end crescent falls to the BACK span plus the far annulus, both of
+which are geometrically the surfaces a ray there really hits. What is wrong is
+their tone, not their presence -- the back span takes a light interior ramp
+and the annulus its own, so the end reads as a scoop cut out of the tube where
+LDView shades both continuous with the wall. Same question as
+35480-bore-reads-flat: what tone a surface seen from its back side should
+carry. Paint order is right (far annulus 0, interior walls 1-2, exterior 3-4)."""
 
 [[defect]]
 id = "6047-gradient-shading-is-a-really"
@@ -376,10 +443,13 @@ filed = "2026-09-07"
 id = "28660-lots-of-random-stitches-across"
 part = "28660"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "lots of random stitches across curved walls. seems like a good source of hints"
 classes = ["stray-ink"]
 filed = "2026-09-07"
+notes = """FIXED by bd537b1 -- 20 of the elbow's cyli are oblique (skew axis) and were
+dropped, so the bend was sewn out of whatever was left and stitched across.
+Re-rendered at iso against LDView: the elbow reads as one wall now."""
 
 [[defect]]
 id = "35480-bore-reads-flat"
@@ -409,7 +479,18 @@ status = "open"
 title = "a dark tab hangs below the neck stud that LDView does not draw"
 classes = ["hidden-leak"]
 filed = "2026-09-07"
-notes = "Caused by f832da6. _pierce_seams keeps 3 seams on this head and the split puts new ink under the stud base -- the same defect class the fix removes on 35480, appearing somewhere it was not. 127 px in 1 component, read against LDView at a matched crop. Two narrowings are already disproven: requiring the seam's two faces to straddle the plane changes nothing (all 3 already do, as do 67811's 17 and 35480's 2), and requiring the seam to lie inside a real planar FACE rather than its infinite plane kills 35480's own seams, because the plate top is many small triangles and none of them contains the circle. Reproduce by disarming in process: occt._pierce_seams = lambda s: [] and render both ways. See 67811-notch-through-hub-wall."
+notes = """Narrowed to ONE seam, and the obvious narrowings are all disproven.
+scripts/pierce-seam-ab.py drops each kept seam in turn: of the 3 seams here
+only seam 2 (the neck bore, centre 0,0,-3.41 on the y=0 plane) draws the tab
+-- 5089 px in 5 components, largest 3943. Dropping either of the others
+changes nothing at all.
+Disproven, in order: both faces straddle the plane (all 3 do); the seam lies
+inside a real planar face (kills 35480's own seams); the seam is far from the
+plane's material (BRepExtrema gap is 2.0 LDU here and 1.99 on 35480, so it
+does not separate them); and the two faces lie on one surface (every seam on
+all three parts is cylinder-to-cylinder at equal radius and axis, so it is
+true everywhere). The pass has no test left that tells a good seam from a bad
+one, which points at order_faces' single witness rather than at the seam."""
 
 [[defect]]
 id = "67811-notch-through-hub-wall"
@@ -419,7 +500,11 @@ status = "open"
 title = "a square notch is cut through the steering wheel's hub wall"
 classes = ["hidden-leak"]
 filed = "2026-09-07"
-notes = "Caused by f832da6, and the second of the two regressions that change found. 17 seams kept here against 35480's 2. LDView shows small tabs along that edge rather than a square hole, so this is at best a real feature drawn wrong and at worst a hole in the silhouette. 470 px in 2 components. Same reproduction and same disproven narrowings as 3626bpsk-tab-under-neck-stud."
+notes = """No single seam owns it: over the 17 kept seams, dropping ANY one moves at
+most 16 px, while all-vs-none moves 4905 px in a 4829 px component
+(scripts/pierce-seam-ab.py). So the notch survives on a redundant group and
+per-seam bisection cannot name a culprit -- unlike 3626bpsk, where seam 2
+alone draws the tab. Same disproven narrowings as that row."""
 
 [[defect]]
 id = "3941p01-decal-under-its-own-wall"
@@ -436,16 +521,23 @@ part = "3941"
 engines = ["occt"]
 status = "open"
 title = "centre stud has no top ellipse and the brace between the studs is unfilled"
+classes = ["over-cull", "arc-loss"]
 filed = "2026-09-07"
-notes = "Two symptoms on the top face, against naive at the same pose. The front-centre stud is drawn as an open cup: its top ellipse is absent where the other three studs each carry one. The four-armed brace between the studs comes out as an outline in top-face tone with a stray thin arc floating inside it; naive fills the same shape dark. Total top-face-tone area is not the tell -- occt paints 348,827 px of it against naive's 323,132, so this is features not being built, not fill being lost. Spotted on a wall sheet stamped 4b290bc and blamed on the full-turn merge; it is not that. At 8e436a5, the commit before that merge, the render differs by 36 px in 9 components of 1-4 px each, which is antialias. flat3 disables gradients in fill_ops, so a shading change cannot move this part."
+notes = "Two symptoms on the top face, against naive at the same pose. The front-centre stud is drawn as an open cup: its top ellipse is absent where the other three studs each carry one. The four-armed brace between the studs comes out as an outline in top-face tone with a stray thin arc floating inside it; naive fills the same shape dark. Total top-face-tone area is not the tell -- occt paints 348,827 px of it against naive's 323,132, so this is features not being built, not fill being lost. Spotted on a wall sheet stamped 4b290bc and blamed on the full-turn merge; it is not that. At 8e436a5, the commit before that merge, the render differs by 36 px in 9 components of 1-4 px each, which is antialias. flat3 disables gradients in fill_ops, so a shading change cannot move this part. Confirmed at --shading outline with no shade-style, where the render carries no fills at all: both features are missing as STROKES. naive draws the center stud's top ellipse and all four brace arms; occt draws neither, so 'unfilled' in the title is too narrow -- nothing is filled wrongly, the ops never reach the stroke list. Measured with scripts/engine-overlay.py at 1000 px wide: 88.8% shared ink, naive-only 4,445 px in 14 components, of which two are chunky -- 4,051 px over the brace and the center stud rim, and 372 px continuing it on the rim's lower right -- and the other twelve are 1-4 px antialias crumbs."
 
 [[defect]]
 id = "49612-extra-vertical-line-extending-down"
 part = "49612"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "extra vertical line extending down from stud"
 filed = "2026-09-08"
+notes = """FIXED, c95e2c9. The line was seven of the dome's own facet creases, drawn
+because they project along the locus of an authored type-2 corner line the
+dome hides completely. select_authored matches in 2-D, so any crease on an
+authored line's screen path is drawn as that edge. Straight authored lines are
+now projected alongside the shape and a fragment is kept only where HLR calls
+that line visible."""
 
 [[defect]]
 id = "6296256ec01-utter-disaster-in-occt"
@@ -538,6 +630,10 @@ engines = ["occt"]
 status = "open"
 title = "missing inner square"
 filed = "2026-09-08"
+notes = """Renders WITH the inner square at HEAD, at iso against LDView. Either one of
+today's fixes closed it or the row was filed against a stale renders/occt slot
+entry -- the slot predates bd537b1, c95e2c9 and 99a9693. Wants one look at a
+fresh wall sheet before it is closed."""
 
 [[defect]]
 id = "4650852g-far-half-elements-missing"
@@ -564,3 +660,33 @@ engines = ["occt"]
 status = "open"
 title = "missing some lines near bottom"
 filed = "2026-09-08"
+
+[[defect]]
+id = "3626cp7d-bore-sliver-over-brow"
+part = "3626cp7d"
+engines = ["occt"]
+status = "open"
+title = "the hollow bore leaks a gray sliver across the eyebrow"
+classes = ["hidden-leak"]
+filed = "2026-09-08"
+notes = "A 28.2 x 3.3 px gray taper runs off the right end of the orange eyebrow, tapering into the body tone. It is a sliver of the HOLLOW BORE -- the r=6 cylinder at origin [0,4,0] inside the head, whose near span (depth 10.14) sits behind the head wall (depth 12.81) and should be entirely hidden. It reaches the SVG as its own element filled with that span's wall gradient (#565656 -> #9d9d9d), painted at (99.8,86.6)-(128.0,89.9). occt only: naive draws the brow ending clean, and LDView has nothing there. Print only in the sense that the split head wall is what lets it through -- the unprinted 3626c does not show it. Likely the same family as 3626cp7d-floating-ink-diamond, which is also occt-only and print-only and sits at a similar height."
+
+[[defect]]
+id = "3626cp7d-floating-ink-diamond"
+part = "3626cp7d"
+engines = ["occt"]
+status = "open"
+title = "a black diamond floats in the middle of the head with nothing under it"
+classes = ["stray-ink"]
+filed = "2026-09-08"
+notes = "A black lozenge sits mid-head to the right of the glasses arm with no feature under it -- LDView has nothing there and naive draws nothing there. It is a CLOSED 5-point subpath in the interior stroke layer, `M 159.65 84.93 L 158.85 84.66 L 159.76 84.36 L 160.70 84.66 Z`: 1.85 x 0.57 SVG units, so the 2px stroke fills it solid and it reads as a blob rather than as a loop. Do not look for a fill: removing every <path/> in the fill layer leaves it, and it disappears with the one big interior-stroke path. occt only and print only -- absent from the naive render of the same part and from the unprinted 3626c. Scan for it with the tiny-subpath sweep: split the stroke path's d on `M `, and flag any subpath whose bbox is under ~6 units."
+
+[[defect]]
+id = "3626cp7d-lips-lose-a-facet"
+part = "3626cp7d"
+engines = ["naive", "occt"]
+status = "open"
+title = "a wedge of body tone shows through the middle of the lips"
+classes = ["decal"]
+filed = "2026-09-08"
+notes = "The lower lip has a wedge of body gray through it; LDView draws it as one contiguous red. BOTH engines show it identically, so this is the decoration itself and not hidden-surface removal. It is a HOLE, not an over-paint: nothing gray is drawn after the lips at that location -- the region's five painted elements are four #b40000 paths and one #1b2a34 mouth line, and the head fill is the first element in the file. Counts: 37 source triangles of LDraw color 4 reach flatten, 5 color-4 faces reach fill_ops, and 4 red paths reach the SVG, so one merged region is clipped to nothing on the way out. Start at that fifth face rather than at the extraction."
