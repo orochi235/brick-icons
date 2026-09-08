@@ -74,8 +74,10 @@ parameter the lab knows and the CLI does not is a bug by construction, and
 
 ## The corpus database
 
-`corpus.db` holds `parts`, `renders` (one row per part per source slot) and
-`measurements` (census results). Source slots are `db.SOURCES`.
+`corpus.db` holds `parts`, `renders` (one row per part per source slot),
+`measurements` (census results) and `attempts` (one row per part a render-store
+run tried, drawn or not — the only record of a part that timed out, since it
+leaves neither a render nor a measurement). Source slots are `db.SOURCES`.
 
 Rebuild it into a temp file and swap — never in place, because a running lab
 server reads it on every request:

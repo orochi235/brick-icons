@@ -98,6 +98,20 @@ CREATE TABLE IF NOT EXISTS measurements (
   PRIMARY KEY (run_id, part_id, engine)
 );
 
+CREATE TABLE IF NOT EXISTS attempts (
+  run_id INTEGER NOT NULL REFERENCES runs(id),
+  part_id TEXT NOT NULL,
+  -- The slot the run was drawing into, as `renders.source` names it.
+  source TEXT NOT NULL,
+  -- `stored`, `cached` or `present`; null when `error` says why nothing was
+  -- drawn. A part that timed out leaves no render and no measurement, so this
+  -- row is the only record it was ever tried.
+  state TEXT,
+  secs REAL,
+  error TEXT, detail TEXT,
+  PRIMARY KEY (run_id, part_id, source)
+);
+
 CREATE TABLE IF NOT EXISTS defects (
   id TEXT PRIMARY KEY,
   part_id TEXT NOT NULL,
@@ -156,6 +170,7 @@ CREATE TABLE IF NOT EXISTS part_successors (
 );
 
 CREATE INDEX IF NOT EXISTS measurements_by_part ON measurements(part_id, engine);
+CREATE INDEX IF NOT EXISTS attempts_by_part ON attempts(part_id, source);
 CREATE INDEX IF NOT EXISTS renders_by_part ON renders(part_id);
 -- Feature first: the question this table exists for is "which parts have
 -- X", and part-first would scan every row to answer it.
@@ -294,6 +309,30 @@ def import_census_jsonl(conn: sqlite3.Connection, run_id: int,
         "build, missing_px, extra_px, missing_comps, extra_d99, extra_d100, "
         "secs, phases, counts, error, detail) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+    conn.commit()
+    return len(rows)
+
+
+def import_store_jsonl(conn: sqlite3.Connection, run_id: int,
+                       path: Path | str) -> int:
+    """One row per part a render-store run attempted, drawn or not.
+
+    Deliberately not `measurements`: those are scores against the part's own
+    polygons, and every reader takes the newest run per part and engine -- a
+    store row landing there would hand each occt finding a null where its
+    d99 was. A part logged twice in one run keeps its last row, so a retry
+    settles the failure before it -- what `Runner.remaining` already assumes.
+    """
+    rows = []
+    for line in Path(path).read_text().splitlines():
+        if not line.strip():
+            continue
+        r = json.loads(line)
+        rows.append((run_id, r["part"], r["source"], r.get("state"),
+                     r.get("secs"), r.get("error"), r.get("detail")))
+    conn.executemany(
+        "INSERT OR REPLACE INTO attempts (run_id, part_id, source, state, "
+        "secs, error, detail) VALUES (?, ?, ?, ?, ?, ?, ?)", rows)
     conn.commit()
     return len(rows)
 
@@ -597,6 +636,23 @@ def census_trees(root: Path | str = ".") -> list[Path]:
     return sorted(d for d in (Path(root) / "out").glob("census*") if d.is_dir())
 
 
+def store_logs(tree: Path) -> list[Path]:
+    """A store tree's JSONL logs. `Runner` names them `<log>.<source>` and
+    keeps a `.inflight` marker beside them holding a part id, not JSON."""
+    return sorted(p for p in tree.glob("*.jsonl.*")
+                  if p.is_file() and not p.name.endswith(".inflight"))
+
+
+def store_trees(root: Path | str = ".") -> list[Path]:
+    """Every directory holding render-store logs: `out/store` itself, where a
+    local sharded run writes, and the per-run directories a fleet run gets."""
+    store = Path(root) / "out" / "store"
+    if not store.is_dir():
+        return []
+    here = [d for d in sorted(store.iterdir()) if d.is_dir()]
+    return [d for d in [store, *here] if store_logs(d)]
+
+
 def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
             census_dirs: Sequence[Path | str] | None = None,
             defects_path: Path | str = defects_toml.DEFAULT_PATH,
@@ -609,7 +665,7 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
     path.unlink(missing_ok=True)
     conn = connect(path)
     counts = {"parts": seed_parts(conn, ldraw_dir), "renders": 0,
-              "measurements": 0, "skipped": 0, "replaced": 0,
+              "measurements": 0, "attempts": 0, "skipped": 0, "replaced": 0,
               "defects": 0, "statuses": 0, "years": 0, "successors": 0,
               "features": 0}
     progress(f"seeded {counts['parts']} parts")
@@ -682,6 +738,20 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
         finish_run(conn, run_id,
                    note=f"rebuilt from {len(shards)} shards in {where}")
 
+    # The store's own logs, which no census tree carries: a part that timed
+    # out here has no render to index and no measurement to import.
+    for tree in store_trees(root):
+        logs = store_logs(tree)
+        where = _relative(tree, root)
+        run_id = start_run(conn, "store", {"dir": where, "logs": len(logs)},
+                           commit_sha)
+        for log in logs:
+            n = import_store_jsonl(conn, run_id, log)
+            counts["attempts"] += n
+            progress(f"{log.name}: {n} attempts")
+        finish_run(conn, run_id,
+                   note=f"rebuilt from {len(logs)} logs in {where}")
+
     counts["defects"] = import_defects(conn, defects_path)
     counts["statuses"] = import_statuses(conn, status_path)
     # The CSV is the record, the way part-status.toml is: a rebuild drops the
@@ -691,7 +761,8 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
         counts["years"] = import_part_years(conn, years_path)
     if Path(successors_path).is_file():
         counts["successors"] = import_part_successors(conn, successors_path)
-    progress(f"{counts['defects']} defects, {counts['statuses']} statuses, "
+    progress(f"{counts['attempts']} store attempts, "
+             f"{counts['defects']} defects, {counts['statuses']} statuses, "
              f"{counts['years']} part years, {counts['successors']} successors")
     conn.close()
     return counts

@@ -1,6 +1,7 @@
 import json
 import re
 import sqlite3
+from pathlib import Path
 
 import pytest
 
@@ -329,7 +330,7 @@ def test_rebuild_walks_renders_and_toml_and_jsonl(tmp_path):
     # so pinning it would make every new feature a failing rebuild test.
     assert counts.pop("features") > 0
     assert counts == {"parts": 4, "renders": 1, "measurements": 1,
-                      "skipped": 0, "replaced": 0, "defects": 0,
+                      "attempts": 0, "skipped": 0, "replaced": 0, "defects": 0,
                       "statuses": 0, "years": 0, "successors": 0}
 
     conn = db.connect(tmp_path / "corpus.db")
@@ -631,6 +632,73 @@ def test_an_inflight_marker_is_not_read_as_measurements(tmp_path):
     counts = db.rebuild(tmp_path / "corpus.db", lib, root=tmp_path,
                         census_dirs=[d])
     assert counts["measurements"] == 1
+
+
+def _store_log(dir_: Path, name: str, rows: list[dict]) -> None:
+    dir_.mkdir(parents=True, exist_ok=True)
+    (dir_ / name).write_text("".join(json.dumps(r) + "\n" for r in rows))
+
+
+def test_rebuild_takes_up_the_store_logs(tmp_path):
+    # A fleet run writes one log per batch below out/store; a local sharded
+    # run writes its logs in out/store itself. Both are the same run kind.
+    lib = _library(tmp_path)
+    store = tmp_path / "out" / "store"
+    _store_log(store, "s0.jsonl.naive",
+               [{"source": "naive", "part": "3001", "state": "stored",
+                 "secs": 2.5}])
+    _store_log(store / "occt-studio", "occt-3001.jsonl.occt",
+               [{"source": "occt", "part": "3001", "state": "stored",
+                 "secs": 40.0},
+                {"source": "occt", "part": "3005", "error": "TimeoutError",
+                 "detail": "exceeded 120s", "secs": 120.0}])
+
+    counts = db.rebuild(tmp_path / "corpus.db", lib, root=tmp_path,
+                        census_dirs=[])
+    assert counts["attempts"] == 3
+
+    conn = db.connect(tmp_path / "corpus.db")
+    rows = {(r["part_id"], r["source"]): r for r in
+            conn.execute("SELECT * FROM attempts")}
+    assert rows[("3001", "occt")]["secs"] == 40.0
+    assert rows[("3005", "occt")]["error"] == "TimeoutError"
+    assert rows[("3005", "occt")]["state"] is None
+    assert [json.loads(r["args"])["dir"] for r in conn.execute(
+        "SELECT args FROM runs WHERE kind = 'store' ORDER BY id")] == \
+        ["out/store", "out/store/occt-studio"]
+
+
+def test_a_store_attempt_is_not_a_measurement(tmp_path):
+    # Every reader takes the newest run per part and engine, so a store row in
+    # `measurements` would hand the engine's findings a null where its numbers
+    # were. The timeout is a record that the part was tried, nothing more.
+    lib = _library(tmp_path)
+    _store_log(tmp_path / "out" / "store", "s0.jsonl.occt",
+               [{"source": "occt", "part": "3001", "error": "TimeoutError",
+                 "secs": 120.0}])
+    d = tmp_path / "out" / "census"
+    d.mkdir(parents=True)
+    (d / "occt-r0.jsonl").write_text(json.dumps(MEASURED) + "\n")
+
+    db.rebuild(tmp_path / "corpus.db", lib, root=tmp_path, census_dirs=[d])
+    conn = db.connect(tmp_path / "corpus.db")
+    assert conn.execute("SELECT count(*) FROM measurements").fetchone()[0] == 1
+    assert conn.execute(
+        "SELECT count(*) FROM measurements WHERE error = 'TimeoutError'"
+    ).fetchone()[0] == 0
+    assert conn.execute("SELECT count(*) FROM attempts").fetchone()[0] == 1
+
+
+def test_an_inflight_marker_is_not_read_as_an_attempt(tmp_path):
+    lib = _library(tmp_path)
+    store = tmp_path / "out" / "store"
+    _store_log(store, "s0.jsonl.naive",
+               [{"source": "naive", "part": "3001", "state": "stored"}])
+    (store / "s0.jsonl.naive.inflight").write_text("3005\n")
+
+    counts = db.rebuild(tmp_path / "corpus.db", lib, root=tmp_path,
+                        census_dirs=[])
+    assert counts["attempts"] == 1
 
 
 def test_a_census_directory_that_is_not_there_is_skipped(tmp_path):

@@ -11,7 +11,9 @@ diff against the corpus, relaunch the remainder. Every step has a tool already;
 this file is the order they go in and the ways each one silently does nothing.
 
 `onto` mechanics — nodes, sync, detach, fetch — are the `onto-job` skill's
-subject, not this one. Read it too if you are launching.
+subject, not this one. Read it too if you are launching. Getting what came
+back into `corpus.db` and onto the wall is `ingest-renders`, which step 3
+below is the census half of.
 
 ### 1. Stop what is running
 
@@ -47,16 +49,11 @@ One pass, by hand:
     rm -f corpus.db-wal corpus.db-shm && mv -f "$tmp" corpus.db
     .venv/bin/python scripts/bake-thumbs.py
 
-Three things that look done and are not:
-
-- **Indexing a render does not put it on the wall.** `bake-thumbs.py` is what
-  draws it, and it is idempotent by render sha, so it only costs the new parts.
-  Skip it and the database is current while the wall is a round behind.
-- **Rebuild into a temp file and swap.** `db.rebuild` deletes and rewrites, so
-  a lab server reading mid-pass sees a half-built database. Checkpoint the temp
-  first: both are WAL, and moving a fresh database over a stale `corpus.db-wal`
-  hands sqlite a log that is not its own.
-- **A schema bump needs the lab server restarted**, or it reads the old shape.
+**Read `ingest-renders` before running either.** It carries the traps that
+cost the most time here: a bake is what puts a render on the wall, a rebuild
+must go into a temp file and swap, a piped bake reports the wrong exit status,
+and a schema bump leaves the lab server 500ing every route until it is
+restarted.
 
 ### 4. Ask what is still owed
 
