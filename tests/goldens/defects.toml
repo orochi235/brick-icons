@@ -172,3 +172,12 @@ status = "open"
 title = "cylinder decal painted over by the wall spans it sits on"
 filed = "2026-09-07"
 notes = "The unwrap is not at fault and neither is the bind: all 464 decoration facets bind to an analytic carrier (0 fall back to a body plane), merge_regions returns them as ONE region, and the SVG carries exactly one #1b2a34 element -- the same count naive emits. What differs is how much of it survives: 14,651 navy pixels against naive's 64,562 over an identical bounding box, the remainder overpainted in vertical strips the width of the wall's own spans. A decal lies exactly on its carrier, so decal and wall span tie on depth, and occt resolves that tie the wrong way for most spans. naive breaks it by list index, which is LDraw emission order, and decoration is authored after the surface it sits on. Measured at 4b290bc; byte-identical at 8e436a5, so the full-turn merge is not involved."
+
+[[defect]]
+id = "3941-top-features-unfilled"
+part = "3941"
+engines = ["occt"]
+status = "open"
+title = "centre stud has no top ellipse and the brace between the studs is unfilled"
+filed = "2026-09-07"
+notes = "Two symptoms on the top face, against naive at the same pose. The front-centre stud is drawn as an open cup: its top ellipse is absent where the other three studs each carry one. The four-armed brace between the studs comes out as an outline in top-face tone with a stray thin arc floating inside it; naive fills the same shape dark. Total top-face-tone area is not the tell -- occt paints 348,827 px of it against naive's 323,132, so this is features not being built, not fill being lost. Spotted on a wall sheet stamped 4b290bc and blamed on the full-turn merge; it is not that. At 8e436a5, the commit before that merge, the render differs by 36 px in 9 components of 1-4 px each, which is antialias. flat3 disables gradients in fill_ops, so a shading change cannot move this part."
