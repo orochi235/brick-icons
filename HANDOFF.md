@@ -33,6 +33,37 @@ Reproduce headless -- the site is vite on **`[::1]:5178`** (IPv6 only, so
 slider through the native value setter plus an `input` event, then read the
 network log filtered to `api/thumbs`.
 
+**A fourth symptom, reported later and probably the same fault:** panning at
+some zoom levels updates only the TOP HALF of the thumbnails. A visible-range
+that covers half the viewport would also starve the loose fetch, so treat
+symptoms 2 and 4 as one bug until they are proven separate.
+
+**What has been ruled out, so nobody re-checks it.** Every backend route
+returns 200 for `reference` at levels 8, 32 and 128 in both `.webp` and
+`.png`. The sheet IMAGES have real content -- `reference` sheet-8 is 50%
+non-transparent against ldview's 48%. `/api/corpus/cells` returns a `sha` for
+all 24,591 cells, which is what `useLooseThumbs.wanted` gates on.
+`visibleRange` itself is a correct AABB test. The main canvas handles dpr
+correctly: backing store at `width * dpr`, CSS pinned to `width`, context
+scaled, paint in CSS units -- so what reaches `visibleRange` is CSS pixels.
+
+**The leading untested lead is `useCanvasSize`**, imported from
+`@weasel-js/core` and never read. Every headless reproduction PASSED, and that
+browser runs at **devicePixelRatio 1** where Mike's Retina screen is 2 -- which
+is the one asymmetry that would explain why the wall misbehaves for him and
+not in the harness. Read what `useCanvasSize` returns at dpr 2 before
+anything else, and reproduce with dpr forced to 2
+(`mcp__chrome-devtools__emulate`) rather than default playwright.
+
+**A second, independent hazard: the sheet URL has no cache-buster.**
+`useSheets.ts` builds `/api/thumbs/${source}/sheet-${level}.webp` with no
+version, while `useLooseThumbs.thumbUrl` versions its own with `?v=<sha>`. The
+sheets are re-written by every bake -- `reference`'s carry a Last-Modified of
+today 13:09 -- so a browser holding a stale image against a freshly fetched
+`sheet-*.json` manifest reads the atlas at the wrong offsets. That is a
+plausible cause of "blank when zoomed out" for one browser and not another,
+and it wants a version on the URL either way.
+
 **`lab/` has a peer's uncommitted work in it** (`shade.py`, `unwrap.py`, and an
 unpushed commit `7b5e062`), so check who owns a file before editing.
 
