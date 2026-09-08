@@ -67,6 +67,7 @@ class Sink(BaseHTTPRequestHandler):
     margin: int = 6
     done: threading.Event = threading.Event()
     received = 0
+    failed = 0
 
     def log_message(self, *a):  # the render loop prints its own progress
         pass
@@ -87,13 +88,19 @@ class Sink(BaseHTTPRequestHandler):
                                "margin": Sink.margin}).encode()
             return self._send(200, body, "application/json")
         if path.startswith("/ldraw/"):
-            # `resolve` under LDRAW is the containment check: a part name comes
-            # from the page, and the page is not a trusted input.
-            target = (LDRAW / path[len("/ldraw/"):]).resolve()
-            if not str(target).startswith(str(LDRAW.resolve())) or not target.is_file():
-                return self._send(404, b"no", "text/plain")
-            ctype = TYPES.get(target.suffix.lower(), "application/octet-stream")
-            return self._send(200, target.read_bytes(), ctype)
+            rel = path[len("/ldraw/"):]
+            # Official first, then the unofficial tree: 2374b and 5241 name
+            # subparts the library only carries under Unofficial/, and a loader
+            # that cannot find one drops it and draws the rest.
+            for base in (LDRAW, LDRAW / "Unofficial"):
+                # `resolve` under LDRAW is the containment check: a part name
+                # comes from the page, and the page is not a trusted input.
+                target = (base / rel).resolve()
+                if str(target).startswith(str(LDRAW.resolve())) and target.is_file():
+                    ctype = TYPES.get(target.suffix.lower(),
+                                      "application/octet-stream")
+                    return self._send(200, target.read_bytes(), ctype)
+            return self._send(404, b"no", "text/plain")
         # the built page and its assets, so no dev server is needed
         rel = path.lstrip("/") or "shot.html"
         target = (DIST / rel).resolve()
@@ -113,6 +120,13 @@ class Sink(BaseHTTPRequestHandler):
                 print(f"  page failed: {self.rfile.read(n).decode()[:400]}",
                       file=sys.stderr, flush=True)
             Sink.done.set()
+            return self._send(200, b"ok", "text/plain")
+        if path.startswith("/failed/"):
+            n = int(self.headers.get("Content-Length", 0))
+            why = self.rfile.read(n).decode() if n else "(no reason given)"
+            print(f"  FAILED {path[len('/failed/'):]}: {why[:300]}",
+                  file=sys.stderr, flush=True)
+            Sink.failed += 1
             return self._send(200, b"ok", "text/plain")
         if path.startswith("/fit/"):
             n = int(self.headers.get("Content-Length", 0))
@@ -204,7 +218,7 @@ def main() -> int:
         for bi, batch in enumerate(batches, 1):
             # One browser per batch. A page that leaks or dies takes its batch
             # with it and nothing else; the next run skips what is on disk.
-            Sink.parts, Sink.received = batch, 0
+            Sink.parts, Sink.received, Sink.failed = batch, 0, 0
             Sink.done.clear()
             print(f"onto: item batch {bi}/{len(batches)} ({batch[0]})",
                   flush=True)

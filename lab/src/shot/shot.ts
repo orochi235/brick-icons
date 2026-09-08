@@ -181,7 +181,11 @@ async function main() {
       await fetch(`${SINK}/fit/${part}.fit.json`,
                   { method: 'POST', body: JSON.stringify(fit) });
     } catch (e) {
-      console.error(`shot ${part}: ${String(e)}`);
+      // Tell the sink, not just the console: a bake of the whole library drops
+      // a handful of parts, and a console nobody reads cannot say which or why.
+      await fetch(`${SINK}/failed/${part}`,
+                  { method: 'POST', body: String(e instanceof Error ? e.stack : e) })
+        .catch(() => {});
     }
   }
   window.shotProgress = 'done';
