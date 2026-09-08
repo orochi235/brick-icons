@@ -1613,7 +1613,11 @@ def _dome_wall_case(r_facet=13.0):
     half = th / 2.0
     n = np.array([math.cos(half), 0.0, math.sin(half)])
     spec = {"cx": 0.0, "cy": 0.0, "r": 50.0, "ratio": 1.0}
-    wall = {"grad_axis": ((0.0, 0.0), (10.0, 0.0)), "grad_samples": []}
+    # inside the dome's gradient ellipse: a wall the ramp does not reach takes
+    # the ramp's last stop over its whole area (2947bc01's shaft)
+    wall = {"grad_axis": ((0.0, 0.0), (10.0, 0.0)), "grad_samples": [],
+            "poly": np.array([[-20.0, -20.0], [20.0, -20.0],
+                              [20.0, 20.0], [-20.0, 20.0]])}
     facet = {"grad_radial": spec, "grad_samples": [((0.0, 0.0), n)],
              "group": ("dome", 1), "_plane3": (verts, n)}
     return [wall, facet], {id(wall): prim}, spec
@@ -1640,6 +1644,18 @@ def test_a_wall_the_dome_does_not_sit_on_keeps_its_linear_ramp():
     occt._absorb_dome_walls(faces, own_occ)
     assert "grad_radial" not in faces[0]
     assert faces[0]["grad_axis"] == ((0.0, 0.0), (10.0, 0.0))
+
+
+def test_a_wall_outside_the_dome_ramp_is_left_alone():
+    """A facet lying on a wall's surface does not make the wall part of that
+    dome. 2947bc01's shaft carries 12 facets of a dome 6.9 gradient radii
+    away; adopting its ramp painted the shaft the ramp's LAST stop, with the
+    ellipse's own edge crossing it as a ghost of the ring behind."""
+    faces, own_occ, _ = _dome_wall_case()
+    faces[0]["poly"] = faces[0]["poly"] + np.array([400.0, 0.0])   # far outside
+    occt._absorb_dome_walls(faces, own_occ)
+    assert "grad_radial" not in faces[0]
+    assert "grad_axis" in faces[0]
 
 
 def _cyl_spans_of(part, ldraw_dir, lat):
