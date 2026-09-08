@@ -5,20 +5,27 @@
 **Naive is fixed** (`2f54f58`): a part authored as a facet dome AND substituted
 as a barrel gave the dome a radial ramp and the barrel its own linear one, whose
 stops sat entirely below the dome's darkest. `absorb_wall_facets` now runs the
-same on-surface test in reverse, per FACE rather than per group -- a dome's
-members mostly leave the barrel's surface, so the group-wide intersection can
-never see it.
+same on-surface test in reverse, per FACE rather than per group.
 
-**occt shows the same band and needs a different fix.** It has no substituted
-primitives for that test to match; its faces come off the sewn solid and carry
-no `prim`. It emits six gradient fills on `3626cp7d` against naive's four, four
-of them linear spans of one wall, so look at `_merge_turn_gradients` leaving
-spans out of the coaxial merge. Filed as `3626cp7d-occt-barrel-dark-band`.
+**occt is characterized, not fixed, and the naive fix does not transfer** --
+occt has no substituted primitives for that test to match. Do not start from
+`_merge_turn_gradients`: it never fires on this part at all. The measurements
+and the one design question that blocks a fix are on the
+`3626cp7d-occt-barrel-dark-band` defect entry; read that before touching code.
 
-**The golden manifest holds no part of this shape**, so neither the fix nor a
-regression in it moves the gate. Its two unit tests in `test_shade.py` are the
-only cover; a manifest part with a domed, substituted wall would be worth
-adding.
+The short of it: `_span_edges` cuts every curved face at the silhouette limb
+before shading decides anything, and each piece then fits its own ramp. The
+head barrel is a 225-degree face cut into 157.5 and 67.5, and the two pieces
+disagree at the limb. **The open question is what ramp two limb-split pieces of
+one partial cylinder should share** -- they are opposite sides of the
+silhouette, so neither a shared linear axis nor a pooled `_turn_gradient` is
+obviously right. I tried the pooled one; it throws in `_radial_focal_stops`,
+and it would have been wrong anyway for a surface that does not close.
+
+**The golden manifest holds no part of this shape**, so neither the naive fix
+nor a regression in it moves the gate. Its two unit tests in `test_shade.py`
+are the only cover; a manifest part with a domed, substituted wall would be
+worth adding.
 
 The way to see any of this: render to SVG and recolor each `fill="url(#gN)"` a
 distinct flat color. That separated the dome from the barrel in one look.
