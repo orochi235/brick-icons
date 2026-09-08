@@ -81,16 +81,27 @@ parameter table, and never re-implement a render path there: a parameter the
 lab knows and the CLI does not is a bug by construction, and
 `tests/test_lab_schema.py` fails on it.
 
-## Long jobs go through `onto`, including on this Mac
+## Long jobs go through `onto`, and they go to another machine
 
 Anything running longer than a few minutes is launched with `onto run`, never as
-a backgrounded shell command. This machine is enrolled as `orochi`, so a local
-job qualifies — `--dir` runs it in place in this checkout, with no tree sync and
-no fetch back.
+a backgrounded shell command. **Send it to a remote node.** This Mac runs the
+editor, the browsers, the lab servers and several Claude sessions at once, and
+it is the only machine whose slowness anyone feels; the fleet exists so it does
+not also grind through renders. `onto status` names a node with free cores, or
+`--any` picks one.
 
-    onto run --detach --timeout 4h --task thumb-bake --dir "$PWD" \
+    onto run --detach --timeout 4h --task thumb-bake --in brick-icons \
       --env PATH=/opt/homebrew/bin:/usr/bin:/bin \
-      orochi -- .venv/bin/python scripts/bake-thumbs.py
+      --out out/thumbs --to out/thumbs \
+      msb-uai -- .venv/bin/python scripts/bake-thumbs.py
+
+This machine is enrolled as `orochi`, so `--dir "$PWD"` can run a job in place
+with no sync and no fetch. **That is the exception and it needs a reason** —
+the job needs this checkout's uncommitted state, or it is minutes rather than
+tens of them. "Shipping the inputs would take a while" is not one: the sync is
+paid once and the node keeps what it got, while every local run is paid again
+out of the machine you are working on. Ship it first and let it copy in the
+background — deciding is what costs the hour, not the transfer.
 
 `--task` is the identity and it is the point. Several Claude sessions share this
 working directory and cannot see each other's background processes; two once ran

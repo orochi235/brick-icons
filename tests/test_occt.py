@@ -13,7 +13,7 @@ from PIL import Image
 
 occt = pytest.importorskip("brick_icons.occt", reason="needs the [occt] extra")
 
-from brick_icons import arcfit, hlr, goldens  # noqa: E402
+from brick_icons import arcfit, geom2d, hlr, goldens  # noqa: E402
 from brick_icons.cli import process_one  # noqa: E402
 from brick_icons.config import load_config  # noqa: E402
 
@@ -1485,3 +1485,33 @@ def test_a_drawn_circle_is_an_arc_candidate_at_the_facet_step(ldraw_dir):
              if len(e) > 6 and tuple(round(v, 4) for v in e[:6]) in drawn}
     assert steps == {occt.RIM_STEP_DEG}
     assert drawn <= {tuple(round(v, 4) for v in e[:6]) for e in res.ellipses}
+
+
+def test_a_decal_is_not_clipped_by_the_wall_it_is_printed_on(ldraw_dir):
+    """A decal is re-projected onto its carrier's exact surface, so its depth
+    has to come from that surface too. Fitted an affine plane instead, a panel
+    wrapped around a cylinder gets a chord plane that sits BEHIND the body
+    facets it is printed on, and the boolean clip in fill_ops then cuts the
+    decal away wherever one of them overlaps it: 3941p01 kept 17% of its ink.
+    """
+    out = occt.flatten_part("3941p01", ldraw_dir)
+    # what hlr.visible_segments adds on top of the flatten, and _with_decoration
+    # reads: the per-triangle colors and the library's own printed/not verdict
+    out["tri_colors"] = [m["color"] for m in out["tri_meta"]]
+    out["printed"] = hlr._is_printed(
+        hlr._resolve_input("3941p01", hlr.default_roots(ldraw_dir)))
+    shape = occt.build_shape(out)
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    faces = occt.ordered_faces(shape, occt.op_projection(right, up, fwd), out)
+    deco = [f for f in faces if f.get("color", 16) != 16]
+    assert deco, "3941p01 must reach the ordering with its print on it"
+    area = lambda f: geom2d.area(geom2d.to_geom(f["poly"], f.get("holes") or []))
+    decal = max(deco, key=area)
+    at = next(k for k, f in enumerate(faces) if f is decal)
+    g = geom2d.to_geom(decal["poly"], decal.get("holes") or [])
+    cover = None
+    for f in faces[at + 1:]:                       # everything painted later
+        gg = geom2d.to_geom(f["poly"], f.get("holes") or [])
+        cover = gg if cover is None else geom2d.union(cover, gg)
+    hidden = geom2d.area(geom2d.intersection(g, cover)) / geom2d.area(g)
+    assert hidden < 0.05, f"{hidden:.0%} of the decal is painted over"

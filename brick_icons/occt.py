@@ -1753,8 +1753,18 @@ def _with_decoration(faces, out, proj, own_occ=None, ellipses_out=None):
     # binds to nothing among OCCT's planes, and the unwrap is what dissolves
     # the author's faceting. ellipses_out recovers a flat decal's circular
     # boundary runs as arcs instead of the chords the author wrote.
-    return shade.unwrap_decoration(faces + deco, out.get("analytic", ()), proj,
-                                   ellipses_out=ellipses_out)
+    merged = shade.unwrap_decoration(faces + deco, out.get("analytic", ()),
+                                     proj, ellipses_out=ellipses_out)
+    # A merged region lies on its carrier's EXACT surface, so its depth has to
+    # come from there. Fitted an affine plane instead, a panel wrapped around a
+    # cylinder gets a chord plane sitting behind the body facets it is printed
+    # on, and the boolean clip cuts it away against them (3941p01 kept 17%).
+    for f in merged:
+        carrier = f.get("carrier")
+        occ = getattr(carrier, "full_occluder", lambda: None)()
+        if occ is not None and own_occ is not None and id(f) not in own_occ:
+            own_occ[id(f)] = occ
+    return merged
 
 
 def _negate_y(ops):

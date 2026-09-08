@@ -168,10 +168,10 @@ filed = "2026-09-06"
 id = "3941p01-decal-under-its-own-wall"
 part = "3941p01"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "cylinder decal painted over by the wall spans it sits on"
 filed = "2026-09-07"
-notes = "The unwrap is not at fault and neither is the bind: all 464 decoration facets bind to an analytic carrier (0 fall back to a body plane), merge_regions returns them as ONE region, and the SVG carries exactly one #1b2a34 element -- the same count naive emits. What differs is how much of it survives: 14,651 navy pixels against naive's 64,562 over an identical bounding box, the remainder overpainted in vertical strips the width of the wall's own spans. A decal lies exactly on its carrier, so decal and wall span tie on depth, and occt resolves that tie the wrong way for most spans. naive breaks it by list index, which is LDraw emission order, and decoration is authored after the surface it sits on. Measured at 4b290bc; byte-identical at 8e436a5, so the full-turn merge is not involved."
+notes = "Fixed by giving the merged region its carrier's occluder as its own depth source. The unwrap and the bind were never at fault: all 464 decoration facets bind to an analytic carrier, merge to ONE region, and reach the SVG as a single element on both engines. The region had no exact depth, so order_faces fell back to an affine plane fitted through a panel wrapped around a cylinder -- a chord plane sitting 1.4 to 4.0 LDU behind the body facets against an eps of 0.048 -- and fill_ops' boolean clip then cut the decal away against the 22 color-16 planes that came out nearer, 83% of its area. Registering carrier.occluder() alone changed nothing: unwrap.bind picks a carrier by radial distance to the SURFACE and ignores the angular sector, so the decal had bound to a 90-degree quadrant that does not contain it and every ray was clamped away as a miss, silently falling back to the same plane fit. full_occluder() opens the sector for this use. 14,651 navy px before, 72,529 after, against naive's 64,562."
 
 [[defect]]
 id = "3941-top-features-unfilled"

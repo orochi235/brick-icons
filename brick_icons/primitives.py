@@ -482,6 +482,24 @@ class Primitive:
             self._occ = self._make_occluder()
             return self._occ
 
+    def full_occluder(self):
+        """The same surface with its angular sector opened out.
+
+        `occluder()` is shared by every consumer, and its sector is what stops
+        a quarter-wall occluding rays that miss it. A decal bound to this
+        primitive is bounded by its OWN polygon and may span several sectors
+        of the one surface, so as a depth source it wants the whole turn --
+        and its own instance, because the shared one must keep its sector.
+        """
+        try:
+            return self._full_occ
+        except AttributeError:
+            occ = self._make_occluder()
+            if occ is not None and getattr(occ, "sector", None) is not None:
+                occ.sector = 360.0
+            self._full_occ = occ
+            return occ
+
     def _make_occluder(self):
         return None
 

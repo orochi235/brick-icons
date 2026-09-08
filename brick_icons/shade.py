@@ -2068,7 +2068,7 @@ def _region_face(part, carrier, theta0, members, proj, step, tag,
     f = {**members[0], "poly": poly, "zs": zs,
          "holes": [px_ring(h)[0] for h in part.interiors],
          "depth": float(np.mean(zs)), "group": ("uv",) + tag,
-         "plane": ("uv",) + tag}
+         "plane": ("uv",) + tag, "carrier": carrier}
     for k in ("_verts", "grad_axis", "grad_radial", "grad_samples", "backfill"):
         f.pop(k, None)
     return f
