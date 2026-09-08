@@ -1,5 +1,93 @@
 # Handoff — `main`: the corpus lab, and the OCCT engine
 
+## Baton, 2026-09-08 late morning: the hands are fixed; five things are open
+
+On `main`, in the shared checkout. Four commits from this session are unpushed
+(`git log --oneline @{u}..HEAD`); `tests/goldens/defects.toml` is Mike's and
+stays dirty.
+
+**76382's hands were a tolerance bug, not a hand bug.** `occt.frame` judged a
+primitive's axis against `ORTHO_TOL = 1e-4`, but a .dat writes a placement
+matrix to three decimals, so a *rotation in a part file is only orthonormal to
+about 1e-3* -- 76382 hangs each hand off 0.985/0.696/0.707, whose Gram
+off-diagonal is 1.0e-3. Every cylinder in the hand was read as skew, dropped,
+and drawn from tessellation instead: two overlapping crescents and two floating
+fragments. Both tolerances are 3e-3 now, which is the rounding budget for a
+two-deep chain and sits in a gap the measurement says is empty -- no cyli has
+an axis residual between 2e-3 and 5e-3, and no kind is out of round between
+1e-3 and 3e-3, while authored skew starts ten times higher. Rerun
+`scripts/measure-ortho-residuals.py` to get both gaps back.
+
+**The reproduce that made it quick, if something like it turns up again:** the
+same hand renders correctly at identity and breaks under any rotation, while
+moving the CAMERA ten degrees changes nothing. That pair says the fault is in
+the transform algebra and not the pose, and it took four renders.
+
+**The grip's cavity is drawn but coarse.** LDView draws a clean open C; ours is
+chunky and carries a stray internal stub. That is what is left of
+`76382psj-missing-outlines-reference-is-wrong` in `defects.toml` -- the row is
+still right, it is just much smaller than it was.
+
+### Open, in the order I would take them
+
+1. **The corpus wall hits "max update depth exceeded"** (Mike, this session).
+   The chain is `Wall.tsx:540` onMove -> `CorpusWall.tsx:360` onPan ->
+   `CorpusWall.tsx:178` setCam. What is wrong there: `clampView` returns its
+   argument untouched when nothing is out of bounds but builds a **fresh object
+   the moment it clamps**, so a camera pinned against an edge writes new state
+   on every pointer event while its four numbers stand still.
+   **The obvious fix is not available.** Guarding `setCam` by value
+   (`sameView`) fails two tests in `CorpusWall.test.tsx` -- "opens on the level
+   the initial fit asks for" and "holds its level through a slot change" --
+   because the level pick hangs off the `[cam]` effect and *deliberately*
+   relies on a same-valued re-fit writing state. Whatever fixes this has to
+   separate "the camera moved" from "re-pick the level" first. That attempt is
+   reverted, not in the tree.
+   **I could not reproduce it headlessly** -- synthetic pointer drags, hard
+   flicks into every bound, and a 45-notch wheel zoom followed by a drag all
+   come back clean on `corpus.html`. It needs a state I did not find.
+2. **The naive-tail A/B needs about 80 minutes of one core, and nobody has
+   said go.** `scripts/snap-render-ab.py` appends now: one JSON Lines row
+   flushed per part, and a re-run with the same `--results` skips finished
+   parts and retries errored ones after every untried one. Measured on 12
+   random affected parts, 5m30s -- so the 177 in `out/snap-affected.txt` is
+   ~80 min, not the 9h38m the old run suggested. **`out/snap-render-ab/`'s 149
+   surviving SVG pairs are stale** and must not be reused: they predate the
+   ORTHO_TOL change, which moves occt geometry.
+3. **studio is still baking** (`onto jobs`, task `store-occt-studio`,
+   9h+). When it finishes run `out/ingest-bake.sh` once -- it does
+   rebuild-checkpoint-swap *then* bake, and that order matters because the bake
+   reads the database.
+4. **Printed and sticker parts want a `decal` slot** holding a 2D extraction of
+   the printing (Mike, this session). Not started, and not designed. A peer has
+   uncommitted decal-binding work in `brick_icons/shade.py` and `unwrap.py` --
+   talk to them before starting, because that is the same seam.
+5. **`3626cp7d` and 816 other parts still read the base part's years.** The
+   named route below fixed 3,401 of them; the rest name no catalog number in
+   their `.dat`.
+
+### Answered this session, so nobody re-opens them
+
+- **A printed part's years are its own now.** LDraw numbers the Gryffindor 1x1
+  brick `3005pz0` and Rebrickable numbers it `3005pr0018`, so every print fell
+  through to the plain brick: 3005pz0 read 1954-2026, 5,144 sets and 77 colors
+  for a crest made in one 2018 set in one color. The `.dat`'s own `!KEYWORDS`
+  line names both catalogs' numbers, and `match` takes that ahead of the base,
+  sheet and design routes. `base` fell from 4,218 rows to 817.
+- **The reference sheet's halves are on one scale.** LDView renders with
+  `-AutoCrop` and fills its frame; ours kept the icon's margin, so the two
+  halves could not be compared by eye. Ours is trimmed to its ink first, with
+  the part label lifted off by rasterizing the SVG a second time without its
+  one `<text>` element. Every `-trim` needs `-alpha off` -- resvg writes an
+  alpha channel over an opaque background and trim otherwise collapses to 1x1
+  without failing. The script takes `--engine` now and defaults to occt.
+- **The reference cannot be sharpened by a flag.** `-CurveQuality` is already
+  at 12, LDView's maximum, and `-AllowPrimitiveSubstitution=1` is already set,
+  so the flag is live -- 3820 at quality 1 against 12 differs by 2.2% of mean
+  pixel value. The crude circles that remain are **authored facets** in the
+  .dat, which substitution cannot reach because there is no primitive to
+  substitute.
+
 ## Baton, 2026-09-08 midday: the wall's tile path is fixed; three things are open
 
 On `main`, in the shared checkout. `git log --oneline @{u}..HEAD` for anything
