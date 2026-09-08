@@ -13,7 +13,7 @@ from PIL import Image
 
 occt = pytest.importorskip("brick_icons.occt", reason="needs the [occt] extra")
 
-from brick_icons import arcfit, geom2d, hlr, goldens  # noqa: E402
+from brick_icons import arcfit, geom2d, hlr, goldens, primitives  # noqa: E402
 from brick_icons.cli import process_one  # noqa: E402
 from brick_icons.config import load_config  # noqa: E402
 
@@ -1561,3 +1561,73 @@ def test_a_decal_is_not_clipped_by_the_wall_it_is_printed_on(ldraw_dir):
         cover = gg if cover is None else geom2d.union(cover, gg)
     hidden = geom2d.area(geom2d.intersection(g, cover)) / geom2d.area(g)
     assert hidden < 0.05, f"{hidden:.0%} of the decal is painted over"
+
+
+def _dome_wall_case(r_facet=13.0):
+    """A wall face plus one radially shaded facet, as _absorb_dome_walls reads
+    them: the wall's occluder is a unit-radius r=13 barrel, and the facet is a
+    22.5 deg chord on it (or off it, at a different radius)."""
+    R = np.column_stack([13.0 * np.array([1.0, 0.0, 0.0]),
+                         13.0 * np.array([0.0, 1.0, 0.0]),
+                         13.0 * np.array([0.0, 0.0, 1.0])])
+    prim = primitives.CylinderOccluder(R, np.zeros(3), 225.0)
+    th = math.radians(22.5)
+    verts = np.array([[r_facet, 0.0, 0.0],
+                      [r_facet * math.cos(th), 0.0, r_facet * math.sin(th)],
+                      [r_facet * math.cos(th), 13.0, r_facet * math.sin(th)]])
+    half = th / 2.0
+    n = np.array([math.cos(half), 0.0, math.sin(half)])
+    spec = {"cx": 0.0, "cy": 0.0, "r": 50.0, "ratio": 1.0}
+    wall = {"grad_axis": ((0.0, 0.0), (10.0, 0.0)), "grad_samples": []}
+    facet = {"grad_radial": spec, "grad_samples": [((0.0, 0.0), n)],
+             "group": ("dome", 1), "_plane3": (verts, n)}
+    return [wall, facet], {id(wall): prim}, spec
+
+
+def test_a_wall_takes_the_ramp_of_the_dome_on_its_own_surface():
+    """3626cp7d's head is authored as a facet dome over 135 deg and as an
+    exact barrel over the other 225. The barrel fitted its own linear ramp per
+    limb-split span, and the visible 67.5 deg piece ran #565656 to #5a5a5a --
+    entirely below the dome's darkest stop, so it read as a dark panel."""
+    faces, own_occ, spec = _dome_wall_case()
+    occt._absorb_dome_walls(faces, own_occ)
+    wall = faces[0]
+    assert wall["grad_radial"] is spec
+    assert wall["group"] == ("dome", 1)
+    assert "grad_axis" not in wall
+
+
+def test_a_wall_the_dome_does_not_sit_on_keeps_its_linear_ramp():
+    """The stud, neck and collar cylinders carry no dome facet, and must not
+    be pulled into the head's ramp: on 3626cp7d 8 of the 955 radially shaded
+    planes lie on each r=13 barrel span and 0 lie on any other cylinder."""
+    faces, own_occ, _ = _dome_wall_case(r_facet=8.0)
+    occt._absorb_dome_walls(faces, own_occ)
+    assert "grad_radial" not in faces[0]
+    assert faces[0]["grad_axis"] == ((0.0, 0.0), (10.0, 0.0))
+
+
+def _cyl_spans_of(part, ldraw_dir, lat):
+    """Every span of every CYLINDER face of `part` at that latitude."""
+    shape = occt.build_shape(occt.flatten_part(part, ldraw_dir))
+    right, up, fwd = hlr.view_basis(lat, 45.0)
+    proj = occt.op_projection(right, up, fwd)
+    out = []
+    for face in occt._faces_of_type(
+            shape, occt.GeomAbs_SurfaceType.GeomAbs_Cylinder):
+        out.extend(occt._faces_for(face, proj))
+    return out
+
+
+def test_a_side_on_cylinder_is_two_spans_and_that_is_the_answer(ldraw_dir):
+    """A cylinder's normal carries no axial term, so _limb_params always
+    returns two roots unless the axis points AT the camera. `full_turn` is
+    therefore false for every side-on cylinder by construction, and the near
+    and far halves it splits into really are two sides -- not a dome ramp gone
+    missing. Down the axis the wall projects to an annulus, and there the turn
+    is real and takes the radial ramp."""
+    assert not [f for f in _cyl_spans_of("4740", ldraw_dir, 30.0)
+                if f["span_deg"] > 359.9]
+    down = _cyl_spans_of("4740", ldraw_dir, 90.0)
+    assert down and all(f["span_deg"] > 359.9 for f in down)
+    assert all("grad_radial" in f for f in down)

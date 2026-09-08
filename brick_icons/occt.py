@@ -1188,6 +1188,8 @@ def _plane_face(face, proj, step_deg=BOUNDARY_STEP_DEG):
                                   # not a reliable statement about facing
     f = {"poly": np.stack([px, py], 1),
          "normal": nv,
+         # world outer wire and normal, for _absorb_dome_walls; popped there
+         "_plane3": (W, n),
          "depth": float(np.mean(z)), "zs": z, "kind": "occt-plane",
          # carrier plane key: fill_ops unions same-plane fragments that abut
          # without a shared edge, which is what UnifySameDomain declined to do
@@ -1352,6 +1354,56 @@ def _span_face(point, normal, ua, ub, v0, v1, proj, step_deg=BOUNDARY_STEP_DEG,
     else:
         f["grad_axis"], f["grad_samples"] = (p0, p1), samples
     return f
+
+
+def _absorb_dome_walls(faces, own_occ):
+    """An exact wall takes the radial ramp of the facet dome sitting on its
+    own surface.
+
+    3626cp7d's head is authored as a facet dome over 135 deg and as an exact
+    barrel over the other 225. The dome's normals spread in 2-D, so
+    attach_group_gradients ramps it radially; the barrel carries no group and
+    fitted its own linear ramp per limb-split span, and the visible 67.5 deg
+    piece ran #565656 to #5a5a5a -- entirely below the dome's darkest stop,
+    so it read as a dark panel rather than as a seam. The naive engine
+    reaches the same split from the other side, in shade.absorb_wall_facets.
+
+    The match is the same on-surface test, run per FACE: a dome's facets
+    mostly leave the barrel's surface, so nothing group-wide can see it. On
+    this part 8 of the 955 radially shaded planes lie on each r=13 barrel
+    span and 0 lie on the stud, neck or collar cylinders.
+    """
+    from . import shade
+    radial = [f for f in faces if "grad_radial" in f and "_plane3" in f]
+    # a full-turn span already has the dome ramp _turn_gradient fitted for it,
+    # and attach_group_gradients adds a grad_axis to its group that
+    # _merge_turn_gradients drops again -- only a wall that has nothing BUT a
+    # linear ramp of its own is a candidate
+    walls = [f for f in faces if "grad_axis" in f and "grad_radial" not in f
+             and own_occ.get(id(f))]
+    if not radial or not walls:
+        return
+    cents = np.array([f["_plane3"][0].mean(axis=0) for f in radial])
+    for wf in walls:
+        prim = own_occ[id(wf)]
+        local = (np.linalg.inv(prim.R) @ (cents - prim.t).T).T
+        lvl = local[:, 1]
+        r_exp = prim.radius_at(lvl) if hasattr(prim, "radius_at") else 1.0
+        # a chord facet's CENTROID sits inside the surface by the sagitta,
+        # 0.019 of the radius at the 22.5 deg the test admits -- too tight a
+        # prefilter here drops the match with nothing to see
+        near = np.flatnonzero((np.abs(np.hypot(local[:, 0], local[:, 2]) - r_exp)
+                               < 0.05) & (lvl > -0.05) & (lvl < 1.05))
+        for i in near:
+            pf = radial[int(i)]
+            W, n = pf["_plane3"]
+            if not shade.facet_on_wall(prim, W, n, oriented=False):
+                continue
+            wf["grad_radial"] = pf["grad_radial"]
+            wf["grad_samples"] = pf["grad_samples"]
+            wf["group"] = pf["group"]
+            wf.pop("grad_axis", None)
+            break
 
 
 def _merge_turn_gradients(faces):
@@ -1717,6 +1769,9 @@ def ordered_faces(shape, proj, out=None, ellipses_out=None):
     if out is not None and plane_by_idx:
         _group_planes(shape, out, plane_by_idx)
         shade.attach_group_gradients(faces)
+        _absorb_dome_walls(faces, own_occ)
+    for f in faces:
+        f.pop("_plane3", None)
     _merge_turn_gradients(faces)
     faces = _with_decoration(faces, out, proj, own_occ, ellipses_out)
     zs = np.concatenate([f["zs"] for f in faces])

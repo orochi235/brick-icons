@@ -2080,6 +2080,45 @@ def _region_face(part, carrier, theta0, members, proj, step, tag,
     return f
 
 
+def facet_on_wall(prim, verts, n_world, tol=2e-3, oriented=True):
+    """Do `verts` lie on `prim`'s curved surface as one tessellation facet?
+
+    Judged in the prim's local frame, whose columns are (U, axis, V) with
+    unit radius and height 0..1. Three tests: every vertex within `tol` of
+    the surface and inside the height range; the facet no wider than a
+    16-gon's 22.5 deg, because a wider one is a flat FEATURE face whose
+    corners merely lie on the circle (30136's end face is clipped to the log
+    profile, a chord plane whose normal equals the radial direction at the
+    chord's mid-angle); and the normal radial rather than axial, which is
+    what separates a chord facet from an end cap.
+
+    `oriented` demands the normal point OUTWARD, so interior facets seen
+    through an opening cannot steal an exterior band's paint. A producer
+    whose face orientation is not a reliable statement about facing -- occt
+    reads planes off a sewn shape and flips them by view -- passes False and
+    keeps only the radial-vs-axial half of that test.
+    """
+    local = (np.linalg.inv(prim.R) @ (np.asarray(verts, float) - prim.t).T).T
+    lvl = local[:, 1]
+    if lvl.min() < -0.02 or lvl.max() > 1.02:
+        return False
+    r_exp = prim.radius_at(lvl) if hasattr(prim, "radius_at") else 1.0
+    if np.max(np.abs(np.hypot(local[:, 0], local[:, 2]) - r_exp)) > tol:
+        return False
+    aa = np.arctan2(local[:, 2], local[:, 0])
+    rel = (aa - aa[0] + math.pi) % (2 * math.pi) - math.pi
+    if rel.max() - rel.min() > math.radians(25.0):
+        return False
+    c = local.mean(axis=0)
+    nl = prim.R.T @ np.asarray(n_world, float)
+    rdir = np.array([c[0], 0.0, c[2]])
+    rn = np.linalg.norm(rdir) * np.linalg.norm(nl)
+    if rn <= 1e-12:
+        return False
+    cos = float(nl @ rdir) / rn
+    return cos > 0.7 if oriented else abs(cos) > 0.7
+
+
 def absorb_wall_facets(tri_faces, an_faces, tol=2e-3, abut_px=3.0):
     """Authored facet faces lying ON an analytic wall's surface inherit the
     abutting wall face's gradient and merge into its fill element.
@@ -2109,29 +2148,7 @@ def absorb_wall_facets(tri_faces, an_faces, tol=2e-3, abut_px=3.0):
         return p if p.is_valid else p.buffer(0)
 
     def on_wall(prim, v, n_world):
-        local = (np.linalg.inv(prim.R) @ (np.asarray(v, float) - prim.t).T).T
-        lvl = local[:, 1]
-        if lvl.min() < -0.02 or lvl.max() > 1.02:
-            return False
-        r_exp = prim.radius_at(lvl) if hasattr(prim, "radius_at") else 1.0
-        if np.max(np.abs(np.hypot(local[:, 0], local[:, 2]) - r_exp)) > tol:
-            return False
-        # tessellation facets span <= 22.5 deg (16-gon); a wider facet is a
-        # flat FEATURE face whose corners merely lie on the circle (30136's
-        # end face is clipped to the log profile: a chord plane, and its
-        # normal equals the radial direction at the chord's mid-angle, so
-        # the outward test below cannot reject it)
-        aa = np.arctan2(local[:, 2], local[:, 0])
-        rel = (aa - aa[0] + math.pi) % (2 * math.pi) - math.pi
-        if rel.max() - rel.min() > math.radians(25.0):
-            return False
-        # outward facing: the facet's world normal agrees with the radial
-        # direction at its centroid (in the prim's local frame)
-        c = local.mean(axis=0)
-        nl = prim.R.T @ np.asarray(n_world, float)
-        rdir = np.array([c[0], 0.0, c[2]])
-        rn = np.linalg.norm(rdir) * np.linalg.norm(nl)
-        return rn > 1e-12 and float(nl @ rdir) / rn > 0.7
+        return facet_on_wall(prim, v, n_world, tol)
 
     by_group = defaultdict(list)
     for tf in tri_faces:
