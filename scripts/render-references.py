@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -39,12 +40,51 @@ def ldview_reference(cfg, part: str, out_png: Path) -> None:
     subprocess.run(argv, check=True, capture_output=True)
 
 
+def magick(*argv) -> str:
+    done = subprocess.run(["magick", *map(str, argv)], check=True,
+                          capture_output=True, text=True)
+    return done.stdout.strip()
+
+
+def our_half(svg: Path, stem: Path, px: int) -> tuple[Path, Path]:
+    """(part raster trimmed to its ink, label raster), from one outline SVG.
+
+    LDView renders with -AutoCrop, so its part fills the frame while ours keeps
+    the icon's designed margin -- resizing both to the same box then draws them
+    at different scales and the halves cannot be compared by eye. Trimming ours
+    to its ink is what puts them on one scale, and the part label has to come
+    off first or it is the bounding box. Rendering the SVG a second time
+    without its one <text> element is cheaper than a second geometry pass, and
+    the difference between the two rasters is the label.
+    """
+    bare = stem.with_name(f"{stem.name}-nolabel.svg")
+    bare.write_text(re.sub(r"<text\b.*?</text>", "", svg.read_text(),
+                           flags=re.S))
+    labeled, plain = stem.with_suffix(".png"), stem.with_name(f"{stem.name}-nolabel.png")
+    for src, dst in ((svg, labeled), (bare, plain)):
+        subprocess.run(["resvg", "--background", "white", "--width", str(px * 2),
+                        str(src), str(dst)], check=True)
+
+    part = stem.with_name(f"{stem.name}-part.png")
+    magick(plain, "-alpha", "off", "-trim", "+repage", part)
+    label = stem.with_name(f"{stem.name}-label.png")
+    # -alpha off before every trim: resvg writes an alpha channel even over an
+    # opaque background, and trim reads the whole frame as transparent and
+    # collapses to 1x1 rather than failing.
+    where = magick(labeled, plain, "-compose", "difference", "-composite",
+                   "-alpha", "off", "-trim", "-format", "%wx%h%X%Y", "info:")
+    magick(labeled, "-crop", where, "+repage", label)
+    return part, label
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("parts", nargs="*")
     ap.add_argument("--list", default="specimens.txt")
     ap.add_argument("--out", default="out/references")
     ap.add_argument("--px", type=int, default=620)
+    ap.add_argument("--engine", default="occt",
+                    choices=("naive", "occt", "cadquery"))
     args = ap.parse_args()
 
     ids = args.parts or read_list(Path(args.list))
@@ -55,21 +95,24 @@ def main() -> int:
     subprocess.run([".venv/bin/python", "-m", "brick_icons.cli", *ids,
                     "--format", "svg", "--shading", "outline",
                     "--shade-style", "flat3", "--part-label",
+                    "--engine", args.engine,
                     "--out", str(out / "ours")], check=True)
 
+    fit, box = f"{args.px}x{args.px}", f"{args.px + 20}x{args.px + 20}"
     for n, pid in enumerate(ids, 1):
         ref, svg = out / "ldview" / f"{pid}.png", out / "ours" / f"{pid}.svg"
         print(f"[{n}/{len(ids)}] {pid} ... ", end="", flush=True)
         try:
             ldview_reference(cfg, pid, ref)
-            ours = out / "ours" / f"{pid}.png"
-            subprocess.run(["resvg", "--background", "white", "--width",
-                            str(args.px * 2), str(svg), str(ours)], check=True)
-            geom = [f"{args.px}x{args.px}", f"{args.px + 20}x{args.px + 20}"]
-            subprocess.run(["magick", str(ref), str(ours), "-background",
-                            "white", "-gravity", "center", "-resize", geom[0],
-                            "-extent", geom[1], "-append",
-                            str(out / f"{pid}-compare.png")], check=True)
+            part, label = our_half(svg, out / "ours" / pid, args.px)
+            ours = out / "ours" / f"{pid}-half.png"
+            magick(part, "-background", "white", "-gravity", "center",
+                   "-resize", fit, "-extent", box,
+                   label, "-gravity", "southwest", "-geometry", "+6+4",
+                   "-composite", ours)
+            magick(ref, "-background", "white", "-gravity", "center",
+                   "-resize", fit, "-extent", box,
+                   ours, "-append", out / f"{pid}-compare.png")
             print("ok")
         except (subprocess.CalledProcessError, FileNotFoundError) as e:
             print(f"FAILED ({type(e).__name__})")
