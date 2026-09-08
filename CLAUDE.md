@@ -63,6 +63,15 @@ problem. A fix motivated only by a printed part is not yet motivated.
   "no exact surface exists" and "my tolerance was too tight", and two tolerance
   constants once deleted whole walls with no error anywhere. Remove the
   `except` and look before believing it.
+- **An image on the wall labels what VARIES between its panels.** Several
+  sessions post to one zone, so a sheet arrives with no conversation around it
+  and has to answer "what am I looking at" by itself. Give it a title line, and
+  label each panel with the thing that changed -- `before` / `after`, `step 15`
+  / `step 25`, `naive` / `occt`. Repeating the part id and config under both
+  halves of a pair, which is what `fixB-inkab` did, names everything except the
+  one difference the pair exists to show: the reader is left guessing which
+  side is the new one, and a guess about panel order turns a regression report
+  into a maybe.
 
 ## The lab must not fork the CLI
 
