@@ -399,9 +399,17 @@ def create_app(root: Path | str = ".",
                 "FROM measurements m JOIN runs r ON r.id = m.run_id "
                 "WHERE m.part_id = ? ORDER BY r.started DESC LIMIT 20",
                 (part_id,))]
-            slots = [dict(r) for r in conn.execute(
-                "SELECT source, sha256, made_at FROM renders WHERE part_id = ? "
-                "ORDER BY source", (part_id,))]
+            # Every live slot, not only the ones that drew: a slot that timed
+            # out leaves no render, and its absence read as a part nobody had
+            # asked that engine about.
+            made = {r["source"]: dict(r) for r in conn.execute(
+                "SELECT source, sha256, made_at FROM renders WHERE part_id = ?",
+                (part_id,))}
+            tried = cells.slot_attempts(conn, part_id)
+            slots = [{"source": source, "sha256": None, "made_at": None,
+                      **made.get(source, {}),
+                      "secs": tried.get(source, {}).get("secs")}
+                     for source in cells.live_sources(conn)]
             states = cells.slot_states(conn, part_id,
                                        [s["source"] for s in slots])
             years = conn.execute(

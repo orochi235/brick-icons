@@ -584,3 +584,46 @@ def test_part_route_gives_every_slot_what_the_wall_colors_a_cell_by(tmp_path):
     # Nothing is elsewhere: the only fault here is the occt engine's, and
     # `white-occt` is that engine, so it carries it as its own above.
     assert slots["white-occt"]["elsewhere"] == []
+
+
+def test_part_route_gives_a_slot_that_failed_a_tile_of_its_own(tmp_path):
+    """A slot that timed out leaves no render, so listing only the renders
+    dropped the one thing worth knowing: which engines never drew the part."""
+    from brick_icons import db
+    client = _corpus_client(tmp_path)
+    conn = db.connect(tmp_path / "corpus.db")
+    conn.execute("INSERT INTO renders (part_id, source, config_key, made_at, "
+                 "path, sha256) VALUES ('3001', 'ldview', 'k', "
+                 "'2026-09-05T00:00:00+00:00', 'renders/ldview/3001.svg', 'abc')")
+    conn.execute("INSERT INTO runs (id, kind, started, commit_sha, args) "
+                 "VALUES (1, 'store', '2026-09-05T09:00:00+00:00', 'abc', '{}')")
+    conn.execute("INSERT INTO attempts (run_id, part_id, source, state, secs, "
+                 "error) VALUES (1, '3001', 'occt', NULL, 120.5, 'TimeoutError')")
+    conn.commit()
+    conn.close()
+
+    slots = {s["source"]: s for s in client.get(
+        "/api/corpus/part/3001").json()["slots"]}
+    # Only the two slots anything has ever been run against: `decal` and the
+    # rest have never drawn, been tried or been measured.
+    assert set(slots) == {"occt", "ldview"}
+    assert slots["occt"]["sha256"] is None
+    assert slots["occt"]["error"] == "TimeoutError"
+    assert slots["occt"]["secs"] == 120.5
+    assert slots["ldview"]["sha256"] == "abc"
+
+
+def test_part_route_lists_its_slots_in_the_module_s_own_order(tmp_path):
+    from brick_icons import db
+    client = _corpus_client(tmp_path)
+    conn = db.connect(tmp_path / "corpus.db")
+    for source in ("white-occt", "occt", "ldview"):
+        conn.execute("INSERT INTO renders (part_id, source, config_key, "
+                     "made_at, path, sha256) VALUES ('3001', ?, 'k', "
+                     "'2026-09-05T00:00:00+00:00', ?, 'abc')",
+                     (source, f"renders/{source}/3001.svg"))
+    conn.commit()
+    conn.close()
+
+    body = client.get("/api/corpus/part/3001").json()
+    assert [s["source"] for s in body["slots"]] == ["occt", "ldview", "white-occt"]

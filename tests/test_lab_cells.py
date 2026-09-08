@@ -609,3 +609,59 @@ def test_a_wontfix_in_another_slot_asks_nothing_of_this_one(conn):
     cell = cells.cells(conn, source="silhouette-naive")["cells"][0]
     assert cell["accepted_defects"] == 0
     assert cell["elsewhere"] == []
+
+
+def _attempt(conn, pid, source, state=None, secs=None, error=None):
+    global _run_id
+    _run_id += 1
+    conn.execute("INSERT INTO runs (id, kind, started, commit_sha, args) "
+                 "VALUES (?, 'store', '2026-09-05T09:00:00+00:00', 'abc', '{}')",
+                 (_run_id,))
+    conn.execute("INSERT INTO attempts (run_id, part_id, source, state, secs, "
+                 "error) VALUES (?, ?, ?, ?, ?, ?)",
+                 (_run_id, pid, source, state, secs, error))
+
+
+def test_a_slot_nothing_has_ever_used_is_not_live(conn):
+    """The detail view lays out one tile per live slot. `decal` and
+    `translucent-naive` have never drawn, been tried or been measured, and a
+    column of empties for them is eight slots of noise on every part."""
+    _part(conn, "3001")
+    _render(conn, "3001", "sha", "2026-09-05T00:00:00+00:00", source="occt")
+    conn.commit()
+    assert cells.live_sources(conn) == ["occt"]
+
+
+def test_a_slot_that_only_ever_failed_is_live(conn):
+    """`naive` holds no render at all and has been run: a slot is live because
+    someone pointed the renderer at it, not because it succeeded."""
+    _part(conn, "3001")
+    _attempt(conn, "3001", "naive", error="TimeoutError", secs=120.0)
+    _measure(conn, "3001", "occt", error="ProcessDied")
+    conn.commit()
+    assert cells.live_sources(conn) == ["naive", "silhouette-occt"]
+
+
+def test_live_sources_are_in_the_module_s_own_order(conn):
+    _part(conn, "3001")
+    for source in ("white-occt", "occt", "ldview"):
+        _render(conn, "3001", "sha", "2026-09-05T00:00:00+00:00", source=source)
+    conn.commit()
+    assert cells.live_sources(conn) == ["occt", "ldview", "white-occt"]
+
+
+def test_an_attempt_says_how_long_a_slot_ran_before_it_gave_up(conn):
+    _part(conn, "3001")
+    _attempt(conn, "3001", "occt", error="TimeoutError", secs=120.5)
+    conn.commit()
+    assert cells.slot_attempts(conn, "3001")["occt"] == {
+        "state": None, "secs": 120.5, "error": "TimeoutError"}
+
+
+def test_the_latest_attempt_per_slot_is_the_one_that_counts(conn):
+    _part(conn, "3001")
+    _attempt(conn, "3001", "occt", error="TimeoutError", secs=120.0)
+    _attempt(conn, "3001", "occt", state="stored", secs=204.0)
+    conn.commit()
+    got = cells.slot_attempts(conn, "3001")["occt"]
+    assert (got["state"], got["error"]) == ("stored", None)

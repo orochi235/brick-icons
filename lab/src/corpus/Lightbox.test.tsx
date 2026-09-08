@@ -270,3 +270,58 @@ it('stamps a freshly filed defect with the render it was filed against', async (
   const filed = addDefect.mock.calls.at(-1)![0] as { checked: unknown };
   expect(filed.checked).toEqual({ naive: 'deadbeef0000' });
 });
+
+// --- a slot that never drew ------------------------------------------------
+
+const failedDetail = {
+  ...detail,
+  part: { ...detail.part, out_of_scope: false },
+  slots: [
+    { source: 'occt', sha256: null, made_at: null, secs: 120.5,
+      error: 'TimeoutError', open_defects: 0, review_defects: 0,
+      accepted_defects: 0, elsewhere: [] },
+    { ...detail.slots[1], secs: 12, error: null, open_defects: 0,
+      review_defects: 0, accepted_defects: 0, elsewhere: [] },
+  ],
+};
+const failedBox = (props: Record<string, unknown> = {}) => box({
+  client: { corpusPart: () => Promise.resolve(failedDetail), addDefect },
+  ...props,
+});
+
+it('gives a slot that never drew a tile saying why', async () => {
+  render(failedBox());
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  const tile = document.querySelector('.corpus-slot[data-state="timeout"]')!;
+  expect(tile.querySelector('img')).toBeNull();
+  expect(tile.textContent).toContain('TimeoutError');
+  expect(tile.textContent).toContain('120.5s');
+});
+
+it('says a slot was never run rather than leaving the tile blank', async () => {
+  const never = {
+    ...failedDetail,
+    slots: [{ ...failedDetail.slots[0], secs: null, error: null }],
+  };
+  render(box({ client: { corpusPart: () => Promise.resolve(never), addDefect } }));
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  expect(document.querySelector('.corpus-slot-empty')!.textContent)
+    .toContain('not drawn');
+});
+
+it('lets a slot with no render still be picked', async () => {
+  render(failedBox());
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  fireEvent.click(screen.getByRole('radio', { name: 'occt' }));
+  const current = document.querySelectorAll('[data-current="true"] .corpus-slot-name');
+  expect([...current].map((el) => el.textContent)).toEqual(['occt']);
+});
+
+it('has no render to open for a slot that never drew', async () => {
+  const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+  render(failedBox());
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  fireEvent.click(screen.getByRole('radio', { name: 'occt' }), { shiftKey: true });
+  expect(open).not.toHaveBeenCalled();
+  open.mockRestore();
+});

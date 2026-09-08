@@ -75,11 +75,14 @@ export interface PartDetail {
           sets: number | null; tags: string[];
           /** Absent from an API older than the field, like `slots`. */
           out_of_scope?: boolean };
-  /** Every slot that has drawn this part, in slot order, each carrying what
-   *  the wall would color its cell by. The state fields are optional for the
-   *  same reason `slots` itself is. */
+  /** Every live slot, in slot order, each carrying what the wall would color
+   *  its cell by. A slot with no `sha256` did not draw this part -- it timed
+   *  out, it failed, or nothing has run it. The state fields are optional for
+   *  the same reason `slots` itself is. */
   slots: {
-    source: string; sha256: string; made_at: string;
+    source: string; sha256: string | null; made_at: string | null;
+    /** How long the last run of this slot took, from its attempt row. */
+    secs?: number | null;
     error?: string | null;
     open_defects?: number;
     review_defects?: number;

@@ -11,7 +11,7 @@ import sqlite3
 
 from brick_icons import tags as part_tags
 from brick_icons.lab import defects as defects_toml
-from brick_icons.db import OUT_OF_SCOPE_CATEGORIES
+from brick_icons.db import OUT_OF_SCOPE_CATEGORIES, SOURCES
 
 # Matched on source, not engine. Two facets of one engine are both "naive", so
 # the newest run per engine is whichever facet was indexed last -- which handed
@@ -152,6 +152,41 @@ def colors_for(year: sqlite3.Row | None) -> int | None:
     return year["colors"]
 
 
+def live_sources(conn: sqlite3.Connection) -> list[str]:
+    """The slots this corpus has anything to say about, in `SOURCES` order.
+
+    A slot counts as live once anything has pointed the renderer at it --
+    a render, an attempt or a measurement. The detail view lays out one tile
+    per live slot, so a slot nobody has ever run stays out of the strip
+    instead of standing there empty on all 24,591 parts.
+    """
+    seen: set[str] = set()
+    for table in ("renders", "attempts", "measurements"):
+        seen |= {r["source"] for r in
+                 conn.execute(f"SELECT DISTINCT source FROM {table}")}
+    return [source for source in SOURCES if source in seen]
+
+
+_LATEST_ATTEMPT = """
+SELECT a.source, a.state, a.secs, a.error FROM attempts a
+JOIN (SELECT source, MAX(run_id) AS run_id FROM attempts
+      WHERE part_id = ? GROUP BY source) latest
+  ON a.source = latest.source AND a.run_id = latest.run_id
+WHERE a.part_id = ?
+"""
+
+
+def slot_attempts(conn: sqlite3.Connection, part_id: str) -> dict[str, dict]:
+    """What each slot's last run of this part did, keyed by source.
+
+    A part that times out leaves no render and no measurement, so this is the
+    only record it was tried at all -- and the only place its seconds are.
+    """
+    return {row["source"]: {"state": row["state"], "secs": row["secs"],
+                            "error": row["error"]}
+            for row in conn.execute(_LATEST_ATTEMPT, (part_id, part_id))}
+
+
 def coverage_of(*, sha: str | None, error: str | None, open_defects: int) -> str:
     """How far this slot got with a part, worst news first. Mirrored by
     `Coverage` in the wall's `facts.ts`, which reads this rather than deriving
@@ -268,8 +303,21 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
             "source": source}
 
 
-def other_conditions(conn: sqlite3.Connection,
-                     source: str) -> dict[str, set[str]]:
+#: The three corpus-wide reads `other_conditions` makes, so a caller asking
+#: about several slots at once pays for them once. Every slot sees the same
+#: errors, renders and defects; only the engine to exclude changes.
+Elsewhere = tuple[dict[str, dict[str, str]], dict[str, dict[str, str]], list[dict]]
+
+
+def elsewhere_context(conn: sqlite3.Connection) -> Elsewhere:
+    shas: dict[str, dict[str, str]] = {}
+    for row in conn.execute("SELECT part_id, source, sha256 FROM renders"):
+        shas.setdefault(row["source"], {})[row["part_id"]] = row["sha256"]
+    return errors_by_engine(conn), shas, live_defects(conn)
+
+
+def other_conditions(conn: sqlite3.Connection, source: str,
+                     context: Elsewhere | None = None) -> dict[str, set[str]]:
     """Per part, the conditions that hold somewhere other than `source`.
 
     Everything here is keyed by ENGINE, errors as much as defects: a fault is
@@ -280,20 +328,17 @@ def other_conditions(conn: sqlite3.Connection,
     ever got as far as drawing this part.
     """
     engine = engine_for(source)
+    errors, shas, records = context or elsewhere_context(conn)
     out: dict[str, set[str]] = {}
 
-    for other, by_part in errors_by_engine(conn).items():
+    for other, by_part in errors.items():
         if other == engine:
             continue
         for pid, error in by_part.items():
             out.setdefault(pid, set()).add(
                 "timeout" if error == "TimeoutError" else "failed")
 
-    shas: dict[str, dict[str, str]] = {}
-    for row in conn.execute("SELECT part_id, source, sha256 FROM renders"):
-        shas.setdefault(row["source"], {})[row["part_id"]] = row["sha256"]
-
-    for record in live_defects(conn):
+    for record in records:
         # `accepted` has no sibling -- a fault someone chose to live with in
         # another slot asks nothing of this one.
         if record["status"] == "wontfix":
@@ -317,9 +362,13 @@ def slot_states(conn: sqlite3.Connection, part_id: str,
     cannot drift from the wall it was opened from. `out_of_scope` is the
     part's and belongs to the caller that already has the row.
     """
-    records = live_defects(conn)
-    errors = errors_by_engine(conn)
-    others = {source: other_conditions(conn, source) for source in sources}
+    context = elsewhere_context(conn)
+    errors, _, records = context
+    # A slot that timed out files no measurement, so its own attempt is the
+    # only thing that knows -- and it is what a tile with no render shows.
+    tried = slot_attempts(conn, part_id)
+    others = {source: other_conditions(conn, source, context)
+              for source in sources}
     out: dict[str, dict] = {}
     for source in sources:
         render = conn.execute(
@@ -328,7 +377,8 @@ def slot_states(conn: sqlite3.Connection, part_id: str,
         bucket = tally_defects(records, part_id, engine_for(source), source,
                                render["sha256"] if render else None)
         out[source] = {
-            "error": errors.get(engine_for(source), {}).get(part_id),
+            "error": (errors.get(engine_for(source), {}).get(part_id)
+                      or tried.get(source, {}).get("error")),
             "open_defects": bucket["open"],
             "review_defects": bucket["review"],
             "accepted_defects": bucket["accepted"],

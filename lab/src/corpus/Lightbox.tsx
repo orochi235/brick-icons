@@ -14,15 +14,23 @@ import { STATUSES, type DefectStatus } from '@lab/defects/useDefects';
 import { STATUS_BADGES } from '@lab/defects/statusBadges';
 import '@lab/corpus/Lightbox.css';
 
-function renderSrc(partId: string, slot: { source: string; sha256: string }) {
-  return `/api/corpus/render/${slot.source}/${partId}.svg?v=${slot.sha256.slice(0, 8)}`;
+type Slot = PartDetail['slots'][number];
+
+function renderSrc(partId: string, slot: Slot) {
+  return `/api/corpus/render/${slot.source}/${partId}.svg?v=${slot.sha256?.slice(0, 8)}`;
+}
+
+/** What a slot with no render has to say for itself: the error that stopped
+ *  it and how long it ran, or that nobody has run it. */
+function whyNothing(slot: Slot): string[] {
+  if (!slot.error) return ['not drawn'];
+  return slot.secs != null ? [slot.error, `${slot.secs}s`] : [slot.error];
 }
 
 /** The state the wall would color this slot's cell. An API older than the
- *  state fields sends none, and every slot here has a render, so the honest
- *  answer for a slot that says nothing is the ground a clean one gets. */
-function slotState(slot: PartDetail['slots'][number],
-                   part: PartDetail['part']): CellState {
+ *  state fields sends none, and the honest answer for a slot that says
+ *  nothing is the ground a clean one gets. */
+function slotState(slot: Slot, part: PartDetail['part']): CellState {
   return cellState({
     out_of_scope: part.out_of_scope ?? false,
     open_defects: slot.open_defects ?? 0,
@@ -48,7 +56,8 @@ function groundVar(state: CellState): string | undefined {
  *  against a render, and the slot draws something else now. Mirrors
  *  `defects.wants_review` on the server, which is what colors the cell. */
 export function wantsReview(defect: PartDetail['defects'][number],
-                            source: string, sha: string | undefined): boolean {
+                            source: string,
+                            sha: string | null | undefined): boolean {
   if (defect.status !== 'open' || !sha) return false;
   const seen = defect.checked?.[source];
   return seen !== undefined && seen !== sha;
@@ -188,9 +197,11 @@ export function Lightbox({ partId, source, client, onClose }: {
                 {/* Capture, and stopped there: React derives a radio's onChange
                     from the same click, so a bubble-phase handler cannot keep
                     the shift-click from also picking the slot. */}
-                <label className="corpus-slot-pick" title="Shift-click to open this render in a new tab"
+                <label className="corpus-slot-pick"
+                       title={slot.sha256
+                         ? 'Shift-click to open this render in a new tab' : undefined}
                        onClickCapture={(e) => {
-                         if (!e.shiftKey) return;
+                         if (!e.shiftKey || !slot.sha256) return;
                          e.preventDefault();
                          e.stopPropagation();
                          window.open(renderSrc(detail.part.id, slot), '_blank', 'noopener');
@@ -198,8 +209,14 @@ export function Lightbox({ partId, source, client, onClose }: {
                   <input type="radio" name="corpus-slot-shown" aria-label={slot.source}
                          className="corpus-slot-radio" checked={slot.source === shown}
                          onChange={() => setShown(slot.source)} />
-                  <img className="corpus-big" alt={`${detail.part.id} drawn by ${slot.source}`}
-                       src={renderSrc(detail.part.id, slot)} />
+                  {slot.sha256 ? (
+                    <img className="corpus-big" alt={`${detail.part.id} drawn by ${slot.source}`}
+                         src={renderSrc(detail.part.id, slot)} />
+                  ) : (
+                    <span className="corpus-big corpus-slot-empty">
+                      {whyNothing(slot).map((line) => <span key={line}>{line}</span>)}
+                    </span>
+                  )}
                   <span className="corpus-slot-name">{slot.source}</span>
                 </label>
               </li>
