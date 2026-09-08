@@ -57,6 +57,9 @@ export interface WallProps {
   appearance?: Appearance;
   /** Group headers the layout asked for. Absent for a dense grid. */
   bands?: Band[];
+  /** How much sharper than `devicePixelRatio` to draw, for a pinch the page
+   *  cannot otherwise see. 1 everywhere but a pinched Chrome. */
+  pixelScale?: number;
   /** What a cell's color says. Outside `status` the thumbnail gives way to
    *  the ramp. */
   tint?: TintMode;
@@ -326,7 +329,7 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
                        highlight, highlightTag, explicitCaret, onExplicitCaretChange,
                        onPan, onPick, onOpen, onDragStart,
                        dragThresholdPx = DEFAULT_PARAMS.dragThresholdPx,
-                       appearance, bands, tint }: WallProps) {
+                       pixelScale = 1, appearance, bands, tint }: WallProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [dragging, setDragging] = useState(false);
   const decay = useDecayLoop();
@@ -405,9 +408,14 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
     const canvas = ref.current;
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return;
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = width * dpr;
-    canvas.height = height * dpr;
+    // Times the pinch, not just the device: Chrome's pinch zoom magnifies the
+    // composited layer without moving `devicePixelRatio`, so a store sized off
+    // dpr alone is blown up by the compositor and the cells go soft. Picking a
+    // sharper tile without this buys nothing -- it is downsampled straight back
+    // into the same device pixels.
+    const dpr = (window.devicePixelRatio || 1) * pixelScale;
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
     // The backing store is oversized for sharpness; without pinning the CSS
     // size back down the canvas displays at the backing-store size and
     // overflows its container on any dpr != 1.
@@ -425,7 +433,7 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
     }
   }, [cells, rects, visible, cam, sheet, manifest, palette, loose, vector, highlight, highlightTag,
       caretIndex,
-      appearance, bands, tint, width, height]);
+      appearance, bands, tint, width, height, pixelScale]);
 
   // The lens shows a magnified crop of what is already on screen -- zooming
   // in about a fixed point never brings a cell into view that the outer

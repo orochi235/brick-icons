@@ -28,6 +28,7 @@ import { useVectorThumbs } from '@lab/corpus/useVectorThumbs';
 import type { Cell } from '@lab/corpus/types';
 import { staleCount } from '@lab/corpus/sheet';
 import { visibleRange } from '@lab/corpus/visible';
+import { useVisualViewport } from '@lab/corpus/useVisualViewport';
 import { Wall } from '@lab/corpus/Wall';
 import { PartSearch } from '@lab/shared/PartSearch';
 import '@lab/corpus/corpus.css';
@@ -43,6 +44,15 @@ const NO_CELLS: Cell[] = [];
 const JUMP_MIN_CELL_HEIGHT = 0.5;
 // `blockLayout` takes no order for the groupings that have none of their own.
 const NO_ORDER: string[] = [];
+
+/** How far the canvas will follow a pinch before letting the compositor take
+ *  over. The backing store costs the square of this. */
+const MAX_PIXEL_SCALE = 3;
+
+/** Slack around the pinched slice, as a fraction of it: a pinch-pan exposes
+ *  new cells before its scroll event lands, and without the margin they arrive
+ *  as blank ground. */
+const SLICE_PAD = 0.25;
 
 /** The whole app, minus its mount -- including labkit's `<LabShell>`, so this
  *  is a standalone lab and must not be nested inside a `<Lab>` or another
@@ -88,6 +98,26 @@ export function CorpusWall({ client }: { client: LabClient }) {
     if (Number.isFinite(px) && px > 0) setBlankPx(px);
   }, [width]);
   const size = { width, height };
+  const vv = useVisualViewport();
+  // Capped: the backing store grows with the square of this, and a pinch can
+  // run well past any zoom worth drawing for. Beyond the cap the compositor
+  // magnifies, which is what it did at every scale before.
+  const pixelScale = Math.min(vv.scale, MAX_PIXEL_SCALE);
+  // The slice of the stage a pinch has left on screen, in the stage's own CSS
+  // pixels, padded so a pinch-pan has somewhere to go before the next scroll
+  // event lands. Unpinched this is the whole stage and nothing changes.
+  const slice = useMemo(() => {
+    const el = box.current;
+    if (!el || vv.scale <= 1) return { x: 0, y: 0, width, height };
+    const r = el.getBoundingClientRect();
+    const padX = vv.width * SLICE_PAD, padY = vv.height * SLICE_PAD;
+    const x0 = Math.max(0, vv.left - r.left - padX);
+    const y0 = Math.max(0, vv.top - r.top - padY);
+    const x1 = Math.min(width, vv.left + vv.width - r.left + padX);
+    const y1 = Math.min(height, vv.top + vv.height - r.top + padY);
+    return { x: x0, y: y0,
+             width: Math.max(0, x1 - x0), height: Math.max(0, y1 - y0) };
+  }, [vv, width, height]);
   const touched = useRef(false);
   const camInitialized = useRef(false);
   const camRef = useRef<View | null>(null);
@@ -288,7 +318,9 @@ export function CorpusWall({ client }: { client: LabClient }) {
   // to `cam` meant every one of those writes re-picked a level that could not
   // have changed. The viewport is here in its own right: a resize re-fits, and
   // the fit is what the level is read off.
-  const cellPx = cam ? params.cell * cam.scale.x : 0;
+  // Multiplied by the pinch: this is the size a cell is actually drawn at on
+  // the glass, which is the only thing a mip level should be read off.
+  const cellPx = cam ? params.cell * cam.scale.x * pixelScale : 0;
   useEffect(() => {
     if (!cam) return;
     if (camInitialized.current) {
@@ -303,8 +335,8 @@ export function CorpusWall({ client }: { client: LabClient }) {
       params.levelUpHysteresis, params.levelDownHysteresis]);
 
   const visible = useMemo(
-    () => (cam ? visibleRange(laid.rects, cam, size) : []),
-    [laid.rects, cam, size.width, size.height]);
+    () => (cam ? visibleRange(laid.rects, cam, slice) : []),
+    [laid.rects, cam, slice]);
   const loose = useLooseThumbs(shown, visible, level, drawnSource);
   const vector = useVectorThumbs(shown, visible, level, drawnSource, cellPx);
 
@@ -393,7 +425,8 @@ export function CorpusWall({ client }: { client: LabClient }) {
                   onPick={(c, at) => setCarded({ cell: c, at })}
                   onDragStart={() => setCarded(null)}
                   onOpen={(c) => { setCarded(null); setPicked(c.id); }}
-                  dragThresholdPx={params.dragThresholdPx} appearance={appearance} />
+                  dragThresholdPx={params.dragThresholdPx} appearance={appearance}
+                  pixelScale={pixelScale} />
           )}
           {carded && !picked && (
             <PartCard cell={carded.cell} source={drawnSource} at={carded.at}
