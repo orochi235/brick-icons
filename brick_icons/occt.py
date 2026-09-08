@@ -1464,6 +1464,15 @@ def _span_face(point, normal, ua, ub, v0, v1, proj, step_deg=BOUNDARY_STEP_DEG,
             f["group"] = ("turn", axis_key, away)
     else:
         f["grad_axis"], f["grad_samples"] = (p0, p1), samples
+        f["_span_ring"] = ring
+        if axis_key is not None:
+            # one analytic wall can reach HLR as SEVERAL faces -- 92692's
+            # knuckle barrel is a u 0..180 face beside a u 0..67.5 one that
+            # UnifySameDomain declined to merge -- and each fits its own ramp
+            # over its own arc, so the barrel came out as two pasted areas
+            # meeting along a tone step. _merge_wall_gradients gives the tiles
+            # one ramp and fill_ops unions them into one element.
+            f["group"] = ("wall", axis_key, round(v0, 3), round(v1, 3), away)
     return f
 
 
@@ -1519,6 +1528,47 @@ def _absorb_dome_walls(faces, own_occ):
             break
 
 
+def _relax_facet_cylinders(faces, proj, planar_tol=0.05):
+    """A closed faceted CYLINDER is not a dome: ramp it across the tube.
+
+    attach_group_gradients calls a group a dome when its normals spread in
+    2-D, and a full turn of cylinder facets does spread in 2-D -- they run
+    right round the axis. The ORIGIN is what separates the two: every normal
+    of a cylinder lies in the one plane perpendicular to its axis, so the
+    UNCENTERED cloud is rank 2, while a dome's is rank 3. Measured s2/s0 over
+    the specimens: 0.0000 on every faceted cylinder (92692's two 4-4cylse
+    knuckles, 49612, 6143, 2947bc01) against 0.22 on 3960's dish and 0.36-0.85
+    on the head domes. The nearest thing under the dome band is 32062's axle
+    fillet at 0.18, which wants the ramp too, so the cut sits at 0.05 and
+    takes only the exactly-planar clouds.
+
+    The ramp is fitted to the CAMERA-FACING members alone. A plane face's view
+    normal is flipped toward the camera (_plane_face), so a facet on the far
+    side of the turn carries its mirror's tone at the mirror's screen position;
+    fit across the whole turn and the centroid<->normal covariance cancels.
+    """
+    from . import shade
+    groups = defaultdict(list)
+    for f in faces:
+        if "grad_radial" in f and "_plane3" in f and f.get("group") is not None:
+            groups[f["group"]].append(f)
+    for members in groups.values():
+        if len(members) < 3:
+            continue
+        N = np.asarray([f["normal"] for f in members], float)
+        s = np.linalg.svd(N, full_matrices=False, compute_uv=False)
+        if s[0] <= 1e-9 or s[2] / s[0] > planar_tol:
+            continue
+        seen = [f for f in members if float(f["_plane3"][1] @ proj.fwd) < 0]
+        if len(seen) < 2:
+            continue
+        shade.attach_axis_gradient(
+            members, range(len(members)),
+            [f["poly"].mean(axis=0) for f in seen], [f["normal"] for f in seen])
+        for f in members:
+            f.pop("grad_radial", None)
+
+
 def _inside_ramp(poly, spec):
     """Does the dome's radial gradient reach every corner of this wall?
 
@@ -1535,6 +1585,48 @@ def _inside_ramp(poly, spec):
     t = np.hypot((p[:, 0] - spec["cx"]) / r,
                  (p[:, 1] - spec["cy"]) / (r * (spec["ratio"] or 1.0)))
     return bool(t.max() <= 1.0)
+
+
+def _merge_wall_gradients(faces):
+    """One ramp across the spans that tile ONE analytic wall on one side of
+    the limb.
+
+    Same job as _merge_turn_gradients and the same reason, for the surfaces
+    that do NOT close: the ramp is fitted over the pooled ring rather than
+    each tile's own arc, so a tile's stops no longer run 0..1 across a
+    fraction of the surface. The axis is the ring cloud's principal
+    direction, which on a wall runs ACROSS the rulings -- the direction
+    brightness actually varies in, and the same one _span_face picks per
+    tile.
+
+    A group whose member took a dome's radial ramp in _absorb_dome_walls is
+    left alone: re-linearizing one member would split the surface again,
+    which is the defect this exists to close.
+    """
+    groups = defaultdict(list)
+    for f in faces:
+        if "_span_ring" in f and f.get("group") is not None:
+            groups[f["group"]].append(f)
+    for members in groups.values():
+        if len(members) < 2 or any("grad_radial" in f for f in members):
+            continue
+        ring = [s for f in members for s in f["_span_ring"]]
+        pts = np.array([(x, y) for x, y, _ in ring], float)
+        c = pts.mean(axis=0)
+        _, _, vt = np.linalg.svd(pts - c, full_matrices=False)
+        t = (pts - c) @ vt[0]
+        p0 = tuple((c + t.min() * vt[0]).tolist())
+        p1 = tuple((c + t.max() * vt[0]).tolist())
+        axis = np.array([p1[0] - p0[0], p1[1] - p0[1]])
+        L2 = float(axis @ axis) or 1.0
+        samples = sorted(
+            ((float(np.clip(((x - p0[0]) * axis[0] + (y - p0[1]) * axis[1])
+                            / L2, 0.0, 1.0)), nv) for x, y, nv in ring),
+            key=lambda s: s[0])
+        for f in members:
+            f["grad_axis"], f["grad_samples"] = (p0, p1), samples
+    for f in faces:
+        f.pop("_span_ring", None)
 
 
 def _merge_turn_gradients(faces):
@@ -1900,10 +1992,12 @@ def ordered_faces(shape, proj, out=None, ellipses_out=None):
     if out is not None and plane_by_idx:
         _group_planes(shape, out, plane_by_idx)
         shade.attach_group_gradients(faces)
+        _relax_facet_cylinders(faces, proj)
         _absorb_dome_walls(faces, own_occ)
     for f in faces:
         f.pop("_plane3", None)
     _merge_turn_gradients(faces)
+    _merge_wall_gradients(faces)
     faces = _with_decoration(faces, out, proj, own_occ, ellipses_out)
     zs = np.concatenate([f["zs"] for f in faces])
     zrange = float(zs.max() - zs.min()) or 1.0
