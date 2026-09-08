@@ -1325,10 +1325,14 @@ def test_a_fill_boundary_carries_no_sampled_boundary(part, tmp_path, ldraw_dir):
 def test_a_part_declaring_no_edge_draws_instead_of_raising(ldraw_dir):
     """1,407 stickers and a few ordinary parts carry faces and not one type-2
     or type-5 line -- `box5-12.dat`, which 185 of them are built on, is named
-    "Box with 5 Faces without Any Edges". `5241` is the unprinted one: 14
-    triangles, no lines, no condlines. The engine used to report that honestly
-    and draw nothing, which is a blank icon rather than an answer."""
-    out = occt.flatten_part("5241", ldraw_dir)
+    "Box with 5 Faces without Any Edges". The engine used to report that
+    honestly and draw nothing, which is a blank icon rather than an answer.
+
+    A sticker rather than `5241`, which held this until `8e436a5`: 5241's
+    shell was being dropped for an unresolvable subfile, so the part only
+    declared no edge because the resolver could not reach the edges it has.
+    A specimen whose emptiness depends on a lookup failing is not one."""
+    out = occt.flatten_part("003238j", ldraw_dir)
     assert not out.get("2") and not out.get("5")
     right, up = hlr.view_basis(30.0, 65.0)[:2]
     assert occt.visible_segments(out, right, up, 900).segs
