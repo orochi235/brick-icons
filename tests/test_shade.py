@@ -1736,3 +1736,49 @@ def test_axis_stops_keep_a_monotone_ramp_monotone():
     stops = shade._axis_binned_stops(samples, style)
     greys = [int(c[1:3], 16) for _, c in stops]
     assert len(set(greys)) >= 4, "a real ramp must survive the bin"
+
+
+def test_a_radial_dome_lends_its_ramp_to_the_wall_inside_it():
+    """3626cp7d's head is authored as a facet dome AND substituted as a
+    cylinder barrel. The dome is shaded radially; the barrel computed its own
+    linear ramp, whose whole tone range sat below the dome's darkest stop, and
+    painted over it as a dark panel. The wall takes the dome's gradient.
+
+    Per FACE, not per group: a dome's members mostly leave the wall's surface,
+    so the group-wide intersection the flat case uses can never see it."""
+    proj = _shade_stub_proj()
+    cyl, tris = _cyl_and_surface_tris()
+    an_faces = shade.faces_from_analytic([cyl], proj)
+    tri_faces = shade.faces_from_tris(tris, proj)
+    spec = {"cx": 0.0, "cy": 0.0, "r": 50.0, "ratio": 1.0}
+    for tf in tri_faces:
+        tf["grad_radial"] = spec
+        tf["grad_samples"] = [((0.0, 0.0), tf["normal"])]
+        tf["group"] = ("dome", 1)
+
+    shade.absorb_wall_facets(tri_faces, an_faces)
+
+    walls = [f for f in an_faces if f.get("prim") is not None]
+    took = [f for f in walls if f.get("grad_radial") is spec]
+    assert took, "the wall under a radial dome kept its own linear ramp"
+    for wf in took:
+        assert wf["group"] == ("dome", 1)
+        assert "grad_axis" not in wf
+
+
+def test_a_wall_the_dome_does_not_touch_keeps_its_own_ramp():
+    """The head's stud and neck cylinders carry no dome facet on their
+    surface, and must not be pulled into the head's ramp."""
+    proj = _shade_stub_proj()
+    cyl, tris = _cyl_and_surface_tris(radius=10.0, r_tri=14.0)   # tris off it
+    an_faces = shade.faces_from_analytic([cyl], proj)
+    tri_faces = shade.faces_from_tris(tris, proj)
+    spec = {"cx": 0.0, "cy": 0.0, "r": 50.0, "ratio": 1.0}
+    for tf in tri_faces:
+        tf["grad_radial"] = spec
+        tf["grad_samples"] = [((0.0, 0.0), tf["normal"])]
+        tf["group"] = ("dome", 1)
+
+    shade.absorb_wall_facets(tri_faces, an_faces)
+
+    assert all("grad_radial" not in f for f in an_faces)

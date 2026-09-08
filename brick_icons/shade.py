@@ -2172,6 +2172,27 @@ def absorb_wall_facets(tri_faces, an_faces, tol=2e-3, abut_px=3.0):
             tf["grad_axis"] = best["grad_axis"]
             tf["grad_samples"] = best["grad_samples"]
 
+    # The reverse case, and it runs per FACE rather than per group: a part
+    # authored as a facet dome AND substituted as a barrel (3626cp7d's head)
+    # shades the dome radially while the barrel computes its own linear ramp,
+    # whose tone range sat entirely below the dome's darkest stop and painted
+    # over it as a dark panel. A dome's members mostly leave the barrel's
+    # surface, so the group-wide intersection above can never see this.
+    radial = [tf for tf in tri_faces
+              if "grad_radial" in tf and tf.get("_verts") is not None]
+    for wf in walls:
+        for tf in radial:
+            v = tf["_verts"]
+            n = np.cross(v[1] - v[0], v[2] - v[0])
+            ln = np.linalg.norm(n)
+            if ln < 1e-9 or not on_wall(wf["prim"], v, n / ln):
+                continue
+            wf["grad_radial"] = tf["grad_radial"]
+            wf["grad_samples"] = tf["grad_samples"]
+            wf["group"] = tf["group"]
+            wf.pop("grad_axis", None)
+            break
+
 
 def _edge_key(a, b):
     ka, kb = tuple(np.round(a, 3)), tuple(np.round(b, 3))
