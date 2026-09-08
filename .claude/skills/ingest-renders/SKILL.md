@@ -157,10 +157,11 @@ snapshot under `out/snapshots` **holds those rows itself** — checked by
 counting them there, because a snapshot taken after the logs can still predate
 the ingest.
 
-**Deleting a log makes the database the only copy**, which is why the snapshot
-is not optional: `db.rebuild` drops `corpus.db` and re-derives it from files,
-and the file it derived `attempts` from is the one being deleted. The node
-keeps its own tree, so pruning here does not stop a relaunch resuming there.
+**Deleting a log makes the database the only copy of those rows.** A rebuild
+carries them across from the database it replaces, so a pruned tree survives
+one — but only while some database still has them, which is what the snapshot
+is for. The node keeps its own tree, so pruning here does not stop a relaunch
+resuming there.
 
 ### 6. Verify against the files, not against the run
 

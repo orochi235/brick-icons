@@ -694,7 +694,12 @@ def store_run(conn: sqlite3.Connection, tree: Path | str,
     `create` false this only asks, which is what a caller deciding whether the
     tree has been taken up wants.
     """
-    where = _relative(Path(tree), Path(root))
+    return _run_for_tree(conn, _relative(Path(tree), Path(root)), commit_sha,
+                         create)
+
+
+def _run_for_tree(conn: sqlite3.Connection, where: str, commit_sha: str,
+                  create: bool) -> int | None:
     row = conn.execute(
         "SELECT id FROM runs WHERE kind = 'store' "
         "AND json_extract(args, '$.dir') = ? ORDER BY id LIMIT 1",
@@ -702,6 +707,35 @@ def store_run(conn: sqlite3.Connection, tree: Path | str,
     if row:
         return row["id"]
     return start_run(conn, "store", {"dir": where}, commit_sha) if create else None
+
+
+def _stored_attempts(path: Path) -> list[tuple[str, list[tuple]]]:
+    """Every attempt in the database about to be replaced, by tree.
+
+    A pruned tree's logs are gone, so a rebuild cannot re-derive its rows from
+    files -- and dropping them would lose the only record that those parts were
+    ever tried. Carried across instead, then overwritten by whatever logs are
+    still on disk.
+    """
+    if not path.is_file():
+        return []
+    conn = connect(path)
+    try:
+        trees = [r["dir"] for r in conn.execute(
+            "SELECT DISTINCT json_extract(args, '$.dir') AS dir FROM runs "
+            "WHERE kind = 'store'") if r["dir"]]
+        out = []
+        for where in trees:
+            rows = [tuple(r) for r in conn.execute(
+                "SELECT a.part_id, a.source, a.state, a.secs, a.error, a.detail "
+                "FROM attempts a JOIN runs r ON r.id = a.run_id "
+                "WHERE r.kind = 'store' AND json_extract(r.args, '$.dir') = ?",
+                (where,))]
+            if rows:
+                out.append((where, rows))
+        return out
+    finally:
+        conn.close()
 
 
 def ingest_store(conn: sqlite3.Connection, root: Path | str = ".",
@@ -737,6 +771,7 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
             commit_sha: str = "unknown",
             progress=lambda msg: None) -> dict[str, int]:
     path = Path(path)
+    carried = _stored_attempts(path)
     path.unlink(missing_ok=True)
     conn = connect(path)
     counts = {"parts": seed_parts(conn, ldraw_dir), "renders": 0,
@@ -814,8 +849,22 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
                    note=f"rebuilt from {len(shards)} shards in {where}")
 
     # The store's own logs, which no census tree carries: a part that timed
-    # out here has no render to index and no measurement to import.
-    counts["attempts"] = ingest_store(conn, root, commit_sha, progress)
+    # out here has no render to index and no measurement to import. Rows whose
+    # logs have been pruned come across from the database being replaced,
+    # first, so a log still on disk wins.
+    for where, rows in carried:
+        run_id = _run_for_tree(conn, where, commit_sha, create=True)
+        conn.executemany(
+            "INSERT OR REPLACE INTO attempts (run_id, part_id, source, state, "
+            "secs, error, detail) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [(run_id, *r) for r in rows])
+        progress(f"{where}: {len(rows)} attempts carried across")
+    conn.commit()
+    ingest_store(conn, root, commit_sha, progress)
+    # Counted off the table: a row that was carried across AND is still in a
+    # log is one row, not two.
+    counts["attempts"] = conn.execute(
+        "SELECT count(*) FROM attempts").fetchone()[0]
 
     counts["defects"] = import_defects(conn, defects_path)
     counts["statuses"] = import_statuses(conn, status_path)

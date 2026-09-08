@@ -762,6 +762,28 @@ def test_asking_for_a_store_run_does_not_make_one(tmp_path):
     assert db.store_run(conn, tree, tmp_path) is not None
 
 
+def test_a_rebuild_keeps_attempts_whose_logs_were_pruned(tmp_path):
+    # Once a finished tree's logs are deleted, the database is the only record
+    # that those parts were tried -- and a rebuild drops the database.
+    out = tmp_path / "corpus.db"
+    lib = _library(tmp_path)
+    tree = tmp_path / "out" / "store" / "occt-studio"
+    _store_log(tree, "occt-3001.jsonl.occt",
+               [{"source": "occt", "part": "3001", "error": "TimeoutError",
+                 "secs": 120.0}])
+    db.rebuild(out, lib, root=tmp_path, census_dirs=[])
+
+    for log in db.store_logs(tree):
+        log.unlink()
+    counts = db.rebuild(out, lib, root=tmp_path, census_dirs=[])
+
+    assert counts["attempts"] == 1
+    conn = db.connect(out)
+    row = conn.execute("SELECT * FROM attempts").fetchone()
+    assert (row["part_id"], row["error"], row["secs"]) == \
+        ("3001", "TimeoutError", 120.0)
+
+
 def test_a_census_directory_that_is_not_there_is_skipped(tmp_path):
     # The naive node's tree does not exist on a machine that never ran it.
     lib = _library(tmp_path)
