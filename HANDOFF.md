@@ -1,34 +1,13 @@
 # Handoff — `main`: the corpus lab, and the OCCT engine
 
-## occt still draws the head band that naive no longer does
+## The head band is closed on both engines
 
-**Naive is fixed** (`2f54f58`): a part authored as a facet dome AND substituted
-as a barrel gave the dome a radial ramp and the barrel its own linear one, whose
-stops sat entirely below the dome's darkest. `absorb_wall_facets` now runs the
-same on-surface test in reverse, per FACE rather than per group.
-
-**occt is characterized, not fixed, and the naive fix does not transfer** --
-occt has no substituted primitives for that test to match. Do not start from
-`_merge_turn_gradients`: it never fires on this part at all. The measurements
-and the one design question that blocks a fix are on the
-`3626cp7d-occt-barrel-dark-band` defect entry; read that before touching code.
-
-The short of it: `_span_edges` cuts every curved face at the silhouette limb
-before shading decides anything, and each piece then fits its own ramp. The
-head barrel is a 225-degree face cut into 157.5 and 67.5, and the two pieces
-disagree at the limb. **The open question is what ramp two limb-split pieces of
-one partial cylinder should share** -- they are opposite sides of the
-silhouette, so neither a shared linear axis nor a pooled `_turn_gradient` is
-obviously right. I tried the pooled one; it throws in `_radial_focal_stops`,
-and it would have been wrong anyway for a surface that does not close.
-
-**The golden manifest holds no part of this shape**, so neither the naive fix
-nor a regression in it moves the gate. Its two unit tests in `test_shade.py`
-are the only cover; a manifest part with a domed, substituted wall would be
-worth adding.
-
-The way to see any of this: render to SVG and recolor each `fill="url(#gN)"` a
-distinct flat color. That separated the dome from the barrel in one look.
+`3626cp7d`'s dark panel is fixed on occt as well as naive (`_absorb_dome_walls`,
+`22453b4`). The `3626cp7d-occt-barrel-dark-band` entry in
+`tests/goldens/defects.toml` carries the mechanism and corrects two things this
+file used to say: the limb-split pieces never disagreed at the limb, and a
+side-on cylinder never full-turns by construction -- no occt cylinder is missing
+a dome ramp.
 
 ## Two decal fixes landed and are pushed
 

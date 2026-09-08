@@ -5,6 +5,10 @@
 # `points` are absent on a plain rectangle, which is every defect filed before
 # 2026-09. `seen` is retained for records that carry it; the lab now asks
 # labkit whether a mark is stale.
+#
+# `classes` is the symptom family, from defects.CLASSES: what the drawing
+# does wrong, never what causes it. A row nobody can class from its own
+# title has none, and there is no `misc`.
 
 
 [[defect]]
@@ -46,6 +50,7 @@ part = "4524"
 engines = ["naive"]
 status = "open"
 title = "a circle whose visible part is several arcs is drawn whole"
+classes = ["arc-split"]
 filed = "2026-09-04"
 notes = "The neck ring keeps a complete ellipse where the near rim should cut it. In the SVG the ring comes out as 4-chunk closed arc runs (paths 11 and 13 of 21) alongside genuine 1- and 2-chunk partial arcs elsewhere in the same drawing, so partial arcs work and these specifically did not. Suspected rule: when occlusion breaks one circle into more than one visible span, the whole circle survives instead of the spans. 27448 shows the same thing."
 
@@ -55,6 +60,7 @@ part = "27448"
 engines = ["naive"]
 status = "open"
 title = "same split-arc ellipse as 4524"
+classes = ["arc-split"]
 filed = "2026-09-04"
 notes = "Second instance of 4524-ring-whole-circle; two parts make it a class rather than a one-part quirk."
 
@@ -64,6 +70,7 @@ part = "6107"
 engines = ["naive"]
 status = "open"
 title = "underside pockets punch through the solid front wall"
+classes = ["hidden-leak"]
 filed = "2026-09-04"
 notes = "Four rectangular notches are cut into the silhouette along the bottom front edge. They are interior underside geometry escaping through a face that should occlude them -- a hidden-line miss, not a fill problem."
 
@@ -73,6 +80,7 @@ part = "3832"
 engines = ["naive"]
 status = "open"
 title = "constant-width strokes drown small features"
+classes = ["stroke-scale"]
 filed = "2026-09-04"
 notes = "Not a stud bug and not a count bug -- a scale bug. Stroke width is a constant 2.0 output px while fit-to-canvas shrinks the geometry, so the longer the part the less of each feature survives its own outline. Stud rim radius against that stroke, all at the same 256x170 viewBox: 3024 22.5x (clean), 3710 10.3x (clean), 3460 5.8x (clean), 3832 4.3x (bad), 65068 1.9x (bad). Monotone, and the break sits between 5.8 and 4.3. At 65068 a 2px stroke on both sides of a 3.7-unit radius leaves almost no wall, which is why the studs read as solid black bands with scalloped inner edges. Studs are simply the smallest recurring feature, so they drown first -- the ragged black edges reported on other parts are likely the same cause. 3024's single large stud is drawn correctly, base rim as a front arc only, which rules out the 4524 whole-circle defect as the cause here."
 
@@ -82,6 +90,7 @@ part = "7037"
 engines = ["naive"]
 status = "open"
 title = "gradients spend half their stops repeating the previous color"
+classes = ["banding"]
 filed = "2026-09-04"
 notes = "Measured on the stored SVG: 102 stops across 4 gradients, 50 of them the same color as the stop before. g1 is the worst -- 59 stops for 14 distinct greys, 43 exact repeats. Consecutive equal stops are flat plateaus, so this is the banding rather than a symptom beside it. Merging equal-color runs is the obvious fix and costs no fidelity."
 
@@ -100,6 +109,7 @@ part = "30152a"
 engines = ["naive"]
 status = "open"
 title = "same split-arc ellipse as 4524"
+classes = ["arc-split"]
 filed = "2026-09-04"
 notes = "Third instance after 4524 and 27448. Also carries a couple of stray dots against the annulus, which may or may not be the same cause."
 
@@ -109,6 +119,7 @@ part = "28192dy0"
 engines = ["naive"]
 status = "open"
 title = "much of the decal is torn off"
+classes = ["decal"]
 filed = "2026-09-04"
 notes = "A printed part, so it sits behind the decal work rather than the engine work; filed so the decal pass has a case waiting."
 
@@ -118,6 +129,7 @@ part = "30152a"
 engines = ["naive"]
 status = "open"
 title = "stray dots against the annulus"
+classes = ["stray-ink"]
 filed = "2026-09-04"
 notes = "Filed separately from the split-arc defect on the same part: a shared part is not evidence of a shared cause, and merging them would hide it if one fix lands and the other does not."
 
@@ -127,6 +139,7 @@ part = "44300"
 engines = ["naive"]
 status = "open"
 title = "gradients over curved surfaces band, and one oscillates between two greys"
+classes = ["banding"]
 filed = "2026-09-04"
 notes = "Class defect; 44300 near the hole is the clearest case and 7037 is the other measured one. 44300's g6 spends 67 stops on exactly two colors, #9c9c9c and #c0c0c0, alternating -- a stripe pattern, not a ramp. Across the parts measured so far: 52 gradients, 587 stops, 192 of them repeating the previous color (33%), and every single gradient is LINEAR -- zero radial. The binned-stop path is radial-only, so it never runs on any of these. That is the lead: either bin the linear path too, or emit these as radial where the surface is one."
 
@@ -136,6 +149,7 @@ part = "65068"
 engines = ["naive"]
 status = "open"
 title = "studs drowned by their own strokes"
+classes = ["stroke-scale"]
 filed = "2026-09-04"
 notes = "Worst measured case of constant-width strokes drowning small features; see 3832-doubled-stud-ellipses for the measurement."
 
@@ -145,6 +159,7 @@ part = "u7040"
 engines = ["naive"]
 status = "open"
 title = "stray stroke tips across the darkest face"
+classes = ["stray-ink", "stroke-scale"]
 filed = "2026-09-04"
 notes = "May be the same constant-width stroke class; not measured yet."
 
@@ -152,9 +167,11 @@ notes = "May be the same constant-width stroke class; not measured yet."
 id = "35480-extra-elements-in-shaded-view"
 part = "35480"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "extra elements in shaded view"
+classes = ["hidden-leak"]
 filed = "2026-09-06"
+notes = "Fixed by f832da6. The two fangs under the studs were the bore drawn where it is buried inside the plate. UnifySameDomain merges a stud's stud2a with the 4-4cyli continuing below the plate top into one cylindrical face, which then straddles that plane -- in front of the plate top above it, behind it below -- and order_faces settles a pair with a single bit, so the buried half won. _pierce_seams keeps the seam so each side is one face. Buried-bore ink on the plate top is 0.00 px^2 against 605.17 for the lobe and ~42 for the limb fangs; debug/35480-pierce-seam/verify.py reprints that against the tree as it stands. Earlier readings of this row blamed absorb picking the wrong claimant -- absorb never ran on the part."
 
 [[defect]]
 id = "24434-extra-diagonal-under-closer-arch"
@@ -162,7 +179,247 @@ part = "24434"
 engines = ["naive"]
 status = "open"
 title = "extra diagonal under closer arch"
+classes = ["hidden-leak"]
 filed = "2026-09-06"
+
+[[defect]]
+id = "3484-occt-handle-missing-arcs-extra"
+part = "3484"
+engines = ["occt"]
+status = "open"
+title = "occt handle missing arcs; extra garbage below R hook hand on both engines"
+classes = ["arc-loss", "stray-ink"]
+filed = "2026-09-06"
+
+[[defect]]
+id = "3820-c-grip-fills-solid"
+part = "3820"
+engines = ["naive", "occt"]
+status = "fixed"
+title = "an open C-shaped grip fills solid instead of showing its cavity"
+classes = ["fill-solid"]
+filed = "2026-09-06"
+notes = "Fixed on occt by b0c5d85. The open ring was never the discriminator, and this entry named the wrong parts: 2531 (Hand Hook) and u9543 (Hand Pincer) have no rejected frames and always drew their C correctly. What failed was occt.frame() rejecting a ring, disc or edge whose matrix axis column is not square to the other two -- every vertex of those primitives sits at local y=0, so that column is not their geometry and nothing reads it. 3820 caps its grip with two 2-4ring2 whose axis column is 14 degrees off the ring's own plane, so both rims fell back to tessellation and the grip filled solid. 36 (tyre) and u151 (rubber belt) drew correctly because their transforms are axis-aligned, not because they are closed. Verify with an in-process A/B: occt.PLANAR_KINDS = () restores the old behavior, and 98642 (a torso carrying two of these hands) goes from two floating slivers to a drawn ring. Mike's 3484 entry may still name the same family from the other side."
+
+[[defect]]
+id = "10126-unfilled-wedge"
+part = "10126"
+engines = ["naive"]
+status = "open"
+title = "white unfilled wedge where the thumb meets the palm"
+classes = ["fill-hole"]
+filed = "2026-09-06"
+notes = "The opposite failure to 3820-c-grip-fills-solid on a part of the same shape class: a wedge of canvas is left unpainted where two surfaces meet, rather than a cavity being overfilled. Worth checking whether one fix moves both."
+
+[[defect]]
+id = "59443-a-strip-along-the-bottom"
+part = "59443"
+engines = ["occt"]
+status = "open"
+title = "a strip along the bottom that's totally occluded is instead rendering as a hole"
+classes = ["fill-hole"]
+filed = "2026-09-07"
+
+[[defect]]
+id = "35485-ring-is-broken"
+part = "35485"
+engines = ["occt"]
+status = "open"
+title = "ring is broken"
+classes = ["arc-loss"]
+filed = "2026-09-07"
+
+[[defect]]
+id = "49492-occt-deletes-several-extruded-segments"
+part = "49492"
+engines = ["occt"]
+status = "open"
+title = "occt deletes several extruded segments"
+classes = ["over-cull"]
+filed = "2026-09-07"
+
+[[defect]]
+id = "4913-hole-in-base-shows-through"
+part = "4913"
+engines = ["occt"]
+status = "open"
+title = "hole in base shows through opaque tube"
+classes = ["hidden-leak"]
+filed = "2026-09-07"
+
+[[defect]]
+id = "14653-f1-left-hole-should-be-invisible"
+part = "14653-f1"
+engines = ["occt"]
+status = "open"
+title = "left hole should be invisible"
+classes = ["hidden-leak"]
+filed = "2026-09-07"
+
+[[defect]]
+id = "11090-curved-lower-face-in-occt"
+part = "11090"
+engines = ["occt"]
+status = "open"
+title = "curved lower face in occt is culled"
+classes = ["over-cull"]
+filed = "2026-09-07"
+
+[[defect]]
+id = "11090-hand-at-top-is-missing"
+part = "11090"
+engines = ["occt"]
+status = "open"
+title = "hand at top is missing a curve too"
+classes = ["arc-loss"]
+filed = "2026-09-07"
+
+[[defect]]
+id = "2310-crap-on-darkest-face-and"
+part = "2310"
+engines = ["occt"]
+status = "open"
+title = "crap on darkest face and inside hollow stud"
+classes = ["stray-ink"]
+filed = "2026-09-07"
+
+[[defect]]
+id = "38317-left-stud-shading-is-very"
+part = "38317"
+engines = ["occt"]
+status = "open"
+title = "left stud shading is very weird"
+classes = ["shading"]
+filed = "2026-09-07"
+
+[[defect]]
+id = "39789-occt-has-issues-with-top"
+part = "39789"
+engines = ["occt"]
+status = "open"
+title = "occt has issues with top main face"
+filed = "2026-09-07"
+
+[[defect]]
+id = "53119-occt-has-a-bunch-of"
+part = "53119"
+engines = ["occt"]
+status = "open"
+title = "occt has a bunch of stray lines and shaded version has bad banding"
+classes = ["stray-ink", "banding"]
+filed = "2026-09-07"
+
+[[defect]]
+id = "96910-weird-dot-near-bottom-inset"
+part = "96910"
+engines = ["occt"]
+status = "open"
+title = "weird dot near bottom inset in shaded version"
+classes = ["stray-ink"]
+filed = "2026-09-07"
+
+[[defect]]
+id = "96904-top-annulus-missing-other-arc"
+part = "96904"
+engines = ["occt"]
+status = "open"
+title = "top annulus missing, other arc-based issues"
+classes = ["arc-loss"]
+filed = "2026-09-07"
+
+[[defect]]
+id = "92692-joint-where-front-tube-meets"
+part = "92692"
+engines = ["occt"]
+status = "open"
+title = "joint where front tube meets rings"
+classes = ["seam"]
+filed = "2026-09-07"
+
+[[defect]]
+id = "79306-f1-far-end-should-be-hidden"
+part = "79306-f1"
+engines = ["occt"]
+status = "open"
+title = "far end should be hidden"
+classes = ["hidden-leak"]
+filed = "2026-09-07"
+
+[[defect]]
+id = "6047-gradient-shading-is-a-really"
+part = "6047"
+engines = ["occt"]
+status = "open"
+title = "gradient shading is a really weird, harsh, banded blob on the largest body"
+classes = ["banding"]
+filed = "2026-09-07"
+
+[[defect]]
+id = "4616559cc01-very-messy-decal"
+part = "4616559cc01"
+engines = ["occt"]
+status = "open"
+title = "very messy decal"
+classes = ["decal"]
+filed = "2026-09-07"
+
+[[defect]]
+id = "4629677c-looks-like-another-painter-s"
+part = "4629677c"
+engines = ["occt"]
+status = "open"
+title = "looks like another painter's algo problem on a sticker projection with variable z"
+classes = ["hidden-leak", "decal"]
+filed = "2026-09-07"
+
+[[defect]]
+id = "28660-lots-of-random-stitches-across"
+part = "28660"
+engines = ["occt"]
+status = "open"
+title = "lots of random stitches across curved walls. seems like a good source of hints"
+classes = ["stray-ink"]
+filed = "2026-09-07"
+
+[[defect]]
+id = "35480-bore-reads-flat"
+part = "35480"
+engines = ["occt"]
+status = "open"
+title = "looking down a stud the tube has no depth, where LDView shows a lit far wall"
+classes = ["shading"]
+filed = "2026-09-07"
+notes = "Not a missing fill. The bore is drawn as two correctly-split fills that shade consistently across the seam f832da6 keeps. What flattens it is the max(0.0, n . L) clamp in shade._axis_binned_stops (also shade.ramp, and the b array above it). Looking down a bore you see the half of the tube whose normals sweep a full 180 degrees, so the terminator lands mid-span: face 29's eight raw n.L bins run -0.44 -0.19 +0.03 +0.24 - +0.41 +0.52 +0.53 and the first two floor to the same value. The SVG shows it -- g9's stops at 0%, 6.2% and 18.8% are all #565656, and a quarter of the face's area sits pinned at that floor. An exterior wall does not show it because its visible half is mostly lit and the terminator sits near a limb. LDView gives the shadowed side ambient falloff instead of a floor. THE FIX IS A LIGHTING-MODEL CHANGE AND MOVES EVERY RENDER IN THE CORPUS, so it is Mike's call, like the constant stroke width. Before scoping it, check a Technic pin hole: any deep recess seen down its own axis should show the same thing. Measured by brick-icons-e4."
+
+[[defect]]
+id = "35480-wall-fill-hairline"
+part = "35480"
+engines = ["occt"]
+status = "open"
+title = "the plate's outer wall shows a hairline where two fill fragments meet"
+classes = ["seam"]
+filed = "2026-09-07"
+notes = "A one-pixel tone step down the plate's front wall where its fill splits, visible at 8x. It is not new -- f832da6 only moved it, the transition column going from x=204 at value 146 to x=205 at 137 in a 410px frame -- but that is the point: an unrelated change to face topology renumbers what follows and the boundary re-rounds, so the seam drifts under changes that should not touch it. Worth a row because it is the visible half of the fill-fragment seam class and it makes byte-level A/Bs of unrelated fixes noisier than they should be."
+
+[[defect]]
+id = "3626bpsk-tab-under-neck-stud"
+part = "3626bpsk"
+engines = ["occt"]
+status = "open"
+title = "a dark tab hangs below the neck stud that LDView does not draw"
+classes = ["hidden-leak"]
+filed = "2026-09-07"
+notes = "Caused by f832da6. _pierce_seams keeps 3 seams on this head and the split puts new ink under the stud base -- the same defect class the fix removes on 35480, appearing somewhere it was not. 127 px in 1 component, read against LDView at a matched crop. Two narrowings are already disproven: requiring the seam's two faces to straddle the plane changes nothing (all 3 already do, as do 67811's 17 and 35480's 2), and requiring the seam to lie inside a real planar FACE rather than its infinite plane kills 35480's own seams, because the plate top is many small triangles and none of them contains the circle. Reproduce by disarming in process: occt._pierce_seams = lambda s: [] and render both ways. See 67811-notch-through-hub-wall."
+
+[[defect]]
+id = "67811-notch-through-hub-wall"
+part = "67811"
+engines = ["occt"]
+status = "open"
+title = "a square notch is cut through the steering wheel's hub wall"
+classes = ["hidden-leak"]
+filed = "2026-09-07"
+notes = "Caused by f832da6, and the second of the two regressions that change found. 17 seams kept here against 35480's 2. LDView shows small tabs along that edge rather than a square hole, so this is at best a real feature drawn wrong and at worst a hole in the silhouette. 470 px in 2 components. Same reproduction and same disproven narrowings as 3626bpsk-tab-under-neck-stud."
 
 [[defect]]
 id = "3941p01-decal-under-its-own-wall"
@@ -181,3 +438,129 @@ status = "open"
 title = "centre stud has no top ellipse and the brace between the studs is unfilled"
 filed = "2026-09-07"
 notes = "Two symptoms on the top face, against naive at the same pose. The front-centre stud is drawn as an open cup: its top ellipse is absent where the other three studs each carry one. The four-armed brace between the studs comes out as an outline in top-face tone with a stray thin arc floating inside it; naive fills the same shape dark. Total top-face-tone area is not the tell -- occt paints 348,827 px of it against naive's 323,132, so this is features not being built, not fill being lost. Spotted on a wall sheet stamped 4b290bc and blamed on the full-turn merge; it is not that. At 8e436a5, the commit before that merge, the render differs by 36 px in 9 components of 1-4 px each, which is antialias. flat3 disables gradients in fill_ops, so a shading change cannot move this part."
+
+[[defect]]
+id = "49612-extra-vertical-line-extending-down"
+part = "49612"
+engines = ["occt"]
+status = "open"
+title = "extra vertical line extending down from stud"
+filed = "2026-09-08"
+
+[[defect]]
+id = "6296256ec01-utter-disaster-in-occt"
+part = "6296256ec01"
+engines = ["occt"]
+status = "open"
+title = "utter disaster in occt"
+filed = "2026-09-08"
+
+[[defect]]
+id = "76382psj-missing-outlines-reference-is-wrong"
+part = "76382psj"
+engines = ["occt"]
+status = "open"
+title = "missing outlines. reference is wrong too"
+filed = "2026-09-08"
+
+[[defect]]
+id = "78666-missing-contour-edge-on-front"
+part = "78666"
+engines = ["occt"]
+status = "open"
+title = "missing contour edge on front curve"
+filed = "2026-09-08"
+
+[[defect]]
+id = "3626cp7d-glasses-lose-their-color"
+part = "3626cp7d"
+engines = ["naive", "occt"]
+status = "fixed"
+title = "a minifig's dark red glasses draw as gray patches"
+classes = ["decal"]
+filed = "2026-09-08"
+notes = "geom2d.to_geom ran set_precision BEFORE repairing validity, and set_precision empties an invalid polygon rather than fixing it -- the ordering geom2d.region's own docstring already warns about. fill_ops then dropped the whole fill at its `if g.is_empty: continue`. The glasses are the only decoration on the head that WRAPS: frame, bridge and temple arm merge to one region running from the front around to the side, whose re-projected boundary folds over itself in screen space (self-intersection at 187.5, 937.1). Every other region on the part is a valid polygon and drew correctly, which is what made it look like a color bug. Color was never lost: resolve(320) is 0x720012, the 122 triangles bind to the cylinder, merge to one region, survive absorb_wall_facets and order_faces with color 320 intact, and face_fill is simply never reached. Fixed by repairing before snapping. Blast radius, all improvements: 8 render cases move by 3 to 221 px, each a pinhole or a bitten fill edge closing where a self-intersecting fragment used to vanish (3941, 32062 inspected at 7x); 13 of 393 extraction corpus parts move, 12 recovering dropped area. The 13th, 88323c04, drops from 4 textures to 0 because a recovered group crosses the sliver bar and trips MAX_DECALS -- correctly: its five groups are faces of one orange rubber foot, a sub-part in another color, not a print."
+
+[[defect]]
+id = "56640-too-convex-banding-in-shaded"
+part = "56640"
+engines = ["occt"]
+status = "open"
+title = "too convex; banding in shaded version"
+filed = "2026-09-08"
+
+[[defect]]
+id = "6155286t-silhouette-occt-is-wrong-but"
+part = "6155286t"
+engines = ["occt"]
+status = "open"
+title = "silhouette-occt is wrong but might be stale"
+filed = "2026-09-08"
+
+[[defect]]
+id = "6055874bc01-very-bad-probably-because-curved"
+part = "6055874bc01"
+engines = ["occt"]
+status = "open"
+title = "very bad, probably because curved"
+filed = "2026-09-08"
+
+[[defect]]
+id = "6057849b-only-3-wedges-are-properly"
+part = "6057849b"
+engines = ["reference"]
+status = "open"
+title = "only 3 wedges are properly colored"
+filed = "2026-09-08"
+
+[[defect]]
+id = "3626cp7d-cheek-patch-flat-toned"
+part = "3626cp7d"
+engines = ["naive"]
+status = "fixed"
+title = "one sector of the head misses the full-turn merge and paints darker than the wall"
+classes = ["shading"]
+filed = "2026-09-08"
+notes = "A panel on the right of the head reads as a distinctly darker rectangle against the wall around it; LDView shades that area continuously. The wall closes a full turn and takes a RADIAL gradient (g0, 10 stops #cecece -> #7e7e7e, the dome ramp). One sector did not join that merge and kept a LINEAR axis gradient (g16, x1 193.75,84.64 -> x2 153.16,115.02) whose 10 stops run #565656 -> #5a5a5a: nearly flat, and its whole range sits BELOW the radial's darkest stop, which is why it reads as a panel rather than as a seam. Two gradient models on one surface. The head body is two coaxial cylinder primitives with identical axis [0,1,0], r=13.000, h=13.000 and origin [0,4,0] -- sectors of one surface -- so the merge has everything it needs to identify them; find why one span is left out. Disproved, so do not re-derive: absorb_wall_facets is NOT involved (this part has zero flat color-16 triangle faces; every body triangle already carries a gradient), and the three flat #cccccc paths in the SVG are the stud's discs and rings at the top, not the panel -- confirmed by repainting those paths magenta. Also not the decal work: unrelated to 3626cp7d-glasses-lose-their-color, which is fixed, and the panel survives that fix. CORRECTION, 2026-09-08: the absorb_wall_facets disproof above is wrong and 2f54f58 fixed it there. The test that matters runs per FACE and the other way round -- a radially shaded FACET sitting on the barrel's surface, not a flat facet group abutting a band -- which is why the group-wide intersection could not see it."
+
+[[defect]]
+id = "5651-extra-chord-across-top-shouldn"
+part = "5651"
+engines = ["reference"]
+status = "open"
+title = "extra chord across top shouldn't be there in outlines"
+filed = "2026-09-08"
+
+[[defect]]
+id = "4107582e-missing-inner-square"
+part = "4107582e"
+engines = ["occt"]
+status = "open"
+title = "missing inner square"
+filed = "2026-09-08"
+
+[[defect]]
+id = "4650852g-far-half-elements-missing"
+part = "4650852g"
+engines = ["reference"]
+status = "open"
+title = "far half elements missing"
+filed = "2026-09-08"
+
+[[defect]]
+id = "3626cp7d-occt-barrel-dark-band"
+part = "3626cp7d"
+engines = ["occt"]
+status = "fixed"
+title = "occt draws the same dark band on the head that naive did"
+classes = ["shading"]
+filed = "2026-09-08"
+notes = "Fixed by 22453b4. The premise this entry was filed on was wrong twice. The two limb-split pieces do NOT disagree at the limb -- they share the #565656 end stop -- and the 157.5 deg piece is hidden behind the facets entirely. The band is the 67.5 deg piece alone, painted against a facet dome that attach_group_gradients had ramped RADIALLY, so the mechanism is the naive one after all. 3626cp7d authors the head as a facet dome over 135 deg and as an exact barrel over the other 225; the unprinted 3626c is a full 360 deg barrel with no facets on it and no band, so the split comes in with the print. occt needs no substituted `prim` to match it: the sewn shape's own planar faces ARE the dome, and _face_occluder already builds the wall's exact surface. _absorb_dome_walls runs shade.facet_on_wall (lifted out of absorb_wall_facets' closure; oriented=False because a sewn plane's orientation is not a statement about facing) per FACE -- 8 of the 955 radially shaded planes lie on each r=13 barrel span and 0 lie on the stud, neck or collar cylinders. Every part in the golden manifest absorbs 0 walls and BRICK_GOLDENS=full was green with nothing re-frozen. The pass must skip a span that already carries grad_radial: attach_group_gradients adds a grad_axis to a full-turn group that _merge_turn_gradients drops again, and without the guard 4740's five turn spans get pulled into a plane group. The entry's second finding is answered and is NOT a bug -- a cylinder's normal carries no axial term, so _limb_params returns two roots unless the axis points at the camera; full_turn is false for a side-on cylinder by construction and its near and far halves really are two sides. At lat=90 all of 4740's cylinder spans do come out full turns and take the radial ramp."
+
+[[defect]]
+id = "2947bc01-missing-some-lines-near-bottom"
+part = "2947bc01"
+engines = ["occt"]
+status = "open"
+title = "missing some lines near bottom"
+filed = "2026-09-08"
