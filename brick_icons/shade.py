@@ -336,6 +336,25 @@ def order_faces(faces, proj=None, eps=1e-6, own_occ=None):
 MIN_FRAG_AREA = 0.2     # px^2: visible fragments smaller than this are noise
 
 
+def _falling(means, weights):
+    """`means` made non-increasing, pooling adjacent violators by weight.
+
+    The focal point is placed so brightness falls away from it, so along t a
+    rise is sampling noise and SVG draws it as a ring. A radial gradient's
+    inner bins are the small ones -- 53119's swirl put 15 facets in bin 2
+    against 65 in bin 4 -- so the least-supported mean was drawing the
+    brightest ring on the part. Weighting is what stops it: a bin outvotes
+    its neighbours only if more of the surface is in it.
+    """
+    vals, wts, runs = [], [], []
+    for m, w in zip(means, weights):
+        vals.append(float(m) * w); wts.append(float(w)); runs.append(1)
+        while len(vals) > 1 and vals[-2] / wts[-2] < vals[-1] / wts[-1]:
+            v, w2, r = vals.pop(), wts.pop(), runs.pop()
+            vals[-1] += v; wts[-1] += w2; runs[-1] += r
+    return [v / w for v, w, r in zip(vals, wts, runs) for _ in range(r)]
+
+
 def _radial_focal_stops(samples, style, nbins=8, exact=False):
     """Focal point + binned stops for a dome group's radial gradient.
 
@@ -410,14 +429,18 @@ def _radial_focal_stops(samples, style, nbins=8, exact=False):
     bins = defaultdict(list)
     for t, bv, n in zip(ts, b, nvs):
         bins[min(int(t * nbins), nbins - 1)].append((bv, n))
-    stops = []
-    for bi in sorted(bins):
-        if ramp_b is not None:
-            color = ramp_b(float(np.mean([bv for bv, _ in bins[bi]])))
-        else:
+    order = sorted(bins)
+    if ramp_b is not None:
+        means = _falling([np.mean([bv for bv, _ in bins[bi]]) for bi in order],
+                         [len(bins[bi]) for bi in order])
+        stops = [((bi + 0.5) / nbins, ramp_b(float(m)))
+                 for bi, m in zip(order, means)]
+    else:
+        stops = []
+        for bi in order:
             n = np.mean([n for _, n in bins[bi]], axis=0)
-            color = style.ramp(n / (np.linalg.norm(n) or 1.0))
-        stops.append(((bi + 0.5) / nbins, color))
+            stops.append(((bi + 0.5) / nbins,
+                          style.ramp(n / (np.linalg.norm(n) or 1.0))))
     if stops:
         stops = [(0.0, stops[0][1])] + stops + [(1.0, stops[-1][1])]
     return stops, (float(f[0]), float(f[1]))

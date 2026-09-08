@@ -1782,3 +1782,30 @@ def test_a_wall_the_dome_does_not_touch_keeps_its_own_ramp():
     shade.absorb_wall_facets(tri_faces, an_faces)
 
     assert all("grad_radial" not in f for f in an_faces)
+
+
+def test_a_radial_ramp_cannot_brighten_outward():
+    """The focal point is placed so brightness falls away from it, so a rise
+    along t is sampling noise and SVG draws it as a ring. 53119's swirl put 15
+    facets in bin 2 and 65 in bin 4, and the least-supported mean was drawing
+    the brightest ring on the part."""
+    got = shade._falling([0.595, 0.621, 0.765, 0.507, 0.516, 0.408, 0.385,
+                          0.284], [3, 7, 15, 45, 65, 99, 107, 77])
+    assert len(got) == 8
+    assert all(a >= b for a, b in zip(got, got[1:]))
+    assert got[0] == pytest.approx(0.7043, abs=1e-4)   # the pooled inner three
+    assert got[-1] == pytest.approx(0.284)             # a falling tail is left alone
+
+
+def test_a_falling_ramp_is_left_alone():
+    assert shade._falling([3.0, 2.0, 1.0], [1, 1, 1]) == [3.0, 2.0, 1.0]
+    assert shade._falling([], []) == []
+
+
+def test_a_bin_outvotes_its_neighbour_only_by_weight():
+    """Unweighted, one facet's mean would flatten a run that most of the
+    surface disagrees with."""
+    light = shade._falling([0.2, 0.9], [100, 1])
+    assert light[0] == pytest.approx(0.2069, abs=1e-4)
+    heavy = shade._falling([0.2, 0.9], [1, 100])
+    assert heavy[0] == pytest.approx(0.8931, abs=1e-4)
