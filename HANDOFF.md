@@ -22,6 +22,22 @@ same HLR pass, which is 1.0-1.1x on most parts, 1.26x on 4019 (471 authored
 lines) and 1.59x on 3649. If that ever matters, the prune to look for is which
 lines can be confused at all -- not a second HLR pass, which doubles the phase.
 
+**Two corrections from Mike's read of 92692.** The black stub on the ridge in
+front of the studs was mine: `c95e2c9` judged EVERY plain segment locus against
+the type-2 spans, and a condline locus is one too, so three silhouette pieces
+were dropped along that ridge. `d46962e` narrows the mask to type-2 loci, which
+is all its evidence ever covered. **The stray ink that pass removed from
+53119's swirl and 3626bpsk's cheeks came back with it** -- that was
+condline-locus matching, it is a real defect, and it needs its own answer:
+masking a condline against its own projection does nothing (HLR breaks the tie
+visible on a facet's shared edge), and drawing a crease that lies on a condline
+is the design for a tessellated dome's profile.
+
+The knuckle gradients he also saw are a separate row,
+`92692-knuckle-gradient-crescents`: two radially shaded faces leaking as
+crescents where the covering cylinder does not quite cover them. Neither the
+ring fix nor `_absorb_dome_walls` puts them there.
+
 ### Settled by probe, so nobody re-derives them
 
 - **The tube rows (`79306-f1`, `14653-f1`) are not hidden-line misses.**
