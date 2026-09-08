@@ -101,8 +101,13 @@ def _overlap_witness(pa, pb, ha=(), hb=(), grid=48):
     bx0, by0 = pb.min(axis=0); bx1, by1 = pb.max(axis=0)
     x0, y0 = max(ax0, bx0), max(ay0, by0)
     x1, y1 = min(ax1, bx1), min(ay1, by1)
-    if x1 - x0 < 0.5 or y1 - y0 < 0.5:
+    if x1 <= x0 or y1 <= y0:
         return None
+    # NOT a minimum thickness: the grid is scaled to this bbox, so a third of
+    # a pixel rasterizes as well as ten. Refusing thin overlaps handed back NO
+    # ordering constraint, and a tube behind a facet dome overlaps each facet
+    # in exactly such a band -- 3626cp7d's bore met its face in 3.12 x 0.33 px
+    # and floated free of the whole dome, painting a wall sliver over the brow.
     sx = (grid - 1) / (x1 - x0); sy = (grid - 1) / (y1 - y0)
 
     def ring(r):
@@ -197,11 +202,19 @@ def _stall_release(remaining, succ, faces):
     return max(cand or rem, key=lambda i: faces[i]["depth"])
 
 
-def _bbox_pairs(polys, gap=0.5, chunk=256):
+def _bbox_pairs(polys, gap=1e-9, chunk=256):
     """(i, j), i < j, for every pair of polygons whose screen bboxes overlap by
-    at least `gap` on both axes -- the test _overlap_witness opens with, which
+    more than `gap` on both axes -- the test _overlap_witness opens with, which
     all but a percent or two of the pairs fail. Ordered exactly as the i<j
     double loop it replaces, so the graph it feeds is built in the same order.
+
+    `gap` is a degeneracy guard, NOT a minimum thickness. It was 0.5 px, and a
+    pair under it got no ordering constraint at all rather than a weak one: a
+    tube behind a facet dome meets each facet in a band a third of a pixel
+    tall, so 3626cp7d's hollow bore was unconstrained against the whole face
+    and floated in front of it. Both thresholds have to move together --
+    raising one alone changes nothing, because this one decides which pairs
+    _overlap_witness ever sees.
 
     Chunked because the mask is n^2 booleans and a 2000-face part is common.
     """
