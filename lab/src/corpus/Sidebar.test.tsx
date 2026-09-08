@@ -2,7 +2,8 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { Sidebar } from '@lab/corpus/Sidebar';
 import { DEFAULT_PARAMS } from '@lab/corpus/params';
-import { DEFAULT_SHOWN, type Selection } from '@lab/corpus/select';
+import { DEFAULT_SHOWN } from '@lab/corpus/criteria';
+import type { Selection } from '@lab/corpus/select';
 
 const selection: Selection = {
   sort: 'id', filter: 'all', shown: DEFAULT_SHOWN, grouping: 'none',

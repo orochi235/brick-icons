@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest';
-import { applySelection, DEFAULT_SHOWN, type Selection } from '@lab/corpus/select';
+import { DEFAULT_SHOWN } from '@lab/corpus/criteria';
+import { applySelection, type Selection } from '@lab/corpus/select';
 import type { Cell } from '@lab/corpus/types';
 
 const base: Omit<Selection, 'sort' | 'filter' | 'shown'> = {

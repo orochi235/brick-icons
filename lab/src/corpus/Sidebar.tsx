@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import type { Grouping } from '@lab/corpus/facts';
 import { familyFacets, type Family, type FamilyFacet } from '@lab/corpus/families';
-import { CLASS_LABEL, CLASSES, FILTERS, SORTS, type Selection } from '@lab/corpus/select';
+import { CLASS_SPECS, FILTER_SPECS, SORT_SPECS } from '@lab/corpus/criteria';
+import type { Selection } from '@lab/corpus/select';
 import { ParamsPanel, type ParamsPanelProps } from '@lab/corpus/ParamsPanel';
 import { TINT_MODES } from '@lab/corpus/tint';
 import '@lab/corpus/Sidebar.css';
@@ -116,7 +117,7 @@ export function Sidebar({ selection, counts, shown, total, onChange,
         <select value={selection.sort}
                 onChange={(e) => onChange({ ...selection,
                                             sort: e.target.value as Selection['sort'] })}>
-          {SORTS.map((s) => <option key={s} value={s}>{s}</option>)}
+          {SORT_SPECS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
         </select>
       </label>
 
@@ -132,7 +133,7 @@ export function Sidebar({ selection, counts, shown, total, onChange,
         <select value={selection.filter}
                 onChange={(e) => onChange({ ...selection,
                                             filter: e.target.value as Selection['filter'] })}>
-          {FILTERS.map((f) => <option key={f} value={f}>{f}</option>)}
+          {FILTER_SPECS.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
         </select>
       </label>
 
@@ -168,15 +169,15 @@ export function Sidebar({ selection, counts, shown, total, onChange,
 
       <h3>Classes</h3>
       <ul className="corpus-side__facets">
-        {CLASSES.map((cls) => (
-          <li key={cls}>
+        {CLASS_SPECS.map((cls) => (
+          <li key={cls.key}>
             <label>
-              <input type="checkbox" name={cls} checked={selection.shown[cls]}
+              <input type="checkbox" name={cls.key} checked={selection.shown[cls.key]}
                      onChange={(e) => onChange({
                        ...selection,
-                       shown: { ...selection.shown, [cls]: e.target.checked },
+                       shown: { ...selection.shown, [cls.key]: e.target.checked },
                      })} />
-              <span>{CLASS_LABEL[cls]}</span>
+              <span>{cls.label}</span>
             </label>
           </li>
         ))}
