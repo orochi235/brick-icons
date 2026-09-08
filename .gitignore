@@ -18,9 +18,16 @@ corpus.db-wal
 corpus.db.ingest*
 .onto-fetch-cache.json
 
-# A render slot is versioned as text; a raster one is not. ldview is 130 KB
-# a part against an SVG's tens, so the library-scale slot is a gigabyte that
-# rebuilds from vendor/LDView.app in an hour.
+# No render slot is versioned. A slot is derived from the library and the
+# engine, and it moves whenever the engine does -- the goldens gate is a byte
+# diff, so an output-moving commit rewrites every file in every slot at once.
+# The 18 SVGs in git are a hand-picked gallery, never a slot.
+#
+# This said the opposite ("a render slot is versioned as text") and nothing had
+# ever acted on it: renders/occt was 7,931 files that were neither tracked nor
+# ignored, which is the one combination that puts every `onto sync` over its
+# request limit.
+renders/**/*.svg
 renders/**/*.png
 renders/**/*.webp
 # The reference bake's world -> pixel maps, one per render and regenerated with
