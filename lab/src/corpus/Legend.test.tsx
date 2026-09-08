@@ -8,8 +8,8 @@ import type { Cell } from '@lab/corpus/types';
 const cell = (id: string, overrides: Partial<Cell> = {}): Cell => ({
   id, index: 0, title: id, category: null, family: null, printed: false, obsolete: false, base: true, out_of_scope: false, moved: false, year_from: null, year_to: null, sets: null, colors: null, tags: [],
   status: 'unreviewed', sha: null, made_at: null, extra_d99: null, secs: null,
-  error: null, open_defects: 0, open_defects_elsewhere: 0, accepted_defects: 0,
-  error_elsewhere: false, ...overrides,
+  error: null, open_defects: 0, review_defects: 0, accepted_defects: 0,
+  elsewhere: [], ...overrides,
 });
 
 const cells: Cell[] = [
@@ -27,8 +27,9 @@ it('renders a row per state with its own count', () => {
   expect(screen.getByLabelText('timed out, 2 parts')).toBeTruthy();
   expect(screen.getByLabelText('open defect, 1 parts')).toBeTruthy();
   expect(screen.getByLabelText('render error, 0 parts')).toBeTruthy();
-  expect(screen.getByLabelText('problem in another slot, 0 parts')).toBeTruthy();
-  expect(screen.getByLabelText('defect in another slot, 0 parts')).toBeTruthy();
+  expect(screen.getByLabelText('render error, in another slot, 0 parts')).toBeTruthy();
+  expect(screen.getByLabelText('open defect, in another slot, 0 parts')).toBeTruthy();
+  expect(screen.getByLabelText('fix claimed, needs a look, 0 parts')).toBeTruthy();
 });
 
 it('renders one row per state, in the table\'s own legend order', () => {
@@ -47,7 +48,7 @@ it('reports the hovered state, and null once the pointer leaves', () => {
   const onHighlight = vi.fn();
   render(<Legend cells={cells} highlight={null} onHighlight={onHighlight} badges={[]} onBadges={vi.fn()}
                  highlightTag={null} onHighlightTag={vi.fn()} onClose={vi.fn()} />);
-  const row = screen.getByLabelText(/timed out/);
+  const row = screen.getByLabelText('timed out, 2 parts');
   fireEvent.mouseEnter(row);
   expect(onHighlight).toHaveBeenCalledWith('timeout');
   fireEvent.mouseLeave(row);
@@ -58,7 +59,7 @@ it('treats keyboard focus the same as hover, and blur the same as leaving', () =
   const onHighlight = vi.fn();
   render(<Legend cells={cells} highlight={null} onHighlight={onHighlight} badges={[]} onBadges={vi.fn()}
                  highlightTag={null} onHighlightTag={vi.fn()} onClose={vi.fn()} />);
-  const row = screen.getByLabelText(/open defect/);
+  const row = screen.getByLabelText('open defect, 1 parts');
   fireEvent.focus(row);
   expect(onHighlight).toHaveBeenCalledWith('defect');
   fireEvent.blur(row);

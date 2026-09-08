@@ -40,25 +40,12 @@
 
 /* The wall's `ground = border ?? thumbGround()` (paint.ts): a drawn cell says
  * its state with the surround, because the drawing itself is ink on
- * transparency. Every slot here is drawn, so the two states with no border --
- * unknown and outOfScope -- keep the plain ground above. */
-.corpus-slot[data-state='timeout'] .corpus-big {
-  background: var(--corpus-cell-timeout-border);
-}
-.corpus-slot[data-state='failed'] .corpus-big {
-  background: var(--corpus-cell-failed-border);
-}
-.corpus-slot[data-state='defect'] .corpus-big {
-  background: var(--corpus-cell-defect-border);
-}
-.corpus-slot[data-state='accepted'] .corpus-big {
-  background: var(--corpus-cell-accepted-border);
-}
-.corpus-slot[data-state='problemElsewhere'] .corpus-big {
-  background: var(--corpus-cell-problem-elsewhere-border);
-}
-.corpus-slot[data-state='defectElsewhere'] .corpus-big {
-  background: var(--corpus-cell-defect-elsewhere-border);
+ * transparency. `--slot-ground` is set to a `var()` reference naming the
+ * state's own border property, so a state added to `states.ts` needs no rule
+ * here and tuning the color live still reaches this. A state with no border
+ * -- unknown, outOfScope -- sets nothing and keeps the plain ground above. */
+.corpus-slot[data-ground] .corpus-big {
+  background: var(--slot-ground);
 }
 
 .corpus-slots {
@@ -140,4 +127,16 @@
   display: flex;
   align-items: center;
   gap: 0.4rem;
+}
+
+/* A defect whose slot has been redrawn since anyone judged it. The row is
+ * marked, not recolored: the status badge beside it still has to read. */
+.corpus-defect[data-review] {
+  border-left: 3px solid var(--corpus-cell-review-border);
+  padding-left: 0.4rem;
+}
+
+.corpus-verdict {
+  display: inline-flex;
+  gap: 0.3rem;
 }

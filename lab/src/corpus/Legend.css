@@ -70,9 +70,9 @@
   background: var(--corpus-cell-defect-fill);
   border-color: var(--corpus-cell-defect-border);
 }
-.corpus-legend-row[data-state="problemElsewhere"] .corpus-legend-swatch {
-  background: var(--corpus-cell-problem-elsewhere-fill);
-  border-color: var(--corpus-cell-problem-elsewhere-border);
+.corpus-legend-row[data-state="failedElsewhere"] .corpus-legend-swatch {
+  background: var(--corpus-cell-failed-elsewhere-fill);
+  border-color: var(--corpus-cell-failed-elsewhere-border);
   border-width: 1px;
 }
 .corpus-legend-row[data-state="defectElsewhere"] .corpus-legend-swatch {
@@ -85,7 +85,7 @@
 .corpus-legend-row[data-state="timeout"] .corpus-legend-swatch,
 .corpus-legend-row[data-state="failed"] .corpus-legend-swatch,
 .corpus-legend-row[data-state="defect"] .corpus-legend-swatch,
-.corpus-legend-row[data-state="problemElsewhere"] .corpus-legend-swatch,
+.corpus-legend-row[data-state="failedElsewhere"] .corpus-legend-swatch,
 .corpus-legend-row[data-state="defectElsewhere"] .corpus-legend-swatch {
   background-image: linear-gradient(to top right,
     transparent calc(50% - 1px), currentColor calc(50% - 1px),
@@ -100,8 +100,8 @@
 .corpus-legend-row[data-state="defect"] .corpus-legend-swatch {
   color: var(--corpus-cell-defect-border);
 }
-.corpus-legend-row[data-state="problemElsewhere"] .corpus-legend-swatch {
-  color: var(--corpus-cell-problem-elsewhere-border);
+.corpus-legend-row[data-state="failedElsewhere"] .corpus-legend-swatch {
+  color: var(--corpus-cell-failed-elsewhere-border);
 }
 .corpus-legend-row[data-state="defectElsewhere"] .corpus-legend-swatch {
   color: var(--corpus-cell-defect-elsewhere-border);

@@ -253,10 +253,22 @@ def create_app(root: Path | str = ".",
             rows = [d for d in rows if d["status"] == status]
         return {"defects": rows}
 
+    def mirror_defect(record: dict) -> dict:
+        """The TOML is the record; the wall colors itself from the derived
+        table. A write that reached only one of them left a closed defect
+        painting its cell for as long as it took someone to rebuild the db."""
+        if Path(app.state.corpus_db).is_file():
+            conn = corpus_db_module.connect(app.state.corpus_db)
+            try:
+                corpus_db_module.upsert_defect(conn, record)
+            finally:
+                conn.close()
+        return record
+
     @app.post("/api/defects")
     def post_defect(record: dict):
         try:
-            return defects.add(app.state.defects_path, record)
+            return mirror_defect(defects.add(app.state.defects_path, record))
         except ValueError as e:
             code = 409 if "already exists" in str(e) else 400
             raise HTTPException(code, str(e)) from None
@@ -264,7 +276,8 @@ def create_app(root: Path | str = ".",
     @app.patch("/api/defects/{defect_id}")
     def patch_defect(defect_id: str, changes: dict):
         try:
-            return defects.update(app.state.defects_path, defect_id, changes)
+            return mirror_defect(
+                defects.update(app.state.defects_path, defect_id, changes))
         except KeyError:
             raise HTTPException(404, f"no defect {defect_id!r}") from None
         except ValueError as e:

@@ -18,7 +18,7 @@ CLASSES = ("hidden-leak", "stray-ink", "arc-split", "fill-solid",
            "over-cull", "arc-loss", "fill-hole",
            "banding", "shading", "seam", "stroke-scale", "decal")
 _ORDER = ("id", "part", "engines", "status", "title", "classes", "mark",
-          "kind", "points", "seen", "filed", "notes")
+          "kind", "points", "seen", "checked", "filed", "notes")
 
 _HEADER = """\
 # Defects found in corpus renders, filed from the lab.
@@ -32,6 +32,11 @@ _HEADER = """\
 # `classes` is the symptom family, from defects.CLASSES: what the drawing
 # does wrong, never what causes it. A row nobody can class from its own
 # title has none, and there is no `misc`.
+#
+# `checked` maps a slot to the render sha that was last looked at and judged.
+# An open defect whose slot now draws a different sha is looking for review;
+# one with no entry for a slot never asks, which is what a record filed
+# before this field wants.
 
 """
 
@@ -72,6 +77,20 @@ def save(path: Path | str, records: list[dict]) -> None:
             lines.append(f"{field} = {dump_value(record[field])}")
         chunks.append("\n".join(lines) + "\n")
     path.write_text("\n".join(chunks))
+
+
+def wants_review(record: dict, source: str, sha: str | None) -> bool:
+    """Whether this defect is asking someone to look at `source` again.
+
+    Only an open defect, only against a slot it was judged on, and only once
+    that slot draws something else. Shas and not dates: a bake that redraws
+    the same picture has nothing to review, and every open defect flagging at
+    once on a routine rebake would be worse than no signal at all.
+    """
+    if record.get("status", "open") != "open" or sha is None:
+        return False
+    seen = (record.get("checked") or {}).get(source)
+    return seen is not None and seen != sha
 
 
 def check_classes(classes) -> None:

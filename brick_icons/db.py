@@ -127,6 +127,10 @@ CREATE TABLE IF NOT EXISTS defects (
   -- seen together.
   classes TEXT,
   mark TEXT, kind TEXT, points TEXT,
+  -- Slot -> the render sha last judged against this defect, as a JSON object.
+  -- A slot drawing something else since is the whole of "looking for review";
+  -- keyed by slot and not by engine because a sha belongs to a slot.
+  checked TEXT,
   filed TEXT NOT NULL,
   notes TEXT
 );
@@ -192,6 +196,7 @@ def now() -> str:
 #: additive only: SCHEMA_VERSION is deliberately not bumped for these, because
 #: older code cannot misread a column it never selects.
 _ADDED_COLUMNS = (("defects", "classes", "TEXT"),
+                  ("defects", "checked", "TEXT"),
                   ("measurements", "counts", "TEXT"))
 
 
@@ -454,18 +459,37 @@ def store_render(conn: sqlite3.Connection, part_id: str, source: str,
 def import_defects(conn: sqlite3.Connection, path: Path | str) -> int:
     records = defects_toml.load(path)
     conn.executemany(
-        "INSERT OR REPLACE INTO defects (id, part_id, engines, status, title, "
-        "classes, mark, kind, points, filed, notes) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        [(r["id"], r["part"], json.dumps(r.get("engines", [])),
-          r.get("status", "open"), r["title"],
-          json.dumps(r["classes"]) if r.get("classes") else None,
-          json.dumps(r["mark"]) if "mark" in r else None,
-          r.get("kind"),
-          json.dumps(r["points"]) if "points" in r else None,
-          r["filed"], r.get("notes")) for r in records])
+        _DEFECT_UPSERT, [_defect_row(r) for r in records])
     conn.commit()
     return len(records)
+
+
+_DEFECT_UPSERT = (
+    "INSERT OR REPLACE INTO defects (id, part_id, engines, status, title, "
+    "classes, mark, kind, points, checked, filed, notes) "
+    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+
+
+def _defect_row(r: dict) -> tuple:
+    return (r["id"], r["part"], json.dumps(r.get("engines", [])),
+            r.get("status", "open"), r["title"],
+            json.dumps(r["classes"]) if r.get("classes") else None,
+            json.dumps(r["mark"]) if "mark" in r else None,
+            r.get("kind"),
+            json.dumps(r["points"]) if "points" in r else None,
+            json.dumps(r["checked"]) if r.get("checked") else None,
+            r["filed"], r.get("notes"))
+
+
+def upsert_defect(conn: sqlite3.Connection, record: dict) -> None:
+    """One record from the TOML into the derived table.
+
+    The lab owns the TOML and the wall colors itself from this table, so a
+    status set in the lightbox has to reach both or the cell keeps the color
+    of a defect that is closed.
+    """
+    conn.execute(_DEFECT_UPSERT, _defect_row(record))
+    conn.commit()
 
 
 def export_defects(conn: sqlite3.Connection, path: Path | str) -> int:
@@ -482,6 +506,8 @@ def export_defects(conn: sqlite3.Connection, path: Path | str) -> int:
             record["kind"] = row["kind"]
         if row["points"]:
             record["points"] = json.loads(row["points"])
+        if row["checked"]:
+            record["checked"] = json.loads(row["checked"])
         record["filed"] = row["filed"]
         if row["notes"]:
             record["notes"] = row["notes"]

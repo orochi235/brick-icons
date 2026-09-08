@@ -56,8 +56,8 @@ const c = (over: Partial<Cell>): Cell => ({
   obsolete: false, base: false, out_of_scope: false, moved: false,
   year_from: null, year_to: null, sets: null, colors: null, tags: [],
   status: 'unreviewed', sha: null, made_at: null, extra_d99: null, secs: null,
-  error: null, open_defects: 0, open_defects_elsewhere: 0, accepted_defects: 0,
-  error_elsewhere: false, ...over,
+  error: null, open_defects: 0, review_defects: 0, accepted_defects: 0,
+  elsewhere: [], ...over,
 });
 
 describe('blockLayout', () => {

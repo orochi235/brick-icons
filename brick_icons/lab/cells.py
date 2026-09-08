@@ -10,6 +10,7 @@ import json
 import sqlite3
 
 from brick_icons import tags as part_tags
+from brick_icons.lab import defects as defects_toml
 from brick_icons.db import OUT_OF_SCOPE_CATEGORIES
 
 # Matched on source, not engine. Two facets of one engine are both "naive", so
@@ -25,47 +26,87 @@ JOIN (SELECT part_id, MAX(run_id) AS run_id FROM measurements
 WHERE m.source = ?
 """
 
-# Newest run per other source -- never the newest run overall, or a part whose
-# other slot has since gone clean would still read as erroring elsewhere.
-_LATEST_OTHER_ERRORS = """
-SELECT m.part_id FROM measurements m
+# Every slot's latest error, gathered per ENGINE below. One query for the whole
+# wall: the alternative is a query per slot per part, and the wall asks for all
+# 24,591.
+_LATEST_ERRORS = """
+SELECT m.part_id, m.source, m.error FROM measurements m
 JOIN (SELECT part_id, source, MAX(run_id) AS run_id FROM measurements
-      WHERE source != ? GROUP BY part_id, source) latest
+      GROUP BY part_id, source) latest
   ON m.part_id = latest.part_id AND m.source = latest.source
  AND m.run_id = latest.run_id
-WHERE m.source != ? AND m.error IS NOT NULL
+WHERE m.error IS NOT NULL
 """
 
 
-_NO_DEFECTS = {"here": 0, "elsewhere": 0, "accepted": 0}
+#: What an engine can be saying about a part, matching the conditions
+#: `states.ts` colors. The wall draws one slot and reports every OTHER engine
+#: as `elsewhere`, so this list is the vocabulary both ends share: add one here
+#: and in the conditions table there, and its `<key>Elsewhere` sibling is
+#: derived at both ends.
+CONDITIONS = ("review", "defect", "timeout", "failed", "accepted")
 
 
-def _open_defects(conn: sqlite3.Connection, ids: list[str],
-                   engine: str) -> dict[str, dict[str, int]]:
-    """Defect counts for a page of parts: open here, open elsewhere, and the
-    ones filed against this engine that were accepted rather than fixed.
+def errors_by_engine(conn: sqlite3.Connection) -> dict[str, dict[str, str]]:
+    """Each engine's latest error per part.
 
-    One query for the page, following `findings._attach_defects`. A `wontfix`
-    defect used to count as open, so a decision to live with something painted
-    the same as a live fault for as long as the record stood.
+    An error belongs to an ENGINE, not to the slot that happened to record it.
+    `occt` files no measurements of its own and every failure of the occt
+    engine is written under `silhouette-occt`, so a slot that asked only about
+    itself painted a clean wall over 2,432 parts that do not draw at all.
+
+    Worst news first where an engine's facets disagree: a real error outranks a
+    timeout, so one facet giving up on the clock cannot mask another failing
+    outright.
     """
-    if not ids:
-        return {}
-    marks = ",".join("?" * len(ids))
-    out: dict[str, dict[str, int]] = {}
-    for d in conn.execute(
-            f"SELECT part_id, engines, status FROM defects WHERE part_id IN ({marks}) "
-            f"AND status NOT IN ('fixed', 'notabug')", ids):
-        bucket = out.setdefault(d["part_id"], dict(_NO_DEFECTS))
-        here = engine in json.loads(d["engines"])
-        if d["status"] == "wontfix":
+    out: dict[str, dict[str, str]] = {}
+    for row in conn.execute(_LATEST_ERRORS):
+        bucket = out.setdefault(engine_for(row["source"]), {})
+        have = bucket.get(row["part_id"])
+        if have is None or (have == "TimeoutError"
+                            and row["error"] != "TimeoutError"):
+            bucket[row["part_id"]] = row["error"]
+    return out
+
+
+_NO_DEFECTS = {"open": 0, "review": 0, "accepted": 0}
+
+
+def live_defects(conn: sqlite3.Connection) -> list[dict]:
+    """Every defect that still says something, in the shape the TOML uses.
+
+    `fixed` and `notabug` are dropped here rather than at each use: they are
+    settled, and a settled record that reached a tally once painted a closed
+    fault the same as a live one.
+    """
+    return [{"part": r["part_id"], "engines": json.loads(r["engines"]),
+             "status": r["status"],
+             "checked": json.loads(r["checked"]) if r["checked"] else {}}
+            for r in conn.execute(
+                "SELECT part_id, engines, status, checked FROM defects "
+                "WHERE status NOT IN ('fixed', 'notabug')")]
+
+
+def tally_defects(records: list[dict], part_id: str, engine: str,
+                  source: str, sha: str | None) -> dict[str, int]:
+    """This slot's defects, split three ways.
+
+    Disjoint on purpose: a defect waiting on a fresh render is counted under
+    `review` and nowhere else, so the wall can show that something changed
+    without a part's other, untouched defects hiding it.
+    """
+    out = dict(_NO_DEFECTS)
+    for record in records:
+        if record["part"] != part_id or engine not in record["engines"]:
+            continue
+        if record["status"] == "wontfix":
             # Only here: a fault someone accepted in another slot says nothing
             # about this one.
-            bucket["accepted"] += int(here)
-        elif here:
-            bucket["here"] += 1
+            out["accepted"] += 1
+        elif defects_toml.wants_review(record, source, sha):
+            out["review"] += 1
         else:
-            bucket["elsewhere"] += 1
+            out["open"] += 1
     return out
 
 
@@ -140,8 +181,8 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
     engine = engine_for(source)
     measures = {r["part_id"]: r for r in conn.execute(
         _LATEST_MEASURE, (source, source))}
-    error_elsewhere = {r["part_id"] for r in conn.execute(
-        _LATEST_OTHER_ERRORS, (source, source))}
+    errors = errors_by_engine(conn).get(engine, {})
+    others = other_conditions(conn, source)
 
     version = max((r["made_at"] for r in renders.values()), default="")
     wanted = order
@@ -149,7 +190,7 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
         wanted = sorted(pid for pid, r in renders.items()
                         if r["made_at"] > since)
 
-    defects = _open_defects(conn, wanted, engine)
+    records = live_defects(conn)
     years = {r["part_id"]: r for r in conn.execute(
         "SELECT part_id, year_from, year_to, sets, colors, matched "
         "FROM part_years")}
@@ -170,7 +211,8 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
         pid = part["id"]
         render = renders.get(pid)
         measure = measures.get(pid)
-        bucket = defects.get(pid, _NO_DEFECTS)
+        bucket = tally_defects(records, pid, engine, source,
+                               render["sha256"] if render else None)
         year = years.get(pid)
         successor = successors.get(pid)
         rows.append({
@@ -203,45 +245,93 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
             "status": part["status"],
             "sha": render["sha256"] if render else None,
             "made_at": render["made_at"] if render else None,
+            # d99 and secs stay this SLOT's -- they are not comparable across
+            # facets, so a borrowed figure is worse than a blank. The error is
+            # the engine's, because failing to draw is not a property of which
+            # facet was asked.
             "extra_d99": measure["extra_d99"] if measure else None,
             "secs": measure["secs"] if measure else None,
-            "error": measure["error"] if measure else None,
+            "error": errors.get(pid),
             "coverage": coverage_of(
                 sha=render["sha256"] if render else None,
-                error=measure["error"] if measure else None,
-                open_defects=bucket["here"]),
-            "open_defects": bucket["here"],
-            "open_defects_elsewhere": bucket["elsewhere"],
+                error=errors.get(pid),
+                open_defects=bucket["open"] + bucket["review"]),
+            "open_defects": bucket["open"],
+            "review_defects": bucket["review"],
             "accepted_defects": bucket["accepted"],
-            "error_elsewhere": pid in error_elsewhere,
+            # Which conditions hold in a slot that is not this one. The wall
+            # draws each as the condition's own `<key>Elsewhere` sibling, so a
+            # condition added here needs no second field of its own.
+            "elsewhere": sorted(others.get(pid, ())),
         })
     return {"cells": rows, "count": len(order), "version": version,
             "source": source}
+
+
+def other_conditions(conn: sqlite3.Connection,
+                     source: str) -> dict[str, set[str]]:
+    """Per part, the conditions that hold somewhere other than `source`.
+
+    Everything here is keyed by ENGINE, errors as much as defects: a fault is
+    a property of what drew the part, not of which facet was asked for. So a
+    slot is never `elsewhere` from a sibling that shares its engine -- that
+    would draw one fault twice and let the weaker color win nothing but
+    confusion -- and a defect counts whether or not the engine it names has
+    ever got as far as drawing this part.
+    """
+    engine = engine_for(source)
+    out: dict[str, set[str]] = {}
+
+    for other, by_part in errors_by_engine(conn).items():
+        if other == engine:
+            continue
+        for pid, error in by_part.items():
+            out.setdefault(pid, set()).add(
+                "timeout" if error == "TimeoutError" else "failed")
+
+    shas: dict[str, dict[str, str]] = {}
+    for row in conn.execute("SELECT part_id, source, sha256 FROM renders"):
+        shas.setdefault(row["source"], {})[row["part_id"]] = row["sha256"]
+
+    for record in live_defects(conn):
+        # `accepted` has no sibling -- a fault someone chose to live with in
+        # another slot asks nothing of this one.
+        if record["status"] == "wontfix":
+            continue
+        engines = [e for e in record["engines"] if e != engine]
+        if not engines:
+            continue
+        asks = any(
+            defects_toml.wants_review(record, slot,
+                                      shas.get(slot, {}).get(record["part"]))
+            for slot in shas if engine_for(slot) in engines)
+        out.setdefault(record["part"], set()).add("review" if asks else "defect")
+    return out
 
 
 def slot_states(conn: sqlite3.Connection, part_id: str,
                 sources: list[str]) -> dict[str, dict]:
     """What each of a part's slots would color its cell, keyed by source.
 
-    The same four reads `cells` makes, narrowed to one part, so the detail
-    view cannot drift from the wall it was opened from. `out_of_scope` is the
+    The same reads `cells` makes, narrowed to one part, so the detail view
+    cannot drift from the wall it was opened from. `out_of_scope` is the
     part's and belongs to the caller that already has the row.
     """
+    records = live_defects(conn)
+    errors = errors_by_engine(conn)
+    others = {source: other_conditions(conn, source) for source in sources}
     out: dict[str, dict] = {}
     for source in sources:
-        engine = engine_for(source)
-        measure = conn.execute(
-            _LATEST_MEASURE + " AND m.part_id = ?",
-            (source, source, part_id)).fetchone()
-        elsewhere = conn.execute(
-            _LATEST_OTHER_ERRORS + " AND m.part_id = ?",
-            (source, source, part_id)).fetchone()
-        bucket = _open_defects(conn, [part_id], engine).get(part_id, _NO_DEFECTS)
+        render = conn.execute(
+            "SELECT sha256 FROM renders WHERE source = ? AND part_id = ?",
+            (source, part_id)).fetchone()
+        bucket = tally_defects(records, part_id, engine_for(source), source,
+                               render["sha256"] if render else None)
         out[source] = {
-            "error": measure["error"] if measure else None,
-            "open_defects": bucket["here"],
-            "open_defects_elsewhere": bucket["elsewhere"],
+            "error": errors.get(engine_for(source), {}).get(part_id),
+            "open_defects": bucket["open"],
+            "review_defects": bucket["review"],
             "accepted_defects": bucket["accepted"],
-            "error_elsewhere": elsewhere is not None,
+            "elsewhere": sorted(others[source].get(part_id, ())),
         }
     return out

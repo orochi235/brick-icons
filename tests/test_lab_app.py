@@ -577,7 +577,10 @@ def test_part_route_gives_every_slot_what_the_wall_colors_a_cell_by(tmp_path):
     assert body["part"]["out_of_scope"] is False
     slots = {s["source"]: s for s in body["slots"]}
     assert slots["silhouette-occt"]["error"] == "TimeoutError"
-    assert slots["white-occt"]["error"] is None
+    # Both facets of the occt engine: failing to draw belongs to the engine,
+    # not to whichever facet's run happened to record it.
+    assert slots["white-occt"]["error"] == "TimeoutError"
     assert slots["white-occt"]["open_defects"] == 0
-    # The oracle slot timed out on this part, and every other slot says so.
-    assert slots["white-occt"]["error_elsewhere"] is True
+    # Nothing is elsewhere: the only fault here is the occt engine's, and
+    # `white-occt` is that engine, so it carries it as its own above.
+    assert slots["white-occt"]["elsewhere"] == []

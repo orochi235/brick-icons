@@ -164,9 +164,9 @@ it('marks each slot with the state the wall would color its cell', async () => {
     part: { ...detail.part, out_of_scope: false },
     slots: [
       { ...detail.slots[0], error: 'TimeoutError', open_defects: 0,
-        open_defects_elsewhere: 0, accepted_defects: 0, error_elsewhere: false },
+        review_defects: 0, accepted_defects: 0, elsewhere: [] },
       { ...detail.slots[1], error: null, open_defects: 2,
-        open_defects_elsewhere: 0, accepted_defects: 0, error_elsewhere: false },
+        review_defects: 0, accepted_defects: 0, elsewhere: [] },
     ],
   };
   render(box({ client: { corpusPart: () => Promise.resolve(detailed), addDefect } }));
@@ -199,4 +199,74 @@ it('survives an API too old to send the features', async () => {
   render(box({ client: stale }));
   await waitFor(() => screen.getByText('Brick 2 x 4'));
   expect(document.querySelector('.corpus-built')).toBeNull();
+});
+
+// --- closing a defect out, and judging one that has been redrawn -----------
+
+const reviewDetail = (over: Record<string, unknown> = {}) => ({
+  ...detail,
+  defects: [{ id: 'd1', part: '3001', title: 'rim nubs', status: 'open',
+              engines: ['naive'], checked: { naive: 'stale-sha' }, ...over }],
+});
+
+const withDefects = (d: ReturnType<typeof reviewDetail>) => {
+  const patchDefect = vi.fn(
+    async (_id: string, _changes: Record<string, unknown>) => ({}));
+  return {
+    patchDefect,
+    client: { corpusPart: () => Promise.resolve(d), addDefect, patchDefect } as any,
+  };
+};
+
+it('closes a defect out from the panel the render is in', async () => {
+  const { client: c, patchDefect } = withDefects(reviewDetail({ checked: undefined }));
+  render(box({ client: c }));
+  await waitFor(() => screen.getByText('rim nubs'));
+  fireEvent.change(screen.getByLabelText('status of rim nubs'),
+                   { target: { value: 'fixed' } });
+  await waitFor(() => expect(patchDefect).toHaveBeenCalled());
+  expect(patchDefect.mock.calls[0]![0]).toBe('d1');
+  expect(patchDefect.mock.calls[0]![1]).toMatchObject({ status: 'fixed' });
+});
+
+it('offers a verdict only on a defect whose slot has been redrawn', async () => {
+  const { client: c } = withDefects(reviewDetail());
+  render(box({ client: c }));
+  await waitFor(() => screen.getByText('rim nubs'));
+  // `naive` now draws deadbeef0000; the defect was judged against stale-sha.
+  expect(screen.getByRole('button', { name: 'fixed' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'still broken' })).toBeTruthy();
+});
+
+it('leaves a defect judged against the render on screen alone', async () => {
+  const { client: c } = withDefects(reviewDetail({ checked: { naive: 'deadbeef0000' } }));
+  render(box({ client: c }));
+  await waitFor(() => screen.getByText('rim nubs'));
+  expect(screen.queryByRole('button', { name: 'still broken' })).toBeNull();
+});
+
+// Without the re-stamp, one look at a redrawn fault would leave it asking
+// for review for good.
+it('re-stamps the render it was judged against when it stays open', async () => {
+  const { client: c, patchDefect } = withDefects(reviewDetail());
+  render(box({ client: c }));
+  await waitFor(() => screen.getByText('rim nubs'));
+  fireEvent.click(screen.getByRole('button', { name: 'still broken' }));
+  await waitFor(() => expect(patchDefect).toHaveBeenCalled());
+  expect(patchDefect.mock.calls[0]![1]).toEqual({
+    status: 'open', checked: { naive: 'deadbeef0000' },
+  });
+});
+
+it('stamps a freshly filed defect with the render it was filed against', async () => {
+  const { client: c } = withDefects(reviewDetail());
+  render(box({ client: c }));
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  fireEvent.click(screen.getByRole('button', { name: /flag a problem/i }));
+  fireEvent.change(screen.getByLabelText(/what is wrong/i),
+                   { target: { value: 'the rim is doubled' } });
+  fireEvent.click(screen.getByRole('button', { name: /file against/i }));
+  await waitFor(() => expect(addDefect).toHaveBeenCalled());
+  const filed = addDefect.mock.calls.at(-1)![0] as { checked: unknown };
+  expect(filed.checked).toEqual({ naive: 'deadbeef0000' });
 });

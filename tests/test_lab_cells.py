@@ -26,10 +26,12 @@ def _render(conn, pid, sha, made_at, source="silhouette-naive"):
                  (pid, source, made_at, f"renders/{source}/{pid}.svg", sha))
 
 
-def _defect(conn, defect_id, pid, engines, status="open"):
+def _defect(conn, defect_id, pid, engines, status="open", checked=None):
     conn.execute("INSERT INTO defects (id, part_id, engines, status, title, "
-                 "filed) VALUES (?, ?, ?, ?, 't', '2026-09-05T00:00:00+00:00')",
-                 (defect_id, pid, json.dumps(engines), status))
+                 "checked, filed) "
+                 "VALUES (?, ?, ?, ?, 't', ?, '2026-09-05T00:00:00+00:00')",
+                 (defect_id, pid, json.dumps(engines), status,
+                  json.dumps(checked) if checked else None))
 
 
 _run_id = 0
@@ -156,7 +158,7 @@ def test_a_part_with_no_defects_reports_none_open(conn):
     conn.commit()
     cell = cells.cells(conn, source="silhouette-naive")["cells"][0]
     assert cell["open_defects"] == 0
-    assert cell["open_defects_elsewhere"] == 0
+    assert cell["elsewhere"] == []
 
 
 def test_a_defect_naming_this_engine_counts_here_only(conn):
@@ -165,7 +167,7 @@ def test_a_defect_naming_this_engine_counts_here_only(conn):
     conn.commit()
     cell = cells.cells(conn, source="silhouette-naive")["cells"][0]
     assert cell["open_defects"] == 1
-    assert cell["open_defects_elsewhere"] == 0
+    assert cell["elsewhere"] == []
 
 
 def test_a_defect_naming_another_engine_counts_elsewhere_only(conn):
@@ -174,7 +176,7 @@ def test_a_defect_naming_another_engine_counts_elsewhere_only(conn):
     conn.commit()
     cell = cells.cells(conn, source="silhouette-naive")["cells"][0]
     assert cell["open_defects"] == 0
-    assert cell["open_defects_elsewhere"] == 1
+    assert cell["elsewhere"] == ["defect"]
 
 
 def test_a_fixed_defect_counts_in_neither(conn):
@@ -183,7 +185,7 @@ def test_a_fixed_defect_counts_in_neither(conn):
     conn.commit()
     cell = cells.cells(conn, source="silhouette-naive")["cells"][0]
     assert cell["open_defects"] == 0
-    assert cell["open_defects_elsewhere"] == 0
+    assert cell["elsewhere"] == []
 
 
 def _years(conn, pid, year_from, year_to, sets, matched):
@@ -281,7 +283,7 @@ def test_a_part_erroring_elsewhere_is_clean_here(conn):
     conn.commit()
     cell = cells.cells(conn, source="silhouette-naive")["cells"][0]
     assert cell["error"] is None
-    assert cell["error_elsewhere"] is True
+    assert "timeout" in cell["elsewhere"]
 
 
 def test_a_sticker_is_in_scope(conn):
@@ -364,26 +366,28 @@ def test_erroring_in_any_other_slot_marks_the_cell(conn):
     _measure(conn, "3001", "naive", source="white-naive")
     _measure(conn, "3001", "occt", error="TimeoutError", source="silhouette-occt")
     conn.commit()
-    assert cells.cells(conn, source="white-naive")["cells"][0][
-        "error_elsewhere"] is True
+    assert "timeout" in cells.cells(conn, source="white-naive")["cells"][0][
+        "elsewhere"]
 
 
-def test_a_slot_that_names_no_facet_still_has_an_elsewhere(conn):
-    """`occt` carries no qualifier, so under a family rule its family was
-    itself and the cell read clean however badly the part failed next door."""
+def test_a_slot_with_no_measurements_of_its_own_carries_its_engine_s_error(conn):
+    """`occt` records no measurements at all -- every failure of the occt
+    engine is filed under `silhouette-occt` or `white-occt`. Read per slot,
+    that painted a clean wall over 2,432 parts that do not draw."""
     _part(conn, "3001")
     _measure(conn, "3001", "occt", error="TimeoutError", source="white-occt")
     conn.commit()
-    assert cells.cells(conn, source="occt")["cells"][0][
-        "error_elsewhere"] is True
+    cell = cells.cells(conn, source="occt")["cells"][0]
+    assert cell["error"] == "TimeoutError"
+    # Its own, not a weaker report of somebody else's.
+    assert cell["elsewhere"] == []
 
 
 def test_a_slot_s_own_error_is_not_elsewhere(conn):
     _part(conn, "3001")
     _measure(conn, "3001", "occt", error="TimeoutError", source="occt")
     conn.commit()
-    assert cells.cells(conn, source="occt")["cells"][0][
-        "error_elsewhere"] is False
+    assert cells.cells(conn, source="occt")["cells"][0]["elsewhere"] == []
 
 
 def test_a_third_party_part_is_out_of_scope(conn):
@@ -441,7 +445,9 @@ def test_a_qualified_slot_files_its_measurements_under_the_last_segment():
     assert cells.engine_for("ldview") == "ldview"
 
 
-def test_slot_states_reads_each_slot_on_its_own_source(conn):
+def test_slot_states_gives_every_facet_of_an_engine_that_engine_s_error(conn):
+    """Failing to draw is a property of the engine, not of which facet was
+    asked for, so both occt slots report it."""
     _part(conn, "3001")
     _render(conn, "3001", "a", "2026-09-05T00:00:00+00:00", "silhouette-occt")
     _render(conn, "3001", "b", "2026-09-05T00:00:00+00:00", "white-occt")
@@ -450,7 +456,7 @@ def test_slot_states_reads_each_slot_on_its_own_source(conn):
     conn.commit()
     states = cells.slot_states(conn, "3001", ["silhouette-occt", "white-occt"])
     assert states["silhouette-occt"]["error"] == "TimeoutError"
-    assert states["white-occt"]["error"] is None
+    assert states["white-occt"]["error"] == "TimeoutError"
 
 
 def test_slot_states_counts_a_defect_here_and_elsewhere(conn):
@@ -460,9 +466,9 @@ def test_slot_states_counts_a_defect_here_and_elsewhere(conn):
     states = cells.slot_states(conn, "3001",
                                ["silhouette-occt", "silhouette-naive"])
     assert states["silhouette-occt"]["open_defects"] == 1
-    assert states["silhouette-occt"]["open_defects_elsewhere"] == 0
+    assert states["silhouette-occt"]["elsewhere"] == []
     assert states["silhouette-naive"]["open_defects"] == 0
-    assert states["silhouette-naive"]["open_defects_elsewhere"] == 1
+    assert states["silhouette-naive"]["elsewhere"] == ["defect"]
 
 
 def test_slot_states_marks_a_wontfix_as_accepted_only_on_its_own_engine(conn):
@@ -481,5 +487,125 @@ def test_slot_states_reads_error_elsewhere_across_every_slot(conn):
     _measure(conn, "3001", "naive", error="MemoryError", source="white-naive")
     conn.commit()
     states = cells.slot_states(conn, "3001", ["white-occt", "silhouette-occt"])
-    assert states["white-occt"]["error_elsewhere"] is True
-    assert states["silhouette-occt"]["error_elsewhere"] is True
+    assert "failed" in states["white-occt"]["elsewhere"]
+    assert "failed" in states["silhouette-occt"]["elsewhere"]
+
+
+# --- looking for review: an open defect whose slot has been redrawn ---------
+
+
+def test_a_defect_judged_against_the_render_on_screen_asks_for_nothing(conn):
+    _part(conn, "3001")
+    _render(conn, "3001", "sha-a", "2026-09-05T00:00:00+00:00")
+    _defect(conn, "d1", "3001", ["naive"],
+            checked={"silhouette-naive": "sha-a"})
+    conn.commit()
+    cell = cells.cells(conn, source="silhouette-naive")["cells"][0]
+    assert cell["open_defects"] == 1
+    assert cell["review_defects"] == 0
+
+
+def test_a_defect_whose_slot_has_been_redrawn_asks_for_review(conn):
+    _part(conn, "3001")
+    _render(conn, "3001", "sha-b", "2026-09-06T00:00:00+00:00")
+    _defect(conn, "d1", "3001", ["naive"],
+            checked={"silhouette-naive": "sha-a"})
+    conn.commit()
+    cell = cells.cells(conn, source="silhouette-naive")["cells"][0]
+    # Disjoint: it left `open` when it entered `review`, so it cannot hide
+    # behind the part's untouched faults.
+    assert cell["open_defects"] == 0
+    assert cell["review_defects"] == 1
+
+
+def test_a_defect_nobody_has_judged_never_asks_for_review(conn):
+    """The whole corpus predates `checked`. Without a baseline a record has
+    nothing to compare against, and must stay quiet rather than flag."""
+    _part(conn, "3001")
+    _render(conn, "3001", "sha-b", "2026-09-06T00:00:00+00:00")
+    _defect(conn, "d1", "3001", ["naive"])
+    conn.commit()
+    cell = cells.cells(conn, source="silhouette-naive")["cells"][0]
+    assert cell["open_defects"] == 1
+    assert cell["review_defects"] == 0
+
+
+def test_a_closed_defect_asks_for_review_however_much_the_render_moves(conn):
+    _part(conn, "3001")
+    _render(conn, "3001", "sha-b", "2026-09-06T00:00:00+00:00")
+    _defect(conn, "d1", "3001", ["naive"], status="fixed",
+            checked={"silhouette-naive": "sha-a"})
+    conn.commit()
+    cell = cells.cells(conn, source="silhouette-naive")["cells"][0]
+    assert cell["review_defects"] == 0
+    assert cell["open_defects"] == 0
+
+
+def test_a_redraw_in_another_engine_reads_as_review_elsewhere(conn):
+    _part(conn, "3001")
+    _render(conn, "3001", "sha-b", "2026-09-06T00:00:00+00:00",
+            source="silhouette-occt")
+    _defect(conn, "d1", "3001", ["occt"],
+            checked={"silhouette-occt": "sha-a"})
+    conn.commit()
+    cell = cells.cells(conn, source="silhouette-naive")["cells"][0]
+    assert cell["elsewhere"] == ["review"]
+
+
+# --- errors belong to a slot, defects to an engine -------------------------
+
+
+def test_a_real_error_outranks_a_timeout_when_an_engine_s_facets_disagree(conn):
+    """One facet giving up on the clock must not mask another failing
+    outright, so the engine reports the worse of the two."""
+    _part(conn, "3001")
+    _measure(conn, "3001", "occt", error="TimeoutError", source="silhouette-occt")
+    _measure(conn, "3001", "occt", error="GEOSException", source="white-occt")
+    conn.commit()
+    assert cells.cells(conn, source="occt")["cells"][0]["error"] == "GEOSException"
+
+
+def test_a_timeout_elsewhere_is_told_apart_from_an_error_elsewhere(conn):
+    """One `error_elsewhere` bool could not say which, so the wall drew a
+    render error in the color of a timeout."""
+    _part(conn, "3001")
+    _part(conn, "3002")
+    _measure(conn, "3001", "occt", error="TimeoutError", source="silhouette-occt")
+    _measure(conn, "3002", "occt", error="GEOSException", source="silhouette-occt")
+    conn.commit()
+    rows = {c["id"]: c for c in cells.cells(conn, source="silhouette-naive")["cells"]}
+    assert rows["3001"]["elsewhere"] == ["timeout"]
+    assert rows["3002"]["elsewhere"] == ["failed"]
+
+
+def test_a_defect_against_an_engine_that_never_drew_the_part_still_counts(conn):
+    """A defect belongs to an engine, not to a render. Reading it off the
+    slots that have drawn the part hid every fault in an engine that has
+    not got to it yet."""
+    _part(conn, "3001")
+    _defect(conn, "d1", "3001", ["occt"])
+    conn.commit()
+    cell = cells.cells(conn, source="silhouette-naive")["cells"][0]
+    assert cell["elsewhere"] == ["defect"]
+
+
+def test_a_sibling_slot_of_the_same_engine_is_not_elsewhere(conn):
+    """`occt` and `silhouette-occt` are one engine. A defect against occt is
+    this cell's own, and reporting it as elsewhere too draws it twice."""
+    _part(conn, "3001")
+    _render(conn, "3001", "sha-a", "2026-09-05T00:00:00+00:00",
+            source="silhouette-occt")
+    _defect(conn, "d1", "3001", ["occt"])
+    conn.commit()
+    cell = cells.cells(conn, source="occt")["cells"][0]
+    assert cell["open_defects"] == 1
+    assert cell["elsewhere"] == []
+
+
+def test_a_wontfix_in_another_slot_asks_nothing_of_this_one(conn):
+    _part(conn, "3001")
+    _defect(conn, "d1", "3001", ["occt"], status="wontfix")
+    conn.commit()
+    cell = cells.cells(conn, source="silhouette-naive")["cells"][0]
+    assert cell["accepted_defects"] == 0
+    assert cell["elsewhere"] == []

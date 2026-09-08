@@ -1,15 +1,14 @@
 import type { ConfigField } from '@weasel-js/labkit';
-import { STATES, kebabKey, paramKeys } from '@lab/corpus/states';
-
-type Spec = (typeof STATES)[number];
+import { STATES, kebabKey, paramKeys,
+         type BorderedKey, type StateKey } from '@lab/corpus/states';
 
 /** The params a color row writes as a CSS custom property on `.lk-root`
  *  instead of passing down as a prop -- see `useParams` and `palette.ts`'s
  *  `PARAM_CSS_VAR`. One per color a state declares, so a borderless state
  *  gets no border row; `caretColor` is chrome rather than a state. */
 export type ColorParamKey =
-  | `${Spec['key']}Fill`
-  | `${Extract<Spec, { border: string }>['key']}Border`
+  | `${StateKey}Fill`
+  | `${BorderedKey}Border`
   | 'caretColor';
 
 interface ColorRow {

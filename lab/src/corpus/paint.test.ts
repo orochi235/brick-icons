@@ -13,8 +13,8 @@ const cell = (id: string, index: number, sha: string | null,
               overrides: Partial<Cell> = {}): Cell => ({
   id, index, title: id, category: null, family: null, printed: false, obsolete: false, base: true, out_of_scope: false, moved: false, year_from: null, year_to: null, sets: null, colors: null, tags: [],
   status: 'unreviewed', sha, made_at: null, extra_d99: null, secs: null,
-  error: null, open_defects: 0, open_defects_elsewhere: 0, accepted_defects: 0,
-  error_elsewhere: false, ...overrides,
+  error: null, open_defects: 0, review_defects: 0, accepted_defects: 0,
+  elsewhere: [], ...overrides,
 });
 
 const base = cell('base', 0, null);
@@ -156,11 +156,11 @@ it('grounds a drawn cell in its state color, defect or trouble elsewhere', () =>
   });
   expect(clean).toMatchObject({ ground: thumbGround() });
   const [elsewhere] = paintCommands({
-    cells: [cell('a', 0, 'sha-a', { error_elsewhere: true })], rects, visible: [0],
+    cells: [cell('a', 0, 'sha-a', { elsewhere: ['failed'] })], rects, visible: [0],
     cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest,
     loose: new Map([['a', img]]),
   });
-  expect(elsewhere).toMatchObject({ ground: CELL_FILL.problemElsewhere.border });
+  expect(elsewhere).toMatchObject({ ground: CELL_FILL.failedElsewhere.border });
 });
 
 it('keeps the ring for an undrawn cell, which has no drawing to color', () => {
@@ -184,14 +184,14 @@ it('separates a render error from a timeout', () => {
 });
 
 it('mutes a problem that belongs to another permutation', () => {
-  expect(fillFor({ ...base, open_defects_elsewhere: 1 }, CELL_FILL))
+  expect(fillFor({ ...base, elsewhere: ['defect'] }, CELL_FILL))
     .toBe(CELL_FILL.defectElsewhere);
-  expect(fillFor({ ...base, error_elsewhere: true }, CELL_FILL))
-    .toBe(CELL_FILL.problemElsewhere);
+  expect(fillFor({ ...base, elsewhere: ['failed'] }, CELL_FILL))
+    .toBe(CELL_FILL.failedElsewhere);
 });
 
 it('lets what is wrong here outrank what is wrong elsewhere', () => {
-  expect(fillFor({ ...base, error: 'TimeoutError', open_defects_elsewhere: 3 }, CELL_FILL))
+  expect(fillFor({ ...base, error: 'TimeoutError', elsewhere: ['defect'] }, CELL_FILL))
     .toBe(CELL_FILL.timeout);
 });
 
@@ -204,8 +204,8 @@ it('emits a fill and border for every problem state, and neither for unknown', (
     [{ ...base, open_defects: 1 }, 'defect'],
     [{ ...base, error: 'GEOSException' }, 'failed'],
     [{ ...base, error: 'TimeoutError' }, 'timeout'],
-    [{ ...base, open_defects_elsewhere: 1 }, 'defectElsewhere'],
-    [{ ...base, error_elsewhere: true }, 'problemElsewhere'],
+    [{ ...base, elsewhere: ['defect'] }, 'defectElsewhere'],
+    [{ ...base, elsewhere: ['failed'] }, 'failedElsewhere'],
     [base, 'unknown'],
   ];
   for (const [c, key] of states) {
@@ -230,7 +230,7 @@ it('draws a thinner border for a problem elsewhere than for one here', () => {
     cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest: null,
   });
   const [elsewhere] = paintCommands({
-    cells: [{ ...base, error_elsewhere: true }], rects: midRect, visible: [0],
+    cells: [{ ...base, elsewhere: ['failed'] }], rects: midRect, visible: [0],
     cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest: null,
   });
   expect((elsewhere as { borderWidth: number }).borderWidth)
@@ -242,8 +242,8 @@ it('gives every state cellState can produce an entry in the palette', () => {
     cell('a', 0, null, { open_defects: 1 }),
     cell('b', 1, null, { error: 'TimeoutError' }),
     cell('c', 2, null, { error: 'GEOSException' }),
-    cell('d', 3, null, { open_defects_elsewhere: 1 }),
-    cell('e', 4, null, { error_elsewhere: true }),
+    cell('d', 3, null, { elsewhere: ['defect'] }),
+    cell('e', 4, null, { elsewhere: ['failed'] }),
     cell('f', 5, null),
   ];
   for (const c of cells) {
@@ -274,22 +274,24 @@ it('tallies each cell into its own state, and nowhere else', () => {
     cell('b', 1, null, { open_defects: 2 }),
     cell('c', 2, null, { error: 'TimeoutError' }),
     cell('d', 3, null, { error: 'GEOSException' }),
-    cell('e', 4, null, { open_defects_elsewhere: 1 }),
-    cell('f', 5, null, { error_elsewhere: true }),
+    cell('e', 4, null, { elsewhere: ['defect'] }),
+    cell('f', 5, null, { elsewhere: ['failed'] }),
     cell('g', 6, null),
     cell('h', 7, null, { out_of_scope: true }),
     cell('i', 8, null, { accepted_defects: 1 }),
   ];
   expect(tally(cells)).toEqual({
-    unknown: 1, outOfScope: 1, timeout: 1, failed: 1, defect: 2, accepted: 1,
-    problemElsewhere: 1, defectElsewhere: 1,
+    unknown: 1, outOfScope: 1, review: 0, timeout: 1, failed: 1, defect: 2,
+    accepted: 1, reviewElsewhere: 0, defectElsewhere: 1, timeoutElsewhere: 0,
+    failedElsewhere: 1,
   });
 });
 
 it('tallies an empty corpus as all zeros', () => {
   expect(tally([])).toEqual({
-    unknown: 0, outOfScope: 0, timeout: 0, failed: 0, defect: 0, accepted: 0,
-    problemElsewhere: 0, defectElsewhere: 0,
+    unknown: 0, outOfScope: 0, review: 0, timeout: 0, failed: 0, defect: 0,
+    accepted: 0, reviewElsewhere: 0, defectElsewhere: 0, timeoutElsewhere: 0,
+    failedElsewhere: 0,
   });
 });
 
@@ -567,7 +569,7 @@ it('strikes every undrawn cell with a border, and leaves the quiet ones alone', 
   expect(struck({ error: 'TimeoutError' }).slash).toBe(true);
   expect(struck({ error: 'GEOSException' }).slash).toBe(true);
   expect(struck({ open_defects: 1 }).slash).toBe(true);
-  expect(struck({ error_elsewhere: true }).slash).toBe(true);
+  expect(struck({ elsewhere: ['failed'] }).slash).toBe(true);
   expect(struck({}).slash).toBe(false);
 });
 
@@ -608,7 +610,7 @@ it('paints a fault we decided to live with in its own color, under every live on
   expect(cellState(accepted)).toBe('accepted');
   expect(cellState(cell('b', 1, null, { accepted_defects: 1, open_defects: 1 })))
     .toBe('defect');
-  expect(cellState(cell('c', 2, null, { accepted_defects: 1, error_elsewhere: true })))
+  expect(cellState(cell('c', 2, null, { accepted_defects: 1, elsewhere: ['failed'] })))
     .toBe('accepted');
 });
 

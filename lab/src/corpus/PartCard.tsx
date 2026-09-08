@@ -13,23 +13,30 @@ const OFFSET = 16;
 
 /** Names what the wall's color and ring are saying about this cell, from the
  *  same precedence `fillFor` and the legend read. */
+const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
+
 function cellStateLabel(cell: Cell): string | null {
   switch (cellState(cell)) {
+    case 'review':
+      return `${plural(cell.review_defects, 'defect')} redrawn since last looked at`;
     case 'defect':
-      return `${cell.open_defects} open defect${cell.open_defects === 1 ? '' : 's'}`;
+      return `${plural(cell.open_defects, 'open defect')}`;
     case 'timeout':
       return 'render timed out';
     case 'failed':
       return `render error: ${cell.error}`;
+    case 'reviewElsewhere':
+      return 'a defect was redrawn in another slot';
     case 'defectElsewhere':
-      return `${cell.open_defects_elsewhere} open defect${cell.open_defects_elsewhere === 1 ? '' : 's'} in another slot`;
-    case 'problemElsewhere':
-      return 'fails in another slot';
+      return 'open defect in another slot';
+    case 'timeoutElsewhere':
+      return 'times out in another slot';
+    case 'failedElsewhere':
+      return 'errors in another slot';
     case 'outOfScope':
       return 'currently out of scope';
     case 'accepted':
-      return `${cell.accepted_defects} known issue`
-        + `${cell.accepted_defects === 1 ? '' : 's'}, not being fixed`;
+      return `${plural(cell.accepted_defects, 'known issue')}, not being fixed`;
     case 'unknown':
       return null;
   }

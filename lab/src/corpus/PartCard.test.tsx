@@ -8,7 +8,7 @@ const cell: Cell = {
   printed: false, obsolete: false, base: true, out_of_scope: false, moved: false, year_from: null, year_to: null, sets: null, colors: null, tags: [], status: 'good',
   sha: 'deadbeefcafe',
   made_at: '2026-09-05T10:00:00+00:00', extra_d99: 4.5, secs: 12, error: null,
-  open_defects: 0, open_defects_elsewhere: 0, accepted_defects: 0, error_elsewhere: false,
+  open_defects: 0, review_defects: 0, accepted_defects: 0, elsewhere: [],
 };
 
 const card = (props: Record<string, unknown> = {}) => (
@@ -72,8 +72,8 @@ it('counts open defects filed against this slot', () => {
 });
 
 it('names a defect filed against another slot as belonging elsewhere', () => {
-  render(card({ cell: { ...cell, open_defects_elsewhere: 1 } }));
-  expect(screen.getByText(/1 open defect in another slot/)).toBeTruthy();
+  render(card({ cell: { ...cell, elsewhere: ['defect'] } }));
+  expect(screen.getByText(/open defect in another slot/)).toBeTruthy();
 });
 
 it('leads with the render and sets the text beside it', () => {

@@ -8,7 +8,9 @@ import { Tags, yearRange } from '@lab/corpus/tags';
 import { defectId, engineFor } from '@lab/corpus/flag';
 import { cellState } from '@lab/corpus/paint';
 import type { CellState } from '@lab/corpus/palette';
+import { cssVarTable } from '@lab/corpus/states';
 import type { PartDetail } from '@lab/corpus/types';
+import { STATUSES, type DefectStatus } from '@lab/defects/useDefects';
 import { STATUS_BADGES } from '@lab/defects/statusBadges';
 import '@lab/corpus/Lightbox.css';
 
@@ -24,11 +26,32 @@ function slotState(slot: PartDetail['slots'][number],
   return cellState({
     out_of_scope: part.out_of_scope ?? false,
     open_defects: slot.open_defects ?? 0,
+    review_defects: slot.review_defects ?? 0,
     error: slot.error ?? null,
     accepted_defects: slot.accepted_defects ?? 0,
-    open_defects_elsewhere: slot.open_defects_elsewhere ?? 0,
-    error_elsewhere: slot.error_elsewhere ?? false,
+    elsewhere: slot.elsewhere ?? [],
   });
+}
+
+const STATE_VAR = cssVarTable();
+
+/** The CSS variable holding a state's border color, as a `var()` reference
+ *  for `--slot-ground`. Naming the property rather than resolving it keeps a
+ *  live color tweak reaching the lightbox, and keeps this table out of the
+ *  stylesheet where a new state would have to be remembered twice. */
+function groundVar(state: CellState): string | undefined {
+  const prop = STATE_VAR[state]?.border;
+  return prop ? `var(${prop})` : undefined;
+}
+
+/** Whether this defect is asking for a look at `source`: it was judged once
+ *  against a render, and the slot draws something else now. Mirrors
+ *  `defects.wants_review` on the server, which is what colors the cell. */
+export function wantsReview(defect: PartDetail['defects'][number],
+                            source: string, sha: string | undefined): boolean {
+  if (defect.status !== 'open' || !sha) return false;
+  const seen = defect.checked?.[source];
+  return seen !== undefined && seen !== sha;
 }
 
 /** A defect's status where it is read rather than set: the same badge shape
@@ -91,6 +114,9 @@ export function Lightbox({ partId, source, client, onClose }: {
         engines: [engineFor(shown)],
         status: 'open',
         title: title.trim(),
+        // Stamped with what you are looking at: this is the drawing the
+        // defect describes, and the one a later render is compared against.
+        ...(shaOf(shown) ? { checked: { [shown]: shaOf(shown) } } : {}),
         filed: new Date().toISOString().slice(0, 10),
       });
       setTitle('');
@@ -100,6 +126,23 @@ export function Lightbox({ partId, source, client, onClose }: {
       setFlagError(e instanceof Error ? e.message : String(e));
     }
   };
+  const shaOf = (source: string) =>
+    slots.find((slot) => slot.source === source)?.sha256;
+
+  /** Close a defect out, or send it back round. Either way the render in
+   *  front of you is stamped as judged, so a defect left open stops asking
+   *  until the slot draws something else again -- without that, one look at a
+   *  redrawn fault would leave it shouting for good. */
+  const verdict = async (id: string, status: DefectStatus) => {
+    const sha = shaOf(shown);
+    await client.patchDefect(id, {
+      status,
+      ...(sha ? { checked: { ...(detail?.defects.find((d) => d.id === id)?.checked ?? {}),
+                             [shown]: sha } } : {}),
+    });
+    setDetail(await client.corpusPart(partId));
+  };
+
   const years = detail
     ? yearRange(detail.part.year_from, detail.part.year_to,
                 (detail.part.tags ?? []).includes('retired'))
@@ -136,6 +179,11 @@ export function Lightbox({ partId, source, client, onClose }: {
               <li key={slot.source} className="corpus-slot"
                   data-current={slot.source === shown}
                   data-state={slotState(slot, detail.part)}
+                  data-ground={groundVar(slotState(slot, detail.part)) ? '' : undefined}
+                  ref={(el) => {
+                    const ground = groundVar(slotState(slot, detail.part));
+                    if (ground) el?.style.setProperty('--slot-ground', ground);
+                  }}
                   data-retired={(detail.part.tags ?? []).includes('retired')}>
                 {/* Capture, and stopped there: React derives a radio's onChange
                     from the same click, so a bubble-phase handler cannot keep
@@ -211,12 +259,30 @@ export function Lightbox({ partId, source, client, onClose }: {
           <h3>Defects</h3>
           {detail.defects.length === 0 ? <p>none</p> : (
             <ul>
-              {detail.defects.map((d) => (
-                <li key={d.id} className="corpus-defect">
-                  <span>{d.title}</span>
-                  <DefectStatusBadge status={d.status} />
-                </li>
-              ))}
+              {detail.defects.map((d) => {
+                const asks = wantsReview(d, shown, shaOf(shown));
+                return (
+                  <li key={d.id} className="corpus-defect" data-review={asks || undefined}>
+                    <span>{d.title}</span>
+                    <DefectStatusBadge status={d.status} />
+                    {asks && (
+                      <span className="corpus-verdict">
+                        <button type="button" onClick={() => void verdict(d.id, 'fixed')}>
+                          fixed
+                        </button>
+                        <button type="button" onClick={() => void verdict(d.id, 'open')}>
+                          still broken
+                        </button>
+                      </span>
+                    )}
+                    <select aria-label={`status of ${d.title}`} value={d.status}
+                            onChange={(e) => void verdict(
+                              d.id, e.target.value as DefectStatus)}>
+                      {STATUSES.map((st) => <option key={st} value={st}>{st}</option>)}
+                    </select>
+                  </li>
+                );
+              })}
             </ul>
           )}
           <h3>Runs</h3>

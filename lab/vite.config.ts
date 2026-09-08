@@ -12,6 +12,9 @@ export default defineConfig({
     alias: { '@lab': fileURLToPath(new URL('./src', import.meta.url)) },
   },
   server: {
+    // Both loopbacks answer; with this unset Node binds only whichever
+    // `localhost` resolves to first and 127.0.0.1:5178 refuses.
+    host: '::',
     port: 5178,
     proxy: { '/api': API, '/ldraw': API },
   },

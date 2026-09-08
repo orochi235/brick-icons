@@ -27,10 +27,20 @@ const PRE_TASK_LITERALS: Params = {
   // Post-snapshot: a fault we decided to live with needed a color of its own.
   acceptedFill: '#26382c',
   acceptedBorder: '#6f9e78',
-  problemElsewhereFill: '#26383f',
-  problemElsewhereBorder: '#97bcc5',
+  // Post-snapshot: a defect claimed fixed and redrawn, waiting to be judged.
+  reviewFill: '#3a2740',
+  reviewBorder: '#d070c0',
+  // Every `*Elsewhere` border is derived from its own condition's -- see
+  // `washOut` in states.ts -- so these pin the output of that formula, not a
+  // color anyone picked. The two that predate it moved by at most 4/255.
+  reviewElsewhereFill: '#3a2740',
+  reviewElsewhereBorder: '#c593bd',
   defectElsewhereFill: '#453c27',
-  defectElsewhereBorder: '#c7b78f',
+  defectElsewhereBorder: '#c5b793',
+  timeoutElsewhereFill: '#26383f',
+  timeoutElsewhereBorder: '#93bbc5',
+  failedElsewhereFill: '#4a2626',
+  failedElsewhereBorder: '#c59393',
   caretColor: '#ffffff',
 
   // Both post-snapshot, and both on: a cell wore its badges and captions
@@ -105,10 +115,13 @@ it('gives every color param a labelled row in the appearance panel', () => {
 it('keeps the color row labels the panel already showed', () => {
   const rows = new Map(APPEARANCE_FIELDS.map((f) => [f.key, f.label]));
   expect(COLOR_PARAM_KEYS.map((key) => rows.get(key))).toEqual([
-    'Unknown fill', 'Out-of-scope fill', 'Timeout fill', 'Timeout border',
-    'Failed fill', 'Failed border', 'Defect fill', 'Defect border',
-    'Accepted fill', 'Accepted border', 'Problem-elsewhere fill',
-    'Problem-elsewhere border', 'Defect-elsewhere fill', 'Defect-elsewhere border',
+    'Unknown fill', 'Out-of-scope fill', 'Review fill', 'Review border',
+    'Defect fill', 'Defect border', 'Timeout fill', 'Timeout border',
+    'Failed fill', 'Failed border', 'Accepted fill', 'Accepted border',
+    'Review-elsewhere fill', 'Review-elsewhere border',
+    'Defect-elsewhere fill', 'Defect-elsewhere border',
+    'Timeout-elsewhere fill', 'Timeout-elsewhere border',
+    'Failed-elsewhere fill', 'Failed-elsewhere border',
     'Caret color',
   ]);
 });

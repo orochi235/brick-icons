@@ -10,8 +10,8 @@ const cell = (id: string, index: number, overrides: Partial<Cell> = {}): Cell =>
   year_from: 1978, year_to: 1994, sets: 42, colors: 9, tags: [],
   status: 'unreviewed', sha: `sha-${id}`, made_at: '2025-01-01T00:00:00Z',
   extra_d99: null, secs: 1.5, error: null,
-  open_defects: 0, open_defects_elsewhere: 0, accepted_defects: 0,
-  error_elsewhere: false, ...overrides,
+  open_defects: 0, review_defects: 0, accepted_defects: 0,
+  elsewhere: [], ...overrides,
 });
 
 // A slot that is out of scope, timed out or errored produced no thumbnail, so
@@ -24,8 +24,8 @@ export const GOLDEN_CELLS: Cell[] = [
   cell('failed', 3, { error: 'RuntimeError', sha: null }),
   cell('defect', 4, { open_defects: 2 }),
   cell('accepted', 5, { accepted_defects: 1 }),
-  cell('probelse', 6, { error_elsewhere: true }),
-  cell('defelse', 7, { open_defects_elsewhere: 1 }),
+  cell('probelse', 6, { elsewhere: ['failed'] }),
+  cell('defelse', 7, { elsewhere: ['defect'] }),
   cell('retired', 8, { tags: ['retired'] }),
   cell('popular', 9, { tags: ['popular', 'technic'] }),
   cell('replaced', 10, { tags: ['replaced'], successor: '3002' }),

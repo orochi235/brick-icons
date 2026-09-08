@@ -33,11 +33,17 @@ export interface Cell {
   /** How far this slot got: see `coverage_of` in `brick_icons/lab/cells.py`.
    *  Absent from an API older than the field. */
   coverage?: 'defect' | 'failed' | 'timeout' | 'drawn' | 'untried';
+  /** Open here, and not waiting on a fresh render -- the two are disjoint so
+   *  a redrawn defect cannot hide behind the part's untouched ones. */
   open_defects: number;
-  open_defects_elsewhere: number;
+  /** Open here, judged once, and the slot has drawn something else since. */
+  review_defects: number;
   /** Filed against this slot's engine and accepted rather than fixed. */
   accepted_defects: number;
-  error_elsewhere: boolean;
+  /** Condition keys holding in a slot that is not this one, which the wall
+   *  draws as each condition's `<key>Elsewhere` sibling. One field for every
+   *  condition there will ever be. */
+  elsewhere: string[];
 }
 
 export interface CellsBody {
@@ -76,9 +82,9 @@ export interface PartDetail {
     source: string; sha256: string; made_at: string;
     error?: string | null;
     open_defects?: number;
-    open_defects_elsewhere?: number;
+    review_defects?: number;
     accepted_defects?: number;
-    error_elsewhere?: boolean;
+    elsewhere?: string[];
   }[];
   findings: { part_id: string; engine: string; extra_d99: number | null;
               missing_px: number | null; secs: number | null;
@@ -86,7 +92,11 @@ export interface PartDetail {
   runs: { id: number; kind: string; started: string; commit_sha: string;
           engine: string; extra_d99: number | null; missing_px: number | null;
           secs: number | null; error: string | null }[];
-  defects: { id: string; part: string; title: string; status: string }[];
+  defects: { id: string; part: string; title: string; status: string;
+             engines?: string[];
+             /** Slot -> the render sha last judged. The lightbox re-stamps it
+              *  on a verdict; absent means this defect never asks for one. */
+             checked?: Record<string, string> }[];
   /** How the part is built, from `part_features`: a null value is a flag the
    *  part carries, a number is a measure every part has. Absent from an API
    *  older than the field. */
