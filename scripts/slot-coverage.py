@@ -37,7 +37,6 @@ DEGENERATE = ROOT / "tests" / "goldens" / "degenerate-parts.toml"
 UNFILLABLE = {
     "ldview": "LDView renders it; scripts/ldview-batch.py",
     "reference": "a browser renders it; scripts/shot-sink.py",
-    "decal": "--decal is not a flag the census pass takes",
 }
 
 #: Why the estimate is a floor and not a forecast: it is built from the parts
@@ -65,13 +64,23 @@ def degenerate() -> set[str]:
         return {e["id"] for e in tomllib.load(fh).get("part", [])}
 
 
-def corpus(conn) -> list[str]:
-    """Every part in scope, id order."""
+#: A slot whose corpus is narrower than the library's, as an extra WHERE
+#: clause. The decal slot draws decoration, so a plain brick is not missing
+#: from it -- scoring it against the whole library would leave it reported
+#: 12,000 parts short of a coverage it can never reach.
+SLOT_SCOPE = {"decal": "(printed = 1 OR category = 'Sticker')"}
+
+
+def corpus(conn, slot: str | None = None) -> list[str]:
+    """Every part in scope for a slot, id order. Slotless: the whole library."""
     marks = ",".join("?" * len(db.OUT_OF_SCOPE_CATEGORIES))
     bad = degenerate()
+    narrow = SLOT_SCOPE.get(slot or "")
+    extra = f"AND {narrow} " if narrow else ""
     return [r["id"] for r in conn.execute(
         f"SELECT id FROM parts WHERE obsolete = 0 "
-        f"AND (category IS NULL OR category NOT IN ({marks})) ORDER BY id",
+        f"AND (category IS NULL OR category NOT IN ({marks})) {extra}"
+        f"ORDER BY id",
         db.OUT_OF_SCOPE_CATEGORIES) if r["id"] not in bad]
 
 
@@ -84,6 +93,11 @@ def flags_for(slot: str) -> dict:
     """
     parsed = cli.build_parser().parse_args(db.canonical_argv("3001", slot))
     cfg = cli._config_from_args(parsed)
+    if cfg.decal:
+        # A decal has no viewpoint, no engine and no strokes. Handing the
+        # batch the census pass's drawing flags would draw a silhouette into
+        # the decal slot, which is a wrong picture rather than an error.
+        return {"engine": cfg.engine, "extra": "--decal"}
     extra = ["--shade-style", cfg.shade_style,
              "--line-width", str(cfg.line_width),
              "--silhouette-width", str(cfg.silhouette_width)]
@@ -126,7 +140,10 @@ def owed(conn, slot: str, scope: list[str]) -> dict:
             "SELECT secs FROM measurements WHERE engine = ? AND error IS NULL "
             "AND secs IS NOT NULL", (engine,))]
         median = statistics.mean(peers) if peers else FALLBACK_SECS
-        borrowed = bool(peers)
+        # "borrowed" and "guessed" are different claims and a budget built on
+        # the second is worth much less. A slot whose engine has no rows at
+        # all got FALLBACK_SECS, and must not report it as measurement.
+        borrowed = "engine" if peers else "fallback"
 
     out = {"drawn": [], "never": [], "errored": [], "median": median,
            "borrowed": borrowed, "secs": {}}
@@ -176,7 +193,7 @@ def main() -> int:
     if not args.slot:
         rows = []
         for slot in db.SOURCES:
-            o = owed(conn, slot, scope)
+            o = owed(conn, slot, corpus(conn, slot))
             rows.append((slot, len(o["drawn"]),
                          len(o["never"]) + len(o["errored"]), o["median"],
                          o["borrowed"]))
@@ -198,7 +215,7 @@ def main() -> int:
         ap.error(f"{args.slot} cannot be filled from here: "
                  f"{UNFILLABLE[args.slot]}")
 
-    o = owed(conn, args.slot, scope)
+    o = owed(conn, args.slot, corpus(conn, args.slot))
     flags = flags_for(args.slot)
     picked = batch(o, args.budget * args.workers * 3600)
     spent = sum(o["secs"].get(p) or o["median"] for p in picked)
@@ -207,8 +224,9 @@ def main() -> int:
     print(f"  drawn      {len(o['drawn']):6}", flush=True)
     print(f"  never      {len(o['never']):6}", flush=True)
     print(f"  errored    {len(o['errored']):6}", flush=True)
-    origin = f"borrowed from every {flags['engine']} row" if o["borrowed"] \
-        else "this slot's own rows"
+    origin = {"engine": f"borrowed from every {flags['engine']} row",
+              "fallback": f"nothing measured yet; the {FALLBACK_SECS:.0f}s "
+                          f"default"}.get(o["borrowed"], "this slot's own rows")
     print(f"  mean       {o['median']:6.1f}s per part  ({origin})", flush=True)
     print(f"\n  batch of {len(picked)}: about {spent / 3600:5.1f} core-hours, "
           f"{spent / 3600 / args.workers:5.1f}h on {args.workers} workers",

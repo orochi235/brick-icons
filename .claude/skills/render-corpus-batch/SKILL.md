@@ -29,9 +29,14 @@ means the slot has no rows of its own and the figure is borrowed from its
 engine's other slots — an estimate of an estimate, fine for sizing a batch and
 not for quoting.
 
-Three slots cannot be filled from here and the table says so: `ldview` and
-`reference` come out of LDView and a browser, and `decal` needs a flag the
-census pass does not take.
+Two slots cannot be filled from here and the table says so: `ldview` and
+`reference` come out of LDView and a browser.
+
+**`decal` is filled by a different pass.** It has no silhouette to score
+against, so there is nothing for `census-batch.sh` to measure and its route is
+`scripts/build-render-store.py --sources decal`, sharded by list and launched
+the same way. Its scope is narrower too -- `SLOT_SCOPE` in `slot-coverage.py`
+counts only decorated parts, because a plain brick is not missing a decal.
 
 **Prefer an occt slot.** occt is the engine under work; a naive slot is
 low priority unless someone asked for it, and naive is also the half that

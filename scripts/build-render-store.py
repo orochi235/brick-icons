@@ -26,8 +26,9 @@ from brick_icons.lab import cache  # noqa: E402
 from brick_icons.lab import runner as lab_runner  # noqa: E402
 
 
-def render_one(part: str, source: str, run_id: int, conn, force: bool) -> dict:
-    have = [d for d in (ROOT / "renders" / source).glob(f"{part}.*")]
+def render_one(part: str, source: str, run_id: int, conn, force: bool,
+               store_root: Path = ROOT) -> dict:
+    have = [d for d in (store_root / "renders" / source).glob(f"{part}.*")]
     if have and not force:
         return {"part": part, "source": source, "state": "present"}
     argv = db.canonical_argv(part, source)
@@ -40,10 +41,16 @@ def render_one(part: str, source: str, run_id: int, conn, force: bool) -> dict:
     names = [a["name"] for a in result["artifacts"]]
     drawn = ([n for n in names if n.endswith(".svg")]
              or [n for n in names if n.endswith(".png")])
+    if not drawn and source == "decal":
+        # Not a failure: most of the library carries no print, and a part
+        # whose decoration shattered past unwrap.MAX_DECALS is declining to
+        # draw rather than erroring. Logged so a later pass can tell a part
+        # that was tried and had nothing from one nobody has reached.
+        return {"part": part, "source": source, "state": "none"}
     if not drawn:
         raise RuntimeError(f"render produced no drawing: {names}")
     made = cache.dir_for(argv, root=lab_root) / drawn[0]
-    db.store_render(conn, part, source, made, root=ROOT, run_id=run_id)
+    db.store_render(conn, part, source, made, root=store_root, run_id=run_id)
     return {"part": part, "source": source,
             "state": "cached" if result["cached"] else "stored"}
 
@@ -59,6 +66,11 @@ def main(argv=None) -> int:
     ap.add_argument("--no-isolate", dest="isolate", action="store_false",
                     help="render in-process; a crash then takes the run with it")
     ap.add_argument("--log", default=str(ROOT / "out" / "store" / "store.jsonl"))
+    ap.add_argument("--store-root", dest="store_root", default=str(ROOT),
+                    help="write drawings under <root>/renders/<source>. A "
+                         "fleet run points this inside the directory onto "
+                         "brings home, so the drawings travel with the log "
+                         "instead of staying on the node")
     ap.add_argument("--db", default=str(ROOT / db.DEFAULT_PATH))
     ap.add_argument("--force", action="store_true",
                     help="re-render a part already in the store")
@@ -67,7 +79,10 @@ def main(argv=None) -> int:
                          "errored on, which resume otherwise treats as done")
     args = ap.parse_args(argv)
 
-    ids = list(args.parts)
+    # Comma-split so one `onto run --each` line is one item: the batch files
+    # slot-coverage writes hold a dozen ids per line, and onto substitutes the
+    # whole line for `{}`.
+    ids = [p for arg in args.parts for p in arg.split(",") if p.strip()]
     if args.list:
         ids += [s for line in Path(args.list).read_text().splitlines()
                 if (s := line.split("#")[0].strip())]
@@ -96,7 +111,7 @@ def main(argv=None) -> int:
         print(f"{source}: {len(todo)} of {len(ids)} to render", flush=True)
         for n, part in enumerate(todo, 1):
             row = batch.run(part, lambda p, s=source: render_one(
-                p, s, run_id, conn, args.force))
+                p, s, run_id, conn, args.force, Path(args.store_root)))
             state = row.get("error") or row.get("state")
             print(f"{n}/{len(todo)} {source} {part}: {state} [{row['secs']}s]",
                   flush=True)
