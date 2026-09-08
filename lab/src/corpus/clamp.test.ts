@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BLANK_SLOP_PX, clampWallView, DEFAULT_BLANK_PX } from '@lab/corpus/clamp';
+import { BLANK_SLOP_PX, clampWallView, DEFAULT_BLANK_PX, sameView } from '@lab/corpus/clamp';
 
 const BOUNDS = { w: 1000, h: 800 };
 const CANVAS = { width: 400, height: 300 };
@@ -47,5 +47,23 @@ describe('clampWallView', () => {
     // world units and the strip still looks the same size
     const out = clampWallView({ x: 9999, y: 100, scale: { x: 2, y: 2 } }, BOUNDS, CANVAS, 120);
     expect(out.x + CANVAS.width / 2 - BOUNDS.w).toBeCloseTo((120 + BLANK_SLOP_PX) / 2);
+  });
+});
+
+describe('sameView', () => {
+  const view = { x: 3, y: 4, scale: { x: 2, y: 2 } };
+
+  it('holds a clamped camera still once it is against the edge', () => {
+    const first = clampWallView({ x: 9999, y: 9999, scale: { x: 1, y: 1 } }, BOUNDS, CANVAS);
+    expect(sameView(first, clampWallView(first, BOUNDS, CANVAS))).toBe(true);
+  });
+
+  it('separates cameras that differ in any one of the four numbers', () => {
+    expect(sameView(view, { ...view })).toBe(true);
+    expect(sameView(view, { ...view, x: 3.0001 })).toBe(false);
+    expect(sameView(view, { ...view, y: 5 })).toBe(false);
+    expect(sameView(view, { ...view, scale: { x: 2, y: 3 } })).toBe(false);
+    expect(sameView(view, null)).toBe(false);
+    expect(sameView(null, null)).toBe(true);
   });
 });

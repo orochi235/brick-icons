@@ -40,3 +40,18 @@ export function clampWallView(view: View, bounds: WallBounds, canvas: CanvasSize
     height: bounds.h + 2 * marginY,
   }, canvas);
 }
+
+/** Whether two cameras are the same view, by value.
+ *
+ *  `clampView` returns its argument untouched when nothing is out of bounds,
+ *  but builds a fresh object the moment it clamps anything -- so a camera
+ *  pinned against an edge yields a new reference on every write while the four
+ *  numbers stand still. Setting React state to that is a re-render that changes
+ *  nothing, and re-entering the write from it is an update loop with no end.
+ */
+export function sameView(a: View | null, b: View | null): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return a.x === b.x && a.y === b.y
+      && a.scale.x === b.scale.x && a.scale.y === b.scale.y;
+}

@@ -4,7 +4,7 @@ import {
 } from '@weasel-js/core';
 import { LabShell } from '@weasel-js/labkit';
 import type { LabClient } from '@lab/api/client';
-import { clampWallView, DEFAULT_BLANK_PX } from '@lab/corpus/clamp';
+import { clampWallView, DEFAULT_BLANK_PX, sameView } from '@lab/corpus/clamp';
 import { readWallHash, wallHashString } from '@lab/corpus/wallHash';
 import { categoryOf, COVERAGE_ORDER, groupers, rollUp } from '@lab/corpus/facts';
 import { FilterBar } from '@lab/corpus/FilterBar';
@@ -192,9 +192,15 @@ export function CorpusWall({ client }: { client: LabClient }) {
   // calls `view.set` directly, bypassing any handler below -- gets clamped on
   // each intermediate frame too, not just once it comes to rest.
   const updateCam = (next: View) => {
-    setCam(laid.bounds.w > 0 && size.width > 0 && size.height > 0
+    const clamped = laid.bounds.w > 0 && size.width > 0 && size.height > 0
       ? clampWallView(next, laid.bounds, size, blankPx)
-      : next);
+      : next;
+    // By value, not by reference. `clampView` hands back its argument when
+    // nothing is out of bounds but builds a fresh object the moment it clamps,
+    // so a camera pinned against an edge produced a new one on every pointer
+    // event while its four numbers stood still -- a re-render that changed
+    // nothing, and a write that could re-enter itself without end.
+    setCam((current) => (sameView(current, clamped) ? current : clamped));
   };
 
   // Glides rather than jumps -- reads the live camera through the ref, so an
@@ -275,22 +281,31 @@ export function CorpusWall({ client }: { client: LabClient }) {
   // Hysteresis governs transitions, and the first pick has nothing to be
   // hysteretic about -- the camera's first fit sets the level directly, and
   // only later camera changes route through pickLevel.
+  //
+  // On the drawn cell size and the viewport, NOT on the camera object. A
+  // camera held against a bound is rewritten on every pointer event -- the
+  // clamp builds a new object whenever it clamps anything -- and keying this
+  // to `cam` meant every one of those writes re-picked a level that could not
+  // have changed. The viewport is here in its own right: a resize re-fits, and
+  // the fit is what the level is read off.
+  const cellPx = cam ? params.cell * cam.scale.x : 0;
   useEffect(() => {
     if (!cam) return;
     if (camInitialized.current) {
-      setLevel((current) => pickLevel(current, params.cell * cam.scale.x,
+      setLevel((current) => pickLevel(current, cellPx,
                                        params.levelUpHysteresis, params.levelDownHysteresis));
     } else {
       camInitialized.current = true;
-      setLevel(levelFor(params.cell * cam.scale.x));
+      setLevel(levelFor(cellPx));
     }
-  }, [cam, params.cell, params.levelUpHysteresis, params.levelDownHysteresis]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cellPx, size.width, size.height,
+      params.levelUpHysteresis, params.levelDownHysteresis]);
 
   const visible = useMemo(
     () => (cam ? visibleRange(laid.rects, cam, size) : []),
     [laid.rects, cam, size.width, size.height]);
   const loose = useLooseThumbs(shown, visible, level, drawnSource);
-  const cellPx = cam ? params.cell * cam.scale.x : 0;
   const vector = useVectorThumbs(shown, visible, level, drawnSource, cellPx);
 
   // The 128 rung still draws from the 32px bake underneath -- a cell whose
