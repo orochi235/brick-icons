@@ -1,3 +1,52 @@
+## The decal slot draws, and its fill is running
+
+On `main` in the shared checkout. `750815a`, `422d3a0`, `9427d0a` are the
+decal sheet, the store fill and the lightbox 3D panel; unpushed. Another
+session is working the wall's topbar in the same tree, so stage explicit paths.
+
+Two decisions from conversation that the code does not carry:
+
+**Head-on and flat, not the part seen face-on.** The slot draws only the
+decoration, unwrapped off its carriers -- `unwrap.decal_sheet` -- rather than
+the part rendered down the print's normal. Stickers, printed parts and
+decorated assemblies all go through the one path.
+
+**`MAX_DECALS = 4` stays.** The first six over-cap parts in the library
+(10057pm0, 10057pm1, 10066p01-03, 100942p01; nine to eleven panels each) are
+one decoration shattered over the facet planes of a sculpted head, hair or
+wheel. No panel is a readable picture, the largest included, so unwrapping
+five or more onto a sheet would tile shards.
+
+### What is running
+
+`onto jobs` -- task `slot-decal` on **orochi, in place** (`--dir "$PWD"`), 4
+shards over the 12,388 decorated parts the slot is missing. Sent here because
+no fleet node could take it: keiei has no `.venv` and no `uv`, and studio and
+msb-uai both held tree locks from running jobs.
+
+**It will not finish inside its deadline.** Measured 26 parts/min across the
+four shards -- about 8 hours for the corpus, against the 4h the job has. The
+cost estimate that sized it came from a 40-part stride sample averaging 0.84s,
+which badly over-represents cheap parts: the real spread runs to 54s on a
+shattered print. Relaunching under the same task name continues it, because
+`batch.Runner` skips what its JSONL already holds:
+
+    onto run --detach --timeout 4h --dir "$PWD" --task slot-decal \
+      --each out/slot-decal/shards.txt --workers 4 --retries 0 \
+      --env PATH=/Users/mike/.local/bin:/opt/homebrew/bin:/usr/bin:/bin \
+      orochi -- sh -c 'n=$(basename "$1" .txt); mkdir -p out/store/decal-$n; \
+        .venv/bin/python scripts/build-render-store.py --list "$1" \
+          --sources decal --log out/store/decal-$n/store.jsonl \
+          --db out/slot-decal/$n.db --timeout 60' sh '{}'
+
+Drawings land in `renders/decal/` and rows in each shard's own scratch db, so
+the four writers do not contend on `corpus.db`. **`corpus.db` has none of them
+yet** -- `scripts/index-store-attempts.py` takes the shard logs up when the
+run stops, and until that runs the wall shows the slot at its 33 probe rows.
+
+**keiei is worth provisioning.** It is the only idle node and it cannot run
+anything in this repo: no `uv`, system Python 3.11.6, no `.venv`.
+
 ## Engine parity: the two engines already agree, and a corpus ranking is running
 
 On `main` in the shared checkout. `git log --oneline @{u}..HEAD` for what is
