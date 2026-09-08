@@ -146,3 +146,128 @@ it('keeps a cell carrying ANY of the picked tags, not all of them', () => {
   expect(pick(['technic'])).toEqual(['a']);
   expect(pick([])).toEqual(['a', 'b', 'c']);
 });
+
+it('sorts by category name, ascending, unnamed last', () => {
+  const parts = [cell({ id: 'a', index: 0, category: 'Plate' }),
+                 cell({ id: 'b', index: 1, category: 'Brick' }),
+                 cell({ id: 'c', index: 2, category: null })];
+  expect(applySelection(parts, { sort: 'category', filter: 'all', shown: DEFAULT_SHOWN, ...base })
+    .map((c) => c.id)).toEqual(['b', 'a', 'c']);
+});
+
+// Sorting reads the raw catalog name, so a sigil sorts after every letter --
+// unlike exclusion, which matches on the cleaned name.
+it('sorts on the raw category, sigil and all', () => {
+  const parts = [cell({ id: 'a', index: 0, category: '~Brick' }),
+                 cell({ id: 'b', index: 1, category: 'Plate' })];
+  expect(applySelection(parts, { sort: 'category', filter: 'all', shown: DEFAULT_SHOWN, ...base })
+    .map((c) => c.id)).toEqual(['b', 'a']);
+});
+
+it('sorts by status, ascending', () => {
+  const parts = [cell({ id: 'a', index: 0, status: 'reviewed' }),
+                 cell({ id: 'b', index: 1, status: 'broken' }),
+                 cell({ id: 'c', index: 2, status: 'unreviewed' })];
+  expect(applySelection(parts, { sort: 'status', filter: 'all', shown: DEFAULT_SHOWN, ...base })
+    .map((c) => c.id)).toEqual(['b', 'a', 'c']);
+});
+
+it('sorts by render time, slowest first, unmeasured last', () => {
+  const parts = [cell({ id: 'a', index: 0, secs: 0.5 }),
+                 cell({ id: 'b', index: 1, secs: 12 }),
+                 cell({ id: 'c', index: 2 })];
+  expect(applySelection(parts, { sort: 'secs', filter: 'all', shown: DEFAULT_SHOWN, ...base })
+    .map((c) => c.id)).toEqual(['b', 'a', 'c']);
+});
+
+it('sorts by render date, newest first, never-rendered last', () => {
+  const parts = [cell({ id: 'a', index: 0, made_at: '2024-01-02T00:00:00Z' }),
+                 cell({ id: 'b', index: 1, made_at: '2025-06-01T00:00:00Z' }),
+                 cell({ id: 'c', index: 2 })];
+  expect(applySelection(parts, { sort: 'made_at', filter: 'all', shown: DEFAULT_SHOWN, ...base })
+    .map((c) => c.id)).toEqual(['b', 'a', 'c']);
+});
+
+it('breaks a tie on part id, ascending, whichever way the sort runs', () => {
+  const asc = [cell({ id: 'c', index: 0, status: 'same' }),
+               cell({ id: 'a', index: 1, status: 'same' }),
+               cell({ id: 'b', index: 2, status: 'same' })];
+  expect(applySelection(asc, { sort: 'status', filter: 'all', shown: DEFAULT_SHOWN, ...base })
+    .map((c) => c.id)).toEqual(['a', 'b', 'c']);
+  const desc = [cell({ id: 'c', index: 0, sets: 7 }),
+                cell({ id: 'a', index: 1, sets: 7 }),
+                cell({ id: 'b', index: 2, sets: 7 })];
+  expect(applySelection(desc, { sort: 'sets', filter: 'all', shown: DEFAULT_SHOWN, ...base })
+    .map((c) => c.id)).toEqual(['a', 'b', 'c']);
+});
+
+it('leaves cells with no key in the order they arrived', () => {
+  const parts = [cell({ id: 'c', index: 0 }),
+                 cell({ id: 'a', index: 1 }),
+                 cell({ id: 'b', index: 2 })];
+  expect(applySelection(parts, { sort: 'sets', filter: 'all', shown: DEFAULT_SHOWN, ...base })
+    .map((c) => c.id)).toEqual(['c', 'a', 'b']);
+});
+
+it('filters to what has a render', () => {
+  expect(applySelection(cells, { sort: 'id', filter: 'rendered', shown: DEFAULT_SHOWN, ...base })
+    .map((c) => c.id)).toEqual(['a', 'c']);
+});
+
+it('keeps everything under the all filter', () => {
+  expect(applySelection(cells, { sort: 'id', filter: 'all', shown: DEFAULT_SHOWN, ...base })
+    .map((c) => c.id)).toEqual(['a', 'b', 'c']);
+});
+
+it('filters to printed parts', () => {
+  const parts = [cell({ id: 'a', index: 0, printed: true }),
+                 cell({ id: 'b', index: 1 })];
+  expect(applySelection(parts, { sort: 'id', filter: 'printed', shown: DEFAULT_SHOWN, ...base })
+    .map((c) => c.id)).toEqual(['a']);
+});
+
+it('filters to obsolete parts', () => {
+  const parts = [cell({ id: 'a', index: 0, obsolete: true }),
+                 cell({ id: 'b', index: 1 })];
+  expect(applySelection(parts, { sort: 'id', filter: 'obsolete', shown: DEFAULT_SHOWN, ...base })
+    .map((c) => c.id)).toEqual(['a']);
+});
+
+it('narrows by filter, class and badge together', () => {
+  const parts = [
+    cell({ id: 'a', index: 0, sha: 'x', tags: ['technic'] }),
+    cell({ id: 'b', index: 1, tags: ['technic'] }),
+    cell({ id: 'c', index: 2, sha: 'x', tags: ['duplo'] }),
+    cell({ id: 'd', index: 3, sha: 'x', tags: ['technic'], moved: true }),
+  ];
+  expect(applySelection(parts, { sort: 'id', filter: 'rendered', shown: DEFAULT_SHOWN,
+                                 ...base, badges: ['technic'] })
+    .map((c) => c.id)).toEqual(['a']);
+});
+
+it('drops a cell an excluded category catches even when a badge picked it', () => {
+  const parts = [cell({ id: 'a', index: 0, category: 'Brick', tags: ['technic'] }),
+                 cell({ id: 'b', index: 1, category: 'Plate', tags: ['technic'] })];
+  expect(applySelection(parts, { sort: 'id', filter: 'all', shown: DEFAULT_SHOWN,
+                                 ...base, excluded: ['Plate'], badges: ['technic'] })
+    .map((c) => c.id)).toEqual(['a']);
+});
+
+it('drops a cell whose tags the server never sent when a badge is picked', () => {
+  const parts = [cell({ id: 'a', index: 0, tags: ['technic'] }),
+                 { ...cell({ id: 'b', index: 1 }), tags: undefined } as unknown as Cell];
+  expect(applySelection(parts, { sort: 'id', filter: 'all', shown: DEFAULT_SHOWN,
+                                 ...base, badges: ['technic'] })
+    .map((c) => c.id)).toEqual(['a']);
+});
+
+// The server is long-lived and can be older than the page: a selection that
+// reaches `applySelection` without these fields falls back rather than throwing.
+it('falls back to the default classes and no badges when neither is supplied', () => {
+  const parts = [cell({ id: 'a', index: 0 }),
+                 cell({ id: 'b', index: 1, moved: true }),
+                 cell({ id: 'c', index: 2, out_of_scope: true })];
+  const bare = { sort: 'id', filter: 'all', grouping: 'none', tint: 'status',
+                 excluded: [], desc: true } as unknown as Selection;
+  expect(applySelection(parts, bare).map((c) => c.id)).toEqual(['a', 'c']);
+});
