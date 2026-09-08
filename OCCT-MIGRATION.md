@@ -101,7 +101,18 @@ The `occt` branch of `hlr.visible_segments` runs `fit_silhouette_arcs` and
 | `faces_from_analytic` | `_faces_for` / `curved_faces` |
 | `fit_arcs` drawn as arcs, occluded along a chord proxy | `authored_loci` matches the authored chords and `locus_arc` re-reads them against the arc |
 | `absorb_wall_facets` | not applicable: occt's walls are OCCT surfaces, and an authored color-16 wall quad never becomes an occt face |
-| rim arc candidates carry a 25° max step so a 16-gon's chords are recognized | occt samples its own boundaries at `BOUNDARY_STEP_DEG` 9°, under `geom2d.MAX_STEP` 15°, so they recover without help. The coarser step still matters for the faces occt derives from triangles |
+
+### Arc candidates
+
+`geom2d.arc_candidates` reads an optional 7th element as that candidate's max
+step in degrees and an 8th as a per-candidate snap tolerance in px. naive sets
+both; occt appends bare 6-tuples, so every candidate it emits takes the default
+`MAX_STEP` 15° and no tolerance.
+
+| naive does | occt does | |
+|---|---|---|
+| every drawn circle is a candidate at a 25° max step, because a face authored as an LDraw 16-gon rings a hole in 22.5° chords and cannot recover as an arc under 15° | bare 6-tuples: `MAX_STEP` 15° | **absent.** occt's own surface boundaries sample at `BOUNDARY_STEP_DEG` 9° and do recover unaided, but a triangle is sewn into a planar face whose boundary is still the authored chord polygon. Giving occt's candidates naive's 25°: `32062` 43 arc commands to 75 and 26,360 bytes to 21,573 with the raster unchanged; `3941` 141 to 164, and two kinks in the counterbore band become curves. 4 of 6 faceted specimens move |
+| `fit_ells` carries a MEASURED snap tolerance so a fill seam authored along the facet chain snaps onto the DRAWN arc | no tolerance | **absent**, follows the row above |
 
 ### The junction-lens layer is not a fill
 
