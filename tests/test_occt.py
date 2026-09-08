@@ -79,6 +79,21 @@ def test_a_skew_axis_is_rejected():
     assert occt.frame(P("cyli", R, np.zeros(3))) is None
 
 
+def test_a_rounded_rotation_is_not_read_as_skew():
+    """LDraw writes a placement matrix to three decimals, so a rotation in a
+    .dat is only orthonormal to about 1e-3 -- 76382 hangs each hand off
+    0.985/0.696/0.707, whose Gram off-diagonal is 1.0e-3. Judged as skew, every
+    round subpart under a rotated placement loses its exact surface and falls
+    back to tessellation, which is what left the minifig hands a mess."""
+    hand = np.array([[0.985, -0.12, 0.12],
+                     [0.17, 0.696, -0.696],
+                     [0.0, 0.707, 0.707]])
+    assert abs(hand[:, 0] @ hand[:, 1]) > 1e-4          # above the old tol
+    f = occt.frame(P("cyli", hand @ np.diag([4.0, 11.0, 4.0]), np.zeros(3)))
+    assert f is not None
+    assert occt.is_round(f[4], f[5]), "a rounded rotation is still a circle"
+
+
 def _sheared_wall():
     """11090's tube wall: 1-4cylo whose u and v columns sit 89.2 degrees
     apart, with the axis exactly square to both."""

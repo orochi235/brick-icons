@@ -42,8 +42,16 @@ from . import timing
 from . import hlr, primitives
 
 TOL = 1e-4
-ORTHO_TOL = 1e-4     # see frame(); measured noise floors are 1.2e-6 and 8.9e-6
-ROUND_TOL = 1e-4
+# A rotation written to three decimals -- which is all a .dat carries -- is
+# orthonormal only to about 1e-3, and composing two of them roughly doubles
+# that. Both tolerances are that rounding budget, measured rather than picked:
+# over 38,758 primitives from 400 random parts, no cyli has an axis residual
+# between 2e-3 and 5e-3, and none of the four kinds has an out-of-round between
+# 1e-3 and 3e-3. Authored skew starts an order of magnitude above -- 11090's
+# tube wall at 89.2 degrees is 1.4e-2 -- so nothing sits on the fence.
+# `scripts/measure-ortho-residuals.py` re-derives both gaps.
+ORTHO_TOL = 3e-3     # see frame()
+ROUND_TOL = 3e-3
 
 # every vertex of these sits at local y=0, so the matrix's axis column is not
 # their geometry and is not required to be square to it -- see frame()
