@@ -1,7 +1,15 @@
-## Working through the open occt defect rows: two landed, and what each probe settled
+## Working through the open occt defect rows: what landed, and what each probe settled
 
-Both fixes are committed on `main` (`bd537b1`, `c95e2c9`) with their own
-measurements; `tests/goldens/defects.toml` carries a note per row.
+On `main`, in the shared checkout -- five other sessions had this exact
+directory open when this was written, so **stage explicit paths and never
+`git add -A`**, and confirm the branch before assuming it. `git log --oneline
+@{u}..HEAD` for what is unpushed.
+
+Four fixes are committed: `bd537b1`, `c95e2c9`, `99a9693` and `d46962e` (which
+narrows `c95e2c9`), each carrying its own measurements. **`tests/goldens/
+defects.toml` holds a note per row and is deliberately uncommitted** -- it is
+Mike's shared file; never stage it and never revert it. The new row
+`92692-knuckle-gradient-crescents` lives only there.
 
 **An oblique cylinder builds now** (`bd537b1`). A cyli whose axis leans out of
 its cross-section plane was rejected, and a rejected primitive is a HOLE in the
