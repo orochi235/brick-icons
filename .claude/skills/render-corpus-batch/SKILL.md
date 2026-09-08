@@ -16,7 +16,7 @@ a render nobody measured is a cell on the wall that no coverage number can
 check.
 
 Two neighbors own the steps either side of this one. `onto-job` is the fleet
-mechanics — nodes, sync, detach, fetch. `ingest-renders` is step 5, and it is
+mechanics — nodes, sync, detach, fetch. `ingest-renders` is step 6, and it is
 not optional reading: indexing is not baking, and a rebuild that is not swapped
 in from a temp file corrupts a database somebody else is reading.
 
@@ -54,7 +54,34 @@ Never-tried parts come before previously-errored ones. A part that times out
 costs its whole cap and yields nothing, so a run cut short by its deadline
 should spend the time on parts that might succeed.
 
-### 3. Launch
+### 3. Say what you are about to schedule, before you schedule it
+
+This spends hours of somebody else's machine. Before launching, state in one
+short block: **which slot, how many parts, which node, how many workers, the
+expected wall-clock, and what will be true when it lands.** Then launch — this
+is an announcement, not a request for permission, unless something in it
+surprises you.
+
+    slot        white-occt      12,987 parts missing, filling all of them
+    node        studio          8 workers, ~4.5h wall clock (~36 core-hours)
+    lands as    renders under white-occt + a measurement row per part
+    after       white-occt goes from 7,464 drawn to ~12,900 short of failures
+
+**`orochi` is the user's own Mac, and it is the last node you consider, not the
+first.** It runs the editor, the browsers, the lab servers and several Claude
+sessions, and it is the only machine whose slowness anyone feels. Read its row
+in `onto status` last, and dispatch to it only when no other node can take the
+work and the job has a reason to need this checkout. A remote node being a bit
+busier is not a reason to come home.
+
+**Check no peer session is already working that slot.** Several Claude sessions
+share this working directory and cannot see each other's processes. Read their
+launch prompts — `ps -eo pid,command | grep '[c]laude'` — before picking, not
+after: a slot another session is mid-fetch on will re-render thousands of parts
+that are already drawn and waiting to be indexed. `store-queue/*.txt` and
+`onto jobs` say what is in flight; neither is enough on its own.
+
+### 4. Launch
 
 `out/` is gitignored and `--each` reads its list in the node's own tree, so
 rsync the list across first. Then, with the three values step 2 printed:
@@ -91,7 +118,7 @@ rsync the list across first. Then, with the three values step 2 printed:
   batch appends to that pass's file — and `--skip-done` reads the old timeout
   rows as done and skips exactly the parts being retried.
 
-### 4. Wait, and watch for the two silent failures
+### 5. Wait, and watch for the two silent failures
 
     onto jobs
     onto logs <id> | tail -20
@@ -104,7 +131,7 @@ run reaches its end having written only error rows.
 Do not start a second `onto fetch` on a task that already has one streaming:
 two streams race each other into the same directory. `pgrep -fl "onto fetch"`.
 
-### 5. Ingest
+### 6. Ingest
 
     onto fetch --stream slot-occt
 
@@ -113,7 +140,7 @@ route, because it carries measurements as well as drawings. Let the stream's
 final pass finish first — it is the only one guaranteed to see a tree nobody
 is writing to, and a part-written SVG indexes fine and bakes as UNREADABLE.
 
-### 6. Report what is owed, not that it finished
+### 7. Report what is owed, not that it finished
 
 Re-run step 1 and say four numbers: asked for, drawn, failed, still missing.
 The job's own summary counts what it believes it wrote; `slot-coverage.py`
