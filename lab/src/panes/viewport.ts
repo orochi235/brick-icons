@@ -6,9 +6,11 @@
  * frustum, so the same world point lands on the same pixel in both.
  *
  * The world -> viewBox map is the render's own, read from the `.fit.json` the
- * CLI writes beside the SVG; nothing here re-derives it.
+ * CLI writes beside the SVG. The exception is `viewBasis`/`fitAffine`, which
+ * build one: the reference bake frames itself and has no render to read.
  */
 import type { Camera } from '@lab/panes/camera';
+import type { Angle } from '@lab/panes/orbit';
 
 export type Vec3Tuple = [number, number, number];
 
@@ -26,7 +28,7 @@ export interface RenderFit {
   /** The style's VIEW-space light direction, pointing at the source. Absent
    *  for a render with no style -- wireframe, or `--shade-style none`. */
   light?: Vec3Tuple;
-  /** The style's resolved part colour, as r/g/b 0-255. Absent with `light`. */
+  /** The style's resolved part color, as r/g/b 0-255. Absent with `light`. */
   part_color?: Vec3Tuple;
 }
 
@@ -139,7 +141,7 @@ export function threeStyle(config: Record<string, unknown>): ThreeStyle {
   return {
     opacity: Math.min(1, Math.max(0, num('opacity', DEFAULT_STYLE.opacity))),
     lineWidth: Math.max(0, num('line_width', DEFAULT_STYLE.lineWidth)),
-    // `none` is the CLI's word for a transparent ground, not a colour.
+    // `none` is the CLI's word for a transparent ground, not a color.
     background: typeof bg === 'string' && bg && bg !== 'none' ? bg : null,
   };
 }
@@ -171,8 +173,8 @@ export function lightPosition(fit: RenderFit | null,
   ]);
 }
 
-/** The render's part colour as a three.js hex, or null to leave the part in
- *  the colours the LDraw file gave it. */
+/** The render's part color as a three.js hex, or null to leave the part in
+ *  the colors the LDraw file gave it. */
 export function partColorHex(fit: RenderFit | null): number | null {
   if (!fit?.part_color) return null;
   const [r, g, b] = fit.part_color;
@@ -188,4 +190,43 @@ export function partColorHex(fit: RenderFit | null): number | null {
  */
 export function toThree(v: Vec3Tuple): Vec3Tuple {
   return [v[0], -v[1], -v[2]];
+}
+
+/** `hlr.view_basis`: the engine's LDraw-space camera basis for an angle.
+ *
+ * A projected point is `(P.right, -(P.up))`, so `up` is the world direction
+ * screen-up and B is its negation. `SIGN_Z` is the engine's -1.
+ */
+export function viewBasis(angle: Angle): Pick<RenderFit, 'right' | 'up' | 'fwd'> {
+  const la = angle.lat * Math.PI / 180, lo = angle.long * Math.PI / 180;
+  const d: Vec3Tuple = [Math.cos(la) * Math.sin(lo), -Math.sin(la),
+                        -Math.cos(la) * Math.cos(lo)];
+  const norm = (v: Vec3Tuple): Vec3Tuple => {
+    const n = Math.hypot(...v) || 1;
+    return [v[0] / n, v[1] / n, v[2] / n];
+  };
+  const cross = (a: Vec3Tuple, b: Vec3Tuple): Vec3Tuple =>
+    [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const fwd = norm([-d[0], -d[1], -d[2]]);
+  const right = norm(cross(fwd, [0, -1, 0]));
+  return { right, up: cross(right, fwd), fwd };
+}
+
+export function projectPoint(basis: Pick<RenderFit, 'right' | 'up'>,
+                             x: number, y: number, z: number): [number, number] {
+  const { right, up } = basis;
+  return [x * right[0] + y * right[1] + z * right[2],
+          -(x * up[0] + y * up[1] + z * up[2])];
+}
+
+/** `hlr.fit_affine`: the uniform scale and offset putting a projected A/B box
+ *  in the middle of a `width` x `height` canvas, `margin` pixels clear. */
+export function fitAffine(box: { a0: number; b0: number; a1: number; b1: number },
+                          width: number, height: number,
+                          margin = 6): Pick<RenderFit, 'k' | 'kx' | 'ky'> {
+  const bw = (box.a1 - box.a0) || 1, bh = (box.b1 - box.b0) || 1;
+  const k = Math.min(Math.max(1, width - 2 * margin) / bw,
+                     Math.max(1, height - 2 * margin) / bh);
+  return { k, kx: (width - bw * k) / 2 - box.a0 * k,
+           ky: (height - bh * k) / 2 - box.b0 * k };
 }

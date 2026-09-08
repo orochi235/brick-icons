@@ -1,12 +1,31 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { LabClient } from '@lab/api/client';
-import type { Mark } from '@lab/defects/geometry';
-import { defectId, seenFrom, type Seen } from '@lab/defects/identity';
+import { defectId } from '@lab/defects/identity';
+import { POSITION_DEPENDS_ON } from '@lab/defects/targets';
 
 export type DefectStatus = 'open' | 'fixed' | 'wontfix' | 'notabug';
 
 /** Beside the type, so a new status cannot reach one dropdown and not the other. */
 export const STATUSES: DefectStatus[] = ['open', 'fixed', 'wontfix', 'notabug'];
+
+export type MarkKind = 'rect' | 'line' | 'arrow' | 'ellipse' | 'stroke' | 'text';
+
+/** A rectangle in fractions of the pane box it was drawn on. */
+export interface Mark { x: number; y: number; w: number; h: number; }
+
+export type Seen = Record<string, string>;
+
+/** The pose a mark was drawn at, for storing beside it. Only the keys the
+ *  target says a position depends on: `line_width` changes the picture but
+ *  moves nothing, and a mark that went stale on it would cry wolf. */
+function seenFrom(config: Record<string, unknown>): Seen {
+  const out: Seen = {};
+  for (const key of POSITION_DEPENDS_ON) {
+    const value = config[key];
+    if (typeof value === 'string' && value) out[key] = value;
+  }
+  return out;
+}
 
 export interface Defect {
   id: string;
@@ -15,6 +34,14 @@ export interface Defect {
   status: DefectStatus;
   title: string;
   mark: Mark;
+  /** Absent means a rectangle — every defect filed before marks could be
+   *  anything else. */
+  kind?: MarkKind;
+  /** Vertices for a kind a bounding box cannot describe. Absent for a rect. */
+  points?: { x: number; y: number }[];
+  /** The pose the mark was drawn at. labkit answers staleness from it, against
+   *  the target's `positionDependsOn`; a record filed without one never goes
+   *  stale, which is what an older record wants. */
   seen: Seen;
   filed: string;
   notes: string;
@@ -26,6 +53,8 @@ export interface BuildDefectArgs {
   title: string;
   notes: string;
   mark: Mark;
+  kind?: MarkKind;
+  points?: { x: number; y: number }[];
   config: Record<string, unknown>;
   existing: readonly string[];
   today: string;
@@ -34,13 +63,19 @@ export interface BuildDefectArgs {
 export function buildDefect(args: BuildDefectArgs): Defect {
   const title = args.title.trim();
   if (!title) throw new Error('a defect needs a title');
+  // The server keys defects by part and `useDefects` reads them back by it, so
+  // one filed with no part is accepted and then never listed again.
+  const part = args.part.trim();
+  if (!part) throw new Error('a defect needs a part');
   return {
-    id: defectId(args.part, args.engines, title, args.existing),
-    part: args.part,
+    id: defectId(part, args.engines, title, args.existing),
+    part,
     engines: [...args.engines].sort(),
     status: 'open',
     title,
     mark: args.mark,
+    ...(args.kind && args.kind !== 'rect' ? { kind: args.kind } : {}),
+    ...(args.points?.length ? { points: args.points } : {}),
     seen: seenFrom(args.config),
     filed: args.today,
     notes: args.notes,

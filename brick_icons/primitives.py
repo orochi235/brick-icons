@@ -324,6 +324,16 @@ class DiscOccluder:
         return np.where(valid, lam, out)
 
 
+def _plane_basis(F):
+    """Any orthonormal (u, v) spanning the plane normal to F."""
+    F = np.asarray(F, float)
+    F = F / np.linalg.norm(F)          # u, v must be perpendicular to the ray
+    a = np.array([1.0, 0.0, 0.0]) if abs(F[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
+    u = a - (a @ F) * F
+    u /= np.linalg.norm(u)
+    return u, np.cross(F, u)
+
+
 class TriangleOccluder:
     """Flat triangles (world coords, shape (M,3,3)) as a gridless depth source.
 
@@ -331,33 +341,89 @@ class TriangleOccluder:
     lambda inside the triangle, inf on miss.
     """
 
+    # rays per chunk; the working set is CHUNK x tris floats a few times over
+    CHUNK_ELEMS = 2_000_000
+    # ... and a ceiling on it, because the screen-space prefilter is only as
+    # tight as the chunk's own bounding box
+    RAYS_PER_CHUNK = 128
+
     def __init__(self, tris):
         self.tris = np.asarray(tris, float) if len(tris) else np.zeros((0, 3, 3))
+        self._F = None
+
+    def _prepare(self, F):
+        """Per-triangle constants for view direction F. Every one of these is
+        ray-independent, and `depth` is called once per drawn op, so they are
+        computed once per part rather than once per op per triangle."""
+        if self._F is not None and self._F.shape == F.shape and np.array_equal(self._F, F):
+            return
+        self._F = F.copy()
+        t = self.tris
+        if not len(t):
+            self.v0 = np.zeros((0, 3))
+            return
+        v0, e0, e1 = t[:, 0], t[:, 1] - t[:, 0], t[:, 2] - t[:, 0]
+        n = np.empty_like(e0)
+        n[:, 0] = e0[:, 1] * e1[:, 2] - e0[:, 2] * e1[:, 1]
+        n[:, 1] = e0[:, 2] * e1[:, 0] - e0[:, 0] * e1[:, 2]
+        n[:, 2] = e0[:, 0] * e1[:, 1] - e0[:, 1] * e1[:, 0]
+        denom = n @ F
+        d00 = np.einsum("ij,ij->i", e0, e0)
+        d01 = np.einsum("ij,ij->i", e0, e1)
+        d11 = np.einsum("ij,ij->i", e1, e1)
+        denomb = d00 * d11 - d01 * d01
+        keep = (np.abs(denom) >= 1e-12) & (np.abs(denomb) >= 1e-18)
+        self.v0, self.e0, self.e1 = v0[keep], e0[keep], e1[keep]
+        self.n, self.denom = n[keep], denom[keep]
+        self.d00, self.d01 = d00[keep], d01[keep]
+        self.d11, self.denomb = d11[keep], denomb[keep]
+        self.nv0 = np.einsum("ij,ij->i", self.n, self.v0)
+        self.Fe0 = self.e0 @ F
+        self.Fe1 = self.e1 @ F
+        self.v0e0 = np.einsum("ij,ij->i", self.v0, self.e0)
+        self.v0e1 = np.einsum("ij,ij->i", self.v0, self.e1)
+        # Screen-space bounds, for the prefilter in `depth`. Every ray runs
+        # along F, so a ray misses a triangle whose 2-D box it lies outside
+        # of -- any basis spanning the plane normal to F gives the same
+        # answer. Padded by the barycentric slack the inside test allows.
+        u, v = _plane_basis(F)
+        self._u, self._v = u, v
+        corners = np.stack([self.v0, self.v0 + self.e0, self.v0 + self.e1], 1)
+        su, sv = corners @ u, corners @ v
+        self.blo = np.stack([su.min(1), sv.min(1)], 1)
+        self.bhi = np.stack([su.max(1), sv.max(1)], 1)
+        pad = 1e-5 * np.linalg.norm(self.bhi - self.blo, axis=1)[:, None]
+        self.blo -= pad
+        self.bhi += pad
 
     def depth(self, O, F):
         O = np.atleast_2d(O).astype(float)
         F = np.asarray(F, float)
+        self._prepare(F)
         out = np.full(O.shape[0], np.inf)
-        for tri in self.tris:
-            v0, v1, v2 = tri
-            e0, e1 = v1 - v0, v2 - v0
-            n = np.cross(e0, e1)
-            denom = float(F @ n)
-            if abs(denom) < 1e-12:
+        m = len(self.v0)
+        if not m:
+            return out
+        step = min(self.RAYS_PER_CHUNK, max(1, self.CHUNK_ELEMS // m))
+        ou, ov = O @ self._u, O @ self._v
+        for lo in range(0, O.shape[0], step):
+            Oc = O[lo:lo + step]
+            cu, cv = ou[lo:lo + step], ov[lo:lo + step]
+            near = np.nonzero((self.blo[:, 0] <= cu.max()) & (self.bhi[:, 0] >= cu.min())
+                              & (self.blo[:, 1] <= cv.max()) & (self.bhi[:, 1] >= cv.min()))[0]
+            if not len(near):
                 continue
-            lam = ((v0 - O) @ n) / denom
-            Ph = O + lam[:, None] * F
-            e2 = Ph - v0
-            d00 = float(e0 @ e0); d01 = float(e0 @ e1); d11 = float(e1 @ e1)
-            d20 = e2 @ e0; d21 = e2 @ e1
-            denomb = d00 * d11 - d01 * d01
-            if abs(denomb) < 1e-18:
-                continue
+            n, denom = self.n[near], self.denom[near]
+            e0, e1 = self.e0[near], self.e1[near]
+            lam = (self.nv0[near] - Oc @ n.T) / denom
+            d20 = Oc @ e0.T + lam * self.Fe0[near] - self.v0e0[near]
+            d21 = Oc @ e1.T + lam * self.Fe1[near] - self.v0e1[near]
+            d00, d01, d11 = self.d00[near], self.d01[near], self.d11[near]
+            denomb = self.denomb[near]
             v = (d11 * d20 - d01 * d21) / denomb
             w = (d00 * d21 - d01 * d20) / denomb
-            u = 1.0 - v - w
-            inside = (u >= -1e-6) & (v >= -1e-6) & (w >= -1e-6)
-            out = np.minimum(out, np.where(inside, lam, np.inf))
+            inside = (1.0 - v - w >= -1e-6) & (v >= -1e-6) & (w >= -1e-6)
+            out[lo:lo + step] = np.where(inside, lam, np.inf).min(axis=1)
         return out
 
 
@@ -394,7 +460,7 @@ class Primitive:
     R: np.ndarray
     t: np.ndarray
     sector: float = 360.0
-    color: int = 16          # LDraw code; 16 = inherit the part colour
+    color: int = 16          # LDraw code; 16 = inherit the part color
 
     kind = None          # class attribute, overridden per subclass
 

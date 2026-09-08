@@ -1,7 +1,1385 @@
 # Handoff — `main`: the corpus lab, and the OCCT engine
 
-On **`main`**, pushed through `6a780c5` with the goldens re-freeze
-and its crash fix committed on top, unpushed. A plain `pytest`
+## `occt-full-turn-gradient` is merged: a full turn shades as a dome
+
+A curved span that closes on itself (`ub - ua` a whole turn) had a zero-length
+`grad_axis`, and SVG paints a degenerate gradient as its last stop -- `4740`'s
+dish came out `#aaaaaa` against naive's `#565656`, picked by sample order.
+Such a span now takes a radial gradient (`occt._turn_gradient`), a coaxial
+stack of them shares one ramp keyed on the axis line (`_axis_key`,
+`_merge_turn_gradients`), and an exact surface's ramp is two stops rather than
+eight bins -- binning mixed azimuths at one radius and every reversal drew an
+arc across the dish. `tests/test_occt.py` covers all three.
+
+**A dome's highlight comes from the light, not from a fit.** Two placements
+were measured against LDView on `4740` and are worse: the brightest sample's
+own position (radius 0.37 against a true 1.18) and the sphere radius
+`hypot(Lx, Ly)` (0.60). A dish's normals tilt only slightly from its axis, so
+the normal nearest the light is at the outer edge; the rim at 0.95 lands at
+1.14. The least-squares slope `_radial_focal_stops` still fits for the faceted
+path sat 71 degrees off the light on the same part.
+
+**`naive` is not the oracle for `4740`'s dish.** LDView ramps it 175 to 143;
+naive paints it flat at 86. `occt` disagreeing there is `occt` being right, so
+check a shading disagreement against `scripts/render-references.py` before
+calling it drift -- and pass `--engine occt`, or that script renders "ours"
+with the DEFAULT engine and compares LDView against naive.
+
+**`.venv/bin/pytest` in a worktree tests the MAIN checkout's library.** The
+venv is shared and its editable `brick_icons` is rooted at the main clone, so
+the console script imports that tree -- including whatever is uncommitted in
+it -- and the worktree's own `brick_icons/` never loads. Run
+`.venv/bin/python -m pytest`, which puts cwd first on `sys.path`. It goes
+green against the wrong code everywhere the branch has no feature main lacks,
+which is what hides it.
+
+**The golden gate cannot see a part that stops rendering.** A case that ERRORs
+is dropped from the hash set instead of failing, so `BRICK_GOLDENS=full`
+reports one fewer case hashed and still fails only on drift. Unaddressed.
+
+Two things did not come across. The branch's letterbox fix -- marks measured
+against the drawing rather than the pane it letterboxes inside -- patched
+`lab/src/defects/geometry.ts` and `SourcePane`, which `f1638fc` deleted in
+favour of labkit's annotations. `partInspector` deliberately hands labkit the
+measured pane body as a target's `content`, so a stored fraction stays a
+fraction of the pane; the branch's three `6589` marks were converted into that
+frame on merge (the 643.5x843.5 pane whose drawing sat at y 208.1..635.4).
+Reviving the fix means giving labkit the drawing's box instead, and moving
+every mark filed before it.
+
+## Baton, 2026-09-07 late: the reference is calibrated and the corpus is baking
+
+`renders/reference` is baking on msb-uai as task `reference-bake-corpus`, with
+`onto fetch -stream -every 10m reference-bake-corpus` pulling it back. About 20
+minutes for 24,591 parts. If it is gone when you read this, `onto jobs --all`
+says how it ended and re-running the same command resumes -- the sink skips
+whatever is already in `--out`.
+
+**The slot is `reference` now, not `ortho`.** It cost nothing: no rows were
+indexed and `renders/ortho` never existed.
+
+**The shot page frames itself with the engine's own fit.** `viewBasis` and
+`fitAffine` in `lab/src/panes/viewport.ts` are ports of `hlr.view_basis` and
+`hlr.fit_affine`; every render POSTs a `<part>.fit.json` in the schema the CLI
+writes beside an SVG. Reference and engine register through world space --
+their fits share a basis, so the map between them is a 2D similarity. Warping
+the reference into occt's viewBox gives IoU 0.9899 / 0.9854 / 0.9703 on
+3001 / 3941 / 4740, with ref-only 0 on all three: the disagreement is entirely
+our analytic circle standing outside the library's inscribed polygon, which is
+the intended difference.
+
+**The reference frames itself from the part and must keep doing so.** Frame it
+from the drawn-ops bbox instead and every engine change invalidates the whole
+bake.
+
+**Two traps that cost real time, both silent.** `LDrawLoader.preloadMaterials`
+resolves against `this.path`, so it has to run before `setPath`; and `load`
+opens with `setMaterials([])`, which throws the preloaded color table away
+before every part -- parts come in through `parse` for that reason. Miss either
+and a quarter of the library draws in three's missing-material magenta with no
+error anywhere.
+
+**`onto sync` to msb-uai refuses over 4,801 translucent-occt SVGs.** They are
+ignored here by `.git/info/exclude` and not there, so the node counts them as
+untracked files in tracked space. All 4,799 checked byte-identical to what is
+already in `renders/translucent-occt`, so `-force` is safe today, but the fix is
+a committed ignore rule -- `renders/**/*.fit.json` was added for exactly this
+reason before the bake could repeat it 24,591 times.
+
+## Baton, 2026-09-07 night: naive's tail is audited, half of it landed
+
+On `main`, in the shared checkout. `git log --oneline @{u}..HEAD` for anything
+unpushed.
+
+**Do this first: work the rest of naive's post-processing tail.** The audit
+that names every row is `OCCT-MIGRATION.md`, section "What naive does that occt
+does not" -- read that, not this. Four rows are still open and they are one
+cluster:
+
+    _snap_rim_crossings pass 1   snap a partial arc's ends onto the junction
+                                 it grazes
+    _snap_rim_crossings pass 2   counterbore separator refit -> `refits`
+    _refit_candidates            the moved seam as an arc candidate
+    _fold_arc_loops              chained fold-arc spans -> `loops`
+
+`hlr.visible_segments` runs all four on the naive branch and none on the occt
+branch, so `fill_ops` gets `refits=()` and `loops=()` and their downstream
+passes (`shade.refit_fill_boundaries`, the `loops=` sub-region outlines) never
+fire. `fold_ells` is built from `fit_ells` inside `_visible_segments_analytic`,
+which occt never enters, so `cull_orphan_runs(protect=...)` is vacuous there
+too.
+
+**The question is whether they are NEEDED, not how to port them.**
+`OCCT-MIGRATION.md` item 4 has said so since the port started and it is still
+the right instruction. Pass 1 exists because naive's occlusion is SAMPLED --
+`visible_subops(n=64)` stops up to a sample short of the true graze, leaving an
+arc end "just next to" the stroke it should touch. occt does real hidden-line
+removal and may land the graze exactly; if it does, pass 1 is machinery with no
+defect to fix. Establish that with a measurement on a counterbore part before
+writing any code. Pass 2 is a different animal -- it is stylization (make the
+separator read concentric with the bore), not a repair, so it is a design call
+rather than a gap.
+
+**Two traps if you do port any of it.** The engines emit ops in different
+spaces: naive in canvas px at `render_px`, occt in projected LDU normalized
+later by `fit_segments`. `_snap_rim_crossings`'s `max_snap` is degrees and
+carries over; its `vertex_tol=0.25` is op units and does not. And the pass runs
+BEFORE `fit_silhouette_arcs` on naive -- match that order rather than inventing
+one.
+
+**What landed tonight** -- `git log` for the shas; the audit doc marks each row.
+
+- Decoration authored as an analytic primitive is drawn. It never survived the
+  sew: an author partitions a wall into colored and color-16 sectors of the
+  same surface, `UnifySameDomain` merges them back (correctly, as geometry),
+  and the color is gone. The faces are built from the primitive list instead.
+  `unwrap_decoration` also gets naive's two arguments now -- the analytic list
+  as carriers, and `ellipses_out`.
+- occt's drawn ops go through `dedupe_segments`, with a new occt-only
+  `keep_order`. A circle arrived as contiguous spans of itself and each was
+  stroked separately.
+
+**Two rows are closed as WRONG, not as done.** Do not re-propose either.
+`ink_prims` cannot be ported: its first rule is "color is not 16", and a
+printed part whose *body* is authored in a color (`9359`, a green brick with a
+white TAXI print) has every structural edge it owns caught by it -- porting it
+took the stud rims off `9359`, `80400`, `6141p01`. And
+`test_a_fill_boundary_carries_no_sampled_boundary` now skips pure-black fills:
+a junction-lens pocket is a difference against the buffered stroke band, so its
+boundary is a buffer boundary by construction and counting it measures pocket
+gnarliness rather than the defect the test is for. **Mike has not signed off on
+that test amendment** -- it is a two-line skip in `tests/test_occt.py` and
+reverting it fails the dedupe on `32062` alone.
+
+**Not in scope and still open:** `004490h`'s bottom line of small text draws as
+dots and dashes where LDView draws letters. `shade.RESIDUE_CRUMB` set to 0
+recovers a few glyph pieces and not the start of the line, so the cull is a
+contributor and something upstream fragments the text as well. Its `$` glyphs
+came back with the decal arc recovery; the line did not.
+
+**`out/ellip-before/` is untracked and is the only copy of the pre-restage
+SVGs.** The originals were overwritten. Do not clean it up. `out/audit-2a/`
+holds tonight's A/B sheets and is disposable.
+
+**Four other sessions share this exact working directory** -- `brick-icons-60`,
+`brick-icons-4b`, `brick-icons-9d`, `brick-icons-bb` -- and "Status icon for
+thumbnails" is in the `.claude/worktrees/defect-sweep` worktree. Stage explicit
+paths, never `git add -A` or `git commit -a`, and confirm the branch before
+assuming it. `tests/goldens/defects.toml` is Mike's, written by the lab UI, and
+is permanently dirty.
+
+## Baton, 2026-09-07 evening: the orthographic reference is a real slot now
+
+**LDView is being replaced, and Mike has said so plainly** -- "it has a
+ceremonial place on the board because nobody has the heart to fire it but it is
+not fit for purpose". It disagrees with the library three ways and none is
+tunable: it renders perspective where our projector is orthographic, so no
+pixel comparison means anything; `-CurveQuality` only applies with
+`-AllowPrimitiveSubstitution`, so what it draws is not the part's geometry
+(4070's "hexagonal recess" was LDView redrawing an r=4 `4-4cyli`); and its
+internal color table overrides LDConfig. That is why every finding taken from
+it has been structural. It stays on the board for now.
+
+**The replacement is `ortho`, and it bakes.** `fa4c653` gave it a headless
+driver -- `scripts/shot-sink.py` serves `lab/dist` beside the library and
+launches its own Chrome, so no dev server and no person opening a tab.
+`e278a7a` made it a slot: `ortho` is in `db.SOURCES`, renders index at
+`renders/ortho/<part>.png`, and the bake is
+
+    .venv/bin/python scripts/shot-sink.py --list <parts> --out renders/ortho
+
+resumable by re-running it. **Its `_CANONICAL` argv is a config key and nothing
+runs it** -- the renderer is a browser drawing a whole list in one WebGL
+context, and a per-part CLI flag would launch Chrome 24,591 times.
+
+**Two traps it cost to find.** Headless Chrome has no GPU, so WebGL is off
+unless SwiftShader is named: `--use-angle=swiftshader` **and**
+`--enable-unsafe-swiftshader`, mandatory since Chrome 131. Without them the
+page loads and renders nothing, which reads as a broken renderer. And
+`shot.html` was not in vite's rollup inputs, so `lab/dist` had no page to
+serve; `npm run build` in `lab/` after touching `shot.ts`.
+
+### What is next, in order
+
+1. **Bake the corpus.** Nothing has run past five parts. `--batch` restarts the
+   browser per batch so a leak costs one batch; sizing it is unmeasured.
+2. **Frame registration, and it is the one that decides whether this is worth
+   it.** Mike: "we'll be using it to drive our gradient fill sampling too."
+   `shot.ts` fits its own bounding box with a 1.02 pad, so a pixel in the
+   reference does NOT map to a point on our face. Sampling needs it to share
+   our pixel fit exactly, not approximately.
+3. **Shading, explicitly deferred by Mike.** `LDrawLoader.smoothNormals` is at
+   its default `true`, so a faceted cylinder shades smooth while our `flat3`
+   tones per facet group. The key light is a guess at LDView's `-LightVector`;
+   the `0.55` ambient already matches `shade.ramp_b`'s floor exactly.
+4. Part color has no override -- the render is whatever colors the part file
+   names. Still true, but no longer the magenta bug it looked like; see the
+   late baton.
+
+Items 1 and 2 are done: see the late baton at the top. The slot was renamed to
+`reference` there, so the migration this section warned about never came due.
+
+## The coplanar sticker measurement is done, and `f832da6` has two regressions
+
+**The coplanar paint-order fix redraws 87% of the sticker class**: 3,884 of
+4,454 measured parts move pixels, 4,091 change paint order, median 2,740 px or
+6.3% of the frame. 59 parts errored (51 timeouts, 3 GEOS, 5 killed by a
+relaunch) and cannot move the answer -- 86.1% to 87.4% whichever way they fall.
+`scripts/coplanar-affected.py` (`f130bf8`) is the tool; rows in `out/coplanar/`,
+the 59 in `out/coplanar/retry-batches.txt`, already on studio and never run
+because a peer took the tree.
+
+**Consequence nobody has acted on: the wall's `silhouette-occt` slot is stale
+for about 3,900 stickers**, several stored as blank grey discs that now draw
+their artwork.
+
+**`f832da6` fixed 35480 and broke two other parts.** Filed as
+`3626bpsk-tab-under-neck-stud` and `67811-notch-through-hub-wall`, both open,
+both with the in-process reproduction and both narrowings that are already
+disproven. Mike's call was **leave it and file them**, not revert. The sample
+was 60 parts: seams kept on 14, pixels move on 5, 2 better, 2 worse, 1 neutral.
+A full-corpus bound is cheap -- `_pierce_seams` fires without rendering.
+
+**`35480-bore-reads-flat` is waiting on Mike and nobody else.** Looking down a
+bore, `max(0.0, n . L)` in `shade._axis_binned_stops` floors every bin past the
+terminator and a quarter of the visible tube pins to one tone. Fixing it is a
+lighting-model change that moves every render in the corpus.
+
+**`tests/goldens/defects.toml` carries four rows written this session and is
+unstaged by design.** It is Mike's file. If it is ever reverted, those rows go.
+
+
+## Baton, 2026-09-07 evening: occt drops naive's decal unwrap, and the audit that follows
+
+**Do this first: go through the naive engine's tricks and check each has an
+analog in occt.** Mike's ask, and the one below is the first row of that table
+-- found by reading the two call sites side by side, so the rest of the audit
+is the same exercise over `hlr.py` against `occt.py`.
+
+**`occt` hands `unwrap_decoration` an empty carrier list and throws away the
+recovered ellipses; naive passes both.**
+
+    hlr.py:523   shade.unwrap_decoration(tri_faces, analytic, proj,
+                                         ellipses_out=decal_ells)
+    occt.py:1621 shade.unwrap_decoration(faces + deco, [], proj)
+
+`unwrap.py` already IS the "scrape the decal off and draw it back as one
+piece" machinery Mike asked for -- it maps a decal into its carrier's
+parameter space, unions it there at full precision, and re-projects onto the
+exact surface, dissolving the author's faceting on the way (its own docstring:
+3941p01's 36-quad panel becomes one rounded rectangle in (theta, h)). It
+covers planar, cylinder and cone. On occt the analytic carriers never reach
+it, so a decal can only bind to a plane OCCT happens to have built, and
+`ellipses_out` -- the planar arc recovery for printed shapes -- is collected
+nowhere.
+
+**Two parts to work against, both from tonight's sheets.** `004490h`
+("WANTED DEAD OR ALIVE"): the bottom line of small text draws as dashes and
+dots where LDView draws letters, and the rule under it is dotted. Setting
+`shade.RESIDUE_CRUMB` to 0 recovers some glyph pieces and NOT the start of the
+line, so the crumb cull is a contributor and something upstream fragments it
+too -- do not stop at the cull. `003428d` is Mike's named case for planar arc
+recovery: an oval printed plate whose decal circles should come back as arcs.
+
+**Tonight's landed work is `73af254`, pushed.** occt_faces built no face for
+any non-round disc or ring; 2,619 of 24,591 parts carry one. All 576 parts
+with a stored `silhouette-occt` render were re-rendered (`ellip-restage`, plus
+a 10-part retry at MEM_GB=12 for the ones the 4GB cap killed). 523 of 576
+moved: 135 changed the silhouette, which is this fix; the other 388 only
+repainted inside an unchanged silhouette, which is the coplanar paint-order
+fix landing, not this one.
+
+**`out/ellip-before/` is the only copy of the pre-restage SVGs and is
+untracked.** The originals were overwritten. Without it the before/after
+sheets in `out/restage/ellip-sheets/` cannot be rebuilt.
+
+Still returning `[]` from `occt_faces`, each its own problem: an elliptical
+`con` (four of them are `71689`'s residual 233,860 missing px) and a skew
+axis (`4609`'s 149,786).
+
+
+## Baton, 2026-09-07 afternoon: what is running and what to do first
+
+On `main`, in the shared checkout. `git log --oneline @{u}..HEAD` for anything
+unpushed; nothing of mine is uncommitted.
+
+**Do this first: measure how many stickers the coplanar paint-order fix
+actually changes.** `a38e5a8`, gated to same-color pairs by `83ba303`. The
+whole `4263304` family reads as fixed at HEAD and broken in the stored
+`silhouette-occt` renders -- `4263304a` stored says `SF` and draws `BNSF` at
+HEAD, `c` says `56` and draws `2256`, `d`'s cross is gray and draws yellow, `f`
+draws one lozenge of three, `g` draws fragments of two vent panels, and
+`ec01`'s far half is blank. The question is the size of that class over the
+4,513 sticker parts. **Do not measure it with a census** -- paint order changes
+which color wins INSIDE the silhouette and `compare-silhouette-truth` scores
+`alpha > 128`. `scripts/render-hash.py` hashes the rasterized RGB under the
+alpha mask and is the tool; `scripts/hlr-shell-affected.py` is the model for a
+cheap in-process A/B that toggles the fix's own constant. **`brick-icons-00` is gone**, so nobody
+can be asked about its A/B; its `ab-control` output is on disk at
+`out/abhash/ctl-printed/` -- 2,812 parts, 2,794 ok, and 2,808 of them stickers,
+which makes it the control half of this exact class. It was taken by checking
+out `coplanar-control`, not by an in-process toggle, so it carries the
+editable-install question: a cross-check, not an input. The branch must not be
+deleted.
+
+`4263304ec01` is the one still wrong at HEAD: the formed sticker's near flap
+reads flatter than LDView's and the arrow loses part of its fill. Its own row
+if anyone wants it chased.
+
+**Two jobs were running when this was written** -- `onto jobs` for the truth.
+`hlr-restage-list` (orochi, 6 shards) writes `restage/hlr-loose-faces.txt`,
+the re-render list for `b350c40`; when it finishes, re-run
+`scripts/hlr-shell-affected.py` over `out/restage/occt-parts.txt` with
+`--log` pointed at the merged shard logs and `--out restage/hlr-loose-faces.txt`
+and the resume path does the merge for you. `ldview-bake` re-bakes the LDView
+thumbnails; it skips anything unchanged.
+
+**Three other sessions share this exact working directory** and one more is in
+the `defect-sweep` worktree. Stage explicit paths, never `git add -A`, and
+confirm the branch before assuming it. `tests/goldens/defects.toml` is Mike's
+and is permanently dirty; `lab/src/corpus/badges.ts` is `brick-icons-de`'s
+badge work in flight.
+
+## The slots lost `census-`, and the LDView gap is stickers nobody rendered
+
+`5df13cb`. Every slot came out of a census run, so the prefix said nothing:
+
+    census-occt        -> silhouette-occt   (strokeless; fills carry the outline)
+    census-naive       -> silhouette-naive
+    census-white-occt  -> white-occt        (opaque white fills, strokes drawn)
+    census-white-naive -> white-naive
+
+`occt` and `naive` keep meaning flat3 with 2px strokes -- Mike's call, against
+handing those names to a different config. Both are still empty.
+
+**A census TREE is a directory and a slot is a slot, and they used to share a
+name.** The directories are all still `census-something`; `db.census_source`
+now reads the facet out of the directory name and `index-census-renders.py`
+keeps `TREE` and `SOURCE` apart. `renders` and `measurements` rows are
+migrated and `out/thumbs/<slot>` is renamed, so nothing re-renders or
+re-bakes. Anything holding a slot name -- a script, a saved URL, a lab
+bookmark -- needs the new one.
+
+**The uncommitted `labelX` change in `lab/src/corpus/badges.ts` is
+`brick-icons-de`'s** -- it was launched to take over the lab's badge rendering,
+which its own process argv says. Leave it alone. Two sessions guessed at the
+owner before anyone read that: `ps -eo pid,command | grep '[c]laude'` prints
+every session's launch prompt and settles it in one command.
+
+**The LDView slot is complete: all 24,591 parts.** The 2,794 that were
+missing -- 2,701 of them stickers -- were coverage the slot never got, not
+anything refusing to draw: they render at 0.2-0.6s each, in color, artwork
+intact. Filled on studio as task `ldview-fill` (112 batches of 25, 5 workers,
+about four minutes), fetched, indexed, and the thumbnails re-baked. Four parts
+(`11055df1`, `11244p05`, `11408p03`, `11477d0u`) had a database row pointing
+at a file that was gone, so they were not in the missing list either; drawn by
+hand and now present.
+
+**`census-ingest.sh` rebuilds `corpus.db` every 900s and it is the authority.**
+It rebuilt three minutes after the hand ingest and replaced it, keeping the
+24,002 files that were on disk when its scan started and dropping the 589 that
+the final fetch delivered mid-rebuild. Nothing was lost -- the files are the
+truth and its next pass indexes them -- but a hand ingest races it, so either
+index into it or wait a pass and check, rather than trusting a count taken a
+minute after a swap.
+
+## Defect sweep, 2026-09-07 midday: the borehole class closed, and where the rest stand
+
+`b350c40` closes "something occluded is drawn anyway" on occt. **HLR reads a
+face's orientation once the faces are connected in a shell and lets a
+back-facing one occlude nothing** -- and `build_shape`'s sewing leaves an LDraw
+part inward, so its own front faces stop hiding anything. 79306-f1 drew 3 LDU
+of its bore's limb straight across the end annulus that hides it; ray-traced,
+every point of that run is occluded, and the run stops exactly where the outer
+wall takes over. `hlr_edges` now hands HLR `_loose_faces(shape)`, the same
+faces in a compound. **Reversing the shell fixes 79306-f1 too, and so does an
+oriented solid; neither generalizes** -- both need a closed volume, which a
+cracked part is not.
+
+Closes `79306-f1-far-end-should-be-hidden`, `4913-hole-in-base-shows-through`
+and `14653-f1-left-hole-should-be-invisible`; takes the two arcs that cut
+across 96904's recess floor, one stray arc off 53119's base ring, the
+scallops off 3062b's stud collar and the crescent sliver out of every one of
+3894's Technic holes. Outline and shaded alike, each read against LDView.
+
+**A differing SVG is not a moved drawing here** -- this change reorders
+elements, so 11090 and 59443 differ byte for byte and rasterize identically.
+Rasterize and diff before crediting it with anything.
+
+**Bounded on 137 sampled library parts: 44 differ in bytes, 29 move a pixel,
+and not one moves for the worse.** 15 of the 44 rasterize identically. Of the
+29, 26 lose strokes; the 2 that gain one -- 44302a and 5091 -- gain it where
+new occlusion splits a run in two. All 29 were rendered and looked at: the
+crescent inside a bore, the scallop over a stud collar, one big phantom
+ellipse inside 77813's ring. No errors, and no measured cost in time on either
+side. Job `01a6b72d`, task `hlr-shell-ab`, still grinding on 71986 (an 11L
+ribbed hose, slow on both sides) when this was written; the remaining 22 parts
+add nothing the first 137 have not said.
+
+`59443-a-strip-along-the-bottom` reorders its SVG under the fix and is pixel
+for pixel identical, so that row is untouched.
+
+**4070 is byte-identical under it and its verbal description is wrong.**
+LDView's "hexagonal recess" is `-AllowPrimitiveSubstitution` drawing the r=4
+`4-4cyli` at low curve quality; the innermost ring is a real circle, the
+`stud2a` collar's inner rim. What ours actually misses is the recess behind
+it -- nothing at all is drawn inside the collar bore where LDView shows wall.
+
+### The re-render list, and how to get one for the next engine change
+
+`scripts/hlr-shell-affected.py` names the parts `b350c40` moves without
+rendering any of them: HLR twice a part, shell against loose faces, visible
+edge sequences compared, 0.3s against up to 40s for two renders. Against a
+full render A/B of 160 parts it caught all 49 whose SVG changed and named 13
+more that did not -- a superset by design, because a wasted re-render costs
+seconds and a missed one leaves a stale drawing on the wall. Its output is
+`restage/hlr-loose-faces.txt`, and it feeds
+
+    .venv/bin/python scripts/build-render-store.py \
+        --list restage/hlr-loose-faces.txt --sources occt --force
+
+**Compare the SEQUENCE, not a sorted set.** Sorting first looked like the
+honest comparison and missed 9 of 33 parts whose pixels move: the stages under
+HLR read ops in order, so the same edges in a different order still trace
+differently. That is the same trap as reading a byte diff as a moved drawing,
+from the other side.
+
+### 2310 and 39789 are confirmed and neither is a hidden-line miss
+
+Both were ray-tested against the shape occt itself builds, with
+`IntCurvesFace_ShapeIntersector` and the projector's own view direction --
+**HLR's answer is right for that shape in both.** So the disagreement with
+LDView sits upstream, in which surfaces reach HLR at all, and no visibility
+rule will move it.
+
+- `2310` -- naive draws it stroke for stroke the same, so it is not an occt
+  fault at all. `compare-silhouette-truth` gives 0px missing against the
+  part's own triangles, so our outline is exactly our geometry. What LDView
+  shows is a flat wall where both engines draw a half cylinder: the r=6
+  circle at (0,12,0), which is outside the material in every direction tested
+  (every ray count even). Its filed engine list should say `naive` too.
+- `39789` -- occt alone draws four ~85-degree arcs of the r=8 recess rim at
+  each of the three axle holes, curving across the stud in front. naive draws
+  none of them and LDView shows none. Ray-tested, 34 of 36 samples of what
+  occt draws are genuinely clear to the camera in occt's shape, and the 2 that
+  are not sit at exact tangency. The lead is the occluder set: compare what
+  `occt.build_shape` holds against `primitives`' occluders for this part.
+
+### The constant stroke width is the biggest remaining cause, and it is already filed
+
+Rendered at `--line-width 1 --silhouette-width 1` against the 2 the config
+ships, all shaded, all read against LDView:
+
+**`38317-left-stud-shading-is-very` is that and nothing else.** At 2 its two
+studs are solid black lozenges -- four `#000000` pockets out of seven fills in
+the SVG, the junction-lens inking filling what the strokes leave -- and the
+right one carries black bars across its wall. At 1 both are clean rings. It
+is not a shading fault; re-file it under `3832-doubled-stud-ellipses` /
+`65068-studs-drowned`, on occt.
+
+`96904`'s fat slot and `96910`'s heavy insets lighten at 1 and still sit
+wider than LDView's hairline, so they are that class plus something else.
+`39789`'s bracket arcs are unchanged at 1, which is the other half of the
+ray-test finding above: they are real geometry, not ink.
+
+**The class reaches both engines and every part small in its own frame**, and
+the filed measurement (3832) is naive-only and from before the switch. Fixing
+it means scaling the stroke to the drawing rather than pinning it at 2 output
+px -- which moves every render in the corpus, so it is Mike's call, not a
+session's.
+
+### Every occt row, rendered at iso and read against LDView
+
+Confirmed, still open, worst first:
+
+- `49492-occt-deletes-several-extruded-segments` -- **the crook is barely
+  drawn**: a thin malformed loop where LDView has a fat smooth hook. The part
+  is `t16o`/`t16i`/`t04o`/`t04i`/`t16q` and nothing else round;
+  `occt_faces` handles `edge`/`cyli`/`con`/`disc`/`ring` and no torus, so all
+  of it falls to tessellation. Same for `3484-occt-handle-missing-arcs-extra`
+  (its fork is drawn straight-sided, cavity gone) and
+  `35485-ring-is-broken`, both of which are `s\*s01` subfiles plus a `cyli`.
+  Analytic torus is the shared answer and it is a feature, not a fix.
+- `2310-crap-on-darkest-face-and` and `39789-occt-has-issues-with-top` --
+  both confirmed, both diagnosed above; neither is a visibility fault.
+- `92692-joint-where-front-tube-meets` -- the tube/ring joints read as
+  separate capped cylinders.
+- `96904` keeps its slot drawn far fatter than LDView's hairline; the annulus
+  itself is present and always was.
+
+Shaded-only, so `--shade-style flat3` is needed to judge them and an outline
+render says nothing. All three now rendered that way. `38317` and
+`96910` are the stroke-width class above. **`35480` is FIXED by `f832da6`,
+and the earlier reading of it here was wrong** -- absorb never ran on the
+part. Its two fangs were a bore drawn where it is buried inside the plate:
+UnifySameDomain merged the stud's `stud2a` with the `4-4cyli` continuing below
+the plate top into one face straddling that plane, and `order_faces` gives a
+pair one bit. `_pierce_seams` keeps the seam. Buried-bore ink on the plate top
+is 0.00 px^2, against 605.17 for the lobe and ~42 for the limb fangs;
+`debug/35480-pierce-seam/verify.py` reprints those against the tree as it
+stands. Diagnosed independently by two sessions.
+
+**What it does NOT close: `_refine_order_clips` is one-directional.** It hands
+back area a face wrongly lost and there is no pass that takes away area a face
+wrongly kept, so any other cycle break that drops a constraint still leaves
+ink with nothing downstream to remove it. No part shows it right now, so it is
+here rather than in `defects.toml`.
+
+**Two rows filed off the back of it, both `35480`, both open.**
+`35480-bore-reads-flat` is the one that needs Mike: looking down a stud the
+tube has no depth because `max(0.0, n . L)` in `shade._axis_binned_stops`
+floors every bin past the terminator, and looking down a bore puts the
+terminator mid-span. Fixing it is a lighting-model change and moves every
+render in the corpus, so it is his call, like the constant stroke width --
+check a Technic pin hole first to scope it. `35480-wall-fill-hairline` is the
+visible fill-fragment seam on the plate's outer wall; `f832da6` moved it one
+pixel without touching it, which is what makes it worth a row.
+
+`11090-curved-lower-face-in-occt` and `11090-hand-at-top-is-missing` are
+`9fdfb72`'s alone (the sheared cross-section), pixel-identical under this fix
+by both sessions' measurement, and belong to whoever filed that commit.
+
+`53119`'s two ticks on the dome survive. Its banding half closed overnight.
+
+## The badges: 1 and 2 are landed, the wall is still a hand-written paint loop
+
+`f721151`. The three defects Mike reported had one cause and two of them are
+gone.
+
+**The marks are path data now.** All twelve live in `lab/src/corpus/markShapes.ts`
+as SVG path strings with a fill/stroke/alpha spec; `badges.ts` fills them into
+a canvas and `BadgeSwatch.tsx` emits them as `<path>`. **Nothing in the set is
+allowed to be a draw call again** -- that is what put a rasterizer behind the
+legend. Two escapes are declared rather than baked, and both are load-bearing:
+technic keeps a `transform` because a shear thickens a stroke's pen and baking
+the shear into the endpoints would not, and the sticker's peel keeps `punch`,
+which is `destination-out` on the canvas and a mask in the DOM.
+
+**The Legend, `tags.tsx` and the Lightbox status are HTML.** `BadgeSwatch`
+renders a CSS stadium with the mark as inline SVG; `labelX` is gone from that
+path entirely. The peel's hole is a CSS `mask-image` with two layers and
+`mask-composite: exclude`, because what it cuts is the field, which the disc's
+`<svg>` does not paint.
+
+**The misaligned text was `measureText`, and it is fixed on the canvas too.**
+`actualBoundingBoxAscent` is reported FROM the current baseline, and
+`drawBadgeDirect` measured the label under `middle` and painted it under
+`alphabetic`. Measured on the render, not on the formula: the word sat 7.0
+device px high on a 17px badge and 18.0 on a 44px one -- a constant fifth of
+the badge, which is why it looked like a fixed offset at one size. Measuring
+under the baseline it paints on brings the canvas to within 1 device px of the
+HTML. **The earlier note that the arithmetic was provably exact was measured
+with the default baseline in force, not the one the code sets.**
+
+**A/B, in process, both paths from one set of badge records:** nine of twelve
+marks are byte-identical on the canvas; the other three (archive, minifig's
+eyes, the sticker's cap) differ only in antialias coverage where a rect or an
+arc now rasterizes as a path -- 185 px of 756,000, worst channel delta 47.
+A moved shape would read 255 where white ink meets a gray field.
+
+Also landed: the scratch canvas is allocated at dpr, which is what made the
+sticker badge alone render soft; `Path2D` objects are kept per path string
+rather than reparsed for every badge on a wall paint.
+
+### Next: the wall's paint loop becomes weasel's scene, on `wall-scene`
+
+**Branch `wall-scene`, worktree `.claude/worktrees/wall-scene`.** Both exist.
+Mike asked for this one off the shared tree because four other sessions are in
+`/Users/mike/src/brick-icons` and the wall is the file they are most likely to
+touch. Run `npm install` in the worktree's `lab/` before trusting a test run --
+a symlinked `node_modules` shares `node_modules/.vite`, and a stale cache there
+serves modules from the wrong tree with no error.
+
+`Wall.tsx:594` is a bare `<canvas>` with a hand-written renderer; the lab
+imports weasel only for viewport math (`worldToScreen`, `zoomAt`, the drag and
+pinch actions). `@weasel-js/core` exports `createNode`, `ContainerNode`,
+`ImageNode`, `LeafNode`, `drawText`, `renderSceneToCanvas`, `registerCanvas`
+-- **`grep -rn "renderSceneToCanvas\|SceneNode\|createNode" lab/src` still
+returns nothing.**
+
+**Mike wants old against new benchmarked, and that decides the shape of the
+work: the hand-written loop stays, behind a flag, until the numbers are read.**
+A sequential A/B measures the box and not the change -- that is already filed
+twice in this repo, once at 36x against 18x for the same commit and once at
+0.90x on a peer's machine. So the two renderers have to be alive in one process
+and interleaved, alternating paints rather than running one suite then the
+other. Deleting the old loop first makes the measurement impossible to take.
+
+What to measure is a full wall paint in ms, at a fixed corpus, cell size and
+camera, across the zoom levels that change what gets drawn (thumbnails, then
+badges and captions, then vector). Report one line per paint as it runs; a
+silent harness is indistinguishable from a hung one.
+
+**One thing the new renderer must not give back:** badge marks are path data
+now, and `badges.ts` keeps one `Path2D` per path string rather than reparsing
+about thirty of them for every badge on every paint. `drawText` is the reason
+to do this at all -- it is where the baseline arithmetic belongs -- but a scene
+node allocated per cell per frame would cost more than the loop it replaces.
+
+**Look at the badges at `/badges.html`, not at a description of them.** It
+draws every badge as HTML at four sizes on a light ground and a dark one, the
+real `<Tags>` row, the status pills, and the canvas sheet underneath. The
+sticker's peel is a hole, so it is invisible against a ground its own color --
+that is what the two grounds are for.
+
+## 2026-09-07 late morning: coplanar paint order, and an A/B the census cannot run
+
+Merged to `main` (see `git log --oneline --first-parent -8`): the coplanar
+paint-order fix, an RGB render-hash sweep, an orthographic reference renderer,
+cmd-0, and `DEVELOPING.md`. Branches `coplanar-order` and `ortho-reference` are
+merged and disposable. **`coplanar-control` is not** — see below.
+
+**Stickers lost half their artwork to the paint sort.** `shade.order_faces`
+skipped every coplanar pair with `continue`, adding no ordering edge, so the
+ready-heap's mean-depth tiebreak decided. A decoration blob on a tilted face has
+a mean depth that lands either side of its background's, so artwork in the far
+half sorted behind its own background and vanished — Mike's "it works on exactly
+half". Measured, mean depth contradicts file order in 7 of 12, 5 of 7 and 1137
+of 2195 coplanar pairs on 6155286u, 6148328ak and 6177969acc01. The fix orders
+coplanar pairs by list index, which is file order because `_with_decoration`
+appends decoration last, and LDraw draws decoration after the surface it sits
+on. 6148328ak gets its red border back; 6177969acc01's checkerboard resolves.
+
+**The census cannot see a change like this, and this is the load-bearing
+decision of the session.** `compare-silhouette-truth` builds `ours` as
+`alpha > 128`. Paint order changes which color wins *inside* the silhouette,
+never whether a pixel is opaque, so a full census would have returned
+near-identical numbers whether the fix was right or catastrophic. Mike asked for
+a census pass; what is running instead is `scripts/render-hash.py`, which hashes
+the rasterized RGB under the alpha mask. Do not "correct" this back to a census.
+
+**The A/B is half done.** `ab-control` (job `edbad6eb`, studio, deadline 7:06PM)
+sweeps all 8235 parts at the pre-fix revision, into `out/abhash/control`, with a
+fetch stream running. Still owed: sync the fix revision and run the same sweep
+as `ab-fix` into its own directory, then diff the shas — the parts that differ
+are exactly the parts whose drawing moved.
+
+The two revisions must differ **only** by the fix. `coplanar-control` is
+`f41a962` plus the sweep script and nothing else; the fix side is `f41a962` plus
+those plus the one `shade.py` hunk. Do not sync `main` for the fix run — `main`
+carries 23 other commits since `f41a962`, several of them engine changes, and
+using it conflates them into the diff. Keep `coplanar-control` until the A/B is
+read.
+
+**The goldens are green, and the earlier red was mine.** The first version of
+the coplanar rule applied the index tiebreak to *every* coplanar pair, which
+also reordered two faces of the same body — `3005`'s stud wall and the top face
+it stands on are coplanar where they meet, and index order painted the stud
+under the brick. That broke
+`tests/test_occt.py::test_the_stud_paints_over_the_top_face_it_sits_on` and
+drifted `outline-flat3__3005`; `brick-icons-c6` caught the unit test. The rule
+now fires only when the two faces carry different colors, which is what makes
+one decoration on the other and the only case where LDraw's emission order is
+an instruction about paint order. Sticker renders are unchanged from the broad
+rule; goldens need no re-freeze.
+
+**LDView stays.** Mike said "we're ripping out ldview" and then reversed it an
+hour later: leave it in so the new orthographic renderer can be compared against
+it. The new one (`lab/shot.html`, `lab/src/shot/shot.ts`,
+`scripts/shot-sink.py`) is merged but unfinished — the key light is a guess at
+LDView's `-LightVector` rather than the ortho path's own `--light` convention,
+there is no part-color override, and it has no `db.SOURCES` slot, so it is not
+a wall column yet. It works: one browser draws a list in one WebGL context.
+
+**Mike named a fourth case of "occluded thing drawn anyway", verbally, so it is
+in no defect row: 4070.** Its icon draws three concentric circles at the bore —
+collar outer edge, bore mouth, and an innermost ring that should not be a circle
+at all, because the bore interior is the hexagonal LDraw recess and its far
+geometry sits behind the near wall. He said it generalizes: "there are lots of
+cases where there's a borehole somewhere that we're not properly occluding".
+Worth testing against `79306-f1`, `4913`, `14653-f1` and `59443` as one fault
+rather than four. Note the older finding that 4070's *dropped ledge edge* is an
+HLR visibility misjudgement with 0 ABSENT edges — that is the same stage failing
+in the other direction, culling what it should draw.
+
+**Queued and unstarted:** Mike reports the translucent renders are "too fancy
+and are culling surfaces that need to be rendered now because everything needs
+to be rendered in this mode". Nothing has been looked at.
+
+**cmd-0 is unverified by test.** It now clears `camInitialized` so the zoom
+level resets and not just the camera. jsdom does no layout, so the refit yields
+an identical camera object, neither branch of the level effect runs, and a test
+written against `pickLevel` or `levelFor` passes with the fix reverted. It needs
+a real browser or nothing.
+
+## 2026-09-07 midday: a sheared cross-section is an ellipse, not a reject
+
+`9fdfb72`, on occt. `frame()` lumped two unrelated defects together and
+dropped both. They separate cleanly:
+
+- **A skew axis** — the axis column leaves the cross-section plane — really is
+  unrepresentable, because there the axis is the extrusion direction. Still
+  rejected. 18% of parts carry one; 10126's oblique cylinders are the open
+  question, unchanged.
+- **A sheared cross-section** — `u` and `v` not square to each other, axis
+  fine — is an exact ellipse, because a linear map sends a circle to one. It
+  is now diagonalized: the singular values of `[u v]` are the semi-axes,
+  and `frame()` returns a ninth element, the phase that keeps the sector where
+  the part put it. Drop the phase and 11090's quarter swings 135 degrees.
+
+11090 is the part that showed it: its tube wall is two `1-4cylo` at 89.2
+degrees. Rejected, the wall reached the kernel as **neither a face nor
+triangles** — `hlr.flatten` recurses into a subfile only when
+`primitives.from_ref` does *not* recognize it, so a substituted primitive that
+then builds no face leaves nothing at all. The base drew as a hole with the
+bore floating inside it. 51482 also loses a hidden edge that was leaking
+across its knurled boss.
+
+538 primitives across 52 of 800 sampled parts were rejected for shear alone,
+so this reaches roughly 1,600 parts. No specimen carries one, which is why the
+corpus never saw it — and also why the corpus cannot guard it. **11090 is
+worth adding to `specimens.txt`**; nobody has, because freezing while the gate
+is red would tangle it with whatever is red.
+
+**The `=full` gate is red on 31 rows, not one.** Every one is a naive-engine
+row (no golden combo passes `--engine`), so occt work cannot move them and
+this is drift from naive-side changes that landed without a re-freeze. The
+list: `outline-flat3__` 3001, 3005, 3020, 3024, 3040b, 3040bp08, 3068bp00,
+32062, 3649, 3673, 3941, 3941p01, 3942bp01, 3960, 4019, 4070, 4589, 4740p03,
+50950, 6143, 6589, 87087, 99781; `outline__` 3001, 3941, 3942c, 4589, 6143;
+`wireframe__` 3001, 3941, 4589. Whoever re-freezes owns deciding whether each
+is an improvement.
+
+**11090's second defect is real and untouched by this.**
+`11090-curved-lower-face-in-occt` is the base, closed. `11090-hand-at-top-is-
+missing-a-curve-too` is the clip, and it is a different fault: **in the clip
+region occt draws 3 arcs against naive's 7**, unchanged by the fix above (3
+either way, 8 pixels of antialias). The one to look at runs the length of the
+clip's right lobe — the limb where its 225-degree cylinder turns away.
+
+Count arcs by region on this part, never over the whole drawing. Whole-part it
+reads 3 against naive's 8, which looks like the clip gap and is not: the fix
+above takes occt's base arcs from 5 to 0, and those 5 were bore limbs only
+visible through the hole in the wall. Naive draws 1 base arc there, so the
+base is a separate 1-arc gap, the short curve at the collar.
+
+`tests/test_occt.py::test_the_stud_paints_over_the_top_face_it_sits_on` fails
+at HEAD with nothing applied (`assert 12 > 13`) — it belongs to the coplanar
+paint-order thread above, not to this.
+
+**Diff renders composited onto white.** A `--shade-style none` SVG has a
+transparent ground, and resvg leaves the RGB under it at zero, so
+`Image.convert("L")` reads the whole frame as black and every diff comes back
+0 changed pixels. Two comparisons here read as perfect agreement that way and
+were 1040 and 2598 pixels once composited.
+
+## Overnight defect sweep, 2026-09-07: what is fixed and what the rows are lying about
+
+Mike asked for a night on `tests/goldens/defects.toml` and the census's failed
+parts. Branch `defect-sweep` (pushed, `origin/defect-sweep`) holds two commits
+off `84b1706`, both a clean fast-forward onto `main`; `brick-icons-11` was asked
+to merge them, because `main` is checked out in the shared tree and a worktree
+session cannot move it.
+
+- `d8181bf` **GEOSException is fixed.** `shapely.clip_by_rect` is GEOS's fast
+  rectangle clipper and does not check its input: handed a polygon carrying a
+  zero-area interior ring it builds a 3-point LinearRing out of that hole and
+  throws, on input GEOS itself calls valid. 813c03-f2's fill carries a
+  three-point hole of area 4e-13. `geom2d.window()` falls back to intersecting
+  with the box, and shade's four `clip_by_rect` sites go through it. It is
+  deliberately NOT the module's `_only_area` intersection — one caller windows a
+  MultiLineString, and stripping that to empty is a wrong answer, not a safe
+  one. Reachable only where the old code raised. 813c03-f2 draws its rails,
+  sleepers and uprights correctly now.
+
+- `0a39ae8` **Gradient banding is fixed, and the filed cause was wrong.** The
+  linear path emitted a stop per facet through `style.ramp(nv)`, so two facets
+  at nearly the same offset and opposite azimuth wrote two tones and the run
+  ALTERNATED between them. 44300's chamfer band: 67 stops, two colors, hairline
+  stripes across the fillet. `curved-surface-gradient-banding` proposed "merging
+  equal-color runs"; that would not have touched it, because the tones alternate
+  rather than repeat. `_axis_binned_stops` bins by offset, averages BRIGHTNESS
+  in the bin and ramps once — exactly what the radial path already did. 44300 is
+  now 10 stops over 4 tones and one flat surface; 7037's rounded face loses its
+  striping. Cylinder-wall ramps are unchanged to the eye at 6x (3062b, 3005),
+  and a unit test pins a monotone sweep against being flattened.
+
+  Closes `7037-gradient-banding` and `curved-surface-gradient-banding`, and the
+  shaded half of `53119-occt-has-a-bunch-of`. Its stray lines are untouched.
+
+### `outline__3673` was stale, not broken — and the gate is why nobody knew
+
+Resolved and re-frozen in `145c345`. It read as a naive regression: an arc and a
+subpath gone from the strokes-only combo, which is the one that exists to catch
+that. Bisected over 323 revisions, eight steps, with the freeze of that single
+case as the test — first bad commit `1d0450b`, "run the orphan cull on the occt
+path, and drop floating islands". Rendered either side, the dropped run is one
+2-output-px dot on the pin's barrel: the rule working, on exactly the case it
+names. The drawing is better without it.
+
+**The bookkeeping is the finding.** `BRICK_GOLDENS=1` freezes 3005 alone, so
+every other row in `hashes.txt` is decorative until someone runs `=full`. For
+three days nobody did, and the corpus described a pre-`1d0450b` engine.
+**`=full` is the only run that bounds a `shade.py` or `hlr.py` change**; a green
+`=1` does not, and should not be cited as if it did.
+
+**The island threshold has room on both sides.** It is relative — a run under
+1.2% of drawn extent goes whatever its kind — so the parts it can reach are
+those whose real features are small against their overall size, and a pin is the
+worst case. Instrumented and swept over all 22 specimens on both engines, 133
+candidate islands: the three dropped are 1.077% (3673 naive), 0.902% (3941p01
+occt) and 0.585% (6589 naive); the smallest one KEPT is 6.988% (99781 occt).
+The threshold could sit anywhere between 1.1% and 7% and change no decision on
+this corpus. That bounds the specimens, not the library — a census-scale answer
+needs the same counter and a fleet run.
+
+`tests/goldens/defects.toml`'s uncommitted block is **Mike's**, not any
+session's: `brick_icons/lab/defects.py` rewrites the whole file on every filing
+from the lab UI. Do not commit it.
+
+### The split-arc class is a naive-only defect, and occt already draws it right
+
+Started, not finished. `4524-ring-whole-circle` / `27448` / `30152a` are filed
+`engines = ["naive"]`, and an LDView A/B at iso says that is the whole story:
+naive draws 4524 as a phantom raised collar — four concentric ellipses, the
+bore's bottom rim nearly whole and offset well below the top rim — where LDView
+has a flat plate whose hole shows one thin crescent of far inner wall. occt
+draws it essentially as LDView does. Since occt is the engine of record, this
+class is worth much less than three filed entries suggest; the entries predate
+the occt switch. Picture is on the slopboard, `brick-icons` zone.
+
+Naive's arc ops for 4524: two full ellipses at cy 414 (the top face's bore rim
+and outer rim — correct, that face is wholly visible) and partials at cy 500
+(146 deg) and cy 580 (261 deg). So `dedupe_segments` is not unioning spans into
+a whole circle; the underside rims survive occlusion they should not, and the
+"whole circle" reading in the entry is a symptom rather than the rule. Anyone
+picking this up should re-file it against what the A/B shows, or close it as
+naive-only.
+
+**The one thing both engines get wrong is a stray tick inside the bore** — a
+short mark across the hole on 4524, on naive and occt alike. That is the same
+shape as `30152a-annulus-dots`, which was deliberately filed apart from the
+split-arc entry on the same part. That separation looks right, and the tick is
+the part of the class that survives the engine switch. It is the piece worth
+taking.
+
+### The census's failure rows are stale, and "stale" is not "fine"
+
+Latest run per part, on occt: TimeoutError 413, ProcessDied 243, TypeError 29,
+LinAlgError 4, ValueError 3, RuntimeError 2, GEOSException 2.
+
+All 29 `TypeError: coordinate list must contain at least 2 coordinates` rows are
+build `830.557ae4d` and the crash is gone. **Do not read them as clean.**
+Re-running them at HEAD under a 120s cap: 2393, 4273a, 32208 and 15092 draw,
+while 15461, 18942, 19086, 19159 and 28578 now hit the TIMEOUT instead. The
+crash became slowness on at least five. Same shape as `6177970ec01`'s
+ProcessDied: re-derive a failure row before quoting it.
+
+Also verified healed at HEAD: the three `ValueError` stickers (4221407f,
+4510086c, 6015425b) by `c673dd3`, 6342851a by `b5b2694`, 5241, 2976c01 and
+72632. Still failing: 41896c01 and 72632c01/c02 on time, not on a crash.
+
+## Read first, 2026-09-07 early: occt only, and where the wall stands
+
+**occt is the engine from now on**, until Mike says otherwise. Say "on occt" in
+any report so a naive number is never mistaken for the current one.
+
+**Several sessions share this exact working directory** -- `ListAgents`, or
+`node ~/.claude-msb/skills/pass-the-baton/baton.mjs successor --since 0`, for
+who is here right now; the roster turns over hourly, so do not trust a list
+written down. Same tree: their uncommitted edits appear in yours and
+`git switch` moves the branch under all of them. **Stage explicit paths; never
+`git add -A` or `git commit -a`.** Confirm the branch before assuming it.
+`git log --oneline @{u}..HEAD` for what is unpushed; `git status --porcelain`
+for whose work is in flight.
+
+**Vitest does not typecheck, so a green suite is half an answer.** Run
+`npx tsc -b --noEmit` in `lab/` as well. `main` was red on
+`lab/src/corpus/Lightbox.tsx` for a while tonight and is clean again as of
+`931b342` -- the point is the habit, not that one break.
+
+**Nothing of mine is in flight.** Every change described below is committed
+and pushed.
+
+**`tests/goldens/defects.toml` is dirty because the lab writes it, and it is
+Mike's file, not a session's.** `brick_icons/lab/defects.py` holds
+`DEFAULT_PATH = tests/goldens/defects.toml`, and the `add`/`update` routes
+write the whole file straight back to disk -- so every defect filed through the
+lab UI lands there uncommitted. Three sessions in one night each read those
+lines as a peer's work in progress and stepped around them. Nobody should
+commit that file but Mike. If you have a correction to an entry, make it in the
+tree and say so; do not stage the file to carry it.
+
+**`corpus.db` and `out/thumbs` are rebuilt and current, and neither is in
+git.** They already hold the sticker renders and the ldview slot, so a fresh
+ingest buys nothing -- and `scripts/census-ingest.sh 900` may be looping in
+another session, which is the one thing not to race. Check `pgrep -fl
+census-ingest` before starting one.
+
+**The `naive` render store is gone on purpose** (`6078305`), at Mike's ask. All
+49 of its parts are drawn by census slots too, so it covered nothing on its
+own. It stays in `SOURCES` and `_CANONICAL`, so with no rows it just stops
+being listed. It is a committed deletion, not lost files:
+`git checkout 6078305^ -- renders/naive` restores all 49. A `git ls-tree HEAD`
+coming back empty is what a committed deletion looks like, not proof the files
+were never tracked -- that reading cost a peer a false alarm.
+
+**Every sticker draws now, and the last five were three separate faults.**
+`43e09bd` and `cdb54ee` built the undeclared-edge fallback and took the
+2,701-part bucket to 2,695. `c673dd3` and `b5b2694` finish it. All five were
+rendered and looked at: each draws its plate outline, no facet cloud.
+
+- `4221407f`, `4510086c`, `6015425b` -- `ValueError: need at least one array
+  to concatenate` out of `cull_orphan_runs`. OCCT's entire visible edge set
+  for each is two 0.22 LDU stubs, the plate thickness seen edge-on at the far
+  left and far right. They sit at opposite ends of a 276-314 LDU bbox, so the
+  ghost length lands at 0.55-0.63 and no op clears it; `real` came out empty
+  and `np.vstack` had nothing to stack. The cull only ever removes, so with no
+  stroke graph it now returns the segments untouched.
+- `6342851a` -- "produced no edges". A `box5-12` plate with 8,888 artwork
+  triangles coplanar on its top face and two type-2 lines drawn along the
+  print. UnifySameDomain merges all of it into 6 faces, so both lines land in
+  the INTERIOR of one and match none of HLR's 9 visible edges. **A declaration
+  only counts where OCCT has an edge to hang it on**, so the fallback's guard
+  is now that nothing was drawn, not that nothing was declared. This
+  deliberately reverses `cdb54ee`'s "a real type-2 and still nothing is a
+  different fault and still raises" -- 6342851a was the only part in the
+  census on that row (5241, the other, has drawn since `43e09bd`) and it is
+  not a fault. Restore the guard by putting `and not out.get("2")` back on
+  `occt.visible_segments`'s fallback line.
+- `6177970ec01` -- nothing wrong with it. Renders in 90 s at 823 MB peak. Its
+  `ProcessDied` row is exactly the stale-row trap below: collateral from a
+  pre-`18310b7` runaway that named whichever part held `.inflight`.
+
+Both fixes are byte-safe by control flow, not by sampling: each branch is
+entered only where the old code raised. (`43e09bd`/`cdb54ee` were measured by
+instrumenting `occt._undeclared_ops` -- a byte-diff against a worktree does
+not work here, because the editable install beats `PYTHONPATH` and both sides
+run HEAD.)
+
+## The dashboard now says where the time goes and what it costs on disk
+
+Two things Mike asked for tonight, both landed and pushed. `git log --oneline
+@{u}..HEAD` for what is unpushed; the commits are `a11741a` (phases),
+`9f9282b` (footprint) and `2d25603`.
+
+**A phase records under the path of the phases open around it**, and a
+parent's time now INCLUDES its children -- `render/geometry/engine/hlr`. The
+nested-subtraction the old accumulator did is gone with it: a level's leftover
+is `parent - sum(children)`, worked out once when the tree is read. That is
+what lets a seam be added at any depth without redefining the band above it,
+which was the whole reason `geometry` had stayed one number.
+
+- Seams are `flatten`, `repair`, `arcfit`, `engine`, `cull` under geometry,
+  and `build_shape`, `hlr`, `loci`, `faces`, `face_polys` inside the engine.
+- **The OCP import is 0.783s, paid once per process** by whichever part a
+  worker draws first, and unnamed it read as that part's geometry -- 78% of
+  it on 3001. It is its own phase now. Read it as a per-batch constant, not a
+  per-part one.
+- **Legacy rows all sit directly under `render`**, including `decoration`.
+  It runs inside `geometry`, but the old accumulator subtracted nested time so
+  a legacy `geometry` does not contain it. Nesting it where it runs would read
+  that exclusive number as inclusive and take the same tenth off `render`'s
+  leftover twice. `stats.LEGACY_PATHS` is where that decision lives.
+- Storage did not move. Same `measurements.phases` JSON, keys gain slashes.
+
+**The tree is shallow until r7 lands.** Every row carrying a breakdown when
+this was written predates the change, so the wall draws `fill` and `geometry`
+as siblings with nothing under them. `brick-icons-1c` relaunched the overnight
+occt census as **r7, job `4b141c6f`, at `2d256033`** -- with the
+instrumentation, 12h deadline -- so those rows will carry nested paths. They
+verified 3001 through `census-batch.sh` on studio first: 14 slash-keyed
+phases, and the same measurement r6 gave (missing 0px, extra 14584px, 99th
+0.45px), so the geometry is untouched and the two runs stay comparable on
+everything but the tree.
+
+**The footprint section counts size on disk, as `du` does** -- the bakes are
+303 MB of bytes against 615 MB of blocks, because a 32px thumbnail is mostly
+block overhead, and two cells measured differently cannot be compared.
+Per-slot render sizes come from `renders.path` in the database rather than a
+directory walk, so they count exactly what the wall can reach and follow an
+ingest without any change. It is its own route with a five-minute memo:
+`/api/corpus/stats` re-polls every few seconds while a census is open and
+walking `out/` takes about seven.
+
+**The lab API has no `--reload`.** Anything server-side needs
+`pkill -f "brick_icons.lab --port 8792"` and a relaunch before you can see it.
+It is a background process, shared with the other sessions here, so say so
+when you bounce it.
+
+### The C-grip filled solid because a ring was judged on a column it never reads
+
+`b0c5d85` closes `3820-c-grip-fills-solid`. Every vertex of a `ring`, `disc`
+or `edge` sits at local y=0, so the matrix's axis column is not their geometry
+-- and `occt.frame()` rejected them anyway when it was not square to the other
+two. 3820 caps its grip with two `2-4ring2` whose axis column is 14 degrees off
+the ring's own plane, so both fell back to tessellation and the grip filled
+solid with no inner rim. Those three kinds are now judged on `u . v` alone and
+take `u x v` as the axis. **`cyli` and `con` still fail on any shear** -- there
+the axis IS the extrusion direction and a skew one is a real oblique surface
+with no exact counterpart.
+
+**It is a wide change, not a narrow one.** 4,479 of the library's 24,591
+parts carry at least one such primitive -- 18.2%, a median of 6 each, 43,768
+in all. 2,169 of those parts are printed, so 2,310 are in the engine loop
+today.
+
+**A/B the change in-process, never against a census render.** Setting
+`occt.PLANAR_KINDS = ()` before a render restores `frame()`'s old behavior
+exactly, so one process draws the before and another the after -- a worktree
+cannot, because the editable install beats `PYTHONPATH` and both sides run
+HEAD. Read against its census render, 32054 looked like this fix turned a
+near-solid black blob into a clean shaft; A/B'd, it is the same drawing either
+way and something else on main had already fixed it. `b0c5d85`'s message
+claims it and is wrong. 3820 A/B's exactly as advertised.
+
+**98642 is the second case and it A/B's.** A minifig torso carrying two 3820
+hands: with the fix off its left hand is two disconnected slivers floating in
+space, with it on the hand is a C-grip ring. Missing area against LDView goes
+17,947px in 1 component to 4,905px in 2 -- the component count RISES because
+what was one missing blob is now the two thin slivers either side of a drawn
+ring. Numbers from `scripts/compare-silhouette-truth.py`'s own scoring at
+default stroke widths, so they are comparable to each other and NOT to a
+strokeless census row.
+
+**That comparator gates coverage, not tone.** `ours` is the alpha channel
+thresholded at 128, so a fill going from one flat gray to a lit band does not
+move it at all: 3820 scores missing 0px both with the fix and without, while
+the picture is the whole defect. Use it to catch a hole appearing, never to
+decide whether a fill got better. Of the 39 affected parts swept, the only one
+whose coverage moved is 98642; 4600, 32054, 41334 and 35485 score byte-identical
+with the fix armed and disarmed, 41334's 188,496px in 23 components included --
+that one is a pre-existing defect this does not touch.
+
+**`2531` and `u9543` have no rejected frames, so this did not touch them**, and
+both already drew their open ring correctly. The defect entry grouped them with
+3820 and that grouping does not hold -- the discriminator was never openness,
+it was the skew axis column.
+
+**The naive golden gate says nothing about an occt change.** `hlr.py` imports
+`occt` only inside the `engine == "occt"` branch, and
+`test_frozen_hashes_still_reproduce` says in its own comment that it holds the
+naive engine still. `BRICK_GOLDENS=1` also passes `--only 3005`, so the fast
+mode is one part. Cite `=full`, or cite `tests/test_occt.py`.
+
+### The translucent slot is rendering, and `onto` has four traps in a row
+
+**Mike said do it.** `translucent-occt` over all 8,235 census parts is running
+on msb-uai as task `translucent-full`, job `271b71e2`, 6 workers, deadline
+18:07. A fetch stream pulls into `renders/translucent-occt/`. `--opacity 0.5`
+was already declared by `0faba98`; nothing about the drawing needed writing.
+
+**`0bc8dd3` gave the store the runaway guard it never had.**
+`build-render-store.py` built its `Runner` with `isolate=False, mem_gb=0`, so a
+store run had `--timeout` and nothing else -- and that is `signal.setitimer`,
+whose handler runs only between bytecodes, so an occt render inside one OCP
+call ignores it and keeps allocating. It now passes `isolate` and an 8 GB cap,
+matching `compare-silhouette-truth.py`. The 300-part trial, run before the fix,
+wedged at 295 on 14.4 GB, which is what the guard is for.
+
+**What the slot costs, measured on the 191 trial parts that exist in both
+slots.** 2.4x the disk (79 KiB median against 34), and 1.5x the ink (0.231
+coverage against 0.158). 11 of 191 land above 0.35 and read as black masses at
+thumbnail size. The driver is stud count, not complexity -- every stud has an
+anti-stud tube beneath it and translucent draws all of them, so `47405`, a 6x12
+wedge plate, goes 0.13 to 0.39 while `63522`, a 2x4 brick, stays perfectly
+readable. Whether the slot belongs on the wall or only in a detail view is
+undecided.
+
+**Four traps, each of which cost a restart:**
+
+- **`--in brick-icons` is mandatory.** Without it the node has no venv and the
+  job exits 127 in under a minute.
+- **`out/` does not sync.** A parts list living there is not on the node; scp
+  it into `~/.config/onto/work/brick-icons/out/` first.
+- **`onto` collapses a space-separated argument list into ONE item.** Passing
+  300 part ids inline handed the renderer a single "part" 1,900 characters
+  long. Use `--each <list in the tree>` with `'{}'`.
+- **Workers sharing one `--log` share one `.inflight` and race on it**, which
+  surfaces as `FileNotFoundError: ...inflight` and spurious failures.
+  `census-batch.sh`'s header warns about this. Interpolate: `--log
+  'out/store/translucent/{}.jsonl'`.
+
+**And a fifth for syncing.** `onto sync --in brick-icons <node>` is required
+after a commit or the node runs the old code silently. It refuses while the
+node holds job output you have not fetched -- **fetch first; `--force` past
+that warning deletes the node's renders.** The fetched renders live under
+`renders/`, which is tracked, so 40 MB of them push the sync patch over its
+8 MB limit: move them aside before syncing.
+
+### What is not done
+
+- **A translucent slot, both engines. This is the only thing waiting on Mike,
+  and the only named item still unstarted.** No such source exists, and **he
+  has not said which picture he means**: `--wireframe` (occlusion off, every
+  hidden edge drawn, no fills) and `--opacity 0.5` (fills go semi-transparent,
+  occlusion still applied) are different drawings. Ask before building.
+
+- **The island cull's 1.2% threshold is bounded on 22 specimens, not on the
+  library.** Across 133 candidate islands the rule drops nothing above 1.08% of
+  drawn extent and spares nothing below 6.99%, so it is not a marginal call
+  there -- but the specimen list is curated for curves and studs, not for small
+  features on big parts, which is the shape that would fall through. A
+  census-scale answer wants the same counter in `cull_orphan_runs` and a fleet
+  run, and the fleet is busy with r7 until 13:15.
+
+- **`3820`'s fix has an obvious next question nobody has asked yet.** `cyli`
+  and `con` still reject a skew axis, correctly, because there the axis is the
+  extrusion -- but 20 of 10126's cylinders are genuinely oblique and OCCT has
+  no exact counterpart for them. Whether an oblique cylinder is worth building
+  as a swept surface, or whether tessellating it is the right answer forever,
+  is undecided.
+
+- **`10126-unfilled-wedge`** in `tests/goldens/defects.toml`, filed
+  naive-only. 20 of 10126's cylinders have a genuinely oblique axis and stay
+  tessellated on occt after `b0c5d85`; the other 60 rejected primitives are
+  planar and now build exact faces. On occt it draws no white wedge.
+
+- **Badge artwork has one rendering, and it should stay that way.**
+  `931b342` put the detail views on `BadgeSwatch`, which is the canvas swatch
+  lifted out of `Legend.tsx` and draws through `drawBadge` like the wall does.
+  `drawBadge` now takes an optional `label`, stretching the disc to a stadium
+  with the word on its own field; no label is the old path exactly. Resist a
+  DOM reimplementation of any mark -- the corner-badge lean fixed in `434cc2d`
+  existed because the corner path and the strip path had already drifted.
+
+**An agent rebuild silently resets a node's limits.** studio's agent went
+`0906.2329` to `0907.0049` mid-evening and lost both `-max-job-time` and
+`-max-work-size`: a 6h `--timeout` came back clamped to the 30m default, and
+the work quota reverted from 30G to 10G. Nothing says so except the deadline
+`onto run` prints, so read it -- 30 minutes means it happened again, and the
+fix is `onto install -max-job-time 12h -max-work-size 40G` on the node.
+
+**A pipeline hides the exit code of the thing you care about.**
+`bake-thumbs.py | grep | tail` reports *tail's* status, so the bake died
+partway through the ldview slot -- 17,371 of 21,797, stale sheets -- and the
+run was recorded as exit 0. Write to a log and grep the file.
+
+**Killing a census does not kill what it started.** `onto kill` took r6 off
+the job list and left two `compare-silhouette-truth.py` processes alive on
+studio, still writing r6 JSONLs -- the orphan case `census-batch.sh`'s
+watchdog exists for, except the watchdog dies with the job. Check
+`pgrep -f compare-silhouette-truth` on the node rather than trusting the job
+list; 1c killed these by hand, and left alone they would have competed with
+r7 for cores all night. r6's 8 completed batches are still in
+`out/census/occt-r6` and are real measurements at `4905d45`, against r7's 687.
+
+## The census can stop a runaway now, and old failure rows cannot be trusted
+
+`18310b7`. A part that spends its life inside one OCP call -- OCCT's HLR does,
+for tens of minutes -- was unstoppable by every cap meant to stop it, and kept
+allocating meanwhile. studio reached 24.1 GB of 24.5 GB swap with one render at
+4.4 GB after 60 seconds and a batch's renders still alive 36 minutes into a
+300s cap.
+
+Three holes, each enough on its own:
+
+- `--timeout` arms `signal.setitimer`, whose handler runs only between
+  bytecodes. Sampling the biggest render put 1935 of 1935 samples inside a
+  single `cfunction_call` into OCP, under `HLRBRep_Data::NextEdge`. `Runner`
+  now has an `isolate` mode: the part renders in a forked child with its own
+  process group and the parent kills the **group** -- the group, because
+  `occt._unify_survives` forks a grandchild that outlives a kill aimed at its
+  parent and keeps rendering as an orphan.
+- `census-batch.sh`'s HARD watchdog had never once killed anything. `pgrep`
+  returns one pid per line and there are always at least two, so
+  `kill -9 "$py"` handed kill every pid as a single argument, which it rejects
+  outright into the `|| true`.
+- The watchdog also skipped every check when `.inflight` was missing, which is
+  exactly the orphan state: no part claimed, renders alive, nobody looking.
+
+**Memory has a cap for the first time, and it cannot be an rlimit.** Darwin
+accepts none -- `setrlimit(RLIMIT_AS)` and `setrlimit(RLIMIT_DATA)` both fail
+with EINVAL at every value, and `ulimit -d` the same. The parent prices the
+child's process group with `ps` and kills it past `--mem-gb`, 4 GB by default
+in the census. A healthy part on this corpus peaks under 1 GB.
+
+**So no `ProcessDied` count from before `18310b7` says what it appears to.**
+The runaways ran until the node was out of swap and macOS killed whatever it
+could reach; the row names whichever part held `.inflight`. Re-derive before
+quoting one.
+
+**A census job's `--out` carries the JSONLs and not the renders.** `KEEP`
+writes SVGs to `out/census/renders/<engine>` on the NODE, which no `--out`
+names, so they stay there and the part reads as `redraw` -- measured, no render
+-- forever. 1,039 sticker renders sat on msb-uai that way. The fix is a second
+fetch, not a re-render:
+`onto fetch msb-uai:brick-icons/out/census/renders/occt out/census/renders/occt`.
+Do it as part of every round.
+
+## Superseded, 2026-09-06 late: occt only, and what is unverified
+
+**occt is the engine from now on**, until Mike says otherwise. He said so while
+redirecting msb-uai off a naive retry pass. naive is the reference
+implementation, not the product; spending a node on a naive bucket spends it on
+the engine we are not shipping. Say "on occt" in any report so a naive number is
+never mistaken for the current one.
+
+**The sticker census answered its question and is finished.** `census-sticker-occt-r2`
+ran the 2,201 stickers occt had not attempted: **1,027 drew, 1,152 failed**.
+Ignore any 76% figure -- that was an early slice, and the settled rate is 53%.
+
+**The failures are one thing, and the library says so itself.** A sticker built
+on `box5-12.dat` failed 185 of 185, and that primitive's own first line reads
+"Box with 5 Faces without Any Edges". Generalized through the subfile tree the
+rule is near-exact: of the parts measured, **217 that declare no type-2 or
+type-5 line anywhere failed and none drew; every one of the 85 that drew
+declares one.** So `OCCT engine produced no edges` is the engine correctly
+reporting a part that declared nothing -- not a bug, and not worth chasing part
+by part.
+
+- **The fix, if it is wanted, is engine-side and is one change**: where a shape
+  has declared faces and an empty authored-edge set, fall back to the silhouette
+  of the fused solid. That converts ~200 errors into renders.
+- **Seven parts declare an edge and still failed** -- `003497b`, `003497bc01`,
+  `004690a`, `163145bc01`, `163555bc01`, `162275dc01`, `164325d`. Six of the
+  seven are *formed* stickers or their flat siblings. That is the class worth
+  looking at; the 217 are not.
+- **Minifig torsos are not the problem** -- they are in the drawn column. The
+  failures are flat: plain N x M rectangles, round discs, flags.
+- Reference photos: a sticker id is its sheet number plus a letter, and the
+  sheet is the catalog entry, whose Rebrickable name gives the set. e.g.
+  `003497b` -> sheet `003497` -> set `271-1`.
+
+**Stickers file under `census-occt`, not a slot of their own.** Mike reversed an
+earlier decision here; `234100c` removed the `census-sticker-*` sources again.
+`census_source` falls back to `census-<engine>` for any tree naming no declared
+facet, so dropping the sources was the whole change and `out/census-sticker`
+files itself correctly.
+
+**The wall's ground is one color at every rung, and bakes carry no ground.**
+`thumbs.GROUND` is `(0, 0, 0, 0)` and the wall paints `thumbGround()` under the
+sheet, the loose PNG and the live SVG alike (`3e9cfdd`, `4b2fa8c`). Before that
+each rung answered "what is behind this cell?" differently and a cell jumped
+`#ffffff` to `#c9cbcf` on one wheel notch.
+
+- **A ground has to clear the fills, not just the page.** An OCCT lit face is
+  `#cccccc`; `--wzl-gray-200` is `#c9cbcf`, which is 1.01:1 against it and hid
+  13% of all drawn ink across 400 parts -- two thirds of it on a pale part. The
+  ground is white, and it lives in `--corpus-thumb-ground`, which the Lightbox
+  already used. Measure any candidate against `#cccccc`, never only against the
+  page background.
+
+- **Changing it is a repaint, not a rebake.** A rebake is only forced by
+  clearing `out/thumbs/<slot>`, because the sha check skips a part whose render
+  has not changed -- so a stale slot reads as *unchanged* rather than broken.
+  All five vector slots were re-baked (26k parts, 569 s).
+
+- **A corner badge centers on its caption's ink**, not on its own radius
+  (`434cc2d`). `badgeGeometry` keeps `inset` for across the cell and gains
+  `rise`/`fall` for down it. The lean was 0.21 of the type size: 0.13 from
+  `radius + pad`, and `CAPTION_INK_RISE` = 0.0823 because canvas sets a caption
+  on `middle` and Oswald's ink centers above that anchor.
+
+**The `ldview` slot is back, and why it vanished** (`ae2464e`). Re-encoding it
+to WebP made every one of its files invisible to the rebuild, which indexed
+`(".svg", ".png")` and nothing else -- so it wrote no rows, and the picker lists
+whatever `renders` has rows for. The list is `db.RENDER_SUFFIXES` now.
+`thumbs.bake_part` gained the raster branch that had to exist beside it: PIL
+opens a raster, resvg keeps the vector path, and that is why ldview had no
+thumbnails before.
+
+**The slot is now the whole library** (`75d6a31`). 21,797 renders -- every
+in-scope part; stickers and the `|` category stay out. studio drew the 17,901
+missing ones in 26 minutes under `scripts/ldview-batch.py`, which takes a
+comma-separated batch so onto's `--each` can own the pool, and skips a part
+whose `.webp` is already there so it resumes. Two things it had to fix first:
+`process_one` wrote LDView's PNG into `renders/ldview/` before converting it,
+which `db.rebuild` would index as the render, and which raced a fleet fetch
+listing the slot -- five rounds in a row 500'd on `lstat ... no such file` and
+15,000 renders sat on the node for half an hour. The PNG goes to a temp dir
+now. `bake-thumbs.py` also died on the first zero-byte file an interrupted
+fetch left behind, abandoning the twenty thousand parts after it; it logs
+UNREADABLE and continues.
+
+**Both pages poll now** (`bd5c6de`, `0f66367`). The wall fetched its slot list
+once at mount, so a page open across an ingest showed a menu that no longer
+matched the store. The dashboard stopped reading whenever no run was open, on
+the reasoning that the database is static between runs -- it is not, and the
+only way to see an ingest or a rebake was a reload, which redraws every chart.
+
+**The Google Fonts link is gone from all three lab pages**, and `thumbFontReady()`
+in `main.tsx` stays. Labkit's `oswald-latin-variable.woff2` (200-700) serves both
+weights and the stylesheet's ten faces never loaded. **The gate is not dead
+weight with it:** held the woff2 back 12 s and zoomed to captions, and without
+the gate they draw in the fallback face and **never repaint** -- a caption keeps
+whatever face was loaded when it was drawn. Removing the link rests on labkit
+shipping that face, so re-check it before bumping `^1.4.0`, not after.
+
+**The wall opens far below every decoration threshold.** It refits to about
+6.5 px per cell; glyphs need 22, badges 56, captions 110, and the sprite-to-
+vector swap lands between 151 and 166. So an empty-looking wall is the default
+view, not a regression. One wheel notch is 1.1x regardless of `deltaY` and is
+anchored at the cursor -- which is how to crop the same cell at two zooms. About
+24 notches from refit to badges, 30 to captions, 34 to vector. `vectorGround()`
+caches on first call, so judge grounds after a full reload, never over HMR.
+
+**Two traps that cost real time tonight, both fixed, both worth knowing:**
+
+- **A stale lab server 500s every DB route.** `db.connect` raises when the file
+  is at a higher schema than the code, so a server started before a schema bump
+  fails every request. Restart it after a bump.
+- **`bake-thumbs.py` fed every render to resvg**, which reads SVG only. LDView
+  emits PNG, so one ldview row killed the whole bake with "provided data has not
+  an UTF-8 encoding" -- which reads like a corrupt file rather than the wrong
+  kind of one. It skips rasters now.
+
+**Sharing this tree:** `brick-icons-4b`, `brick-icons-b8`, `brick-icons-40` and
+`Status icon for thumbnails` are all in this same directory. Stage explicit
+paths, never `git add -A`; their uncommitted work in `paint.ts`, `Wall.tsx`,
+`params.ts` and the stats files is not yours. `tests/goldens/part-status.toml`
+and `wall-census-naive.png` sit *staged* in the shared index and are someone
+else's -- keep them out of your commits.
+
+## Finished, badly: the naive retry passes, and two slots that do not exist yet
+
+**Both naive retry passes are over and neither is worth re-reading.**
+`census-white-naive-r3` was cancelled and pruned; `-r4` timed out after 2h12m
+of CPU with its batch counter still at `0/134` -- every logged item reads
+`FAILED TimeoutError: exceeded 300.0s`. msb-uai is idle, carrying one stale
+record (`475fecdf`, "the supervisor is gone and wrote no result") from a pass
+that was scoring stickers at a false `missing 0px / extra 0px`. Both passes
+ran naive, against the occt-only decision at the top of this file.
+
+studio's `census-white-occt-r3` reached 19 of 59 batches and is also gone. Run
+the next round through the `census-round` skill, which holds the traps.
+
+**Do not quote a ProcessDied count from any run before `18310b7`.** The
+watchdog that produced those rows had never killed anything -- `pgrep` returns
+one pid per line and `kill -9 "$py"` handed kill every pid as a single
+argument, which it rejects outright into the `|| true`. So the runaways were
+never stopped, the node ran out of swap, and macOS killed whatever it could
+reach: a `ProcessDied` row names whichever part happened to be holding
+`.inflight`, not the part at fault. That includes the claim this section used
+to make -- that 149 of occt's remaining 698 rows are ProcessDied and 57 of
+those are the segfault `00f4e32` survives. **The 57 has to be re-derived from
+a post-`18310b7` run before it means anything.**
+
+**Two slots Mike asked for, neither built:**
+
+- **`ldview`** is already in `db.SOURCES` and `_CANONICAL`, and the wall builds
+  its slot list from `renders` rows, so nothing needs designing -- the store
+  simply has no ldview rows. One bug is in the way: `build-render-store.py`
+  hardcodes `dest = renders/<source>/<part>.svg`, and LDView emits a raster.
+- **transparent, both engines** -- no such source exists. It needs
+  `translucent-naive`/`translucent-occt` in `SOURCES` and `_CANONICAL`, and
+  **Mike has not said which picture he means**: `--wireframe` (occlusion off,
+  every hidden edge drawn, no fills) and `--opacity 0.5` (fills go
+  semi-transparent, occlusion still applied) are different drawings. Ask before
+  building.
+
+**Filed but uncommitted:** `3820-c-grip-fills-solid` and `10126-unfilled-wedge`
+in `tests/goldens/defects.toml`, beside Mike's own uncommitted
+`3484-occt-handle-missing-arcs-extra`. 3820 is fixed by `b0c5d85` and the
+reading below was wrong: the failing case was never the open ring, it was a
+skew axis column on a planar primitive -- see the section on it above.
+
+**Landed today:** `f224fdf` + `b86e88c` (TriangleOccluder vectorized, then
+culled by the ray chunk's screen box -- 3.8x at 304 tris to 21.7x at 4,240,
+interleaved), `a2d43dc` (`measurements.build`, schema 5), `533c47a` (the
+`census-round` skill), `00f4e32` (the UnifySameDomain segfault guard). Every
+one gated byte-identical on the 22 specimens.
+
+**Measurement discipline, learned the hard way today:** never quote a speedup
+from sequential runs -- alternate the order and take the min per side -- and
+`measurements.secs` is the whole oracle pass, not the geometry phase, so a
+geometry speedup does not divide into it. `2613aeb` added
+`measurements.phases`, which makes that unmixable.
+
+
+On **`main`**, pushed through `6a780c5`, with the goldens re-freeze, its
+crash fix, and the whole `labkit/annotations-arc-5` arc committed on top and
+unpushed. A plain `pytest`
 skips the drift tests, and `BRICK_GOLDENS=1` renders only `3005` — neither is
 verification; only `BRICK_GOLDENS=full` (~18 min) is.
 
@@ -30,43 +1408,799 @@ machine will not carry. A `--only <case>` loop over the 52 ids finished every
 time, and prints per-case timings worth keeping (`outline-flat3__3649` 330s,
 `4740p03` 114s, `outline__3649` 230s; everything else under 25s).
 
-## Read first: unlanded work on `occt-full-turn-gradient`
+## The wall, 2026-09-06 evening: what landed and what Mike still owes an answer on
 
-A baton pass, not a merge. The branch lives in the worktree
-`.claude/worktrees/occt-faces`; `git log --oneline main..occt-full-turn-gradient`
-is what has not landed and `git merge-base --is-ancestor main
-occt-full-turn-gradient` says whether it is still a fast-forward. `main` has
-moved under it once already.
+All merged to `main`; `git log --oneline @{u}..HEAD` shows the unpushed run.
+Nothing here is in flight -- this section exists for the decisions, which are
+not recoverable from the diff.
 
-It makes a curved span that closes on itself shade as one dome: the coaxial
-stack shares one radial gradient, two stops spanning the surface's true
-extremes, and the focal point comes from the light rather than a least-squares
-slope, so it tracks the light to any angle. `tests/test_occt.py` covers it.
+**Stickers are their own thing now.** `6881734` stops `tags_for` calling a
+sticker printed: `partindex.printed` reads "pattern" *or* "sticker" out of the
+description, so all 2,701 sticker parts wore the printed badge. The LDraw
+category wins where it applies, and the two never both show.
 
-**`6589`'s extra circles were `naive`'s, not `occt`'s.** Marked in the lab and
-filed; the diagnosis is under the halo entry in Still open. `occt` draws the
-part's authored radii and nothing else, so the stud-ring trap named here as the
-candidate is not implicated and neither is `locus_arc`.
+**The sticker badge is `239406c`.** The disc *is* the sticker and its corner
+lifts off the print. Three decisions in it that the code cannot tell you:
 
-**The one finding `fbfda92` left that the fixes above did not close:**
+- **POLICE, not flames, M:Tron, skull or a shield** -- Mike picked it off a
+  candidate sheet. `flames` (the fire emblem off sticker `004659a`) is kept as
+  the alternative and `lab/sticker-candidates.html` compares the two; swapping
+  `mark` on the badge in `paint.ts` is the whole change. The other fifteen
+  candidates were deleted.
+- **Outlines, never a webfont.** Mike's call, and it is the right one: no font
+  to ship, no race between first paint and the font landing, no fallback face
+  setting the word at another width.
+- **Navy, not the shared property field**, because a sticker is a thing you
+  apply rather than a fact about the moulding.
 
-- **The golden gate cannot see a part that stops rendering.** A case that
-  ERRORS is dropped from the hash set instead of failing, so `BRICK_GOLDENS=full`
-  reported one fewer case hashed and still failed only on drift. `6589`'s crash
-  was invisible to it for exactly that reason.
+**Centering a badge face means centering its drawn box.** Not its area
+centroid, and never the ink left showing after the fold. I got this wrong twice
+and Mike caught both: correcting for what the flap covers put POLICE a fifth of
+a unit right of where it belonged. A traced face is already centered by the
+trace -- all six measured [-0.002, -0.002] -- so only type needs a nudge,
+because a baseline is not the cap-height center. `FACE_NUDGE` carries the
+measurement and its reasoning.
 
-**Decided in conversation, recoverable from nowhere else:** a full sweep takes a
-RADIAL gradient even though that diverges from `naive` further, not less --
-chosen with that trade-off stated. And `worktree-occt-faces` is a duplicate of
-the same nine-task plan built in parallel; it reintroduces the plane cull
-`16321b5` removed and should be deleted rather than merged, once someone is
-satisfied nothing else in it is wanted.
+**Trace artwork, do not draw it from memory.** The M:Tron, Blacktron and
+Exploriens marks I first drew were wrong, and Mike said so. `brick-icons decal
+<part>` unwraps a printed part's decoration flat, and the library has the real
+thing: `3068bp68` (M:Tron), `2408p01` (Blacktron II), `2335p05` (Jolly Roger),
+`168135h` (the City fire shield), `003238c` (a Maltese cross), `3004p21` (the
+police star badge on sheet 22637), `004659a` (the fire emblem). Union the
+colored subpaths, weld hairlines with a dilate/erode, simplify, normalize on
+the bounding box.
 
-The worktree has its own `lab/node_modules` now, so run the lab from it rather
-than from the main checkout — marks filed from there land in whatever tree is
-serving them.
+**Answered, in `6467668`: the legend counts the wall, and the tags count the
+menu.** It used to count all 24,591 library parts against a wall showing
+23,432, so "19,928 unknown" was mostly the 13,083 printed parts the census
+never targets. The state rows follow `shown` now.
+
+The tag rows could not, and that was the whole difficulty: they are the control
+that applies the filter, so over `shown` they read 0 for every tag but the one
+picked, and the list you choose the next tag from destroys its own information.
+They count over `untagged` -- the wall narrowed by everything *except* the tag
+picks. Two tags picked will not sum to the wall's total; that is what it costs
+to keep the row a menu, and the sidebar's category counts already pay it
+(`CorpusWall.tsx`, "a facet's own checkbox must not zero out the moment it is
+cleared").
+
+**Answered: better part-year data. No source beats the one we have; what we
+have is being read badly.** Sources first:
+
+- **Brick Architect publishes no export**, and its terms prohibit reuse without
+  permission. Its year ranges come from *Brickset*, and Tom Alphin says on the
+  site that they get less accurate before the 1990s and that he intended to
+  switch to Rebrickable. He gives `3005` as his worked example of a wrong start
+  year; ours already reads 1954-2026.
+- **Brickset's API has no parts methods** -- sets, minifigs, collections,
+  themes. The year data Brick Architect takes from it is not reachable per part.
+- **BrickLink's API returns `year_released`** per catalog item and only that:
+  no end year, OAuth1 with a registered consumer and an IP whitelist, ~5k calls
+  a day. Its bulk catalog download sits behind a login, so whether the parts
+  file carries a year is unchecked -- that one needs Mike's account.
+- **Rebrickable's API takes an `ldraw_id` filter**, which the dumps do not
+  expose. That is from its own OpenAPI schema
+  (`/api/v3/swagger/?format=openapi`), not from the docs prose. Whether the part
+  object also carries `year_from`/`year_to` is unverified -- the schema declares
+  no response models and the site is behind Cloudflare. A free key settles it in
+  one request.
+
+**The gap is ours.** 9,269 of 24,591 parts (38%) have years. Of the 15,322
+without, 7,593 are LDraw constructs no catalog will ever hold: 3,306 shadow
+parts, 2,701 stickers, 1,127 composites, 459 aliases. Two routes close much of
+the rest, both from dumps, no key:
+
+- **`elements.csv`'s `design_id` column** maps LEGO design numbers -- what LDraw
+  uses for modern parts -- onto Rebrickable part numbers. **+2,020 parts**, to
+  11,289 (46%). It is not in `DUMPS` yet; one more download.
+- **`part_relationships`' mould rows (`M`)**, which the script already pulls for
+  successors. Rebrickable splits early moulds off under their own numbers, so a
+  1958 set is inventoried against `3001a`, not `3001` -- which is why our Brick
+  2x4 reads 1979. Unioning a part's mould family moves the start year earlier on
+  **1,610 parts** and the end year later on 850: `3001` 1979->1954, `3003`
+  1985->1954, `3068b` 1975->1965. The closure is well behaved -- every family is
+  variants of one part, the largest is 9.
+
+**Decided against: the mould union.** Mike left the call to me. It is right when
+the LDraw file is the generic part and wrong when it is one specific mould, and
+no rule separates the two. Three were tried and all fail on parts whose names
+say outright that they are late moulds:
+
+- *union everything* -- gives `6947`, the vented-stud minifig head, 1975.
+- *only where LDraw does not model the siblings* -- holds back `3001`, the one
+  case that most obviously should union.
+- *only plain numeric ids*, and *only the shortest name in the family* -- both
+  hand `50665`, "Helmet Classic, New Mold 2019", a start year of 1979, and
+  `3556`, "Brick 2 x 4 without Cross Supports [Modern]", 1954.
+
+Right on maybe three parts (`3001`, `3002`, `3003` -> 1954), wrong on hundreds,
+and the failure is silent: a modern mould backdated forty years is exactly what
+`retired` and `obscure` key off. So `year_from` keeps a definition that is
+consistent and explainable -- *the first year Rebrickable inventories this exact
+mould number* -- which is why our Brick 2x4 reads 1979 and not 1958. If those
+few matter, a hand-curated exception list is the honest fix, not an inferred
+rule.
+
+**All of this is built and loaded** -- `scripts/fetch-part-years.py` carries the
+routes, and `part_years` went from 9,269 rows to **19,033 of 24,591 (38% ->
+77%)**: 5,051 exact, 4,218 base, 2,020 design, 1,158 sheet, 6,586 keywords.
+Printed parts reach 95%, stickers 95%, plain 61%. The CSV under
+`tests/goldens/` is the durable form and `db.rebuild` reloads it, so the census
+ingest's next swap of `corpus.db` keeps it rather than clobbering it.
+
+**Stickers are not unfixable -- that claim was wrong.** Two routes give 2,680 of
+2,810 sticker parts a year:
+
+- **The sheet number.** Strip a sticker's trailing letter and the sheet is in
+  the Rebrickable catalog (`003381` is "Sticker Sheet for Set 663-1"), with set
+  inventories behind it. Worth 795 parts, plus 16 more from parsing the set out
+  of the sheet's own name.
+- **LDraw's `!KEYWORDS` line names the sets.** `003238a` carries
+  `Castle, part 3846, set 375-2, set 6075-2`; those numbers go straight into
+  `sets.csv`. Never touched before, and it is in `vendor/ldraw` already.
+
+**`!KEYWORDS` is a fallback source only, and the gate is not negotiable.**
+Against the years we already trust it is poor in general -- 3,865 parts overlap,
+median 10 years off -- because a common part's keywords name two illustrative
+sets out of thousands, not the earliest. Accuracy is a clean function of how
+many sets the part is in:
+
+| sets the part is in | exact | median error |
+|---|---|---|
+| 1-2 | 49% | 1 yr |
+| 3-10 | 46% | 1 yr |
+| 11-100 | 18% | 4 yr |
+| >100 | 1% | 14 yr |
+
+Stickers sit at the top of that table and hit **95% exact** against the 691 with
+a sheet-derived year to check against. So use `!KEYWORDS` only where the
+inventories give nothing -- a part absent from every inventory is by
+construction a part in few sets, the regime where keywords are good. Mixing it
+into parts that already have inventory years would make them worse. The route is labelled in
+`part_years.matched`, and `cells.sets_for` returns None for an estimated row so
+the wall cannot read a popularity out of it. That guard is load-bearing:
+`part_years.sets` is `NOT NULL DEFAULT 0` and `tags_for` calls `sets <= 2`
+obscure, so serving the 0 tagged all 6,586 estimates obscure -- 8,517 against a
+true 1,931. Making the column nullable would have meant a schema bump, and one
+of those had just 500'd the lab for every session; suppressing at the read is
+the same answer without it.
+
+**occt renders decals now** (`4b80035`, gated by `cd7ce2c`). Mike was asked
+whether occt should do this corpus-wide and answered that there is no reason
+not to; the question was badly framed. The real constraint was only timing --
+do not change the engine under a running census. The gate is the same test
+`partindex` classifies the corpus with, because color-other-than-16 is not a
+print signal: every sub-part of an assembly carries its own, and running the
+carrier search over `604ac01` cost 6.8s of its 8.8s geometry phase to draw
+decoration it does not have.
+
+**Also landed:** `f5538b1` hovering a legend tag dims the wall like a hovered
+state; `d19f4e4` params moved into the sidebar and the part card leads with its
+render; `259ea5f` params rows are full-width (a row's label and readout share
+one `nowrap` flex line whose text is an *anonymous* item, so a long label
+cannot be shrunk from outside the component); `78aea11` a legend toggle in the
+topbar and cmd-0 to refit; `d2b9fb2` a zoom keeps the card the pointer is over,
+and a jump lands centered at half the viewport height.
+
+**Staging in this tree needs care.** Three or four sessions share it. My
+`paint.ts` change had to be staged apart from another session's in-flight
+badges/captions work: build your hunks on top of `git show HEAD:<file>`, then
+`git hash-object -w` and `git update-index --cacheinfo 100644,<blob>,<path>`.
+Their `paint.test.ts` failures are theirs; the corpus suite is otherwise green.
+
+## Decals on the occt path: DONE, and this section used to say otherwise
+
+`4b80035` built it. `occt._with_decoration` pulls the colored source triangles
+alongside OCCT's own faces and hands both to `shade.unwrap_decoration`, which
+finds the carrier among OCCT's planes — a sewn solid stamps every face 16, so
+the print is not in the solid and never could be.
+
+Re-measured 2026-09-07: `20308p02` emits the same palette on both engines
+(`#b40000`, `#f6a9bb`, `#720012` and the rest, same counts), and the two SVGs
+draw the pig's eyes and snout identically. `3068bp00`, `3040bp08`, `4740p03`,
+`3941p01` and `3942bp01` agree too. Decoration is no longer a reason the flag
+cannot flip.
+
+**Read a printed part's SVG, never its `.gray.png`.** Under `--shading
+outline` the PNG modes go through `process.draw_segments` /
+`process.segments_mono`, which take strokes and contour rings and no `fills` —
+`fill_ops` is called only inside the SVG branch of `cli.process_one`. So
+`--shade-style flat3 --format png` silently produces line art with no shading
+and no print, on **both** engines. An engine A/B run on those rasters reads as
+agreement no matter how far the fills have diverged.
+
+## In flight: the colour tint — branch `corpus-colors`, green, waiting to land
+
+Worktree `.claude/worktrees/cgc`. Two commits on top of `main`: the colour count
+itself and a merge of `main`. **Complete and green** — 645 lab tests, 70 Python
+(`test_lab_cells.py` + `test_db.py`), `tsc` clean, `npm run build` emits both
+entries.
+
+It is a pure fast-forward (`git merge --ff-only corpus-colors`), blocked only by
+an uncommitted `lab/src/corpus/paint.test.ts` in the main checkout. Nothing to
+resolve; it lands the moment that file is committed.
+
+**Landing it requires restarting the lab server on 8792.** `SCHEMA_VERSION` goes
+3 → 4 and `db.py` has no ALTER path, so the ingest loop's next 15-minute tick
+rebuilds `corpus.db` at schema 4 under a server still holding schema 3 — the
+"no such column" blank wall. This is the case the note above already warns about.
+
+What it does: extends `part_facts()` in `scripts/fetch-part-years.py` to collect
+distinct `color_id` in the pass it already makes over `inventory_parts`, adds one
+`colors` column to `part_years`, serves it from `cells.py`, and adds a fourth
+`TINT_MODES` entry. No second table and no second importer — the abandoned
+`corpus-grouping` branch's `part_facts`/`part_colors` tables are exactly what
+this avoids.
+
+**`tests/goldens/part-years.csv` is regenerated in the same commit as the loader
+change, deliberately.** `import_part_years` reads it by name, so a loader that
+expects `colors` against an un-regenerated golden dies with a bare `KeyError`
+inside `rebuild`, which reads as a corrupt database. The loader reads
+`int(r["colors"])` straight, with no tolerant default: zero colours is not a
+fact about any part, so a default would put all 9,269 parts on the ramp's bottom
+shade and render a missing column as a finding.
+
+**The ramp constant was measured twice and the first number was wrong.**
+`MAX_LOG_COLORS = Math.log10(80)`, over the golden's 9,269 dated parts: median 9,
+p90 63, max 80. An earlier measurement said median 4 / max 81 because it joined
+only the 5,051 `exact` matches and missed the 4,218 `base` ones. Log beats linear
+either way — 25% of the wall in the bottom two of eight shades against 62% — but
+recompute from the golden, not from `inventory_parts` directly, if the ceiling
+ever needs revisiting.
+
+### Dead, safe to delete
+
+`corpus-grouping` at `349fc8e` — the original 19-commit branch. Its Rebrickable
+backend duplicated `part_years` and does not land; the useful half was ported and
+is on `main` as of `a3f5b90`. Worktrees `.claude/worktrees/corpus-grouping` and
+`cg2` are disposable.
+
+## Next: render performance
+
+Agreed in conversation, nothing written down elsewhere. A lab render is slow
+enough to be the thing that limits working in it, and the census measured why:
+a naive render's median is 12s, its 90th percentile 76s, its worst 695s; occt's
+median is 22s. Three things to do, in order:
+
+1. **Run renders in a `ProcessPoolExecutor`, not threads.** `lab/runner.py`
+   calls `cli.process_one` in the API server's own process, on a daemon thread
+   per job, so two renders take turns on the GIL and both hold up the server
+   that is also serving artifacts.
+2. **Cancel a superseded render.** Change the config again and the old render
+   runs to completion, and its result is thrown away.
+3. **Serve a known part from `renders/` once the store exists**, so opening one
+   is a file read.
+
+**Stop the census before measuring any of this** — `pkill -f
+compare-silhouette` — or you are timing eight of your own render processes
+fighting for eight performance cores.
+
+**Threading one render's booleans: tried, byte-safe, worth nothing.** GEOS
+releases the GIL (a synthetic boolean load scales 4.8x over 8 threads), so the
+obvious move is to thread the independent maps in `fill_ops` — the impostor
+cuts in `_refine_order_clips.apply` and the per-group merge unions. Output was
+byte-identical on six parts and the speed was 0.99-1.02x on every one of them.
+The reason is granularity: on `0901`, 224 of 227 of those maps carry exactly
+ONE item, and those single-item maps hold 56.5s of its 116s. The fill stage is
+a chain of a few hundred large serial booleans, so spending a second core means
+splitting one boolean — canvas tiling, which brings back the T-junction seams
+the coplanar plane-merge exists to remove. Reverted; don't re-propose it
+without a plan for that.
+
+**The parallelism that is really there is in the hidden-line stage**, and it
+wants vectorizing before it wants cores: `hlr.visible_segments` is 67% of
+`66790`'s render and per-segment independent, but it is Python-level numpy —
+895,872 `np.cross` calls with 5.4M axis-normalization calls under them — so it
+holds the GIL throughout and most of that time is dispatch, not arithmetic.
+
+**Trap from the same experiment:** threading the per-face intersection sweep
+that builds `near` changed the SVG bytes. Not slower — wrong. Whatever the
+mechanism, a shapely call threaded over geometry another thread also touches
+has to be proved byte-identical before it is believed.
+
+## In flight: the white census facet, third pass -- the 300s cap
+
+Both engines are running at a **300s per-part cap, up from 120s**, `HARD=600`:
+`census-white-occt-r2` (93af72b4, studio, 8 workers, 959 parts, launched 17:06,
+deadline 05:06) and `census-white-naive-r2` (ed49e9f8, msb-uai, 10 workers,
+1,909 parts, launched 18:08, deadline 06:08). An `onto fetch --stream` per task
+collects into `out/census-white-{occt,naive}/`. **The ingest loop belongs to
+the Database web UI session** -- one loop, not two.
+
+**A retry pass needs its own directory.** A batch's JSONL is named for its
+first part, so a retry batch beginning with a part that also began a batch of
+an earlier pass appends to that pass's file -- and `--skip-done` then reads its
+120s TimeoutError rows as done and skips exactly the parts being retried. 15 of
+occt's first 37 batches started non-empty this way and one was skipped whole.
+naive writes to `out/census-white/r2` for that reason; `db.rebuild` rglobs, so
+a subdirectory is still indexed, and `KEEP` still points at the shared
+`out/census-white/renders`. occt's running pass predates the finding and keeps
+the flaw -- harmless, because a skipped part keeps its old error row and so
+comes back in the next coverage list.
+
+**`onto sync` a node while it runs a job is refused**, with a 409: sync takes
+the tree lock and a running job holds it. It is a refusal, not a loss --
+`out/` is gitignored and the reset's clean is not `-x`, so census output and
+the rsync'd batch lists survive a sync either way. `onto sync` also wants
+`--ref origin/main` here, because the branch has no upstream and onto cannot
+otherwise name a commit the node is known to have.
+
+studio was synced before `273a6dd`, so **occt's worker labels still show the
+batch's first part**; msb-uai has it and naive's name the part in hand. Same
+for onto's own `22/-117` progress arithmetic, fixed in `b137f50`: a running
+job keeps the supervisor it launched with.
+
+**`--env PATH` is not optional.** The agent's PATH has no `~/.local/bin`, so
+`resvg` is missing and every part fails `FileNotFoundError` in about a second
+-- fast enough to write a few hundred error rows before anyone looks, and
+`--skip-done` then skips those parts for good. A launch without it is worse
+than one that crashes.
+
+Parts that only ever timed out at 120s are finishing at 300s, so the cap was
+the binding constraint and not a rendering fault.
+
+**onto's automatic pool sizing gets this job wrong.** It divides free memory
+by the task's recorded peak -- 18.3G, which was the whole 8-worker job, not
+one part -- and hands out one worker. Pass `--workers` explicitly; 8 on studio
+and 10 on msb-uai are what earlier passes ran at, at ~2.3G each.
+
+`649bdba` -- **a part the batch attempted now always gets a row.** The
+watchdog kill left the part named in `<jsonl>.inflight` and nowhere else, to
+be buried only on the way into a re-run of that same batch; where onto ordered
+none, the part was in no census at all -- not drawn, not failed, just absent,
+and so invisible to the coverage list the next run is built from. A segfault
+was the same hole one level up, losing every part after the killer.
+`census-batch.sh` buries the in-flight part itself and resumes the batch;
+`compare-silhouette-truth.py --bury` writes that row with the facet's own
+engine/angle/style/strokes. 120 naive and 147 occt parts went missing this way.
+
+**Read a facet by `source`, never by `engine`** -- an engine's two facets are
+both "naive". `census-coverage.py --facet` does; its default oracle path still
+reads by engine and counts a white measurement as the oracle's.
+
+Two earlier bugs of that same shape, both fixed: `e60f811` (renders --
+`config_key` comes from the source alone, so a second facet indexed under
+`census-<engine>` replaced the oracle's rows) and `a1295f5` (measurements --
+`census-white-*` sorts last, won `MAX(run_id)`, and every oracle cell on the
+wall showed white figures; **schema 2**, so restart any lab server after the
+next rebuild).
+
+**Do not read a white row against an oracle row.** Strokes put a ~1px band
+outside the fill boundary everywhere, moving `extra_dist_px` 99th from ~0.45px
+to ~1.01px on every part. The facet is worth having for its drawings.
+
+**Not built:** the wall wants a third border color for a part that renders
+correctly but slowly, distinct from one that fails. `measurements.secs`
+already carries what it needs; nothing reads it for status yet.
+
+## Superseded: the first white census pass
+
+
+Ran 2026-09-06 01:19-09:19 on both nodes, **merged to `main`**, both jobs
+stopped by their 8h deadline rather than by finishing.
+
+| | naive (msb-uai) | occt (studio) |
+|---|---|---|
+| parts reached | 5,670 of 8,235 | 6,661 of 8,235 |
+| measured | 4,378 | 5,982 |
+| errored | 1,294 (1,285 timeouts) | 679 (529 timeouts, 125 ProcessDied) |
+| in `corpus.db` | 4,393 renders | 5,997 renders |
+
+Everything is collected, ingested and baked; the wall draws both slots.
+**naive timed out at more than twice occt's rate** against the same 120s cap,
+which is the opposite of the strokeless facet and worth a look before
+budgeting another run.
+
+To finish the corpus, relaunch the same two jobs. `--skip-done` reads the
+JSONL already in `out/census-white-*`, so a second run costs only what is
+left, and the batch lists still have to be rsync'd to each node -- `--each`
+reads its list in the tree and `out/` is gitignored:
+
+    rsync -a out/census-white/{naive,occt}-batches.txt \
+      <node>.local:~/.config/onto/work/brick-icons/out/census-white/
+
+`scripts/census-ingest.sh 900` rebuilds corpus.db on an interval while it
+runs, and `scripts/bake-thumbs.py --source census-white-naive` afterwards is
+what puts new parts on the wall -- indexing alone does not, and it is
+idempotent by render sha so it only costs the new ones.
+
+**These numbers are not comparable to `out/census`.** Strokes add a ~1px band
+outside the fill boundary everywhere, moving `extra_dist_px` 99th from
+~0.45px to ~1.01px on every part. The facet is worth having for its drawings,
+not its measurements.
+
+## In flight: the library-scale silhouette census, now on `studio`
+
+Eight detached shards (4 naive, 4 occt) run
+`scripts/compare-silhouette-truth.py` over `out/census/parts.txt` — 8,235
+unprinted library parts, the corpus the 21-part `unprinted` list samples.
+`scripts/run-census.sh` starts or resumes it; every shard streams JSONL and
+skips what it already has. Read progress with `scripts/census-report.py`,
+which prints coverage per engine and ranks the worst parts.
+
+**It runs on `studio` now, not here**, in the onto working tree at
+`~/.config/onto/work/brick-icons` — the rows this machine had collected were
+copied there first, so the shards resumed rather than restarted. Bring results
+back with `onto fetch studio:brick-icons/out/census .` and merge; a shard
+writes only its own file, so nothing conflicts.
+
+**Studio reproduces this machine's numbers exactly** — `3001` gives 14590
+extra px on naive and 14584 on occt on both — so its rows merge with the ones
+already collected. That is not free, and two things buy it:
+
+- **`resvg` must be the 0.47.0 the lock pins.** Brew now serves 0.48.1, and
+  resvg's antialiasing *is* the comparison reference, so a node on the wrong
+  one produces plausible numbers that mean something different. Studio has the
+  0.47.0 binary copied over and sha256-verified, at `~/.local/bin/resvg`.
+- **LDraw must be the same snapshot.** `complete.zip` is rolling, so fetching
+  it on a new machine gets a different library. Studio's copy was rsynced from
+  here and verified with the manifest command in `scripts/external-deps.lock`:
+  36603 files, `5f855079…`.
+
+**Two dependencies are missing from `pyproject.toml`.** The census script
+imports `scipy`, which nothing declares, and the `occt` engine needs the
+`cadquery` extra on top of `occt`. A fresh checkout installing `.[occt]` gets
+neither, and fails at the first import. Worth fixing in `pyproject.toml`
+rather than remembering.
+
+What it is for: the oracle needs no golden and no eye, so it answers at
+library scale the two questions 21 parts cannot — which parts either engine
+omits real geometry from, and how far `occt`'s silhouette sits from the part's
+own polygons, which is the open blocker on making it the default. On the parts
+both engines have measured, **naive omits real geometry more often than occt**
+(roughly 11% against 5%), though occt's failures are far larger when they land.
+
+**occt segfaults on some parts, and it has killed its shards three times.**
+The crash reports are all one frame — `SIGSEGV` in
+`ShapeUpgrade_UnifySameDomain::IntUnifyFaces`, OCCT's own C++ — and `92738`
+under `--engine occt` reproduces it on demand, exit 139. Five parts are known
+to do it: `92738`, `u9236c03`, `76110p01`, `u9105p01c04`, `47326p01`. A native crash writes
+no row, so each shard now names the part it is rendering in `<jsonl>.inflight`
+and records it as `ProcessDied` on the way back in — which means **a shard that
+dies needs one restart to get past its killer, and a second run to make
+progress.**
+
+`scripts/census-shard.sh` does that restarting, and every shard runs under it
+now — `run-census.sh` launches shards but does not watch them, so one crash
+costs that shard the rest of the night.
+
+**The whole census is one onto job**, `scripts/census-run.sh`, which starts
+every shard in parallel and waits. It is one job rather than eight because
+onto locks a working tree to a single job, and that is the right shape: the
+census is one workload on one tree. `onto jobs` shows its CPU and peak group
+RSS; `onto logs -f <id>` follows every shard interleaved, with a progress line
+joining them every five minutes.
+
+**Shards are split per engine, not shared.** The two engines run at different
+rates and are rarely the same distance through, so a shared split spends half
+the machine on whichever one is nearly done. `scripts/census-reshard.py
+<engine> <n>` re-splits just that engine's unfinished parts into n fresh
+shards, leaving out anything already recorded in any of its JSONL files, so no
+work is repeated and old files stay as the record. Studio runs 3 naive and 5
+occt against its 8 performance cores — naive had 22 core-hours left against
+occt's 102, and occt is the blocker.
+
+**The census's renders are NOT the store's renders, and they cannot be
+promoted into it.** `--keep` saves what the oracle drew, and the oracle draws
+strokeless on purpose — `--line-width 0 --silhouette-width 0`, so fills carry
+the silhouette with no stroke overhang to subtract from the comparison. The
+store's canonical render is the ordinary stroked drawing `db.canonical_argv`
+names. Copying one into the other puts a file under a key describing a
+different drawing; it was tried and backed out. `out/census/renders` is
+evidence for a finding, to be looked at beside the numbers. The store gets
+filled by its own job, which is part 2 of the database plan.
+
+**The per-part cap is 120s, it does not bound wall clock, and the tail is
+worse than it looks.** SIGALRM lands between Python bytecodes, so a part stuck
+inside OCCT or shapely runs straight past the cap — one measured 695s against
+it. Worse, when the shards were stopped on 2026-09-04 at 23:18, **all eight had
+written nothing since 22:57**: twenty-one minutes of eight-way render time with
+no row to show for it, and no timeout fired in any of them. The four occt
+shards were on `4480c04`, `7757`, `85834` and `12890`. Treat a cap as a
+throughput hint, not a guarantee, and read progress from the log's mtime rather
+than from the fact that processes are alive.
+
+About a fifth of the corpus hits the cap, burning roughly 40% of the CPU on
+parts that record nothing but "too slow". A `TimeoutError` row is a
+rendering-cost finding, not a defect.
+
+## The corpus database
+
+`docs/superpowers/specs/2026-09-04-corpus-database-design.md` is the design and
+`docs/superpowers/plans/2026-09-04-corpus-database.md` the plan, and part 2 —
+the job that fills the store — has its own plan at
+`docs/superpowers/plans/2026-09-04-render-store.md`. **Part 1 is
+built and its tasks are checked off**: `brick_icons/db.py` holds the schema and
+every accessor, `scripts/build-corpus-db.py` rebuilds `corpus.db` from files,
+and `tests/test_db.py` covers it.
+
+**Part 2 is built and running.** Every task in the render-store plan is checked
+off but the last, which is Mike's to take (below). `brick_icons/batch.py` holds
+the guard both batch jobs now share, `scripts/build-render-store.py` renders a
+part list into the store, and `scripts/run-render-store.sh` shards it:
+
+    scripts/run-render-store.sh 8 180 naive     # RETRY=1 to re-take timeouts
+    scripts/render-store-report.sh              # where it has got to
+
+Parts 3 and 4 — the lab's findings view and the regression gate — are unwritten,
+each its own plan.
+
+**The store run needs a second, slower pass.** Resume treats every logged part
+as done, so anything the per-part cap cut short is dropped rather than retried.
+`RETRY=1 scripts/run-render-store.sh 8 600 naive` takes exactly those, and a
+`ProcessDied` part is still never retried. Run it on a quiet box: the first
+22 parts timed out at 23% against a desktop running Chrome, and the renders are
+single-threaded at ~80% CPU each, so contention is the whole story.
+
+Two decisions taken 2026-09-04, so they are not re-argued from scratch:
+
+**One pass, iso only.** The store holds one canonical render per part per
+source, all at iso — the pose the goldens already use. This inherits their
+blind spot knowingly: no golden combo sets `--angle`, so nothing here says
+anything about other poses, and the one bug that hid was every round part
+crashing the naive engine at a side elevation. A second pose costs about 110
+CPU-hours per engine — the renders, not the disk, which is ~115MB — so the
+version worth proposing later is a side elevation for the parts the database
+can already single out, round ones and anything the census flagged, not
+another whole pass. Adding a pose needs the pose in the file path, since
+`config_key` distinguishes them in the table but the path does not.
+
+**The census's renders stay out of git for now.** They live in
+`out/census/renders/<engine>/`, gitignored, with rows in the database. Roughly
+16,500 of them at full coverage, ~230MB.
+
+**`db.census_trees()` is the one definition of where those renders are, and a
+caller that keeps its own list is a bug.** The census runs one tree per node —
+`out/census`, `out/census-naive`, plus run 1's archive `out/census-run1` — so a
+caller looking only in `out/census` indexes one engine, returns a smaller number
+than it should, and raises nothing. That is the shape that reads as "the census
+hasn't finished yet". `rebuild(census_dirs=None)` calls it; pass a list only to
+index something narrower.
+
+Each tree is imported as **its own run**, which is the only thing separating
+pre-fix rows from post-fix ones: `out/census-run1` is not a disjoint set of
+rows but a literal *prefix* of the live files, same filenames continued in
+place, and the rows carry no timestamp or commit. Post-fix occt rows are
+therefore `run(out/census) EXCEPT run(out/census-run1)` — 2,517 parts, matching
+the count `CENSUS-RUN2.md` records as never attempted. **Beware the run ids:**
+run 1 in the database is `out/census`, the live tree; the archive is run 3.
+Read `args.dir`, never the id.
+
+**The database cannot tell you which code produced a timing, and two traps
+follow.** `runs.commit_sha` is whatever was checked out when the *rebuild* ran,
+not what produced the rows — it says nothing about the engine that timed them.
+And a run is a directory, so job `62bb81bd`'s pre-fix rows sit in `out/census`
+beside the backfill's HEAD rows and share a run id. Comparing engines off the
+database alone therefore reads occt as 1.16x slower than naive when it is
+about 2.5x faster; `scripts/census-plot-engines.py` reads the HEAD timings from
+`out/census/backfill/*.jsonl` directly for that reason. Accuracy is unaffected
+— the SVG is byte-identical across the perf commits — this is a timings-only
+hazard.
+
+A part drawn by two trees under one engine is **one row**, won by whichever
+tree sorts last — the nodes run an engine each so nothing collides today, but
+an archive carrying renders would, and the render total would not move. The
+rebuild counts it as `replaced` rather than leaving it silent. Renders sitting
+directly in `renders/` instead of `renders/<engine>/` are skipped: three
+`<part>.occt.svg` files from an early smoke run are there, and their stem would
+file a row under a part id that does not exist.
+
+**`corpus-grouping` was cut before `census_dir` became `census_dirs`** and its
+`_rebuild()` test helper still passes the old name in four places, so its
+tests raise `TypeError` rather than conflicting. It matters only if that
+branch is ever revived; nothing on main or in v2 carries it.
+
+**The tracked store is bigger than that, not equal to it.** Measured on the
+first stored renders, the canonical stroked drawing has a 29KB median and a
+long tail — `0901` is 699KB of real geometry, 1481 elements, already at 2dp, so
+there is no precision bloat to trim. That puts the naive half between 230MB and
+640MB, and the run leaves `renders/` **uncommitted** for that reason: the
+rendering is the expensive half and it is safe on disk, so committing later
+costs nothing. Firm the number up with `du -sh renders` and decide then.
+
+The decision that shaped it, argued in conversation: **a render is the most
+expensive artifact this project makes, so `renders/<source>/<part>.svg` is
+tracked in git and the database is derived from it.** Not the other way round.
+Store the SVG plain rather than gzipped — git's own zlib and delta compression
+are what make a re-rendered part nearly free, and a pre-compressed blob defeats
+both. `corpus.db` is gitignored and rebuilt by walking `renders/` and the TOML.
+
+
+## The corpus wall — merged to `main`
+
+A pan/zoom canvas showing every one of the 24,591 parts as one cell, thumbnail
+where a render exists and a status color where none does. Merged as `d54ca18`;
+all 23 tasks of `docs/superpowers/plans/2026-09-05-corpus-wall.md` landed.
+
+Run it: `.venv/bin/python -m brick_icons.lab` and `cd lab && npm run dev`, then
+`/corpus.html`. `scripts/index-census-renders.py` indexes census renders and
+`scripts/bake-thumbs.py` bakes the sheets; both are idempotent.
+### 2026-09-06: the wall, after a day of it
+
+Committed on `main` through `a3f5b90`, **unpushed**. All of it is live at
+`/corpus.html` with `.venv/bin/python -m brick_icons.lab` and `npm run dev`
+running.
+
+**A schema bump means restarting the lab server on 8792, and it is part of
+landing one rather than something to notice afterwards.** The server is
+long-lived and `scripts/census-ingest.sh 900` rebuilds `corpus.db` from the
+working tree every 15 minutes -- so a bump goes live on the next tick,
+underneath a server still holding the old schema, whether or not anyone
+restarted anything. Every cells request then fails (`no such column: source`
+was schema 2's version of it) and the wall draws blank, which reads as a
+frontend fault and has cost an hour twice. `db.py` has no `ALTER` path at
+all: `SCHEMA_VERSION` goes up and a rebuild recreates the table. Restart
+8792, and say in the commit that you did.
+
+**What a cell knows.** `part_years` carries first year, last year and set
+count for 9,269 parts, derived from Rebrickable's public dumps by
+`scripts/fetch-part-years.py` into the committed
+`tests/goldens/part-years.csv` -- `db.rebuild` reloads it, because a rebuild
+drops the database and the ingest cron rebuilds every 15 minutes.
+`brick_icons/tags.py` turns those plus the library's category and flags into
+tags: sticker, minifig, technic, duplo, printed, obsolete, retired, popular,
+obscure. Retired means the last set is two years back; obscure covers the
+sideline themes whatever their set count; a part the catalogs do not list gets
+neither popular nor obscure, because that is missing data rather than rarity.
+
+**What a cell shows.** Its state color, and now: a slash corner to corner when
+it is undrawn and bordered; its state's border over the thumbnail when it is
+drawn (under the drawing at the vector rung, over it on an opaque bake); a
+gray R bottom-right when retired and a goldenrod star top-left when popular;
+its years top-right and its part number bottom-left past 110px; and a wash
+over the whole cell when retired, painted by the viewer at
+`params.retiredWash` rather than baked -- **the bake has one ground again**,
+and changing how a retired cell looks costs a repaint, not 7,600 rebakes.
+Out-of-scope cells are not squares at all: a lavender sticker glyph, or the
+category's initial, at 60% of the cell.
+
+**What is out of scope**, in `db.OUT_OF_SCOPE_CATEGORIES`: `Sticker` and `|`
+(LDraw's mark for a part nobody at LEGO made -- Circuit Cubes, Brickstuff,
+Hubelino, BuWizz). 2,794 cells. Separately, `~Moved to` redirects are hidden
+from the view rather than dropped from `parts`: a cell's sprite position is
+its index over the whole corpus, so removing them would renumber every sheet.
+Checkboxes in the filter bar bring both classes back.
+
+**A `wontfix` defect has its own state** and its own count. It used to be
+counted as open, so a fault someone decided to live with painted exactly like
+a live one.
+
+**Chrome.** The lightbox is a modal portaled over the shell header, showing
+the part as every slot drew it, with links out to Rebrickable, BrickLink,
+Brickset and the LDraw library, an `Open in lab` link (`index.html?part=<id>`)
+and a form that files a defect against the slot being viewed. A drag or a
+wheel drops the hover card. A slot change keeps the old drawings up until the
+new slot's cells and sheets are both in hand. A pan stops a panel width plus
+30px past the wall's edge. Numeric params carry units through a resolved
+schema, since a legacy `ConfigField` cannot hold one.
+
+**Bugs found and fixed along the way, worth not re-finding:** the vector rung
+canceled every raster in flight on each camera frame, so a zoom threw the work
+away and started over; the same cancellation was in the loose rung, where a
+dropped image was never re-requested; `engine_for` took everything after
+`census-`, so both white slots asked for measurements from an engine called
+`white-naive` and joined to nothing; and two bakes running at once dropped
+5,110 entries from two slots' `baked.json`, which the wall reads as "stale"
+and draws as a blank cell (that was the 29111 report). The last one is why
+`e60f811` writes sidecars atomically -- and why only one bake should run at a
+time.
+
+**The blur after a slot change is fixed** (`f9a3801`) -- the "SVG pop-in, or
+possibly even mipmapping" report. A zoom is not what broke it; switching
+slots is, and it is only visible if you switch while zoomed in. Two causes,
+either enough on its own. `setLevel(32)` on a slot change threw away the rung
+the camera asked for, and nothing recomputes the level but a camera move, so
+the wall sat on the 32px sheet until the next wheel tick. And
+`useVectorThumbs` cleared its raster cache through `setRaster`, which the ref
+the work-splitter reads does not see until the next commit -- so the new
+slot's cells were matched against the old slot's rasters, which a parked
+camera makes look exactly the right size to keep, and they were neither drawn
+nor redrawn. The second one *is* a regression from the slot hold (`1117576`):
+the blank frame it removed used to give the cache clear a commit of its own.
+**The level belongs to the camera, not to a slot** -- every slot lays out the
+same 24,591 cells at the same size, so nothing about a slot change should
+touch it.
+
+**Still open.** Badges and captions are not toggleable, and Mike wants them
+to be. The census draws the `~Moved` redirects, which are hidden on the wall
+and can never be worth rendering -- skipping them in the batch lists would
+give back whatever share of the run they are. A 512px baked level between the
+128px PNG and the SVG was considered and deferred once the vector rung got
+fast; it would cost roughly 600MB per slot.
+
+**`~/src/castleblack`** holds the design for pulling the wall out into two
+domain-free packages, with this corpus as the first host --
+`docs/superpowers/specs/2026-09-07-abstract-wall-design.md`. The earlier
+`wall/README.md` it superseded survives only at `a1fffd0`. Its first phase is
+built here on branch `states-as-data`: the cell states and the selection
+vocabulary are now tables, behind 45 `paintCommands` goldens. Nothing in this
+repo imports anything from castleblack, and nothing is meant to until the
+packages exist.
+
+**Grouping is on the wall.** `corpus-grouping-v2` merged, giving the sidebar
+four groupings -- nothing, coverage, category, release year -- an order and a
+color ramp, category and class facets with live counts, and band labels over
+the blocks. Design and plan:
+`docs/superpowers/specs/2026-09-05-corpus-grouping-design.md` and
+`docs/superpowers/plans/2026-09-05-corpus-grouping.md`.
+
+**`corpus-grouping` -- the older, 20-commit branch -- is not merging, and
+that is a decision, not a backlog item.** It carries the same grouping core
+(`grouped.ts` and `layout.ts` are byte-identical to v2's) on top of a second
+Rebrickable pipeline of its own: `brick_icons/rebrickable.py`, a
+`part_facts` and a `part_colors` table, `scripts/import-rebrickable.py`, and
+a `cells.py` that sends `cat` as an index into a `categories[]` array plus
+`year`/`uses`/`ncolors`. Main already answers all of that from `part_years`,
+`tests/goldens/part-years.csv` and `tags.py`, offline and without a network
+fetch of 1.5M inventory rows -- which matters, because the ingest cron
+rebuilds every 15 minutes. Its `useCells` also predates the slot hold and
+returns a bare body rather than the `{cells, source}` pair. **The one thing
+it has that main does not is a color count per part**, which is why its tint
+offers `colors` and v2's offers `year` and `sets`. That is being added to
+main's own pipeline instead, as a `colors` column on `part_years`.
+
+**Band labels overlap the top cell row when the whole wall is fit to width.**
+`grouped.ts` reserves `headerRows * pitch` of world space above every block,
+but `paint.ts` draws the label at a fixed 18px (outer) or 11px (inner), so
+below roughly a 20px cell the text is taller than the gap it was given. There
+is a width guard (`MIN_LABEL_PX`) and no height one. Zoomed in, labels sit
+clean.
+
+**windease cannot lay out this wall, and the caret already has what it offered.**
+`gridStrategy.layout` is O(n^2): 6.4ms at 250 items, 18.7s at 16,000, 44.7s at
+24,591 — measured, exponent 2.0 across the range. Its `focus/resolve.ts`
+`directional()` is the same score function `lab/src/corpus/caret.ts` already
+uses (nearest center along the axis, plus a cross-axis penalty), and taking it
+from windease would mean a `Store` node per cell. Do not re-propose it for the
+corpus wall. It stays the right tool for slopboard, which lays out tens of
+panes and not tens of thousands.
+
+## Lab decisions from 2026-09-04, none of them in the code
+
+**The three layout buttons name windease's own strategies.** windease
+(`~/src/windease`, its own repo, reaching the lab as a labkit dependency) ships
+`grid`, `split`, `stack`, `strip` and `floating`. The lab reimplements three of
+them as CSS classes in `lab/src/app.css`, which is how `grid` came to lay four
+panes out in a row of four — windease's grid auto-balances. The `:has()` column
+counting there now is a stopgap standing in for that; the panes should become a
+windease zone.
+
+**A key that temporarily arms a toggle gets its own half-pressed state**, not
+the on state — `.pose.is-armed` against `.pose.is-on`. A clicked toggle stays
+until clicked again; a key-armed one returns on release, and drawing them alike
+makes the button look stuck. Alt on the loupe is the first case; write the next
+one the same way.
+
+**Two asks are blocked on the same missing seam.** labkit's `StringNode` offers
+`placeholder`, `maxLength` and `debounce` and nothing else, and its node tree
+has no read-only text leaf. So committing the part field on Enter, and showing
+the selected part's name inside the settings panel, both need the lab's first
+custom control (`f.custom` + `controls`). Worth building once. The part field
+is throttled with `.debounce(400)` meanwhile, and the trial titlebar already
+reads `3001 - Brick 2 x 4`.
+
+**labkit is pinned to the released `@weasel-js/labkit@^1.4.0`.** One labkit
+commit landed after that tag — `a2c5318c`, bundling declarations from built
+types rather than source — so if a labkit type ever resolves oddly, that is
+why and 1.4.1 is the fix.
 
 ## Read first: there are two threads now
+
+**Branch state (2026-09-04):** `labkit/annotations-arc-5` is fast-forwarded
+into `main` and the whole arc is on it. **`main` is 27 ahead of `origin/main`
+and nothing is pushed.** The `BRICK_GOLDENS=full` run that gates the engine
+files this arc touched — the colour-to-color rename across `hlr`, `occt`,
+`shade`, `trace`, `unwrap` — finished green at 00:59 (751 passed, 4 skipped,
+18m04s), before the two lab-only commits on top of it; a lab commit cannot
+move a Python suite. Only the tail of that run's log survived, so the
+`BRICK_GOLDENS=full` on its command line is inferred from the duration and
+from three tests un-skipping, not read.
+
+**labkit is pinned to the released `@weasel-js/labkit@^1.4.0`.** The `file:`
+link to the weasel checkout is gone, and with it the requirement to rebuild
+that checkout before the lab could see a kit change. `lab/vite.config.weasel-src.mts`
+still exists for running against weasel source when a kit change needs to be
+seen before release — it is opt-in with `--config`, never the default.
 
 The **corpus lab** — a local web app for inspecting renders and tracking
 defects — is the active one. The engine thread below it is unchanged and still
@@ -207,20 +2341,57 @@ Not re-derivable from a green suite, and each cost real time:
 
 ### Upstream
 
-Weasel has fixed the `FloatingPanel` capture (movement threshold) and written
-the styling contract into labkit's `RECIPES.md`; both are on
-`labkit/consumer-asks`, unpushed and unreleased — so the two workarounds above
-are delete-when-it-ships, not delete-on-a-date. The `.pair()`-vs-`pack`
+Linked, not pinned — see the link paragraph above for how to advance it.
+labkit ships `AnnotationsApi.selection()` and `setSelection()`, and the styling
+contract is in its `docs/RECIPES.md`. The `FloatingPanel` capture is filed
+upstream, not fixed, so `App.tsx`'s drag-stop stays. The `.pair()`-vs-`pack`
 question and the leading titlebar slot are filed and open.
+
+`usePanZoom` is exported standalone, for a lab that hosts its own renderer
+through `surface` — which is what `lab/src/panes/camera.ts` is. Nobody has
+checked whether its view shape matches what an annotation target wants.
+
+The icon set is reachable as `import { Icon } from '@weasel-js/labkit/weasel-ui'`
+— the bare barrel does not carry it. The pose bar's layout selector draws from
+it. `weasel-ui` is the passthrough for every kit primitive, so importing
+`@weasel-js/ui` directly is never the answer.
 
 Sidebar sections can now be torn out into workspace tiles (`undockAs`), but a
 section undocks WHOLE, as one panel: our six settings sections would become six
-tear-out controls and six panels. Putting the render and colour flags in one
+tear-out controls and six panels. Putting the render and color flags in one
 tile means making them one `sidebar` contribution with both groups inside it,
 not two contributions — so this is a restructure of the panel, not an
 annotation on it.
 
+**Sidebar drag-to-resize is in the linked tip** (`21b0582a`): the sidebar and
+content well are a two-pane windease strip whose seam is a real
+`role="separator"` — pointer drag, arrows, Home/End — with the width persisted
+per trial as `TrialRecord.sidebarWidth`. Nothing here needed changing for it:
+we use neither `--lk-trial-sidebar-w` (which stops meaning anything) nor
+`<TrialBody>` (for chrome you compose yourself). Nobody has driven it here yet.
+
 Do not wait on any of it; every item has a working local workaround.
+
+### The annotations overlay owns pane input
+
+`paneSpec().marks` now answers "does this pane take marks *right now*", and
+`config.marking` is half of it, so a target — and the `.lk-annotate__input` box
+that covers a pane and takes every pointer event it would otherwise pan with —
+mounts only while marking is armed. **Filed defect marks are therefore hidden
+while it is off**, which is what the toggle promises; the Defects panel still
+lists them. The trial also starts on `rect`: an instrument declaring only
+`annotations` opens on `select`, where a drag marquees rather than draws.
+
+**Still open: whether the camera should stay live *under* an armed overlay.**
+`usePanZoom` above is the likely answer. Nothing here is visible to jsdom —
+all three were found driving a browser.
+
+A projected mark could not go stale, because the projection passed the live
+config to `marks.add` and re-ran on every config change. `buildDefect` fills
+`seen` from `POSITION_DEPENDS_ON` again — the TOML store never stopped keeping
+the field — and `projectDefects` dates each mark by that. A record filed
+between `f1638fc` and `d6d9293` carries `seen = {}` and never goes stale, which
+is what labkit's `isStale` does with an absent key by design.
 
 ## The engine thread: one checkout, no branches
 
@@ -350,7 +2521,7 @@ exact surface. `--engine occt --shade-style flat3` fills all 21 parts of the
 are not, and `occt` is still not the default.
 
 **Look at faces, not at drawings — `scripts/render-face-sheet.py`.** One flat
-colour per fill element, strokes dropped, over any part list:
+color per fill element, strokes dropped, over any part list:
 
     .venv/bin/python scripts/render-face-sheet.py --engine occt \
       --list specimens.txt
@@ -362,7 +2533,7 @@ truncated. One pass over the 22 specimens turned up, unchased: `3941`
 arrow-shaped artifacts on the top face, `6143` slivers, `3673` stripes,
 `3040bp08` fragments, plus the `32062` notch elements listed below. None of
 those are in the defects file yet. Note `--debug-colors` is NOT this — it
-recolours strokes and leaves the fills grey.
+recolors strokes and leaves the fills grey.
 
 ### Where it still differs
 
@@ -553,13 +2724,13 @@ and the substitutions.
 against doubled ink's black, which is how naive's 30–55% duplicate ink becomes
 visible at all.
 
-**`--debug-colors` gives every drawn element its own colour** in emission
+**`--debug-colors` gives every drawn element its own color** in emission
 order. Bare, it is a 12-hue cycle (`trace.DEBUG_PALETTE`) — use it to ask which
 element owns a vertex, which a black outline cannot say. `ramp` instead fades
 light to dark across 6 elements then steps the hue, so position within a run
 and which run both read at once; `ramp=N` sets the run length, and `ramp=100`
 trades adjacent-step contrast for coarse structure. It already shows the outer
-silhouette is not one contour but many fragments, with the colour changing at
+silhouette is not one contour but many fragments, with the color changing at
 each tangent jog. Opt-in; the goldens do not pass it.
 
 **`--part-label` stamps the whole render tag**, not just the part id:
@@ -605,8 +2776,8 @@ causes, all now fixed and tested:
   constant height — a round tile's print unwrapped to a zero-area line.
 - A round tile's top face **is** a disc primitive, so it has no facets and
   contributed no plane. Flat primitives now contribute theirs.
-- Decoration authored as coloured *primitives* was ignored entirely.
-  `3942bp01` is 16 cone sectors and zero coloured facets.
+- Decoration authored as colored *primitives* was ignored entirely.
+  `3942bp01` is 16 cone sectors and zero colored facets.
 
 Also: stacked wall sections merge into one spanning carrier (`span_carrier`),
 carrier faces union **all** coplanar facets including the print, groups sort by
@@ -620,7 +2791,7 @@ pipeline (99s → 0.04s on a high-poly torso, byte-identical output, pinned).
 **The minifig neck mark is dropped from decals only.** LDraw authors a neck as
 a 270-degree body cylinder plus a 90-degree one in black; the head covers it.
 It is authored exactly as real print is — `3942bp01`'s stripes partition their
-wall into coloured and colour-16 sectors summing to 360 the same way — so it is
+wall into colored and color-16 sectors summing to 360 the same way — so it is
 caught by position *and* size together: protrudes past the body **and** covers
 no more than a quarter of its ring. Either condition alone admits `29030p01`'s
 head print and `53983p01`'s turbine case. Renders keep the band, by request.
@@ -682,19 +2853,23 @@ A hand edit between the markers is overwritten — edit the store instead.
   Sampling by count class, not alphabetically, is load-bearing: 310 parts yield
   one decal and 20 yield none, so an alphabetical sample misses both edges —
   which is where `MAX_DECALS` does its silencing.
-- **The rim veers down where a notch meets the silhouette, in BOTH engines.**
-  On `3941` at `30,65` the outline climbs the notch ceiling, detours to a
-  spurious low vertex, then rises to the silhouette:
-  `L(193.8,131.7) -> L(198.0,136.3) -> L(201.0,126.7)`. Naive and occt emit
-  that same `(198.0, 136.3)` point, so it is NOT an HLR defect — it comes from
-  the stage they share (`geom2d.contour_d` / `shade.silhouette_geom`). Fixing
-  it there fixes both. Reproduce with `--angle 30,65 --part-label`.
-  Two things this explains, so nobody re-chases them: the tangent notch walls
-  measure 9.2px against the front notch's 11.8px, and the outline carries a
-  visible barb at the tangent. Both appear in both engines. The 9.2-vs-11.8
-  split is NOT independent evidence of a naive defect — an orthographic
-  argument says equal-height edges project equally, but the two notch corner
-  edges sit at different depths and only part of one is unoccluded.
+- **`3941`'s notch "rim veer": NOT A DEFECT, and this file said otherwise.**
+  The V at the tangent notch is the true projection of the skirt panel's
+  bottom corner, the vertex `(11.36, 24, 16)` authored in `s/3941s01.dat`,
+  which lands at exactly `(197.56, 134.36)`. Naive's silhouette contains the
+  part's own polygons with ZERO missing pixels at `30,65`
+  (`scripts/compare-silhouette-truth.py`). The `(198.0, 136.3)` recorded here
+  was read out of the `sclip` clipPath, not the outline: it is
+  `buffer_d(sil, 1.0)`'s mitre apex at that 60.1-degree corner, matching to
+  both decimals. The "barb" is the same corner mitred — ink reaches 1.9px out
+  against 1.0px along the rest of the outline, which is what miterlimit 5 on
+  `contour_d` is FOR. occt does not emit the point at all today.
+- **occt fills that notch in solid, and naive does not.** Same pose, same
+  part: occt's silhouette runs 10.1px (99th pct) beyond the part where the
+  skirt is cut flat, so the flat walls never reach the silhouette; naive
+  holds 0.56px, which is antialias plus arc-over-chord bulge. `4589` also
+  loses 686px in 2 components under occt and none under naive. One more
+  reason the flag cannot flip — see "The decision the merge creates".
 - **`3941`/`6143`'s `stud10` lateral cut: FIXED** — see the arcfit anchor
   fallback in the corpus review. The cut is a cylinder-cylinder intersection
   LDraw approximates with 4 tris and 4 quads; the chain now fits one arc
@@ -801,4 +2976,177 @@ A hand edit between the markers is overwritten — edit the store instead.
   move under an engine swap, and an extraction corpus whose candidate pool was
   an alphabetical prefix containing no classic brick, plate or tile. Ask what
   a gate would MISS before trusting it.
-- LDView colour is not evidence; a proof sheet is not the renderer.
+- LDView color is not evidence; a proof sheet is not the renderer.
+
+## 2026-09-06 evening: the geometry phase, and what is still unmeasured
+
+On branch `main`, unpushed with everyone else's evening — `git log --oneline @{u}..HEAD` for the current list:
+
+- `9493b33` prefilters the two all-pairs scans in the geometry phase.
+  `shade.order_faces` tested every face pair and recomputed each polygon's
+  extent inside the test; `occt.select_authored` tested every HLR fragment
+  against every locus; `_overlap_witness`'s erosion allocated four padded
+  copies per pass. Gated BYTE-IDENTICAL over 120 occt parts and 25 naive parts.
+- `454cd51` stops `census-render-diff.sh` running over a dirty `brick_icons/` —
+  it swaps files with `git checkout` and had been overwriting whatever another
+  session had uncommitted in this shared checkout.
+- `2613aeb` adds `measurements.phases` (JSON, SCHEMA_VERSION 6) and a
+  `brick_icons.timing` accumulator splitting a render into geometry /
+  decoration / fill, exclusive of each other. The census's own `phase` dict was
+  already in every JSONL row and being dropped at ingest, so a rebuild
+  backfills render/rasterize/truth_mask/compare for both finished runs.
+
+**The performance numbers are not settled, and I have published two that
+moved.** What is load- and config-independent, and safe: the byte-identity
+gates, and the call counts — 1,253,615 of 10039's 1,279,200 face pairs rejected
+at 8.9us each, and 663,145 `_on_locus` calls on 32531b for 279 matches.
+
+The ratios need care, and the trap caught me twice:
+
+1. A *sequential* gate (new revision, then old) measures two revisions and two
+   machine states. Mine read 0.90x on a change that alternating passes put
+   above 4x. Alternate the sides, min of two.
+2. `hlr.visible_segments`'s **default `render_px` is 900; the census renders at
+   2048**. A harness that calls it directly measures a render nobody performs.
+   Measure through `cli.process_one` with the census's own argv.
+
+Measured through `process_one`, alternating, min of two, on 8 parts from the
+census's slow bands (`docs/census-timings/geometry-ab-census-config.log`):
+geometry 75.77s -> 15.28s (**4.96x**), whole render 191.63s -> 125.16s
+(**1.53x**), geometry falling from 40% of a render to 12%.
+
+**The 1.08x was never a base run.** `census-engine-bench.py`'s 14-part sample
+gave that figure because `python scripts/x.py` puts `scripts/` on `sys.path`
+and never the checkout root: the venv's editable install then serves
+`/Users/mike/src/brick-icons/brick_icons` from inside a worktree, so both
+sides of the A/B ran head. `--rev` said `d19f4e4` throughout, because git
+resolves that from the cwd. The fingerprint is in the rows — base and head
+agree to within noise on every part (0901 0.95 vs 0.79, 32172 1.57 vs 1.56,
+44937 3.09 vs 3.04) — and the two 0901 figures were never in conflict: the
+bench's 0.95s is a *head* number, next to ab2's head 0.74s. Only ab2 measured
+base.
+## In flight: mesh refinement, branch `smooth-subdivide` — UNBUILT
+
+Local, unmerged, cut from `bf4ae83`; `git log --oneline bf4ae83..smooth-subdivide`
+for what is on it.
+
+The premise, which decides every design call here: a round the library
+authored as flat triangles carries no curve for any rule to find, so
+**fix the mesh, not the drawing.** Both engines then see one surface, and
+strokes and fills come off the same geometry instead of being kept in step by
+hand. The declaration to key on is the conditional line: a type-5 across a
+facet boundary says the two faces are meant to read as one smooth surface,
+and it holds across the cracks that make a dihedral-angle rule wrong here.
+
+`repair.smooth_subdivide` unions facets into declared-smooth patches, takes
+corner normals from the patch around each corner, and replaces each facet
+with `level**2` triangles on its curved point-normal (PN) patch. A boundary
+that is not declared smooth stays on its straight chord, so a refined patch
+still meets a flat neighbor along the same line.
+
+**What split a round into N strips was our own quad diagonal, not a missing
+declaration.** A type-4 becomes two triangles across the 0-2 diagonal, and no
+type-5 line describes that diagonal because the library never had an edge
+there — so union-find over declared edges could not cross it, and a quad grid
+whose sides are all declared smooth still fell into diagonal staircase
+chains. On 28621, 128 of its edges were shared between two "strips" and
+carried no condline; there are exactly 128 quads. `flatten` now stamps both
+halves of a quad with its id and the refiner joins them: 28621's shoulder
+goes from 32 patches of 8 facets to 2 of 128, 3960's dish from 72 of 14 to
+424 + 384.
+
+Where the four specimens stand, rendered against `2cedb47`. 4592 draws a
+round silhouette and keeps its radial dome gradient — clean. 32062 comes out
+byte-identical to an unrefined render, which is what the gate is for. 28621
+loses its swirl of overlapping tone fragments and its shoulder silhouette
+becomes a true curve instead of a chord chain, but see below. 3960 is worse
+than unrefined.
+
+Two conditions gate refinement, both asking only what the library declared. A
+patch is refined when it **surrounds a vertex** — one whose every incident
+edge is declared smooth — and its edges leave their chords only where the
+mesh **pairs** them. The first replaces a triangle-count gate that was a
+proxy for it: only at a surrounded vertex is a corner normal the patch's
+rather than one chord's, and a patch that is all boundary hands PN a single
+facet plane at every corner, so it invents the curve — 32062's axle bevel
+pushed past the drawn strokes and left a crescent the fill inked as a
+25-vertex sampled boundary. The pairing condition is because bulging one lip
+of a crack widens it. The gate is per PATCH and must stay that way: refining
+part of one leaves the rest on its chords and cuts it in two for the fill
+merge. Over `parts.txt` the surrounded-vertex gate refines every triangle the
+count gate did and more (60474 2428 → 2672, 3960 736 → 808), and 32062 none.
+
+**The blocker is un-inked fragments floating on a refined surface**, and it
+is one defect on two parts, not a 3960 problem. 28621 carries a single dark
+sliver on the shoulder below the stud, with faint pale ghost edges at the
+stud base. 3960 carries four dark wedges and a spike on the dome, the same
+ghost around the stud, and a sawtooth dark band along the far rim — the band
+this repo has fixed once already, so refinement re-triggers a known HLR
+failure rather than a new one. Both are unrefined-clean. Scale is the obvious
+suspect and the wrong place to start: 28621 refines 256 triangles into 2304
+and shows one sliver, 3960 refines 808 into 7272 and shows six.
+
+Rendering against `b0c5d85` (ring/disc axis from its own two columns) and
+`2cedb47` (degenerate-ring window, binned gradient stops) changes neither
+part's artifacts — checked, not assumed, on all four specimens.
+
+After that: a contact sheet over `parts.txt` against `main`, then the full
+suite. Four parts have been looked at (28621, 4592, 3960, 32062).
+
+⚠️ `occt.flatten_part` does its own flatten and does NOT refine, so any test
+comparing it against `hlr.visible_segments` compares an unrefined mesh
+against a refined one. `test_occt_segments_go_through_the_orphan_cull` broke
+exactly that way while an intermediate gate refined 30162. Aligning the two
+paths changes the input of 32 occt tests, so it has not been done.
+
+`render.pose_for` is on this branch too and is unrelated to any of the above:
+a sticker modelled as a flat sheet (thinnest extent under 1 LDU) is posed
+square onto its face rather than at iso. It does not make stickers render —
+003238a is still at the wrong scale under naive and raises "no edges" under
+occt, both pre-existing.
+
+**Dead ends, measured, do not re-propose:**
+
+- *`shade._seam_edge_mask`'s partial-lie matching.* It matches a mesh edge
+  lying anywhere ON a conditional line, where the refiner requires the
+  condline to match a facet edge end to end. On 28621 the two tests select
+  the SAME 288 mesh edges — zero partial-lie-only ones — and all 320 of its
+  condlines land exactly on a mesh edge; 4592 likewise. Only 3960 has any (16
+  edges, merging 12 patches). The difference is not what let occt see a
+  surface the refiner split.
+- *Rejecting a patch that has a face attached to it by a single seam.* Kills
+  60474 and 3960 outright, and refines nothing anywhere else in `parts.txt`.
+- *Fitting an analytic surface to the patch.* 4592's two big patches fit a
+  sphere to 2.44px and everything else worse (plane 45, cone 22, cylinder
+  35). No quadric is that surface, and PN triangles do not need one — they
+  only need to know which edges are smooth, which the file declares.
+- *LDView's `-CurveQuality`.* It only re-tessellates primitive references,
+  and this engine already substitutes those with exact analytic surfaces,
+  which beats any tessellation. 4592's dome is inline triangles: LDView
+  would export the same 180 of them at any quality. There is no
+  tessellation knob on our own path — `--curve-quality` feeds LDView alone.
+- *Fitting the drawn chords to an ellipse* (`arcfit.fit_silhouette_arcs`,
+  landed as `6f042c0`). 4592's one candidate run has no ellipse near it, and
+  the gate that makes the pass safe elsewhere only accepts runs that were
+  already smooth. It fires on 5 of 74 census parts for a sub-pixel change.
+- *Gating on `primitives.from_ref`.* The earlier handoff said to skip
+  refinement wherever an exact surface was already substituted. `from_ref`
+  substitutes NOTHING on 32062 — `out["analytic"]` is empty — so that gate
+  is a no-op on the part it was written for.
+- *Carrying the patch id from the refiner into `occt._group_planes`.* Tagging
+  each refined triangle with its patch and unioning faces by it took 4592
+  from 29 groups to 21, and the drawing was pixel-indistinguishable. It costs
+  a face-to-triangle mapping and a field on every plane face. The patches
+  have to get coarser before any of that pays.
+- *Blaming the cracks, `UnifySameDomain`, or vertex welding.* 28621's 64
+  unpaired condline edges are real boundaries, not cracks — the nearest
+  same-length edge is over 3 LDU away, and they carry one ancestor face with
+  refinement on and off alike. Disabling `UnifySameDomain` leaves the group
+  count at 15. Welding vertices at 2e-3 changes no patch on 28621, 4592 or
+  3960.
+
+The 128-face fill groups in an unrefined render are the **flat rings** — the
+caps, fan-triangulated and chained by the coplanar rule — not the curved
+wall. Anything comparing group counts before and after refinement has to
+separate the two, or it measures the caps and concludes something about the
+round.

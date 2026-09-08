@@ -1,0 +1,391 @@
+/* The coverage status palette. Three saturated states the wall already marks
+ * problems with, and two deliberately neutral ones for the bulk. */
+.stats-page {
+  --stats-defect: #daa520;
+  --stats-failed: #e03030;
+  --stats-timeout: #30b0d0;
+  --stats-drawn: #d8d8dc;
+  --stats-untried: #6a6a72;
+  /* Deliberately none of the status colors above: a histogram bar is a count,
+   * not a state, and painting it cyan would say "timed out" to anyone who
+   * just read the coverage legend. */
+  --stats-bin: #7f8ca6;
+
+  /* The phase palette: categorical, four exclusive stages. Validated with the
+   * dataviz validator against this page's sunken surface -- lightness band,
+   * chroma floor, adjacent CVD separation, normal-vision separation and
+   * contrast all pass. */
+  --stats-phase-render: #3987e5;
+  --stats-phase-rasterize: #d95926;
+  --stats-phase-truth_mask: #199e70;
+  --stats-phase-compare: #9085e9;
+
+  /* How render divides: one hue, light to dark, because these are ordered
+   * pieces of the band above rather than four unrelated things -- and seven
+   * categorical hues on a page that already spends three on status is how a
+   * reader stops being able to tell any of them apart. Identity comes from
+   * the labels written into the bands, not from the color. */
+  --stats-split-geometry: #a9cff8;
+  --stats-split-decoration: #7bb0f0;
+  --stats-split-fill: #4f92e2;
+  --stats-split-rest: #2f6fbe;
+  padding: 1rem 1.5rem 4rem;
+  max-width: 72rem;
+  margin: 0 auto;
+  color: var(--wzl-fg);
+}
+
+.stats-head {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.stats-head h1 { margin: 0; font-size: 1.25rem; }
+.stats-asof { margin: 0; color: var(--wzl-fg-muted); flex: 1; }
+.stats-muted { color: var(--wzl-fg-muted); }
+.stats-empty { color: var(--wzl-fg-muted); }
+.stats-error { color: var(--wzl-danger); }
+
+.stats-page h2 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--wzl-fg-muted);
+  margin: 2rem 0 0.75rem;
+}
+
+.stats-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin: 1rem 0 0;
+  padding: 0.75rem;
+  border: 1px solid var(--wzl-border, #333);
+  border-radius: 4px;
+}
+
+.stats-controls label { display: flex; align-items: center; gap: 0.35rem; }
+
+.stats-categories {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.stats-categories legend { color: var(--wzl-fg-muted); padding: 0 0.5rem 0 0; }
+
+/* -- coverage bars ------------------------------------------------------ */
+
+.stats-legend {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.75rem;
+  color: var(--wzl-fg-muted);
+  font-size: 0.85rem;
+}
+
+.stats-legend li { display: flex; align-items: center; gap: 0.35rem; }
+
+.stats-swatch {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.stats-bars { display: flex; flex-direction: column; gap: 0.5rem; }
+
+.stats-bar-row {
+  display: grid;
+  grid-template-columns: 11rem 1fr 9rem;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.stats-bar-name { font-variant-numeric: tabular-nums; }
+.stats-bar-value { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* The 2px gap is the surface showing through, not a stroke: a one-part
+ * segment stays a visible sliver instead of vanishing under a neighbor's
+ * border. */
+.stats-bar {
+  display: flex;
+  gap: 2px;
+  height: 1.5rem;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--wzl-surface-sunken, #111);
+}
+
+.stats-seg { display: block; height: 100%; min-width: 2px; }
+.stats-seg[data-label='defect'] { background: var(--stats-defect); }
+.stats-seg[data-label='failed'] { background: var(--stats-failed); }
+.stats-seg[data-label='timeout'] { background: var(--stats-timeout); }
+.stats-seg[data-label='drawn'] { background: var(--stats-drawn); }
+.stats-seg[data-label='untried'] { background: var(--stats-untried); }
+a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg); }
+
+.stats-swatch[data-label='defect'] { background: var(--stats-defect); }
+.stats-swatch[data-label='failed'] { background: var(--stats-failed); }
+.stats-swatch[data-label='timeout'] { background: var(--stats-timeout); }
+.stats-swatch[data-label='drawn'] { background: var(--stats-drawn); }
+.stats-swatch[data-label='untried'] { background: var(--stats-untried); }
+
+/* -- phases ------------------------------------------------------------- */
+
+/* One rule per phase across every mark that wears it -- the full-width bar,
+ * the legend swatch and a column segment in the per-part strip. */
+.stats-phase-mark[data-phase='render'] { background: var(--stats-phase-render); }
+.stats-phase-mark[data-phase='rasterize'] { background: var(--stats-phase-rasterize); }
+.stats-phase-mark[data-phase='truth_mask'] { background: var(--stats-phase-truth_mask); }
+.stats-phase-mark[data-phase='compare'] { background: var(--stats-phase-compare); }
+
+/* Phase tree ---------------------------------------------------------- */
+
+.stats-phase-rows {
+  list-style: none;
+  margin: 0 0 1.25rem;
+  padding: 0;
+}
+
+.stats-phase-row {
+  display: grid;
+  grid-template-columns: minmax(11rem, 18rem) 4.5rem 1fr 3.5rem 4rem;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.0625rem 0;
+  font-size: 0.8125rem;
+}
+
+.stats-phase-row:hover { background: var(--wzl-surface-hover); }
+
+.stats-phase-toggle {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.stats-phase-leaf { color: var(--wzl-fg); }
+
+.stats-phase-row[data-rest='true'] .stats-phase-leaf { font-style: italic; }
+
+.stats-phase-secs,
+.stats-phase-pct,
+.stats-phase-n {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-phase-pct,
+.stats-phase-n { color: var(--wzl-fg-muted); }
+
+.stats-phase-bar {
+  display: block;
+  height: 0.6875rem;
+  background: var(--wzl-line);
+  border-radius: 1px;
+  overflow: hidden;
+}
+
+.stats-phase-fill {
+  display: block;
+  height: 100%;
+  background: var(--stats-split-geometry);
+}
+
+.stats-phase-row[data-rest='true'] .stats-phase-fill {
+  background: var(--stats-split-rest);
+}
+
+.stats-phase-row[data-depth='0'] .stats-phase-fill {
+  background: var(--stats-split-fill);
+}
+
+.stats-phases { display: flex; flex-direction: column; gap: 1.5rem; }
+.stats-phase-engine { margin: 0; }
+.stats-phase-engine figcaption { margin-bottom: 0.4rem; font-size: 0.9rem; }
+.stats-phase-split { margin-top: 0.5rem; }
+.stats-phase-note { margin: 0 0 0.3rem; font-size: 0.8rem; }
+
+/* The split bands carry their own names, so the shared hue never has to be
+ * the identity channel. Dark ink because every step of the ramp is well
+ * clear of 3:1 against it. */
+.stats-seg-label {
+  display: block;
+  padding: 0 0.4rem;
+  line-height: 1.5rem;
+  font-size: 0.72rem;
+  color: #0e0f12;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* -- the slowest parts, one column each --------------------------------- */
+
+.stats-columns { margin: 1rem 0 0; }
+.stats-columns figcaption { margin-bottom: 0.4rem; font-size: 0.8rem; }
+
+.stats-column-plot {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 9rem;
+  border-bottom: 1px solid var(--wzl-line, #333);
+}
+
+.stats-column { flex: 1; min-width: 3px; }
+
+.stats-column-stack {
+  display: flex;
+  flex-direction: column-reverse;
+  height: 100%;
+  width: 100%;
+  border-radius: 3px 3px 0 0;
+  overflow: hidden;
+}
+
+.stats-col-seg { display: block; width: 100%; }
+
+/* -- tiles -------------------------------------------------------------- */
+
+.stats-tiles {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 2rem;
+}
+
+.stats-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--wzl-border, #333);
+  border-radius: 4px;
+  min-width: 11rem;
+}
+
+.stats-tile strong { font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+.stats-tile-label { color: var(--wzl-fg-muted); font-size: 0.85rem; }
+
+/* -- histograms --------------------------------------------------------- */
+
+.stats-histogram { margin: 0; }
+.stats-histogram figcaption { margin-bottom: 0.5rem; font-size: 0.9rem; }
+
+.stats-overlay-keys { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+.stats-overlay-key { display: flex; align-items: center; gap: 0.4rem; }
+
+.stats-bins {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 8rem;
+}
+
+.stats-bin {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: 100%;
+  position: relative;
+}
+
+/* The two series share the column and overlap. The shorter one is drawn over
+ * the taller, so a bin where one engine is far ahead still shows both. */
+.stats-bin-stack {
+  display: flex;
+  align-items: flex-end;
+  height: 100%;
+  position: relative;
+}
+
+.stats-bin-fill {
+  display: block;
+  border-radius: 3px 3px 0 0;
+  min-height: 1px;
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+}
+
+/* The ring is what keeps the front bar's edge readable where it sits inside
+ * the back one; without it two bars of the same color read as one. */
+.stats-bin-fill[data-front] {
+  box-shadow: 0 -2px 0 var(--wzl-surface-sunken, #0e0f12),
+              2px 0 0 var(--wzl-surface-sunken, #0e0f12),
+              -2px 0 0 var(--wzl-surface-sunken, #0e0f12);
+}
+
+.stats-bin-mark { background: var(--stats-bin); }
+/* Fine and low-contrast on purpose. A bold hatch across a bar this wide reads
+ * as "disabled" rather than as a second series. */
+.stats-bin-mark[data-fill="hatch"] {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--stats-bin) 0 2px,
+    color-mix(in srgb, var(--stats-bin) 62%, var(--wzl-surface-sunken, #0e0f12)) 2px 5px);
+}
+
+.stats-bins { border-bottom: 1px solid var(--wzl-border, #333); }
+
+.stats-bin-label {
+  font-size: 0.65rem;
+  color: var(--wzl-fg-muted);
+  text-align: center;
+  padding-top: 0.25rem;
+  white-space: nowrap;
+}
+
+/* -- tables ------------------------------------------------------------- */
+
+.stats-page table { border-collapse: collapse; width: 100%; }
+
+.stats-page th, .stats-page td {
+  text-align: left;
+  padding: 0.3rem 0.75rem 0.3rem 0;
+  border-bottom: 1px solid var(--wzl-border, #2a2a2a);
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-page th { color: var(--wzl-fg-muted); font-weight: 600; }
+.stats-page tr[data-open='true'] td { color: var(--stats-defect); }
+
+/* Footprint ---------------------------------------------------------- */
+
+.stats-footprint h2 button {
+  margin-left: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 400;
+  vertical-align: middle;
+}
+
+.stats-aside {
+  margin: 0.5rem 0 1rem;
+  color: var(--wzl-fg-muted);
+  font-size: 0.8125rem;
+}
+
+.stats-slot-sizes td:not(:first-child),
+.stats-slot-sizes th:not(:first-child) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-slot-sizes tfoot td {
+  border-top: 1px solid var(--wzl-line);
+  font-weight: 500;
+}

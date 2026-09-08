@@ -2,7 +2,9 @@ import { fileURLToPath, URL } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 
-const API = 'http://127.0.0.1:8792';
+// A worktree runs its own lab server on its own port; the default is the one
+// `brick-icons-lab` listens on with no arguments.
+const API = process.env.LAB_API ?? 'http://127.0.0.1:8792';
 
 export default defineConfig({
   plugins: [react()],
@@ -13,7 +15,20 @@ export default defineConfig({
     port: 5178,
     proxy: { '/api': API, '/ldraw': API },
   },
-  build: { outDir: 'dist' },
+  build: {
+    outDir: 'dist',
+    rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        corpus: fileURLToPath(new URL('./corpus.html', import.meta.url)),
+        badges: fileURLToPath(new URL('./badges.html', import.meta.url)),
+        stats: fileURLToPath(new URL('./stats.html', import.meta.url)),
+        // Built so `scripts/shot-sink.py` can serve the page itself. A bake of
+        // the whole library must not need a dev server running beside it.
+        shot: fileURLToPath(new URL('./shot.html', import.meta.url)),
+      },
+    },
+  },
   test: {
     environment: 'jsdom',
     globals: true,

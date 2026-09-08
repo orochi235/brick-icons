@@ -28,7 +28,7 @@ PARTS = ROOT / "vendor" / "ldraw" / "parts"
 
 
 def printed_ids():
-    """Parts carrying geometry in a colour other than 16/24."""
+    """Parts carrying geometry in a color other than 16/24."""
     ids = []
     for f in sorted(PARTS.glob("*.dat")):
         try:
@@ -67,7 +67,7 @@ def main(argv=None):
 
     header = (
         f"# Candidate pool for the extraction corpus: {len(picked)} parts\n"
-        f"# sampled every-Nth across all {len(ids)} printed parts (colour\n"
+        f"# sampled every-Nth across all {len(ids)} printed parts (color\n"
         f"# other than 16/24), so the pool spans the id space instead of a\n"
         f"# prefix of it. Regenerate with select-decal-candidates.py;\n"
         f"# select-decal-corpus.py filters this to parts a decal can be got\n"

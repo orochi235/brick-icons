@@ -1,0 +1,26 @@
+# Parts that take a machine down rather than failing.
+#
+# A part that raises, or times out, or dies under the memory cap is ordinary
+# census business -- `batch.Runner` records it and the sweep moves on. These are
+# different: they exhaust the node itself, and the watchdog does not save it
+# because the machine stops scheduling before the watchdog runs. macOS starts
+# compressing pages, everything on the box crawls, and the job that follows is
+# measuring a machine under duress rather than an engine.
+#
+# So they are excluded from every generated list by default.
+# `scripts/census-scope.py --include-degenerate` puts them back, for when the
+# run is about them. Part ids live here rather than in `brick_icons/`, the way
+# `corpus-overrides.toml` does.
+#
+# Adding one: say what it did, on what, and when. "Slow" is not a reason -- the
+# timeout handles slow. The bar is that the node needed intervention.
+
+[[part]]
+id = "501ac01"
+what = "Electric Train Motor 12V with 2-Hole Sockets (Complete)"
+note = """
+Took msb-uai down single-handedly, 2026-09-07. A complete motor assembly:
+composite, and the geometry it flattens to is large enough that the render
+exhausts the node rather than the process, so the per-part memory cap never
+gets to fire.
+"""

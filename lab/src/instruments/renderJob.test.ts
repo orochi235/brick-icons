@@ -104,6 +104,41 @@ describe('runRenders', () => {
     expect(events.filter((e) => e.kind === 'item')).toEqual([]);
   });
 
+  it('cancels the render it abandons', async () => {
+    const controller = new AbortController();
+    const cancelJob = vi.fn(async () => {});
+    const client = fakeClient({
+      cancelJob,
+      job: vi.fn(async () => {
+        controller.abort();
+        return { id: 'j1', kind: 'render', state: 'running' as const, total: 1,
+                 done: 0, failed: 0, events: [], results: [] };
+      }),
+    } as never);
+    await collect(runRenders({
+      client, part: '3941', config: {}, sources: ['naive'],
+      signal: controller.signal, pollMs: 0,
+    }));
+    expect(cancelJob).toHaveBeenCalledWith('j1');
+  });
+
+  it('a cancel that fails is not reported as a render failure', async () => {
+    const controller = new AbortController();
+    const client = fakeClient({
+      cancelJob: vi.fn(async () => { throw new Error('gone'); }),
+      job: vi.fn(async () => {
+        controller.abort();
+        return { id: 'j1', kind: 'render', state: 'running' as const, total: 1,
+                 done: 0, failed: 0, events: [], results: [] };
+      }),
+    } as never);
+    const events = await collect(runRenders({
+      client, part: '3941', config: {}, sources: ['naive'],
+      signal: controller.signal, pollMs: 0,
+    }));
+    expect(events.filter((e) => e.kind === 'failed')).toEqual([]);
+  });
+
   it('starts every engine before any of them has finished', async () => {
     let release!: () => void;
     const gate = new Promise<void>((resolve) => { release = resolve; });

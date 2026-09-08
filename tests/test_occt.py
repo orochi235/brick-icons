@@ -13,7 +13,7 @@ from PIL import Image
 
 occt = pytest.importorskip("brick_icons.occt", reason="needs the [occt] extra")
 
-from brick_icons import hlr, goldens  # noqa: E402
+from brick_icons import arcfit, hlr, goldens  # noqa: E402
 from brick_icons.cli import process_one  # noqa: E402
 from brick_icons.config import load_config  # noqa: E402
 
@@ -71,10 +71,105 @@ class P:
         self.sector, self.top, self.inner = sector, top, inner
 
 
-def test_sheared_frame_is_rejected():
-    """Non-orthogonal frames have no exact OCCT counterpart (5% of parts)."""
+def test_a_skew_axis_is_rejected():
+    """The axis column is the extrusion direction, so a cyli whose axis leaves
+    the cross-section plane is a swept surface OCCT has no maker for. A shear
+    WITHIN that plane is a different case entirely -- see below."""
     R = np.array([[1.0, 0.3, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
     assert occt.frame(P("cyli", R, np.zeros(3))) is None
+
+
+def _sheared_wall():
+    """11090's tube wall: 1-4cylo whose u and v columns sit 89.2 degrees
+    apart, with the axis exactly square to both."""
+    return np.column_stack([np.array([6.33731, 0.0, -6.25]),
+                            np.array([0.0, -20.0, 0.0]),
+                            np.array([6.33731, 0.0, 6.25])])
+
+
+def test_a_sheared_cross_section_is_diagonalized_not_dropped():
+    """A linear map sends a circle to an ellipse whatever the shear, so the
+    singular values of [u v] are exact semi-axes -- there is nothing to
+    approximate. Rejected, 11090's wall reached OCCT as neither a face nor
+    triangles, because flatten never loads a substituted primitive's mesh, and
+    the base drew hollow with the bore showing through it."""
+    f = occt.frame(P("cyli", _sheared_wall(), np.zeros(3), sector=90.0))
+    assert f is not None
+    _o, uh, _ah, vh, ru, rv, _h, _rh, ph = f
+    assert uh @ vh == pytest.approx(0.0, abs=1e-12)
+    assert (ru, rv) == pytest.approx((8.96231, 8.83883), rel=1e-5)
+    # the diagonalized frame retraces the primitive's own points: the sector
+    # rides along in `ph`, and dropping it swings the quarter 135 degrees.
+    th = np.linspace(0.0, math.radians(90.0), 64)
+    U, V = _sheared_wall()[:, 0], _sheared_wall()[:, 2]
+    assert np.cos(th)[:, None] * U + np.sin(th)[:, None] * V == pytest.approx(
+        np.cos(th + ph)[:, None] * ru * uh
+        + np.sin(th + ph)[:, None] * rv * vh, abs=1e-9)
+
+
+def test_an_unsheared_frame_carries_no_phase():
+    """ph is 0 for everything that already worked, so no sector moves."""
+    f = occt.frame(P("cyli", np.diag([4.0, 10.0, 5.0]), np.zeros(3)))
+    assert f[8] == 0.0
+
+
+def test_a_sheared_wall_builds_one_face():
+    """Area against the arc length of the primitive's OWN parameterization,
+    not of the diagonalized frame: a 90-degree span of an ellipse is a quarter
+    of its perimeter only when it is centered on an axis, and this one starts
+    at 135 degrees. Measuring the wall the other way hides a lost phase."""
+    R = _sheared_wall()
+    prim = P("cyli", R, np.zeros(3), sector=90.0)
+    faces = occt.occt_faces(prim)
+    assert len(faces) == 1
+    th = np.linspace(0.0, math.radians(90.0), 200001)
+    pts = np.cos(th)[:, None] * R[:, 0] + np.sin(th)[:, None] * R[:, 2]
+    arc = float(np.linalg.norm(np.diff(pts, axis=0), axis=1).sum())
+    assert _face_area(faces[0]) == pytest.approx(arc * 20.0, rel=1e-6)
+
+
+@pytest.mark.parametrize("kind", ["ring", "disc", "edge"])
+def test_a_planar_primitive_ignores_a_skew_axis_column(kind):
+    """A ring/disc/edge is entirely at local y=0, so the matrix's axis column
+    is not its geometry. 3820 caps its grip with two 2-4ring2 whose axis
+    column is 14 degrees off the plane, and rejecting them for it dropped both
+    rim annuli into tessellation."""
+    # the ring's own columns are orthonormal; only the unused axis is skew
+    R = np.array([[-2.0, 0.0, 0.0],
+                  [0.0, -1.0, -0.5008],
+                  [0.0, 0.0, 1.93629]])
+    f = occt.frame(P(kind, R, np.zeros(3)))
+    assert f is not None
+    _o, uh, ah, vh, ru, rv, _h, rh, _ph = f
+    assert (ru, rv) == pytest.approx((2.0, 2.0), rel=1e-5)
+    # the axis comes from the plane the primitive actually occupies
+    assert ah == pytest.approx(np.cross(uh, vh))
+    assert rh is True
+
+
+def test_a_planar_primitive_with_sheared_own_axes_is_diagonalized():
+    """u . v is the ring's own geometry, and a shear there is an ellipse whose
+    axes are not the columns -- exact once you take the singular values, which
+    is what the axis column can never be."""
+    R = np.array([[1.0, 0.0, 0.3], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+    f = occt.frame(P("ring", R, np.zeros(3)))
+    assert f is not None
+    _o, uh, ah, vh, ru, rv, _h, _rh, _ph = f
+    assert uh @ vh == pytest.approx(0.0, abs=1e-12)
+    assert (ru, rv) == pytest.approx((1.16119, 0.86119), rel=1e-4)
+    # the axis column is square to both here, so it stays the axis; the
+    # diagonalized pair may come out left-handed, which is what rh reports
+    assert ah == pytest.approx(np.array([0.0, 1.0, 0.0]))
+    assert abs(np.cross(uh, vh) @ ah) == pytest.approx(1.0)
+
+
+def test_the_grip_rims_of_3820_build_exact_faces(ldraw_dir):
+    """Both 2-4ring2 that cap the C-grip reach OCCT as annulus faces. With
+    them tessellated the cavity filled solid and no inner rim was drawn."""
+    out = occt.flatten_part("3820", ldraw_dir)
+    rings = [p for p in out["analytic"] if p.kind == "ring"]
+    assert len(rings) == 2
+    assert all(len(occt.occt_faces(p)) == 1 for p in rings)
 
 
 def test_cone_radii_are_n_plus_one_and_n_scaled():
@@ -455,6 +550,42 @@ def test_elliptical_cone_is_not_guessed_at():
     assert occt.occt_faces(P("con", np.diag([4.0, 10.0, 5.0]), np.zeros(3))) == []
 
 
+def test_elliptical_disc_and_ring_build_planar_faces():
+    """Every non-round disc and ring used to return [], and 190085a -- oval
+    discs and an oval rim, no triangles at all -- drew literally nothing."""
+    disc = occt.occt_faces(P("disc", np.diag([4.0, 10.0, 5.0]), np.zeros(3)))
+    assert len(disc) == 1
+    assert _face_area(disc[0]) == pytest.approx(math.pi * 4.0 * 5.0, rel=1e-6)
+    ring = occt.occt_faces(P("ring", np.diag([4.0, 10.0, 5.0]), np.zeros(3),
+                             inner=2))
+    assert len(ring) == 1
+    assert _face_area(ring[0]) == pytest.approx(
+        math.pi * 4.0 * 5.0 * (3.0 ** 2 - 2.0 ** 2), rel=1e-6)
+
+
+def test_an_elliptical_sector_keeps_its_span():
+    """A quarter of an axis-aligned ellipse is a quarter of its area whichever
+    semi-axis is longer. ellipse_axes turns the frame when rv wins, so the
+    radial ends are read back off the arc instead of derived through that turn
+    a second time."""
+    for R in (np.diag([4.0, 10.0, 5.0]), np.diag([5.0, 10.0, 4.0])):
+        faces = occt.occt_faces(P("ring", R, np.zeros(3), sector=90.0, inner=2))
+        assert len(faces) == 1
+        assert _face_area(faces[0]) == pytest.approx(
+            math.pi * 4.0 * 5.0 * (3.0 ** 2 - 2.0 ** 2) / 4.0, rel=1e-6)
+
+
+def test_190085a_oval_discs_reach_the_shape(ldraw_dir):
+    """The part-level consequence: this sticker is primitives only, so with
+    its discs dropped the shape was the 0.25 LDU rim and nothing else."""
+    out = occt.flatten_part("190085a", ldraw_dir)
+    assert not out["tri"], "190085a is expected to carry no triangles"
+    planar = [p for p in out["analytic"] if p.kind in ("disc", "ring")]
+    assert planar and not any(occt.is_round(*occt.frame(p)[4:6]) for p in planar)
+    assert all(len(occt.occt_faces(p)) == 1 for p in planar)
+    assert occt.count_faces(occt.build_shape(out)) > 1
+
+
 def test_50950_wall_is_elliptical_and_reaches_the_shape(ldraw_dir):
     """The part-level consequence, not just the face builder."""
     from OCP.GeomAbs import GeomAbs_SurfaceType
@@ -462,6 +593,19 @@ def test_50950_wall_is_elliptical_and_reaches_the_shape(ldraw_dir):
     cylis = [p for p in out["analytic"] if p.kind == "cyli"]
     assert cylis, "50950 is expected to carry a cyli primitive"
     assert not any(occt.is_round(*occt.frame(p)[4:6]) for p in cylis)
+    assert GeomAbs_SurfaceType.GeomAbs_SurfaceOfExtrusion in _surface_types(
+        occt.build_shape(out))
+
+
+def test_11090_tube_wall_reaches_the_shape(ldraw_dir):
+    """The part-level consequence: both halves of the bar tube's wall build a
+    face, so the wall occludes the bore inside it."""
+    from OCP.GeomAbs import GeomAbs_SurfaceType
+    out = occt.flatten_part("11090", ldraw_dir)
+    walls = [p for p in out["analytic"]
+             if p.kind == "cyli" and np.linalg.norm(p.R[:, 0]) > 8.0]
+    assert len(walls) == 2, "11090's tube wall is two quarter cylinders"
+    assert all(len(occt.occt_faces(p)) == 1 for p in walls)
     assert GeomAbs_SurfaceType.GeomAbs_SurfaceOfExtrusion in _surface_types(
         occt.build_shape(out))
 
@@ -858,6 +1002,42 @@ def test_a_flat_face_gets_no_occluder(ldraw_dir):
     assert occt._face_occluder(face) is None
 
 
+def test_occt_segments_go_through_the_orphan_cull(ldraw_dir):
+    """The stylization tail ran only on the naive branch, so occt drew
+    dashes naive had already dropped -- 30162's dot on the barrel.
+
+    Spelled out as the composition rather than a count, so a stage added to
+    the tail has to be added here too: this is the record of what occt's
+    output goes through between the engine and the caller.
+    """
+    out = occt.flatten_part("30162", ldraw_dir)
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    res = occt.visible_segments(out, right, up, 512, cull=True, fwd=fwd)
+    kept = hlr.visible_segments("30162", ldraw_dir, render_px=512,
+                                engine="occt").segs
+    assert len(kept) < len(res.segs)
+    tail = hlr.dedupe_segments(list(res.segs), eps=0.05 / res.s,
+                               keep_order=True)
+    tail, _sil = arcfit.fit_silhouette_arcs(tail)
+    assert list(kept) == hlr.cull_orphan_runs(tail)
+
+
+def test_a_zero_height_cylinder_face_gets_no_occluder(ldraw_dir):
+    """72632's sensor body carries a cylinder face of zero height. Its local
+    frame is singular, and building an occluder from it raised LinAlgError
+    out of the render (the 72632 family, four census parts)."""
+    out = occt.flatten_part("72632", ldraw_dir)
+    shape = occt.build_shape(out)
+    flat = [f for f in occt._faces_of_type(
+        shape, occt.GeomAbs_SurfaceType.GeomAbs_Cylinder)
+        if abs(occt.BRepTools.UVBounds_s(f)[3]
+               - occt.BRepTools.UVBounds_s(f)[2]) < 1e-9]
+    assert flat, "expected a zero-height cylinder face on 72632"
+    assert all(occt._face_occluder(f) is None for f in flat)
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    assert occt.visible_segments(out, right, up, 512, cull=True, fwd=fwd).segs
+
+
 def test_faces_come_back_in_paint_order(ldraw_dir):
     out = occt.flatten_part("3005", ldraw_dir)
     right, up, fwd = hlr.view_basis(30.0, 45.0)
@@ -979,7 +1159,7 @@ def test_boundary_conics_cover_rims_no_drawn_arc_reports(ldraw_dir):
 
 def test_a_faceted_dome_shades_as_one_surface(ldraw_dir):
     """3960 sews 822 planes. Toned one at a time they read flat and emit one
-    fill element each -- 194 same-colour fills against naive's 1, and a dome
+    fill element each -- 194 same-color fills against naive's 1, and a dome
     that draws as a disc."""
     out = occt.flatten_part("3960", ldraw_dir)
     shape = occt.build_shape(out)
@@ -1093,6 +1273,15 @@ def test_a_fill_boundary_carries_no_sampled_boundary(part, tmp_path, ldraw_dir):
     these three, and only for occt. Parts whose refine regions genuinely
     involve a CURVED coverer still run the grid and still carry such runs
     (3941 51, 4019 64), and so does the naive path (32062 18).
+
+    The junction-lens layer is exempt and not an oversight. A lens pocket IS
+    a difference against the buffered stroke band (`_ink_lens_pockets`), so
+    its boundary is a buffer boundary by construction; it is capped in area,
+    must vanish under an opening at half a stroke width, and paints black
+    beneath the ink that encloses it. Counting it measures how gnarly the
+    pockets are, not whether a surface fill inherited a sampling. `flat3`
+    derives every surface tone from part_color, so pure black is the lens
+    layer and nothing else.
     """
     from brick_icons.cli import build_parser, _config_from_args, process_one
 
@@ -1106,6 +1295,8 @@ def test_a_fill_boundary_carries_no_sampled_boundary(part, tmp_path, ldraw_dir):
     for m in re.finditer(r"<path\b([^>]*)>", (out / f"{part}.svg").read_text()):
         attrs = dict(re.findall(r'([\w:-]+)="([^"]*)"', m.group(1)))
         if attrs.get("fill") in (None, "none"):        # fills, not strokes
+            continue
+        if attrs.get("fill") == "#000000":            # lens layer, see above
             continue
         run, cur = 0, None
         for c in re.finditer(r"([MLAZ])([^MLAZ]*)", attrs.get("d", "")):
@@ -1129,3 +1320,112 @@ def test_a_fill_boundary_carries_no_sampled_boundary(part, tmp_path, ldraw_dir):
     assert worst <= 4, (
         f"{part}: {worst} sub-quarter-pixel fill segments in a row "
         f"({short} of {total}) -- a buffer boundary reached the path")
+
+
+def test_a_part_declaring_no_edge_draws_instead_of_raising(ldraw_dir):
+    """1,407 stickers and a few ordinary parts carry faces and not one type-2
+    or type-5 line -- `box5-12.dat`, which 185 of them are built on, is named
+    "Box with 5 Faces without Any Edges". `5241` is the unprinted one: 14
+    triangles, no lines, no condlines. The engine used to report that honestly
+    and draw nothing, which is a blank icon rather than an answer."""
+    out = occt.flatten_part("5241", ldraw_dir)
+    assert not out.get("2") and not out.get("5")
+    right, up = hlr.view_basis(30.0, 65.0)[:2]
+    assert occt.visible_segments(out, right, up, 900).segs
+
+
+def test_the_undeclared_fallback_is_never_consulted_by_a_part_with_edges(
+        ldraw_dir, monkeypatch):
+    """It may only run where the old code raised. A part that declares an edge
+    reaches ops of its own, so the fallback cannot touch what it draws -- which
+    is what makes the change byte-safe for the rest of the library."""
+    calls = []
+    real = occt._undeclared_ops
+    monkeypatch.setattr(occt, "_undeclared_ops",
+                        lambda comps: (calls.append(1), real(comps))[1])
+    right, up = hlr.view_basis(30.0, 65.0)[:2]
+    for part in ("3001", "3941", "4740"):
+        assert occt.visible_segments(
+            occt.flatten_part(part, ldraw_dir), right, up, 900).segs
+    assert calls == []
+
+
+def test_a_part_with_no_geometry_to_read_a_sharp_set_from_still_raises():
+    """The fallback reads HLR's sharp set, so it has nothing to offer a part
+    that carries no faces. Declaring an edge does not conjure one, and drawing
+    an empty icon in silence would hide the fault."""
+    with pytest.raises(RuntimeError, match="produced no edges"):
+        occt.visible_segments({"2": [(np.zeros(3), np.zeros(3))], "5": [],
+                               "tri": [], "tri_meta": [], "analytic": []},
+                              np.array([1.0, 0, 0]), np.array([0, 1.0, 0]), 900)
+
+
+def test_an_artwork_line_inside_a_face_does_not_count_as_a_declaration(
+        ldraw_dir):
+    """6342851a is a box5-12 plate with 8,888 artwork triangles coplanar on its
+    top face and two type-2 lines drawn along the artwork. UnifySameDomain
+    merges all of it into 6 faces, so both lines sit in the INTERIOR of one and
+    match none of HLR's 9 visible edges. Guarding the fallback on the mere
+    presence of a type-2 left the part blank."""
+    out = occt.flatten_part("6342851a", ldraw_dir)
+    right, up = hlr.view_basis(30.0, 65.0)[:2]
+    shape = occt.build_shape(out)
+    comps = occt.hlr_edges(shape, right, up)
+    loci = occt.authored_loci(shape, out, right, up)
+    assert out["2"] and not occt.select_authored(comps.get("sharp"), loci)
+    assert occt.visible_segments(out, right, up, 900).segs
+
+
+def test_condlines_alone_do_not_count_as_declaring_an_edge(ldraw_dir):
+    """A condline is conditional by construction -- it draws only where its two
+    faces straddle the view -- so on a flat plate seen from outside none of them
+    qualify and the part is left with no boundary at all. 36 formed stickers and
+    their composite siblings sit exactly there: type-5 and no type-2, 26 to 204
+    sharp edges from HLR, not one locus matched. Treating type-5 as a
+    declaration left every one of them blank."""
+    right, up = hlr.view_basis(30.0, 65.0)[:2]
+    for part in ("003497bc01", "164325d", "4620856b", "162275dc01"):
+        out = occt.flatten_part(part, ldraw_dir)
+        assert out["5"] and not out["2"], part
+        assert occt.visible_segments(out, right, up, 900).segs, part
+
+
+def test_an_end_face_hides_the_bore_limb_behind_it(ldraw_dir):
+    """79306-f1 is a pneumatic tube: two cylinders and an annulus at each end.
+    Its bore's limb runs the whole 40 LDU and every point of it is hidden --
+    the far 29 by the outer wall, the near 3 by the end annulus. Sewn into a
+    shell those 3 came back visible, two ticks drawn across the annulus, and
+    it is orientation that decides it: reversing the shell hides them again.
+    So the limbs left are the outer wall's, both full length."""
+    out = occt.flatten_part("79306-f1", ldraw_dir)
+    right, up = hlr.view_basis(30.0, 45.0)[:2]
+    res = occt.visible_segments(out, right, up, 512)
+    limbs = sorted(round(float(np.hypot(op[3] - op[1], op[4] - op[2])), 2)
+                   for op in res.segs if op[0] == "line" and op[-1] == "sil")
+    assert limbs == [31.62, 31.62], limbs
+
+
+def test_hlr_occludes_with_loose_faces_whatever_the_shell_says(ldraw_dir):
+    """The mechanism behind the test above, pinned on its own: HLR drops a
+    back-facing occluder once the faces are connected, and sewing leaves this
+    part inward. Handed the shell it keeps 2.45 of each bore limb; handed the
+    same faces loose, or the shell reversed, it hides them."""
+    out = occt.flatten_part("79306-f1", ldraw_dir)
+    right, up = hlr.view_basis(30.0, 45.0)[:2]
+    shell = occt.build_shape(out)
+
+    def visible_limbs(shape):
+        algo = occt.HLRBRep_Algo()
+        algo.Add(shape)
+        algo.Projector(occt.HLRAlgo_Projector(
+            occt.ax2((0.0, 0.0, 0.0), *occt.projector_axes(right, up))))
+        algo.Update()
+        algo.Hide()
+        comp = occt.HLRBRep_HLRToShape(algo).OutLineVCompound()
+        return sorted(round(float(np.hypot(op[3] - op[1], op[4] - op[2])), 2)
+                      for e in occt._edges_of(comp)
+                      for op in occt._edge_ops(e, "sil"))
+
+    assert visible_limbs(shell) == [2.45, 2.45, 31.62, 31.62]
+    assert visible_limbs(shell.Reversed()) == [31.62, 31.62]
+    assert visible_limbs(occt._loose_faces(shell)) == [31.62, 31.62]

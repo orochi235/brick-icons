@@ -1,0 +1,16 @@
+/* Without `touch-action: none` the browser claims a one-finger drag for
+ * scrolling and a two-finger one for page zoom, and the wall's own pan and
+ * pinch never see them. */
+.corpus-canvas { display: block; cursor: grab; touch-action: none; }
+.corpus-canvas-dragging { cursor: grabbing; }
+
+/* Off-screen rather than display:none -- a hidden node is dropped from the
+ * accessibility tree, which would silence the announcement it exists for. */
+.corpus-caret-announce {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}

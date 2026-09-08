@@ -119,5 +119,6 @@ def summarize_svg(text: str) -> dict:
     }
 
 
-def sha256(text: str) -> str:
-    return hashlib.sha256(text.encode()).hexdigest()
+def sha256(data: str | bytes) -> str:
+    """Text or raw bytes: a raster slot's artifact never decodes."""
+    return hashlib.sha256(data.encode() if isinstance(data, str) else data).hexdigest()

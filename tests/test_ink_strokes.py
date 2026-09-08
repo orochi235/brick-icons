@@ -26,14 +26,14 @@ class FakePrim:
         return self.t + (np.cos(th)[:, None] * U + np.sin(th)[:, None] * V)
 
 
-def test_a_coloured_primitive_is_ink():
+def test_a_colored_primitive_is_ink():
     """3040bp08's lamps are 7 discs in LDraw 14 and 3942bp01's stripes are 16
     cones in LDraw 4; both drew a rim stroke around every one."""
     lamp = FakePrim(color=14)
     assert id(lamp) in shade.ink_prims([lamp], None, None)
 
 
-def test_body_coloured_geometry_still_strokes():
+def test_body_colored_geometry_still_strokes():
     """The part's own edges are relief and must keep their strokes."""
     wall = FakePrim(color=16)
     assert shade.ink_prims([wall], None, None) == set()
@@ -74,9 +74,9 @@ def _disc_on_wall(theta_deg, height, r=1.5, standoff=19.7, color=16):
     return d
 
 
-def test_a_body_coloured_disc_inside_a_decal_is_part_of_the_print():
+def test_a_body_colored_disc_inside_a_decal_is_part_of_the_print():
     """3941p01's buttons are LDraw 16 discs lying flush on the wall INSIDE the
-    black panel — holes in its region. Colour alone cannot tell them from the
+    black panel — holes in its region. Color alone cannot tell them from the
     part's own geometry; enclosure by the decal can."""
     cyl = FakeCylinder()
     panel = _wall_quads(20.0, 0, 40, 4.0, 12.0)

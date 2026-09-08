@@ -3,11 +3,11 @@
 A decal that fails to bind renders as a blank brick, indistinguishable from an
 unprinted part, so the icon output cannot be eyeballed for this class.
 Flattening the decal into its carrier's surface shows what SHOULD be drawn;
-LDView's own colour render beside it shows what the part actually is.
+LDView's own color render beside it shows what the part actually is.
 Disagreement is an unwrap bug; agreement leaves only the projection to check.
 
 Emits a paginated PDF laid out as a grid, each cell labelled with the part id,
-title, carrier kind, facet count and the LDraw colours used.
+title, carrier kind, facet count and the LDraw colors used.
 
     .venv/bin/python scripts/proof-decals.py --limit 200 --jobs 8
     .venv/bin/python scripts/proof-decals.py --list printed.txt --out out/p.pdf
@@ -63,8 +63,8 @@ def _resolve(ref: str):
     return None
 
 
-def flatten(path, M, t, colour, out, depth=0):
-    """Walk a .dat keeping each polygon's LDraw colour (16 inherits)."""
+def flatten(path, M, t, color, out, depth=0):
+    """Walk a .dat keeping each polygon's LDraw color (16 inherits)."""
     if depth > 30 or path is None:
         return
     for ln in Path(path).read_text(errors="replace").splitlines():
@@ -72,7 +72,7 @@ def flatten(path, M, t, colour, out, depth=0):
         if not tok or tok[0] == "0":
             continue
         own = int(tok[1]) if len(tok) > 1 and tok[1].isdigit() else 16
-        c = colour if own == 16 else own
+        c = color if own == 16 else own
         if tok[0] == "1" and len(tok) >= 15:
             x, y, z = map(float, tok[2:5])
             m = np.array(list(map(float, tok[5:14])), float).reshape(3, 3)
@@ -216,7 +216,7 @@ def _unwrap(deco, body):
 
 
 def _union(polys):
-    """Same-colour facets unioned into whole regions.
+    """Same-color facets unioned into whole regions.
 
     LDraw has no regions: a stripe is 10 abutting quads, a border 68 facets.
     Drawn as separate fills they leave an antialiased hairline along every
@@ -271,9 +271,9 @@ def cell_svg(pid, title, deco, carrier, kind, ref_png, ghosts=(), margin=0.12):
                 [np.asarray(r.coords) for r in g.interiors]
         return " ".join(d(r[:-1]) for r in rings)
 
-    by_colour = {}
+    by_color = {}
     for c, p in deco:
-        by_colour.setdefault(c, []).append(p)
+        by_color.setdefault(c, []).append(p)
     body += [f'<path d="{region_d(g)}" fill="#f2f2f2" stroke="none"/>'
              for g in _union([p for _, p in carrier])] if carrier else []
     by_ghost = {}
@@ -284,10 +284,10 @@ def cell_svg(pid, title, deco, carrier, kind, ref_png, ghosts=(), margin=0.12):
         body += [f'<path d="{region_d(g)}" fill="{col}" fill-rule="evenodd" '
                  f'fill-opacity="0.22" stroke="none"/>'
                  for g in _union(by_ghost[c])]
-    for c in sorted(by_colour):                      # authored order: later on top
+    for c in sorted(by_color):                      # authored order: later on top
         col = PAL[c].hex.replace("0x", "#") if c in PAL else "#888888"
         body += [f'<path d="{region_d(g)}" fill="{col}" fill-rule="evenodd" '
-                 f'stroke="none"/>' for g in _union(by_colour[c])]
+                 f'stroke="none"/>' for g in _union(by_color[c])]
     body += [f'<path d="{region_d(g)}" fill="none" stroke="#b8b8b8" '
              f'stroke-width="1.6" stroke-dasharray="7 5"/>'
              for g in _union([p for _, p in carrier])] if carrier else []
@@ -308,7 +308,7 @@ def cell_svg(pid, title, deco, carrier, kind, ref_png, ghosts=(), margin=0.12):
 
 
 def printed_ids(limit=None, start=0):
-    """Parts carrying geometry in a colour other than 16/24."""
+    """Parts carrying geometry in a color other than 16/24."""
     ids = []
     for f in sorted(PARTS.glob("*p*.dat")):
         try:

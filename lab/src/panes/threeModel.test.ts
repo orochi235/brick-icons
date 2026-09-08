@@ -34,7 +34,7 @@ describe('fattenLines', () => {
     expect(kinds).not.toContain('LineSegments');
   });
 
-  it("draws in the engines' stroke colour, not the one LDraw gave the edge", () => {
+  it("draws in the engines' stroke color, not the one LDraw gave the edge", () => {
     const group = new THREE.Group();
     group.add(segments(0x00ff00));
     expect(fattenLines(group)[0]!.color.getHex()).toBe(0x000000);
@@ -70,7 +70,7 @@ describe('fattenLines', () => {
 });
 
 describe('paint', () => {
-  it('imposes the render colour on the faces', () => {
+  it('imposes the render color on the faces', () => {
     const group = new THREE.Group();
     group.add(mesh());
     paint(group, 0x9d9d9d, 1);
@@ -78,7 +78,7 @@ describe('paint', () => {
       .color.getHex()).toBe(0x9d9d9d);
   });
 
-  it('leaves the LDraw colours alone when the render imposed none', () => {
+  it('leaves the LDraw colors alone when the render imposed none', () => {
     const group = new THREE.Group();
     group.add(mesh());
     paint(group, null, 1);

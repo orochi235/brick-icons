@@ -1,0 +1,42 @@
+/* A block of the sidebar, not a panel over the wall: the sidebar carries the
+   surface, the scrolling and the heading style, so this only has to space its
+   own rows and let the color rows out of ControlPanel's pairing grid. */
+.corpus-params-panel {
+  display: flex;
+  flex-direction: column;
+  font: 12px/1.4 ui-monospace, monospace;
+}
+.corpus-params-body { padding: 0 12px; }
+.corpus-params-group + .corpus-params-group { margin-top: 0.6rem; }
+.corpus-params-group h4 {
+  margin: 0 0 0.2rem;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--wzl-fg-muted);
+}
+
+/* Overrides weasel-ui's centered color row (`Properties.module.css`), whose
+ * class names this package can't select from outside it -- reached
+ * structurally instead. No row here carries an alpha slider. */
+.corpus-params-panel label:has(> input[type='color']) > span:first-child,
+.corpus-params-panel label:has(> input[type='color']) > input[type='color'] {
+  align-self: start;
+}
+
+/* `ControlPanel`'s default `pairs` packing gives every row half the panel's
+ * width; the twelve color labels here run up to three words and wrap onto
+ * the swatch. Span the full grid instead of pairing -- the same opt-out a
+ * `span` control gets, reached structurally since the pairing grid's class
+ * names are also weasel-ui's. */
+.corpus-params-panel label:has(> input[type='color']) {
+  grid-column: 1 / -1;
+}
+
+/* One column, not `ControlPanel`'s pairs. The sidebar is 216px, so a paired
+   grid leaves each row about 90px -- and a row's label and readout sit in one
+   `nowrap` flex line whose text is an anonymous item, so it cannot be shrunk
+   from out here. "Drag threshold" needs 93px and hangs its unit 7px past the
+   row; "Max border" fits and does not. Full-width rows fit every label the
+   panel has. */
+.corpus-params-panel label { grid-column: 1 / -1; }

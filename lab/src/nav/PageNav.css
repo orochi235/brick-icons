@@ -1,0 +1,25 @@
+.lab-nav {
+  display: inline-flex;
+  border: 1px solid var(--wzl-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.lab-nav-link {
+  padding: 0.2rem 0.7rem;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--wzl-fg-muted);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.lab-nav-link + .lab-nav-link { border-left: 1px solid var(--wzl-border); }
+
+.lab-nav-link:hover { background: var(--wzl-bg-raised); color: var(--wzl-fg); }
+
+.lab-nav-link[aria-current='page'] {
+  background: var(--wzl-bg-raised);
+  color: var(--wzl-fg);
+  font-weight: 600;
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defectId, seenFrom, seenMatches, slug } from '@lab/defects/identity';
+import { defectId, slug } from '@lab/defects/identity';
 
 describe('slug', () => {
   it('lowercases and hyphenates', () => {
@@ -45,31 +45,5 @@ describe('defectId', () => {
   it('keeps counting past the first collision', () => {
     expect(defectId('3941', ['occt'], 'x', ['3941-occt-x', '3941-occt-x-2']))
       .toBe('3941-occt-x-3');
-  });
-});
-
-describe('seenFrom', () => {
-  it('records only the parameters that move a mark', () => {
-    expect(seenFrom({ angle: '30,25', shading: 'outline', shade_style: 'flat3',
-                      part_color: '0xc91a09', render_px: 900 }))
-      .toEqual({ angle: '30,25', shading: 'outline', shade_style: 'flat3' });
-  });
-
-  it('omits a parameter that is not set', () => {
-    expect(seenFrom({ angle: '30,25' })).toEqual({ angle: '30,25' });
-  });
-});
-
-describe('seenMatches', () => {
-  it('is true when every recorded parameter still holds', () => {
-    expect(seenMatches({ angle: '30,25' }, { angle: '30,25', engine: 'occt' })).toBe(true);
-  });
-
-  it('is false when the angle moved, because the mark moved with it', () => {
-    expect(seenMatches({ angle: '30,25' }, { angle: '45,45' })).toBe(false);
-  });
-
-  it('is true for a defect with nothing recorded', () => {
-    expect(seenMatches({}, { angle: '30,25' })).toBe(true);
   });
 });

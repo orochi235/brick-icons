@@ -5,6 +5,25 @@ if (!Element.prototype.setPointerCapture) {
   Element.prototype.releasePointerCapture = () => {};
 }
 
+// Node's own experimental Web Storage global shadows jsdom's, but stays
+// inert without `--localstorage-file` -- `localStorage` reads as `undefined`
+// rather than a working `Storage`, whichever provider set it up. Give it an
+// in-memory one so a test doesn't need a CLI flag to persist anything.
+if (typeof globalThis.localStorage === 'undefined') {
+  class MemoryStorage implements Storage {
+    #store = new Map<string, string>();
+    get length() { return this.#store.size; }
+    clear() { this.#store.clear(); }
+    getItem(key: string) { return this.#store.has(key) ? this.#store.get(key)! : null; }
+    key(index: number) { return [...this.#store.keys()][index] ?? null; }
+    removeItem(key: string) { this.#store.delete(key); }
+    setItem(key: string, value: string) { this.#store.set(key, String(value)); }
+  }
+  const storage = new MemoryStorage();
+  Object.defineProperty(globalThis, 'localStorage', { value: storage, configurable: true });
+  Object.defineProperty(globalThis.window, 'localStorage', { value: storage, configurable: true });
+}
+
 if (!('ResizeObserver' in globalThis)) {
   (globalThis as { ResizeObserver?: unknown }).ResizeObserver = class {
     observe() {}
@@ -28,4 +47,22 @@ if (!('PointerEvent' in globalThis)) {
   (globalThis as { PointerEvent?: unknown }).PointerEvent = PointerEventPolyfill;
   (globalThis.window as unknown as { PointerEvent?: unknown }).PointerEvent =
     PointerEventPolyfill;
+}
+
+// jsdom's Blob predates `.text()`/`.arrayBuffer()`, and the vector rung reads
+// both -- a render travels as bytes and is only decoded as text when it is
+// SVG. FileReader is the one reader jsdom does implement.
+if (typeof Blob !== 'undefined' && !Blob.prototype.text) {
+  const read = <T>(blob: Blob, as: 'text' | 'buffer'): Promise<T> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as T);
+      reader.onerror = () => reject(reader.error);
+      if (as === 'text') reader.readAsText(blob);
+      else reader.readAsArrayBuffer(blob);
+    });
+  Blob.prototype.text = function text() { return read<string>(this, 'text'); };
+  Blob.prototype.arrayBuffer = function arrayBuffer() {
+    return read<ArrayBuffer>(this, 'buffer');
+  };
 }

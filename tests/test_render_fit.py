@@ -81,7 +81,7 @@ def test_an_engine_without_a_pixel_fit_uses_the_canvas_fit_alone(tmp_path):
     assert hlr.canvas_affine(res, 3.0, 5.0, 7.0) == (3.0, 5.0, 7.0)
 
 
-def test_it_reports_the_style_s_own_light_and_colour(tmp_path, ldraw_parts):
+def test_it_reports_the_style_s_own_light_and_color(tmp_path, ldraw_parts):
     """The pane lights itself from this, so it must be the render's own vector
     rather than one the frontend derived a second time."""
     from brick_icons import shade

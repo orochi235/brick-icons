@@ -960,6 +960,23 @@ def test_orphan_cull_subpixel_gaps_anchor():
     assert crumb not in kept
 
 
+def test_orphan_cull_drops_floating_sil_island():
+    # 44874's peg-tip chord: two `sil` ops chained to each other and to
+    # nothing else, about 2 output px of ink. The peel never starts on a sil
+    # op, so on its own it leaves this floating in the middle of the barrel.
+    span = ("line", 0.0, 900.0, 3200.0, 900.0, "edge")      # sets the extent
+    a = ("line", 1580.0, 1260.0, 1588.0, 1260.0, "sil")
+    b = ("line", 1588.0, 1260.0, 1608.0, 1260.0, "sil")
+    assert hlr.cull_orphan_runs([span, a, b]) == [span]
+    # past a stroke width the same island is outline, and stays
+    long_b = ("line", 1588.0, 1260.0, 1660.0, 1260.0, "sil")
+    assert hlr.cull_orphan_runs([span, a, long_b]) == [span, a, long_b]
+    # a short sil run is not an island when it lands on other ink
+    on_a = ("line", 1580.0, 900.0, 1580.0, 908.0, "sil")
+    on_b = ("line", 1580.0, 908.0, 1580.0, 928.0, "sil")
+    assert hlr.cull_orphan_runs([span, on_a, on_b]) == [span, on_a, on_b]
+
+
 def test_orphan_cull_never_peels_silhouette_ops():
     # a broken outline is always worse than fray: sil ops never peel (they
     # still anchor and chain); the same op as an edge kind is fray
@@ -987,6 +1004,16 @@ def test_orphan_cull_protected_fold_spans_never_peel():
     assert hlr.cull_orphan_runs([outline, hook]) == [outline]
     assert hlr.cull_orphan_runs([outline, hook], protect={key}) \
         == [outline, hook]
+
+
+def test_orphan_cull_survives_when_every_op_is_a_ghost():
+    # 4221407f: HLR's whole visible set for the sticker is two 0.22 LDU
+    # thickness stubs at opposite ends of a 276 LDU plate. Both are under
+    # the ghost length, so the graph has no real op to build on -- and the
+    # cull only ever removes, so with no graph there is nothing to remove.
+    stubs = [("line", -137.9413, -14.8006, -137.9413, -14.5841, "sil"),
+             ("line", 137.9413, 14.3676, 137.9413, 14.5841, "sil")]
+    assert hlr.cull_orphan_runs(list(stubs)) == stubs
 
 
 def test_refit_candidates_carry_measured_snap_tol():

@@ -39,7 +39,7 @@ function labNodes() {
     layout: f.enum(LAYOUTS[0], [...LAYOUTS]).section('Panes'),
     sources: f.value<SourceId[]>([...DEFAULT_SOURCES]).section('Panes'),
     marking: f.boolean(false).section('Panes')
-      .describe('A drag on a pane draws a defect mark instead of panning'),
+      .describe('Show defect marks; a drag on a pane draws one instead of panning'),
     loupe_factor: f.number(DEFAULT_FACTOR).section('Panes')
       .describe('How much the loupe magnifies. Alt-wheel over a pane sets it too'),
     loupe_sticky: f.boolean(false).section('Panes')
@@ -54,7 +54,7 @@ function labNodes() {
 const SECTIONS: Record<string, string> = {
   engine: 'Render', shading: 'Render', shade_style: 'Render', angle: 'Render',
   wireframe: 'Render', weld_corners: 'Render', opacity: 'Render',
-  part_color: 'Colour', light: 'Colour', svg_bg: 'Colour', mode: 'Colour',
+  part_color: 'Color', light: 'Color', svg_bg: 'Color', mode: 'Color',
   line_width: 'Strokes', silhouette_width: 'Strokes', line_mm: 'Strokes',
   silhouette_mm: 'Strokes',
   fmt: 'Output', render_px: 'Output', curve_quality: 'Output',
@@ -66,11 +66,24 @@ const SECTIONS: Record<string, string> = {
 
 const sectionOf = (key: string) => SECTIONS[key] ?? 'Other';
 
+/** Where a flag sits inside its section, for the few whose parser order reads
+ *  wrong in a panel. Unlisted keys keep the order the CLI declares them in. */
+const ORDER: Record<string, number> = { part_color: -1 };
+
+/** Stable: only the ranked keys move, and only ahead of their unranked
+ *  neighbours. */
+function inPanelOrder(fields: SchemaField[]): SchemaField[] {
+  return fields
+    .map((field, i) => ({ field, i }))
+    .sort((a, b) => (ORDER[a.field.key] ?? 0) - (ORDER[b.field.key] ?? 0) || a.i - b.i)
+    .map((x) => x.field);
+}
+
 /** Apply the shared annotations every leaf gets.
  *
  * No `.pair()` here, though the couples are obvious (width/height,
  * dpi/margin): `ControlPanel` renders its leaves into a `PropertyList` at the
- * default `pack="auto-color"`, which pairs colour rows and nothing else, so a
+ * default `pack="auto-color"`, which pairs color rows and nothing else, so a
  * pair annotation on any other kind is silently inert. */
 function decorate<T extends { section: (s: string) => T; describe: (d: string) => T }>(
     node: T, field: SchemaField): T {
@@ -79,7 +92,7 @@ function decorate<T extends { section: (s: string) => T; describe: (d: string) =
 
 export function buildSchema(fields: SchemaField[]) {
   const nodes: Record<string, unknown> = {};
-  for (const field of fields) {
+  for (const field of inPanelOrder(fields)) {
     if (!usable(field)) continue;
     if (field.choices && field.choices.length > 0) {
       const seed = typeof field.effective === 'string'

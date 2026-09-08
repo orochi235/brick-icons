@@ -1,0 +1,86 @@
+/* The app is the page: the browser's default body margin puts a strip of
+ * nothing around a shell that already manages its own edges. */
+body { margin: 0; }
+
+/* The cell-state canvas fills, read by `palette.ts` -- CSS cannot reach a
+ * canvas fill any other way. None of the tuned values coincides with a
+ * `--wzl-*` token, so they stay literal rather than drifting to a
+ * close-but-different one; see `palette.ts` for the values these mirror. */
+.lk-root {
+  /* Every floating panel is this wide, and a pan may leave exactly this much
+   * of the wall blank -- enough to pull the cells under a panel into the
+   * open, and no further. */
+  --corpus-panel-width: 17rem;
+
+  /* What every render is drawn on, canvas and DOM alike -- `thumbGround()`
+   * in paint.ts reads this token. Change the ground here and nowhere else;
+   * nothing is baked, so it costs a repaint rather than a rebake. */
+  --corpus-thumb-ground: #ffffff;
+  --corpus-thumb-ground-retired: #d8d8d8;
+
+  --corpus-cell-unknown-fill: #3a3a3f;
+  --corpus-cell-out-of-scope-fill: #b2a3dd;
+  --corpus-cell-timeout-fill: #26383f;
+  --corpus-cell-timeout-border: #30b0d0;
+  --corpus-cell-failed-fill: #4a2626;
+  --corpus-cell-failed-border: #e03030;
+  --corpus-cell-defect-fill: #453c27;
+  --corpus-cell-defect-border: #daa520;
+  --corpus-cell-accepted-fill: #26382c;
+  --corpus-cell-accepted-border: #6f9e78;
+  --corpus-cell-problem-elsewhere-fill: #26383f;
+  --corpus-cell-problem-elsewhere-border: #97bcc5;
+  --corpus-cell-defect-elsewhere-fill: #453c27;
+  --corpus-cell-defect-elsewhere-border: #c7b78f;
+  /* The caret's own ring -- distinct from every cell-state border above, so
+   * it still reads when a caret'd cell also carries the ochre defect ring. */
+  --corpus-caret-color: #ffffff;
+
+  /* A band header, and the block header inside it that must not compete. */
+  --corpus-label: #e8e8ea;
+  --corpus-sublabel: #7e7e88;
+  /* A part that matched nothing outside -- its own flat tone, so absence
+   * never reads as the low end of a tint ramp. */
+  --corpus-unmatched: #2a2a2e;
+
+  /* The wall is full-bleed under the shell header -- the workspace padding
+   * is meant for a tile grid, not this single canvas. */
+  --lk-workspace-pad: 0;
+}
+
+.corpus-loading {
+  padding: 1rem;
+  font: 13px/1.4 ui-monospace, monospace;
+  color: var(--wzl-fg-muted);
+}
+
+.corpus-search-notice {
+  font: 12px/1.4 ui-monospace, monospace;
+  color: var(--wzl-fg-muted);
+}
+
+/* The legend's way back. Reads as a pressed state rather than a checkbox,
+   because it toggles a panel rather than filtering anything. */
+.corpus-legend-toggle {
+  font: 12px/1.4 ui-monospace, monospace;
+  color: var(--wzl-fg-muted);
+  background: none;
+  border: var(--wzl-border-w) solid var(--wzl-border);
+  border-radius: var(--wzl-radius-sm, 3px);
+  padding: 1px 8px;
+  cursor: pointer;
+}
+.corpus-legend-toggle[aria-pressed='true'] {
+  color: var(--wzl-fg);
+  background: var(--wzl-surface-sunken);
+}
+.corpus-legend-toggle:hover { color: var(--wzl-fg); }
+
+.corpus-app {
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+  background: var(--wzl-surface-sunken);
+  color: var(--wzl-fg);
+}
+.corpus-stage { flex: 1; overflow: hidden; position: relative; }

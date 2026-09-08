@@ -25,11 +25,6 @@ describe('buildDefect', () => {
     expect(got.filed).toBe('2026-08-31');
   });
 
-  it('records only the parameters that move the mark', () => {
-    expect(buildDefect(args).seen)
-      .toEqual({ angle: '30,25', shading: 'outline', shade_style: 'flat3' });
-  });
-
   it('avoids an id already in use', () => {
     expect(buildDefect({ ...args, existing: ['3941-occt-borehole-rim-not-drawn'] }).id)
       .toBe('3941-occt-borehole-rim-not-drawn-2');
@@ -41,6 +36,47 @@ describe('buildDefect', () => {
 
   it('refuses an untitled defect, which nothing could later find', () => {
     expect(() => buildDefect({ ...args, title: '   ' })).toThrow(/title/i);
+  });
+
+  // A defect is stored under its part and read back by it, so one filed with
+  // no part is written, accepted, and never listed again.
+  it('refuses a defect with no part', () => {
+    expect(() => buildDefect({ ...args, part: '   ' })).toThrow(/part/i);
+  });
+
+  it('carries a mark kind and its points', () => {
+    const d = buildDefect({
+      part: '3001', engines: ['naive'], title: 'missing edge', notes: '',
+      mark: { x: 0.1, y: 0.1, w: 0.3, h: 0.2 },
+      kind: 'line',
+      points: [{ x: 0.1, y: 0.1 }, { x: 0.4, y: 0.3 }],
+      config: {}, existing: [], today: '2026-09-03',
+    });
+    expect(d.kind).toBe('line');
+    expect(d.points).toHaveLength(2);
+  });
+
+  // Without the snapshot the projection has nothing to date a mark by, and a
+  // mark remade under today's config can never be stale.
+  it('records the pose the mark was drawn at', () => {
+    expect(buildDefect(args).seen)
+      .toEqual({ angle: '30,25', shading: 'outline', shade_style: 'flat3' });
+  });
+
+  it('records only what moves a mark, not the whole config', () => {
+    const seen = buildDefect({ ...args, config: { ...args.config, render_px: 900,
+                                                  line_width: 2 } }).seen;
+    expect(Object.keys(seen).sort()).toEqual(['angle', 'shade_style', 'shading']);
+  });
+
+  it('leaves kind and points off a plain rectangle', () => {
+    const d = buildDefect({
+      part: '3001', engines: ['naive'], title: 'blob', notes: '',
+      mark: { x: 0, y: 0, w: 0.2, h: 0.2 },
+      config: {}, existing: [], today: '2026-09-03',
+    });
+    expect(d.kind).toBeUndefined();
+    expect(d.points).toBeUndefined();
   });
 });
 

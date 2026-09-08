@@ -4,6 +4,7 @@ from collections import defaultdict, namedtuple
 from pathlib import Path
 import numpy as np
 
+from . import timing
 from . import arcfit
 from . import primitives
 from . import repair
@@ -83,8 +84,8 @@ def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
         if not tok:
             continue
         typ = tok[0]
-        # LDraw column 2: 16 means "inherit the referring line's colour",
-        # 24 is the edge colour. Anything else overrides.
+        # LDraw column 2: 16 means "inherit the referring line's color",
+        # 24 is the edge color. Anything else overrides.
         own = int(tok[1]) if len(tok) > 1 and tok[1].lstrip("#").isdigit() else 16
         cur = color if own == 16 else own
         if typ == "0":
@@ -516,7 +517,7 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
                                       cond_edges=out["5"],
                                       colors=out.get("tri_colors")) if out["tri"] else []
     an_faces = shade.faces_from_analytic(analytic, proj)
-    # before absorb_wall_facets, which is colour-blind: a decal that binds is
+    # before absorb_wall_facets, which is color-blind: a decal that binds is
     # already its own region and must not be swallowed into the wall it sits on
     decal_ells = []
     tri_faces = shade.unwrap_decoration(tri_faces, analytic, proj,
@@ -881,6 +882,10 @@ def cull_orphan_runs(segs, cap=None, tol=None, join_tol=0.75, protect=()):
         ends.append(None if full else (pts[0].copy(), pts[-1].copy()))
 
     real = [i for i in range(len(ops)) if lens[i] >= ghost_len]
+    # No real op is no graph, and the cull only ever removes -- 4221407f's
+    # whole visible set is two 0.22 LDU stubs at the ends of a 276 LDU plate.
+    if not real:
+        return segs
 
     # junction nodes: cluster coincident endpoints of real ops
     node_of = {}                       # (op, slot) -> node id
@@ -907,11 +912,16 @@ def cull_orphan_runs(segs, cap=None, tol=None, join_tol=0.75, protect=()):
 
     alive = set(real)
 
-    def anchored(i, P):
+    def nearest(i, P, exclude):
         u = np.clip(np.einsum("ij,ij->i", P - A, D) / dd, 0.0, 1.0)
         dist = np.linalg.norm(P - (A + u[:, None] * D), axis=1)
-        dist[(owner == i) | ~np.isin(owner, list(alive))] = np.inf
-        return float(dist.min()) <= max(tol, lens[i] / 63.0)
+        dist[np.isin(owner, list(exclude)) | ~np.isin(owner, list(alive))] = np.inf
+        k = int(dist.argmin())
+        return float(dist[k]), int(owner[k])
+
+    def anchored(i, P):
+        d, _ = nearest(i, P, {i})
+        return d <= max(tol, lens[i] / 63.0)
 
     # peel dangling branches: a leaf op whose tip node holds no other
     # living op and whose tip is unanchored is fray — remove it and carry
@@ -945,6 +955,50 @@ def cull_orphan_runs(segs, cap=None, tol=None, join_tol=0.75, protect=()):
                         carry[j] = max(carry[j], carry[i] + lens[i])
                 changed = True
                 break
+
+    # Floating islands. The peel leaves a run that has no free tip to start
+    # from, and it never starts on a `sil` op at all, so a short run that
+    # touches nothing else survives both — 44874's peg-tip chord, ~2 output
+    # px of ink with nothing to read it against. Below a stroke width that is
+    # a dot, not an outline, so the silhouette exemption does not apply.
+    root = {i: i for i in alive}
+
+    def find(a):
+        while root[a] != a:
+            root[a] = root[root[a]]
+            a = root[a]
+        return a
+
+    def join(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            root[ra] = rb
+
+    by_node = defaultdict(list)
+    for i in alive:
+        if ends[i] is None:
+            continue
+        for slot in (0, 1):
+            by_node[node_of[(i, slot)]].append(i)
+    for members in by_node.values():
+        for j in members[1:]:
+            join(members[0], j)
+    for i in alive:                              # T-junctions bind too
+        if ends[i] is None:
+            continue
+        for slot in (0, 1):
+            d, j = nearest(i, ends[i][slot], {i})
+            if d <= max(tol, lens[i] / 63.0):
+                join(i, j)
+
+    island = defaultdict(list)
+    for i in alive:
+        island[find(i)].append(i)
+    for members in island.values():
+        if all(ends[i] is None for i in members):
+            continue                             # full ellipses are not fray
+        if sum(lens[i] for i in members) <= 0.012 * dim:
+            alive.difference_update(members)
 
     return [orig for i, orig in enumerate(segs)
             if ends[i] is None or lens[i] < ghost_len or i in alive]
@@ -987,6 +1041,18 @@ def part_geometry(part: str, ldraw_dir):
 VALID_ENGINES = ("naive", "occt", "cadquery")
 
 
+def _is_printed(path) -> bool:
+    """Whether line 1 of the part file describes a pattern or a sticker."""
+    try:
+        with Path(path).open(encoding="utf-8", errors="replace") as fh:
+            first = fh.readline().strip()
+    except OSError:
+        return False
+    desc = first[1:].strip().lower() if first.startswith("0") else ""
+    return "pattern" in desc or "sticker" in desc
+
+
+@timing.timed("geometry")
 def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
                      cull=True, engine="naive"):
     if engine not in VALID_ENGINES:
@@ -995,33 +1061,71 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
     roots = default_roots(ldraw_dir)
     path = _resolve_input(part, roots)
     out = {"2": [], "5": [], "tri": [], "tri_meta": [], "analytic": []}
-    flatten(path, np.eye(3), np.zeros(3), out, roots)
+    # Decoration is drawn only where the library says there is some. A color
+    # other than 16 is not that signal: every sub-part of an assembly has its
+    # own, and treating those as print sends a thousand carrier candidates
+    # through the unwrap for nothing. The description line is the signal
+    # -- see partindex, which classifies the corpus the same way.
+    out["printed"] = _is_printed(path)
+    with timing.phase("flatten"):
+        flatten(path, np.eye(3), np.zeros(3), out, roots)
     if out["tri"]:
         # Repair returns outward-oriented tris as float32 (cache dtype); the
         # ~7 sig-fig precision is ample at icon scale. Keep out["tri"] a LIST
         # of (3,3) rows — _visible_segments_* test it with `if out["tri"]:`.
-        fixed = repair.repaired_tris(np.array(out["tri"]), out["tri_meta"],
-                                     MESH_CACHE_DIR)
+        with timing.phase("repair"):
+            fixed = repair.repaired_tris(np.array(out["tri"]),
+                                         out["tri_meta"], MESH_CACHE_DIR)
         out["tri"] = list(fixed)
         out["tri_colors"] = [m["color"] for m in out["tri_meta"]]
     # hand-faceted rounds (condline-marked type-2 chains) become true arcs;
     # any part that gains one needs the analytic pipeline to draw it
-    out["fit_arcs"], out["2"] = arcfit.fit_edge_arcs(out["2"], out["5"])
+    with timing.phase("arcfit"):
+        out["fit_arcs"], out["2"] = arcfit.fit_edge_arcs(out["2"], out["5"])
     right, up, fwd = view_basis(lat, long)
     if engine == "occt":
-        from . import occt
-        return occt.visible_segments(out, right, up, render_px, cull=cull,
-                                     fwd=fwd)
+        # Its own phase: OCP is a 0.65s import, paid once per process by
+        # whichever part a worker happens to draw first. Left unnamed it
+        # reads as that part's geometry.
+        with timing.phase("import"):
+            from . import occt
+        res = occt.visible_segments(out, right, up, render_px, cull=cull,
+                                    fwd=fwd)
+        # A circle reaches here as contiguous spans -- 4740's outer rim as
+        # 225-360 plus 180-225 -- drawn as two strokes meeting at a seam that
+        # composites its antialiasing twice. Over 36 parts this drops 2,202
+        # drawn ops to 1,692. `eps` is divided by the fit scale because occt
+        # works in projected LDU where naive works in canvas px.
+        with timing.phase("dedupe"):
+            segs = dedupe_segments(res.segs, eps=0.05 / (res.s or 1.0),
+                                   keep_order=True)
+        with timing.phase("arcfit"):
+            segs, sil_ells = arcfit.fit_silhouette_arcs(segs)
+        if cull:
+            with timing.phase("cull"):
+                segs = cull_orphan_runs(segs)
+        return res._replace(segs=segs,
+                            ellipses=list(res.ellipses) + sil_ells)
     if engine == "cadquery":
         from . import cqsvg
         return cqsvg.visible_segments(out, right, up, render_px, cull=cull)
     if out["analytic"] or out["fit_arcs"]:
-        res = _visible_segments_analytic(out, right, up, fwd, render_px, cull=cull)
+        with timing.phase("engine"):
+            res = _visible_segments_analytic(out, right, up, fwd, render_px,
+                                             cull=cull)
     else:
-        res = _visible_segments_faceted(out, right, up, fwd, render_px, cull=cull)
-    segs, refits = _snap_rim_crossings(dedupe_segments(res.segs))
+        with timing.phase("engine"):
+            res = _visible_segments_faceted(out, right, up, fwd, render_px,
+                                            cull=cull)
+    with timing.phase("snap"):
+        segs, refits = _snap_rim_crossings(dedupe_segments(res.segs))
+    with timing.phase("arcfit"):
+        segs, sil_ells = arcfit.fit_silhouette_arcs(segs)
+    if sil_ells:
+        res = res._replace(ellipses=list(res.ellipses) + sil_ells)
     if cull:
-        segs = cull_orphan_runs(segs, protect=set(res.fold_ells or ()))
+        with timing.phase("cull"):
+            segs = cull_orphan_runs(segs, protect=set(res.fold_ells or ()))
     if refits:
         # refit separators are arc-recovery candidates too, so the moved
         # fill seam emits as a true arc (25 deg step, like the rim ones)
@@ -1046,15 +1150,24 @@ def _merge_intervals(iv, eps):
     return out
 
 
-def dedupe_segments(segs, eps=0.05):
+def dedupe_segments(segs, eps=0.05, keep_order=False):
     """Cull redundant drawn ops: collinear line spans on the same carrier
     line and arc spans on the same carrier ellipse are unioned per kind.
     LDraw subparts re-draw shared edges and rim circles many times over;
     after occlusion culling those survive as duplicate or overlapping
     elements. Exact duplicates collapse and abutting/overlapping spans merge
-    into one op; gaps (real occlusion breaks) are never bridged."""
+    into one op; gaps (real occlusion breaks) are never bridged.
+
+    `keep_order` returns the ops in the order they arrived and passes a span
+    that merged with nothing through as the op that ARRIVED, rather than
+    rebuilding it on its carrier. Both are no-ops for what this pass is for,
+    and both keep it from churning what `fill_ops` reads: the stroke list
+    decides where junction-lens pockets fall, and neither regrouping nor a
+    sub-0.001 rebuild is a change anyone asked for. Naive is byte-locked by
+    `tests/goldens/hashes.txt` and keeps the original behavior.
+    """
     lines, arcs, out = defaultdict(list), defaultdict(list), []
-    for op in segs:
+    for i, op in enumerate(segs):
         if len(op) == 5:
             op = ("line",) + tuple(op)
         if op[0] == "line":
@@ -1072,13 +1185,13 @@ def dedupe_segments(segs, eps=0.05):
             # distinct nearly-parallel lines must never share a key
             key = (kind, round(dxh * 1e3), round(dyh * 1e3), round(c * 1e3))
             t1, t2 = dxh * x1 + dyh * y1, dxh * x2 + dyh * y2
-            lines[key].append((min(t1, t2), max(t1, t2), dxh, dyh, c))
+            lines[key].append((min(t1, t2), max(t1, t2), dxh, dyh, c, op, i))
         elif op[0] == "arc":
             _, cx, cy, ux, uy, vx, vy, t0, t1, kind = op
             M = np.array([[ux, vx], [uy, vy]])
             det = M[0, 0] * M[1, 1] - M[0, 1] * M[1, 0]
             if abs(det) < 1e-9:
-                out.append(op)
+                out.append((i, op))
                 continue
             # carrier key: center + quadratic form (M M^T)^-1, invariant to
             # the (u, v) parametrization the drawing primitive happened to use
@@ -1092,27 +1205,33 @@ def dedupe_segments(segs, eps=0.05):
                 return math.degrees(math.atan2(d[1], d[0]))
             span = abs(t1 - t0)
             if span >= 359.9:
-                arcs[key].append((0.0, 360.0, op))
+                arcs[key].append((0.0, 360.0, op, i))
                 continue
             p0, p1 = polar(t0), polar(t1)
             if det * (1 if t1 >= t0 else -1) < 0:  # normalize to CCW polar
                 p0, p1 = p1, p0
             if p1 <= p0:
                 p1 += 360.0
-            arcs[key].append((p0, p1, op))
+            arcs[key].append((p0, p1, op, i))
         else:
-            out.append(op)
+            out.append((i, op))
     for key, spans in lines.items():
         kind = key[0]
-        _, _, dxh, dyh, c = spans[0]
+        _, _, dxh, dyh, c, _op, _i = spans[0]
         for a, b in _merge_intervals([s[:2] for s in spans], eps):
-            out.append(("line", dxh * a - dyh * c, dyh * a + dxh * c,
-                        dxh * b - dyh * c, dyh * b + dxh * c, kind))
+            src = [s for s in spans if a - eps <= s[0] and s[1] <= b + eps]
+            i = min((s[6] for s in src), default=len(segs))
+            if keep_order and len(src) == 1:
+                out.append((i, src[0][5]))
+                continue
+            out.append((i, ("line", dxh * a - dyh * c, dyh * a + dxh * c,
+                            dxh * b - dyh * c, dyh * b + dxh * c, kind)))
     for key, spans in arcs.items():
         kind = key[0]
         ref = spans[0][2]
         _, cx, cy, ux, uy, vx, vy, _, _, _ = ref
         Minv = np.linalg.inv(np.array([[ux, vx], [uy, vy]]))
+        i0 = min(s[3] for s in spans)
 
         def param(polar_deg):
             d = np.array([math.cos(math.radians(polar_deg)),
@@ -1122,17 +1241,22 @@ def dedupe_segments(segs, eps=0.05):
         # circular union: shift every span into [base, base+720) where base
         # is a gap edge, then merge linearly
         if any(b - a >= 360.0 for a, b in ((s[0], s[1]) for s in spans)):
-            out.append(("arc", cx, cy, ux, uy, vx, vy, 0.0, 360.0, kind))
+            out.append((i0, ("arc", cx, cy, ux, uy, vx, vy, 0.0, 360.0, kind)))
             continue
-        ivs = [(a % 360.0, a % 360.0 + (b - a)) for a, b, _ in spans]
+        ivs = [(a % 360.0, a % 360.0 + (b - a)) for a, b, _op, _i in spans]
         merged = _merge_intervals(ivs, eps)
         # rejoin a run that wraps past 360 onto the first run
         if len(merged) > 1 and merged[0][0] <= (merged[-1][1] - 360.0) + eps:
             merged[0][0] = merged[-1][0] - 360.0
             merged.pop()
         for a, b in merged:
+            src = [s for s in spans if a - eps <= s[0] and s[1] <= b + eps]
+            i = min((s[3] for s in src), default=i0)
             if b - a >= 359.9:
-                out.append(("arc", cx, cy, ux, uy, vx, vy, 0.0, 360.0, kind))
+                out.append((i, ("arc", cx, cy, ux, uy, vx, vy, 0.0, 360.0, kind)))
+                continue
+            if keep_order and len(src) == 1:
+                out.append((i, src[0][2]))
                 continue
             ta, tb = param(a), param(b)
             det = ux * vy - uy * vx
@@ -1142,8 +1266,10 @@ def dedupe_segments(segs, eps=0.05):
             else:
                 while tb >= ta:
                     tb -= 360.0
-            out.append(("arc", cx, cy, ux, uy, vx, vy, ta, tb, kind))
-    return out
+            out.append((i, ("arc", cx, cy, ux, uy, vx, vy, ta, tb, kind)))
+    if keep_order:
+        out.sort(key=lambda r: r[0])
+    return [op for _i, op in out]
 
 
 def fit_ellipses(ells, f, ox, oy):

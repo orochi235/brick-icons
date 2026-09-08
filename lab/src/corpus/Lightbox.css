@@ -1,0 +1,134 @@
+/* Over the shell's header (z-index 10) as well as the wall, so nothing above
+ * the panel can be mistaken for part of it. */
+.corpus-lightbox-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  padding: 2rem;
+  overflow: auto;
+  background: rgb(0 0 0 / 55%);
+}
+
+.corpus-lightbox {
+  position: relative;
+  margin: auto;
+  width: min(72rem, 100%);
+  max-height: 100%;
+  overflow: auto;
+  padding: 1.5rem 2rem;
+  border: 1px solid var(--wzl-border);
+  border-radius: 6px;
+  box-shadow: 0 1.5rem 3rem var(--wzl-shadow, rgb(0 0 0 / 35%));
+  background: var(--wzl-surface);
+  color: var(--wzl-fg);
+  font: 13px/1.5 ui-monospace, monospace;
+}
+.corpus-close { position: absolute; top: 1rem; right: 1rem; }
+/* On the ground the wall draws thumbnails on -- see `thumbGround()` in
+ * paint.ts. A render is ink on transparency and this panel is dark. */
+.corpus-big {
+  width: 256px;
+  height: 256px;
+  /* A slot's render is not square and no two slots agree: the drawings are
+   * 256x170, and LDView frames its shot to the part, from 936x2048 up. `fill`
+   * -- the default -- squashes each to this box, so the same part reads as a
+   * different shape in every pane it appears in. */
+  object-fit: contain;
+  background: var(--corpus-thumb-ground, #ffffff);
+}
+
+/* The wall's `ground = border ?? thumbGround()` (paint.ts): a drawn cell says
+ * its state with the surround, because the drawing itself is ink on
+ * transparency. Every slot here is drawn, so the two states with no border --
+ * unknown and outOfScope -- keep the plain ground above. */
+.corpus-slot[data-state='timeout'] .corpus-big {
+  background: var(--corpus-cell-timeout-border);
+}
+.corpus-slot[data-state='failed'] .corpus-big {
+  background: var(--corpus-cell-failed-border);
+}
+.corpus-slot[data-state='defect'] .corpus-big {
+  background: var(--corpus-cell-defect-border);
+}
+.corpus-slot[data-state='accepted'] .corpus-big {
+  background: var(--corpus-cell-accepted-border);
+}
+.corpus-slot[data-state='problemElsewhere'] .corpus-big {
+  background: var(--corpus-cell-problem-elsewhere-border);
+}
+.corpus-slot[data-state='defectElsewhere'] .corpus-big {
+  background: var(--corpus-cell-defect-elsewhere-border);
+}
+
+.corpus-slots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.corpus-slot { display: flex; flex-direction: column; gap: 0.25rem; }
+.corpus-slot-pick { display: flex; flex-direction: column; gap: 0.25rem; cursor: pointer; }
+/* Off-screen rather than display:none, which drops it out of the tab order
+ * and takes the group's keyboard operability with it. */
+.corpus-slot-radio {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+.corpus-slot-pick:focus-within .corpus-big { outline: 2px dashed var(--wzl-accent, currentColor); }
+/* Only where the state left the ground plain. A retired part that also has an
+ * open defect is still a defect, and the wall says so with the surround. */
+.corpus-slot[data-retired='true']:is([data-state='unknown'], [data-state='outOfScope'])
+  .corpus-big {
+  background: var(--corpus-thumb-ground-retired, #d8d8d8);
+}
+.corpus-slot-name { color: var(--wzl-fg-muted); }
+.corpus-slot[data-current='true'] .corpus-slot-name {
+  color: var(--wzl-fg);
+  font-weight: 700;
+}
+.corpus-slot[data-current='true'] .corpus-big { outline: 2px solid var(--wzl-fg); }
+.corpus-sub { color: var(--wzl-fg-muted); }
+.corpus-lightbox td, .corpus-lightbox th {
+  padding: 0.1rem 0.8rem 0.1rem 0;
+  text-align: left;
+}
+
+.corpus-catalogs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  padding: 0;
+  list-style: none;
+}
+
+.corpus-actions {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  margin: 0.6rem 0;
+}
+
+.corpus-flag {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 0.6rem;
+}
+
+.corpus-flag label { display: flex; flex-direction: column; gap: 0.2rem; }
+.corpus-flag input { min-width: 32ch; font: inherit; }
+.corpus-flag-error { color: var(--corpus-cell-failed-border, #e03030); }
+
+/* Title and status on one line, the badge riding the text's own baseline. */
+.corpus-defect {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}

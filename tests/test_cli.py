@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import shutil
 import numpy as np
 import pytest
@@ -75,7 +76,7 @@ def test_shade_style_choices_track_implemented_styles():
     cli._parse_args(["3001", "--shade-style", "flat3"])
     with pytest.raises(SystemExit):        # only styles in shade.STYLES accepted
         cli._parse_args(["3001", "--shade-style", "gradient"])
-    assert set(shade.STYLES) == {"flat3"}
+    assert set(shade.STYLES) == {"flat3", "white"}
 
 
 def test_debug_dir_saves_stages(tmp_path, monkeypatch):
@@ -140,6 +141,23 @@ def test_shade_style_flat3_adds_fills(tmp_path):
     assert "linearGradient" in txt
     cli.main(["3001", "--format", "svg", "--shading", "outline", "--out", str(tmp_path / "n")])
     assert '<g stroke-linejoin="round">' not in (tmp_path / "n" / "3001.svg").read_text()
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_shade_style_white_is_flat_and_gradientless(tmp_path):
+    # 4740 is a dish: its curved wall is what takes the gradient branch under
+    # flat3, so it is the part that shows `white` suppressing it rather than
+    # emitting stops that are all the same color.
+    cli.main(["4740", "--format", "svg", "--shading", "outline",
+              "--shade-style", "white", "--out", str(tmp_path)])
+    txt = (tmp_path / "4740.svg").read_text()
+    assert '<g stroke-linejoin="round">' in txt          # fills present, not wireframe
+    assert "Gradient" not in txt
+    body = {m for m in re.findall(r'fill="(#[0-9a-f]{6})"', txt)} - {"#000000"}
+    assert body == {"#ffffff"}, body
+    # the camera file stays readable with no light to record
+    import json
+    assert "light" not in json.loads((tmp_path / "4740.fit.json").read_text())
 
 
 @pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
@@ -288,7 +306,7 @@ def test_render_tag_reports_the_shade_style_when_there_is_one():
 
 @pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
 def test_debug_colors_gives_each_element_its_own_stroke(tmp_path):
-    """One colour per drawn element, in emission order — it answers "which
+    """One color per drawn element, in emission order — it answers "which
     element owns this vertex", which a black outline cannot."""
     import re
     cli.main(["3941", "--format", "svg", "--shading", "outline",

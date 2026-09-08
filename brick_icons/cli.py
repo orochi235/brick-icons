@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -57,13 +58,17 @@ def build_parser():
     p.add_argument("--wireframe", action="store_true", default=None,
                    help="outline strokes only with occlusion culling off "
                         "(every edge drawn, hidden or not; no fills)")
+    p.add_argument("--ldview", dest="use_ldview", action="store_true",
+                   default=None,
+                   help="draw with the vendored LDView instead of our engine, "
+                        "in LDraw's own colors — the reference slot, a PNG")
     p.add_argument("--opacity", type=float,
                    help="face-fill opacity 0-1 for SVG output "
                         "(translucent bricks; default 1)")
     p.add_argument("--debug-colors", dest="debug_colors", nargs="?",
                    const="cycle", default=None, type=_debug_mode,
                    metavar="cycle|ramp|ramp=N",
-                   help="one colour per drawn element, in emission order; "
+                   help="one color per drawn element, in emission order; "
                         "'ramp' fades light-to-dark within a hue then steps "
                         "the hue every 6 elements, 'ramp=N' every N")
     p.add_argument("--part-label", dest="part_label", action="store_true",
@@ -102,7 +107,8 @@ def _config_from_args(args) -> Config:
         "levels": tuple(args.levels) if args.levels else None,
         "shade_style": args.shade_style, "light": args.light,
         "svg_bg": args.svg_bg, "opacity": args.opacity,
-        "wireframe": args.wireframe, "weld_corners": args.weld_corners,
+        "wireframe": args.wireframe, "use_ldview": args.use_ldview,
+        "weld_corners": args.weld_corners,
         "part_label": args.part_label,
         "debug_colors": args.debug_colors,
     }
@@ -133,7 +139,8 @@ def _emit_fit(out_dir: Path, name: str, res, right, up, fwd,
         "width": int(w), "height": int(h),
     }
     if style is not None:
-        fit["light"] = [float(v) for v in style.light]
+        if style.light is not None:
+            fit["light"] = [float(v) for v in style.light]
         fit["part_color"] = [int(v) for v in style.part_color]
     (out_dir / f"{name}.fit.json").write_text(json.dumps(fit))
 
@@ -190,10 +197,32 @@ def render_tag(cfg: Config, name: str) -> str:
     return "  ".join(bits)
 
 
-def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None) -> None:
+def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
+                timeout: float | None = None) -> None:
     name = Path(part).stem if Path(part).suffix else part
     out_dir.mkdir(parents=True, exist_ok=True)
     label = render_tag(cfg, name) if cfg.part_label else None
+
+    if cfg.use_ldview:
+        # The reference, not a drawing of ours: LDView reads the same .dat and
+        # honors each polygon's color code, so it says what a part is supposed
+        # to look like. Raster only, and nothing below it applies.
+        #
+        # LDView's PNG lands in a temp dir, never in the slot. `db.rebuild`
+        # indexes a .png as readily as a .webp, and a fleet fetch lists the
+        # slot while this is running: a transient one there is recorded as the
+        # render, or vanishes between the lister's readdir and its stat.
+        with tempfile.TemporaryDirectory() as td:
+            png = render.render_part(cfg, part, Path(td) / f"{name}.png",
+                                     timeout=timeout)
+            # LDView writes 2048px PNGs at ~128 KB, and this slot is the
+            # corpus's single largest asset -- 1.5 GB over the library,
+            # against 0.35 GB as WebP at q90, which is indistinguishable at
+            # 1:1 on the stud embossing. It is read structurally, never
+            # pixelwise.
+            with Image.open(png) as im:
+                im.save(out_dir / f"{name}.webp", "WEBP", quality=90, method=4)
+        return
 
     if cfg.shading == "outline" or cfg.wireframe:
         lat, long = render.resolve_latlong(cfg.angle)

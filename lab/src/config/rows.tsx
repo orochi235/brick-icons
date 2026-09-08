@@ -1,5 +1,7 @@
 import { PropertyRow } from '@weasel-js/labkit';
 import type { ControlRenderer } from '@weasel-js/labkit';
+import type { LabClient } from '@lab/api/client';
+import { ColorField } from '@lab/config/ColorRow';
 
 /**
  * Compact rows for the settings panel.
@@ -98,7 +100,7 @@ const booleanRow: ControlRenderer = ({ path, pref, value, setValue }) => {
   );
 };
 
-/** Keyed by leaf kind. `color` is left to labkit, whose colour row is already
+/** Keyed by leaf kind. `color` is left to labkit, whose color row is already
  *  inline and carries a picker this would only make worse. */
 export const COMPACT_ROWS: Record<string, ControlRenderer> = {
   number: numberRow,
@@ -106,3 +108,25 @@ export const COMPACT_ROWS: Record<string, ControlRenderer> = {
   enum: enumRow,
   boolean: booleanRow,
 };
+
+/** The compact rows plus the ones that need the server. `--part-color` takes
+ *  hex, an LDraw code or a name, and the palette that resolves the last two
+ *  lives behind the API — so this row is keyed by config path, over the
+ *  `string` row its leaf would otherwise get. */
+export function rowsFor(client: LabClient): Record<string, ControlRenderer> {
+  // No label: the swatch and the palette names say what the field is, and the
+  // value is what needs the width.
+  const partColor: ControlRenderer = ({ pref, value, setValue }) => {
+    const leaf = leafOf(pref);
+    return (
+      <ColorField
+        client={client}
+        label=""
+        description={leaf.description}
+        value={value === null || value === undefined ? '' : String(value)}
+        onChange={setValue}
+      />
+    );
+  };
+  return { ...COMPACT_ROWS, part_color: partColor };
+}

@@ -21,14 +21,37 @@ describe('quickOptions', () => {
     expect(engine?.values).toEqual(['naive', 'occt', 'cadquery']);
   });
 
-  it('names the lab-only layout values itself', () => {
-    const layout = quickOptions(FIELDS).find((o) => o.key === 'layout');
-    expect(layout?.values).toEqual(['grid', 'split', 'stack']);
-  });
-
+  // `layout` is the lab's own and has its own buttons; every quick option
+  // left is a CLI flag, so one the CLI drops leaves nothing behind.
   it('drops a control whose flag the CLI no longer offers', () => {
     const keys = quickOptions([field('engine', ['naive'])]).map((o) => o.key);
-    expect(keys).toEqual(['engine', 'layout']);
+    expect(keys).toEqual(['engine']);
+  });
+});
+
+describe('the layout buttons', () => {
+  const bar = (config: Record<string, unknown>, setConfig = () => {}) =>
+    render(<PoseBar angle="iso" config={config} fields={FIELDS} setConfig={setConfig} />);
+
+  it('offers every layout, named for a reader who cannot read the glyph', () => {
+    bar({});
+    expect(screen.getAllByRole('button', { name: /^(grid|split|stack)$/ })
+      .map((b) => b.getAttribute('aria-label'))).toEqual(['grid', 'split', 'stack']);
+  });
+
+  it('shows which layout is on, and opens on the grid', () => {
+    bar({});
+    expect(screen.getByRole('button', { name: 'grid' }).getAttribute('aria-pressed'))
+      .toBe('true');
+    expect(screen.getByRole('button', { name: 'stack' }).getAttribute('aria-pressed'))
+      .toBe('false');
+  });
+
+  it('chooses a layout on a click', () => {
+    const setConfig = vi.fn();
+    bar({ layout: 'grid' }, setConfig);
+    fireEvent.click(screen.getByRole('button', { name: 'split' }));
+    expect(setConfig).toHaveBeenCalledWith('layout', 'split');
   });
 });
 
@@ -57,6 +80,24 @@ describe('the loupe buttons', () => {
     expect(screen.getByText('loupe').getAttribute('aria-pressed')).toBe('true');
     fireEvent.keyUp(window, { key: 'Alt' });
     expect(screen.getByText('loupe').getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('shows a key-armed toggle as half-pressed, not as on', () => {
+    bar({});
+    const button = screen.getByText('loupe');
+    fireEvent.keyDown(window, { key: 'Alt' });
+    expect(button.className).toContain('is-armed');
+    expect(button.className).not.toContain('is-on');
+    fireEvent.keyUp(window, { key: 'Alt' });
+    expect(button.className).not.toContain('is-armed');
+  });
+
+  it('shows a clicked toggle as on, even while the key is held', () => {
+    bar({ loupe_sticky: true });
+    fireEvent.keyDown(window, { key: 'Alt' });
+    const button = screen.getByText('loupe');
+    expect(button.className).toContain('is-on');
+    expect(button.className).not.toContain('is-armed');
   });
 
   it('makes the loupe sticky on a click', () => {

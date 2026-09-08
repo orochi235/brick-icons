@@ -52,6 +52,15 @@ describe('FileDefectDialog', () => {
     expect(onFile).not.toHaveBeenCalled();
   });
 
+  it('will not file before a part is loaded, and says so', () => {
+    const onFile = vi.fn();
+    render(<FileDefectDialog {...props} part="" onFile={onFile} />);
+    fireEvent.change(screen.getByLabelText(/title/i), { target: { value: 'x' } });
+    fireEvent.click(screen.getByText(/^file$/i));
+    expect(onFile).not.toHaveBeenCalled();
+    expect(screen.getByText(/load a part/i)).toBeTruthy();
+  });
+
   it('cancels', () => {
     const onCancel = vi.fn();
     render(<FileDefectDialog {...props} onCancel={onCancel} />);

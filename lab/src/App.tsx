@@ -1,18 +1,18 @@
-import { useEffect, useState } from 'react';
-import { FloatingPanel, Lab, useLabContext } from '@weasel-js/labkit';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { FloatingPanel, Lab } from '@weasel-js/labkit';
 import type { Instrument, TrialContribution } from '@weasel-js/labkit';
 import type { LabClient } from '@lab/api/client';
-import { PartSearch } from '@lab/chrome/PartSearch';
-import { COMPACT_ROWS } from '@lab/config/rows';
+import { PartSearch } from '@lab/shared/PartSearch';
+import { rowsFor } from '@lab/config/rows';
 import { DefectList } from '@lab/defects/DefectList';
 import type { Defect, DefectStatus } from '@lab/defects/useDefects';
-import { setPendingPart } from '@lab/config/pending';
+import { setPendingPart, useOpenPart } from '@lab/config/pending';
 import '@lab/app.css';
 
 // `FloatingPanel` is a positioned box and nothing else -- it carries neither a
 // title nor a dismissal, so both are written here as its first child.
 function AllDefects({ client }: { client: LabClient }) {
-  const { addTrial } = useLabContext();
+  const openPart = useOpenPart();
   const [defects, setDefects] = useState<Defect[]>([]);
   const [open, setOpen] = useState(false);
 
@@ -39,7 +39,7 @@ function AllDefects({ client }: { client: LabClient }) {
       </div>
       <DefectList
         defects={defects}
-        onOpen={(part) => { setPendingPart(part); addTrial('part-inspector'); }}
+        onOpen={(part) => openPart(part)}
         onStatus={async (id: string, status: DefectStatus) => {
           await client.patchDefect(id, { status });
           setDefects((await client.defects()) as Defect[]);
@@ -53,12 +53,26 @@ function AllDefects({ client }: { client: LabClient }) {
 // and puts its children in the shell's header beside the built-in controls.
 // Nesting a `<LabShell>` here would lay the whole app out as one header item.
 function TitleBar({ client }: { client: LabClient }) {
-  const { addTrial } = useLabContext();
-  // `addTrial` reads the pending part through the instrument's defaultConfig;
-  // see src/config/pending.ts.
+  const openPart = useOpenPart();
+  // `?part=3001` opens that part on load -- the corpus wall is its own page,
+  // so a link is the only way it can hand one over. Once, and the query is
+  // dropped afterwards so a reload does not reopen it.
+  const opened = useRef(false);
+  useEffect(() => {
+    if (opened.current) return;
+    const asked = new URLSearchParams(window.location.search).get('part');
+    if (!asked) return;
+    opened.current = true;
+    setPendingPart(asked);
+    openPart(asked);
+    const url = new URL(window.location.href);
+    url.searchParams.delete('part');
+    window.history.replaceState(null, '', url);
+  }, [openPart]);
+
   return (
     <>
-      <PartSearch client={client} onOpen={() => addTrial('part-inspector')} />
+      <PartSearch client={client} onOpen={(part) => { setPendingPart(part); openPart(part); }} />
       <AllDefects client={client} />
     </>
   );
@@ -100,6 +114,7 @@ const TRIAL_CHROME: TrialContribution[] = [
 
 export function App({ instruments, client }:
                     { instruments: Instrument<any, any, any>[]; client: LabClient }) {
+  const controls = useMemo(() => rowsFor(client), [client]);
   return (
     <Lab
       instruments={instruments}
@@ -107,7 +122,7 @@ export function App({ instruments, client }:
       storageKey="brick-icons-lab"
       title="brick-icons lab"
       chrome={TRIAL_CHROME}
-      controls={COMPACT_ROWS}
+      controls={controls}
       suppress={['snapshot']}
     >
       <TitleBar client={client} />

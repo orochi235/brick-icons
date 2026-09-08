@@ -8,12 +8,17 @@ geometry — a degenerate sliver must never kill a render.
 from __future__ import annotations
 
 import math
+import warnings
 
 import numpy as np
 import shapely
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, box
 
 GRID = 1e-3            # set_precision snap grid, px
+
+# shapely builds Polygon() by parsing the WKT text "POLYGON EMPTY" -- 2us a
+# call, and the fill pipeline returns the empty sentinel millions of times.
+_EMPTY = Polygon()
 
 # --- arc recovery ---------------------------------------------------------
 # Face polygons sample their curves from known projected circles, so after
@@ -59,6 +64,10 @@ def arc_candidates(ellipses):
         if S_[-1] < MIN_AXIS:
             continue
         cands.append({"c": c, "Minv": np.linalg.inv(M), "M": M,
+                      # ellipse bbox half-extents: point(t) = c + cos t*u +
+                      # sin t*v, so |x-cx| <= hypot(ux, vx)
+                      "hx": float(math.hypot(M[0, 0], M[0, 1])),
+                      "hy": float(math.hypot(M[1, 0], M[1, 1])),
                       "det": float(M[0, 0] * M[1, 1] - M[0, 1] * M[1, 0]),
                       "rx": float(S_[0]), "ry": float(S_[1]),
                       "phi": math.degrees(math.atan2(U_[1, 0], U_[0, 0])),
@@ -99,24 +108,37 @@ def _assign_edges(pts, cands, tol, wide=False):
     """Per ring edge i -> (cand_index, signed sweep[, wide]) or None.
     `wide=True` re-offers edges the strict pass left unmatched at
     WIDE_TOL/WIDE_STEP; those get a third truthy element so _ring_d can
-    demote runs shorter than WIDE_MIN_RUN."""
+    demote runs shorter than WIDE_MIN_RUN.
+
+    Lowest candidate index wins an edge, so candidate order is significant
+    and a skipped candidate must be one that could not have matched: a
+    vertex within `eff` px of the curve is within `eff` of the curve's bbox,
+    which is what the prefilter tests."""
     n = len(pts)
     assign = [None] * n
+    rx0, ry0 = pts.min(axis=0)
+    rx1, ry1 = pts.max(axis=0)
     passes = [(tol, None)] + ([(WIDE_TOL, WIDE_STEP)] if wide else [])
     for ptol, pstep in passes:
         for k, cand in enumerate(cands):
             eff, inward = _cand_tol(cand, ptol)
+            cx, cy = cand["c"]
+            if (rx0 > cx + cand["hx"] + eff or rx1 < cx - cand["hx"] - eff
+                    or ry0 > cy + cand["hy"] + eff
+                    or ry1 < cy - cand["hy"] - eff):
+                continue
+            open_i = [i for i in range(n) if assign[i] is None]
+            if not open_i:
+                return assign
             t = _vertex_angles(pts, cand, eff, inward=inward)
             step = max(cand["step"], pstep) if pstep else cand["step"]
-            for i in range(n):
-                if assign[i] is not None:
-                    continue
-                ti, tj = t[i], t[(i + 1) % n]
-                if np.isnan(ti) or np.isnan(tj):
-                    continue
-                dt = (tj - ti + math.pi) % (2 * math.pi) - math.pi
-                if 1e-9 < abs(dt) <= step:
-                    assign[i] = (k, dt) if pstep is None else (k, dt, True)
+            dt = (np.roll(t, -1) - t + math.pi) % (2 * math.pi) - math.pi
+            ok = np.abs(dt)
+            hit = (ok > 1e-9) & (ok <= step)     # NaN compares False both ways
+            for i in open_i:
+                if hit[i]:
+                    d = float(dt[i])
+                    assign[i] = (k, d) if pstep is None else (k, d, True)
     return assign
 
 
@@ -225,8 +247,8 @@ def _only_area(g):
         return g
     if hasattr(g, "geoms"):
         polys = [x for x in g.geoms if x.geom_type in ("Polygon", "MultiPolygon")]
-        return shapely.union_all(polys) if polys else Polygon()
-    return Polygon()
+        return shapely.union_all(polys) if polys else _EMPTY
+    return _EMPTY
 
 
 def to_geom(poly, holes=None):
@@ -234,14 +256,14 @@ def to_geom(poly, holes=None):
     try:
         p = np.asarray(poly, float)
         if len(p) < 3:
-            return Polygon()
+            return _EMPTY
         g = Polygon(p, [np.asarray(h, float) for h in (holes or []) if len(h) >= 3])
         g = shapely.set_precision(g, GRID)
         if not g.is_valid:
             g = shapely.make_valid(g)
         return _only_area(g)
     except Exception:
-        return Polygon()
+        return _EMPTY
 
 
 def region(ring):
@@ -251,11 +273,11 @@ def region(ring):
     try:
         p = np.asarray(ring, float)
         if len(p) < 3:
-            return Polygon()
+            return _EMPTY
         g = shapely.make_valid(Polygon(p))
         return _only_area(shapely.set_precision(g, GRID))
     except Exception:
-        return Polygon()
+        return _EMPTY
 
 
 def union(a, b):
@@ -268,7 +290,7 @@ def union(a, b):
 def union_all(geoms):
     gs = [g for g in geoms if g is not None and not g.is_empty]
     if not gs:
-        return Polygon()
+        return _EMPTY
     try:
         return _only_area(shapely.union_all(gs))
     except Exception:
@@ -299,10 +321,26 @@ def opened(g, r):
 def intersection(a, b):
     try:
         if not a.intersects(b):
-            return Polygon()
+            return _EMPTY
         return _only_area(shapely.intersection(a, b))
     except Exception:
-        return Polygon()
+        return _EMPTY
+
+
+def window(g, x0, y0, x1, y1):
+    """`g` cut down to a rectangle, for windowing a big geometry to a work
+    area. clip_by_rect is the fast path and does the same job as intersecting
+    with the box, except on a polygon carrying a degenerate ring: it builds a
+    3-point ring out of one and throws (813c03-f2's 4e-13 hole), on input GEOS
+    itself calls valid. The box intersection is exact there."""
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            return shapely.clip_by_rect(g, x0, y0, x1, y1)
+    except Exception:
+        # not the _only_area intersection above: a caller may be windowing
+        # lines, and stripping those to empty is a wrong answer, not a safe one
+        return shapely.intersection(g, box(x0, y0, x1, y1))
 
 
 def area(g):

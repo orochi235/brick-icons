@@ -1,0 +1,1386 @@
+# What a human decided about a part, and any notes against one.
+#
+# Written by brick_icons.db from corpus.db, which is derived and gitignored.
+# This file is the record: a status that is not here does not survive a
+# rebuild.
+
+
+[[part]]
+id = "003238r"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "003441a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "003605a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "003605d"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "003672a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "004158d"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "004158e"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "004159d"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "004219c"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "004315c"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "004318b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "004462d"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "004488c"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "004589a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "004630b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "004659h"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "004677b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "004690b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "004695b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "004695d"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "004695e"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "004751a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "004847c"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "160205a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "160395a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "160425b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "162275a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "162275g"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "163145b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "163555b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "163555g"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "163555h"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "163555k"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "164325c"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "164565c"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "164795d"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "165485b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "165485e"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "165985a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "165985b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "165985d"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "166285b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "168055b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "168135h"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "168175a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "168225c"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "168265b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "168315f"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "168335b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "168365c"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "168365e"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "169625a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "169625e"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "169675b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "169675c"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "169675f"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "169685a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "170884c"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "190145a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "190155a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "190155e"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "190155h"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "190315a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "190765h"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "191075a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "191075f"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "191485b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "191485j"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "191485l"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "191895b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:18+00:00"
+
+[[part]]
+id = "191895c"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "191895d"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "191905b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "191915h"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "191915i"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "191945a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "192375f"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "192385d"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "192685e"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "192685g"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "192895a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "192895e"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "192915b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "193445h"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "194175b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "194225c"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "194535h"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "195075b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "195115a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "195115b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "195125a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "195125b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "195375c"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "195385b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "195505a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "195985b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "196685a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "196715a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "196825a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "196935b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "196945y"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "197875bc01"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "197875bc02"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "197895a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "197905c"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "197915e"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "197925a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "22587c"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4100418d"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4106331f"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4106981a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4107582f"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4114141c"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4116878a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4125165c"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4141242a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4179107a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4179107b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4188571h"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4198678dc01"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4201018f"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4226636b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4263304b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4263304f"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4296207e"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4297014c"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4521703g"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4521703r"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4533401f"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4533401gc01"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4533401i"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4542422c"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4544258d"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4544258e"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4544258gc01"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4586574b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4599932l"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4603014b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4613857e"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4613908b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4613908k"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4615865f"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4616559b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4620855c"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4620858i"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4620859a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4620859c"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4620860k"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4622303d"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4622303h"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4622303t"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4629677a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4629791b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4631649a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4638848l"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4650852l"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4650853ac01"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4650853d"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4650853k"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4650854h"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "4650854m"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "59718c"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "59826h"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6005724b3"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6005724b4"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6005724c1"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6005724g"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6005724j2"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6005724o1"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6005724q"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6005745c"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6005745d"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6018377d"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6022692a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6037728b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6037728k"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6037728o"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6042677a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6057482a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6058327d"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6062886a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6126972a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6153754c"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6153754i"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6153754l"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6153754q"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6196607a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6255869d"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6255869g"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6255869k"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6255869o"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6267174i"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6279911b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6279911d"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6279911j"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6279911n"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6285381a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6285381ec01"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6288456b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6296256h"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6296256i"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6296256j"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6296256n"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6318649c"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6327015g"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6342851ec01"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6342869bc01"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6372023o"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6422772f"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "6422772i"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "820670e"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "820670h"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "820672b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "820672h"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "820673e"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "820673n"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "820673o"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "820673p"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "820675a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "821421c"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "821422b"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "821435e"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "821437e"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "821437f"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "821445a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "821445e"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "821472hc01"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "821577a"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "821577f"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"
+
+[[part]]
+id = "821577h"
+status = "broken"
+note = "naive draws it at the wrong scale -- coordinates around 1e5 against a 256x170 viewBox -- so it comes out blank or overruns the frame, and scores extra_px 0 / missing_px 0 as if perfect"
+at = "2026-09-07T00:52:19+00:00"

@@ -298,3 +298,19 @@ def test_negative_snap_tol_pulls_inward_only():
     r = np.hypot(out[:, 0], out[:, 1])
     assert (np.abs(r - 10.0) < 1e-6).sum() >= 2       # inset pair snapped
     assert (np.abs(out - [10.4, 8.0]).sum(axis=1) < 1e-9).any()  # outsider
+
+
+def test_window_survives_a_zero_area_hole_the_rect_clipper_chokes_on():
+    """813c03-f2: a fill carried a three-point interior ring of area 4e-13 --
+    GEOS calls the polygon valid and then builds a 3-point ring out of that
+    hole inside clip_by_rect, which it rejects. The window must still come
+    back, and with the region a true intersection would give."""
+    from shapely.geometry import Polygon, box
+    sliver = [(79.35755028107833, 95.48820251603766),
+              (75.69826541456764, 93.6585600827823),
+              (132.53221597979933, 122.07553536539814)]
+    g = Polygon(box(0, 0, 250, 200).exterior, [sliver])
+    assert g.is_valid
+    rect = (122.643, 111.644, 134.01, 119.342)
+    w = geom2d.window(g, *rect)
+    assert abs(w.area - g.intersection(box(*rect)).area) < 1e-9

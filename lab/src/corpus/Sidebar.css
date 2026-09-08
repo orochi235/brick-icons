@@ -1,0 +1,71 @@
+.corpus-side {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 216px;
+  padding: 10px 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--wzl-border);
+  background: var(--wzl-surface);
+  font-size: 13px;
+}
+.corpus-side__row {
+  display: flex; align-items: center; gap: 8px; padding: 0 12px;
+  color: var(--wzl-fg-muted); font-size: var(--wzl-font-size-sm);
+}
+.corpus-side__row select {
+  flex: 1; min-width: 0;
+  font-family: var(--wzl-font-ui); font-size: var(--wzl-font-size-sm);
+  color: var(--wzl-fg); background: var(--wzl-surface-raised);
+  border: 1px solid var(--wzl-border); border-radius: var(--wzl-radius-sm, 3px);
+  padding: 1px 4px;
+}
+.corpus-side__row select:focus-visible { outline: 2px solid var(--wzl-accent); outline-offset: -2px }
+.corpus-side > label.corpus-side__check {
+  display: flex; flex-direction: row; align-items: center; gap: 6px; padding: 0 12px;
+}
+.corpus-side h3 {
+  display: flex; align-items: baseline; gap: 8px; margin: 12px 0 2px; padding: 0 12px;
+  font-size: 10px; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--wzl-fg-subtle);
+}
+.corpus-side h3 button {
+  border: 0; background: none; padding: 0; cursor: pointer;
+  color: var(--wzl-fg-subtle); font: inherit; text-transform: none; letter-spacing: 0;
+}
+.corpus-side h3 button:hover { color: var(--wzl-accent) }
+.corpus-side__facets, .corpus-side__members { margin: 0; padding: 0; list-style: none }
+.corpus-side__facets label, .corpus-side__members label {
+  display: flex; gap: 7px; align-items: baseline; padding: 2px 12px; cursor: pointer;
+}
+.corpus-side__facets label:hover, .corpus-side__members label:hover {
+  background: var(--wzl-surface-raised);
+}
+.corpus-side__facets span, .corpus-side__members span {
+  flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.corpus-side__facets em, .corpus-side__members em {
+  font-style: normal; font-size: 11px; color: var(--wzl-fg-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The twisty sits outside the label so that clicking the name still toggles
+ * the family's box rather than opening it. */
+.corpus-side__fam { display: flex; align-items: center }
+.corpus-side__fam label { flex: 1; min-width: 0; padding-left: 0 }
+/* Drawn rather than typed: the UI font has no triangle, so a glyph here
+ * falls back to whatever the system offers and lands at the wrong size. */
+.corpus-side__twisty {
+  flex: none; display: flex; align-items: center; justify-content: flex-end;
+  width: 20px; height: 20px; margin-left: 4px; padding: 0 2px 0 0;
+  border: 0; border-radius: var(--wzl-radius-sm, 3px); background: none;
+  cursor: pointer; color: var(--wzl-fg-muted);
+}
+.corpus-side__twisty svg { fill: currentColor; transition: transform 90ms ease }
+.corpus-side__twisty[aria-expanded="true"] svg { transform: rotate(90deg) }
+.corpus-side__twisty:hover { color: var(--wzl-fg); background: var(--wzl-surface-raised) }
+.corpus-side__twisty:focus-visible { outline: 2px solid var(--wzl-accent); outline-offset: -2px }
+.corpus-side__members label { padding-left: 36px }
+.corpus-side__members span { color: var(--wzl-fg-muted) }
+
+.corpus-side__count { margin: 8px 12px 0; color: var(--wzl-fg-subtle) }

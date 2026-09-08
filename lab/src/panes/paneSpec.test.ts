@@ -10,6 +10,7 @@ const DEPS: PaneDeps = {
   decal: { pane: { kind: 'image', src: '/d.png' }, note: '2 decals' },
   diff: { pane: { kind: 'image', src: '/diff.png' }, note: '3 components' },
   three: { node: 'the orbit view' },
+  marking: true,
 };
 
 describe('paneSpec', () => {
@@ -35,9 +36,22 @@ describe('paneSpec', () => {
   // only on a pane drawing that render at the shared camera.
   it('marks the panes that draw the run under test', () => {
     expect(paneSpec(SOURCES.naive, DEPS).marks).toBe(true);
-    expect(paneSpec(SOURCES.diff, DEPS).marks).toBe(true);
     expect(paneSpec(SOURCES.reference, DEPS).marks).toBe(false);
     expect(paneSpec(SOURCES['3d'], DEPS).marks).toBe(false);
+  });
+
+  // A defect names engines, and `diff` is not one, so a mark drawn there
+  // could never be found again.
+  it('does not mark the diff pane, which a defect cannot name', () => {
+    expect(paneSpec(SOURCES.diff, DEPS).marks).toBe(false);
+  });
+
+  // The overlay a target mounts covers the pane and takes its pointer, so an
+  // engine pane that is not being marked must not have one.
+  it('takes no marks while marking is off', () => {
+    const off = { ...DEPS, marking: false };
+    expect(paneSpec(SOURCES.naive, off).marks).toBe(false);
+    expect(paneSpec(SOURCES.occt, off).marks).toBe(false);
   });
 
   it('gives the 3D pane the orbit view and what it says about registering', () => {

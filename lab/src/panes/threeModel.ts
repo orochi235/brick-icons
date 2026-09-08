@@ -21,7 +21,7 @@ function materialsOf(object: THREE.Mesh | THREE.LineSegments): THREE.Material[] 
  * which is what draws them only where the edge is a silhouette; there is no
  * fat equivalent, so those stay hairlines.
  *
- * The colour is the engines' stroke, not the one LDraw gave the edge: the pane
+ * The color is the engines' stroke, not the one LDraw gave the edge: the pane
  * is here to be compared against a line drawing, and an edge tinted to match
  * the part reads as a shading artefact next to one that is not.
  *
@@ -46,8 +46,8 @@ export function fattenLines(group: THREE.Object3D,
   });
 }
 
-/** The render's part colour and face opacity, on the model's meshes. A null
- *  colour leaves the part in the colours its LDraw file gave it. */
+/** The render's part color and face opacity, on the model's meshes. A null
+ *  color leaves the part in the colors its LDraw file gave it. */
 export function paint(group: THREE.Object3D, color: number | null,
                       opacity: number): void {
   group.traverse((child) => {

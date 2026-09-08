@@ -205,7 +205,9 @@ def test_batch_starts_one_job_for_the_list(client, ldraw_dir):
     done = _finish(client, body["job"], timeout=180)
     assert done["total"] == 2
     assert done["done"] == 2
-    assert [e["index"] for e in done["events"]] == [1, 2]
+    # The list runs several at a time, so the positions arrive in
+    # whatever order the renders finish.
+    assert sorted(e["index"] for e in done["events"]) == [1, 2]
 
 
 def test_command_route_returns_argv_without_rendering(client):
@@ -322,3 +324,259 @@ def test_goldens_check_on_a_part_with_no_cases_is_an_empty_job(client):
     body = client.post("/api/goldens/check", json={"part": "not-a-part"}).json()
     done = _finish(client, body["job"])
     assert done["total"] == 0
+
+
+def test_colors_route_returns_the_ldraw_palette(client):
+    body = client.get("/api/colors").json()
+    by_code = {c["code"]: c for c in body["colors"]}
+    assert by_code[0]["name"] == "Black"
+    assert by_code[4]["hex"].startswith("#")
+    assert len(by_code[4]["hex"]) == 7
+
+
+def test_colors_route_carries_alpha_only_where_it_is_set(client):
+    body = client.get("/api/colors").json()
+    by_code = {c["code"]: c for c in body["colors"]}
+    assert by_code[0]["alpha"] == 255
+    assert any(c["alpha"] < 255 for c in body["colors"])
+
+
+def test_colors_route_sorts_by_code(client):
+    codes = [c["code"] for c in client.get("/api/colors").json()["colors"]]
+    assert codes == sorted(codes)
+
+
+def test_colors_route_carries_the_ldconfig_family(client):
+    by_code = {c["code"]: c for c in client.get("/api/colors").json()["colors"]}
+    assert by_code[0]["category"] == "Solid"
+    assert by_code[256]["category"] == "Rubber"
+
+
+def test_colors_route_carries_legos_own_number_where_there_is_one(client):
+    by_code = {c["code"]: c for c in client.get("/api/colors").json()["colors"]}
+    assert by_code[0]["legoId"] == 26
+    assert by_code[507]["legoId"] is None
+
+
+def _corpus_client(tmp_path):
+    from brick_icons import db
+    conn = db.connect(tmp_path / "corpus.db")
+    conn.execute("INSERT INTO parts (id, title, category, printed, obsolete, "
+                 "status) VALUES ('3001', 'Brick 2 x 4', 'Brick', 0, 0, 'good')")
+    conn.commit()
+    conn.close()
+    thumbs = tmp_path / "thumbs"
+    (thumbs / "naive" / "128").mkdir(parents=True)
+    (thumbs / "naive" / "128" / "3001.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    (thumbs / "naive" / "sheet-8.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    return TestClient(lab_app.create_app(
+        cache_root=tmp_path / "cache",
+        corpus_db=tmp_path / "corpus.db",
+        thumbs_root=thumbs))
+
+
+def test_cells_route_returns_every_part(tmp_path):
+    body = _corpus_client(tmp_path).get("/api/corpus/cells").json()
+    assert body["cells"][0]["id"] == "3001"
+    assert body["count"] == 1
+
+
+def test_cells_route_takes_a_since(tmp_path):
+    body = _corpus_client(tmp_path).get(
+        "/api/corpus/cells", params={"since": "2030-01-01T00:00:00+00:00"}).json()
+    assert body["cells"] == []
+    assert body["count"] == 1
+
+
+def test_cells_route_takes_a_slot(tmp_path):
+    body = _corpus_client(tmp_path).get(
+        "/api/corpus/cells", params={"source": "naive"}).json()
+    assert body["source"] == "naive"
+
+
+def test_summary_route_counts_the_corpus(tmp_path):
+    body = _corpus_client(tmp_path).get("/api/corpus/summary").json()
+    assert body["parts"] == 1
+
+
+def test_stats_route_tallies_the_default_working_set(tmp_path):
+    body = _corpus_client(tmp_path).get("/api/corpus/stats").json()
+    assert body["set"]["size"] == 1
+    assert body["set"]["kind"] == "all"
+
+
+def test_stats_route_carries_the_working_set_through(tmp_path):
+    body = _corpus_client(tmp_path).get(
+        "/api/corpus/stats", params={"kind": "printed"}).json()
+    assert body["set"]["size"] == 0
+    assert body["set"]["kind"] == "printed"
+
+
+def test_stats_route_refuses_a_kind_it_does_not_have(tmp_path):
+    assert _corpus_client(tmp_path).get(
+        "/api/corpus/stats", params={"kind": "rendered"}).status_code == 422
+
+
+def test_sources_route_lists_the_slots_that_have_renders(tmp_path):
+    body = _corpus_client(tmp_path).get("/api/corpus/sources").json()
+    assert body["sources"] == []
+
+
+def test_part_route_carries_measurements_and_defects(tmp_path):
+    body = _corpus_client(tmp_path).get("/api/corpus/part/3001").json()
+    assert body["part"]["title"] == "Brick 2 x 4"
+    assert body["findings"] == []
+    assert body["defects"] == []
+
+
+def test_part_route_carries_the_construction_features(tmp_path):
+    from brick_icons import db
+
+    client = _corpus_client(tmp_path)
+    conn = db.connect(tmp_path / "corpus.db")
+    conn.executemany(
+        "INSERT INTO part_features (part_id, feature, value) VALUES (?, ?, ?)",
+        [("3001", "tris", 384.0), ("3001", "elliptical", None),
+         ("3001", "stud", None)])
+    conn.commit()
+    conn.close()
+
+    got = client.get("/api/corpus/part/3001").json()["features"]
+    assert got["tris"] == 384.0
+    # The null is what the page reads a flag by, so it has to survive the
+    # round trip rather than being dropped or turned into a 0.
+    assert got["elliptical"] is None
+    # Flags before measures, in the extractor's order, so the page can render
+    # what it is given without sorting.
+    assert list(got) == ["stud", "elliptical", "tris"]
+
+
+def test_part_route_sends_no_features_for_a_part_that_has_none(tmp_path):
+    assert _corpus_client(tmp_path).get(
+        "/api/corpus/part/3001").json()["features"] == {}
+
+
+def test_part_route_404s_on_an_unknown_part(tmp_path):
+    assert _corpus_client(tmp_path).get("/api/corpus/part/nope").status_code == 404
+
+
+def test_thumb_route_serves_a_loose_level(tmp_path):
+    r = _corpus_client(tmp_path).get("/api/thumbs/naive/128/3001.png")
+    assert r.status_code == 200
+
+
+def test_thumb_route_serves_a_sheet(tmp_path):
+    assert _corpus_client(tmp_path).get(
+        "/api/thumbs/naive/sheet-8.png").status_code == 200
+
+
+def test_thumb_route_refuses_an_unknown_slot(tmp_path):
+    assert _corpus_client(tmp_path).get(
+        "/api/thumbs/nonsense/128/3001.png").status_code == 400
+
+
+def test_thumb_route_refuses_traversal(tmp_path):
+    assert _corpus_client(tmp_path).get(
+        "/api/thumbs/naive/128/..%2F..%2Fcorpus.db").status_code in (400, 404)
+
+
+def _render_client(tmp_path, render_path="out/census/renders/naive/3001.svg"):
+    from brick_icons import db
+    conn = db.connect(tmp_path / "corpus.db")
+    conn.execute("INSERT INTO parts (id, title, category, printed, obsolete, "
+                 "status) VALUES ('3001', 'Brick 2 x 4', 'Brick', 0, 0, 'good')")
+    conn.execute(
+        "INSERT INTO renders (part_id, source, config_key, made_at, path, "
+        "sha256) VALUES ('3001', 'naive', 'default', ?, ?, 'deadbeef')",
+        (db.now(), render_path))
+    conn.commit()
+    conn.close()
+    made = tmp_path / render_path
+    made.parent.mkdir(parents=True, exist_ok=True)
+    made.write_bytes(b"RIFF\x00\x00\x00\x00WEBPVP8 " if made.suffix == ".webp"
+                     else b"<svg viewBox='0 0 256 170'></svg>")
+    return TestClient(lab_app.create_app(
+        root=tmp_path, cache_root=tmp_path / "cache", corpus_db=tmp_path / "corpus.db"))
+
+
+def test_render_route_serves_a_real_render(tmp_path):
+    r = _render_client(tmp_path).get("/api/corpus/render/naive/3001.svg")
+    assert r.status_code == 200
+    assert "<svg" in r.text
+
+
+def test_render_route_types_a_render_by_what_it_actually_is(tmp_path):
+    """The route's path says `.svg` because that is the wall's URL for a
+    render, not a claim about the bytes: the ldview slot is WebP. Typing
+    every slot `image/svg+xml` left `createImageBitmap` unable to decode
+    the blob, and the vector rung silently kept the 128px bake."""
+    r = _render_client(
+        tmp_path, render_path="out/census/renders/naive/3001.webp").get(
+            "/api/corpus/render/naive/3001.svg")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "image/webp"
+
+
+def test_render_route_404s_an_unknown_part(tmp_path):
+    assert _render_client(tmp_path).get(
+        "/api/corpus/render/naive/9999.svg").status_code == 404
+
+
+def test_render_route_400s_an_unknown_slot(tmp_path):
+    assert _render_client(tmp_path).get(
+        "/api/corpus/render/nonsense/3001.svg").status_code == 400
+
+
+def test_render_route_refuses_escaping_the_store(tmp_path):
+    outside = tmp_path.parent / "outside-3001.svg"
+    outside.write_text("<svg>not in the store</svg>")
+    r = _render_client(tmp_path, render_path="../outside-3001.svg").get(
+        "/api/corpus/render/naive/3001.svg")
+    assert r.status_code == 404
+
+
+def test_sizes_route_answers_with_tiles_and_slots(tmp_path):
+    r = _render_client(tmp_path).get("/api/corpus/sizes")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["tiles"]["renders"] > 0
+    assert [s["source"] for s in body["slots"]] == ["naive"]
+
+
+def test_sizes_route_holds_its_answer_until_asked_again(tmp_path):
+    """Walking `out/` is seconds over a few hundred thousand files, and the
+    dashboard's Reload is one click. The numbers move when a census lands."""
+    client = _render_client(tmp_path)
+    first = client.get("/api/corpus/sizes").json()
+    (tmp_path / "out" / "census" / "renders" / "naive" / "3001.svg").write_bytes(
+        b"x" * 100_000)
+    assert client.get("/api/corpus/sizes").json()["as_of"] == first["as_of"]
+    assert client.get("/api/corpus/sizes?refresh=1").json()["as_of"] != first["as_of"]
+
+
+def test_part_route_gives_every_slot_what_the_wall_colors_a_cell_by(tmp_path):
+    """The detail view draws each render on its slot's state ground, so the
+    state has to arrive per slot rather than per part."""
+    from brick_icons import db
+    client = _corpus_client(tmp_path)
+    conn = db.connect(tmp_path / "corpus.db")
+    for source in ("silhouette-occt", "white-occt"):
+        conn.execute("INSERT INTO renders (part_id, source, config_key, "
+                     "made_at, path, sha256) VALUES ('3001', ?, 'k', "
+                     "'2026-09-05T00:00:00+00:00', ?, 'abcdef1234')",
+                     (source, f"renders/{source}/3001.svg"))
+    conn.execute("INSERT INTO runs (id, kind, started, commit_sha, args) "
+                 "VALUES (1, 'census', '2026-09-05T09:00:00+00:00', 'abc', '{}')")
+    conn.execute("INSERT INTO measurements (run_id, part_id, engine, source, "
+                 "error) VALUES (1, '3001', 'occt', 'silhouette-occt', "
+                 "'TimeoutError')")
+    conn.commit()
+    conn.close()
+
+    body = client.get("/api/corpus/part/3001").json()
+    assert body["part"]["out_of_scope"] is False
+    slots = {s["source"]: s for s in body["slots"]}
+    assert slots["silhouette-occt"]["error"] == "TimeoutError"
+    assert slots["white-occt"]["error"] is None
+    assert slots["white-occt"]["open_defects"] == 0
+    assert slots["white-occt"]["error_elsewhere"] is False

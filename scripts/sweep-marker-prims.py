@@ -1,19 +1,19 @@
-"""Sweep printed parts for coloured primitives sitting on a connector.
+"""Sweep printed parts for colored primitives sitting on a connector.
 
-LDraw authors a minifig torso's neck as a 270-degree colour-16 cylinder plus a
+LDraw authors a minifig torso's neck as a 270-degree color-16 cylinder plus a
 90-degree one in black — the `// Neck mark` convention. That mark is covered by
 the head on an assembled figure, so it does not belong in an extracted decal.
 
 There is no way to tell it from real print by authoring shape: 3942bp01's cone
-stripes partition their wall into coloured and colour-16 sectors summing to 360
+stripes partition their wall into colored and color-16 sectors summing to 360
 exactly as the neck does. What separates them is position — the mark rides
 geometry that protrudes past the part's body, and the stripes ride the body
 itself. This measures that split across the corpus, so the size and the false
 positives of a connector filter are known before it goes into the library.
 
-`share` is the coloured fraction of the ring; `outside` is the coloured
+`share` is the colored fraction of the ring; `outside` is the colored
 primitive's extent along the part's up axis measured against the envelope of
-its colour-16 TRIANGLES — a connector reads positive, body geometry does not.
+its color-16 TRIANGLES — a connector reads positive, body geometry does not.
 
     .venv/bin/python scripts/sweep-marker-prims.py --out out/markers.tsv
     .venv/bin/python scripts/sweep-marker-prims.py --limit 300 --jobs 8
@@ -47,15 +47,15 @@ COINCIDE_TOL = 0.01     # LDU; survives matrix composition through references
 
 def _surface(prim):
     """The surface a primitive lies on, independent of which sector of it the
-    primitive covers or what colour it is."""
+    primitive covers or what color it is."""
     q = lambda v: tuple(np.round(np.asarray(v, float) / COINCIDE_TOL).astype(np.int64))
     return (prim.kind, q(prim.t), q(prim.R[:, 1]),
             int(round(float(np.linalg.norm(prim.R[:, 0])) / COINCIDE_TOL)))
 
 
 def markers_in(part_id: str, ldraw_dir):
-    """[(colour, kind, share, outside)] per coloured primitive that shares a
-    surface with a colour-16 one. `share` is its colour's fraction of the ring;
+    """[(color, kind, share, outside)] per colored primitive that shares a
+    surface with a color-16 one. `share` is its color's fraction of the ring;
     `outside` is how far its extent clears the body triangles' envelope."""
     roots = hlr.default_roots(ldraw_dir)
     path = hlr._resolve_input(part_id, roots)
@@ -76,11 +76,11 @@ def markers_in(part_id: str, ldraw_dir):
 
     found = []
     for key, prims in by_surface.items():
-        colours = {getattr(p, "color", 16) for p in prims}
-        if 16 not in colours or colours == {16}:
+        colors = {getattr(p, "color", 16) for p in prims}
+        if 16 not in colors or colors == {16}:
             continue
         total = sum(p.sector for p in prims)
-        for c in sorted(colours - {16}):
+        for c in sorted(colors - {16}):
             members = [p for p in prims if getattr(p, "color", 16) == c]
             share = sum(p.sector for p in members) / max(total, 1e-9)
             found.append((c, key[0], share, _clearance(members, body)))
@@ -101,7 +101,7 @@ def _clearance(prims, body):
 
 
 def printed_ids(limit=None, start=0):
-    """Parts carrying geometry in a colour other than 16/24."""
+    """Parts carrying geometry in a color other than 16/24."""
     ids = []
     for f in sorted(PARTS.glob("*.dat")):
         try:
@@ -154,7 +154,7 @@ def main() -> int:
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     with out.open("w") as fh:
-        fh.write("part\tcolour\tcolour_name\tkind\tshare\toutside\ttitle\n")
+        fh.write("part\tcolor\tcolor_name\tkind\tshare\toutside\ttitle\n")
         for pid in sorted(hits):
             src = PARTS / f"{pid}.dat"
             try:

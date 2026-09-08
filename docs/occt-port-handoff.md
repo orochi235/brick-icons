@@ -147,7 +147,7 @@ an edge — so branching on it is the same doctrine the engine already runs on,
 not a shortcut. Two consequences: the base part (`4740p03` -> `4740`) usually
 exists in the library and is the same geometry minus decoration, which gives
 the stripping stage a real oracle over hundreds of parts with nothing to label;
-and the id only says decoration EXISTS, so it gates the stage while colour and
+and the id only says decoration EXISTS, so it gates the stage while color and
 `tri_meta` still choose the facets. Watch the other suffixes (`pr` codes,
 stickers like `3069bpr0001`) and parts with no unprinted twin.
 
@@ -157,7 +157,7 @@ fight the surface underneath. On a flat top face you could catch it as
 coplanar-and-inside; on `4740`'s dish the carrier is a CONE and no geometric
 test in the pipeline sees it as anything but more surface — which is why that
 part's rim came back as a one-face edge. `tri_meta` already carries each
-facet's colour, so the filter is identification-on-arrival rather than
+facet's color, so the filter is identification-on-arrival rather than
 geometry. The render path only needs to DROP decoration; none of extraction's
 hard part (unwrapping a curved carrier to UV) is needed.
 
@@ -216,7 +216,7 @@ they should be, and a guess is worse than the empty.
   `face_polys` + `VisResult.sil_polys` now carry the shape's projected
   tessellation, wired to `silhouette_geom` and nothing else so fills and spur
   trimming stay off. Kept per-face, not pre-unioned, because those polygons
-  are what the fills slice will attribute colour and depth to.
+  are what the fills slice will attribute color and depth to.
 
   Diagnose this class by stubbing `shade.apply_affine_faces` to `[]` on the
   NAIVE engine: it reproduced the barb pixel for pixel, which is what told the
@@ -295,7 +295,7 @@ stroke count, and expect to beat it on duplicates.
 ## Later, not now
 
 Extend the translucent-stroke overlap technique to FACES as well as strokes,
-on a separate colour channel, so face coverage and stroke coverage can be read
+on a separate color channel, so face coverage and stroke coverage can be read
 off one image independently.
 
 ## The lab (next project, spans two repos)
@@ -402,8 +402,8 @@ causes, all now fixed and tested:
   constant height — a round tile's print unwrapped to a zero-area line.
 - A round tile's top face **is** a disc primitive, so it has no facets and
   contributed no plane. Flat primitives now contribute theirs.
-- Decoration authored as coloured *primitives* was ignored entirely.
-  `3942bp01` is 16 cone sectors and zero coloured facets.
+- Decoration authored as colored *primitives* was ignored entirely.
+  `3942bp01` is 16 cone sectors and zero colored facets.
 
 Also: stacked wall sections merge into one spanning carrier (`span_carrier`),
 carrier faces union **all** coplanar facets including the print, groups sort by
@@ -417,7 +417,7 @@ pipeline (99s → 0.04s on a high-poly torso, byte-identical output, pinned).
 **The minifig neck mark is dropped from decals only.** LDraw authors a neck as
 a 270-degree body cylinder plus a 90-degree one in black; the head covers it.
 It is authored exactly as real print is — `3942bp01`'s stripes partition their
-wall into coloured and colour-16 sectors summing to 360 the same way — so it is
+wall into colored and color-16 sectors summing to 360 the same way — so it is
 caught by position *and* size together: protrudes past the body **and** covers
 no more than a quarter of its ring. Either condition alone admits `29030p01`'s
 head print and `53983p01`'s turbine case. Renders keep the band, by request.
@@ -452,7 +452,7 @@ converts only the runs that follow one.
 - **Don't `cd` out of the repo in the same command as a `git stash pop`** — the
   pop fails and the work sits in the stash looking lost.
 - Everything from the previous handoff's Traps still applies: `cmd | tail`
-  buffers, subagents park on long commands, LDView colour is not evidence.
+  buffers, subagents park on long commands, LDView color is not evidence.
 
 ## Open
 

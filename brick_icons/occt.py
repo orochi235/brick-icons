@@ -38,16 +38,42 @@ from OCP.BRepMesh import BRepMesh_IncrementalMesh
 from OCP.TopLoc import TopLoc_Location
 from OCP.BRepTools import BRepTools, BRepTools_WireExplorer
 
+from . import timing
 from . import hlr, primitives
 
 TOL = 1e-4
 ORTHO_TOL = 1e-4     # see frame(); measured noise floors are 1.2e-6 and 8.9e-6
 ROUND_TOL = 1e-4
 
+# every vertex of these sits at local y=0, so the matrix's axis column is not
+# their geometry and is not required to be square to it -- see frame()
+PLANAR_KINDS = ("edge", "disc", "ring")
+
+
+def diagonalize(U, V):
+    """(u_hat, v_hat, radius_u, radius_v, phase) for the ellipse traced by
+    cos t*U + sin t*V, whose U and V need not be square to each other.
+
+    A linear map sends the unit circle to an ellipse whatever the shear, so
+    the singular values of [U V] are its semi-axes and the left-singular
+    vectors its axis directions. `phase` carries the primitive's own parameter
+    onto that frame: t there is t + phase here, which is what keeps a sector
+    where the part put it.
+    """
+    W, S, Zt = np.linalg.svd(np.column_stack([np.asarray(U, float),
+                                              np.asarray(V, float)]),
+                             full_matrices=False)
+    ph = math.atan2(Zt[1, 0], Zt[0, 0])
+    if np.linalg.det(Zt) < 0:
+        # a reflection runs the sweep backwards; flipping v_hat turns it round
+        return W[:, 0], -W[:, 1], float(S[0]), float(S[1]), -ph
+    return W[:, 0], W[:, 1], float(S[0]), float(S[1]), ph
+
 
 def frame(prim):
-    """(origin, u_hat, a_hat, v_hat, radius_u, radius_v, height, right_handed),
-    or None if sheared.
+    """(origin, u_hat, a_hat, v_hat, radius_u, radius_v, height, right_handed,
+    phase), or None if the axis is skew. A planar primitive is judged on its
+    own two columns only, and takes its axis from the plane they span.
 
     ru != rv is an ellipse, not shear -- 50950's wall measures 68.3 x 84.9 at
     an orthogonality residual of exactly 0. Callers decide what to do with it;
@@ -61,11 +87,26 @@ def frame(prim):
     # At 1e-6 this rejected 32 of 3942bp01's cones on residuals of 1.2e-6 --
     # float noise off accumulated subpart transforms, not shear. They then
     # built no face, so its wall was cracks and every band drew as a hoop.
-    if not (abs(uh @ ah) < ORTHO_TOL and abs(vh @ ah) < ORTHO_TOL
-            and abs(uh @ vh) < ORTHO_TOL):
+    ax_ok = abs(uh @ ah) < ORTHO_TOL and abs(vh @ ah) < ORTHO_TOL
+    ph = 0.0
+    if abs(uh @ vh) >= ORTHO_TOL:
+        # A shear WITHIN the cross-section is still an exact ellipse, so it is
+        # diagonalized rather than dropped -- 11090's tube wall is two 1-4cylo
+        # at 89.2 degrees, and rejecting them left the wall as neither a face
+        # nor triangles. A skew AXIS stays unrepresentable, because there the
+        # axis is the extrusion direction rather than a spare column.
+        if not (ax_ok or prim.kind in PLANAR_KINDS):
+            return None
+        uh, vh, ru, rv, ph = diagonalize(U, V)
+    if not ax_ok:
+        # 3820 caps its grip with two 2-4ring2 whose axis column is 14 degrees
+        # off the ring's own plane. Nothing reads that column for a planar
+        # primitive, so the plane it spans is the axis.
+        if prim.kind in PLANAR_KINDS:
+            return prim.t, uh, np.cross(uh, vh), vh, ru, rv, h, True, ph
         return None
     rh = float(np.cross(uh, vh) @ ah) > 0
-    return prim.t, uh, ah, vh, ru, rv, h, rh
+    return prim.t, uh, ah, vh, ru, rv, h, rh, ph
 
 
 def is_round(ru, rv):
@@ -88,19 +129,21 @@ def ellipse_axes(o, uh, vh, ru, rv):
     return ax2(o, w, vh), rv, ru, -math.pi / 2
 
 
-def ellipse_edge(o, uh, vh, ru, rv, ang):
+def ellipse_edge(o, uh, vh, ru, rv, ang, phase=0.0):
     a, maj, minr, ph = ellipse_axes(o, uh, vh, ru, rv)
     el = gp_Elips(a, float(maj), float(minr))
     if ang >= 2 * math.pi - 1e-9:
         return BRepBuilderAPI_MakeEdge(el).Edge()
-    return BRepBuilderAPI_MakeEdge(el, float(ph), float(ph + ang)).Edge()
+    s = ph + phase
+    return BRepBuilderAPI_MakeEdge(el, float(s), float(s + ang)).Edge()
 
 
-def elliptic_wall(o, uh, ah, vh, ru, rv, h, ang):
+def elliptic_wall(o, uh, ah, vh, ru, rv, h, ang, phase=0.0):
     """The lateral surface of an elliptical cylinder, which no BRepPrimAPI
     maker builds -- extrude the ellipse instead."""
     v = gp_Vec(*(float(x) for x in np.asarray(ah, float) * h))
-    prism = BRepPrimAPI_MakePrism(ellipse_edge(o, uh, vh, ru, rv, ang), v)
+    prism = BRepPrimAPI_MakePrism(
+        ellipse_edge(o, uh, vh, ru, rv, ang, phase), v)
     return TopoDS.Face_s(prism.Shape())
 
 
@@ -153,6 +196,42 @@ def annulus_face(origin, ah, uh, r_in, r_out, ang):
     return mf.Face()
 
 
+def _edge_ends(edge):
+    return (BRep_Tool.Pnt_s(TopExp.FirstVertex_s(edge)),
+            BRep_Tool.Pnt_s(TopExp.LastVertex_s(edge)))
+
+
+def elliptic_annulus(o, uh, vh, ru_in, rv_in, ru_out, rv_out, ang, phase=0.0):
+    """Planar elliptical disc/ring face, bounded by its own ellipses.
+
+    The radial ends of a sector are read off the arcs rather than recomputed:
+    ellipse_axes turns the frame a quarter turn when rv wins, and a second
+    derivation of that phase is a second place for it to be wrong.
+    """
+    eo = ellipse_edge(o, uh, vh, ru_out, rv_out, ang, phase)
+    if ang >= 2 * math.pi - 1e-9:
+        mf = BRepBuilderAPI_MakeFace(BRepBuilderAPI_MakeWire(eo).Wire(), True)
+        if ru_in > 1e-9:
+            wi = BRepBuilderAPI_MakeWire(
+                ellipse_edge(o, uh, vh, ru_in, rv_in, ang, phase)).Wire()
+            mf.Add(TopoDS.Wire_s(wi.Reversed()))
+        return mf.Face()
+
+    p0, p1 = _edge_ends(eo)
+    w = BRepBuilderAPI_MakeWire(eo)
+    if ru_in > 1e-9:
+        ei = ellipse_edge(o, uh, vh, ru_in, rv_in, ang, phase)
+        q0, q1 = _edge_ends(ei)
+        w.Add(BRepBuilderAPI_MakeEdge(p1, q1).Edge())
+        w.Add(ei)
+        w.Add(BRepBuilderAPI_MakeEdge(q0, p0).Edge())
+    else:
+        ctr = gp_Pnt(*map(float, o))
+        w.Add(BRepBuilderAPI_MakeEdge(p1, ctr).Edge())
+        w.Add(BRepBuilderAPI_MakeEdge(ctr, p0).Edge())
+    return BRepBuilderAPI_MakeFace(w.Wire(), True).Face()
+
+
 def _cone_radii(r, n):
     """(r_base, r_top) for a conN primitive: N+1 tapering to N, scaled by r."""
     return (n + 1.0) * r, n * r
@@ -172,25 +251,32 @@ def occt_faces(prim):
     f = frame(prim)
     if f is None:
         return []
-    o, uh, ah, vh, ru, rv, h, rh = f
+    o, uh, ah, vh, ru, rv, h, rh, ph = f
     ang = sector_rad(prim)
     if not is_round(ru, rv):
-        # Only cyli has a measured elliptical instance (50950). The rest would
-        # be guesswork, and occt_faces returning [] is the honest answer.
-        if k != "cyli":
-            return []
         try:
-            return [elliptic_wall(o, uh, ah, vh, ru, rv, h, ang)]
+            if k == "cyli":
+                return [elliptic_wall(o, uh, ah, vh, ru, rv, h, ang, ph)]
+            if k in ("disc", "ring"):
+                n = float(prim.inner) if k == "ring" else 0.0
+                return [elliptic_annulus(o, uh, vh, n * ru, n * rv,
+                                         (n + 1.0) * ru, (n + 1.0) * rv,
+                                         ang, ph)]
         except Exception:
             return []
+        # An elliptical con is neither a gp_Cone nor an extrusion; nothing yet
+        # pins what it should be, so it stays [] -- see the test by that name.
+        return []
     r = ru
     # The axis sets the EXTRUSION direction, so it must always be +ah --
     # negating it to fix a left-handed sector sweep builds the cone/cylinder
     # backwards off its base plane, which reads as a gap between subparts.
-    # Handle the sweep by starting the x-direction at -ang instead.
+    # Handle the sweep by starting the x-direction where the sector does.
     zdir = ah
-    if not rh:
-        uh = math.cos(-ang) * np.asarray(uh, float) + math.sin(-ang) * np.cross(ah, uh)
+    start = ph if rh else ph + ang
+    if start:
+        uh = (math.cos(start) * np.asarray(uh, float)
+              + math.sin(start) * np.asarray(vh, float))
     try:
         # .Face() is the LATERAL surface; .Shape() would be a capped solid, and
         # LDraw's cyli/con are open tubes and skirts -- the caps are material
@@ -335,12 +421,15 @@ def authored_edges(out: dict, right, up):
         f = frame(prim)
         if f is None:
             continue
-        o, uh, ah, vh, ru, rv, _h, _rh = f
+        o, uh, ah, vh, ru, rv, _h, _rh, ph = f
         ang = sector_rad(prim)
         try:
             if not is_round(ru, rv):
-                hard.append(ellipse_edge(o, uh, vh, ru, rv, ang))
+                hard.append(ellipse_edge(o, uh, vh, ru, rv, ang, ph))
                 continue
+            if ph:
+                uh = (math.cos(ph) * np.asarray(uh, float)
+                      + math.sin(ph) * np.asarray(vh, float))
             circ = gp_Circ(ax2(o, ah, uh), float(ru))
             hard.append(BRepBuilderAPI_MakeEdge(circ).Edge()
                         if ang >= 2 * math.pi - 1e-9
@@ -410,9 +499,12 @@ def analytic_creases(shape: TopoDS_Shape, out: dict) -> TopoDS_Shape:
     cos_tol = math.cos(math.radians(TANGENT_DEG))
     keep = []
     for i in range(1, amap.Extent() + 1):
-        faces = list(amap.FindFromIndex(i))
-        if len(faces) != 2:
+        # First/Last, never list(): exhausting an OCP collection iterator
+        # throws a C++ stop_iteration whose unwind costs 3ms inside OCP.so
+        fl = amap.FindFromIndex(i)
+        if fl.Size() != 2:
             continue          # a crack has no junction; see the docstring
+        faces = (fl.First(), fl.Last())
         if faces[0].IsSame(faces[1]):
             continue          # a closed surface's parametric seam, not a crease
         try:
@@ -435,6 +527,87 @@ def analytic_creases(shape: TopoDS_Shape, out: dict) -> TopoDS_Shape:
     return _compound(keep)
 
 
+PIERCE_TOL = 1e-3      # LDU: a seam either lies in the plane or it does not
+
+
+def _planar_planes(shape):
+    """Every distinct world plane a planar face of `shape` lies in."""
+    seen, out = set(), []
+    for face in _faces_of_type(shape, GeomAbs_SurfaceType.GeomAbs_Plane):
+        try:
+            ax = BRepAdaptor_Surface(face).Plane().Axis()
+        except Exception:
+            continue
+        d, p = ax.Direction(), ax.Location()
+        n = np.array([d.X(), d.Y(), d.Z()], float)
+        off = float(n @ np.array([p.X(), p.Y(), p.Z()], float))
+        if off < 0 or (off == 0 and n[0] < 0):    # one representative per plane
+            n, off = -n, -off
+        key = (round(n[0], 5), round(n[1], 5), round(n[2], 5), round(off, 4))
+        if key not in seen:
+            seen.add(key)
+            out.append((n, off))
+    return out
+
+
+def _pierce_seams(shape):
+    """Seams where one curved surface passes THROUGH another face's plane.
+
+    A stud's bore is authored twice: `stud2a` above the plate and a `4-4cyli`
+    continuing four units below it. Both lie on one cylinder, so
+    UnifySameDomain merges them -- and the merged face then lives on both
+    sides of the plate's top plane, in front of it above and buried behind it
+    below. `order_faces` settles a pair with a single bit, so whichever side
+    its witness lands on wins the whole overlap and the buried half is painted
+    over the plate top (35480's fangs). Keeping the seam leaves two faces,
+    each wholly in front of or wholly behind that plane.
+
+    Both sides of the seam must be curved: a curve meeting a PLANAR face there
+    is an ordinary rim, and the plane it ends at is its own.
+    """
+    planes = _planar_planes(shape)
+    if not planes:
+        return []
+    amap = TopTools_IndexedDataMapOfShapeListOfShape()
+    TopExp.MapShapesAndAncestors_s(shape, TopAbs_ShapeEnum.TopAbs_EDGE,
+                                   TopAbs_ShapeEnum.TopAbs_FACE, amap)
+    keep = []
+    for i in range(1, amap.Extent() + 1):
+        fl = amap.FindFromIndex(i)          # never list(): see analytic_creases
+        if fl.Size() != 2:
+            continue
+        faces = (fl.First(), fl.Last())
+        if faces[0].IsSame(faces[1]):
+            continue                        # a parametric seam, not a junction
+        try:
+            kinds = [BRepAdaptor_Surface(TopoDS.Face_s(f)).GetType()
+                     for f in faces]
+        except Exception:
+            continue
+        if any(k == GeomAbs_SurfaceType.GeomAbs_Plane for k in kinds):
+            continue
+        edge = TopoDS.Edge_s(amap.FindKey(i))
+        try:
+            c = BRepAdaptor_Curve(edge)
+            if c.GetType() == GeomAbs_CurveType.GeomAbs_Line:
+                # A straight seam in a plane is a RULING -- two sector patches
+                # of one wall meeting along a generatrix, which unify should
+                # merge. 72632 has one, and keeping it splits a cylinder down
+                # the middle into two fills with two gradients.
+                continue
+            t0, t1 = c.FirstParameter(), c.LastParameter()
+            pts = np.array([[(v := c.Value(t0 + (t1 - t0) * k / 4.0)).X(),
+                             v.Y(), v.Z()] for k in range(5)], float)
+        except Exception:
+            continue
+        for n, off in planes:
+            if np.abs(pts @ n - off).max() <= PIERCE_TOL:
+                keep.append(edge)
+                break
+    return keep
+
+
+@timing.timed("build_shape")
 def build_shape(out: dict) -> TopoDS_Shape:
     """The sewn faces. They exist to occlude; their boundaries are not drawn
     -- see authored_edges."""
@@ -449,13 +622,37 @@ def build_shape(out: dict) -> TopoDS_Shape:
     sew.Perform()
     shape = sew.SewedShape()
 
-    try:
+    if _unify_survives(shape):
         u = ShapeUpgrade_UnifySameDomain(shape, True, True, True)
+        for edge in _pierce_seams(shape):
+            u.KeepShape(edge)
         u.Build()
         shape = u.Shape()
-    except Exception:
-        pass
     return shape
+
+
+def _unify_survives(shape) -> bool:
+    """Whether UnifySameDomain can merge this shape without dying.
+
+    It segfaults inside its own IntUnifyFaces on badly cracked meshes -- the
+    crashers carry three times the free-edge-per-triangle of the parts that
+    survive -- and no input test separates them: the sewn shape is valid, and
+    parts on both sides of the crash share every statistic. A SIGSEGV is not
+    catchable, so the call is tried in a forked child, which inherits the sewn
+    shape copy-on-write and costs one extra unify and no serialization.
+    """
+    import os
+    pid = os.fork()
+    if pid == 0:
+        try:
+            u = ShapeUpgrade_UnifySameDomain(shape, True, True, True)
+            u.Build()
+            u.Shape()
+            os._exit(0)
+        except BaseException:
+            os._exit(1)
+    _, status = os.waitpid(pid, 0)
+    return os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0
 
 
 def count_faces(shape: TopoDS_Shape) -> int:
@@ -620,10 +817,20 @@ def _by_offset(items, tol=1e-9):
     return [(np.mean([r[2] for r in rows]), rows) for _o, rows in out]
 
 
+@timing.timed("loci")
 def authored_loci(shape, out, right, up):
     """2D loci every drawable edge must lie on: type-2 lines (including the
     chains arcfit claimed), `edge` primitives, analytic creases, and condlines
-    that read as a silhouette."""
+    that read as a silhouette.
+
+    Tried and failed: skipping the primitives `shade.ink_prims` calls print
+    rather than relief. Its first rule is "color is not 16", and a printed
+    part whose BODY is authored in a color -- 9359 is a green brick with a
+    white TAXI print -- has every structural edge it owns caught by that,
+    which took the stud rims off 9359, 80400 and 6141p01. Naive needs the
+    rule because a substituted primitive there draws its own rim; nothing on
+    this side draws one, so there is no hoop to suppress.
+    """
     ax, ay = _screen_axes(right, up)
     loci = []
     for e in out.get("2", ()):
@@ -651,7 +858,7 @@ def authored_loci(shape, out, right, up):
         f = frame(prim)
         if f is None:
             continue
-        o, uh, ah, vh, ru, rv, _h, _rh = f
+        o, uh, ah, vh, ru, rv, _h, _rh, _ph = f
         loc = _ell_locus(o, uh, vh, float(ru), float(rv), "line", ax, ay)
         if loc is not None:
             loci.append(loc)
@@ -694,6 +901,26 @@ def _fragment_points(edge):
     return np.array(out, float)
 
 
+def _locus_bboxes(loci):
+    """(x0, y0, x1, y1) per locus, grown by everything _on_locus tolerates, so
+    a fragment whose own bbox escapes one cannot lie on it. Every locus is a
+    bounded segment or ellipse, so this turns the fragments x loci scan into a
+    handful of real tests."""
+    bb = np.empty((len(loci), 4))
+    for k, l in enumerate(loci):
+        if l[0] == "seg":
+            a, b = np.asarray(l[1], float), np.asarray(l[2], float)
+            pad = MATCH_TOL + 1e-3 * np.abs(b - a)
+            lo, hi = np.minimum(a, b) - pad, np.maximum(a, b) + pad
+        else:
+            c = np.asarray(l[1], float)
+            M = np.linalg.inv(l[2])
+            h = (1.0 + MATCH_TOL) * np.hypot(M[:, 0], M[:, 1])
+            lo, hi = c - h, c + h
+        bb[k] = (lo[0], lo[1], hi[0], hi[1])
+    return bb
+
+
 def select_authored(comp, loci):
     """(edge, kind) for every fragment lying on an authored locus.
 
@@ -707,14 +934,18 @@ def select_authored(comp, loci):
     got = []
     if comp is None:
         return got
+    lb = _locus_bboxes(loci)
     for e in _edges_of(comp):
         try:
             pts = _fragment_points(e)
         except Exception:
             continue
-        for locus in loci:
-            if _on_locus(pts, locus):
-                got.append((e, locus))
+        lo, hi = pts.min(axis=0), pts.max(axis=0)
+        near = np.nonzero((lo[0] >= lb[:, 0]) & (hi[0] <= lb[:, 2])
+                          & (lo[1] >= lb[:, 1]) & (hi[1] <= lb[:, 3]))[0]
+        for k in near:
+            if _on_locus(pts, loci[k]):
+                got.append((e, loci[k]))
                 break
     return got
 
@@ -752,6 +983,20 @@ def locus_arc(edge, locus, kind):
             math.degrees(th[0]), math.degrees(th[-1]), kind)
 
 
+def _loose_faces(shape):
+    """The same faces, in a compound rather than in the sewn shell.
+
+    Connected, HLR reads a face's orientation and lets a back-facing one
+    occlude nothing -- and sewing leaves an LDraw part inward, so its own
+    front faces read as backs. 79306-f1 then drew 3 LDU of its bore's limb
+    across the end annulus that hides it. Loose faces claim nothing about
+    which side is solid, so each occludes on its own; orienting the shell
+    instead only answers for a closed volume, which a cracked part is not.
+    """
+    return _compound(_shape_faces(shape))
+
+
+@timing.timed("hlr")
 def hlr_edges(shape, right, up, cull=True, edges=None, cond=None):
     """Exact hidden-line removal, keyed 'sharp'/'cond'/'outline' -> a
     TopoDS_Compound or None. With cull=False also '..._hidden' compounds.
@@ -766,7 +1011,7 @@ def hlr_edges(shape, right, up, cull=True, edges=None, cond=None):
     z, x = projector_axes(right, up)
     a = ax2((0.0, 0.0, 0.0), z, x)
     algo = HLRBRep_Algo()
-    algo.Add(shape)
+    algo.Add(_loose_faces(shape))
     for extra in (edges, cond):
         if extra is not None:
             algo.Add(extra)
@@ -1169,6 +1414,8 @@ def _face_occluder(face):
         A = math.cos(u0) * maj * X + math.sin(u0) * minr * Y
         C = -math.sin(u0) * maj * X + math.cos(u0) * minr * Y
         R = np.column_stack([A, (v1 - v0) * D, C])
+        if abs(np.linalg.det(R)) < 1e-9:
+            return None                  # zero height or radius: occludes nothing
         return primitives.CylinderOccluder(R, o + v0 * D,
                                            math.degrees(u1 - u0))
     if kind not in (GeomAbs_SurfaceType.GeomAbs_Cylinder,
@@ -1190,6 +1437,8 @@ def _face_occluder(face):
     if kind == GeomAbs_SurfaceType.GeomAbs_Cylinder:
         r = g.Radius()
         R = np.column_stack([r * Xs, h * Z, r * Ys])
+        if abs(np.linalg.det(R)) < 1e-9:
+            return None                  # zero height or radius: occludes nothing
         return primitives.CylinderOccluder(R, o + v0 * Z, sector)
 
     semi = g.SemiAngle()
@@ -1361,7 +1610,7 @@ def _group_planes(shape, out, plane_by_idx):
 
     A hand-faceted curve sews as hundreds of planes. Toned one by one they
     read flat and emit one fill element each: 3960's dome came out as 194
-    same-colour fills against naive's 1. The union is DECLARED-only (type-5
+    same-color fills against naive's 1. The union is DECLARED-only (type-5
     lines, plus exactly coplanar neighbours, which is naive's rule) -- a
     dihedral test over tessellation is the explosion this engine exists to
     avoid.
@@ -1374,8 +1623,11 @@ def _group_planes(shape, out, plane_by_idx):
                                    TopAbs_ShapeEnum.TopAbs_FACE, amap)
     pairs, A, B = [], [], []
     for i in range(1, amap.Extent() + 1):
-        fs = list(amap.FindFromIndex(i))
-        if len(fs) != 2 or fs[0].IsSame(fs[1]):
+        fl = amap.FindFromIndex(i)          # not list(): see analytic_creases
+        if fl.Size() != 2:
+            continue
+        fs = (fl.First(), fl.Last())
+        if fs[0].IsSame(fs[1]):
             continue
         fa = plane_by_idx.get(fmap.FindIndex(fs[0]))
         fb = plane_by_idx.get(fmap.FindIndex(fs[1]))
@@ -1412,12 +1664,15 @@ def _group_planes(shape, out, plane_by_idx):
         f["group"] = find(id(f))
 
 
-def ordered_faces(shape, proj, out=None):
+@timing.timed("faces")
+def ordered_faces(shape, proj, out=None, ellipses_out=None):
     """Every fill face of `shape`, in paint order, each curved one depth-probed
     against its own exact surface.
 
     `out` (the flattened part) supplies the type-5 conditional lines the
     planar-face grouping is keyed on; without it every plane tones alone.
+    `ellipses_out` collects the arc candidates a flat decal's circular
+    boundary recovers -- see `_with_decoration`.
     """
     from . import shade
     fmap = TopTools_IndexedMapOfShape()
@@ -1435,11 +1690,63 @@ def ordered_faces(shape, proj, out=None):
         return []
     if out is not None and plane_by_idx:
         _group_planes(shape, out, plane_by_idx)
-    shade.attach_group_gradients(faces)
+        shade.attach_group_gradients(faces)
     _merge_turn_gradients(faces)
+    faces = _with_decoration(faces, out, proj, own_occ, ellipses_out)
     zs = np.concatenate([f["zs"] for f in faces])
     zrange = float(zs.max() - zs.min()) or 1.0
     return shade.order_faces(faces, proj, 1e-3 * zrange, own_occ=own_occ)
+
+
+@timing.timed("decoration")
+def _with_decoration(faces, out, proj, own_occ=None, ellipses_out=None):
+    """Print, back onto the body OCCT drew.
+
+    A sewn solid carries no color: every face this module builds is stamped
+    16, so a printed part came out blank while the same part through the
+    faceted path came out printed. The decoration is not in the solid at all
+    -- it is in the source, which is where naive reads it from too, so the fix
+    is to bring those faces along and let `unwrap_decoration` bind them.
+
+    It arrives in two forms and both have to be read. Triangles carry their
+    own color. A SUBSTITUTED PRIMITIVE does not survive the sew at all: an
+    author partitions a wall into colored and color-16 sectors of the same
+    surface (3942bp01's 16 color-4 cone stripes), and UnifySameDomain merges
+    those sectors straight back into the wall they partition -- correctly, as
+    geometry. So the primitive list is the only place that color still exists,
+    and its faces are built here rather than read off the shape. 4,553 of the
+    library's 13,083 printed parts author some decoration this way and 202
+    author all of it that way.
+
+    Only for a part the library describes as printed. Color alone says nothing
+    -- an assembly's sub-parts each carry their own -- and running the carrier
+    search over one cost 6.8s of 604ac01's 8.8s geometry phase, to draw
+    decoration it does not have.
+    """
+    if out is None or not out.get("printed"):
+        return faces
+    from . import shade
+    deco = []
+    if out.get("tri") and out.get("tri_colors"):
+        deco += [f for f in shade.faces_from_tris(
+                     np.array(out["tri"]), proj, cond_edges=out.get("5"),
+                     colors=out.get("tri_colors"))
+                 if f.get("color", 16) != 16]
+    prims = [p for p in out.get("analytic", ())
+             if getattr(p, "color", 16) != 16]
+    for f in shade.faces_from_analytic(prims, proj):
+        deco.append(f)
+        occ = f["prim"].occluder() if f.get("prim") is not None else None
+        if occ is not None and own_occ is not None:
+            own_occ[id(f)] = occ
+    if not deco:
+        return faces
+    # carriers: the analytic list, not [] -- a decal on a cylinder or cone
+    # binds to nothing among OCCT's planes, and the unwrap is what dissolves
+    # the author's faceting. ellipses_out recovers a flat decal's circular
+    # boundary runs as arcs instead of the chords the author wrote.
+    return shade.unwrap_decoration(faces + deco, out.get("analytic", ()), proj,
+                                   ellipses_out=ellipses_out)
 
 
 def _negate_y(ops):
@@ -1477,12 +1784,13 @@ def edges_to_ops(compounds):
     return _negate_y(ops)
 
 
+@timing.timed("face_polys")
 def face_polys(shape, right, up, deflection):
     """Every face of `shape` as a projected polygon in op space (Y already
     negated, like the segment ops).
 
     Built for the silhouette contour, which needs only their union -- but the
-    per-face split is what the fills slice will attribute colour and depth to,
+    per-face split is what the fills slice will attribute color and depth to,
     so it stays per-face rather than pre-unioned.
     """
     ax, ay = _screen_axes(right, up)
@@ -1518,6 +1826,38 @@ def _union_bbox(bbox, polys):
             max(bbox[2], P[:, 0].max()), max(bbox[3], P[:, 1].max()))
 
 
+def _undeclared_ops(comps):
+    """What to draw for a part that declared no edge of its own.
+
+    1,407 of the library's stickers and a handful of ordinary parts carry
+    faces and not one type-2 or type-5 line -- `box5-12.dat`, which 185 of
+    them are built on, says so in its own first line: "Box with 5 Faces
+    without Any Edges". The engine reported that honestly and drew nothing,
+    which is a blank icon rather than an answer.
+
+    HLR's sharp set is the only material such a part has, and it is safe
+    HERE and nowhere else. It is normally off limits -- reading a crease off
+    tessellation draws every facet boundary, which is the failure this engine
+    exists to avoid -- but `build_shape` has already run UnifySameDomain, so
+    a flat wall's interior facet seams are gone and what survives is the
+    part's real creases and its boundary.
+
+    The guard is that nothing was drawn -- not that nothing was declared. A
+    declaration only counts where OCCT has an edge to hang it on, and two
+    kinds routinely have none. A condline is conditional by construction, so
+    on a flat plate seen from outside none qualify (36 formed stickers, type-5
+    only, 26 to 204 sharp edges from HLR and not one locus matched). And an
+    artwork line inside a face is not an edge of anything: 6342851a draws two
+    along its print, UnifySameDomain merges the print into the plate's top
+    face, and both loci sit in that face's interior.
+
+    A part with no geometry to read a sharp set from still raises.
+    """
+    return [op for edge in _edges_of(comps.get("sharp"))
+            for op in _edge_ops(edge, "sil")] if comps.get("sharp") else []
+
+
+@timing.timed("engine")
 def visible_segments(out, right, up, render_px, cull=True, fwd=None):
     from .hlr import VisResult, _ops_bbox
     if fwd is None:
@@ -1540,6 +1880,8 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None):
             continue
         for edge in _edges_of(comp):
             ops += _edge_ops(edge, "sil")
+    if not ops:
+        ops = _undeclared_ops(comps)
     ops = _negate_y(ops)
     if not ops:
         raise RuntimeError("OCCT engine produced no edges")
@@ -1568,11 +1910,20 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None):
             seen.add(k)
             ells.append(tuple(op[1:7]))
     proj = op_projection(right, up, fwd)
-    faces = ordered_faces(shape, proj, out)
+    decal_ells = []
+    faces = ordered_faces(shape, proj, out, ellipses_out=decal_ells)
     for cand in _boundary_conics(shape, proj):
         k = tuple(round(v, 4) for v in cand)
         if k not in seen:
             seen.add(k)
             ells.append(cand)
-    return VisResult(ops, bbox, s, faces=faces, analytic=(),
-                     ellipses=tuple(ells), proj=proj, sil_polys=polys)
+    # a flat decal's recovered circles carry their own (coarse) max step, so
+    # they are keyed and appended whole rather than through the 6-tuple path
+    for cand in decal_ells:
+        k = tuple(round(v, 4) for v in cand[:6])
+        if k not in seen:
+            seen.add(k)
+            ells.append(cand)
+    return VisResult(ops, bbox, s, faces=faces, analytic=out.get("analytic", ()),
+                     ellipses=tuple(ells), proj=proj, sil_polys=polys,
+                     tri=out.get("tri", ()), tri_colors=out.get("tri_colors", ()))

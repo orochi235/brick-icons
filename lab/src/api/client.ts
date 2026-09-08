@@ -1,4 +1,7 @@
-import type { Artifact, JobState, LabConfig, PartHit, RenderResult, SchemaField } from '@lab/api/types';
+import type { Artifact, JobState, LabConfig, LdrawColor, PartHit, RenderResult,
+  SchemaField } from '@lab/api/types';
+import type { Footprint, Stats } from '@lab/stats/types';
+import type { CellsBody, PartDetail, SheetManifest } from '@lab/corpus/types';
 
 export interface ClientOptions {
   base?: string;
@@ -30,6 +33,13 @@ export function createClient({ base = '', fetchImpl = fetch }: ClientOptions = {
   return {
     async schema(): Promise<SchemaField[]> {
       return (await json<{ fields: SchemaField[] }>(fetchImpl, at('/api/schema'))).fields;
+    },
+
+    /** The LDraw palette, by code. Cached by the server, small enough to take
+     *  whole -- `--part-color` accepts a name, a code or hex, so the field
+     *  needs every row to match against. */
+    async colors(): Promise<LdrawColor[]> {
+      return (await json<{ colors: LdrawColor[] }>(fetchImpl, at('/api/colors'))).colors;
     },
 
     async searchParts(q: string, limit = 25): Promise<PartHit[]> {
@@ -122,6 +132,33 @@ export function createClient({ base = '', fetchImpl = fetch }: ClientOptions = {
     async goldens(part: string) {
       return json<{ part: string; cases: Record<string, string>; known: boolean }>(
         fetchImpl, at(`/api/goldens?part=${encodeURIComponent(part)}`));
+    },
+
+    async cells(source: string, since?: string): Promise<CellsBody> {
+      const q = new URLSearchParams({ source });
+      if (since) q.set('since', since);
+      return json(fetchImpl, at(`/api/corpus/cells?${q}`));
+    },
+
+    async corpusSources(): Promise<{ sources: { source: string; n: number }[] }> {
+      return json(fetchImpl, at('/api/corpus/sources'));
+    },
+
+    async corpusStats(query: URLSearchParams): Promise<Stats> {
+      const q = query.toString();
+      return json(fetchImpl, at(`/api/corpus/stats${q ? `?${q}` : ''}`));
+    },
+
+    async corpusSizes(refresh = false): Promise<Footprint> {
+      return json(fetchImpl, at(`/api/corpus/sizes${refresh ? '?refresh=1' : ''}`));
+    },
+
+    async corpusPart(id: string): Promise<PartDetail> {
+      return json(fetchImpl, at(`/api/corpus/part/${encodeURIComponent(id)}`));
+    },
+
+    async sheetManifest(source: string, level: number): Promise<SheetManifest> {
+      return json(fetchImpl, at(`/api/thumbs/${source}/sheet-${level}.json`));
     },
   };
 }

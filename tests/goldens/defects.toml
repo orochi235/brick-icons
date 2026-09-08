@@ -1,8 +1,10 @@
 # Defects found in corpus renders, filed from the lab.
 #
 # Written by brick_icons.lab; hand edits are kept but reformatted on the next
-# write. `mark` is in fractions of the render box, so it survives a change of
-# --render-px but not of --angle -- which is what `seen` records.
+# write. `mark` is in fractions of the pane box it was drawn on. `kind` and
+# `points` are absent on a plain rectangle, which is every defect filed before
+# 2026-09. `seen` is retained for records that carry it; the lab now asks
+# labkit whether a mark is stale.
 
 
 [[defect]]
@@ -11,7 +13,7 @@ part = "6589"
 engines = ["naive"]
 status = "open"
 title = "spurious ring at r=12.80 (separator refit)"
-mark = { x = 0.3322, y = 0.3581, w = 0.02, h = 0.0861 }
+mark = { x = 0.3322, y = 0.4281, w = 0.02, h = 0.0436 }
 seen = { angle = "iso", shading = "outline", shade_style = "flat3" }
 filed = "2026-09-03"
 notes = "naive draws a ring at r=12.80 LDU; 6589.dat authors circles only at r=9, 10, 12 and 16. The counterbore separator refit in hlr._snap_rim_crossings refits the authored r=16 ring onto this circumcircle (0.800x radius, sweep 121.72 -> 220.79 deg). SEP_REFIT_MAX_GROWTH caps angular growth at 10x, so 1.81x passes; nothing guards the radius. occt draws the authored set and is right."
@@ -22,7 +24,7 @@ part = "6589"
 engines = ["naive"]
 status = "open"
 title = "spurious ring at r=11.33 (separator refit)"
-mark = { x = 0.4168, y = 0.7041, w = 0.059, h = 0.0518 }
+mark = { x = 0.4168, y = 0.6034, w = 0.059, h = 0.0262 }
 seen = { angle = "iso", shading = "outline", shade_style = "flat3" }
 filed = "2026-09-03"
 notes = "naive draws a ring at r=11.33 LDU, unauthored the same way as 6589-naive-halo-r12.8. Refit of the authored r=12 ring: 0.944x radius, sweep 180.00 -> 344.69 deg (1.92x, under the same cap)."
@@ -33,7 +35,131 @@ part = "6589"
 engines = ["occt"]
 status = "open"
 title = "this is weird"
-mark = { x = 0.3369, y = 0.455, w = 0.0463, h = 0.0424 }
+mark = { x = 0.3369, y = 0.4772, w = 0.0463, h = 0.0215 }
 seen = { angle = "iso", shading = "outline", shade_style = "flat3" }
 filed = "2026-09-03"
-notes = "Unexamined; y re-anchored from the pane-box fractions the lab stored."
+notes = "Unexamined."
+
+[[defect]]
+id = "4524-ring-whole-circle"
+part = "4524"
+engines = ["naive"]
+status = "open"
+title = "a circle whose visible part is several arcs is drawn whole"
+filed = "2026-09-04"
+notes = "The neck ring keeps a complete ellipse where the near rim should cut it. In the SVG the ring comes out as 4-chunk closed arc runs (paths 11 and 13 of 21) alongside genuine 1- and 2-chunk partial arcs elsewhere in the same drawing, so partial arcs work and these specifically did not. Suspected rule: when occlusion breaks one circle into more than one visible span, the whole circle survives instead of the spans. 27448 shows the same thing."
+
+[[defect]]
+id = "27448-ring-whole-circle"
+part = "27448"
+engines = ["naive"]
+status = "open"
+title = "same split-arc ellipse as 4524"
+filed = "2026-09-04"
+notes = "Second instance of 4524-ring-whole-circle; two parts make it a class rather than a one-part quirk."
+
+[[defect]]
+id = "6107-pockets-through-wall"
+part = "6107"
+engines = ["naive"]
+status = "open"
+title = "underside pockets punch through the solid front wall"
+filed = "2026-09-04"
+notes = "Four rectangular notches are cut into the silhouette along the bottom front edge. They are interior underside geometry escaping through a face that should occlude them -- a hidden-line miss, not a fill problem."
+
+[[defect]]
+id = "3832-doubled-stud-ellipses"
+part = "3832"
+engines = ["naive"]
+status = "open"
+title = "constant-width strokes drown small features"
+filed = "2026-09-04"
+notes = "Not a stud bug and not a count bug -- a scale bug. Stroke width is a constant 2.0 output px while fit-to-canvas shrinks the geometry, so the longer the part the less of each feature survives its own outline. Stud rim radius against that stroke, all at the same 256x170 viewBox: 3024 22.5x (clean), 3710 10.3x (clean), 3460 5.8x (clean), 3832 4.3x (bad), 65068 1.9x (bad). Monotone, and the break sits between 5.8 and 4.3. At 65068 a 2px stroke on both sides of a 3.7-unit radius leaves almost no wall, which is why the studs read as solid black bands with scalloped inner edges. Studs are simply the smallest recurring feature, so they drown first -- the ragged black edges reported on other parts are likely the same cause. 3024's single large stud is drawn correctly, base rim as a front arc only, which rules out the 4524 whole-circle defect as the cause here."
+
+[[defect]]
+id = "7037-gradient-banding"
+part = "7037"
+engines = ["naive"]
+status = "open"
+title = "gradients spend half their stops repeating the previous color"
+filed = "2026-09-04"
+notes = "Measured on the stored SVG: 102 stops across 4 gradients, 50 of them the same color as the stop before. g1 is the worst -- 59 stops for 14 distinct greys, 43 exact repeats. Consecutive equal stops are flat plateaus, so this is the banding rather than a symptom beside it. Merging equal-color runs is the obvious fix and costs no fidelity."
+
+[[defect]]
+id = "15469-tweaks"
+part = "15469"
+engines = ["naive"]
+status = "open"
+title = "needs tweaks"
+filed = "2026-09-04"
+notes = "Filed to keep it on the list; Mike called it expected, so it ranks below the others here."
+
+[[defect]]
+id = "30152a-ring-whole-circle"
+part = "30152a"
+engines = ["naive"]
+status = "open"
+title = "same split-arc ellipse as 4524"
+filed = "2026-09-04"
+notes = "Third instance after 4524 and 27448. Also carries a couple of stray dots against the annulus, which may or may not be the same cause."
+
+[[defect]]
+id = "28192dy0-decal-torn"
+part = "28192dy0"
+engines = ["naive"]
+status = "open"
+title = "much of the decal is torn off"
+filed = "2026-09-04"
+notes = "A printed part, so it sits behind the decal work rather than the engine work; filed so the decal pass has a case waiting."
+
+[[defect]]
+id = "30152a-annulus-dots"
+part = "30152a"
+engines = ["naive"]
+status = "open"
+title = "stray dots against the annulus"
+filed = "2026-09-04"
+notes = "Filed separately from the split-arc defect on the same part: a shared part is not evidence of a shared cause, and merging them would hide it if one fix lands and the other does not."
+
+[[defect]]
+id = "curved-surface-gradient-banding"
+part = "44300"
+engines = ["naive"]
+status = "open"
+title = "gradients over curved surfaces band, and one oscillates between two greys"
+filed = "2026-09-04"
+notes = "Class defect; 44300 near the hole is the clearest case and 7037 is the other measured one. 44300's g6 spends 67 stops on exactly two colors, #9c9c9c and #c0c0c0, alternating -- a stripe pattern, not a ramp. Across the parts measured so far: 52 gradients, 587 stops, 192 of them repeating the previous color (33%), and every single gradient is LINEAR -- zero radial. The binned-stop path is radial-only, so it never runs on any of these. That is the lead: either bin the linear path too, or emit these as radial where the surface is one."
+
+[[defect]]
+id = "65068-studs-drowned"
+part = "65068"
+engines = ["naive"]
+status = "open"
+title = "studs drowned by their own strokes"
+filed = "2026-09-04"
+notes = "Worst measured case of constant-width strokes drowning small features; see 3832-doubled-stud-ellipses for the measurement."
+
+[[defect]]
+id = "u7040-stray-stroke-tips"
+part = "u7040"
+engines = ["naive"]
+status = "open"
+title = "stray stroke tips across the darkest face"
+filed = "2026-09-04"
+notes = "May be the same constant-width stroke class; not measured yet."
+
+[[defect]]
+id = "35480-extra-elements-in-shaded-view"
+part = "35480"
+engines = ["occt"]
+status = "open"
+title = "extra elements in shaded view"
+filed = "2026-09-06"
+
+[[defect]]
+id = "24434-extra-diagonal-under-closer-arch"
+part = "24434"
+engines = ["naive"]
+status = "open"
+title = "extra diagonal under closer arch"
+filed = "2026-09-06"

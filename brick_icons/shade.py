@@ -7,6 +7,7 @@ from collections import Counter, defaultdict
 import numpy as np
 from PIL import Image, ImageDraw
 
+from . import timing
 from . import colors, geom2d, primitives, unwrap
 
 
@@ -104,20 +105,33 @@ def _overlap_witness(pa, pb, ha=(), hb=(), grid=48):
         return None
     sx = (grid - 1) / (x1 - x0); sy = (grid - 1) / (y1 - y0)
 
+    def ring(r):
+        # A ring of under three points bounds no area, and PIL raises on one
+        # of under two rather than drawing nothing (28 census parts).
+        return [((q[0] - x0) * sx, (q[1] - y0) * sy) for q in r] \
+            if len(r) >= 3 else None
+
     def mask(p, holes):
         im = Image.new("1", (grid, grid), 0)
         draw = ImageDraw.Draw(im)
-        draw.polygon([((q[0] - x0) * sx, (q[1] - y0) * sy) for q in p], fill=1)
+        outer = ring(p)
+        if outer is None:
+            return np.zeros((grid, grid), bool)
+        draw.polygon(outer, fill=1)
         for h in holes:
-            draw.polygon([((q[0] - x0) * sx, (q[1] - y0) * sy) for q in h], fill=0)
+            if (r := ring(h)) is not None:
+                draw.polygon(r, fill=0)
         return np.array(im, bool)
 
     m = mask(pa, ha) & mask(pb, hb)
     if not m.any():
         return None
     while True:                                  # erode to the interior
-        er = m & np.pad(m, 1)[:-2, 1:-1] & np.pad(m, 1)[2:, 1:-1] \
-               & np.pad(m, 1)[1:-1, :-2] & np.pad(m, 1)[1:-1, 2:]
+        # Sliced rather than padded: the four np.pad copies per pass were the
+        # single most-run allocation in the whole render.
+        er = np.zeros_like(m)
+        er[1:-1, 1:-1] = (m[1:-1, 1:-1] & m[:-2, 1:-1] & m[2:, 1:-1]
+                          & m[1:-1, :-2] & m[1:-1, 2:])
         if not er.any():
             break
         m = er
@@ -183,6 +197,33 @@ def _stall_release(remaining, succ, faces):
     return max(cand or rem, key=lambda i: faces[i]["depth"])
 
 
+def _bbox_pairs(polys, gap=0.5, chunk=256):
+    """(i, j), i < j, for every pair of polygons whose screen bboxes overlap by
+    at least `gap` on both axes -- the test _overlap_witness opens with, which
+    all but a percent or two of the pairs fail. Ordered exactly as the i<j
+    double loop it replaces, so the graph it feeds is built in the same order.
+
+    Chunked because the mask is n^2 booleans and a 2000-face part is common.
+    """
+    n = len(polys)
+    if n < 2:
+        return np.zeros((0, 2), int)
+    bb = np.array([(p[:, 0].min(), p[:, 1].min(), p[:, 0].max(), p[:, 1].max())
+                   for p in polys], float)
+    idx = np.arange(n)
+    out = []
+    for s in range(0, n, chunk):
+        e = min(s + chunk, n)
+        lo, hi = bb[s:e, :2, None], bb[s:e, 2:, None]
+        m = ((np.minimum(hi[:, 0], bb[None, :, 2]) - np.maximum(lo[:, 0], bb[None, :, 0]) >= gap)
+             & (np.minimum(hi[:, 1], bb[None, :, 3]) - np.maximum(lo[:, 1], bb[None, :, 1]) >= gap)
+             & (idx[None, :] > idx[s:e, None]))
+        ii, jj = np.nonzero(m)
+        if len(ii):
+            out.append(np.stack([ii + s, jj], axis=1))
+    return np.concatenate(out) if out else np.zeros((0, 2), int)
+
+
 def order_faces(faces, proj=None, eps=1e-6, own_occ=None):
     """Witness-depth (Newell-style) paint ordering, replacing the mean-depth
     painter sort AND the occlusion cull: for every screen-overlapping pair,
@@ -225,20 +266,35 @@ def order_faces(faces, proj=None, eps=1e-6, own_occ=None):
 
     succ = defaultdict(set)
     indeg = [0] * n
-    for i in range(n):
-        for j in range(i + 1, n):
-            w = _overlap_witness(faces[i]["poly"], faces[j]["poly"],
-                                 ha=faces[i].get("holes") or (),
-                                 hb=faces[j].get("holes") or ())
-            if w is None:
+    polys = [np.asarray(f["poly"], float) for f in faces]
+    for i, j in _bbox_pairs(polys):
+        w = _overlap_witness(polys[i], polys[j],
+                             ha=faces[i].get("holes") or (),
+                             hb=faces[j].get("holes") or ())
+        if w is None:
+            continue
+        di, dj = depth_at(i, *w), depth_at(j, *w)
+        if abs(di - dj) <= eps:
+            # Coplanar, so depth cannot separate them. Where the two carry
+            # different colors one is decoration on the other, and LDraw draws
+            # decoration after the surface it sits on -- the emission index is
+            # that instruction, and index edges alone cannot cycle. Without it
+            # the ready-heap's mean-depth tiebreak decides, and that splits a
+            # tilted face down the middle: artwork in the far half sorts behind
+            # its own background and vanishes.
+            #
+            # Same color means both are body, and the index is then OCCT's face
+            # enumeration order, which says nothing -- 3005's stud wall and the
+            # top face it stands on are coplanar where they meet, and ordering
+            # those by index paints the stud under the brick.
+            if faces[i].get("color", 16) == faces[j].get("color", 16):
                 continue
-            di, dj = depth_at(i, *w), depth_at(j, *w)
-            if abs(di - dj) <= eps:
-                continue                         # coplanar at witness: no edge
+            a, b = (i, j) if i < j else (j, i)
+        else:
             a, b = (i, j) if di > dj else (j, i)  # farther paints first
-            if b not in succ[a]:
-                succ[a].add(b)
-                indeg[b] += 1
+        if b not in succ[a]:
+            succ[a].add(b)
+            indeg[b] += 1
 
     ready = [(-faces[i]["depth"], i) for i in range(n) if indeg[i] == 0]
     heapq.heapify(ready)
@@ -352,6 +408,39 @@ def _radial_focal_stops(samples, style, nbins=8, exact=False):
     if stops:
         stops = [(0.0, stops[0][1])] + stops + [(1.0, stops[-1][1])]
     return stops, (float(f[0]), float(f[1]))
+
+
+def _axis_binned_stops(samples, style, nbins=8):
+    """Binned stops for a strip's linear gradient, the way the radial path
+    bins a dome's.
+
+    A stop per facet is a stop per sample of a surface the axis only
+    approximates, so two facets at the same offset and different azimuths
+    emit two tones and the run alternates between them — 44300's chamfer
+    band spends 67 stops on #9c9c9c and #c0c0c0, and the pair renders as
+    hairline stripes across the fillet. Averaging BRIGHTNESS within a band
+    and ramping once is what makes the band one tone; ramping each sample
+    and averaging nothing is what makes it two.
+    """
+    ramp_b = getattr(style, "ramp_b", None)
+    L = getattr(style, "light", None)
+    bins = defaultdict(list)
+    for off, nv in samples:
+        bins[min(int(off * nbins), nbins - 1)].append(np.asarray(nv, float))
+    stops = []
+    for bi in sorted(bins):
+        ns = bins[bi]
+        if ramp_b is not None and L is not None:
+            Lv = np.asarray(L, float)
+            b = np.mean([max(0.0, float(n @ Lv)) for n in ns])
+            color = ramp_b(float(b))
+        else:
+            n = np.mean(ns, axis=0)
+            color = style.ramp(n / (np.linalg.norm(n) or 1.0))
+        stops.append(((bi + 0.5) / nbins, color))
+    if stops:
+        stops = [(0.0, stops[0][1])] + stops + [(1.0, stops[-1][1])]
+    return stops
 
 
 def _face_depth_probe(face, proj, fit):
@@ -948,7 +1037,7 @@ def _donate_escaped_spurs(merged, order, strokes, sil, line_px, sil_px):
         # window a big geometry down to the work area; snap the cut back
         # onto the precision grid (off-grid booleans: see geom2d.opened)
         x0, y0, x1, y1 = bounds
-        c = _sh.clip_by_rect(g, x0 - pad, y0 - pad, x1 + pad, y1 + pad)
+        c = geom2d.window(g, x0 - pad, y0 - pad, x1 + pad, y1 + pad)
         return _sh.set_precision(c, geom2d.GRID)
 
     # a donation can surface the NEXT seam: the pocket handed from the wall
@@ -1076,7 +1165,7 @@ def _ink_lens_pockets(base, vis, strokes, sil, line_px, sil_px):
         if not geom2d.opened(p, 0.5 * line_px).is_empty:
             continue
         x0, y0, x1, y1 = p.bounds
-        inkp = _sh.clip_by_rect(ink, x0 - 1, y0 - 1, x1 + 1, y1 + 1)
+        inkp = geom2d.window(ink, x0 - 1, y0 - 1, x1 + 1, y1 + 1)
         exposed = p.boundary.difference(inkp.buffer(0.1))
         if exposed.length > 0.1 * p.boundary.length:
             continue
@@ -1234,16 +1323,20 @@ def _weld_junction_notches(strokes, base, line_px, sil_px, broad=False):
 
 
 def face_fill(face, style, ldraw_dir):
-    """A face's fill: shaded part tone for body geometry (colour 16), the
-    flat LDraw colour for decoration. Decoration is print, not relief — tone
+    """A face's fill: shaded part tone for body geometry (color 16), the
+    flat LDraw color for decoration. Decoration is print, not relief — tone
     it and it reads as engraving, which is the bug this fixes."""
     code = face.get("color", 16)
     if code == 16:
-        return style.tone(face["normal"])
+        # A curved face carries no view normal -- it only ever reached the
+        # gradient branch, which a flat style skips.
+        nv = face.get("normal")
+        return style.tone(nv) if nv is not None else style.ramp_b(1.0)
     hex_str, _ = colors.resolve(str(code), ldraw_dir)
     return "#" + hex_str[2:]
 
 
+@timing.timed("fill")
 def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
              refits=None, loops=None, strokes=None, line_px=2.0,
              sil_px=2.0, drop=None, weld_corners=False, ldraw_dir="vendor/ldraw"):
@@ -1458,10 +1551,11 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
         if not d:
             continue
         # decoration is ink on a surface, not relief, so it takes no shading
-        # ramp — and the gradient branches never consulted the LDraw colour,
+        # ramp — and the gradient branches never consulted the LDraw color,
         # which is why a printed cylinder or cone painted in body tone
         deco = f.get("color", 16) != 16
-        if "grad_radial" in f and not deco:
+        flat = getattr(style, "flat", False)
+        if "grad_radial" in f and not deco and not flat:
             g = f["grad_radial"]
             stops, (fx, fy) = _radial_focal_stops(
                 f["grad_samples"], style, exact=f.get("grad_exact", False))
@@ -1469,10 +1563,9 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
                         "gradient": {"type": "radial", "cx": g["cx"], "cy": g["cy"],
                                      "r": g["r"], "ratio": g["ratio"],
                                      "fx": fx, "fy": fy, "stops": stops}})
-        elif "grad_axis" in f and not deco:
+        elif "grad_axis" in f and not deco and not flat:
             p0, p1 = f["grad_axis"]
-            stops = sorted(((off, style.ramp(nv)) for off, nv in f["grad_samples"]),
-                           key=lambda s: s[0])
+            stops = _axis_binned_stops(f["grad_samples"], style)
             ops.append({"d": d, "depth": f["depth"],
                         "gradient": {"x1": p0[0], "y1": p0[1], "x2": p1[0], "y2": p1[1],
                                      "stops": stops}})
@@ -1545,7 +1638,7 @@ def silhouette_spur_trim(faces, ellipses, sil_px, strokes=None):
         ex, ey = abs(e[2]) + abs(e[4]), abs(e[3]) + abs(e[5])
         x0, y0 = c[0] - ex - 3 * sil_px, c[1] - ey - 3 * sil_px
         x1, y1 = c[0] + ex + 3 * sil_px, c[1] + ey + 3 * sil_px
-        w = _sh.clip_by_rect(sil, x0, y0, x1, y1)
+        w = geom2d.window(sil, x0, y0, x1, y1)
         if w.is_empty:
             continue
         disk = _Poly(np.stack([c[0] + np.cos(ts) * e[2] + np.sin(ts) * e[4],
@@ -1591,8 +1684,8 @@ def silhouette_spur_trim(faces, ellipses, sil_px, strokes=None):
                 # ending mid-sliver) leaves them poking past a bare outline.
                 base_line = disk.boundary.intersection(pb)
                 gx0, gy0, gx1, gy1 = pb.bounds
-                near = _sh.clip_by_rect(dmls, gx0 - 2, gy0 - 2,
-                                        gx1 + 2, gy1 + 2)
+                near = geom2d.window(dmls, gx0 - 2, gy0 - 2,
+                                     gx1 + 2, gy1 + 2)
                 bare = base_line.difference(near.buffer(0.6))
                 if bare.length > max(0.3, 0.1 * base_line.length):
                     continue                 # bare base: stubs become barbs
@@ -1622,7 +1715,33 @@ def apply_affine_faces(faces, f, ox, oy):
     return out
 
 
-STYLES = {"flat3": Flat3Style}
+class WhiteStyle(ShadingStyle):
+    """Every body surface one opaque white. Fills exist only to occlude what
+    is behind them, so the strokes carry the whole drawing.
+
+    `flat` is read by fill_ops: without it a curved face still takes the
+    gradient branch and emits a <radialGradient> whose stops are all the same
+    white, which is a def per curve across the corpus for no visible effect."""
+    flat = True
+    light = None
+
+    def __init__(self, part_color=None, light=None):
+        # part_color and light are accepted because make_style passes both to
+        # every style, and ignored because "white" names the output.
+        self.part_color = (255, 255, 255)
+        self._white = _hex(self.part_color)
+
+    def tone(self, nv):
+        return self._white
+
+    def ramp(self, nv):
+        return self._white
+
+    def ramp_b(self, b):
+        return self._white
+
+
+STYLES = {"flat3": Flat3Style, "white": WhiteStyle}
 
 
 def light_vector(spec):
@@ -1799,7 +1918,7 @@ def ink_prims(analytic, tris, tri_colors):
         return ink
     # A decal is a stack of nested regions: 3941p01's buttons are LDraw 16
     # discs lying flush INSIDE the black panel, so they are print too and
-    # colour cannot tell them from the part's own geometry. They are the
+    # color cannot tell them from the part's own geometry. They are the
     # panel's holes, so test against each region with its holes filled.
     filled = [(carrier, theta0, _filled(g)) for _c, carrier, theta0, g in regions]
     for prim in analytic:
@@ -2142,7 +2261,7 @@ def _attach_smooth_gradients(faces, cond_edges, min_spread=0.002):
     for ek, ks in by_edge.items():
         for k in ks[1:]:
             # a decal is coplanar with its carrier and shares its edges;
-            # unioning across the colour boundary is what erased flat prints
+            # unioning across the color boundary is what erased flat prints
             if faces[ks[0]].get("color", 16) != faces[k].get("color", 16):
                 continue
             # union across a seam always; across an ordinary shared edge only

@@ -66,6 +66,9 @@ weights, and opacities — including a printed part, whose decoration keeps its
 own LDraw colors, and a strokeless fills-only render (zero stroke widths). Hover any icon for its exact command, or regenerate them
 all with `scripts/render-gallery.sh`.*
 
+Changing the code rather than using it? See [DEVELOPING.md](DEVELOPING.md) for
+the pipeline, the layout, the lab, the census and the test gates.
+
 ## Setup (macOS)
 
     python3 -m venv .venv && .venv/bin/pip install -e .
@@ -187,7 +190,7 @@ is invisible on the white one.
 One thing is dropped deliberately. LDraw authors a minifig neck as a
 270-degree body cylinder plus a 90-degree one in black — `973.dat` calls it the
 "neck mark" — which an assembled minifig's head covers. It is authored exactly
-as real print is, so it is caught by position and size together: a coloured
+as real print is, so it is caught by position and size together: a colored
 primitive standing proud of the part's body and covering no more than a
 quarter of its surface's ring. Across all 11,220 printed parts that is 1,388
 torso necks and nothing else; `scripts/sweep-marker-prims.py` re-derives it
@@ -409,6 +412,12 @@ triangles and loses the arcs `arcfit` recovers on the naive path (`32062`, all
 19), and several parts carry known artifacts. `scripts/compare-engines.py`
 re-derives the current per-part deltas across the `outline` corpus; the
 `occt-port` branch's handoff lists what is still open.
+
+`scripts/compare-silhouette-truth.py` answers the prior question — whether an
+outline feature is real geometry at all — by rasterizing the .dat's own
+triangles under the render's own camera and diffing. Use it before chasing an
+outline that merely looks wrong; on `3941` at `30,65` it settles the tangent
+notch as authored geometry and catches occt filling it in solid.
 
 #### `--debug-dir DIR`
 
