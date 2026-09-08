@@ -1,5 +1,36 @@
 # Handoff — `main`: the corpus lab, and the OCCT engine
 
+## occt draws a curved decal whole now, and the trap that hid it
+
+`3941p01`'s panel kept 14,651 navy pixels against naive's 64,562; it draws
+72,529. Rendered alone on an empty canvas the decal's own path came out as
+crescents, so the fill was being cut rather than covered — the unwrap and the
+bind were never implicated, and both engines emit the region as one element.
+
+A merged decal region is re-projected onto its carrier's exact surface but
+carried no occluder, so `order_faces` fitted an affine plane through a panel
+wrapped around a cylinder. That chord plane sits 1.4 to 4.0 LDU behind the body
+facets the print lies on, against an eps of 0.048, and the boolean clip in
+`fill_ops` then took 83% of it away.
+
+**`unwrap.bind` picks a carrier by radial distance to the SURFACE and never
+looks at the angular sector.** This is what makes the bug expensive: giving the
+region `carrier.occluder()` changed nothing and said nothing, because
+`3941p01`'s decal had bound to a 90-degree quadrant that does not contain it,
+every witness ray was clamped away as a miss, and the `inf` fell back to the
+same plane fit. `Primitive.full_occluder()` opens the sector for this one use,
+on its own instance — `occluder()` is shared with the wall, whose sector is
+what stops a quarter-wall occluding rays that miss it. Anything else that reads
+a decal's carrier should assume the sector is wrong.
+
+naive is untouched by construction: it builds `own_occ` from its analytic faces
+only, so the `carrier` key is inert there.
+
+**The fix is inside `6cfdfc7`, whose message is about `onto`.** A peer session's
+`git commit -a` swept it out of the index mid-commit, and it was pushed that
+way; `git log` will not find it under anything decal-shaped. The diagnosis lives
+on the `3941p01-decal-under-its-own-wall` defect entry, now `fixed`.
+
 ## `occt-full-turn-gradient` is merged: a full turn shades as a dome
 
 A curved span that closes on itself (`ub - ua` a whole turn) had a zero-length
