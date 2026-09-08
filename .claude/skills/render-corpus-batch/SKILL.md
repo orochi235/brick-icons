@@ -16,7 +16,7 @@ a render nobody measured is a cell on the wall that no coverage number can
 check.
 
 Two neighbors own the steps either side of this one. `onto-job` is the fleet
-mechanics — nodes, sync, detach, fetch. `ingest-renders` is step 6, and it is
+mechanics — nodes, sync, detach, fetch. `ingest-renders` is step 7, and it is
 not optional reading: indexing is not baking, and a rebuild that is not swapped
 in from a temp file corrupts a database somebody else is reading.
 
@@ -83,8 +83,20 @@ that are already drawn and waiting to be indexed. `store-queue/*.txt` and
 
 ### 4. Launch
 
-`out/` is gitignored and `--each` reads its list in the node's own tree, so
-rsync the list across first. Then, with the three values step 2 printed:
+**`--each` reads its list in the node's own tree, and `out/` is gitignored, so
+the list never arrives on its own.** Copy it first -- the directory does not
+exist there either, so `scp` alone fails:
+
+    ssh <node> 'mkdir -p ~/.config/onto/work/brick-icons/out/slot-<slot>'
+    scp out/slot-<slot>/batches.txt \
+        <node>:.config/onto/work/brick-icons/out/slot-<slot>/batches.txt
+
+Skip it and the job dies in seconds with `exited -1` and an EMPTY log, which
+reads like the node refusing the work rather than a missing file. Confirm it
+landed (`onto run -in brick-icons <node> -- wc -l < out/slot-<slot>/batches.txt`)
+before launching, because once the job holds the tree lock that check 409s.
+
+Then, with the three values step 2 printed:
 
     onto run --detach --timeout 12h --in brick-icons --task slot-occt \
       --each out/slot-occt/batches.txt --workers 10 --retries 1 \
@@ -118,7 +130,28 @@ rsync the list across first. Then, with the three values step 2 printed:
   batch appends to that pass's file — and `--skip-done` reads the old timeout
   rows as done and skips exactly the parts being retried.
 
-### 5. Wait, and watch for the two silent failures
+### 5. Turn the results around before you wait
+
+**`--out` and `--to` do not move anything.** They record where results should
+land for a later fetch, and a job launched with only those holds its whole
+output on the node until it ends -- which is how a round that dies at hour
+three comes home with nothing. `onto run` has no cadence flag, so both halves
+are separate commands, and both are easy to forget:
+
+    onto deliver --at items <job-id>              # node pushes as it finishes
+    nohup onto fetch --stream <task> > out/<task>-stream.log 2>&1 &
+
+Do them in the same breath as the launch. The push and the pull overlap
+harmlessly -- both are idempotent by content -- and the stream's pass after
+the job stops is the only one guaranteed to see a tree nobody is writing to,
+which is what the ingest waits for.
+
+**Do not start a second stream on a task that already has one.** Sessions
+share this repo. `pgrep -f "onto fetch --stream"` -- and read it, because
+every Claude session's launch prompt contains that string too, so a plain
+`pgrep -fl "onto fetch"` matches sessions rather than fetches.
+
+### 6. Wait, and watch for the two silent failures
 
     onto jobs
     onto logs <id> | tail -20
@@ -131,7 +164,7 @@ run reaches its end having written only error rows.
 Do not start a second `onto fetch` on a task that already has one streaming:
 two streams race each other into the same directory. `pgrep -fl "onto fetch"`.
 
-### 6. Ingest
+### 7. Ingest
 
     onto fetch --stream slot-occt
 
@@ -140,7 +173,7 @@ route, because it carries measurements as well as drawings. Let the stream's
 final pass finish first — it is the only one guaranteed to see a tree nobody
 is writing to, and a part-written SVG indexes fine and bakes as UNREADABLE.
 
-### 7. Report what is owed, not that it finished
+### 8. Report what is owed, not that it finished
 
 Re-run step 1 and say four numbers: asked for, drawn, failed, still missing.
 The job's own summary counts what it believes it wrote; `slot-coverage.py`
