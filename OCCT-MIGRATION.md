@@ -92,7 +92,7 @@ The `occt` branch of `hlr.visible_segments` runs `fit_silhouette_arcs` and
 | `_fold_arc_loops` turns chained fold-arc spans into `fill_ops(loops=)` sub-region outlines | `loops=()` | **absent.** `fold_ells` is built from `fit_ells` inside `_visible_segments_analytic`, which occt never enters |
 | `cull_orphan_runs(protect=fold_ells)` | called with no `protect` | present but unprotected; vacuous while `fold_ells` is empty, wrong the moment it is not |
 
-#### The snap passes on occt: pass 1 deletes edges, pass 2 draws the strays
+#### The snap passes on occt: pass 1 exposes a cull bug, pass 2 draws the strays
 
 `scripts/snap-render-ab.py` splices in `_snap_rim_crossings`, which runs BOTH
 passes -- so its rendered A/B measures the pair, and the first reading of it
@@ -101,8 +101,8 @@ moves an endpoint by at most `max_snap` = 4 degrees, so a span can change by 8;
 measured over the eight parts below it never changed one by more, and it cannot
 turn a short arc into a long one.
 
-**Pass 1 drops a drawn element on one occt part in nine, and visible ink on
-one in eighteen.** It exists for naive's SAMPLED occlusion: `visible_subops(n=64)` stops up to a sample short of
+**Pass 1 destroys nothing. It moves endpoints, and `cull_orphan_runs` then
+deletes correctly-drawn geometry.** It exists for naive's SAMPLED occlusion: `visible_subops(n=64)` stops up to a sample short of
 the true graze, leaving an arc end beside the stroke it should touch. occt does
 real hidden-line removal and lands it, so there is nothing for the pass to
 repair -- but it still fires, and where it fires it can drop an element rather
@@ -133,14 +133,46 @@ in with:
 
 Eight lose an edge you cannot miss -- `24130`, `33089`, `48812`, `30124b`,
 `5405`, `99930`, `76421` each lose a long stroke, and `67887` loses a closed
-panel outline. `24130`'s is the clearest: its foot ring's whole front arc,
-three arcs and about 230px of edge, replaced by a 16px `<line>` stub.
-**`67887` and `33089` were previously recorded here as "identical to the eye";
-they are not** -- an eyeball pass over a full-frame render is not sensitive
-enough for this, and the element count is, at no cost.
+panel outline. **`67887` and `33089` were previously recorded here as
+"identical to the eye"; they are not** -- an eyeball pass over a full-frame
+render is not sensitive enough for this, and the element count is, at no cost.
+
+**But the pass is not what deletes them.** `_snap_rim_crossings` pass 1 only
+ever rewrites an arc's two angles (`hlr.py:677`); it cannot drop an op, and it
+does not. Rendering `24130` through all four corners says where the loss comes
+from:
+
+    24130          cull off   cull on
+    snap off            218       218
+    snap on             218       215
+
+The snap alone deletes nothing and the cull alone deletes nothing. Only
+together, and then it is exactly the three missing elements: the snap moves an
+endpoint up to 4 degrees, the junctions `cull_orphan_runs` reads to decide what
+is anchored stop matching, and the cull peels correctly-drawn geometry as
+though it were fray. So pass 1 is a DETECTOR for a fragility on this side, not
+a destroyer, and the row's "do not port" stands for the original reason: occt
+has nothing for it to repair.
 
 So pass 1 on occt is inert at best and destructive at worst, and never a
 repair.
+
+#### `cull_orphan_runs` deletes real geometry on occt, with no snap involved
+
+`30124b` renders 68 elements with the cull disabled and 66 as it ships. The two
+it loses include a **structural crease** -- the fold line between two faces --
+which leaves the surfaces meeting with nothing drawn between them. `33089`
+loses 7 the same way. The cull exists to peel 2654a's inner-rim fraying, and on
+occt it is reaching past that into edges that belong in the drawing.
+
+**`join_tol` is wrong here and is NOT the cause.** `cull_orphan_runs`'
+`join_tol=0.75` is a bare canvas-px literal deciding whether two endpoints are
+the same junction node, and the occt branch hands it projected LDU three lines
+below the comment explaining that scaling for `dedupe`'s `eps` -- at `30124b`'s
+`s` of 52.55 it is about 39 output px. Correcting it changes nothing useful:
+scaled it draws 65 elements against the shipped 66 and the cull-off 68, so it
+deletes marginally MORE. Fix the units as a cleanup; look elsewhere for the
+cause. `cap` and `tol` both derive from the drawn extent and are scale-free.
 
 **It is not a problem on naive, which is the engine that runs it.** The eight
 parts above, drawn on naive with `hlr._snap_rim_crossings` stubbed out: four of
