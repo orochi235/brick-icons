@@ -92,14 +92,35 @@ keys on the drawn cell size and the viewport instead.
    come out with fewer drawn elements than they went in with.
    `scripts/snap-element-delta.py` re-derives the list; the section carries it.
    **CLOSED:** the job finished 177 of 177 and the table is the final one.
-3. **Pass 2's sweep-direction bug is fixable and nobody has said whether to
+3. **`cull_orphan_runs` deletes real geometry on occt.** `30124b` draws 68
+   elements with the cull disabled and 66 as it ships, and one of the two is a
+   **structural crease** -- the fold between two faces, leaving them meeting
+   with nothing drawn between them. `33089` loses 7 the same way. No snap is
+   involved; this is the shipped path. The cull exists to peel 2654a's
+   inner-rim fraying and is reaching past it. **Disproven, do not
+   re-propose:** `join_tol=0.75` is a canvas-px literal handed projected LDU
+   (about 39 output px at `30124b`'s scale) and is genuinely wrong, but
+   scaling it draws 65 against the shipped 66, so it deletes MORE and is not
+   the cause; `cap` and `tol` both derive from the drawn extent and are
+   scale-free. The crease terminates where its junction partner is sub-stroke,
+   which is the docstring's own fray case -- so the anchor test is probably
+   right in principle and wrong against occt's geometry. That is where to
+   start. Probes are in the scratchpad and are not committed; they monkeypatch
+   `hlr.cull_orphan_runs` to identity and render the four corners.
+4. **The wall's hash should carry its whole client state**, so a reload keeps
+   the camera, the grid selection and the caret rather than just the slot and
+   the lightbox. Designed and NOT BUILT --
+   `docs/superpowers/specs/2026-09-08-wall-hash-state-design.md`. Mike picked
+   the shape: everything in, condensing optional behind a `condenseHash` param
+   in `useParams`.
+5. **Pass 2's sweep-direction bug is fixable and nobody has said whether to
    fix it.** The refit emits the circumcircle through (pinch1, pinch2, apex)
    the long way round: 23801 goes from a 41.7-degree separator to 288.7. The
    fix is to pick the sweep that keeps the apex BETWEEN the pinch points --
    NOT to tune `SEP_REFIT_MAX_GROWTH`, which does not separate the damaged
    parts from the clean ones. Mike has seen this and not yet called it; pass 2
    is stylization, so fixing the bug still leaves whether the effect is wanted.
-4. **Printed and sticker parts want a `decal` slot** holding a 2D extraction of
+6. **Printed and sticker parts want a `decal` slot** holding a 2D extraction of
    the printing (Mike). Not started, not designed, and a peer has uncommitted
    decal-binding work in `brick_icons/shade.py` and `unwrap.py` -- same seam,
    so agree who owns it first.
