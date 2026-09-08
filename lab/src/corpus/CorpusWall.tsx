@@ -5,6 +5,7 @@ import {
 import { LabShell } from '@weasel-js/labkit';
 import type { LabClient } from '@lab/api/client';
 import { clampWallView, DEFAULT_BLANK_PX } from '@lab/corpus/clamp';
+import { readWallHash, wallHashString } from '@lab/corpus/wallHash';
 import { categoryOf, COVERAGE_ORDER, groupers, rollUp } from '@lab/corpus/facts';
 import { FilterBar } from '@lab/corpus/FilterBar';
 import { bandedLayout, blockLayout } from '@lab/corpus/grouped';
@@ -48,8 +49,12 @@ const NO_ORDER: string[] = [];
  *  `<LabShell>`. */
 export function CorpusWall({ client }: { client: LabClient }) {
   const { params, setParam, reset: resetParams } = useParams();
+  // Read once, at the first render: restoring the slot through an effect would
+  // fetch the default slot's cells before replacing them, and the sources poll
+  // below would have already chosen for us.
+  const fromHash = useRef(readWallHash(window.location.hash));
   const [sources, setSources] = useState<{ source: string; n: number }[]>([]);
-  const [source, setSource] = useState('silhouette-naive');
+  const [source, setSource] = useState(fromHash.current.source ?? 'silhouette-naive');
   const fetched = useCells(client, source, params.pollMs);
   const loaded = useSheets(client, source);
   const [level, setLevel] = useState(32);
@@ -58,7 +63,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
     tint: 'status', excluded: [], badges: [], desc: true,
   });
   const [cam, setCam] = useState<View | null>(null);
-  const [picked, setPicked] = useState<string | null>(null);
+  const [picked, setPicked] = useState<string | null>(fromHash.current.part ?? null);
   const [carded, setCarded] = useState<{ cell: Cell; at: { x: number; y: number } } | null>(null);
   const [highlight, setHighlight] = useState<CellState | null>(null);
   const [highlightTag, setHighlightTag] = useState<string | null>(null);
@@ -95,7 +100,8 @@ export function CorpusWall({ client }: { client: LabClient }) {
   // the opening slot is chosen from it -- the route orders by population, and
   // the most-populated one is worth opening on -- so a later poll adds
   // entries without moving anyone off what they are looking at.
-  const opened = useRef(false);
+  // A slot named in the hash is a choice already made, so the poll leaves it.
+  const opened = useRef(!!fromHash.current.source);
   useEffect(() => {
     let live = true;
     const load = () => void client.corpusSources().then(({ sources: got }) => {
@@ -170,6 +176,17 @@ export function CorpusWall({ client }: { client: LabClient }) {
     () => layout(shown, { cell: params.cell, gap: params.gap, cols }),
     [layout, shown, cols, params.cell, params.gap]);
   const pitch = params.cell + params.gap;
+
+  // Written on every change, not on unload: a reload is not the only way back
+  // here, and a link someone copies mid-session has to carry what they can see.
+  // `replaceState`, so the browser's Back button still leaves the wall rather
+  // than walking through every part that has been opened.
+  useEffect(() => {
+    const next = wallHashString({ source, part: picked ?? undefined });
+    if (next !== window.location.hash) {
+      window.history.replaceState(null, '', next || window.location.pathname);
+    }
+  }, [source, picked]);
 
   // Every camera write goes through this, so a flick's inertia decay -- which
   // calls `view.set` directly, bypassing any handler below -- gets clamped on

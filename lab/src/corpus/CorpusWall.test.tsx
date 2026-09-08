@@ -57,6 +57,10 @@ const rect = (width: number, height: number): DOMRect => ({
 beforeEach(() => {
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
     .mockReturnValue(rect(800, 600));
+  // The wall keeps the open part and the drawn slot in the hash, and one
+  // jsdom location outlives every case in this file -- so without this a test
+  // that opens a lightbox reopens it in the next one.
+  window.history.replaceState(null, '', window.location.pathname);
 });
 
 // Every `FloatingPanel` (the legend, the params panel) observes its own size
