@@ -62,6 +62,13 @@ def build_parser():
                    default=None,
                    help="draw with the vendored LDView instead of our engine, "
                         "in LDraw's own colors — the reference slot, a PNG")
+    p.add_argument("--decal", action="store_true", default=None,
+                   help="draw the part's printed decoration laid flat off the "
+                        "surfaces it is printed on, all of them on one sheet — "
+                        "no viewpoint, so the view, sizing and stroke flags "
+                        "do not apply")
+    p.add_argument("--texture-px", dest="texture_px", type=int,
+                   help="longer edge of a --decal canvas in px (default 900)")
     p.add_argument("--opacity", type=float,
                    help="face-fill opacity 0-1 for SVG output "
                         "(translucent bricks; default 1)")
@@ -108,6 +115,7 @@ def _config_from_args(args) -> Config:
         "shade_style": args.shade_style, "light": args.light,
         "svg_bg": args.svg_bg, "opacity": args.opacity,
         "wireframe": args.wireframe, "use_ldview": args.use_ldview,
+        "decal": args.decal, "texture_px": args.texture_px,
         "weld_corners": args.weld_corners,
         "part_label": args.part_label,
         "debug_colors": args.debug_colors,
@@ -147,9 +155,9 @@ def _emit_fit(out_dir: Path, name: str, res, right, up, fwd,
 
 def _emit_unwrap(debug_dir, name, res, cfg) -> None:
     """The decal laid flat on its carrier — the only way to see whether a
-    carrier bound correctly without reading projected output. Same extraction
-    the `decal` subcommand runs, on a white ground because this one is read
-    against a render rather than composited."""
+    carrier bound correctly without reading projected output. Per carrier
+    here, not as the `--decal` sheet: this is read to find the carrier that
+    bound wrongly, and on a sheet the panels stop being separable."""
     svgs = unwrap.decal_svgs(res.tri, res.tri_colors, res.analytic,
                              ldraw_dir=cfg.ldraw_dir, bg="#ffffff")
     d = Path(debug_dir)
@@ -202,6 +210,15 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
     name = Path(part).stem if Path(part).suffix else part
     out_dir.mkdir(parents=True, exist_ok=True)
     label = render_tag(cfg, name) if cfg.part_label else None
+
+    if cfg.decal:
+        # Before the engines, and returning rather than falling through: a
+        # decal has no viewpoint, so nothing below here has anything to say
+        # about it. A part carrying no bindable decoration writes nothing and
+        # is not an error -- most of the library is undecorated, and the
+        # caller reads the absence of the file.
+        decal_one(cfg, part, out_dir, cfg.texture_px, cfg.svg_bg)
+        return
 
     if cfg.use_ldview:
         # The reference, not a drawing of ours: LDView reads the same .dat and
@@ -423,19 +440,22 @@ def _parse_decal_args(argv):
 
 
 def decal_one(cfg, part: str, out_dir: Path, px: int, bg: str) -> list[Path]:
-    """Write one SVG per carrier the part carries a decal on."""
+    """Write the part's decoration as one sheet, or nothing if it carries none.
+
+    A list rather than a path because it is a count of what was written: the
+    caller reports a part that yielded nothing, and a part printed on several
+    surfaces used to answer with several files.
+    """
     name = Path(part).stem if Path(part).suffix else part
     tri, tri_colors, analytic = hlr.part_geometry(part, cfg.ldraw_dir)
-    svgs = unwrap.decal_svgs(tri, tri_colors, analytic, px=px,
+    svg = unwrap.decal_sheet(tri, tri_colors, analytic, px=px,
                              ldraw_dir=cfg.ldraw_dir, bg=bg)
+    if svg is None:
+        return []
     out_dir.mkdir(parents=True, exist_ok=True)
-    written = []
-    for i, svg in enumerate(svgs):
-        tag = "" if len(svgs) == 1 else f".{i}"
-        path = out_dir / f"{name}.decal{tag}.svg"
-        path.write_text(svg)
-        written.append(path)
-    return written
+    path = out_dir / f"{name}.decal.svg"
+    path.write_text(svg)
+    return [path]
 
 
 def _decal_main(argv) -> int:
@@ -460,10 +480,7 @@ def _decal_main(argv) -> int:
             missing.append(part)
             print(f"[{i}/{len(parts)}] {part}: no decal", flush=True)
         else:
-            head = written[0].name
-            more = ("" if len(written) == 1
-                    else f" (+{len(written) - 1} more surfaces)")
-            print(f"[{i}/{len(parts)}] {part} -> {head}{more}", flush=True)
+            print(f"[{i}/{len(parts)}] {part} -> {written[0].name}", flush=True)
     if missing:
         print(f"{len(missing)}/{len(parts)} yielded no decal")
         return 1

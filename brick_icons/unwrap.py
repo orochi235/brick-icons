@@ -223,22 +223,24 @@ def _rings_of(poly):
     return [np.asarray(poly, float)]
 
 
-def texture_svg(carrier_uv, regions, px=900, ldraw_dir="vendor/ldraw",
-                face=None, bg="#ffffff"):
-    """The decal laid flat, canvas set by the carrier at ONE uniform scale.
+def _extent_size(carrier_uv):
+    """(w, h) of a carrier extent, in LDU."""
+    cu = np.asarray(carrier_uv, float)
+    lo, hi = cu.min(axis=0), cu.max(axis=0)
+    return float(hi[0] - lo[0]), float(hi[1] - lo[1])
 
-    `face` is the carrier's own outline, drawn under the decal so the texture
-    carries the shape it was lifted from — 30260p01's octagon, a torso's
-    trapezoid — rather than reading as a print floating on a rectangle.
+
+def _panel_paths(carrier_uv, regions, s, ldraw_dir, face):
+    """One decal's `<path>` elements, drawn at the scale it is handed.
+
+    Split out of `texture_svg` so a sheet can draw several panels at ONE
+    scale; `texture_svg` is this at the scale that makes a single panel fill
+    its canvas.
     """
     cu = np.asarray(carrier_uv, float)
-    x0, y0 = cu.min(axis=0)
-    x1, y1 = cu.max(axis=0)
-    s = px / max(x1 - x0, y1 - y0, 1e-9)
-    w, h = (x1 - x0) * s, (y1 - y0) * s
+    x0, _y0 = cu.min(axis=0)
+    _x1, y1 = cu.max(axis=0)
     body = []
-    if bg and bg != "none":
-        body.append(f'<rect width="{w:.0f}" height="{h:.0f}" fill="{bg}"/>')
     if face is not None and not face.is_empty:
         body.append(f'<path d="{_region_d(face, x0, y1, s)}" '
                     f'fill="#f2f2f2" fill-rule="evenodd"/>')
@@ -247,6 +249,24 @@ def texture_svg(carrier_uv, regions, px=900, ldraw_dir="vendor/ldraw",
         d = _region_d(poly, x0, y1, s)
         body.append(f'<path d="{d}" fill="#{hex_str[2:]}" '
                     f'fill-rule="evenodd"/>')
+    return body
+
+
+def texture_svg(carrier_uv, regions, px=900, ldraw_dir="vendor/ldraw",
+                face=None, bg="#ffffff"):
+    """The decal laid flat, canvas set by the carrier at ONE uniform scale.
+
+    `face` is the carrier's own outline, drawn under the decal so the texture
+    carries the shape it was lifted from — 30260p01's octagon, a torso's
+    trapezoid — rather than reading as a print floating on a rectangle.
+    """
+    ew, eh = _extent_size(carrier_uv)
+    s = px / max(ew, eh, 1e-9)
+    w, h = ew * s, eh * s
+    body = []
+    if bg and bg != "none":
+        body.append(f'<rect width="{w:.0f}" height="{h:.0f}" fill="{bg}"/>')
+    body += _panel_paths(carrier_uv, regions, s, ldraw_dir, face)
     return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{w:.0f}" '
             f'height="{h:.0f}">' + "".join(body) + "</svg>")
 
@@ -760,10 +780,9 @@ def significant_groups(groups):
     return [] if len(kept) > MAX_DECALS else kept
 
 
-def decal_svgs(tris, tri_colors, analytic, px=900, ldraw_dir="vendor/ldraw",
-               bg=None):
-    """[svg] one per carrier the part carries a decal on."""
-    svgs = []
+def decal_panels(tris, tri_colors, analytic):
+    """[(extent, regions, face)] for every decal a part is worth drawing."""
+    out = []
     for carrier, _theta0, regions, face in significant_groups(
             decal_groups(tris, tri_colors, analytic)):
         # a merged region can come back with no ring at all — a sliver that
@@ -775,9 +794,78 @@ def decal_svgs(tris, tri_colors, analytic, px=900, ldraw_dir="vendor/ldraw",
         uv = np.vstack([np.asarray(r) for r in rings])
         ext = carrier_extent(carrier, uv if face is None
                              else np.asarray(face.exterior.coords))
-        svgs.append(texture_svg(ext, regions, px=px, ldraw_dir=ldraw_dir,
-                                face=face, bg=bg))
-    return svgs
+        out.append((ext, regions, face))
+    return out
+
+
+def decal_svgs(tris, tri_colors, analytic, px=900, ldraw_dir="vendor/ldraw",
+               bg=None):
+    """[svg] one per carrier the part carries a decal on."""
+    return [texture_svg(ext, regions, px=px, ldraw_dir=ldraw_dir,
+                        face=face, bg=bg)
+            for ext, regions, face in decal_panels(tris, tri_colors, analytic)]
+
+
+#: Space between panels on a sheet, as a share of the largest cell's longer
+#: edge. Enough to read two prints as two, and no more: the panels carry no
+#: frame, so the gap is the only thing separating them.
+SHEET_GUTTER = 0.04
+
+
+def sheet_grid(n):
+    """(cols, rows) for `n` panels. Square-ish rather than a row: four panels
+    side by side make a canvas four times as wide as it is tall, which is
+    thumbnailed down to nothing on the wall."""
+    if n <= 1:
+        return 1, 1
+    return (2, 1) if n == 2 else (2, 2)
+
+
+def decal_sheet(tris, tri_colors, analytic, px=900, ldraw_dir="vendor/ldraw",
+                bg=None):
+    """Every decal a part carries, on one canvas, or None if it carries none.
+
+    One drawing per part, because that is what the render store keys: a part
+    printed front and back is one row, not two. All panels share ONE LDU
+    scale, so a torso's back still reads larger than the small print on its
+    front — the same property `texture_svg` gives a single panel, held across
+    a sheet. A part above `MAX_DECALS` arrives here empty and stays that way;
+    what it has is one decoration shattered over facet planes, and tiling the
+    shards produces a mosaic rather than a picture of anything.
+    """
+    panels = [(ext, regions, face, *_extent_size(ext))
+              for ext, regions, face in decal_panels(tris, tri_colors, analytic)]
+    if not panels:
+        return None
+    if len(panels) == 1:
+        ext, regions, face, _w, _h = panels[0]
+        return texture_svg(ext, regions, px=px, ldraw_dir=ldraw_dir,
+                           face=face, bg=bg)
+
+    cols, rows = sheet_grid(len(panels))
+    cell_w = max(p[3] for p in panels)
+    cell_h = max(p[4] for p in panels)
+    gutter = SHEET_GUTTER * max(cell_w, cell_h)
+    sheet_w = cols * cell_w + (cols + 1) * gutter
+    sheet_h = rows * cell_h + (rows + 1) * gutter
+    # px is the sheet's longer edge, as it is a single panel's -- so a part
+    # with four prints draws each of them smaller, rather than returning a
+    # canvas four times the size the flag asked for.
+    s = px / max(sheet_w, sheet_h, 1e-9)
+    w, h = sheet_w * s, sheet_h * s
+
+    body = []
+    if bg and bg != "none":
+        body.append(f'<rect width="{w:.0f}" height="{h:.0f}" fill="{bg}"/>')
+    for i, (ext, regions, face, pw, ph) in enumerate(panels):
+        col, row = i % cols, i // cols
+        dx = (gutter + col * (cell_w + gutter) + (cell_w - pw) / 2) * s
+        dy = (gutter + row * (cell_h + gutter) + (cell_h - ph) / 2) * s
+        paths = _panel_paths(ext, regions, s, ldraw_dir, face)
+        body.append(f'<g transform="translate({dx:.2f} {dy:.2f})">'
+                    + "".join(paths) + "</g>")
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{w:.0f}" '
+            f'height="{h:.0f}">' + "".join(body) + "</svg>")
 
 
 def _wall_family(prim, tol=0.01):

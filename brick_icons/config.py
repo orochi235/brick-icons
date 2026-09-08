@@ -41,6 +41,10 @@ DEFAULTS = {
     "opacity": 1.0,          # face-fill opacity in SVG (translucent bricks)
     "wireframe": False,      # outline strokes only, occlusion culling off
     "use_ldview": False,     # draw with the vendored LDView, not our engine
+    "decal": False,          # lift the printed decoration off the part and
+                             # lay it flat; no viewpoint, so the view, sizing
+                             # and stroke settings do not apply
+    "texture_px": 900,       # longer edge of a decal canvas, in px
     "weld_corners": False,   # broad junction weld: ink the notch at EVERY
                              # stroke T-graze, not just stub-bridged
                              # junctions (restyles stud/limb corners)
@@ -84,6 +88,8 @@ class Config:
     opacity: float
     wireframe: bool
     use_ldview: bool
+    decal: bool
+    texture_px: int
     weld_corners: bool
     part_label: bool
     debug_colors: bool | str
@@ -151,6 +157,8 @@ def load_config(toml_path=None, overrides=None, root="."):
         opacity=float(data["opacity"]),
         wireframe=bool(data["wireframe"]),
         use_ldview=bool(data["use_ldview"]),
+        decal=bool(data["decal"]),
+        texture_px=int(data["texture_px"]),
         weld_corners=bool(data["weld_corners"]),
         part_label=bool(data["part_label"]),
         debug_colors=(data["debug_colors"]

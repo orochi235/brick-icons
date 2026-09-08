@@ -95,9 +95,9 @@ def rasterize(svg: Path, png: Path, width: int) -> str | None:
 def freeze_extraction(out: Path, corpus: Path, only: str | None) -> int:
     """The `decal` seam: `hlr.part_geometry`, no view pipeline.
 
-    One hash per part covering all of its decals, not one per SVG — a corpus
-    this size yields ~12k files, and per-part granularity localizes drift just
-    as well at a twentieth of the rows.
+    One hash per part, with the number of panels its sheet holds. Per-part
+    granularity localizes drift as well as per-file did, and the count is what
+    the sliver ratio, the shatter share and MAX_DECALS all move.
     """
     parts = [ln.split("#")[0].strip()
              for ln in corpus.read_text().splitlines()]
@@ -132,7 +132,12 @@ def freeze_extraction(out: Path, corpus: Path, only: str | None) -> int:
     for part in parts:
         got = by_part.get(part, [])
         blob = "".join(p.read_text() for p in got)
-        rows.append((part, goldens.sha256(blob), len(got)))
+        # PANELS, not files: a part's decals arrive as one sheet now, and
+        # counting files would collapse every class to 1 -- which is the
+        # column `_decal_subset` samples by, so the gate would quietly shrink
+        # to three parts. A single-panel sheet carries no group wrapper.
+        panels = blob.count('<g transform="translate(') or (1 if blob else 0)
+        rows.append((part, goldens.sha256(blob), panels))
     shutil.rmtree(work, ignore_errors=True)
 
     # Merge, never overwrite — same reason as the render seam: an --only run

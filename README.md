@@ -108,7 +108,7 @@ ships as `parts.txt`:
 
 Printed parts can also have their decoration lifted off as a flat texture:
 
-    .venv/bin/python -m brick_icons.cli decal 3941p01 --out out
+    .venv/bin/python -m brick_icons.cli 3941p01 --decal --out out
 
 ## Lab server
 
@@ -143,6 +143,13 @@ else, a printed part's extracted decal, and a pixel diff. Drag on a pane with
 `python scripts/defects-to-handoff.py` regenerates the handoff's list from the
 store, so the two cannot disagree.
 
+The corpus wall's lightbox shows a part as every slot drew it, and "Turn it
+around" mounts the same 3D view there — dragged with the plain left button,
+since there is no shared camera to protect, and captioned with the `LAT,LONG`
+the drag left behind so a pose worth keeping can be typed into `--angle`.
+Loaded on demand: three.js and the LDraw loader are most of a megabyte, and
+the wall must not fetch them to draw a thumbnail.
+
 The contact-sheet instrument renders a whole corpus list and opens any cell as
 a trial; `scripts/render-contact-sheet.sh` remains the headless equivalent.
 "check goldens" re-renders a part once per combo it appears in and compares
@@ -151,34 +158,51 @@ pytest gate makes.
 
 ## Decal extraction
 
+    brick-icons PARTS... --decal [--out DIR] [--svg-bg PAINT] [--texture-px N]
     brick-icons decal PARTS... [--out DIR] [--svg-bg PAINT] [--texture-px N]
 
-`decal` writes a part's printed decoration as a standalone SVG, unwrapped off
-the surface it is printed on and laid flat: `out/<part>.decal.svg`, or
-`<part>.decal.0.svg`, `.1.svg` … for a part printed on more than one surface,
-biggest print first. The numbering earns its keep on a high-poly part, where
-the print scatters across dozens of small facet planes: a modern minifig torso
-emits `.0` and `.1` as its front and back, then 56 slivers.
-The texture is drawn on the outline of the face it came from — a road sign's
-print on its octagon, a torso's on the torso's trapezoid — at one uniform
-scale in LDU, so the print stays isometric with the part.
+`--decal` writes a part's printed decoration as a standalone SVG, unwrapped off
+the surfaces it is printed on and laid flat: `out/<part>.decal.svg`. Stickers,
+printed parts and decorated assemblies all go through it — a sticker part's
+colored faces *are* its print.
+
+One file per part, whatever it is printed on. A part decorated on two to four
+surfaces gets them laid out together on one sheet, biggest print first, two
+side by side and three or four in a 2x2. Every panel is drawn at one shared
+scale in LDU, so a torso's back still reads larger than the small print on its
+front, and each sits on the outline of the face it came from — a road sign's
+print on its octagon, a torso's on its trapezoid.
+
+Above four surviving surfaces the part draws nothing. What it has then is one
+decoration cut across facet planes rather than several prints, and tiling the
+shards produces a mosaic: `10057pm0` keeps ten panels of a sculpted head, none
+of them a picture of anything (`unwrap.MAX_DECALS`).
 
 A decal has no viewpoint, so none of the view, sizing or stroke flags apply.
 
     # a batch, on a white ground so the SVGs can be eyeballed directly
-    brick-icons decal --list printed.txt --out decals --svg-bg white
+    brick-icons --decal --list printed.txt --out decals --svg-bg white
 
-Parts carrying no bindable decoration are reported, and the run exits `1`:
+The `decal` subcommand is the same extraction under an older spelling. It
+reports the parts carrying no bindable decoration and exits `1`:
 
     $ brick-icons decal 3941p01 3001
-    [1/2] 3941p01 -> out/3941p01.decal.svg
+    [1/2] 3941p01 -> 3941p01.decal.svg
     [2/2] 3001: no decal
     1/2 yielded no decal
 
+Under `--decal` a part with nothing to draw writes no file and is not an
+error — most of the library is undecorated. `scripts/build-render-store.py
+--sources decal` fills the `decal` render slot on that basis, logging such a
+part as `none` so a later pass can tell one that was tried and had nothing
+from one nobody has reached.
+
 #### `--texture-px N`
 
-Longer edge of the texture canvas in px (default 900). The aspect comes from
-the carrier, not from the decal's own bounds.
+Longer edge of the texture canvas in px (default 900) — of the whole sheet,
+not of each panel, so a part with four prints draws each of them smaller
+rather than returning a canvas four times the size asked for. The aspect comes
+from the carrier, not from the decal's own bounds.
 
 #### `--svg-bg PAINT`
 

@@ -1,3 +1,5 @@
+import re
+
 import numpy as np
 import pytest
 
@@ -665,3 +667,81 @@ def test_parallel_planes_at_different_offsets_stay_apart():
     planes = [unwrap.Plane(normal=np.array([0.0, 1.0, 0.0]), offset=0.0),
               unwrap.Plane(normal=np.array([0.0, 1.0, 0.0]), offset=4.0)]
     assert len(unwrap.dedupe_planes(planes)) == 2
+
+
+def _panel(ext_w, ext_h, region):
+    """A `decal_panels` entry: a rectangular carrier extent and one region."""
+    ext = np.array([[0.0, 0.0], [ext_w, 0.0], [ext_w, ext_h], [0.0, ext_h]])
+    return (ext, [(4, np.asarray(region, float))], None)
+
+
+def _panel_groups(svg):
+    """[(dx, dy, path_d)] one per `<g>` a sheet drew."""
+    out = []
+    for chunk in re.findall(r'<g transform="translate\(([-\d.]+) ([-\d.]+)\)">'
+                            r'(.*?)</g>', svg):
+        dx, dy, inner = chunk
+        d = re.search(r'<path d="([^"]+)"', inner).group(1)
+        out.append((float(dx), float(dy), d))
+    return out
+
+
+def _path_width(d):
+    xs = [float(m) for m in re.findall(r'[ML]\s*([-\d.]+)', d)]
+    return max(xs) - min(xs)
+
+
+def test_sheet_grid_stays_square_ish():
+    """Four panels in a row make a canvas 4:1, which the wall thumbnails into
+    a sliver."""
+    assert unwrap.sheet_grid(1) == (1, 1)
+    assert unwrap.sheet_grid(2) == (2, 1)
+    assert unwrap.sheet_grid(3) == (2, 2)
+    assert unwrap.sheet_grid(4) == (2, 2)
+
+
+def test_a_single_decal_sheet_is_the_panel_itself(monkeypatch):
+    """One print is one drawing, unchanged: the sheet layout exists for the
+    parts that carry several, and must not re-render the common case."""
+    panel = _panel(20.0, 10.0, [[2, 2], [8, 2], [8, 8], [2, 8]])
+    monkeypatch.setattr(unwrap, "decal_panels", lambda *a, **k: [panel])
+    sheet = unwrap.decal_sheet(None, None, None, px=400)
+    assert sheet == unwrap.texture_svg(panel[0], panel[1], px=400,
+                                       face=None, bg=None)
+    assert "<g transform" not in sheet
+
+
+def test_a_part_with_no_decal_yields_no_sheet(monkeypatch):
+    monkeypatch.setattr(unwrap, "decal_panels", lambda *a, **k: [])
+    assert unwrap.decal_sheet(None, None, None) is None
+
+
+def test_every_panel_on_a_sheet_is_drawn_at_one_scale(monkeypatch):
+    """The point of the sheet over separate files: a small print stays small
+    against a large one. Two carriers of different size, each printed with the
+    SAME region, so one scale means one drawn width."""
+    region = [[2, 2], [6, 2], [6, 6], [2, 6]]
+    monkeypatch.setattr(unwrap, "decal_panels", lambda *a, **k: [
+        _panel(40.0, 40.0, region), _panel(20.0, 20.0, region)])
+    groups = _panel_groups(unwrap.decal_sheet(None, None, None, px=600))
+    assert len(groups) == 2
+    a, b = (_path_width(g[2]) for g in groups)
+    assert a == pytest.approx(b, rel=1e-6)
+
+
+def test_sheet_panels_do_not_sit_on_top_of_each_other(monkeypatch):
+    region = [[1, 1], [3, 1], [3, 3], [1, 3]]
+    monkeypatch.setattr(unwrap, "decal_panels", lambda *a, **k: [
+        _panel(10.0, 10.0, region)] * 4)
+    groups = _panel_groups(unwrap.decal_sheet(None, None, None, px=600))
+    assert len({(g[0], g[1]) for g in groups}) == 4
+
+
+def test_px_sizes_the_whole_sheet_not_each_panel(monkeypatch):
+    """`--texture-px` is the canvas's longer edge, and stays so once the
+    canvas holds four prints."""
+    region = [[1, 1], [3, 1], [3, 3], [1, 3]]
+    monkeypatch.setattr(unwrap, "decal_panels", lambda *a, **k: [
+        _panel(10.0, 10.0, region)] * 4)
+    sheet = unwrap.decal_sheet(None, None, None, px=600)
+    assert 'width="600"' in sheet and 'height="600"' in sheet
