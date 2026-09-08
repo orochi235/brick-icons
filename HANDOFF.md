@@ -87,25 +87,28 @@ keys on the drawn cell size and the viewport instead.
 
 ### Open, in the order I would take them
 
-1. **studio's bake and its fetch BOTH exited 1, and nothing has been ingested
-   since.** `store-occt-studio` reached 610 of 617 batches over 11h43m before
-   it exited 1 -- most of the work landed, and the tail of its log is ordinary
-   `stored` lines with the odd `TimeoutError` per part, not a crash.
-   `fetch-occt-studio` exited 1 too, having brought 6,803 files / 465 MiB home.
-   So: find what is actually on disk against what the queue asked for
-   (`store-queue/occt-gap-studio.txt`), re-fetch the remainder, and only then
-   run `out/ingest-bake.sh` -- it does rebuild-checkpoint-swap *then* bake, and
-   the order matters because the bake reads the database. Until that runs the
-   wall is showing renders older than this work.
+1. **CLOSED. The wall is current; 660 parts of the queue are timeouts.**
+   Nothing was stranded on studio -- `onto fetch -dry-run
+   studio:brick-icons/renders renders` reports every one of its 9,597 files
+   already local, and both exit-1s were the fetch inheriting the store job's
+   status. The 704 queued parts with no `.svg` were 654 the renderer failed on
+   (651 `TimeoutError` at the 120s cap, 2 `MemoryError`, 1 `RuntimeError`) and
+   56 in batches it never reached. `store-occt-tail` rendered those 56: 43
+   stored, 9 more timed out, 4 already had renders. Two `ingest-bake` passes
+   ran; the occt slot holds 7,931 renders and 1,689 new thumbnails are baked.
+   **What is left is the 660 timeouts**, which want a longer per-part cap or a
+   faster path, not another fetch.
 2. **`snap-ab-occt` is still running** (`onto jobs`), appending a row per part
    to `out/snap-render-ab.jsonl`; re-launching under the same `--task` resumes
    rather than restarting. **The verdict is already written up** in
    `OCCT-MIGRATION.md` under "The snap passes on occt" and the remaining parts
    can only confirm or overturn it -- read the finished file against it rather
-   than starting the analysis again. **One loose thread:** `24130` is changed
-   by pass 1 alone (zero refits) with a 2,053px diff component that I could not
-   see when I looked. "Pass 1 is pointless" is solid; "pass 1 is harmless"
-   wants a second pair of eyes.
+   than starting the analysis again. **The loose thread is answered, and it went
+   the other way:** pass 1 is not harmless. `24130`'s 2,053px component is its
+   foot ring's whole front arc, and 13 of the 106 parts pass 2 never touches
+   come out with fewer drawn elements than they went in with.
+   `scripts/snap-element-delta.py` re-derives the list; the section carries it.
+   The count still moves as rows land, so refresh the table when the job ends.
 3. **Pass 2's sweep-direction bug is fixable and nobody has said whether to
    fix it.** The refit emits the circumcircle through (pinch1, pinch2, apex)
    the long way round: 23801 goes from a 41.7-degree separator to 288.7. The
