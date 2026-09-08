@@ -78,10 +78,13 @@ def diagonalize(U, V):
     return W[:, 0], W[:, 1], float(S[0]), float(S[1]), ph
 
 
-def frame(prim):
+def frame(prim, skew_axis=False):
     """(origin, u_hat, a_hat, v_hat, radius_u, radius_v, height, right_handed,
     phase), or None if the axis is skew. A planar primitive is judged on its
     own two columns only, and takes its axis from the plane they span.
+
+    `skew_axis` keeps a skew axis instead of rejecting it, for the one caller
+    that can build the oblique sweep -- see occt_faces.
 
     ru != rv is an ellipse, not shear -- 50950's wall measures 68.3 x 84.9 at
     an orthogonality residual of exactly 0. Callers decide what to do with it;
@@ -103,10 +106,10 @@ def frame(prim):
         # at 89.2 degrees, and rejecting them left the wall as neither a face
         # nor triangles. A skew AXIS stays unrepresentable, because there the
         # axis is the extrusion direction rather than a spare column.
-        if not (ax_ok or prim.kind in PLANAR_KINDS):
+        if not (ax_ok or skew_axis or prim.kind in PLANAR_KINDS):
             return None
         uh, vh, ru, rv, ph = diagonalize(U, V)
-    if not ax_ok:
+    if not ax_ok and not skew_axis:
         # 3820 caps its grip with two 2-4ring2 whose axis column is 14 degrees
         # off the ring's own plane. Nothing reads that column for a planar
         # primitive, so the plane it spans is the axis.
@@ -257,11 +260,18 @@ def occt_faces(prim):
     if k == "edge":
         return []                      # stroke-only, contributes no surface
     f = frame(prim)
+    oblique = False
+    if f is None and k == "cyli":
+        # An oblique cylinder is a cross-section swept along a skew axis, which
+        # is the prism elliptic_wall already builds -- 49492's hook shaft is
+        # four of them and each one dropped took the shaft with it.
+        f = frame(prim, skew_axis=True)
+        oblique = f is not None
     if f is None:
         return []
     o, uh, ah, vh, ru, rv, h, rh, ph = f
     ang = sector_rad(prim)
-    if not is_round(ru, rv):
+    if oblique or not is_round(ru, rv):
         try:
             if k == "cyli":
                 return [elliptic_wall(o, uh, ah, vh, ru, rv, h, ang, ph)]

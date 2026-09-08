@@ -72,11 +72,42 @@ class P:
 
 
 def test_a_skew_axis_is_rejected():
-    """The axis column is the extrusion direction, so a cyli whose axis leaves
-    the cross-section plane is a swept surface OCCT has no maker for. A shear
-    WITHIN that plane is a different case entirely -- see below."""
+    """`frame` reads the axis as square to the cross-section and says so when
+    it is not. Only the caller that can build the oblique sweep asks again --
+    see the wall test below. A shear WITHIN that plane is a different case
+    entirely."""
     R = np.array([[1.0, 0.3, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
     assert occt.frame(P("cyli", R, np.zeros(3))) is None
+
+
+def _oblique_wall():
+    """49492's hook: a 4-4cyli whose axis leans 8.6 degrees out of the
+    circle's plane, one of four that bend the shepherd's crook."""
+    return np.array([[4.0, 0.0, 0.0],
+                     [0.0, -13.8, 0.0],
+                     [0.0, 2.1, 4.0]])
+
+
+def test_an_oblique_cylinder_builds_a_swept_wall():
+    """A circle swept along a skew axis is an exact surface -- the prism
+    elliptic_wall already builds for an elliptical one -- so dropping it takes
+    a wall the part authored. 49492 lost two of its six shaft segments that
+    way and drew as three pieces of a hook with gaps between them.
+
+    Area against the sweep's own integral: lateral area is
+    int |C'(t) x A| dt, which is perimeter x |A| only when A is square to the
+    section, so measuring it that way would pass on a wall built upright.
+    """
+    R = _oblique_wall()
+    prim = P("cyli", R, np.zeros(3))
+    assert occt.frame(prim) is None
+    faces = occt.occt_faces(prim)
+    assert len(faces) == 1
+    U, A, V = R[:, 0], R[:, 1], R[:, 2]
+    th = np.linspace(0.0, 2.0 * math.pi, 200001)
+    dC = (-np.sin(th)[:, None] * U + np.cos(th)[:, None] * V)
+    area = float(np.trapezoid(np.linalg.norm(np.cross(dC, A), axis=1), th))
+    assert _face_area(faces[0]) == pytest.approx(area, rel=1e-6)
 
 
 def test_a_rounded_rotation_is_not_read_as_skew():
