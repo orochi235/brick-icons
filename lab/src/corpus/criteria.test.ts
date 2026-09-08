@@ -88,10 +88,22 @@ it('starts the wall with the redirects off and the out-of-scope parts on', () =>
   expect(DEFAULT_SHOWN).toEqual({ moved: false, outOfScope: true });
 });
 
-it('names every sort, filter and class the way the sidebar does', () => {
-  expect(SORT_SPECS.map((s) => s.label)).toEqual(sortKeys());
-  expect(FILTER_SPECS.map((f) => f.label)).toEqual(filterKeys());
+it('names every sort, filter and class the way the menus do', () => {
+  expect(SORT_SPECS.map((s) => s.label)).toEqual([
+    'id', 'category', 'status', 'extra_d99', 'secs', 'made_at', 'year', 'sets',
+  ]);
+  expect(FILTER_SPECS.map((f) => f.label)).toEqual([
+    'all', 'rendered', 'unrendered', 'errors', 'printed', 'obsolete', 'base',
+  ]);
   expect(CLASS_SPECS.map((c) => c.label)).toEqual(['moved', 'out of scope']);
+});
+
+// A repeated key would lose one entry out of `sortTable`/`filterTable` and
+// give the menu two options that select the same thing.
+it('gives every sort, filter and class its own key', () => {
+  for (const keys of [sortKeys(), filterKeys(), classKeys()]) {
+    expect(new Set(keys).size).toBe(keys.length);
+  }
 });
 
 it('looks a sort or a filter up by its key', () => {
