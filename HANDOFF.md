@@ -1,286 +1,85 @@
 # Handoff — `main`: the corpus lab, and the OCCT engine
 
-## Baton, 2026-09-08 morning: the wall does not fetch its 128px tiles
+## Baton, 2026-09-08 midday: the wall's tile path is fixed; three things are open
 
-On `main`, in the shared checkout. Live jobs are in `onto jobs`.
+On `main`, in the shared checkout. `git log --oneline @{u}..HEAD` for anything
+unpushed; `onto jobs` for what is running.
 
-**Do this first: the corpus wall never requests a loose 128px thumbnail.**
-Mike reported three symptoms and they are one area: the reference grid reads
-blank, moving the cell-size slider does not pull the sprites the new size
-needs, and zooming to the SVG rung leaves one cell drawn while the rest stay
-stale. The backend is not at fault -- every route was checked by hand and
-returns 200 for `reference` at levels 8, 32 and 128, both `.webp` and `.png`,
-and `/api/corpus/cells` returns a `sha` for all 24,591 cells (which
-`useLooseThumbs.wanted` requires).
+**The wall bug is closed.** Four symptoms Mike reported -- the reference grid
+blank, the cell-size slider not pulling sprites, the SVG rung leaving one cell
+drawn, and panning eventually stopping loading altogether -- were three faults
+in one path, all landed:
 
-Two separate faults, both in `lab/src/corpus/`:
+- **The draw was gated on freshness.** A sprite painted only when the sheet's
+  sha matched the store's exactly. Re-encoding the reference slot to WebP moved
+  every sha at once, so all of its cells fell through to flat fills and the
+  wall showed an empty grid with NOTHING saying why. `hasTile` gates the draw
+  now, `isStale` only decides whether to fetch a better tile, and `staleCount`
+  warns when a slot goes stale wholesale. The `-stale` paint goldens were
+  re-frozen; a stale entry and a missing one have parted ways.
+- **The loose-tile cap counted cells already in hand**, so a viewport holding
+  more than `MAX_IN_FLIGHT` of them starved everything behind -- permanently,
+  since the requested set only grows. That was the pan-until-it-stops symptom.
+- **`levelFor(128)` returned the vector rung**, so the cell-size slider's own
+  maximum skipped the 128px bake. The vector is the fall-through now.
+- The sheet URL carried no version while every bake rewrites the atlas in
+  place; the server stamps the image's mtime into the manifest.
 
-1. **`levelFor(128)` returns 512, not 128.** `BANDS` has `[128, 128]` and the
-   test is `px < top`, so the 128 rung covers 64..127 and the slider's own
-   maximum (`params.ts`: `max: 128`) falls through to `VECTOR_LEVEL`. The top
-   notch lands on the vector rung and skips the 128 raster entirely -- which
-   is exactly "zooming to svg level leaves a cell populated".
-2. **The loose fetch never fires at all.** At cell size 100, squarely inside
-   the 128 band, a headless run recorded ZERO requests to
-   `/api/thumbs/reference/128/...`. Only `sheet-8` and `sheet-32` are ever
-   fetched, so the wall upscales the 32px sheet at every size above it. Fault
-   1 does not explain this one; `useLooseThumbs` is wired to `visible` and
-   `level`, and which of those is wrong is not yet established.
+**The thing that cost the most time, so nobody repeats it:** the cell-size
+slider does NOT drive the level. It is `params.cell * cam.scale.x`, and the
+wall auto-fits the whole corpus, so the fit cancels the slider -- at cell size
+100 the effective cell is 6.64px, below every threshold. Only CAMERA zoom
+changes the rung. Reproducing a tile bug by dragging the slider proves
+nothing.
 
-Reproduce headless -- the site is vite on **`[::1]:5178`** (IPv6 only, so
-`http://127.0.0.1:5178` refuses; `localhost` works), and the API is FastAPI on
-`127.0.0.1:8792`. Port 5173 is a different project's app. Set the cell-size
-slider through the native value setter plus an `input` event, then read the
-network log filtered to `api/thumbs`.
+Headless: the site is vite on **`[::1]:5178`** (IPv6 only -- `127.0.0.1:5178`
+refuses, `localhost` works); the API is FastAPI on `127.0.0.1:8792`. Port 5173
+is a different project. HMR leaves stale wall state, so reload fully after an
+edit before believing a symptom.
 
-**A fourth symptom, reported later and probably the same fault:** panning at
-some zoom levels updates only the TOP HALF of the thumbnails. A visible-range
-that covers half the viewport would also starve the loose fetch, so treat
-symptoms 2 and 4 as one bug until they are proven separate.
+### Open, in the order I would take them
 
-**What has been ruled out, so nobody re-checks it.** Every backend route
-returns 200 for `reference` at levels 8, 32 and 128 in both `.webp` and
-`.png`. The sheet IMAGES have real content -- `reference` sheet-8 is 50%
-non-transparent against ldview's 48%. `/api/corpus/cells` returns a `sha` for
-all 24,591 cells, which is what `useLooseThumbs.wanted` gates on.
-`visibleRange` itself is a correct AABB test. The main canvas handles dpr
-correctly: backing store at `width * dpr`, CSS pinned to `width`, context
-scaled, paint in CSS units -- so what reaches `visibleRange` is CSS pixels.
+1. **`76382p__`'s minifig hands are still a mess** (Mike, this morning). Not
+   looked at at all -- no diagnosis, no defect row.
+2. **The four naive-tail rows are measured but undecided.** Both engines
+   scanned over 500 random parts with `scripts/measure-snap-gaps.py`:
 
-**The leading untested lead is `useCanvasSize`**, imported from
-`@weasel-js/core` and never read. Every headless reproduction PASSED, and that
-browser runs at **devicePixelRatio 1** where Mike's Retina screen is 2 -- which
-is the one asymmetry that would explain why the wall misbehaves for him and
-not in the harness. Read what `useCanvasSize` returns at dpr 2 before
-anything else, and reproduce with dpr forced to 2
-(`mcp__chrome-devtools__emulate`) rather than default playwright.
+       engine   move >= 0.5px    pass-2 refits   median move
+       occt     177 (35.4%)      53              0.013 px
+       naive    201 (40.2%)      59              0.098 px
 
-**A second, independent hazard: the sheet URL has no cache-buster.**
-`useSheets.ts` builds `/api/thumbs/${source}/sheet-${level}.webp` with no
-version, while `useLooseThumbs.thumbUrl` versions its own with `?v=<sha>`. The
-sheets are re-written by every bake -- `reference`'s carry a Last-Modified of
-today 13:09 -- so a browser holding a stale image against a freshly fetched
-`sheet-*.json` manifest reads the atlas at the wrong offsets. That is a
-plausible cause of "blank when zoomed out" for one browser and not another,
-and it wants a version on the URL either way.
+   So pass 1 is NOT vacuous on occt and the populations are close. What is
+   missing is whether occt's moves are REPAIRS -- three on `4019` were checked
+   by eye and all three were, but that is one part.
+   **`scripts/snap-render-ab.py` timed out over the 177 affected parts and
+   wrote nothing**, because it only writes `--results` at the end. Make it
+   append per part before re-running it.
+3. **studio is baking the occt render slot** (`onto jobs`, task
+   `store-occt-studio`, 7,397 unprinted parts). `fetch-occt-studio` streams it
+   home. **When it finishes, run `out/ingest-bake.sh` once more** -- the pass
+   that ran this morning started while studio was still writing, so its last
+   batches are indexed but unbaked. 10,708 printed parts of the gap are still
+   unrendered.
 
-**`lab/` has a peer's uncommitted work in it** (`shade.py`, `unwrap.py`, and an
-unpushed commit `7b5e062`), so check who owns a file before editing.
-
-## What landed overnight
-
-- `d9e10ad` records the parts occt draws with their faces unmerged.
-  `timing.count()` sits beside `phases()`, `occt._unify_survives` counts
-  `unify_crash`, and it reaches `measurements.counts`. Exactly 1 part in 500
-  trips it: **23799**.
-- `b3554a2` gives occt's drawn circles the 25 deg facet arc-candidate step.
-  `32062` 43 arc commands to 75 and 26,360 bytes to 21,573 with the raster
-  unchanged; `3941` loses two kinks in the counterbore band.
-- `1d4593b` adds the arc-candidate row the pipeline audit never had. The audit
-  is otherwise complete as an enumeration -- both pipelines were re-read
-  against it.
-- `49f2ed5` fixes a test `8e436a5` had left red on main.
-- `aac8a1b`, `ce1699f` are the measurement scripts and the store batch runner.
-
-## The occt render slot, and the jobs still running
-
-The canonical `occt` slot had 12 renders against 24,591 for `reference` and
-`ldview`. Overnight: msb-uai did 1,800 parts and exited clean; **studio is
-still going** (`e6e1db65`, deadline 12:38, 7,397 unprinted parts, ~443/617
-batches at last look). `f15f9547` streams its output home every 5 minutes.
-
-**Nothing fetches on its own.** `--out`/`--to` only record a destination. The
-r8 census sat unfetched on both nodes for hours, and studio's first fetch
-stream timed out mid-run and stranded 656 files. A `fetch --stream` must
-outlive the job it follows.
-
-- **When studio finishes: run one more ingest + bake.** `out/ingest-bake.sh`
-  does both in order. The pass running now (`7f3e9df5`) started while studio
-  was still writing, so the last batches will be indexed but unbaked.
-- r8 is fetched and ingested (934 shards, `out/census/r8-studio` and
-  `r8-uai`). `census-ingest.sh` was NOT running; start it if you want the
-  database live again.
-- `store-queue/` holds the batch lists and is untracked-but-not-ignored, which
-  is the only reason `onto sync` carries them (`out/` is ignored). **10,708
-  printed parts of the gap are still unrendered.**
-
-## The four naive-tail rows: measured, not yet decided
-
-`scripts/measure-snap-gaps.py` over 500 random parts, both engines:
-
-    engine   move >= 0.5px    pass-2 refits   median move
-    occt     177 (35.4%)      53              0.013 px
-    naive    201 (40.2%)      59              0.098 px
-
-So pass 1 is **not** vacuous on occt, and the two populations are far closer
-than the goldens implied. What is still missing is whether occt's moves are
-REPAIRS: on `4019` three were checked by eye and all three were (a spur, a
-T-stub, a broken corner), but that is one part.
-
-**`scripts/snap-render-ab.py` timed out at 9h38m over the 177 affected parts
-and wrote nothing** -- it only writes `--results` at the end. Fix that to
-append per part before re-running it; the repo's own rule is that a harness
-reports as it goes.
-
-## Traps worth keeping
+### Traps worth keeping
 
 - **`onto fetch <node>:<path> .` FLATTENS.** It dumped 659 SVGs into the repo
-  root. Give it the matching directory, not `.`.
+  root. Give it the matching directory, never `.`.
 - **`onto sync` stages untracked files to build its patch**, so `renders/`
-  (untracked, and `*.svg` deliberately not ignored) travels with every sync
-  and once put one 111 MiB over its 8 MiB limit. It also ships a peer's
-  uncommitted edits to a render node -- which is why studio was given the
-  unprinted gap only.
+  travels with every sync (`*.svg` there is deliberately not ignored) and once
+  put one 111 MiB over its 8 MiB limit. It also ships a peer's uncommitted
+  edits to a render node, which is why studio was given unprinted parts only.
 - **`onto sync --force` deletes node files the sync is not sending.** Three
   files existed ONLY on studio (`lab/ab.html`, `lab/src/corpus/abBadges.tsx`,
   `abOldBadges.ts`); they are rescued into the working tree, untracked, and
   want committing or deleting by whoever wrote them.
-- **`onto` has no dependency primitive.** It refuses with a 409 while a tree is
-  locked. Do not build a poll-and-submit job for it; check whether the running
-  job is nearly done instead.
+- **`onto` has no dependency primitive** -- it 409s while a tree is locked. Do
+  not build a poll-and-submit job for it.
+- **Nothing fetches on its own.** `--out`/`--to` only record a destination; a
+  `fetch --stream` must be launched and must outlive the job it follows.
 - **A crash report from `IntUnifyFaces` is by design** -- `_unify_survives`
   probes UnifySameDomain in a forked child because it segfaults on cracked
-  meshes.
-
-
-## occt draws a curved decal whole now, and the trap that hid it
-
-`3941p01`'s panel kept 14,651 navy pixels against naive's 64,562; it draws
-72,529. Rendered alone on an empty canvas the decal's own path came out as
-crescents, so the fill was being cut rather than covered — the unwrap and the
-bind were never implicated, and both engines emit the region as one element.
-
-A merged decal region is re-projected onto its carrier's exact surface but
-carried no occluder, so `order_faces` fitted an affine plane through a panel
-wrapped around a cylinder. That chord plane sits 1.4 to 4.0 LDU behind the body
-facets the print lies on, against an eps of 0.048, and the boolean clip in
-`fill_ops` then took 83% of it away.
-
-**`unwrap.bind` picks a carrier by radial distance to the SURFACE and never
-looks at the angular sector.** This is what makes the bug expensive: giving the
-region `carrier.occluder()` changed nothing and said nothing, because
-`3941p01`'s decal had bound to a 90-degree quadrant that does not contain it,
-every witness ray was clamped away as a miss, and the `inf` fell back to the
-same plane fit. `Primitive.full_occluder()` opens the sector for this one use,
-on its own instance — `occluder()` is shared with the wall, whose sector is
-what stops a quarter-wall occluding rays that miss it. Anything else that reads
-a decal's carrier should assume the sector is wrong.
-
-naive is untouched by construction: it builds `own_occ` from its analytic faces
-only, so the `carrier` key is inert there.
-
-**The fix is inside `6cfdfc7`, whose message is about `onto`.** A peer staged
-one file by name and ran a bare `git commit`, which commits the WHOLE index —
-and the index is shared, so my staged hunks rode along and were pushed that
-way. `git log` will not find this fix under anything decal-shaped. Narrow
-`git add` is not the guard; `git commit -- <paths>` is, because it ignores the
-index entirely. The diagnosis lives
-on the `3941p01-decal-under-its-own-wall` defect entry, now `fixed`.
-
-## `occt-full-turn-gradient` is merged: a full turn shades as a dome
-
-A curved span that closes on itself (`ub - ua` a whole turn) had a zero-length
-`grad_axis`, and SVG paints a degenerate gradient as its last stop -- `4740`'s
-dish came out `#aaaaaa` against naive's `#565656`, picked by sample order.
-Such a span now takes a radial gradient (`occt._turn_gradient`), a coaxial
-stack of them shares one ramp keyed on the axis line (`_axis_key`,
-`_merge_turn_gradients`), and an exact surface's ramp is two stops rather than
-eight bins -- binning mixed azimuths at one radius and every reversal drew an
-arc across the dish. `tests/test_occt.py` covers all three.
-
-**A dome's highlight comes from the light, not from a fit.** Two placements
-were measured against LDView on `4740` and are worse: the brightest sample's
-own position (radius 0.37 against a true 1.18) and the sphere radius
-`hypot(Lx, Ly)` (0.60). A dish's normals tilt only slightly from its axis, so
-the normal nearest the light is at the outer edge; the rim at 0.95 lands at
-1.14. The least-squares slope `_radial_focal_stops` still fits for the faceted
-path sat 71 degrees off the light on the same part.
-
-**`naive` is not the oracle for `4740`'s dish.** LDView ramps it 175 to 143;
-naive paints it flat at 86. `occt` disagreeing there is `occt` being right, so
-check a shading disagreement against `scripts/render-references.py` before
-calling it drift -- and pass `--engine occt`, or that script renders "ours"
-with the DEFAULT engine and compares LDView against naive.
-
-**`.venv/bin/pytest` in a worktree tests the MAIN checkout's library.** The
-venv is shared and its editable `brick_icons` is rooted at the main clone, so
-the console script imports that tree -- including whatever is uncommitted in
-it -- and the worktree's own `brick_icons/` never loads. Run
-`.venv/bin/python -m pytest`, which puts cwd first on `sys.path`. It goes
-green against the wrong code everywhere the branch has no feature main lacks,
-which is what hides it.
-
-**The golden gate cannot see a part that stops rendering.** A case that ERRORs
-is dropped from the hash set instead of failing, so `BRICK_GOLDENS=full`
-reports one fewer case hashed and still fails only on drift. Unaddressed.
-
-Two things did not come across. The branch's letterbox fix -- marks measured
-against the drawing rather than the pane it letterboxes inside -- patched
-`lab/src/defects/geometry.ts` and `SourcePane`, which `f1638fc` deleted in
-favour of labkit's annotations. `partInspector` deliberately hands labkit the
-measured pane body as a target's `content`, so a stored fraction stays a
-fraction of the pane; the branch's three `6589` marks were converted into that
-frame on merge (the 643.5x843.5 pane whose drawing sat at y 208.1..635.4).
-Reviving the fix means giving labkit the drawing's box instead, and moving
-every mark filed before it.
-
-## Baton, 2026-09-07 late: the reference is calibrated, baked and indexed
-
-**Done: `renders/reference` holds all 24,591 parts and corpus.db indexes them**
-(1.0 GB, gitignored). The bake ran on msb-uai in 45 minutes of CPU. Re-baking a
-slot is `scripts/shot-sink.py --list <parts> --out renders/<slot>`, resumable by
-rerunning; indexing it afterwards is `scripts/index-slot-renders.py --source
-<slot>`, which records renders where they lie instead of dropping the database
-the way `db.rebuild` does.
-
-**The slot is `reference` now, not `ortho`.** It cost nothing: no rows were
-indexed and `renders/ortho` never existed.
-
-**The shot page frames itself with the engine's own fit.** `viewBasis` and
-`fitAffine` in `lab/src/panes/viewport.ts` are ports of `hlr.view_basis` and
-`hlr.fit_affine`; every render POSTs a `<part>.fit.json` in the schema the CLI
-writes beside an SVG. Reference and engine register through world space --
-their fits share a basis, so the map between them is a 2D similarity. Warping
-the reference into occt's viewBox gives IoU 0.9899 / 0.9854 / 0.9703 on
-3001 / 3941 / 4740, with ref-only 0 on all three: the disagreement is entirely
-our analytic circle standing outside the library's inscribed polygon, which is
-the intended difference.
-
-**The reference frames itself from the part and must keep doing so.** Frame it
-from the drawn-ops bbox instead and every engine change invalidates the whole
-bake.
-
-**Two traps that cost real time, both silent.** `LDrawLoader.preloadMaterials`
-resolves against `this.path`, so it has to run before `setPath`; and `load`
-opens with `setMaterials([])`, which throws the preloaded color table away
-before every part -- parts come in through `parse` for that reason. Miss either
-and a quarter of the library draws in three's missing-material magenta with no
-error anywhere.
-
-**Two parts are drawn wrong by our engine, in every slot, silently.** 2374b
-(Boat Cargo Loading Plate, 1987-1991) and 5241 (Windscreen Wedge, 2024) are
-official LDraw parts whose subparts were never promoted out of the Parts
-Tracker; the official release ships them with references it does not contain.
-`hlr.default_roots` never looks in `vendor/ldraw/Unofficial/`, and `flatten`
-skips an unresolvable subfile without a word (hlr.py:118) -- so 2374b loses all
-four mirrored corners and 5241 loses its whole shell. Scanned: exactly these two
-across 24,591 parts, and all three missing subfiles are in `Unofficial/`.
-Appending that tree to `default_roots` fixes it with a blast radius of two,
-since official roots are tried first. **Not done -- it changes resolution for
-every render in the repo and is Mike's call.** The reference bake works around
-it in the sink, so the reference slot draws them right and our slots do not.
-
-**`vendor/ldraw/Unofficial/` has three files and no node has them.** They are
-untracked (`/vendor` is gitignored) and were dropped there by hand on 2026-09-06
-without a note. A fleet bake fails those two parts again until they are rsynced
-to the node, or until they stop living somewhere git ignores.
-
-**`onto sync` to msb-uai refuses over 4,801 translucent-occt SVGs.** They are
-ignored here by `.git/info/exclude` and not there, so the node counts them as
-untracked files in tracked space. All 4,799 checked byte-identical to what is
-already in `renders/translucent-occt`, so `-force` is safe today, but the fix is
-a committed ignore rule -- `renders/**/*.fit.json` was added for exactly this
-reason before the bake could repeat it 24,591 times.
+  meshes. Exactly 1 part in 500 trips it: `23799`.
 
 ## Baton, 2026-09-07 night: naive's tail is audited, half of it landed
 
