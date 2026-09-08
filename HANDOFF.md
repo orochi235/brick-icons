@@ -1,3 +1,57 @@
+## Baton, 2026-09-08 afternoon: store ingested, and the snap verdict was wrong
+
+On `main`, in the shared checkout with two peers. `tests/goldens/defects.toml`
+is Mike's and stays dirty; never stage it. Fourteen commits are unpushed.
+
+**The corpus wall is current.** Nothing was ever stranded on studio -- its whole
+`renders/` tree was already local and both exit-1s were the fetch inheriting the
+store job's status. The 704 queued parts with no `.svg` were 654 the renderer
+failed on and 56 in batches it never reached; `store-occt-tail` got 43 of those
+56. Two `ingest-bake` passes ran. **What is left is 660 timeouts at the 120s
+cap, and 294 of them have a clean occt census row at 300s** -- most between 120
+and 240 seconds. That is a cap change, not an investigation.
+
+**Two structural zeros on the wall, one fixed.** `error_elsewhere` matched
+`source LIKE '<facet>-%'`, so a slot naming no facet -- `occt`, `naive`,
+`ldview`, `reference` -- matched its own name plus a hyphen and found nothing;
+the occt wall read zero "problem in another slot" while 654 of its parts had
+just timed out. It marks 5,400 now. **The other zero is still there:**
+`timed out` and `render error` read 0 on `occt` because `measurements` has no
+rows with that source at all -- `rebuild` reads `renders/**` and `out/census*/**`
+and nothing else, so the store's own failure logs in `out/store/*/` have never
+been ingested. The census logs largely cover the same parts (619 of the 661
+already carry an occt error row), which is why this has gone unnoticed.
+
+**The snap verdict in `OCCT-MIGRATION.md` was wrong twice and is now right.**
+First reading: pass 1 is inert on occt. Second: pass 1 deletes edges. Both
+wrong. `_snap_rim_crossings` pass 1 rewrites an arc's two angles and nothing
+else, so it cannot drop an op -- `24130` draws 218 elements with the snap alone
+and 218 with the cull alone, and only both together lose three.
+`cull_orphan_runs` is what deletes, and the snap only moves the endpoints that
+stop it recognising a junction. That is item 3, and it is a live defect in the
+shipped occt path.
+
+**The lesson worth keeping:** an eyeball pass over a full-frame render is not
+sensitive enough to catch a missing stroke. Counting `<path>` plus `<line>` is,
+costs nothing, and is `scripts/snap-element-delta.py`.
+
+### Open, in the order I would take them
+
+1. **`cull_orphan_runs` deletes real geometry on occt** -- see the item list
+   below, which carries the numbers and the disproof.
+2. **The wall's hash should carry its whole client state** -- designed, unbuilt,
+   `docs/superpowers/specs/2026-09-08-wall-hash-state-design.md`.
+3. **The store's failure logs are never ingested.** `rebuild` would need to walk
+   `out/store/*/`; `measurements`' primary key is `(run_id, part_id, engine)`
+   and the store's rows are keyed by source, so it needs either source-keyed
+   rows or its own table.
+4. **The 660 timeouts want a 300s cap**, not another fetch.
+
+**One thing needs a person:** the lab API on `127.0.0.1:8792` was started before
+today's `cells.py` change and has no `--reload`, so the wall still shows zero
+"problem in another slot" until someone restarts it. It is not this session's
+process and two peers were live on it.
+
 # Handoff — `main`: the corpus lab, and the OCCT engine
 
 ## The head band is closed on both engines
