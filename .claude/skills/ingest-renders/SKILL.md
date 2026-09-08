@@ -190,12 +190,9 @@ and what is still missing from the slot. "Ingested and baked" without them
 says nothing about whether the round is done — and the failures are in the
 JSONL, not in anything the database will show you.
 
-## Not covered here, and wanted
+## Swapping the library itself
 
-**An LDraw library update has no route.** `vendor/ldraw` is a rolling snapshot
-(`scripts/external-deps.lock`), so swapping it moves part ids, descriptions and
-geometry under everything derived from them: the parts seed, part features,
-every stored render's sha, the goldens, and what the census counts as covered.
-An `ingest-ldraw` skill beside this one would say what to re-derive, in what
-order, and how to tell which parts actually changed — the alternative being to
-re-render a library of 24,591 parts to find out. Nothing does this today.
+`ingest-ldraw` is that route. Updating `vendor/ldraw` moves part ids,
+descriptions and geometry under everything derived from them, and the step
+that cannot be redone comes before the download — read it before fetching
+anything.
