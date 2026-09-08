@@ -1859,9 +1859,14 @@ give back whatever share of the run they are. A 512px baked level between the
 128px PNG and the SVG was considered and deferred once the vector rung got
 fast; it would cost roughly 600MB per slot.
 
-**`~/src/castleblack/wall/README.md`** is a writeup of pulling the wall out
-into its own repo with this corpus as one host. Nothing is built, and it
-argues for waiting until the census stops landing renders.
+**`~/src/castleblack`** holds the design for pulling the wall out into two
+domain-free packages, with this corpus as the first host --
+`docs/superpowers/specs/2026-09-07-abstract-wall-design.md`. The earlier
+`wall/README.md` it superseded survives only at `a1fffd0`. Its first phase is
+built here on branch `states-as-data`: the cell states and the selection
+vocabulary are now tables, behind 45 `paintCommands` goldens. Nothing in this
+repo imports anything from castleblack, and nothing is meant to until the
+packages exist.
 
 **Grouping is on the wall.** `corpus-grouping-v2` merged, giving the sidebar
 four groupings -- nothing, coverage, category, release year -- an order and a
