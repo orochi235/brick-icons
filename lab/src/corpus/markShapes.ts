@@ -214,6 +214,8 @@ const BRUSH_FRAME = rotation(-Math.PI * 2 / 3, 0, 0.18);
 const brushed = (pts: readonly number[]) =>
   poly(clipRect(through(BRUSH_FRAME, pts), -1.8, -1.8, 3.6, 2.42));
 
+// Kept, though nothing points at it: `printed` was drawn as a brush until the
+// halftone took the badge, and a mark is cheap to hold and slow to redraw.
 // The handle runs off the edge of the field rather than stopping inside it: a
 // ferrule drawn whole is a stack of bands at the strip's floor, and the mark
 // is clipped to the disc, so this reads as a brush held into frame. Narrow
@@ -249,19 +251,64 @@ const technic: MarkShape[] = [
     transform: [1, 0, -0.15, 1, 0.07, 0] },
 ];
 
+// ------------------------------------------------------------- the printing
+
+/** A halftone screen filling the whole field: dots on a square lattice turned
+ *  to the 45 degrees a single-color screen is always shot at, clipped by the
+ *  badge's own disc. The field IS the printing, rather than carrying a picture
+ *  of a tool that does it.
+ *
+ *  `radiusAt` is given the dot's center, so a caller can ramp the dot across
+ *  the field the way a real screen renders a tone. Dots that fall entirely
+ *  outside the disc are dropped rather than drawn and clipped -- at the wall's
+ *  floor the whole mark is about seven dots across, and every one that is
+ *  really there costs a fill.
+ */
+function halftone(pitch: number,
+                  radiusAt: (x: number, y: number) => number): string {
+  const c = Math.SQRT1_2 * pitch;        // the 45-degree lattice's two vectors
+  const reach = FIELD_R + pitch;
+  const n = Math.ceil(reach / c) + 1;
+  let d = '';
+  for (let i = -n; i <= n; i++) {
+    for (let j = -n; j <= n; j++) {
+      const x = (i - j) * c, y = (i + j) * c;
+      const r = radiusAt(x, y);
+      if (r <= 0 || Math.hypot(x, y) - r > FIELD_R) continue;
+      d += circle(x, y, r);
+    }
+  }
+  return d;
+}
+
+/** Dots the same size everywhere. A decorated part is a flat tint -- printing
+ *  over the whole face -- so the screen renders no tone and needs no ramp.
+ *
+ *  Coarse on purpose: the wall draws this from 9px up, and at a finer pitch
+ *  the dots stop resolving and the badge is a gray disc a reader has to tell
+ *  apart from `retired` by its color alone. These hold as dots to about 14.
+ */
+const printed: MarkShape[] = [{ d: halftone(0.86, () => 0.30) }];
+
 // Composite: two L-trominoes interlocked into a 2x3 block -- the smallest
 // rectangle two identical pieces can tile, and it says assembled-from-parts
-// rather than merely stacked. Each piece takes its own color and the seam
-// between them is cut in the field, so neither needs an outline.
-const UPRIGHT = rotation(-Math.PI / 2);
+// rather than merely stacked. Drawn at the size that overruns the field on
+// both axes, so the disc is a hole cut through the join rather than a frame
+// around a picture of one: the same move the minifig badge makes, where the
+// disc is the head. What survives the clip is the step where the two pieces
+// take hold of each other, which is the part that carries the meaning -- an
+// L drawn whole is a diagram, and at the strip's floor it is a smudge.
+// The seam is cut in the field so neither piece needs an outline.
+const COMPOSITE_FILL = 2.6;   // the short axis (1.2) has to clear 2*FIELD_R
+const COMPOSITE_FRAME: Matrix = [0, -COMPOSITE_FILL, COMPOSITE_FILL, 0, 0, 0];
 const composite: MarkShape[] = [
-  { d: poly(through(UPRIGHT,
+  { d: poly(through(COMPOSITE_FRAME,
       [-0.6, -0.9, 0.6, -0.9, 0.6, -0.3, 0, -0.3, 0, 0.3, -0.6, 0.3])) },
-  { d: poly(through(UPRIGHT,
+  { d: poly(through(COMPOSITE_FRAME,
       [0, -0.3, 0.6, -0.3, 0.6, 0.9, -0.6, 0.9, -0.6, 0.3, 0, 0.3])),
     fill: 'accent' },
-  { d: line(through(UPRIGHT, [0.6, -0.3, 0, -0.3, 0, 0.3, -0.6, 0.3])),
-    fill: 'none', stroke: 'field', width: 0.12, join: 'miter' },
+  { d: line(through(COMPOSITE_FRAME, [0.6, -0.3, 0, -0.3, 0, 0.3, -0.6, 0.3])),
+    fill: 'none', stroke: 'field', width: 0.16, join: 'miter' },
 ];
 
 // Duplo's d, in the weight its logotype uses: a heavy rounded geometric with a
@@ -397,7 +444,8 @@ const sticker = (face: string): MarkShape[] =>
 // ------------------------------------------------------------------ the set
 
 export const MARK_SHAPES: Record<string, MarkShape[]> = {
-  star, archive, redo, bolt, magnet, brush, minifig, technic, composite, duplo,
+  star, archive, redo, bolt, magnet, minifig, technic, composite, duplo,
+  printed, brush,
   stickerPolice: sticker('police'), stickerFlames: sticker('flames'),
 };
 

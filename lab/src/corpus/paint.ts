@@ -150,7 +150,7 @@ export const LABEL_MIN_PX = 110;
 
 /** A picture rather than a letter, where a letter would need explaining. */
 export type BadgeMark = 'stickerPolice' | 'stickerFlames'
-  | 'star' | 'archive' | 'redo' | 'bolt' | 'magnet'
+  | 'star' | 'archive' | 'redo' | 'bolt' | 'magnet' | 'printed'
                       | 'brush' | 'minifig' | 'technic' | 'composite' | 'duplo';
 
 export interface CellBadge {
@@ -234,10 +234,10 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
   // in the library is printed on.
   sticker: { tag: 'sticker', mark: 'stickerPolice', field: '#1a4b8c',
              ink: '#ffffff', accent: '#c9c9d0' },
-  printed: { tag: 'printed', mark: 'brush', field: PROPERTY_FIELD, ink: '#ffffff',
-             accent: '#00d8d8' },
+  printed: { tag: 'printed', mark: 'printed', field: PROPERTY_FIELD,
+             ink: '#ffffff' },
   composite: { tag: 'composite', mark: 'composite', field: PROPERTY_FIELD,
-               ink: '#22c8dc', accent: '#f5a623', scale: 0.86 },
+               ink: '#22c8dc', accent: '#f5a623' },
 };
 
 /** Every badge the wall can draw, in the order the legend lists them:
