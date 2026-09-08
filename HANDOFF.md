@@ -26,9 +26,12 @@ a decal's carrier should assume the sector is wrong.
 naive is untouched by construction: it builds `own_occ` from its analytic faces
 only, so the `carrier` key is inert there.
 
-**The fix is inside `6cfdfc7`, whose message is about `onto`.** A peer session's
-`git commit -a` swept it out of the index mid-commit, and it was pushed that
-way; `git log` will not find it under anything decal-shaped. The diagnosis lives
+**The fix is inside `6cfdfc7`, whose message is about `onto`.** A peer staged
+one file by name and ran a bare `git commit`, which commits the WHOLE index —
+and the index is shared, so my staged hunks rode along and were pushed that
+way. `git log` will not find this fix under anything decal-shaped. Narrow
+`git add` is not the guard; `git commit -- <paths>` is, because it ignores the
+index entirely. The diagnosis lives
 on the `3941p01-decal-under-its-own-wall` defect entry, now `fixed`.
 
 ## `occt-full-turn-gradient` is merged: a full turn shades as a dome
