@@ -1,0 +1,31 @@
+/* A fixed height rather than an aspect ratio: the panel opens inside a column
+   whose other children are the slot tiles, and a ratio there resizes with the
+   lightbox width until the canvas is taller than the screen. */
+.corpus-orbit {
+  position: relative;
+  height: 320px;
+  border: 1px solid var(--wzl-border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--wzl-bg-raised);
+  cursor: grab;
+}
+
+.corpus-orbit:active { cursor: grabbing; }
+
+.corpus-orbit canvas { display: block; }
+
+/* The pose the drag left behind, in the same `LAT,LONG` the CLI takes -- so
+   an angle worth keeping can be typed straight into `--angle`. */
+.corpus-orbit-pose {
+  position: absolute;
+  right: 0.4rem;
+  bottom: 0.3rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  background: var(--wzl-surface);
+  color: var(--wzl-fg-muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}

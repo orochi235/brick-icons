@@ -154,3 +154,12 @@
   display: inline-flex;
   gap: 0.3rem;
 }
+
+/* The 3D panel's own placeholder. The canvas brings its own frame; this is
+   only what stands in while the chunk is on the wire. */
+.corpus-orbit-loading {
+  margin: 0;
+  padding: 1.2rem 0;
+  color: var(--wzl-fg-muted);
+  text-align: center;
+}

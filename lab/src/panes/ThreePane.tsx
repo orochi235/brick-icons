@@ -86,8 +86,15 @@ interface RigProps {
   style: ThreeStyle;
   framing: Framing;
   lines: LineMaterial[];
+  orbit: Orbit;
   onSettle: (angle: string) => void;
 }
+
+/** Who owns the left drag. In the trial the pane shares a camera with every
+ *  other pane, so the left drag pans that one and orbiting is the middle and
+ *  right buttons; a pane standing on its own has no shared camera to protect
+ *  and the plain drag should turn the part. */
+export type Orbit = 'shared' | 'own';
 
 /** Points the camera at the pose `--angle` names and frames it the way the
  *  render did.
@@ -96,8 +103,9 @@ interface RigProps {
  *  angle is current and the fit is a render behind, and taking the direction
  *  from the stale one would snap the part back to the previous pose. The
  *  framing lags by that one render, which is all registration promises. */
-function Rig({ angle, fit, box, view, style, framing, lines, onSettle }: RigProps) {
-  const { camera } = useThree();
+function Rig({ angle, fit, box, view, style, framing, lines, orbit,
+               onSettle }: RigProps) {
+  const { camera, invalidate } = useThree();
   const controls = useRef<{ target: THREE.Vector3; update: () => void } | null>(null);
 
   useEffect(() => {
@@ -138,7 +146,13 @@ function Rig({ angle, fit, box, view, style, framing, lines, onSettle }: RigProp
     ortho.updateProjectionMatrix();
     controls.current?.target.set(0, 0, 0);
     controls.current?.update();
-  }, [angle, fit, box.width, box.height, view, framing, camera]);
+    // `frameloop="demand"` draws only when asked, and moving a camera object
+    // in an effect is not an ask. Without this the pane holds whatever was on
+    // the buffer until some other event drew a frame -- which for a pane that
+    // is revealed rather than laid out means an empty canvas until the first
+    // drag.
+    invalidate();
+  }, [angle, fit, box.width, box.height, view, framing, camera, invalidate]);
 
   useEffect(() => {
     const width = strokePx(fit, box, view, style.lineWidth);
@@ -147,7 +161,8 @@ function Rig({ angle, fit, box, view, style, framing, lines, onSettle }: RigProp
       // The line shader works in clip space, so it has to be told the pixels.
       material.resolution.set(Math.max(1, box.width), Math.max(1, box.height));
     }
-  }, [lines, fit, box.width, box.height, view, style.lineWidth]);
+    invalidate();
+  }, [lines, fit, box.width, box.height, view, style.lineWidth, invalidate]);
 
   return (
     <OrbitControls
@@ -158,13 +173,18 @@ function Rig({ angle, fit, box, view, style, framing, lines, onSettle }: RigProp
       enableZoom={false}
       // An undefined button is one OrbitControls does nothing with, which is
       // how the left drag is left to the shared camera.
-      mouseButtons={{ LEFT: undefined, MIDDLE: THREE.MOUSE.ROTATE,
-                      RIGHT: THREE.MOUSE.ROTATE }}
-      // Touch has no middle or right button to put the orbit on, and the
-      // defaults (one finger rotates, two dolly-pan) would take both of the
-      // pane's own gestures. The pose bar's named angles are the way round
-      // for now.
-      touches={{ ONE: undefined, TWO: undefined }}
+      mouseButtons={orbit === 'own'
+        ? { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.ROTATE,
+            RIGHT: THREE.MOUSE.ROTATE }
+        : { LEFT: undefined, MIDDLE: THREE.MOUSE.ROTATE,
+            RIGHT: THREE.MOUSE.ROTATE }}
+      // Touch has no middle or right button to put the orbit on, and in the
+      // trial the defaults (one finger rotates, two dolly-pan) would take
+      // both of the pane's own gestures. A pane on its own has no gestures to
+      // lose, so one finger turns it.
+      touches={orbit === 'own'
+        ? { ONE: THREE.TOUCH.ROTATE, TWO: undefined }
+        : { ONE: undefined, TWO: undefined }}
       // `end` fires when the drag stops, which is when a re-render is worth it.
       onEnd={() => onSettle(formatAngle(angleFromOrbit(camera.position)))}
     />
@@ -209,11 +229,14 @@ export interface ThreePaneProps {
   style: ThreeStyle;
   /** The pane's drawing as an image, for the loupe to magnify. */
   onSnapshot?: (url: string | null) => void;
+  /** Who owns the left drag; 'shared' (the default) leaves it to the trial's
+   *  shared camera. */
+  orbit?: Orbit;
   onSettle: (angle: string) => void;
 }
 
 export function ThreePane({ part, angle, fit, box, view, style, onSnapshot,
-                            onSettle }: ThreePaneProps) {
+                            orbit = 'shared', onSettle }: ThreePaneProps) {
   const [framing, setFraming] = useState<Framing>({ radius: RADIUS, centre: [0, 0, 0] });
   const [lines, setLines] = useState<LineMaterial[]>([]);
   if (!part.trim()) return <p className="three-empty">no part chosen</p>;
@@ -222,7 +245,12 @@ export function ThreePane({ part, angle, fit, box, view, style, onSnapshot,
   const registered = fit && box.width >= 1 && box.height >= 1 ? fit : null;
   const sun = lightPosition(registered, Math.max(1, framing.radius) * 8);
   return (
-    <Canvas dpr={SUPERSAMPLE} frameloop="demand"
+    // `demand` is what pays for the supersampled buffer across the trial's
+    // several panes, and it needs every draw to be asked for. A pane on its
+    // own is one small canvas that is revealed rather than laid out, where the
+    // model arrives through Suspense after the asking is over -- so it runs
+    // the plain loop and always has something on the buffer.
+    <Canvas dpr={SUPERSAMPLE} frameloop={orbit === 'own' ? 'always' : 'demand'}
       gl={{ preserveDrawingBuffer: true }}>
       {style.background ? <color attach="background" args={[style.background]} /> : null}
       <OrthographicCamera makeDefault near={0.1} far={20000} />
@@ -233,7 +261,7 @@ export function ThreePane({ part, angle, fit, box, view, style, onSnapshot,
           onFraming={setFraming} onLines={setLines} />
       </Suspense>
       <Rig angle={angle} fit={registered} box={box} view={view} style={style}
-        framing={framing} lines={lines} onSettle={onSettle} />
+        framing={framing} lines={lines} orbit={orbit} onSettle={onSettle} />
       {onSnapshot ? (
         <Snapshot onSnapshot={onSnapshot}
           // `framing` is the term that says the model has ARRIVED: the part

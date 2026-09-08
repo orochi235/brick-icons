@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { LabClient } from '@lab/api/client';
 import { BadgeSwatch } from '@lab/corpus/BadgeSwatch';
@@ -13,6 +13,10 @@ import type { PartDetail } from '@lab/corpus/types';
 import { STATUSES, type DefectStatus } from '@lab/defects/useDefects';
 import { STATUS_BADGES } from '@lab/defects/statusBadges';
 import '@lab/corpus/Lightbox.css';
+
+// Lazy, and the only import of it: three.js, the LDraw loader and drei are
+// most of a megabyte, and the wall must not pay for them to draw a thumbnail.
+const PartOrbit = lazy(() => import('@lab/corpus/PartOrbit'));
 
 type Slot = PartDetail['slots'][number];
 
@@ -90,6 +94,9 @@ export function Lightbox({ partId, source, client, onClose }: {
   // comparison can be made here without disturbing the wall behind.
   const [shown, setShown] = useState(source);
   const [flagging, setFlagging] = useState(false);
+  // Off until asked: mounting it is what fetches three.js, and most visits to
+  // the lightbox are to read a render rather than to turn the part.
+  const [turning, setTurning] = useState(false);
   const [title, setTitle] = useState('');
   const [flagError, setFlagError] = useState<string | null>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -223,9 +230,18 @@ export function Lightbox({ partId, source, client, onClose }: {
             ))}
             {slots.length === 0 && <li>no slot has drawn this part</li>}
           </ul>
+          {turning && (
+            <Suspense fallback={<p className="corpus-orbit-loading">loading the model…</p>}>
+              <PartOrbit part={detail.part.id} />
+            </Suspense>
+          )}
           <div className="corpus-actions">
             <a className="corpus-action" href={`/index.html?part=${encodeURIComponent(partId)}`}
                target="_blank" rel="noopener noreferrer">Open in lab</a>
+            <button type="button" className="corpus-action" aria-pressed={turning}
+                    onClick={() => setTurning((was) => !was)}>
+              {turning ? 'Hide 3D' : 'Turn it around'}
+            </button>
             <button type="button"
                     className={flagging ? 'corpus-action' : 'corpus-action corpus-action-flag'}
                     onClick={() => setFlagging((was) => !was)}>
