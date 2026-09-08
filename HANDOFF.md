@@ -44,6 +44,20 @@ lines can be confused at all -- not a second HLR pass, which doubles the phase.
 - **`3484` and `6589` drop no surface at all** -- every cyli, con, disc and
   ring builds a face, so neither is the 49492 class.
 
+**A third fix landed** (`99a9693`): `sector_face` drew its arcs off a `gp_Ax2`
+and computed its two radial ends from `uh` by hand, and under a placement
+orthonormal only to three decimals the two frames differ by 6e-5 LDU -- 600x
+MakeWire's tolerance, so the wire never closed and 92692's ring sector built no
+face. Rare (no part in a random 300), and the second row in this sweep whose
+whole symptom was a surface that silently never reached the shape.
+
+**The single witness in `order_faces` is now the biggest named cause.** It owns
+`2310` (a stud painted over the slope that hides it, seen per-face), and it is
+where the pierce-seam rows point after four narrowings failed. One witness per
+screen-overlapping pair cannot order two faces that interleave;
+`_refine_order_clips` is the machinery that already knows this, and whether it
+reaches these pairs is the question to ask first.
+
 ### Where to pick it up
 
 1. **32 occt rows are still open.** `scripts/surface-drop-probe.py <part>` is
@@ -54,8 +68,9 @@ lines can be confused at all -- not a second HLR pass, which doubles the phase.
    before building one -- a BSpline through ThruSections would occlude,
    contribute no fill, and trip
    `test_every_corpus_surface_kind_is_one_the_face_producer_handles`.
-3. **The stored `renders/occt` slot is stale** for every part these two fixes
-   move. Re-render before reading a wall sheet as current.
+3. **The stored `renders/occt` slot is stale** for every part these three
+   fixes move -- `4107582e` may already be one of them: it renders with its
+   inner square at HEAD. Re-render before reading a wall sheet as current.
 
 ## Baton, 2026-09-08 afternoon: store ingested, and the snap verdict was wrong
 
