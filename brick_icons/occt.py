@@ -957,20 +957,31 @@ def _locus_bboxes(loci):
     return bb
 
 
-def _straight_lines(out):
-    """Every type-2 line as its own edge, or None if the part states none.
+def _straight_lines(out, right, up):
+    """(type-2 lines, condlines that read as a silhouette) as their own edges.
 
-    Only the straight ones, and not the chords arcfit claimed: a chord lies
-    inside the material its arc bulges out of, so HLR calls it hidden and it
-    would mask away every fitted arc.
+    Both are straight and both are stated, which is what makes the mask sound
+    for them -- see _drop_lines_hlr_hides. Not the chords arcfit claimed: a
+    chord lies inside the material its arc bulges out of, so HLR calls it
+    hidden and masking on it would delete every fitted arc.
     """
-    eds = []
+    hard, cond = [], []
     for e in out.get("2", ()):
         seg = np.asarray(e, float)
         ed = _line_edge(seg[0], seg[1])
         if ed is not None:
-            eds.append(ed)
-    return _compound(eds) if eds else None
+            hard.append(ed)
+    for q in out.get("5", ()):
+        pts = np.asarray(q, float)
+        sx, sy, _ = hlr.project(pts, right, up, np.zeros(3))
+        if not hlr.same_side(np.array([sx[0], sy[0]]), np.array([sx[1], sy[1]]),
+                             np.array([sx[2], sy[2]]), np.array([sx[3], sy[3]])):
+            continue                     # not a silhouette here: no locus either
+        ed = _line_edge(pts[0], pts[1])
+        if ed is not None:
+            cond.append(ed)
+    return (_compound(hard) if hard else None,
+            _compound(cond) if cond else None)
 
 
 def _visible_line_spans(comp):
@@ -1004,7 +1015,15 @@ def _drop_lines_hlr_hides(picked, spans):
     meridian projects along them: seven facet creases came out as a line down
     the middle of the dome, which no engine and no reference draws.
 
-    Only straight lines are masked. A rim circle is coincident with the
+    Type-2 lines only. Judging a condline locus (kind `sil`) against those
+    spans is judging it against nothing, and 92692 lost three silhouette pieces
+    at a ridge that way, one of which left a black stub hanging off the apex.
+    Masking a condline against its OWN projection does not work either: it lies
+    on the shared edge of two nearly coplanar facets, so HLR breaks the tie
+    visible and the mask passes everything -- measured, 53119 and 32062 move by
+    nothing. Drawing a crease that lies on a condline is also the DESIGN there,
+    since a tessellated dome's profile is a facet boundary and the condline is
+    what distinguishes it. A rim circle is coincident with the
     cylinder it bounds, and a loose copy of it defeats HLR's tie -- which is
     why select_authored reads the shape's own fragments in the first place --
     but a plane cannot hide its own boundary, so for a line the loose copy is
@@ -1012,7 +1031,10 @@ def _drop_lines_hlr_hides(picked, spans):
     """
     keep = []
     for edge, locus in picked:
-        if locus[0] != "seg" or (len(locus) > 4 and locus[4] is not None):
+        # a locus carrying an ell is a chord arcfit claimed, and it is drawn as
+        # the arc rather than as the chord
+        if (locus[0] != "seg" or locus[3] != "line"
+                or (len(locus) > 4 and locus[4] is not None)):
             keep.append((edge, locus))
             continue
         try:
@@ -1488,11 +1510,31 @@ def _absorb_dome_walls(faces, own_occ):
             W, n = pf["_plane3"]
             if not shade.facet_on_wall(prim, W, n, oriented=False):
                 continue
+            if not _inside_ramp(wf["poly"], pf["grad_radial"]):
+                continue
             wf["grad_radial"] = pf["grad_radial"]
             wf["grad_samples"] = pf["grad_samples"]
             wf["group"] = pf["group"]
             wf.pop("grad_axis", None)
             break
+
+
+def _inside_ramp(poly, spec):
+    """Does the dome's radial gradient reach every corner of this wall?
+
+    A facet lying on a wall's surface does NOT make the wall part of that
+    dome. 2947bc01's shaft carries 12 facets of a dome 6.9 gradient radii
+    away, and adopting its ramp painted the whole shaft the ramp's LAST stop
+    -- SVG clamps outside the ellipse -- with the ellipse's own edge crossing
+    it as a ghost. The gradient's extent is its own statement of what surface
+    it describes, so the test is its extent and not a tolerance: 3626cp7d's
+    barrel reaches 0.98 of it, 2947bc01's shaft 6.24 and 6.95.
+    """
+    p = np.asarray(poly, float)
+    r = spec["r"] or 1.0
+    t = np.hypot((p[:, 0] - spec["cx"]) / r,
+                 (p[:, 1] - spec["cy"]) / (r * (spec["ratio"] or 1.0)))
+    return bool(t.max() <= 1.0)
 
 
 def _merge_turn_gradients(faces):
@@ -2044,8 +2086,8 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None):
         z, _ = projector_axes(right, up)
         fwd = -z / np.linalg.norm(z)
     shape = build_shape(out)
-    comps = hlr_edges(shape, right, up, cull=cull,
-                      lines=_straight_lines(out) if cull else None)
+    lines, _cond = _straight_lines(out, right, up) if cull else (None, None)
+    comps = hlr_edges(shape, right, up, cull=cull, lines=lines)
     loci = authored_loci(shape, out, right, up)
     picked = select_authored(comps.get("sharp"), loci)
     if cull:
