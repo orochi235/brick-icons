@@ -1,92 +1,85 @@
 # Handoff — `main`: the corpus lab, and the OCCT engine
 
-## Baton, 2026-09-08 late morning: the hands are fixed; five things are open
+## Baton, 2026-09-08 midday: hands, wall and pinch fixed; three things open
 
-On `main`, in the shared checkout. Four commits from this session are unpushed
-(`git log --oneline @{u}..HEAD`); `tests/goldens/defects.toml` is Mike's and
-stays dirty.
+On `main`, in the shared checkout. `git log --oneline @{u}..HEAD` for what is
+unpushed; `tests/goldens/defects.toml` is Mike's and stays dirty.
 
 **76382's hands were a tolerance bug, not a hand bug.** `occt.frame` judged a
 primitive's axis against `ORTHO_TOL = 1e-4`, but a .dat writes a placement
 matrix to three decimals, so a *rotation in a part file is only orthonormal to
 about 1e-3* -- 76382 hangs each hand off 0.985/0.696/0.707, whose Gram
 off-diagonal is 1.0e-3. Every cylinder in the hand was read as skew, dropped,
-and drawn from tessellation instead: two overlapping crescents and two floating
-fragments. Both tolerances are 3e-3 now, which is the rounding budget for a
-two-deep chain and sits in a gap the measurement says is empty -- no cyli has
-an axis residual between 2e-3 and 5e-3, and no kind is out of round between
-1e-3 and 3e-3, while authored skew starts ten times higher. Rerun
-`scripts/measure-ortho-residuals.py` to get both gaps back.
+and drawn from tessellation instead. Both tolerances are 3e-3 now, which the
+measurement puts in an empty gap: no cyli has an axis residual between 2e-3 and
+5e-3, no kind is out of round between 1e-3 and 3e-3, and authored skew starts
+ten times higher. `scripts/measure-ortho-residuals.py` re-derives both.
 
-**The reproduce that made it quick, if something like it turns up again:** the
-same hand renders correctly at identity and breaks under any rotation, while
-moving the CAMERA ten degrees changes nothing. That pair says the fault is in
-the transform algebra and not the pose, and it took four renders.
+**The reproduce that made it quick:** the hand renders correctly at identity and
+breaks under any rotation, while moving the CAMERA ten degrees changes nothing.
+That pair says the fault is in the transform algebra and not the pose, and it
+cost four renders. The grip's cavity is drawn but coarse against LDView's clean
+open C, which is what is left of `76382psj-...` in `defects.toml`.
 
-**The grip's cavity is drawn but coarse.** LDView draws a clean open C; ours is
-chunky and carries a stray internal stub. That is what is left of
-`76382psj-missing-outlines-reference-is-wrong` in `defects.toml` -- the row is
-still right, it is just much smaller than it was.
+**Chrome's pinch zoom was invisible to the wall.** Measured at page scale 3:
+`devicePixelRatio` stays 1 and `innerWidth` stays 1280, while
+`visualViewport.scale` reads 3 and `visualViewport.width` reads 427. Three
+things now move together, and **any one alone is worthless** -- the mip level
+reads off cell x camera x pinch; the canvas backing store is sized off dpr
+TIMES the pinch (without it a sharper tile is downsampled straight back into
+the same device pixels); and `visibleRange` takes an origin so it covers only
+the slice still on screen. The third is not a cost, it is what pays for the
+other two: at 3x the visible area is a ninth, so nine times fewer cells each
+want nine times the pixels and the totals are conserved.
+
+**The wall's "max update depth" is closed.** `clampView` hands back its argument
+when nothing is out of bounds but builds a fresh object the moment it clamps, so
+a camera pinned against an edge rewrote state on every pointer event while its
+four numbers stood still. `updateCam` compares by value now. **That fix used to
+fail two tests** and the reason is worth keeping: the level pick hung off
+`[cam]`, so it depended on a same-valued re-fit writing state to run at all. It
+keys on the drawn cell size and the viewport instead.
 
 ### Open, in the order I would take them
 
-1. **The corpus wall hits "max update depth exceeded"** (Mike, this session).
-   The chain is `Wall.tsx:540` onMove -> `CorpusWall.tsx:360` onPan ->
-   `CorpusWall.tsx:178` setCam. What is wrong there: `clampView` returns its
-   argument untouched when nothing is out of bounds but builds a **fresh object
-   the moment it clamps**, so a camera pinned against an edge writes new state
-   on every pointer event while its four numbers stand still.
-   **The obvious fix is not available.** Guarding `setCam` by value
-   (`sameView`) fails two tests in `CorpusWall.test.tsx` -- "opens on the level
-   the initial fit asks for" and "holds its level through a slot change" --
-   because the level pick hangs off the `[cam]` effect and *deliberately*
-   relies on a same-valued re-fit writing state. Whatever fixes this has to
-   separate "the camera moved" from "re-pick the level" first. That attempt is
-   reverted, not in the tree.
-   **I could not reproduce it headlessly** -- synthetic pointer drags, hard
-   flicks into every bound, and a 45-notch wheel zoom followed by a drag all
-   come back clean on `corpus.html`. It needs a state I did not find.
-2. **The naive-tail A/B needs about 80 minutes of one core, and nobody has
-   said go.** `scripts/snap-render-ab.py` appends now: one JSON Lines row
-   flushed per part, and a re-run with the same `--results` skips finished
-   parts and retries errored ones after every untried one. Measured on 12
-   random affected parts, 5m30s -- so the 177 in `out/snap-affected.txt` is
-   ~80 min, not the 9h38m the old run suggested. **`out/snap-render-ab/`'s 149
-   surviving SVG pairs are stale** and must not be reused: they predate the
-   ORTHO_TOL change, which moves occt geometry.
-3. **studio is still baking** (`onto jobs`, task `store-occt-studio`,
-   9h+). When it finishes run `out/ingest-bake.sh` once -- it does
-   rebuild-checkpoint-swap *then* bake, and that order matters because the bake
-   reads the database.
-4. **Printed and sticker parts want a `decal` slot** holding a 2D extraction of
-   the printing (Mike, this session). Not started, and not designed. A peer has
-   uncommitted decal-binding work in `brick_icons/shade.py` and `unwrap.py` --
-   talk to them before starting, because that is the same seam.
-5. **`3626cp7d` and 816 other parts still read the base part's years.** The
-   named route below fixed 3,401 of them; the rest name no catalog number in
-   their `.dat`.
+1. **`snap-ab-occt` is running and will want reading** (`onto jobs`, in place on
+   orochi -- `renders/` is 2.8 GB untracked, so `onto sync` would go far over
+   its 8 MiB limit). It appends one JSON Lines row per part to
+   `out/snap-render-ab.jsonl` and resumes on a re-run under the same `--task`,
+   so a deadline is not a loss. **Then the actual question**, which no amount of
+   rendering answers by itself: are occt's pass-1 moves REPAIRS? A part with a
+   chunky diff has to be looked at, not counted.
+2. **studio is still baking** (`store-occt-studio`, 10h+). When it finishes run
+   `out/ingest-bake.sh` once -- rebuild-checkpoint-swap *then* bake, and the
+   order matters because the bake reads the database.
+3. **Printed and sticker parts want a `decal` slot** holding a 2D extraction of
+   the printing (Mike). Not started, not designed, and a peer has uncommitted
+   decal-binding work in `brick_icons/shade.py` and `unwrap.py` -- same seam,
+   so agree who owns it first.
 
-### Answered this session, so nobody re-opens them
+### Settled this session, so nobody re-opens them
 
-- **A printed part's years are its own now.** LDraw numbers the Gryffindor 1x1
-  brick `3005pz0` and Rebrickable numbers it `3005pr0018`, so every print fell
-  through to the plain brick: 3005pz0 read 1954-2026, 5,144 sets and 77 colors
-  for a crest made in one 2018 set in one color. The `.dat`'s own `!KEYWORDS`
-  line names both catalogs' numbers, and `match` takes that ahead of the base,
-  sheet and design routes. `base` fell from 4,218 rows to 817.
-- **The reference sheet's halves are on one scale.** LDView renders with
-  `-AutoCrop` and fills its frame; ours kept the icon's margin, so the two
-  halves could not be compared by eye. Ours is trimmed to its ink first, with
-  the part label lifted off by rasterizing the SVG a second time without its
-  one `<text>` element. Every `-trim` needs `-alpha off` -- resvg writes an
-  alpha channel over an opaque background and trim otherwise collapses to 1x1
-  without failing. The script takes `--engine` now and defaults to occt.
+- **A printed part's years are its own.** LDraw calls the Gryffindor 1x1 brick
+  `3005pz0` and Rebrickable calls it `3005pr0018`, so every print fell through
+  to the plain brick: 1954-2026, 5,144 sets, 77 colors, for a crest made in one
+  2018 set in one color. The `.dat`'s `!KEYWORDS` line names both catalogs'
+  numbers and `match` takes that ahead of base, sheet and design. `base` fell
+  from 4,218 rows to 817; the rest name no catalog number at all.
+- **The reference sheet's halves share a scale**, and it takes `--engine`,
+  defaulting to occt. Every `-trim` needs `-alpha off` -- resvg writes an alpha
+  channel over an opaque background and trim otherwise collapses to 1x1 without
+  failing.
 - **The reference cannot be sharpened by a flag.** `-CurveQuality` is already
-  at 12, LDView's maximum, and `-AllowPrimitiveSubstitution=1` is already set,
-  so the flag is live -- 3820 at quality 1 against 12 differs by 2.2% of mean
-  pixel value. The crude circles that remain are **authored facets** in the
-  .dat, which substitution cannot reach because there is no primitive to
-  substitute.
+  12, LDView's ceiling, with `-AllowPrimitiveSubstitution=1` set, and 3820 at
+  quality 1 against 12 differs by 2.2% of mean pixel value, so it is live. What
+  is left is **authored facets**, which substitution cannot reach.
+- **The wall keeps `part` and `source` in its hash**, so a refresh no longer
+  closes the lightbox. One jsdom location outlives every case in
+  `CorpusWall.test.tsx`, so the suite resets the hash between them.
+- **`printed` and `composite` are field-is-the-container badges now** -- a 45
+  degree halftone screen at 0.62 pitch, and the two trominoes drawn 2.6x so the
+  disc is a hole cut through their join. The `brush` mark stays in the set with
+  nothing pointing at it; it is what `printed` used to be.
 
 ## Baton, 2026-09-08 midday: the wall's tile path is fixed; three things are open
 
