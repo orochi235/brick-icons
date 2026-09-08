@@ -68,6 +68,12 @@ LEGO made — third-party electronics and wheels that fit LEGO.
   "no exact surface exists" and "my tolerance was too tight", and two tolerance
   constants once deleted whole walls with no error anywhere. Remove the
   `except` and look before believing it.
+- **A defect is not resolved until a labeled before/after is on the wall.** The
+  render is the evidence, and a fix reported only as prose asks the reader to
+  take the claim on trust -- so post the pair in the same turn that closes the
+  entry, not when asked. Both panels come from the SAME tree: render `after` at
+  HEAD and `before` by disarming the new code in-process, never by stashing or
+  checking out (this checkout is shared).
 - **An image on the wall labels what VARIES between its panels.** Several
   sessions post to one zone, so a sheet arrives with no conversation around it
   and has to answer "what am I looking at" by itself. Give it a title line, and
