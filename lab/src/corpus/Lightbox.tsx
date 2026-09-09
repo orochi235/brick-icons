@@ -176,9 +176,13 @@ export function Lightbox({ partId, source, client, onClose }: {
          aria-label={`Part ${partId}`} onClick={(e) => e.stopPropagation()}>
       <button type="button" className="corpus-close" aria-label="Close"
               ref={closeRef} onClick={onClose}>x</button>
-      {!detail ? <p>loading {partId}…</p> : (
+      {/* The frame is up before the fetch is: a dialog that answers a click
+          with a loading screen reads as slower than one that opens and fills
+          in, and the id is a real heading rather than a placeholder for the
+          title that replaces it. */}
+      <h2>{detail?.part.title ?? partId}</h2>
+      {detail && (
         <>
-          <h2>{detail.part.title}</h2>
           <p className="corpus-sub">
             {detail.part.id} · {detail.part.category ?? 'uncategorised'} ·
             {' '}{detail.part.status}
