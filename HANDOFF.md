@@ -1,3 +1,85 @@
+## Baton, 2026-09-09 night: the "missing surface" defects are one bug, and it is occt inking a flat face's triangle fan
+
+On `main` in the shared checkout, nothing pushed. **At least two other sessions
+commit to `main` in this same tree** — commits landed between my own commands
+all evening. Stage explicit paths, read `git diff --cached`, and re-read
+`git log` rather than believing a tip named in a doc.
+
+`lab/src/corpus/Lightbox.*` and `tests/goldens/defects.toml` are a peer's,
+uncommitted, and were still theirs when I finished: my own Lightbox hunks went
+in through `git apply --cached` on a filtered patch, never `git add <file>`.
+
+### The finding, and it is not what the defects say
+
+Ten-odd defects read as a part "missing its main top surface" — `30258p05`,
+`10202p04`, `3070bp1k`, `25269p00`, `25269`, `14769pt0`, `39789`, `96904`,
+`3941`, `30136`, `30137`. **They are not one class and most are misfiled
+against the wrong thing.**
+
+**What occt actually does: it inks the tessellation split of a flat top face.**
+`3070bp1k` is the clean specimen — a 1x1 tile, so its top is one quad. occt's
+SVG carries five paths naive does not, and their coordinates give it away:
+they run along `x = 128.00`, the exact horizontal centre of the 256px canvas,
+plus two diagonals to the corners. That is the top quad's triangle fan, drawn.
+`25269p00` and `25269` get the same treatment as a three-armed Y across the
+curved top; `30258p05` shows the back clips through the front face.
+
+The fills are innocent. occt and naive emit the SAME fill paths in the SAME
+colors — 5 blue, 2 white, and so on, identical counts. The whole difference is
+5 extra stroked contours. **Nothing is missing; something is added, and the
+added lines read as a hole.** Anyone who goes looking in `fill_ops` or
+`occt_faces` for a dropped surface will not find one — `scripts/surface-drop-probe.py`
+(untracked, someone else's) reports zero drops for `30258p05`; its only
+"dropped" rows are `edge` primitives, which are lines and have no surface by
+definition.
+
+**Where to look.** Not the dihedral-angle rule — the dihedral across this seam
+is zero, the fragments are coplanar. The suspects are the seam-coverage
+machinery (`smooth_rim_skips`, `rim_facet_span_bins`) and the junction weld,
+one of which is calling a coplanar fragment boundary a real crease. On a
+printed tile the decoration triangles sit in the same plane as the body, which
+is why the printed ones are over-represented in the list.
+
+### Two of the ten are a different bug and must not be chased with the rest
+
+**`39789` draws identically under naive and occt** — the axle-hole crosses sit
+outside the studs in both. Whatever that is, it is upstream of the engine
+choice, and its defect row says `engines: ["occt"]`, which is wrong. `30136`
+and `30137` have their own history (`elliptical-prims-local-frame`,
+`junction-weld`) and should be checked before being folded in.
+
+Sort the rest by rendering each under naive: same picture means not occt.
+
+### Evidence on the wall
+
+Three sheets, in the `brick-icons` zone: the flagged tiles as occt | naive |
+ldview, the focused `3070bp1k` + `25269` pair, and the earlier four-slot
+`30258p05` comparison. The wall is ephemeral; re-render from
+`.venv/bin/python -m brick_icons.cli <part> --engine naive --shading outline
+--shade-style flat3 --angle iso --format svg --out <dir>` against the stored
+occt render, whose path is in `renders`.
+
+### Still owed from the six asks
+
+(1) `runs.kind` and (2) `touched_at` are both written up in
+`docs/runs-are-just-runs.md` and both unbuilt, waiting on `slot-occt-r2`
+(studio, deadline 22:09, drawing ~1,150/hour with ~4,400 left when I looked,
+so it should land near 21:50). (6) the LDraw 2026-08 ingest waits on the same
+job — it rewrites `vendor/ldraw` underneath it. (3), (4) and (5) are done;
+the list at "Six things asked for" says which commits.
+
+**Stop `scripts/ingest-watch.py` before touching either schema.** It is still
+running against `out/ingest-watch.log`.
+
+### A trap worth keeping
+
+**Headless Chrome against the lab is slow and flaky** — two to four minutes a
+shot, and it sometimes returns nothing. `--virtual-time-budget` hangs on the
+wall, which polls forever; the lightbox needs it to capture anything at all,
+because `--screenshot` otherwise fires before the detail fetch returns. There
+is a wrapper with a hard cap in this session's scratchpad. Neither the
+playwright nor the chrome-devtools MCP server would connect all evening.
+
 ## Baton, 2026-09-09 night: the scene renderer is measured and rejected, and the lab works off localhost
 
 On `main` in the shared checkout, nothing pushed —
