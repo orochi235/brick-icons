@@ -299,7 +299,7 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
     marks = ",".join("?" * len(wanted)) if wanted else "NULL"
     scope_marks = ",".join("?" * len(OUT_OF_SCOPE_CATEGORIES))
     for part in conn.execute(
-            f"SELECT id, title, category, printed, obsolete, status, "
+            f"SELECT id, title, category, printed, obsolete, preview, status, "
             f"(printed = 0 AND obsolete = 0 AND id NOT LIKE '%c__' "
             f"AND id NOT LIKE '%d__' AND id NOT LIKE 'u9%') AS base, "
             f"(category IN ({scope_marks})) AS out_of_scope, "
@@ -339,7 +339,8 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
                 part["category"], bool(part["printed"]), bool(part["obsolete"]),
                 year["year_to"] if year else None,
                 sets_for(year),
-                title=part["title"], part_id=pid, successor=successor),
+                title=part["title"], part_id=pid, successor=successor,
+                posed=bool(part["preview"])),
             "status": part["status"],
             "sha": render["sha256"] if render else None,
             "made_at": render["made_at"] if render else None,

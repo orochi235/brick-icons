@@ -48,3 +48,15 @@ def test_search_is_capped(index):
 
 def test_empty_query_returns_nothing(index):
     assert partindex.search(index, "  ") == []
+
+
+def test_carries_a_declared_preview_orientation(index):
+    # 87544dq0's sticker faces away under the default view, and LDraw says so.
+    assert index["87544dq0"]["preview"] == "16 0 0 0 -1 0 0 0 1 0 0 0 -1"
+    assert index["3001"]["preview"] is None
+
+
+def test_reads_past_the_twelfth_line_for_a_preview(index):
+    # 3818pv0 declares one on line 22. A fixed 12-line header read -- what
+    # `library._read_header_lines` takes -- misses 340 of the 394 that do.
+    assert index["3818pv0"]["preview"] is not None

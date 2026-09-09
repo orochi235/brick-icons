@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS parts (
   category TEXT,
   printed INTEGER NOT NULL,
   obsolete INTEGER NOT NULL,
+  preview TEXT,
   status TEXT NOT NULL DEFAULT 'unreviewed',
   status_note TEXT,
   status_at TEXT
@@ -197,7 +198,8 @@ def now() -> str:
 #: older code cannot misread a column it never selects.
 _ADDED_COLUMNS = (("defects", "classes", "TEXT"),
                   ("defects", "checked", "TEXT"),
-                  ("measurements", "counts", "TEXT"))
+                  ("measurements", "counts", "TEXT"),
+                  ("parts", "preview", "TEXT"))
 
 
 def _add_missing_columns(conn: sqlite3.Connection) -> None:
@@ -244,13 +246,14 @@ def seed_parts(conn: sqlite3.Connection, ldraw_dir: Path | str) -> int:
         title = entry["description"]
         rows.append((entry["id"], title, title.split()[0] if title else None,
                      int(entry["printed"]),
-                     int(title.startswith(("~", "_")))))
+                     int(title.startswith(("~", "_"))),
+                     entry["preview"]))
     conn.executemany(
-        "INSERT INTO parts (id, title, category, printed, obsolete) "
-        "VALUES (?, ?, ?, ?, ?) "
+        "INSERT INTO parts (id, title, category, printed, obsolete, preview) "
+        "VALUES (?, ?, ?, ?, ?, ?) "
         "ON CONFLICT(id) DO UPDATE SET title=excluded.title, "
         "category=excluded.category, printed=excluded.printed, "
-        "obsolete=excluded.obsolete",
+        "obsolete=excluded.obsolete, preview=excluded.preview",
         rows)
     conn.commit()
     return len(rows)

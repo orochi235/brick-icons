@@ -451,7 +451,8 @@ def create_app(root: Path | str = ".",
         part["sets"] = years["sets"] if years else None
         part["tags"] = tags.tags_for(part["category"], bool(part["printed"]),
                                      bool(part["obsolete"]),
-                                     part["year_to"], part["sets"])
+                                     part["year_to"], part["sets"],
+                                     posed=bool(part["preview"]))
         part["out_of_scope"] = part["category"] in cells.OUT_OF_SCOPE_CATEGORIES
         for slot in slots:
             slot.update(states[slot["source"]])

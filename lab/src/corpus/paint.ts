@@ -272,6 +272,10 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
   // materials, and its orange was the popular badge's field.
   composite: { tag: 'composite', mark: 'composite', field: 'oklch(0.5773 0.0871 187.97)',
                ink: 'oklch(0.8193 0.0851 189.02)', accent: 'oklch(0.5773 0.0871 187.97)', labelInk: 'oklch(1.0000 0 0)' },
+  // A half-lit disc, not a rotation arrow: the arrow is `replaced`, and the
+  // question this badge answers is which side of the part you are looking at.
+  posed: { tag: 'posed', text: '◑', field: PROPERTY_FIELD, ink: 'oklch(1.0000 0 0)',
+           font: WEIRD_FACE, scale: 1.18 },
 };
 
 /** Every badge the wall can draw, in the order the legend lists them:

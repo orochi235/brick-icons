@@ -73,7 +73,9 @@ export interface PartDetail {
           status: string; status_note: string | null;
           year_from: number | null; year_to: number | null;
           sets: number | null; tags: string[];
-          /** Absent from an API older than the field, like `slots`. */
+          /** LDraw's `!PREVIEW` line, verbatim, for the 394 parts that carry
+           *  one. Absent from an API older than the field, like `slots`. */
+          preview?: string | null;
           out_of_scope?: boolean };
   /** Every live slot, in slot order, each carrying what the wall would color
    *  its cell by. A slot with no `sha256` did not draw this part -- it timed

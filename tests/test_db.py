@@ -894,3 +894,34 @@ def test_the_rebuild_indexes_every_render_format_it_declares():
     """
     assert ".webp" in db.RENDER_SUFFIXES
     assert set(db.RENDER_SUFFIXES) >= {".svg", ".png", ".webp"}
+
+
+def test_seeding_carries_a_declared_preview_orientation(tmp_path):
+    parts = tmp_path / "ldraw" / "parts"
+    parts.mkdir(parents=True)
+    (parts / "3001.dat").write_text("0 Brick  2 x  4\n")
+    (parts / "87544dq0.dat").write_text(
+        "0 Panel with Anubis Head Sticker\n"
+        "0 Name: 87544dq0.dat\n"
+        "\n"
+        "0 !PREVIEW 16 0 0 0 -1 0 0 0 1 0 0 0 -1\n"
+        "\n"
+        "1 16 0 0 0 1 0 0 0 1 0 0 0 1 87544.dat\n")
+    conn = db.connect(tmp_path / "corpus.db")
+    db.seed_parts(conn, tmp_path / "ldraw")
+    rows = {r["id"]: r for r in conn.execute("SELECT * FROM parts")}
+    assert rows["87544dq0"]["preview"] == "16 0 0 0 -1 0 0 0 1 0 0 0 -1"
+    assert rows["3001"]["preview"] is None
+
+
+def test_a_database_without_the_preview_column_gains_it(tmp_path):
+    # The additive path: several sessions share one corpus.db and a rebuild is
+    # not a thing to make them all do.
+    path = tmp_path / "corpus.db"
+    conn = db.connect(path)
+    conn.execute("ALTER TABLE parts DROP COLUMN preview")
+    conn.commit()
+    conn.close()
+    conn = db.connect(path)
+    have = {r["name"] for r in conn.execute("PRAGMA table_info(parts)")}
+    assert "preview" in have

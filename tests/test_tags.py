@@ -86,3 +86,9 @@ def test_a_sticker_is_not_a_printed_part():
     # sticker is a sheet item you apply. One badge each, never both.
     assert tags.tags_for("Sticker", True, False) == ["sticker"]
     assert tags.tags_for("Sticker", True, True) == ["sticker", "obsolete"]
+
+
+def test_a_part_ldraw_gives_a_preview_orientation_is_posed():
+    assert "posed" in tags.tags_for("Sticker Shortcut", False, False,
+                                    posed=True)
+    assert "posed" not in tags.tags_for("Brick", False, False)

@@ -94,7 +94,7 @@ def members(conn: sqlite3.Connection, *, kind: str = "all", moved: bool = False,
     """
     scope_marks = ",".join("?" * len(OUT_OF_SCOPE_CATEGORIES))
     rows = list(conn.execute(
-        f"SELECT id, title, category, printed, obsolete, "
+        f"SELECT id, title, category, printed, obsolete, preview, "
         f"(printed = 0 AND obsolete = 0 AND id NOT LIKE '%c__' "
         f"AND id NOT LIKE '%d__' AND id NOT LIKE 'u9%') AS base, "
         f"(category IN ({scope_marks})) AS out_of_scope, "
@@ -129,7 +129,8 @@ def members(conn: sqlite3.Connection, *, kind: str = "all", moved: bool = False,
                 year["year_to"] if year else None,
                 year["sets"] if year else None,
                 title=row["title"], part_id=row["id"],
-                successor=row["id"] in successors or None)
+                successor=row["id"] in successors or None,
+                posed=bool(row["preview"]))
             if not wanted_badges <= set(carried):
                 continue
         keep.append(row)

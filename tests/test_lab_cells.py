@@ -752,3 +752,15 @@ def test_a_slot_erroring_on_a_part_it_does_not_cover_still_says_so(conn):
                              inapplicable=True) == "drawn"
     assert cells.coverage_of(sha=None, error=None, open_defects=1,
                              inapplicable=True) == "defect"
+
+
+def test_a_cell_says_ldraw_poses_the_part(conn):
+    _part(conn, "3001")
+    conn.execute("INSERT INTO parts (id, title, category, printed, obsolete, "
+                 "preview, status) VALUES ('87544dq0', 'Panel Sticker', "
+                 "'Sticker', 0, 0, '16 0 0 0 -1 0 0 0 1 0 0 0 -1', "
+                 "'unreviewed')")
+    conn.commit()
+    by_id = {c["id"]: c for c in cells.cells(conn)["cells"]}
+    assert "posed" in by_id["87544dq0"]["tags"]
+    assert "posed" not in by_id["3001"]["tags"]

@@ -4,6 +4,7 @@ import type { LabClient } from '@lab/api/client';
 import { BadgeSwatch } from '@lab/corpus/BadgeSwatch';
 import { CATALOGS } from '@lab/corpus/catalogs';
 import { Fingerprint } from '@lab/corpus/Fingerprint';
+import { poseNote } from '@lab/corpus/posed';
 import { Tags, yearRange } from '@lab/corpus/tags';
 import { defectId, engineFor } from '@lab/corpus/flag';
 import { cellState } from '@lab/corpus/paint';
@@ -167,6 +168,7 @@ export function Lightbox({ partId, source, client, onClose }: {
     ? yearRange(detail.part.year_from, detail.part.year_to,
                 (detail.part.tags ?? []).includes('retired'))
     : null;
+  const pose = detail ? poseNote(detail.part.preview) : null;
 
   // Portaled to the theme root rather than left inside the workspace: as a
   // child of the wall it drew under the shell's header, and a panel with the
@@ -195,6 +197,12 @@ export function Lightbox({ partId, source, client, onClose }: {
             {detail.part.sets != null ? ` · ${detail.part.sets} sets` : ''}
           </p>
           <Tags tags={detail.part.tags ?? []} />
+          {/* Every render below is drawn from the one global angle, so a part
+              the library poses is one the drawings may be showing the wrong
+              side of. */}
+          {pose && (
+            <p className="corpus-pose">LDraw poses this part: {pose}</p>
+          )}
           {/* A radio group rather than a hand-built control: it carries the
               role, the name and the arrow-key roving for free, and the `<li>`
               stays a list item with neither a role nor a handler on it. */}

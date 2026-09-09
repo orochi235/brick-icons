@@ -375,3 +375,22 @@ it('keeps the slot you arrived on, even where it does not apply', async () => {
   expect(screen.getAllByRole('radio').map((r) => r.getAttribute('aria-label')))
     .toEqual(['silhouette-occt', 'naive', 'decal']);
 });
+
+it('says when LDraw poses the part, and which way', async () => {
+  const posed = {
+    ...detail,
+    part: { ...detail.part, id: '87544dq0', title: 'Panel Sticker',
+            preview: '16 0 0 0 -1 0 0 0 1 0 0 0 -1' },
+  };
+  render(<Lightbox partId="87544dq0" source="naive" onClose={() => {}}
+                   client={{ corpusPart: () => Promise.resolve(posed),
+                             addDefect } as any} />);
+  await waitFor(() => screen.getByText('Panel Sticker'));
+  expect(screen.getByText(/half turn about Y/)).toBeTruthy();
+});
+
+it('says nothing about a pose for a part that declares none', async () => {
+  render(box());
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  expect(screen.queryByText(/turn about/)).toBeNull();
+});
