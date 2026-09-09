@@ -64,6 +64,23 @@ function pathOf(d: string): Path2D {
   return path;
 }
 
+/** How far the labelled field is let down toward white. The disc is the
+ *  badge; the stadium behind its name is a place to put the word, and at the
+ *  disc's own strength the two read as equally loud. */
+export const LABEL_WASH = 0.15;
+
+/** `hex` mixed that far toward white. Only the six-digit form occurs in the
+ *  badge records, and anything else is returned untouched rather than
+ *  guessed at. */
+export function washToward(hex: string, amount = LABEL_WASH): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return hex;
+  const n = parseInt(m[1]!, 16);
+  const mix = (c: number) => Math.round(c + (255 - c) * amount);
+  const out = (mix((n >> 16) & 255) << 16) | (mix((n >> 8) & 255) << 8) | mix(n & 255);
+  return `#${out.toString(16).padStart(6, '0')}`;
+}
+
 /** The ring a badge wears, in the same units as `radius`. Drawn inside the
  *  radius, so `strokeScale` changes the line and never the footprint. Shared
  *  with `BadgeSwatch`, which paints the same ring in CSS -- the two computed
@@ -159,8 +176,11 @@ export function badgeWidth(ctx: CanvasRenderingContext2D, badge: CellBadge,
   return at.radius + labelX(badge, at) - at.cx + w + LABEL_PAD * at.size;
 }
 
-const LABEL_GAP = 0.32;     // multiples of the type size, mark to word
-const LABEL_PAD = 0.55;     // and word to the end of the field
+/** Multiples of the type size: mark to word, and word to the end of the
+ *  field. Exported because `BadgeSwatch` sets the same two as CSS custom
+ *  properties, and a second copy of the numbers drifts. */
+export const LABEL_GAP = 0.22;
+export const LABEL_PAD = 0.55;
 
 /** Where the word starts. A badge with nothing in its disc -- a status like
  *  `open` carries neither a mark nor a letter -- gets the field's own padding
@@ -239,11 +259,14 @@ function drawBadgeDirect(ctx: CanvasRenderingContext2D, badge: CellBadge,
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
   }
   const labelled = at.label != null;
-  const field = labelled ? badge.labelField ?? badge.field : badge.field;
+  const field = labelled
+    ? badge.labelField ?? washToward(badge.field) : badge.field;
   ctx.fillStyle = field;
   ctx.fill();
   ctx.lineWidth = line;
-  ctx.strokeStyle = badge.stroke ?? badge.field;
+  // Defaults to the field it is drawn on, washed or not, so letting the
+  // labelled field down does not hand every badge a visible outline.
+  ctx.strokeStyle = badge.stroke ?? field;
   // The ring either edges the artwork or frames the whole field. On the disc
   // it is stroked after the disc's own fill, below.
   if (!badge.ringOnDisc) ctx.stroke();

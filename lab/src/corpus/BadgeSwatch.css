@@ -32,17 +32,19 @@
 .corpus-badge[data-label='true'] { padding-right: var(--badge-pad); }
 
 /* A ring that edges the artwork rather than framing the name: the stadium
- * goes unstroked and the disc carries the ring, on its own field. */
+ * goes unstroked and the disc carries the ring. */
 .corpus-badge[data-ring='disc'] { box-shadow: none; }
 
 .corpus-badge[data-ring='disc'] .corpus-badge-disc {
-  background: var(--badge-disc-field);
-  border-radius: 50%;
   box-shadow: inset 0 0 0 var(--badge-line) var(--badge-stroke);
-  color: var(--badge-mark-ink);
 }
 
+/* The disc always paints its own field and its own ink: the stadium behind
+ * the name is let down toward white, and the artwork is not. */
 .corpus-badge-disc {
+  background: var(--badge-disc-field);
+  border-radius: 50%;
+  color: var(--badge-mark-ink);
   position: relative;
   flex: 0 0 var(--badge-box);
   width: var(--badge-box);
@@ -68,7 +70,9 @@
   translate: var(--badge-dx) var(--badge-dy);
 }
 
-.corpus-badge-label { margin-left: var(--badge-gap); }
+/* The gap is mark-to-word, so a badge with nothing in its disc does not
+ * carry one -- it set the word 0.22 of the type size right of center. */
+.corpus-badge[data-disc='true'] .corpus-badge-label { margin-left: var(--badge-gap); }
 
 /* The sticker's peel takes a bite out of the field, and what shows through it
  * has to be the page: a hole filled with any color reads as another piece of

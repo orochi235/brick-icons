@@ -1,5 +1,6 @@
 import { StrictMode, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
+import '@weasel-js/labkit/styles.css';
 import { BADGE_FACE, BADGE_WEIGHT, drawBadge } from '@lab/corpus/badges';
 import { BadgeSwatch } from '@lab/corpus/BadgeSwatch';
 import { CORNER_BADGES, STRIP_BADGES, type CellBadge } from '@lab/corpus/paint';

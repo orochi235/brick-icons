@@ -1,5 +1,6 @@
 import { useId } from 'react';
-import { BADGE_FACE, BADGE_WEIGHT, markInk, ringWidth } from '@lab/corpus/badges';
+import { BADGE_FACE, BADGE_WEIGHT, LABEL_GAP, LABEL_PAD, markInk,
+  ringWidth, washToward } from '@lab/corpus/badges';
 import { MARK_SHAPES, type MarkShape } from '@lab/corpus/markShapes';
 import type { CellBadge } from '@lab/corpus/paint';
 import '@lab/corpus/BadgeSwatch.css';
@@ -28,12 +29,13 @@ export function BadgeSwatch({ badge, label, box = SWATCH_BOX, className }:
   const disc = shapes != null || badge.text != null;
   const cut = cutMask(shapes, box, radius * 0.66 * scale);
   const labelled = label != null;
-  const field = labelled ? badge.labelField ?? badge.field : badge.field;
+  const field = labelled
+    ? badge.labelField ?? washToward(badge.field) : badge.field;
   const vars = {
     '--badge-box': `${box}px`,
     '--badge-field': field,
     '--badge-disc-field': badge.field,
-    '--badge-stroke': badge.stroke ?? badge.field,
+    '--badge-stroke': badge.stroke ?? field,
     '--badge-ink': labelled ? badge.labelInk ?? badge.ink : badge.ink,
     '--badge-mark-ink': badge.ink,
     '--badge-line': `${ringWidth(radius, badge)}px`,
@@ -41,8 +43,8 @@ export function BadgeSwatch({ badge, label, box = SWATCH_BOX, className }:
     '--badge-weight': `${badge.weight ?? BADGE_WEIGHT}`,
     '--badge-text': `${size * 0.92}px`,
     // Mark to word, and word to the end of the field.
-    '--badge-gap': `${size * 0.32}px`,
-    '--badge-pad': `${size * 0.55}px`,
+    '--badge-gap': `${size * LABEL_GAP}px`,
+    '--badge-pad': `${size * LABEL_PAD}px`,
     '--badge-glyph-face': badge.font ?? BADGE_FACE,
     '--badge-glyph': `${size * scale}px`,
     '--badge-glyph-style': badge.style ?? 'normal',
