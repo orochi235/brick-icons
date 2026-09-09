@@ -301,6 +301,10 @@ const printed: MarkShape[] = [{ d: halftone(PRINT_PITCH, () => 0.21) }];
 // take hold of each other, which is the part that carries the meaning -- an
 // L drawn whole is a diagram, and at the strip's floor it is a smudge.
 // The seam is cut in the field so neither piece needs an outline.
+// Half the seam wall's thickness. Set to render at the width the stroked
+// seam did: a stroke's `width` is not in these units, so the quads that
+// replaced it had to be measured back to 0.12 rather than converted.
+const WALL_H = 0.06;
 const COMPOSITE_FILL = 2.6;   // the short axis (1.2) has to clear 2*FIELD_R
 const COMPOSITE_FRAME: Matrix = [0, -COMPOSITE_FILL, COMPOSITE_FILL, 0, 0, 0];
 const composite: MarkShape[] = [
@@ -312,20 +316,22 @@ const composite: MarkShape[] = [
   // The seam is a wall between the two pieces, not a drawn line: three faces
   // in three teals, each a filled quad rather than a stroke so the corners
   // meet on a 45 degree mitre. A stroked polyline joins square, and two
-  // squares butted at a right angle read as a flat elbow; the mitre is what
-  // makes the corner look like one solid turning away from the light.
+  // squares butted at a right angle read as a flat elbow.
   //
-  // The mitre is the diagonal of the 2h square where two faces overlap, from
-  // the bend's inner corner to its outer one -- h being half the wall's
-  // thickness, WALL / 2.
-  { d: poly(through(COMPOSITE_FRAME,
-      [0.75, -0.45, 0.15, -0.45, -0.15, -0.15, 0.75, -0.15])),
+  // Each mitre is the diagonal of the WALL_H square where two faces overlap,
+  // run from the bend's inner corner to its outer one. The arms overrun the
+  // field and the disc clips them.
+  { d: poly(through(COMPOSITE_FRAME, [
+      0.75, -0.3 - WALL_H, WALL_H, -0.3 - WALL_H,
+      -WALL_H, -0.3 + WALL_H, 0.75, -0.3 + WALL_H])),
     fill: '#1c625d' },
-  { d: poly(through(COMPOSITE_FRAME,
-      [0.15, -0.45, 0.15, 0.15, -0.15, 0.45, -0.15, -0.15])),
+  { d: poly(through(COMPOSITE_FRAME, [
+      WALL_H, -0.3 - WALL_H, WALL_H, 0.3 - WALL_H,
+      -WALL_H, 0.3 + WALL_H, -WALL_H, -0.3 + WALL_H])),
     fill: '#57b3ab' },
-  { d: poly(through(COMPOSITE_FRAME,
-      [-0.75, 0.45, -0.15, 0.45, 0.15, 0.15, -0.75, 0.15])),
+  { d: poly(through(COMPOSITE_FRAME, [
+      -0.75, 0.3 + WALL_H, -WALL_H, 0.3 + WALL_H,
+      WALL_H, 0.3 - WALL_H, -0.75, 0.3 - WALL_H])),
     fill: '#1c625d' },
 ];
 

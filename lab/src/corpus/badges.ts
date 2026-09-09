@@ -73,7 +73,7 @@ function pathOf(d: string): Path2D {
 /** How far the labelled field is let down toward white. The disc is the
  *  badge; the stadium behind its name is a place to put the word, and at the
  *  disc's own strength the two read as equally loud. */
-export const LABEL_WASH = 0.15;
+export const LABEL_WASH = 0.25;
 
 /** `hex` mixed that far toward white. Only the six-digit form occurs in the
  *  badge records, and anything else is returned untouched rather than
