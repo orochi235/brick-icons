@@ -29,10 +29,30 @@ function extensionlessPages(): Plugin {
 // `brick-icons-lab` listens on with no arguments.
 const API = process.env.LAB_API ?? 'http://127.0.0.1:8792';
 
+/** `WEASEL_SRC=~/src/weasel npm run dev` draws from a weasel checkout instead
+ *  of the installed `@weasel-js/core`, for measuring an unreleased renderer
+ *  change against `/bench`. Its `dist` has to be built; the alias points at
+ *  the build, not the source, so what runs is what a release would ship.
+ *  Unset by default -- several sessions share this checkout. */
+const WEASEL_SRC = process.env.WEASEL_SRC;
+// Regexes, not a bare string: a plain alias prefix-matches, and
+// `@weasel-js/svg` imports `@weasel-js/core/patterns-builtin`, which then
+// resolves under the root entry's own filename. The subpaths mirror the
+// package's exports map, which maps each to `dist/<name>.js`.
+const weaselAlias = WEASEL_SRC
+  ? [{ find: /^@weasel-js\/core$/,
+       replacement: `${WEASEL_SRC}/packages/core/dist/index.js` },
+     { find: /^@weasel-js\/core\/(.*)$/,
+       replacement: `${WEASEL_SRC}/packages/core/dist/$1.js` }]
+  : [];
+
 export default defineConfig({
   plugins: [react(), extensionlessPages()],
   resolve: {
-    alias: { '@lab': fileURLToPath(new URL('./src', import.meta.url)) },
+    alias: [
+      { find: '@lab', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
+      ...weaselAlias,
+    ],
   },
   server: {
     // Both loopbacks answer; with this unset Node binds only whichever
