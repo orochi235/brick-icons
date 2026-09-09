@@ -382,10 +382,20 @@ def test_cells_route_returns_every_part(tmp_path):
 
 
 def test_cells_route_takes_a_since(tmp_path):
-    body = _corpus_client(tmp_path).get(
-        "/api/corpus/cells", params={"since": "2030-01-01T00:00:00+00:00"}).json()
+    client = _corpus_client(tmp_path)
+    now = client.get("/api/corpus/cells").json()["version"]
+    body = client.get("/api/corpus/cells", params={"since": now}).json()
     assert body["cells"] == []
     assert body["count"] == 1
+
+
+def test_a_since_without_a_stamp_resends_what_was_judged(tmp_path):
+    """An older client sends a bare timestamp. The fixture part carries a
+    status, so it is judged, and a caller with no stamp has to be told."""
+    body = _corpus_client(tmp_path).get(
+        "/api/corpus/cells",
+        params={"since": "2030-01-01T00:00:00+00:00"}).json()
+    assert [c["id"] for c in body["cells"]] == ["3001"]
 
 
 def test_cells_route_takes_a_slot(tmp_path):

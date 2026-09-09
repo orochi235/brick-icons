@@ -93,13 +93,33 @@ def test_the_version_is_the_newest_render(conn):
     _render(conn, "3001", "a", "2026-09-05T10:00:00+00:00")
     _render(conn, "3004", "b", "2026-09-05T11:00:00+00:00")
     conn.commit()
-    assert cells.cells(conn)["version"] == "2026-09-05T11:00:00+00:00"
+    # Two halves: the newest render, then a stamp over what has been judged.
+    drawn, _, stamp = cells.cells(conn)["version"].partition("|")
+    assert drawn == "2026-09-05T11:00:00+00:00"
+    assert stamp
 
 
 def test_the_version_is_empty_with_no_renders(conn):
     _part(conn, "3001")
     conn.commit()
-    assert cells.cells(conn)["version"] == ""
+    assert cells.cells(conn)["version"].startswith("|")
+
+
+def test_a_defect_moves_the_version_and_comes_back_in_the_delta(conn):
+    _part(conn, "3001")
+    _render(conn, "3001", "a", "2026-09-05T10:00:00+00:00")
+    conn.commit()
+    before = cells.cells(conn)["version"]
+    assert cells.cells(conn, since=before)["cells"] == []
+    # Nothing was drawn, so the render half cannot carry this -- which is why
+    # filing a defect used to leave the cell stale until a reload.
+    conn.execute(
+        "INSERT INTO defects (id, part_id, engines, status, title, filed) "
+        "VALUES ('3001-x', '3001', '[\"naive\"]', 'open', 'x', '2026-09-09')")
+    conn.commit()
+    after = cells.cells(conn)
+    assert after["version"] != before
+    assert [c["id"] for c in cells.cells(conn, since=before)["cells"]] == ["3001"]
 
 
 def test_since_returns_only_what_was_rendered_after_it(conn):

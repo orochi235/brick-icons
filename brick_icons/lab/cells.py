@@ -6,6 +6,7 @@ between this and `brick_icons.thumbs` -- and both take it from `ORDER BY id`.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 
@@ -221,6 +222,23 @@ def coverage_of(*, sha: str | None, error: str | None, open_defects: int) -> str
     return "drawn" if sha else "untried"
 
 
+def _judged(conn: sqlite3.Connection) -> tuple[set[str], str]:
+    """The parts somebody has said something about, and a stamp over what was
+    said. Small -- defects and reviewed statuses are in the tens against
+    twenty thousand parts -- so resending all of them when the stamp moves
+    costs nothing, and it is the only way to catch a change no row dates."""
+    rows = list(conn.execute(
+        "SELECT part_id AS id, status, COALESCE(checked, '') AS extra "
+        "FROM defects "
+        "UNION ALL "
+        "SELECT id, status, COALESCE(status_at, '') FROM parts "
+        "WHERE status <> 'unreviewed' ORDER BY id, status"))
+    digest = hashlib.sha256(
+        "".join(f"{r['id']}\x1f{r['status']}\x1f{r['extra']}\x1e"
+                for r in rows).encode()).hexdigest()[:16]
+    return {r["id"] for r in rows}, digest
+
+
 def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
           since: str | None = None) -> dict:
     """Every cell, or only those whose render landed after `since`.
@@ -240,11 +258,23 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
     errors = errors_by_engine(conn).get(engine, {})
     others = other_conditions(conn, source)
 
-    version = max((r["made_at"] for r in renders.values()), default="")
+    # Two halves, because two unrelated things change a cell and only one of
+    # them has a timestamp. A render dates itself; a defect and a part's
+    # status do not, so they are fingerprinted and the whole judged set is
+    # resent whenever that fingerprint moves. Without the second half, filing
+    # a defect updated the lightbox and left the cell behind it stale until a
+    # reload -- the delta is built from renders, and no render had happened.
+    drawn = max((r["made_at"] for r in renders.values()), default="")
+    judged, stamp = _judged(conn)
+    version = f"{drawn}|{stamp}"
     wanted = order
     if since is not None:
-        wanted = sorted(pid for pid, r in renders.items()
-                        if r["made_at"] > since)
+        was_drawn, _, was_stamp = since.partition("|")
+        wanted = {pid for pid, r in renders.items()
+                  if r["made_at"] > was_drawn}
+        if was_stamp != stamp:
+            wanted |= judged
+        wanted = sorted(wanted)
 
     records = live_defects(conn)
     years = {r["part_id"]: r for r in conn.execute(
