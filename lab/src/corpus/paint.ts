@@ -230,7 +230,7 @@ export const SYSTEM_FACE =
 export const PROPERTY_FIELD = 'oklch(0.4109 0.0082 286.03)';
 
 /** The magnet's pole tips, and so its name. */
-const MAGNET_POLES = 'oklch(0.8834 0.0054 286.29)';
+const MAGNET_POLES = 'oklch(0.9500 0.0040 286.29)';
 
 /** The strip that runs right from the part number. System badges first --
  *  a part has one category, so at most one of those shows -- then the
