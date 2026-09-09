@@ -22,10 +22,13 @@ import { DEFAULT_SHOWN } from '@lab/corpus/criteria';
 import { applySelection, type Selection } from '@lab/corpus/select';
 import { Sidebar } from '@lab/corpus/Sidebar';
 import { useCells } from '@lab/corpus/useCells';
-import { useLooseThumbs } from '@lab/corpus/useLooseThumbs';
+import { CacheFailureButton } from '@lab/corpus/CacheFailureButton';
+import { cacheReport, probeCell } from '@lab/corpus/cacheReport';
+import { useLooseThumbs, type LooseHandle } from '@lab/corpus/useLooseThumbs';
 import { useParams } from '@lab/corpus/useParams';
-import { useSheets, type Sheet } from '@lab/corpus/useSheets';
-import { useVectorThumbs } from '@lab/corpus/useVectorThumbs';
+import { SHEET_LEVELS, useSheets, type Sheet } from '@lab/corpus/useSheets';
+import { useVectorThumbs, targetPxFor, vectorUrl, type VectorHandle }
+  from '@lab/corpus/useVectorThumbs';
 import type { Cell } from '@lab/corpus/types';
 import { staleCount } from '@lab/corpus/sheet';
 import { visibleRange } from '@lab/corpus/visible';
@@ -362,8 +365,47 @@ export function CorpusWall({ client }: { client: LabClient }) {
   const visible = useMemo(
     () => (cam ? visibleRange(laid.rects, cam, slice) : []),
     [laid.rects, cam, slice]);
-  const loose = useLooseThumbs(shown, visible, level, drawnSource);
-  const vector = useVectorThumbs(shown, visible, level, drawnSource, cellPx);
+  // The two upper rungs' read-and-reset handles, for the header's cache
+  // report. Both rungs swallow their own failures on purpose, so this is the
+  // only way to ask them what happened.
+  const looseHandle = useRef<LooseHandle | null>(null);
+  const vectorHandle = useRef<VectorHandle | null>(null);
+  const loose = useLooseThumbs(shown, visible, level, drawnSource, looseHandle);
+  const vector = useVectorThumbs(shown, visible, level, drawnSource, cellPx,
+                                 vectorHandle);
+
+  const gatherCacheReport = async () => {
+    const dpr = window.devicePixelRatio || 1;
+    const targetPx = targetPxFor(cellPx, dpr);
+    const seen = visible.map((i) => shown[i]).filter((c) => c !== undefined);
+    // Three, not one: a single 404 is a part with no render, and the same
+    // answer on three says the rung is broken rather than the part.
+    const probes = await Promise.all(
+      seen.filter((c) => c!.sha).slice(0, 3).map(
+        (c) => probeCell(c!.id, vectorUrl(c!, drawnSource), targetPx)));
+    return cacheReport({
+      slot: drawnSource,
+      cellPx, dpr, level,
+      cells: {
+        shown: shown.length,
+        visible: seen.length,
+        visibleWithSha: seen.filter((c) => c!.sha).length,
+      },
+      sheets: SHEET_LEVELS.map((lvl) => {
+        const sheet = sheets[lvl];
+        return {
+          level: lvl,
+          loaded: sheet !== undefined,
+          version: sheet?.manifest.version ?? null,
+          baked: sheet ? Object.keys(sheet.manifest.baked).length : 0,
+        };
+      }),
+      loose: looseHandle.current?.stats() ?? { loaded: 0, requested: 0 },
+      vector: vectorHandle.current?.stats()
+        ?? { resident: 0, inFlight: 0, queued: 0, bytesCached: 0, rasterPx: [] },
+      probes,
+    });
+  };
 
   // The 128 rung still draws from the 32px bake underneath -- a cell whose
   // loose image hasn't arrived yet needs something to show.
@@ -420,6 +462,12 @@ export function CorpusWall({ client }: { client: LabClient }) {
                              items={[{ value: 'legend', label: 'Legend' }]}
                              value={legendOpen ? ['legend'] : []}
                              onChange={(v) => setLegendOpen(v.includes('legend'))} />
+                  <CacheFailureButton
+                    report={gatherCacheReport}
+                    reset={() => {
+                      looseHandle.current?.reset();
+                      vectorHandle.current?.reset();
+                    }} />
                   {searchNotice && (
                     <span className="corpus-search-notice" role="status">{searchNotice}</span>
                   )}

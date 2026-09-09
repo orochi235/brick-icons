@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { MutableRefObject } from 'react';
 import { fetchRender, rasterize } from '@lab/corpus/svgRaster';
 import { VECTOR_LEVEL } from '@lab/corpus/levels';
 import type { Cell } from '@lab/corpus/types';
@@ -90,6 +91,20 @@ export function splitWork(want: Cell[], have: Map<string, { px: number }>,
 
 interface RasterEntry { image: CanvasImageSource; px: number }
 
+/** Read-and-reset for this rung, for the topbar's cache report.
+ *
+ *  `rasterOne` swallows a failed fetch or rasterize on purpose -- the 128px
+ *  thumb is a legitimate fallback for one bad part -- so from outside, a rung
+ *  that has broken for every part looks exactly like one that is idle. These
+ *  four counts are what tell those apart, and `reset` is the fix for the
+ *  state that cannot recover on its own: an id stuck in `inFlight` is never
+ *  enqueued again. */
+export interface VectorHandle {
+  stats(): { resident: number; inFlight: number; queued: number;
+             bytesCached: number; rasterPx: number[] };
+  reset(): void;
+}
+
 /** The vector rung's rasterized cells, keyed by part id.
  *
  *  Square, device-pixel-sized bitmaps, one per visible cell -- kept only
@@ -103,7 +118,8 @@ interface RasterEntry { image: CanvasImageSource; px: number }
  *  fetch and decode.
  */
 export function useVectorThumbs(cells: Cell[], visible: number[], level: number,
-                                source: string, cellPx: number):
+                                source: string, cellPx: number,
+                                handle?: MutableRefObject<VectorHandle | null>):
     Map<string, CanvasImageSource> {
   const [raster, setRaster] = useState<Map<string, RasterEntry>>(new Map());
   const rasterRef = useRef(raster);
@@ -136,6 +152,30 @@ export function useVectorThumbs(cells: Cell[], visible: number[], level: number,
     rasterRef.current = new Map();
     setRaster(new Map());
   }, [source]);
+
+  useEffect(() => {
+    if (!handle) return;
+    const cold = () => {
+      inFlight.current = new Set();
+      queue.current = [];
+      bytes.current = new Map();
+      arrived.current = new Map();
+      rasterRef.current = new Map();
+      setRaster(new Map());
+    };
+    handle.current = {
+      stats: () => ({
+        resident: raster.size,
+        inFlight: inFlight.current.size,
+        queued: queue.current.length,
+        bytesCached: bytes.current.size,
+        rasterPx: [...new Set([...raster.values()].map((e) => e.px))].sort(
+          (a, b) => a - b),
+      }),
+      reset: cold,
+    };
+    return () => { handle.current = null; };
+  }, [handle, raster]);
 
   useEffect(() => {
     const dpr = window.devicePixelRatio || 1;

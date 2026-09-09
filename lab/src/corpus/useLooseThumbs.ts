@@ -1,5 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
+import type { MutableRefObject } from 'react';
 import type { Cell } from '@lab/corpus/types';
+
+/** Read-and-reset for this rung, for the topbar's cache report.
+ *
+ *  A handle rather than a second return value: every failure here is silent
+ *  by design -- an image that errors leaves the sheet tile on screen and
+ *  tells nobody -- so something has to be able to ask how many were asked
+ *  for against how many arrived. `reset` puts the rung back to a cold start,
+ *  which is the fix when `requested` is holding ids whose loads all failed:
+ *  the set only grows, so nothing would ever ask for them again. */
+export interface LooseHandle {
+  stats(): { loaded: number; requested: number };
+  reset(): void;
+}
 
 export const LOOSE_LEVEL = 128;
 export const MAX_IN_FLIGHT = 200;
@@ -39,7 +53,9 @@ export function wanted(cells: Cell[], visible: number[], level: number,
  *  moves, but the id-keyed guard means that churn recomputes `wanted`
  *  without re-issuing any fetch. */
 export function useLooseThumbs(cells: Cell[], visible: number[], level: number,
-                               source: string): Map<string, HTMLImageElement> {
+                               source: string,
+                               handle?: MutableRefObject<LooseHandle | null>):
+                               Map<string, HTMLImageElement> {
   const [loose, setLoose] = useState<Map<string, HTMLImageElement>>(new Map());
   const requested = useRef<Set<string>>(new Set());
   // Only unmounting stops an image landing. Keying liveness to the effect
@@ -53,6 +69,15 @@ export function useLooseThumbs(cells: Cell[], visible: number[], level: number,
     requested.current = new Set();
     setLoose(new Map());
   }, [source]);
+
+  useEffect(() => {
+    if (!handle) return;
+    handle.current = {
+      stats: () => ({ loaded: loose.size, requested: requested.current.size }),
+      reset: () => { requested.current = new Set(); setLoose(new Map()); },
+    };
+    return () => { handle.current = null; };
+  }, [handle, loose]);
 
   useEffect(() => {
     for (const cell of wanted(cells, visible, level, requested.current)) {
