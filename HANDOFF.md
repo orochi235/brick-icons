@@ -19,33 +19,30 @@ five or more onto a sheet would tile shards.
 
 ### What is running
 
-`onto jobs` -- task `slot-decal` on **orochi, in place** (`--dir "$PWD"`), 4
-shards over the 12,388 decorated parts the slot is missing. Sent here because
-no fleet node could take it: keiei has no `.venv` and no `uv`, and studio and
-msb-uai both held tree locks from running jobs.
+`onto jobs` -- task `slot-decal-keiei` on **keiei**, 6 shards over the 11,215
+parts the slot still owes. keiei is provisioned now
+(`scripts/provision-node.sh`), and its output is byte-identical to this
+machine's: same LDraw manifest hash as `external-deps.lock` records, same
+sha256 on `3941p01.decal.svg` and `004402cc01.decal.svg`.
 
-**It will not finish inside its deadline.** Measured 26 parts/min across the
-four shards -- about 8 hours for the corpus, against the 4h the job has. The
-cost estimate that sized it came from a 40-part stride sample averaging 0.84s,
-which badly over-represents cheap parts: the real spread runs to 54s on a
-shattered print. Relaunching under the same task name continues it, because
-`batch.Runner` skips what its JSONL already holds:
+The earlier in-place run on orochi drew 1,173 parts before it was killed, and
+those are indexed -- `renders/decal/` plus rows, via
+`scripts/index-store-attempts.py` for the attempts and
+`scripts/index-slot-renders.py --source decal` for the drawings. **Two ingest
+steps, not one:** the store pass writes its `renders` rows into each shard's
+own scratch db (so four writers do not contend on `corpus.db`), so the logs
+and the drawings are taken up separately.
 
-    onto run --detach --timeout 4h --dir "$PWD" --task slot-decal \
-      --each out/slot-decal/shards.txt --workers 4 --retries 0 \
-      --env PATH=/Users/mike/.local/bin:/opt/homebrew/bin:/usr/bin:/bin \
-      orochi -- sh -c 'n=$(basename "$1" .txt); mkdir -p out/store/decal-$n; \
-        .venv/bin/python scripts/build-render-store.py --list "$1" \
-          --sources decal --log out/store/decal-$n/store.jsonl \
-          --db out/slot-decal/$n.db --timeout 60' sh '{}'
+**Both launches were clamped to a 30-minute deadline** despite `--timeout 4h`
+-- the agent's `-max-job-time` default, which a reinstall reverts. Relaunching
+under the same task name continues the run, because `batch.Runner` skips what
+its JSONL already holds. keiei's shard lists live in its own tree
+(`out/slot-decal/keiei-*.txt`) and travel with `scp`, not with the sync.
 
-Drawings land in `renders/decal/` and rows in each shard's own scratch db, so
-the four writers do not contend on `corpus.db`. **`corpus.db` has none of them
-yet** -- `scripts/index-store-attempts.py` takes the shard logs up when the
-run stops, and until that runs the wall shows the slot at its 33 probe rows.
-
-**keiei is worth provisioning.** It is the only idle node and it cannot run
-anything in this repo: no `uv`, system Python 3.11.6, no `.venv`.
+**A node's `vendor/` survives `onto sync`, but its job output does not.**
+The sync resets what the node holds and is not sending, so a re-sync drops
+`out/` -- including the `--each` shard lists, which then makes a launch die in
+seconds with an empty log.
 
 ## Engine parity: the two engines already agree, and a corpus ranking is running
 
