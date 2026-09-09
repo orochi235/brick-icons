@@ -1,0 +1,17 @@
+.bench { padding: 24px; font: 14px/1.5 ui-sans-serif, system-ui, sans-serif; }
+.bench h1 { font-size: 20px; margin: 0 0 6px; }
+.bench__status { margin: 0 0 4px; font-weight: 600; }
+.bench__note { margin: 0 0 16px; max-width: 62ch; color: #666; }
+.bench__log,
+.bench__table { font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.bench__log { margin: 16px 0; white-space: pre-wrap; }
+.bench__table { border-collapse: collapse; margin: 16px 0; }
+.bench__table th,
+.bench__table td { padding: 3px 14px 3px 0; text-align: right; }
+.bench__table th:first-child,
+.bench__table td:first-child { text-align: left; }
+.bench__withheld { color: #a33; }
+.bench__canvases { display: flex; gap: 16px; flex-wrap: wrap; }
+.bench__canvases figure { margin: 0; }
+.bench__canvases figcaption { font-size: 12px; margin-bottom: 4px; }
+.bench__canvases canvas { width: 600px; height: 450px; border: 1px solid #ccc; }
