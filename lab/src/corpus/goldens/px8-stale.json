@@ -38,6 +38,8 @@
     "borderWidth": 1.44,
     "shape": "square",
     "captions": [],
+    "badges": [],
+    "strip": [],
     "slash": true
   },
   {
@@ -51,6 +53,8 @@
     "borderWidth": 1.44,
     "shape": "square",
     "captions": [],
+    "badges": [],
+    "strip": [],
     "slash": true
   },
   {
@@ -64,6 +68,8 @@
     "borderWidth": 1.44,
     "shape": "square",
     "captions": [],
+    "badges": [],
+    "strip": [],
     "slash": true
   },
   {
@@ -167,6 +173,8 @@
     "borderWidth": 0,
     "shape": "square",
     "captions": [],
+    "badges": [],
+    "strip": [],
     "slash": false
   },
   {

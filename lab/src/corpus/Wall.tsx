@@ -228,8 +228,8 @@ function washCell(ctx: CanvasRenderingContext2D, wash: number,
   ctx.restore();
 }
 
-/** The captions, corner discs and kind strip a drawn cell wears. The strip
- *  starts where the part number ended, so it has to run after the captions. */
+/** The captions, corner discs and kind strip a cell wears, drawn or not. The
+ *  strip starts where the part number ended, so it runs after the captions. */
 function drawOverlays(ctx: CanvasRenderingContext2D,
                       cmd: { captions?: CellCaption[]; badges?: CellBadge[];
                              strip?: CellBadge[] },
@@ -308,7 +308,7 @@ function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
       ctx.fillRect(dx, dy, cmd.dw, cmd.dh);
     }
     strokeBorder(ctx, { ...cmd, dx, dy });
-    for (const caption of cmd.captions ?? []) drawCaption(ctx, caption, { ...cmd, dx, dy });
+    drawOverlays(ctx, cmd, { ...cmd, dx, dy });
     if (cmd.caret) strokeCaret(ctx, { ...cmd, dx, dy }, palette);
   } else if (cmd.kind === 'label') {
     ctx.save();

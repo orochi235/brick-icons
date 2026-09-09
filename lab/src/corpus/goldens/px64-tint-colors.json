@@ -10,6 +10,8 @@
     "borderWidth": 0,
     "shape": "square",
     "captions": [],
+    "badges": [],
+    "strip": [],
     "slash": false
   },
   {
@@ -36,6 +38,8 @@
     "borderWidth": 0,
     "shape": "square",
     "captions": [],
+    "badges": [],
+    "strip": [],
     "slash": false
   },
   {
@@ -49,6 +53,8 @@
     "borderWidth": 0,
     "shape": "square",
     "captions": [],
+    "badges": [],
+    "strip": [],
     "slash": false
   },
   {
@@ -62,6 +68,8 @@
     "borderWidth": 0,
     "shape": "square",
     "captions": [],
+    "badges": [],
+    "strip": [],
     "slash": false
   },
   {
@@ -75,6 +83,8 @@
     "borderWidth": 0,
     "shape": "square",
     "captions": [],
+    "badges": [],
+    "strip": [],
     "slash": false
   },
   {
@@ -88,6 +98,8 @@
     "borderWidth": 0,
     "shape": "square",
     "captions": [],
+    "badges": [],
+    "strip": [],
     "slash": false
   },
   {
@@ -101,6 +113,8 @@
     "borderWidth": 0,
     "shape": "square",
     "captions": [],
+    "badges": [],
+    "strip": [],
     "slash": false
   },
   {
@@ -114,6 +128,16 @@
     "borderWidth": 0,
     "shape": "square",
     "captions": [],
+    "badges": [
+      {
+        "tag": "retired",
+        "mark": "archive",
+        "corner": "tr",
+        "field": "oklch(0.5302 0.0108 286.02)",
+        "ink": "oklch(1.0000 0 0)"
+      }
+    ],
+    "strip": [],
     "slash": false
   },
   {
@@ -127,6 +151,23 @@
     "borderWidth": 0,
     "shape": "square",
     "captions": [],
+    "badges": [
+      {
+        "tag": "popular",
+        "mark": "star",
+        "corner": "tl",
+        "field": "oklch(0.6800 0.1760 50.54)",
+        "ink": "oklch(1.0000 0 0)"
+      }
+    ],
+    "strip": [
+      {
+        "tag": "technic",
+        "mark": "technic",
+        "field": "oklch(0.3047 0.0947 268.21)",
+        "ink": "oklch(1.0000 0 0)"
+      }
+    ],
     "slash": false
   },
   {
@@ -140,6 +181,18 @@
     "borderWidth": 0,
     "shape": "square",
     "captions": [],
+    "badges": [
+      {
+        "tag": "replaced",
+        "mark": "redo",
+        "corner": "tr",
+        "field": "oklch(0.4950 0.1230 154.41)",
+        "ink": "oklch(1.0000 0 0)",
+        "accent": "oklch(1.0000 0 0)",
+        "scale": 1.14
+      }
+    ],
+    "strip": [],
     "slash": false
   },
   {
@@ -153,6 +206,8 @@
     "borderWidth": 0,
     "shape": "square",
     "captions": [],
+    "badges": [],
+    "strip": [],
     "slash": false
   },
   {
@@ -166,6 +221,8 @@
     "borderWidth": 0,
     "shape": "square",
     "captions": [],
+    "badges": [],
+    "strip": [],
     "slash": false
   }
 ]

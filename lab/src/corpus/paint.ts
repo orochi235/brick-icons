@@ -151,7 +151,7 @@ export function markFor(cell: Cell): 'sticker' | undefined {
 /** Below this drawn size a cell has no room for a badge without covering the
  *  drawing it is about; the year needs more room still, being words. */
 export const BADGE_MIN_PX = 56;
-export const LABEL_MIN_PX = 110;
+export const LABEL_MIN_PX = 88;
 
 /** A picture rather than a letter, where a letter would need explaining. */
 export type BadgeMark = 'stickerPolice' | 'stickerFlames'
@@ -401,6 +401,10 @@ export type PaintCommand =
       glyph?: string;
       mark?: 'sticker';
       captions?: CellCaption[];
+      /** An undrawn cell wears the same badges a drawn one does: what a part
+       *  IS does not depend on whether this slot managed to draw it, and a
+       *  duplo brick that timed out still wants saying so (20302k01). */
+      badges?: CellBadge[]; strip?: CellBadge[];
       /** Struck corner to corner in the border's own color and width. Every
        *  bordered state earns it when there is nothing drawn in the cell: the
        *  border alone reads as a tint at the zooms where most cells are small,
@@ -507,6 +511,8 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
                captions: state === 'outOfScope' ? undefined
                  : appearance.showCaptions
                    ? captionsFor(cell, dw, CAPTION_ON_FILL) : NO_CAPTIONS,
+               badges: state === 'outOfScope' ? undefined : badges,
+               strip: state === 'outOfScope' ? undefined : strip,
                slash: border !== null, caret: isCaret });
   }
   for (const b of bands ?? []) {

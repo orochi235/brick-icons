@@ -23,6 +23,8 @@
         "weight": 500
       }
     ],
+    "badges": [],
+    "strip": [],
     "slash": false
   },
   {
@@ -62,6 +64,8 @@
         "weight": 500
       }
     ],
+    "badges": [],
+    "strip": [],
     "slash": false
   },
   {
@@ -88,6 +92,8 @@
         "weight": 500
       }
     ],
+    "badges": [],
+    "strip": [],
     "slash": false
   },
   {
@@ -114,6 +120,8 @@
         "weight": 500
       }
     ],
+    "badges": [],
+    "strip": [],
     "slash": false
   },
   {
@@ -140,6 +148,8 @@
         "weight": 500
       }
     ],
+    "badges": [],
+    "strip": [],
     "slash": false
   },
   {
@@ -166,6 +176,8 @@
         "weight": 500
       }
     ],
+    "badges": [],
+    "strip": [],
     "slash": false
   },
   {
@@ -192,6 +204,8 @@
         "weight": 500
       }
     ],
+    "badges": [],
+    "strip": [],
     "slash": false
   },
   {
@@ -218,6 +232,16 @@
         "weight": 500
       }
     ],
+    "badges": [
+      {
+        "tag": "retired",
+        "mark": "archive",
+        "corner": "tr",
+        "field": "oklch(0.5302 0.0108 286.02)",
+        "ink": "oklch(1.0000 0 0)"
+      }
+    ],
+    "strip": [],
     "slash": false
   },
   {
@@ -242,6 +266,23 @@
         "corner": "bl",
         "ink": "#ffffff",
         "weight": 500
+      }
+    ],
+    "badges": [
+      {
+        "tag": "popular",
+        "mark": "star",
+        "corner": "tl",
+        "field": "oklch(0.6800 0.1760 50.54)",
+        "ink": "oklch(1.0000 0 0)"
+      }
+    ],
+    "strip": [
+      {
+        "tag": "technic",
+        "mark": "technic",
+        "field": "oklch(0.3047 0.0947 268.21)",
+        "ink": "oklch(1.0000 0 0)"
       }
     ],
     "slash": false
@@ -270,6 +311,18 @@
         "weight": 500
       }
     ],
+    "badges": [
+      {
+        "tag": "replaced",
+        "mark": "redo",
+        "corner": "tr",
+        "field": "oklch(0.4950 0.1230 154.41)",
+        "ink": "oklch(1.0000 0 0)",
+        "accent": "oklch(1.0000 0 0)",
+        "scale": 1.14
+      }
+    ],
+    "strip": [],
     "slash": false
   },
   {
@@ -296,6 +349,8 @@
         "weight": 500
       }
     ],
+    "badges": [],
+    "strip": [],
     "slash": false
   },
   {
@@ -316,6 +371,8 @@
         "weight": 500
       }
     ],
+    "badges": [],
+    "strip": [],
     "slash": false
   }
 ]

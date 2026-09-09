@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { badgeGeometry, badgesFor, captionsFor, CAPTION_ON_FILL,
   captionSize, cornerPad,
   cellState, DEFAULT_APPEARANCE, fillFor, paintCommands, PROPERTY_FIELD,
+  LABEL_MIN_PX,
   stripFor, stripGeometry, tally, thumbGround, type Appearance }
   from '@lab/corpus/paint';
 import { CELL_STATES, DEFAULT_PALETTE as CELL_FILL, type CellState } from '@lab/corpus/palette';
@@ -46,7 +47,8 @@ it('draws an unrendered cell with nothing known as unknown gray, and no border',
   expect(cmd).toEqual({ kind: 'fill', dx: 20, dy: 0, dw: 10, dh: 10,
                         fill: CELL_FILL.unknown.fill, border: null, borderWidth: 0,
                         shape: 'square', slash: false, glyph: undefined,
-                        captions: [] });
+                        mark: undefined, caret: undefined,
+                        captions: [], badges: [], strip: [] });
 });
 
 it('draws last week’s picture for a stale cell rather than a blank box', () => {
@@ -318,7 +320,8 @@ it('dims a fill cell outside the highlighted state to the unknown field, without
   expect(cmd).toEqual({ kind: 'fill', dx: 0, dy: 0, dw: 10, dh: 10,
                         fill: CELL_FILL.unknown.fill, border: null, borderWidth: 0,
                         shape: 'square', slash: false, glyph: undefined,
-                        captions: [] });
+                        mark: undefined, caret: undefined,
+                        captions: [], badges: [], strip: [] });
 });
 
 it('reduces alpha on a drawn cell outside the highlighted state, and leaves a matching one alone', () => {
@@ -749,4 +752,31 @@ describe('tint', () => {
     const [cmd] = paintCommands({ ...drawn, cells: [cell('a', 0, null)], tint: 'sets' });
     expect(cmd).toMatchObject({ kind: 'fill', fill: CELL_FILL.unmatched.fill });
   });
+});
+
+it('gives an undrawn cell the badges of the part it is, not of the render it lacks', () => {
+  const [cmd] = paintCommands({
+    cells: [cell('20302k01', 0, null, { tags: ['duplo'] })],
+    rects: [{ x: 0, y: 0, w: 64, h: 64 }], visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest: null,
+  });
+  expect(cmd).toMatchObject({ kind: 'fill' });
+  expect((cmd as { strip?: { tag: string }[] }).strip?.map((b) => b.tag))
+    .toEqual(['duplo']);
+});
+
+it('leaves an out-of-scope cell unbadged, as it leaves it uncaptioned', () => {
+  const [cmd] = paintCommands({
+    cells: [cell('x', 0, null, { out_of_scope: true, tags: ['duplo'] })],
+    rects: [{ x: 0, y: 0, w: 64, h: 64 }], visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest: null,
+  });
+  expect(cmd).toMatchObject({ kind: 'fill', badges: undefined, strip: undefined });
+});
+
+it('captions a cell down to LABEL_MIN_PX and not below it', () => {
+  const c = cell('3001', 0, null, { year_from: 1979 });
+  expect(captionsFor(c, LABEL_MIN_PX, CAPTION_ON_FILL).map((x) => x.text))
+    .toEqual(['1979–', '3001']);
+  expect(captionsFor(c, LABEL_MIN_PX - 1, CAPTION_ON_FILL)).toEqual([]);
 });

@@ -38,6 +38,8 @@
     "borderWidth": 5.76,
     "shape": "square",
     "captions": [],
+    "badges": [],
+    "strip": [],
     "slash": true
   },
   {
@@ -51,6 +53,8 @@
     "borderWidth": 5.76,
     "shape": "square",
     "captions": [],
+    "badges": [],
+    "strip": [],
     "slash": true
   },
   {
@@ -171,6 +175,8 @@
     "borderWidth": 0,
     "shape": "square",
     "captions": [],
+    "badges": [],
+    "strip": [],
     "slash": false
   },
   {
