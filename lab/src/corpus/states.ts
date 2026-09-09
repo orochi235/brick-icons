@@ -22,6 +22,11 @@ export interface StateFacts {
   /** The condition keys that hold in a slot other than the one being drawn.
    *  The server decides, because only it can see the other slots. */
   elsewhere: readonly string[];
+  /** The slot has nothing to draw for this part -- a plain brick on the decal
+   *  wall. The server decides that too: which parts a slot covers is a fact
+   *  about the slot, and a rule for it here would have to be rewritten for
+   *  every slot added. Absent from a host that has no such slot. */
+  not_applicable?: boolean;
 }
 
 /** The outline a cell is drawn with. The legend reads it too, so a swatch
@@ -65,6 +70,14 @@ const CONDITIONS = [
   // Above `defect` on purpose. Below it, a part carrying three other faults
   // stays plain gold and nobody ever learns that the fourth was redrawn --
   // which is the whole of what this state exists to say.
+  // Above every problem state and under `currently out of scope`: nothing
+  // was owed here, so nothing failed. Dark gray rather than a state color --
+  // the cell is saying there was nothing to draw, not that drawing went
+  // wrong -- and it carries a border because a border is what draws the
+  // slash, which is the mark that says the cell is empty on purpose.
+  { key: 'notApplicable', label: 'nothing for this slot to draw', shape: 'square',
+    fill: '#2c2c31', border: '#71717c', weight: 'thick', sibling: false,
+    precedence: 12, match: (f: StateFacts) => f.not_applicable === true },
   { key: 'review', label: 'fix claimed, needs a look', shape: 'square',
     fill: '#3a2740', border: '#d070c0', weight: 'thick', sibling: true,
     precedence: 15, match: (f: StateFacts) => f.review_defects > 0 },

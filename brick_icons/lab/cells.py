@@ -47,6 +47,27 @@ WHERE m.error IS NOT NULL
 CONDITIONS = ("review", "defect", "timeout", "failed", "accepted")
 
 
+#: The slots that draw only some of the library, and what makes a part one
+#: they have something to draw. Everything not named here applies to every
+#: part, so nothing in it is ever `not_applicable`. `decal` draws a part's
+#: decoration: a plain brick has none, which is a different thing from a
+#: decorated part whose decal the finder missed -- that one is still owed and
+#: stays `unknown`.
+SLOT_DRAWS = {"decal": lambda printed: printed}
+
+
+def not_applicable(source: str, printed: bool, drawn: bool) -> bool:
+    """Whether this slot has nothing to draw for this part.
+
+    Two signals have to agree: the part is one the slot does not cover, and
+    nothing was drawn for it. Where they ever disagree -- a plain part with a
+    decal against its name -- the cell keeps whatever state its render gives
+    it, so a contradiction shows rather than being colored over.
+    """
+    draws = SLOT_DRAWS.get(source)
+    return draws is not None and not draws(printed) and not drawn
+
+
 def errors_by_engine(conn: sqlite3.Connection) -> dict[str, dict[str, str]]:
     """Each engine's latest error per part.
 
@@ -298,6 +319,8 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
             # draws each as the condition's own `<key>Elsewhere` sibling, so a
             # condition added here needs no second field of its own.
             "elsewhere": sorted(others.get(pid, ())),
+            "not_applicable": not_applicable(
+                source, bool(part["printed"]), render is not None),
         })
     return {"cells": rows, "count": len(order), "version": version,
             "source": source}
@@ -367,6 +390,9 @@ def slot_states(conn: sqlite3.Connection, part_id: str,
     # A slot that timed out files no measurement, so its own attempt is the
     # only thing that knows -- and it is what a tile with no render shows.
     tried = slot_attempts(conn, part_id)
+    printed = bool((conn.execute(
+        "SELECT printed FROM parts WHERE id = ?", (part_id,)).fetchone()
+        or {"printed": 0})["printed"])
     others = {source: other_conditions(conn, source, context)
               for source in sources}
     out: dict[str, dict] = {}
@@ -383,5 +409,6 @@ def slot_states(conn: sqlite3.Connection, part_id: str,
             "review_defects": bucket["review"],
             "accepted_defects": bucket["accepted"],
             "elsewhere": sorted(others[source].get(part_id, ())),
+            "not_applicable": not_applicable(source, printed, render is not None),
         }
     return out

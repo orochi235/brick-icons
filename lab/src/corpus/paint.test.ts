@@ -281,7 +281,7 @@ it('tallies each cell into its own state, and nowhere else', () => {
     cell('i', 8, null, { accepted_defects: 1 }),
   ];
   expect(tally(cells)).toEqual({
-    unknown: 1, outOfScope: 1, review: 0, timeout: 1, failed: 1, defect: 2,
+    unknown: 1, outOfScope: 1, notApplicable: 0, review: 0, timeout: 1, failed: 1, defect: 2,
     accepted: 1, reviewElsewhere: 0, defectElsewhere: 1, timeoutElsewhere: 0,
     failedElsewhere: 1,
   });
@@ -289,7 +289,7 @@ it('tallies each cell into its own state, and nowhere else', () => {
 
 it('tallies an empty corpus as all zeros', () => {
   expect(tally([])).toEqual({
-    unknown: 0, outOfScope: 0, review: 0, timeout: 0, failed: 0, defect: 0,
+    unknown: 0, outOfScope: 0, notApplicable: 0, review: 0, timeout: 0, failed: 0, defect: 0,
     accepted: 0, reviewElsewhere: 0, defectElsewhere: 0, timeoutElsewhere: 0,
     failedElsewhere: 0,
   });

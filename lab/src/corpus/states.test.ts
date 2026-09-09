@@ -19,17 +19,32 @@ const by = (key: string) => STATES.find((s) => s.key === key)!;
 
 it('lists the states in legend order: every condition, then every sibling', () => {
   expect(stateKeys()).toEqual([
-    'unknown', 'outOfScope', 'review', 'defect', 'timeout', 'failed', 'accepted',
+    'unknown', 'outOfScope', 'notApplicable', 'review', 'defect', 'timeout',
+    'failed', 'accepted',
     'reviewElsewhere', 'defectElsewhere', 'timeoutElsewhere', 'failedElsewhere',
   ]);
 });
 
 it('matches in a different order from the one it lists, worst first', () => {
   expect(BY_PRECEDENCE.map((s) => s.key)).toEqual([
-    'outOfScope', 'review', 'defect', 'timeout', 'failed', 'accepted',
+    'outOfScope', 'notApplicable', 'review', 'defect', 'timeout', 'failed',
+    'accepted',
     'reviewElsewhere', 'defectElsewhere', 'timeoutElsewhere', 'failedElsewhere',
     'unknown',
   ]);
+});
+
+it('colors a cell the slot has nothing to draw for, above every problem', () => {
+  const facts = { ...clean, not_applicable: true };
+  expect(BY_PRECEDENCE.find((s) => s.match(facts))!.key).toBe('notApplicable');
+  expect(by('notApplicable').precedence)
+    .toBeGreaterThan(by('outOfScope').precedence);
+  expect(by('notApplicable').precedence).toBeLessThan(by('review').precedence);
+});
+
+// A host with no such slot sends no such field, and must not light the state.
+it('leaves the field absent alone', () => {
+  expect(BY_PRECEDENCE.find((s) => s.match(clean))!.key).toBe('unknown');
 });
 
 it('gives every state its own precedence', () => {

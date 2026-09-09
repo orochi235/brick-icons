@@ -665,3 +665,30 @@ def test_the_latest_attempt_per_slot_is_the_one_that_counts(conn):
     conn.commit()
     got = cells.slot_attempts(conn, "3001")["occt"]
     assert (got["state"], got["error"]) == ("stored", None)
+
+
+def test_a_plain_part_is_not_applicable_to_the_decal_slot(conn):
+    _part(conn, "3001")
+    rows = cells.cells(conn, source="decal")["cells"]
+    assert [r["not_applicable"] for r in rows] == [True]
+
+
+def test_a_decorated_part_the_decal_slot_missed_is_still_owed(conn):
+    conn.execute("INSERT INTO parts (id, title, category, printed, obsolete, "
+                 "status) VALUES ('3001p01', 'Brick with Pattern', 'Brick', "
+                 "1, 0, 'unreviewed')")
+    rows = cells.cells(conn, source="decal")["cells"]
+    assert [r["not_applicable"] for r in rows] == [False]
+
+
+def test_a_plain_part_with_a_decal_against_its_name_keeps_its_render(conn):
+    _part(conn, "3001")
+    _render(conn, "3001", "sha", "2026-09-08T00:00:00+00:00", source="decal")
+    rows = cells.cells(conn, source="decal")["cells"]
+    assert [r["not_applicable"] for r in rows] == [False]
+
+
+def test_no_part_is_inapplicable_to_a_slot_that_draws_the_whole_library(conn):
+    _part(conn, "3001")
+    rows = cells.cells(conn, source="silhouette-naive")["cells"]
+    assert [r["not_applicable"] for r in rows] == [False]

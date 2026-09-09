@@ -18,6 +18,10 @@ const PRE_TASK_LITERALS: Params = {
   // No pre-task literal: the out-of-scope state was added after this
   // snapshot, so what it pins is that the state kept the color it shipped with.
   outOfScopeFill: '#b2a3dd',
+  // Nor these: the same goes for the state that says a slot had nothing to
+  // draw for this part.
+  notApplicableFill: '#2c2c31',
+  notApplicableBorder: '#71717c',
   timeoutFill: '#26383f',
   timeoutBorder: '#30b0d0',
   failedFill: '#4a2626',
@@ -119,7 +123,9 @@ it('gives every color param a labelled row in the appearance panel', () => {
 it('keeps the color row labels the panel already showed', () => {
   const rows = new Map(APPEARANCE_FIELDS.map((f) => [f.key, f.label]));
   expect(COLOR_PARAM_KEYS.map((key) => rows.get(key))).toEqual([
-    'Unknown fill', 'Out-of-scope fill', 'Review fill', 'Review border',
+    'Unknown fill', 'Out-of-scope fill',
+    'Not-applicable fill', 'Not-applicable border',
+    'Review fill', 'Review border',
     'Defect fill', 'Defect border', 'Timeout fill', 'Timeout border',
     'Failed fill', 'Failed border', 'Accepted fill', 'Accepted border',
     'Review-elsewhere fill', 'Review-elsewhere border',

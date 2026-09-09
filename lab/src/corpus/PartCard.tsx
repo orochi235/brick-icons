@@ -37,6 +37,8 @@ function cellStateLabel(cell: Cell): string | null {
       return 'currently out of scope';
     case 'accepted':
       return `${plural(cell.accepted_defects, 'known issue')}, not being fixed`;
+    case 'notApplicable':
+      return 'nothing for this slot to draw';
     case 'unknown':
       return null;
   }
