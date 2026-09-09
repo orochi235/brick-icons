@@ -18,7 +18,7 @@ import { badgeGeometry, CAPTION_INK_RISE, captionSize, cornerPad, LINKED_BADGE, 
 import { DEFAULT_PALETTE, readPalette, type CellState, type Palette } from '@lab/corpus/palette';
 import { DEFAULT_PARAMS } from '@lab/corpus/params';
 import { pinchStep } from '@lab/corpus/pinch';
-import { panToReveal } from '@lab/corpus/reveal';
+import { centerReveal, panToReveal } from '@lab/corpus/reveal';
 import type { TintMode } from '@lab/corpus/tint';
 import type { Cell, SheetManifest } from '@lab/corpus/types';
 import { visibleRange } from '@lab/corpus/visible';
@@ -390,14 +390,17 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
   const byId = useMemo(() => new Map(cells.map((c, i) => [c.id, i])), [cells]);
 
   /** Follow an updated badge to the part that replaced this one: put the
-   *  caret on it and bring it on screen, the same move an arrow key makes. */
+   *  caret on it and center it. Centered rather than an arrow key's minimum
+   *  shift -- the successor is somewhere else in the wall entirely, and
+   *  landing it against an edge leaves the reader hunting for what they
+   *  asked to be taken to. */
   const goToSuccessor = (cell: Cell): boolean => {
     if (!cell.successor) return false;
     const next = byId.get(cell.successor);
     if (next == null) return false;
     onExplicitCaretChange(next);
     const rect = rects[next];
-    if (rect) onPan(panToReveal(rect, camRef.current, { width, height }));
+    if (rect) onPan(centerReveal(rect, camRef.current, { width, height }));
     return true;
   };
 
