@@ -273,21 +273,18 @@ export function badgeGeometry(cellPx: number) {
   const size = captionSize(cellPx);
   const radius = size * 0.63;
   const pad = cornerPad(cellPx, size);
-  return {
-    size, radius,
-    // Across the cell the disc sits tangent to the pad, as the caption does.
-    inset: radius + pad,
-    // Down it, it centers on the caption's ink instead -- `radius + pad` put
-    // it 0.21 of the type size below the year it sits beside.
-    rise: pad + size * (0.5 - CAPTION_INK_RISE),
-    fall: pad + size * (0.5 + CAPTION_INK_RISE),
-  };
+  // One inset on every edge, the same one the year caption keeps: a corner
+  // mark is a box tangent to the pad, whichever corner it is in. Chasing the
+  // caption's ink line instead made a top disc sit 0.21 of the type size
+  // nearer its edge than a bottom one, so no two corners agreed.
+  return { size, radius, inset: radius + pad, rise: radius + pad, fall: radius + pad };
 }
 
 /** How far a caption's ink centers above the `middle` baseline canvas sets
  *  it on, as a fraction of the type size. Measured on Oswald at 10, 14 and
- *  18px, where the ratio held to four places. A badge beside a caption
- *  centers on this rather than on its own radius. */
+ *  18px, where the ratio held to four places. The kind strip sits on the part
+ *  number's own line and uses it; a corner disc does not -- it keeps the
+ *  caption's pad instead, see `badgeGeometry`. */
 export const CAPTION_INK_RISE = 0.0823;
 
 /** The type size a caption is set at. */
