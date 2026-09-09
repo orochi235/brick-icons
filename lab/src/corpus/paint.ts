@@ -206,13 +206,13 @@ export interface CellBadge {
  *  and a part that was replaced are different things wearing one badge
  *  today. */
 export const CORNER_BADGES: Record<string, CellBadge> = {
-  popular: { tag: 'popular', mark: 'star', corner: 'tl', field: '#ff7a00', ink: '#ffffff' },
+  popular: { tag: 'popular', mark: 'star', corner: 'tl', field: 'oklch(0.7230 0.1897 50.54)', ink: 'oklch(1.0000 0 0)' },
   // Top right, outboard of the year: what these two say is when the part
   // stopped, so they belong beside the dates rather than in the opposite
   // corner from them. The year caption gives way and sets to their left.
-  retired: { tag: 'retired', mark: 'archive', corner: 'tr', field: '#6b6b72', ink: '#ffffff' },
-  replaced: { tag: 'replaced', mark: 'redo', corner: 'tr', field: '#2f7d4f',
-             ink: '#ffffff', accent: '#ffffff', scale: 1.14 },
+  retired: { tag: 'retired', mark: 'archive', corner: 'tr', field: 'oklch(0.5302 0.0108 286.02)', ink: 'oklch(1.0000 0 0)' },
+  replaced: { tag: 'replaced', mark: 'redo', corner: 'tr', field: 'oklch(0.5289 0.1056 154.41)',
+             ink: 'oklch(1.0000 0 0)', accent: 'oklch(1.0000 0 0)', scale: 1.14 },
 };
 
 /** The system letters are set in a wide rounded sans rather than the wall's

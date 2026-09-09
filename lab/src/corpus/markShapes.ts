@@ -285,12 +285,12 @@ function halftone(pitch: number,
  *  over the whole face -- so the screen renders no tone. `halftone` takes a
  *  radius per dot, so one that does is a function away.
  *
- *  Nearest neighbors sit exactly `pitch` apart, so the dots stay clear of each
- *  other below half of it; a third is the coverage that reads as a screen
- *  rather than as a grid of holes.
+ *  Nearest neighbors sit exactly `pitch` apart, so the dots stay clear of
+ *  each other below half of it -- 0.28 against a 0.31 touch, which is a
+ *  screen printed heavy rather than a grid of holes.
  */
 const PRINT_PITCH = 0.62;
-const printed: MarkShape[] = [{ d: halftone(PRINT_PITCH, () => 0.21) }];
+const printed: MarkShape[] = [{ d: halftone(PRINT_PITCH, () => 0.28) }];
 
 // Composite: two L-trominoes interlocked into a 2x3 block -- the smallest
 // rectangle two identical pieces can tile, and it says assembled-from-parts

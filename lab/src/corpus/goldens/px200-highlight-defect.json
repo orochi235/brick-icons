@@ -225,8 +225,8 @@
         "tag": "retired",
         "mark": "archive",
         "corner": "tr",
-        "field": "#6b6b72",
-        "ink": "#ffffff"
+        "field": "oklch(0.5302 0.0108 286.02)",
+        "ink": "oklch(1.0000 0 0)"
       }
     ],
     "strip": [],
@@ -262,8 +262,8 @@
         "tag": "popular",
         "mark": "star",
         "corner": "tl",
-        "field": "#ff7a00",
-        "ink": "#ffffff"
+        "field": "oklch(0.7230 0.1897 50.54)",
+        "ink": "oklch(1.0000 0 0)"
       }
     ],
     "strip": [
@@ -306,9 +306,9 @@
         "tag": "replaced",
         "mark": "redo",
         "corner": "tr",
-        "field": "#2f7d4f",
-        "ink": "#ffffff",
-        "accent": "#ffffff",
+        "field": "oklch(0.5289 0.1056 154.41)",
+        "ink": "oklch(1.0000 0 0)",
+        "accent": "oklch(1.0000 0 0)",
         "scale": 1.14
       }
     ],

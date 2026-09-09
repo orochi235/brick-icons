@@ -286,8 +286,9 @@ function drawBadgeDirect(ctx: CanvasRenderingContext2D, badge: CellBadge,
   // Defaults to the field it is drawn on, washed or not, so letting the
   // labelled field down does not hand every badge a visible outline.
   ctx.strokeStyle = badge.stroke ?? field;
-  // The ring either edges the artwork or frames the whole field. On the disc
-  // it is stroked after the disc's own fill, below.
+  // The ring either frames the whole field or edges the artwork. On the disc
+  // it is stroked last, over the mark: printed's dots run to the field's edge
+  // and would otherwise sit on top of the ring meant to contain them.
   if (!badge.ringOnDisc) ctx.stroke();
   if (labelled && field !== badge.field) {
     // The disc keeps its own field under the artwork while the stadium
@@ -296,11 +297,6 @@ function drawBadgeDirect(ctx: CanvasRenderingContext2D, badge: CellBadge,
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
     ctx.fillStyle = badge.field;
     ctx.fill();
-  }
-  if (badge.ringOnDisc) {
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.stroke();
   }
   ctx.fillStyle = badge.ink;
   const mark = badge.mark ? MARK_SHAPES[badge.mark] : undefined;
@@ -328,6 +324,13 @@ function drawBadgeDirect(ctx: CanvasRenderingContext2D, badge: CellBadge,
       ctx.textBaseline = 'alphabetic';
       ctx.fillText(badge.text, cx + size * (badge.dx ?? 0), textY);
     }
+  }
+  if (badge.ringOnDisc) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.lineWidth = line;
+    ctx.strokeStyle = badge.stroke ?? badge.field;
+    ctx.stroke();
   }
   if (at.label) {
     ctx.font = labelFont(badge, size);
