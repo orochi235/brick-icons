@@ -78,9 +78,17 @@ set of controls it separates them exactly -- 3070bp1k, 30258p05, 10202p04,
 30136, 30137, 9359, 80400, 6141p01, 3005, 4740 and 3001 all keep it. So does
 6342851a, whose valid merge the `_undeclared_ops` docstring reasons from.
 
-It is not free. Rejecting the merge keeps every triangle its own face, and
-10202p04 goes from 13.8s to 69.3s at 3,757 faces against 91. Whether that is
-worth paying library-wide is the open question, not whether it draws right.
+It is not free, and the price is now measured. Over 300 random parts the merge
+comes back invalid for **62 of the 298 it decided -- 20.8%** -- and those parts
+keep a median 3.1x more faces without it (mean 15.3x, worst 203x). 10202p04
+goes from 13.8s to 69.3s at 3,757 faces against 91.
+
+Read the 20.8% twice, because it cuts both ways: it is what the guard costs,
+and it is also how much of the library currently draws from an occluder OCCT
+calls invalid. Not all of that shows a visible defect -- invalidity does not
+have to put a line anywhere you can see it -- but the surface doing the hiding
+is unsound on one part in five.
+
 `ShapeFix_Shape` is not the cheaper answer: it leaves the shape invalid and
 takes 3070bp1k from 5 extras to 2.
 
