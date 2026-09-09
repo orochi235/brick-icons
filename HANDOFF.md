@@ -20,18 +20,29 @@ paragraph's problem, not a gap in the fill.
 ingest and stopped after the rows, leaving the wall a round behind until the
 bake was run separately.
 
-### Decals come out mirrored, and the library proves it
+### Decals came out mirrored — FIXED, and the slot is now stale
 
-`6041468c` and `6041468d` are the regression pair: LDraw describes the first
-as plain `"ZZ"` and the second as `Mirrored "ZZ"`, and we render them the
-wrong way round. `6041468k` reads backwards throughout ("STAR WARS", every
-spec line). Not every part is affected — `3009p03`, `2431pw1` and `190265d`
-all read correctly — so the flip depends on the face the decoration is
-unwrapped from, not on printed-vs-sticker.
+A decal binds to a body plane, and `planes_from` builds planes only from
+color-16 facets. Artwork covering its face edge to edge leaves that face with
+no body facets at all, so no plane is built for it and `bind` matches the face
+BEHIND the sheet instead — within `BIND_TOL` on a 0.25 LDU sticker, and
+antiparallel, which hands `up_aligned` a mirrored frame. `6041468c` has 0 body
+facets on its printed face against 354 decoration facets; `190265d`, which
+keeps an unprinted border, has 311 and always read correctly. Nothing to do
+with printed-vs-sticker.
 
-**Not started, and `unwrap.py` has a peer's uncommitted decal-binding work in
-it.** Coordinate before touching it. A fix invalidates every decal render, so
-it costs the whole slot again: refill, re-index, re-bake.
+`unwrap.reseat_plane` moves the bound carrier onto the plane the decoration
+itself lies in, pointing away from the same `inside` centroid `planes_from`
+already orients against — so it can only supply an orientation that was
+missing, never contradict one that was there.
+
+**80 of the 393 corpus parts (20.4%) were mirrored.** `decal-hashes.txt` is
+re-frozen against the fix; before/after sheets for `6041468c/d/k` and a sample
+of the 80 are on the wall.
+
+**`renders/decal` is now wrong for those parts and has NOT been re-rendered.**
+That is 9,894 parts to refill, re-index and re-bake — a fleet job nobody has
+authorized yet.
 
 ### A "not applicable" legend class: designed, NOT BUILT
 

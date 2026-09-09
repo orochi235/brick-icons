@@ -533,6 +533,35 @@ def planes_from(polys, inside=None):
     return out
 
 
+def reseat_plane(carrier, pts, inside=None):
+    """`carrier` moved onto the plane `pts` lie in, pointing away from `inside`.
+
+    A decal lies ON the face it decorates, so its carrier's outward normal
+    points at it. Artwork covering a face edge to edge leaves that face with
+    no body facets at all, so `planes_from` never builds its plane and `bind`
+    matches the face BEHIND the sheet — antiparallel, which hands
+    `up_aligned` a mirrored frame. 6041468c and its Mirrored twin 6041468d
+    came out the wrong way round and 6041468k backwards throughout; 190265d,
+    the same 0.25 LDU sticker but with an unprinted border, read correctly on
+    the strength of the 311 body facets that border leaves behind.
+    """
+    if not isinstance(carrier, Plane):
+        return carrier
+    n = np.asarray(carrier.normal, float)
+    ln = float(np.linalg.norm(n))
+    pts = np.asarray(pts, float).reshape(-1, 3)
+    if ln < 1e-9 or not len(pts):
+        return carrier
+    n = n / ln
+    # median, not mean: a decal with a facet straying off its face must not
+    # drag the carrier off it
+    d = float(np.median(pts @ n))
+    inside = np.zeros(3) if inside is None else np.asarray(inside, float)
+    if float(n @ inside) > d:
+        n, d = -n, -d
+    return Plane(normal=n, offset=d)
+
+
 def _surface_key(prim, tol=0.01):
     """The surface a primitive lies on, independent of the sector of it that
     the primitive covers and of its color."""
@@ -722,6 +751,7 @@ def decal_groups(tris, tri_colors, analytic):
     out = []
     for carrier, group in members.values():
         pts = np.vstack([p for _, p in group])
+        carrier = reseat_plane(carrier, pts, inside)
         theta0 = _seam_origin(pts, carrier)
         uv = [(code, to_uv(p, carrier, theta0)) for code, p in group]
         regions = merge_regions(uv)

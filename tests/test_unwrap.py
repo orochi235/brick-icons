@@ -395,6 +395,60 @@ def test_a_flat_print_binds_to_its_face_not_a_nearby_primitive():
     assert len(regions) == 1
 
 
+#: LDraw up is -y, so a sticker's printed side is its -y face and the sheet
+#: is 0.25 LDU thick.
+STICKER_TOP, STICKER_BACK = -0.25, 0.0
+
+
+def _sticker(margin: bool):
+    """(tris, colors) for a printed sheet, with or without a bare border.
+
+    `margin` is the whole variable: 190265d leaves unprinted sticker around
+    its artwork and reads correctly, while 6041468c is printed edge to edge
+    and comes out mirrored.
+    """
+    back = _quad_tris([[-20, STICKER_BACK, -10], [20, STICKER_BACK, -10],
+                       [20, STICKER_BACK, 10], [-20, STICKER_BACK, 10]])
+    if margin:
+        border = _quad_tris([[-20, STICKER_TOP, -10], [20, STICKER_TOP, -10],
+                             [20, STICKER_TOP, -8], [-20, STICKER_TOP, -8]])
+        print_ = _quad_tris([[-20, STICKER_TOP, -8], [20, STICKER_TOP, -8],
+                             [20, STICKER_TOP, 10], [-20, STICKER_TOP, 10]])
+        return back + border + print_, [16, 16, 16, 16, 4, 4]
+    print_ = _quad_tris([[-20, STICKER_TOP, -10], [20, STICKER_TOP, -10],
+                         [20, STICKER_TOP, 10], [-20, STICKER_TOP, 10]])
+    return back + print_, [16, 16, 4, 4]
+
+
+def _only_carrier(tris, colors):
+    groups = unwrap.decal_groups(tris, colors, [])
+    assert len(groups) == 1
+    return groups[0][0]
+
+
+def test_a_full_bleed_print_carries_on_the_face_it_is_printed_on():
+    """Artwork covering its face edge to edge leaves that face with no body
+    facets, so no plane is built for it and the print binds to the face
+    BEHIND it -- whose outward normal is antiparallel, which hands
+    `up_aligned` a mirrored frame."""
+    tris, colors = _sticker(margin=False)
+    carrier = _only_carrier(tris, colors)
+    n = carrier.basis()[0]
+    print_pts = np.vstack(tris[-2:])
+    # the print lies ON its carrier, never a sheet's thickness behind it
+    assert float(np.median(print_pts @ n)) - carrier.offset == pytest.approx(0.0, abs=1e-6)
+
+
+def test_a_bare_margin_does_not_change_which_way_a_print_reads():
+    """The two sticker shapes differ only in whether the printed face keeps
+    any unprinted body, which must not decide the print's handedness."""
+    full = _only_carrier(*_sticker(margin=False))
+    margined = _only_carrier(*_sticker(margin=True))
+    # basis() is (normal, u, v); a flipped normal flips u and mirrors the UV
+    assert np.allclose(full.basis()[1], margined.basis()[1])
+    assert np.allclose(full.basis()[2], margined.basis()[2])
+
+
 def test_the_carrier_face_is_the_whole_face_print_included():
     """The print REPLACES the body facets under it, so unioning color 16
     alone leaves the strips around a torso's stripes, not the torso's front."""
