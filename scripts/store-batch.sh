@@ -13,6 +13,12 @@
 # Resumable at two levels: build-render-store.py skips a part that already has
 # a file under renders/<source>/, and it skips one already in this batch's
 # log. Re-running the job continues it.
+#
+# STORE_EXTRA passes flags through to build-render-store.py -- `onto run` can
+# set it but cannot append to the command, the batch line having to stay last.
+# A redraw after an engine fix wants `--force --store-root <dir>`: the force
+# to get past both skips, the root to put the drawings beside the log so the
+# delivery carries them home instead of leaving them on the node.
 set -eu
 cd "$(dirname "$0")/.."
 source=${1:?source}
@@ -25,5 +31,5 @@ set -- $(echo "$line" | tr ',' ' ')
 # Named for its first part, like the census: two batches sharing one log would
 # interleave their appends.
 exec .venv/bin/python scripts/build-render-store.py \
-    --sources "$source" --timeout "$timeout" \
+    --sources "$source" --timeout "$timeout" ${STORE_EXTRA:-} \
     --log "$dir/$source-$1.jsonl" "$@"
