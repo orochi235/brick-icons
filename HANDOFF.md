@@ -1,3 +1,73 @@
+## Baton, 2026-09-09 night: the scene renderer is measured and rejected, and the lab works off localhost
+
+On `main` in the shared checkout, nothing pushed —
+`git log --oneline @{u}..HEAD` counts it. **Another session is committing to
+`main` in this same tree right now**: `c4d13b5` landed under this session
+between one command and the next, and it is not the only one. The baton
+registry reported no siblings, so do not trust it here. Stage explicit paths,
+read `git diff --cached` before every commit, and re-read `git log` rather than
+believing any tip named in a doc.
+
+Uncommitted and not this session's: `lab/src/corpus/Lightbox.*` and
+`tests/goldens/defects.toml`. Untracked and unowned: `corpus-loaded.png`,
+`corpus-skeleton.png`, `scripts/surface-drop-probe.py`, `store-queue/`.
+
+### Three things landed
+
+Each commit message carries its own reasoning; this is only what they are.
+
+**The lab was unreachable from any device by IP.** `crypto.randomUUID` exists
+only in a secure context, `http://localhost` counts as one and a LAN address
+does not, and weasel's core and labkit call it thirteen times between them
+while building their stores — so the first render threw and the page went
+black. `lab/public/crypto-shim.js` supplies it. Alongside it,
+`lab/public/error-trap.js` paints the reason a lab page failed onto the page
+itself, which is what found this and is the durable half.
+
+**`/bench` measures the wall's paint loop against weasel's scene renderer, and
+the answer is no.** See `docs/superpowers/specs/2026-09-09-wall-scene-benchmark-design.md`.
+Weasel costs ~0.007ms per draw command above roughly a thousand commands and
+~0.0013ms below — 8–12x slower on the dense low-zoom wall, 2.5x faster when
+sparse. `Wall.tsx`'s executor moved to `corpus/draw2d.ts` unchanged to make the
+comparison possible; that extraction is behavior-neutral and the wall renders
+correctly at HEAD.
+
+**The decal coverage row counted ~10,000 parts as never attempted** that the
+slot was never going to draw. `coverage_of` now takes `inapplicable` and
+returns a sixth label, `notApplicable`.
+
+### Decisions made in conversation and written nowhere else
+
+**Do not re-propose weasel's scene renderer for the wall without rerunning
+`/bench` first.** The rejection is a measurement, not a preference, and it
+inverts if the per-command cliff is lifted. The cliff is weasel's — written up
+in `~/src/weasel/todo.md`, **which is untracked in that repo**, so both notes
+there (this and the `randomUUID` guard) live only in that working tree and want
+a real home.
+
+**`<SceneCanvas>`, the full component, was deliberately never evaluated.** Mike
+staged it behind the paint number: the interaction stack — tools, selection,
+undo, gestures, hit-testing — is a separate question the wall does not need
+answered while the paint number says no.
+
+**The lab API on 8792 was restarted by this session** to pick up the Python
+coverage change. It was another session's process.
+
+### Queued, still unbuilt
+
+The six asks in the baton below this one. **Check each before starting it** —
+the Reference/Legacy/OCCT/Decal toggle (item 3) now appears in the corpus
+topbar, so a peer has built it or part of it.
+
+**New, low priority: flip a part so its decoration faces the camera.**
+`87544dq0` — "Panel 1 x 2 x 3 Reinforced with Hieroglyphs and Anubis Head
+(Left Half) Sticker" — is the example Mike raised. The view is one global
+`--angle` for every part (`cli.py`), so a part whose printed face points away
+under that angle renders its blank side. The job is to detect which face
+carries the decoration and turn the part to show it. Not investigated beyond
+confirming `--angle` is global and not per-part; the mechanism above is
+inferred, not measured, so verify it against a render before building.
+
 ## Baton, 2026-09-09 evening: occt filling on two nodes, and six asks queued unbuilt
 
 On `main` in the shared checkout, nothing pushed (`git log --oneline @{u}..HEAD`
