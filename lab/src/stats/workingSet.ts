@@ -56,5 +56,5 @@ export function wallHref(set: WorkingSet, source: string): string {
   if (!set.outOfScope) q.set('outOfScope', 'false');
   for (const name of set.excluded) q.append('excluded', name);
   for (const tag of set.badges) q.append('badges', tag);
-  return `/corpus.html?${q}`;
+  return `/corpus?${q}`;
 }

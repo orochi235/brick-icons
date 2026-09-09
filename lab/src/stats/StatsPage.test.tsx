@@ -174,7 +174,7 @@ describe('StatsPage', () => {
     const { container } = render(<StatsPage client={clientWith(async () => body())} />);
     await waitFor(() => container.querySelector('a.stats-seg'));
     const href = container.querySelector('a.stats-seg')?.getAttribute('href') ?? '';
-    expect(href.startsWith('/corpus.html?')).toBe(true);
+    expect(href.startsWith('/corpus?')).toBe(true);
     expect(new URLSearchParams(href.slice(href.indexOf('?'))).get('source'))
       .toBe('silhouette-naive');
   });

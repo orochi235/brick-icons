@@ -1,13 +1,36 @@
+import { existsSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vitest/config';
+import { defineConfig, type Plugin } from 'vitest/config';
+
+/** Serves `/corpus` from `corpus.html`, so a lab URL carries no extension.
+ *  Dev only: the build still emits the files under their own names, and
+ *  `scripts/shot-sink.py` serves `shot.html` out of `dist` by that name. */
+function extensionlessPages(): Plugin {
+  return {
+    name: 'lab-extensionless-pages',
+    configureServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        const url = req.url ?? '/';
+        const cut = url.search(/[?#]/);
+        const path = cut === -1 ? url : url.slice(0, cut);
+        const rest = cut === -1 ? '' : url.slice(cut);
+        if (path !== '/' && !path.includes('.')) {
+          const file = fileURLToPath(new URL(`.${path}.html`, import.meta.url));
+          if (existsSync(file)) req.url = `${path}.html${rest}`;
+        }
+        next();
+      });
+    },
+  };
+}
 
 // A worktree runs its own lab server on its own port; the default is the one
 // `brick-icons-lab` listens on with no arguments.
 const API = process.env.LAB_API ?? 'http://127.0.0.1:8792';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), extensionlessPages()],
   resolve: {
     alias: { '@lab': fileURLToPath(new URL('./src', import.meta.url)) },
   },

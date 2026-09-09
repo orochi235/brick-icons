@@ -7,17 +7,23 @@ export interface Page {
 }
 
 /** The lab's pages, in the order the nav lists them. The scratch previews
- *  (`badges.html`, `sticker-candidates.html`) stay off it: they are compare
- *  sheets you open once from a link, not places to be. */
+ *  (`/badges`, `/sticker-candidates`) stay off it: they are compare sheets
+ *  you open once from a link, not places to be.
+ *  Extensionless: the dev server maps `/corpus` to `corpus.html`. A built
+ *  `dist` served without that middleware still answers the `.html` names,
+ *  which `currentIndex` matches too. */
 export const PAGES: Page[] = [
-  { href: '/corpus.html', label: 'Wall' },
-  { href: '/stats.html', label: 'Dashboard' },
+  { href: '/corpus', label: 'Wall' },
+  { href: '/stats', label: 'Dashboard' },
+  { href: '/ingest', label: 'Ingestion' },
 ];
 
 /** Which of `pages` a path is on, or -1. Matched on the filename so a query
- *  string or a trailing slash cannot lose the highlight. */
+ *  string, a trailing slash or a leftover `.html` cannot lose the
+ *  highlight -- a bookmark from before the URLs lost their extension still
+ *  lights the right tab. */
 export function currentIndex(path: string, pages: Page[] = PAGES): number {
-  const here = path.split('?')[0]!.split('#')[0]!.replace(/\/$/, '');
+  const here = path.split('?')[0]!.split('#')[0]!.replace(/\/$/, '').replace(/\.html$/, '');
   return pages.findIndex((p) => here.endsWith(p.href));
 }
 
