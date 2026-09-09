@@ -1,3 +1,62 @@
+## Baton, 2026-09-09 afternoon: two occt fills in flight, and `runs.kind` designed but unbuilt
+
+On `main` in the shared checkout. Today's commits run from the decal cull fix
+to the `runs.kind` write-up — `git log --oneline` from `908f80b` exclusive.
+Committed, unpushed. Other sessions hold `lab/src/corpus/Lightbox.*` and
+`tests/goldens/defects.toml` in this same tree, so stage explicit paths and
+read `git diff --cached` before every commit.
+
+### Two fleet jobs are filling the occt slot, and a watcher is ingesting them live
+
+`slot-occt-r1` on msb-uai and `slot-occt-r2` on studio, together the whole
+never-tried remainder of the slot. **They do not overlap** — r2's list was
+built by subtracting r1's parts from the full owed list and the intersection
+was checked empty before launch. `onto jobs` for state; deadlines are 4:53 PM
+and 10:09 PM.
+
+`scripts/ingest-watch.py out/slot-occt out/slot-occt-r2 --every 300` is
+running against `out/ingest-watch.log`, folding results in as they land. It
+appends — it is NOT `census-ingest.sh`, which rebuilds. New this session, with
+both skills now starting it at launch.
+
+**When they land:** let each `onto fetch --stream` do its final quiet pass,
+let the watcher take one more pass, then stop the watcher, then re-run
+`scripts/slot-coverage.py` and report asked-for / drawn / failed / missing.
+
+### `runs.kind` is designed and NOT built
+
+`docs/runs-are-just-runs.md`. It says the same thing in its own opening lines.
+Mike asked for it, and it waits on the two jobs because the watcher is writing
+every five minutes and that is the wrong hour to change what a run row means.
+**This is the next task.** Everything it needs — the two queries that key on
+`kind`, the replacements, the migration traps — is in the doc.
+
+### Traps this session paid for
+
+**studio does not push job output home.** It measured 73 parts with zero files
+delivered, and `onto deliver --at items` did not wake it either. `onto fetch
+--stream <task>` works and is what both jobs are using. msb-uai pushes fine, so
+it is studio-specific.
+
+**`outline-flat3__32062` is drifted in `tests/goldens/hashes.txt` and it is
+not ours.** A control worktree at clean `908f80b` reproduces the drifted hash;
+the freeze went stale under the shade.py commits of Sep 8 evening
+(`bbc6436`, `513f5ea`, `a87b422`). Do not refreeze it as if it were yours —
+it belongs to whoever made those. Only `outline-flat3__4740p03` was refrozen,
+and a control proved that one was ours.
+
+**Both nodes needed `onto sync -force`,** each holding uncommitted peer work
+that a sync would have deleted — the same `lab/ab.html` + `abBadges.tsx` +
+`abOldBadges.ts` experiment on both, plus `scripts/engine-diff-census.py` and
+`shards.txt` on msb-uai, `scripts/ldraw-hash.py` and `tests/test_ldraw_hash.py`
+on studio. All fetched off first and parked in `out/rescued-from-studio/` and
+`out/rescued-from-uai/` (gitignored, so no sync can take them). They want an
+owner or a delete.
+
+**`npx tsc -b --noEmit` reuses a cached build state and can report clean on a
+broken tree.** `npm run build` is the gate; run it BEFORE the commit, not in
+the same command.
+
 ## Baton, 2026-09-08 evening: decals are mirrored, and one legend class is designed but unbuilt
 
 On `main` in the shared checkout. `3feb3d6`, `6be8830`, `6a38636` are the
