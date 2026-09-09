@@ -64,6 +64,15 @@ function pathOf(d: string): Path2D {
   return path;
 }
 
+/** The ring a badge wears, in the same units as `radius`. Drawn inside the
+ *  radius, so `strokeScale` changes the line and never the footprint. Shared
+ *  with `BadgeSwatch`, which paints the same ring in CSS -- the two computed
+ *  it separately, and the swatch kept the old width when the canvas thinned.
+ */
+export function ringWidth(radius: number, badge: CellBadge): number {
+  return Math.max(1, radius * 0.16 * (badge.strokeScale ?? 1));
+}
+
 /** Fill and stroke one mark's pieces into a canvas.
  *
  *  The geometry is `markShapes`, shared with the DOM renderer, so nothing
@@ -216,7 +225,7 @@ function drawBadgeDirect(ctx: CanvasRenderingContext2D, badge: CellBadge,
   // Every badge is stroked, most of them in their own field: duplo needs a
   // ring because red on white would vanish into the cell, and a ring only it
   // carries would make its disc the largest on the strip.
-  const line = Math.max(1, radius * 0.16);
+  const line = ringWidth(radius, badge);
   const r = radius - line / 2;
   ctx.beginPath();
   if (at.label) {

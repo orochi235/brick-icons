@@ -170,6 +170,10 @@ export interface CellBadge {
   /** Only where the field would vanish: duplo is red on white and
    *  the thumbnail ground is light. */
   stroke?: string;
+  /** A multiple of the shared ring width, for a badge whose ring is an edge
+   *  rather than a frame. The ring is drawn inside `radius` either way, so
+   *  this changes the line and never the footprint. */
+  strokeScale?: number;
   /** A second ink, for the one part of a mark that is not the mark's own
    *  material -- the paint on the brush. */
   accent?: string;
@@ -242,7 +246,7 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
   // it an edge at all: without it the outermost dots are the silhouette and
   // the disc reads as a torn patch rather than a printed one.
   printed: { tag: 'printed', mark: 'printed', field: PROPERTY_FIELD,
-             ink: '#ffffff', stroke: '#ffffff' },
+             ink: '#ffffff', stroke: '#ffffff', strokeScale: 0.5 },
   composite: { tag: 'composite', mark: 'composite', field: PROPERTY_FIELD,
                ink: '#22c8dc', accent: '#f5a623' },
 };
