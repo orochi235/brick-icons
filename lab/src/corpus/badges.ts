@@ -36,10 +36,16 @@ export function thumbFontReady(): Promise<void> {
   return Promise.all([
     fonts.load(`${WEIGHT_ID} 16px Oswald`),
     fonts.load(`${WEIGHT_TEXT} 16px Oswald`),
+    fonts.load(`${LABEL_WEIGHT} 16px Oswald`),
   ]).then(() => undefined, () => undefined);
 }
 
 export const BADGE_WEIGHT = WEIGHT_TEXT;
+
+/** The name is set heavier than the glyphs beside it. A letter badge is one
+ *  reversed character filling a disc and gains weight optically; a word set
+ *  in caps at the same 300 goes thin next to it. */
+export const LABEL_WEIGHT = 400;
 export const BADGE_FACE = THUMB_FACE;
 
 /** Which color a piece of a mark takes. `none` is a piece that is only
@@ -171,9 +177,16 @@ export function badgeWidth(ctx: CanvasRenderingContext2D, badge: CellBadge,
   if (!at.label) return at.radius * 2;
   ctx.save();
   ctx.font = labelFont(badge, at.size);
-  const w = ctx.measureText(at.label).width;
+  const w = ctx.measureText(labelText(at.label)).width;
   ctx.restore();
   return at.radius + labelX(badge, at) - at.cx + w + LABEL_PAD * at.size;
+}
+
+/** A badge's name, as it is set: all caps, matching the glyph badges beside
+ *  it, which have always been capitals. Measured and drawn from here so the
+ *  width the stadium is built to is the width that lands on it. */
+export function labelText(label: string): string {
+  return label.toUpperCase();
 }
 
 /** Multiples of the type size: mark to word, and word to the end of the
@@ -191,8 +204,8 @@ function labelX(badge: CellBadge, at: BadgeAt): number {
                 : at.cx - at.radius + LABEL_PAD * at.size;
 }
 
-function labelFont(badge: CellBadge, size: number) {
-  return `${badge.weight ?? BADGE_WEIGHT} ${size * 0.92}px ${BADGE_FACE}`;
+function labelFont(_badge: CellBadge, size: number) {
+  return `${LABEL_WEIGHT} ${size * 0.92}px ${BADGE_FACE}`;
 }
 
 export function drawBadge(ctx: CanvasRenderingContext2D, badge: CellBadge,
@@ -320,12 +333,13 @@ function drawBadgeDirect(ctx: CanvasRenderingContext2D, badge: CellBadge,
     // descenders come to. Measured under the baseline it is painted on --
     // `measureText` reports the ascent FROM the current baseline, and
     // measuring under `middle` set every label 0.2 of a badge too high.
-    const m = ctx.measureText(at.label);
+    const text = labelText(at.label);
+    const m = ctx.measureText(text);
     const asc = m.actualBoundingBoxAscent;
     const desc = m.actualBoundingBoxDescent;
     const y = Number.isFinite(asc) && Number.isFinite(desc)
       ? cy + (asc - desc) / 2 : cy;
-    ctx.fillText(at.label, labelX(badge, at), y);
+    ctx.fillText(text, labelX(badge, at), y);
   }
   ctx.restore();
 }

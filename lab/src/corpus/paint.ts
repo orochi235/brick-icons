@@ -255,8 +255,8 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
   // it an edge at all: without it the outermost dots are the silhouette and
   // the disc reads as a torn patch rather than a printed one.
   printed: { tag: 'printed', mark: 'printed', field: PROPERTY_FIELD,
-             ink: '#ffffff', stroke: '#ffffff', strokeScale: 0.5,
-             ringOnDisc: true, labelField: '#ffffff', labelInk: PROPERTY_FIELD },
+             ink: '#ffffff', stroke: '#d5d8dd', strokeScale: 0.5,
+             ringOnDisc: true, labelField: '#d5d8dd', labelInk: PROPERTY_FIELD },
   // One hue in two values: the join reads as a step in a single object,
   // which is what interlocked pieces are. Cyan against orange read as two
   // materials, and its orange was the popular badge's field.

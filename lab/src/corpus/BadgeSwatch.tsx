@@ -1,6 +1,6 @@
 import { useId } from 'react';
-import { BADGE_FACE, BADGE_WEIGHT, LABEL_GAP, LABEL_PAD, markInk,
-  ringWidth, washToward } from '@lab/corpus/badges';
+import { BADGE_FACE, BADGE_WEIGHT, LABEL_GAP, LABEL_PAD, LABEL_WEIGHT,
+  markInk, ringWidth, washToward } from '@lab/corpus/badges';
 import { MARK_SHAPES, type MarkShape } from '@lab/corpus/markShapes';
 import type { CellBadge } from '@lab/corpus/paint';
 import '@lab/corpus/BadgeSwatch.css';
@@ -41,6 +41,7 @@ export function BadgeSwatch({ badge, label, box = SWATCH_BOX, className }:
     '--badge-line': `${ringWidth(radius, badge)}px`,
     '--badge-face': BADGE_FACE,
     '--badge-weight': `${badge.weight ?? BADGE_WEIGHT}`,
+    '--badge-label-weight': `${LABEL_WEIGHT}`,
     '--badge-text': `${size * 0.92}px`,
     // Mark to word, and word to the end of the field.
     '--badge-gap': `${size * LABEL_GAP}px`,

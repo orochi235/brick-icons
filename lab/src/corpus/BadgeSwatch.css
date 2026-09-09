@@ -74,6 +74,13 @@
  * carry one -- it set the word 0.22 of the type size right of center. */
 .corpus-badge[data-disc='true'] .corpus-badge-label { margin-left: var(--badge-gap); }
 
+/* Set as capitals, like the letter badges it sits beside, and heavier -- a
+ * reversed single character carries more weight than a word does. */
+.corpus-badge-label {
+  text-transform: uppercase;
+  font-weight: var(--badge-label-weight);
+}
+
 /* The sticker's peel takes a bite out of the field, and what shows through it
  * has to be the page: a hole filled with any color reads as another piece of
  * sticker. `exclude` is the whole badge minus the cut, the mask's two layers

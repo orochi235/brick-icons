@@ -25,7 +25,7 @@ export interface MarkShape {
   /** In mark units, the same as the path's own coordinates. */
   width?: number;
   join?: 'round' | 'miter';
-  cap?: 'round' | 'butt' | 'square';
+  cap?: 'round' | 'butt';
   alpha?: number;
   /** Applied to this piece alone. Only where a stroke has to be transformed
    *  with its path -- a shear thickens the pen, and baking the shear into the
@@ -309,15 +309,24 @@ const composite: MarkShape[] = [
   { d: poly(through(COMPOSITE_FRAME,
       [0, -0.3, 0.6, -0.3, 0.6, 0.9, -0.6, 0.9, -0.6, 0.3, 0, 0.3])),
     fill: 'accent' },
-  // The seam is a wall between the two pieces, not a drawn line: three
-  // segments in three teals, lit as a top, a face and a shaded return, so
-  // the step reads as depth rather than as an outline.
-  { d: line(through(COMPOSITE_FRAME, [0.6, -0.3, 0, -0.3])),
-    fill: 'none', stroke: '#1c625d', width: 0.30, cap: 'square' },
-  { d: line(through(COMPOSITE_FRAME, [0, -0.3, 0, 0.3])),
-    fill: 'none', stroke: '#57b3ab', width: 0.30, cap: 'square' },
-  { d: line(through(COMPOSITE_FRAME, [0, 0.3, -0.6, 0.3])),
-    fill: 'none', stroke: '#1c625d', width: 0.30, cap: 'square' },
+  // The seam is a wall between the two pieces, not a drawn line: three faces
+  // in three teals, each a filled quad rather than a stroke so the corners
+  // meet on a 45 degree mitre. A stroked polyline joins square, and two
+  // squares butted at a right angle read as a flat elbow; the mitre is what
+  // makes the corner look like one solid turning away from the light.
+  //
+  // The mitre is the diagonal of the 2h square where two faces overlap, from
+  // the bend's inner corner to its outer one -- h being half the wall's
+  // thickness, WALL / 2.
+  { d: poly(through(COMPOSITE_FRAME,
+      [0.75, -0.45, 0.15, -0.45, -0.15, -0.15, 0.75, -0.15])),
+    fill: '#1c625d' },
+  { d: poly(through(COMPOSITE_FRAME,
+      [0.15, -0.45, 0.15, 0.15, -0.15, 0.45, -0.15, -0.15])),
+    fill: '#57b3ab' },
+  { d: poly(through(COMPOSITE_FRAME,
+      [-0.75, 0.45, -0.15, 0.45, 0.15, 0.15, -0.75, 0.15])),
+    fill: '#1c625d' },
 ];
 
 // Duplo's d, in the weight its logotype uses: a heavy rounded geometric with a
@@ -337,7 +346,7 @@ const duplo: MarkShape[] = [
 
 // ------------------------------------------------------------- the stickers
 
-// The field is the sticker, and its lower right is peeling off -- the same
+// The field is the sticker, and its top right is peeling off -- the same
 // move the minifig badge makes, where the disc is the head rather than a
 // picture of one. A mark is clipped to its own disc and the field's edge sits
 // at FIELD_R, so the peel is built against that radius: the sticker is only
@@ -346,7 +355,8 @@ const duplo: MarkShape[] = [
 
 // The tab: how much of the edge lifts, and how far the flap stands off the
 // fold. `lift` 1 lays it flat back down on the sticker.
-const PEEL_FROM = Math.PI * 0.02;
+// Angles run clockwise on screen, y being down: 0 is the right of the field.
+const PEEL_FROM = Math.PI * (1.52 + 1 / 6);
 const PEEL_ARC = Math.PI * 0.62;
 const PEEL_LIFT = 0.72;
 
