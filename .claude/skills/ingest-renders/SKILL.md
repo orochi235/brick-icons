@@ -30,9 +30,15 @@ after. Nothing is lost — the files are the truth — but a count you take a
 minute later may be its, not yours. Either index into the database it is
 maintaining, or wait a pass and check.
 
-**Ingesting mid-fetch indexes a tree somebody is writing to.** `--stream`'s
-final pass, after the job stops, is the only one guaranteed to see it quiet.
-A part-written SVG indexes fine and bakes as UNREADABLE later.
+**Ingesting mid-fetch indexes a tree somebody is writing to** -- which
+matters for the RASTER slots and not the vector ones. `record_render` parses
+an `.svg` and hashes everything else, so a zero-byte or half-written SVG
+raises `ParseError` and both indexers count it failed and carry on; the next
+pass picks it up whole. A truncated `.webp` or `.png` is only hashed, so
+`ldview` and `reference` record it happily and bake it as UNREADABLE later.
+Interrupted fetches do leave zero-byte files behind -- one killed
+`bake-thumbs.py` outright before it learned to skip them -- so for those two
+slots, `--stream`'s final pass after the job stops is the one to index.
 
 ### 2. Pick the route by where the renders lie
 

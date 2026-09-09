@@ -180,7 +180,9 @@ two streams race each other into the same directory. `pgrep -fl "onto fetch"`.
 Then follow `ingest-renders`. A tree with a `SOURCE` file rides the rebuild
 route, because it carries measurements as well as drawings. Let the stream's
 final pass finish first — it is the only one guaranteed to see a tree nobody
-is writing to, and a part-written SVG indexes fine and bakes as UNREADABLE.
+is writing to. For an SVG slot that is cheap -- a half-written one fails its
+parse and the next pass takes it whole -- but a truncated raster is only
+hashed, so `ldview` and `reference` wait for the stream's final pass.
 
 ### 8. Report what is owed, not that it finished
 
