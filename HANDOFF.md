@@ -1,3 +1,67 @@
+## Baton, 2026-09-08 evening: decals are mirrored, and one legend class is designed but unbuilt
+
+On `main` in the shared checkout. `3feb3d6`, `6be8830`, `6a38636` are the
+legend swatch shape, the ingestion log route and the extensionless page URLs;
+committed, unpushed. Other sessions are editing `markShapes.ts`, `badges.ts`
+and the paint goldens in this same tree, so stage explicit paths.
+
+### The decal slot is filled, ingested and baked
+
+11,215 parts over three keiei runs, then `index-store-attempts.py` and
+`index-slot-renders.py --source decal`, then `bake-thumbs.py --source decal`
+(9,894 of 9,894, no UNREADABLE, no MISSING). `renders/decal` and the database
+agree at 9,894. Still owed: 38 `TimeoutError`, 23 `ProcessDied` — 8 of those
+are artifacts of two jobs being killed rather than real faults. The 2,913
+`none` rows are decorated parts the finder drew nothing on, which is the next
+paragraph's problem, not a gap in the fill.
+
+**Use the `ingest-renders` skill for this. It already has the bake step** —
+§3, "Bake, or the wall stays a round behind". This session hand-rolled the
+ingest and stopped after the rows, leaving the wall a round behind until the
+bake was run separately.
+
+### Decals come out mirrored, and the library proves it
+
+`6041468c` and `6041468d` are the regression pair: LDraw describes the first
+as plain `"ZZ"` and the second as `Mirrored "ZZ"`, and we render them the
+wrong way round. `6041468k` reads backwards throughout ("STAR WARS", every
+spec line). Not every part is affected — `3009p03`, `2431pw1` and `190265d`
+all read correctly — so the flip depends on the face the decoration is
+unwrapped from, not on printed-vs-sticker.
+
+**Not started, and `unwrap.py` has a peer's uncommitted decal-binding work in
+it.** Coordinate before touching it. A fix invalidates every decal render, so
+it costs the whole slot again: refill, re-index, re-bake.
+
+### A "not applicable" legend class: designed, NOT BUILT
+
+Nothing of this is in the tree. It exists only here.
+
+A twelfth cell state for a part the slot does not apply to — a plain brick on
+the decal wall — drawn as a thick dark-gray border, which gives it the slash
+for free, since `paint` slashes any cell that has a border.
+
+- **The rule is agreement between two signals**: the part is plain
+  (`parts.printed = 0`) and no decal was drawn for it. Measured: 11,508 cells
+  qualify, 0 parts disagree today, and 697 decorated parts never attempted
+  stay `unknown`, which is correct — they are still owed. Where the two ever
+  disagree the tiebreak is manual, in a curated file; it starts empty.
+- **Precedence ~12**, just under `currently out of scope` and above every
+  problem state: nothing was owed here, so nothing failed.
+- It needs a new fact on the cell, so `cells.py` supplies it — the wall cannot
+  derive it, and a per-slot rule in the client would be the wrong shape.
+
+Two dead ends already paid for. `state = 'none'` in `attempts` does **not**
+mean "nothing to decorate": the decal pass only attempts decorated parts, so
+`none` means the finder failed on one. And requiring both signals to speak
+explicitly leaves 9,028 plain bricks in `unknown`, which is the thing that
+looks wrong on the wall today.
+
+### Also asked for, not started
+
+Wall cells inset their captions and badges by 2px — canvas, not CSS, so it is
+`Wall.tsx`'s `cornerPad` and the strip geometry rather than a stylesheet.
+
 ## The decal slot draws, and its fill is running
 
 On `main` in the shared checkout. `750815a`, `422d3a0`, `9427d0a` are the
