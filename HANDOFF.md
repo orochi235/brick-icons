@@ -92,34 +92,30 @@ render skills now start it at launch.
 the watcher one more, stop the watcher, then `scripts/slot-coverage.py` and
 report asked-for / drawn / failed / missing.
 
-### Six things asked for and not built
+### Six things asked for — three built, one designed, two waiting
 
-In the order they were asked. None is started.
+Updated the evening of 2026-09-09. Struck items are done; the rest read as
+they were written.
 
 1. **Drop `runs.kind`** — `docs/runs-are-just-runs.md`, complete, waits only
    on the jobs. This is the next task.
-2. **A per-part `touched_at`.** Track when each part last changed so the wall
-   can flag what needs another look. It also replaces a stopgap I shipped
-   today: `cells.cells` builds its delta from a two-part version, the newest
-   render plus a fingerprint over every judged part, because a defect has no
-   timestamp to compare. `touched_at` makes that one comparison. Schema, so it
-   waits for the same quiet hour as (1) — put it in the same doc.
-3. **A Reference/Legacy/OCCT toggle beside the slot dropdown,** with that
-   dimension taken out of the slot list itself.
-4. **Hide the decal slot in a lightbox where it does not apply** — a plain
-   brick has no decal and the slot should not be offered.
-5. **Base parts never issued unprinted inherit years from their prints.**
-   `11778` (Animal Eagle Wing Left) has no year data at all; its prints
-   `11778p01` and `11778p02` are 2013–2014 and 2018–2018. **467 unprinted,
-   non-obsolete parts are in this position.** Mike said "intersection", but the
-   literal intersection of those two ranges is empty — he must mean the
-   envelope, 2013–2018, and it is worth confirming in one line before
-   building. Inherit YEARS ONLY, never `sets` or `colors`: the reverse
-   direction is a known trap, `3069bp1f` read as 5,766 sets and `popular`
-   because the plain tile it is printed on is. `part_years.matched` is the
-   provenance column and its vocabulary is named / keywords / exact / design /
-   base / sheet — an inherited range needs its own value there so nothing
-   mistakes it for a lookup.
+2. **A per-part `touched_at`.** ~~Designed~~ — `docs/runs-are-just-runs.md`
+   carries it beside (1), `c4d13b5`. Unbuilt, waiting on the same jobs.
+3. ~~**Engine toggle beside the slot dropdown**~~ — `430c4ae`, reordered to
+   OCCT / Legacy / Reference / Decal in `dfa0aee`. Decal is a fourth toggle
+   position (Mike's call): no viewpoint, no engine flag, and the whole family,
+   so it offers no facet list.
+4. ~~**Hide the decal slot in a lightbox where it does not apply**~~ —
+   `19f0914`. The server's `cells.not_applicable` was already right; the
+   lightbox was ignoring the field. The slot you arrived on survives the
+   filter.
+5. ~~**Base parts never issued unprinted inherit years from their prints**~~ —
+   `12c0402`. Mike confirmed the envelope, not the intersection. **370 parts,
+   not the 467 this doc claimed** — that figure reproduces under no reading I
+   could find (422 if obsolete bases are included, 377 if `parts.printed` is
+   ignored). `prints` is the new `part_years.matched` value and joins
+   `keywords` in `cells.BORROWED_COUNT_ROUTES`, so its literal 0 reads as
+   absent rather than as a count.
 6. **LDraw 2026-08 is not ingested and nothing has been fetched into
    `vendor/ldraw`.** We are complete at 2026-07 (all 356 of its part files are
    present). 2026-08 adds **144 parts we do not have** — 121 stickers, 5
