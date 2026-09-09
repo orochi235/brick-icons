@@ -3,6 +3,7 @@ import {
   type Filter, type Shown, type Sort,
 } from '@lab/corpus/criteria';
 import { categoryOf, type Grouping } from '@lab/corpus/facts';
+import { naturalCompare } from '@lab/corpus/natural';
 import type { TintMode } from '@lab/corpus/tint';
 import type { Cell } from '@lab/corpus/types';
 
@@ -42,7 +43,10 @@ export function applySelection(cells: Cell[], selection: Selection): Cell[] {
     const kb = value(b);
     if (ka === null || ka === undefined) return kb === null ? 0 : 1;
     if (kb === null || kb === undefined) return -1;
-    if (ka === kb) return a.id < b.id ? -1 : 1;
+    if (ka === kb) return naturalCompare(a.id, b.id);
+    if (typeof ka === 'string' && typeof kb === 'string') {
+      return naturalCompare(ka, kb) * (desc ? -1 : 1);
+    }
     return (ka < kb ? -1 : 1) * (desc ? -1 : 1);
   });
 }
