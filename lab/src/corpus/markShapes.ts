@@ -25,7 +25,7 @@ export interface MarkShape {
   /** In mark units, the same as the path's own coordinates. */
   width?: number;
   join?: 'round' | 'miter';
-  cap?: 'round' | 'butt';
+  cap?: 'round' | 'butt' | 'square';
   alpha?: number;
   /** Applied to this piece alone. Only where a stroke has to be transformed
    *  with its path -- a shear thickens the pen, and baking the shear into the
@@ -309,8 +309,15 @@ const composite: MarkShape[] = [
   { d: poly(through(COMPOSITE_FRAME,
       [0, -0.3, 0.6, -0.3, 0.6, 0.9, -0.6, 0.9, -0.6, 0.3, 0, 0.3])),
     fill: 'accent' },
-  { d: line(through(COMPOSITE_FRAME, [0.6, -0.3, 0, -0.3, 0, 0.3, -0.6, 0.3])),
-    fill: 'none', stroke: 'field', width: 0.30, join: 'miter' },
+  // The seam is a wall between the two pieces, not a drawn line: three
+  // segments in three teals, lit as a top, a face and a shaded return, so
+  // the step reads as depth rather than as an outline.
+  { d: line(through(COMPOSITE_FRAME, [0.6, -0.3, 0, -0.3])),
+    fill: 'none', stroke: '#1c625d', width: 0.30, cap: 'square' },
+  { d: line(through(COMPOSITE_FRAME, [0, -0.3, 0, 0.3])),
+    fill: 'none', stroke: '#57b3ab', width: 0.30, cap: 'square' },
+  { d: line(through(COMPOSITE_FRAME, [0, 0.3, -0.6, 0.3])),
+    fill: 'none', stroke: '#1c625d', width: 0.30, cap: 'square' },
 ];
 
 // Duplo's d, in the weight its logotype uses: a heavy rounded geometric with a
@@ -416,6 +423,14 @@ const POLICE_OUTLINES: number[][] = [
   [0.848, -0.422, 1.21, -0.422, 1.21, -0.302, 0.981, -0.302, 0.981, -0.079, 1.163, -0.079, 1.163, 0.042, 0.981, 0.042, 0.981, 0.302, 1.21, 0.302, 1.21, 0.422, 0.848, 0.422],
 ];
 
+/** The print, set on the slant a sticker is applied at: 30 degrees counter-
+ *  clockwise. Screen y runs down, so the sine is negated to turn the word the
+ *  way it reads rather than the way the axes point. */
+const POLICE_TILT: Matrix = [
+  Math.cos(Math.PI / 6), -Math.sin(Math.PI / 6),
+  Math.sin(Math.PI / 6), Math.cos(Math.PI / 6), 0, 0,
+];
+
 /** Where each face's own drawn box sits against the disc's center, measured
  *  at 250px per unit and subtracted.
  *
@@ -434,7 +449,8 @@ const shifted = (groups: number[][], dx: number, dy: number) =>
  *  corner read as lifted off the print rather than as a shape drawn beside
  *  it. The face is laid down before the peel, so the peel occludes it. */
 const FACES: Record<string, MarkShape[]> = {
-  police: [{ d: polys(POLICE_OUTLINES), rule: 'evenodd' }],
+  police: [{ d: polys(POLICE_OUTLINES.map((g) => through(POLICE_TILT, g))),
+             rule: 'evenodd' }],
   flames: shifted(FLAMES, -0.004, -0.002).map((ring, n) => ({
     d: poly(ring), alpha: FLAME_ALPHA[n] ?? 1,
   })),

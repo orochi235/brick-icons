@@ -239,7 +239,7 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
   technic: { tag: 'technic', mark: 'technic', field: '#1b2a5e', ink: '#ffffff' },
   duplo: { tag: 'duplo', mark: 'duplo', field: '#c8102e', ink: '#ffffff' },
   weird: { tag: 'weird', text: '\u03a8', field: '#5b3a86', ink: '#ffffff',
-           font: WEIRD_FACE, weight: 300, scale: 1.22, dy: 0.095 },
+           font: WEIRD_FACE, weight: 300, scale: 1.22, dy: 0.14 },
   // The one property badge off the shared field: a gold bolt on black is
   // what a live circuit looks like everywhere else, and it earns the break.
   electric: { tag: 'electric', mark: 'bolt', field: '#101014', ink: '#ffd60a',
@@ -257,8 +257,11 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
   printed: { tag: 'printed', mark: 'printed', field: PROPERTY_FIELD,
              ink: '#ffffff', stroke: '#ffffff', strokeScale: 0.5,
              ringOnDisc: true, labelField: '#ffffff', labelInk: PROPERTY_FIELD },
-  composite: { tag: 'composite', mark: 'composite', field: PROPERTY_FIELD,
-               ink: '#22c8dc', accent: '#f5a623' },
+  // One hue in two values: the join reads as a step in a single object,
+  // which is what interlocked pieces are. Cyan against orange read as two
+  // materials, and its orange was the popular badge's field.
+  composite: { tag: 'composite', mark: 'composite', field: '#2b8a83',
+               ink: '#7fd6cf', accent: '#2b8a83', labelInk: '#ffffff' },
 };
 
 /** Every badge the wall can draw, in the order the legend lists them:
