@@ -1,9 +1,14 @@
 import type { Coverage } from '@lab/corpus/facts';
 import type { CoverageRow, Phase, PhaseRow, SpeedRow } from '@lab/stats/types';
 
-/** Stack order, worst news leftmost, so the eye lands on the problems before
- *  the bulk. Matches `COVERAGE_ORDER` in facts.ts and cells.py. */
-export const STACK: Coverage[] = ['defect', 'failed', 'timeout', 'drawn', 'untried'];
+/** Stack order: `drawn` leads, so a row reads from the left as how much of
+ *  the slot is done, the way any progress bar does, and the rows can be
+ *  compared to each other by one edge. The problem states keep the middle,
+ *  between two neutrals, which is where their saturation finds the eye; the
+ *  bulk of untried sits last. Deliberately NOT `COVERAGE_ORDER` (facts.ts,
+ *  cells.py) -- that one ranks a cell's states worst-first for the wall's
+ *  grouping, and nothing here depends on the two agreeing. */
+export const STACK: Coverage[] = ['drawn', 'defect', 'failed', 'timeout', 'untried'];
 
 export const COVERAGE_LABEL: Record<Coverage, string> = {
   defect: 'open defect',

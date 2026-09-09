@@ -71,7 +71,7 @@ describe('StatsPage', () => {
       expect(container.querySelectorAll('.stats-bars .stats-seg').length).toBe(5));
     const labels = [...container.querySelectorAll('.stats-bars .stats-seg')]
       .map((el) => el.getAttribute('data-label'));
-    expect(labels).toEqual(['defect', 'failed', 'timeout', 'drawn', 'untried']);
+    expect(labels).toEqual(['drawn', 'defect', 'failed', 'timeout', 'untried']);
   });
 
   it('leaves out a label no part is in', async () => {
