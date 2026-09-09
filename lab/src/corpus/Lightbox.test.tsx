@@ -344,3 +344,34 @@ it('keeps the 3D view out of the page until it is asked for', async () => {
   expect(screen.getByRole('button', { name: 'Hide 3D' })
     .getAttribute('aria-pressed')).toBe('true');
 });
+
+it('does not offer a slot with nothing to draw for this part', async () => {
+  // A plain brick has no decoration, so the decal slot beside its renders is
+  // an empty frame that reads as a gap. The server's `not_applicable` is what
+  // tells the two apart -- a decorated part whose decal the finder missed is
+  // still owed and keeps its frame.
+  const plain = {
+    ...detail,
+    slots: [...detail.slots,
+            { source: 'decal', sha256: null, made_at: null, not_applicable: true }],
+  };
+  render(box({ client: { corpusPart: () => Promise.resolve(plain), addDefect } }));
+  await screen.findByRole('radio', { name: 'naive' });
+  expect(screen.getAllByRole('radio').map((r) => r.getAttribute('aria-label')))
+    .toEqual(['silhouette-occt', 'naive']);
+});
+
+// Arriving from the decal wall and finding no decal slot would be the page
+// disagreeing with the wall behind it.
+it('keeps the slot you arrived on, even where it does not apply', async () => {
+  const plain = {
+    ...detail,
+    slots: [...detail.slots,
+            { source: 'decal', sha256: null, made_at: null, not_applicable: true }],
+  };
+  render(box({ source: 'decal',
+               client: { corpusPart: () => Promise.resolve(plain), addDefect } }));
+  await screen.findByRole('radio', { name: 'decal' });
+  expect(screen.getAllByRole('radio').map((r) => r.getAttribute('aria-label')))
+    .toEqual(['silhouette-occt', 'naive', 'decal']);
+});

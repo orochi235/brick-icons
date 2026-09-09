@@ -88,6 +88,9 @@ export interface PartDetail {
     review_defects?: number;
     accepted_defects?: number;
     elsewhere?: string[];
+    /** This slot has nothing to draw for this part -- a plain brick on the
+     *  decal slot. `cells.not_applicable` is the server's rule. */
+    not_applicable?: boolean;
   }[];
   findings: { part_id: string; engine: string; extra_d99: number | null;
               missing_px: number | null; secs: number | null;

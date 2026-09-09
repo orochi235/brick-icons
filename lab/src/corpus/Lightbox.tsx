@@ -119,7 +119,11 @@ export function Lightbox({ partId, source, client, onClose }: {
 
   // An API older than this component sends no slots -- the lab's server is a
   // long-lived process and outlives a reload of the page in front of it.
-  const slots = detail?.slots ?? [];
+  //
+  // The slot you arrived on survives the filter: opening a plain brick from
+  // the decal wall and finding no decal slot disagrees with the wall behind.
+  const slots = (detail?.slots ?? []).filter(
+    (slot) => !slot.not_applicable || slot.source === shown);
 
   const file = async () => {
     setFlagError(null);
