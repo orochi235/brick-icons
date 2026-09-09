@@ -119,12 +119,34 @@ describe('StatsPage', () => {
   it('draws the slowest parts shortest first, scaled to the tallest', async () => {
     const { container } = render(<StatsPage client={clientWith(async () => body())} />);
     await waitFor(() => container.querySelector('.stats-column-plot'));
-    const columns = [...container.querySelectorAll('.stats-column')];
-    expect(columns.map((el) => el.getAttribute('title')))
-      .toEqual(['3002 — 10.0s', '3001 — 30.0s']);
+    const cols = [...container.querySelectorAll('.stats-col-series')];
+    expect(cols.map((el) => el.getAttribute('title')))
+      .toEqual(['naive #1: 3002 — 10.0s', 'naive #2: 3001 — 30.0s']);
     // The tallest part fills the plot; a third of its cost is a third as tall.
-    expect((columns[1] as HTMLElement).style.height).toBe('100%');
-    expect((columns[0] as HTMLElement).style.height).toBe('33.33333333333333%');
+    expect((cols[1] as HTMLElement).style.height).toBe('100%');
+    expect((cols[0] as HTMLElement).style.height).toBe('33.33333333333333%');
+  });
+
+  it('puts every engine\'s slowest parts on one seconds scale', async () => {
+    const two = body();
+    two.phases = [
+      { ...two.phases[0]!, engine: 'naive',
+        slowest: [{ part_id: 'a', total: 10, split: null,
+                    secs: { render: 10, rasterize: 0,
+                            truth_mask: 0, compare: 0 } }] },
+      { ...two.phases[0]!, engine: 'occt',
+        slowest: [{ part_id: 'b', total: 40, split: null,
+                    secs: { render: 40, rasterize: 0,
+                            truth_mask: 0, compare: 0 } }] },
+    ];
+    const { container } = render(<StatsPage client={clientWith(async () => two)} />);
+    await waitFor(() => container.querySelector('.stats-col-series'));
+    // One rank slot holding both engines, the shorter drawn in front, and the
+    // heights are a quarter and full against the taller of the two.
+    const cols = [...container.querySelectorAll('.stats-col-series')] as HTMLElement[];
+    expect(cols.map((el) => el.style.height)).toEqual(['25%', '100%']);
+    expect(cols[0]!.getAttribute('data-front')).toBe('true');
+    expect(cols[1]!.getAttribute('data-front')).toBe(null);
   });
 
   it('scales both engines to one count, so their bars are comparable', async () => {
@@ -158,7 +180,10 @@ describe('StatsPage', () => {
     ];
     const { container } = render(<StatsPage client={clientWith(async () => two)} />);
     await waitFor(() => container.querySelector('.stats-overlay-key'));
-    expect([...container.querySelectorAll('.stats-overlay-key strong')]
+    // Scoped to the histogram: the slowest-parts plot is an overlay too, and
+    // carries a key per engine of its own.
+    expect([...container.querySelectorAll(
+      '.stats-histogram .stats-overlay-key strong')]
       .map((el) => el.textContent)).toEqual(['naive', 'occt']);
   });
 

@@ -234,30 +234,72 @@ export function PhaseLegend() {
   );
 }
 
-/** The slowest parts in the set, one stacked column each, longest last so the
- *  climb reads left to right the way the matplotlib probe drew it. */
-export function PhaseColumns({ row }: { row: PhaseRow }) {
-  const columns = [...row.slowest].reverse();
-  const tallest = Math.max(1, ...columns.map((c) => c.total));
+/** Every engine's slowest parts in one plot, sharing one seconds scale, on the
+ *  reasoning `SecsOverlay` sets out: a panel per engine scaled to its own
+ *  tallest part actively lied, drawing naive's 8-minute tail and occt's
+ *  10-minute one at the same height. The x position is a RANK, not a part --
+ *  each engine has its own 40 slowest, and what the section asks is whose tail
+ *  is worse, which two rank profiles on one scale answer and two part lists
+ *  side by side do not. Longest last, so the climb reads left to right.
+ *
+ *  Identity is the same fill-against-hatch the histogram uses, and for the
+ *  same reason: the columns are already spending four hues on the phases, so
+ *  a fifth for the engine is one the reader has just been taught to read as
+ *  something else. Here the hatch lies OVER whatever the phase painted. */
+export function PhaseColumns({ rows }: { rows: PhaseRow[] }) {
+  const series = rows.map((row) => ({ row, cols: [...row.slowest].reverse() }));
+  const ranks = Math.max(0, ...series.map((s) => s.cols.length));
+  const tallest = Math.max(1, ...series.flatMap((s) => s.cols.map((c) => c.total)));
+  if (ranks === 0) return null;
   return (
-    <figure className="stats-columns">
-      <figcaption className="stats-muted">
-        the {columns.length} longest parts in this set — {row.engine},
-        {' '}{secs(columns[columns.length - 1]?.total ?? 0)} at the tall end
+    <figure className="stats-columns stats-overlay">
+      <figcaption className="stats-overlay-keys">
+        {series.map(({ row, cols }, i) => (
+          <span key={row.engine} className="stats-overlay-key">
+            <span className="stats-swatch stats-phase-mark" aria-hidden="true"
+                  data-phase="render" data-fill={SERIES_FILL[i] ?? 'solid'} />
+            <strong>{row.engine}</strong>
+            <span className="stats-muted">
+              {' '}the {cols.length} longest ·
+              {' '}{secs(cols[cols.length - 1]?.total ?? 0)} at the tall end
+            </span>
+          </span>
+        ))}
       </figcaption>
       <div className="stats-column-plot">
-        {columns.map((col) => {
-          const label = `${col.part_id} — ${secs(col.total)}`;
-          const body = PHASE_STACK.map((phase) => {
-            const v = col.secs[phase];
-            if (v === 0) return null;
-            return <span key={phase} className="stats-col-seg stats-phase-mark" data-phase={phase}
-                         style={{ height: `${pct(v, col.total)}%` }} />;
-          });
+        {Array.from({ length: ranks }, (_, r) => {
+          const at = series.map((s) => s.cols[r]);
+          // Both series stand on the baseline, so the taller hides the shorter
+          // unless the shorter is in front — and which engine that is changes
+          // rank by rank, which is the whole point of the chart.
+          const shortest = Math.min(...at.map((c) => c?.total ?? Infinity));
           return (
-            <div key={col.part_id} className="stats-column"
-                 style={{ height: `${pct(col.total, tallest)}%` }} title={label}>
-              <span className="stats-column-stack" aria-label={label}>{body}</span>
+            <div key={r} className="stats-column">
+              {at.map((col, i) => {
+                if (!col) return null;
+                const label = `${series[i]!.row.engine} #${r + 1}: `
+                  + `${col.part_id} — ${secs(col.total)}`;
+                const front = col.total === shortest;
+                return (
+                  <span key={series[i]!.row.engine} className="stats-col-series"
+                        data-front={front || undefined}
+                        style={{ height: `${pct(col.total, tallest)}%`,
+                                 zIndex: front ? 2 : 1 }}
+                        title={label}>
+                    <span className="stats-column-stack" aria-label={label}>
+                      {PHASE_STACK.map((phase) => {
+                        const v = col.secs[phase];
+                        if (v === 0) return null;
+                        return <span key={phase}
+                                     className="stats-col-seg stats-phase-mark"
+                                     data-phase={phase}
+                                     data-fill={SERIES_FILL[i] ?? 'solid'}
+                                     style={{ height: `${pct(v, col.total)}%` }} />;
+                      })}
+                    </span>
+                  </span>
+                );
+              })}
             </div>
           );
         })}

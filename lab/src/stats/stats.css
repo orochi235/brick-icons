@@ -149,6 +149,18 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
 .stats-phase-mark[data-phase='truth_mask'] { background: var(--stats-phase-truth_mask); }
 .stats-phase-mark[data-phase='compare'] { background: var(--stats-phase-compare); }
 
+/* The second series, laid OVER whatever the phase painted rather than beside
+ * it in a hue of its own: these columns already spend four colors saying what
+ * the time went on. Must follow the phase rules -- they set `background`
+ * whole, and this replaces only the image half of it. Fine and low-contrast
+ * for the reason the histogram's is: a bold hatch reads as "disabled". */
+.stats-phase-mark[data-fill='hatch'] {
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0 2px,
+    color-mix(in srgb, var(--wzl-surface-sunken, #0e0f12) 50%, transparent) 2px 5px);
+}
+
 /* Phase tree ---------------------------------------------------------- */
 
 .stats-phase-rows {
@@ -245,7 +257,24 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
   border-bottom: 1px solid var(--wzl-line, #333);
 }
 
-.stats-column { flex: 1; min-width: 3px; }
+/* The rank slot both engines stand in. Its children are positioned against
+ * it, the way a histogram bin holds its two overlapping bars. */
+.stats-column { flex: 1; min-width: 3px; height: 100%; position: relative; }
+
+.stats-col-series {
+  display: block;
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+}
+
+/* The ring that keeps the front column's edge readable where it stands inside
+ * the taller one; without it two columns read as one. */
+.stats-col-series[data-front] {
+  box-shadow: 0 -2px 0 var(--wzl-surface-sunken, #0e0f12),
+              2px 0 0 var(--wzl-surface-sunken, #0e0f12),
+              -2px 0 0 var(--wzl-surface-sunken, #0e0f12);
+}
 
 .stats-column-stack {
   display: flex;

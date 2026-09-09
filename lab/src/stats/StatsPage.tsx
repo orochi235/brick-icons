@@ -138,9 +138,7 @@ export function StatsPage({ client }: { client: LabClient }) {
             <h2>Where the time goes</h2>
             <PhaseLegend />
             <PhaseBars rows={stats.phases} />
-            {stats.phases.map((row) => (
-              <PhaseColumns key={row.engine} row={row} />
-            ))}
+            <PhaseColumns rows={stats.phases} />
           </section>
 
           <section>
