@@ -21,6 +21,33 @@ const FILL = 1.3;
 const RADIUS = 240;
 const LIBRARY = '/ldraw/';
 const PARTS = `${LIBRARY}parts/`;
+// Relative to PARTS, which is what the loader hands its own file loader.
+const COLORS = '../LDConfig.ldr';
+
+/** The stock loader, with the library's color table actually in place.
+ *
+ *  `preloadMaterials` exists for this and does not survive: `load()` opens
+ *  every part with `setMaterials([])`, which throws the table away again. So
+ *  the colors are read per part and the text is parsed rather than loaded.
+ *  Without them the loader knows two: code 16 as #FF8080 and edges as
+ *  #A0A0A0, which is why a decorated part turned up flat pink. */
+class ColoredLDrawLoader extends LDrawLoader {
+  override load(url: string, onLoad: (group: THREE.Group) => void,
+                onProgress?: (e: ProgressEvent) => void,
+                onError?: (e: unknown) => void): void {
+    const file = new THREE.FileLoader(this.manager);
+    file.setPath(this.path);
+    file.load(url, (text) => {
+      // Three arguments, whatever the published typings say the second is.
+      const parse = (this as unknown as {
+        parse(text: string, onLoad: (group: THREE.Group) => void,
+              onError?: (e: unknown) => void): void }).parse.bind(this);
+      void this.preloadMaterials(COLORS)
+        .then(() => parse(text as string, onLoad, onError))
+        .catch(onError);
+    }, onProgress, onError);
+  }
+}
 // Enough backing store for the loupe to magnify. `frameloop="demand"` is what
 // pays for the dpr, and the readback only happens while the loupe is up.
 const SUPERSAMPLE = 3;
@@ -41,7 +68,7 @@ function Part({ part, color, opacity, onFraming, onLines }: {
   // subfile reference is resolved relative to its parent's name, so any
   // directory in the name is folded into the child's and then doubled by the
   // loader's own `parts/` search (`/ldraw/parts/parts/s/3001s01.dat`).
-  const model = useLoader(LDrawLoader, `${part}.dat`, (loader) => {
+  const model = useLoader(ColoredLDrawLoader, `${part}.dat`, (loader) => {
     // Required since three 0.170: without it the loader throws on the first
     // !COLOUR directive it meets.
     loader.setConditionalLineMaterial(LDrawConditionalLineMaterial);
