@@ -17,14 +17,29 @@
 
 const OPEN_SVG_TAG = /<svg\b[^>]*>/;
 
+/** A `viewBox` standing for the size the tag already declares, where it
+ *  declares one and has no box of its own.
+ *
+ *  Without this the size below is a crop, not a scale: user units with no
+ *  viewBox to map them are CSS pixels, so a 405x900 decal asked for at 128
+ *  hands back its top-left corner at full size. The decal slot writes
+ *  width/height and no box, which is what the wall drew zoomed in. */
+function boxFor(tag: string): string {
+  if (/\sviewBox="/.test(tag)) return '';
+  const w = /\swidth="([\d.]+)/.exec(tag);
+  const h = /\sheight="([\d.]+)/.exec(tag);
+  return w && h ? ` viewBox="0 0 ${w[1]} ${h[1]}"` : '';
+}
+
 /** `svgText` with its root tag's `width`/`height` set to `w`/`h`, replacing
  *  either attribute if already present. */
 export function injectSize(svgText: string, w: number, h: number): string {
   return svgText.replace(OPEN_SVG_TAG, (tag) => {
+    const box = boxFor(tag);
     const stripped = tag
       .replace(/\swidth="[^"]*"/, '')
       .replace(/\sheight="[^"]*"/, '');
-    return stripped.replace(/^<svg/, `<svg width="${w}" height="${h}"`);
+    return stripped.replace(/^<svg/, `<svg width="${w}" height="${h}"${box}`);
   });
 }
 
