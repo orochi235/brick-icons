@@ -48,15 +48,41 @@ cheap to test across the rest of the list.
   engine exists to avoid. No. Instrumented, it returns 0 ops for every one of
   them, printed and plain.
 
-**Where to look instead.** The lines come through the ordinary path,
-`select_authored(comps["sharp"], loci)` at occt.py:2281 — a declared locus
-matched to an HLR sharp edge. The print is what adds loci, and occt.py:2256
-already knows the shape of the problem: "an artwork line inside a face is not
-an edge of anything: 6342851a draws two along its print, UnifySameDomain
-merges the print into the plate's top face, and both loci sit in that face's
-interior." That comment is about the fallback; the same fact looks unhandled
-on the main path. Check what `authored_loci` returns for 3070bp1k that it does
-not for 3070b, and whether those loci sit in a face interior.
+**Root cause: `ShapeUpgrade_UnifySameDomain` returns an INVALID shape, and an
+invalid face does not occlude.** The five lines are the tile's own hidden
+geometry -- its underside rim at y=7, its back corner vertical, its cavity
+edges at y=4 -- drawn because HLR was told they were visible.
+
+The loci are not the lever, and the guess above was wrong: `authored_loci`
+returns the SAME 33 loci for 3070bp1k and 3070b, and the print adds none. What
+differs is which of them HLR hands a visible sharp edge to -- 18 against 13.
+Both parts carry identical 3D geometry on the five loci and no print geometry
+projects onto them.
+
+The break is one call, and it is measurable either side of it:
+
+    3070bp1k  sewn, before UnifySameDomain   valid True   369 faces   14 picked, 0 extras
+              after UnifySameDomain          valid False   16 faces   19 picked, 5 extras
+    3070b     after UnifySameDomain          valid True    16 faces   14 picked, 0 extras
+
+The merge folds the print's 326 coplanar triangles into the top face and leaves
+two degenerate sliver wires inside it, one 0.01 LDU wide. The face then reports
+an area of 400.192 against the 400.000 of its own outer square, `BRepCheck`
+calls it invalid, and HLR sees through it to the inside of the part. Which is
+why it reads as a missing surface: you are looking at the underside.
+
+**The fix that measures well: throw away a merged shape `BRepCheck_Analyzer`
+calls invalid and keep the sewn shape it came from.** Across the class and a
+set of controls it separates them exactly -- 3070bp1k, 30258p05, 10202p04,
+25269p00, 14769pt0, 3941 and 39789 all reject their merge; 3070b, 25269, 96904,
+30136, 30137, 9359, 80400, 6141p01, 3005, 4740 and 3001 all keep it. So does
+6342851a, whose valid merge the `_undeclared_ops` docstring reasons from.
+
+It is not free. Rejecting the merge keeps every triangle its own face, and
+10202p04 goes from 13.8s to 69.3s at 3,757 faces against 91. Whether that is
+worth paying library-wide is the open question, not whether it draws right.
+`ShapeFix_Shape` is not the cheaper answer: it leaves the shape invalid and
+takes 3070bp1k from 5 extras to 2.
 
 ### Two of the ten are a different bug and must not be chased with the rest
 
