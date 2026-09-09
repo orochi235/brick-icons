@@ -106,6 +106,13 @@ owes.
 It runs on the fleet through `onto`; see `CLAUDE.md` for the launch form and
 the traps. Long jobs go through `onto` even on this Mac.
 
+A node that has never run this repo needs `scripts/provision-node.sh <node>`
+first -- uv, the pinned Python, the extras, `resvg`, `potrace`, and the parts
+library, which is copied off this checkout rather than downloaded because
+complete.zip only ever serves the latest snapshot. A node missing its `.venv`
+fails every item in about a second, which reads like the machine refusing the
+work.
+
 ## Gates
 
     .venv/bin/python -m pytest tests/test_hlr.py tests/test_occt.py    # engine
