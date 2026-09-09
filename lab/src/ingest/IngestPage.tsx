@@ -59,8 +59,7 @@ function Detail({ view, failedOnly, onFailedOnly }: {
   if (view.total === 0) {
     return (
       <p className="ingest-detail-empty">
-        This run recorded no attempts. A census rebuild writes measurements
-        instead.
+        This run took nothing in.
       </p>
     );
   }
@@ -82,13 +81,18 @@ function Detail({ view, failedOnly, onFailedOnly }: {
       </label>
       <table className="ingest-attempts">
         <thead>
-          <tr><th>part</th><th>slot</th><th>state</th><th>secs</th><th>error</th></tr>
+          <tr><th>part</th><th>slot</th><th>was</th><th>state</th><th>secs</th>
+            <th>error</th></tr>
         </thead>
         <tbody>
           {view.rows.map((row) => (
             <tr key={`${row.part_id}/${row.source}`}>
               <td>{row.part_id}</td>
               <td>{row.source}</td>
+              {/* Null means this run met the part first, which is a fact
+                  about it rather than a missing value: say so once here
+                  instead of leaving the reader to read a dash as either. */}
+              <td className="ingest-prior">{row.prior ?? 'never tried'}</td>
               <td>{row.state ?? '—'}</td>
               <td>{row.secs === null ? '' : row.secs.toFixed(1)}</td>
               <td title={row.detail ?? undefined}>{row.error ?? ''}</td>

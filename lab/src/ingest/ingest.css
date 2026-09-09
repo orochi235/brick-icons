@@ -82,3 +82,8 @@
 .ingest-attempts th { color: var(--wzl-fg-muted); font-weight: 500; }
 
 .ingest-capped { color: var(--wzl-fg-muted); font-size: 0.8rem; }
+
+/* The prior state is context for the state beside it, not a finding of its
+ * own: quieter than the column it explains, so a row still reads left to
+ * right as part, slot, what changed. */
+.ingest-prior { color: var(--wzl-fg-muted); }

@@ -9,8 +9,8 @@ export interface IngestRun {
   commit_sha: string;
   note: string | null;
   args: Record<string, unknown>;
-  /** Attempts by state, everything that failed under `error`. Empty for a
-   *  run that writes measurements rather than attempts. */
+  /** What the run took in. Attempts by state, everything that failed under
+   *  `error`; `drawn` and `scored` for the tables that carry no state. */
   counts: Record<string, number>;
   total: number;
 }
@@ -22,6 +22,10 @@ export interface IngestAttempt {
   secs: number | null;
   error: string | null;
   detail: string | null;
+  /** What the part was in this slot before this run, or null for one the run
+   *  met first. The reason to read a row: `drawn` -> `TimeoutError` is a
+   *  regression, `TimeoutError` -> `drawn` is the fix landing. */
+  prior: string | null;
 }
 
 export interface IngestAttempts {
@@ -29,4 +33,7 @@ export interface IngestAttempts {
   errors: { error: string; n: number }[];
   /** What `rows` was sampled from -- larger than `rows.length` on a big run. */
   total: number;
+  /** Which table the rows came out of: a store run files attempts, a census
+   *  or a watcher measurements. */
+  kind: 'attempts' | 'measurements';
 }
