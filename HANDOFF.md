@@ -1,4 +1,4 @@
-## Baton, 2026-09-09 night: the "missing surface" defects are one bug, and it is occt inking a flat face's triangle fan
+## Baton, 2026-09-09 night: the "missing surface" defects are occt drawing extra lines on printed parts
 
 On `main` in the shared checkout, nothing pushed. **At least two other sessions
 commit to `main` in this same tree** — commits landed between my own commands
@@ -13,32 +13,50 @@ in through `git apply --cached` on a filtered patch, never `git add <file>`.
 
 Ten-odd defects read as a part "missing its main top surface" — `30258p05`,
 `10202p04`, `3070bp1k`, `25269p00`, `25269`, `14769pt0`, `39789`, `96904`,
-`3941`, `30136`, `30137`. **They are not one class and most are misfiled
-against the wrong thing.**
+`3941`, `30136`, `30137`. **Nothing is missing. occt draws extra lines, and
+the extra lines read as a hole.**
 
-**What occt actually does: it inks the tessellation split of a flat top face.**
-`3070bp1k` is the clean specimen — a 1x1 tile, so its top is one quad. occt's
-SVG carries five paths naive does not, and their coordinates give it away:
-they run along `x = 128.00`, the exact horizontal centre of the 256px canvas,
-plus two diagonals to the corners. That is the top quad's triangle fan, drawn.
-`25269p00` and `25269` get the same treatment as a three-armed Y across the
-curved top; `30258p05` shows the back clips through the front face.
+`3070bp1k` is the specimen — a 1x1 tile with a TV logo. occt and naive emit
+the SAME fill paths in the SAME colors, identical counts. Compared as sets of
+SEGMENTS rather than as path strings — most string diffs are the same polygon
+written from a different starting vertex, which is a trap — occt has 218
+segments to naive's 224, and 23 occt-only. Five of them matter:
 
-The fills are innocent. occt and naive emit the SAME fill paths in the SAME
-colors — 5 blue, 2 white, and so on, identical counts. The whole difference is
-5 extra stroked contours. **Nothing is missing; something is added, and the
-added lines read as a hole.** Anyone who goes looking in `fill_ops` or
-`occt_faces` for a dropped surface will not find one — `scripts/surface-drop-probe.py`
-(untracked, someone else's) reports zero drops for `30258p05`; its only
-"dropped" rows are `edge` primitives, which are lines and have no surface by
-definition.
+    (128.00,   6.00) -> (128.00,  53.04)   len 47.04
+    (128.00,  54.82) -> (188.91,  85.28)   len 68.10
+    ( 67.09,  85.28) -> (128.00,  54.82)   len 68.10
+    (128.00,  53.04) -> (190.69,  84.38)   len 70.09
+    (128.00, 115.73) -> (128.00, 164.00)   len 48.27
 
-**Where to look.** Not the dihedral-angle rule — the dihedral across this seam
-is zero, the fragments are coplanar. The suspects are the seam-coverage
-machinery (`smooth_rim_skips`, `rim_facet_span_bins`) and the junction weld,
-one of which is calling a coplanar fragment boundary a real crease. On a
-printed tile the decoration triangles sit in the same plane as the body, which
-is why the printed ones are over-represented in the list.
+On a 256px canvas whose top face is the rhombus (128,6) (18.27,60.87)
+(128,115.73) (237.73,60.87). They render as a black Y across the blue top.
+
+**The base part is clean and that is the lever.** `3070b`, the same mould
+without the print, draws 41 segments and not one of these; every vertical it
+has at x=128 is a real corner edge. Same mould, print added, Y appears. The
+oracle in CLAUDE.md — strip a print and you get its base — is what makes this
+cheap to test across the rest of the list.
+
+**Two suspects, both disproved, do not spend the evening on them again.**
+
+- *UnifySameDomain was skipped, leaving every triangle its own face.* No.
+  `_unify_survives` returns True for all of these and the merge is
+  aggressive: 3070bp1k goes 369 sewn faces to 16. Also 25269 88->31,
+  25269p00 136->38, 30258p05 129->25.
+- *`_undeclared_ops` fired* — the `if not ops` fallback at occt.py:2299 that
+  takes HLR's whole sharp set, which its own docstring calls the failure this
+  engine exists to avoid. No. Instrumented, it returns 0 ops for every one of
+  them, printed and plain.
+
+**Where to look instead.** The lines come through the ordinary path,
+`select_authored(comps["sharp"], loci)` at occt.py:2281 — a declared locus
+matched to an HLR sharp edge. The print is what adds loci, and occt.py:2256
+already knows the shape of the problem: "an artwork line inside a face is not
+an edge of anything: 6342851a draws two along its print, UnifySameDomain
+merges the print into the plate's top face, and both loci sit in that face's
+interior." That comment is about the fallback; the same fact looks unhandled
+on the main path. Check what `authored_loci` returns for 3070bp1k that it does
+not for 3070b, and whether those loci sit in a face interior.
 
 ### Two of the ten are a different bug and must not be chased with the rest
 
