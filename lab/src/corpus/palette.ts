@@ -1,10 +1,10 @@
 import { DEFAULT_PARAMS, type ColorParamKey } from '@lab/corpus/params';
 import {
-  STATES, cssVarTable, labelTable, paramKeys, stateKeys, styleTable,
-  type CellStyle, type StateKey,
+  STATES, cssVarTable, labelTable, paramKeys, shapeTable, stateKeys, styleTable,
+  type CellShape, type CellStyle, type StateKey,
 } from '@lab/corpus/states';
 
-export type { CellStyle } from '@lab/corpus/states';
+export type { CellShape, CellStyle } from '@lab/corpus/states';
 
 export type CellState = StateKey;
 
@@ -66,6 +66,10 @@ export const CELL_STATES: CellState[] = stateKeys();
 
 /** What each state is called on the legend. */
 export const STATE_LABEL: Record<CellState, string> = labelTable();
+
+/** The shape each state is drawn as, read by the wall and by the legend so
+ *  the two cannot fall out of step. */
+export const STATE_SHAPE: Record<CellState, CellShape> = shapeTable();
 
 function readVar(styles: CSSStyleDeclaration, prop: string, fallback: string): string {
   const value = styles.getPropertyValue(prop).trim();

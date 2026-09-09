@@ -57,6 +57,9 @@
   border: 2px solid var(--swatch-line);
   color: var(--swatch-line);
 }
+/* Round where the wall draws the cell round, from the same `shape` the state
+ * table gives `paint`. */
+.corpus-legend-row[data-shape="circle"] .corpus-legend-swatch { border-radius: 50%; }
 /* An other-slot twin wears a thinner ring, the way the wall draws it. */
 .corpus-legend-row[data-weight="thin"] .corpus-legend-swatch { border-width: 1px; }
 /* Struck corner to corner, the way `Wall` strikes an undrawn cell that has a

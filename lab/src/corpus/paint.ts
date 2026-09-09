@@ -227,7 +227,10 @@ export const SYSTEM_FACE =
 
 /** One field for the whole property family, so a run of them reads as a
  *  group against the system badges' own liveries. */
-export const PROPERTY_FIELD = '#4a4a4f';
+export const PROPERTY_FIELD = 'oklch(0.4109 0.0082 286.03)';
+
+/** The magnet's pole tips, and so its name. */
+const MAGNET_POLES = 'oklch(0.8834 0.0054 286.29)';
 
 /** The strip that runs right from the part number. System badges first --
  *  a part has one category, so at most one of those shows -- then the
@@ -235,33 +238,38 @@ export const PROPERTY_FIELD = '#4a4a4f';
 export const STRIP_BADGES: Record<string, CellBadge> = {
   // The bright yellow a bare minifig head is moulded in, not LDraw's own
   // Yellow (#f2cd37), which reads golden against the rest of the strip.
-  minifig: { tag: 'minifig', mark: 'minifig', field: '#ffd500', ink: '#1a1a1a' },
-  technic: { tag: 'technic', mark: 'technic', field: '#1b2a5e', ink: '#ffffff' },
-  duplo: { tag: 'duplo', mark: 'duplo', field: '#c8102e', ink: '#ffffff' },
-  weird: { tag: 'weird', text: '\u03a8', field: '#5b3a86', ink: '#ffffff',
+  minifig: { tag: 'minifig', mark: 'minifig', field: 'oklch(0.8828 0.1811 94.46)', ink: 'oklch(0.2178 0 0)' },
+  technic: { tag: 'technic', mark: 'technic', field: 'oklch(0.3047 0.0947 268.21)', ink: 'oklch(1.0000 0 0)' },
+  // Turned off the brand's own #c8102e, which sits at 350 degrees and reads
+  // crimson beside the other fields. Same lightness, hue brought to 2.
+  duplo: { tag: 'duplo', mark: 'duplo', field: 'oklch(0.5427 0.2086 28.68)', ink: 'oklch(1.0000 0 0)' },
+  weird: { tag: 'weird', text: '\u03a8', field: 'oklch(0.4247 0.1238 301.36)', ink: 'oklch(1.0000 0 0)',
            font: WEIRD_FACE, weight: 300, scale: 1.22, dy: 0.14 },
   // The one property badge off the shared field: a gold bolt on black is
   // what a live circuit looks like everywhere else, and it earns the break.
-  electric: { tag: 'electric', mark: 'bolt', field: '#101014', ink: '#ffd60a',
+  electric: { tag: 'electric', mark: 'bolt', field: 'oklch(0.1749 0.0082 285.52)', ink: 'oklch(0.8849 0.1805 94.78)',
               scale: 0.86 },
-  magnet: { tag: 'magnet', mark: 'magnet', field: PROPERTY_FIELD, ink: '#e03131',
-            accent: '#d8d8dc', scale: 0.97 },
+  // The name takes the poles' silver, not the body's red: red on the
+  // property field was the faintest word on the strip, and letting the
+  // field down behind it made it fainter.
+  magnet: { tag: 'magnet', mark: 'magnet', field: PROPERTY_FIELD, ink: 'oklch(0.5928 0.2106 26.53)',
+            accent: MAGNET_POLES, labelInk: MAGNET_POLES, scale: 0.97 },
   // Navy rather than the property field: a sticker is a thing you apply, not
   // a fact about the moulding, and the blue is the one every police sticker
   // in the library is printed on.
-  sticker: { tag: 'sticker', mark: 'stickerPolice', field: '#1a4b8c',
-             ink: '#ffffff', accent: '#c9c9d0' },
+  sticker: { tag: 'sticker', mark: 'stickerPolice', field: 'oklch(0.4174 0.1200 256.93)',
+             ink: 'oklch(1.0000 0 0)', accent: 'oklch(0.8380 0.0096 286.19)' },
   // The one badge whose ink runs to its own edge, so the ring is what gives
   // it an edge at all: without it the outermost dots are the silhouette and
   // the disc reads as a torn patch rather than a printed one.
   printed: { tag: 'printed', mark: 'printed', field: PROPERTY_FIELD,
-             ink: '#ffffff', stroke: '#d5d8dd', strokeScale: 0.5,
-             ringOnDisc: true, labelField: '#d5d8dd', labelInk: PROPERTY_FIELD },
+             ink: 'oklch(1.0000 0 0)', stroke: 'oklch(0.8814 0.0076 260.73)', strokeScale: 0.5,
+             ringOnDisc: true, labelField: 'oklch(0.8814 0.0076 260.73)', labelInk: PROPERTY_FIELD },
   // One hue in two values: the join reads as a step in a single object,
   // which is what interlocked pieces are. Cyan against orange read as two
   // materials, and its orange was the popular badge's field.
-  composite: { tag: 'composite', mark: 'composite', field: '#2b8a83',
-               ink: '#7fd6cf', accent: '#2b8a83', labelInk: '#ffffff' },
+  composite: { tag: 'composite', mark: 'composite', field: 'oklch(0.5773 0.0871 187.97)',
+               ink: 'oklch(0.8193 0.0851 189.02)', accent: 'oklch(0.5773 0.0871 187.97)', labelInk: 'oklch(1.0000 0 0)' },
 };
 
 /** Every badge the wall can draw, in the order the legend lists them:

@@ -186,3 +186,13 @@ it('gives every state a swatch, however the table grows', () => {
       .toBe(line !== 'transparent');
   }
 });
+
+it('gives a state the shape the wall draws it in, not a square for every row', () => {
+  const { container } = render(<Legend cells={cells} highlight={null} onHighlight={() => {}}
+                 badges={[]} onBadges={vi.fn()}
+                 highlightTag={null} onHighlightTag={vi.fn()} onClose={vi.fn()} />);
+  const shapeOf = (state: string) =>
+    container.querySelector(`[data-state="${state}"]`)?.getAttribute('data-shape');
+  expect(shapeOf('outOfScope')).toBe('circle');
+  expect(shapeOf('timeout')).toBe('square');
+});

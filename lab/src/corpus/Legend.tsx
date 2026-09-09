@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { FloatingPanel } from '@weasel-js/labkit';
 import { BadgeSwatch } from '@lab/corpus/BadgeSwatch';
 import { ALL_BADGES, tally } from '@lab/corpus/paint';
-import { CELL_STATES, DEFAULT_PALETTE, STATE_CSS_VAR, STATE_LABEL,
+import { CELL_STATES, DEFAULT_PALETTE, STATE_CSS_VAR, STATE_LABEL, STATE_SHAPE,
          type CellState } from '@lab/corpus/palette';
 import type { Cell } from '@lab/corpus/types';
 import '@lab/corpus/Legend.css';
@@ -74,6 +74,7 @@ export function Legend({ cells, tagCells, highlight, onHighlight,
           <li key={state} className="corpus-legend-item">
             <div className="corpus-legend-row" data-state={state}
                  data-struck={DEFAULT_PALETTE[state].border !== null}
+                 data-shape={STATE_SHAPE[state]}
                  data-weight={DEFAULT_PALETTE[state].weight ?? 'none'}
                  style={{
                    ['--swatch-fill' as string]: `var(${STATE_CSS_VAR[state].fill})`,

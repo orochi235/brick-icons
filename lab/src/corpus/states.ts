@@ -24,10 +24,15 @@ export interface StateFacts {
   elsewhere: readonly string[];
 }
 
+/** The outline a cell is drawn with. The legend reads it too, so a swatch
+ *  cannot disagree with the wall about what a state looks like. */
+export type CellShape = 'square' | 'circle';
+
 export interface StateSpec extends CellStyle {
   key: string;
   /** What the legend calls it. */
   label: string;
+  shape: CellShape;
   /** Lower matches first. Listing order and matching order are not the same
    *  order, so both are written down rather than one inferred from the other. */
   precedence: number;
@@ -45,7 +50,7 @@ export interface StateSpec extends CellStyle {
 // below and never written here: hand-writing the pair is how `problemElsewhere`
 // came to wear the blue of `timeout` while standing for `failed`.
 const CONDITIONS = [
-  { key: 'unknown', label: 'unknown',
+  { key: 'unknown', label: 'unknown', shape: 'square',
     fill: '#3a3a3f', border: null, weight: null, sibling: false,
     precedence: 1000, match: () => true },
   // Borderless like `unknown`, and light where every other state is dark: the
@@ -54,29 +59,29 @@ const CONDITIONS = [
   // Ahead of every problem state: a part the project is not drawing yet has
   // not failed at anything, and a wall of red stickers would say it had.
   // A part is out of scope everywhere or nowhere, so there is no sibling.
-  { key: 'outOfScope', label: 'currently out of scope',
+  { key: 'outOfScope', label: 'currently out of scope', shape: 'circle',
     fill: '#b2a3dd', border: null, weight: null, sibling: false,
     precedence: 10, match: (f: StateFacts) => f.out_of_scope },
   // Above `defect` on purpose. Below it, a part carrying three other faults
   // stays plain gold and nobody ever learns that the fourth was redrawn --
   // which is the whole of what this state exists to say.
-  { key: 'review', label: 'fix claimed, needs a look',
+  { key: 'review', label: 'fix claimed, needs a look', shape: 'square',
     fill: '#3a2740', border: '#d070c0', weight: 'thick', sibling: true,
     precedence: 15, match: (f: StateFacts) => f.review_defects > 0 },
-  { key: 'defect', label: 'open defect',
+  { key: 'defect', label: 'open defect', shape: 'square',
     fill: '#453c27', border: '#daa520', weight: 'thick', sibling: true,
     precedence: 20, match: (f: StateFacts) => f.open_defects > 0 },
-  { key: 'timeout', label: 'timed out',
+  { key: 'timeout', label: 'timed out', shape: 'square',
     fill: '#26383f', border: '#30b0d0', weight: 'thick', sibling: true,
     precedence: 30, match: (f: StateFacts) => f.error === 'TimeoutError' },
-  { key: 'failed', label: 'render error',
+  { key: 'failed', label: 'render error', shape: 'square',
     fill: '#4a2626', border: '#e03030', weight: 'thick', sibling: true,
     precedence: 40, match: (f: StateFacts) => f.error !== null },
   // Thin, because nothing here needs doing: the fault is known and the
   // decision was to keep it. No sibling -- a fault someone accepted in
   // another slot says nothing about this one, which is also why
   // `cells.tally_defects` counts it only where it was filed.
-  { key: 'accepted', label: 'known issue, not fixing',
+  { key: 'accepted', label: 'known issue, not fixing', shape: 'square',
     fill: '#26382c', border: '#6f9e78', weight: 'thin', sibling: false,
     precedence: 50, match: (f: StateFacts) => f.accepted_defects > 0 },
 ] as const;
@@ -137,6 +142,7 @@ function elsewhereOf(c: Condition & { border: string }): StateSpec {
   return {
     key: `${c.key}Elsewhere`,
     label: `${c.label}, in another slot`,
+    shape: c.shape,
     fill: c.fill,
     border: washOut(c.border),
     weight: 'thin',
@@ -174,6 +180,10 @@ export function styleTable(): Record<StateKey, CellStyle> {
   return Object.fromEntries(STATES.map(
     (s) => [s.key, { fill: s.fill, border: s.border, weight: s.weight }],
   )) as Record<StateKey, CellStyle>;
+}
+
+export function shapeTable(): Record<StateKey, CellShape> {
+  return Object.fromEntries(STATES.map((s) => [s.key, s.shape])) as Record<StateKey, CellShape>;
 }
 
 export function labelTable(): Record<StateKey, string> {
