@@ -206,12 +206,12 @@ export interface CellBadge {
  *  and a part that was replaced are different things wearing one badge
  *  today. */
 export const CORNER_BADGES: Record<string, CellBadge> = {
-  popular: { tag: 'popular', mark: 'star', corner: 'tl', field: 'oklch(0.7230 0.1897 50.54)', ink: 'oklch(1.0000 0 0)' },
+  popular: { tag: 'popular', mark: 'star', corner: 'tl', field: 'oklch(0.6800 0.1760 50.54)', ink: 'oklch(1.0000 0 0)' },
   // Top right, outboard of the year: what these two say is when the part
   // stopped, so they belong beside the dates rather than in the opposite
   // corner from them. The year caption gives way and sets to their left.
   retired: { tag: 'retired', mark: 'archive', corner: 'tr', field: 'oklch(0.5302 0.0108 286.02)', ink: 'oklch(1.0000 0 0)' },
-  replaced: { tag: 'replaced', mark: 'redo', corner: 'tr', field: 'oklch(0.5289 0.1056 154.41)',
+  replaced: { tag: 'replaced', mark: 'redo', corner: 'tr', field: 'oklch(0.4950 0.1230 154.41)',
              ink: 'oklch(1.0000 0 0)', accent: 'oklch(1.0000 0 0)', scale: 1.14 },
 };
 
@@ -257,7 +257,7 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
   // Navy rather than the property field: a sticker is a thing you apply, not
   // a fact about the moulding, and the blue is the one every police sticker
   // in the library is printed on.
-  sticker: { tag: 'sticker', mark: 'stickerPolice', field: 'oklch(0.4174 0.1200 256.93)',
+  sticker: { tag: 'sticker', mark: 'stickerPolice', field: 'oklch(0.3900 0.1370 256.93)',
              ink: 'oklch(1.0000 0 0)', accent: 'oklch(0.8380 0.0096 286.19)' },
   // The one badge whose ink runs to its own edge, so the ring is what gives
   // it an edge at all: without it the outermost dots are the silhouette and
