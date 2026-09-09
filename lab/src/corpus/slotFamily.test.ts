@@ -10,9 +10,9 @@ it('sorts every slot db.SOURCES names into a family', () => {
   const by: Record<string, string[]> = {};
   for (const { source } of ALL) (by[familyOf(source)] ??= []).push(source);
   expect(by).toEqual({
-    reference: ['ldview', 'reference'],
-    legacy: ['naive', 'translucent-naive', 'silhouette-naive', 'white-naive'],
     occt: ['occt', 'translucent-occt', 'silhouette-occt', 'white-occt'],
+    legacy: ['naive', 'translucent-naive', 'silhouette-naive', 'white-naive'],
+    reference: ['ldview', 'reference'],
     decal: ['decal'],
   });
 });
@@ -33,7 +33,7 @@ it('keeps a reference slot whole', () => {
 
 it('offers only the families something has been drawn in', () => {
   expect(familiesIn([{ source: 'occt' }, { source: 'white-occt' }])).toEqual(['occt']);
-  expect(familiesIn(ALL)).toEqual(['reference', 'legacy', 'occt', 'decal']);
+  expect(familiesIn(ALL)).toEqual(['occt', 'legacy', 'reference', 'decal']);
 });
 
 it('holds the facet across a family change', () => {

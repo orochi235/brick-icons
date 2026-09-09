@@ -12,7 +12,9 @@ import { engineFor } from '@lab/corpus/flag';
  *  reference nor a drawing either engine made. */
 export type Family = 'reference' | 'legacy' | 'occt' | 'decal';
 
-export const FAMILY_ORDER: readonly Family[] = ['reference', 'legacy', 'occt', 'decal'];
+/** Toggle order, and it is not alphabetical or historical: occt is the engine
+ *  under work, so it opens the row. */
+export const FAMILY_ORDER: readonly Family[] = ['occt', 'legacy', 'reference', 'decal'];
 
 export const FAMILY_LABEL: Record<Family, string> = {
   reference: 'Reference',

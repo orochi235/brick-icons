@@ -34,7 +34,7 @@ it('reports a slot change', () => {
 it('offers a segment per family something has been drawn in', () => {
   render(bar());
   expect(screen.getAllByRole('radio').map((b) => b.textContent))
-    .toEqual(['Legacy', 'OCCT', 'Decal']);
+    .toEqual(['OCCT', 'Legacy', 'Decal']);
   expect(screen.getByRole('radio', { name: 'Legacy' }).getAttribute('aria-checked'))
     .toBe('true');
 });

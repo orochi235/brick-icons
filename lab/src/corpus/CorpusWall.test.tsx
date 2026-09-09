@@ -513,7 +513,7 @@ it('picks up a slot that appears after the page is open, without moving off your
   slots = [{ source: 'ldview', n: 9 }, { source: 'silhouette-naive', n: 2 }];
   await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
   await waitFor(() => expect(screen.getAllByRole('radio').map((r) => r.textContent))
-    .toEqual(['Reference', 'Legacy']));
+    .toEqual(['Legacy', 'Reference']));
 
   // ldview now sorts first, but the wall stays on what was already open.
   expect(screen.getByRole('radio', { name: 'Legacy' }).getAttribute('aria-checked'))
