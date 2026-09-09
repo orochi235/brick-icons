@@ -223,6 +223,45 @@ def keyword_years(dat: Path, set_year: dict[str, int],
     return (min(years), max(years)) if years else None
 
 
+def from_prints(plain: dict[str, bool], spans: dict[str, tuple[int, int]],
+                obsolete: set[str] = frozenset()) -> list[tuple]:
+    """Years for a base mould that was never issued undecorated, read off the
+    prints cut from it. `11778` is in no inventory at all -- an eagle wing is
+    only ever sold with feathers on it -- while `11778p01` and `11778p02` are
+    2013-2014 and 2018-2018, so the mould was in production 2013-2018.
+
+    The envelope, not the overlap: those two prints share no year, and a mould
+    that made both existed across the whole span. Its own route, `prints`, so
+    nothing mistakes it for a number someone looked up.
+
+    YEARS ONLY. `sets` and `colors` stay 0, and not for want of a figure to
+    put there -- inheriting the other direction is a known trap, where
+    `3069bp1f` reads 5,766 sets and counts as popular because the plain tile
+    it is printed on is. It is no better read this way round.
+
+    `plain` is every part the corpus holds, against whether it is undecorated;
+    `spans` is the years already matched. A base with a row of its own is not
+    here -- it was issued plain and the inventories know it. `obsolete` is
+    read off the base alone: a retired print still dates the mould that cut
+    it, so its years count toward a base that is still current.
+    """
+    prints: dict[str, list[str]] = defaultdict(list)
+    for part_id in plain:
+        printed = _PRINT_SUFFIX.match(part_id)
+        if printed and printed.group(1) in plain:
+            prints[printed.group(1)].append(part_id)
+
+    out = []
+    for base, kids in prints.items():
+        if not plain[base] or base in spans or base in obsolete:
+            continue
+        known = [spans[k] for k in kids if k in spans]
+        if known:
+            out.append((base, min(s[0] for s in known),
+                        max(s[1] for s in known), 0, "prints", 0))
+    return sorted(out)
+
+
 def successors(cache: Path, facts: dict[str, tuple[int, int, int, int]],
                ids: set[str]) -> dict[str, tuple[str, str]]:
     """The part that replaced each one, where Rebrickable records a partner
@@ -290,7 +329,14 @@ def main() -> int:
 
     conn = db.connect(args.db)
     try:
-        ids = [r["id"] for r in conn.execute("SELECT id FROM parts ORDER BY id")]
+        # `printed` comes with the id: a base mould that inherits from its
+        # prints has to be told apart from a print, and the .dat's own
+        # description is what says so -- an id suffix is ambiguous.
+        part_rows = conn.execute("SELECT id, printed, obsolete FROM parts "
+                                 "ORDER BY id").fetchall()
+        ids = [r["id"] for r in part_rows]
+        plain = {r["id"]: not r["printed"] for r in part_rows}
+        retired = {r["id"] for r in part_rows if r["obsolete"]}
     finally:
         conn.close()
     print(f"{len(ids):,} parts in the corpus", flush=True)
@@ -319,6 +365,14 @@ def main() -> int:
         span = keyword_years(parts_dir / f"{part_id}.dat", set_year, bare)
         if span is not None:
             matched.append((part_id, span[0], span[1], 0, "keywords", 0))
+
+    # A second pass, because it reads what the first one matched: a base
+    # mould nobody ever sold undecorated takes the span of its prints.
+    inherited = from_prints(plain, {m[0]: (m[1], m[2]) for m in matched},
+                            retired)
+    matched.extend(inherited)
+    print(f"  {len(inherited):,} base moulds took their years from their prints",
+          flush=True)
 
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)

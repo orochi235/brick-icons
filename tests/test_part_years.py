@@ -65,3 +65,49 @@ def test_keywords_below_the_header_are_not_read(tmp_path):
     path.write_text("0 name\n1 16 0 0 0 1 0 0 0 1 0 0 0 1 x.dat\n"
                     "0 !KEYWORDS Rebrickable 3005pr0018\n")
     assert years.keyword_parts(path) == []
+
+
+def test_a_mould_never_sold_plain_takes_the_span_of_its_prints():
+    """11778, an eagle's wing, is in no inventory: it is only ever sold with
+    feathers on it. Its two prints ran 2013-2014 and 2018-2018, and they share
+    no year -- the mould that cut both was in production across the whole
+    span, so it is the envelope and not the overlap."""
+    plain = {"11778": True, "11778p01": False, "11778p02": False}
+    spans = {"11778p01": (2013, 2014), "11778p02": (2018, 2018)}
+    assert years.from_prints(plain, spans) == [("11778", 2013, 2018, 0, "prints", 0)]
+
+
+def test_an_inherited_span_counts_no_sets_and_no_colors():
+    """The reverse direction is the known trap -- a print reads its plain
+    tile's 5,766 sets and passes for popular. Neither number travels."""
+    got, = years.from_prints({"3001": True, "3001p01": False},
+                             {"3001p01": (1999, 2001)})
+    assert (got[3], got[5]) == (0, 0)
+
+
+def test_a_base_the_inventories_already_know_keeps_its_own_years():
+    assert years.from_prints({"3001": True, "3001p01": False},
+                             {"3001": (1954, 2026), "3001p01": (1999, 2001)}) == []
+
+
+def test_a_printed_part_inherits_nothing_from_its_own_prints():
+    """A print of a print is still a print, and the ask is about base moulds."""
+    assert years.from_prints({"3001p01": False, "3001p01p9": False},
+                             {"3001p01p9": (1999, 2001)}) == []
+
+
+def test_a_retired_print_still_dates_a_mould_that_is_current():
+    plain = {"11778": True, "11778p01": False}
+    assert years.from_prints(plain, {"11778p01": (2013, 2014)},
+                             obsolete={"11778p01"}) == [
+        ("11778", 2013, 2014, 0, "prints", 0)]
+
+
+def test_an_obsolete_base_gets_no_row():
+    assert years.from_prints({"11778": True, "11778p01": False},
+                             {"11778p01": (2013, 2014)},
+                             obsolete={"11778"}) == []
+
+
+def test_a_base_whose_prints_are_all_undated_gets_no_row():
+    assert years.from_prints({"11778": True, "11778p01": False}, {}) == []

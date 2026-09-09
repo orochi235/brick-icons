@@ -157,8 +157,11 @@ COVERAGE_ORDER = ("defect", "failed", "timeout", "drawn", "untried",
 #: Reporting an inherited count is not a rounding error, it is a different
 #: claim: `3069bp1f` is one silver-arched-window print, and it read as 5,766
 #: sets and `popular` because the plain 1 x 2 tile it is printed on is.
+#:
+#: `prints` and `keywords` store a literal 0, which is the same trap read the
+#: other way -- a part in no inventory would report as being in no sets.
 BORROWED_COUNT_ROUTES = frozenset({"base", "design", "design-id-base",
-                                   "keywords"})
+                                   "keywords", "prints"})
 
 
 def sets_for(year: sqlite3.Row | None) -> int | None:

@@ -236,6 +236,19 @@ def test_an_estimated_year_reports_no_set_count(conn):
     assert "retired" in row["tags"]
 
 
+def test_a_mould_dated_by_its_prints_reports_no_set_count(conn):
+    # 11778 is only ever sold with feathers on it, so its years come from
+    # 11778p01 and 11778p02 and there is no inventory behind the row at all.
+    # Its 0 is the same absence `keywords` writes, read the other way round:
+    # reported as a count it would tag an eagle wing `obscure`.
+    _part(conn, "11778", title="Animal Eagle Wing Left")
+    _years(conn, "11778", 2013, 2018, 0, "prints")
+    row = cells.cells(conn)["cells"][0]
+    assert (row["year_from"], row["year_to"]) == (2013, 2018)
+    assert row["sets"] is None
+    assert "obscure" not in row["tags"]
+
+
 def test_a_print_does_not_inherit_its_base_part_s_popularity(conn):
     # 3069bp1f is one silver-arched-window print. Its years come from the
     # plain 1 x 2 tile it is struck on, which is fair -- the mould is that
