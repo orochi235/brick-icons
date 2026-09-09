@@ -145,7 +145,8 @@ def engine_for(source: str) -> str:
     return source.rsplit("-", 1)[-1] if "-" in source else source
 
 
-COVERAGE_ORDER = ("defect", "failed", "timeout", "drawn", "untried")
+COVERAGE_ORDER = ("defect", "failed", "timeout", "drawn", "untried",
+                  "notApplicable")
 
 
 #: Routes in `part_years.matched` whose `sets` and `colors` describe some
@@ -209,17 +210,25 @@ def slot_attempts(conn: sqlite3.Connection, part_id: str) -> dict[str, dict]:
             for row in conn.execute(_LATEST_ATTEMPT, (part_id, part_id))}
 
 
-def coverage_of(*, sha: str | None, error: str | None, open_defects: int) -> str:
+def coverage_of(*, sha: str | None, error: str | None, open_defects: int,
+                inapplicable: bool = False) -> str:
     """How far this slot got with a part, worst news first. Mirrored by
     `Coverage` in the wall's `facts.ts`, which reads this rather than deriving
-    it a second time."""
+    it a second time.
+
+    `inapplicable` only ever displaces `untried`: a slot erroring on a part it
+    does not cover is a real event, and burying it under "nothing to draw"
+    would hide the contradiction `not_applicable` exists to show.
+    """
     if open_defects > 0:
         return "defect"
     if error and error != "TimeoutError":
         return "failed"
     if error:
         return "timeout"
-    return "drawn" if sha else "untried"
+    if sha:
+        return "drawn"
+    return "notApplicable" if inapplicable else "untried"
 
 
 def _judged(conn: sqlite3.Connection) -> tuple[set[str], str]:
@@ -341,7 +350,9 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
             "coverage": coverage_of(
                 sha=render["sha256"] if render else None,
                 error=errors.get(pid),
-                open_defects=bucket["open"] + bucket["review"]),
+                open_defects=bucket["open"] + bucket["review"],
+                inapplicable=not_applicable(
+                    source, bool(part["printed"]), render is not None)),
             "open_defects": bucket["open"],
             "review_defects": bucket["review"],
             "accepted_defects": bucket["accepted"],

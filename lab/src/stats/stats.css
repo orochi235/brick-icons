@@ -6,6 +6,7 @@
   --stats-timeout: #30b0d0;
   --stats-drawn: #d8d8dc;
   --stats-untried: #6a6a72;
+  --stats-notApplicable: #3f3f46;
   /* Deliberately none of the status colors above: a histogram bar is a count,
    * not a state, and painting it cyan would say "timed out" to anyone who
    * just read the coverage legend. */
@@ -132,6 +133,8 @@
 .stats-seg[data-label='timeout'] { background: var(--stats-timeout); }
 .stats-seg[data-label='drawn'] { background: var(--stats-drawn); }
 .stats-seg[data-label='untried'] { background: var(--stats-untried); }
+.stats-seg[data-label='notApplicable']
+  { background: var(--stats-notApplicable); }
 a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg); }
 
 .stats-swatch[data-label='defect'] { background: var(--stats-defect); }
@@ -139,6 +142,8 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
 .stats-swatch[data-label='timeout'] { background: var(--stats-timeout); }
 .stats-swatch[data-label='drawn'] { background: var(--stats-drawn); }
 .stats-swatch[data-label='untried'] { background: var(--stats-untried); }
+.stats-swatch[data-label='notApplicable']
+  { background: var(--stats-notApplicable); }
 
 /* -- phases ------------------------------------------------------------- */
 

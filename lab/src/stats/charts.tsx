@@ -8,7 +8,8 @@ import type { CoverageRow, Phase, PhaseRow, SpeedRow } from '@lab/stats/types';
  *  bulk of untried sits last. Deliberately NOT `COVERAGE_ORDER` (facts.ts,
  *  cells.py) -- that one ranks a cell's states worst-first for the wall's
  *  grouping, and nothing here depends on the two agreeing. */
-export const STACK: Coverage[] = ['drawn', 'defect', 'failed', 'timeout', 'untried'];
+export const STACK: Coverage[] =
+  ['drawn', 'defect', 'failed', 'timeout', 'untried', 'notApplicable'];
 
 export const COVERAGE_LABEL: Record<Coverage, string> = {
   defect: 'open defect',
@@ -16,6 +17,9 @@ export const COVERAGE_LABEL: Record<Coverage, string> = {
   timeout: 'timed out',
   drawn: 'drawn',
   untried: 'never attempted',
+  // The wall's own words for this state (`states.ts`), so the chart and the
+  // wall are one vocabulary rather than two names for one thing.
+  notApplicable: 'nothing for this slot to draw',
 };
 
 /** A status palette, not a categorical one. The values live in `stats.css`
@@ -35,6 +39,10 @@ export const COVERAGE_COLOR: Record<Coverage, string> = {
   timeout: '#30b0d0',
   drawn: '#d8d8dc',
   untried: '#6a6a72',
+  // Darker than `untried` and unsaturated: a part this slot was never going to
+  // draw is not work outstanding, and must not read as any of the states that
+  // are. Matches the wall's `notApplicableBorder`.
+  notApplicable: '#3f3f46',
 };
 
 const pct = (n: number, whole: number) => (whole > 0 ? (n / whole) * 100 : 0);

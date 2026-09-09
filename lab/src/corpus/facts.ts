@@ -8,10 +8,11 @@ export const UNKNOWN = 'unknown';
  *  category of its own. */
 export const NO_CATEGORY = '-';
 
-export type Coverage = 'defect' | 'failed' | 'timeout' | 'drawn' | 'untried';
+export type Coverage = 'defect' | 'failed' | 'timeout' | 'drawn' | 'untried'
+  | 'notApplicable';
 
 const COVERAGE_ORDER: Coverage[] =
-  ['defect', 'failed', 'timeout', 'drawn', 'untried'];
+  ['defect', 'failed', 'timeout', 'drawn', 'untried', 'notApplicable'];
 
 /** The label the server put on the cell. Derived in `cells.py` so the wall's
  *  grouping and the dashboard's tallies cannot disagree about what `drawn`

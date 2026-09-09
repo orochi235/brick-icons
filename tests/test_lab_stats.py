@@ -118,6 +118,29 @@ def test_coverage_is_counted_per_slot_over_the_set(conn):
     assert rows["silhouette-naive"]["size"] == 2
 
 
+def test_the_decal_slot_does_not_count_plain_parts_as_never_attempted(conn):
+    """The chart read as mostly undone for decal because every unprinted part
+    landed in `untried`, when the slot was never going to draw them."""
+    _part(conn, "3001")
+    _part(conn, "3001p01", printed=1)
+    _render(conn, "3001p01", "decal")
+    conn.commit()
+    counts = {r["source"]: r["counts"] for r in stats.stats(conn)["coverage"]}
+    assert counts["decal"]["notApplicable"] == 1
+    assert counts["decal"]["untried"] == 0
+    assert counts["decal"]["drawn"] == 1
+
+
+def test_a_slot_that_draws_everything_marks_nothing_inapplicable(conn):
+    _part(conn, "3001")
+    _render(conn, "3001", "silhouette-naive")
+    _part(conn, "3002")
+    conn.commit()
+    counts = stats.stats(conn)["coverage"][0]["counts"]
+    assert counts["notApplicable"] == 0
+    assert counts["untried"] == 1
+
+
 def test_a_slot_reports_every_label_even_at_zero(conn):
     _part(conn, "3001")
     _render(conn, "3001", "silhouette-naive")

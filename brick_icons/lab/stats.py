@@ -10,7 +10,8 @@ import sqlite3
 
 from brick_icons import tags as part_tags
 from brick_icons.db import OUT_OF_SCOPE_CATEGORIES
-from brick_icons.lab.cells import COVERAGE_ORDER, coverage_of, engine_for
+from brick_icons.lab.cells import (COVERAGE_ORDER, coverage_of, engine_for,
+                                   not_applicable)
 
 # Seconds a render took, bucketed the way the census notes talk about it.
 SECS_EDGES = (1.0, 3.0, 10.0, 30.0, 60.0, 120.0)
@@ -139,6 +140,8 @@ def _coverage(conn: sqlite3.Connection, ids: set[str]) -> list[dict]:
     sources = [r["source"] for r in conn.execute(
         "SELECT source, count(*) AS n FROM renders GROUP BY source "
         "ORDER BY n DESC")]
+    printed = {r["id"] for r in conn.execute(
+        "SELECT id FROM parts WHERE printed = 1")}
     out = []
     for source in sources:
         engine = engine_for(source)
@@ -157,7 +160,9 @@ def _coverage(conn: sqlite3.Connection, ids: set[str]) -> list[dict]:
         for pid in ids:
             label = coverage_of(sha="x" if pid in drawn else None,
                                 error=errors.get(pid),
-                                open_defects=1 if pid in flagged else 0)
+                                open_defects=1 if pid in flagged else 0,
+                                inapplicable=not_applicable(
+                                    source, pid in printed, pid in drawn))
             counts[label] += 1
         out.append({"source": source, "engine": engine, "counts": counts,
                     "size": len(ids)})

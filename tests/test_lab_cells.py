@@ -712,3 +712,30 @@ def test_no_part_is_inapplicable_to_a_slot_that_draws_the_whole_library(conn):
     _part(conn, "3001")
     rows = cells.cells(conn, source="silhouette-naive")["cells"]
     assert [r["not_applicable"] for r in rows] == [False]
+
+
+def test_a_plain_part_is_not_owed_by_the_decal_slot(conn):
+    """The coverage chart counted every unprinted part as never attempted, so
+    the decal slot read as mostly undone when most of it was never its work."""
+    _part(conn, "3001")
+    rows = cells.cells(conn, source="decal")["cells"]
+    assert [r["coverage"] for r in rows] == ["notApplicable"]
+
+
+def test_a_decorated_part_the_decal_slot_missed_is_still_untried(conn):
+    conn.execute("INSERT INTO parts (id, title, category, printed, obsolete, "
+                 "status) VALUES ('3001p01', 'Brick with Pattern', 'Brick', "
+                 "1, 0, 'unreviewed')")
+    rows = cells.cells(conn, source="decal")["cells"]
+    assert [r["coverage"] for r in rows] == ["untried"]
+
+
+def test_a_slot_erroring_on_a_part_it_does_not_cover_still_says_so(conn):
+    """`notApplicable` displaces `untried` and nothing else -- burying a real
+    failure under "nothing to draw" would hide the contradiction."""
+    assert cells.coverage_of(sha=None, error="ValueError", open_defects=0,
+                             inapplicable=True) == "failed"
+    assert cells.coverage_of(sha="abc", error=None, open_defects=0,
+                             inapplicable=True) == "drawn"
+    assert cells.coverage_of(sha=None, error=None, open_defects=1,
+                             inapplicable=True) == "defect"
