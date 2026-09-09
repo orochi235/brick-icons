@@ -925,6 +925,11 @@ def _residue_trims(ordered, frags, garea, geoms=None, sil=None,
     members, _ = _merge_members(ordered, frags)
     trims = {}
     for ks in members.values():
+        # Decoration is authored ink, not an overlap leftover: a glyph stroke
+        # at label scale is honestly thinner than the erosion radius, so this
+        # gate ate the print (4162p0z's "Louvre" came out gnawed at 256 px).
+        if any(ordered[j].get("color", 16) != 16 for j in ks):
+            continue
         G = frags[ks[0]] if len(ks) == 1 else \
             geom2d.union_all([frags[j] for j in ks])
         live = geom2d.opened(G, r)
@@ -1562,9 +1567,12 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
             geom = geom2d.difference(geom, drop)
             if geom.is_empty:
                 continue
-        if clip:
+        if clip and f.get("color", 16) == 16:
             # crumb cull (see RESIDUE_CRUMB): per-piece, so thin TIPS of a
-            # wide-bodied piece are untouched
+            # wide-bodied piece are untouched. Decoration is exempt for the
+            # reason given in _residue_trims — and its holes doubly so, a
+            # glyph counter being thinner than the self-stroke on any tile
+            # small enough to read as a label.
             from shapely.geometry import Polygon as _Poly
             er = RESIDUE_CRUMB
             pieces = []
