@@ -42,6 +42,18 @@ slots, `--stream`'s final pass after the job stops is the one to index.
 
 ### 2. Pick the route by where the renders lie
 
+**A tree a job is still writing to** is not an ingest you do afterwards. Start
+`scripts/ingest-watch.py` alongside the launch and the results are in the
+database as they land:
+
+    nohup .venv/bin/python scripts/ingest-watch.py out/slot-occt \
+      --every 300 > out/ingest-watch.log 2>&1 &
+
+It appends rather than rebuilding — only the parts it has not recorded, then a
+bake of the slot — and produces exactly what a rebuild of the same tree would,
+so nothing below has to be undone for it. `render-corpus-batch` step 6b is
+where it belongs in a round.
+
 **A slot under `renders/<source>/`** — `naive`, `occt`, `decal`, `ldview`,
 `reference`, `translucent-*`:
 

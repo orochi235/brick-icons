@@ -173,16 +173,40 @@ run reaches its end having written only error rows.
 Do not start a second `onto fetch` on a task that already has one streaming:
 two streams race each other into the same directory. `pgrep -fl "onto fetch"`.
 
+### 6b. Start the watcher in the same breath as the job
+
+A render job delivers for hours, and results sitting on disk are results
+nobody can query: the wall and every coverage number go on describing the
+corpus as it was before the launch. **Start this when you launch, not when
+somebody asks what came back:**
+
+    nohup .venv/bin/python scripts/ingest-watch.py out/slot-<slot> \
+      --every 300 > out/ingest-watch.log 2>&1 &
+
+It appends — per pass it takes only the parts it has not recorded, then bakes
+the slot — so it is not `census-ingest.sh` and must not be confused for it:
+that one REBUILDS, dropping and reseeding every table from every tree, which
+costs the whole corpus each pass and overwrites what another session ingested
+by hand. Name the trees a job is writing to, several if several jobs are
+running; a finished tree has nothing to add.
+
+What it makes is what a later rebuild would make of the same tree, so the
+rebuild after the job is a no-op rather than a correction.
+
 ### 7. Ingest
 
     onto fetch --stream slot-occt
 
-Then follow `ingest-renders`. A tree with a `SOURCE` file rides the rebuild
-route, because it carries measurements as well as drawings. Let the stream's
-final pass finish first — it is the only one guaranteed to see a tree nobody
-is writing to. For an SVG slot that is cheap -- a half-written one fails its
-parse and the next pass takes it whole -- but a truncated raster is only
-hashed, so `ldview` and `reference` wait for the stream's final pass.
+With the watcher running this is the last mile, not the whole job: let the
+stream's final pass land — the only one guaranteed to see a tree nobody is
+writing to — and the watcher's next pass takes what it brought. For an SVG
+slot a half-written file fails its parse and the next pass takes it whole,
+but a truncated raster is only hashed, so `ldview` and `reference` must wait
+for that final pass before anything indexes them.
+
+Then stop the watcher and follow `ingest-renders` if the tree needs the
+rebuild route for anything the watcher does not carry — part-years, features,
+defects, `attempts`.
 
 ### 8. Report what is owed, not that it finished
 
