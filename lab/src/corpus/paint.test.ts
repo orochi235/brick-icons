@@ -450,9 +450,13 @@ it('strips the kind badges in tag order, system before property', () => {
 
 it('gives the property family one field and each system badge its own', () => {
   const part = cell('a', 0, 'sha-a', { tags: ['duplo', 'magnet', 'printed'] });
-  const [system, ...properties] = stripFor(part, 200);
+  const [system, magnet, printed] = stripFor(part, 200);
   expect(system!.field).not.toEqual(PROPERTY_FIELD);
-  expect(properties.map((b) => b.field)).toEqual([PROPERTY_FIELD, PROPERTY_FIELD]);
+  expect(magnet!.field).toEqual(PROPERTY_FIELD);
+  // printed carries the family's color as its ink instead: its dots are the
+  // printing and the field is the paper under them.
+  expect(printed!.ink).toEqual(PROPERTY_FIELD);
+  expect(printed!.field).not.toEqual(PROPERTY_FIELD);
 });
 
 it('lets electric off the shared field, a bright bolt on black', () => {

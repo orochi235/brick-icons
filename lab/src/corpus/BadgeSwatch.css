@@ -35,8 +35,16 @@
  * goes unstroked and the disc carries the ring. */
 .corpus-badge[data-ring='disc'] { box-shadow: none; }
 
-.corpus-badge[data-ring='disc'] .corpus-badge-disc {
+/* Its own layer over the art, not a shadow on the box under it: the mark is
+ * an <svg> above the disc's own background, so a ring painted there sits
+ * behind the dots -- and printed's dots run to the field's edge. */
+.corpus-badge[data-ring='disc'] .corpus-badge-disc::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
   box-shadow: inset 0 0 0 var(--badge-line) var(--badge-stroke);
+  pointer-events: none;
 }
 
 /* The disc always paints its own field and its own ink: the stadium behind

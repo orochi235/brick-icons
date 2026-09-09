@@ -262,8 +262,10 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
   // The one badge whose ink runs to its own edge, so the ring is what gives
   // it an edge at all: without it the outermost dots are the silhouette and
   // the disc reads as a torn patch rather than a printed one.
-  printed: { tag: 'printed', mark: 'printed', field: PROPERTY_FIELD,
-             ink: 'oklch(1.0000 0 0)', stroke: 'oklch(0.8814 0.0076 260.73)', strokeScale: 0.5,
+  // Reversed: the ink is the dots and the field is the paper under them,
+  // which is the way a screen actually prints.
+  printed: { tag: 'printed', mark: 'printed', field: 'oklch(1.0000 0 0)',
+             ink: PROPERTY_FIELD, stroke: 'oklch(0.8814 0.0076 260.73)', strokeScale: 0.5,
              ringOnDisc: true, labelField: 'oklch(0.8814 0.0076 260.73)', labelInk: PROPERTY_FIELD },
   // One hue in two values: the join reads as a step in a single object,
   // which is what interlocked pieces are. Cyan against orange read as two

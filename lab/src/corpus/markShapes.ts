@@ -281,16 +281,22 @@ function halftone(pitch: number,
   return d;
 }
 
-/** Dots the same size everywhere. A decorated part is a flat tint -- printing
- *  over the whole face -- so the screen renders no tone. `halftone` takes a
- *  radius per dot, so one that does is a function away.
+/** A screen rendering a tone: the dots ramp linearly down the field, fine at
+ *  the top and all but touching at the bottom, which is what a printed
+ *  gradient looks like.
  *
- *  Nearest neighbors sit exactly `pitch` apart, so the dots stay clear of
- *  each other below half of it -- 0.28 against a 0.31 touch, which is a
- *  screen printed heavy rather than a grid of holes.
+ *  Nearest neighbors sit exactly `pitch` apart, so 0.31 is the radius at
+ *  which two dots meet. The ramp stops just under it.
  */
 const PRINT_PITCH = 0.62;
-const printed: MarkShape[] = [{ d: halftone(PRINT_PITCH, () => 0.28) }];
+const DOT_MIN = 0.10;
+const DOT_MAX = 0.30;
+const printed: MarkShape[] = [{
+  d: halftone(PRINT_PITCH, (_x, y) => {
+    const t = (y + FIELD_R) / (2 * FIELD_R);   // 0 at the top, 1 at the bottom
+    return DOT_MIN + (DOT_MAX - DOT_MIN) * Math.min(1, Math.max(0, t));
+  }),
+}];
 
 // Composite: two L-trominoes interlocked into a 2x3 block -- the smallest
 // rectangle two identical pieces can tile, and it says assembled-from-parts
