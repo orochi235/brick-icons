@@ -458,7 +458,11 @@ it('gives the property family one field and each system badge its own', () => {
 it('lets electric off the shared field, a bright bolt on black', () => {
   const [bolt] = stripFor(cell('a', 0, 'sha-a', { tags: ['electric'] }), 200);
   expect(bolt!.field).not.toEqual(PROPERTY_FIELD);
-  expect(bolt!.ink).toEqual('#ffd60a');
+  // The palette is OKLCH, so the claim is about lightness rather than a
+  // literal: gold on black wants the ink far lighter than the field.
+  const lightness = (color: string) => Number(/oklch\(([\d.]+)/.exec(color)![1]);
+  expect(lightness(bolt!.ink)).toBeGreaterThan(0.8);
+  expect(lightness(bolt!.field)).toBeLessThan(0.3);
 });
 
 it('draws a letter at twice the height of a mark in the same disc', () => {

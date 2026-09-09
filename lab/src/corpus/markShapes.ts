@@ -321,18 +321,21 @@ const composite: MarkShape[] = [
   // Each mitre is the diagonal of the WALL_H square where two faces overlap,
   // run from the bend's inner corner to its outer one. The arms overrun the
   // field and the disc clips them.
+  //
+  // Lit from below: the upper face darkest, the middle mid, the lower face
+  // lighter than either.
   { d: poly(through(COMPOSITE_FRAME, [
       0.75, -0.3 - WALL_H, WALL_H, -0.3 - WALL_H,
       -WALL_H, -0.3 + WALL_H, 0.75, -0.3 + WALL_H])),
-    fill: '#1c625d' },
+    fill: 'oklch(0.4523 0.0682 188.18)' },
   { d: poly(through(COMPOSITE_FRAME, [
       WALL_H, -0.3 - WALL_H, WALL_H, 0.3 - WALL_H,
       -WALL_H, 0.3 + WALL_H, -WALL_H, -0.3 + WALL_H])),
-    fill: '#57b3ab' },
+    fill: 'oklch(0.7084 0.0887 187.83)' },
   { d: poly(through(COMPOSITE_FRAME, [
       -0.75, 0.3 + WALL_H, -WALL_H, 0.3 + WALL_H,
       WALL_H, 0.3 - WALL_H, -0.75, 0.3 - WALL_H])),
-    fill: '#1c625d' },
+    fill: 'oklch(0.8705 0.0655 186.39)' }
 ];
 
 // Duplo's d, in the weight its logotype uses: a heavy rounded geometric with a
@@ -465,8 +468,15 @@ const shifted = (groups: number[][], dx: number, dy: number) =>
  *  corner read as lifted off the print rather than as a shape drawn beside
  *  it. The face is laid down before the peel, so the peel occludes it. */
 const FACES: Record<string, MarkShape[]> = {
-  police: [{ d: polys(POLICE_OUTLINES.map((g) => through(POLICE_TILT, g))),
-             rule: 'evenodd' }],
+  police: [
+    // A printed border inside the sticker's edge, the way a die-cut sticker
+    // carries one. Kept well inside FIELD_R so the fold and the field's own
+    // rim stay clear of it -- it is print on the sticker, not the cut line.
+    { d: circle(0, 0, FIELD_R * 0.72), fill: 'none',
+      stroke: 'oklch(0.6300 0.0430 246.00)', width: 0.18 },
+    { d: polys(POLICE_OUTLINES.map((g) => through(POLICE_TILT, g))),
+      rule: 'evenodd' },
+  ],
   flames: shifted(FLAMES, -0.004, -0.002).map((ring, n) => ({
     d: poly(ring), alpha: FLAME_ALPHA[n] ?? 1,
   })),

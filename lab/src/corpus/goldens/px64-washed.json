@@ -161,8 +161,8 @@
       {
         "tag": "technic",
         "mark": "technic",
-        "field": "#1b2a5e",
-        "ink": "#ffffff"
+        "field": "oklch(0.3047 0.0947 268.21)",
+        "ink": "oklch(1.0000 0 0)"
       }
     ],
     "captions": []

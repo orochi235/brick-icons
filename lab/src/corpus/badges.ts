@@ -75,12 +75,18 @@ function pathOf(d: string): Path2D {
  *  disc's own strength the two read as equally loud. */
 export const LABEL_WASH = 0.25;
 
-/** `hex` mixed that far toward white. Only the six-digit form occurs in the
- *  badge records, and anything else is returned untouched rather than
- *  guessed at. */
-export function washToward(hex: string, amount = LABEL_WASH): string {
-  const m = /^#([0-9a-f]{6})$/i.exec(hex);
-  if (!m) return hex;
+/** A badge color let that far toward white. The badge palette is written in
+ *  OKLCH, so this raises lightness and leaves hue and chroma alone -- mixed
+ *  toward white in sRGB, a saturated field shifts hue on the way. A
+ *  six-digit hex is still accepted and mixed the old way. */
+export function washToward(color: string, amount = LABEL_WASH): string {
+  const lch = /^oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\)$/i.exec(color);
+  if (lch) {
+    const l = Number(lch[1]);
+    return `oklch(${(l + (1 - l) * amount).toFixed(4)} ${lch[2]} ${lch[3]})`;
+  }
+  const m = /^#([0-9a-f]{6})$/i.exec(color);
+  if (!m) return color;
   const n = parseInt(m[1]!, 16);
   const mix = (c: number) => Math.round(c + (255 - c) * amount);
   const out = (mix((n >> 16) & 255) << 16) | (mix((n >> 8) & 255) << 8) | mix(n & 255);
@@ -192,7 +198,7 @@ export function labelText(label: string): string {
 /** Multiples of the type size: mark to word, and word to the end of the
  *  field. Exported because `BadgeSwatch` sets the same two as CSS custom
  *  properties, and a second copy of the numbers drifts. */
-export const LABEL_GAP = 0.22;
+export const LABEL_GAP = 0.32;
 export const LABEL_PAD = 0.55;
 
 /** Where the word starts. A badge with nothing in its disc -- a status like
