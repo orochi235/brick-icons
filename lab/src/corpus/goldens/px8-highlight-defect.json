@@ -131,8 +131,7 @@
     "alpha": 0.25,
     "badges": [],
     "strip": [],
-    "captions": [],
-    "wash": 0.5
+    "captions": []
   },
   {
     "kind": "sprite",
@@ -164,8 +163,7 @@
     "alpha": 0.25,
     "badges": [],
     "strip": [],
-    "captions": [],
-    "wash": 0.5
+    "captions": []
   },
   {
     "kind": "fill",

@@ -590,19 +590,31 @@ it('centers a corner badge on the caption beside it, not on its own radius', () 
 });
 
 it('washes a retired cell rather than baking it a ground of its own', () => {
+  const washing = { ...DEFAULT_APPEARANCE, washRetired: true };
   const [plain] = paintCommands({
     cells: [cell('a', 0, 'sha-a')], rects, visible: [0],
     cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest,
     vector: new Map([['a', {} as CanvasImageSource]]),
+    appearance: washing,
   });
   expect(plain).toMatchObject({ ground: thumbGround(), wash: undefined });
   const [retired] = paintCommands({
     cells: [cell('b', 1, 'sha-b', { tags: ['retired'] })], rects, visible: [0],
     cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest,
     vector: new Map([['b', {} as CanvasImageSource]]),
+    appearance: washing,
   });
   expect(retired).toMatchObject({ ground: thumbGround() });
   expect((retired as { wash?: number }).wash).toBeGreaterThan(0);
+});
+
+it('leaves a retired cell alone until the wash is switched on', () => {
+  const [retired] = paintCommands({
+    cells: [cell('b', 1, 'sha-b', { tags: ['retired'] })], rects, visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest,
+    vector: new Map([['b', {} as CanvasImageSource]]),
+  });
+  expect(retired).toMatchObject({ wash: undefined });
 });
 
 it('paints a fault we decided to live with in its own color, under every live one', () => {

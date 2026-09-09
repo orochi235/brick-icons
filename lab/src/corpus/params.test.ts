@@ -47,15 +47,19 @@ const PRE_TASK_LITERALS: Params = {
   // before there was a switch, so the switch has to arrive already flipped.
   showBadges: true,
   showCaptions: true,
+  // Post-snapshot, and off: the wash is a reading aid, so a wall of drawings
+  // starts unwashed and asks for it.
+  washRetired: false,
 
   thickBorderFactor: 0.18,
   thinBorderFactor: 0.09,
   maxBorderPx: 6,
   dimAlpha: 0.25,
   // Post-snapshot, like the out-of-scope fill: the wash replaced a ground
-  // that used to be baked into the sprites. Deepened from 0.35 on request --
-  // a retired part was not reading as retired across a wall.
-  retiredWash: 0.5,
+  // that used to be baked into the sprites. Deepened twice on request, 0.35
+  // to 0.5 to 0.75 -- it now reads across a wall, and asking for it at all
+  // is what `washRetired` is for.
+  retiredWash: 0.75,
 
   dragThresholdPx: 4,
   levelUpHysteresis: 1.5,

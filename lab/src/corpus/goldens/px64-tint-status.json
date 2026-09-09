@@ -134,8 +134,7 @@
       }
     ],
     "strip": [],
-    "captions": [],
-    "wash": 0.5
+    "captions": []
   },
   {
     "kind": "sprite",
@@ -190,8 +189,7 @@
       }
     ],
     "strip": [],
-    "captions": [],
-    "wash": 0.5
+    "captions": []
   },
   {
     "kind": "fill",

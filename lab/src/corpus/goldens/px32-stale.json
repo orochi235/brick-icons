@@ -124,8 +124,7 @@
     "ground": "#ffffff",
     "badges": [],
     "strip": [],
-    "captions": [],
-    "wash": 0.5
+    "captions": []
   },
   {
     "kind": "sprite",
@@ -155,8 +154,7 @@
     "ground": "#ffffff",
     "badges": [],
     "strip": [],
-    "captions": [],
-    "wash": 0.5
+    "captions": []
   },
   {
     "kind": "fill",

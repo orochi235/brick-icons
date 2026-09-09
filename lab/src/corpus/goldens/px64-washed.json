@@ -54,17 +54,19 @@
     "slash": true
   },
   {
-    "kind": "fill",
+    "kind": "sprite",
     "dx": 0,
     "dy": 68,
     "dw": 64,
     "dh": 64,
-    "fill": "#453c27",
-    "border": "#daa520",
-    "borderWidth": 6,
-    "shape": "square",
-    "captions": [],
-    "slash": true
+    "sx": 2,
+    "sy": 38,
+    "sw": 32,
+    "sh": 32,
+    "ground": "#daa520",
+    "badges": [],
+    "strip": [],
+    "captions": []
   },
   {
     "kind": "sprite",
@@ -132,7 +134,8 @@
       }
     ],
     "strip": [],
-    "captions": []
+    "captions": [],
+    "wash": 0.75
   },
   {
     "kind": "sprite",
@@ -187,7 +190,8 @@
       }
     ],
     "strip": [],
-    "captions": []
+    "captions": [],
+    "wash": 0.75
   },
   {
     "kind": "fill",

@@ -49,6 +49,7 @@ interface FixedParams {
 
   showBadges: boolean;
   showCaptions: boolean;
+  washRetired: boolean;
 
   thickBorderFactor: number;
   thinBorderFactor: number;
@@ -86,12 +87,13 @@ export const DEFAULT_PARAMS: Params = {
 
   showBadges: true,
   showCaptions: true,
+  washRetired: false,
 
   thickBorderFactor: 0.18,
   thinBorderFactor: 0.09,
   maxBorderPx: 6,
   dimAlpha: 0.25,
-  retiredWash: 0.5,
+  retiredWash: 0.75,
 
   dragThresholdPx: 4,
   levelUpHysteresis: 1.5,
@@ -135,6 +137,8 @@ export const CELL_FIELDS: ConfigField[] = [
     default: DEFAULT_PARAMS.showBadges },
   { key: 'showCaptions', label: 'Captions', type: 'checkbox',
     default: DEFAULT_PARAMS.showCaptions },
+  { key: 'washRetired', label: 'Wash retired', type: 'checkbox',
+    default: DEFAULT_PARAMS.washRetired },
 ];
 
 export const APPEARANCE_FIELDS: ConfigField[] = [
@@ -149,7 +153,7 @@ export const APPEARANCE_FIELDS: ConfigField[] = [
     default: DEFAULT_PARAMS.maxBorderPx, min: 1, max: 20, step: 1 },
   { key: 'dimAlpha', label: 'Dim alpha', type: 'slider',
     default: DEFAULT_PARAMS.dimAlpha, min: 0, max: 1, step: 0.05 },
-  { key: 'retiredWash', label: 'Retired wash', type: 'slider',
+  { key: 'retiredWash', label: 'Retired wash strength', type: 'slider',
     default: DEFAULT_PARAMS.retiredWash, min: 0, max: 1, step: 0.05 },
 ];
 

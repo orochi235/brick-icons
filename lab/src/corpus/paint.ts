@@ -51,6 +51,9 @@ export interface Appearance {
    *  want when judging the drawings rather than reading the corpus. */
   showBadges: boolean;
   showCaptions: boolean;
+  /** Off, a retired part draws like any other. The wash is a reading aid for
+   *  the corpus, not a property of the drawing. */
+  washRetired: boolean;
 }
 
 // A label narrower than its own text is ink, not a word.
@@ -71,6 +74,7 @@ export const DEFAULT_APPEARANCE: Appearance = {
   retiredWash: DEFAULT_PARAMS.retiredWash,
   showBadges: DEFAULT_PARAMS.showBadges,
   showCaptions: DEFAULT_PARAMS.showCaptions,
+  washRetired: DEFAULT_PARAMS.washRetired,
 };
 
 // Switched off, every cell shares one empty -- `Wall` memoizes on the command
@@ -451,7 +455,8 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
     const strip = appearance.showBadges ? stripFor(cell, dw) : NO_BADGES;
     const captions = appearance.showCaptions
       ? captionsFor(cell, dw, CAPTION_ON_THUMB) : NO_CAPTIONS;
-    const wash = isRetired(cell) ? appearance.retiredWash : undefined;
+    const wash = appearance.washRetired && isRetired(cell)
+      ? appearance.retiredWash : undefined;
     const vectored = tint === 'status' ? vector?.get(cell.id) : undefined;
     const image = tint === 'status' ? (vectored ?? loose?.get(cell.id)) : undefined;
     if (image) {

@@ -395,8 +395,10 @@ export function CorpusWall({ client }: { client: LabClient }) {
     maxBorderPx: params.maxBorderPx, dimAlpha: params.dimAlpha,
     retiredWash: params.retiredWash,
     showBadges: params.showBadges, showCaptions: params.showCaptions,
+    washRetired: params.washRetired,
   }), [params.thickBorderFactor, params.thinBorderFactor, params.maxBorderPx,
-       params.dimAlpha, params.retiredWash, params.showBadges, params.showCaptions]);
+       params.dimAlpha, params.retiredWash, params.showBadges, params.showCaptions,
+       params.washRetired]);
 
   return (
     <LabShell title="brick-icons corpus"
