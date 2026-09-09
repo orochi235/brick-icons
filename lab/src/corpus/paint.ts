@@ -1,6 +1,7 @@
 import { worldToScreen, viewToTransform, type View } from '@weasel-js/core';
 import type { Band, Rect } from '@lab/corpus/layout';
-import { CELL_STATES, type CellState, type CellStyle, type Palette } from '@lab/corpus/palette';
+import { CELL_STATES, STATE_SHAPE,
+         type CellState, type CellStyle, type Palette } from '@lab/corpus/palette';
 import { BY_PRECEDENCE, type StateFacts } from '@lab/corpus/states';
 import { DEFAULT_PARAMS } from '@lab/corpus/params';
 import { hasTile, sourceBox } from '@lab/corpus/sheet';
@@ -174,6 +175,14 @@ export interface CellBadge {
    *  rather than a frame. The ring is drawn inside `radius` either way, so
    *  this changes the line and never the footprint. */
   strokeScale?: number;
+  /** The ring goes round the disc rather than the whole field. For a badge
+   *  whose ring gives its artwork an edge: with a word beside it, a ring
+   *  round the stadium frames the name too, which is not what it is for. */
+  ringOnDisc?: boolean;
+  /** The field and word colors the labelled form uses, where wearing a name
+   *  wants different ones from the bare disc. Default to `field` and `ink`. */
+  labelField?: string;
+  labelInk?: string;
   /** A second ink, for the one part of a mark that is not the mark's own
    *  material -- the paint on the brush. */
   accent?: string;
@@ -246,7 +255,8 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
   // it an edge at all: without it the outermost dots are the silhouette and
   // the disc reads as a torn patch rather than a printed one.
   printed: { tag: 'printed', mark: 'printed', field: PROPERTY_FIELD,
-             ink: '#ffffff', stroke: '#ffffff', strokeScale: 0.5 },
+             ink: '#ffffff', stroke: '#ffffff', strokeScale: 0.5,
+             ringOnDisc: true, labelField: '#ffffff', labelInk: PROPERTY_FIELD },
   composite: { tag: 'composite', mark: 'composite', field: PROPERTY_FIELD,
                ink: '#22c8dc', accent: '#f5a623' },
 };
@@ -476,7 +486,7 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
       continue;
     }
     out.push({ kind: 'fill', dx, dy, dw, dh, fill: style.fill, border, borderWidth,
-               shape: state === 'outOfScope' ? 'circle' : 'square',
+               shape: STATE_SHAPE[state],
                glyph: state === 'outOfScope' ? glyphFor(cell, dw) : undefined,
                mark: state === 'outOfScope' ? markFor(cell) : undefined,
                // Not on an out-of-scope cell: it is deliberately the quietest

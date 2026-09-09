@@ -31,6 +31,17 @@
 .corpus-badge[data-disc='false'] { padding-left: var(--badge-pad); }
 .corpus-badge[data-label='true'] { padding-right: var(--badge-pad); }
 
+/* A ring that edges the artwork rather than framing the name: the stadium
+ * goes unstroked and the disc carries the ring, on its own field. */
+.corpus-badge[data-ring='disc'] { box-shadow: none; }
+
+.corpus-badge[data-ring='disc'] .corpus-badge-disc {
+  background: var(--badge-disc-field);
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 var(--badge-line) var(--badge-stroke);
+  color: var(--badge-mark-ink);
+}
+
 .corpus-badge-disc {
   position: relative;
   flex: 0 0 var(--badge-box);

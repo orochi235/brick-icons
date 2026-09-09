@@ -27,11 +27,15 @@ export function BadgeSwatch({ badge, label, box = SWATCH_BOX, className }:
   const shapes = badge.mark ? MARK_SHAPES[badge.mark] : undefined;
   const disc = shapes != null || badge.text != null;
   const cut = cutMask(shapes, box, radius * 0.66 * scale);
+  const labelled = label != null;
+  const field = labelled ? badge.labelField ?? badge.field : badge.field;
   const vars = {
     '--badge-box': `${box}px`,
-    '--badge-field': badge.field,
+    '--badge-field': field,
+    '--badge-disc-field': badge.field,
     '--badge-stroke': badge.stroke ?? badge.field,
-    '--badge-ink': badge.ink,
+    '--badge-ink': labelled ? badge.labelInk ?? badge.ink : badge.ink,
+    '--badge-mark-ink': badge.ink,
     '--badge-line': `${ringWidth(radius, badge)}px`,
     '--badge-face': BADGE_FACE,
     '--badge-weight': `${badge.weight ?? BADGE_WEIGHT}`,
@@ -49,6 +53,7 @@ export function BadgeSwatch({ badge, label, box = SWATCH_BOX, className }:
   return (
     <span className={`corpus-badge ${className ?? ''}`} style={vars}
           data-disc={disc} data-label={label != null} data-cut={cut != null}
+          data-ring={badge.ringOnDisc ? 'disc' : 'field'}
           aria-hidden="true">
       {disc && (
         <span className="corpus-badge-disc">

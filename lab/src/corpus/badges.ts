@@ -238,11 +238,28 @@ function drawBadgeDirect(ctx: CanvasRenderingContext2D, badge: CellBadge,
   } else {
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
   }
-  ctx.fillStyle = badge.field;
+  const labelled = at.label != null;
+  const field = labelled ? badge.labelField ?? badge.field : badge.field;
+  ctx.fillStyle = field;
   ctx.fill();
   ctx.lineWidth = line;
   ctx.strokeStyle = badge.stroke ?? badge.field;
-  ctx.stroke();
+  // The ring either edges the artwork or frames the whole field. On the disc
+  // it is stroked after the disc's own fill, below.
+  if (!badge.ringOnDisc) ctx.stroke();
+  if (labelled && field !== badge.field) {
+    // The disc keeps its own field under the artwork while the stadium
+    // carries the name on another.
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fillStyle = badge.field;
+    ctx.fill();
+  }
+  if (badge.ringOnDisc) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
   ctx.fillStyle = badge.ink;
   const mark = badge.mark ? MARK_SHAPES[badge.mark] : undefined;
   if (mark) {
@@ -272,6 +289,7 @@ function drawBadgeDirect(ctx: CanvasRenderingContext2D, badge: CellBadge,
   }
   if (at.label) {
     ctx.font = labelFont(badge, size);
+    ctx.fillStyle = badge.labelInk ?? badge.ink;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
     // Off the ink box, not the em box: the field is a stadium and the word
