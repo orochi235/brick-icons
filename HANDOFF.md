@@ -1,61 +1,84 @@
-## Baton, 2026-09-09 afternoon: two occt fills in flight, and `runs.kind` designed but unbuilt
+## Baton, 2026-09-09 evening: occt filling on two nodes, and six asks queued unbuilt
 
-On `main` in the shared checkout. Today's commits run from the decal cull fix
-to the `runs.kind` write-up — `git log --oneline` from `908f80b` exclusive.
-Committed, unpushed. Other sessions hold `lab/src/corpus/Lightbox.*` and
-`tests/goldens/defects.toml` in this same tree, so stage explicit paths and
-read `git diff --cached` before every commit.
+On `main` in the shared checkout, nothing pushed (`git log --oneline @{u}..HEAD`
+counts it). Other sessions hold `lab/src/corpus/Lightbox.*` and
+`tests/goldens/defects.toml` in this same tree — stage explicit paths and read
+`git diff --cached` before every commit.
 
-### Two fleet jobs are filling the occt slot, and a watcher is ingesting them live
+### In flight right now
 
 `slot-occt-r1` on msb-uai and `slot-occt-r2` on studio, together the whole
-never-tried remainder of the slot. **They do not overlap** — r2's list was
-built by subtracting r1's parts from the full owed list and the intersection
-was checked empty before launch. `onto jobs` for state; deadlines are 4:53 PM
-and 10:09 PM.
+never-tried remainder of the occt slot. **They do not overlap** — r2's list
+was built by subtracting r1's parts from the full owed list and the
+intersection was checked empty before launch. Deadlines 4:53 PM and 10:09 PM;
+`onto jobs` for the truth.
 
 `scripts/ingest-watch.py out/slot-occt out/slot-occt-r2 --every 300` is
-running against `out/ingest-watch.log`, folding results in as they land. It
-appends — it is NOT `census-ingest.sh`, which rebuilds. New this session, with
-both skills now starting it at launch.
+running against `out/ingest-watch.log`, appending results as they land and
+baking the slot. It is NOT `census-ingest.sh` — that rebuilds. New today; both
+render skills now start it at launch.
 
-**When they land:** let each `onto fetch --stream` do its final quiet pass,
-let the watcher take one more pass, then stop the watcher, then re-run
-`scripts/slot-coverage.py` and report asked-for / drawn / failed / missing.
+**When they land:** let each `onto fetch --stream` finish its quiet pass, give
+the watcher one more, stop the watcher, then `scripts/slot-coverage.py` and
+report asked-for / drawn / failed / missing.
 
-### `runs.kind` is designed and NOT built
+### Six things asked for and not built
 
-`docs/runs-are-just-runs.md`. It says the same thing in its own opening lines.
-Mike asked for it, and it waits on the two jobs because the watcher is writing
-every five minutes and that is the wrong hour to change what a run row means.
-**This is the next task.** Everything it needs — the two queries that key on
-`kind`, the replacements, the migration traps — is in the doc.
+In the order they were asked. None is started.
+
+1. **Drop `runs.kind`** — `docs/runs-are-just-runs.md`, complete, waits only
+   on the jobs. This is the next task.
+2. **A per-part `touched_at`.** Track when each part last changed so the wall
+   can flag what needs another look. It also replaces a stopgap I shipped
+   today: `cells.cells` builds its delta from a two-part version, the newest
+   render plus a fingerprint over every judged part, because a defect has no
+   timestamp to compare. `touched_at` makes that one comparison. Schema, so it
+   waits for the same quiet hour as (1) — put it in the same doc.
+3. **A Reference/Legacy/OCCT toggle beside the slot dropdown,** with that
+   dimension taken out of the slot list itself.
+4. **Hide the decal slot in a lightbox where it does not apply** — a plain
+   brick has no decal and the slot should not be offered.
+5. **Base parts never issued unprinted inherit years from their prints.**
+   `11778` (Animal Eagle Wing Left) has no year data at all; its prints
+   `11778p01` and `11778p02` are 2013–2014 and 2018–2018. **467 unprinted,
+   non-obsolete parts are in this position.** Mike said "intersection", but the
+   literal intersection of those two ranges is empty — he must mean the
+   envelope, 2013–2018, and it is worth confirming in one line before
+   building. Inherit YEARS ONLY, never `sets` or `colors`: the reverse
+   direction is a known trap, `3069bp1f` read as 5,766 sets and `popular`
+   because the plain tile it is printed on is. `part_years.matched` is the
+   provenance column and its vocabulary is named / keywords / exact / design /
+   base / sheet — an inherited range needs its own value there so nothing
+   mistakes it for a lookup.
+6. **LDraw 2026-08 is not ingested and nothing has been fetched into
+   `vendor/ldraw`.** We are complete at 2026-07 (all 356 of its part files are
+   present). 2026-08 adds **144 parts we do not have** — 121 stickers, 5
+   printed, 18 plain moulds — plus 72 new subparts, 3 primitives, and
+   revisions to 33 parts we already hold, so it is not purely additive. The
+   two update archives are in this session's scratchpad and will vanish;
+   re-fetch from `library.ldraw.org/library/updates/lcad2608.zip`. Use the
+   `ingest-ldraw` skill and read its first step before downloading anything.
 
 ### Traps this session paid for
 
-**studio does not push job output home.** It measured 73 parts with zero files
-delivered, and `onto deliver --at items` did not wake it either. `onto fetch
---stream <task>` works and is what both jobs are using. msb-uai pushes fine, so
-it is studio-specific.
+**studio does not push job output home.** It measured 73 parts with zero
+files delivered, and `onto deliver --at items` did not wake it. `onto fetch
+--stream <task>` works and is what both jobs use. msb-uai pushes fine.
 
 **`outline-flat3__32062` is drifted in `tests/goldens/hashes.txt` and it is
-not ours.** A control worktree at clean `908f80b` reproduces the drifted hash;
-the freeze went stale under the shade.py commits of Sep 8 evening
-(`bbc6436`, `513f5ea`, `a87b422`). Do not refreeze it as if it were yours —
-it belongs to whoever made those. Only `outline-flat3__4740p03` was refrozen,
-and a control proved that one was ours.
+not ours.** A control worktree at clean `908f80b` reproduces the drifted
+hash — the freeze went stale under Sep 8 evening's shade.py commits
+(`bbc6436`, `513f5ea`, `a87b422`). Do not refreeze it as if it were yours.
+Only `outline-flat3__4740p03` was refrozen, and a control proved that one was.
 
-**Both nodes needed `onto sync -force`,** each holding uncommitted peer work
-that a sync would have deleted — the same `lab/ab.html` + `abBadges.tsx` +
-`abOldBadges.ts` experiment on both, plus `scripts/engine-diff-census.py` and
-`shards.txt` on msb-uai, `scripts/ldraw-hash.py` and `tests/test_ldraw_hash.py`
-on studio. All fetched off first and parked in `out/rescued-from-studio/` and
-`out/rescued-from-uai/` (gitignored, so no sync can take them). They want an
-owner or a delete.
+**Both nodes needed `onto sync -force`,** each holding uncommitted peer work a
+sync would have deleted. All of it was fetched off first and parked in
+`out/rescued-from-studio/` and `out/rescued-from-uai/` (gitignored). It wants
+an owner or a delete.
 
-**`npx tsc -b --noEmit` reuses a cached build state and can report clean on a
-broken tree.** `npm run build` is the gate; run it BEFORE the commit, not in
-the same command.
+**`npx tsc -b --noEmit` reuses a cached build state and reported clean on a
+tree `npm run build` then rejected.** Run the build as its own step, before
+the commit, never in the same command.
 
 ## Baton, 2026-09-08 evening: decals are mirrored, and one legend class is designed but unbuilt
 
