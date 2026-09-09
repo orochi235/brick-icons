@@ -336,8 +336,9 @@ it('holds its level through a slot change, so a zoomed-in wall stays zoomed in',
     const { container } = render(<CorpusWall client={twoSlots} />);
     await waitFor(() => expect(container.querySelector('canvas')).toBeTruthy());
 
-    act(() => { fireEvent.click(screen.getByRole('button', { name: /Slot/ })); });
-    fireEvent.click(screen.getByRole('option', { name: 'silhouette-occt (2)' }));
+    // The two slots differ by engine, which the toolbar asks with its
+    // segmented Engine control rather than the facet dropdown.
+    fireEvent.click(screen.getByRole('radio', { name: 'OCCT' }));
     // A loose thumb for the new slot means the wall has actually swapped to
     // it -- those are keyed on the drawn slot, not the selected one.
     await waitFor(() => expect(images.srcs.some(
@@ -506,22 +507,34 @@ it('picks up a slot that appears after the page is open, without moving off your
   const growing = { ...client, corpusSources: () => Promise.resolve({ sources: slots }) };
   const { container } = render(<CorpusWall client={growing} />);
   await findCanvas(container);
-  const trigger = () => screen.getByRole('button', { name: /Slot/ });
-  await waitFor(() => expect(trigger()).toBeTruthy());
+  await waitFor(() => expect(screen.getByRole('radio', { name: 'Legacy' })).toBeTruthy());
 
+  // A slot in a family nobody had drawn in arrives as a new Engine segment.
   slots = [{ source: 'ldview', n: 9 }, { source: 'silhouette-naive', n: 2 }];
   await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+  await waitFor(() => expect(screen.getAllByRole('radio').map((r) => r.textContent))
+    .toEqual(['Reference', 'Legacy']));
 
   // ldview now sorts first, but the wall stays on what was already open.
-  expect(trigger().textContent).toContain('silhouette-naive');
+  expect(screen.getByRole('radio', { name: 'Legacy' }).getAttribute('aria-checked'))
+    .toBe('true');
+
+  // One in a family is no choice, so the facet dropdown appears only once
+  // Legacy has a second slot to offer.
+  expect(screen.queryByRole('button', { name: /Slot/ })).toBeNull();
+  slots = [...slots, { source: 'white-naive', n: 1 }];
+  await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+  const trigger = () => screen.getByRole('button', { name: /Slot/ });
+  await waitFor(() => expect(trigger()).toBeTruthy());
 
   // The Select builds its rows in a popover, so the menu is read by opening
   // it -- and an open one hides the rest of the page from the a11y tree, so
   // the trigger is read before this and not after.
+  expect(trigger().textContent).toContain('silhouette');
   act(() => { fireEvent.click(trigger()); });
-  // The rows join name and count with a non-breaking space.
+  // The rows join facet and count with a non-breaking space.
   await waitFor(() => expect(screen.getAllByRole('option')
     .map((o) => o.textContent?.replace(/\u00a0/g, ' ')))
-    .toEqual(['ldview (9)', 'silhouette-naive (2)']));
+    .toEqual(['silhouette (2)', 'white (1)']));
   vi.useRealTimers();
 });

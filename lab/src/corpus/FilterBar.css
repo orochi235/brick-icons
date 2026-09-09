@@ -9,7 +9,18 @@
    the end. The popover then takes the trigger's width, so the min-width here
    is really the menu's. `width: fit` does both in @weasel-js/ui 1.4.1; until
    the lab is on it, the row does the sizing. */
-.corpus-bar > * { flex: 0 0 auto; width: max-content; min-width: 15rem; }
+.corpus-bar__slot { flex: 0 0 auto; width: max-content; min-width: 15rem; }
+
+/* The engine toggle lands against the page nav's right edge, and both are
+   segmented rows -- given the nav's own skin (`lab-nav-alike`) it read as
+   four more places to go, so it does not wear it. The space is what separates
+   them instead. */
+.corpus-bar__engine { flex: 0 0 auto; width: max-content; margin-inline-start: 0.5rem; }
+
+/* The kit's segments are `flex: 1 1 0` with `overflow: hidden` -- equal
+   shares of the track whatever the labels measure -- and `Reference` lost its
+   last letter to `OCCT`'s slack. */
+.corpus-bar__engine [class*='_segment_'] { flex: 0 0 auto; }
 
 /* Not scoped to .corpus-bar: the listbox is portaled out of it, and the
    trigger and its rows have to read the same. Oswald tops out at 700 -- it
