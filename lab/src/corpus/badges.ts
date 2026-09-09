@@ -70,7 +70,7 @@ function pathOf(d: string): Path2D {
   return path;
 }
 
-/** How far the labelled field is let down toward white. The disc is the
+/** How far the labeled field is let down toward white. The disc is the
  *  badge; the stadium behind its name is a place to put the word, and at the
  *  disc's own strength the two read as equally loud. */
 export const LABEL_WASH = 0.25;
@@ -100,6 +100,13 @@ export function washToward(color: string, amount = LABEL_WASH): string {
  */
 export function ringWidth(radius: number, badge: CellBadge): number {
   return Math.max(1, radius * 0.16 * (badge.strokeScale ?? 1));
+}
+
+/** How far out the mark is allowed to run. Shared with `BadgeSwatch`, whose
+ *  SVG clips the same artwork -- the two rasterize differently and have to
+ *  cut in the same place. */
+export function markClip(radius: number, badge: CellBadge): number {
+  return badge.ringOnDisc ? radius - ringWidth(radius, badge) : radius;
 }
 
 /** Fill and stroke one mark's pieces into a canvas.
@@ -277,20 +284,32 @@ function drawBadgeDirect(ctx: CanvasRenderingContext2D, badge: CellBadge,
   } else {
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
   }
-  const labelled = at.label != null;
-  const field = labelled
+  const labeled = at.label != null;
+  const field = labeled
     ? badge.labelField ?? washToward(badge.field) : badge.field;
   ctx.fillStyle = field;
   ctx.fill();
   ctx.lineWidth = line;
   // Defaults to the field it is drawn on, washed or not, so letting the
-  // labelled field down does not hand every badge a visible outline.
+  // labeled field down does not hand every badge a visible outline.
   ctx.strokeStyle = badge.stroke ?? field;
-  // The ring either frames the whole field or edges the artwork. On the disc
-  // it is stroked last, over the mark: printed's dots run to the field's edge
-  // and would otherwise sit on top of the ring meant to contain them.
+  // The ring either frames the whole field or edges the artwork.
   if (!badge.ringOnDisc) ctx.stroke();
-  if (labelled && field !== badge.field) {
+  if (badge.ringOnDisc) {
+    // Two filled discs, never a stroke over the field's own edge. A stroke
+    // antialiases in the same pixels the fill under it already antialiased,
+    // and its partial coverage cannot hide partial coverage: what survives
+    // is a·ring + (1-a)·a·field, a rim of the field's color leaking round
+    // the whole badge. Printed's field is white, so it leaked hardest.
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fillStyle = badge.stroke ?? badge.field;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx, cy, markClip(radius, badge), 0, Math.PI * 2);
+    ctx.fillStyle = badge.field;
+    ctx.fill();
+  } else if (labeled && field !== badge.field) {
     // The disc keeps its own field under the artwork while the stadium
     // carries the name on another.
     ctx.beginPath();
@@ -303,9 +322,12 @@ function drawBadgeDirect(ctx: CanvasRenderingContext2D, badge: CellBadge,
   if (mark) {
     ctx.save();
     // Clipped to its own disc, so a mark may run off the edge of the field
-    // without spilling onto the cell behind it.
+    // without spilling onto the cell behind it. Inside the ring where there
+    // is one on the disc: cut at the same radius, a dot's antialiased edge
+    // and the ring's share the silhouette's pixels and neither reaches full
+    // coverage, which reads as the badge going transparent at the rim.
     ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.arc(cx, cy, markClip(radius, badge), 0, Math.PI * 2);
     ctx.clip();
     ctx.translate(cx, cy);
     const m = radius * 0.66 * (badge.scale ?? 1);

@@ -35,15 +35,22 @@
  * goes unstroked and the disc carries the ring. */
 .corpus-badge[data-ring='disc'] { box-shadow: none; }
 
-/* Its own layer over the art, not a shadow on the box under it: the mark is
- * an <svg> above the disc's own background, so a ring painted there sits
- * behind the dots -- and printed's dots run to the field's edge. */
-.corpus-badge[data-ring='disc'] .corpus-badge-disc::after {
+/* Two filled circles, never a ring laid over the field's own edge: an inset
+ * shadow antialiases in the same pixels the background under it already
+ * antialiased, and partial coverage cannot hide partial coverage -- a·ring +
+ * (1-a)·a·field left a rim of the field leaking round the whole disc. So the
+ * disc IS the ring, and the field is a smaller circle inside it. */
+.corpus-badge[data-ring='disc'] .corpus-badge-disc {
+  background: var(--badge-stroke);
+}
+
+/* Before the art, so it paints under the mark rather than over it. */
+.corpus-badge[data-ring='disc'] .corpus-badge-disc::before {
   content: '';
   position: absolute;
-  inset: 0;
+  inset: var(--badge-line);
   border-radius: 50%;
-  box-shadow: inset 0 0 0 var(--badge-line) var(--badge-stroke);
+  background: var(--badge-disc-field);
   pointer-events: none;
 }
 

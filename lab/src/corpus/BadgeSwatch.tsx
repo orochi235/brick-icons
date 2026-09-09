@@ -1,6 +1,6 @@
 import { useId } from 'react';
 import { BADGE_FACE, BADGE_WEIGHT, LABEL_GAP, LABEL_PAD, LABEL_WEIGHT,
-  markInk, ringWidth, washToward } from '@lab/corpus/badges';
+  markClip, markInk, ringWidth, washToward } from '@lab/corpus/badges';
 import { MARK_SHAPES, type MarkShape } from '@lab/corpus/markShapes';
 import type { CellBadge } from '@lab/corpus/paint';
 import '@lab/corpus/BadgeSwatch.css';
@@ -76,13 +76,15 @@ function BadgeArt({ badge, shapes, box }:
   const id = useId();
   const radius = box / 2;
   // The mark's unit box: 1 unit is 0.66 of the radius, so a mark may run out
-  // past the field's edge, where the disc clips it.
+  // past the field's edge, where the disc clips it -- inside the ring, where
+  // the disc carries one, so the rim is the ring's own edge and not a row of
+  // half-covered dots.
   const m = radius * 0.66 * (badge.scale ?? 1);
   return (
     <svg className="corpus-badge-art" viewBox={`0 0 ${box} ${box}`}
          xmlns="http://www.w3.org/2000/svg" focusable="false">
       <clipPath id={id} clipPathUnits="userSpaceOnUse">
-        <circle cx={radius} cy={radius} r={radius} />
+        <circle cx={radius} cy={radius} r={markClip(radius, badge)} />
       </clipPath>
       <g clipPath={`url(#${id})`}>
         <g transform={`translate(${radius} ${radius}) scale(${m})`}>
