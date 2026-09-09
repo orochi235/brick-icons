@@ -627,3 +627,21 @@ def test_part_route_lists_its_slots_in_the_module_s_own_order(tmp_path):
 
     body = client.get("/api/corpus/part/3001").json()
     assert [s["source"] for s in body["slots"]] == ["occt", "ldview", "white-occt"]
+
+
+def test_ingest_runs_route_lists_the_ingests(tmp_path):
+    from brick_icons import db
+    conn = db.connect(tmp_path / "corpus.db")
+    run = db.start_run(conn, "store", {"dir": "out/store"}, "abc")
+    conn.execute("INSERT INTO attempts (run_id, part_id, source, state, secs) "
+                 "VALUES (?, '3001', 'decal', 'stored', 1.0)", (run,))
+    conn.commit()
+    conn.close()
+    client = TestClient(lab_app.create_app(
+        cache_root=tmp_path / "cache", corpus_db=tmp_path / "corpus.db"))
+    runs = client.get("/api/ingest/runs").json()["runs"]
+    assert runs[0]["kind"] == "store"
+    assert runs[0]["counts"] == {"stored": 1}
+    body = client.get(f"/api/ingest/runs/{run}/attempts").json()
+    assert [r["part_id"] for r in body["rows"]] == ["3001"]
+    assert body["total"] == 1

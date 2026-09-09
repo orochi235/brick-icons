@@ -21,8 +21,8 @@ from .. import features
 from .. import tags
 from ..config import load_config
 from . import (cache, cells, corpus, decal, defects, diff, findings,
-               goldens_status, jobs, partindex, reference, runner, schema, sizes,
-               stats)
+               goldens_status, ingest, jobs, partindex, reference, runner,
+               schema, sizes, stats)
 from .. import db as corpus_db_module
 
 # One entry per `db.RENDER_SUFFIXES`: a slot's renders are whatever the engine
@@ -332,6 +332,25 @@ def create_app(root: Path | str = ".",
             return {"sources": [dict(r) for r in conn.execute(
                 "SELECT source, count(*) AS n FROM renders "
                 "GROUP BY source ORDER BY n DESC")]}
+        finally:
+            conn.close()
+
+    @app.get("/api/ingest/runs")
+    def get_ingest_runs():
+        """Every ingest, newest first, each with its tally of attempts."""
+        conn = corpus_conn()
+        try:
+            return {"runs": ingest.runs(conn)}
+        finally:
+            conn.close()
+
+    @app.get("/api/ingest/runs/{run_id}/attempts")
+    def get_ingest_attempts(run_id: int, failed: bool = False,
+                            limit: int = ingest.ROW_CAP):
+        conn = corpus_conn()
+        try:
+            return ingest.attempts(conn, run_id, failed_only=failed,
+                                   limit=limit)
         finally:
             conn.close()
 

@@ -2,6 +2,7 @@ import type { Artifact, JobState, LabConfig, LdrawColor, PartHit, RenderResult,
   SchemaField } from '@lab/api/types';
 import type { Footprint, Stats } from '@lab/stats/types';
 import type { CellsBody, PartDetail, SheetManifest } from '@lab/corpus/types';
+import type { IngestAttempts, IngestRun } from '@lab/ingest/types';
 
 export interface ClientOptions {
   base?: string;
@@ -155,6 +156,15 @@ export function createClient({ base = '', fetchImpl = fetch }: ClientOptions = {
 
     async corpusPart(id: string): Promise<PartDetail> {
       return json(fetchImpl, at(`/api/corpus/part/${encodeURIComponent(id)}`));
+    },
+
+    /** Every ingest, newest first. */
+    async ingestRuns(): Promise<IngestRun[]> {
+      return (await json<{ runs: IngestRun[] }>(fetchImpl, at('/api/ingest/runs'))).runs;
+    },
+
+    async ingestAttempts(runId: number, failed = false): Promise<IngestAttempts> {
+      return json(fetchImpl, at(`/api/ingest/runs/${runId}/attempts${failed ? '?failed=1' : ''}`));
     },
 
     async sheetManifest(source: string, level: number): Promise<SheetManifest> {
