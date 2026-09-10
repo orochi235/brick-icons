@@ -26,6 +26,19 @@ and the delivering one is old, so a cadence rather than a broken node is the
 better guess — untested. **Check `onto returns` against the log's render
 count before trusting any slot to have arrived.**
 
+**Four of the 394 were buried as `ProcessDied` and will be silently absent
+from the slot:** `4110c03`, `4110c06`, `4707bc01`, `70160`. Only one was a
+real crash (`4110c04`, signal 10); the rest are the in-flight parts the
+resume logic buries when an interpreter dies. `batch.py`'s `remaining()`
+never retries a burial, so they do not come back on a re-run — re-render
+them by name, or they stay missing. This is the same defect the pending
+`census-batch.sh` question is about, biting a run of our own.
+
+Not the watchdog, though: the slowest successful render here was 192.1s
+against HARD's 240, and none landed in the 219-231s band that marks a
+watchdog kill. The margin is thinner than it looks, so a slower slot on
+this list would start losing parts to it.
+
 The other slots those 394 appear in (white-occt, silhouette-occt,
 translucent-occt, ldview, reference) are all still stale; only occt was
 relaunched.
