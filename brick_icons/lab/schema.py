@@ -21,6 +21,16 @@ def _type_name(action) -> str:
     return _TYPES.get(action.type, "str")
 
 
+def _negative(action) -> bool:
+    """Does passing this switch turn its config field OFF?
+
+    `--no-pose` is a store_false, so the lab sending `pose: false` has to emit
+    the flag and `pose: true` has to omit it -- the opposite of every other
+    switch. Read off the action rather than off the flag's name.
+    """
+    return isinstance(action, argparse._StoreFalseAction)
+
+
 def _jsonable(value):
     if isinstance(value, Path):
         return str(value)
@@ -47,6 +57,7 @@ def config_schema(root: Path | str = ".") -> list[dict]:
         out.append({
             "key": a.dest,
             "flag": a.option_strings[0],
+            "negative": _negative(a),
             "type": _type_name(a),
             "choices": list(a.choices) if a.choices else None,
             "help": a.help or "",
@@ -61,8 +72,9 @@ def to_argv(part: str, config: dict) -> list[str]:
     """`part` plus one flag per set config key, in schema order.
 
     A None value means "leave it to the config file", so it is omitted rather
-    than passed as an empty string. A false switch is likewise absent: argparse
-    store_true flags have no negative form.
+    than passed as an empty string. A switch is emitted only when its value
+    differs from what leaving it out would mean, which for a `--no-` flag is
+    when the value is false.
     """
     fields = {f["key"]: f for f in config_schema()}
     unknown = set(config) - set(fields)
@@ -76,7 +88,7 @@ def to_argv(part: str, config: dict) -> list[str]:
         if value is None:
             continue
         if field["type"] == "bool":
-            if value:
+            if bool(value) != field["negative"]:
                 argv.append(field["flag"])
             continue
         argv.append(field["flag"])

@@ -336,3 +336,28 @@ def test_parse_args_still_reads_a_command():
     assert args.parts == ["3001"]
     assert args.engine == "occt"
     assert args.angle == "30,25"
+
+
+def test_part_pose_reads_the_declaration_and_no_pose_refuses_it(ldraw_dir):
+    """The turn comes off the part's own .dat, and `--no-pose` overrides it."""
+    from brick_icons import cli
+
+    root = ldraw_dir.parent.parent
+    on = cli._config_from_args(cli.build_parser().parse_args(
+        ["87544dq0", "--root", str(root)]))
+    off = cli._config_from_args(cli.build_parser().parse_args(
+        ["87544dq0", "--root", str(root), "--no-pose"]))
+    assert on.pose is True and off.pose is False
+    assert np.allclose(cli.part_pose(on, "87544dq0"),
+                       [[-1, 0, 0], [0, 1, 0], [0, 0, -1]])
+    assert cli.part_pose(off, "87544dq0") is None
+    assert cli.part_pose(on, "3001") is None
+
+
+def test_render_tag_stamps_a_posed_render(ldraw_dir):
+    from brick_icons import cli
+
+    cfg = cli._config_from_args(cli.build_parser().parse_args(
+        ["87544dq0", "--root", str(ldraw_dir.parent.parent)]))
+    assert "posed" in cli.render_tag(cfg, "87544dq0", True).split()
+    assert "posed" not in cli.render_tag(cfg, "3001", False).split()

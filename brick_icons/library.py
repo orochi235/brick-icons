@@ -6,6 +6,8 @@ from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
+
 ALLOWED_CATEGORIES = {
     "Brick", "Plate", "Tile", "Slope", "Technic", "Wedge", "Panel",
     "Cylinder", "Cone", "Dish", "Bar", "Bracket", "Hinge", "Wing", "Baseplate",
@@ -36,6 +38,54 @@ def parse_header(lines) -> PartInfo:
     stripped = title.lstrip("~_ ")
     category = stripped.split()[0] if stripped else ""
     return PartInfo(title=title, category=category, org=org)
+
+
+def declared_pose(part_file: Path) -> np.ndarray | None:
+    """The 3x3 a part's `!PREVIEW` meta declares, or None if it declares none.
+
+    LDraw writes it as a type-1 line's tail -- colour, translation, then the
+    matrix -- and means "the default view shows the wrong side of this part".
+    Scanned to the first geometry line rather than a fixed count: it sits as
+    deep as line 22 in the library.
+
+    A reflection is refused. Every one of the 394 declarations is a proper
+    rotation, and folding a mirror into the root basis would flip the winding
+    of every face in the part, which surfaces as a silently inside-out render
+    rather than as an error.
+    """
+    try:
+        with open(part_file, "r", errors="replace") as fh:
+            fh.readline()
+            for ln in fh:
+                fields = ln.split()
+                if not fields:
+                    continue
+                if fields[0] != "0":
+                    break
+                if len(fields) >= 15 and fields[1] == "!PREVIEW":
+                    return pose_matrix(" ".join(fields[2:]))
+    except OSError:
+        return None
+    return None
+
+
+def pose_matrix(preview: str) -> np.ndarray | None:
+    """The rotation out of a `!PREVIEW` meta's argument, or None if unusable.
+
+    Split out from `declared_pose` because `lab.partindex` stores the argument
+    verbatim while indexing the library, and the db's copy has to parse to the
+    same matrix as a fresh read of the file.
+    """
+    fields = preview.split()
+    if len(fields) < 13:
+        return None
+    try:
+        m = np.array([float(x) for x in fields[4:13]]).reshape(3, 3)
+    except ValueError:
+        return None
+    if not np.isclose(np.linalg.det(m), 1.0):
+        return None
+    return m
 
 
 def _read_header_lines(path: Path, n=12):

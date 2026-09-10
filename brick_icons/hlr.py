@@ -1062,7 +1062,7 @@ def _is_printed(path) -> bool:
 
 @timing.timed("geometry")
 def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
-                     cull=True, engine="naive"):
+                     cull=True, engine="naive", pose=None):
     if engine not in VALID_ENGINES:
         raise ValueError(
             f"unrecognized engine {engine!r}; must be one of {VALID_ENGINES}")
@@ -1076,7 +1076,11 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
     # -- see partindex, which classifies the corpus the same way.
     out["printed"] = _is_printed(path)
     with timing.phase("flatten"):
-        flatten(path, np.eye(3), np.zeros(3), out, roots)
+        # The turn goes in as the root basis rather than into the camera:
+        # `view_basis` derives its up vector from world Y, so a lat/long pair
+        # cannot express the roll that a turn about X or Z asks for.
+        root = np.eye(3) if pose is None else np.asarray(pose, float)
+        flatten(path, root, np.zeros(3), out, roots)
     if out["tri"]:
         # Repair returns outward-oriented tris as float32 (cache dtype); the
         # ~7 sig-fig precision is ample at icon scale. Keep out["tri"] a LIST

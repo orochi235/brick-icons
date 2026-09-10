@@ -96,3 +96,16 @@ def test_a_flag_with_no_config_field_has_no_effective_value():
 def test_paths_are_stringified_so_the_schema_is_json_safe():
     import json
     json.dumps(schema.config_schema(root="."))
+
+
+def test_a_negative_switch_is_emitted_when_it_is_false():
+    """`--no-pose` turns its field off, so the lab has to invert it.
+
+    Every other switch is emitted when true. Sending `pose: True` here and
+    getting `--no-pose` back would silently draw 394 parts the wrong way round.
+    """
+    fields = {f["key"]: f for f in schema.config_schema()}
+    assert fields["pose"]["negative"] is True
+    assert fields["weld_corners"]["negative"] is False
+    assert schema.to_argv("3001", {"pose": False}) == ["3001", "--no-pose"]
+    assert schema.to_argv("3001", {"pose": True}) == ["3001"]

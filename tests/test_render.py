@@ -84,3 +84,28 @@ def test_build_argv_ldraw_dir_is_absolute(tmp_path, monkeypatch):
     argv = render.build_argv(cfg, Path("/p/3001.dat"), Path("/o/3001.png"))
     flag = next(a for a in argv if a.startswith("-LDrawDir="))
     assert Path(flag.split("=", 1)[1]).is_absolute(), flag
+
+
+Y180 = [[-1, 0, 0], [0, 1, 0], [0, 0, -1]]
+
+
+def test_posed_wrapper_references_the_library_part_by_name(tmp_path):
+    parts = tmp_path / "vendor/ldraw/parts"
+    parts.mkdir(parents=True)
+    (parts / "3001.dat").write_text("0 brick")
+    dest = tmp_path / "work"; dest.mkdir()
+    w = render.posed_wrapper(parts / "3001.dat", Y180, dest)
+    line = [ln for ln in w.read_text().splitlines() if ln.startswith("1 ")][0]
+    assert line == "1 16 0 0 0 -1 0 0 0 1 0 0 0 -1 3001.dat"
+    # Resolved through -LDrawDir, so the part is not copied next to it.
+    assert not (dest / "3001.dat").exists()
+
+
+def test_posed_wrapper_carries_a_part_from_outside_the_library(tmp_path):
+    loose = tmp_path / "loose"; loose.mkdir()
+    (loose / "mine.dat").write_text("0 mine")
+    dest = tmp_path / "work"; dest.mkdir()
+    w = render.posed_wrapper(loose / "mine.dat", Y180, dest)
+    # Nothing would resolve `mine.dat` under -LDrawDir, so it rides along.
+    assert (dest / "mine.dat").read_text() == "0 mine"
+    assert w.read_text().splitlines()[-1].endswith(" mine.dat")

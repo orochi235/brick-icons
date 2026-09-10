@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from . import render, process, trace, hlr, shade, geom2d, unwrap
+from . import render, process, trace, hlr, library, shade, geom2d, unwrap
 from .config import load_config, Config
 
 
@@ -34,6 +34,9 @@ def build_parser():
     p.add_argument("--silhouette-mm", dest="silhouette_mm", type=float)
     p.add_argument("--dither", choices=["threshold", "floyd", "ordered", "atkinson"])
     p.add_argument("--angle")
+    p.add_argument("--no-pose", dest="pose", action="store_false", default=None,
+                   help="draw a part as authored, ignoring the !PREVIEW turn "
+                        "its own .dat declares (394 parts declare one)")
     p.add_argument("--part-color")
     p.add_argument("--list-colors", dest="list_colors", action="store_true",
                    default=False,
@@ -104,7 +107,8 @@ def _config_from_args(args) -> Config:
         "engine": args.engine,
         "cel_levels": args.cel_levels,
         "line_width": args.line_width, "silhouette_width": args.silhouette_width,
-        "dither": args.dither, "angle": args.angle, "part_color": args.part_color,
+        "dither": args.dither, "angle": args.angle, "pose": args.pose,
+        "part_color": args.part_color,
         "curve_quality": args.curve_quality, "render_px": args.render_px,
         "scale": args.scale, "scale_mode": args.scale_mode,
         "line_mm": args.line_mm, "silhouette_mm": args.silhouette_mm,
@@ -188,13 +192,15 @@ def _sil_faces(res, f, ox, oy):
         [{"poly": np.asarray(q, float)} for q in (res.sil_polys or ())],
         f, ox, oy)
 
-def render_tag(cfg: Config, name: str) -> str:
+def render_tag(cfg: Config, name: str, posed: bool = False) -> str:
     """The part id plus the settings that change what the drawing shows.
 
     Engine and angle are always stamped even at their defaults: a review sheet
     is read after the command that made it has scrolled away.
     """
     bits = [name, cfg.engine, cfg.angle]
+    if posed:
+        bits.append("posed")
     if cfg.wireframe:
         bits.append("wireframe")
     else:
@@ -205,11 +211,27 @@ def render_tag(cfg: Config, name: str) -> str:
     return "  ".join(bits)
 
 
+def part_pose(cfg: Config, part: str):
+    """The turn to draw this part under, or None to draw it as authored.
+
+    Read from the part's own .dat rather than from corpus.db: a fleet node
+    renders with the library and no database, and the library is the thing
+    that declares it.
+    """
+    if not cfg.pose:
+        return None
+    try:
+        return library.declared_pose(render.resolve_part(cfg, part))
+    except FileNotFoundError:
+        return None
+
+
 def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                 timeout: float | None = None) -> None:
     name = Path(part).stem if Path(part).suffix else part
     out_dir.mkdir(parents=True, exist_ok=True)
-    label = render_tag(cfg, name) if cfg.part_label else None
+    pose = part_pose(cfg, part)
+    label = render_tag(cfg, name, pose is not None) if cfg.part_label else None
 
     if cfg.decal:
         # Before the engines, and returning rather than falling through: a
@@ -231,7 +253,7 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
         # render, or vanishes between the lister's readdir and its stat.
         with tempfile.TemporaryDirectory() as td:
             png = render.render_part(cfg, part, Path(td) / f"{name}.png",
-                                     timeout=timeout)
+                                     timeout=timeout, pose=pose)
             # LDView writes 2048px PNGs at ~128 KB, and this slot is the
             # corpus's single largest asset -- 1.5 GB over the library,
             # against 0.35 GB as WebP at q90, which is indistinguishable at
@@ -246,7 +268,8 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
         # translucent or wireframe: draw hidden geometry too
         cull = cfg.opacity >= 1.0 and not cfg.wireframe
         res = hlr.visible_segments(part, cfg.ldraw_dir, lat=lat, long=long,
-                                   render_px=cfg.render_px, cull=cull, engine=cfg.engine)
+                                   render_px=cfg.render_px, cull=cull,
+                                   engine=cfg.engine, pose=pose)
         segs, bbox, s = res.segs, res.bbox, res.s
         if debug_dir:
             _emit_unwrap(debug_dir, name, res, cfg)

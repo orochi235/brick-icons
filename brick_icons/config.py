@@ -22,6 +22,8 @@ DEFAULTS = {
     "render_px": 2048,       # LDView supersample square
     "curve_quality": 12,     # LDView curve subdivision (max)
     "angle": "iso",          # preset or "LAT,LONG"
+    "pose": True,            # turn a part the way its own !PREVIEW meta says
+                             # to; 394 parts in the library declare one
     "shading": "normal",     # normal | cel | outline
     "engine": "naive",       # naive | occt | cadquery (each needs its extra)
     "cel_levels": 4,         # bands for cel shading
@@ -72,6 +74,7 @@ class Config:
     render_px: int
     curve_quality: int
     angle: str
+    pose: bool
     shading: str
     engine: str
     cel_levels: int
@@ -141,6 +144,7 @@ def load_config(toml_path=None, overrides=None, root="."):
         render_px=int(data["render_px"]),
         curve_quality=int(data["curve_quality"]),
         angle=str(data["angle"]),
+        pose=bool(data["pose"]),
         shading=str(data["shading"]),
         engine=str(data["engine"]),
         cel_levels=int(data["cel_levels"]),

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 from .config import Config
@@ -32,6 +34,23 @@ def resolve_part(cfg: Config, part: str) -> Path:
     raise FileNotFoundError(f"could not resolve part {part!r} (looked for {candidate})")
 
 
+def posed_wrapper(part_file: Path, pose, dest_dir: Path) -> Path:
+    """A one-line .ldr that instantiates the part under its declared turn.
+
+    LDView is handed a file, not a camera basis, so this is where a turn
+    reaches it. The reference is by bare filename, which LDView resolves
+    against `-LDrawDir`; a part from outside the library is copied in beside
+    the wrapper so that lookup still finds it.
+    """
+    m = " ".join(f"{v:g}" for v in [float(x) for row in pose for x in row])
+    ref = part_file.name
+    if not part_file.exists() or part_file.parent.name != "parts":
+        shutil.copy(part_file, dest_dir / ref)
+    wrapper = dest_dir / f"{part_file.stem}.posed.ldr"
+    wrapper.write_text(f"0 {part_file.stem} posed\n1 16 0 0 0 {m} {ref}\n")
+    return wrapper
+
+
 def build_argv(cfg: Config, part_file: Path, out_png: Path) -> list[str]:
     lat, long = resolve_latlong(cfg.angle)
     argv = [
@@ -54,11 +73,14 @@ def build_argv(cfg: Config, part_file: Path, out_png: Path) -> list[str]:
 
 
 def render_part(cfg: Config, part: str, out_png: Path,
-                timeout: float | None = None) -> Path:
+                timeout: float | None = None, pose=None) -> Path:
     part_file = resolve_part(cfg, part)
     out_png.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run(build_argv(cfg, part_file, out_png), check=True,
-                   capture_output=True, timeout=timeout)
+    with tempfile.TemporaryDirectory() as td:
+        if pose is not None:
+            part_file = posed_wrapper(part_file, pose, Path(td))
+        subprocess.run(build_argv(cfg, part_file, out_png), check=True,
+                       capture_output=True, timeout=timeout)
     if not out_png.exists():
         raise RuntimeError(f"LDView did not write {out_png}")
     return out_png
