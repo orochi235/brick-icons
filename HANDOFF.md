@@ -27,11 +27,27 @@ JSONL. The other 14 were buried as `ProcessDied`: `4110c03`, `4110c04`,
 `70028`, `70067`, `70160`, `70286`, `93085p03d01`. The entry below named four
 of those; the log records fourteen.
 
-**A buried part carries a posed measurement and no drawing.** All 14 scored
-into run 24 and none has an occt render row at all, so coverage counts them
-measured while the wall has nothing for them. That is the same burial defect
-the `census-batch.sh` question is about, and it now shows up as a database
-that disagrees with itself.
+**13 of those 14 are watchdog kills, and this run is the reproduction.**
+`census-batch.sh`'s own watchdog killed them at 241s to 254s against
+`HARD=240`, each named in the job's **stderr** — `4110c03` 253s, `70027` 254s,
+`93085p03d01` 244s, and ten more at 241-242s — with one resume pass per kill.
+The entry below reads it the other way ("not the watchdog") off the stdout
+render times, and stdout cannot show a kill: it lists what finished, and the
+slowest of those was 192.1s. Only `4110c04` is a genuine fault, dying on
+signal 10 at 37.7s.
+
+They are all composites and assemblies — `4110c0*`, `4707bc*`, `70027`/`70028`
+/`70067`/`70160`/`70286` — so the tail past 240s is one family, not scattered
+bad luck.
+
+**The database is honest about them; the resume logic is not.** They carry a
+run-24 measurement with `error = 'ProcessDied'` and no pixels, and
+`slot-coverage.py` gates on `error IS NULL`, so they count as owed rather than
+drawn. What loses them is `remaining()`, which never retries a burial: raising
+`HARD` on its own would not bring one of them back, because the run that
+killed them already wrote them off as permanently failed. They come back only
+by being named in a list, which is what `out/pose-rerender-missing.txt` is
+for.
 
 **Do not bake occt while ca's watcher is baking it.** It sleeps its 300
 seconds after each pass and bake, so the passes drift later rather than
