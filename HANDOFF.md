@@ -11,20 +11,31 @@ a guard there. Its uncommitted work is `lab/src/corpus/Lightbox.*` and
 parts re-rendered under their turn, into `out/slot-occt-pose2` with
 `SOURCE=occt` so they overwrite those parts' occt rows. Deadline 1:09AM.
 
-**Nothing has come home and a fetch is required — do not skip it.** `--out`
-and `--to` promise delivery "as items finish" and this job has delivered
-nothing in 332 renders; `onto deliver -at items 79ecf756` did not start it
-either. `onto returns` shows one 3.3K file, which is `batches.txt` echoed
-back. The rows and drawings are on the node. Run
-`onto fetch --stream slot-occt-pose` once the job stops, confirm the JSONL
-count locally, and only then ingest (`ingest-renders`).
+**Fetched and verified; ingest is the only step left.** 370 of 394 parts are
+in `out/slot-occt-pose2` as 31 JSONLs, with 356 drawings under
+`renders/occt/` and a `SOURCE` of `occt`, so `ingest-renders` will overwrite
+those parts' occt rows. Every row is clean — none has `missing_px` over 500,
+which is what a posed render measured against a posed oracle should look
+like.
 
-It is not the flags and not one node: `slot-occt-r2` on studio streams
-normally at 8h old, while this job (uai, 7m) and `crack-heal-drift-r3`
-(keiei, 27m) have both delivered nothing. Both non-delivering jobs are young
-and the delivering one is old, so a cadence rather than a broken node is the
-better guess — untested. **Check `onto returns` against the log's render
-count before trusting any slot to have arrived.**
+**The fetch was necessary and nothing arrived without it.** `--out` and
+`--to` promise delivery "as items finish" and this job delivered nothing in
+334 renders; `onto deliver -at items` did not start it either. One
+`onto fetch --stream slot-occt-pose` brought all 744 files. **Compare
+`onto returns` against the log's render count before trusting any slot to
+have arrived** — that check is what caught this, and it holds regardless of
+why the streaming failed, which is unresolved and is onto's business rather
+than ours.
+
+**Every one of the 370 rows carries `build` `1099.d500ca9+`,** which is the
+node's stale HEAD, not the code that drew them. This is the build-stamp trap
+above, confirmed on our own data: the renders are current and the stamp
+says otherwise.
+
+**24 parts are still owed, listed in `out/pose-rerender-missing.txt`.** Four
+are the burials below; the other twenty are two batches that never wrote a
+JSONL — every `2362*` and every `3678*` in the declaring set. Re-run that
+file into a fresh directory.
 
 **Four of the 394 were buried as `ProcessDied` and will be silently absent
 from the slot:** `4110c03`, `4110c06`, `4707bc01`, `70160`. Only one was a
