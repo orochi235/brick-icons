@@ -141,10 +141,7 @@ palette for a person choosing from it and a worse one for this: named pools cap
 around 32 colors, and 2947bc01 draws 49 elements, so 17 of them wore a color
 another element already had. Measured against the packed set on five parts --
 the named set wins under ~32 elements and loses past it. The write-up, the
-patch and the generator are in this session's scratchpad
-(`palette-handoff.md`, `palette-work.patch`, `gen-debug-palette.py` under
-`/private/tmp/claude-501/-Users-mike-src-brick-icons/571f4a54-*/scratchpad/`),
-which is session-scoped: move them somewhere durable or lose them.
+patch and the generator are deleted; this paragraph is the whole record.
 
 ## Two ways an exact surface got its shading wrong, and the slot that is still stale
 
