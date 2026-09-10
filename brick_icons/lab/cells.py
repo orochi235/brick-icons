@@ -214,7 +214,7 @@ def slot_attempts(conn: sqlite3.Connection, part_id: str) -> dict[str, dict]:
 
 
 def coverage_of(*, sha: str | None, error: str | None, open_defects: int,
-                inapplicable: bool = False) -> str:
+                inapplicable: bool = False, drew_nothing: bool = False) -> str:
     """How far this slot got with a part, worst news first. Mirrored by
     `Coverage` in the wall's `facts.ts`, which reads this rather than deriving
     it a second time.
@@ -222,6 +222,11 @@ def coverage_of(*, sha: str | None, error: str | None, open_defects: int,
     `inapplicable` only ever displaces `untried`: a slot erroring on a part it
     does not cover is a real event, and burying it under "nothing to draw"
     would hide the contradiction `not_applicable` exists to show.
+
+    `drew_nothing` is an attempt that finished clean and produced no drawing.
+    On a part the slot covers that is a failure of the renderer, not work
+    still owed -- 2,480 printed parts came back so from the decal finder, and
+    reading them as untried asks the fleet for a job that has already run.
     """
     if open_defects > 0:
         return "defect"
@@ -231,7 +236,9 @@ def coverage_of(*, sha: str | None, error: str | None, open_defects: int,
         return "timeout"
     if sha:
         return "drawn"
-    return "notApplicable" if inapplicable else "untried"
+    if inapplicable:
+        return "notApplicable"
+    return "failed" if drew_nothing else "untried"
 
 
 def _judged(conn: sqlite3.Connection) -> tuple[set[str], str]:
@@ -268,6 +275,12 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
     measures = {r["part_id"]: r for r in conn.execute(
         _LATEST_MEASURE, (source, source))}
     errors = errors_by_engine(conn).get(engine, {})
+    # By SOURCE, unlike `errors`: drawing nothing is this slot's own outcome,
+    # not the engine's. A stale one cannot mislead -- a later render gives the
+    # cell a sha, and `coverage_of` answers "drawn" before it looks here.
+    drew_nothing = {r["part_id"] for r in conn.execute(
+        "SELECT DISTINCT part_id FROM attempts WHERE source = ? "
+        "AND state = 'none'", (source,))}
     others = other_conditions(conn, source)
 
     # Two halves, because two unrelated things change a cell and only one of
@@ -356,7 +369,8 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
                 error=errors.get(pid),
                 open_defects=bucket["open"] + bucket["review"],
                 inapplicable=not_applicable(
-                    source, bool(part["printed"]), render is not None)),
+                    source, bool(part["printed"]), render is not None),
+                drew_nothing=pid in drew_nothing),
             "open_defects": bucket["open"],
             "review_defects": bucket["review"],
             "accepted_defects": bucket["accepted"],

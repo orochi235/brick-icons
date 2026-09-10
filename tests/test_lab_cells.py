@@ -764,3 +764,25 @@ def test_a_cell_says_ldraw_poses_the_part(conn):
     by_id = {c["id"]: c for c in cells.cells(conn)["cells"]}
     assert "posed" in by_id["87544dq0"]["tags"]
     assert "posed" not in by_id["3001"]["tags"]
+
+
+def test_a_slot_that_ran_and_drew_nothing_is_not_untried(conn):
+    # 2,480 printed parts come back 'none' from the decal finder with no
+    # error. Reading that as "never attempted" asks for a job that has run.
+    conn.execute("INSERT INTO parts (id, title, category, printed, obsolete, "
+                 "status) VALUES ('3068bp01', 'Tile Pattern', 'Tile', 1, 0, "
+                 "'unreviewed')")
+    _attempt(conn, '3068bp01', 'decal', 'none')
+    conn.commit()
+    cell = cells.cells(conn, source='decal')["cells"][0]
+    assert cell["coverage"] == "failed"
+
+
+def test_a_part_the_slot_does_not_cover_stays_not_applicable(conn):
+    # Same empty result, but the part carries no decoration to begin with:
+    # that is the slot behaving, not failing.
+    _part(conn, "3001")
+    _attempt(conn, '3001', 'decal', 'none')
+    conn.commit()
+    cell = cells.cells(conn, source='decal')["cells"][0]
+    assert cell["coverage"] == "notApplicable"
