@@ -37,6 +37,9 @@ from OCP.GCPnts import GCPnts_QuasiUniformDeflection
 from OCP.BRepMesh import BRepMesh_IncrementalMesh
 from OCP.TopLoc import TopLoc_Location
 from OCP.BRepTools import BRepTools, BRepTools_WireExplorer
+from OCP.BRepGProp import BRepGProp
+from OCP.GProp import GProp_GProps
+from OCP.ShapeBuild import ShapeBuild_ReShape
 
 from . import timing
 from . import hlr, primitives
@@ -359,6 +362,13 @@ def _edges_of(comp):
     ex = TopExp_Explorer(comp, TopAbs_ShapeEnum.TopAbs_EDGE)
     while ex.More():
         yield TopoDS.Edge_s(ex.Current())
+        ex.Next()
+
+
+def _faces_of(shape):
+    ex = TopExp_Explorer(shape, TopAbs_ShapeEnum.TopAbs_FACE)
+    while ex.More():
+        yield TopoDS.Face_s(ex.Current())
         ex.Next()
 
 
@@ -724,6 +734,90 @@ def chord_crescents(shape, tris):
     return out
 
 
+#: perimeter^2/area above which an inner wire is a crack rather than a hole.
+#: Dimensionless so one value holds at every part scale, where a length
+#: tolerance would need its own per part. Measured over the class and its
+#: controls, a genuine hole is 12.6 (circle) to 18.8 and a crack the merge left
+#: is 980 to 12,275, so the gap this sits in is 50x wide at its narrowest.
+CRACK_Q = 100.0
+
+
+def _wire_face(surf, wire):
+    mk = BRepBuilderAPI_MakeFace(surf, wire, True)
+    return mk.Face() if mk.IsDone() else None
+
+
+def _area(shape) -> float:
+    g = GProp_GProps()
+    BRepGProp.SurfaceProperties_s(shape, g)
+    return g.Mass()
+
+
+def _perimeter(wire) -> float:
+    g = GProp_GProps()
+    BRepGProp.LinearProperties_s(wire, g)
+    return g.Mass()
+
+
+def _face_wires(f):
+    ex = TopExp_Explorer(f, TopAbs_ShapeEnum.TopAbs_WIRE)
+    while ex.More():
+        yield TopoDS.Wire_s(ex.Current())
+        ex.Next()
+
+
+def _is_crack(surf, wire) -> bool:
+    """A wire that has a perimeter and encloses next to nothing."""
+    f = _wire_face(surf, wire)
+    if f is None:
+        return True
+    a = abs(_area(f))
+    if a <= 1e-12:
+        return True
+    p = _perimeter(wire)
+    return (p * p / a) > CRACK_Q
+
+
+def heal_face_cracks(shape):
+    """Drop the crack wires UnifySameDomain leaves inside a merged face.
+
+    Folding a print's coplanar triangles into the face it sits on can leave
+    inner wires that enclose nothing -- 3070bp1k's top face keeps two, one
+    0.01 LDU wide, and comes out claiming 400.192 against the 400.000 of its
+    own outer square. An invalid face does not occlude, so HLR reports the
+    part's underside visible and the engine draws its hidden edges: five
+    strokes read as a Y across the tile, which looks like a missing surface
+    because you are seeing the inside.
+
+    Only the cracks go. Genuine holes stay on the face, and the merge itself
+    is kept, so nothing pays the face count that rejecting it would cost.
+    """
+    rs, healed = ShapeBuild_ReShape(), 0
+    for f in list(_faces_of(shape)):
+        outer = BRepTools.OuterWire_s(f)
+        surf = BRep_Tool.Surface_s(f)
+        inner = [w for w in _face_wires(f) if not w.IsSame(outer)]
+        if not inner:
+            continue
+        cracks = [w for w in inner if _is_crack(surf, w)]
+        if not cracks:
+            continue
+        mk = BRepBuilderAPI_MakeFace(surf, outer, True)
+        if not mk.IsDone():
+            continue
+        for w in inner:
+            if not any(w.IsSame(c) for c in cracks):
+                mk.Add(w)
+        if not mk.IsDone():
+            continue
+        rs.Replace(f, mk.Face().Oriented(f.Orientation()))
+        healed += 1
+    if not healed:
+        return shape
+    timing.count("faces_healed")
+    return rs.Apply(shape)
+
+
 @timing.timed("build_shape")
 def build_shape(out: dict) -> TopoDS_Shape:
     """The sewn faces. They exist to occlude; their boundaries are not drawn
@@ -744,7 +838,7 @@ def build_shape(out: dict) -> TopoDS_Shape:
         for edge in _pierce_seams(shape):
             u.KeepShape(edge)
         u.Build()
-        shape = u.Shape()
+        shape = heal_face_cracks(u.Shape())
     return shape
 
 

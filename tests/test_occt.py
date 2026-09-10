@@ -1816,3 +1816,88 @@ def test_a_chord_crescent_only_hides(ldraw_dir):
         if op[0] == "arc":
             k = tuple(np.round(np.asarray(op[1:-1], float), 6))
             assert kept[k], "sealing the join must never ADD an arc"
+
+
+CRACKED_BY_THE_MERGE = {
+    # part: (cracks the merge leaves, picked at HEAD, picked once healed)
+    "3070bp1k": (2, 19, 14),
+    "30258p05": (2, 27, 9),
+    "10202p04": (1, 169, 14),
+    "14769pt0": (1, 66, 49),
+    "25269p00": (1, 67, 62),
+}
+
+#: Same moulds without the print, plus parts whose merge is sound. A genuine
+#: hole must survive: 3070b and 3001 carry several, 30137 is the largest merge
+#: in the set at 476 faces.
+UNCRACKED = ["3070b", "25269", "96904", "3001", "4740", "3005", "30136",
+             "30137", "6342851a"]
+
+
+def _shape_before_healing(part, ldraw_dir):
+    """build_shape's merged shape with heal_face_cracks NOT applied."""
+    from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
+    out = occt.flatten_part(part, ldraw_dir)
+    out["fit_arcs"], out["2"] = arcfit.fit_edge_arcs(out["2"], out["5"])
+    sew = occt.BRepBuilderAPI_Sewing(occt.TOL)
+    for prim in out["analytic"]:
+        for f in occt.occt_faces(prim):
+            sew.Add(f)
+    for tri in out["tri"]:
+        f = occt.tri_face(np.asarray(tri, float))
+        if f is not None:
+            sew.Add(f)
+    sew.Perform()
+    raw = sew.SewedShape()
+    assert occt._unify_survives(raw), f"{part} must survive the merge"
+    u = ShapeUpgrade_UnifySameDomain(raw, True, True, True)
+    for e in occt._pierce_seams(raw):
+        u.KeepShape(e)
+    u.Build()
+    return out, u.Shape()
+
+
+def _picked(shape, out, right, up):
+    comps = occt.hlr_edges(shape, right, up, cull=True,
+                           lines=occt._straight_lines(out, right, up)[0])
+    loci = occt.authored_loci(shape, out, right, up)
+    return len(occt.select_authored(comps.get("sharp"), loci))
+
+
+@pytest.mark.parametrize("part", sorted(CRACKED_BY_THE_MERGE))
+def test_crack_wires_stop_a_merged_face_occluding(part, ldraw_dir):
+    """UnifySameDomain folds a print's coplanar triangles into the face under
+    it and can leave inner wires that enclose nothing. The face then fails to
+    occlude, HLR calls the part's own underside visible, and select_authored
+    draws those hidden edges -- five strokes across 3070bp1k's top, which reads
+    as a missing surface because it is the inside of the tile.
+
+    Dropping the cracks fixes it without touching the merge, so the face count
+    does not move: 10202p04 stays at 91 faces where rejecting the merge gave it
+    3,757."""
+    cracks, head, healed = CRACKED_BY_THE_MERGE[part]
+    right, up = hlr.view_basis(30.0, 45.0)[:2]
+    out, merged = _shape_before_healing(part, ldraw_dir)
+    fixed = occt.heal_face_cracks(merged)
+    assert occt.count_faces(fixed) == occt.count_faces(merged), \
+        "healing must keep the merge, not undo it"
+    assert _picked(merged, out, right, up) == head
+    assert _picked(fixed, out, right, up) == healed
+    assert sum(1 for f in occt._faces_of(merged)
+               for w in occt._face_wires(f)
+               if not w.IsSame(occt.BRepTools.OuterWire_s(f))
+               and occt._is_crack(occt.BRep_Tool.Surface_s(f), w)) == cracks
+
+
+@pytest.mark.parametrize("part", UNCRACKED)
+def test_a_genuine_hole_is_not_healed_away(part, ldraw_dir):
+    """The separator is shape, not size: perimeter^2/area is 12.6 for a round
+    hole and 16 for a square one, against 980 and up for a crack. A rule keyed
+    on how much area an inner wire encloses instead reads 30258p05's cracks,
+    which subtract 2.445, as a hole."""
+    right, up = hlr.view_basis(30.0, 45.0)[:2]
+    out, merged = _shape_before_healing(part, ldraw_dir)
+    assert occt.heal_face_cracks(merged) is merged, \
+        f"{part} has no crack and must come back untouched"
+    assert _picked(merged, out, right, up) == _picked(
+        occt.build_shape(out), out, right, up)
