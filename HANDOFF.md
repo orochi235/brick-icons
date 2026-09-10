@@ -41,14 +41,24 @@ here — `brick_icons/occt.py`, `primitives.py`, `shade.py`, `unwrap.py` and
 
 `occt` and `white-occt` are both 382 of the 394 declaring parts, ingested and
 baked. The other slots those parts appear in are still drawn under the wrong
-camera: **decal 269, silhouette-occt 40, translucent-occt 34**, and 54 across
-the naive facets. Each is the same launch as `slot-white-occt-pose` with that
-slot's `SOURCE` and `EXTRA` — read them off the slot's last job rather than
-guessing, `onto run <node> -- cat` on the job's `meta.json`.
+camera: **silhouette-occt 40, translucent-occt 34**, and 54 across the naive
+facets. Each is the same launch as `slot-white-occt-pose` with that slot's
+`SOURCE` and `EXTRA` — read them off the slot's last job rather than guessing,
+`onto run <node> -- cat` on the job's `meta.json`.
 
-**`ldview` and `reference` hold all 394 and cannot be fixed this way.**
-`declared_pose` is read by `library.py` and `cli.py`; those two slots are
-drawn by LDView and a browser, which never see it.
+**Three slots cannot be fixed this way, and `decal` is one of them.** An
+earlier entry here counted decal among the 269 owed; it is not owed anything.
+`cli.process_one` computes the pose and then calls `decal_one` without it,
+returning before the engines, because a decal sheet is the decoration unwrapped
+in surface space and has no viewpoint to turn. Ten of the 269, all declaring a
+pose, re-rendered byte-identical under `--force` at HEAD. `ldview` and
+`reference` hold all 394 and are drawn by LDView and a browser, which never
+read `declared_pose` at all.
+
+**And `census-batch.sh` could not have drawn the decal slot regardless.**
+`slot-coverage.py` derives `EXTRA='--decal'` for it, but
+`compare-silhouette-truth.py` has no `--decal` flag — the launch the paragraph
+above prescribes would have failed argparse on every item.
 
 **12 parts are past 600s and look unbounded**, in
 `out/pose-rerender-missing.txt`: `4110c03`, `4110c04`, `4110c07`, `4110c08`,
