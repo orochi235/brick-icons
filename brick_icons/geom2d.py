@@ -352,7 +352,7 @@ def area(g):
     return 0.0 if g is None else float(g.area)
 
 
-def arc_regions(segs, inside=None, cover=0.5):
+def arc_regions(segs, inside=None):
     """Circular-segment polygons (arc + closing chord) of the drawn arc ops
     in a segment list. Face polygons follow the chords, but drawn arcs
     (fitted rounds) legitimately bulge past them by their sagitta — union
@@ -377,16 +377,22 @@ def arc_regions(segs, inside=None, cover=0.5):
         ring = np.stack([cx + np.cos(ts) * ux + np.sin(ts) * vx,
                          cy + np.cos(ts) * uy + np.sin(ts) * vy], 1)
         if inside is not None and not inside.is_empty \
-                and not _chord_on(ring, inside, cover):
+                and not _chord_on(ring, inside):
             continue
         out.append(to_geom(ring))
     return out
 
 
-def _chord_on(ring, inside, cover):
-    """Does the closing chord of this arc run along `inside`? Sampled rather
-    than tested as a line: an endpoint may sit a snap off the boundary, and a
-    chord that leaves the geometry does so over its whole middle."""
+def _chord_on(ring, inside):
+    """Does the closing chord of this arc run along `inside` for its whole
+    length? Sampled rather than tested as a line, and against `inside` grown
+    by a hair, because an endpoint may sit a snap off the boundary.
+
+    Every sample must land: 5845's outer roll has a far rim whose chord leaves
+    the silhouette over only a third of its length, and the sliver it grew was
+    as wrong as 5843's whole wedge. Measured over the arches and the golden
+    parts, a legitimate bulge scores 9 of 9 and nothing scores between.
+    """
     x0, y0, x1, y1 = inside.bounds
     pad = max(1.0, 0.002 * max(x1 - x0, y1 - y0))
     try:
@@ -394,8 +400,7 @@ def _chord_on(ring, inside, cover):
     except Exception:
         return True
     chord = np.linspace(ring[0], ring[-1], 9)
-    hits = int(shapely.contains_xy(grown, chord[:, 0], chord[:, 1]).sum())
-    return hits >= cover * len(chord)
+    return bool(shapely.contains_xy(grown, chord[:, 0], chord[:, 1]).all())
 
 
 def densify_on_arcs(pts, cands, max_step=6.0):

@@ -352,7 +352,12 @@ def test_a_bulge_grows_the_silhouette_and_a_hollow_does_not():
     bulge = ("arc", 100.0, 50.0, 15.0, 0.0, 0.0, 15.0, -90.0, 90.0, "edge")
     # a rim standing off in open space, its chord crossing nothing
     hollow = ("arc", 300.0, 50.0, 15.0, 0.0, 0.0, 15.0, -90.0, 90.0, "edge")
-    assert len(geom2d.arc_regions([bulge, hollow])) == 2
-    kept = geom2d.arc_regions([bulge, hollow], sq)
+    # 5845's outer roll adds a third kind: a chord that runs along the
+    # silhouette for two thirds of its length and leaves it for the rest. The
+    # sliver that grew from it was as wrong as 5843's whole wedge, so the
+    # WHOLE chord has to land.
+    grazing = ("arc", 100.0, 130.0, 40.0, 0.0, 0.0, 40.0, -90.0, 90.0, "edge")
+    assert len(geom2d.arc_regions([bulge, hollow, grazing])) == 3
+    kept = geom2d.arc_regions([bulge, hollow, grazing], sq)
     assert len(kept) == 1
-    assert kept[0].bounds[2] > 100.0        # the bulge, not the hollow
+    assert kept[0].bounds[2] > 100.0        # the bulge, not the other two
