@@ -1,3 +1,80 @@
+## Baton, 2026-09-09 night: the pose slot is ingested, and delivery was broken on this Mac
+
+On `main` in the shared checkout, nothing pushed. `brick-icons-ca` commits to
+this same tree and is running `slot-occt-r2` on studio with an
+`ingest-watch.py` beside it; stage explicit paths, never `git add -A`.
+
+### The pose re-render is in the database and on the wall
+
+`out/slot-occt-pose2` ingested: 356 drawings and 370 measurements, under
+census run 24, keyed the way `ingest-watch.py` keys its own so a rebuild stays
+a no-op. The occt slot went 18,057 to 18,264 rows and re-baked exactly those
+356 sheets, no UNREADABLE and no MISSING. A labeled before/after of four parts
+is on the corpus wall.
+
+**`ingest-watch.py` cannot do this ingest.** It skips a part already in the
+slot, and every part here was drawn once already under the wrong camera, so a
+pass over that tree indexes nothing and reports success. The overwrite went
+through `db.record_render` directly, which is INSERT OR REPLACE on
+(part_id, source, config_key) — and the config key does not include the
+camera, so the posed drawing replaces the unposed row rather than sitting
+beside it.
+
+**38 parts are still owed, not 24** — `out/pose-rerender-missing.txt` now
+holds all of them. 24 are the `2362*` and `3678*` batches that never wrote a
+JSONL. The other 14 were buried as `ProcessDied`: `4110c03`, `4110c04`,
+`4110c06`, `4110c07`, `4110c08`, `4707bc01`, `4707bc02`, `4707c05`, `70027`,
+`70028`, `70067`, `70160`, `70286`, `93085p03d01`. The entry below named four
+of those; the log records fourteen.
+
+**A buried part carries a posed measurement and no drawing.** All 14 scored
+into run 24 and none has an occt render row at all, so coverage counts them
+measured while the wall has nothing for them. That is the same burial defect
+the `census-batch.sh` question is about, and it now shows up as a database
+that disagrees with itself.
+
+**Do not bake occt while ca's watcher is baking it.** It sleeps its 300
+seconds after each pass and bake, so the passes drift later rather than
+landing on a clock — read `out/ingest-watch.log` for the last `baked occt`
+line and start within the five minutes after it. A bake of the slot takes
+about 100 seconds, and two of them race on the same `sheet-*.png`.
+
+### Why the streaming delivered nothing, and what is fixed
+
+Delivery is two steps: the node rings the owner, then the owner's agent pulls.
+Both halves were broken, and neither logs a word when it fails.
+
+**The owner ignored every notice.** From 17:55 to 21:54 orochi's agent
+accepted delivery notices and did nothing with them — no archived logs, no
+fetch, and `~/Library/Logs/onto/agent.log` not written since its startup
+banner. Proved by replaying the pose job's own notice from msb-uai: the old
+process took it and left no trace; a fresh process built from the same source
+archived the logs and pulled all 745 files within a minute. Its goroutine dump
+shows `deliverLoop` parked in its select with nothing to do, so the queue
+looked empty to a loop that was healthy. Cause unknown, symptom certain.
+
+I SIGQUIT'd it. The dump is at the end of `~/Library/Logs/onto/agent.err.log`,
+launchd restarted the agent, and its build moved `42e6d3d` to `de9a40d` (the
+binary already on disk). Replaying a notice against the restarted agent
+collects correctly, so the owner half works now.
+
+**The node barely rings.** msb-uai rang the pose job exactly once, 18 seconds
+after the job's final status write — never during the 20 minutes of items,
+though `pool.finishedItem` touches `news` at every item boundary. studio's
+`slot-occt-r2` has had `news` since 13:09 and has no `rung` file at all after
+nine hours. Both nodes accept a hand-made ring right now, so this is the
+agent's own reap sweep not firing, not the transport. Unfixed, and it means
+`--out`/`--to` will not stream per item however healthy the owner is.
+
+**So keep checking `onto returns` against the log's render count before
+trusting a slot to have arrived**, and expect to run `onto fetch --stream`.
+
+To reproduce a ring: copy `~/src/onto` somewhere, add a test that calls
+`ringOwner(priv, pub)` with the node's `~/.config/onto/agent/id_ed25519` and a
+`replyTo` naming the owner's `orochi.local:7423` and its agent pubkey, and
+`go test` it on the node. A 404 marks the job rung forever; anything else
+leaves the news standing.
+
 ## Baton, 2026-09-09 night: weasel's fix flips the wall verdict, and the camera turns 394 parts
 
 On `main` in the shared checkout, nothing pushed. **`brick-icons-ca` commits to
