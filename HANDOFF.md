@@ -1,3 +1,38 @@
+## Baton, 2026-09-10: occt draws the rims a substituted `cylo` swallowed
+
+On `main` in the shared checkout, committed as `76aeed5`, unpushed. Several
+sessions have this directory open -- one is on 5846's dark curved corner
+(`_curved_frame` orientation) and one on the formed-sticker standoff; stage
+with `git apply --cached` on your own hunks.
+
+**The finding is in `OCCT-MIGRATION.md`, "Declared geometry the substitution
+swallows".** Read that, not this. One line of it: `hlr.flatten` substitutes
+`1-4cylo` as a bare `Cylinder` and never reads the file, so the two `1-4edge`
+rings it declares are lost, and occt -- which draws only what a locus declares
+-- had nothing to pick either rim by.
+
+### What is left over
+
+**The defect rows this closes are not marked.** `tests/goldens/defects.toml`
+carries a peer's uncommitted edits, so touching it would sweep their hunks.
+These are the open rows the fix answers, checked by eye against the render:
+`7904` (missing edge arc), `98138pt1` (missing contour arc), `5841` (missing
+outline contour), `5843` and `5845` (occt missing arc), `7610` (missing lots of
+outlines). `5846` and `5849` are byte-identical across the fix and stay open on
+their own causes.
+
+**Every occt render slot is stale for the parts that own a `cylo`** -- 11,523
+of 24,591 part files. The corpus wall is drawing the old geometry until those
+are re-rendered.
+
+**`cull_orphan_runs` is still deleting real geometry on occt**, just less of
+it. `30124b` and `33089` are byte-identical across this fix and still lose the
+edges `OCCT-MIGRATION.md` records, so the cause there is not the missing rims.
+What the fix does settle is that a *missing edge upstream* is one way to feed
+that cull: the rims are what anchor the runs around them, so `5845` went from
+losing 12 of 16 ops to losing none. Look for the next upstream loss before
+tuning the cull.
+
 ## Baton, 2026-09-09 night: the pose slot is ingested, and delivery was broken on this Mac
 
 On `main` in the shared checkout, nothing pushed. `brick-icons-ca` commits to
