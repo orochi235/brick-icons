@@ -1,3 +1,104 @@
+## Baton, 2026-09-09 night: LDraw poses 394 parts, the decal slot is not owed a job, and weasel's cliff is gone
+
+On `main` in the shared checkout, nothing pushed — `git log --oneline @{u}..HEAD`
+counts it. **`brick-icons-ca` is committing to `main` in this exact directory**
+and has a fleet job running. Stage explicit paths, never `git add -A`, and read
+`git diff --cached` before every commit. `lab/src/corpus/Lightbox.*` and
+`tests/goldens/defects.toml` are its uncommitted work, not yours; untracked and
+unowned: `corpus-loaded.png`, `corpus-skeleton.png`,
+`scripts/surface-drop-probe.py`, `store-queue/`.
+
+### What landed
+
+Each commit carries its own reasoning. `badge the parts LDraw gives a preview
+orientation`, `draw the wall from a weasel checkout when asked`, `call a slot
+that ran and drew nothing failed, not untried`, `sort the parts the decal
+finder gave up on by what they hold`.
+
+### Decisions made in conversation and written nowhere else
+
+**The ldview "dropped lettering" bug is not a bug, and the camera work it
+implies is UNBUILT.** `14769ptk` renders its K in full; LDView draws at
+`DefaultLatLong=30,45` (`config.angle = "iso"`) and the glyph lies flat in XZ
+on the tile face, so latitude 30 halves its Z extent and the yaw shears the
+rest. Proved by projecting the part's own color-80 polygons at 30/45 and
+matching the render stroke for stroke. Same root cause as `87544dq0`, whose
+sticker faces away.
+
+**Mike's rule for fixing it: swing the camera only in 90 degree increments.**
+The library agrees — all 394 `!PREVIEW` declarations are signed permutation
+matrices (180 about Y on 357 parts, 180 about X on 23, 180 about Z on 8, plus
+or minus 90 about Y on 3 each). Quarter turns reach both problem parts but by
+different axes: `87544dq0` needs longitude, `14769ptk` needs latitude — iso
+plus 90 in latitude (120,45) makes the K legible while the tile keeps its rim.
+A longitude quarter turn never helps a top face.
+
+**Weasel's per-command cliff is gone and the wall verdict is still open.**
+The rejection in the entry below assumed the cliff; `1538bdfa` removes it.
+Measured here on one machine in one sitting, scene/nearest at 7,500 commands:
+installed 1.4.0 78.0ms, local at `89276eea` (the batch commit's parent) 92.2ms,
+local with the batch 3.2ms — but the batch build failed the pixel check on
+every rung (mean absolute channel difference 40.6 to 84.8 against a limit of
+12). Weasel root-caused that as `flushBatch` binding the run's adopted bitmap,
+so solids sampled it at (0.5, 0.5), and **merged the fix as `f0a47538`**.
+Re-run `/bench` against it: `WEASEL_SRC=~/src/weasel npm run dev`, weasel's
+`packages/core` dist built first.
+
+**Two traps for that re-run.** Absolutes on this machine drift about a quarter
+between sittings, so all three builds must be measured in one sitting — never
+compare against a figure in weasel's TODO from another day. And the missing
+badges I first reported to weasel were **ours**: `lab/src/bench/toDrawCommands.ts`
+records badges, the kind strip and captions as `unsupported` and emits no draw
+command, so they have never reached that renderer. Correction already sent.
+
+**The decal slot is not owed a fleet job.** `out/slot-decal` is fully ingested,
+zero drift either way. The 2,527 the coverage bar was asking for is 2,480 parts
+that ran and drew nothing plus about 55 live parts never tried; the rest are
+obsolete. `scripts/triage-decal-empties.py` sorts the 2,480 by what their
+`.dat` holds — 975 have decoration only in a subfile, 764 in the part file
+itself, 659 none in the geometry, 82 are LDraw texmaps. So 1,739 carry
+decoration we can see and did not draw, and that is a `unwrap.py` gap in two
+unrelated halves. The 764 are the better first target and 166 of them are
+Sticker parts, which smells like the trap `908f80b` documented: artwork
+covering a face edge to edge leaves it with no body facets, so no plane is
+built.
+
+**A count `brick-icons-ca` queried differently.** It read 2,913 decal `none`
+rows where this session said 2,480. Both are right: 2,480 filters to
+`printed = 1 AND obsolete = 0` with no render, 2,913 is every distinct
+`part_id` with `state = 'none'`.
+
+**`parts.preview` was seeded into the shared `corpus.db`** — 394 rows. Part
+count, title-length sum, `printed` and `obsolete` sums are identical before and
+after, so nothing else moved. Reverse with `UPDATE parts SET preview=NULL`.
+
+**Do not land a guard on `build_shape`.** `brick-icons-ca` found
+`ShapeUpgrade_UnifySameDomain` returns an invalid shape on about one part in
+five, which is what the "missing surface" defects are. Its fix costs a median
+3.1x more faces and it is holding for Mike's call. Both sessions patching that
+call is the thing to avoid.
+
+### Processes that are not yours
+
+The lab API on 8792 is `brick-icons-ca`'s (pid 80287) and carries the `posed`
+tag. A vite on 5178 is THIS session's — the previous one there died when a
+`vite.config.ts` edit triggered its reload. Kill it if you want your own.
+
+### Still queued, still unbuilt
+
+1. **Drop `runs.kind`** and **add `parts.touched_at`** — `docs/runs-are-just-runs.md`,
+   both designed, both waiting on the same quiet hour. Still blocked: the
+   watcher (now pid 57175, covering `out/slot-white-occt` too) holds the old
+   `db.py` in memory and would insert into the column the first drops. Adding
+   a column is safe under it; dropping one is not.
+2. **LDraw 2026-08 is not ingested.** 144 parts we do not have. Use the
+   `ingest-ldraw` skill and read its first step before downloading. Wants the
+   fleet quiet — it re-syncs `vendor/ldraw` to every node.
+3. **Per-part camera**, above. Nothing written.
+4. **The decal finder gap**, above. Nothing written.
+5. Six parts titled "without Pattern" (`92241`, `47545`, the Friends torsos)
+   are flagged `printed` because `partindex` substring-matches "pattern".
+
 ## Baton, 2026-09-09 night: the "missing surface" defects are occt drawing extra lines on printed parts
 
 On `main` in the shared checkout, nothing pushed. **At least two other sessions
