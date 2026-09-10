@@ -1072,15 +1072,19 @@ def authored_loci(shape, out, right, up):
             if np.linalg.norm(p - q) > 1e-7:
                 loci.append(_seg_locus(p, q, "line", ax, ay, ell))
     for prim in out["analytic"]:
-        if prim.kind != "edge":
+        if prim.kind != "edge" and not prim.rims_declared:
             continue
         f = frame(prim)
         if f is None:
             continue
-        o, uh, ah, vh, ru, rv, _h, _rh, _ph = f
-        loc = _ell_locus(o, uh, vh, float(ru), float(rv), "line", ax, ay)
-        if loc is not None:
-            loci.append(loc)
+        o, uh, ah, vh, ru, rv, h, _rh, _ph = f
+        # An `edge` is one circle at its origin; a `cylo` declares a ring at
+        # each end of its wall and loses both to the substitution.
+        centers = [o] if prim.kind == "edge" else [o, o + ah * h]
+        for c in centers:
+            loc = _ell_locus(c, uh, vh, float(ru), float(rv), "line", ax, ay)
+            if loc is not None:
+                loci.append(loc)
     for e in _edges_of(analytic_creases(shape, out)):
         try:
             a = BRepAdaptor_Curve(e)

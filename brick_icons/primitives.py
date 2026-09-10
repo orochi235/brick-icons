@@ -103,6 +103,23 @@ def parse_primitive(name: str):
     return (kind, sector, inner)
 
 
+def declares_rims(name: str) -> bool:
+    """Does this primitive's own file author the two rim circles of its wall?
+
+    `cylo` is "Cylinder Open": the surface plus a `1-4edge` ring at each end.
+    Substituting it stops the recursion, so those rings never reach the
+    flattened part and an engine that draws only what was declared has nothing
+    to draw the rim by. No other substitutable primitive declares an edge --
+    `test_only_open_cylinders_declare_rims_among_the_primitives` is the walk of
+    the library that says so.
+    """
+    base = name.replace("\\", "/").split("/")[-1].lower()
+    if base.endswith(".dat"):
+        base = base[:-4]
+    m = _FRAC.match(base)
+    return bool(m) and m.group(3) == "cylo"
+
+
 class Ellipse:
     """2-D ellipse in pixel space: point(theta) = center + cos t*u + sin t*v."""
 
@@ -463,6 +480,7 @@ class Primitive:
     color: int = 16          # LDraw code; 16 = inherit the part color
 
     kind = None          # class attribute, overridden per subclass
+    rims_declared = False    # set per instance by from_ref; see declares_rims
 
     def __post_init__(self):
         self.R = np.asarray(self.R, float)
@@ -963,7 +981,9 @@ def from_ref(name, R, t):
         return Ring(R=R, t=t, sector=sector, inner=inner)
     if kind == "con":
         return Cone(R=R, t=t, sector=sector, top=float(inner))
-    return _KIND_CLASSES[kind](R=R, t=t, sector=sector)
+    prim = _KIND_CLASSES[kind](R=R, t=t, sector=sector)
+    prim.rims_declared = declares_rims(name)
+    return prim
 
 
 def _arc_op(ell, t0_deg, t1_deg, kind):

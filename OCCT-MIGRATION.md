@@ -78,6 +78,33 @@ rest of the tail is still open and is item 4 above.
 | `ink_prims` — a print's boundary is ink, not a crease, so its primitive does not stroke | no analog; `authored_loci` takes every `edge` primitive | **TRIED AND WRONG.** Its first rule is "color is not 16", and a printed part whose *body* is authored in a color — `9359` is a green brick with a white TAXI print — has every structural edge it owns caught by it. Porting it took the stud rims off `9359`, `80400` and `6141p01`. Naive needs the rule because a substituted primitive there draws its own rim; nothing on this side draws one |
 | `res.tri` / `res.tri_colors` reach `cli._emit_unwrap` | `()` | **CLOSED, `175bc8f`.** `--debug-dir` now writes the `.unwrap.svg` under `occt` |
 
+### Declared geometry the substitution swallows
+
+`1-4cylo` is two `1-4edge` rings plus `1-4cyli`. `hlr.flatten` substitutes it
+as one `Cylinder` and stops recursing, so the rings reach neither `out["2"]`
+nor `out["analytic"]`. Naive never noticed: its `Cylinder.drawn_with_depth`
+emits both rims itself. occt draws only what an authored locus declares, so
+both rims sat VISIBLE in HLR's sharp set with nothing to pick them by.
+
+| naive does | occt does | |
+|---|---|---|
+| `Cylinder.drawn_with_depth` emits a rim arc at each end of every substituted cylinder | `authored_loci` had a locus only for an `edge` primitive that survived the flatten | **CLOSED.** `primitives.declares_rims` marks a `cylo`, and `authored_loci` reads both ends of its frame. 11,523 of 24,591 part files reach one |
+
+The curved-top family is what this was found on: `5841` drew its roll with no
+edge where it meets the end face, `5845` lost both inner arcs and its studs.
+28 of the 41 open-defect parts that own a `cylo` gain edges; none loses any,
+and naive is byte-identical over ten cylo-heavy parts.
+
+**It also fed `cull_orphan_runs`.** A missing rim is what anchors the runs
+around it, so the peel took correctly-drawn geometry with it -- `5845` lost 12
+of 16 ops, and drops to 0 of 27 with the rims restored. That is not the whole
+of the cull's occt problem: `30124b` and `33089` are byte-identical across
+this fix and still lose the edges recorded below.
+
+`con`, `disc` and `ring` declare no edge, so this is the whole class --
+`test_only_open_cylinders_declare_rims_among_the_primitives` walks the
+vendored primitives and fails if that stops being true.
+
 ### Stroke post-processing
 
 The `occt` branch of `hlr.visible_segments` runs `fit_silhouette_arcs` and

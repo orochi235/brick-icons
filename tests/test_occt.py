@@ -749,6 +749,56 @@ def test_arcfit_chains_still_reach_the_authored_loci(ldraw_dir):
                 f"chain chord {p} -> {q} lies on no authored locus"
 
 
+def test_a_substituted_open_cylinder_still_declares_its_rims(ldraw_dir):
+    """`1-4cylo` is two `1-4edge` rings plus `1-4cyli`, and substituting it
+    stops the recursion, so the rings it declares reach neither out["2"] nor
+    out["analytic"]. 5841's curved top then has both rim ellipses sitting
+    VISIBLE in HLR's sharp set with no locus to pick them by -- naive draws
+    both (its Cylinder emits its own rims), occt drew neither, and the whole
+    curved-top family lost the arc where the roll meets its end face."""
+    out = _arcfit_split("5841", ldraw_dir)
+    right, up = hlr.view_basis(30.0, 45.0)[:2]
+    res = occt.visible_segments(out, right, up, 900)
+    # orthographic: a circle of radius R projects with major semi-axis R, and
+    # 5841's curved top is the only radius-20 circle it owns (the stud is 6)
+    rims = [op for op in res.segs
+            if op[0] == "arc" and op[-1] != "sil"
+            and max(math.hypot(op[3], op[4]),
+                    math.hypot(op[5], op[6])) == pytest.approx(20.0, rel=0.02)]
+    assert len(rims) >= 2, f"curved-top rim arcs drawn: {len(rims)}"
+
+
+def test_only_open_cylinders_declare_rims_among_the_primitives():
+    """The rim restoration keys on the `cylo` name, and this is what licenses
+    that: over the vendored primitives every file whose name parses as an open
+    cylinder declares exactly two `edge` sub-references, and no other
+    substitutable primitive file declares one at all."""
+    roots = [ROOT / "vendor/ldraw/p", ROOT / "vendor/ldraw/p/48",
+             ROOT / "vendor/ldraw/p/8"]
+    checked = 0
+    for root in roots:
+        if not root.exists():
+            continue
+        for f in sorted(root.glob("*.dat")):
+            if primitives.parse_primitive(f.name) is None:
+                continue
+            checked += 1
+            declared = 0
+            for line in f.read_text(errors="replace").splitlines():
+                tok = line.split()
+                if len(tok) < 15 or tok[0] != "1":
+                    continue
+                spec = primitives.parse_primitive(
+                    tok[14].replace("\\", "/").split("/")[-1])
+                if spec is not None and spec[0] == "edge":
+                    declared += 1
+            want = 2 if primitives.declares_rims(f.name) else 0
+            if f.name in ("2-4edge.dat", "4-4edge.dat"):
+                continue           # an edge built from smaller edges is one
+            assert declared == want, \
+                f"{f.name} declares {declared} edge sub-refs, expected {want}"
+    assert checked > 500, f"only {checked} primitive files walked"
+
 def test_3941_bore_rim_is_drawn_by_the_occt_engine(ldraw_dir):
     """The rim of the axle hole, end to end. Before the chains were added to
     the loci this counted 0 -- occt drew only the four condline bore verticals,
@@ -1823,7 +1873,7 @@ CRACKED_BY_THE_MERGE = {
     "3070bp1k": (2, 19, 14),
     "30258p05": (2, 27, 9),
     "10202p04": (1, 169, 14),
-    "14769pt0": (1, 66, 49),
+    "14769pt0": (1, 71, 53),
     "25269p00": (1, 67, 62),
 }
 
