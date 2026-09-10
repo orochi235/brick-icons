@@ -34,7 +34,7 @@ it('reports a slot change', () => {
 it('offers a segment per family something has been drawn in', () => {
   render(bar());
   expect(screen.getAllByRole('radio').map((b) => b.textContent))
-    .toEqual(['OCCT', 'Legacy', 'Decal']);
+    .toEqual(['Engine', 'Legacy', 'Decal']);
   expect(screen.getByRole('radio', { name: 'Legacy' }).getAttribute('aria-checked'))
     .toBe('true');
 });
@@ -42,7 +42,7 @@ it('offers a segment per family something has been drawn in', () => {
 it('keeps the facet when the engine changes', () => {
   const onSource = vi.fn();
   render(bar({ onSource }));
-  fireEvent.click(screen.getByRole('radio', { name: 'OCCT' }));
+  fireEvent.click(screen.getByRole('radio', { name: 'Engine' }));
   expect(onSource).toHaveBeenCalledWith('silhouette-occt');
 });
 

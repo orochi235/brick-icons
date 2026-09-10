@@ -17,14 +17,14 @@ describe('SourcePane', () => {
 
   it('labels itself with the source', () => {
     render(<SourcePane {...props} source={SOURCES.naive} state={{ kind: 'idle' }} />);
-    expect(screen.getByText('naive')).toBeTruthy();
+    expect(screen.getByText(SOURCES.naive.label)).toBeTruthy();
   });
 
   it('carries nothing but the label when the pane reports nothing', () => {
     const { container } = render(
       <SourcePane {...props} source={SOURCES.occt} state={{ kind: 'idle' }} />);
     expect(container.querySelector('.pane-note')).toBeNull();
-    expect(container.textContent).toBe('occt');
+    expect(container.textContent).toBe(SOURCES.occt.label);
   });
 
   it('shows a note the pane measured', () => {

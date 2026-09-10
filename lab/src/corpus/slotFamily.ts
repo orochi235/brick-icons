@@ -19,7 +19,7 @@ export const FAMILY_ORDER: readonly Family[] = ['occt', 'legacy', 'reference', '
 export const FAMILY_LABEL: Record<Family, string> = {
   reference: 'Reference',
   legacy: 'Legacy',
-  occt: 'OCCT',
+  occt: 'Engine',
   decal: 'Decal',
 };
 

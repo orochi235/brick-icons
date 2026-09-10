@@ -19,7 +19,7 @@
 
 /* The kit's segments are `flex: 1 1 0` with `overflow: hidden` -- equal
    shares of the track whatever the labels measure -- and `Reference` lost its
-   last letter to `OCCT`'s slack. */
+   last letter to the slack of the shortest label beside it. */
 .corpus-bar__engine [class*='_segment_'] { flex: 0 0 auto; }
 
 /* Not scoped to .corpus-bar: the listbox is portaled out of it, and the

@@ -2,10 +2,15 @@ export type SourceKind = 'engine' | 'reference' | '3d' | 'decal' | 'diff';
 
 /** Every pane the lab can show, in the order they are laid out. The pane's
  *  id, its `SourceId` type, the toggle bar and the render fan-out all derive
- *  from this list, so a new pane is one entry here and nothing else. */
+ *  from this list, so a new pane is one entry here and nothing else.
+ *
+ *  A label is what the bar reads, never what the CLI is passed: `--engine`
+ *  still takes the id. occt is THE engine now and naive is what it replaced,
+ *  so the bar says so; `cadquery` keeps its name because it is a third-party
+ *  exporter kept for comparison rather than an engine of ours. */
 const CATALOG = [
-  { id: 'naive', label: 'naive', kind: 'engine' },
-  { id: 'occt', label: 'occt', kind: 'engine' },
+  { id: 'naive', label: 'Legacy', kind: 'engine' },
+  { id: 'occt', label: 'Engine', kind: 'engine' },
   { id: 'cadquery', label: 'cadquery', kind: 'engine' },
   { id: 'reference', label: 'LDView', kind: 'reference' },
   { id: '3d', label: '3D', kind: '3d' },
@@ -28,8 +33,9 @@ export const SOURCES = Object.fromEntries(
   CATALOG.map((source) => [source.id, source as Source]),
 ) as Record<SourceId, Source>;
 
-/** Which panes a new trial opens with. */
-export const DEFAULT_SOURCES: readonly SourceId[] = ['naive', 'occt'];
+/** Which panes a new trial opens with: the engine alone. naive is kept, not
+ *  offered -- a trial that wants the comparison turns the Legacy pane on. */
+export const DEFAULT_SOURCES: readonly SourceId[] = ['occt'];
 
 export function enabledSources(ids: readonly SourceId[]): Source[] {
   const wanted = new Set<string>(ids);
