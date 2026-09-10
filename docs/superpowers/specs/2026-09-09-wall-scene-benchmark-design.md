@@ -72,11 +72,22 @@ try.
 
 ## Two things measured along the way
 
-**`sampling: 'nearest'` is expensive under minification.** Drawing a 32px tile
-into a 16px cell cost 121ms with nearest against 20ms with linear. It is free at
-1:1 and above. The wall never minifies much because it swaps sheets by cell size,
-so this only bites a consumer that pins one sheet — which the first version of
-this harness did, and it produced a wrong answer for two runs.
+**On our atlas, `sampling: 'nearest'` costs up to 8x linear, and the gap tracks
+minification.** From the 1.4.0 control, scene/nearest over scene/linear by rung:
+16px 8.11, 24px 5.98, 32px 1.08, 48px 1.14. The sheet holds 32px tiles, so those
+are 2:1, 1.33:1, 1:1 and magnifying — the gap vanishes exactly at 1:1, and on the
+small level-8 sheet it inverts to the ordinary expectation. That is backwards
+from the filter arithmetic, and it is a property of how big our sheet is:
+**5652 x 5652, which is 122 MB resident RGBA**, not the 12 MB this repo had been
+quoting, which is the compressed webp over the wire. Weasel's own atlases are
+about 3 MB and their spec sees none of this. Weasel has since fixed a redundant
+`MAG_FILTER` write found while chasing it (`fee0c98d`) and says it does not
+explain the 8x, so do not record it as solved; if we ever shrink the sheet or add
+mipmaps, this is the number that should move.
+
+The wall never minifies much because it swaps sheets by cell size, so this only
+bites a consumer that pins one sheet — which the first version of this harness
+did, and it produced a wrong answer for two runs.
 
 **A group per cell is not the cost.** Wrapping every sprite in a
 `GroupDrawCommand` versus emitting flat changed nothing measurable. The node-per-
