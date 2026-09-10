@@ -15,6 +15,8 @@ years = importlib.import_module("fetch-part-years")
 FACTS = {
     "3005": (1954, 2026, 5144, 77),
     "3005pr0018": (2018, 2018, 1, 1),
+    "11477": (2013, 2026, 3335, 41),
+    "003238": (1979, 1979, 1, 1),
 }
 
 
@@ -34,6 +36,24 @@ def test_a_print_takes_its_own_number_over_the_plain_brick(tmp_path):
     assert years.keyword_parts(dat) == ["3005pr0018", "3005pb031"]
     assert years.match("3005pz0", FACTS, {}, years.keyword_parts(dat)) == (
         {"3005pr0018"}, "named")
+
+
+def test_a_sticker_numbered_like_a_mould_reads_as_the_mould(tmp_path):
+    """A sticker's id is the sheet number plus a letter, so `11477dya` looks
+    like one sticker off sheet 11477. The corpus holds 11477 as a plain slope,
+    which makes it the mould this is a decoration of -- and 3,335 sets the
+    slope's figure, not this print's."""
+    dat = _dat(tmp_path, "11477dya", "0 !KEYWORDS Speed Champions")
+    assert years.match("11477dya", FACTS, {}, years.keyword_parts(dat),
+                       moulds={"11477"}) == ({"11477"}, "base")
+
+
+def test_a_sticker_off_a_real_sheet_keeps_the_sheet_route(tmp_path):
+    """003238 is a sheet Rebrickable inventories and the corpus does not hold
+    as a part, so its count ships with the sticker and is the sticker's."""
+    dat = _dat(tmp_path, "003238a", "0 !KEYWORDS Set 375-2")
+    assert years.match("003238a", FACTS, {}, years.keyword_parts(dat),
+                       moulds={"11477"}) == ({"003238"}, "sheet")
 
 
 def test_the_base_part_is_still_there_when_no_number_is_named(tmp_path):

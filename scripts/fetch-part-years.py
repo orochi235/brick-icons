@@ -171,7 +171,8 @@ def keyword_parts(dat: Path) -> list[str]:
 
 def match(part_id: str, facts: dict[str, tuple[int, int, int, int]],
           designs: dict[str, set[str]],
-          named: list[str] = ()) -> tuple[set[str], str] | None:
+          named: list[str] = (),
+          moulds: frozenset[str] = frozenset()) -> tuple[set[str], str] | None:
     """The Rebrickable numbers to read `part_id`'s years off, and how they
     matched. A set rather than one number: a design id names every mould cut
     from it, and the part's span is the span of all of them.
@@ -179,7 +180,11 @@ def match(part_id: str, facts: dict[str, tuple[int, int, int, int]],
     `named` is what the .dat's own !KEYWORDS line calls this part, best first,
     and it outranks every route that widens the part -- a print's own numbers
     are the print's, where the base and design routes give it the plain
-    mould's."""
+    mould's.
+
+    `moulds` is every undecorated part the corpus holds, and it is what tells
+    a sticker's sheet number from a mould's: both are digits followed by
+    letters."""
     if part_id in facts:
         return {part_id}, "exact"
     for number in named:
@@ -190,7 +195,11 @@ def match(part_id: str, facts: dict[str, tuple[int, int, int, int]],
         return {printed.group(1)}, "base"
     sticker = _STICKER.match(part_id)
     if sticker and sticker.group(1) in facts:
-        return {sticker.group(1)}, "sheet"
+        # A number the corpus holds as an undecorated part is the mould this
+        # one is a decoration of, not a sheet it ships on -- so the count is
+        # the mould's, and `base` is the route that says so.
+        return ({sticker.group(1)},
+                "base" if sticker.group(1) in moulds else "sheet")
     for candidate in (part_id, printed.group(1) if printed else None):
         if candidate and candidate in designs:
             hits = {q for q in designs[candidate] if q in facts}
@@ -336,6 +345,7 @@ def main() -> int:
                                  "ORDER BY id").fetchall()
         ids = [r["id"] for r in part_rows]
         plain = {r["id"]: not r["printed"] for r in part_rows}
+        moulds = frozenset(i for i, undecorated in plain.items() if undecorated)
         retired = {r["id"] for r in part_rows if r["obsolete"]}
     finally:
         conn.close()
@@ -347,7 +357,7 @@ def main() -> int:
         if i % 5000 == 0:
             print(f"  matched {i:,}/{len(ids):,}", flush=True)
         hit = match(part_id, facts, designs,
-                    keyword_parts(parts_dir / f"{part_id}.dat"))
+                    keyword_parts(parts_dir / f"{part_id}.dat"), moulds)
         if hit is not None:
             part_nums, how = hit
             spans = [facts[n] for n in part_nums]
