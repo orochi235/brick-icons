@@ -1,3 +1,70 @@
+## Baton, 2026-09-10: the pose slots are drawn, and a print no longer wears its mould's history
+
+On `main` in the shared checkout, unpushed. Other sessions are committing
+here — `brick_icons/occt.py`, `primitives.py`, `shade.py`, `unwrap.py` and
+`lab/src/corpus/Lightbox.*` are theirs. Stage explicit paths.
+
+### What the pose work still owes
+
+`occt` and `white-occt` are both 382 of the 394 declaring parts, ingested and
+baked. The other slots those parts appear in are still drawn under the wrong
+camera: **decal 269, silhouette-occt 40, translucent-occt 34**, and 54 across
+the naive facets. Each is the same launch as `slot-white-occt-pose` with that
+slot's `SOURCE` and `EXTRA` — read them off the slot's last job rather than
+guessing, `onto run <node> -- cat` on the job's `meta.json`.
+
+**`ldview` and `reference` hold all 394 and cannot be fixed this way.**
+`declared_pose` is read by `library.py` and `cli.py`; those two slots are
+drawn by LDView and a browser, which never see it.
+
+**12 parts are past 600s and look unbounded**, in
+`out/pose-rerender-missing.txt`: `4110c03`, `4110c04`, `4110c07`, `4110c08`,
+`4707bc01`, `4707bc02`, `4707c05`, `70027`, `70028`, `70067`, `70160`,
+`70286`. All composites. Eight of the twelve died "inside a C call" — one
+uninterruptible OCCT call, which only the fork's process-group kill stops.
+Raising the cap again is not the move; `4110c06` and `93085p03d01` were the
+only two the 240s→600s raise recovered.
+
+**A watchdog kill must sit above the render cap, or it pre-empts it.** The run
+that lost 13 parts passed `--timeout 300` with `HARD` at its 240 default. At
+600/900 the cap did the stopping and every failure came back as a retryable
+`TimeoutError` row instead of a permanent write-off. **The census-batch.sh
+change that stops conflating the two is still unlanded** — Mike answered the
+cap question, not that one.
+
+### Pending, and not to be started without Mike
+
+The wall's renderer verdict (weasel beats canvas2d at every rung; badges, the
+kind strip and captions have never reached that renderer).
+
+### Traps this session paid for
+
+**`doneItems` unions the item ledger by TASK NAME, not by output directory.**
+A relaunch into a fresh `--out` inherits the old run's ledger, and a batch
+string it recognizes is skipped in silence — no stdout, no stderr, no
+`items.jsonl` row, and the job exits 0. That is how 24 parts sat unrendered
+through the run that existed to render them. Launch a re-run under a NEW task
+name.
+
+**Delivery has an owner half and a node half, and only the owner half is
+fixed.** orochi's agent took notices for four hours and acted on none;
+restarting it fixed that, and a replayed notice now collects. The node's ring
+sweep is still starved — studio's nine-hour job never rang once — so
+`--out`/`--to` will not stream per item. Compare `onto returns` against the
+log's render count, and expect to run `onto fetch --stream`.
+
+**A part's numbers are only its own on some routes.** `cells.sets_for` and
+`cells.years_for` are the gates; read `part_years` through them or the two
+views disagree about the same part. Three printed parts still badge `popular`
+— `10238`, `3069bpw2`, `98138p07` — off their own `!KEYWORDS` number rather
+than a prototype's, so they are not the same fault.
+
+### Left running
+
+A vite dev server on **5188** (mine, kill it) and the lab API on 8792, which I
+restarted at 00:24 — it is shared, and it had to reload to serve the gated
+numbers.
+
 ## Baton, 2026-09-10: occt draws the rims a substituted `cylo` swallowed
 
 On `main` in the shared checkout, committed as `76aeed5`, unpushed. Several
