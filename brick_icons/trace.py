@@ -428,7 +428,8 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
     if clip_geom is not None:
         from . import geom2d
         # grow by drawn-arc bulge regions so the clip never flattens an arc
-        clip = geom2d.union_all([clip_geom] + geom2d.arc_regions(segs))
+        clip = geom2d.union_all([clip_geom]
+                                + geom2d.arc_regions(segs, clip_geom))
         cd = geom2d.buffer_d(clip, max(line_px, sil_px) / 2.0)
         if cd:
             parts.append(f'<defs><clipPath id="sclip">'

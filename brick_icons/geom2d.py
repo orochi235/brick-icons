@@ -352,12 +352,22 @@ def area(g):
     return 0.0 if g is None else float(g.area)
 
 
-def arc_regions(segs):
+def arc_regions(segs, inside=None, cover=0.5):
     """Circular-segment polygons (arc + closing chord) of the drawn arc ops
     in a segment list. Face polygons follow the chords, but drawn arcs
     (fitted rounds) legitimately bulge past them by their sagitta — union
     these regions into the silhouette wherever it feeds strokes (clip,
-    contour) so an arc is never flattened."""
+    contour) so an arc is never flattened.
+
+    `inside` is the geometry the caller is about to grow, and a segment whose
+    CHORD does not run along it is dropped. A bulge sits on a boundary the
+    silhouette already has, so its chord lies on that boundary whether or not
+    the bulge itself does; an arc on a CONCAVE surface — the rim of an arch's
+    inner roll — closes its chord across the hollow instead, and growing by
+    that fills the arch mouth and draws the chord as a contour. Testing the
+    segment's own area cannot separate them: a fill polygon that follows the
+    chord exactly leaves a real bulge 0% inside.
+    """
     out = []
     for op in segs:
         if len(op) == 5 or op[0] == "line":
@@ -366,8 +376,26 @@ def arc_regions(segs):
         ts = np.radians(np.linspace(t0, t1, max(8, int(abs(t1 - t0) / 5) + 2)))
         ring = np.stack([cx + np.cos(ts) * ux + np.sin(ts) * vx,
                          cy + np.cos(ts) * uy + np.sin(ts) * vy], 1)
+        if inside is not None and not inside.is_empty \
+                and not _chord_on(ring, inside, cover):
+            continue
         out.append(to_geom(ring))
     return out
+
+
+def _chord_on(ring, inside, cover):
+    """Does the closing chord of this arc run along `inside`? Sampled rather
+    than tested as a line: an endpoint may sit a snap off the boundary, and a
+    chord that leaves the geometry does so over its whole middle."""
+    x0, y0, x1, y1 = inside.bounds
+    pad = max(1.0, 0.002 * max(x1 - x0, y1 - y0))
+    try:
+        grown = inside.buffer(pad)
+    except Exception:
+        return True
+    chord = np.linspace(ring[0], ring[-1], 9)
+    hits = int(shapely.contains_xy(grown, chord[:, 0], chord[:, 1]).sum())
+    return hits >= cover * len(chord)
 
 
 def densify_on_arcs(pts, cands, max_step=6.0):

@@ -336,3 +336,23 @@ def test_a_self_intersecting_ring_keeps_its_holes():
     g = geom2d.to_geom(np.array(bowtie, float), holes=[np.array(hole, float)])
     assert not g.is_empty
     assert geom2d.area(g) < solid
+
+
+def test_a_bulge_grows_the_silhouette_and_a_hollow_does_not():
+    """`arc_regions` grows a silhouette by each drawn arc's circular segment,
+    which is right for a bulge (a fitted round bowing past its chords) and
+    wrong for the rim of a CONCAVE surface: an arch's inner roll closes its
+    chord across the mouth, so growing by it fills the opening and draws the
+    chord as a contour (5843, 5845, 5850).
+
+    The two are told apart by the CHORD, not by the segment's own area: the
+    bulge below sits on the square's right edge and is 0% inside it."""
+    sq = geom2d.to_geom(np.array([(0, 0), (100, 0), (100, 100), (0, 100)],
+                                 float))
+    bulge = ("arc", 100.0, 50.0, 15.0, 0.0, 0.0, 15.0, -90.0, 90.0, "edge")
+    # a rim standing off in open space, its chord crossing nothing
+    hollow = ("arc", 300.0, 50.0, 15.0, 0.0, 0.0, 15.0, -90.0, 90.0, "edge")
+    assert len(geom2d.arc_regions([bulge, hollow])) == 2
+    kept = geom2d.arc_regions([bulge, hollow], sq)
+    assert len(kept) == 1
+    assert kept[0].bounds[2] > 100.0        # the bulge, not the hollow

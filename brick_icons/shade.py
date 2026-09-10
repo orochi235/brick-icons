@@ -1510,7 +1510,7 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
         # authored facet chords, and the slit between them belongs to no
         # face polygon at all (30137's log tops) — the contour/clip
         # already grow by these same regions
-        arcr = geom2d.arc_regions(strokes)
+        arcr = geom2d.arc_regions(strokes, base)
         if arcr:
             base = geom2d.union_all([base] + arcr)
         # pass the arc-grown region as the band's silhouette too: the raw

@@ -308,7 +308,8 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                 if sil_geom is not None and spurs is not None:
                     sil_geom = geom2d.difference(sil_geom, spurs)
                 contour = geom2d.contour_d(
-                    geom2d.union_all([sil_geom] + geom2d.arc_regions(shifted)),
+                    geom2d.union_all([sil_geom]
+                                     + geom2d.arc_regions(shifted, sil_geom)),
                     geom2d.arc_candidates(ells)) \
                     if sil_geom is not None else None
                 w_mm = vb_w / s * 0.4
@@ -344,7 +345,8 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                 if sil_geom is not None and spurs is not None:
                     sil_geom = geom2d.difference(sil_geom, spurs)
                 contour = geom2d.contour_d(
-                    geom2d.union_all([sil_geom] + geom2d.arc_regions(fit)),
+                    geom2d.union_all([sil_geom]
+                                     + geom2d.arc_regions(fit, sil_geom)),
                     geom2d.arc_candidates(ells)) \
                     if sil_geom is not None else None
                 trace.segments_to_svg(fit, cfg.width, cfg.height, out_dir / f"{name}.svg",
@@ -363,9 +365,10 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                          or _sil_faces(res, f, ox, oy))
                 if not faces:
                     return None
+                sil = shade.silhouette_geom(faces)
                 g = geom2d.close_slivers(
-                    geom2d.union_all([shade.silhouette_geom(faces)]
-                                     + geom2d.arc_regions(fit_segs)))
+                    geom2d.union_all([sil]
+                                     + geom2d.arc_regions(fit_segs, sil)))
                 return geom2d.rings(g, min_area=0.5)
             if cfg.mode in ("gray", "both"):
                 gpx = max(cfg.width, cfg.height, cfg.render_px // 2)
