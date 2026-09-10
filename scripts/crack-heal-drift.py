@@ -40,6 +40,11 @@ def segs_of(out, right, up, px):
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=200)
+    ap.add_argument("--batch", help="comma-separated ids, for onto's item "
+                                    "dispatch; names its own JSONL under --dir")
+    ap.add_argument("--dir", help="write <first part>.jsonl here, for --batch")
+    ap.add_argument("--skip-done", action="store_true",
+                    help="append, skipping parts the JSONL already has")
     ap.add_argument("--parts", help="ids to draw, one per line; without it the "
                                     "sample is taken from corpus.db, which a "
                                     "fleet node does not have")
@@ -48,9 +53,12 @@ def main() -> int:
     ap.add_argument("--out", default="out/crack-heal-drift.jsonl")
     args = ap.parse_args()
 
-    if args.parts:
+    if args.batch:
+        sample = [x for x in args.batch.split(",") if x]
+    elif args.parts:
+        # No --n slice here: a list is the work, not a pool to sample from.
         sample = [l.strip() for l in Path(args.parts).read_text().splitlines()
-                  if l.strip()][:args.n]
+                  if l.strip()]
     else:
         conn = sqlite3.connect(ROOT / db.DEFAULT_PATH)
         marks = ",".join("?" * len(db.OUT_OF_SCOPE_CATEGORIES))
@@ -62,14 +70,30 @@ def main() -> int:
     ldraw = config.load_config().ldraw_dir
     right, up, _fwd = hlr.view_basis(30.0, 45.0)
 
+    if args.dir:
+        d = Path(args.dir)
+        d.mkdir(parents=True, exist_ok=True)
+        args.out = str(d / f"{sample[0]}.jsonl")
     outp = Path(args.out)
     outp.parent.mkdir(parents=True, exist_ok=True)
+
+    done: set[str] = set()
+    if args.skip_done and outp.exists():
+        for line in outp.read_text().splitlines():
+            try:
+                done.add(json.loads(line)["part"])
+            except (ValueError, KeyError):
+                continue
+        sample = [p for p in sample if p not in done]
+        print(f"resuming: {len(done)} done, {len(sample)} left", flush=True)
+    inflight = outp.with_suffix(outp.suffix + ".inflight")
     healed_n = changed = same = failed = 0
     real = occt.heal_face_cracks
-    with outp.open("w") as fh:
+    with outp.open("a" if args.skip_done else "w") as fh:
         for i, part in enumerate(sample, 1):
             t0 = time.time()
             row = {"part": part}
+            inflight.write_text(part)
             try:
                 out = occt.flatten_part(part, ldraw)
                 out["fit_arcs"], out["2"] = arcfit.fit_edge_arcs(out["2"], out["5"])
