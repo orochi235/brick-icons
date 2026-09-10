@@ -113,6 +113,39 @@ compare `find vendor/ldraw -name '*.dat' | LC_ALL=C sort` between nodes instead,
 and use `LC_ALL=C comm`, or the collation mismatch reports the whole library as
 different.
 
+### Where to pick this up
+
+On `main` in the shared checkout, seven commits unpushed (`1f654f2..6c28aff`).
+`tests/goldens/defects.toml` is Mike's and stays dirty; never stage it.
+
+1. **Relaunch `store-restale-white-occt`.** It exited 1 on both nodes at 15,308
+   of 18,190 parts with 26 failed, hours inside its deadline, and the log says
+   nothing else. Same task name continues it -- `census-batch.sh` resumes from
+   the JSONLs already in the tree -- and the launch line is the one in the
+   section above with `--with keiei` and studio as the primary. Do not make
+   msb-uai a queue host.
+2. **`silhouette-occt` (8,779) and `translucent-occt` (4,649) were never
+   launched.** Their lists are already on all three nodes at
+   `out/store-restale-<slot>/batches.txt`.
+3. **146 parts entered scope with `78d6d27` and have no render in any slot** --
+   the `_`-prefixed figures. Cheap to fold into whichever batch goes next.
+4. **Everything in flight predates `069c08b`**, the gradient-band fix at the top
+   of this file. Whether to accept a corpus one commit behind or redraw is
+   still Mike's call and nobody has taken it.
+
+**A named-color palette for `--debug-colors` was built and reverted, and the
+reason is worth not rediscovering.** Anchors declared as (hue, lightness) with
+the hex derived at maximum chroma, plus LDraw's own solids read from LDConfig,
+picked under a hue floor normalized to a share of an even 360/n. It is a better
+palette for a person choosing from it and a worse one for this: named pools cap
+around 32 colors, and 2947bc01 draws 49 elements, so 17 of them wore a color
+another element already had. Measured against the packed set on five parts --
+the named set wins under ~32 elements and loses past it. The write-up, the
+patch and the generator are in this session's scratchpad
+(`palette-handoff.md`, `palette-work.patch`, `gen-debug-palette.py` under
+`/private/tmp/claude-501/-Users-mike-src-brick-icons/571f4a54-*/scratchpad/`),
+which is session-scoped: move them somewhere durable or lose them.
+
 ## Two ways an exact surface got its shading wrong, and the slot that is still stale
 
 Both landed: `_curved_frame`'s sign (inside `3714533`, see below) and `909140c`.
