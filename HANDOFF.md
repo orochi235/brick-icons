@@ -1,3 +1,22 @@
+## 5845's lens: a majority chord test was not enough
+
+`7307236`. `arc_regions`' chord test now requires EVERY sample to land on the
+silhouette, not most of them. 5845's outer roll has a far rim whose chord runs
+along the silhouette for two thirds of its length and leaves it for the rest;
+a majority test kept it, and the sliver it grew down the inside of the arch was
+`5843`'s wedge again, narrower. LDView draws that surface solid, and so do both
+engines now.
+
+Nothing scores between -- over the arches and the golden corpus a legitimate
+bulge lands 9 of 9 samples, the two hollows 6 and 2. Every golden part stays
+byte-identical on naive. On occt the same rule also fills `38583`'s curved
+cutout and `11090`'s jaw, both toward LDView.
+
+**Judge this class against LDView, not against naive.** naive carries the same
+stray chord and the same lens, so an A/B between the engines agrees on the
+defect. `scripts/render-references.py <part> --out <dir> --engine occt` is the
+oracle.
+
 ## The arch wedge: `arc_regions` grew a silhouette by a hollow
 
 Fixed in `6433554`. `geom2d.arc_regions` unions every drawn arc's circular
