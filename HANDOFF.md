@@ -22,14 +22,19 @@ beside it.
 
 **38 parts are still owed, not 24** — `out/pose-rerender-missing.txt` now
 holds all of them. 24 are the `2362*` and `3678*` batches that never wrote a
-JSONL. The other 14 were buried as `ProcessDied`: `4110c03`, `4110c04`,
+JSONL. The other 14 were **buried** — `batch.py`'s word for a part that took
+its interpreter down with it, named in the `.inflight` marker and written back
+as a row with `error: ProcessDied` so a resume cannot loop on it forever —
+`4110c03`, `4110c04`,
 `4110c06`, `4110c07`, `4110c08`, `4707bc01`, `4707bc02`, `4707c05`, `70027`,
 `70028`, `70067`, `70160`, `70286`, `93085p03d01`. The entry below named four
 of those; the log records fourteen.
 
-**13 of those 14 are watchdog kills, and this run is the reproduction.**
-`census-batch.sh`'s own watchdog killed them at 241s to 254s against
-`HARD=240`, each named in the job's **stderr** — `4110c03` 253s, `70027` 254s,
+**13 of those 14 are watchdog kills, and this run is the reproduction.** The
+watchdog is `HARD` in `census-batch.sh`, 240s by default, and it is not the
+render cap — `--timeout` is, per part, in a forked child. `HARD` is for the
+pass itself wedging, and it SIGKILLs the interpreter working that batch. It
+killed these at 241s to 254s, each named in the job's **stderr** — `4110c03` 253s, `70027` 254s,
 `93085p03d01` 244s, and ten more at 241-242s — with one resume pass per kill.
 The entry below reads it the other way ("not the watchdog") off the stdout
 render times, and stdout cannot show a kill: it lists what finished, and the
@@ -43,9 +48,13 @@ bad luck.
 **The database is honest about them; the resume logic is not.** They carry a
 run-24 measurement with `error = 'ProcessDied'` and no pixels, and
 `slot-coverage.py` gates on `error IS NULL`, so they count as owed rather than
-drawn. What loses them is `remaining()`, which never retries a burial: raising
-`HARD` on its own would not bring one of them back, because the run that
-killed them already wrote them off as permanently failed. They come back only
+drawn. What loses them is that a burial is deliberate and permanent by design —
+`batch.py` buries a part so a resume cannot loop forever on one that segfaults,
+and `census-batch.sh`'s own comment says a re-run "steps over it". That is the
+right guard for a part that kills interpreters and the wrong one for a part
+that merely wanted more than 240 seconds, and the watchdog fires both. So
+raising `HARD` alone brings none of these back: the run that killed them has
+already written them off. They come back only
 by being named in a list, which is what `out/pose-rerender-missing.txt` is
 for.
 
