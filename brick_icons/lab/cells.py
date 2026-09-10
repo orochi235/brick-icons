@@ -12,7 +12,7 @@ import sqlite3
 
 from brick_icons import tags as part_tags
 from brick_icons.lab import defects as defects_toml
-from brick_icons.db import OUT_OF_SCOPE_CATEGORIES, SOURCES
+from brick_icons.db import MOVED_PREFIX, OUT_OF_SCOPE_CATEGORIES, SOURCES
 
 # Matched on source, not engine. Two facets of one engine are both "naive", so
 # the newest run per engine is whichever facet was indexed last -- which handed
@@ -336,7 +336,7 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
             f"(printed = 0 AND obsolete = 0 AND id NOT LIKE '%c__' "
             f"AND id NOT LIKE '%d__' AND id NOT LIKE 'u9%') AS base, "
             f"(category IN ({scope_marks})) AS out_of_scope, "
-            f"(title LIKE '~Moved to%') AS moved "
+            f"(title LIKE '{MOVED_PREFIX}%') AS moved "
             f"FROM parts WHERE id IN ({marks}) ORDER BY id",
             (*OUT_OF_SCOPE_CATEGORIES, *wanted)):
         pid = part["id"]

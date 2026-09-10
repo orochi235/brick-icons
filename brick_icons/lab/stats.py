@@ -9,7 +9,7 @@ import json
 import sqlite3
 
 from brick_icons import tags as part_tags
-from brick_icons.db import OUT_OF_SCOPE_CATEGORIES
+from brick_icons.db import MOVED_PREFIX, OUT_OF_SCOPE_CATEGORIES
 from brick_icons.lab.cells import (COVERAGE_ORDER, coverage_of, engine_for,
                                    not_applicable)
 
@@ -98,7 +98,7 @@ def members(conn: sqlite3.Connection, *, kind: str = "all", moved: bool = False,
         f"(printed = 0 AND obsolete = 0 AND id NOT LIKE '%c__' "
         f"AND id NOT LIKE '%d__' AND id NOT LIKE 'u9%') AS base, "
         f"(category IN ({scope_marks})) AS out_of_scope, "
-        f"(title LIKE '~Moved to%') AS moved "
+        f"(title LIKE '{MOVED_PREFIX}%') AS moved "
         f"FROM parts ORDER BY id", OUT_OF_SCOPE_CATEGORIES))
 
     years = {r["part_id"]: r for r in conn.execute(

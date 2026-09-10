@@ -42,20 +42,45 @@ def _library(tmp_path):
     (parts / "3004p01.dat").write_text("0 Brick  1 x  2 with Cat Pattern\n")
     (parts / "3005.dat").write_text("0 ~Moved to 3005a\n")
     (parts / "u9236.dat").write_text("0 _Shortcut Something\n")
+    (parts / "92198p01c02.dat").write_text(
+        "0 _Figure Friends Cinderella with Two-Coloured Blue Dress\n")
+    (parts / "u9346.dat").write_text("0 ~Electric Mini-Motor  9V - Body\n")
     return tmp_path / "ldraw"
 
 
 def test_seeding_reads_the_description_not_the_id(tmp_path):
     conn = db.connect(tmp_path / "corpus.db")
-    assert db.seed_parts(conn, _library(tmp_path)) == 4
+    assert db.seed_parts(conn, _library(tmp_path)) == 6
     rows = {r["id"]: r for r in conn.execute("SELECT * FROM parts")}
     assert rows["3001"]["title"] == "Brick  2 x  4"
     assert rows["3001"]["category"] == "Brick"
     assert rows["3001"]["printed"] == 0
     assert rows["3004p01"]["printed"] == 1
     assert rows["3005"]["obsolete"] == 1
-    assert rows["u9236"]["obsolete"] == 1
+    assert rows["u9346"]["obsolete"] == 1
     assert rows["3001"]["status"] == "unreviewed"
+
+
+def test_a_color_locked_part_is_not_obsolete(tmp_path):
+    """`_` says draw this in the colors named, not that the part is finished.
+    Reading it as obsolete held 146 current printed figures out of the corpus
+    and out of every engine slot."""
+    conn = db.connect(tmp_path / "corpus.db")
+    db.seed_parts(conn, _library(tmp_path))
+    rows = {r["id"]: r for r in conn.execute("SELECT * FROM parts")}
+    assert rows["92198p01c02"]["obsolete"] == 0
+    assert rows["u9236"]["obsolete"] == 0
+
+
+def test_a_moved_to_stub_is_obsolete_and_says_so_in_its_title(tmp_path):
+    """The redirect case the wall separates out: obsolete covers it, and
+    `db.MOVED_PREFIX` is what tells it apart from a fragment."""
+    conn = db.connect(tmp_path / "corpus.db")
+    db.seed_parts(conn, _library(tmp_path))
+    rows = {r["id"]: r for r in conn.execute("SELECT * FROM parts")}
+    assert rows["3005"]["title"].startswith(db.MOVED_PREFIX)
+    assert not rows["u9346"]["title"].startswith(db.MOVED_PREFIX)
+    assert rows["u9346"]["obsolete"] == 1
 
 
 def test_reseeding_keeps_a_status_a_human_set(tmp_path):
@@ -329,7 +354,7 @@ def test_rebuild_walks_renders_and_toml_and_jsonl(tmp_path):
     # Popped rather than pinned: the number is one row per feature per part,
     # so pinning it would make every new feature a failing rebuild test.
     assert counts.pop("features") > 0
-    assert counts == {"parts": 4, "renders": 1, "measurements": 1,
+    assert counts == {"parts": 6, "renders": 1, "measurements": 1,
                       "attempts": 0, "skipped": 0, "replaced": 0, "defects": 0,
                       "statuses": 0, "years": 0, "successors": 0}
 

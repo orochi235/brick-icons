@@ -240,13 +240,39 @@ def connect(path: Path | str = DEFAULT_PATH) -> sqlite3.Connection:
     return conn
 
 
+#: LDraw's description prefix for a file that must not be used on its own:
+#: a superseded mould, a fragment of an assembly, or a redirect to whatever
+#: replaced it. That is what `parts.obsolete` means, and the corpus excludes
+#: it because no icon will ever be asked for one.
+NOT_A_PART_PREFIX = "~"
+
+#: A redirect and nothing else -- a nine-line file whose only content is a
+#: reference to the part that replaced it, which is why 1,081 of the 1,159 in
+#: the library draw a picture byte-identical to that part's. Also `~`, so
+#: obsolete covers it; named here because the wall says which ones these are.
+MOVED_PREFIX = "~Moved to"
+
+
+def is_obsolete(title: str) -> bool:
+    """Whether LDraw says this file is not a part to draw on its own.
+
+    `_` is NOT one of these, though it was until 2026-09-10: that prefix
+    means the part has to be drawn in the colors its description names --
+    `_Figure Friends Stephanie with Magenta Layered Skirt` is a current part
+    with a print, and not one of the 146 says obsolete anywhere. Reading it as
+    obsolete kept every one of them out of the corpus and out of all four
+    engine slots.
+    """
+    return title.startswith(NOT_A_PART_PREFIX)
+
+
 def seed_parts(conn: sqlite3.Connection, ldraw_dir: Path | str) -> int:
     rows = []
     for entry in partindex.build(ldraw_dir).values():
         title = entry["description"]
         rows.append((entry["id"], title, title.split()[0] if title else None,
                      int(entry["printed"]),
-                     int(title.startswith(("~", "_"))),
+                     int(is_obsolete(title)),
                      entry["preview"]))
     conn.executemany(
         "INSERT INTO parts (id, title, category, printed, obsolete, preview) "
