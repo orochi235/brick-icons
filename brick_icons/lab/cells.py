@@ -178,6 +178,26 @@ def colors_for(year: sqlite3.Row | None) -> int | None:
     return year["colors"]
 
 
+#: Routes whose YEARS describe another part, which is a shorter list than
+#: `BORROWED_COUNT_ROUTES`. `keywords` and `prints` carry no set count anyone
+#: can use, but the span each reads is this part's own -- the sets LDraw names
+#: for it, and the years of the prints cut from the mould. `base` is the span
+#: of the one mould the print is struck on, which is a fact about the print.
+#:
+#: A design id is not: it names every mould cut from that id, and the span is
+#: the union across all of them. 699 printed torsos read 1983-2026 that way,
+#: and the wall drew every one as still in production since 1983.
+BORROWED_YEAR_ROUTES = frozenset({"design", "design-id-base"})
+
+
+def years_for(year: sqlite3.Row | None) -> tuple[int | None, int | None]:
+    """The years this part was made, or a pair of Nones where the span is not
+    its own."""
+    if year is None or year["matched"] in BORROWED_YEAR_ROUTES:
+        return None, None
+    return year["year_from"], year["year_to"]
+
+
 def live_sources(conn: sqlite3.Connection) -> list[str]:
     """The slots this corpus has anything to say about, in `SOURCES` order.
 
@@ -341,8 +361,8 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
             # A redirect to the part that replaced it, not a part -- LDraw
             # keeps the file so old models still load.
             "moved": bool(part["moved"]),
-            "year_from": year["year_from"] if year else None,
-            "year_to": year["year_to"] if year else None,
+            "year_from": years_for(year)[0],
+            "year_to": years_for(year)[1],
             "sets": sets_for(year),
             "colors": colors_for(year),
             # The part that replaced this one, where one is known: the wall's

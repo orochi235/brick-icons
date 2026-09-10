@@ -431,9 +431,13 @@ def create_app(root: Path | str = ".",
                      for source in cells.live_sources(conn)]
             states = cells.slot_states(conn, part_id,
                                        [s["source"] for s in slots])
+            # `matched` comes with the row because the numbers are only this
+            # part's on some routes -- `cells` owns that rule and the detail
+            # view has to read it through the same gate, or the two disagree
+            # about the same part.
             years = conn.execute(
-                "SELECT year_from, year_to, sets FROM part_years WHERE part_id = ?",
-                (part_id,)).fetchone()
+                "SELECT year_from, year_to, sets, colors, matched "
+                "FROM part_years WHERE part_id = ?", (part_id,)).fetchone()
             # In the module's own order, and a flag keeps its null value: the
             # page tells a flag from a measure by that null and so never has
             # to carry a copy of the vocabulary.
@@ -446,9 +450,8 @@ def create_app(root: Path | str = ".",
         finally:
             conn.close()
         part = dict(row)
-        part["year_from"] = years["year_from"] if years else None
-        part["year_to"] = years["year_to"] if years else None
-        part["sets"] = years["sets"] if years else None
+        part["year_from"], part["year_to"] = cells.years_for(years)
+        part["sets"] = cells.sets_for(years)
         part["tags"] = tags.tags_for(part["category"], bool(part["printed"]),
                                      bool(part["obsolete"]),
                                      part["year_to"], part["sets"],

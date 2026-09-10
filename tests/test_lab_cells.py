@@ -222,6 +222,31 @@ def test_a_counted_part_reports_the_sets_it_is_in(conn):
     assert "popular" in row["tags"]
 
 
+def test_a_design_route_part_reports_no_years(conn):
+    """A design id names every mould cut from it, so its span is the family's:
+    699 printed torsos read 1983-2026 and the wall drew every one of them as
+    still in production since 1983. The print's own years are not known, and
+    a blank says so."""
+    _part(conn, "973p2a", title="Minifig Torso with Chef Pattern")
+    _years(conn, "973p2a", 1983, 2026, 4100, "design")
+    row = cells.cells(conn)["cells"][0]
+    assert row["year_from"] is None
+    assert row["year_to"] is None
+    assert row["sets"] is None
+    assert "retired" not in row["tags"]
+
+
+def test_a_keyword_year_is_the_part_s_own(conn):
+    """The set count is borrowed and the years are not: `keywords` reads the
+    years off the sets LDraw's own !KEYWORDS line names for THIS part."""
+    _part(conn, "973p1s", title="Minifig Torso with Mail Horn Pattern")
+    _years(conn, "973p1s", 1983, 1983, 0, "keywords")
+    row = cells.cells(conn)["cells"][0]
+    assert row["year_from"] == 1983
+    assert row["year_to"] == 1983
+    assert row["sets"] is None
+
+
 def test_an_estimated_year_reports_no_set_count(conn):
     # `keywords` reads the sets off LDraw's own !KEYWORDS line, so there is no
     # inventory behind the row and its 0 is an absence, not a count. Reported
