@@ -48,16 +48,23 @@ from brick_icons import build
 from brick_icons.batch import Runner
 
 
-def truth_mask(part: str, ldraw_dir: Path, fit: dict, zoom: int) -> np.ndarray:
+def truth_mask(part: str, ldraw_dir: Path, fit: dict, zoom: int,
+               pose=None) -> np.ndarray:
     """The part's own triangles, projected and filled. No "analytic" key, so
-    every primitive tessellates instead of being recognized."""
+    every primitive tessellates instead of being recognized.
+
+    `pose` has to be the same turn the render used. Left at identity against a
+    posed render the oracle draws a different part, and the two disagree over
+    the whole silhouette -- 27,785 missing pixels on 2362a against 2.
+    """
     right, up = np.array(fit["right"]), np.array(fit["up"])
     k, kx, ky = fit["k"], fit["kx"], fit["ky"]
     W, H = fit["width"] * zoom, fit["height"] * zoom
 
     roots = hlr.default_roots(ldraw_dir)
     out: dict = {"2": [], "5": [], "tri": [], "tri_meta": []}
-    hlr.flatten(hlr._resolve_input(part, roots), np.eye(3), np.zeros(3), out, roots)
+    root = np.eye(3) if pose is None else np.asarray(pose, float)
+    hlr.flatten(hlr._resolve_input(part, roots), root, np.zeros(3), out, roots)
     T = np.array(out["tri"], float)
     P = np.stack([(T @ right) * k * zoom + kx * zoom,
                   -(T @ up) * k * zoom + ky * zoom], axis=-1)
@@ -145,8 +152,9 @@ def one(part: str, args, tmp: Path) -> dict:
     phase["rasterize"] = round(time.perf_counter() - t0, 2)
 
     t0 = time.perf_counter()
-    truth = truth_mask(part, cfg.ldraw_dir, json.loads((tmp / f"{part}.fit.json").read_text()),
-                       args.zoom)
+    truth = truth_mask(part, cfg.ldraw_dir,
+                       json.loads((tmp / f"{part}.fit.json").read_text()),
+                       args.zoom, pose=cli.part_pose(cfg, part))
     phase["truth_mask"] = round(time.perf_counter() - t0, 2)
 
     t0 = time.perf_counter()

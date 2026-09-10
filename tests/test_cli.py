@@ -361,3 +361,38 @@ def test_render_tag_stamps_a_posed_render(ldraw_dir):
         ["87544dq0", "--root", str(ldraw_dir.parent.parent)]))
     assert "posed" in cli.render_tag(cfg, "87544dq0", True).split()
     assert "posed" not in cli.render_tag(cfg, "3001", False).split()
+
+
+def test_the_census_oracle_is_posed_with_the_render(ldraw_dir):
+    """The truth mask has to be built from the same turn the render used.
+
+    Left at identity against a posed render, the oracle draws a different part
+    and every declaring part measures as a whole-silhouette defect -- 2362a
+    went from 2 missing pixels to 27,785. Nothing errors; the rows are just
+    wrong, which is why this is a test rather than a comment.
+    """
+    import importlib.util
+
+    from brick_icons import cli, hlr
+
+    spec = importlib.util.spec_from_file_location(
+        "cst", Path(__file__).resolve().parent.parent
+        / "scripts" / "compare-silhouette-truth.py")
+    cst = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cst)
+
+    part = "2362a"
+    pose = cli.part_pose(cli._config_from_args(cli.build_parser().parse_args(
+        [part, "--root", str(ldraw_dir.parent.parent)])), part)
+    assert pose is not None
+
+    # The real iso basis: a synthetic axis-aligned one hides the difference,
+    # because a 180 about Y only mirrors the silhouette and this part is
+    # symmetric across that mirror.
+    right, up, _ = hlr.view_basis(30.0, 45.0)
+    fit = {"right": list(right), "up": list(up), "k": 1.0,
+           "kx": 60, "ky": 60, "width": 120, "height": 120}
+    plain = cst.truth_mask(part, ldraw_dir, fit, 1)
+    posed = cst.truth_mask(part, ldraw_dir, fit, 1, pose=pose)
+    assert plain.sum() and posed.sum()
+    assert not np.array_equal(plain, posed)
