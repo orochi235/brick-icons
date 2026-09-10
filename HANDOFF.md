@@ -9,8 +9,23 @@ a guard there. Its uncommitted work is `lab/src/corpus/Lightbox.*` and
 
 `onto` job `79ecf756`, task `slot-occt-pose`, on msb-uai: the 394 declaring
 parts re-rendered under their turn, into `out/slot-occt-pose2` with
-`SOURCE=occt` so they overwrite those parts' occt rows. Deadline 1:09AM,
-delivering as it goes. **It still has to be ingested** — `ingest-renders`.
+`SOURCE=occt` so they overwrite those parts' occt rows. Deadline 1:09AM.
+
+**Nothing has come home and a fetch is required — do not skip it.** `--out`
+and `--to` promise delivery "as items finish" and this job has delivered
+nothing in 332 renders; `onto deliver -at items 79ecf756` did not start it
+either. `onto returns` shows one 3.3K file, which is `batches.txt` echoed
+back. The rows and drawings are on the node. Run
+`onto fetch --stream slot-occt-pose` once the job stops, confirm the JSONL
+count locally, and only then ingest (`ingest-renders`).
+
+It is not the flags and not one node: `slot-occt-r2` on studio streams
+normally at 8h old, while this job (uai, 7m) and `crack-heal-drift-r3`
+(keiei, 27m) have both delivered nothing. Both non-delivering jobs are young
+and the delivering one is old, so a cadence rather than a broken node is the
+better guess — untested. **Check `onto returns` against the log's render
+count before trusting any slot to have arrived.**
+
 The other slots those 394 appear in (white-occt, silhouette-occt,
 translucent-occt, ldview, reference) are all still stale; only occt was
 relaunched.
