@@ -1,3 +1,26 @@
+## The arch wedge: `arc_regions` grew a silhouette by a hollow
+
+Fixed in `6433554`. `geom2d.arc_regions` unions every drawn arc's circular
+segment into whatever the caller is about to grow -- contour, stroke clip,
+`fill_ops`' `base`. Right for a fitted round bowing past its chords, wrong for
+the rim of a concave surface: an arch's inner roll closes its chord across the
+mouth, so the mouth filled and the chord drew as a contour.
+
+`76aeed5` only made it visible, by drawing rims nothing drew before. **naive
+has the same stray chord on 5843, 5845 and 5850 without it** -- the "naive has
+extra chord" half of the 5843 and 5845 defect rows.
+
+**The chord separates bulge from hollow; the segment's own area does not.**
+Area was tried first and fails a case `tests/test_trace.py` already pins: a
+fill polygon that follows the chord exactly leaves a real bulge 0% inside. A
+bulge sits on a boundary the silhouette already has, so its chord runs along
+that boundary. Measured on 5850, segment-inside-silhouette runs 99.9-100% for
+every real bulge and 0.9% for the arch rim -- which looks decisive and is not,
+because 5845's far curved-top rim measures 88.1% and is legitimate.
+
+All 23 golden parts are byte-identical on naive. The only parts naive moves on
+are those three arches, and it moves toward losing the chord.
+
 ## The formed-sticker over-wrap: unwrap models a sheared carrier as a circle
 
 **The bare slope this entry describes is fixed, by a different mechanism.**
