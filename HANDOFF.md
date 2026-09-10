@@ -201,20 +201,43 @@ That is why the defect list is printed tiles and not a random cross-section.
 `ShapeFix_Shape` is not the cheaper answer: it leaves the shape invalid and
 takes 3070bp1k from 5 extras to 2.
 
-**Where to take it next.** Test the pathology rather than proxying it with
-whole-shape validity, which covers self-intersection, wire order and tolerance
-faults that never move a stroke. The signature actually measured on 3070bp1k
-is a face whose area exceeds its own outer wire's -- 400.192 against 400.000 --
-having gained near-zero-area inner wires the sewn shape did not have. Reject or
-repair THAT FACE and keep the merge on every other one; the current guard
-discards the whole result to fix one face, which is where the 3-40x comes from.
+**The narrow fix is built and measured, and it is the one to land.** Keep the
+merge; drop only the inner wires that are CRACKS, and keep every genuine hole
+on the same face. A crack is an inner wire with perimeter^2/area above 100.
+That number is dimensionless on purpose -- a length tolerance would need a
+different value at every part scale -- and it sits in a 50x gap that the
+library itself opened: over the class and its controls a genuine hole measures
+12.6 (circle), 16.0 (square), at worst 18.8, while a crack left by the merge
+runs 980 to 12,275.
 
-Two gaps in the evidence, so nobody assumes they are closed. The mechanism was
-traced on 3070bp1k only -- the other six were checked for a changed outcome,
-not for the same cause, and 3941 rejects its merge while picking 102 edges
-either way, so it pays the cost for nothing. And the converse is untested:
-whether a part whose merge is VALID can still draw hidden edges, which would
-make the guard incomplete as well as broad.
+    part        faces   healed  cracks   picked        px changed
+    3070bp1k       16        1       2   19 -> 14      519  (n=1)
+    30258p05       25        1       2   27 ->  9      648  (n=4)
+    10202p04       91        1       1  169 -> 14     4955  (n=26)
+    14769pt0      119        1       1   66 -> 49      396  (n=3)
+    25269p00       38        1       1   67 -> 62      514  (n=1)
+    3070b, 3001, 30137 and every other control: 0 healed, 0px changed
+
+Face counts do not move, because the merge is kept -- 10202p04 stays at 91
+faces where rejecting the merge gave it 3,757, and renders in 8.6s against
+HEAD's 11.0s. The cost that made the broad guard a decision is simply absent.
+
+Two things it does not do, both harmless so far: 3941 heals four cracks and
+draws the same 102 edges either way, and most of these shapes stay INVALID
+afterwards, since their invalidity has causes that never move a stroke. That
+is the point -- whole-shape validity was never the right question.
+
+Superseded, do not rebuild: the area-sign test (face area exceeding its own
+outer wire's). It catches 3070bp1k, whose cracks ADD 0.192, and misses
+30258p05, whose cracks SUBTRACT 2.445 and so read as a genuine hole.
+
+One gap left. The converse is untested: whether a part whose merge carries no
+crack can still draw hidden edges, which would make the repair incomplete. The
+five above are fixed; nothing says they are all of them.
+
+**Unbuilt as of this entry:** the repair lives in a scratchpad harness, not in
+`brick_icons/occt.py`. It needs a home for CRACK_Q, a test per the class above,
+and a corpus round to confirm it moves nothing else.
 
 ### Two of the ten are a different bug and must not be chased with the rest
 
