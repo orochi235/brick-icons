@@ -39,7 +39,13 @@ ends of a ramp, no shape moved.
 
 ## The four occt slots are being redrawn against the 2026-09-10 fixes — in flight
 
-**Two jobs are running as of 09:50; two slots are still queued.** The stale set is
+**occt is still drawing; white-occt stopped at 84%; two slots are never
+started.** As of 19:40: `store-restale-occt` is running on msb-uai, and
+`store-restale-white-occt` exited 1 on both studio and keiei after 15,308 of
+18,190 parts with 26 failed — short of its 3:48AM deadline, and the log gives
+no reason beyond the failure count. 15,270 of its renders are home and
+ingested. The remainder is owed, and a relaunch under the same task continues
+it: `--skip-done` reads the JSONLs already there. The stale set is
 every occt-family render drawn before `7307236` (2026-09-10 01:26), the last of
 the four fixes that move a stroke — the two shading-sign fixes, the tangent-wall
 ramp and the arc-chord rule. Lists are in `store-queue/stale-0910/`, one per slot
@@ -48,8 +54,8 @@ plus its `-batches.txt`, and the nodes hold a copy under
 
 | slot | stale | fresh | job |
 |---|---|---|---|
-| occt | 18,003 | 987 | `store-restale-occt`, msb-uai, 8 workers |
-| white-occt | 18,190 | 1,563 | `store-restale-white-occt`, studio + keiei, 8 each |
+| occt | 18,003 | 987 | `store-restale-occt`, msb-uai, running |
+| white-occt | 18,190 | 1,563 | `store-restale-white-occt`, stopped at 15,308 |
 | silhouette-occt | 8,779 | 1,567 | queued |
 | translucent-occt | 4,649 | 1,564 | queued |
 
@@ -62,9 +68,29 @@ whichever tree sorts last and `restale-arch-occt` loses to `slot-occt`.
 writer wins — so a refresh named `restale-*` would be overwritten by the
 pre-fix `slot-*` trees it exists to replace.
 
-**Ingest is a rebuild, not `ingest-watch.py`.** Every part here already holds a
-row in its slot, and the watcher skips a part it finds there — it would index
-nothing and report success, the way it did on the pose re-render.
+**Ingest is `ingest-watch.py --overwrite`, running as its own onto job.**
+
+    onto run --detach --timeout 6h --dir "$PWD" --task ingest-restale \
+      --env PATH=/Users/mike/.local/bin:/opt/homebrew/bin:/usr/bin:/bin \
+      orochi -- .venv/bin/python scripts/ingest-watch.py \
+        out/store-restale-occt out/store-restale-white-occt \
+        --overwrite --every 1800 --until store-restale-occt,store-restale-white-occt
+
+`--overwrite` is what makes an ingest of a REFRESH possible at all: every part
+here already holds a row in its slot, and the default pass skips exactly those,
+so it would index nothing and report success. `--until` names the tasks it is
+ingesting — while onto lists any of them the watch stays up, and on the pass
+after they stop it runs `onto fetch --stream` for each and closes. An
+unreachable node reads as unknown, never as finished.
+
+It runs on orochi because `corpus.db` and the wall are here, and an in-place
+job takes no exclusive lock: a second `--dir "$PWD"` job runs beside it.
+Orochi's agent caps a job at 6h, and `onto extend` is not re-checked against
+that ceiling — extended to 6:48AM, past the render deadline.
+
+First pass, for what it looks like when it is right: `+0 drawn, 3813 redrawn,
++3815 scored, 18979 in the slot`. The slot total does not move, because a
+refresh replaces rows rather than adding them.
 
 ### Two fleet faults this launch hit
 
