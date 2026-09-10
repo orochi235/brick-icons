@@ -25,8 +25,9 @@ be.** They are not sewn to each other at all — the part leaves 153 edges
 unpaired and has no curved/curved junction — and merging them by geometric
 tangency was built and thrown away: one element carries one gradient, and
 barrel/corner/barrel is not one gradient. A pooled linear ramp banded the
-barrel; a pooled radial one made the corner a blob. Both are on the wall. The
-seam they were meant to close is closed by the end stop instead.
+barrel; a pooled radial one made the corner a blob, and is on the wall beside
+what landed. The seam they were meant to close is closed by the end stop
+instead.
 
 **22 of the 23 shaded goldens moved on naive and are refrozen.** Measured with
 the new end stop disarmed in the same tree: 3001 224 px of 325,500, 3005 204,
