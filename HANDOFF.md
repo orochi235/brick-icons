@@ -342,13 +342,29 @@ Superseded, do not rebuild: the area-sign test (face area exceeding its own
 outer wire's). It catches 3070bp1k, whose cracks ADD 0.192, and misses
 30258p05, whose cracks SUBTRACT 2.445 and so read as a genuine hole.
 
+**Landed** at `99cbce7`, with the class-and-controls table above as a
+parametrized test in `tests/test_occt.py`. 122 tests there pass and the
+`BRICK_GOLDENS=1` drift gate is clean.
+
+**Measured over 400 random parts** (`scripts/crack-heal-drift.py`, which draws
+each part twice in one process and compares the drawn segments -- re-run it
+rather than trusting this paragraph): 33 changed, 367 unchanged, 0 errors.
+Of the 33, thirty-two lose segments and one gains a single 1.26-LDU vertical
+(`2873d04`, at the end of its hinge barrel, and both drawings read correctly).
+Across the changed parts, 25,437 segments become 24,722.
+
+**So roughly 8% of stored occt renders are now stale, and no row says so.**
+The `occt` slot holds renders drawn before `99cbce7` by an engine that no
+longer draws the same thing. `build` in the JSONL cannot date them either: it
+reads the node's `git rev-parse HEAD` plus a dirty flag, and `onto sync` ships
+files without moving HEAD, so a freshly synced node reports the OLD sha with a
+`+`. To ask what a node is actually running, grep it for a symbol the commit
+added. Re-rendering the slot is owed and unscheduled; `slot-occt-r2` on studio
+was still filling that same slot with pre-fix code as this was written.
+
 One gap left. The converse is untested: whether a part whose merge carries no
 crack can still draw hidden edges, which would make the repair incomplete. The
 five above are fixed; nothing says they are all of them.
-
-**Unbuilt as of this entry:** the repair lives in a scratchpad harness, not in
-`brick_icons/occt.py`. It needs a home for CRACK_Q, a test per the class above,
-and a corpus round to confirm it moves nothing else.
 
 ### Two of the ten are a different bug and must not be chased with the rest
 
