@@ -13,6 +13,8 @@ and it draws the same pixels.
 
 Measured against weasel `514cbc0e` (which carries the batch work merged as
 `f0a47538`). canvas2d is the same code in every column, so it is the control.
+The table holds at `deviceScaleFactor` 2 as well as 1: both renderers move by
+under 0.5ms on every rung, so a retina window does not change the verdict.
 
 | cell | commands | canvas2d | scene/nearest | |
 |---|---|---|---|---|
@@ -50,11 +52,23 @@ so any rung whose cells wear them is withheld rather than measured — which is 
 the table stops at 48px. Adopting the scene renderer means writing those, and
 they are the wall's, not weasel's.
 
-**Something makes canvas2d 12× slower at 16px, but only against a batching
-weasel.** 8.8 and 8.9ms across the two unbatched builds; 102.2 and 113.4ms across
-the two batched ones, same sitting, same machine, reproducible either way. It
-does not touch what the scene renderer costs, but it does make the 16px ratio
-above unusable as measured, and it is unexplained.
+**Something makes canvas2d 20–30× slower at the 16px rung, and it is still
+unexplained — but it is not what it looked like.** 84.0, 89.6 and 99.1ms across
+three passes of one page against `514cbc0e`, while every neighboring rung on the
+same sheet stays under 7ms. Four candidates are now excluded:
+
+- **Not minification.** 2,700 tiles drawn from the 32px sheet on a fresh page
+  cost 7.4ms into 16px cells against 6.8ms into 32px — a 2:1 reduction is free.
+- **Not `imageSmoothingEnabled`.** Same test with smoothing off: 7.8ms.
+- **Not the sheet's first touch.** 16px is the first rung to draw the 5652²
+  level-32 sheet, but the spike survives three consecutive passes in one page.
+- **Not dpr.** 151.1ms at `deviceScaleFactor` 1 against 95.0ms at 2, and every
+  other rung moves by under 0.5ms between the two.
+
+What has not been tested is the co-tenancy the earlier note guessed at: whether
+the spike survives with the GL renderers absent from the page. That needs the
+rung order changed or the scene renderers dropped, and it is the next thing to
+try.
 
 ## Two things measured along the way
 
