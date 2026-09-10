@@ -413,14 +413,19 @@ outline renderer (default 2048).
 LDView curve subdivision (default 12). The outline renderer's analytic curves
 are exact and ignore this.
 
-#### `--engine naive|occt|cadquery`
+#### `--engine occt|naive|cadquery`
 
-Which geometry engine performs hidden-line removal (default `naive`). `occt`
+Which geometry engine performs hidden-line removal (default `occt`). `occt`
 runs OpenCASCADE's exact BRep kernel: recognized LDraw primitives become real
 cylinders, cones and annular faces, occlusion is exact, and arcs are read off
 the curve rather than refitted from a polyline. It needs the optional extra —
 `pip install -e '.[occt]'`, which is ~935MB — and raises rather than silently
-falling back to `naive`, so a part it cannot draw fails loudly.
+falling back to `naive`, so a part it cannot draw fails loudly, and so does
+every render on an install without the extra.
+
+`naive` is the z-buffer engine `occt` replaced, kept as the drift baseline the
+goldens lock (`scripts/freeze-goldens.py` states it rather than inheriting it)
+and as the second opinion the parity scripts compare against.
 
 `cadquery` is a yardstick rather than a candidate: it calls cadquery's own
 `getSVG` on the same sewn shape `occt` builds and parses the paths back into

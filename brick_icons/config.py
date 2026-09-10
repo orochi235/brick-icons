@@ -25,7 +25,8 @@ DEFAULTS = {
     "pose": True,            # turn a part the way its own !PREVIEW meta says
                              # to; 394 parts in the library declare one
     "shading": "normal",     # normal | cel | outline
-    "engine": "naive",       # naive | occt | cadquery (each needs its extra)
+    "engine": "occt",        # occt | naive | cadquery (each needs its extra);
+                             # occt needs the `[occt]` extra to draw at all
     "cel_levels": 4,         # bands for cel shading
     "line_width": 2,         # outline edge stroke, output px
     "silhouette_width": 2,   # smooth-silhouette stroke (cylinder limbs,

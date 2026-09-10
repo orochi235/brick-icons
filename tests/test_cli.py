@@ -45,7 +45,8 @@ def test_part_label_stamped_on_outputs(tmp_path):
     cli.main(["3005", "--shading", "outline", "--format", "both",
               "--mode", "gray", "--part-label", "--out", str(tmp_path)])
     svg = (tmp_path / "3005.svg").read_text()
-    assert ">3005  naive  iso  outline</text>" in svg
+    from brick_icons.config import DEFAULTS
+    assert f">3005  {DEFAULTS['engine']}  iso  outline</text>" in svg
     # PNG: stamped corner differs from a blank corner (default font raster)
     g = np.asarray(Image.open(tmp_path / "3005.gray.png").convert("L"))
     assert (g[-14:, :40] < 128).any()               # dark label pixels bottom-left
@@ -282,7 +283,7 @@ def test_render_tag_names_the_engine_and_angle_even_at_defaults():
     cfg = cli.load_config(toml_path=None, overrides={}, root=".")
     tag = render_tag(cfg, "3941")
     assert tag.startswith("3941")
-    assert "naive" in tag and cfg.angle in tag
+    assert cfg.engine in tag and cfg.angle in tag
 
 
 def test_render_tag_distinguishes_two_renders_of_one_part():
@@ -309,8 +310,10 @@ def test_debug_colors_gives_each_element_its_own_stroke(tmp_path):
     """One color per drawn element, in emission order — it answers "which
     element owns this vertex", which a black outline cannot."""
     import re
-    cli.main(["3941", "--format", "svg", "--shading", "outline",
-              "--debug-colors", "--out", str(tmp_path)])
+    # On naive, because the claim is one color per element and the palette is
+    # exhausted only by an engine that emits at least that many.
+    cli.main(["3941", "--engine", "naive", "--format", "svg",
+              "--shading", "outline", "--debug-colors", "--out", str(tmp_path)])
     svg = (tmp_path / "3941.svg").read_text()
     used = set(re.findall(r'stroke="(#[0-9a-f]{6})"', svg))
     from brick_icons.trace import DEBUG_PALETTE

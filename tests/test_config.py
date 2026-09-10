@@ -98,9 +98,9 @@ def test_unknown_color_raises():
         load_config(overrides={"part_color": "chartreuse"}, root=".")
 
 
-def test_engine_defaults_to_naive():
-    assert load_config(root=".").engine == "naive"
+def test_engine_defaults_to_occt():
+    assert load_config(root=".").engine == "occt"
 
 
 def test_engine_override():
-    assert load_config(root=".", overrides={"engine": "occt"}).engine == "occt"
+    assert load_config(root=".", overrides={"engine": "naive"}).engine == "naive"

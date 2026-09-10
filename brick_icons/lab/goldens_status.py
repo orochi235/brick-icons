@@ -38,9 +38,14 @@ def status(path: Path | str, part: str) -> dict:
 
 
 def cases_for(root: Path | str, part: str) -> list[dict]:
-    """Every golden case this part is in, with the argv that reproduces it."""
+    """Every golden case this part is in, with the argv that reproduces it.
+
+    `--engine naive` is stated because the frozen hashes are a naive lock and
+    the config default is occt: inheriting it made every case report `moved`,
+    which reads as drift rather than as the wrong engine.
+    """
     return [{"case": f"{c['name']}__{part}", "combo": c["name"],
-             "argv": [part, *c["args"]]}
+             "argv": [part, "--engine", "naive", *c["args"]]}
             for c in corpus.combos_for(root, part)]
 
 

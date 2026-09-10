@@ -71,9 +71,11 @@ def run_case(case, work: Path) -> tuple[str | None, str | None]:
     out = work / case["id"]
     shutil.rmtree(out, ignore_errors=True)
     out.mkdir(parents=True)
+    # `--engine naive` is stated, not inherited: this baseline is a lock on
+    # the naive engine, and the config default is occt.
     proc = subprocess.run(
         [sys.executable, "-m", "brick_icons.cli", case["part"],
-         *case["args"], "--out", str(out)],
+         "--engine", "naive", *case["args"], "--out", str(out)],
         capture_output=True, text=True, cwd=ROOT)
     svgs = sorted(out.glob("*.svg"))
     if proc.returncode != 0 or not svgs:
