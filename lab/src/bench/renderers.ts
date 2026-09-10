@@ -7,6 +7,7 @@
  */
 import { createScene, renderSceneToCanvas, type View } from '@weasel-js/core';
 import { drawPaintCommand } from '@lab/corpus/draw2d';
+import { scenePainter, type Sheets } from '@lab/corpus/drawScene';
 import type { PaintCommand } from '@lab/corpus/paint';
 import type { Palette } from '@lab/corpus/palette';
 import { toDrawCommands, type Sampling } from '@lab/corpus/toDrawCommands';
@@ -15,8 +16,10 @@ export interface Frame { width: number; height: number; dpr: number }
 
 export interface WallRenderer {
   readonly name: string;
-  /** Read back by the harness to check this executor actually drew. */
-  readonly canvas: HTMLCanvasElement;
+  /** Every canvas this executor paints into, bottom first. Read back by the
+   *  harness to check it actually drew -- a stack is flattened in this order,
+   *  so an overlay layer that stopped drawing shows up as drift. */
+  readonly layers: readonly HTMLCanvasElement[];
   /** Features of the last painted list this executor does not reproduce. */
   readonly unsupported: ReadonlySet<string>;
   paint(cmds: readonly PaintCommand[], frame: Frame): void;
@@ -42,7 +45,7 @@ export function canvas2dRenderer(canvas: HTMLCanvasElement,
   if (!ctx) throw new Error('no 2d context');
   return {
     name: 'canvas2d',
-    canvas,
+    layers: [canvas],
     unsupported: new Set<string>(),
     paint(cmds, frame) {
       size(canvas, frame);
@@ -66,7 +69,7 @@ export function sceneRenderer(canvas: HTMLCanvasElement,
   let unsupported: ReadonlySet<string> = new Set();
   return {
     name: `scene/${sampling}`,
-    canvas,
+    layers: [canvas],
     get unsupported() { return unsupported; },
     paint(cmds, frame) {
       const mapped = toDrawCommands(cmds, sheet, sampling);
@@ -82,5 +85,29 @@ export function sceneRenderer(canvas: HTMLCanvasElement,
         extraCommands: mapped.commands,
       });
     },
+  };
+}
+
+/** The wall's own hybrid: weasel draws the cell bodies, canvas2d draws the
+ *  overlays on a layer above.
+ *
+ *  This is `scenePainter` itself rather than a bench-side copy of it, so the
+ *  number belongs to the code the `sceneRenderer` param turns on. It is the
+ *  only executor here that draws a rung wearing badges -- the bare scene
+ *  renderer withholds those -- which is what the second layer costs and buys.
+ */
+export function hybridRenderer(gl: HTMLCanvasElement,
+                               overlay: HTMLCanvasElement,
+                               sheets: Sheets,
+                               palette: Palette,
+                               sampling: Sampling = 'linear'): WallRenderer {
+  const painter = scenePainter(gl, overlay);
+  return {
+    name: `hybrid/${sampling}`,
+    layers: [gl, overlay],
+    // What NEITHER half drew. The residue pass covers every name the mapping
+    // declines, so this is empty unless one is added to the mapping alone.
+    get unsupported() { return painter.unpainted; },
+    paint(cmds, frame) { painter.paint(cmds, frame, sheets, palette, sampling); },
   };
 }

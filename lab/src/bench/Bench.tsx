@@ -13,7 +13,7 @@ import { SHEET_LEVELS } from '@lab/corpus/useSheets';
 import { levelFor } from '@lab/corpus/levels';
 import type { Cell, SheetManifest } from '@lab/corpus/types';
 import { visibleRange } from '@lab/corpus/visible';
-import { canvas2dRenderer, sceneRenderer } from '@lab/bench/renderers';
+import { canvas2dRenderer, hybridRenderer, sceneRenderer } from '@lab/bench/renderers';
 import { runBench, type Rung, type RungResult } from '@lab/bench/harness';
 
 interface SheetSet { manifest: SheetManifest; img: HTMLImageElement; bitmap: ImageBitmap }
@@ -49,6 +49,8 @@ export function Bench() {
   const twoD = useRef<HTMLCanvasElement>(null);
   const glNearest = useRef<HTMLCanvasElement>(null);
   const glLinear = useRef<HTMLCanvasElement>(null);
+  const hybridGl = useRef<HTMLCanvasElement>(null);
+  const hybridOver = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const client = createClient();
@@ -77,7 +79,9 @@ export function Bench() {
     const a = twoD.current;
     const b = glNearest.current;
     const c = glLinear.current;
-    if (!d || !a || !b || !c) return;
+    const hg = hybridGl.current;
+    const ho = hybridOver.current;
+    if (!d || !a || !b || !c || !hg || !ho) return;
     setBusy(true);
     setLines([]);
     setResults(null);
@@ -109,6 +113,10 @@ export function Bench() {
           canvas2dRenderer(a, rung.sheet.img, DEFAULT_PALETTE),
           sceneRenderer(b, rung.sheet.bitmap, 'nearest'),
           sceneRenderer(c, rung.sheet.bitmap, 'linear'),
+          // Linear, which is what the wall runs: the 2D layer draws with
+          // `imageSmoothingEnabled`, and matching it halves the drift.
+          hybridRenderer(hg, ho, { bitmap: rung.sheet.bitmap, img: rung.sheet.img },
+                         DEFAULT_PALETTE, 'linear'),
         ],
         frame: { width: WIDTH, height: HEIGHT, dpr: window.devicePixelRatio || 1 },
         onLine: (line) => { setLines((prev) => [...prev, line]); },
@@ -123,9 +131,11 @@ export function Bench() {
       <h1>Wall paint: canvas2d against weasel&apos;s scene</h1>
       <p className="bench__status">{status}</p>
       <p className="bench__note">
-        Level {SHEET_LEVELS[1]} sheet, {WIDTH}×{HEIGHT} viewport, identical command
-        list to both. A rung is only given a ratio when both renderers drew the
-        same pixels.
+        {WIDTH}×{HEIGHT} viewport, the same command list to every executor, each
+        drawing from the sheet its own cell size wants. A ratio is given only
+        where that executor drew the same pixels as canvas2d — so the bare scene
+        renderer goes quiet from 56px up, where cells start wearing badges it
+        does not draw and the hybrid does.
       </p>
       <button type="button" onClick={run} disabled={busy || !data.current}>
         {busy ? 'Running…' : 'Run'}
@@ -151,13 +161,16 @@ export function Bench() {
                 <td>{r.level}</td>
                 <td>{r.commands.toLocaleString()}</td>
                 {r.timings.map((t, i) => (
-                  <td key={t.name}>
+                  <td key={t.name} className={t.withheld ? 'bench__withheld' : undefined}>
                     {t.median.toFixed(1)}ms
-                    {i > 0 && !r.incomparable
+                    {i > 0 && !t.withheld && !r.timings[0]!.withheld
                       && ` (${(r.timings[0]!.median / t.median).toFixed(2)}×)`}
                   </td>
                 ))}
-                <td className="bench__withheld">{r.incomparable}</td>
+                <td className="bench__withheld">
+                  {r.timings.filter((t) => t.withheld)
+                    .map((t) => `${t.name} ${t.withheld}`).join('; ')}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -168,6 +181,13 @@ export function Bench() {
         <figure><figcaption>canvas2d</figcaption><canvas ref={twoD} /></figure>
         <figure><figcaption>scene/nearest</figcaption><canvas ref={glNearest} /></figure>
         <figure><figcaption>scene/linear</figcaption><canvas ref={glLinear} /></figure>
+        <figure>
+          <figcaption>hybrid/linear</figcaption>
+          <div className="bench__stack">
+            <canvas ref={hybridGl} />
+            <canvas ref={hybridOver} />
+          </div>
+        </figure>
       </div>
     </main>
   );

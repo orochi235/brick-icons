@@ -24,6 +24,13 @@ export interface Timing {
    *  averaged away. */
   ms: number[];
   median: number;
+  /** Why this renderer's number is not the baseline's to compare against.
+   *
+   *  Per renderer rather than per rung: the hybrid draws the overlays and the
+   *  bare scene renderer does not, so on a rung wearing badges one of them is
+   *  comparable and the other is not. Withholding the rung would retire the
+   *  measurement the hybrid exists to take. */
+  withheld: string | null;
 }
 
 export interface RungResult {
@@ -31,10 +38,6 @@ export interface RungResult {
   level: number;
   commands: number;
   timings: Timing[];
-  /** Set when the two did not draw the same thing. A speed number is withheld
-   *  rather than qualified: a renderer that skipped work is not faster. */
-  incomparable: string | null;
-  speedup: number | null;
 }
 
 function median(xs: number[]): number {
@@ -43,24 +46,44 @@ function median(xs: number[]): number {
   return s.length % 2 ? s[mid]! : (s[mid - 1]! + s[mid]!) / 2;
 }
 
-/** A coarse fingerprint of what actually landed on the canvas.
+/** A coarse fingerprint of what actually landed on a renderer's canvases.
  *
  *  WebGL2 silently no-ops without a context, and an executor that draws
  *  nothing is arbitrarily fast. Downsampling to a small grid keeps this immune
  *  to the antialias differences between two rasterizers while still catching a
  *  blank canvas or a missing layer. Must run in the same task as the paint: a
  *  WebGL drawing buffer is not preserved past it.
+ *
+ *  A renderer may paint into a stack -- the hybrid's overlays sit on a second
+ *  canvas over its GL one -- and the stack is flattened at full resolution
+ *  before the downsample. Shrinking each layer first and compositing the
+ *  small ones is different arithmetic wherever the top layer's alpha varies
+ *  across a probe cell, which for an overlay pass is everywhere it draws.
  */
 const PROBE = 32;
 
-export function fingerprint(canvas: HTMLCanvasElement): number[] | null {
+function flatten(layers: readonly HTMLCanvasElement[],
+                 first: HTMLCanvasElement): HTMLCanvasElement {
+  if (layers.length === 1) return first;
+  const flat = document.createElement('canvas');
+  flat.width = first.width;
+  flat.height = first.height;
+  const ctx = flat.getContext('2d');
+  if (!ctx) return first;
+  for (const l of layers) ctx.drawImage(l, 0, 0, flat.width, flat.height);
+  return flat;
+}
+
+export function fingerprint(layers: readonly HTMLCanvasElement[]): number[] | null {
+  const first = layers[0];
+  if (!first) return null;
   const probe = document.createElement('canvas');
   probe.width = PROBE;
   probe.height = PROBE;
   const ctx = probe.getContext('2d', { willReadFrequently: true });
   if (!ctx) return null;
   try {
-    ctx.drawImage(canvas, 0, 0, PROBE, PROBE);
+    ctx.drawImage(flatten(layers, first), 0, 0, PROBE, PROBE);
   } catch {
     return null;
   }
@@ -117,7 +140,7 @@ export function runBench<R extends Rung>({ rungs, renderersFor, frame, reps = 7,
     // rides the same task, since a WebGL drawing buffer does not survive it.
     for (const r of renderers) {
       r.paint(rung.commands, frame);
-      prints.set(r.name, fingerprint(r.canvas));
+      prints.set(r.name, fingerprint(r.layers));
     }
 
     for (let i = 0; i < reps; i++) {
@@ -130,48 +153,41 @@ export function runBench<R extends Rung>({ rungs, renderersFor, frame, reps = 7,
 
     for (const r of renderers) missing.set(r.name, r.unsupported);
 
+    // The first renderer is the control every other is read against, so its
+    // own failure takes the whole rung with it.
+    const base = prints.get(renderers[0]!.name) ?? null;
+    const baseFailed = isBlank(base)
+      ? `${renderers[0]!.name} drew nothing` : null;
+
+    const withheldFor = (r: WallRenderer): string | null => {
+      if (baseFailed) return baseFailed;
+      const gaps = missing.get(r.name)!;
+      if (gaps.size) return `does not draw: ${[...gaps].join(', ')}`;
+      const fp = prints.get(r.name) ?? null;
+      // Cheap to state and the one that would otherwise pass silently: a
+      // renderer with no context draws nothing in no time at all.
+      if (isBlank(fp)) return 'drew nothing';
+      if (r === renderers[0]) return null;
+      const d = drift(base!, fp!);
+      return d > DRIFT_LIMIT
+        ? `differs by ${d.toFixed(1)}, over the ${DRIFT_LIMIT} limit` : null;
+    };
+
     const timings: Timing[] = renderers.map((r) => ({
       name: r.name, ms: ms.get(r.name)!, median: median(ms.get(r.name)!),
+      withheld: withheldFor(r),
     }));
-
-    let incomparable: string | null = null;
-    for (const r of renderers) {
-      const gaps = missing.get(r.name)!;
-      if (gaps.size) incomparable = `${r.name} does not draw: ${[...gaps].join(', ')}`;
-    }
-    // Cheap to state and the one that would otherwise pass silently: a
-    // renderer with no context draws nothing in no time at all.
-    for (const r of renderers) {
-      if (isBlank(prints.get(r.name) ?? null)) {
-        incomparable = `${r.name} drew nothing`;
-      }
-    }
-    // Every renderer against the first, so adding a third does not quietly
-    // retire the check that the pixels agree.
-    const base = prints.get(renderers[0]!.name);
-    for (const r of renderers.slice(1)) {
-      if (incomparable || !base) break;
-      const other = prints.get(r.name);
-      if (!other) continue;
-      const d = drift(base, other);
-      if (d > DRIFT_LIMIT) {
-        incomparable = `${r.name} differs by ${d.toFixed(1)}, over the ${DRIFT_LIMIT} limit`;
-      }
-    }
-
-    const speedup = incomparable || timings.length < 2 ? null
-      : timings[0]!.median / timings[1]!.median;
 
     results.push({
       cellPx: rung.cellPx, level: rung.level, commands: rung.commands.length,
-      timings, incomparable, speedup,
+      timings,
     });
 
     onLine(`${results.length}/${rungs.length}  cell ${rung.cellPx}px  `
       + `level ${rung.level}  `
       + `${rung.commands.length} commands  `
-      + timings.map((t) => `${t.name} ${t.median.toFixed(1)}ms`).join('  ')
-      + (incomparable ? `  -- ${incomparable}` : ''));
+      + timings.map((t) => `${t.name} ${t.median.toFixed(1)}ms`
+        + (t.withheld ? ` [${t.withheld}]` : '')).join('  '));
   }
 
   return results;

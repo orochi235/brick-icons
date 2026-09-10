@@ -15,3 +15,8 @@
 .bench__canvases figure { margin: 0; }
 .bench__canvases figcaption { font-size: 12px; margin-bottom: 4px; }
 .bench__canvases canvas { width: 600px; height: 450px; border: 1px solid #ccc; }
+
+/* The hybrid's two layers, one over the other. `isolation` keeps the pair's
+ * z-order to themselves, the way the wall's own stack does. */
+.bench__stack { position: relative; isolation: isolate; width: 600px; height: 450px; }
+.bench__stack canvas { position: absolute; top: 0; left: 0; }
