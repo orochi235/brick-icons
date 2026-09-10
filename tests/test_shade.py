@@ -1738,6 +1738,23 @@ def test_axis_stops_keep_a_monotone_ramp_monotone():
     assert len(set(greys)) >= 4, "a real ramp must survive the bin"
 
 
+def test_a_monotone_ramp_ends_on_its_own_last_sample_not_the_band_average():
+    """Where two spans of one surface abut, each side's end stop is what the
+    other has to meet. A band average is the tone an eighth of the way in, so
+    the two clamp to different values and the seam steps -- 5846's corner ran
+    five levels below the barrel beside it."""
+    style = shade.make_style("flat3")
+    lit = style.light / np.linalg.norm(style.light)
+    perp = np.cross(lit, [0.0, 0.0, 1.0])
+    perp /= np.linalg.norm(perp)
+    angles = np.linspace(0.0, np.pi / 2, 24)
+    samples = [(float(i) / 23.0, np.cos(a) * lit + np.sin(a) * perp)
+               for i, a in enumerate(angles)]
+    stops = shade._axis_binned_stops(samples, style)
+    assert stops[0][1] == style.ramp(samples[0][1])
+    assert stops[-1][1] == style.ramp(samples[-1][1])
+
+
 def test_a_radial_dome_lends_its_ramp_to_the_wall_inside_it():
     """3626cp7d's head is authored as a facet dome AND substituted as a
     cylinder barrel. The dome is shaded radially; the barrel computed its own

@@ -2063,3 +2063,21 @@ def test_a_tangent_plane_takes_the_ramp_and_not_the_palette(ldraw_dir):
         nv = f["normal"]
         assert shade.face_fill(f, style, ldraw_dir) == style.ramp(nv)
         assert style.ramp(nv) != style.tone(nv)
+
+
+def test_a_tangent_plane_joins_its_walls_fill_and_ramp(ldraw_dir):
+    """The plane is part of the curved surface it runs into, so it belongs in
+    the same fill element under the same gradient -- 5849's foot drew as its
+    own patch along the bottom of the barrel."""
+    out = occt.flatten_part("5849", ldraw_dir)
+    shape = occt.build_shape(out)
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    faces = occt.ordered_faces(shape, occt.op_projection(right, up, fwd), out)
+    tangent = [f for f in faces if f.get("tangent_wall")]
+    assert tangent, "5849's wall below the curve must be marked"
+    walls = {id(f): f for f in faces if f["kind"] == "occt-wall"}
+    for f in tangent:
+        assert "grad_axis" in f or "grad_radial" in f
+        peers = [w for w in walls.values() if w.get("group") == f.get("group")]
+        assert peers, "the plane must share a wall's group"
+        assert peers[0]["grad_samples"] is f["grad_samples"]

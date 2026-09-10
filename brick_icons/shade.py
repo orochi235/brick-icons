@@ -460,23 +460,45 @@ def _axis_binned_stops(samples, style, nbins=8):
     """
     ramp_b = getattr(style, "ramp_b", None)
     L = getattr(style, "light", None)
-    bins = defaultdict(list)
+    Lv = np.asarray(L, float) if (ramp_b is not None and L is not None) else None
+    runs = defaultdict(list)
     for off, nv in samples:
-        bins[min(int(off * nbins), nbins - 1)].append(np.asarray(nv, float))
-    stops = []
-    for bi in sorted(bins):
-        ns = bins[bi]
-        if ramp_b is not None and L is not None:
-            Lv = np.asarray(L, float)
-            b = np.mean([max(0.0, float(n @ Lv)) for n in ns])
-            color = ramp_b(float(b))
-        else:
-            n = np.mean(ns, axis=0)
-            color = style.ramp(n / (np.linalg.norm(n) or 1.0))
-        stops.append(((bi + 0.5) / nbins, color))
+        runs[min(int(off * nbins), nbins - 1)].append((off, np.asarray(nv, float)))
+
+    def band(ns):
+        if Lv is not None:
+            return ramp_b(float(np.mean([max(0.0, float(n @ Lv)) for n in ns])))
+        n = np.mean(ns, axis=0)
+        return style.ramp(n / (np.linalg.norm(n) or 1.0))
+
+    order = sorted(runs)
+    stops = [((bi + 0.5) / nbins, band([n for _, n in runs[bi]]))
+             for bi in order]
     if stops:
-        stops = [(0.0, stops[0][1])] + stops + [(1.0, stops[-1][1])]
+        stops = [(0.0, _band_edge(runs[order[0]], band, 0))] + stops \
+                + [(1.0, _band_edge(runs[order[-1]], band, -1))]
     return stops
+
+
+def _band_edge(run, band, end):
+    """The tone at one end of the outermost band.
+
+    The band's own average is the tone an eighth of the way in, so where two
+    spans of one surface meet, each side clamps to a different one and the
+    seam steps -- 5846's corner ran five levels below the barrel beside it.
+    The outermost SAMPLE is that end's actual tone.
+
+    Only where the band runs one way. 44300's chamfer interleaves two normal
+    families along the axis, and its outermost sample is one of the two tones
+    the averaging exists to merge, so a band that turns back on itself keeps
+    its average.
+    """
+    run = sorted(run, key=lambda s: s[0])
+    ns = [n for _, n in run]
+    d = np.diff([float(n @ ns[0]) for n in ns])
+    if len(ns) > 1 and not (np.all(d >= -1e-9) or np.all(d <= 1e-9)):
+        return band(ns)
+    return band([ns[end]])
 
 
 def _face_depth_probe(face, proj, fit):

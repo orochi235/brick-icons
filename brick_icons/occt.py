@@ -565,8 +565,9 @@ def analytic_creases(shape: TopoDS_Shape, out: dict) -> TopoDS_Shape:
     return _compound(keep)
 
 
-def tangent_wall_planes(shape: TopoDS_Shape):
-    """Planar faces that a curved face runs tangentially into.
+def tangent_junctions(shape: TopoDS_Shape):
+    """(face, face, kind, kind) for every pair of exact surfaces that meet
+    tangentially.
 
     The junction analytic_creases drops, seen from the other side: no crease
     means no stroke, so the two surfaces have to meet in TONE, and a plane's
@@ -577,6 +578,10 @@ def tangent_wall_planes(shape: TopoDS_Shape):
     The population separates the same way the crease test's does -- measured
     plane/curved junction angles over 5841, 5842, 5847 and 5854 are 0-4 deg
     or 90, nothing between, and 3001 has none at all.
+
+    **It only sees what OCCT sewed.** A rounded corner is authored as separate
+    primitives and usually reaches here as separate shells: 5846 leaves 153
+    edges unpaired and has no curved/curved junction at all.
     """
     amap = TopTools_IndexedDataMapOfShapeListOfShape()
     TopExp.MapShapesAndAncestors_s(shape, TopAbs_ShapeEnum.TopAbs_EDGE,
@@ -596,11 +601,7 @@ def tangent_wall_planes(shape: TopoDS_Shape):
         except Exception:
             continue
         plane = GeomAbs_SurfaceType.GeomAbs_Plane
-        if kinds[0] == plane and kinds[1] in CURVED:
-            pi = 0
-        elif kinds[1] == plane and kinds[0] in CURVED:
-            pi = 1
-        else:
+        if not all(k == plane or k in CURVED for k in kinds):
             continue
         edge = TopoDS.Edge_s(amap.FindKey(i))
         a, b = _face_normal(faces[0], edge), _face_normal(faces[1], edge)
@@ -611,8 +612,26 @@ def tangent_wall_planes(shape: TopoDS_Shape):
             continue
         if abs(float(a @ b)) / (na * nb) <= cos_tol:
             continue          # a real edge: the stroke covers the tone step
-        out.append(TopoDS.Face_s(faces[pi]))
+        out.append((TopoDS.Face_s(faces[0]), TopoDS.Face_s(faces[1]),
+                    kinds[0], kinds[1]))
     return out
+
+
+def tangent_wall_pairs(shape: TopoDS_Shape):
+    """(planar face, curved face) for each plane/curved tangential junction."""
+    plane = GeomAbs_SurfaceType.GeomAbs_Plane
+    out = []
+    for fa, fb, ka, kb in tangent_junctions(shape):
+        if ka == plane and kb != plane:
+            out.append((fa, fb))
+        elif kb == plane and ka != plane:
+            out.append((fb, fa))
+    return out
+
+
+def tangent_wall_planes(shape: TopoDS_Shape):
+    """Just the planar half of each `tangent_wall_pairs` junction."""
+    return [plane for plane, _ in tangent_wall_pairs(shape)]
 
 
 PIERCE_TOL = 1e-3      # LDU: a seam either lies in the plane or it does not
@@ -1876,6 +1895,35 @@ def _merge_wall_gradients(faces):
         f.pop("_span_ring", None)
 
 
+def _absorb_tangent_planes(tangent):
+    """A plane a curved wall runs tangentially into is part of that wall's
+    surface, so it joins the wall's fill and its ramp rather than tone on its
+    own.
+
+    Matching the plane's tone to the ramp still leaves a boundary: the ramp is
+    binned, so the wall's last stop is a bin average and 5849's foot stepped
+    five levels below the curve above it. Sharing the group makes fill_ops
+    union the two into ONE element under ONE gradient, and the step cannot
+    exist. The plane sits past the end of the wall's axis, where an SVG
+    gradient pads with its last stop -- which is the tone at the junction, and
+    constant across the plane, which is what a plane's single normal wants.
+    """
+    for plane, walls in tangent:
+        near = [w for w in walls if "grad_axis" in w or "grad_radial" in w]
+        if not near:
+            continue
+        pc = plane["poly"].mean(axis=0)
+        wall = min(near, key=lambda w: float(
+            np.hypot(*(w["poly"].mean(axis=0) - pc))))
+        plane["group"] = wall.get("group") or ("tangent", id(wall))
+        wall["group"] = plane["group"]
+        plane["grad_samples"] = wall["grad_samples"]
+        for k in ("grad_axis", "grad_radial", "grad_exact"):
+            plane.pop(k, None)
+            if k in wall:
+                plane[k] = wall[k]
+
+
 def _merge_turn_gradients(faces):
     """One ramp across a coaxial stack of full-turn spans.
 
@@ -2226,20 +2274,25 @@ def ordered_faces(shape, proj, out=None, ellipses_out=None):
     fmap = TopTools_IndexedMapOfShape()
     TopExp.MapShapes_s(shape, TopAbs_ShapeEnum.TopAbs_FACE, fmap)
     faces, own_occ, plane_by_idx = [], {}, {}
+    wall_by_idx = defaultdict(list)
     for face in _shape_faces(shape):
         occ = _face_occluder(face)
         for f in _faces_for(face, proj):
             faces.append(f)
             if f["kind"] == "occt-plane":
                 plane_by_idx[fmap.FindIndex(face)] = f
+            elif f["kind"] == "occt-wall":
+                wall_by_idx[fmap.FindIndex(face)].append(f)
             if occ is not None:
                 own_occ[id(f)] = occ
     if not faces:
         return []
-    for face in tangent_wall_planes(shape):
-        f = plane_by_idx.get(fmap.FindIndex(face))
+    tangent = []
+    for plane, curved in tangent_wall_pairs(shape):
+        f = plane_by_idx.get(fmap.FindIndex(plane))
         if f is not None:
             f["tangent_wall"] = True
+            tangent.append((f, wall_by_idx.get(fmap.FindIndex(curved), ())))
     if out is not None and plane_by_idx:
         _group_planes(shape, out, plane_by_idx)
         shade.attach_group_gradients(faces)
@@ -2249,6 +2302,7 @@ def ordered_faces(shape, proj, out=None, ellipses_out=None):
         f.pop("_plane3", None)
     _merge_turn_gradients(faces)
     _merge_wall_gradients(faces)
+    _absorb_tangent_planes(tangent)
     faces = _with_decoration(faces, out, proj, own_occ, ellipses_out)
     zs = np.concatenate([f["zs"] for f in faces])
     zrange = float(zs.max() - zs.min()) or 1.0
