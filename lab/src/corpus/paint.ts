@@ -339,12 +339,22 @@ export function cornerPad(cellPx: number, size: number): number {
 }
 
 /** The corner discs a drawn cell wears, if it is drawn big enough to hold
- *  them. */
+ *  them.
+ *
+ *  `retired` drops out wherever the years are drawn: `1979–1993` already
+ *  says the part stopped, and the two set in the same corner say it twice.
+ *  `replaced` stays -- it says something the dates do not. Below
+ *  LABEL_MIN_PX a cell wears discs and carries no captions, so the disc is
+ *  the only thing left to say it. */
 export function badgesFor(cell: Cell, cellPx: number,
-                          minPx = BADGE_MIN_PX): CellBadge[] {
+                          minPx = BADGE_MIN_PX,
+                          labelMinPx = LABEL_MIN_PX): CellBadge[] {
   if (cellPx < minPx) return [];
+  const dated = cellPx >= labelMinPx
+    && yearRange(cell.year_from, cell.year_to, isRetired(cell)) !== null;
   return (cell.tags ?? []).map((tag) => CORNER_BADGES[tag])
-    .filter((b): b is CellBadge => !!b);
+    .filter((b): b is CellBadge => !!b)
+    .filter((b) => !(dated && b.tag === 'retired'));
 }
 
 /** The strip of kind badges, in tag order. */
@@ -483,7 +493,12 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
     const border = style.border;
     const borderWidth = borderWidthFor(style.weight, dw, appearance);
     const ground = border ?? thumbGround();
-    const badges = appearance.showBadges ? badgesFor(cell, dw) : NO_BADGES;
+    // Captions off and the years are not drawn at any size, so the retired
+    // disc has nothing to be a duplicate of.
+    const badges = appearance.showBadges
+      ? badgesFor(cell, dw, BADGE_MIN_PX,
+                  appearance.showCaptions ? LABEL_MIN_PX : Infinity)
+      : NO_BADGES;
     const strip = appearance.showBadges ? stripFor(cell, dw) : NO_BADGES;
     const captions = appearance.showCaptions
       ? captionsFor(cell, dw, CAPTION_ON_THUMB) : NO_CAPTIONS;

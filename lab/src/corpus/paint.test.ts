@@ -443,6 +443,32 @@ it('puts retired and replaced beside the year, never both at once', () => {
   expect(replaced.map((b) => [b.tag, b.mark, b.corner])).toEqual([['replaced', 'redo', 'tr']]);
 });
 
+it('drops the retired disc where the years already say the part stopped', () => {
+  const dated = cell('a', 0, 'sha-a',
+    { tags: ['retired', 'popular'], year_from: 1979, year_to: 1993 });
+  expect(badgesFor(dated, 200).map((b) => b.tag)).toEqual(['popular']);
+});
+
+it('keeps the retired disc on a part the catalogs give no years', () => {
+  const undated = cell('a', 0, 'sha-a', { tags: ['retired'] });
+  expect(badgesFor(undated, 200).map((b) => b.tag)).toEqual(['retired']);
+});
+
+it('keeps the retired disc where the cell is too small to caption', () => {
+  /** Between BADGE_MIN_PX and LABEL_MIN_PX a cell wears discs and says
+   *  nothing, so the disc is the only thing left to say it stopped. */
+  const dated = cell('a', 0, 'sha-a',
+    { tags: ['retired'], year_from: 1979, year_to: 1993 });
+  expect(badgesFor(dated, 60).map((b) => b.tag)).toEqual(['retired']);
+  expect(captionsFor(dated, 60, '#000')).toEqual([]);
+});
+
+it('keeps the replaced disc beside the years — it is not what they say', () => {
+  const dated = cell('a', 0, 'sha-a',
+    { tags: ['replaced'], year_from: 1979, year_to: 1993 });
+  expect(badgesFor(dated, 200).map((b) => b.tag)).toEqual(['replaced']);
+});
+
 it('strips the kind badges in tag order, system before property', () => {
   const part = cell('a', 0, 'sha-a',
     { tags: ['technic', 'electric', 'printed', 'retired'] });

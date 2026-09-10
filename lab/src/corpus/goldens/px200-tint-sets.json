@@ -232,15 +232,7 @@
         "weight": 500
       }
     ],
-    "badges": [
-      {
-        "tag": "retired",
-        "mark": "archive",
-        "corner": "tr",
-        "field": "oklch(0.5302 0.0108 286.02)",
-        "ink": "oklch(1.0000 0 0)"
-      }
-    ],
+    "badges": [],
     "strip": [],
     "slash": false
   },
