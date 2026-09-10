@@ -639,10 +639,12 @@ changed and clears all 25 controls, with no false positive. Read off the
 census's recorded phases the sweep is 4.0h against 65.9h to redraw the `occt`
 slot alone.
 
-**Swept, and the answer is `store-queue/occt-crack-stale.txt`: 2,949 of the
-19,753 parts** that hold an occt-slot render and are not already failing
-`ProcessDied`/`MemoryError`. 0 missing, 0 errors, 46 minutes over three nodes
-at 18 workers. Re-derive with
+**Swept and narrowed, and the answer is `store-queue/occt-crack-stale.txt`:
+1,561 parts, 3,851 renders across the four slots.** The probe flagged 2,949 of
+the 19,753 parts holding an occt-slot render (0 missing, 0 errors, 46 minutes
+over three nodes at 18 workers); the double-draw pass then judged all 2,949
+and found 1,561 that actually move a stroke. Of those, 1,496 lose segments and
+58 gain them; 395,363 segments become 344,318. Re-derive the flag set with
 
     onto run --detach --timeout 4h --task crack-heal-scope --in brick-icons \
       --each out/scope/batches.txt --workers 6 --retries 1 --with keiei,studio \
@@ -653,12 +655,13 @@ at 18 workers. Re-derive with
 
 **The list is sound but not tight, and the sweep measures by how much.** It
 covered 381 of the drift sample's parts: all 28 of those it had found changed
-are flagged, and 24 of the 353 it had found unchanged are flagged too. So
-about 7% of the list heals a face without moving a stroke -- redrawing them
-costs render time and changes nothing. Narrowing to the exact set means the
-double-draw pass (`crack-heal-drift.py --parts`) over the 2,949, which is
-roughly what redrawing the ~1,350 extras costs in ONE slot, against four slots
-that each need them.
+are flagged, and 24 of the 353 it had found unchanged are flagged too -- so 28
+real out of 52 flagged, and **roughly half the flag set heals a face without
+moving a stroke.** The full double-draw pass agrees: 1,561 of 2,949, or 52.9%.
+Healing a face is necessary for the drawing to change and nowhere near
+sufficient, because a healed face is often hidden or already occluded by
+something else. Read `faces_healed` as a cheap filter that removes 85% of the
+library, never as the answer.
 
 One gap left. The converse is untested: whether a part whose merge carries no
 crack can still draw hidden edges, which would make the repair incomplete. The
