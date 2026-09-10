@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { drawResidue } from '@lab/corpus/drawScene';
+import { drawResidue, paintOverlay } from '@lab/corpus/drawScene';
 import type { PaintCommand } from '@lab/corpus/paint';
 import { DEFAULT_PALETTE } from '@lab/corpus/palette';
 import { toDrawCommands } from '@lab/corpus/toDrawCommands';
@@ -7,11 +7,26 @@ import { toDrawCommands } from '@lab/corpus/toDrawCommands';
 /** Records the calls that put ink on the canvas, and nothing else: the point
  *  of every test here is which marks the second half makes, not how it sets up
  *  to make them. */
-function recorder() {
+/** A canvas that counts assignments to `width`, which is what reallocating
+ *  its backing store costs. */
+function sizedCanvas(width: number, height: number) {
+  let w = width;
+  let h = height;
+  return {
+    writes: 0,
+    get width() { return w; },
+    set width(v: number) { w = v; this.writes++; },
+    get height() { return h; },
+    set height(v: number) { h = v; },
+    style: {} as Record<string, string>,
+  };
+}
+
+function recorder(canvas: unknown = { width: 100, height: 100, style: {} }) {
   const calls: string[] = [];
   const ctx = new Proxy({} as Record<string, unknown>, {
     get(target, prop: string) {
-      if (prop === 'canvas') return { width: 100, height: 100 };
+      if (prop === 'canvas') return canvas;
       if (prop === 'measureText') {
         return () => ({ width: 8, actualBoundingBoxAscent: 6,
                         actualBoundingBoxDescent: 2 });
@@ -19,7 +34,7 @@ function recorder() {
       if (!(prop in target)) {
         target[prop] = (...args: unknown[]) => {
           if (['fillRect', 'strokeRect', 'drawImage', 'fillText', 'stroke',
-               'fill', 'ellipse'].includes(prop)) {
+               'fill', 'ellipse', 'clearRect'].includes(prop)) {
             calls.push(`${prop}(${args.join(',')})`);
           }
           return undefined;
@@ -102,4 +117,33 @@ test('every feature the mapping declines has a branch here -- a command list '
     expect(calls.length, `${cmd.kind} left nothing on the overlay`)
       .toBeGreaterThan(0);
   }
+});
+
+const FRAME = { width: 1200, height: 900, dpr: 1 };
+
+const badged = () => sprite({
+  badges: [{ ink: '#000', field: '#fff', corner: 'tr' }],
+} as never);
+
+test('the overlay pass clears before it draws, so the frame before it does '
+   + 'not ghost through', () => {
+  const { ctx, calls } = recorder();
+  paintOverlay(ctx, [badged()], FRAME, null, DEFAULT_PALETTE);
+  expect(calls[0]).toMatch(/^clearRect/);
+  expect(calls.length).toBeGreaterThan(1);
+});
+
+test('the overlay keeps its backing store when the frame has not moved', () => {
+  const canvas = sizedCanvas(1200, 900);
+  const { ctx } = recorder(canvas);
+  paintOverlay(ctx, [badged()], FRAME, null, DEFAULT_PALETTE);
+  expect(canvas.writes).toBe(0);
+});
+
+test('the overlay is resized when the frame has moved', () => {
+  const canvas = sizedCanvas(600, 400);
+  const { ctx } = recorder(canvas);
+  paintOverlay(ctx, [badged()], FRAME, null, DEFAULT_PALETTE);
+  expect(canvas.width).toBe(1200);
+  expect(canvas.height).toBe(900);
 });

@@ -78,6 +78,37 @@ export function drawResidue(ctx: CanvasRenderingContext2D, cmd: PaintCommand,
   }
 }
 
+/** The 2D half of a hybrid paint: fit the layer, clear it, draw the residue.
+ *
+ *  Separate from `scenePainter` because the GL half needs a WebGL context and
+ *  this half does not, which is the only reason the overlay pass is testable
+ *  at all.
+ */
+export function paintOverlay(ctx: CanvasRenderingContext2D,
+                             cmds: readonly PaintCommand[], frame: Frame,
+                             sheet: HTMLImageElement | null, palette: Palette) {
+  const { canvas } = ctx;
+  const w = Math.round(frame.width * frame.dpr);
+  const h = Math.round(frame.height * frame.dpr);
+  // Assigning `width` reallocates and zeroes the whole surface, so doing it
+  // unconditionally costs a full-frame clear on top of the `clearRect` below
+  // -- about 0.4ms of the hybrid's number at a 1200x900 frame, which the
+  // Canvas2D path it is measured against never pays.
+  if (canvas.width !== w) canvas.width = w;
+  if (canvas.height !== h) canvas.height = h;
+  canvas.style.width = `${frame.width}px`;
+  canvas.style.height = `${frame.height}px`;
+
+  ctx.setTransform(frame.dpr, 0, 0, frame.dpr, 0, 0);
+  ctx.clearRect(0, 0, frame.width, frame.height);
+  ctx.imageSmoothingEnabled = true;
+  // The reallocation used to scrub the context between frames; with it gone,
+  // a helper that forgets its `restore` would smear state into the next one.
+  ctx.save();
+  for (const cmd of cmds) drawResidue(ctx, cmd, sheet, palette);
+  ctx.restore();
+}
+
 export interface Sheets {
   /** For weasel: the atlas as a texture source. */
   bitmap: ImageBitmap | null;
@@ -145,14 +176,7 @@ export function scenePainter(gl: HTMLCanvasElement,
         extraCommands: mapped.commands,
       });
 
-      overlay.width = Math.round(frame.width * frame.dpr);
-      overlay.height = Math.round(frame.height * frame.dpr);
-      overlay.style.width = `${frame.width}px`;
-      overlay.style.height = `${frame.height}px`;
-      ctx.setTransform(frame.dpr, 0, 0, frame.dpr, 0, 0);
-      ctx.clearRect(0, 0, frame.width, frame.height);
-      ctx.imageSmoothingEnabled = true;
-      for (const cmd of cmds) drawResidue(ctx, cmd, sheets.img, palette);
+      paintOverlay(ctx, cmds, frame, sheets.img, palette);
     },
   };
 }
