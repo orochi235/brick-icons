@@ -28,8 +28,17 @@ docs carry the numbers.
 `d500ca9` and rendered 394 parts with the pre-pose code before I caught it —
 the giveaway was `missing 2px` where a posed render against a posed oracle
 gives 0 and against an unposed one gives 27,785. `onto sync <node>` first,
-every time. The node's `git log` still reads `d500ca9` after a sync because
-onto ships files, not history; grep for the symbol instead.
+every time.
+
+**And the `build` field cannot tell you which code ran, so do not judge a slot
+stale by it.** `__init__.py::build()` takes its sha from the node's `git
+rev-parse HEAD` and its `+` from `git status`, while `onto sync` ships files
+without moving HEAD — so a freshly synced node reports the OLD sha with a `+`,
+indistinguishable from a tree with local edits. Measured: after syncing
+msb-uai it answered `d500ca9` to `git log` and `2` to `grep -c declared_pose
+brick_icons/library.py`, which is code from 74 commits later. To ask what a
+node actually holds, grep it for a symbol a recent commit added —
+`reseat_plane` in `unwrap.py` came in with 908f80b.
 
 **The wall's renderer decision has flipped and is Mike's to take.** weasel
 `514cbc0e` beats canvas2d at every rung, 1.5x at 8px to 8.7x at 32px, and the
