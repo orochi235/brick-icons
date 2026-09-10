@@ -140,6 +140,19 @@ rather than the 2 a real window gets.
 
 ## Not done
 
+**The full port — badges, the kind strip and captions through weasel — is queued
+and unbuilt.** The wall takes the scene renderer for cell bodies only; the
+overlays stay on a canvas2d layer stacked above it, because three things in
+`draw2d.ts` have no weasel equivalent. Weasel resolves text through an MSDF
+atlas where canvas2d uses the platform rasterizer, so caption glyphs may not
+agree within this harness's own 12/255 guard. There is no destination-out
+composite, so `drawBadge`'s punching marks — the sticker's peel is a hole — want
+rebuilding on `GroupDrawCommand.clip`. And placement depends on `measureText`
+(`capHalf`, the caption width feeding `stripX`, `badgeWidth`), which weasel does
+not expose, so positions would be measured against glyphs it is not drawing.
+Worth doing to let `/bench` report every rung through one renderer, or if the
+second canvas turns out to cost something. Not before a spec.
+
 `<SceneCanvas>`, the full component, is a separate question. It brings the
 interaction stack — tools, selection, undo, the gesture dispatcher, hit-testing —
 which the wall already has working. Nothing here bears on whether that is worth

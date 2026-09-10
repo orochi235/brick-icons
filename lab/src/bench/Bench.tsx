@@ -107,8 +107,8 @@ export function Bench() {
         rungs,
         renderersFor: (rung) => [
           canvas2dRenderer(a, rung.sheet.img, DEFAULT_PALETTE),
-          sceneRenderer(b, rung.sheet.bitmap, DEFAULT_PALETTE, 'nearest'),
-          sceneRenderer(c, rung.sheet.bitmap, DEFAULT_PALETTE, 'linear'),
+          sceneRenderer(b, rung.sheet.bitmap, 'nearest'),
+          sceneRenderer(c, rung.sheet.bitmap, 'linear'),
         ],
         frame: { width: WIDTH, height: HEIGHT, dpr: window.devicePixelRatio || 1 },
         onLine: (line) => { setLines((prev) => [...prev, line]); },

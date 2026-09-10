@@ -12,6 +12,7 @@ import { adjacent, impliedCaret, type Direction } from '@lab/corpus/caret';
 import type { Band, Rect } from '@lab/corpus/layout';
 import { LINKED_BADGE, paintCommands, type Appearance } from '@lab/corpus/paint';
 import { cornerBadgeAt, drawPaintCommand } from '@lab/corpus/draw2d';
+import { scenePainter, type SceneWallPainter } from '@lab/corpus/drawScene';
 import { DEFAULT_PALETTE, readPalette, type CellState, type Palette } from '@lab/corpus/palette';
 import { DEFAULT_PARAMS } from '@lab/corpus/params';
 import { pinchStep } from '@lab/corpus/pinch';
@@ -38,6 +39,9 @@ export interface WallProps {
   highlight: CellState | null;
   /** The legend's hovered tag row, if any -- cells without it paint dimmed. */
   highlightTag: string | null;
+  /** Paint cell bodies with weasel instead of Canvas2D. The overlays are
+   *  Canvas2D either way, on a layer above. */
+  sceneRenderer?: boolean;
   explicitCaret: number | null;
   onExplicitCaretChange: (index: number | null) => void;
   onPan: (next: View) => void;
@@ -80,8 +84,13 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
                        highlight, highlightTag, explicitCaret, onExplicitCaretChange,
                        onPan, onPick, onOpen, onDragStart,
                        dragThresholdPx = DEFAULT_PARAMS.dragThresholdPx,
-                       pixelScale = 1, appearance, bands, tint }: WallProps) {
+                       pixelScale = 1, appearance, bands, tint,
+                       sceneRenderer = false }: WallProps) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const glRef = useRef<HTMLCanvasElement>(null);
+  const painterRef = useRef<{ painter: SceneWallPainter;
+                              gl: HTMLCanvasElement } | null>(null);
+  const [sheetBitmap, setSheetBitmap] = useState<ImageBitmap | null>(null);
   const [dragging, setDragging] = useState(false);
   const decay = useDecayLoop();
   const [palette, setPalette] = useState<Palette>(DEFAULT_PALETTE);
@@ -158,6 +167,18 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
   const caretIndex = explicitCaret ?? implied;
   const caretCell = caretIndex != null ? cells[caretIndex] : undefined;
 
+  // Weasel takes a texture, not an <img>. Never closed: a paint can still be
+  // holding the previous one when a slot swap replaces it, and a closed bitmap
+  // draws nothing with no error anywhere.
+  useEffect(() => {
+    if (!sceneRenderer || !sheet) { setSheetBitmap(null); return; }
+    let live = true;
+    void createImageBitmap(sheet)
+      .then((b) => { if (live) setSheetBitmap(b); })
+      .catch(() => { if (live) setSheetBitmap(null); });
+    return () => { live = false; };
+  }, [sceneRenderer, sheet]);
+
   useEffect(() => {
     const canvas = ref.current;
     const ctx = canvas?.getContext('2d');
@@ -168,6 +189,26 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
     // sharper tile without this buys nothing -- it is downsampled straight back
     // into the same device pixels.
     const dpr = (window.devicePixelRatio || 1) * pixelScale;
+    const cmds = paintCommands({
+      cells, rects, visible, cam, manifest, palette, loose, vector, highlight, highlightTag,
+      caret: caretIndex,
+      appearance, bands, tint,
+    });
+
+    const gl = glRef.current;
+    if (sceneRenderer && gl) {
+      if (painterRef.current?.gl !== gl) {
+        painterRef.current = { painter: scenePainter(gl, canvas), gl };
+      }
+      // Linear, not the bench's nearest: the 2D path draws with
+      // `imageSmoothingEnabled`, and matching it halves the drift against the
+      // renderer this replaces -- mean |delta| 1.33 against 2.56 over a
+      // magnified wall, with no cell-edge bleed at either setting.
+      painterRef.current.painter.paint(cmds, { width, height, dpr },
+                                       { bitmap: sheetBitmap, img: sheet }, palette, 'linear');
+      return;
+    }
+
     canvas.width = Math.round(width * dpr);
     canvas.height = Math.round(height * dpr);
     // The backing store is oversized for sharpness; without pinning the CSS
@@ -178,16 +219,10 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
     ctx.imageSmoothingEnabled = true;
-    for (const cmd of paintCommands({
-      cells, rects, visible, cam, manifest, palette, loose, vector, highlight, highlightTag,
-      caret: caretIndex,
-      appearance, bands, tint,
-    })) {
-      drawPaintCommand(ctx, cmd, sheet, palette);
-    }
+    for (const cmd of cmds) drawPaintCommand(ctx, cmd, sheet, palette);
   }, [cells, rects, visible, cam, sheet, manifest, palette, loose, vector, highlight, highlightTag,
       caretIndex,
-      appearance, bands, tint, width, height, pixelScale]);
+      appearance, bands, tint, width, height, pixelScale, sceneRenderer, sheetBitmap]);
 
   // The lens shows a magnified crop of what is already on screen -- zooming
   // in about a fixed point never brings a cell into view that the outer
@@ -353,9 +388,15 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
 
   return (
     <>
+      <div className="corpus-canvas-stack">
+      {sceneRenderer && <canvas ref={glRef} className="corpus-canvas-gl" />}
       <canvas
         ref={ref}
-        className={dragging ? 'corpus-canvas corpus-canvas-dragging' : 'corpus-canvas'}
+        className={[
+          'corpus-canvas',
+          dragging ? 'corpus-canvas-dragging' : '',
+          sceneRenderer ? 'corpus-canvas-over' : '',
+        ].filter(Boolean).join(' ')}
         width={width}
         height={height}
         tabIndex={0}
@@ -380,6 +421,7 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
           if (hit) onOpen(hit.cell);
         }}
       />
+      </div>
       {loupe.visible && (
         <LoupeBubble aim={loupe.aim} diameter={loupeCapability.diameter}>
           <canvas ref={lensRef} className="lk-loupe__canvas" />

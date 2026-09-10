@@ -1,7 +1,6 @@
 import { beforeEach, expect, test, vi } from 'vitest';
-import { DEFAULT_PALETTE } from '@lab/corpus/palette';
 import type { PaintCommand } from '@lab/corpus/paint';
-import { toDrawCommands } from '@lab/bench/toDrawCommands';
+import { toDrawCommands } from '@lab/corpus/toDrawCommands';
 import { drift, fingerprint, isBlank, runBench, DRIFT_LIMIT,
          type Rung } from '@lab/bench/harness';
 import type { Frame, WallRenderer } from '@lab/bench/renderers';
@@ -14,26 +13,26 @@ const sprite = (over: Partial<Extract<PaintCommand, { kind: 'sprite' }>> = {}) =
 });
 
 test('a sprite becomes a ground fill and an atlas blit, in that order', () => {
-  const { commands, unsupported } = toDrawCommands([sprite()], SHEET, DEFAULT_PALETTE);
+  const { commands, unsupported } = toDrawCommands([sprite()], SHEET);
   expect(unsupported.size).toBe(0);
   expect(commands.map((c) => c.kind)).toEqual(['path', 'image']);
 });
 
 test('an opaque sprite is emitted flat -- a group per cell is a state change '
    + 'per cell, and would be charged to the renderer', () => {
-  const { commands } = toDrawCommands([sprite()], SHEET, DEFAULT_PALETTE);
+  const { commands } = toDrawCommands([sprite()], SHEET);
   expect(commands.some((c) => c.kind === 'group')).toBe(false);
 });
 
 test('a dimmed sprite gets the group its alpha needs', () => {
-  const { commands } = toDrawCommands([sprite({ alpha: 0.4 })], SHEET, DEFAULT_PALETTE);
+  const { commands } = toDrawCommands([sprite({ alpha: 0.4 })], SHEET);
   expect(commands).toHaveLength(1);
   expect(commands[0]!.kind).toBe('group');
   expect((commands[0] as { alpha?: number }).alpha).toBe(0.4);
 });
 
 test('the atlas blit carries the tile sub-rect and samples nearest', () => {
-  const { commands } = toDrawCommands([sprite()], SHEET, DEFAULT_PALETTE);
+  const { commands } = toDrawCommands([sprite()], SHEET);
   const img = commands[1] as unknown as Record<string, unknown>;
   // Linear sampling reaches past `source`, which would bleed the neighboring
   // tile into every cell edge.
@@ -43,14 +42,14 @@ test('the atlas blit carries the tile sub-rect and samples nearest', () => {
 });
 
 test('a sprite with no sheet draws nothing rather than a bare ground', () => {
-  const { commands } = toDrawCommands([sprite()], null, DEFAULT_PALETTE);
+  const { commands } = toDrawCommands([sprite()], null);
   expect(commands).toHaveLength(0);
 });
 
 test('badges are reported unsupported, not quietly skipped', () => {
   const { unsupported } = toDrawCommands(
     [sprite({ badges: [{ ink: '#000', field: '#fff', corner: 'tr' }] as never })],
-    SHEET, DEFAULT_PALETTE);
+    SHEET);
   expect([...unsupported]).toContain('badges');
 });
 
@@ -59,7 +58,7 @@ test('a plain fill cell becomes one path', () => {
     kind: 'fill', dx: 0, dy: 0, dw: 10, dh: 10, fill: '#abc',
     border: null, borderWidth: 0, shape: 'square', slash: false,
   };
-  const { commands, unsupported } = toDrawCommands([cmd], SHEET, DEFAULT_PALETTE);
+  const { commands, unsupported } = toDrawCommands([cmd], SHEET);
   expect(commands).toHaveLength(1);
   expect(commands[0]!.kind).toBe('path');
   expect(unsupported.size).toBe(0);
@@ -70,7 +69,7 @@ test('a bordered fill adds a stroked rect inset by half the width', () => {
     kind: 'fill', dx: 0, dy: 0, dw: 10, dh: 10, fill: '#abc',
     border: '#111', borderWidth: 2, shape: 'square', slash: false,
   };
-  const { commands } = toDrawCommands([cmd], SHEET, DEFAULT_PALETTE);
+  const { commands } = toDrawCommands([cmd], SHEET);
   expect(commands).toHaveLength(2);
   expect((commands[1] as { stroke?: { width: number } }).stroke?.width).toBe(2);
 });

@@ -66,6 +66,9 @@ const PRE_TASK_LITERALS: Params = {
   retiredWash: 0.75,
 
   dragThresholdPx: 4,
+  // No pre-task literal either: the wall had one renderer when this snapshot
+  // was taken, and `false` is what keeps it the one that ships.
+  sceneRenderer: false,
   levelUpHysteresis: 1.5,
   levelDownHysteresis: 0.67,
   pollMs: 10_000,

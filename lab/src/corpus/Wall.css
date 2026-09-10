@@ -4,6 +4,17 @@
 .corpus-canvas { display: block; cursor: grab; touch-action: none; }
 .corpus-canvas-dragging { cursor: grabbing; }
 
+/* The hybrid renderer's two layers. The GL canvas carries the cell bodies and
+ * the ordinary wall canvas sits over it carrying the overlays -- which is also
+ * what keeps every pointer handler on the element that already had them.
+ * `isolation` is load-bearing: the top layer has to be positioned for z-index
+ * to lift it over the absolute one, and without a stacking context of their
+ * own that z-index also lifts it over the legend and the part card, which sit
+ * later in the stage and had been relying on document order. */
+.corpus-canvas-stack { position: relative; isolation: isolate; }
+.corpus-canvas-gl { position: absolute; top: 0; left: 0; z-index: 0; pointer-events: none; }
+.corpus-canvas-over { position: relative; z-index: 1; }
+
 /* Off-screen rather than display:none -- a hidden node is dropped from the
  * accessibility tree, which would silence the announcement it exists for. */
 .corpus-caret-announce {

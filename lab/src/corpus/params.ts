@@ -58,6 +58,11 @@ interface FixedParams {
   retiredWash: number;
 
   dragThresholdPx: number;
+  /** Paint cell bodies with weasel's WebGL2 renderer instead of Canvas2D.
+   *  The overlays stay on Canvas2D either way. Off by default: the renderer
+   *  only wins against a weasel carrying the batch work, which no release
+   *  does yet -- run the lab with `WEASEL_SRC` to get it. */
+  sceneRenderer: boolean;
   levelUpHysteresis: number;
   levelDownHysteresis: number;
   pollMs: number;
@@ -96,6 +101,7 @@ export const DEFAULT_PARAMS: Params = {
   retiredWash: 0.75,
 
   dragThresholdPx: 4,
+  sceneRenderer: false,
   levelUpHysteresis: 1.5,
   levelDownHysteresis: 0.67,
   pollMs: 10_000,
@@ -160,6 +166,8 @@ export const APPEARANCE_FIELDS: ConfigField[] = [
 export const FEEL_FIELDS: ConfigField[] = [
   { key: 'dragThresholdPx', label: 'Drag threshold', type: 'slider',
     default: DEFAULT_PARAMS.dragThresholdPx, min: 0, max: 20, step: 1 },
+  { key: 'sceneRenderer', label: 'WebGL cell bodies', type: 'checkbox',
+    default: DEFAULT_PARAMS.sceneRenderer },
   { key: 'levelUpHysteresis', label: 'Level-up hysteresis', type: 'slider',
     default: DEFAULT_PARAMS.levelUpHysteresis, min: 1, max: 3, step: 0.05 },
   { key: 'levelDownHysteresis', label: 'Level-down hysteresis', type: 'slider',

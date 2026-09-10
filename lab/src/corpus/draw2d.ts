@@ -15,7 +15,7 @@ import type { Palette } from '@lab/corpus/palette';
 // where a ring reads as nothing at the zooms most cells are seen at. A stroke
 // straddles its path, so inset by half the width -- otherwise it overshoots
 // the cell and eats into its neighbors.
-function strokeBorder(ctx: CanvasRenderingContext2D,
+export function strokeBorder(ctx: CanvasRenderingContext2D,
                       cmd: { dx: number; dy: number; dw: number; dh: number;
                              border: string | null; borderWidth: number;
                              slash?: boolean }) {
@@ -26,18 +26,31 @@ function strokeBorder(ctx: CanvasRenderingContext2D,
   ctx.lineWidth = cmd.borderWidth;
   ctx.strokeRect(cmd.dx + inset, cmd.dy + inset,
                  cmd.dw - cmd.borderWidth, cmd.dh - cmd.borderWidth);
-  if (cmd.slash) {
-    ctx.beginPath();
-    ctx.moveTo(cmd.dx + inset, cmd.dy + inset);
-    ctx.lineTo(cmd.dx + cmd.dw - inset, cmd.dy + cmd.dh - inset);
-    ctx.stroke();
-  }
+  ctx.restore();
+  if (cmd.slash) strokeSlash(ctx, cmd);
+}
+
+// Split from the border so the hybrid renderer can draw it alone: weasel maps
+// the border rect and has no diagonal, and re-stroking the rect over the one
+// it already drew hardens that edge.
+export function strokeSlash(ctx: CanvasRenderingContext2D,
+                            cmd: { dx: number; dy: number; dw: number; dh: number;
+                                   border: string | null; borderWidth: number }) {
+  if (!cmd.border || cmd.borderWidth <= 0) return;
+  const inset = cmd.borderWidth / 2;
+  ctx.save();
+  ctx.strokeStyle = cmd.border;
+  ctx.lineWidth = cmd.borderWidth;
+  ctx.beginPath();
+  ctx.moveTo(cmd.dx + inset, cmd.dy + inset);
+  ctx.lineTo(cmd.dx + cmd.dw - inset, cmd.dy + cmd.dh - inset);
+  ctx.stroke();
   ctx.restore();
 }
 
 // Dashed and drawn outside the cell, so it never collides with the inset
 // defect ring when a cell carries both.
-function strokeCaret(ctx: CanvasRenderingContext2D,
+export function strokeCaret(ctx: CanvasRenderingContext2D,
                      cmd: { dx: number; dy: number; dw: number; dh: number },
                      palette: Palette) {
   ctx.save();
@@ -50,7 +63,7 @@ function strokeCaret(ctx: CanvasRenderingContext2D,
 
 // A sheet with its corner turned up: the sticker every catalog draws. Stroked
 // rather than filled, so it reads as a mark on the field instead of a blob.
-function drawSticker(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
+export function drawSticker(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number) {
   const fold = r * 0.62;
   const x0 = cx - r, y0 = cy - r, x1 = cx + r, y1 = cy + r;
   ctx.save();
@@ -151,8 +164,8 @@ function drawCaption(ctx: CanvasRenderingContext2D, caption: CellCaption,
 
 /** How much of its cell a round cell fills across, and how tall its letter
  *  stands when there is room for one. */
-const CIRCLE_SCALE = 0.6;
-const GLYPH_SCALE = 0.62;
+export const CIRCLE_SCALE = 0.6;
+export const GLYPH_SCALE = 0.62;
 
 // Flattens a retired cell toward the wash color: white goes gray, ink goes
 // gray, and the whole thumbnail drops in contrast without a second bake.
@@ -167,7 +180,7 @@ function washCell(ctx: CanvasRenderingContext2D, wash: number,
 
 /** The captions, corner discs and kind strip a cell wears, drawn or not. The
  *  strip starts where the part number ended, so it runs after the captions. */
-function drawOverlays(ctx: CanvasRenderingContext2D,
+export function drawOverlays(ctx: CanvasRenderingContext2D,
                       cmd: { captions?: CellCaption[]; badges?: CellBadge[];
                              strip?: CellBadge[] },
                       box: { dx: number; dy: number; dw: number; dh: number }) {

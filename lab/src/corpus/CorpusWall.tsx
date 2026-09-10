@@ -504,7 +504,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
                   onDragStart={() => setCarded(null)}
                   onOpen={(c) => { setCarded(null); setPicked(c.id); }}
                   dragThresholdPx={params.dragThresholdPx} appearance={appearance}
-                  pixelScale={pixelScale} />
+                  pixelScale={pixelScale} sceneRenderer={params.sceneRenderer} />
           )}
           {carded && !picked && (
             <PartCard cell={carded.cell} source={drawnSource} at={carded.at}

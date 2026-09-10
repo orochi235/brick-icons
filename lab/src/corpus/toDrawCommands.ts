@@ -7,14 +7,28 @@
  *  that was quick because it drew less.
  */
 import {
-  ellipsePath, rectPath, textCommand,
+  ellipsePath, rectPath,
   type DrawCommand,
 } from '@weasel-js/core';
+import { CIRCLE_SCALE } from '@lab/corpus/draw2d';
 import { RETIRED_WASH, type PaintCommand } from '@lab/corpus/paint';
-import type { Palette } from '@lab/corpus/palette';
 
-/** Kept in step with `draw2d.ts`, whose copies are module-private. */
-const CIRCLE_SCALE = 0.6;
+/** Every feature this mapping can decline to draw, named once.
+ *
+ *  Shared rather than spelled inline so the hybrid executor's second half can
+ *  be checked against it at compile time: a name added here and nowhere else
+ *  is a cell nothing paints. */
+export const UNSUPPORTED = {
+  badges: 'badges',
+  strip: 'kind strip',
+  captions: 'captions',
+  caret: 'caret',
+  sticker: 'sticker mark',
+  glyph: 'category glyph',
+  slash: 'slash',
+  image: 'loose/vector image rung',
+  label: 'band label',
+} as const;
 
 export interface Mapped {
   commands: DrawCommand[];
@@ -44,16 +58,15 @@ export type Sampling = 'nearest' | 'linear';
 
 export function toDrawCommands(cmds: readonly PaintCommand[],
                                sheet: ImageBitmap | null,
-                               palette: Palette,
                                sampling: Sampling = 'nearest'): Mapped {
   const out: DrawCommand[] = [];
   const unsupported = new Set<string>();
 
   const overlays = (cmd: { badges?: unknown[]; strip?: unknown[];
                            captions?: unknown[] }) => {
-    if (cmd.badges?.length) unsupported.add('badges');
-    if (cmd.strip?.length) unsupported.add('kind strip');
-    if (cmd.captions?.length) unsupported.add('captions');
+    if (cmd.badges?.length) unsupported.add(UNSUPPORTED.badges);
+    if (cmd.strip?.length) unsupported.add(UNSUPPORTED.strip);
+    if (cmd.captions?.length) unsupported.add(UNSUPPORTED.captions);
   };
 
   for (const cmd of cmds) {
@@ -79,15 +92,15 @@ export function toDrawCommands(cmds: readonly PaintCommand[],
       if (alpha === 1) out.push(...body);
       else out.push({ kind: 'group', alpha, children: body });
       overlays(cmd);
-      if (cmd.caret) unsupported.add('caret');
+      if (cmd.caret) unsupported.add(UNSUPPORTED.caret);
     } else if (cmd.kind === 'image') {
-      unsupported.add('loose/vector image rung');
+      unsupported.add(UNSUPPORTED.image);
       overlays(cmd);
     } else if (cmd.kind === 'fill') {
       if (cmd.mark === 'sticker') {
-        unsupported.add('sticker mark');
+        unsupported.add(UNSUPPORTED.sticker);
       } else if (cmd.glyph) {
-        unsupported.add('category glyph');
+        unsupported.add(UNSUPPORTED.glyph);
       } else if (cmd.shape === 'circle') {
         const iw = cmd.dw * CIRCLE_SCALE;
         const ih = cmd.dh * CIRCLE_SCALE;
@@ -102,17 +115,17 @@ export function toDrawCommands(cmds: readonly PaintCommand[],
       }
       if (cmd.border && cmd.borderWidth > 0) {
         out.push(strokeRect(cmd.dx, cmd.dy, cmd.dw, cmd.dh, cmd.border, cmd.borderWidth));
-        if (cmd.slash) unsupported.add('slash');
+        if (cmd.slash) unsupported.add(UNSUPPORTED.slash);
       }
       overlays(cmd);
-      if (cmd.caret) unsupported.add('caret');
+      if (cmd.caret) unsupported.add(UNSUPPORTED.caret);
     } else if (cmd.kind === 'label') {
-      const text = cmd.depth === 0
-        ? `${cmd.text}  ${cmd.count.toLocaleString()}` : cmd.text;
-      const color = cmd.depth === 0 ? palette.label.fill : palette.sublabel.fill;
-      out.push(textCommand(cmd.dx, cmd.dy, text,
-                           { fontSize: cmd.size, fill: { color } } as never));
-      unsupported.add('band label metrics');
+      // Deliberately undrawn. Weasel resolves a run through an MSDF atlas and
+      // canvas2d through the platform rasterizer, so the two disagree on both
+      // the glyphs and the advance widths -- and the wall's overlay layer is
+      // already the place text is drawn. Naming it here is what stops a rung
+      // carrying band labels from being reported as comparable.
+      unsupported.add(UNSUPPORTED.label);
     }
   }
 

@@ -9,7 +9,7 @@ import { createScene, renderSceneToCanvas, type View } from '@weasel-js/core';
 import { drawPaintCommand } from '@lab/corpus/draw2d';
 import type { PaintCommand } from '@lab/corpus/paint';
 import type { Palette } from '@lab/corpus/palette';
-import { toDrawCommands, type Sampling } from '@lab/bench/toDrawCommands';
+import { toDrawCommands, type Sampling } from '@lab/corpus/toDrawCommands';
 
 export interface Frame { width: number; height: number; dpr: number }
 
@@ -61,7 +61,6 @@ export function canvas2dRenderer(canvas: HTMLCanvasElement,
  *  `extraCommands` over an empty scene. */
 export function sceneRenderer(canvas: HTMLCanvasElement,
                               sheet: ImageBitmap | null,
-                              palette: Palette,
                               sampling: Sampling = 'nearest'): WallRenderer {
   const scene = createScene<unknown, 'main'>({ systemLayers: [{ id: 'main' }] });
   let unsupported: ReadonlySet<string> = new Set();
@@ -70,7 +69,7 @@ export function sceneRenderer(canvas: HTMLCanvasElement,
     canvas,
     get unsupported() { return unsupported; },
     paint(cmds, frame) {
-      const mapped = toDrawCommands(cmds, sheet, palette, sampling);
+      const mapped = toDrawCommands(cmds, sheet, sampling);
       unsupported = mapped.unsupported;
       renderSceneToCanvas({
         canvas,
