@@ -172,8 +172,9 @@ an area of 400.192 against the 400.000 of its own outer square, `BRepCheck`
 calls it invalid, and HLR sees through it to the inside of the part. Which is
 why it reads as a missing surface: you are looking at the underside.
 
-**The fix that measures well: throw away a merged shape `BRepCheck_Analyzer`
-calls invalid and keep the sewn shape it came from.** Across the class and a
+**A guard that separates the class, but is too broad to land as it stands:
+throw away a merged shape `BRepCheck_Analyzer` calls invalid and keep the sewn
+shape it came from.** Across the class and a
 set of controls it separates them exactly -- 3070bp1k, 30258p05, 10202p04,
 25269p00, 14769pt0, 3941 and 39789 all reject their merge; 3070b, 25269, 96904,
 30136, 30137, 9359, 80400, 6141p01, 3005, 4740 and 3001 all keep it. So does
@@ -184,14 +185,36 @@ comes back invalid for **62 of the 298 it decided -- 20.8%** -- and those parts
 keep a median 3.1x more faces without it (mean 15.3x, worst 203x). 10202p04
 goes from 13.8s to 69.3s at 3,757 faces against 91.
 
-Read the 20.8% twice, because it cuts both ways: it is what the guard costs,
-and it is also how much of the library currently draws from an occluder OCCT
-calls invalid. Not all of that shows a visible defect -- invalidity does not
-have to put a line anywhere you can see it -- but the surface doing the hiding
-is unsound on one part in five.
+**Do not read the 20.8% as 20.8% of the library drawing wrong -- measured, it
+is not.** Eight parts drawn from that population at random, none from the
+defect list, render before and after the guard as: two identical to the pixel,
+three differing by 5px or less or by one antialias component, and three by 41
+to 85px, one of those scattered over 20 components, which is fringe rather
+than a defect. Against 3070bp1k losing a whole Y across its top face, none of
+the eight is a real fix. They all pay the faces.
+
+So the invalidity is real and mostly harmless, and a guard keyed on it is
+overapplied by roughly the whole sample. What the broken parts have in common
+is narrower than invalidity: the merge folds a PRINT into one large flat face.
+That is why the defect list is printed tiles and not a random cross-section.
 
 `ShapeFix_Shape` is not the cheaper answer: it leaves the shape invalid and
 takes 3070bp1k from 5 extras to 2.
+
+**Where to take it next.** Test the pathology rather than proxying it with
+whole-shape validity, which covers self-intersection, wire order and tolerance
+faults that never move a stroke. The signature actually measured on 3070bp1k
+is a face whose area exceeds its own outer wire's -- 400.192 against 400.000 --
+having gained near-zero-area inner wires the sewn shape did not have. Reject or
+repair THAT FACE and keep the merge on every other one; the current guard
+discards the whole result to fix one face, which is where the 3-40x comes from.
+
+Two gaps in the evidence, so nobody assumes they are closed. The mechanism was
+traced on 3070bp1k only -- the other six were checked for a changed outcome,
+not for the same cause, and 3941 rejects its merge while picking 102 edges
+either way, so it pays the cost for nothing. And the converse is untested:
+whether a part whose merge is VALID can still draw hidden edges, which would
+make the guard incomplete as well as broad.
 
 ### Two of the ten are a different bug and must not be chased with the rest
 
