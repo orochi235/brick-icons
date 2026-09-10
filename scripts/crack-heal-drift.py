@@ -40,18 +40,25 @@ def segs_of(out, right, up, px):
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=200)
+    ap.add_argument("--parts", help="ids to draw, one per line; without it the "
+                                    "sample is taken from corpus.db, which a "
+                                    "fleet node does not have")
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--px", type=int, default=512)
     ap.add_argument("--out", default="out/crack-heal-drift.jsonl")
     args = ap.parse_args()
 
-    conn = sqlite3.connect(ROOT / db.DEFAULT_PATH)
-    marks = ",".join("?" * len(db.OUT_OF_SCOPE_CATEGORIES))
-    ids = [r[0] for r in conn.execute(
-        f"SELECT id FROM parts WHERE obsolete=0 AND (category IS NULL OR "
-        f"category NOT IN ({marks}))", db.OUT_OF_SCOPE_CATEGORIES)]
-    random.seed(args.seed)
-    sample = random.sample(ids, min(args.n, len(ids)))
+    if args.parts:
+        sample = [l.strip() for l in Path(args.parts).read_text().splitlines()
+                  if l.strip()][:args.n]
+    else:
+        conn = sqlite3.connect(ROOT / db.DEFAULT_PATH)
+        marks = ",".join("?" * len(db.OUT_OF_SCOPE_CATEGORIES))
+        ids = [r[0] for r in conn.execute(
+            f"SELECT id FROM parts WHERE obsolete=0 AND (category IS NULL OR "
+            f"category NOT IN ({marks}))", db.OUT_OF_SCOPE_CATEGORIES)]
+        random.seed(args.seed)
+        sample = random.sample(ids, min(args.n, len(ids)))
     ldraw = config.load_config().ldraw_dir
     right, up, _fwd = hlr.view_basis(30.0, 45.0)
 
