@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { LabClient } from '@lab/api/client';
 import { PageNav } from '@lab/nav/PageNav';
+import { changeOf, outcomeOf } from '@lab/ingest/change';
 import type { IngestAttempts, IngestRun } from '@lab/ingest/types';
 import '@lab/ingest/ingest.css';
 
@@ -86,7 +87,10 @@ function Detail({ view, failedOnly, onFailedOnly }: {
         </thead>
         <tbody>
           {view.rows.map((row) => (
-            <tr key={`${row.part_id}/${row.source}`}>
+            /* Colored by whether the row moved the part, which is the whole
+               reason to read a list where most rows repeat last run. */
+            <tr key={`${row.part_id}/${row.source}`}
+                data-change={changeOf(row.prior, outcomeOf(row)) ?? undefined}>
               <td>{row.part_id}</td>
               <td>{row.source}</td>
               {/* Null means this run met the part first, which is a fact

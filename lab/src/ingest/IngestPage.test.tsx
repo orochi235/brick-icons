@@ -113,3 +113,23 @@ it('calls a part this run met first never tried, not blank', async () => {
   fireEvent.click(await screen.findByLabelText('run 1, store'));
   expect(await screen.findByText('never tried')).toBeTruthy();
 });
+
+it('colors a row by whether the run moved the part', async () => {
+  const c = client([run()], attempts({
+    rows: [
+      { part_id: '3001', source: 'occt', state: 'stored', secs: 1,
+        error: null, detail: null, prior: 'TimeoutError' },
+      { part_id: '3002', source: 'occt', state: 'stored', secs: 1,
+        error: 'TimeoutError', detail: null, prior: 'stored' },
+      { part_id: '3003', source: 'occt', state: 'stored', secs: 1,
+        error: null, detail: null, prior: 'stored' },
+    ],
+  }));
+  render(<IngestPage client={c} />);
+  fireEvent.click(await screen.findByLabelText('run 1, store'));
+  const rowOf = async (part: string) =>
+    (await screen.findByText(part)).closest('tr');
+  expect((await rowOf('3001'))?.getAttribute('data-change')).toBe('fixed');
+  expect((await rowOf('3002'))?.getAttribute('data-change')).toBe('broke');
+  expect((await rowOf('3003'))?.getAttribute('data-change')).toBeNull();
+});

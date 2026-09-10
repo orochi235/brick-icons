@@ -87,3 +87,27 @@
  * own: quieter than the column it explains, so a row still reads left to
  * right as part, slot, what changed. */
 .ingest-prior { color: var(--wzl-fg-muted); }
+
+/* A run's rows are mostly parts that did what they did last time, so the
+   color marks the exception rather than the rule: a left edge and a wash,
+   both quiet enough that twenty of them in a row still read as a table.
+   `first` gets no color at all -- on a slot's first run every row is one. */
+.ingest-attempts tr[data-change] > td:first-child {
+  box-shadow: inset 2px 0 0 var(--ingest-change, transparent);
+  padding-left: 0.5rem;
+}
+.ingest-attempts tr[data-change="fixed"] {
+  --ingest-change: var(--wzl-success, #4caf70);
+  background: color-mix(in oklch, var(--wzl-success, #4caf70) 9%, transparent);
+}
+.ingest-attempts tr[data-change="broke"] {
+  --ingest-change: var(--wzl-danger, #e03030);
+  background: color-mix(in oklch, var(--wzl-danger, #e03030) 10%, transparent);
+}
+/* One failure swapped for another. Worth seeing and not worth a verdict, so
+   it is drawn in the muted foreground rather than in a state color. */
+.ingest-attempts tr[data-change="changed"] {
+  --ingest-change: var(--wzl-fg-muted);
+}
+.ingest-attempts tr[data-change="fixed"] .ingest-prior,
+.ingest-attempts tr[data-change="broke"] .ingest-prior { color: var(--wzl-fg); }
