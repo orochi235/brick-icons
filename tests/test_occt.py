@@ -1991,3 +1991,45 @@ def _cylinders(faces):
     return [f for f in faces
             if occt.BRepAdaptor_Surface(f).GetType()
             == occt.GeomAbs_SurfaceType.GeomAbs_Cylinder]
+
+
+def test_sewing_reverses_analytic_faces_that_were_built_outward(ldraw_dir):
+    """Why _curved_frame does not read `face.Orientation()`.
+
+    occt_faces builds every cylinder FORWARD, so its surface normal points
+    out of the part. BRepBuilderAPI_Sewing reverses whatever it needs to make
+    a shell consistent, and on a cracked LDraw part it has no basis for the
+    choice: most of 5846's cylinders come back the other way round.
+    """
+    out = occt.flatten_part("5846", ldraw_dir)
+    pre = _cylinders([f for prim in out["analytic"] for f in occt.occt_faces(prim)])
+    assert pre, "5846 must substitute cylinders for this to say anything"
+    assert not [f for f in pre if _reversed_face(f)]
+
+    post = _cylinders(list(occt._shape_faces(occt.build_shape(out))))
+    assert [f for f in post if _reversed_face(f)], \
+        "the sewn shape must still carry the reversals this rule exists for"
+
+
+def test_a_curved_wall_normal_points_out_of_its_own_surface(ldraw_dir):
+    """5846's curved corner is a sphere octant between two quarter cylinders.
+    Read off the sewn orientation, the cylinders' normals pointed INTO the
+    brick, every gradient sample fell below the ramp's darkest stop, and the
+    corner drew as a near-black window beside a lit dome.
+    """
+    shape = occt.build_shape(occt.flatten_part("5846", ldraw_dir))
+    checked = 0
+    for face in _cylinders(list(occt._shape_faces(shape))):
+        point, normal, _a, _b, _c = occt._curved_frame(face)
+        g = occt.BRepAdaptor_Surface(face).Cylinder()
+        pos = g.Position()
+        o = np.array([pos.Location().X(), pos.Location().Y(), pos.Location().Z()])
+        d = pos.Direction()
+        Z = np.array([d.X(), d.Y(), d.Z()], float)
+        u0, u1, v0, v1 = occt.BRepTools.UVBounds_s(face)
+        for u in np.linspace(u0, u1, 5):
+            p = point(np.array([u]), (v0 + v1) / 2.0)[0] - o
+            radial = p - (p @ Z) * Z
+            assert normal(u) @ radial > 0, "normal points into the surface"
+            checked += 1
+    assert checked, "5846 must sew cylinders for this to say anything"

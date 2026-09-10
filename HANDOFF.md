@@ -1,8 +1,13 @@
 ## The formed-sticker over-wrap: unwrap models a sheared carrier as a circle
 
-Nobody holds `unwrap.py`. The uncommitted edits in it and in `shade.py` belong
-to a session that has since ended, and this diagnosis reached the tree only as
-a message between two live ones -- which is why it is written here.
+**The bare slope this entry describes is fixed, by a different mechanism.**
+The `unwrap.py` and `shade.py` edits it calls orphaned were a live session's
+and landed as `d4c2378`: a formed sticker stands ~0.29 LDU proud of the wall
+it binds to, and rebuilding it flush dropped it under its own uncolored
+geometry in the sew. Armed against disarmed, that commit moves 14 chunky
+components on `15068dx0` and 4 on `24309dy0` -- both parts now draw their
+print. What follows is a **separate** claim about reconstruction ACCURACY,
+and it still needs a symptom of its own before anyone acts on it.
 
 `unwrap._circle_frame` models every curved carrier as RIGHT-CIRCULAR: one
 scalar radius `|R[:,0]|`, and `e2 = e1 x axis` to force the basis orthogonal.

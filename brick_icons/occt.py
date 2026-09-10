@@ -1525,10 +1525,16 @@ def _curved_frame(face):
 
     `point` and `normal` are callables in the surface's own parameters;
     (a, b, c) are the normal's cos/sin/constant vectors for _limb_params.
+
+    The normal points OUT, which is how occt_faces built every one of these
+    surfaces, and `face.Orientation()` is not consulted: sewing reverses
+    whatever it likes to make a shell consistent, and on a cracked LDraw part
+    it has no basis for the choice -- 7 of 5846's 12 analytic cylinders come
+    back REVERSED, and its curved corner then shaded at the darkest stop of
+    the ramp. _plane_face refuses the same statement for the same reason.
     """
     s = BRepAdaptor_Surface(face)
     kind = s.GetType()
-    flip = -1.0 if face.Orientation() == TopAbs_Orientation.TopAbs_REVERSED else 1.0
     if kind == GeomAbs_SurfaceType.GeomAbs_SurfaceOfExtrusion:
         el = s.BasisCurve().Ellipse()
         pos = el.Position()
@@ -1546,8 +1552,8 @@ def _curved_frame(face):
 
         # n(u) = C'(u) x D with C'(u) = -maj sin u X + minr cos u Y, so the
         # normal keeps the cos/sin form _limb_params solves.
-        a = flip * minr * np.cross(Y, D)
-        b = flip * -maj * np.cross(X, D)
+        a = minr * np.cross(Y, D)
+        b = -maj * np.cross(X, D)
         c = np.zeros(3)
 
         def normal(u):
@@ -1570,7 +1576,7 @@ def _curved_frame(face):
             return (o + r * (np.cos(u)[:, None] * X + np.sin(u)[:, None] * Y)
                     + np.asarray(v, float).reshape(-1, 1) * Z)
 
-        a, b, c = flip * X, flip * Y, np.zeros(3)
+        a, b, c = X, Y, np.zeros(3)
     else:
         r0, semi = g.RefRadius(), g.SemiAngle()
 
@@ -1581,9 +1587,9 @@ def _curved_frame(face):
             return (o + rad * (np.cos(u)[:, None] * X + np.sin(u)[:, None] * Y)
                     + v * math.cos(semi) * Z)
 
-        a = flip * math.cos(semi) * X
-        b = flip * math.cos(semi) * Y
-        c = flip * -math.sin(semi) * Z
+        a = math.cos(semi) * X
+        b = math.cos(semi) * Y
+        c = -math.sin(semi) * Z
 
     def normal(u):
         return math.cos(u) * a + math.sin(u) * b + c
