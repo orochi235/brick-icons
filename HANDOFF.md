@@ -1,3 +1,36 @@
+## The formed-sticker over-wrap: unwrap models a sheared carrier as a circle
+
+Nobody holds `unwrap.py`. The uncommitted edits in it and in `shade.py` belong
+to a session that has since ended, and this diagnosis reached the tree only as
+a message between two live ones -- which is why it is written here.
+
+`unwrap._circle_frame` models every curved carrier as RIGHT-CIRCULAR: one
+scalar radius `|R[:,0]|`, and `e2 = e1 x axis` to force the basis orthogonal.
+`_local`, three lines below it and used by `bind` and `_radial_gap`, goes
+through `inv(R)` and is exact under shear -- its docstring says so. Where the
+two disagree `bind` still accepts the carrier, and `to_uv` -> `to_xyz` puts the
+decal back somewhere else.
+
+`occt.frame` already handles this case: it diagonalizes an in-plane shear into
+an ellipse (`ru`, `rv`, phase) and `is_round` decides cylinder against
+`elliptic_wall`. So the body draws as an elliptic wall while its decoration is
+unwrapped on a circle.
+
+Verified here on `15068dx0`: its carrier is a `cyli` of `|R[:,0]|` 49.39 whose
+two cross-section columns meet at 108.17 degrees -- an 18.17 degree in-plane
+shear -- and the part's own vertices around it sit 31.99 to 49.39 LDU from the
+axis, which one scalar radius cannot describe.
+
+Measured by `brick-icons-88`, not re-derived here: u and v round-trip exactly
+and the reconstruction is what moves, mean 5.75 LDU and max 8.76, which throws
+the top edge 7.2 px up-slope and leaves the lower two-thirds of the slope bare.
+115 of the 301 parts using a `(Formed)` sticker carry a cylinder or cone
+sheared past 1 degree; `11477`, `15068` and `93273` all share the same 18.17.
+Seven round-tripped: 18.17 degrees gives 8.76 / 8.52 / 8.52 LDU against
+0.22 / 0.12 / 0.96 at 0 degrees. **`24309dy0` is the disproof of shear as the
+only mechanism** -- 0 degrees on the carrier that produced its worst error and
+still 8.20 LDU.
+
 ## Baton, 2026-09-10: the pose slots are drawn, and a print no longer wears its mould's history
 
 On `main` in the shared checkout, unpushed. Other sessions are committing
