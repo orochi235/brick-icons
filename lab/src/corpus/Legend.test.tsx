@@ -27,9 +27,9 @@ it('renders a row per state with its own count', () => {
   expect(screen.getByLabelText('timed out, 2 parts')).toBeTruthy();
   expect(screen.getByLabelText('open defect, 1 parts')).toBeTruthy();
   expect(screen.getByLabelText('render error, 0 parts')).toBeTruthy();
-  expect(screen.getByLabelText('render error, in another slot, 0 parts')).toBeTruthy();
-  expect(screen.getByLabelText('open defect, in another slot, 0 parts')).toBeTruthy();
-  expect(screen.getByLabelText('fix claimed, needs a look, 0 parts')).toBeTruthy();
+  expect(screen.getByLabelText('render error elsewhere, 0 parts')).toBeTruthy();
+  expect(screen.getByLabelText('open defect elsewhere, 0 parts')).toBeTruthy();
+  expect(screen.getByLabelText('fix to check, 0 parts')).toBeTruthy();
 });
 
 it('renders one row per state, in the table\'s own legend order', () => {

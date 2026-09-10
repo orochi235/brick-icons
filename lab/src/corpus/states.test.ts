@@ -151,14 +151,14 @@ it('carries the tuned colors and weights of the conditions', () => {
 it('names every state the way the legend does', () => {
   expect(labelTable()).toMatchObject({
     unknown: 'unknown',
-    outOfScope: 'currently out of scope',
-    review: 'fix claimed, needs a look',
+    outOfScope: 'out of scope',
+    review: 'fix to check',
     timeout: 'timed out',
     failed: 'render error',
     defect: 'open defect',
-    accepted: 'known issue, not fixing',
-    defectElsewhere: 'open defect, in another slot',
-    failedElsewhere: 'render error, in another slot',
+    accepted: "won't fix",
+    defectElsewhere: 'open defect elsewhere',
+    failedElsewhere: 'render error elsewhere',
   });
 });
 

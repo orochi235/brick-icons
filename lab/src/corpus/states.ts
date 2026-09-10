@@ -51,7 +51,7 @@ export interface StateSpec extends CellStyle {
 // none of the values coincides with a `--wzl-*` token, so they stay literal
 // rather than drifting to a close-but-different one.
 //
-// ONE ROW PER CONDITION. The "in another slot" variant of each is derived
+// ONE ROW PER CONDITION. The "elsewhere" variant of each is derived
 // below and never written here: hand-writing the pair is how `problemElsewhere`
 // came to wear the blue of `timeout` while standing for `failed`.
 const CONDITIONS = [
@@ -64,21 +64,21 @@ const CONDITIONS = [
   // Ahead of every problem state: a part the project is not drawing yet has
   // not failed at anything, and a wall of red stickers would say it had.
   // A part is out of scope everywhere or nowhere, so there is no sibling.
-  { key: 'outOfScope', label: 'currently out of scope', shape: 'circle',
+  { key: 'outOfScope', label: 'out of scope', shape: 'circle',
     fill: '#b2a3dd', border: null, weight: null, sibling: false,
     precedence: 10, match: (f: StateFacts) => f.out_of_scope },
   // Above `defect` on purpose. Below it, a part carrying three other faults
   // stays plain gold and nobody ever learns that the fourth was redrawn --
   // which is the whole of what this state exists to say.
-  // Above every problem state and under `currently out of scope`: nothing
+  // Above every problem state and under `out of scope`: nothing
   // was owed here, so nothing failed. Dark gray rather than a state color --
   // the cell is saying there was nothing to draw, not that drawing went
   // wrong -- and it carries a border because a border is what draws the
   // slash, which is the mark that says the cell is empty on purpose.
-  { key: 'notApplicable', label: 'nothing for this slot to draw', shape: 'square',
+  { key: 'notApplicable', label: 'nothing to draw', shape: 'square',
     fill: '#2c2c31', border: '#71717c', weight: 'thick', sibling: false,
     precedence: 12, match: (f: StateFacts) => f.not_applicable === true },
-  { key: 'review', label: 'fix claimed, needs a look', shape: 'square',
+  { key: 'review', label: 'fix to check', shape: 'square',
     fill: '#3a2740', border: '#d070c0', weight: 'thick', sibling: true,
     precedence: 15, match: (f: StateFacts) => f.review_defects > 0 },
   { key: 'defect', label: 'open defect', shape: 'square',
@@ -94,7 +94,7 @@ const CONDITIONS = [
   // decision was to keep it. No sibling -- a fault someone accepted in
   // another slot says nothing about this one, which is also why
   // `cells.tally_defects` counts it only where it was filed.
-  { key: 'accepted', label: 'known issue, not fixing', shape: 'square',
+  { key: 'accepted', label: "won't fix", shape: 'square',
     fill: '#26382c', border: '#6f9e78', weight: 'thin', sibling: false,
     precedence: 50, match: (f: StateFacts) => f.accepted_defects > 0 },
 ] as const;
@@ -113,7 +113,7 @@ export type BorderedKey =
   | Extract<Condition, { border: string }>['key']
   | `${SiblingKey}Elsewhere`;
 
-// How far below its own condition an "in another slot" state ranks. Wide
+// How far below its own condition an "elsewhere" state ranks. Wide
 // enough that every sibling sorts under every condition except `accepted`,
 // which is where `defectElsewhere` already sat.
 const ELSEWHERE_DROP = 40;
@@ -154,7 +154,7 @@ export function washOut(hex: string, s = ELSEWHERE_S, l = ELSEWHERE_L): string {
 function elsewhereOf(c: Condition & { border: string }): StateSpec {
   return {
     key: `${c.key}Elsewhere`,
-    label: `${c.label}, in another slot`,
+    label: `${c.label} elsewhere`,
     shape: c.shape,
     fill: c.fill,
     border: washOut(c.border),
