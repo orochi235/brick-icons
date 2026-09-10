@@ -2,42 +2,61 @@
 
 **Built and run.** `/bench` in the lab is the harness; the numbers below came off
 it on an M2 Max. Read this to find out whether weasel's WebGL2 renderer should
-replace `Wall.tsx`'s Canvas2D loop. The short answer is no, not as it stands.
+replace `Wall.tsx`'s Canvas2D loop. The answer changed once weasel started
+batching: it is now yes, pending the badge gap below.
 
 ## The answer
 
-Weasel's renderer costs **about 0.007ms per draw command above roughly a
-thousand commands, and about 0.0013ms below it** — a five-fold per-command
-cliff. So it wins where the wall is already fast and loses where the wall is
-slow.
+Weasel's renderer is faster than the hand-written loop at **every** cell size the
+wall bakes, from 1.5× in the densest case to about 8× in the middle of the range,
+and it draws the same pixels.
 
-| cell | sheet | commands | canvas2d | scene | |
-|---|---|---|---|---|---|
-| 8px | 8 | 7,500 | 5.2ms | 65.6ms | 0.08× |
-| 12px | 8 | 4,275 | 3.0ms | 26.8ms | 0.11× |
-| 16px | 32 | 2,700 | 8.7ms | 19.8ms | 0.44× |
-| 24px | 32 | 1,419 | 4.6ms | 10.4ms | 0.44× |
-| 32px | 32 | 825 | 2.7ms | 1.1ms | 2.45× |
-| 48px | 32 | 414 | 1.4ms | 0.5ms | 2.80× |
+Measured against weasel `514cbc0e` (which carries the batch work merged as
+`f0a47538`). canvas2d is the same code in every column, so it is the control.
 
-Scene times are the better of the two sampling modes at each rung. The dense
-low-zoom case — thousands of cells on screen, which is the wall's whole reason
-for existing — is where the scene renderer is eight to twelve times slower.
+| cell | commands | canvas2d | scene/nearest | |
+|---|---|---|---|---|
+| 8px | 7,500 | 5.2ms | 3.4ms | 1.5× |
+| 12px | 4,275 | 2.9ms | 1.7ms | 1.7× |
+| 16px | 2,700 | 8.9ms | 1.1ms | 8.0× |
+| 24px | 1,419 | 4.5ms | 0.6ms | 7.5× |
+| 32px | 825 | 2.6ms | 0.3ms | 8.7× |
+| 48px | 414 | 1.4ms | 0.2ms | 7.0× |
 
-**So the hand-written loop stays.** Not because WebGL2 cannot win here, but
-because it does not win today at the sizes that matter, and swapping it in would
-make the common case worse.
+The 16px canvas2d figure is the one from the unbatched runs in the same sitting;
+see the hazard below.
 
-## What would change the answer
+**A sha is part of every number here.** Absolutes on this machine drift about a
+quarter between sittings, so a figure from another day is not a control. Four
+builds, measured back to back, scene/nearest at 7,500 commands:
 
-The cliff is in weasel, not in the mapping. Cost per command is flat at ~0.007ms
-across 1,419 / 2,700 / 4,275 / 7,500 commands and flat at ~0.0013ms across 414
-and 825 — the same texture, the same command shapes, a 5× step between. That
-reads as a batch or cache limit being crossed rather than a smooth cost. Finding
-and lifting it is a weasel change; if it lands, rerun `/bench` and this
-conclusion may invert.
+| weasel build | | 7,500 commands | pixels |
+|---|---|---|---|
+| `@weasel-js/core` 1.4.0 | installed release | 76.2ms | agree |
+| `89276eea` | before the batch work | 91.9ms | agree |
+| `d80a7ebc` | batch, before the fix | 2.8ms | **disagree, 40.6 to 84.8** |
+| `514cbc0e` | batch, after the fix | 3.4ms | agree, 0.9 to 1.9 |
 
-Two things measured along the way that are worth keeping:
+`d80a7ebc` was fast for the wrong reason: `flushBatch` bound the run's adopted
+bitmap, so every solid sampled it at (0.5, 0.5) and the wall came back a flat
+olive. The harness caught it and withheld the ratio, which is what it is for.
+`f0a47538` gives each batch vertex its own texture slot and the pixels come back.
+
+## What is still in the way
+
+**Badges, the kind strip and captions have never reached this renderer.**
+`bench/toDrawCommands.ts` names them in `unsupported` and emits no draw command,
+so any rung whose cells wear them is withheld rather than measured — which is why
+the table stops at 48px. Adopting the scene renderer means writing those, and
+they are the wall's, not weasel's.
+
+**Something makes canvas2d 12× slower at 16px, but only against a batching
+weasel.** 8.8 and 8.9ms across the two unbatched builds; 102.2 and 113.4ms across
+the two batched ones, same sitting, same machine, reproducible either way. It
+does not touch what the scene renderer costs, but it does make the 16px ratio
+above unusable as measured, and it is unexplained.
+
+## Two things measured along the way
 
 **`sampling: 'nearest'` is expensive under minification.** Drawing a 32px tile
 into a 16px cell cost 121ms with nearest against 20ms with linear. It is free at
@@ -75,26 +94,28 @@ rung, every canvas is downsampled to a 32×32 fingerprint in the same task — a
 WebGL drawing buffer does not survive the task — and the rung is marked
 incomparable if any canvas is uniform or drifts more than 12/255 from the first.
 
-The mapping also declares what it cannot draw. Badges, the kind strip, captions,
-the sticker mark, category glyphs and the loose/vector rung are named in
-`unsupported`, which forces the rung incomparable rather than fast. That is why
-the table stops at 48px: from 56px up a cell wears badges, and reproducing them
-is work this measurement did not need.
-
-**Runs interleave, A/B/C/A/B/C.** A sequential run measures the machine's mood;
-this repo has filed that twice, at 36× against 18× for one commit and at 0.90×
-for the same code on a peer's box.
+A rung that fails by a point or two is the badge gap above and is expected; a
+rung that fails by 40 is a renderer bug, as `d80a7ebc` was.
 
 ## Reading it yourself
 
-`npm run dev` in `lab/`, then `/bench`. The page names the GPU it found before
-you press Run — a software renderer invalidates the whole table, and headless
-WebKit reports no WebGL2 context at all.
+`npm run dev` in `lab/`, then `/bench`. To measure an unreleased weasel, build
+its `packages/core` and run `WEASEL_SRC=~/src/weasel npm run dev`; the vite
+alias points at `dist`, so what runs is what a release would ship. To measure
+several shas in one sitting without leaving the weasel checkout detached, build
+each and copy its `dist` to
+`~/src/weasel/node_modules/.bench-snapshots/<sha>/packages/core/dist` — module
+resolution still walks up to weasel's own `node_modules`, and `WEASEL_SRC` takes
+the snapshot directory.
+
+The page names the GPU it found before you press Run — a software renderer
+invalidates the whole table, and headless WebKit reports no WebGL2 context at
+all. Headless Chrome does: it reports ANGLE Metal on the M2 Max, at `dpr` 1
+rather than the 2 a real window gets.
 
 ## Not done
 
 `<SceneCanvas>`, the full component, is a separate question. It brings the
 interaction stack — tools, selection, undo, the gesture dispatcher, hit-testing —
 which the wall already has working. Nothing here bears on whether that is worth
-adopting; it was deliberately staged behind the paint number, and the paint
-number says not yet.
+adopting.
