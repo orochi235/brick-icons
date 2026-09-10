@@ -258,6 +258,9 @@ export function drawPaintCommand(ctx: CanvasRenderingContext2D, cmd: PaintComman
       ctx.fillRect(dx, dy, cmd.dw, cmd.dh);
     }
     strokeBorder(ctx, { ...cmd, dx, dy });
+    // Over the fill and under the overlays, the way a drawn cell takes it: an
+    // undrawn cell is just as much the slot the wall has moved off.
+    if (cmd.wash) washCell(ctx, cmd.wash, { ...cmd, dx, dy });
     drawOverlays(ctx, cmd, { ...cmd, dx, dy });
     if (cmd.caret) strokeCaret(ctx, { ...cmd, dx, dy }, palette);
   } else if (cmd.kind === 'label') {

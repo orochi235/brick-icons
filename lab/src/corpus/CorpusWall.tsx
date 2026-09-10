@@ -85,6 +85,13 @@ function WallSkeleton({ cell, gap, width, height }: {
 }
 
 
+/** The slot the wall opens on with nothing in the hash: the engine's own
+ *  canonical drawing. Population picked this before, which meant `reference`
+ *  -- LDView drew every part in the library, so the biggest slot is never
+ *  ours. */
+export const DEFAULT_SOURCE = 'occt';
+
+
 export function CorpusWall({ client }: { client: LabClient }) {
   const { params, setParam, reset: resetParams } = useParams();
   // Read once, at the first render: restoring the slot through an effect would
@@ -92,7 +99,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
   // below would have already chosen for us.
   const fromHash = useRef(readWallHash(window.location.hash));
   const [sources, setSources] = useState<{ source: string; n: number }[]>([]);
-  const [source, setSource] = useState(fromHash.current.source ?? 'silhouette-naive');
+  const [source, setSource] = useState(fromHash.current.source ?? DEFAULT_SOURCE);
   const fetched = useCells(client, source, params.pollMs);
   const loaded = useSheets(client, source);
   const [level, setLevel] = useState(32);
@@ -154,18 +161,23 @@ export function CorpusWall({ client }: { client: LabClient }) {
 
   // Polled, not fetched once: a slot appears when its renders are indexed, and
   // fetching at mount alone left a page open across an ingest showing a menu
-  // that no longer matched the store, with nothing on screen saying so. Only
-  // the opening slot is chosen from it -- the route orders by population, and
-  // the most-populated one is worth opening on -- so a later poll adds
-  // entries without moving anyone off what they are looking at.
-  // A slot named in the hash is a choice already made, so the poll leaves it.
+  // that no longer matched the store, with nothing on screen saying so. A
+  // later poll adds entries without moving anyone off what they are looking
+  // at: a slot named in the hash is a choice already made, and so is the
+  // default.
   const opened = useRef(!!fromHash.current.source);
   useEffect(() => {
     let live = true;
     const load = () => void client.corpusSources().then(({ sources: got }) => {
       if (!live) return;
       setSources(got);
-      if (!opened.current && got[0]) { opened.current = true; setSource(got[0].source); }
+      // The default stands wherever it has renders; population decides only
+      // when it has none, so a store without an occt slot still opens on
+      // something rather than on an empty wall.
+      if (!opened.current && got[0]) {
+        opened.current = true;
+        if (!got.some((s) => s.source === DEFAULT_SOURCE)) setSource(got[0].source);
+      }
     }).catch(() => {});
     load();
     const id = setInterval(load, params.pollMs);
@@ -188,6 +200,10 @@ export function CorpusWall({ client }: { client: LabClient }) {
   const all = cells ?? NO_CELLS;
   const sheets = view?.sheets ?? {};
   const drawnSource = view?.source ?? source;
+  // The toolbar has moved and the cells have not caught up. Keeping the old
+  // pictures beats blanking the wall, but only if the wall says they are the
+  // old pictures -- unsaid, a slot change reads as "this slot looks identical".
+  const stale = view != null && drawnSource !== source;
 
   const shown = useMemo(
     () => (cells ? applySelection(cells, selection) : []),
@@ -504,7 +520,13 @@ export function CorpusWall({ client }: { client: LabClient }) {
                   onDragStart={() => setCarded(null)}
                   onOpen={(c) => { setCarded(null); setPicked(c.id); }}
                   dragThresholdPx={params.dragThresholdPx} appearance={appearance}
+                  stale={stale}
                   pixelScale={pixelScale} sceneRenderer={params.sceneRenderer} />
+          )}
+          {stale && (
+            <p className="corpus-stale" role="status">
+              still showing <b>{drawnSource}</b> while <b>{source}</b> loads
+            </p>
           )}
           {carded && !picked && (
             <PartCard cell={carded.cell} source={drawnSource} at={carded.at}

@@ -74,6 +74,25 @@ body { margin: 0; }
   color: var(--wzl-fg-muted);
 }
 
+/* The wall drawing one slot under another slot's name. Set over the cells
+   rather than beside the toggle: the wash it explains is on the cells, and a
+   note up in the chrome is read after the wall, not before it. */
+.corpus-stale {
+  position: absolute;
+  inset-inline-start: 1rem;
+  inset-block-start: 1rem;
+  z-index: 2;
+  margin: 0;
+  padding: 0.3rem 0.6rem;
+  border-radius: 0.35rem;
+  background: var(--wzl-bg, #fff);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.18);
+  font: 13px/1.4 ui-monospace, monospace;
+  color: var(--wzl-fg-muted);
+}
+
+.corpus-stale b { color: var(--wzl-fg); font-weight: 500; }
+
 @keyframes corpus-skeleton-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.45; }

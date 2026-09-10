@@ -56,6 +56,8 @@ export interface WallProps {
   dragThresholdPx?: number;
   /** Border and dim tuning, live from the params panel. */
   appearance?: Appearance;
+  /** These cells belong to a slot the toolbar has already moved off. */
+  stale?: boolean;
   /** Group headers the layout asked for. Absent for a dense grid. */
   bands?: Band[];
   /** How much sharper than `devicePixelRatio` to draw, for a pinch the page
@@ -84,7 +86,7 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
                        highlight, highlightTag, explicitCaret, onExplicitCaretChange,
                        onPan, onPick, onOpen, onDragStart,
                        dragThresholdPx = DEFAULT_PARAMS.dragThresholdPx,
-                       pixelScale = 1, appearance, bands, tint,
+                       pixelScale = 1, appearance, bands, tint, stale = false,
                        sceneRenderer = false }: WallProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const glRef = useRef<HTMLCanvasElement>(null);
@@ -192,7 +194,7 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
     const cmds = paintCommands({
       cells, rects, visible, cam, manifest, palette, loose, vector, highlight, highlightTag,
       caret: caretIndex,
-      appearance, bands, tint,
+      appearance, bands, tint, stale,
     });
 
     const gl = glRef.current;
@@ -222,7 +224,7 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
     for (const cmd of cmds) drawPaintCommand(ctx, cmd, sheet, palette);
   }, [cells, rects, visible, cam, sheet, manifest, palette, loose, vector, highlight, highlightTag,
       caretIndex,
-      appearance, bands, tint, width, height, pixelScale, sceneRenderer, sheetBitmap]);
+      appearance, bands, tint, stale, width, height, pixelScale, sceneRenderer, sheetBitmap]);
 
   // The lens shows a magnified crop of what is already on screen -- zooming
   // in about a fixed point never brings a cell into view that the outer
@@ -248,13 +250,13 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
     for (const cmd of paintCommands({
       cells, rects, visible, cam: magCam, manifest, palette, loose, vector, highlight, highlightTag,
       caret: caretIndex,
-      appearance, bands, tint,
+      appearance, bands, tint, stale,
     })) {
       drawPaintCommand(ctx, cmd, sheet, palette, offset);
     }
   }, [loupe.visible, loupe.aim, loupe.factor, loupeCapability.diameter,
       cells, rects, visible, cam, sheet, manifest, palette, loose, vector, highlight, caretIndex,
-      appearance, bands, tint, width, height]);
+      appearance, bands, tint, stale, width, height]);
 
   const hitTest = (e: { clientX: number; clientY: number;
                          currentTarget: HTMLCanvasElement }) => {

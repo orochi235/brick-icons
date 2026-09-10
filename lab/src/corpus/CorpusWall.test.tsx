@@ -338,7 +338,7 @@ it('holds its level through a slot change, so a zoomed-in wall stays zoomed in',
 
     // The two slots differ by engine, which the toolbar asks with its
     // segmented Engine control rather than the facet dropdown.
-    fireEvent.click(screen.getByRole('radio', { name: 'OCCT' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Engine' }));
     // A loose thumb for the new slot means the wall has actually swapped to
     // it -- those are keyed on the drawn slot, not the selected one.
     await waitFor(() => expect(images.srcs.some(
@@ -537,4 +537,67 @@ it('picks up a slot that appears after the page is open, without moving off your
     .map((o) => o.textContent?.replace(/\u00a0/g, ' ')))
     .toEqual(['silhouette (2)', 'white (1)']));
   vi.useRealTimers();
+});
+
+it('opens on the engine slot with nothing in the hash, not on the biggest one', async () => {
+  // `reference` is every part in the library, so it heads the route's
+  // population order forever -- opening on it showed LDView's renders to
+  // anyone who followed a bare /corpus link.
+  const cells = vi.fn((source: string) => Promise.resolve({
+    cells: [cell('a', 0, 'sha-a'), cell('b', 1)], count: 2,
+    version: '2026-09-05T10:00:00+00:00', source,
+  }));
+  const wide = { ...client, cells, corpusSources: () => Promise.resolve({
+    sources: [{ source: 'reference', n: 9 }, { source: 'occt', n: 2 }],
+  }) } as any;
+
+  const { container } = render(<CorpusWall client={wide} />);
+  await findCanvas(container);
+  await waitFor(() => expect(screen.getByRole('radio', { name: 'Engine' })
+    .getAttribute('aria-checked')).toBe('true'));
+  expect(cells.mock.calls.map((c) => c[0])).not.toContain('reference');
+  expect(cells.mock.calls[0]?.[0]).toBe('occt');
+});
+
+it('falls back to the most-populated slot when the engine has drawn nothing', async () => {
+  const cells = vi.fn((source: string) => Promise.resolve({
+    cells: [cell('a', 0, 'sha-a'), cell('b', 1)], count: 2,
+    version: '2026-09-05T10:00:00+00:00', source,
+  }));
+  const noOcct = { ...client, cells, corpusSources: () => Promise.resolve({
+    sources: [{ source: 'ldview', n: 9 }, { source: 'silhouette-naive', n: 2 }],
+  }) } as any;
+
+  const { container } = render(<CorpusWall client={noOcct} />);
+  await findCanvas(container);
+  await waitFor(() => expect(screen.getByRole('radio', { name: 'Reference' })
+    .getAttribute('aria-checked')).toBe('true'));
+  await waitFor(() => expect(cells.mock.calls.map((c) => c[0])).toContain('ldview'));
+});
+
+it('says the pictures belong to the old slot while the new one loads', async () => {
+  // The wall keeps drawing what it has rather than blanking, which without a
+  // word of warning reads as "the slot you just picked looks identical".
+  const body = (source: string) => ({
+    cells: [cell('a', 0, 'sha-a'), cell('b', 1)], count: 2,
+    version: '2026-09-05T10:00:00+00:00', source,
+  });
+  // Only the slot switched TO stays out, so the wall has something drawn and
+  // nothing to replace it with.
+  const cells = vi.fn((source: string) =>
+    (source === 'silhouette-naive'
+      ? new Promise(() => {})
+      : Promise.resolve(body(source))));
+  const two = { ...client, cells, corpusSources: () => Promise.resolve({
+    sources: [{ source: 'occt', n: 2 }, { source: 'silhouette-naive', n: 2 }],
+  }) } as any;
+
+  const { container } = render(<CorpusWall client={two} />);
+  await findCanvas(container);
+  expect(document.querySelector('.corpus-stale')).toBeNull();
+
+  fireEvent.click(screen.getByRole('radio', { name: 'Legacy' }));
+  const said = await screen.findByText(/still showing/);
+  expect(said.textContent).toContain('occt');
+  expect(said.textContent).toContain('silhouette-naive');
 });
