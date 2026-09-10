@@ -17,7 +17,7 @@ from __future__ import annotations
 import math
 import re
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 
@@ -518,6 +518,17 @@ class Primitive:
             self._full_occ = occ
             return occ
 
+    def raised(self, d: float):
+        """The same surface moved `d` LDU out along its outward normal.
+
+        For a decal that sits PROUD of the primitive it binds to (a formed
+        sticker on a slope): the region is reconstructed out there, and its
+        depth source has to follow or the ordering still reads the wall.
+        Kinds that cannot express the offset return themselves, which is the
+        behavior before there was one.
+        """
+        return self
+
     def _make_occluder(self):
         return None
 
@@ -766,6 +777,15 @@ class Cylinder(Primitive):
     def _make_occluder(self):
         return CylinderOccluder(self.R, self.t, self.sector)
 
+    def raised(self, d):
+        r = float(np.linalg.norm(self.R[:, 0]))
+        if not d or r < 1e-9:
+            return self
+        R = self.R.copy()
+        R[:, 0] *= (r + d) / r
+        R[:, 2] *= (r + d) / r
+        return replace(self, R=R)
+
     def _rim_circles(self):
         A = self.R[:, 1]
         ru = float(np.linalg.norm(self.R[:, 0]))
@@ -855,6 +875,13 @@ class Cone(Primitive):
 
     def _make_occluder(self):
         return ConeOccluder(self.R, self.t, self.sector, self.top)
+
+    def raised(self, d):
+        # `top` alone: the law is `top + 1 - level`, so adding d/r to it
+        # raises base and mouth by the same d. Scaling R would instead
+        # multiply the taper.
+        r = float(np.linalg.norm(self.R[:, 0]))
+        return self if not d or r < 1e-9 else replace(self, top=self.top + d / r)
 
     def radius_at(self, level):
         return self.top + 1 - level                      # top+1 at base -> top

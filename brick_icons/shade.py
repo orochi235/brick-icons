@@ -2025,7 +2025,7 @@ def unwrap_decoration(faces, carriers, proj, step=0.25, ellipses_out=None):
     if not deco:
         return faces
     planes = _body_planes(faces)
-    groups = {}
+    groups, bound = {}, {}
     for f in deco:
         # a curved carrier outranks a plane: the body wall under a decal is
         # hand-faceted where no primitive was substituted, and each of those
@@ -2038,8 +2038,14 @@ def unwrap_decoration(faces, carriers, proj, step=0.25, ellipses_out=None):
             continue
         groups.setdefault((id(carrier), f["color"]),
                           (carrier, f["color"], []))[2].append(f)
+        bound.setdefault(id(carrier), (carrier, []))[1].append(f["_verts"])
     if not groups:
         return faces
+    # One standoff per CARRIER, not per color: a sticker's background and the
+    # artwork on it are one sheet, and raising them by their own measurements
+    # would set the two at different depths and let either win.
+    stand = {cid: unwrap.standoff(np.vstack(vs), c)
+             for cid, (c, vs) in bound.items()}
     drop, made = set(), []
     for gi, (carrier, code, members) in enumerate(groups.values()):
         theta0 = unwrap._seam_origin(
@@ -2050,6 +2056,7 @@ def unwrap_decoration(faces, carriers, proj, step=0.25, ellipses_out=None):
             for pi, part in enumerate(getattr(g, "geoms", [g])):
                 face = _region_face(part, carrier, theta0, members, proj, step,
                                     tag=(gi, code, pi),
+                                    standoff=stand[id(carrier)],
                                     ellipses_out=ellipses_out)
                 if face is not None:
                     made.append(face)
@@ -2059,7 +2066,7 @@ def unwrap_decoration(faces, carriers, proj, step=0.25, ellipses_out=None):
     return [f for f in faces if id(f) not in drop] + made
 
 
-def _decal_arc_candidates(part, carrier, theta0, proj, out):
+def _decal_arc_candidates(part, carrier, theta0, proj, out, standoff=0.0):
     """Projected circles for a flat decal's circular boundary runs.
 
     A plane's unwrap is the identity, so a printed disc stays a polygon in UV
@@ -2075,7 +2082,8 @@ def _decal_arc_candidates(part, carrier, theta0, proj, out):
     _n, u, v = carrier.basis()
     for ring in geom2d.rings(part):
         for cx, cy, r in unwrap.circle_candidates(ring):
-            C = unwrap.to_xyz(np.array([[cx, cy]]), carrier, theta0)[0]
+            C = unwrap.to_xyz(np.array([[cx, cy]]), carrier, theta0,
+                              standoff)[0]
             ell = primitives.project_circle_uv(C, u * r, v * r, proj.to_AB,
                                                proj.s, proj.cx, proj.cy,
                                                proj.half)
@@ -2091,7 +2099,7 @@ def _decal_arc_candidates(part, carrier, theta0, proj, out):
 
 
 def _region_face(part, carrier, theta0, members, proj, step, tag,
-                 ellipses_out=None):
+                 standoff=0.0, ellipses_out=None):
     """One merged UV region as a face, its boundary back on the exact carrier.
     A fresh group and plane key keep it a region of its own: sharing either
     would merge it back into whatever it was cut out of."""
@@ -2100,7 +2108,8 @@ def _region_face(part, carrier, theta0, members, proj, step, tag,
 
     flat = isinstance(carrier, unwrap.Plane)
     if flat and ellipses_out is not None:
-        _decal_arc_candidates(part, carrier, theta0, proj, ellipses_out)
+        _decal_arc_candidates(part, carrier, theta0, proj, ellipses_out,
+                              standoff)
 
     def px_ring(ring):
         uv = np.asarray(ring.coords, float)[:-1]
@@ -2109,7 +2118,7 @@ def _region_face(part, carrier, theta0, members, proj, step, tag,
         # camera needs to carry its own resolution across
         if not flat:
             uv = unwrap.densify(uv, step)
-        x, y, z = proj.to_px(unwrap.to_xyz(uv, carrier, theta0))
+        x, y, z = proj.to_px(unwrap.to_xyz(uv, carrier, theta0, standoff))
         return np.stack([x, y], axis=1), z
 
     poly, zs = px_ring(part.exterior)
@@ -2118,7 +2127,7 @@ def _region_face(part, carrier, theta0, members, proj, step, tag,
     f = {**members[0], "poly": poly, "zs": zs,
          "holes": [px_ring(h)[0] for h in part.interiors],
          "depth": float(np.mean(zs)), "group": ("uv",) + tag,
-         "plane": ("uv",) + tag, "carrier": carrier}
+         "plane": ("uv",) + tag, "carrier": carrier, "standoff": standoff}
     for k in ("_verts", "grad_axis", "grad_radial", "grad_samples", "backfill"):
         f.pop(k, None)
     return f

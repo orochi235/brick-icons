@@ -2249,7 +2249,12 @@ def _with_decoration(faces, out, proj, own_occ=None, ellipses_out=None):
     # cylinder gets a chord plane sitting behind the body facets it is printed
     # on, and the boolean clip cuts it away against them (3941p01 kept 17%).
     for f in merged:
+        # raised where the decoration stands proud of what it bound to: a
+        # formed sticker's own uncolored geometry is in the sew, and a depth
+        # source left on the wall under it loses the print to that geometry.
         carrier = f.get("carrier")
+        if f.get("standoff") and hasattr(carrier, "raised"):
+            carrier = carrier.raised(f["standoff"])
         occ = getattr(carrier, "full_occluder", lambda: None)()
         if occ is not None and own_occ is not None and id(f) not in own_occ:
             own_occ[id(f)] = occ

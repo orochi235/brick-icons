@@ -115,6 +115,34 @@ def _gap(pts, carrier) -> float:
     return _radial_gap(pts, carrier)
 
 
+def standoff(pts, carrier) -> float:
+    """How far `pts` stand PROUD of the carrier surface; 0 if they do not.
+
+    A print on a curved wall is inscribed in it -- its facets are chords, so
+    every vertex reads at or inside the surface, 3941p01 and 3062bp01 by
+    0.02 at worst. A FORMED STICKER is a separate part laid on top and reads
+    outside it, 15068dy6 by 0.29, and binds all the same at BIND_TOL.
+    Reconstructing that on the carrier drops it under its own uncolored
+    geometry, which then paints over the print.
+
+    Raising a decoration that had nothing under it changes nothing, which is
+    what makes this safe to apply to all of them: 3068bp01 and 11055d0d read
+    0.45 and draw the same pixels either way.
+
+    The outermost vertex, not the mean: what this raises has to clear every
+    facet it was built from. A defect cannot raise it far -- geometry
+    further out than BIND_TOL does not bind at all.
+    """
+    pts = np.asarray(pts, float).reshape(-1, 3)
+    if isinstance(carrier, Plane):
+        n = carrier.normal / np.linalg.norm(carrier.normal)
+        return max(0.0, float(np.max(pts @ n - carrier.offset)))
+    p = _local(pts, carrier)
+    r = float(np.linalg.norm(carrier.R[:, 0]))
+    want = np.array([carrier.radius_at(float(v)) for v in p[:, 1]])
+    return max(0.0, float(np.max(np.hypot(p[:, 0], p[:, 2]) - want)) * r)
+
+
 def bind(pts, carriers, tol: float = BIND_TOL):
     """The carrier `pts` lies on, or None. None means 'leave as authored'."""
     best, best_gap = None, tol
@@ -180,18 +208,25 @@ def to_uv(pts, carrier, theta0=0.0):
     return np.column_stack([_radius(carrier, height / h, r) * _wrap(th), height])
 
 
-def to_xyz(uv, carrier, theta0=0.0):
-    """Back onto the EXACT surface — this is where the sagitta closes."""
+def to_xyz(uv, carrier, theta0=0.0, standoff=0.0):
+    """Back onto the EXACT surface — this is where the sagitta closes.
+
+    `standoff` raises the result that far along the outward normal, for a
+    decal that sits proud of its carrier rather than printed on it. The
+    ANGLE still comes from the carrier's own radius, so raising a region
+    lifts it without sliding it around the part.
+    """
     uv = np.asarray(uv, float)
     if isinstance(carrier, Plane):
         n, u, v = carrier.basis()
         return (np.outer(uv[:, 0], u) + np.outer(uv[:, 1], v)
-                + carrier.offset * n)
+                + (carrier.offset + standoff) * n)
     o, a, r, e1, e2, h = _circle_frame(carrier)
     rad = _radius(carrier, uv[:, 1] / h, r)
     th = uv[:, 0] / rad + theta0
-    return (o + np.outer(rad * np.cos(th), e1)
-            + np.outer(rad * np.sin(th), e2) + np.outer(uv[:, 1], a))
+    out = rad + standoff
+    return (o + np.outer(out * np.cos(th), e1)
+            + np.outer(out * np.sin(th), e2) + np.outer(uv[:, 1], a))
 
 
 def _region_d(poly, x0, y1, s):

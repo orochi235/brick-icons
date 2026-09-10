@@ -1951,3 +1951,43 @@ def test_a_genuine_hole_is_not_healed_away(part, ldraw_dir):
         f"{part} has no crack and must come back untouched"
     assert _picked(merged, out, right, up) == _picked(
         occt.build_shape(out), out, right, up)
+
+
+def test_a_sticker_is_not_clipped_by_the_slope_it_is_stuck_to(ldraw_dir):
+    """A FORMED STICKER is a separate part laid on the wall, and binds to the
+    wall's cylinder all the same -- 15068dy6's air vents stand 0.29 LDU proud
+    of the slope under them. Rebuilt on that cylinder the print drops under
+    the sticker's own uncolored geometry, which is in the sewn solid and
+    paints over it: the part drew as a bare slope. The print is raised to its
+    own standoff, so it clears that geometry instead.
+    """
+    out = occt.flatten_part("15068dy6", ldraw_dir)
+    out["tri_colors"] = [m["color"] for m in out["tri_meta"]]
+    out["printed"] = hlr._is_printed(
+        hlr._resolve_input("15068dy6", hlr.default_roots(ldraw_dir)))
+    shape = occt.build_shape(out)
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    faces = occt.ordered_faces(shape, occt.op_projection(right, up, fwd), out)
+    deco = [f for f in faces if f.get("color", 16) != 16]
+    assert deco, "15068dy6 must reach the ordering with its sticker on it"
+    area = lambda f: geom2d.area(geom2d.to_geom(f["poly"], f.get("holes") or []))
+    decal = max(deco, key=area)
+    assert decal.get("standoff", 0.0) > 0.1, "the sticker reads as proud"
+    at = next(k for k, f in enumerate(faces) if f is decal)
+    g = geom2d.to_geom(decal["poly"], decal.get("holes") or [])
+    cover = None
+    for f in faces[at + 1:]:                       # everything painted later
+        gg = geom2d.to_geom(f["poly"], f.get("holes") or [])
+        cover = gg if cover is None else geom2d.union(cover, gg)
+    hidden = geom2d.area(geom2d.intersection(g, cover)) / geom2d.area(g)
+    assert hidden < 0.05, f"{hidden:.0%} of the sticker is painted over"
+
+
+def _reversed_face(f):
+    return f.Orientation() == occt.TopAbs_Orientation.TopAbs_REVERSED
+
+
+def _cylinders(faces):
+    return [f for f in faces
+            if occt.BRepAdaptor_Surface(f).GetType()
+            == occt.GeomAbs_SurfaceType.GeomAbs_Cylinder]

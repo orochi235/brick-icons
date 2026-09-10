@@ -1,6 +1,7 @@
 import math
 
 import numpy as np
+import pytest
 
 from brick_icons import primitives as P
 
@@ -740,3 +741,39 @@ def test_facet_snap_rims_ignores_off_band_facets():
     deep = _wall_quad_tris(35.0, 0.0, 4.0, 200.0, 250.0)   # well inside
     assert P.facet_snap_rims([cyl], deep) == []
     assert P.facet_snap_rims([cyl], None) == []
+
+
+def _ray_depth(occ, x, y):
+    """Depth of the nearest hit on a ray down -Z through (x, y)."""
+    return float(occ.depth(np.array([[x, y, 100.0]]),
+                           np.array([0.0, 0.0, -1.0]))[0])
+
+
+def test_raising_a_cylinder_moves_its_wall_out_by_that_much():
+    cyl = P.Cylinder(R=np.diag([10.0, 20.0, 10.0]), t=np.zeros(3), sector=360.0)
+    near = _ray_depth(cyl.full_occluder(), 0.0, 5.0)
+    assert _ray_depth(cyl.raised(0.3).full_occluder(), 0.0, 5.0) \
+        == pytest.approx(near - 0.3, abs=1e-9)
+
+
+def test_raising_a_cone_lifts_base_and_mouth_alike():
+    """`top` carries the raise, not a scale on R: scaling would multiply the
+    taper and move the wide end further than the narrow one."""
+    cone = P.Cone(R=np.diag([10.0, 20.0, 10.0]), t=np.zeros(3), sector=360.0,
+                  top=0.5)
+    for level in (0.0, 1.0):
+        base = _ray_depth(cone.full_occluder(), 0.0, level * 20.0)
+        assert _ray_depth(cone.raised(0.3).full_occluder(), 0.0, level * 20.0) \
+            == pytest.approx(base - 0.3, abs=1e-6)
+
+
+def test_raising_by_nothing_hands_back_the_same_primitive():
+    cyl = P.Cylinder(R=np.eye(3), t=np.zeros(3), sector=360.0)
+    assert cyl.raised(0.0) is cyl
+
+
+def test_a_kind_that_cannot_express_a_raise_keeps_its_own_surface():
+    """An unrecognized carrier degrades to the behavior from before there was
+    a raise, rather than raising a surface it has not moved."""
+    disc = P.Disc(R=np.eye(3), t=np.zeros(3), sector=360.0)
+    assert disc.raised(0.3) is disc

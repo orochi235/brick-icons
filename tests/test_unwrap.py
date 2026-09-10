@@ -799,3 +799,53 @@ def test_px_sizes_the_whole_sheet_not_each_panel(monkeypatch):
         _panel(10.0, 10.0, region)] * 4)
     sheet = unwrap.decal_sheet(None, None, None, px=600)
     assert 'width="600"' in sheet and 'height="600"' in sheet
+
+
+def test_a_print_inscribed_in_its_wall_stands_off_by_nothing():
+    """Every measured pattern reads at or inside its carrier -- its facets
+    are chords -- so the standoff is the one that must stay exactly zero:
+    it is what keeps a print's reconstruction where it is today."""
+    cyl = FakeCylinder(r=20.0)
+    th = np.linspace(0, np.pi / 2, 5)
+    chord = np.column_stack([19.6 * np.cos(th), np.full(5, 4.0),
+                             19.6 * np.sin(th)])
+    assert unwrap.standoff(chord, cyl) == 0.0
+
+
+def test_a_sticker_laid_on_the_wall_reads_its_own_thickness():
+    cyl = FakeCylinder(r=20.0)
+    th = np.linspace(0, np.pi / 2, 5)
+    proud = np.column_stack([20.3 * np.cos(th), np.full(5, 4.0),
+                             20.3 * np.sin(th)])
+    assert unwrap.standoff(proud, cyl) == pytest.approx(0.3, abs=1e-9)
+
+
+def test_standoff_clears_the_outermost_vertex_not_the_average():
+    """It is what the reconstruction is raised by, and the point of raising
+    it is to clear the geometry it was built from -- all of it."""
+    cyl = FakeCylinder(r=20.0)
+    mixed = np.array([[20.1, 4.0, 0.0], [20.4, 4.0, 0.0], [20.2, 4.0, 0.0]])
+    assert unwrap.standoff(mixed, cyl) == pytest.approx(0.4, abs=1e-9)
+
+
+def test_a_plane_carrier_measures_standoff_along_its_normal():
+    plane = unwrap.Plane(normal=np.array([0.0, 1.0, 0.0]), offset=2.0)
+    assert unwrap.standoff(np.array([[3.0, 2.25, 5.0]]), plane) \
+        == pytest.approx(0.25, abs=1e-9)
+
+
+def test_raising_the_reconstruction_keeps_its_place_on_the_wall():
+    """Only the radius moves: raised by exactly the distance they stand off
+    a r=20 wall, points authored at r=20.3 come back where they started --
+    not turned around the part."""
+    cyl = FakeCylinder(r=20.0)
+    pts = np.array([[20.3, 3.0, 0.0], [0.0, 7.0, 20.3], [-20.3, 1.0, 0.0]])
+    back = unwrap.to_xyz(unwrap.to_uv(pts, cyl), cyl, standoff=0.3)
+    assert back == pytest.approx(pts, abs=1e-9)
+
+
+def test_a_raised_plane_reconstruction_moves_along_the_normal():
+    plane = unwrap.Plane(normal=np.array([0.0, 1.0, 0.0]), offset=2.0)
+    pts = np.array([[3.0, 2.0, 5.0]])
+    back = unwrap.to_xyz(unwrap.to_uv(pts, plane), plane, standoff=0.25)
+    assert back == pytest.approx(np.array([[3.0, 2.25, 5.0]]), abs=1e-9)

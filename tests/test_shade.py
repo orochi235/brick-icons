@@ -1809,3 +1809,46 @@ def test_a_bin_outvotes_its_neighbour_only_by_weight():
     assert light[0] == pytest.approx(0.2069, abs=1e-4)
     heavy = shade._falling([0.2, 0.9], [1, 100])
     assert heavy[0] == pytest.approx(0.8931, abs=1e-4)
+
+
+def _decal_region(r_tri, carriers=None, proj=None):
+    """The one merged region of a colored quad authored at `r_tri` on a
+    radius-10 cylinder."""
+    proj = proj or _shade_stub_proj()
+    cyl, tris = _cyl_and_surface_tris(r_tri=r_tri)
+    faces = (shade.faces_from_analytic([cyl], proj)
+             + shade.faces_from_tris(tris, proj, colors=[4, 4]))
+    out = shade.unwrap_decoration(faces, [cyl] if carriers is None else carriers,
+                                  proj)
+    made = [f for f in out if isinstance(f.get("group"), tuple)
+            and f["group"][0] == "uv"]
+    assert len(made) == 1
+    return made[0]
+
+
+def test_a_print_on_the_wall_is_rebuilt_on_the_wall():
+    """The case the unwrap was written for, and the one that must not move:
+    a pattern's facets are chords of the surface they decorate, so there is
+    no standoff to raise them by."""
+    assert _decal_region(10.0)["standoff"] == 0.0
+
+
+def test_a_decal_proud_of_its_carrier_is_rebuilt_where_it_was_authored():
+    """A formed sticker is a separate part laid on the wall, not printed on
+    it, and binds all the same. Rebuilt on the carrier it drops under its own
+    uncolored geometry in the sewn solid, which paints over it -- 15068dy6
+    drew a bare slope where its air vents should be."""
+    region = _decal_region(10.3)
+    assert region["standoff"] == pytest.approx(0.3, abs=1e-6)
+
+
+def test_the_raise_moves_the_region_and_not_only_its_bookkeeping(monkeypatch):
+    """Against the depth of the facets it was built from: on it once raised,
+    a standoff away from it when the raise is disarmed."""
+    proj = _shade_stub_proj()
+    _cyl, tris = _cyl_and_surface_tris(r_tri=10.3)
+    authored = np.mean([f["depth"]
+                        for f in shade.faces_from_tris(tris, proj, colors=[4, 4])])
+    assert abs(_decal_region(10.3, proj=proj)["depth"] - authored) < 0.05
+    monkeypatch.setattr(shade.unwrap, "standoff", lambda pts, carrier: 0.0)
+    assert abs(_decal_region(10.3, proj=proj)["depth"] - authored) > 0.2
