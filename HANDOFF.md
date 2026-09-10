@@ -455,14 +455,39 @@ Of the 33, thirty-two lose segments and one gains a single 1.26-LDU vertical
 (`2873d04`, at the end of its hinge barrel, and both drawings read correctly).
 Across the changed parts, 25,437 segments become 24,722.
 
-**So roughly 8% of stored occt renders are now stale, and no row says so.**
-The `occt` slot holds renders drawn before `99cbce7` by an engine that no
-longer draws the same thing. `build` in the JSONL cannot date them either: it
+**So roughly 8% of stored occt renders are now stale.** The `occt` slot holds
+renders drawn before `99cbce7` by an engine that no longer draws the same
+thing. `build` in the JSONL cannot date them: it
 reads the node's `git rev-parse HEAD` plus a dirty flag, and `onto sync` ships
 files without moving HEAD, so a freshly synced node reports the OLD sha with a
 `+`. To ask what a node is actually running, grep it for a symbol the commit
 added. Re-rendering the slot is owed and unscheduled; `slot-occt-r2` on studio
 was still filling that same slot with pre-fix code as this was written.
+
+### `counts` dates the stale renders, and the stale set is decidable without drawing one
+
+**Four slots are stale, not one.** `occt`, `white-occt`, `silhouette-occt` and
+`translucent-occt` all pass `--engine occt` and so all go through
+`build_shape`: 52,843 renders over 20,013 distinct parts. Only run 24's 356
+`occt` renders were drawn after the fix.
+
+**A row does say which engine drew it -- by what its `counts` omits.** Runs 21
+and 22 record `unify_crash` three times across 11,585 `occt` rows and
+`faces_healed` zero times. The counter mechanism was live, so had the fix been
+in that code some rows would carry the key; none do. That dates both runs
+pre-fix from the database alone, with no appeal to a timestamp or a build
+stamp.
+
+**`heal_face_cracks` returns the shape it was handed when it heals nothing**
+(`if not healed: return shape`), so a part that keeps every inner wire goes
+down an identical pipeline and draws an identical picture. Watching
+`faces_healed` therefore bounds the stale set soundly *by construction* rather
+than by sample, and costs a shape build instead of a render --
+`scripts/crack-heal-scope.py`, no HLR, no decoration, no fill, no raster. Over
+the 58 parts the 400-part drift run had already judged it flags all 33 it found
+changed and clears all 25 controls, with no false positive. Read off the
+census's recorded phases the sweep is 4.0h against 65.9h to redraw the `occt`
+slot alone.
 
 One gap left. The converse is untested: whether a part whose merge carries no
 crack can still draw hidden edges, which would make the repair incomplete. The
