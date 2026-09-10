@@ -723,35 +723,40 @@ files without moving HEAD, so a freshly synced node reports the OLD sha with a
 added. Re-rendering the slot is owed and unscheduled; `slot-occt-r2` on studio
 was still filling that same slot with pre-fix code as this was written.
 
-### Overnight, 2026-09-10: refresh the renders the crack repair made stale
+### The crack repair's stale renders are refreshed — done 2026-09-10 07:30
 
-**Running unattended on Mike's say-so ("keep the fleet busy as long as there
-are renders to refresh"). Read this before relaunching anything.**
+**1,564 parts redrawn in all four occt slots and ingested.** The list is
+`store-queue/occt-crack-stale.txt`; `scripts/crack-heal-scope.py` finds the
+flag set and `scripts/crack-heal-drift.py --batch` judges it, both resumable
+under `--skip-done`.
 
-The chain, in order. Each step's launch command is below it.
+Slots now hold occt 18,979 · white-occt 19,742 · silhouette-occt 10,335 ·
+translucent-occt 6,213. The rebuild replaced 3,818 renders and skipped none;
+the bake reported no UNREADABLE and no MISSING in any slot.
 
-1. `crack-narrow-clean` (job `6e4df476`, msb-uai + keiei + studio) re-judges all
-   2,949 flagged parts. **This supersedes the 1,561 figure**, which was measured
-   with keiei on an engine missing the `rims_declared`/cylo-ring work while
-   msb-uai had it. Results land in `out/narrow3/jsonl`.
-2. Rewrite `store-queue/occt-crack-stale.txt` from `out/narrow3` and commit.
-3. Redraw that list in `occt`, `white-occt`, `silhouette-occt`,
-   `translucent-occt` -- one job per slot through `render-corpus-batch`'s
-   launch, ~70 min total for all four at 18 workers.
-4. Ingest with `ingest-renders`.
+**17 parts died in OCCT, and 14 of them died in exactly one slot of four** —
+so these are mostly nondeterministic, not parts that cannot draw. Only
+`u9234c01`, `32020c01` and `32288c01` died in three. A retry pass over the 17
+should recover most; they are absent from their slot rather than wrong in it.
 
-**Every node's five render files are pinned byte-for-byte to HEAD**
-(`cli.py`, `geom2d.py`, `shade.py`, `trace.py`, `occt.py` -- verify with
-`shasum -a 256` against `git show HEAD:brick_icons/<f>`). This is not what
-`onto sync` gives you: three other sessions are editing those files
-uncommitted in this shared checkout, and a plain sync ships their work to the
-fleet. One such edit, `tangent_wall_planes`, is called from the render path at
-`occt.py:2239` and reached all three nodes before it was caught. **Re-pin after
-any sync, and re-check the hashes before trusting a render.**
+Three traps this run paid for:
 
-`scripts/crack-heal-scope.py` finds the flag set (a shape build, no HLR);
-`scripts/crack-heal-drift.py --batch` judges it (draws each part twice).
-Both take `--skip-done` and both are safe to relaunch under their task name.
+- **`--to` under-delivers, and a job exiting 0 does not mean its drawings are
+  home.** Every slot had files still on a node afterwards — 32, 30, 28 and, in
+  translucent's case, 1,240, which was 580 missing SVGs. Row counts arrive
+  ahead of the drawings, so the JSONL tally cannot see it either. Check each
+  node with `onto fetch --dry-run <node>:brick-icons/<tree> <tree>` before
+  ingesting, per slot, and fetch explicitly where it names a number.
+- **`onto run --in` never re-syncs, and `onto warm` only moves git.** A node
+  runs whatever it last got, which can be older *or* newer than HEAD: keiei
+  spent the first narrowing pass on an engine without the
+  `rims_declared`/cylo-ring work while msb-uai had it. Compare
+  `shasum -a 256 brick_icons/<f>` against `git show HEAD:brick_icons/<f>` for
+  cli, geom2d, shade, trace and occt before trusting a fleet render.
+- **`onto sync` ships this checkout's uncommitted edits to the fleet.** It
+  carried another session's in-progress `tangent_wall_planes` — live code,
+  called from the render path — to all three nodes. Where the tree is dirty,
+  scp HEAD's copies over the node's afterwards.
 
 ### `counts` dates the stale renders, and the stale set is decidable without drawing one
 

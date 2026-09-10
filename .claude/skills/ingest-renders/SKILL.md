@@ -111,9 +111,15 @@ Idempotent by render sha, so it costs only the new parts.
 
 **A drawing and its score arrive together and are ingested apart.** The
 `measurements` table has exactly one writer — `import_census_jsonl`, called by
-`db.rebuild` over every `*.jsonl` it finds under a directory matching
-`out/census*`. Both halves of that are literal: no other script writes the
-table, and a tree named anything else is never scanned.
+`db.rebuild` over every `*.jsonl` it finds under a tree `db.census_trees`
+returns. No other script writes the table.
+
+**Which trees those are is not just `out/census*`.** `census_trees` takes any
+directory under `out/` that either starts with `census` **or** carries a
+`SOURCE` file, so a slot fill named for its slot — `out/slot-occt-crack` — is
+scanned for its measurements exactly like a census tree, and its `SOURCE`
+marker is what files the drawings under the right slot. A tree with neither is
+renders that came all the way home and indexed as nothing.
 
 So **the two in-place routes record drawings and no scores.** Index a running
 census's renders with `index-census-renders.py` and the wall fills while
