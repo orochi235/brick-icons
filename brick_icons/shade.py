@@ -1372,7 +1372,13 @@ def face_fill(face, style, ldraw_dir):
         # A curved face carries no view normal -- it only ever reached the
         # gradient branch, which a flat style skips.
         nv = face.get("normal")
-        return style.tone(nv) if nv is not None else style.ramp_b(1.0)
+        if nv is None:
+            return style.ramp_b(1.0)
+        # a plane a curved wall runs tangentially into draws no stroke between
+        # them, so it has to meet the ramp rather than the palette
+        if face.get("tangent_wall"):
+            return style.ramp(nv)
+        return style.tone(nv)
     hex_str, _ = colors.resolve(str(code), ldraw_dir)
     return "#" + hex_str[2:]
 

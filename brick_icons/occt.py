@@ -565,6 +565,56 @@ def analytic_creases(shape: TopoDS_Shape, out: dict) -> TopoDS_Shape:
     return _compound(keep)
 
 
+def tangent_wall_planes(shape: TopoDS_Shape):
+    """Planar faces that a curved face runs tangentially into.
+
+    The junction analytic_creases drops, seen from the other side: no crease
+    means no stroke, so the two surfaces have to meet in TONE, and a plane's
+    three palette tones have nothing to do with the Lambert ramp beside them.
+    5841's curved top goes vertical 4 LDU above its base and the flat wall
+    below it steps 133 against the ramp's 149, with no edge to hide it.
+
+    The population separates the same way the crease test's does -- measured
+    plane/curved junction angles over 5841, 5842, 5847 and 5854 are 0-4 deg
+    or 90, nothing between, and 3001 has none at all.
+    """
+    amap = TopTools_IndexedDataMapOfShapeListOfShape()
+    TopExp.MapShapesAndAncestors_s(shape, TopAbs_ShapeEnum.TopAbs_EDGE,
+                                   TopAbs_ShapeEnum.TopAbs_FACE, amap)
+    cos_tol = math.cos(math.radians(TANGENT_DEG))
+    out = []
+    for i in range(1, amap.Extent() + 1):
+        fl = amap.FindFromIndex(i)
+        if fl.Size() != 2:
+            continue          # a crack has no junction; see analytic_creases
+        faces = (fl.First(), fl.Last())
+        if faces[0].IsSame(faces[1]):
+            continue
+        try:
+            kinds = [BRepAdaptor_Surface(TopoDS.Face_s(f)).GetType()
+                     for f in faces]
+        except Exception:
+            continue
+        plane = GeomAbs_SurfaceType.GeomAbs_Plane
+        if kinds[0] == plane and kinds[1] in CURVED:
+            pi = 0
+        elif kinds[1] == plane and kinds[0] in CURVED:
+            pi = 1
+        else:
+            continue
+        edge = TopoDS.Edge_s(amap.FindKey(i))
+        a, b = _face_normal(faces[0], edge), _face_normal(faces[1], edge)
+        if a is None or b is None:
+            continue
+        na, nb = np.linalg.norm(a), np.linalg.norm(b)
+        if na < 1e-9 or nb < 1e-9:
+            continue
+        if abs(float(a @ b)) / (na * nb) <= cos_tol:
+            continue          # a real edge: the stroke covers the tone step
+        out.append(TopoDS.Face_s(faces[pi]))
+    return out
+
+
 PIERCE_TOL = 1e-3      # LDU: a seam either lies in the plane or it does not
 
 
@@ -2186,6 +2236,10 @@ def ordered_faces(shape, proj, out=None, ellipses_out=None):
                 own_occ[id(f)] = occ
     if not faces:
         return []
+    for face in tangent_wall_planes(shape):
+        f = plane_by_idx.get(fmap.FindIndex(face))
+        if f is not None:
+            f["tangent_wall"] = True
     if out is not None and plane_by_idx:
         _group_planes(shape, out, plane_by_idx)
         shade.attach_group_gradients(faces)

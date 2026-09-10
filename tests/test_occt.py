@@ -2033,3 +2033,33 @@ def test_a_curved_wall_normal_points_out_of_its_own_surface(ldraw_dir):
             assert normal(u) @ radial > 0, "normal points into the surface"
             checked += 1
     assert checked, "5846 must sew cylinders for this to say anything"
+
+
+def test_a_plane_a_curved_wall_runs_into_is_found_tangent(ldraw_dir):
+    """5841's `1-4cylo` is centred at y=20 r=20, so it stands vertical exactly
+    at y=20 and a flat wall carries the last 4 LDU to the base. 3001 is the
+    control: a brick's walls all meet its studs at a right angle.
+    """
+    shape = occt.build_shape(occt.flatten_part("5841", ldraw_dir))
+    assert len(occt.tangent_wall_planes(shape)) == 1
+    assert not occt.tangent_wall_planes(
+        occt.build_shape(occt.flatten_part("3001", ldraw_dir)))
+
+
+def test_a_tangent_plane_takes_the_ramp_and_not_the_palette(ldraw_dir):
+    """No crease means no stroke, so nothing hides a tone step. The palette
+    tone read 133 against the wall's ramp at 149; the ramp at the plane's own
+    normal is what meets it.
+    """
+    from brick_icons import shade
+    out = occt.flatten_part("5841", ldraw_dir)
+    shape = occt.build_shape(out)
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    faces = occt.ordered_faces(shape, occt.op_projection(right, up, fwd), out)
+    tangent = [f for f in faces if f.get("tangent_wall")]
+    assert tangent, "5841's wall below the curve must be marked"
+    style = shade.Flat3Style()
+    for f in tangent:
+        nv = f["normal"]
+        assert shade.face_fill(f, style, ldraw_dir) == style.ramp(nv)
+        assert style.ramp(nv) != style.tone(nv)
