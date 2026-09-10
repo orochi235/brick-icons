@@ -1,3 +1,91 @@
+## A gradient band now ends on its own sample, and the in-flight fill predates it
+
+`069c08b`. **Read this before ingesting anything the three running jobs bring
+home: they were launched at 09:50 against the engine as it was before this
+commit, so every render they deliver is already a revision behind.** Whether to
+stop and relaunch them or take a corpus one commit old is unresolved — 12.5
+core-hours were already spent when the commit landed.
+
+**A gradient's end stops were the outermost BAND's average**, which is the tone
+an eighth of the way in. Where two spans of one surface abut, each side clamped
+to a different value and the seam stepped: `5846` runs a corner into a barrel
+and the step was five levels. `_band_edge` now reads that end's own sample,
+except where the band turns back on itself — 44300's chamfer interleaves two
+normal families along the axis, and its outermost sample is one of the two
+tones the averaging exists to merge.
+
+**A plane a curved wall runs tangentially into joins the wall's fill.**
+`_absorb_tangent_planes` puts it in the wall's group, so fill_ops unions them
+into one element under one gradient; the plane lies past the end of the wall's
+axis, where SVG pads with the last stop. `5849`'s foot was a separate patch
+along the bottom of the barrel.
+
+**`5846`'s three curved faces cannot be made one element, and do not need to
+be.** They are not sewn to each other at all — the part leaves 153 edges
+unpaired and has no curved/curved junction — and merging them by geometric
+tangency was built and thrown away: one element carries one gradient, and
+barrel/corner/barrel is not one gradient. A pooled linear ramp banded the
+barrel; a pooled radial one made the corner a blob. Both are on the wall. The
+seam they were meant to close is closed by the end stop instead.
+
+**22 of the 23 shaded goldens moved on naive and are refrozen.** Measured with
+the new end stop disarmed in the same tree: 3001 224 px of 325,500, 3005 204,
+4740p03 1,340, 3960 1,665, 3673 5,162 — the largest 1.6%, all of it tone at the
+ends of a ramp, no shape moved.
+
+`5841`-`5854` are redrawn, measured, ingested and baked in `occt`,
+`white-occt` and `silhouette-occt` at this commit.
+
+## The four occt slots are being redrawn against the 2026-09-10 fixes — in flight
+
+**Two jobs are running as of 09:50; two slots are still queued.** The stale set is
+every occt-family render drawn before `7307236` (2026-09-10 01:26), the last of
+the four fixes that move a stroke — the two shading-sign fixes, the tangent-wall
+ramp and the arc-chord rule. Lists are in `store-queue/stale-0910/`, one per slot
+plus its `-batches.txt`, and the nodes hold a copy under
+`out/store-restale-<slot>/batches.txt`.
+
+| slot | stale | fresh | job |
+|---|---|---|---|
+| occt | 18,003 | 987 | `store-restale-occt`, msb-uai, 8 workers |
+| white-occt | 18,190 | 1,563 | `store-restale-white-occt`, studio + keiei, 8 each |
+| silhouette-occt | 8,779 | 1,567 | queued |
+| translucent-occt | 4,649 | 1,564 | queued |
+
+Fresh means the crack refresh of 07:30 or the 11-part arch redraw; those 11 are
+in the lists anyway, because a rebuild resolves a part drawn by two trees to
+whichever tree sorts last and `restale-arch-occt` loses to `slot-occt`.
+
+**The tree names start with `store-` for that reason.** `db.rebuild` indexes
+`renders/` first, then every tree under `out/` in sorted order, and the last
+writer wins — so a refresh named `restale-*` would be overwritten by the
+pre-fix `slot-*` trees it exists to replace.
+
+**Ingest is a rebuild, not `ingest-watch.py`.** Every part here already holds a
+row in its slot, and the watcher skips a part it finds there — it would index
+nothing and report success, the way it did on the pose re-render.
+
+### Two fleet faults this launch hit
+
+**msb-uai's agent was dead and needed `launchctl kickstart -k
+gui/$(id -u)/dev.onto.agent` over ssh.** `onto status` said `offline
+connection refused` while ssh worked.
+
+**Nothing can use msb-uai as a job's queue host.** keiei and studio both answer
+`no route to host` on its port, so `--with` silently skips them and the job runs
+one node wide; onto's own message points at Local Network permission on that
+node. Give a shared queue to studio and let msb-uai help, or run it a node at a
+time.
+
+**The library differed on all three nodes and now does not.** studio lacked
+`Unofficial/parts/s/2374bs01.dat`, msb-uai that and both `5241s0*.dat`; the
+files are untracked (vendor is gitignored), so no sync would have carried them.
+Pushed by hand, hashes now match this checkout. `scripts/ldraw-hash.py` needs
+more than 4 minutes on a node, and its answer is a resolve count, not a hash —
+compare `find vendor/ldraw -name '*.dat' | LC_ALL=C sort` between nodes instead,
+and use `LC_ALL=C comm`, or the collation mismatch reports the whole library as
+different.
+
 ## Two ways an exact surface got its shading wrong, and the slot that is still stale
 
 Both landed: `_curved_frame`'s sign (inside `3714533`, see below) and `909140c`.
@@ -47,17 +135,12 @@ ancestor map. The population separates the way that docstring promises:
 plane/curved junction angles over `5841`, `5842`, `5847` and `5854` are 0-4
 degrees or 90 with nothing between, and `3001` has none of the first kind.
 
-**5 levels of step remain**, because the wall's last stop is a bin average over
-`_axis_binned_stops`' 8 bins rather than the ramp at the tangent point. Closing
-it means reaching into the wall's stops from the plane, which nothing does yet.
+**The 5 levels of step are gone**, closed by `069c08b` from both sides — see the
+top of this file.
 
 ### What is owed
 
-**Re-render the occt and white-occt slots for `5841`-`5854`.** It was held all
-night on purpose: `onto sync` ships uncommitted edits, and three sessions had
-half-finished engine work in this tree, so a fill would have baked unlanded
-code into a shared artifact that records a git rev. The tree is clean of engine
-work now.
+**`5841`-`5854` are re-rendered** — see the top of this file.
 
 **Watch the index on this checkout.** Two commits tonight swept hunks that were
 not theirs -- `d4c2378` took two test helpers, `3714533` took the whole
