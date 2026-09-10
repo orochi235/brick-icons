@@ -54,7 +54,7 @@ const SUPERSAMPLE = 3;
 
 interface Framing {
   radius: number;
-  centre: Vec3Tuple;
+  center: Vec3Tuple;
 }
 
 function Part({ part, color, opacity, onFraming, onLines }: {
@@ -88,13 +88,13 @@ function Part({ part, color, opacity, onFraming, onLines }: {
     group.updateMatrixWorld(true);
     const lines = fattenLines(group);
     const box = new THREE.Box3().setFromObject(group);
-    const centre = box.getCenter(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
     return {
       group,
       lines,
       framing: {
         radius: box.getSize(new THREE.Vector3()).length() / 2,
-        centre: [centre.x, centre.y, centre.z] as Vec3Tuple,
+        center: [center.x, center.y, center.z] as Vec3Tuple,
       },
     };
   }, [model]);
@@ -140,11 +140,17 @@ function Rig({ angle, fit, box, view, style, framing, lines, orbit,
     const parsed = parseAngle(angle);
     const dir = orbitFromAngle(parsed ?? { lat: 30, long: 45 }, 1);
     const radius = Math.max(1, framing.radius);
-    // The eye sits on the view axis through the WORLD origin, which is the
-    // point the engine projects about; the bounds carry the pan and the zoom,
-    // so aiming it at the framed centre would apply that offset twice.
+    // Registered, the eye sits on the view axis through the WORLD origin,
+    // which is the point the engine projects about; the bounds carry the pan
+    // and the zoom, so aiming it at the framed middle would apply that offset
+    // twice. Unregistered there are no such bounds -- they are symmetric about
+    // the axis -- so the axis has to run through the part instead. An LDraw
+    // part's origin is where it meets the brick below it, not its middle, so
+    // aiming at the origin hung a 2x4 half out of the bottom of the frame.
+    const target: Vec3Tuple = fit ? [0, 0, 0] : framing.center;
     const back = radius * 4 + 1;
-    ortho.position.set(dir.x * back, dir.y * back, dir.z * back);
+    ortho.position.set(target[0] + dir.x * back, target[1] + dir.y * back,
+                       target[2] + dir.z * back);
     ortho.near = 0.1;
     ortho.far = back + radius * 4;
 
@@ -157,9 +163,9 @@ function Rig({ angle, fit, box, view, style, framing, lines, orbit,
       ortho.top = bounds.top;
       ortho.bottom = bounds.bottom;
     } else {
-      // No render to register against: frame the part by its own size, which
-      // is off-centre for a part whose origin is not its middle. That is what
-      // the pane's `unregistered` note is warning about.
+      // No render to register against: frame the part by its own size, about
+      // its own middle. That is what the pane's `unregistered` note is warning
+      // about -- this framing is the part's, not any slot's picture of it.
       const aspect = box.height >= 1 ? box.width / box.height : 1;
       const half = radius * FILL;
       ortho.up.set(0, 1, 0);
@@ -169,9 +175,9 @@ function Rig({ angle, fit, box, view, style, framing, lines, orbit,
       ortho.bottom = -half;
     }
 
-    ortho.lookAt(0, 0, 0);
+    ortho.lookAt(target[0], target[1], target[2]);
     ortho.updateProjectionMatrix();
-    controls.current?.target.set(0, 0, 0);
+    controls.current?.target.set(target[0], target[1], target[2]);
     controls.current?.update();
     // `frameloop="demand"` draws only when asked, and moving a camera object
     // in an effect is not an ask. Without this the pane holds whatever was on
@@ -213,7 +219,12 @@ function Rig({ angle, fit, box, view, style, framing, lines, orbit,
         ? { ONE: THREE.TOUCH.ROTATE, TWO: undefined }
         : { ONE: undefined, TWO: undefined }}
       // `end` fires when the drag stops, which is when a re-render is worth it.
-      onEnd={() => onSettle(formatAngle(angleFromOrbit(camera.position)))}
+      // The angle is the direction FROM what the camera turns about, which is
+      // the part's own middle when there is no render to register against --
+      // read off the position alone it would carry that offset into the pose.
+      onEnd={() => onSettle(formatAngle(angleFromOrbit(
+        camera.position.clone().sub(
+          controls.current?.target ?? new THREE.Vector3()))))}
     />
   );
 }
@@ -264,7 +275,7 @@ export interface ThreePaneProps {
 
 export function ThreePane({ part, angle, fit, box, view, style, onSnapshot,
                             orbit = 'shared', onSettle }: ThreePaneProps) {
-  const [framing, setFraming] = useState<Framing>({ radius: RADIUS, centre: [0, 0, 0] });
+  const [framing, setFraming] = useState<Framing>({ radius: RADIUS, center: [0, 0, 0] });
   const [lines, setLines] = useState<LineMaterial[]>([]);
   if (!part.trim()) return <p className="three-empty">no part chosen</p>;
   // A frustum needs a measured pane; before the first ResizeObserver callback

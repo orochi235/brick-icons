@@ -326,23 +326,24 @@ it('has no render to open for a slot that never drew', async () => {
   open.mockRestore();
 });
 
-it('keeps the 3D view out of the page until it is asked for', async () => {
-  // The chunk holds three.js and the LDraw loader. A lightbox opened to read
-  // a render must not fetch it, so the panel is a toggle and not a pane.
+it('shows the 3D view with the lightbox, and puts it away on the button', async () => {
+  // The part is what somebody opened the lightbox to look at, so the view is
+  // there without being asked for. The chunk holding three.js and the LDraw
+  // loader stays lazy, which is what keeps it out of the wall's own bundle.
   vi.mock('@lab/corpus/PartOrbit', () => ({
     default: ({ part }: { part: string }) => <div data-testid="orbit">{part}</div>,
   }));
   render(box());
   await waitFor(() => screen.getByText('Brick 2 x 4'));
-  expect(screen.queryByTestId('orbit')).toBeNull();
-
-  const turn = screen.getByRole('button', { name: 'Turn it around' });
-  expect(turn.getAttribute('aria-pressed')).toBe('false');
-  fireEvent.click(turn);
   await waitFor(() => screen.getByTestId('orbit'));
   expect(screen.getByTestId('orbit').textContent).toBe('3001');
-  expect(screen.getByRole('button', { name: 'Hide 3D' })
-    .getAttribute('aria-pressed')).toBe('true');
+
+  const hide = screen.getByRole('button', { name: 'Hide 3D' });
+  expect(hide.getAttribute('aria-pressed')).toBe('true');
+  fireEvent.click(hide);
+  expect(screen.queryByTestId('orbit')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Turn it around' })
+    .getAttribute('aria-pressed')).toBe('false');
 });
 
 it('names each slot on its own row, so the decal one can be grounded differently', async () => {

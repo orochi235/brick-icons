@@ -95,9 +95,11 @@ export function Lightbox({ partId, source, client, onClose }: {
   // comparison can be made here without disturbing the wall behind.
   const [shown, setShown] = useState(source);
   const [flagging, setFlagging] = useState(false);
-  // Off until asked: mounting it is what fetches three.js, and most visits to
-  // the lightbox are to read a render rather than to turn the part.
-  const [turning, setTurning] = useState(false);
+  // On with the lightbox: the part is what somebody opened it to look at, and
+  // a view behind a button is a view nobody turns. The chunk is still lazy, so
+  // the wall pays for three.js when a lightbox opens and not to draw a
+  // thumbnail; the button is there to put it away.
+  const [turning, setTurning] = useState(true);
   const [title, setTitle] = useState('');
   const [flagError, setFlagError] = useState<string | null>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
