@@ -1,3 +1,66 @@
+## Baton, 2026-09-09 night: weasel's fix flips the wall verdict, and the camera turns 394 parts
+
+On `main` in the shared checkout, nothing pushed. **`brick-icons-ca` commits to
+this same tree** and holds a fix on `build_shape` for Mike's call — do not land
+a guard there. Its uncommitted work is `lab/src/corpus/Lightbox.*` and
+`tests/goldens/defects.toml`. Stage explicit paths, never `git add -A`.
+
+### In flight right now
+
+`onto` job `79ecf756`, task `slot-occt-pose`, on msb-uai: the 394 declaring
+parts re-rendered under their turn, into `out/slot-occt-pose2` with
+`SOURCE=occt` so they overwrite those parts' occt rows. Deadline 1:09AM,
+delivering as it goes. **It still has to be ingested** — `ingest-renders`.
+The other slots those 394 appear in (white-occt, silhouette-occt,
+translucent-occt, ldview, reference) are all still stale; only occt was
+relaunched.
+
+### What landed
+
+`flip the wall's renderer verdict`, `draw each part under the turn its own .dat
+declares`, `pose the census oracle with the render it is judging`, `correct
+what the level-32 sheet costs`. Each carries its own reasoning; the two design
+docs carry the numbers.
+
+### Decisions and traps not in the code
+
+**`onto run --in <tree>` does not sync the repo.** msb-uai was still on
+`d500ca9` and rendered 394 parts with the pre-pose code before I caught it —
+the giveaway was `missing 2px` where a posed render against a posed oracle
+gives 0 and against an unposed one gives 27,785. `onto sync <node>` first,
+every time. The node's `git log` still reads `d500ca9` after a sync because
+onto ships files, not history; grep for the symbol instead.
+
+**The wall's renderer decision has flipped and is Mike's to take.** weasel
+`514cbc0e` beats canvas2d at every rung, 1.5x at 8px to 8.7x at 32px, and the
+pixel check passes at 0.9-1.9 drift against a limit of 12. What still blocks
+adoption is ours: badges, the kind strip and captions have never reached that
+renderer. `weasel-90` was gone from ListAgents, so nobody there has been told.
+
+**Inferring a camera turn for undeclared parts is measured and dead.** Best
+rule agrees with LDraw 32 times in 351; guessing "180 about Y" blind agrees
+320. Do not re-propose it — the design doc says why, and
+`scripts/assess-pose-inference.py` is the harness if anyone wants to re-check.
+
+**`14769ptk` is a separate problem and is still open.** Its K is sheared by the
+iso camera, not facing away, and it declares no turn. `120,45` makes it legible.
+Nothing decides which parts should get that, and the 394 declarations are no
+evidence either way.
+
+### Still queued, still unbuilt
+
+1. Re-render the 394 in the slots other than occt, and ingest all of it.
+2. **Drop `runs.kind`** and **add `parts.touched_at`** — `docs/runs-are-just-runs.md`,
+   both designed, both waiting on a quiet hour and on the watcher holding the
+   old `db.py`.
+3. **LDraw 2026-08 is not ingested.** 144 parts we do not have; use
+   `ingest-ldraw` and read its first step before downloading.
+4. **The decal finder gap** — 1,739 parts carry decoration we can see and did
+   not draw, in two unrelated halves. The 764 with decoration in the part file
+   itself are the better first target.
+5. Six parts titled "without Pattern" are flagged `printed` because
+   `partindex` substring-matches "pattern".
+
 ## Baton, 2026-09-09 night: LDraw poses 394 parts, the decal slot is not owed a job, and weasel's cliff is gone
 
 On `main` in the shared checkout, nothing pushed — `git log --oneline @{u}..HEAD`
