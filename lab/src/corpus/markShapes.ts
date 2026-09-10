@@ -491,11 +491,79 @@ const FACES: Record<string, MarkShape[]> = {
 const sticker = (face: string): MarkShape[] =>
   [...FACES[face]!, ...peel(PEEL_FROM, PEEL_ARC, PEEL_LIFT)];
 
+
+// ---------------------------------------------------------------- the cobweb
+
+/** A cobweb, not an orb web: anchored in a corner, a fan of a few radials
+ *  with slack threads across them, and most of the field left empty. The
+ *  emptiness is the point -- an orb web is a working animal's, drawn taut and
+ *  filling its hoop, and what LDraw's `~` means is that nothing has come for
+ *  this file in years.
+ *
+ *  The anchor sits ON the field's rim, so the radials read as strung to
+ *  something outside the badge; the far ends run past the rim and are cut by
+ *  the disc. Five radials over a quarter turn, because at the wall's floor the
+ *  disc is a dozen pixels across and five is what still resolves.
+ */
+const COBWEB_RADIALS = 5;
+/** From the anchor, as a fraction of the field radius. The last one is past
+ *  the rim on purpose. */
+const COBWEB_ARCS = [0.52, 0.98, 1.46, 1.94] as const;
+/** Where a thread's midpoint sits, against the straight line between its two
+ *  radials. Below 1 it sags back toward the anchor, which is the slack. */
+const COBWEB_SAG = 0.9;
+/** Which corner it hangs in, in screen coordinates: up and to the left, the
+ *  same corner a room's is in. */
+const COBWEB_ANCHOR = [-Math.SQRT1_2 * FIELD_R, -Math.SQRT1_2 * FIELD_R] as const;
+
+/** A point out from the anchor, `r` field-radii along the `i`th radial. The
+ *  fan opens across the quarter turn that faces the disc -- right, to down --
+ *  which is the quarter the anchor is not in. */
+function cobwebAt(i: number, r: number): [number, number] {
+  const a = (i / (COBWEB_RADIALS - 1)) * (Math.PI / 2);
+  const reach = r * FIELD_R * 2;
+  return [COBWEB_ANCHOR[0] + Math.cos(a) * reach,
+          COBWEB_ANCHOR[1] + Math.sin(a) * reach];
+}
+
+function cobwebRadials(): string {
+  let d = '';
+  for (let i = 0; i < COBWEB_RADIALS; i++) {
+    const [x, y] = cobwebAt(i, COBWEB_ARCS[COBWEB_ARCS.length - 1]!);
+    d += `M${pt(COBWEB_ANCHOR[0], COBWEB_ANCHOR[1])}L${pt(x, y)}`;
+  }
+  return d;
+}
+
+function cobwebThreads(): string {
+  let d = '';
+  for (const r of COBWEB_ARCS) {
+    for (let i = 0; i < COBWEB_RADIALS - 1; i++) {
+      const [x0, y0] = cobwebAt(i, r);
+      const [x1, y1] = cobwebAt(i + 1, r);
+      // A quadratic's midpoint is a quarter each end plus half the control,
+      // so the control is pulled twice as far back as the sag it produces.
+      const mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+      const cx = COBWEB_ANCHOR[0] + (mx - COBWEB_ANCHOR[0]) * (2 * COBWEB_SAG - 1);
+      const cy = COBWEB_ANCHOR[1] + (my - COBWEB_ANCHOR[1]) * (2 * COBWEB_SAG - 1);
+      d += `M${pt(x0, y0)}Q${pt(cx, cy)} ${pt(x1, y1)}`;
+    }
+  }
+  return d;
+}
+
+const cobweb: MarkShape[] = [
+  { d: cobwebRadials(), fill: 'none', stroke: 'ink', width: 0.12, cap: 'round' },
+  // Finer than the radials, the way the silk is: the radials are what holds
+  // it up and the threads are what is strung across them.
+  { d: cobwebThreads(), fill: 'none', stroke: 'ink', width: 0.09, cap: 'round' },
+];
+
 // ------------------------------------------------------------------ the set
 
 export const MARK_SHAPES: Record<string, MarkShape[]> = {
   star, archive, redo, bolt, magnet, minifig, technic, composite, duplo,
-  printed, brush,
+  printed, brush, cobweb,
   stickerPolice: sticker('police'), stickerFlames: sticker('flames'),
 };
 

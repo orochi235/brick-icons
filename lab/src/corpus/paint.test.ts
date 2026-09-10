@@ -3,8 +3,10 @@ import { badgeGeometry, badgesFor, captionsFor, CAPTION_ON_FILL,
   captionSize, cornerPad,
   cellState, DEFAULT_APPEARANCE, fillFor, paintCommands, PROPERTY_FIELD,
   LABEL_MIN_PX,
-  stripFor, stripGeometry, tally, thumbGround, type Appearance }
+  stripFor, stripGeometry, tally, thumbGround, ALL_BADGES, STALE_WASH,
+  type Appearance }
   from '@lab/corpus/paint';
+import { MARK_SHAPES } from '@lab/corpus/markShapes';
 import { CELL_STATES, DEFAULT_PALETTE as CELL_FILL, type CellState } from '@lab/corpus/palette';
 import type { Band } from '@lab/corpus/layout';
 import { tintFor } from '@lab/corpus/tint';
@@ -805,4 +807,42 @@ it('captions a cell down to LABEL_MIN_PX and not below it', () => {
   expect(captionsFor(c, LABEL_MIN_PX, CAPTION_ON_FILL).map((x) => x.text))
     .toEqual(['1979–', '3001']);
   expect(captionsFor(c, LABEL_MIN_PX - 1, CAPTION_ON_FILL)).toEqual([]);
+});
+
+it('draws obsolete as a web on the strip, at the tail of the property run', () => {
+  // `~` in an LDraw description is a file nobody is meant to reach for, and
+  // it used to reach the wall as a word in the tag list and nothing on the
+  // cell. The mark has to exist: a badge naming a mark that does not is a
+  // disc with a hole in it.
+  const part = cell('a', 0, 'sha-a', { tags: ['technic', 'printed', 'obsolete'] });
+  expect(stripFor(part, 200).map((b) => b.tag))
+    .toEqual(['technic', 'printed', 'obsolete']);
+  expect(ALL_BADGES.obsolete!.mark).toBe('cobweb');
+  expect(MARK_SHAPES.cobweb!.length).toBeGreaterThan(0);
+});
+
+it('washes every cell while the wall is drawing a slot the toolbar left', () => {
+  // Keeping the old pictures up beats blanking the wall, but unsaid it reads
+  // as "the new slot looks identical to the old one".
+  const part = cell('a', 0, 'sha-a');
+  const input = {
+    cells: [part], rects: [{ x: 0, y: 0, w: 64, h: 64 }], visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest: null,
+  };
+  expect((paintCommands(input)[0] as { wash?: number }).wash).toBeUndefined();
+  expect((paintCommands({ ...input, stale: true })[0] as { wash?: number }).wash)
+    .toBe(STALE_WASH);
+});
+
+it('never washes a stale wall lighter than a retired cell in it', () => {
+  // The retired wash is a slider, so a constant cannot outrank it on its own.
+  const part = cell('a', 0, 'sha-a');
+  const heavy = { ...DEFAULT_APPEARANCE, retiredWash: 1 };
+  const cmd = paintCommands({
+    cells: [part], rects: [{ x: 0, y: 0, w: 64, h: 64 }], visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest: null,
+    stale: true, appearance: heavy,
+  })[0] as { wash?: number };
+  expect(cmd.wash).toBe(1);
+  expect(STALE_WASH).toBeGreaterThan(DEFAULT_APPEARANCE.retiredWash);
 });

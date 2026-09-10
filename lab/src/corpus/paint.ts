@@ -118,6 +118,13 @@ export function thumbGround(): string {
  *  noticed. */
 export const RETIRED_WASH = '#d8d8d8';
 
+/** How hard the whole wall is washed while it is drawing one slot under
+ *  another slot's name. Never lighter than a retired cell in the same view --
+ *  the painter takes the greater of the two -- because this is not a fact
+ *  about a part: it is the wall saying the pictures are the ones you were
+ *  looking at a moment ago. */
+export const STALE_WASH = 0.85;
+
 /** Below this a cell's category initial is a smudge, and the mark falls back
  *  to a plain dot. */
 export const GLYPH_MIN_PX = 22;
@@ -156,7 +163,8 @@ export const LABEL_MIN_PX = 88;
 /** A picture rather than a letter, where a letter would need explaining. */
 export type BadgeMark = 'stickerPolice' | 'stickerFlames'
   | 'star' | 'archive' | 'redo' | 'bolt' | 'magnet' | 'printed'
-                      | 'brush' | 'minifig' | 'technic' | 'composite' | 'duplo';
+                      | 'brush' | 'minifig' | 'technic' | 'composite' | 'duplo'
+  | 'cobweb';
 
 export interface CellBadge {
   /** The tag that drew it. The strip is hit-tested by tag, so a click knows
@@ -229,6 +237,10 @@ export const SYSTEM_FACE =
  *  group against the system badges' own liveries. */
 export const PROPERTY_FIELD = 'oklch(0.4109 0.0082 286.03)';
 
+/** Silk, against the property field: white read as a fresh web drawn in
+ *  chalk, and the thread wants to look old. */
+const WEB_SILK = 'oklch(0.8100 0.0090 286.29)';
+
 /** The magnet's pole tips, and so its name. */
 const MAGNET_POLES = 'oklch(0.9500 0.0040 286.29)';
 
@@ -276,6 +288,12 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
   // question this badge answers is which side of the part you are looking at.
   posed: { tag: 'posed', text: '◑', field: PROPERTY_FIELD, ink: 'oklch(1.0000 0 0)',
            font: WEIRD_FACE, scale: 1.18 },
+  // A cobweb, because what LDraw marks with `~` is a file nobody is meant to
+  // reach for -- a superseded mould or a fragment of an assembly. Silk on the
+  // property field rather than a livery of its own: it is a fact about the
+  // file, which is what the rest of this group says too.
+  obsolete: { tag: 'obsolete', mark: 'cobweb', field: PROPERTY_FIELD,
+              ink: WEB_SILK, scale: 1.06 },
 };
 
 /** Every badge the wall can draw, in the order the legend lists them:
@@ -423,7 +441,7 @@ export type PaintCommand =
        *  bordered state earns it when there is nothing drawn in the cell: the
        *  border alone reads as a tint at the zooms where most cells are small,
        *  and an empty cell is the one that has something to say. */
-      slash: boolean; caret?: boolean }
+      slash: boolean; caret?: boolean; wash?: number }
   | { kind: 'image'; dx: number; dy: number; dw: number; dh: number;
       image: CanvasImageSource; ground: string; wash?: number;
       alpha?: number;
@@ -448,6 +466,10 @@ export interface PaintInput {
   highlight?: CellState | null;
   /** The same, for a hovered tag row: cells that do not carry the tag dim. */
   highlightTag?: string | null;
+  /** The slot on the toolbar is not the slot these cells came from -- the new
+   *  one's cells and sheets are still out. Every cell washes, because what is
+   *  on screen answers a question nobody is asking any more. */
+  stale?: boolean;
   /** Index of the caret cell, if any -- explicit or implied, resolved by the
    *  caller (`caret.ts`). */
   caret?: number | null;
@@ -470,7 +492,7 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
                                 highlight = null, highlightTag = null,
                                 bands, caret = null,
                                 appearance = DEFAULT_APPEARANCE,
-                                tint = 'status' }: PaintInput): PaintCommand[] {
+                                tint = 'status', stale = false }: PaintInput): PaintCommand[] {
   const out: PaintCommand[] = [];
   const transform = viewToTransform(cam);
   for (const i of visible) {
@@ -502,8 +524,9 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
     const strip = appearance.showBadges ? stripFor(cell, dw) : NO_BADGES;
     const captions = appearance.showCaptions
       ? captionsFor(cell, dw, CAPTION_ON_THUMB) : NO_CAPTIONS;
-    const wash = appearance.washRetired && isRetired(cell)
-      ? appearance.retiredWash : undefined;
+    const wash = stale ? Math.max(STALE_WASH, appearance.retiredWash)
+      : appearance.washRetired && isRetired(cell) ? appearance.retiredWash
+      : undefined;
     const vectored = tint === 'status' ? vector?.get(cell.id) : undefined;
     const image = tint === 'status' ? (vectored ?? loose?.get(cell.id)) : undefined;
     if (image) {
@@ -532,7 +555,7 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
                    ? captionsFor(cell, dw, CAPTION_ON_FILL) : NO_CAPTIONS,
                badges: state === 'outOfScope' ? undefined : badges,
                strip: state === 'outOfScope' ? undefined : strip,
-               slash: border !== null, caret: isCaret });
+               slash: border !== null, caret: isCaret, wash });
   }
   for (const b of bands ?? []) {
     const w = b.rect.w * cam.scale.x;
