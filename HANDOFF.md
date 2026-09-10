@@ -614,6 +614,36 @@ files without moving HEAD, so a freshly synced node reports the OLD sha with a
 added. Re-rendering the slot is owed and unscheduled; `slot-occt-r2` on studio
 was still filling that same slot with pre-fix code as this was written.
 
+### Overnight, 2026-09-10: refresh the renders the crack repair made stale
+
+**Running unattended on Mike's say-so ("keep the fleet busy as long as there
+are renders to refresh"). Read this before relaunching anything.**
+
+The chain, in order. Each step's launch command is below it.
+
+1. `crack-narrow-clean` (job `6e4df476`, msb-uai + keiei + studio) re-judges all
+   2,949 flagged parts. **This supersedes the 1,561 figure**, which was measured
+   with keiei on an engine missing the `rims_declared`/cylo-ring work while
+   msb-uai had it. Results land in `out/narrow3/jsonl`.
+2. Rewrite `store-queue/occt-crack-stale.txt` from `out/narrow3` and commit.
+3. Redraw that list in `occt`, `white-occt`, `silhouette-occt`,
+   `translucent-occt` -- one job per slot through `render-corpus-batch`'s
+   launch, ~70 min total for all four at 18 workers.
+4. Ingest with `ingest-renders`.
+
+**Every node's five render files are pinned byte-for-byte to HEAD**
+(`cli.py`, `geom2d.py`, `shade.py`, `trace.py`, `occt.py` -- verify with
+`shasum -a 256` against `git show HEAD:brick_icons/<f>`). This is not what
+`onto sync` gives you: three other sessions are editing those files
+uncommitted in this shared checkout, and a plain sync ships their work to the
+fleet. One such edit, `tangent_wall_planes`, is called from the render path at
+`occt.py:2239` and reached all three nodes before it was caught. **Re-pin after
+any sync, and re-check the hashes before trusting a render.**
+
+`scripts/crack-heal-scope.py` finds the flag set (a shape build, no HLR);
+`scripts/crack-heal-drift.py --batch` judges it (draws each part twice).
+Both take `--skip-done` and both are safe to relaunch under their task name.
+
 ### `counts` dates the stale renders, and the stale set is decidable without drawing one
 
 **Four slots are stale, not one.** `occt`, `white-occt`, `silhouette-occt` and
