@@ -1,3 +1,70 @@
+## Two ways an exact surface got its shading wrong, and the slot that is still stale
+
+Both landed: `_curved_frame`'s sign (inside `3714533`, see below) and `909140c`.
+The occt store slot for `5841`-`5854` is still on the 2026-09-09 16:55 render
+and now lags four fixes.
+
+### An analytic wall's normal comes from how it was built
+
+`occt_faces` builds every cylinder, cone and elliptic wall FORWARD, so its
+normal points out of the part, and `BRepBuilderAPI_Sewing` reverses whatever it
+needs to make a shell consistent. On a cracked LDraw part that is no statement
+about which side the material is on: `5846` sews 12 analytic cylinders, all 12
+FORWARD as built, and 7 come back REVERSED. `_curved_frame` read that flag,
+pointed those normals into the brick, and every gradient sample fell below the
+ramp -- `5846`'s curved corner drew as a near-black window with hard vertical
+edges beside a lit sphere octant. `_plane_face` had already refused the same
+statement, in its own words, for the same reason.
+
+The occluders never read it (`_face_occluder` takes the surface, not the face),
+so only the shading ramp and the near/far span labelling move. 44 of 117
+sampled parts move; checked against LDView -- not against naive, which carries
+its own version of several of these -- `5846`, `24607`, `26913` and `11377` all
+move toward it.
+
+**A `Primitive` still does not carry its own BFC inversion.** `hlr.flatten`
+computes `base_invert ^ invert_next ^ m_reflect` and drops it on the
+substitution branch, so an INVERTNEXT'd cylinder is drawn outward like any
+other. Measured: 7.6% of substituted primitives sit under an odd INVERTNEXT
+parity (20 of 263 over seven parts). Keying the sign on the declared inversion
+was tried and abandoned -- `4740` has 3 of its 4 (axis, radius) keys carrying
+BOTH senses, because LDraw draws a thin shell as the same primitive referenced
+twice, once inverted. Any fix here has to key on something other than the
+surface.
+
+### A plane a curved wall runs tangentially into
+
+`909140c`. A tangent junction is not a crease, `analytic_creases` correctly
+draws no stroke across it, and then nothing hides a tone step: `Flat3Style`
+hands a plane one of three palette constants, which has no relation to the
+Lambert ramp beside it. `5841`'s `1-4cylo` is centred at y=20 r=20, stands
+vertical exactly at y=20, and the flat wall carrying the last 4 LDU to the base
+read 133 against the ramp's 149 -- a band along the foot of every curved top.
+Such a plane now takes `style.ramp(nv)`.
+
+`tangent_wall_planes` is the crease test read from the other side, on the same
+ancestor map. The population separates the way that docstring promises:
+plane/curved junction angles over `5841`, `5842`, `5847` and `5854` are 0-4
+degrees or 90 with nothing between, and `3001` has none of the first kind.
+
+**5 levels of step remain**, because the wall's last stop is a bin average over
+`_axis_binned_stops`' 8 bins rather than the ramp at the tangent point. Closing
+it means reaching into the wall's stops from the plane, which nothing does yet.
+
+### What is owed
+
+**Re-render the occt and white-occt slots for `5841`-`5854`.** It was held all
+night on purpose: `onto sync` ships uncommitted edits, and three sessions had
+half-finished engine work in this tree, so a fill would have baked unlanded
+code into a shared artifact that records a git rev. The tree is clean of engine
+work now.
+
+**Watch the index on this checkout.** Two commits tonight swept hunks that were
+not theirs -- `d4c2378` took two test helpers, `3714533` took the whole
+`_curved_frame` change and its tests, so that commit's subject describes none
+of what it carries. `git commit --only <path>` takes the working-tree state of
+that path; only `git apply --cached` scopes by hunk.
+
 ## 5845's lens: a majority chord test was not enough
 
 `7307236`. `arc_regions`' chord test now requires EVERY sample to land on the
