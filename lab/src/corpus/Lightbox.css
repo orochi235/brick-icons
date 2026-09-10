@@ -38,6 +38,23 @@
   background: var(--corpus-thumb-ground, #ffffff);
 }
 
+/* A decal is a cut-out: its own shape is the drawing, and everything around it
+ * is transparent. A flat ground hides that -- a white sticker on white reads as
+ * a full square -- so this slot alone gets the checkerboard, and the state's
+ * ground below is deliberately overridden for it: a color under the checks
+ * would defeat the one thing they are there to show. */
+.corpus-slot[data-source="decal"] .corpus-big,
+.corpus-slot[data-source="decal"][data-ground] .corpus-big {
+  background-color: #ffffff;
+  background-image:
+    linear-gradient(45deg, #c8c8cc 25%, transparent 25%, transparent 75%,
+                    #c8c8cc 75%),
+    linear-gradient(45deg, #c8c8cc 25%, transparent 25%, transparent 75%,
+                    #c8c8cc 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 8px 8px;
+}
+
 /* The wall's `ground = border ?? thumbGround()` (paint.ts): a drawn cell says
  * its state with the surround, because the drawing itself is ink on
  * transparency. `--slot-ground` is set to a `var()` reference naming the

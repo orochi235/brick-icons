@@ -345,6 +345,23 @@ it('keeps the 3D view out of the page until it is asked for', async () => {
     .getAttribute('aria-pressed')).toBe('true');
 });
 
+it('names each slot on its own row, so the decal one can be grounded differently', async () => {
+  const withDecal = {
+    ...detail,
+    slots: [...detail.slots,
+            { source: 'decal', sha256: 'facefeed0000',
+              made_at: '2026-09-05T12:00:00+00:00' }],
+  };
+  render(box({
+    client: { corpusPart: () => Promise.resolve(withDecal), addDefect } }));
+  await screen.findByRole('radio', { name: 'decal' });
+  // Queried off the document: the lightbox renders through a portal, so
+  // `container` holds none of it.
+  const sources = [...document.querySelectorAll('.corpus-slot')]
+    .map((li) => li.getAttribute('data-source'));
+  expect(sources).toEqual(['silhouette-occt', 'naive', 'decal']);
+});
+
 it('does not offer a slot with nothing to draw for this part', async () => {
   // A plain brick has no decoration, so the decal slot beside its renders is
   // an empty frame that reads as a gap. The server's `not_applicable` is what

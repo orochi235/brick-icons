@@ -209,6 +209,7 @@ export function Lightbox({ partId, source, client, onClose }: {
           <ul className="corpus-slots" role="radiogroup" aria-label="Slot shown">
             {slots.map((slot) => (
               <li key={slot.source} className="corpus-slot"
+                  data-source={slot.source}
                   data-current={slot.source === shown}
                   data-state={slotState(slot, detail.part)}
                   data-ground={groundVar(slotState(slot, detail.part)) ? '' : undefined}
