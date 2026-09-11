@@ -1,3 +1,52 @@
+## Cones gp_Cone cannot hold are ruled now, and the corpus is stale for it
+
+`5a2d856`, on `main` in the shared checkout, unpushed. **0 of 40,633 cones
+drop, from 1,847 across 344 parts** — re-derive with
+`scripts/measure-cone-drops.py` (108s) rather than trusting this line.
+
+**Every occt slot is stale for the 344 parts.** A dropped cone was a hole in
+the occluder, not a rough edge, so the parts that hold one drew wrong in every
+facet. `scripts/cone-ruled-drift.py --affected` names them; `--control` is the
+proof of blast radius, and over 40 cone-carrying parts this does not touch, 0
+changed.
+
+**Do not re-derive these four the hard way.** Each one costs a whole class and
+each is a test in `tests/test_occt.py`:
+
+- A sector is a TRIM of the full turn. ThruSections parameterizes a closed
+  section by its own angle and renormalizes an arc to 0..1, and the angle is
+  the parameter the normal is written in — build the arc directly and the limb
+  cut lands in the wrong place. Every dropped cone in the library is partial.
+- `con0` tapers to a point, and a zero-radius conic is not a wire: it fails the
+  whole build with `BRep_API: command not done`. 693 cones.
+- The ruled surface closes but is not FLAGGED periodic, so a sector straddling
+  the seam dies in sewing as `Geom_BSplineCurve::Segment`. Two faces instead.
+- `S_u x S_v` points out for one winding only, and a primitive's frame is
+  left-handed as often as not. The sign comes from the normal leaning away
+  from the ruling line, never from the face's orientation.
+
+**What is not done.** `_axis_key` returns None for a BSpline, so a dome
+authored as stacked oblique cones will not share one gradient the way a
+stacked right-circular one does; no part is known to need it yet.
+`tests/goldens/defects.toml` still has `35485` open — the ring draws clean now
+and the row wants re-reading, but that file is Mike's and dirty, so it was left
+alone.
+
+## The dashboard says what a pass costs, slot by slot
+
+`bc3b5fb`. Each slot's share of the seconds over the parts every slot drew, at
+ONE build — at `1099.d500ca9+` over 1,587 parts: occt 1.000, white-occt 1.006,
+silhouette-occt 0.854, translucent-occt 0.353, so four slots cost 3.2 times
+one. **The revision is the load-bearing part**: silhouette-occt's
+pre-instrumentation rows average 48.9s against 17.9s at the current build, and
+taking a slot's whole history makes it the most expensive of the three rather
+than the cheapest.
+
+**`_latest_measurements` still groups by part and ENGINE**, and four occt
+facets are all `occt` — so "Render seconds" and "Where the time goes" have been
+reporting whichever facet ran last, per part. `measurements.source` is the
+column they want. The new `cost` section reads it; those two do not.
+
 ## The white-occt refresh completed; its progress bar did not say so
 
 `03bd6fb`. **The "stopped at 15,308 of 18,190" reading further down this file
