@@ -19,9 +19,13 @@ export function blockCols(n: number, cols: number): number {
 /** Pack `groups` as blocks flowed across `cols` cells, starting at `top`.
  *
  *  `headerRows` rows of pitch are reserved above every block for its label.
- *  The caller places cells by index, so this never sees a `Cell`. */
+ *  The caller places cells by index, so this never sees a `Cell`.
+ *
+ *  `depth` is how the label is set, not how deep the call is: a grouping with
+ *  one level has no outer band for its blocks to defer to, so they are the
+ *  outer band and read like it. */
 export function flowBlocks(groups: Group[], opts: LayoutOptions, top: number,
-                           headerRows: number): Flowed {
+                           headerRows: number, depth: 0 | 1 = 1): Flowed {
   const pitch = opts.cell + opts.gap;
   const width = opts.cols * pitch;
   const gutter = BLOCK_GAP_PITCHES * pitch;
@@ -51,7 +55,7 @@ export function flowBlocks(groups: Group[], opts: LayoutOptions, top: number,
     });
     const h = headerRows * pitch + rows * pitch - opts.gap;
     bands.push({ key: group.key, label: group.label ?? group.key, count: n,
-                 rect: { x, y, w: w - opts.gap, h }, depth: 1,
+                 rect: { x, y, w: w - opts.gap, h }, depth,
                  header: headerRows * pitch });
     rowHeight = Math.max(rowHeight, h);
     x += w + gutter;
@@ -106,7 +110,7 @@ export function blockLayout(key: (c: Cell) => string, order: string[]): Layout {
                     - (rank.get(b[0]) ?? order.length)
                     || a[0].localeCompare(b[0]))
       .map(([k, items]) => ({ key: k, items }));
-    const { placed, bands } = flowBlocks(groups, opts, 0, INNER_HEADER_ROWS);
+    const { placed, bands } = flowBlocks(groups, opts, 0, OUTER_HEADER_ROWS, 0);
     const rects = rectsInOrder(cells, placed);
     return { rects, bands, bounds: boundsOf(rects, bands) };
   };

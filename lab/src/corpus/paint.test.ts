@@ -724,7 +724,8 @@ describe('band labels', () => {
   });
 
   it('sets the label to the space the layout reserved above the block', () => {
-    // A fifth of world scale leaves 14.4px of header for an 18px label.
+    // A fifth of world scale leaves 14.4px of header, and the type takes the
+    // share of it `LABEL_FILL` allows.
     const out = paintCommands({
       cells: [], rects: [], visible: [], cam: { ...cam, scale: { x: 0.2, y: 0.2 } },
       manifest: null, palette: CELL_FILL, bands: [band({ rect: { x: 0, y: 0, w: 4000, h: 2000 } })],
@@ -736,12 +737,16 @@ describe('band labels', () => {
     expect(label!.dy).toBeLessThanOrEqual(14.4);
   });
 
-  it('keeps the full size when the header has room for it', () => {
-    const out = paintCommands({
-      cells: [], rects: [], visible: [], cam, manifest: null,
-      palette: CELL_FILL, bands: [band()],
-    });
-    expect(out.find((c) => c.kind === 'label')!.size).toBe(18);
+  it('grows with the zoom rather than stopping at a screen size', () => {
+    // A heading lies in the plane with the cells: nothing caps it, so zooming
+    // in on a band brings its name up with it.
+    const at = (scale: number) => paintCommands({
+      cells: [], rects: [], visible: [],
+      cam: { ...cam, scale: { x: scale, y: scale } },
+      manifest: null, palette: CELL_FILL, bands: [band()],
+    }).find((c) => c.kind === 'label')!.size;
+    expect(at(1)).toBeCloseTo(57.6);
+    expect(at(4)).toBeCloseTo(at(1) * 4);
   });
 
   it('drops a label whose header is too short to read at any size', () => {

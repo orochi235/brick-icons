@@ -36,9 +36,11 @@ body { margin: 0; }
    * it still reads when a caret'd cell also carries the ochre defect ring. */
   --corpus-caret-color: #ffffff;
 
-  /* A band header, and the block header inside it that must not compete. */
-  --corpus-label: #e8e8ea;
-  --corpus-sublabel: #7e7e88;
+  /* A band header, and the block header inside it that must not compete.
+     The theme's own foreground, not a literal: these were dark-theme values
+     and an outer label set in #e8e8ea is invisible on the light wall. */
+  --corpus-label: var(--wzl-fg, #e8e8ea);
+  --corpus-sublabel: var(--wzl-fg-muted, #7e7e88);
   /* A part that matched nothing outside -- its own flat tone, so absence
    * never reads as the low end of a tint ramp. */
   --corpus-unmatched: #2a2a2e;
