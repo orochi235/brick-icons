@@ -1,3 +1,100 @@
+## The white-occt refresh completed; its progress bar did not say so
+
+`03bd6fb`. **The "stopped at 15,308 of 18,190" reading further down this file
+was wrong, and that section is corrected.** All 18,190 parts were drawn.
+onto's progress counter is fed by parsing each item's own stdout, so the lease
+host counts only what it rendered itself while showing the job-wide
+denominator: studio's 15,298 against 18,190 reads as 84% at completion, and
+keiei's 7,720 never enter it. The union of both nodes' JSONLs is 18,190
+exactly. The `exit 1` on both nodes is keiei's lease being refused mid-batch
+once studio's queue drained, not a fault.
+
+**keiei's half was never fetched, and would not have been for hours.**
+`ingest-watch --until a,b` tests whether ANY named task is running, so the
+closing `onto fetch --stream` for a finished task waits on the slowest task in
+the list. white-occt ended 19:27; `store-restale-occt` is still going at 21:45.
+Fetched by hand: 7,307 files, 173.6 MiB. All 18,182 drawn parts now carry a
+white-occt score, and both bakes logged 0 UNREADABLE / 0 MISSING.
+
+**4,828 parts (27%) were rendered twice.** studio's lease sweeper logged `took
+back N items from a helper that stopped reporting` 80 times over 9.6h, roughly
+half the job's 138h CPU. `leaseTTL` is 90s against a 30s heartbeat
+(`~/src/onto/lease.go:27-33`). Why keiei's heartbeats missed that window is NOT
+established — the heartbeat is its own goroutine, but `exchange` takes a mutex
+shared with item requests, and keiei logged no failure at all. Worth settling
+before the next two-node job.
+
+**8 of the 134 stale parts were never attempted**: batches `12891p01` (stopped
+5/12) and `32201` (11/12), cut off when keiei lost the lease and the job ended
+before `census-batch.sh` could run a resume pass. All 8 already hold a
+white-occt drawing and render fine under occt.
+
+## The ldview slot is gone
+
+`03bd6fb`. Wrong projection: LDView renders perspective and
+`-AllowPrimitiveSubstitution` redraws a `4-4cyli` at whatever curve quality it
+likes, so the slot never held what the corpus compares against. The
+browser-rendered `reference` slot replaced it and covers all 20,597 parts.
+Dropped from `SOURCES` and `_CANONICAL`, with 24,591 renders rows, 3,896
+attempts rows and 1.1 GB under `renders/ldview`. Snapshot taken before the
+delete: `out/snapshots/corpus-20260910-2127-fcf1e0b.db`.
+
+**LDView the binary stays.** `brick_icons/lab/reference.py` shells out to it
+per orbit frame for the lab's interactive reference pane, so `config.ldview`,
+`vendor/LDView.app`, `scripts/setup-ldview.sh` and the `--ldview` CLI flag are
+all still live. Only the stored slot went.
+
+`engine_for` and `familyOf` needed no change — ldview matched the bare-name
+rule rather than being special-cased. Comments and fixtures that used it as the
+stand-in for "a raster slot" now name `reference`, which is also WebP.
+
+**One golden defect went with it**, `4521703u-far-half-of-polys-are`, filed
+`engines = ["ldview"]`. That deletion is uncommitted inside
+`tests/goldens/defects.toml` — Mike's file, never to be staged — so it rides
+along whenever he commits it.
+
+## The translucent-occt gap is being filled — in flight
+
+Two jobs with disjoint lists, both delivering: `slot-translucent-occt` (studio,
+5,690 parts) and `slot-translucent-occt-r2` (keiei, 8,703). Together they are
+all 14,393 the slot was missing. The split was made by subtracting studio's
+`batches.txt` from a full `slot-coverage.py --budget 99` list — **the in-flight
+parts are not in the database yet, so a second survey would have handed keiei
+the same parts studio was already drawing.**
+
+One watcher covers both trees, `ingest-watch.py out/slot-translucent-occt
+out/slot-translucent-occt-r2 --every 300`, logging to
+`out/ingest-watch-translucent.log`. **Both trees file under the same slot, so
+two watchers would race two `bake-thumbs` runs onto the same sheets.**
+
+Slot went 6,204 → 10,353 between 20:55 and 21:45.
+
+**This is a gap fill, not the restale refresh.** The 4,649 stale
+translucent-occt renders in the table below are a different job, still queued.
+
+Trap: the watcher's first pass on the r2 tree ran before the job's `SOURCE`
+marker had been delivered and derived the slot as `silhouette-`. It wrote 0
+rows and read `translucent-occt` correctly on the next pass, but a watcher
+started in the same breath as its job can win that race.
+
+## Open, asked for and not started
+
+**The lightbox's interactive preview draws a different projection from the
+thumbnails beside it.** Mike asked for it to render like any other thumbnail,
+including starting pose and camera. It cannot while it is LDView-driven —
+`lab/src/shot/shot.ts` says it outright: "LDView cannot render orthographic at
+all." Matching means moving the pane onto the same three.js path
+`scripts/shot-sink.py` uses for the `reference` slot. Not scoped, not started.
+
+**Render cost wants reporting as a bucket distribution, not a median.**
+Measured over 2,670 parts of the translucent fill: the fixed ~1-2s of setup
+compresses everything, so nothing lands under 1s whole-part — but cut
+`render/geometry/import` and 31.6% of parts fall under 0.5s. The tail barely
+moves (27 parts over 64s whole-part, 22 engine-only), so the slow parts are
+slow inside the engine, not in setup. `scripts/census-plot-duration-hist.py`
+already exists and is where this belongs rather than a new file. The table
+itself exists only in conversation.
+
 ## A gradient band now ends on its own sample, and the in-flight fill predates it
 
 `069c08b`. **Read this before ingesting anything the three running jobs bring
@@ -39,13 +136,11 @@ ends of a ramp, no shape moved.
 
 ## The four occt slots are being redrawn against the 2026-09-10 fixes — in flight
 
-**occt is still drawing; white-occt stopped at 84%; two slots are never
-started.** As of 19:40: `store-restale-occt` is running on msb-uai, and
-`store-restale-white-occt` exited 1 on both studio and keiei after 15,308 of
-18,190 parts with 26 failed — short of its 3:48AM deadline, and the log gives
-no reason beyond the failure count. 15,270 of its renders are home and
-ingested. The remainder is owed, and a relaunch under the same task continues
-it: `--skip-done` reads the JSONLs already there. The stale set is
+**occt is still drawing; white-occt COMPLETED; silhouette-occt is still never
+started.** As of 21:45: `store-restale-occt` is running on msb-uai.
+`store-restale-white-occt` drew all 18,190 parts — the "stopped at 15,308"
+reading this section used to carry was the lease host's own counter, not the
+job's, and is corrected in the top section of this file. The stale set is
 every occt-family render drawn before `7307236` (2026-09-10 01:26), the last of
 the four fixes that move a stroke — the two shading-sign fixes, the tangent-wall
 ramp and the arc-chord rule. Lists are in `store-queue/stale-0910/`, one per slot
@@ -55,7 +150,7 @@ plus its `-batches.txt`, and the nodes hold a copy under
 | slot | stale | fresh | job |
 |---|---|---|---|
 | occt | 18,003 | 987 | `store-restale-occt`, msb-uai, running |
-| white-occt | 18,190 | 1,563 | `store-restale-white-occt`, stopped at 15,308 |
+| white-occt | 18,190 | 1,563 | `store-restale-white-occt`, complete; 134 stale |
 | silhouette-occt | 8,779 | 1,567 | queued |
 | translucent-occt | 4,649 | 1,564 | queued |
 
@@ -118,12 +213,9 @@ different.
 On `main` in the shared checkout, seven commits unpushed (`1f654f2..6c28aff`).
 `tests/goldens/defects.toml` is Mike's and stays dirty; never stage it.
 
-1. **Relaunch `store-restale-white-occt`.** It exited 1 on both nodes at 15,308
-   of 18,190 parts with 26 failed, hours inside its deadline, and the log says
-   nothing else. Same task name continues it -- `census-batch.sh` resumes from
-   the JSONLs already in the tree -- and the launch line is the one in the
-   section above with `--with keiei` and studio as the primary. Do not make
-   msb-uai a queue host.
+1. **white-occt is done; 134 parts keep last round's drawing.** 126 failed
+   (115 TimeoutError, 10 GEOSException, 1 ProcessDied) and 8 were never
+   attempted. Fold them into the next round rather than relaunching the task.
 2. **`silhouette-occt` (8,779) and `translucent-occt` (4,649) were never
    launched.** Their lists are already on all three nodes at
    `out/store-restale-<slot>/batches.txt`.
