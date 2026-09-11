@@ -170,6 +170,29 @@ def test_a_reversed_carrier_still_round_trips():
     assert back == pytest.approx(pts, abs=1e-9)
 
 
+def test_a_curved_canvas_grows_to_hold_ink_that_overruns_it():
+    """A minifig head's print runs onto the dome its wall cylinder stops at.
+    The canvas is the SVG's viewport, so ink past the section is cut, not
+    merely off-centre."""
+    cyl = _axis([0.0, -1.0, 0.0], r=20.0, h=24.0)
+    over = np.array([[0.0, -1.5], [0.0, 25.5]])
+    ext = unwrap.carrier_extent(cyl, over)
+    assert ext[:, 1].min() == pytest.approx(-1.5)
+    assert ext[:, 1].max() == pytest.approx(25.5)
+    # and the wrap is still the carrier's, not the ink's
+    assert ext[:, 0].min() == pytest.approx(-20.0 * np.pi)
+    assert ext[:, 0].max() == pytest.approx(20.0 * np.pi)
+
+
+def test_ink_inside_the_carrier_leaves_the_canvas_alone():
+    """The union has to be a no-op where the print fits, or every decal in the
+    store is redrawn to fix the few that overrun."""
+    cyl = _axis([0.0, -1.0, 0.0], r=20.0, h=24.0)
+    bare = unwrap.carrier_extent(cyl)
+    inside = np.array([[0.0, 2.0], [1.0, 22.0]])
+    assert unwrap.carrier_extent(cyl, inside) == pytest.approx(bare)
+
+
 def test_a_plane_falls_back_to_the_decal_bounds():
     plane = unwrap.Plane(normal=np.array([0.0, 1.0, 0.0]), offset=0.0)
     uv = np.array([[1.0, 2.0], [5.0, 2.0], [5.0, 9.0]])
