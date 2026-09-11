@@ -15,6 +15,7 @@ describe('the working set in the address bar', () => {
 
   it('survives the round trip', () => {
     const set: WorkingSet = { kind: 'base', moved: true, outOfScope: false,
+                              obsolete: false, posed: false,
                               excluded: ['Sticker', 'Minifig'],
                               badges: ['technic', 'popular'] };
     expect(round(set)).toEqual(set);
@@ -39,5 +40,13 @@ describe('wallHref', () => {
     expect(q.get('source')).toBe('silhouette-naive');
     expect(q.get('outOfScope')).toBe('false');
     expect(q.getAll('excluded')).toEqual(['Sticker']);
+  });
+
+  it('carries the two newer classes across as well', () => {
+    const href = wallHref({ ...DEFAULT_SET, obsolete: false, posed: false },
+                          'silhouette-naive');
+    const q = new URLSearchParams(href.slice(href.indexOf('?')));
+    expect(q.get('obsolete')).toBe('false');
+    expect(q.get('posed')).toBe('false');
   });
 });

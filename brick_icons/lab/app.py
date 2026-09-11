@@ -364,7 +364,8 @@ def create_app(root: Path | str = ".",
 
     @app.get("/api/corpus/stats")
     def get_corpus_stats(kind: str = "all", moved: bool = False,
-                         out_of_scope: bool = True,
+                         out_of_scope: bool = True, obsolete: bool = True,
+                         posed: bool = True,
                          excluded: list[str] = Query(default=[]),
                          badges: list[str] = Query(default=[])):
         """Every tally the dashboard draws, over one working set."""
@@ -373,7 +374,8 @@ def create_app(root: Path | str = ".",
         conn = corpus_conn()
         try:
             return stats.stats(conn, kind=kind, moved=moved,
-                               out_of_scope=out_of_scope,
+                               out_of_scope=out_of_scope, obsolete=obsolete,
+                               posed=posed,
                                excluded=tuple(excluded), badges=tuple(badges))
         finally:
             conn.close()
@@ -453,9 +455,7 @@ def create_app(root: Path | str = ".",
         part["year_from"], part["year_to"] = cells.years_for(years)
         part["sets"] = cells.sets_for(years)
         part["tags"] = tags.tags_for(part["category"], bool(part["printed"]),
-                                     bool(part["obsolete"]),
-                                     part["year_to"], part["sets"],
-                                     posed=bool(part["preview"]))
+                                     part["year_to"], part["sets"])
         part["out_of_scope"] = part["category"] in cells.OUT_OF_SCOPE_CATEGORIES
         for slot in slots:
             slot.update(states[slot["source"]])

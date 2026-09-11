@@ -14,8 +14,8 @@ from datetime import datetime, timezone
 #: Tags in the order they read best on a badge row: which system a part
 #: belongs to, then what is true of the drawing, then what became of it.
 TAGS = ("sticker", "minifig", "technic", "duplo", "weird",
-        "electric", "magnet", "printed", "composite", "posed",
-        "obsolete", "retired", "replaced", "popular", "obscure")
+        "electric", "magnet", "printed", "composite",
+        "retired", "replaced", "popular", "obscure")
 
 #: A category maps to a tag of its own name once its LDraw marker is stripped.
 _CATEGORY_TAGS = {"sticker": "sticker", "minifig": "minifig",
@@ -94,11 +94,11 @@ def is_composite(part_id: str | None) -> bool:
     return bool(part_id) and _COMPOSITE.search(part_id) is not None
 
 
-def tags_for(category: str | None, printed: bool, obsolete: bool,
+def tags_for(category: str | None, printed: bool,
              year_to: int | None = None, sets: int | None = None,
              this_year: int | None = None, *,
              title: str | None = None, part_id: str | None = None,
-             successor: str | None = None, posed: bool = False) -> list[str]:
+             successor: str | None = None) -> list[str]:
     """Every tag that applies, in `TAGS` order.
 
     `year_to` and `sets` are None for a part Rebrickable does not catalog --
@@ -120,17 +120,10 @@ def tags_for(category: str | None, printed: bool, obsolete: bool,
     # the category wins where it applies and the two badges never both show.
     if printed and "sticker" not in out:
         out.add("printed")
-    if obsolete:
-        out.add("obsolete")
     if is_weird(title):
         out.add("weird")
     if is_composite(part_id):
         out.add("composite")
-    # LDraw declaring a `!PREVIEW` turn is the library saying the default view
-    # shows the wrong side of this part -- which is a prediction about the
-    # render, not a fact about the moulding.
-    if posed:
-        out.add("posed")
     if year_to is not None and year_to <= this_year - RETIRED_AFTER_YEARS:
         out.add("replaced" if successor else "retired")
     if sets is not None:

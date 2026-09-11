@@ -825,16 +825,14 @@ it('captions a cell down to LABEL_MIN_PX and not below it', () => {
   expect(captionsFor(c, LABEL_MIN_PX - 1, CAPTION_ON_FILL)).toEqual([]);
 });
 
-it('draws obsolete as a web on the strip, at the tail of the property run', () => {
-  // `~` in an LDraw description is a file nobody is meant to reach for, and
-  // it used to reach the wall as a word in the tag list and nothing on the
-  // cell. The mark has to exist: a badge naming a mark that does not is a
-  // disc with a hole in it.
+it('has no badge for a class the sidebar decides membership by', () => {
+  // `obsolete` and `posed` say whether a part is on the map at all, which the
+  // Classes checkboxes answer. A badge for it marked every cell with a fact
+  // that was already true of every cell you could see.
   const part = cell('a', 0, 'sha-a', { tags: ['technic', 'printed', 'obsolete'] });
-  expect(stripFor(part, 200).map((b) => b.tag))
-    .toEqual(['technic', 'printed', 'obsolete']);
-  expect(ALL_BADGES.obsolete!.mark).toBe('cobweb');
-  expect(MARK_SHAPES.cobweb!.length).toBeGreaterThan(0);
+  expect(stripFor(part, 200).map((b) => b.tag)).toEqual(['technic', 'printed']);
+  expect(ALL_BADGES.obsolete).toBeUndefined();
+  expect(ALL_BADGES.posed).toBeUndefined();
 });
 
 it('washes every cell while the wall is drawing a slot the toolbar left', () => {

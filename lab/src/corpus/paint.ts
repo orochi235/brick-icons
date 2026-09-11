@@ -237,10 +237,6 @@ export const SYSTEM_FACE =
  *  group against the system badges' own liveries. */
 export const PROPERTY_FIELD = 'oklch(0.4109 0.0082 286.03)';
 
-/** Silk, against the property field: white read as a fresh web drawn in
- *  chalk, and the thread wants to look old. */
-const WEB_SILK = 'oklch(0.8100 0.0090 286.29)';
-
 /** The magnet's pole tips, and so its name. */
 const MAGNET_POLES = 'oklch(0.9500 0.0040 286.29)';
 
@@ -284,16 +280,6 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
   // materials, and its orange was the popular badge's field.
   composite: { tag: 'composite', mark: 'composite', field: 'oklch(0.5773 0.0871 187.97)',
                ink: 'oklch(0.8193 0.0851 189.02)', accent: 'oklch(0.5773 0.0871 187.97)', labelInk: 'oklch(1.0000 0 0)' },
-  // A half-lit disc, not a rotation arrow: the arrow is `replaced`, and the
-  // question this badge answers is which side of the part you are looking at.
-  posed: { tag: 'posed', text: '◑', field: PROPERTY_FIELD, ink: 'oklch(1.0000 0 0)',
-           font: WEIRD_FACE, scale: 1.18 },
-  // A cobweb, because what LDraw marks with `~` is a file nobody is meant to
-  // reach for -- a superseded mould or a fragment of an assembly. Silk on the
-  // property field rather than a livery of its own: it is a fact about the
-  // file, which is what the rest of this group says too.
-  obsolete: { tag: 'obsolete', mark: 'cobweb', field: PROPERTY_FIELD,
-              ink: WEB_SILK, scale: 1.06 },
 };
 
 /** Every badge the wall can draw, in the order the legend lists them:

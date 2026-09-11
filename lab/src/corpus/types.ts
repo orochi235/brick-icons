@@ -8,6 +8,10 @@ export interface Cell {
   family: string | null;
   printed: boolean;
   obsolete: boolean;
+  /** LDraw declaring a `!PREVIEW` turn -- the library saying the default view
+   *  shows the wrong side of this part. Optional for the same reason `tags`
+   *  is: a lab server older than this page sends no such field. */
+  posed?: boolean;
   base: boolean;
   out_of_scope: boolean;
   moved: boolean;

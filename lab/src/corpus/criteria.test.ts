@@ -14,7 +14,8 @@ const plain: FilterFacts = {
   sha: null, error: null, printed: false, obsolete: false, base: true,
 };
 
-const unclassed: ClassFacts = { moved: false, out_of_scope: false };
+const unclassed: ClassFacts = { moved: false, out_of_scope: false,
+                                obsolete: false, posed: false };
 
 it('lists the orders the way the menu offers them', () => {
   expect(sortKeys()).toEqual([
@@ -73,7 +74,7 @@ it('gives each filter the predicate the wall narrows by', () => {
 });
 
 it('lists the classes the way the checkboxes offer them', () => {
-  expect(classKeys()).toEqual(['moved', 'outOfScope']);
+  expect(classKeys()).toEqual(['moved', 'outOfScope', 'obsolete', 'posed']);
 });
 
 it('gives each class the predicate that puts a cell in it', () => {
@@ -82,10 +83,17 @@ it('gives each class the predicate that puts a cell in it', () => {
   expect(by('moved').member(unclassed)).toBe(false);
   expect(by('outOfScope').member({ ...unclassed, out_of_scope: true })).toBe(true);
   expect(by('outOfScope').member(unclassed)).toBe(false);
+  expect(by('obsolete').member({ ...unclassed, obsolete: true })).toBe(true);
+  expect(by('obsolete').member(unclassed)).toBe(false);
+  expect(by('posed').member({ ...unclassed, posed: true })).toBe(true);
+  // A lab API older than the field sends none, which is not the same as
+  // saying every part is posed.
+  expect(by('posed').member({ ...unclassed, posed: undefined })).toBe(false);
 });
 
 it('starts the wall with the redirects off and the out-of-scope parts on', () => {
-  expect(DEFAULT_SHOWN).toEqual({ moved: false, outOfScope: true });
+  expect(DEFAULT_SHOWN).toEqual({ moved: false, outOfScope: true,
+                                  obsolete: true, posed: true });
 });
 
 it('names every sort, filter and class the way the menus do', () => {
@@ -95,7 +103,8 @@ it('names every sort, filter and class the way the menus do', () => {
   expect(FILTER_SPECS.map((f) => f.label)).toEqual([
     'all', 'rendered', 'unrendered', 'errors', 'printed', 'obsolete', 'base',
   ]);
-  expect(CLASS_SPECS.map((c) => c.label)).toEqual(['moved', 'out of scope']);
+  expect(CLASS_SPECS.map((c) => c.label))
+    .toEqual(['moved', 'out of scope', 'obsolete', 'posed']);
 });
 
 // A repeated key would lose one entry out of `sortTable`/`filterTable` and

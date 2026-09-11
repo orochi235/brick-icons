@@ -9,6 +9,11 @@ export interface WorkingSet {
   /** `~Moved to` redirects, which are not parts anyone can draw. */
   moved: boolean;
   outOfScope: boolean;
+  /** Whether the class is in the set at all, which is not what `kind` asks:
+   *  `kind: 'obsolete'` looks at nothing else. */
+  obsolete: boolean;
+  /** Parts LDraw gives a `!PREVIEW` turn. */
+  posed: boolean;
   /** Clean category names left out entirely. */
   excluded: string[];
   /** Badge tags a part must carry -- every one of them, as on the wall. */
@@ -16,7 +21,8 @@ export interface WorkingSet {
 }
 
 export const DEFAULT_SET: WorkingSet = {
-  kind: 'all', moved: false, outOfScope: true, excluded: [], badges: [],
+  kind: 'all', moved: false, outOfScope: true, obsolete: true, posed: true,
+  excluded: [], badges: [],
 };
 
 const KINDS = new Set(['all', 'printed', 'obsolete', 'base']);
@@ -30,6 +36,8 @@ export function toQuery(set: WorkingSet): URLSearchParams {
   if (set.outOfScope !== DEFAULT_SET.outOfScope) {
     q.set('out_of_scope', String(set.outOfScope));
   }
+  if (set.obsolete !== DEFAULT_SET.obsolete) q.set('obsolete', String(set.obsolete));
+  if (set.posed !== DEFAULT_SET.posed) q.set('posed', String(set.posed));
   for (const name of set.excluded) q.append('excluded', name);
   for (const tag of set.badges) q.append('badges', tag);
   return q;
@@ -41,6 +49,8 @@ export function fromQuery(q: URLSearchParams): WorkingSet {
     kind: kind && KINDS.has(kind) ? kind as WorkingSet['kind'] : 'all',
     moved: q.get('moved') === 'true',
     outOfScope: q.get('out_of_scope') !== 'false',
+    obsolete: q.get('obsolete') !== 'false',
+    posed: q.get('posed') !== 'false',
     excluded: q.getAll('excluded'),
     badges: q.getAll('badges'),
   };
@@ -54,6 +64,8 @@ export function wallHref(set: WorkingSet, source: string): string {
   if (set.kind !== 'all') q.set('filter', set.kind);
   if (set.moved) q.set('moved', 'true');
   if (!set.outOfScope) q.set('outOfScope', 'false');
+  if (!set.obsolete) q.set('obsolete', 'false');
+  if (!set.posed) q.set('posed', 'false');
   for (const name of set.excluded) q.append('excluded', name);
   for (const tag of set.badges) q.append('badges', tag);
   return `/corpus?${q}`;

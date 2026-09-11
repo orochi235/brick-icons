@@ -87,6 +87,27 @@ def test_out_of_scope_parts_can_be_dropped(conn):
     assert stats.stats(conn, out_of_scope=False)["set"]["size"] == 1
 
 
+def test_obsolete_parts_can_be_dropped_without_narrowing_to_them(conn):
+    # `kind="obsolete"` looks at nothing else; the flag says whether the class
+    # is in the set at all, which is the sidebar's question.
+    _part(conn, "3001")
+    _part(conn, "3002", obsolete=1)
+    conn.commit()
+    assert stats.stats(conn)["set"]["size"] == 2
+    assert stats.stats(conn, obsolete=False)["set"]["size"] == 1
+    assert stats.stats(conn, kind="obsolete")["set"]["size"] == 1
+
+
+def test_a_part_ldraw_gives_a_preview_turn_can_be_dropped(conn):
+    _part(conn, "3001")
+    _part(conn, "87544dq0")
+    conn.execute("UPDATE parts SET preview = '16 0 0 0 -1 0 0 0 1 0 0 0 -1' "
+                 "WHERE id = '87544dq0'")
+    conn.commit()
+    assert stats.stats(conn)["set"]["size"] == 2
+    assert stats.stats(conn, posed=False)["set"]["size"] == 1
+
+
 def test_a_category_can_be_excluded_by_its_clean_name(conn):
     _part(conn, "3001", category="Brick")
     _part(conn, "t1", category="=Technic")

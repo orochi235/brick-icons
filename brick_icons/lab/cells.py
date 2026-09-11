@@ -356,6 +356,10 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
             "family": part_tags.weird_theme(part["title"]),
             "printed": bool(part["printed"]),
             "obsolete": bool(part["obsolete"]),
+            # LDraw declaring a `!PREVIEW` turn is the library saying the
+            # default view shows the wrong side of this part -- a prediction
+            # about the render, not a fact about the moulding.
+            "posed": bool(part["preview"]),
             "base": bool(part["base"]),
             "out_of_scope": bool(part["out_of_scope"]),
             # A redirect to the part that replaced it, not a part -- LDraw
@@ -369,11 +373,10 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
             # updated badge links to it.
             "successor": successor,
             "tags": part_tags.tags_for(
-                part["category"], bool(part["printed"]), bool(part["obsolete"]),
+                part["category"], bool(part["printed"]),
                 year["year_to"] if year else None,
                 sets_for(year),
-                title=part["title"], part_id=pid, successor=successor,
-                posed=bool(part["preview"])),
+                title=part["title"], part_id=pid, successor=successor),
             "status": part["status"],
             "sha": render["sha256"] if render else None,
             "made_at": render["made_at"] if render else None,

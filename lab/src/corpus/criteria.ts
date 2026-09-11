@@ -79,6 +79,8 @@ export type Filter = (typeof FILTER_SPECS)[number]['key'];
 export interface ClassFacts {
   moved: boolean;
   out_of_scope: boolean;
+  obsolete: boolean;
+  posed?: boolean;
 }
 
 export interface ClassSpec {
@@ -94,13 +96,17 @@ export interface ClassSpec {
  *  which picks one class to look at: these say what the map is made of at
  *  all, and a `~Moved to` redirect is not a part anyone can draw.
  *
- *  Redirects are off by default; out-of-scope parts stay on the map in their
- *  own color, because knowing what is not being drawn is the point of it. */
+ *  Redirects are off by default; everything else stays on the map, because
+ *  knowing what is not being drawn is the point of it. */
 export const CLASS_SPECS = [
   { key: 'moved', label: 'moved',
     member: (f: ClassFacts) => f.moved, shown: false },
   { key: 'outOfScope', label: 'out of scope',
     member: (f: ClassFacts) => f.out_of_scope, shown: true },
+  { key: 'obsolete', label: 'obsolete',
+    member: (f: ClassFacts) => f.obsolete, shown: true },
+  { key: 'posed', label: 'posed',
+    member: (f: ClassFacts) => f.posed === true, shown: true },
 ] as const satisfies readonly ClassSpec[];
 
 export type CellClass = (typeof CLASS_SPECS)[number]['key'];

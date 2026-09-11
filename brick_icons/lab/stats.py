@@ -89,12 +89,16 @@ def _bins(values: list[float]) -> list[dict]:
 
 
 def members(conn: sqlite3.Connection, *, kind: str = "all", moved: bool = False,
-            out_of_scope: bool = True, excluded: tuple[str, ...] = (),
+            out_of_scope: bool = True, obsolete: bool = True,
+            posed: bool = True, excluded: tuple[str, ...] = (),
             badges: tuple[str, ...] = ()) -> tuple[set[str], list[sqlite3.Row]]:
     """The parts in the working set, and their rows.
 
     The same membership the wall's sidebar expresses, decided here so the
     tallies and the wall agree on which parts they are about.
+
+    `obsolete` and `posed` say whether that class is on the map at all, which
+    is not what `kind` asks: `kind="obsolete"` looks at nothing else.
     """
     scope_marks = ",".join("?" * len(OUT_OF_SCOPE_CATEGORIES))
     rows = list(conn.execute(
@@ -118,6 +122,10 @@ def members(conn: sqlite3.Connection, *, kind: str = "all", moved: bool = False,
             continue
         if row["out_of_scope"] and not out_of_scope:
             continue
+        if row["obsolete"] and not obsolete:
+            continue
+        if row["preview"] and not posed:
+            continue
         if kind == "printed" and not row["printed"]:
             continue
         if kind == "obsolete" and not row["obsolete"]:
@@ -129,12 +137,11 @@ def members(conn: sqlite3.Connection, *, kind: str = "all", moved: bool = False,
         if wanted_badges:
             year = years.get(row["id"])
             carried = part_tags.tags_for(
-                row["category"], bool(row["printed"]), bool(row["obsolete"]),
+                row["category"], bool(row["printed"]),
                 year["year_to"] if year else None,
                 year["sets"] if year else None,
                 title=row["title"], part_id=row["id"],
-                successor=row["id"] in successors or None,
-                posed=bool(row["preview"]))
+                successor=row["id"] in successors or None)
             if not wanted_badges <= set(carried):
                 continue
         keep.append(row)
@@ -562,11 +569,13 @@ def _failures(conn: sqlite3.Connection) -> dict:
 
 
 def stats(conn: sqlite3.Connection, *, kind: str = "all", moved: bool = False,
-          out_of_scope: bool = True, excluded: tuple[str, ...] = (),
+          out_of_scope: bool = True, obsolete: bool = True, posed: bool = True,
+          excluded: tuple[str, ...] = (),
           badges: tuple[str, ...] = ()) -> dict:
     """Every tally the dashboard draws, for one working set."""
     ids, rows = members(conn, kind=kind, moved=moved,
-                        out_of_scope=out_of_scope, excluded=tuple(excluded),
+                        out_of_scope=out_of_scope, obsolete=obsolete,
+                        posed=posed, excluded=tuple(excluded),
                         badges=tuple(badges))
     total = conn.execute("SELECT count(*) FROM parts").fetchone()[0]
     latest = [r for r in _latest_measurements(conn)
@@ -575,6 +584,7 @@ def stats(conn: sqlite3.Connection, *, kind: str = "all", moved: bool = False,
     return {
         "set": {"size": len(ids), "total": total, "kind": kind,
                 "moved": moved, "out_of_scope": out_of_scope,
+                "obsolete": obsolete, "posed": posed,
                 "excluded": list(excluded), "badges": list(badges)},
         "coverage": _coverage(conn, ids),
         "speed": speed,

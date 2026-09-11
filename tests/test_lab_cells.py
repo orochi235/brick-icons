@@ -780,6 +780,8 @@ def test_a_slot_erroring_on_a_part_it_does_not_cover_still_says_so(conn):
 
 
 def test_a_cell_says_ldraw_poses_the_part(conn):
+    # A fact about membership, not a badge: the wall's Classes checkbox reads
+    # this to decide whether posed parts are on the map at all.
     _part(conn, "3001")
     conn.execute("INSERT INTO parts (id, title, category, printed, obsolete, "
                  "preview, status) VALUES ('87544dq0', 'Panel Sticker', "
@@ -787,8 +789,8 @@ def test_a_cell_says_ldraw_poses_the_part(conn):
                  "'unreviewed')")
     conn.commit()
     by_id = {c["id"]: c for c in cells.cells(conn)["cells"]}
-    assert "posed" in by_id["87544dq0"]["tags"]
-    assert "posed" not in by_id["3001"]["tags"]
+    assert by_id["87544dq0"]["posed"] is True
+    assert by_id["3001"]["posed"] is False
 
 
 def test_a_slot_that_ran_and_drew_nothing_is_not_untried(conn):
