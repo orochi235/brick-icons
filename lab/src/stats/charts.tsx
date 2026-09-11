@@ -373,7 +373,7 @@ interface FailurePoint { at: string; source: string; bad: number; size: number;
                          build: string | null }
 
 interface HistoryPoint { run: number; source: string; bad: number; size: number;
-                         build: string | null }
+                         clean: number; build: string | null }
 
 /** Ticks that land on round numbers, so the axis reads without arithmetic.
  *
@@ -397,13 +397,23 @@ function ticksFor(max: number): number[] {
  *  tiny sample as a collapse in failures. */
 type FailureRow = FailurePoint | HistoryPoint;
 
-export function FailureLines({ rows, unit, caption }: {
+/** What a line is worth reading off a slot: how many parts it cannot draw, as
+ *  a count or as a share of what the revision touched, or how much of the
+ *  library it renders without failing. */
+export type SlotUnit = 'count' | 'rate' | 'coverage';
+
+/** One line per slot, over ingests or over time -- `FailureRow` carries `run`
+ *  for the first and `at` for the second. */
+export function SlotLines({ rows, unit, caption }: {
   rows: FailureRow[];
-  unit: 'count' | 'rate';
+  unit: SlotUnit;
   caption: string;
 }) {
+  const share = (n: number, of: number) => (of > 0 ? (n / of) * 100 : 0);
   const value = (r: FailureRow) =>
-    unit === 'rate' ? (r.size > 0 ? (r.bad / r.size) * 100 : 0) : r.bad;
+    unit === 'rate' ? share(r.bad, r.size)
+      : unit === 'coverage' ? share('clean' in r ? r.clean : 0, r.size)
+      : r.bad;
 
   const bySlot = new Map<string, FailureRow[]>();
   for (const r of rows) {
@@ -445,7 +455,7 @@ export function FailureLines({ rows, unit, caption }: {
                   y1={y(t)} y2={y(t)} />
             <text className="stats-axis" x={padL - 8} y={y(t) + 4}
                   textAnchor="end">
-              {unit === 'rate' ? `${t.toFixed(0)}%` : t.toLocaleString()}
+              {unit === 'count' ? t.toLocaleString() : `${t.toFixed(0)}%`}
             </text>
           </g>
         ))}
@@ -471,6 +481,9 @@ export function FailureLines({ rows, unit, caption }: {
                     {`${slot} — ${stamp(p)}`}
                     {unit === 'rate'
                       ? ` — ${value(p).toFixed(1)}% of ${p.size.toLocaleString()} drawn`
+                      : unit === 'coverage'
+                      ? ` — ${('clean' in p ? p.clean : 0).toLocaleString()} of `
+                        + `${p.size.toLocaleString()}, ${value(p).toFixed(1)}%`
                       : ` — ${p.bad.toLocaleString()} of ${p.size.toLocaleString()}`}
                     {p.build ? ` — ${p.build}` : ''}
                   </title>

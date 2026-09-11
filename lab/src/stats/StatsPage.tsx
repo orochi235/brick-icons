@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { LabClient } from '@lab/api/client';
-import { CostBars, CoverageBars, CoverageLegend, ELSEWHERE, FailureLines,
+import { CostBars, CoverageBars, CoverageLegend, ELSEWHERE, SlotLines,
          PhaseBars, PhaseLegend, SecsOverlay } from '@lab/stats/charts';
 import { Footprint } from '@lab/stats/Footprint';
 import type { Cost, Failures } from '@lab/stats/types';
@@ -147,7 +147,7 @@ export function StatsPage({ client }: { client: LabClient }) {
 
           <section>
             <h2>What will not draw</h2>
-            <FailureLines rows={failures.history ?? failures.series} unit="count"
+            <SlotLines rows={failures.history ?? failures.series} unit="count"
                           caption={unanswered ? STALE_API
                             : 'no tally has been taken yet — one is written on '
                               + 'the next ingest'} />
@@ -166,8 +166,25 @@ export function StatsPage({ client }: { client: LabClient }) {
           </section>
 
           <section>
+            <h2>Coverage over time</h2>
+            <SlotLines rows={failures.history ?? []} unit="coverage"
+                       caption={unanswered ? STALE_API
+                         : 'no ingest has been recorded yet'} />
+            <p className="stats-note">
+              How much of the library each slot renders without failing, over
+              the same ingests. What is on disk cannot be drawn here: 66,238
+              of the corpus&rsquo;s 112,861 drawings carry no run, a rebuild
+              stamped every one with the morning it read them back, and the
+              row that survives a re-bake names the re-bake — read that way
+              white-occt sits at 7% for forty ingests and reaches 80% at run
+              45, where 18,034 of that bake&rsquo;s 18,117 drawings were parts
+              it had already measured clean.
+            </p>
+          </section>
+
+          <section>
             <h2>Failure rate by engine revision</h2>
-            <FailureLines rows={failures.by_build} unit="rate"
+            <SlotLines rows={failures.by_build} unit="rate"
                           caption={unanswered ? STALE_API
                             : 'no render in this corpus carries the build that '
                               + 'drew it'} />

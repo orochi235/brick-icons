@@ -348,3 +348,35 @@ def test_history_names_the_newest_revision_an_ingest_carried(conn):
                      "NULL, ?)", (pid, build))
     rows = tally.history(conn, ["occt"])
     assert [r["build"] for r in rows] == [f"959.{head}"]
+
+
+def test_history_counts_what_a_slot_renders_rather_than_what_is_on_disk(conn):
+    """Two thirds of the corpus's renders carry no run and the row surviving a
+    re-bake names the re-bake, so a coverage line read off `renders` shows
+    when drawings got a run stamped, not when the slot grew."""
+    _part(conn, "3001")
+    _part(conn, "3002")
+    _render(conn, "3002", "occt")
+    _measure(conn, "3001", "occt", "occt")
+    _measure(conn, "3002", "occt", "occt")
+    # Both render clean; only one has a file, and the file is not the point.
+    assert [r["clean"] for r in tally.history(conn, ["occt"])][-1] == 2
+
+
+def test_history_drops_a_part_from_coverage_once_the_slot_errors_on_it(conn):
+    _part(conn, "3001")
+    _measure(conn, "3001", "occt", "occt")
+    assert [r["clean"] for r in tally.history(conn, ["occt"])] == [1]
+    _measure(conn, "3001", "occt", "occt", error="ProcessDied")
+    rows = tally.history(conn, ["occt"])
+    assert [r["clean"] for r in rows] == [1, 0]
+    assert rows[-1]["bad"] == 1
+
+
+def test_history_leaves_a_part_no_run_has_reached_out_of_both_counts(conn):
+    # Untried is neither clean nor failed, so the two do not sum to the set.
+    _part(conn, "3001")
+    _part(conn, "3002")
+    _measure(conn, "3001", "occt", "occt")
+    row = tally.history(conn, ["occt"])[-1]
+    assert (row["clean"], row["bad"], row["size"]) == (1, 0, 2)

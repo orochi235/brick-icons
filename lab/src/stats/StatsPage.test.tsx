@@ -140,7 +140,7 @@ describe('StatsPage', () => {
     // A dash, not a zero: "nothing is broken" and "this server cannot say"
     // must not draw the same.
     expect(container.querySelector('.stats-tile-wide strong')!.textContent).toBe('—');
-    expect(screen.getAllByText(/predates the failure tallies/).length).toBe(2);
+    expect(screen.getAllByText(/predates the failure tallies/).length).toBe(3);
   });
 
   it('says a tally is owed rather than drawing an empty chart', async () => {

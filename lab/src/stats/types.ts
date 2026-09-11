@@ -92,6 +92,10 @@ export interface FailurePoint {
 export interface HistoryPoint {
   run: number;
   source: string;
+  /** Parts this slot renders without failing. Not what is on disk for it:
+   *  two thirds of the corpus's drawings carry no run, and the row that
+   *  survives a re-bake names the re-bake. */
+  clean: number;
   /** The newest revision among that ingest's rows, or the run's own commit
    *  where none of them names one. */
   build: string | null;

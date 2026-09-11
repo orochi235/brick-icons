@@ -390,8 +390,17 @@ def history(conn: sqlite3.Connection,
                 flagged_by_engine.setdefault(engine, set()).add(row["part_id"])
 
     # Tuples, not rows, and every run's newest build tracked as the walk
-    # passes it: this is a pass over every measurement and every attempt in
-    # the corpus, 154,000 of them, and it runs on every dashboard read.
+    # passes it: this is a pass over every measurement, attempt and render in
+    # the corpus, 265,000 of them, and it runs on every dashboard read.
+    #
+    # Measurements and attempts only. `renders` cannot go on a run axis at
+    # all: 66,238 of its 112,861 rows carry no run, a rebuild stamped every
+    # `made_at` with the morning it read them back, and the row that survives
+    # a re-bake names the re-bake. Read that way white-occt sits at 7% for
+    # forty ingests and reaches 80% at run 45 -- where 18,034 of that bake's
+    # 18,117 drawings were parts the slot had already measured clean. So
+    # `clean` below counts what a slot renders without failing, which every
+    # row does date, and not what is on disk.
     rows = [r for r in conn.execute(
         "SELECT source, build, run_id, part_id, error, NULL AS state "
         "FROM measurements WHERE source IS NOT NULL "
@@ -413,11 +422,12 @@ def history(conn: sqlite3.Connection,
 
     for source, mine in sorted(by_source.items()):
         flagged = flagged_by_engine.get(engine_for(source), set())
+        mine.sort(key=lambda r: (r[2], counts[r[1]]))
         covers = not not_applicable(source, True, False)
         covers_plain = not not_applicable(source, False, False)
-        mine.sort(key=lambda r: (r[2], counts[r[1]]))
         verdict: dict[str, str | None] = {}
-        held = {"failed": 0, "timeout": 0}
+        held = {"failed": 0, "timeout": 0, "na": 0}
+        seen = 0
         newest: str | None = None
         rank = -2
 
@@ -429,24 +439,35 @@ def history(conn: sqlite3.Connection,
                 now_ = None
             elif error:
                 now_ = "timeout" if error == "TimeoutError" else "failed"
-            elif state == "none" and (covers if pid in printed else covers_plain):
-                now_ = "failed"
+            elif state == "none":
+                # A slot with nothing to draw for this part has not failed at
+                # it and has not covered it either, so it counts as neither.
+                now_ = ("failed" if (covers if pid in printed else covers_plain)
+                        else "na")
             else:
                 now_ = None
+            if pid not in verdict:
+                seen += 1
             was = verdict.get(pid)
             if was != now_:
                 if was:
                     held[was] -= 1
                 if now_:
                     held[now_] += 1
-                verdict[pid] = now_
+            verdict[pid] = now_
             if i + 1 == len(mine) or mine[i + 1][2] != run_id:
+                bad = held["failed"] + held["timeout"]
                 out.append({"run": run_id, "source": source,
                             "build": newest or commits.get(run_id),
                             "size": len(ids),
                             "failed": held["failed"],
                             "timeout": held["timeout"],
-                            "bad": held["failed"] + held["timeout"]})
+                            "bad": bad,
+                            # What the slot renders without failing -- not
+                            # what is on disk for it, which no run dates.
+                            # Not `size - bad` either: a part no run has
+                            # reached is untried, neither clean nor failed.
+                            "clean": seen - bad - held["na"]})
                 newest, rank = None, -2
     out.sort(key=lambda r: (r["run"], r["source"]))
     _REPLAYED = (mark, out)
