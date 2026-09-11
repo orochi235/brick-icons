@@ -608,10 +608,127 @@ def test_elliptical_cylinder_builds_a_wall():
         _ellipse_perimeter(5.0, 4.0) * 10.0, rel=1e-6)
 
 
-def test_elliptical_cone_is_not_guessed_at():
-    """occt_faces returning [] is the honest answer where no measured part
-    pins what the shape should be -- see CLAUDE.md on silent []."""
-    assert occt.occt_faces(P("con", np.diag([4.0, 10.0, 5.0]), np.zeros(3))) == []
+def _rim_conics(face):
+    """(radii, centre) for each exact circle or ellipse bounding a face."""
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.GeomAbs import GeomAbs_CurveType
+    out = []
+    for edge in occt._edges_of(face):
+        c = BRepAdaptor_Curve(edge)
+        if c.GetType() == GeomAbs_CurveType.GeomAbs_Circle:
+            g = c.Circle()
+            radii = (g.Radius(), g.Radius())
+        elif c.GetType() == GeomAbs_CurveType.GeomAbs_Ellipse:
+            g = c.Ellipse()
+            radii = (g.MajorRadius(), g.MinorRadius())
+        else:
+            continue
+        loc = g.Position().Location()
+        out.append((tuple(round(r, 6) for r in radii),
+                    (round(loc.X(), 6), round(loc.Y(), 6), round(loc.Z(), 6))))
+    return out
+
+
+def test_an_elliptical_cone_is_ruled_between_its_two_sections():
+    """`gp_Cone` is right circular, so an elliptical con matched no maker and
+    returned [] -- 354 of them across the library, 32 in 2526 alone, each one
+    a hole in the occluder. It is a ruled surface between two parallel
+    ellipses, and ThruSections leaves both rims exact."""
+    prim = P("con", np.diag([4.0, 10.0, 5.0]), np.zeros(3), top=1)
+    faces = occt.occt_faces(prim)
+    assert len(faces) == 1
+    # conN: N+1 at the base, N at the top, both scaled by the section radii.
+    assert sorted(_rim_conics(faces[0])) == sorted(
+        [((10.0, 8.0), (0.0, 0.0, 0.0)), ((5.0, 4.0), (0.0, 10.0, 0.0))])
+
+
+def test_a_skew_axis_cone_is_ruled_too(ldraw_dir):
+    """35485's ring is 8 cones leaning 1.2 degrees out of their own section
+    plane. Every one of them built nothing, and the ring had holes where they
+    should be."""
+    out = occt.flatten_part("35485", ldraw_dir)
+    cones = [p for p in out["analytic"] if p.kind == "con"]
+    assert len(cones) == 8
+    assert all(len(occt.occt_faces(c)) == 1 for c in cones)
+
+
+def _ruled(ang, top, ru=6.0, rv=6.0, skew=0.3):
+    """One oblique cone's face, built the way occt_faces builds it."""
+    uh, vh = np.array([1.0, 0, 0]), np.array([0, 0, 1.0])
+    ah = np.array([skew, 1.0, 0]) / math.hypot(skew, 1.0)
+    faces = occt.oblique_cone(np.zeros(3), uh, ah, vh, ru, rv, 20.0, top,
+                              ang, 0.0)
+    assert len(faces) == 1
+    return faces[0]
+
+
+def test_a_cone_that_tapers_to_a_point_is_built_from_a_vertex():
+    """con0 has no top circle, and a zero-radius wire fails the whole
+    ThruSections build with `BRep_API: command not done`. 693 of the
+    library's cones are this shape."""
+    assert occt._curved_frame(_ruled(2 * math.pi, 0.0)) is not None
+
+
+def test_a_sector_is_trimmed_from_a_full_turn_not_swept_as_an_arc():
+    """ThruSections parameterizes a closed section by its own angle and
+    renormalizes an arc to 0..1 -- and the angle is the parameter the cos/sin
+    normal is written in, so a sector built as an arc has a normal that does
+    not match its own u and `_limb_params` cuts the span in the wrong place."""
+    for deg in (45.0, 67.5, 90.0, 180.0):
+        u0, u1 = occt._ruled_u_bounds(_ruled(math.radians(deg), 1.0))
+        assert math.degrees(u1 - u0) == pytest.approx(deg, abs=1e-6)
+
+
+@pytest.mark.parametrize("vh", [np.array([0, 0, 1.0]), np.array([0, 0, -1.0])])
+def test_the_ruled_normal_points_out_whichever_way_the_section_winds(vh):
+    """S_u x S_v points out only for one winding, and a primitive's frame is
+    left-handed as often as not -- 6064b's cones and 35485's wind opposite
+    ways. An inward normal shades the surface at the far end of its ramp."""
+    uh = np.array([1.0, 0, 0])
+    ah = np.array([0.3, 1.0, 0]) / math.hypot(0.3, 1.0)
+    face = occt.oblique_cone(np.zeros(3), uh, ah, vh, 6.0, 6.0, 20.0, 1.0,
+                             2 * math.pi, 0.0)[0]
+    point, normal, *_ = occt._curved_frame(face)
+    for u in np.linspace(0.1, 6.1, 13):
+        radial = point(u, 0.5)[0] - 10.0 * ah
+        assert normal(u) @ radial > 0
+
+
+def test_a_bspline_that_is_not_a_ruled_cone_is_refused():
+    """CURVED_SURFACES holding BSplineSurface is not a promise that every
+    BSpline is one of ours. Refusing is what keeps `_faces_for` from reading
+    a surface it cannot, and it costs the fill, never a stroke."""
+    from OCP.BRepOffsetAPI import BRepOffsetAPI_ThruSections
+    from OCP.BRepBuilderAPI import (BRepBuilderAPI_MakePolygon,
+                                    BRepBuilderAPI_MakeWire)
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.GeomAbs import GeomAbs_SurfaceType
+    from OCP.gp import gp_Pnt
+    # Two SQUARES: ruled, degree 1 in v, and nothing like a conic.
+    ts = BRepOffsetAPI_ThruSections(False, True, 1e-7)
+    for z, r in ((0.0, 5.0), (10.0, 3.0)):
+        poly = BRepBuilderAPI_MakePolygon()
+        for x, y in ((-r, -r), (r, -r), (r, r), (-r, r)):
+            poly.Add(gp_Pnt(x, y, z))
+        poly.Close()
+        ts.AddWire(BRepBuilderAPI_MakeWire(poly.Wire()).Wire())
+    ts.Build()
+    for face in occt._shape_faces(ts.Shape()):
+        if BRepAdaptor_Surface(face).GetType() == GeomAbs_SurfaceType.GeomAbs_Plane:
+            continue
+        assert occt._curved_frame(face) is None
+
+
+def test_a_right_circular_cone_still_takes_the_analytic_maker():
+    """The ruled path is for what gp_Cone cannot hold. A plain con must not
+    fall into it -- a BSpline occludes as well but carries no exact surface
+    for the fill and limb math to read."""
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.GeomAbs import GeomAbs_SurfaceType
+    faces = occt.occt_faces(P("con", np.diag([4.0, 10.0, 4.0]), np.zeros(3)))
+    assert len(faces) == 1
+    assert (BRepAdaptor_Surface(faces[0]).GetType()
+            == GeomAbs_SurfaceType.GeomAbs_Cone)
 
 
 def test_elliptical_disc_and_ring_build_planar_faces():

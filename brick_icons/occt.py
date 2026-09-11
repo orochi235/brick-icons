@@ -17,6 +17,7 @@ from OCP.gp import gp_Pnt, gp_Dir, gp_Vec, gp_Ax2, gp_Circ, gp_Elips
 from OCP.BRepPrimAPI import (BRepPrimAPI_MakeCylinder, BRepPrimAPI_MakeCone,
                              BRepPrimAPI_MakePrism)
 from OCP.BRepBuilderAPI import (BRepBuilderAPI_MakePolygon, BRepBuilderAPI_MakeFace,
+                                BRepBuilderAPI_MakeVertex,
                                 BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeWire,
                                 BRepBuilderAPI_Sewing)
 from OCP.TopoDS import TopoDS_Shape, TopoDS_Compound, TopoDS
@@ -27,6 +28,7 @@ from OCP.TopTools import (TopTools_IndexedDataMapOfShapeListOfShape,
 from OCP.BRep import BRep_Builder, BRep_Tool
 from OCP.GeomAbs import GeomAbs_Shape
 from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
+from OCP.BRepOffsetAPI import BRepOffsetAPI_ThruSections
 from OCP.HLRBRep import HLRBRep_Algo, HLRBRep_HLRToShape
 from OCP.HLRAlgo import HLRAlgo_Projector
 from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
@@ -161,6 +163,53 @@ def elliptic_wall(o, uh, ah, vh, ru, rv, h, ang, phase=0.0):
     return TopoDS.Face_s(prism.Shape())
 
 
+def oblique_cone(o, uh, ah, vh, ru, rv, h, top, ang, phase=0.0):
+    """The lateral surface of a con whose axis is skew, or whose section is an
+    ellipse. `gp_Cone` is right circular and can be neither, so this rules a
+    surface between the two section conics -- which is what the primitive is.
+
+    It comes back a BSpline, degree 1 across and a degree-14 polynomial
+    approximation of the conic around. The approximation only ever reaches
+    HLR's occlusion; `_curved_frame` reads the exact geometry back off the two
+    boundary conics, which ThruSections leaves as gp_Circ and gp_Elips.
+    """
+    o = np.asarray(o, float)
+    ends = ((o, top + 1.0), (o + np.asarray(ah, float) * h, top))
+    ts = BRepOffsetAPI_ThruSections(False, True, TOL)
+    for centre, scale in ends:
+        # con0 tapers to a POINT, and a zero-radius conic is not a wire OCCT
+        # will take -- ThruSections fails the whole build with "command not
+        # done". 693 of the library's cones are this shape.
+        if max(scale * ru, scale * rv) < TOL:
+            ts.AddVertex(BRepBuilderAPI_MakeVertex(
+                gp_Pnt(*(float(x) for x in centre))).Vertex())
+            continue
+        # Always the FULL turn, whatever sector the primitive asks for, and
+        # trimmed below. ThruSections hands a closed section back
+        # parameterized by its own angle and renormalizes an arc to 0..1 --
+        # and the angle is the parameter the cos/sin normal is written in, so
+        # the sector is a trim rather than a shorter sweep.
+        edge = ellipse_edge(centre, uh, vh, scale * ru, scale * rv,
+                            2 * math.pi)
+        ts.AddWire(BRepBuilderAPI_MakeWire(edge).Wire())
+    ts.Build()
+    faces = list(_shape_faces(ts.Shape()))
+    if ang >= 2 * math.pi - 1e-9 or len(faces) != 1:
+        return faces
+    # The ruled surface closes but is not FLAGGED periodic, so a trim running
+    # off either end of 0..2pi dies inside sewing as
+    # `Geom_BSplineCurve::Segment`. A sector that straddles the seam becomes
+    # two faces rather than one out-of-range one.
+    surf = BRep_Tool.Surface_s(faces[0])
+    start = (ellipse_axes(o, uh, vh, ru, rv)[3] + phase) % (2 * math.pi)
+    spans = [(start, min(start + ang, 2 * math.pi))]
+    if start + ang > 2 * math.pi + 1e-9:
+        spans.append((0.0, start + ang - 2 * math.pi))
+    return [BRepBuilderAPI_MakeFace(surf, float(a), float(b), 0.0, 1.0,
+                                    TOL).Face()
+            for a, b in spans if b - a > 1e-9]
+
+
 def ax2(origin, zdir, xdir):
     return gp_Ax2(gp_Pnt(*map(float, origin)), gp_Dir(*map(float, zdir)),
                   gp_Dir(*map(float, xdir)))
@@ -274,10 +323,12 @@ def occt_faces(prim):
         return []                      # stroke-only, contributes no surface
     f = frame(prim)
     oblique = False
-    if f is None and k == "cyli":
+    if f is None and k in ("cyli", "con"):
         # An oblique cylinder is a cross-section swept along a skew axis, which
         # is the prism elliptic_wall already builds -- 49492's hook shaft is
-        # four of them and each one dropped took the shaft with it.
+        # four of them and each one dropped took the shaft with it. A con is
+        # the same sweep with the section scaling as it goes, which no
+        # BRepPrimAPI maker builds either; oblique_cone rules it.
         f = frame(prim, skew_axis=True)
         oblique = f is not None
     if f is None:
@@ -293,10 +344,11 @@ def occt_faces(prim):
                 return [elliptic_annulus(o, uh, vh, n * ru, n * rv,
                                          (n + 1.0) * ru, (n + 1.0) * rv,
                                          ang, ph)]
+            if k == "con":
+                return oblique_cone(o, uh, ah, vh, ru, rv, h,
+                                    float(prim.top), ang, ph)
         except Exception:
             return []
-        # An elliptical con is neither a gp_Cone nor an extrusion; nothing yet
-        # pins what it should be, so it stays [] -- see the test by that name.
         return []
     r = ru
     # The axis sets the EXTRUSION direction, so it must always be +ah --
@@ -1586,7 +1638,84 @@ CURVED_SURFACES = (GeomAbs_SurfaceType.GeomAbs_Cylinder,
                    # 50950's elliptical wall: elliptic_wall extrudes an
                    # ellipse, and no BRepPrimAPI maker builds one, so it
                    # reaches HLR as an extrusion rather than a cylinder.
-                   GeomAbs_SurfaceType.GeomAbs_SurfaceOfExtrusion)
+                   GeomAbs_SurfaceType.GeomAbs_SurfaceOfExtrusion,
+                   # oblique_cone's ruled surface. Membership here is not a
+                   # promise that every BSpline is one -- _curved_frame
+                   # refuses the ones it cannot read, and _faces_for treats
+                   # that as no fill rather than as a crash.
+                   GeomAbs_SurfaceType.GeomAbs_BSplineSurface)
+
+
+# How many u samples fit the two sections. Three would determine them; nine
+# over a 67.5-degree sector -- the narrowest the library authors -- keeps the
+# (1, cos u, sin u) system away from the conditioning cliff a short arc walks
+# towards.
+RULED_SAMPLES = 9
+
+
+def _ruled_sections(s):
+    """(o, A, B) at v=0 and v=1 for a surface ruled between two conics, or
+    None if this BSpline is not one.
+
+    A section is `o + cos(u) A + sin(u) B`, with A and B the radius VECTORS
+    rather than unit axes, so the caller never divides by a radius. Fitted off
+    the surface rather than read off its boundary edges: the rims survive
+    sewing as exact conics, but the face that reaches here has been through
+    UnifySameDomain and may be trimmed to something else entirely.
+    """
+    if s.GetType() != GeomAbs_SurfaceType.GeomAbs_BSplineSurface:
+        return None
+    b = s.BSpline()
+    if b.VDegree() != 1 or b.NbVPoles() != 2:
+        return None           # not ruled: nothing here can read it
+    u0, u1, v0, v1 = b.Bounds()
+    us = np.linspace(u0, u1, RULED_SAMPLES)
+    basis = np.column_stack([np.ones_like(us), np.cos(us), np.sin(us)])
+    out = []
+    for v in (v0, v1):
+        pts = np.array([[(q := b.Value(float(u), float(v))).X(), q.Y(), q.Z()]
+                        for u in us])
+        fit, *_ = np.linalg.lstsq(basis, pts, rcond=None)
+        if np.abs(basis @ fit - pts).max() > RULED_FIT_TOL:
+            return None       # a BSpline that is ruled but not between conics
+        out.append(tuple(fit))
+    return out
+
+
+# How far a fitted section may sit from the surface, in LDU. ThruSections
+# approximates a conic with a degree-14 polynomial, so the residual is the
+# approximation's, not ours: measured at 3e-8 over the library's cones.
+RULED_FIT_TOL = 1e-5
+
+
+def _ruled_u_bounds(face):
+    """The face's u range as ANGLES on its sections, or None if it is not a
+    ruled cone. A full turn comes back parameterized by angle and a partial
+    one renormalized to 0..1, so the trim has to be converted rather than
+    read."""
+    s = BRepAdaptor_Surface(face)
+    sections = _ruled_sections(s)
+    if sections is None:
+        return None
+    o0, A0, B0 = sections[0]
+    ea, eb = A0 / (A0 @ A0), B0 / (B0 @ B0)
+    v0 = s.FirstVParameter()
+
+    def angle(u):
+        q = s.Value(float(u), float(v0))
+        d = np.array([q.X(), q.Y(), q.Z()]) - o0
+        return math.atan2(d @ eb, d @ ea)
+
+    u0, u1 = s.FirstUParameter(), s.LastUParameter()
+    t0, t1 = angle(u0), angle(u1)
+    # A closed face reads both ends at the same angle; it spans a full turn.
+    if abs(t1 - t0) < 1e-9:
+        return t0, t0 + 2 * math.pi
+    return t0, t0 + (t1 - t0) % (2 * math.pi)
+
+
+def normal_of(u, a, b, c):
+    return math.cos(u) * a + math.sin(u) * b + c
 
 
 def _curved_frame(face):
@@ -1604,6 +1733,55 @@ def _curved_frame(face):
     """
     s = BRepAdaptor_Surface(face)
     kind = s.GetType()
+    if kind == GeomAbs_SurfaceType.GeomAbs_BSplineSurface:
+        sections = _ruled_sections(s)
+        if sections is None:
+            return None
+        (o0, A0, B0), (o1, A1, B1) = sections
+        D, dA, dB = o1 - o0, A1 - A0, B1 - B0
+        # `u` here is the section's own ANGLE, which is what gives the normal
+        # the cos/sin form _limb_params solves. It is NOT the surface's own u:
+        # ThruSections hands a full turn back parameterized by angle and a
+        # partial one renormalized to 0..1, so _faces_for asks
+        # `_ruled_u_bounds` for the range rather than reading UVBounds.
+
+        def point(u, v):
+            u = np.atleast_1d(np.asarray(u, float))
+            v = np.asarray(v, float).reshape(-1, 1)
+            return (o0 + v * D + np.cos(u)[:, None] * (A0 + v * dA)
+                    + np.sin(u)[:, None] * (B0 + v * dB))
+
+        # n = S_u x S_v. A and dA are parallel (both along the section's own
+        # first axis) and so are B and dB, which kills four of the six terms
+        # and leaves the cos/sin/constant form _limb_params solves -- with a
+        # DIRECTION that does not depend on v, so one limb serves the whole
+        # ruling. That last part needs the section to keep its shape as it
+        # travels, which a con does by construction: both radii carry the same
+        # matrix. A section that changes ratio has a v-dependent limb and is
+        # refused rather than drawn wrong.
+        b0, b1 = np.linalg.norm(B0), np.linalg.norm(B1)
+        a0, a1 = np.linalg.norm(A0), np.linalg.norm(A1)
+        if b0 < 1e-9 or abs(a0 * b1 - a1 * b0) > RULED_FIT_TOL * max(a0, b0):
+            return None
+        a = np.cross(B0, D)
+        b = -np.cross(A0, D)
+        c = -((b1 - b0) / b0) * np.cross(A0, B0)
+        # S_u x S_v points out only when the section winds one way about the
+        # ruling, and a primitive's frame is left-handed as often as not --
+        # the non-oblique path absorbs that into a start angle, which leaves
+        # the winding here either way round. An outward normal on a swept
+        # surface leans AWAY from the ruling line, whatever the handedness, so
+        # that is what decides it rather than the orientation of the face.
+        um = 0.5 * sum(_ruled_u_bounds(face))
+        radial = point(um, 0.5)[0] - (o0 + 0.5 * D)
+        if normal_of(um, a, b, c) @ radial < 0:
+            a, b, c = -a, -b, -c
+
+        def normal(u):
+            return math.cos(u) * a + math.sin(u) * b + c
+
+        return point, normal, a, b, c
+
     if kind == GeomAbs_SurfaceType.GeomAbs_SurfaceOfExtrusion:
         el = s.BasisCurve().Ellipse()
         pos = el.Position()
@@ -2080,8 +2258,13 @@ def _faces_for(face, proj, step_deg=BOUNDARY_STEP_DEG):
         return [f] if len(f["poly"]) >= 3 else []
     if kind not in CURVED_SURFACES:
         return []
-    point, normal, a, b, c = _curved_frame(face)
+    frame = _curved_frame(face)
+    if frame is None:
+        return []          # a BSpline nothing here knows how to read
+    point, normal, a, b, c = frame
     u0, u1, v0, v1 = BRepTools.UVBounds_s(face)
+    if kind == GeomAbs_SurfaceType.GeomAbs_BSplineSurface:
+        u0, u1 = _ruled_u_bounds(face)
     edges = _span_edges(u0, u1, _limb_params(a, b, c, proj.fwd))
     out = []
     for ua, ub in zip(edges, edges[1:]):
