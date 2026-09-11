@@ -1,8 +1,86 @@
-## Six dashboard and wall asks are open, none of them started
+## A batch map for the wall: designed, measured, not built
 
-All from one session on 2026-09-10, in the order Mike asked. Nothing below is
-designed or half-built -- they are requests with the groundwork read, so treat
-the notes as where to start, not as decisions taken.
+Mike's ask, 2026-09-10: "a really compact way of depicting which icons on a
+stable map were rendered as part of a batch" -- so that a few batches can sit
+side by side and you can see where they overlap. Nothing is implemented. What
+follows is decided and measured; the mock-up scripts were in a session
+scratchpad and are gone, but every number below is reproducible from
+`corpus.db` in a few lines.
+
+**The map is blocks pinned by id prefix, and that detail is the whole design.**
+A part's cell must not move when LDraw grows, and plain id order fails hard:
+of a 4,000-part sample still current in 2024+, every one sits before the last
+2% of the order, so one new `3068bp42` shifts every cell after it.
+
+The obvious repair does not work either. Blocks keyed by the thousand-block of
+the id (`3xxx`, `76xxx`, `u9xxx`), laid out the natural way -- sorted inside
+the block, capacity recomputed each time -- **moves 86.6% of cells when 250
+parts arrive**. Two causes: a part inserted in sorted position shifts the rest
+of its block (`3xxx` holds 3,897), and a block crossing a capacity boundary
+shifts every later block.
+
+Both are fixable, and then it is exact. **Freeze the block bases in a file and
+append newcomers to the end of their own block** instead of sorting them in:
+0 cells move at +250, +1,000 and +4,000 parts. At headroom 1.5 and grain 32
+that is 45,600 cells for 24,591 parts, 54% of them a part, and a 403-line
+file. Overflow is the one escape hatch -- 4 newcomers outgrow their block at
++250, 743 at +4,000 -- so there is a spill block at the end.
+
+The alternative Mike weighed it against was a checked-in order of every part
+id, position = line number, newcomers appended. Also 0 movement, and denser
+(24,591 cells, all of them a part), but the file is 24,591 lines / 184 KB
+against 403, and a newcomer lands at the far end of the map rather than among
+its own id neighbours, so position stops meaning anything over time. **Blocks
+won on both counts.** The empty cells cost nothing: on the wall's dark ground
+an unused cell is just ground, and the gaps between sparse id ranges turn out
+to be the map's only landmarks -- the checked-in-order map is a featureless
+slab.
+
+**One ink per panel, and nothing is mixed.** Overlaying slots as translucent
+colour was tried at Mike's suggestion and abandoned at his word -- "this colour
+scheme is too ugly". It was also measured, and the measurement is the reason
+not to come back to it: stacking lights gives at most four distinguishable
+sources, and only if the fourth sits away from the others' sums (RGB + violet
+at 0.42 keeps a closest pair of dE 17; RGB + amber collapses to dE 6, because
+amber IS red plus green). Worse, occt and white-occt between them cover most of
+the corpus, so nearly every cell showed the same two-slot mixture and the map
+came out a uniform khaki. Two polarities meant to fix that -- lighting only
+what a slot drew that the others did not, and dimming by how much the slots
+agree -- were both rendered at too high a gain, blew out to white and were
+never actually judged.
+
+What replaced it is small multiples: **one panel per run, one ink, the same map
+every time**, plus a grey panel of how many runs reached each place. The eye
+does the overlap by looking at the same spot in two panels, which is exactly
+what a map that holds still is for. It reads immediately -- occt and white-occt
+share a footprint, translucent-occt covers the top half and one band, and
+silhouette-occt is thin and scattered.
+
+**A cell is a bin of about 6 parts, lit by the fraction of them the run drew,
+with a 0.4px blur.** One hard cell per part was, in Mike's words, "way too
+harsh". Fraction-lighting is what makes it smooth and it carries more: a
+half-covered stretch is a half-lit one.
+
+`scripts/batch-map.py` is the prototype all of the above was measured on, and
+it draws the real thing from `corpus.db`. **It recomputes the block bases on
+every run**, which is right for one picture and wrong for comparing one drawn
+today against one drawn next month -- the frozen-base file is the piece that is
+designed and not built.
+
+**Not decided: where it lives.** A panel on the stats dashboard, a mode on the
+wall itself, or a script that writes a PNG for a report. Mike was asked and had
+not answered.
+
+## Four of the six dashboard and wall asks have landed
+
+## (superseded) the six asks as first recorded
+
+All from one session on 2026-09-10, in the order Mike asked. **Four have since
+landed** -- the horizontal bar (`aa61222`), posed/obsolete as membership
+(`febdd5d`), the four Elsewhere legend rows (`5d54daf`) and the runs list
+(`1141a16`). What is still open is the load-cutting, the "what will not draw"
+backfill and the legend axes. The rest of this section is kept for its
+groundwork, not as a to-do list.
 
 **Cut more from the dashboard's load.** It is 1,597 ms now, down from 3,662
 (`91c82dd`, which has the profile). Mike's words: "that runs list, if it costs
