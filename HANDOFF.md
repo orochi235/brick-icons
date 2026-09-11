@@ -1,3 +1,39 @@
+## Six dashboard and wall asks are open, none of them started
+
+All from one session on 2026-09-10, in the order Mike asked. Nothing below is
+designed or half-built -- they are requests with the groundwork read, so treat
+the notes as where to start, not as decisions taken.
+
+**Cut more from the dashboard's load.** It is 1,597 ms now, down from 3,662
+(`91c82dd`, which has the profile). Mike's words: "that runs list, if it costs
+anything, is a waste" -- `_runs` is 103 ms and the Runs section goes. What is
+left after it: `_coverage` 349, `_phases` 476, `_cost_rows` 244, `_failures`
+253, `_latest_measurements` 164. `scripts/`-free profiler is in the session
+scratchpad; it is ten lines of `time.perf_counter` around each section and is
+worth rewriting rather than hunting for.
+
+**"Inside a render" becomes one horizontal bar of proportional segments**,
+instead of the `PhaseTree` it draws now.
+
+**Backfill "what will not draw".** It has one point, taken when `tallies` was
+added. A real backfill IS possible and is not the `by_build` series: rows are
+kept per run, so "as of run R, what was each part's latest error" is a query,
+and every distinct build already dates from git. `tally.by_build` shows the
+shape of the answer.
+
+**Split the legend into axes** -- primary category (minifig, technic, duplo,
+weird, sticker), then features (magnet, electric, printed, composite), then
+popular, then retired/replaced, each its own axis rather than one flat list.
+
+**`posed` and `obsolete` move to the membership sidebar**, beside `moved` and
+`out of scope`, rather than being badge tags. The `posed` TAG is already
+deleted from `tags.TAGS` and `tags_for` in the working tree, uncommitted --
+that half is done and the filter half is not, so committing it as it stands
+loses the fact entirely. `parts.preview` is the source.
+
+**The four `*Elsewhere` legend rows go**, but the cells keep their own
+styling -- it is the legend entries that are surplus, not the distinction.
+
 ## Cones gp_Cone cannot hold are ruled now, and the corpus is stale for it
 
 `5a2d856`, on `main` in the shared checkout, unpushed. **0 of 40,633 cones
