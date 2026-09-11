@@ -141,7 +141,10 @@ export interface Stats {
   phases: PhaseRow[];
   runs: RunRow[];
   shape: Shape;
-  failures: Failures;
+  /** Optional because the lab API is a separate process: a dev server started
+   *  before this field existed serves a payload without it, and the page must
+   *  render the rest rather than white-screen on a stale backend. */
+  failures?: Failures;
   as_of: string;
 }
 

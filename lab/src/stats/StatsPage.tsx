@@ -4,6 +4,7 @@ import { CoverageBars, CoverageLegend, FailureLines, PhaseBars, PhaseColumns,
          PhaseLegend, SecsOverlay } from '@lab/stats/charts';
 import { Footprint } from '@lab/stats/Footprint';
 import { PhaseTree } from '@lab/stats/PhaseTree';
+import type { Failures } from '@lab/stats/types';
 import { useStats } from '@lab/stats/useStats';
 import { DEFAULT_SET, fromQuery, toQuery, wallHref,
          type WorkingSet } from '@lab/stats/workingSet';
@@ -84,6 +85,13 @@ export function StatsPage({ client }: { client: LabClient }) {
   }, [set]);
 
   const change = useCallback((next: WorkingSet) => setSet(next), []);
+  // A lab API older than this bundle sends no `failures`. Read through a
+  // blank rather than off `stats.failures` directly: the page carries nine
+  // other sections, and none of them should go dark over a stale server.
+  // `unanswered` keeps that case apart from a real zero -- "nothing is
+  // broken" and "this server cannot say" must not draw the same.
+  const failures = stats?.failures ?? NO_FAILURES;
+  const unanswered = stats !== null && stats.failures === undefined;
   const categories = stats?.shape.categories ?? [];
   const total = stats?.set.total ?? 0;
 
@@ -109,11 +117,11 @@ export function StatsPage({ client }: { client: LabClient }) {
       {!stats ? <p className="stats-empty">loading…</p> : (
         <>
           <section className="stats-tiles">
-            <Tile n={stats.failures.totals.occt.bad}
-                  of={stats.failures.totals.size} wide
+            <Tile n={unanswered ? null : failures.totals.occt.bad}
+                  of={unanswered ? undefined : failures.totals.size} wide
                   label="parts occt cannot draw, corpus-wide" />
-            <Tile n={stats.failures.totals.decal.bad}
-                  of={stats.failures.totals.size} wide
+            <Tile n={unanswered ? null : failures.totals.decal.bad}
+                  of={unanswered ? undefined : failures.totals.size} wide
                   label="parts decal cannot draw, corpus-wide" />
             <Tile n={stats.set.size} of={total} label="parts in the set" />
             <Tile n={stats.coverage.reduce((a, r) => a + r.counts.drawn, 0)}
@@ -126,9 +134,10 @@ export function StatsPage({ client }: { client: LabClient }) {
 
           <section>
             <h2>What will not draw</h2>
-            <FailureLines rows={stats.failures.series} unit="count"
-                          caption="no tally has been taken yet — one is
-                                   written on the next ingest" />
+            <FailureLines rows={failures.series} unit="count"
+                          caption={unanswered ? STALE_API
+                            : 'no tally has been taken yet — one is written on '
+                              + 'the next ingest'} />
             <p className="stats-note">
               Counted over every in-scope part, so the Controls above do not
               move these. A part failing in more than one occt facet is one
@@ -138,9 +147,10 @@ export function StatsPage({ client }: { client: LabClient }) {
 
           <section>
             <h2>Failure rate by engine revision</h2>
-            <FailureLines rows={stats.failures.by_build} unit="rate"
-                          caption="no render in this corpus carries the build
-                                   that drew it" />
+            <FailureLines rows={failures.by_build} unit="rate"
+                          caption={unanswered ? STALE_API
+                            : 'no render in this corpus carries the build that '
+                              + 'drew it'} />
             <p className="stats-note">
               A share, not a count, and on its own axis for that reason: each
               revision is measured over the parts it actually drew, which
@@ -256,12 +266,21 @@ export function StatsPage({ client }: { client: LabClient }) {
 const fixed = (v: number | null, places = 2) =>
   v === null ? '—' : v.toFixed(places);
 
+const STALE_API = 'this lab API predates the failure tallies — restart it '
+  + '(python -m brick_icons.lab) to see them';
+
+const NO_FAILURES: Failures = {
+  totals: { size: 0, occt: { bad: 0, failed: 0, timeout: 0, facets: [] },
+            decal: { bad: 0, failed: 0, timeout: 0 } },
+  series: [], by_build: [],
+};
+
 function Tile({ n, of, label, wide }: {
-  n: number; of?: number; label: string; wide?: boolean;
+  n: number | null; of?: number; label: string; wide?: boolean;
 }) {
   return (
     <div className={wide ? 'stats-tile stats-tile-wide' : 'stats-tile'}>
-      <strong>{n.toLocaleString()}</strong>
+      <strong>{n === null ? '—' : n.toLocaleString()}</strong>
       {of !== undefined && <span className="stats-muted">of {of.toLocaleString()}</span>}
       <span className="stats-tile-label">{label}</span>
     </div>

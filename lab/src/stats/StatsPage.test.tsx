@@ -117,9 +117,24 @@ describe('StatsPage', () => {
       .toEqual(['occt', 'decal']);
   });
 
+  it('renders the rest of the page when the API is older than the bundle', async () => {
+    // The lab API is a separate process. A dev server started before
+    // `failures` existed sends a payload without it, and nine other sections
+    // must not go dark over that.
+    const old = body();
+    delete (old as { failures?: unknown }).failures;
+    const { container } = render(<StatsPage client={clientWith(async () => old)} />);
+    await waitFor(() => screen.getByText('Coverage'));
+    expect(container.querySelectorAll('[role=alert]').length).toBe(0);
+    // A dash, not a zero: "nothing is broken" and "this server cannot say"
+    // must not draw the same.
+    expect(container.querySelector('.stats-tile-wide strong')!.textContent).toBe('—');
+    expect(screen.getAllByText(/predates the failure tallies/).length).toBe(2);
+  });
+
   it('says a tally is owed rather than drawing an empty chart', async () => {
     const none = body();
-    none.failures.series = [];
+    none.failures!.series = [];
     render(<StatsPage client={clientWith(async () => none)} />);
     await waitFor(() => screen.getByText(/no tally has been taken yet/));
   });
