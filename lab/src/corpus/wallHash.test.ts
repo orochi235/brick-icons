@@ -45,3 +45,26 @@ describe('wallHashString', () => {
       .toBe('#source=silhouette-occt');
   });
 });
+
+describe('tint in the hash', () => {
+  it('carries a measured tint and its ramp', () => {
+    expect(wallHashString({ source: 'occt', tint: 'secs', gradient: 'ironbow' }))
+      .toBe('#source=occt&tint=secs&gradient=ironbow');
+    expect(readWallHash('#source=occt&tint=secs&gradient=ironbow'))
+      .toEqual({ source: 'occt', tint: 'secs', gradient: 'ironbow' });
+  });
+
+  it('leaves the defaults out, so an untouched wall has a bare bar', () => {
+    expect(wallHashString({ tint: 'status', gradient: 'ember' })).toBe('');
+    expect(wallHashString({ tint: 'secs', gradient: 'ember' })).toBe('#tint=secs');
+  });
+
+  it('drops a ramp that no tint is using', () => {
+    expect(wallHashString({ tint: 'status', gradient: 'ironbow' })).toBe('');
+  });
+
+  it('refuses a mode or ramp it does not know', () => {
+    expect(readWallHash('#tint=heat&gradient=rainbow')).toEqual({});
+    expect(readWallHash('#tint=secs&gradient=rainbow')).toEqual({ tint: 'secs' });
+  });
+});

@@ -1,3 +1,6 @@
+import { RAMP_NAMES, TINT_MODES, type RampName, type TintMode }
+  from '@lab/corpus/tint';
+
 /** What the corpus wall keeps in its URL, so a reload lands where you were.
  *
  *  The lightbox is the reason this exists: it is a whole page's worth of a
@@ -15,6 +18,22 @@ export interface WallHash {
   part?: string;
   /** The render slot the wall is drawing. */
   source?: string;
+  /** What the cells are colored by. Here because a wall tinted by render
+   *  seconds is a different picture of the corpus, not a view setting: a
+   *  link to it that arrives colored by status shows the reader something
+   *  else and says nothing about it. */
+  tint?: TintMode;
+  /** The ramp a measured tint draws in. Only meaningful alongside one. */
+  gradient?: RampName;
+}
+
+/** Closed vocabularies, so these are checked against their own lists rather
+ *  than the shape below: an unknown mode is not a harmless string to pass on,
+ *  it is a wall colored by nothing. */
+function known<T extends string>(allowed: readonly T[], value: string | null):
+    T | undefined {
+  return value !== null && (allowed as readonly string[]).includes(value)
+    ? value as T : undefined;
 }
 
 /** A slot name or part id, and nothing that could be read as markup or a
@@ -30,8 +49,12 @@ export function readWallHash(hash: string): WallHash {
   const out: WallHash = {};
   const part = clean(q.get('part'));
   const source = clean(q.get('source'));
+  const tint = known(TINT_MODES, q.get('tint'));
+  const gradient = known(RAMP_NAMES, q.get('gradient'));
   if (part) out.part = part;
   if (source) out.source = source;
+  if (tint) out.tint = tint;
+  if (gradient) out.gradient = gradient;
   return out;
 }
 
@@ -42,6 +65,16 @@ export function wallHashString(state: WallHash): string {
   const q = new URLSearchParams();
   if (state.source) q.set('source', state.source);
   if (state.part) q.set('part', state.part);
+  // Defaults stay out, so an untouched wall still has a bare address bar.
+  // `gradient` rides only with a tint that uses it -- the sidebar hides the
+  // picker under `status`, and a hash naming a ramp nothing draws in would
+  // outlive the mode it was picked for.
+  if (state.tint && state.tint !== 'status') {
+    q.set('tint', state.tint);
+    if (state.gradient && state.gradient !== 'ember') {
+      q.set('gradient', state.gradient);
+    }
+  }
   const text = q.toString();
   return text ? `#${text}` : '';
 }

@@ -15,11 +15,17 @@ export const STEPS = 8;
  *  ramps encode magnitude. A diverging or rainbow scale would invent a
  *  midpoint the data has no opinion about, and read as categories.
  *
- *  `ember` is the original and stays the default. `viridis` and `magma` are
- *  the usual perceptually-uniform pair, carried at eight stops each: equal
- *  steps in the number are equal steps to the eye, which the two-endpoint
- *  ramps only approximate. Both also hold up under every form of color
- *  blindness, which `ember` does not. */
+ *  `ember` is the original and stays the default. `viridis`, `magma` and
+ *  `inferno` are the usual perceptually-uniform set, carried at eight stops
+ *  each: equal steps in the number are equal steps to the eye, which the
+ *  two-endpoint ramps only approximate. All three also hold up under every
+ *  form of color blindness, which `ember` does not.
+ *
+ *  `ironbow` and `whitehot` are the two a thermal camera offers, and they
+ *  are here because a render-time wall IS a heat map -- the reading they
+ *  train you to make is the one wanted. Neither is perceptually uniform:
+ *  ironbow compresses its middle and whitehot carries no hue at all, so
+ *  prefer `inferno` when the question is how much rather than where. */
 export const RAMPS = {
   ember: ['#3a3a3f', '#e8c478'],
   ice: ['#12233a', '#a9e2f3'],
@@ -28,6 +34,11 @@ export const RAMPS = {
             '#21918c', '#28ae80', '#5ec962', '#addc30'],
   magma: ['#000004', '#1c1044', '#4f127b', '#812581',
           '#b5367a', '#e55964', '#fb8761', '#fec287'],
+  inferno: ['#000004', '#1b0c41', '#4a0c6b', '#781c6d',
+            '#a52c60', '#cf4446', '#ed6925', '#fcffa4'],
+  ironbow: ['#00000a', '#1a0a52', '#4a0a7a', '#8a1a6a',
+            '#c43e2f', '#e8721a', '#f9b70a', '#ffffe0'],
+  whitehot: ['#000000', '#ffffff'],
 } as const;
 
 export const RAMP_NAMES = Object.keys(RAMPS) as (keyof typeof RAMPS)[];
@@ -94,9 +105,20 @@ export type MeasuredMode = Exclude<TintMode, 'status'>;
 export const MEASURED_MODES = TINT_MODES.filter(
   (m): m is MeasuredMode => m !== 'status');
 
+/** What a mode is called on screen. The keys match the columns they read --
+ *  `secs` is `cell.secs` -- and a key is not a name: the Color menu showed
+ *  `secs` where every other menu on the sidebar shows words. */
+export const TINT_LABEL: Record<TintMode, string> = {
+  status: 'status',
+  secs: 'render time',
+  year: 'year',
+  sets: 'sets',
+  colors: 'colors',
+};
+
 /** What a mode's ramp measures, as a reader would say it. */
 export const SCALE_LABEL: Record<MeasuredMode, string> = {
-  secs: 'render seconds',
+  secs: 'render time',
   year: 'first year',
   sets: 'sets appeared in',
   colors: 'colors made in',
@@ -116,6 +138,17 @@ export function scaleAt(mode: MeasuredMode, t: number): number {
     case 'year': return FIRST_YEAR + t * YEAR_SPAN;
     case 'sets': return 10 ** (t * MAX_LOG_SETS);
     case 'colors': return 10 ** (t * MAX_LOG_COLORS);
+  }
+}
+
+/** The raw fact a mode tints by, unnormalised -- what a reader wants told
+ *  back, against the ramp's `t` which is only where it sits on the strip. */
+export function cellValue(cell: Cell, mode: MeasuredMode): number | null {
+  switch (mode) {
+    case 'secs': return cell.secs ?? null;
+    case 'year': return cell.year_from;
+    case 'sets': return cell.sets;
+    case 'colors': return cell.colors;
   }
 }
 

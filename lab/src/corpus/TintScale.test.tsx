@@ -1,12 +1,12 @@
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { TintScale } from '@lab/corpus/TintScale';
-import { MEASURED_MODES, STEPS } from '@lab/corpus/tint';
+import { MEASURED_MODES, RAMP_NAMES, STEPS } from '@lab/corpus/tint';
 
 describe('TintScale', () => {
   it('names what the colors mean and the range they span', () => {
     render(<TintScale mode="secs" gradient="ember" />);
-    expect(screen.getByText('render seconds')).toBeTruthy();
+    expect(screen.getByText('render time')).toBeTruthy();
     expect(screen.getByText('1.0s')).toBeTruthy();
     expect(screen.getByText('680s')).toBeTruthy();
   });
@@ -34,8 +34,23 @@ describe('TintScale', () => {
   it('gives the strip a role and a name rather than bare swatches', () => {
     render(<TintScale mode="secs" gradient="ember" />);
     const strip = screen.getByRole('img');
-    expect(strip.getAttribute('aria-label')).toContain('render seconds');
+    expect(strip.getAttribute('aria-label')).toContain('render time');
     expect(strip.getAttribute('aria-label')).toContain('logarithmic');
+  });
+
+  it('renders in every gradient, thermal ones included', () => {
+    for (const gradient of RAMP_NAMES) {
+      const { unmount, container } = render(
+        <TintScale mode="secs" gradient={gradient} />);
+      const swatches = container.querySelectorAll(
+        '.corpus-tint-scale-strip .corpus-tint-scale-swatch');
+      expect(swatches).toHaveLength(STEPS);
+      // a ramp that collapsed to one color would be a strip, not a scale
+      const seen = new Set([...swatches].map(
+        (el) => (el as HTMLElement).style.background));
+      expect(seen.size).toBeGreaterThan(1);
+      unmount();
+    }
   });
 
   it('renders every measured mode', () => {

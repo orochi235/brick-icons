@@ -57,3 +57,7 @@
 .corpus-card-stats dt { color: var(--wzl-fg-muted); }
 .corpus-card-stats dd { margin: 0; }
 .corpus-card-open { align-self: flex-end; }
+
+/* The fact the wall is currently colored by, ahead of the rest of the stats
+ * and marked as the reason this cell is the shade it is. */
+.corpus-card-tinted { color: var(--wzl-fg); font-weight: 600; }

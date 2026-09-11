@@ -1,4 +1,4 @@
-import { expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { PartCard } from '@lab/corpus/PartCard';
 import type { Cell } from '@lab/corpus/types';
@@ -91,4 +91,36 @@ it('keeps the render first even when there is none to show', () => {
   const { container } = render(card({ cell: { ...cell, sha: null } }));
   const [first] = container.querySelector('.corpus-card-head')!.children;
   expect(first!.classList.contains('corpus-card-none')).toBe(true);
+});
+
+describe('the shading mode on the card', () => {
+  const as = (over: Partial<Cell>, tint: string) =>
+    card({ cell: { ...cell, ...over }, tint });
+
+  it("shows the value the wall is colored by, in the scale's units", () => {
+    render(as({ secs: 6.1 }, 'secs'));
+    expect(screen.getByText('render time')).toBeTruthy();
+    expect(screen.getByText('6.1s')).toBeTruthy();
+  });
+
+  it('says not measured rather than dropping the row', () => {
+    render(as({ secs: null }, 'secs'));
+    expect(screen.getByText('not measured')).toBeTruthy();
+  });
+
+  it('follows the mode, not just render time', () => {
+    const { unmount } = render(as({ year_from: 1998 }, 'year'));
+    expect(screen.getByText('first year')).toBeTruthy();
+    expect(screen.getByText('1998')).toBeTruthy();
+    unmount();
+    render(as({ sets: 312 }, 'sets'));
+    expect(screen.getByText('sets appeared in')).toBeTruthy();
+    expect(screen.getByText('312')).toBeTruthy();
+  });
+
+  it('adds no such row under status, and says render time once', () => {
+    render(as({ secs: 6.1 }, 'status'));
+    expect(screen.queryByText('first year')).toBeNull();
+    expect(screen.getAllByText('render time')).toHaveLength(1);
+  });
 });

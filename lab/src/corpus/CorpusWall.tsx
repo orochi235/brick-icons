@@ -106,7 +106,9 @@ export function CorpusWall({ client }: { client: LabClient }) {
   const [level, setLevel] = useState(32);
   const [selection, setSelection] = useState<Selection>({
     sort: 'id', filter: 'all', shown: DEFAULT_SHOWN, grouping: 'none',
-    tint: 'status', gradient: 'ember', excluded: [], badges: [], desc: true,
+    tint: fromHash.current.tint ?? 'status',
+    gradient: fromHash.current.gradient ?? 'ember',
+    excluded: [], badges: [], desc: true,
   });
   const [cam, setCam] = useState<View | null>(null);
   const [picked, setPicked] = useState<string | null>(fromHash.current.part ?? null);
@@ -257,11 +259,14 @@ export function CorpusWall({ client }: { client: LabClient }) {
   // `replaceState`, so the browser's Back button still leaves the wall rather
   // than walking through every part that has been opened.
   useEffect(() => {
-    const next = wallHashString({ source, part: picked ?? undefined });
+    const next = wallHashString({
+      source, part: picked ?? undefined,
+      tint: selection.tint, gradient: selection.gradient,
+    });
     if (next !== window.location.hash) {
       window.history.replaceState(null, '', next || window.location.pathname);
     }
-  }, [source, picked]);
+  }, [source, picked, selection.tint, selection.gradient]);
 
   // Every camera write goes through this, so a flick's inertia decay -- which
   // calls `view.set` directly, bypassing any handler below -- gets clamped on
@@ -529,7 +534,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
           )}
           {carded && !picked && (
             <PartCard cell={carded.cell} source={drawnSource} at={carded.at}
-                      viewport={size}
+                      viewport={size} tint={selection.tint}
                       onOpen={(id) => { setCarded(null); setPicked(id); }}
                       onClose={() => setCarded(null)}
                       onHoverChange={(over) => { overCard.current = over; }} />

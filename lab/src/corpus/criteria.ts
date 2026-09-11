@@ -32,7 +32,7 @@ export const SORT_SPECS = [
     value: (f: SortFacts) => f.status, desc: false },
   { key: 'extra_d99', label: 'extra_d99',
     value: (f: SortFacts) => f.extra_d99, desc: true },
-  { key: 'secs', label: 'secs',
+  { key: 'secs', label: 'render time',
     value: (f: SortFacts) => f.secs, desc: true },
   { key: 'made_at', label: 'made_at',
     value: (f: SortFacts) => f.made_at, desc: true },

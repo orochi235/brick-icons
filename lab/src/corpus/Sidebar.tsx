@@ -4,7 +4,7 @@ import { familyFacets, type Family, type FamilyFacet } from '@lab/corpus/familie
 import { CLASS_SPECS, FILTER_SPECS, SORT_SPECS } from '@lab/corpus/criteria';
 import type { Selection } from '@lab/corpus/select';
 import { ParamsPanel, type ParamsPanelProps } from '@lab/corpus/ParamsPanel';
-import { RAMP_NAMES, TINT_MODES } from '@lab/corpus/tint';
+import { RAMP_NAMES, TINT_LABEL, TINT_MODES } from '@lab/corpus/tint';
 import '@lab/corpus/Sidebar.css';
 
 const GROUPINGS: { id: Grouping; label: string }[] = [
@@ -125,7 +125,7 @@ export function Sidebar({ selection, counts, shown, total, onChange,
         <select value={selection.tint}
                 onChange={(e) => onChange({ ...selection,
                                             tint: e.target.value as Selection['tint'] })}>
-          {TINT_MODES.map((t) => <option key={t} value={t}>{t}</option>)}
+          {TINT_MODES.map((t) => <option key={t} value={t}>{TINT_LABEL[t]}</option>)}
         </select>
       </label>
 

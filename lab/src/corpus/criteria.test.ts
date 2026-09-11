@@ -98,7 +98,7 @@ it('starts the wall with the redirects off and the out-of-scope parts on', () =>
 
 it('names every sort, filter and class the way the menus do', () => {
   expect(SORT_SPECS.map((s) => s.label)).toEqual([
-    'id', 'category', 'status', 'extra_d99', 'secs', 'made_at', 'year', 'sets',
+    'id', 'category', 'status', 'extra_d99', 'render time', 'made_at', 'year', 'sets',
   ]);
   expect(FILTER_SPECS.map((f) => f.label)).toEqual([
     'all', 'rendered', 'unrendered', 'errors', 'printed', 'obsolete', 'base',
