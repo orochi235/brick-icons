@@ -30,16 +30,18 @@ _run = 0
 
 
 def _measure(conn, pid, engine, source=None, error=None, secs=None,
-             extra_d99=None, finished="2026-09-05T09:30:00+00:00", phases=None):
+             extra_d99=None, finished="2026-09-05T09:30:00+00:00", phases=None,
+             build=None):
     global _run
     _run += 1
     conn.execute("INSERT INTO runs (id, kind, started, finished, commit_sha, "
                  "args) VALUES (?, 'census', '2026-09-05T09:00:00+00:00', ?, "
                  "'abc1234', '{}')", (_run, finished))
     conn.execute("INSERT INTO measurements (run_id, part_id, engine, source, "
-                 "error, secs, extra_d99, phases) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                 "error, secs, extra_d99, phases, build) VALUES "
+                 "(?, ?, ?, ?, ?, ?, ?, ?, ?)",
                  (_run, pid, engine, source or f"silhouette-{engine}", error, secs,
-                  extra_d99, json.dumps(phases) if phases else None))
+                  extra_d99, json.dumps(phases) if phases else None, build))
 
 
 def _defect(conn, did, pid, engines):
@@ -417,3 +419,90 @@ def test_the_failure_tiles_ignore_the_working_set(conn):
     narrow = stats.stats(conn, kind="base")["failures"]["totals"]
     assert wide["occt"]["bad"] == 1
     assert narrow == wide
+
+
+# -- what a pass costs, slot by slot --------------------------------------
+
+def _cost(conn, **kw):
+    ids, _ = stats.members(conn, **kw)
+    return stats._cost(stats._cost_rows(conn), ids)
+
+
+def test_cost_is_each_slot_s_share_of_running_them_all(conn):
+    _part(conn, "3001")
+    _part(conn, "3002")
+    for pid, occt, white in (("3001", 10.0, 5.0), ("3002", 30.0, 5.0)):
+        _measure(conn, pid, "occt", source="occt", secs=occt, build="b1")
+        _measure(conn, pid, "occt", source="white-occt", secs=white, build="b1")
+    cost = _cost(conn)
+    assert cost["n"] == 2
+    assert [r["source"] for r in cost["slots"]] == ["occt", "white-occt"]
+    assert cost["slots"][0]["share"] == pytest.approx(0.8)
+    assert cost["slots"][1]["share"] == pytest.approx(0.2)
+
+
+def test_cost_ratios_are_taken_against_the_plain_slot(conn):
+    """Not against the biggest, which flips the two on a half-percent."""
+    _part(conn, "3001")
+    _measure(conn, "3001", "occt", source="occt", secs=10.0, build="b1")
+    _measure(conn, "3001", "occt", source="white-occt", secs=12.0, build="b1")
+    cost = _cost(conn)
+    assert cost["base"] == "occt"
+    ratios = {r["source"]: r["ratio"] for r in cost["slots"]}
+    assert ratios == {"occt": pytest.approx(1.0), "white-occt": pytest.approx(1.2)}
+
+
+def test_cost_compares_one_build_over_the_parts_it_drew_in_every_slot(conn):
+    """A slot's stored seconds span every revision that drew it, and the old
+    ones are slow enough to reverse which slot reads as expensive."""
+    for pid in ("3001", "3002", "3003"):
+        _part(conn, pid)
+    # b2 drew both slots over two parts; b1 drew one slot over three, slowly.
+    for pid in ("3001", "3002", "3003"):
+        _measure(conn, pid, "occt", source="silhouette-occt", secs=90.0, build="b1")
+    for pid in ("3001", "3002"):
+        _measure(conn, pid, "occt", source="occt", secs=10.0, build="b2")
+        _measure(conn, pid, "occt", source="silhouette-occt", secs=5.0, build="b2")
+    cost = _cost(conn)
+    assert cost["build"] == "b2"
+    assert cost["n"] == 2
+    assert {r["source"]: round(r["ratio"], 3) for r in cost["slots"]} == {
+        "occt": 1.0, "silhouette-occt": 0.5}
+
+
+def test_a_build_only_one_slot_drew_cannot_be_the_comparison(conn):
+    """There is nothing for it to be proportional to."""
+    _part(conn, "3001")
+    _measure(conn, "3001", "occt", source="occt", secs=10.0, build="b1")
+    assert _cost(conn) is None
+
+
+def test_cost_leaves_out_the_slots_the_timing_sections_do(conn):
+    """naive keeps its coverage rows and nothing else here -- and taking its
+    facets in collapses the common set, since they draw different parts."""
+    _part(conn, "3001")
+    _part(conn, "3002")
+    for pid in ("3001", "3002"):
+        _measure(conn, pid, "occt", source="occt", secs=10.0, build="b1")
+        _measure(conn, pid, "occt", source="white-occt", secs=4.0, build="b1")
+    _measure(conn, "3001", "naive", source="white-naive", secs=99.0, build="b1")
+    cost = _cost(conn)
+    assert [r["source"] for r in cost["slots"]] == ["occt", "white-occt"]
+    assert cost["n"] == 2
+
+
+def test_cost_counts_only_the_working_set(conn):
+    _part(conn, "3001")
+    _part(conn, "3002", obsolete=1)
+    for pid in ("3001", "3002"):
+        _measure(conn, pid, "occt", source="occt", secs=10.0, build="b1")
+        _measure(conn, pid, "occt", source="white-occt", secs=5.0, build="b1")
+    assert _cost(conn)["n"] == 2
+    assert _cost(conn, kind="base")["n"] == 1
+
+
+def test_a_measurement_with_no_build_cannot_be_placed_on_a_revision(conn):
+    _part(conn, "3001")
+    _measure(conn, "3001", "occt", source="occt", secs=10.0)
+    _measure(conn, "3001", "occt", source="white-occt", secs=5.0)
+    assert _cost(conn) is None

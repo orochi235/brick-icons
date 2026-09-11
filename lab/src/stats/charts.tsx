@@ -1,5 +1,5 @@
 import type { Coverage } from '@lab/corpus/facts';
-import type { CoverageRow, Phase, PhaseRow, SpeedRow } from '@lab/stats/types';
+import type { Cost, CoverageRow, Phase, PhaseRow, SpeedRow } from '@lab/stats/types';
 
 /** Stack order: `drawn` leads, so a row reads from the left as how much of
  *  the slot is done, the way any progress bar does, and the rows can be
@@ -87,6 +87,47 @@ export function CoverageBars({ rows, onOpen }: {
           <span className="stats-bar-value">
             {row.counts.drawn.toLocaleString()}
             <span className="stats-muted"> / {row.size.toLocaleString()}</span>
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** What one pass costs, slot by slot, as a share of running them all.
+ *
+ *  One bar each rather than a single stack: the question is how the slots
+ *  compare to each other, and a stack answers that only for the segment
+ *  touching an edge. The bars share a scale, so the widths are comparable
+ *  across rows. */
+export function CostBars({ cost }: { cost: Cost }) {
+  const widest = Math.max(...cost.slots.map((r) => r.share));
+  return (
+    <div className="stats-bars stats-cost">
+      <div className="stats-bar-row stats-cost-row stats-cost-head">
+        <span />
+        <span />
+        <span className="stats-bar-value">share</span>
+        <span className="stats-bar-value">&times; {cost.base}</span>
+        <span className="stats-bar-value">median</span>
+      </div>
+      {cost.slots.map((row) => (
+        <div key={row.source} className="stats-bar-row stats-cost-row">
+          <span className="stats-bar-name">{row.source}</span>
+          <div className="stats-bar" role="img"
+               aria-label={`${row.source}: ${(row.share * 100).toFixed(1)}% of `
+                 + `the seconds, ${row.ratio?.toFixed(2) ?? '?'} times `
+                 + `${cost.base}`}>
+            <span className="stats-seg" data-label="cost"
+                  style={{ width: `${pct(row.share, widest)}%` }} />
+          </div>
+          <span className="stats-bar-value">{(row.share * 100).toFixed(1)}%</span>
+          <span className="stats-bar-value">
+            &times;{row.ratio === null ? '—' : row.ratio.toFixed(2)}
+          </span>
+          <span className="stats-bar-value">
+            {row.median === null ? '—' : row.median.toFixed(1)}
+            <span className="stats-muted">s</span>
           </span>
         </div>
       ))}

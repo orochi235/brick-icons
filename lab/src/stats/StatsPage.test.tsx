@@ -76,6 +76,17 @@ type Client = Parameters<typeof StatsPage>[0]['client'];
 const clientWith = (corpusStats: (q: URLSearchParams) => Promise<Stats>) =>
   ({ corpusStats, corpusSizes: async () => EMPTY_FOOTPRINT } as unknown as Client);
 
+const COST = {
+  build: '1099.d500ca9+', base: 'occt', n: 1587, total: 1000,
+  slots: [
+    { source: 'occt', total: 400, share: 0.4, ratio: 1, median: 6.2, p90: 58 },
+    { source: 'white-occt', total: 400, share: 0.4, ratio: 1.0, median: 6.2,
+      p90: 58.9 },
+    { source: 'translucent-occt', total: 200, share: 0.2, ratio: 0.5,
+      median: 3.7, p90: 17.5 },
+  ],
+};
+
 describe('StatsPage', () => {
   // -- the failure strip and chart ----------------------------------------
 
@@ -330,5 +341,59 @@ describe('StatsPage', () => {
     await waitFor(() => screen.getByRole('alert'));
     expect(screen.getByRole('alert').textContent).toBe('database is locked');
     expect(screen.getByText(/20 of 24 parts/)).toBeTruthy();
+  });
+
+  // -- what a pass costs --------------------------------------------------
+
+  it('draws one cost bar per slot, with its share and its ratio', async () => {
+    const { container } = render(
+      <StatsPage client={clientWith(async () => body({ cost: COST }))} />);
+    await waitFor(() => container.querySelector('.stats-cost'));
+    const rows = [...container.querySelectorAll('.stats-cost-row')]
+      .filter((r) => !r.classList.contains('stats-cost-head'));
+    expect(rows.map((r) => r.querySelector('.stats-bar-name')!.textContent))
+      .toEqual(['occt', 'white-occt', 'translucent-occt']);
+    expect(rows[2]!.textContent).toContain('20.0%');
+    expect(rows[2]!.textContent).toContain('0.50');
+    expect(rows[2]!.textContent).toContain('3.7');
+  });
+
+  it('names the revision the comparison was taken at', async () => {
+    const { container } = render(
+      <StatsPage client={clientWith(async () => body({ cost: COST }))} />);
+    await waitFor(() => container.querySelector('.stats-cost'));
+    const note = [...container.querySelectorAll('.stats-note')]
+      .find((n) => n.textContent?.includes('1099.d500ca9+'))!;
+    expect(note).toBeTruthy();
+    expect(note.textContent).toContain('1,587');
+  });
+
+  it('says what running every slot costs against one base pass', async () => {
+    const { container } = render(
+      <StatsPage client={clientWith(async () => body({ cost: COST }))} />);
+    await waitFor(() => container.querySelector('.stats-cost'));
+    const note = [...container.querySelectorAll('.stats-note')]
+      .find((n) => n.textContent?.includes('1099.d500ca9+'))!;
+    // occt is 0.4 of the whole, so the three passes cost 2.5 of one.
+    expect(note.textContent).toContain('2.5');
+  });
+
+  it('says so rather than drawing an empty panel when no two slots pair up',
+     async () => {
+    const { container } = render(
+      <StatsPage client={clientWith(async () => body({ cost: null }))} />);
+    await waitFor(() => container.querySelector('.stats-cost, .stats-empty'));
+    expect(container.querySelector('.stats-cost')).toBeNull();
+    expect(container.textContent)
+      .toContain('no two slots have drawn the same parts');
+  });
+
+  it('draws the rest of the page when a stale API sends no cost', async () => {
+    const { container } = render(
+      <StatsPage client={clientWith(async () => body())} />);
+    await waitFor(() => container.querySelector('.stats-tiles'));
+    expect(container.querySelector('.stats-cost')).toBeNull();
+    expect([...container.querySelectorAll('h2')].map((h) => h.textContent))
+      .toContain('Coverage');
   });
 });

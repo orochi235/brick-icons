@@ -365,6 +365,77 @@ def _phases(rows: list[sqlite3.Row], ids: set[str]) -> list[dict]:
     return out
 
 
+def _cost_rows(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    """The newest timing per part per SLOT, which is not the same question as
+    `_latest_measurements`: two facets of one engine are both `occt`, so a
+    newest-per-engine pick hands a slot whichever facet ran last."""
+    return list(conn.execute(
+        "SELECT m.part_id, m.source, m.build, m.secs "
+        "FROM measurements m JOIN "
+        "(SELECT part_id, source, MAX(run_id) AS run_id FROM measurements "
+        " WHERE secs IS NOT NULL GROUP BY part_id, source) latest "
+        "ON m.part_id = latest.part_id AND m.source = latest.source "
+        "AND m.run_id = latest.run_id "
+        "WHERE m.secs IS NOT NULL AND m.source IS NOT NULL"))
+
+
+def _cost(rows: list[sqlite3.Row], ids: set[str]) -> dict | None:
+    """What one pass costs, slot by slot, as a share of running them all.
+
+    Taken at ONE engine revision over the parts that revision drew in every
+    slot. A slot's stored seconds otherwise span every revision that ever
+    drew it and the spread swamps the answer: silhouette-occt's oldest rows
+    average 48.9s against 17.9s for the same slot at the current build, which
+    is enough to reverse which slot reads as the expensive one.
+    """
+    at: dict[str, dict[str, dict[str, float]]] = {}
+    for row in rows:
+        if row["part_id"] not in ids or not row["build"]:
+            continue
+        # The same slots the timing sections report on. Intersecting across
+        # every slot in the corpus collapses the common set to nothing --
+        # taking naive's two facets in as well left 14 parts of 1,587.
+        if engine_for(row["source"]) not in REPORTED_ENGINES:
+            continue
+        by_source = at.setdefault(row["build"], {})
+        by_source.setdefault(row["source"], {})[row["part_id"]] = row["secs"]
+
+    best: tuple[int, str, list[str], set[str]] | None = None
+    for build, by_source in at.items():
+        if len(by_source) < 2:
+            continue          # nothing to be proportional to
+        sources = sorted(by_source)
+        common = set.intersection(*(set(by_source[s]) for s in sources))
+        if best is None or len(common) > best[0]:
+            best = (len(common), build, sources, common)
+    if best is None or not best[3]:
+        return None
+
+    _, build, sources, common = best
+    by_source = at[build]
+    totals = {s: sum(by_source[s][p] for p in common) for s in sources}
+    whole = sum(totals.values())
+    # The plain slot is the reference when it is here -- `occt` against
+    # `white-occt` is the comparison a reader means, and picking the biggest
+    # total instead flips the two on a half-percent difference.
+    plain = [s for s in sources if s == engine_for(s)]
+    base = plain[0] if plain else max(sources, key=lambda s: totals[s])
+    slots = []
+    for source in sources:
+        ordered = sorted(by_source[source][p] for p in common)
+        slots.append({
+            "source": source,
+            "total": round(totals[source], 1),
+            "share": totals[source] / whole if whole else 0.0,
+            "ratio": totals[source] / totals[base] if totals[base] else None,
+            "median": _quantile(ordered, 0.5),
+            "p90": _quantile(ordered, 0.9),
+        })
+    return {"build": build, "base": base, "n": len(common),
+            "total": round(whole, 1),
+            "slots": sorted(slots, key=lambda r: -r["share"])}
+
+
 def _runs(conn: sqlite3.Connection, ids: set[str]) -> list[dict]:
     measured: dict[int, int] = {}
     for row in conn.execute("SELECT run_id, part_id FROM measurements "
@@ -433,6 +504,7 @@ def stats(conn: sqlite3.Connection, *, kind: str = "all", moved: bool = False,
         "speed": speed,
         "error": error,
         "phases": _phases(latest, ids),
+        "cost": _cost(_cost_rows(conn), ids),
         "runs": _runs(conn, ids),
         "shape": _shape(conn, rows, ids),
         "failures": _failures(conn),

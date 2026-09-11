@@ -125,6 +125,34 @@ export interface Failures {
   by_build: FailurePoint[];
 }
 
+/** One slot's share of running every slot over the same parts, at one engine
+ *  revision. `ratio` is against `Cost.base`, so the number reads as "a
+ *  translucent pass costs 0.35 of an occt one". */
+export interface CostSlot {
+  source: string;
+  /** Seconds this slot spent on the compared parts. */
+  total: number;
+  /** Of the seconds every compared slot spent. The slots sum to 1. */
+  share: number;
+  ratio: number | null;
+  median: number | null;
+  p90: number | null;
+}
+
+/** Null until two slots have drawn the same parts at one recorded revision.
+ *  The revision is not decoration: a slot's stored seconds span every engine
+ *  that ever drew it, and mixing them reverses which slot reads as the
+ *  expensive one. */
+export interface Cost {
+  build: string;
+  /** The slot every `ratio` is measured against. */
+  base: string;
+  /** Parts drawn by every slot shown, at this build. */
+  n: number;
+  total: number;
+  slots: CostSlot[];
+}
+
 export interface Stats {
   set: {
     size: number;
@@ -145,6 +173,9 @@ export interface Stats {
    *  before this field existed serves a payload without it, and the page must
    *  render the rest rather than white-screen on a stale backend. */
   failures?: Failures;
+  /** Optional for the same reason as `failures`: a lab API older than this
+   *  bundle sends no `cost`, and the page's other sections must still draw. */
+  cost?: Cost | null;
   as_of: string;
 }
 

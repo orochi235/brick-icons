@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { LabClient } from '@lab/api/client';
-import { CoverageBars, CoverageLegend, FailureLines, PhaseBars, PhaseColumns,
-         PhaseLegend, SecsOverlay } from '@lab/stats/charts';
+import { CostBars, CoverageBars, CoverageLegend, FailureLines, PhaseBars,
+         PhaseColumns, PhaseLegend, SecsOverlay } from '@lab/stats/charts';
 import { Footprint } from '@lab/stats/Footprint';
 import { PhaseTree } from '@lab/stats/PhaseTree';
 import type { Failures } from '@lab/stats/types';
@@ -163,6 +163,31 @@ export function StatsPage({ client }: { client: LabClient }) {
             <CoverageLegend />
             <CoverageBars rows={stats.coverage}
                           onOpen={(row) => wallHref(set, row.source)} />
+          </section>
+
+          <section>
+            <h2>What a pass costs</h2>
+            {!stats.cost
+              ? <p className="stats-empty">
+                  no two slots have drawn the same parts at one recorded
+                  engine revision yet
+                </p>
+              : (
+                <>
+                  <CostBars cost={stats.cost} />
+                  <p className="stats-note">
+                    One engine revision — <code>{stats.cost.build}</code> —
+                    over the {stats.cost.n.toLocaleString()} parts it drew in
+                    every slot above. Taken at one revision on purpose: a
+                    slot's stored seconds span every engine that ever drew it,
+                    and mixing them reverses which slot reads as the expensive
+                    one. Running all {stats.cost.slots.length} costs{' '}
+                    {(1 / (stats.cost.slots
+                      .find((r) => r.source === stats.cost!.base)?.share ?? 1))
+                      .toFixed(1)}× one {stats.cost.base} pass.
+                  </p>
+                </>
+              )}
           </section>
 
           <section>
