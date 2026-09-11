@@ -14,7 +14,8 @@ Each option is a 1-D reparametrization of the meridian, so all three run through
 the stock cylinder map with the dome vertices rewritten first. Nothing in the
 tree is edited.
 
-    off   the wall carrier stops at its own section, so jaw ink is dropped.
+    off   the wall carrier stops at its own section, so ink on the jaw or
+          the crown is dropped.
           `unwrap.skirt` is disarmed in-process to get this -- never by
           stashing or checking out, since this tree is shared.
     on    HEAD. The wall is continued over the jaw by `unwrap.Skirt`.
@@ -332,14 +333,16 @@ MODES = ("off", "on")
 
 
 def survey(pattern, ldraw_dir):
-    """Every figure the handoff quotes about the head corpus, re-derived.
+    """What the skirt does to every matching part, off against HEAD.
 
-    Per part: how far its ink runs past the wall, what "extend the cylinder"
-    does to the lowest of it, how far the two working options disagree, and
-    how much of the dropped ink a pure extent bump would recover.
+    Two numbers per part, both about what the carrier set manages to hold:
+    decoration triangles that bind to nothing and are dropped, and how many
+    carriers the print ends up split across -- a face landing on one carrier
+    is one texture, a face on eleven is a mosaic.
     """
     files = sorted(glob.glob(f"{ldraw_dir}/parts/{pattern}.dat"))
     rows, skipped = [], []
+    real = unwrap.skirt
     for i, f in enumerate(files, 1):
         pid = Path(f).stem
         try:
@@ -351,89 +354,66 @@ def survey(pattern, ldraw_dir):
                 skipped.append((pid, "no decoration"))
                 print(f"[{i}/{len(files)}] {pid}: no decoration", flush=True)
                 continue
-            found = wall(analytic)
-            if found is None:
-                skipped.append((pid, "no color-16 wall"))
-                print(f"[{i}/{len(files)}] {pid}: no color-16 wall", flush=True)
-                continue
-            _prim, r_wall, h_wall, y_base = found
-            y_top = y_base + h_wall
-            fit = fit_profile(tri, tri_colors, y_top, r_wall)
-            if fit is None:
-                skipped.append((pid, "no dome fit"))
-                print(f"[{i}/{len(files)}] {pid}: no dome fit", flush=True)
-                continue
-            _res, a, pp, q, _rms = fit
-            top = float(deco.reshape(-1, 3)[:, 1].max())
-            over = top - y_top
-            _h, v = stretch("cylinder", y_top, r_wall, (a, pp, q), top)
-            if over > 0:
-                t = float(np.arcsin(np.clip(over / q, 0.0, 1.0)))
-                sl = float(arc_length(pp, q, t)[0]) - over
-            else:
-                sl = 0.0
-            body = [c for c in analytic if getattr(c, "color", 16) == 16
-                    and c.kind in ("cyli", "con")]
-            base = np.array([bind_is_none(t, body) for t in deco])
-            unwrap._radial_gap = _extended_gap
+            unwrap.skirt = lambda carrier, pts, **kw: carrier
             try:
-                relaxed = np.array([bind_is_none(t, body) for t in deco])
+                off = unwrap.decal_groups(tri, tri_colors, analytic)
             finally:
-                unwrap._radial_gap = _radial_gap
-            rows.append((pid, over, v, sl, int(base.sum()),
-                         int((base & ~relaxed).sum())))
-            print(f"[{i}/{len(files)}] {pid}: over {over:5.2f} LDU  "
-                  f"cyl v={v:.2f}  slide {sl:.2f}  "
-                  f"unbound {base.sum()}, extent bump recovers "
-                  f"{(base & ~relaxed).sum()}", flush=True)
+                unwrap.skirt = real
+            on = unwrap.decal_groups(tri, tri_colors, analytic)
+            # what a part actually YIELDS: above MAX_DECALS a part is judged
+            # one decoration shattered over faces and returns nothing at all,
+            # so collapsing its carriers can turn no decal into a decal
+            yield_off = len(unwrap.significant_groups(off))
+            yield_on = len(unwrap.significant_groups(on))
+            skirted = sum(isinstance(g[0], unwrap.Skirt) for g in on)
+            rows.append((pid, len(off), len(on), yield_off, yield_on, skirted))
+            print(f"[{i}/{len(files)}] {pid}: groups {len(off)}->{len(on)}, "
+                  f"drawn panels {yield_off}->{yield_on}, {skirted} skirted",
+                  flush=True)
         except Exception as e:                       # noqa: BLE001
             skipped.append((pid, f"{type(e).__name__}: {e}"))
-            print(f"[{i}/{len(files)}] {pid}: ERROR {type(e).__name__}",
+            print(f"[{i}/{len(files)}] {pid}: ERROR {type(e).__name__}: {e}",
                   flush=True)
     return rows, skipped
 
 
-def bind_is_none(tri, carriers):
-    return unwrap.bind(tri, carriers) is None
-
-
 def report(rows, skipped):
-    over = np.array([r[1] for r in rows])
-    v = np.array([r[2] for r in rows])
-    sl = np.array([r[3] for r in rows])
-    unbound = np.array([r[4] for r in rows], float)
-    rec = np.array([r[5] for r in rows], float)
-    print(f"\n{len(rows)} heads with decoration and a dome; "
-          f"{len(skipped)} skipped")
-    print(f"  ink past the wall on {(over > 0).sum()} of them; "
-          f"median {np.median(over[over > 0]):.2f} LDU, "
-          f"max {over.max():.2f}")
-    print("  extend-the-cylinder vertical scale at the lowest ink: "
-          f"median {np.median(v):.2f}, p10 {np.percentile(v, 10):.2f}, "
-          f"min {v.min():.2f}")
-    print(f"  the two options disagree by: median {np.median(sl):.2f} LDU, "
-          f"p90 {np.percentile(sl, 90):.2f}, max {sl.max():.2f}")
-    for thr in (0.5, 1.0, 2.0):
-        print(f"    over {thr:.1f} LDU: {(sl > thr).sum()} heads "
-              f"({(sl > thr).mean() * 100:.0f}%)")
-    has = unbound > 0
-    print("  a pure extent bump recovers "
-          f"{rec[has].sum() / unbound[has].sum() * 100:.0f}% of dropped ink "
-          f"over the corpus; per part "
-          f"{np.median(rec[has] / unbound[has]) * 100:.0f}% at the median")
-    worst = sorted(rows, key=lambda r: -r[3])[:8]
-    print("  biggest disagreement:",
-          [(r[0], round(r[3], 2)) for r in worst])
+    g_off = np.array([r[1] for r in rows], float)
+    g_on = np.array([r[2] for r in rows], float)
+    skirted = np.array([r[5] for r in rows], float)
+    print(f"\n{len(rows)} parts drawn; {len(skipped)} skipped")
+    print(f"  {(skirted > 0).sum()} got a skirt "
+          f"({(skirted > 0).mean() * 100:.0f}%)")
+    moved = g_on != g_off
+    print(f"  carrier count changed on {moved.sum()}: "
+          f"{(g_on < g_off).sum()} fewer, {(g_on > g_off).sum()} more")
+    print(f"  parts on a single carrier: {(g_off == 1).sum()} -> "
+          f"{(g_on == 1).sum()}")
+    worse = [r for r in rows if r[2] > r[1]]
+    if worse:
+        print("  MORE carriers than before:",
+              [(r[0], r[1], r[2]) for r in worse[:10]])
+    best = sorted(rows, key=lambda r: r[2] - r[1])[:8]
+    print("  biggest collapse:", [(r[0], r[1], r[2]) for r in best])
+    y_off = np.array([r[3] for r in rows])
+    y_on = np.array([r[4] for r in rows])
+    gained = (y_off == 0) & (y_on > 0)
+    lost = (y_off > 0) & (y_on == 0)
+    print(f"  parts drawing NO decal: {(y_off == 0).sum()} -> "
+          f"{(y_on == 0).sum()}   ({gained.sum()} gained, {lost.sum()} lost)")
+    if lost.any():
+        print("  LOST a decal:", [rows[i][0] for i in np.flatnonzero(lost)[:10]])
     counts = {}
     for _pid, why in skipped:
-        counts[why.split(":")[0]] = counts.get(why.split(":")[0], 0) + 1
+        k = why.split(":")[0]
+        counts[k] = counts.get(k, 0) + 1
     if counts:
         print("  skipped:", counts)
 
 
 LABEL = {"off": "skirt off", "on": "skirt on"}
-BLURB = {"off": "jaw ink binds to nothing and is dropped",
-         "on": "the wall is continued over the jaw"}
+BLURB = {"off": "ink past either end binds to nothing and is dropped",
+         "on": "the wall is continued over the jaw and the crown"}
 
 
 def _font(size):
@@ -493,7 +473,8 @@ def sheet(parts, out_dir, renders, cell=520, band=None):
     im = Image.new("RGB", (W, H), "#ffffff")
     d = ImageDraw.Draw(im)
     d.text((pad, 20), "minifig head decals: continuing the wall carrier over "
-           "the jaw it runs onto", font=_font(21), fill="#111111")
+           "the jaw and crown its print runs onto", font=_font(21),
+           fill="#111111")
     d.text((pad, 48), "each row one part, at one scale across the row; "
            "columns vary only in whether the skirt is built",
            font=_font(15), fill="#666666")

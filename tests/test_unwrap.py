@@ -958,6 +958,18 @@ def test_a_raised_plane_reconstruction_moves_along_the_normal():
     assert back == pytest.approx(np.array([[3.0, 2.25, 5.0]]), abs=1e-9)
 
 
+def _crown_pts(r=20.0, drop=4.0, rings=(0.25, 0.5, 0.75, 1.0)):
+    """The skirt at the OTHER end: curving inward below the wall's base."""
+    pts = []
+    for f in rings:
+        t = f * np.pi / 2
+        rr = r - (r * 0.4) * (1 - np.cos(t))
+        y = -drop * np.sin(t)
+        for th in np.linspace(0, 2 * np.pi, 24, endpoint=False):
+            pts.append([rr * np.cos(th), y, rr * np.sin(th)])
+    return np.array(pts, float)
+
+
 def _jaw_pts(r=20.0, h=24.0, drop=4.0, rings=(0.25, 0.5, 0.75, 1.0)):
     """Tessellation of a wall plus the skirt it runs into: a quarter ellipse
     from (r, top) inward, sampled as latitude rings the way LDraw's torus
@@ -1031,7 +1043,30 @@ def test_a_skirt_never_flares_back_out():
     pts = _jaw_pts()
     stray = np.array([[20.0, 24.0 + 3.9, 0.0]])      # an outlier near the top
     s = unwrap.skirt(cyl, np.vstack([pts, stray]))
-    assert np.all(np.diff(s.radii) <= 1e-9)
+    assert np.all(np.diff(s.hi[1]) <= 1e-9)
+
+
+def test_a_skirt_continues_both_ends_of_a_wall():
+    """A wall is not special at one end. 3626bp63's forehead lines run over
+    the crown, and a skirt built only past level 1 left the upper one
+    clipped exactly as the jaw's ink had been."""
+    cyl = FakeCylinder(r=20.0, h=24.0)
+    s = unwrap.skirt(cyl, np.vstack([_jaw_pts(), _crown_pts()]))
+    assert s.level_top > 1.0
+    assert s.level_bot < 0.0
+    assert s.radius_at(s.level_bot) < 0.95
+    assert s.radius_at(0.5) == pytest.approx(1.0)
+
+
+def test_ink_over_the_crown_binds_and_round_trips():
+    cyl = FakeCylinder(r=20.0, h=24.0)
+    crown = _crown_pts()
+    s = unwrap.skirt(cyl, np.vstack([_jaw_pts(), crown]))
+    over = crown[crown[:, 1] < -2.0][:1]
+    assert unwrap.bind(over, [cyl]) is None
+    assert unwrap.bind(over, [s]) is s
+    assert unwrap.to_xyz(unwrap.to_uv(over, s), s) == pytest.approx(over,
+                                                                   abs=0.3)
 
 
 def test_a_planar_carrier_has_no_skirt():

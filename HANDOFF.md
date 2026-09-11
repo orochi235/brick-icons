@@ -4,13 +4,18 @@ On `main`, committed, unpushed. **Another session shares this working
 directory and commits to `brick_icons/unwrap.py` too**, so unpushed commits
 are not necessarily yours. Stage explicit paths, never `git add -A`.
 
-A head's print does not stop where its r=13 wall does -- it runs onto the jaw,
-and `bind` had nothing to bind that ink to, so `bind_groups` dropped it.
-`unwrap.Skirt` continues the wall carrier over whatever it runs into, and
-`unwrap.skirt` builds one by reading the profile off the part's own latitude
-rings. Over the four drawn heads, decoration triangles binding to nothing went
-from **359 to 10**, and the ten left are `3626bp63`'s ink below the wall's
-BOTTOM -- a different end, untouched.
+A head's print does not stop where its r=13 wall does -- it runs onto the jaw
+at one end and over the crown at the other, and `bind` had nothing to bind that
+ink to, so `bind_groups` dropped it. `unwrap.Skirt` continues the wall carrier
+over whatever it runs into at BOTH ends, and `unwrap.skirt` builds one by
+reading the profile off the part's own latitude rings. Over the four drawn
+heads, decoration triangles binding to nothing went from **359 to 0**.
+
+**Read the part's orientation before naming an end.** 3626 is authored with +Y
+as LDraw DOWN: the hollow stud is at y=-4..0 and the neck at y=21..24, so
+`y > 17` is the jaw and `y < 4` is the crown. Calling the crown "below the
+wall's bottom" is what hid `3626bp63`'s clipped forehead line for a round --
+its ink was never on the jaw at all.
 
 **Mike chose "extend the cylinder" over "recognize the dome", and the shipped
 code is that**: `v` is the point's own height, exactly as before. The skirt

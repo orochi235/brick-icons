@@ -85,7 +85,8 @@ def _radial_gap(pts, prim) -> float:
     h = float(np.linalg.norm(prim.R[:, 1]))
     y = p[:, 1]
     top = getattr(prim, "level_top", 1.0) + BIND_TOL / h
-    if np.any(y < -BIND_TOL / h) or np.any(y > top):
+    bot = getattr(prim, "level_bot", 0.0) - BIND_TOL / h
+    if np.any(y < bot) or np.any(y > top):
         return np.inf
     want = np.array([prim.radius_at(float(v)) for v in y])
     return float(np.max(np.abs(np.hypot(p[:, 0], p[:, 2]) - want)) * r)
@@ -233,29 +234,32 @@ class Plane:
 
 @dataclass
 class Skirt:
-    """A wall carrier continued past its own end, over what it runs into.
+    """A wall carrier continued past its own ends, over what it runs into.
 
     A minifig head's print does not stop where its r=13 wall does -- it runs
-    onto the jaw, which LDraw builds from four `t04o6250` quarter-torus
-    subfiles that arrive tessellated, so `bind` had nothing to bind them to
-    and `bind_groups` dropped a quarter of the ink.
+    onto the jaw at one end and over the crown at the other, both of which
+    LDraw builds from `t04o6250` quarter-torus subfiles that arrive
+    tessellated. `bind` had nothing to bind that ink to and `bind_groups`
+    dropped it.
 
     Everything the unwrap needs from a carrier it asks `radius_at` for -- the
     bind test's target radius, the arc-length scale `to_uv` gives u, and the
-    radius `to_xyz` puts a point back at. So continuing the surface is a
-    matter of answering that question past level 1, and no other rule changes.
+    radius `to_xyz` puts a point back at. So continuing a surface is a matter
+    of answering that question outside [0, 1], and no other rule changes.
 
-    The profile is sampled off the part's own body tessellation rather than
-    read from the torus that declares it: `primitives.parse_primitive` matches
-    only `<num>-<den><family>` and has no torus case, so the declaration is
-    gone by the time geometry arrives here. Teaching the loader that family is
-    the durable fix and this is not it -- which is why the samples are a
-    MEDIAN per band and monotone-clamped, so a cracked or decoration-cut band
-    moves the profile by a vertex rather than by its worst vertex.
+    BOTH ends, because a wall is not special at one of them: 3626bp63's
+    forehead lines run over the crown, and a skirt built only past level 1
+    left its upper line clipped exactly as the jaw's ink had been.
+
+    The profile is sampled off the part's own tessellation rather than read
+    from the torus that declares it: `primitives.parse_primitive` matches only
+    `<num>-<den><family>` and has no torus case, so the declaration is gone by
+    the time geometry arrives here. Teaching the loader that family is the
+    durable fix and this is not it.
     """
     base: object
-    levels: np.ndarray
-    radii: np.ndarray
+    hi: tuple = None          # (levels ascending from 1, radii) or None
+    lo: tuple = None          # (levels ascending to 0, radii) or None
 
     @property
     def R(self):
@@ -275,17 +279,23 @@ class Skirt:
 
     @property
     def level_top(self):
-        return float(self.levels[-1])
+        return 1.0 if self.hi is None else float(self.hi[0][-1])
+
+    @property
+    def level_bot(self):
+        return 0.0 if self.lo is None else float(self.lo[0][0])
 
     def radius_at(self, level):
         level = float(level)
-        if level <= 1.0:
-            return self.base.radius_at(level)
-        return float(np.interp(level, self.levels, self.radii))
+        if level > 1.0 and self.hi is not None:
+            return float(np.interp(level, self.hi[0], self.hi[1]))
+        if level < 0.0 and self.lo is not None:
+            return float(np.interp(level, self.lo[0], self.lo[1]))
+        return self.base.radius_at(min(max(level, 0.0), 1.0))
 
 
 #: How close two levels must be to count as the same latitude ring, in LDU,
-#: and how far past its section to continue a wall, as a multiple of the
+#: and how far past a section to continue a wall, as a multiple of the
 #: section's height. A fixed band grid was the first try and it conflated
 #: 3626bp39's last two rings -- 0.31 LDU apart, inside one band -- so the
 #: profile stopped at the wrong radius and the jaw's last course of ink was
@@ -295,49 +305,68 @@ SKIRT_RING = 0.05
 SKIRT_REACH = 0.5
 
 
+def _skirt_side(y, rad, carrier, reach, up):
+    """(levels, radii) continuing one end of a section, or None.
+
+    `up` picks the end: past level 1, or before level 0. Written once and
+    called twice, because a wall is not special at either end.
+    """
+    h = float(np.linalg.norm(carrier.R[:, 1])) or 1.0
+    edge = 1.0 if up else 0.0
+    away = (y - edge) if up else (edge - y)          # distance past the end
+    keep = (away > 0) & (away <= reach)
+    if not keep.any():
+        return None
+    away, r = away[keep], rad[keep]
+    order = np.argsort(away)
+    away, r = away[order], r[order]
+    # one sample per latitude ring, cut where the level jumps by more than a
+    # ring's worth. A gap between rings is a coarse tessellation, not the end
+    # of the surface, so it splits clusters and nothing more.
+    cuts = np.flatnonzero(np.diff(away) > SKIRT_RING / h) + 1
+    dists, radii = [0.0], [float(carrier.radius_at(edge))]
+    for grp in np.split(np.arange(len(away)), cuts):
+        d = float(np.median(away[grp]))
+        if d <= dists[-1]:
+            continue
+        dists.append(d)
+        # the median, and never wider than the ring nearer the section: a
+        # skirt curves inward, and a ring left holding only its outer
+        # vertices where decoration cut it away would otherwise read as the
+        # wall flaring back out
+        radii.append(min(float(np.median(r[grp])), radii[-1]))
+    if len(dists) < 3:
+        return None
+    dists = np.asarray(dists, float)
+    radii = np.asarray(radii, float)
+    if up:
+        return edge + dists, radii
+    return (edge - dists)[::-1], radii[::-1]         # ascending levels
+
+
 def skirt(carrier, pts, reach=SKIRT_REACH):
-    """`carrier` continued over the geometry past its end, or unchanged.
+    """`carrier` continued over the geometry past either end, or unchanged.
 
     Every triangle, not the color-16 ones: decoration lies on the same
-    surface, and a print that COVERS the skirt leaves almost no body
+    surface, and a print that COVERS a skirt leaves almost no body
     tessellation to read it from. 3626bp39's beard wraps the whole jaw.
 
-    `reach` bounds how far past the section to look -- a wall does not
-    continue forever, and without a bound the profile swallows the neck and
-    then the torso.
+    `reach` bounds how far past a section to look -- a wall does not continue
+    forever, and without a bound the profile swallows the neck and then the
+    torso.
     """
     if isinstance(carrier, Plane) or carrier is None:
         return carrier
     pts = np.asarray(pts, float).reshape(-1, 3)
     if not len(pts):
         return carrier
-    h = float(np.linalg.norm(carrier.R[:, 1])) or 1.0
     p = _local(pts, carrier)
     y, rad = p[:, 1], np.hypot(p[:, 0], p[:, 2])
-    keep = (y > 1.0) & (y <= 1.0 + reach)
-    if not keep.any():
+    hi = _skirt_side(y, rad, carrier, reach, up=True)
+    lo = _skirt_side(y, rad, carrier, reach, up=False)
+    if hi is None and lo is None:
         return carrier
-    y, rad = y[keep], rad[keep]
-    order = np.argsort(y)
-    y, rad = y[order], rad[order]
-    # one sample per latitude ring, cut where the level jumps by more than a
-    # ring's worth. A gap between rings is a coarse tessellation, not the end
-    # of the surface, so it splits clusters and nothing more.
-    cuts = np.flatnonzero(np.diff(y) > SKIRT_RING / h) + 1
-    levels, radii = [1.0], [float(carrier.radius_at(1.0))]
-    for grp in np.split(np.arange(len(y)), cuts):
-        lvl = float(np.median(y[grp]))
-        if lvl <= levels[-1]:
-            continue
-        levels.append(lvl)
-        # the median, and never wider than the ring below it: a skirt curves
-        # inward, and a ring left holding only its outer vertices where
-        # decoration cut it away would otherwise read as the wall flaring out
-        radii.append(min(float(np.median(rad[grp])), radii[-1]))
-    if len(levels) < 3:
-        return carrier
-    return Skirt(base=carrier, levels=np.asarray(levels, float),
-                 radii=np.asarray(radii, float))
+    return Skirt(base=carrier, hi=hi, lo=lo)
 
 
 def to_uv(pts, carrier, theta0=0.0):
@@ -486,7 +515,8 @@ def carrier_extent(carrier, uv=None):
     r = float(np.linalg.norm(carrier.R[:, 0]))
     h = float(np.linalg.norm(carrier.R[:, 1]))
     top = getattr(carrier, "level_top", 1.0) * h
-    ext = np.array([[-np.pi * r, 0.0], [np.pi * r, 0.0],
+    bot = getattr(carrier, "level_bot", 0.0) * h
+    ext = np.array([[-np.pi * r, bot], [np.pi * r, bot],
                     [np.pi * r, top], [-np.pi * r, top]])
     if axis_reversed(carrier):
         ext = -ext
