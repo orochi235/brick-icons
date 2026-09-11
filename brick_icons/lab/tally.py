@@ -207,6 +207,13 @@ def _commit_dates(shas: Sequence[str]) -> dict[str, str]:
     return out
 
 
+#: The least of a slot's widest run a revision has to cover before its failure
+#: rate means anything. white-occt's first revision drew 277 parts of the
+#: 20,213 it draws now and 58% of them failed, which took the chart's axis to
+#: 60% and flattened every real line into the bottom tenth of it.
+MEANINGFUL_SHARE = 0.10
+
+
 def by_build(conn: sqlite3.Connection,
              sources: Sequence[str] | None = None) -> list[dict]:
     """Failures per slot per engine revision, dated from git.
@@ -215,6 +222,10 @@ def by_build(conn: sqlite3.Connection,
     -- a revision count, then the sha -- with a trailing `+` where the tree
     was dirty; the sha is what git can date, and a dirty tree is still that
     commit's code plus something uncommitted.
+
+    A revision that covered a sliver of what its slot has drawn is left out:
+    a bring-up run and a spot check are not rates, and they are the points
+    that set the axis -- see `MEANINGFUL_SHARE`.
     """
     want = set(sources) if sources else None
     rows = [r for r in conn.execute(
@@ -228,10 +239,16 @@ def by_build(conn: sqlite3.Connection,
     shas = {r["build"].split(".")[-1].rstrip("+") for r in rows}
     dates = _commit_dates(sorted(shas))
 
+    widest: dict[str, int] = {}
+    for r in rows:
+        widest[r["source"]] = max(widest.get(r["source"], 0), r["n"])
+
     out = []
     for r in rows:
         sha = r["build"].split(".")[-1].rstrip("+")
         if sha not in dates:
+            continue
+        if r["n"] < widest[r["source"]] * MEANINGFUL_SHARE:
             continue
         out.append({"at": dates[sha], "source": r["source"], "build": r["build"],
                     "size": r["n"], "failed": r["failed"] or 0,

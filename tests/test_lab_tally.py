@@ -201,6 +201,24 @@ def test_by_build_drops_a_revision_this_checkout_has_never_seen(conn):
     assert tally.by_build(conn) == []
 
 
+def test_by_build_drops_a_revision_that_barely_ran(conn):
+    """A slot's bring-up run is not its failure rate. white-occt's first
+    revision drew 277 parts of the 20,213 it draws now, 58% of them failed,
+    and that one point set the chart's axis to 60%."""
+    head = subprocess.run(["git", "rev-parse", "--short", "HEAD"],
+                          capture_output=True, text=True).stdout.strip()
+    for i in range(20):
+        _part(conn, f"30{i:02d}")
+        _render(conn, f"30{i:02d}", "occt")
+        _measure(conn, f"30{i:02d}", "occt", "occt", build=f"200.{head}")
+    _part(conn, "9999")
+    _render(conn, "9999", "occt")
+    _measure(conn, "9999", "occt", "occt", error="MemoryError",
+             build=f"100.{head}")
+    conn.commit()
+    assert [r["build"] for r in tally.by_build(conn)] == [f"200.{head}"]
+
+
 def test_a_dirty_build_is_dated_by_the_commit_it_sat_on(conn):
     head = subprocess.run(["git", "rev-parse", "--short", "HEAD"],
                           capture_output=True, text=True).stdout.strip()

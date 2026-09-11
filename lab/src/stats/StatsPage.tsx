@@ -165,9 +165,10 @@ export function StatsPage({ client }: { client: LabClient }) {
                             : 'no render in this corpus carries the build that '
                               + 'drew it'} />
             <p className="stats-note">
-              A share, not a count, and on its own axis for that reason: each
-              revision is measured over the parts it actually drew, which
-              ranges from a handful to the whole library.
+              A share, not a count, and on its own axis for that reason. A
+              revision that covered less than a tenth of its slot's widest run
+              is left out — a bring-up run and a spot check are not rates, and
+              they are what sets the axis.
             </p>
           </section>
 
