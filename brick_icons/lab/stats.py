@@ -14,8 +14,13 @@ from brick_icons.lab import tally
 from brick_icons.lab.cells import (COVERAGE_ORDER, coverage_of, engine_for,
                                    not_applicable)
 
-# Seconds a render took, bucketed the way the census notes talk about it.
-SECS_EDGES = (1.0, 3.0, 10.0, 30.0, 60.0, 120.0)
+# Seconds a render took, in even 2-second buckets up to two minutes, then one
+# open bucket for the tail. Even is the point: bars of one width over buckets
+# spanning 1s, 7s and 30s drew the same area for wildly different densities.
+SECS_BUCKET = 2.0
+SECS_TOP = 120.0
+SECS_EDGES = tuple(SECS_BUCKET * i
+                   for i in range(1, int(SECS_TOP // SECS_BUCKET) + 1))
 
 # The part-kind filters. The wall's `rendered` / `unrendered` / `errors` are
 # not here: each is a statement about one slot, and the coverage chart already
@@ -82,11 +87,7 @@ def _bins(values: list[float]) -> list[dict]:
     out = [{"from": lo, "to": hi, "n": 0}
            for lo, hi in zip(edges, (*SECS_EDGES, None))]
     for v in values:
-        index = len(SECS_EDGES)
-        for i, edge in enumerate(SECS_EDGES):
-            if v < edge:
-                index = i
-                break
+        index = min(max(int(v // SECS_BUCKET), 0), len(SECS_EDGES))
         out[index]["n"] += 1
     return out
 
@@ -144,23 +145,40 @@ def members(conn: sqlite3.Connection, *, kind: str = "all", moved: bool = False,
     return {r["id"] for r in keep}, keep
 
 
+#: Every slot's latest error per part, in ONE pass. Asked per slot instead,
+#: this is a `MAX(run_id)` group-by over the whole measurements table once for
+#: each of them -- 1,067 ms of a 3,700 ms page, and it grows with the slots.
+_LATEST_ERROR_BY_SOURCE = """
+SELECT m.part_id, m.source, m.error FROM measurements m
+JOIN (SELECT part_id, source, MAX(run_id) AS run_id FROM measurements
+      WHERE source IS NOT NULL GROUP BY part_id, source) latest
+  ON m.part_id = latest.part_id AND m.source = latest.source
+ AND m.run_id = latest.run_id
+WHERE m.error IS NOT NULL
+"""
+
+
 def _coverage(conn: sqlite3.Connection, ids: set[str]) -> list[dict]:
     sources = [r["source"] for r in conn.execute(
         "SELECT source, count(*) AS n FROM renders GROUP BY source "
         "ORDER BY n DESC")]
     printed = {r["id"] for r in conn.execute(
         "SELECT id FROM parts WHERE printed = 1")}
+    errors_by_source: dict[str, dict[str, str]] = {}
+    for row in conn.execute(_LATEST_ERROR_BY_SOURCE):
+        errors_by_source.setdefault(row["source"], {})[row["part_id"]] = row["error"]
+    drawn_by_source: dict[str, set[str]] = {}
+    for row in conn.execute("SELECT part_id, source FROM renders"):
+        drawn_by_source.setdefault(row["source"], set()).add(row["part_id"])
+    nothing_by_source: dict[str, set[str]] = {}
+    for row in conn.execute(
+            "SELECT DISTINCT part_id, source FROM attempts WHERE state = 'none'"):
+        nothing_by_source.setdefault(row["source"], set()).add(row["part_id"])
     out = []
     for source in sources:
         engine = engine_for(source)
-        drawn = {r["part_id"] for r in conn.execute(
-            "SELECT part_id FROM renders WHERE source = ?", (source,))}
-        errors = {r["part_id"]: r["error"] for r in conn.execute(
-            "SELECT m.part_id, m.error FROM measurements m JOIN "
-            "(SELECT part_id, MAX(run_id) AS run_id FROM measurements "
-            " WHERE source = ? GROUP BY part_id) latest "
-            "ON m.part_id = latest.part_id AND m.run_id = latest.run_id "
-            "WHERE m.source = ?", (source, source))}
+        drawn = drawn_by_source.get(source, set())
+        errors = errors_by_source.get(source, {})
         flagged = {r["part_id"] for r in conn.execute(
             "SELECT part_id, engines FROM defects WHERE status = 'open'")
             if engine in r["engines"]}
@@ -168,17 +186,24 @@ def _coverage(conn: sqlite3.Connection, ids: set[str]) -> list[dict]:
         # promises they cannot: the wall reads a slot that ran and drew
         # nothing as `failed`, and the dashboard was calling the same 2,480
         # decal parts `untried` and asking the fleet to redo finished work.
-        drew_nothing = {r["part_id"] for r in conn.execute(
-            "SELECT DISTINCT part_id FROM attempts WHERE source = ? "
-            "AND state = 'none'", (source,))}
+        drew_nothing = nothing_by_source.get(source, set())
         counts = dict.fromkeys(COVERAGE_ORDER, 0)
+        # `coverage_of` stays the definition -- the wall reads the same
+        # function, and re-deriving its precedence here is how the two pages
+        # come to disagree. It is only ever asked a handful of distinct
+        # questions, though, so the answers are remembered: 23,339 parts over
+        # nine slots was 210,000 calls and a third of the page's load.
+        seen: dict[tuple, str] = {}
         for pid in ids:
-            label = coverage_of(sha="x" if pid in drawn else None,
-                                error=errors.get(pid),
-                                open_defects=1 if pid in flagged else 0,
-                                inapplicable=not_applicable(
-                                    source, pid in printed, pid in drawn),
-                                drew_nothing=pid in drew_nothing)
+            key = ("x" if pid in drawn else None, errors.get(pid),
+                   1 if pid in flagged else 0,
+                   not_applicable(source, pid in printed, pid in drawn),
+                   pid in drew_nothing)
+            label = seen.get(key)
+            if label is None:
+                label = seen[key] = coverage_of(
+                    sha=key[0], error=key[1], open_defects=key[2],
+                    inapplicable=key[3], drew_nothing=key[4])
             counts[label] += 1
         out.append({"source": source, "engine": engine, "counts": counts,
                     "size": len(ids)})
@@ -278,6 +303,40 @@ def _bands(phases: dict) -> dict[str, float]:
     return {k: float(named.get(k, 0.0)) for k in PHASE_ORDER}
 
 
+def _sum_paths(named: list[dict[str, float]]) -> list[dict]:
+    """One tree over many rows, summed from their paths rather than from a
+    tree apiece.
+
+    Identical output to walking each row's own tree -- a node exists for every
+    prefix of every named path, carrying that path's seconds or nothing --
+    and `tree` is then run once instead of 19,931 times, which was a third of
+    the dashboard's load.
+    """
+    secs: dict[str, float] = {}
+    seen: dict[str, int] = {}
+    for row in named:
+        # Per ROW, so a row naming `render/geometry` twice still counts once
+        # against `render` -- `seen` is how many parts reached a stage.
+        reached: set[str] = set()
+        for path in row:
+            parts = path.split("/")
+            for i in range(len(parts)):
+                reached.add("/".join(parts[:i + 1]))
+        for path in reached:
+            secs[path] = secs.get(path, 0.0) + row.get(path, 0.0)
+            seen[path] = seen.get(path, 0) + 1
+    summed = tree(secs)
+
+    def stamp(nodes):
+        for node in nodes:
+            if node["name"] != REST:
+                node["n"] = seen.get(node["path"], 0)
+            stamp(node["children"])
+
+    stamp(summed)
+    return summed
+
+
 def _sum_trees(rows: list[dict]) -> list[dict]:
     """One tree over many parts: the same path added up wherever it appears.
 
@@ -333,11 +392,17 @@ def _phases(rows: list[sqlite3.Row], ids: set[str]) -> list[dict]:
             continue
         phases = json.loads(row["phases"])
         bands = _bands(phases)
+        named = normalize(phases)
         per_engine.setdefault(row["engine"], []).append({
             "part_id": row["part_id"],
             "bands": bands,
             "total": round(sum(bands.values()), 3),
-            "nodes": _split_of(phases),
+            # The paths, not a tree. A tree per row is only needed for the
+            # handful this page draws individually, and is built below for
+            # those alone.
+            "named": named,
+            "phases": phases,
+            "split": any("/" in path for path in named),
         })
 
     out = []
@@ -345,7 +410,8 @@ def _phases(rows: list[sqlite3.Row], ids: set[str]) -> list[dict]:
         totals = {k: round(sum(m["bands"][k] for m in measured), 3)
                   for k in PHASE_ORDER}
         ranked = sorted(measured, key=lambda m: -m["total"])
-        split = [m for m in measured if m["nodes"] is not None]
+        split = [m for m in measured if m["split"]]
+        nodes = _sum_paths([m["named"] for m in split]) if split else []
         out.append({
             "engine": engine,
             "n": len(measured),
@@ -353,13 +419,12 @@ def _phases(rows: list[sqlite3.Row], ids: set[str]) -> list[dict]:
             "totals": totals,
             "split": {
                 "n": len(split),
-                "total": round(sum(n["secs"] for m in split
-                                   for n in m["nodes"]), 3),
-                "nodes": _sum_trees(split),
+                "total": round(sum(n["secs"] for n in nodes), 3),
+                "nodes": nodes,
             } if split else None,
             "slowest": [{"part_id": m["part_id"], "total": m["total"],
                          "secs": {k: round(v, 3) for k, v in m["bands"].items()},
-                         "split": m["nodes"]}
+                         "split": _split_of(m["phases"])}
                         for m in ranked[:SLOWEST_N]],
         })
     return out
