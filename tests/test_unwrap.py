@@ -73,6 +73,35 @@ def test_cylinder_unwrap_round_trips():
     assert back == pytest.approx(pts, abs=1e-9)
 
 
+class FakeShearedCylinder(FakeCylinder):
+    """15068d02's carrier: LDraw's unit `cyli` through a shearing matrix, so
+    the section is an ellipse. Both radial columns are the same length and
+    square to the axis, but they are 108.2 degrees apart, not 90."""
+
+    def __init__(self, r=49.39, h=40.0, shear_deg=108.2):
+        super().__init__(r=r, h=h)
+        th = np.radians(shear_deg)
+        self.R = np.column_stack([[r, 0.0, 0.0],
+                                  [0.0, h, 0.0],
+                                  [r * np.cos(th), 0.0, r * np.sin(th)]])
+
+
+def _on_wall(prim, theta, level):
+    """Points on a primitive's EXACT wall, shear and all."""
+    local = np.column_stack([np.cos(theta), level, np.sin(theta)])
+    return np.asarray(prim.t, float) + local @ np.asarray(prim.R, float).T
+
+
+def test_a_sheared_cylinder_round_trips():
+    """The unwrap read every carrier as circular, so a decal on a sheared one
+    came back on a circle that meets the true section in one place -- 15068d02
+    hinged its sticker there and lifted the rest 8.2 LDU off the slope."""
+    cyl = FakeShearedCylinder()
+    pts = _on_wall(cyl, np.linspace(0.1, 1.2, 6), np.linspace(0.1, 0.9, 6))
+    back = unwrap.to_xyz(unwrap.to_uv(pts, cyl), cyl)
+    assert back == pytest.approx(pts, abs=1e-9)
+
+
 def test_faceted_ring_reprojects_onto_the_exact_radius():
     """The point of the whole exercise: chord midpoints authored at r=19.616
     (a 16-gon inscribed in r=20) come back at exactly 20."""

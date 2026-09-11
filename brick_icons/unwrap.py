@@ -54,6 +54,20 @@ def _circle_frame(prim):
     return o, a, r, e1, e2, float(np.linalg.norm(prim.R[:, 1])) or 1.0
 
 
+def _scale(prim):
+    """(world radius, world height) — the lengths the UV metric is in."""
+    return (float(np.linalg.norm(prim.R[:, 0])),
+            float(np.linalg.norm(prim.R[:, 1])) or 1.0)
+
+
+def _local_arc(pts, prim):
+    """(theta, level) on the primitive's own wall, exact under scale and
+    shear. The orthonormalized frame `_circle_frame` builds is a CIRCLE, and
+    a sheared carrier's section is an ellipse that meets it in one place."""
+    p = _local(pts, prim)
+    return np.arctan2(p[:, 2], p[:, 0]), p[:, 1]
+
+
 def _local(pts, prim):
     """`pts` in the primitive's own frame, where the wall is the unit circle
     and the axis runs y = 0 to 1. Exact under scale and shear, which a
@@ -93,10 +107,8 @@ def _seam_origin(pts, carrier) -> float:
     never merge, fit as one shape, or stroke as one boundary."""
     if isinstance(carrier, Plane):
         return 0.0
-    o, a, r, e1, e2, _h = _circle_frame(carrier)
-    d = np.asarray(pts, float).reshape(-1, 3) - o
-    perp = d - np.outer(d @ a, a)
-    th = np.sort(np.mod(np.arctan2(perp @ e2, perp @ e1), 2 * np.pi))
+    arc, _level = _local_arc(np.asarray(pts, float).reshape(-1, 3), carrier)
+    th = np.sort(np.mod(arc, 2 * np.pi))
     if len(th) < 2:
         return 0.0
     gaps = np.diff(np.concatenate([th, th[:1] + 2 * np.pi]))
@@ -225,12 +237,10 @@ def to_uv(pts, carrier, theta0=0.0):
     if isinstance(carrier, Plane):
         n, u, v = carrier.basis()
         return np.column_stack([pts @ u, pts @ v])
-    o, a, r, e1, e2, h = _circle_frame(carrier)
-    d = pts - o
-    height = d @ a
-    perp = d - np.outer(height, a)
-    th = np.arctan2(perp @ e2, perp @ e1) - theta0
-    uv = np.column_stack([_radius(carrier, height / h, r) * _wrap(th), height])
+    r, h = _scale(carrier)
+    arc, level = _local_arc(pts, carrier)
+    uv = np.column_stack([_radius(carrier, level, r) * _wrap(arc - theta0),
+                          level * h])
     # Negating BOTH components is a 180-degree rotation, so a reversed axis
     # turns the print upright without mirroring its glyphs.
     return -uv if axis_reversed(carrier) else uv
@@ -251,12 +261,16 @@ def to_xyz(uv, carrier, theta0=0.0, standoff=0.0):
                 + (carrier.offset + standoff) * n)
     if axis_reversed(carrier):
         uv = -uv
-    o, a, r, e1, e2, h = _circle_frame(carrier)
-    rad = _radius(carrier, uv[:, 1] / h, r)
+    r, h = _scale(carrier)
+    level = uv[:, 1] / h
+    rad = _radius(carrier, level, r)
     th = uv[:, 0] / rad + theta0
-    out = rad + standoff
-    return (o + np.outer(out * np.cos(th), e1)
-            + np.outer(out * np.sin(th), e2) + np.outer(uv[:, 1], a))
+    # A local radial scale, which is what `Cylinder.raised` does to the depth
+    # source: the two have to lift a region by the same amount or the boolean
+    # clip cuts the drawing away against its own occluder.
+    out = (rad + standoff) / r
+    local = np.column_stack([out * np.cos(th), level, out * np.sin(th)])
+    return np.asarray(carrier.t, float) + local @ np.asarray(carrier.R, float).T
 
 
 def _region_d(poly, x0, y1, s):
