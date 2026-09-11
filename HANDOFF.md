@@ -1,3 +1,46 @@
+## Two silhouette-occt fills are running overnight, 2026-09-11 ~05:30
+
+`80c86ab6` on studio (7,015 parts, 8 workers, deadline 11:24AM) and `a5ef3b55`
+on keiei (1,700 parts, 4 workers, deadline 9:23AM). **Disjoint part lists** --
+one slot, split, no part in both. An `ingest-watch.py` covers both trees every
+300s, so the wall and the coverage numbers follow along without a fetch.
+
+    out/slot-silhouette-occt-fill2    studio
+    out/slot-silhouette-occt-keiei    keiei
+
+Both draw at 1.4-2.5s a part. When they land silhouette-occt goes from 10,274
+drawn to roughly 19,000 of 20,597.
+
+**The batch was cut by hand, and that is the point.** `slot-coverage.py
+--budget` sizes from the slot's mean seconds and orders never-tried first. Both
+are wrong for a fill: the mean is over parts the slot has ALREADY drawn, and
+the never-tried are overwhelmingly `c0X` composite assemblies. The first job
+(`01f0b2f1`, killed) spent 19 minutes and 2h18m of CPU on 28 composites and
+produced **2 drawings** -- roughly 15 core-minutes each to `ProcessDied`. The
+list these two are running is instead every part whose latest silhouette-occt
+measurement is clean, that has no render row, and whose id has no `c0` in it:
+8,715 of them, and they draw ten times faster than the estimate rather than
+forty times slower. The query is in this session's scrollback; it is four lines
+against `measurements` and `renders`.
+
+**`onto kill` leaves the workers running.** After killing `01f0b2f1` the tree
+stayed locked and `onto run` returned 409 for four minutes; five orphaned
+`compare-silhouette-truth.py` processes were still grinding composites,
+reparented to init. `pkill -f "python.*census"` does NOT match them -- the
+script is `compare-silhouette-truth.py`. Kill by that name.
+
+**Neither job delivered until told to.** `--out` and `--to` are documented to
+push as items finish and did not; `onto deliver --at items <id>` started it
+both times, and keiei then pushed on its own while studio needed the nudge
+again. Check `find out/<tree> -name '*.svg' | wc -l` against the job's own
+progress line within the first minute, not at the end.
+
+**Composites are owed a pass of their own.** 577 `c0X` parts are missing from
+silhouette-occt and are not in either list. They need a longer cap, a different
+approach, or a decision that occt will not draw them -- `ProcessDied` is the
+OCCT segfault in `ShapeUpgrade_UnifySameDomain::IntUnifyFaces`, which a longer
+cap never fixes.
+
 ## A batch map for the wall: designed, measured, not built
 
 Mike's ask, 2026-09-10: "a really compact way of depicting which icons on a
