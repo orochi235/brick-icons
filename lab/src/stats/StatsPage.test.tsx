@@ -270,6 +270,34 @@ describe('StatsPage', () => {
     ]);
   });
 
+  it('ticks the axis every ten seconds rather than labelling every bucket',
+     async () => {
+    const many = body();
+    many.speed = [{ engine: 'occt', n: 30, total: 100, median: 5, p95: 40,
+                    max: 90,
+                    bins: [...Array.from({ length: 10 }, (_, i) => (
+                      { from: i * 2, to: i * 2 + 2, n: 3 })),
+                           { from: 20, to: null, n: 0 }] }];
+    const { container } = render(<StatsPage client={clientWith(async () => many)} />);
+    await waitFor(() => container.querySelector('.stats-bin-fill'));
+    expect([...container.querySelectorAll('.stats-histogram .stats-bin-label')]
+      .map((el) => el.textContent)).toEqual(['0s', '10s', '20s+']);
+  });
+
+  it('leaves an empty bucket empty instead of standing a stub on it',
+     async () => {
+    const gap = body();
+    gap.speed = [{ engine: 'occt', n: 5, total: 10, median: 1, p95: 3, max: 4,
+                   bins: [{ from: 0, to: 2, n: 5 }, { from: 2, to: 4, n: 0 },
+                          { from: 4, to: null, n: 0 }] }];
+    const { container } = render(<StatsPage client={clientWith(async () => gap)} />);
+    await waitFor(() => container.querySelector('.stats-bin-fill'));
+    // A bar carries `min-height: 1px`, so an empty bucket that still renders
+    // one draws a tick mark the reader reads as a part that took that long.
+    expect(container.querySelectorAll('.stats-histogram .stats-bin-fill').length)
+      .toBe(1);
+  });
+
   it('names both engines rather than leaving the fills to say which is which',
      async () => {
     const two = body();

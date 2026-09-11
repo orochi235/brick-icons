@@ -14,11 +14,11 @@ from brick_icons.lab import tally
 from brick_icons.lab.cells import (COVERAGE_ORDER, coverage_of, engine_for,
                                    not_applicable)
 
-# Seconds a render took, in even 2-second buckets up to two minutes, then one
-# open bucket for the tail. Even is the point: bars of one width over buckets
+# Seconds a render took, in even 2-second buckets to a minute, then one open
+# bucket for the tail. Even is the point: bars of one width over buckets
 # spanning 1s, 7s and 30s drew the same area for wildly different densities.
 SECS_BUCKET = 2.0
-SECS_TOP = 120.0
+SECS_TOP = 60.0
 SECS_EDGES = tuple(SECS_BUCKET * i
                    for i in range(1, int(SECS_TOP // SECS_BUCKET) + 1))
 

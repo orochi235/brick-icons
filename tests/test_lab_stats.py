@@ -183,6 +183,18 @@ def test_speed_reports_the_spread_per_engine(conn):
     assert sum(b["n"] for b in row["bins"]) == 4
 
 
+def test_speed_buckets_seconds_evenly(conn):
+    for i, secs in enumerate([0.5, 2.0, 3.9, 61.0, 4000.0]):
+        _part(conn, f"300{i}")
+        _measure(conn, f"300{i}", "occt", secs=secs)
+    conn.commit()
+    bins = {r["engine"]: r for r in stats.stats(conn)["speed"]}["occt"]["bins"]
+    widths = {round(b["to"] - b["from"], 3) for b in bins if b["to"] is not None}
+    assert widths == {stats.SECS_BUCKET}
+    assert bins[-1] == {"from": stats.SECS_TOP, "to": None, "n": 2}
+    assert [b["n"] for b in bins[:3]] == [1, 2, 0]
+
+
 def test_speed_ignores_a_part_outside_the_set(conn):
     _part(conn, "3001")
     _part(conn, "s1", category="|")

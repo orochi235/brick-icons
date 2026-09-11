@@ -152,15 +152,23 @@ const binLabel = (from: number, to: number | null) =>
   to === null ? `${from}s+` : `${from}–${to}s`;
 
 /** Render times, sharing bins and one count scale across whatever engines are
- *  on screen -- occt alone today. The shared scale is the load-bearing part:
- *  a panel scaled to its own tallest bin draws two different counts at the
- *  same height, so a second engine must not bring per-panel scaling with it.
+ *  on screen. The shared scale is the load-bearing part: a panel scaled to its
+ *  own tallest bin draws two different counts at the same height, so a second
+ *  engine must not bring per-panel scaling with it.
+ *
+ *  The bins are even and the server decides how wide (2s today), so there are
+ *  too many to label one by one: a tick sits at every ten seconds and the rest
+ *  of a bin's reading is its tooltip.
  *
  *  Identity is fill against hatch, not two hues. The status palette already
  *  spends gold, red and cyan and the phase palette blue, orange, green and
  *  purple; a spare hue on this page is one the reader has just been taught to
  *  read as something else. */
 const SERIES_FILL = ['solid', 'hatch'] as const;
+
+/** A tick every ten seconds, read off the bin's own boundary rather than
+ *  counted in bins, so the axis survives the server changing bin width. */
+const TICK_SECS = 10;
 
 export function SecsOverlay({ rows }: { rows: SpeedRow[] }) {
   const bins = rows[0]?.bins ?? [];
@@ -188,11 +196,13 @@ export function SecsOverlay({ rows }: { rows: SpeedRow[] }) {
           // engine that is changes bin by bin -- that is the whole point of
           // the chart -- so it cannot be a fixed order.
           const shortest = Math.min(...counts);
+          const open = bin.to === null;
           return (
-            <div key={bin.from} className="stats-bin">
+            <div key={bin.from} className="stats-bin" data-open={open || undefined}>
               <span className="stats-bin-stack">
                 {rows.map((row, i) => {
                   const n = counts[i] ?? 0;
+                  if (n === 0) return null;
                   return (
                     <span key={row.engine} className="stats-bin-fill stats-bin-mark"
                           data-engine={row.engine} data-fill={SERIES_FILL[i] ?? 'solid'}
@@ -204,7 +214,12 @@ export function SecsOverlay({ rows }: { rows: SpeedRow[] }) {
                   );
                 })}
               </span>
-              <span className="stats-bin-label">{binLabel(bin.from, bin.to)}</span>
+              {(open || bin.from % TICK_SECS === 0) && (
+                <span className="stats-bin-label"
+                      data-at={open ? 'bin' : b === 0 ? 'first' : 'edge'}>
+                  {open ? binLabel(bin.from, null) : `${bin.from}s`}
+                </span>
+              )}
             </div>
           );
         })}

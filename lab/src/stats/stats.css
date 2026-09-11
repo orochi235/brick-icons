@@ -324,7 +324,9 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
 
 /* -- histograms --------------------------------------------------------- */
 
-.stats-histogram { margin: 0; }
+/* The padding is room for the axis ticks, which hang below the bars out of
+ * the flow. */
+.stats-histogram { margin: 0; padding-bottom: 1.25rem; }
 .stats-histogram figcaption { margin-bottom: 0.5rem; font-size: 0.9rem; }
 
 .stats-overlay-keys { display: flex; gap: 1.5rem; flex-wrap: wrap; }
@@ -333,18 +335,23 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
 .stats-bins {
   display: flex;
   align-items: flex-end;
-  gap: 2px;
+  gap: 1px;
   height: 8rem;
 }
 
 .stats-bin {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
   height: 100%;
   position: relative;
 }
+
+/* The open bucket is not the same width as the rest -- it runs to the slowest
+ * part there is -- so it stands off from the even ones. */
+.stats-bin[data-open] { margin-inline-start: 0.75rem; }
 
 /* The two series share the column and overlap. The shorter one is drawn over
  * the taller, so a bin where one engine is far ahead still shows both. */
@@ -368,8 +375,8 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
  * the back one; without it two bars of the same color read as one. */
 .stats-bin-fill[data-front] {
   box-shadow: 0 -2px 0 var(--wzl-surface-sunken, #0e0f12),
-              2px 0 0 var(--wzl-surface-sunken, #0e0f12),
-              -2px 0 0 var(--wzl-surface-sunken, #0e0f12);
+              1px 0 0 var(--wzl-surface-sunken, #0e0f12),
+              -1px 0 0 var(--wzl-surface-sunken, #0e0f12);
 }
 
 .stats-bin-mark { background: var(--stats-bin); }
@@ -384,13 +391,22 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
 
 .stats-bins { border-bottom: 1px solid var(--wzl-border, #333); }
 
+/* Out of the flow: a tick names the boundary it sits on, so it is placed at
+ * the bin's leading edge rather than centered under the bin. */
 .stats-bin-label {
+  position: absolute;
+  top: 100%;
   font-size: 0.65rem;
+  font-variant-numeric: tabular-nums;
   color: var(--wzl-fg-muted);
-  text-align: center;
   padding-top: 0.25rem;
   white-space: nowrap;
 }
+
+.stats-bin-label[data-at="edge"] { inset-inline-start: 0; transform: translateX(-50%); }
+/* The leftmost tick would half hang off the page if it straddled its edge. */
+.stats-bin-label[data-at="first"] { inset-inline-start: 0; }
+.stats-bin-label[data-at="bin"] { inset-inline: 0; text-align: center; }
 
 /* -- tables ------------------------------------------------------------- */
 
