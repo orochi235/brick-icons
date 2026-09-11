@@ -1,0 +1,370 @@
+[
+  {
+    "kind": "fill",
+    "dx": 0,
+    "dy": 0,
+    "dw": 120,
+    "dh": 120,
+    "fill": "rgb(58,58,63)",
+    "border": null,
+    "borderWidth": 0,
+    "shape": "square",
+    "captions": [
+      {
+        "text": "1978–",
+        "corner": "tr",
+        "ink": "#ffffff",
+        "weight": 300
+      },
+      {
+        "text": "unknown",
+        "corner": "bl",
+        "ink": "#ffffff",
+        "weight": 500
+      }
+    ],
+    "badges": [],
+    "strip": [],
+    "slash": false
+  },
+  {
+    "kind": "fill",
+    "dx": 124,
+    "dy": 0,
+    "dw": 120,
+    "dh": 120,
+    "fill": "rgb(58,58,63)",
+    "border": null,
+    "borderWidth": 0,
+    "shape": "circle",
+    "mark": "sticker",
+    "slash": false
+  },
+  {
+    "kind": "fill",
+    "dx": 248,
+    "dy": 0,
+    "dw": 120,
+    "dh": 120,
+    "fill": "rgb(58,58,63)",
+    "border": null,
+    "borderWidth": 0,
+    "shape": "square",
+    "captions": [
+      {
+        "text": "1978–",
+        "corner": "tr",
+        "ink": "#ffffff",
+        "weight": 300
+      },
+      {
+        "text": "timeout",
+        "corner": "bl",
+        "ink": "#ffffff",
+        "weight": 500
+      }
+    ],
+    "badges": [],
+    "strip": [],
+    "slash": false
+  },
+  {
+    "kind": "fill",
+    "dx": 372,
+    "dy": 0,
+    "dw": 120,
+    "dh": 120,
+    "fill": "rgb(58,58,63)",
+    "border": null,
+    "borderWidth": 0,
+    "shape": "square",
+    "captions": [
+      {
+        "text": "1978–",
+        "corner": "tr",
+        "ink": "#ffffff",
+        "weight": 300
+      },
+      {
+        "text": "failed",
+        "corner": "bl",
+        "ink": "#ffffff",
+        "weight": 500
+      }
+    ],
+    "badges": [],
+    "strip": [],
+    "slash": false
+  },
+  {
+    "kind": "fill",
+    "dx": 0,
+    "dy": 124,
+    "dw": 120,
+    "dh": 120,
+    "fill": "rgb(58,58,63)",
+    "border": null,
+    "borderWidth": 0,
+    "shape": "square",
+    "captions": [
+      {
+        "text": "1978–",
+        "corner": "tr",
+        "ink": "#ffffff",
+        "weight": 300
+      },
+      {
+        "text": "defect",
+        "corner": "bl",
+        "ink": "#ffffff",
+        "weight": 500
+      }
+    ],
+    "badges": [],
+    "strip": [],
+    "slash": false
+  },
+  {
+    "kind": "fill",
+    "dx": 124,
+    "dy": 124,
+    "dw": 120,
+    "dh": 120,
+    "fill": "rgb(58,58,63)",
+    "border": null,
+    "borderWidth": 0,
+    "shape": "square",
+    "captions": [
+      {
+        "text": "1978–",
+        "corner": "tr",
+        "ink": "#ffffff",
+        "weight": 300
+      },
+      {
+        "text": "accepted",
+        "corner": "bl",
+        "ink": "#ffffff",
+        "weight": 500
+      }
+    ],
+    "badges": [],
+    "strip": [],
+    "slash": false
+  },
+  {
+    "kind": "fill",
+    "dx": 248,
+    "dy": 124,
+    "dw": 120,
+    "dh": 120,
+    "fill": "rgb(58,58,63)",
+    "border": null,
+    "borderWidth": 0,
+    "shape": "square",
+    "captions": [
+      {
+        "text": "1978–",
+        "corner": "tr",
+        "ink": "#ffffff",
+        "weight": 300
+      },
+      {
+        "text": "probelse",
+        "corner": "bl",
+        "ink": "#ffffff",
+        "weight": 500
+      }
+    ],
+    "badges": [],
+    "strip": [],
+    "slash": false
+  },
+  {
+    "kind": "fill",
+    "dx": 372,
+    "dy": 124,
+    "dw": 120,
+    "dh": 120,
+    "fill": "rgb(58,58,63)",
+    "border": null,
+    "borderWidth": 0,
+    "shape": "square",
+    "captions": [
+      {
+        "text": "1978–",
+        "corner": "tr",
+        "ink": "#ffffff",
+        "weight": 300
+      },
+      {
+        "text": "defelse",
+        "corner": "bl",
+        "ink": "#ffffff",
+        "weight": 500
+      }
+    ],
+    "badges": [],
+    "strip": [],
+    "slash": false
+  },
+  {
+    "kind": "fill",
+    "dx": 0,
+    "dy": 248,
+    "dw": 120,
+    "dh": 120,
+    "fill": "rgb(58,58,63)",
+    "border": null,
+    "borderWidth": 0,
+    "shape": "square",
+    "captions": [
+      {
+        "text": "1978–1994",
+        "corner": "tr",
+        "ink": "#ffffff",
+        "weight": 300
+      },
+      {
+        "text": "retired",
+        "corner": "bl",
+        "ink": "#ffffff",
+        "weight": 500
+      }
+    ],
+    "badges": [],
+    "strip": [],
+    "slash": false
+  },
+  {
+    "kind": "fill",
+    "dx": 124,
+    "dy": 248,
+    "dw": 120,
+    "dh": 120,
+    "fill": "rgb(58,58,63)",
+    "border": null,
+    "borderWidth": 0,
+    "shape": "square",
+    "captions": [
+      {
+        "text": "1978–",
+        "corner": "tr",
+        "ink": "#ffffff",
+        "weight": 300
+      },
+      {
+        "text": "popular",
+        "corner": "bl",
+        "ink": "#ffffff",
+        "weight": 500
+      }
+    ],
+    "badges": [
+      {
+        "tag": "popular",
+        "mark": "star",
+        "corner": "tl",
+        "field": "oklch(0.6800 0.1760 50.54)",
+        "ink": "oklch(1.0000 0 0)"
+      }
+    ],
+    "strip": [
+      {
+        "tag": "technic",
+        "mark": "technic",
+        "field": "oklch(0.3047 0.0947 268.21)",
+        "ink": "oklch(1.0000 0 0)"
+      }
+    ],
+    "slash": false
+  },
+  {
+    "kind": "fill",
+    "dx": 248,
+    "dy": 248,
+    "dw": 120,
+    "dh": 120,
+    "fill": "rgb(58,58,63)",
+    "border": null,
+    "borderWidth": 0,
+    "shape": "square",
+    "captions": [
+      {
+        "text": "1978–1994",
+        "corner": "tr",
+        "ink": "#ffffff",
+        "weight": 300
+      },
+      {
+        "text": "replaced",
+        "corner": "bl",
+        "ink": "#ffffff",
+        "weight": 500
+      }
+    ],
+    "badges": [
+      {
+        "tag": "replaced",
+        "mark": "redo",
+        "corner": "tr",
+        "field": "oklch(0.4950 0.1230 154.41)",
+        "ink": "oklch(1.0000 0 0)",
+        "accent": "oklch(1.0000 0 0)",
+        "scale": 1.14
+      }
+    ],
+    "strip": [],
+    "slash": false
+  },
+  {
+    "kind": "fill",
+    "dx": 372,
+    "dy": 248,
+    "dw": 120,
+    "dh": 120,
+    "fill": "rgb(58,58,63)",
+    "border": null,
+    "borderWidth": 0,
+    "shape": "square",
+    "captions": [
+      {
+        "text": "1978–",
+        "corner": "tr",
+        "ink": "#ffffff",
+        "weight": 300
+      },
+      {
+        "text": "unrendered",
+        "corner": "bl",
+        "ink": "#ffffff",
+        "weight": 500
+      }
+    ],
+    "badges": [],
+    "strip": [],
+    "slash": false
+  },
+  {
+    "kind": "fill",
+    "dx": 0,
+    "dy": 372,
+    "dw": 120,
+    "dh": 120,
+    "fill": "rgb(58,58,63)",
+    "border": null,
+    "borderWidth": 0,
+    "shape": "square",
+    "captions": [
+      {
+        "text": "nodata",
+        "corner": "bl",
+        "ink": "#ffffff",
+        "weight": 500
+      }
+    ],
+    "badges": [],
+    "strip": [],
+    "slash": false
+  }
+]

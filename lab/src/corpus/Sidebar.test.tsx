@@ -7,7 +7,7 @@ import type { Selection } from '@lab/corpus/select';
 
 const selection: Selection = {
   sort: 'id', filter: 'all', shown: DEFAULT_SHOWN, grouping: 'none',
-  tint: 'status', excluded: [], badges: [], desc: true,
+  tint: 'status', gradient: 'ember', excluded: [], badges: [], desc: true,
 };
 
 const props = {

@@ -4,7 +4,7 @@ import { familyFacets, type Family, type FamilyFacet } from '@lab/corpus/familie
 import { CLASS_SPECS, FILTER_SPECS, SORT_SPECS } from '@lab/corpus/criteria';
 import type { Selection } from '@lab/corpus/select';
 import { ParamsPanel, type ParamsPanelProps } from '@lab/corpus/ParamsPanel';
-import { TINT_MODES } from '@lab/corpus/tint';
+import { RAMP_NAMES, TINT_MODES } from '@lab/corpus/tint';
 import '@lab/corpus/Sidebar.css';
 
 const GROUPINGS: { id: Grouping; label: string }[] = [
@@ -128,6 +128,18 @@ export function Sidebar({ selection, counts, shown, total, onChange,
           {TINT_MODES.map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
       </label>
+
+      {/* `status` paints from the state palette, so a gradient would have
+          nothing to colour. */}
+      {selection.tint !== 'status' && (
+        <label className="corpus-side__row">Gradient
+          <select value={selection.gradient}
+                  onChange={(e) => onChange({ ...selection,
+                                              gradient: e.target.value as Selection['gradient'] })}>
+            {RAMP_NAMES.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </label>
+      )}
 
       <label className="corpus-side__row">Show
         <select value={selection.filter}

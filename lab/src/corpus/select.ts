@@ -4,7 +4,7 @@ import {
 } from '@lab/corpus/criteria';
 import { categoryOf, type Grouping } from '@lab/corpus/facts';
 import { naturalCompare } from '@lab/corpus/natural';
-import type { TintMode } from '@lab/corpus/tint';
+import type { RampName, TintMode } from '@lab/corpus/tint';
 import type { Cell } from '@lab/corpus/types';
 
 export interface Selection {
@@ -13,6 +13,9 @@ export interface Selection {
   shown: Shown;
   grouping: Grouping;
   tint: TintMode;
+  /** Which gradient a measured tint is drawn in. Ignored by `status`,
+   *  which uses the state palette rather than a ramp. */
+  gradient: RampName;
   /** Clean category names to leave off the wall entirely. */
   excluded: string[];
   /** Badge tags that keep a cell on the wall. Any one of them, not all:

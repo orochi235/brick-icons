@@ -17,7 +17,7 @@ import { DEFAULT_PALETTE, readPalette, type CellState, type Palette } from '@lab
 import { DEFAULT_PARAMS } from '@lab/corpus/params';
 import { pinchStep } from '@lab/corpus/pinch';
 import { centerReveal, panToReveal } from '@lab/corpus/reveal';
-import type { TintMode } from '@lab/corpus/tint';
+import type { RampName, TintMode } from '@lab/corpus/tint';
 import type { Cell, SheetManifest } from '@lab/corpus/types';
 import { visibleRange } from '@lab/corpus/visible';
 import '@lab/corpus/Wall.css';
@@ -66,6 +66,7 @@ export interface WallProps {
   /** What a cell's color says. Outside `status` the thumbnail gives way to
    *  the ramp. */
   tint?: TintMode;
+  gradient?: RampName;
 }
 
 function ongoingInvoker(action: typeof viewportDragPanAction) {
@@ -86,7 +87,7 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
                        highlight, highlightTag, explicitCaret, onExplicitCaretChange,
                        onPan, onPick, onOpen, onDragStart,
                        dragThresholdPx = DEFAULT_PARAMS.dragThresholdPx,
-                       pixelScale = 1, appearance, bands, tint, stale = false,
+                       pixelScale = 1, appearance, bands, tint, gradient, stale = false,
                        sceneRenderer = false }: WallProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const glRef = useRef<HTMLCanvasElement>(null);
@@ -194,7 +195,7 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
     const cmds = paintCommands({
       cells, rects, visible, cam, manifest, palette, loose, vector, highlight, highlightTag,
       caret: caretIndex,
-      appearance, bands, tint, stale,
+      appearance, bands, tint, gradient, stale,
     });
 
     const gl = glRef.current;
@@ -224,7 +225,7 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
     for (const cmd of cmds) drawPaintCommand(ctx, cmd, sheet, palette);
   }, [cells, rects, visible, cam, sheet, manifest, palette, loose, vector, highlight, highlightTag,
       caretIndex,
-      appearance, bands, tint, stale, width, height, pixelScale, sceneRenderer, sheetBitmap]);
+      appearance, bands, tint, gradient, stale, width, height, pixelScale, sceneRenderer, sheetBitmap]);
 
   // The lens shows a magnified crop of what is already on screen -- zooming
   // in about a fixed point never brings a cell into view that the outer
@@ -250,13 +251,13 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
     for (const cmd of paintCommands({
       cells, rects, visible, cam: magCam, manifest, palette, loose, vector, highlight, highlightTag,
       caret: caretIndex,
-      appearance, bands, tint, stale,
+      appearance, bands, tint, gradient, stale,
     })) {
       drawPaintCommand(ctx, cmd, sheet, palette, offset);
     }
   }, [loupe.visible, loupe.aim, loupe.factor, loupeCapability.diameter,
       cells, rects, visible, cam, sheet, manifest, palette, loose, vector, highlight, caretIndex,
-      appearance, bands, tint, stale, width, height]);
+      appearance, bands, tint, gradient, stale, width, height]);
 
   const hitTest = (e: { clientX: number; clientY: number;
                          currentTarget: HTMLCanvasElement }) => {

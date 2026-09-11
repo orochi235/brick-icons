@@ -105,7 +105,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
   const [level, setLevel] = useState(32);
   const [selection, setSelection] = useState<Selection>({
     sort: 'id', filter: 'all', shown: DEFAULT_SHOWN, grouping: 'none',
-    tint: 'status', excluded: [], badges: [], desc: true,
+    tint: 'status', gradient: 'ember', excluded: [], badges: [], desc: true,
   });
   const [cam, setCam] = useState<View | null>(null);
   const [picked, setPicked] = useState<string | null>(fromHash.current.part ?? null);
@@ -511,6 +511,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
                   loose={loose} vector={vector} width={size.width} height={size.height}
                   highlight={highlight} highlightTag={highlightTag}
                   bands={laid.bands} tint={selection.tint}
+                  gradient={selection.gradient}
                   explicitCaret={explicitCaret} onExplicitCaretChange={setExplicitCaret}
                   onPan={(next) => { touched.current = true; updateCam(next); }}
                   onPick={(c, at) => setCarded({ cell: c, at })}

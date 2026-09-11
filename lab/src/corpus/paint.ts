@@ -5,7 +5,7 @@ import { CELL_STATES, STATE_SHAPE,
 import { BY_PRECEDENCE, type StateFacts } from '@lab/corpus/states';
 import { DEFAULT_PARAMS } from '@lab/corpus/params';
 import { hasTile, sourceBox } from '@lab/corpus/sheet';
-import { tintFor, type TintMode } from '@lab/corpus/tint';
+import { tintFor, type RampName, type TintMode } from '@lab/corpus/tint';
 import type { Cell, SheetManifest } from '@lab/corpus/types';
 import { yearRange } from '@lab/corpus/years';
 import { WEIGHT_ID, WEIGHT_TEXT } from '@lab/corpus/badges';
@@ -481,6 +481,8 @@ export interface PaintInput {
   /** What a cell's color says. Outside `status` the thumbnail gives way to
    *  the ramp -- an opaque drawing and a ramp cannot both be read. */
   tint?: TintMode;
+  /** Which gradient a measured tint draws in. */
+  gradient?: RampName;
 }
 
 /** What to draw this frame, as data.
@@ -492,7 +494,8 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
                                 highlight = null, highlightTag = null,
                                 bands, caret = null,
                                 appearance = DEFAULT_APPEARANCE,
-                                tint = 'status', stale = false }: PaintInput): PaintCommand[] {
+                                tint = 'status', gradient = 'ember',
+                                stale = false }: PaintInput): PaintCommand[] {
   const out: PaintCommand[] = [];
   const transform = viewToTransform(cam);
   for (const i of visible) {
@@ -511,7 +514,7 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
     // the cell has to say so itself. A drawn cell says it with the ground --
     // every rung is ink on transparency, so the state gets the whole surround
     // -- and an undrawn one with the ring, having no drawing to carry it.
-    const style = dimmed ? palette.unknown : tintFor(cell, tint, palette);
+    const style = dimmed ? palette.unknown : tintFor(cell, tint, palette, gradient);
     const border = style.border;
     const borderWidth = borderWidthFor(style.weight, dw, appearance);
     const ground = border ?? thumbGround();

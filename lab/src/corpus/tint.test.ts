@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TINT_MODES, ramp, tintFor } from '@lab/corpus/tint';
+import { RAMP_NAMES, TINT_MODES, ramp, tintFor } from '@lab/corpus/tint';
 import { DEFAULT_PALETTE } from '@lab/corpus/palette';
 import type { Cell } from '@lab/corpus/types';
 
@@ -72,6 +72,47 @@ describe('tintFor', () => {
   });
 
   it('names every mode it supports', () => {
-    expect(TINT_MODES).toEqual(['status', 'year', 'sets', 'colors']);
+    expect(TINT_MODES).toEqual(['status', 'secs', 'year', 'sets', 'colors']);
+  });
+
+  it('logs render seconds, which a linear ramp cannot show', () => {
+    // Measured over 68,827 occt timings: median 6.1s, p99 202.7s. A linear
+    // ramp leaves 98% of the wall in its bottom two shades, a log one 36%.
+    const at = (secs: number) => tintFor(c({ secs }), 'secs', DEFAULT_PALETTE).fill;
+    expect(at(6.1)).not.toBe(at(64.5));
+    expect(at(64.5)).not.toBe(at(202.7));
+    // Under a second pins to the floor rather than going negative.
+    expect(at(0.2)).toBe(at(1));
+  });
+
+  it('gives a cell with no timing the unmatched swatch, not the floor', () => {
+    expect(tintFor(c({ secs: null }), 'secs', DEFAULT_PALETTE))
+      .toBe(DEFAULT_PALETTE.unmatched);
+  });
+
+  it('draws the same value differently in each gradient', () => {
+    expect(ramp(0.5, 'ice')).not.toBe(ramp(0.5, 'ember'));
+    expect(ramp(0.5, 'viridis')).not.toBe(ramp(0.5, 'ember'));
+  });
+
+  it('runs every gradient dark to light, since these encode magnitude', () => {
+    const lum = (colour: string) => {
+      const [r, g, b] = colour.match(/\d+/g)!.map(Number);
+      return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+    };
+    for (const name of RAMP_NAMES) {
+      expect(lum(ramp(1, name))).toBeGreaterThan(lum(ramp(0, name)));
+    }
+  });
+
+  it('clamps every gradient at both ends, not just the default', () => {
+    for (const name of RAMP_NAMES) {
+      expect(ramp(-1, name)).toBe(ramp(0, name));
+      expect(ramp(2, name)).toBe(ramp(1, name));
+    }
+  });
+
+  it('names every mode it supports', () => {
+    expect(TINT_MODES).toEqual(['status', 'secs', 'year', 'sets', 'colors']);
   });
 });
