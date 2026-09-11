@@ -2,7 +2,8 @@ import { useMemo } from 'react';
 import { FloatingPanel } from '@weasel-js/labkit';
 import { BadgeSwatch } from '@lab/corpus/BadgeSwatch';
 import { ALL_BADGES, tally } from '@lab/corpus/paint';
-import { CELL_STATES, DEFAULT_PALETTE, STATE_CSS_VAR, STATE_LABEL, STATE_SHAPE,
+import { CELL_STATES, DEFAULT_PALETTE, LEGEND_STATES, STATE_CSS_VAR,
+         STATE_FAMILY, STATE_LABEL, STATE_SHAPE,
          type CellState } from '@lab/corpus/palette';
 import type { Cell } from '@lab/corpus/types';
 import '@lab/corpus/Legend.css';
@@ -33,13 +34,22 @@ export interface LegendProps {
   onClose: () => void;
 }
 
-/** The wall's cell states, with a swatch, a name and a count over the wall.
+/** The wall's conditions, with a swatch, a name and a count over the wall.
  *  Hovering or focusing a row raises `highlight`; `Wall` dims every cell
- *  that isn't in that state rather than brightening the ones that are. */
+ *  outside that row's family rather than brightening the ones in it. */
 export function Legend({ cells, tagCells, highlight, onHighlight,
                         badges, onBadges,
                         highlightTag, onHighlightTag, onClose }: LegendProps) {
-  const counts = useMemo(() => tally(cells), [cells]);
+  const counts = useMemo(() => {
+    // A row stands for its siblings too, so the rows still add up to the
+    // wall: `timed out` counts the 1,930 parts that timed out in another
+    // slot, which have no row of their own any more.
+    const per = tally(cells);
+    const out = Object.fromEntries(
+      LEGEND_STATES.map((s) => [s, 0])) as Record<CellState, number>;
+    for (const state of CELL_STATES) out[STATE_FAMILY[state]] += per[state];
+    return out;
+  }, [cells]);
   const forTags = tagCells ?? cells;
   const badgeCounts = useMemo(() => {
     const out: Record<string, number> = {};
@@ -67,10 +77,10 @@ export function Legend({ cells, tagCells, highlight, onHighlight,
       </div>
       <ul className="corpus-legend-list">
         {/* Swatch colors come from the state table, not from a rule per
-            state: the CSS enumerated seven of eleven, so `timeoutElsewhere`
-            drew blank with 1,930 parts in it. `var(...)` rather than a literal
-            keeps the params panel's live tuning reaching the swatch. */}
-        {CELL_STATES.map((state) => (
+            state: the CSS enumerated seven of eleven and two states drew
+            blank. `var(...)` rather than a literal keeps the params panel's
+            live tuning reaching the swatch. */}
+        {LEGEND_STATES.map((state) => (
           <li key={state} className="corpus-legend-item">
             <div className="corpus-legend-row" data-state={state}
                  data-struck={DEFAULT_PALETTE[state].border !== null}

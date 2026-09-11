@@ -1,6 +1,6 @@
 import { worldToScreen, viewToTransform, type View } from '@weasel-js/core';
 import type { Band, Rect } from '@lab/corpus/layout';
-import { CELL_STATES, STATE_SHAPE,
+import { CELL_STATES, STATE_FAMILY, STATE_SHAPE,
          type CellState, type CellStyle, type Palette } from '@lab/corpus/palette';
 import { BY_PRECEDENCE, type StateFacts } from '@lab/corpus/states';
 import { DEFAULT_PARAMS } from '@lab/corpus/params';
@@ -507,7 +507,10 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
     const dh = rect.h * cam.scale.y;
     const isCaret = caret != null && i === caret ? true : undefined;
     const state = cellState(cell);
-    const dimmed = (highlight !== null && highlight !== state)
+    // By family, not by state: the legend lists conditions only, so hovering
+    // `timed out` has to raise the cells that timed out in another slot as
+    // well or they answer to no row at all.
+    const dimmed = (highlight !== null && STATE_FAMILY[state] !== highlight)
       || (highlightTag !== null && !(cell.tags ?? []).includes(highlightTag));
     const alpha = dimmed ? appearance.dimAlpha : undefined;
     // A part that fails in another slot draws perfectly well in this one, so

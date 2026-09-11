@@ -313,6 +313,22 @@ it('leaves the highlighted state exactly as painted with no highlight at all', (
   expect(matched).toEqual(plain);
 });
 
+it('leaves a cell that timed out in another slot lit when `timed out` is hovered', () => {
+  // The legend lists conditions only, so `timeoutElsewhere` answers to the
+  // `timeout` row; dimming it would leave 1,930 parts under no row at all.
+  const elsewhere = cell('a', 0, null, { elsewhere: ['timeout'] });
+  const plain = paintCommands({
+    cells: [elsewhere], rects: [rects[0]!], visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest: null,
+  });
+  const matched = paintCommands({
+    cells: [elsewhere], rects: [rects[0]!], visible: [0],
+    cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL, manifest: null,
+    highlight: 'timeout',
+  });
+  expect(matched).toEqual(plain);
+});
+
 it('dims a fill cell outside the highlighted state to the unknown field, without a border', () => {
   const [cmd] = paintCommands({
     cells: [cell('a', 0, null, { open_defects: 1 })], rects: [rects[0]!], visible: [0],

@@ -1,8 +1,8 @@
 import { expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { Legend } from '@lab/corpus/Legend';
-import { CELL_STATES, STATE_LABEL } from '@lab/corpus/palette';
-import { stateKeys } from '@lab/corpus/states';
+import { LEGEND_STATES, STATE_LABEL } from '@lab/corpus/palette';
+import { conditionKeys } from '@lab/corpus/states';
 import type { Cell } from '@lab/corpus/types';
 
 const cell = (id: string, overrides: Partial<Cell> = {}): Cell => ({
@@ -27,9 +27,15 @@ it('renders a row per state with its own count', () => {
   expect(screen.getByLabelText('timed out, 2 parts')).toBeTruthy();
   expect(screen.getByLabelText('open defect, 1 parts')).toBeTruthy();
   expect(screen.getByLabelText('render error, 0 parts')).toBeTruthy();
-  expect(screen.getByLabelText('render error elsewhere, 0 parts')).toBeTruthy();
-  expect(screen.getByLabelText('open defect elsewhere, 0 parts')).toBeTruthy();
   expect(screen.getByLabelText('fix to check, 0 parts')).toBeTruthy();
+  expect(screen.queryByLabelText(/elsewhere/)).toBeNull();
+});
+
+it('counts a fault seen in another slot under the row for that fault', () => {
+  render(<Legend cells={[...cells, cell('f', { elsewhere: ['timeout'] })]}
+                 highlight={null} onHighlight={() => {}} badges={[]} onBadges={vi.fn()}
+                 highlightTag={null} onHighlightTag={vi.fn()} onClose={vi.fn()} />);
+  expect(screen.getByLabelText('timed out, 3 parts')).toBeTruthy();
 });
 
 it('renders one row per state, in the table\'s own legend order', () => {
@@ -39,9 +45,9 @@ it('renders one row per state, in the table\'s own legend order', () => {
   // The state rows are the `[data-state]` divs. A role query would answer with
   // the close button and the badge rows, which are the only buttons here.
   const rows = [...container.querySelectorAll('[data-state]')];
-  expect(rows.map((row) => row.getAttribute('data-state'))).toEqual(stateKeys());
+  expect(rows.map((row) => row.getAttribute('data-state'))).toEqual(conditionKeys());
   expect(rows.map((row) => row.querySelector('.corpus-legend-name')?.textContent))
-    .toEqual(stateKeys().map((state) => STATE_LABEL[state]));
+    .toEqual(conditionKeys().map((state) => STATE_LABEL[state]));
 });
 
 it('reports the hovered state, and null once the pointer leaves', () => {
@@ -70,7 +76,7 @@ it('is reachable by keyboard -- every row is focusable', () => {
   const { container } = render(<Legend cells={cells} highlight={null} onHighlight={() => {}} badges={[]} onBadges={vi.fn()}
                  highlightTag={null} onHighlightTag={vi.fn()} onClose={vi.fn()} />);
   const rows = container.querySelectorAll('[data-state]');
-  expect(rows.length).toBe(CELL_STATES.length);
+  expect(rows.length).toBe(LEGEND_STATES.length);
   for (const row of rows) {
     expect(row.getAttribute('tabindex')).toBe('0');
   }
@@ -172,7 +178,7 @@ it('gives every state a swatch, however the table grows', () => {
     <Legend cells={cells} highlight={null} onHighlight={() => {}} badges={[]} onBadges={vi.fn()}
             highlightTag={null} onHighlightTag={vi.fn()} onClose={vi.fn()} />);
   const rows = container.querySelectorAll<HTMLElement>('.corpus-legend-row[data-state]');
-  expect(rows.length).toBe(CELL_STATES.length);
+  expect(rows.length).toBe(LEGEND_STATES.length);
   for (const row of rows) {
     const state = row.dataset.state!;
     expect(row.style.getPropertyValue('--swatch-fill'),

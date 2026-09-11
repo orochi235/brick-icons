@@ -183,6 +183,25 @@ export function stateKeys(): StateKey[] {
   return STATES.map((s) => s.key);
 }
 
+/** The conditions alone -- the legend's rows. A sibling is the same fault
+ *  seen in another slot, so listing it again said nothing the row above it
+ *  had not; the cells keep the washed-out border that tells the two apart. */
+export function conditionKeys(): StateKey[] {
+  return CONDITIONS.map((c) => c.key);
+}
+
+/** Which legend row a state answers to: itself for a condition, the
+ *  condition it washes out for a sibling. Read by the legend's counts and by
+ *  the wall's dimming, so a row still stands for every cell it covers. */
+export function familyTable(): Record<StateKey, StateKey> {
+  const out = Object.fromEntries(
+    CONDITIONS.map((c) => [c.key, c.key])) as Record<StateKey, StateKey>;
+  for (const c of CONDITIONS) {
+    if (c.sibling && c.border !== null) out[`${c.key}Elsewhere`] = c.key;
+  }
+  return out;
+}
+
 /** `outOfScope` -> `out-of-scope`, the spelling the stylesheet and the CSS
  *  custom properties already use. */
 export function kebabKey(key: string): string {

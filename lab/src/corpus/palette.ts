@@ -1,6 +1,7 @@
 import { DEFAULT_PARAMS, type ColorParamKey } from '@lab/corpus/params';
 import {
-  STATES, cssVarTable, labelTable, paramKeys, shapeTable, stateKeys, styleTable,
+  STATES, conditionKeys, cssVarTable, familyTable, labelTable, paramKeys,
+  shapeTable, stateKeys, styleTable,
   type CellShape, type CellStyle, type StateKey,
 } from '@lab/corpus/states';
 
@@ -63,6 +64,12 @@ export const PARAM_CSS_VAR: Record<ColorParamKey, string> = {
 /** Legend order, which is not match order -- see `states.ts`. Every table
  *  keyed by state iterates this. */
 export const CELL_STATES: CellState[] = stateKeys();
+
+/** The states the legend lists, which is every condition and no sibling. */
+export const LEGEND_STATES: CellState[] = conditionKeys();
+
+/** Which legend row each state answers to -- see `states.familyTable`. */
+export const STATE_FAMILY: Record<CellState, CellState> = familyTable();
 
 /** What each state is called on the legend. */
 export const STATE_LABEL: Record<CellState, string> = labelTable();
