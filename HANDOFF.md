@@ -35,6 +35,26 @@ both times, and keiei then pushed on its own while studio needed the nudge
 again. Check `find out/<tree> -name '*.svg' | wc -l` against the job's own
 progress line within the first minute, not at the end.
 
+**A fresh tree is filed under the invalid source `silhouette-` until its
+SOURCE marker arrives, and loses that pass silently.** `ingest-watch.py` calls
+`db.census_source(tree, "")` before it knows the engine, and with no marker yet
+the fallback yields `silhouette-`, which is not in `db.SOURCES` -- so
+`record_render` raises on every file and `_take_renders` swallows it per part.
+It self-healed for both of tonight's jobs (`census-batch.sh` writes the marker
+on the node and it rides home with the first delivery; the 01:28 pass then took
++168 from keiei and +80 from fill2), so nothing was lost. A marker that arrives
+late, or a job that never writes one, loses a whole pass with no error anywhere.
+NOT FIXED -- deliberately left alone while two jobs were running against that
+watcher unattended. Two candidate fixes: have the launcher write `SOURCE` at
+tree creation rather than at first delivery, or make the watcher skip a pass
+loudly when the resolved source is not in `db.SOURCES` instead of failing per
+file.
+
+**4,619 `translucent-occt` parts are drawn but unmeasured.** They came in
+through `index-slot-renders.py`, which records drawings only, and no JSONL for
+them exists in any `out/` tree. That is the cost of the slot route, not a gap
+an ingest can close.
+
 **Composites are owed a pass of their own.** 577 `c0X` parts are missing from
 silhouette-occt and are not in either list. They need a longer cap, a different
 approach, or a decision that occt will not draw them -- `ProcessDied` is the
