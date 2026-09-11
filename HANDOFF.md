@@ -1,3 +1,76 @@
+## Minifig head decals: two bugs fixed, one open, 2026-09-11
+
+On `main`. `git log --oneline @{u}..HEAD` for what is unpushed — **another
+session shares this working directory and commits to `brick_icons/unwrap.py`
+too**, so unpushed commits are not necessarily yours. Stage explicit paths,
+never `git add -A`, and check `git branch --show-current` before assuming.
+
+**Next action: show Mike an example render of each dome-projection option
+below.** He asked for exactly that and the session ran out of room before it
+could draw them.
+
+### What a head's decal loses, and why it is two separate faults
+
+The bottom of a face was **clipped**: a curved carrier's extent was the SVG's
+viewport outright, so ink past the section it binds to was cut. Fixed — the
+extent is now a floor unioned with what has to fit. Where the print already
+fit, the drawing is byte-identical, which is what keeps this off the 71% of
+curved carriers that never overran.
+
+The top of a face is **dropped before it is ever drawn**, and this is open. A
+quarter of `3626cp7e`'s decoration triangles bind to nothing, and every one
+sits above the wall cylinder's 13-LDU span — on the domed top. The part has no
+dome primitive at all: LDraw builds it from torus subfiles that arrive
+tessellated, so the analytic set is `cyli`, `ring`, `disc`, `edge` and nothing
+else. `bind_groups` drops what binds to nothing. That is why `3626cp7e` has no
+mouth. Re-measure with the probe in this file's git history, or by counting
+unbound decoration triangles against `unwrap.bind(tri[i], analytic)`.
+
+### The three options, none built
+
+A cylinder and cone unwrap isometrically; a sphere or torus does not, so this
+is a choice about distortion and nobody has made it:
+
+- **Recognize the dome and unwrap it under a chosen projection.** Truest to
+  the part, most work, and the projection is itself a decision.
+- **Extend the wall cylinder's parameter space past its section**, so dome ink
+  binds to the nearest wall. Cheap; distorts increasingly toward the pole.
+- **Leave it.** Heads keep losing their upper face.
+
+### Decisions made in conversation, not visible in the code
+
+**Redraw only what a fix actually changed, never the whole slot.** Mike
+rejected a blanket `--force` over the decal store: it rewrites every sha, which
+churns every decal cell on the wall and stales every `checked` stamp against
+one. Identify-first also costs about a third as much. `scripts/decal-axis-affected.py`
+is that predicate for the axis fix; **the canvas fix needs its own and does not
+have one** — a different and larger set of parts is now stale for it.
+
+**`onto run --in <tree>` does NOT sync.** `--in` names a tree the node already
+has. Without `onto sync <node>` first the job runs whatever the node last got,
+and `onto warm` reports `fetched` while changing no working file — it pulls git
+objects only. This cost two fill jobs today: they ran a day-stale engine and
+were killed and relaunched. The node's `git log` lags independently, because
+sync sends a base commit plus a patch and never moves `HEAD` — compare file
+hashes, not refs.
+
+**The decal slot's "25s per part" was never real.** It is `FALLBACK_SECS`,
+printed with a `~` because the slot writes no measurements and has no timing of
+its own. Measured through the real store builder it is about 0.9s. Any cost
+argument built on the 25s figure is wrong by a factor of thirty.
+
+**`AXIS_UP_TOL = 0.05` is a threshold nobody measured.** It separates a leaning
+carrier from one lying on its side. No part in the sample sat near the margin,
+so nothing is known to depend on it.
+
+### In flight
+
+`onto jobs` for the truth. Fills on studio and msb-uai, a `slot-naive` job on
+keiei that belongs to the sibling session, and watchers under `pgrep -fl
+ingest-watch`. Several `out/` trees are disposable: two `stale-0911-*` holding
+renders drawn on the stale engine, `decal-superseded` holding the 499
+upside-down originals, and `decal-redraw`. `out/decal-axis/` is worth keeping.
+
 ## Two silhouette-occt fills are running overnight, 2026-09-11 ~05:30
 
 `80c86ab6` on studio (7,015 parts, 8 workers, deadline 11:24AM) and `a5ef3b55`
