@@ -71,46 +71,37 @@ designed and not built.
 wall itself, or a script that writes a PNG for a report. Mike was asked and had
 not answered.
 
-## Four of the six dashboard and wall asks have landed
+## The ten dashboard and wall asks have all landed
 
-## (superseded) the six asks as first recorded
+Six from 2026-09-10 and four Mike added the evening of 09-11, all on `main`,
+all unpushed. Nothing here is a to-do; the notes are the traps each one left.
 
-All from one session on 2026-09-10, in the order Mike asked. **Four have since
-landed** -- the horizontal bar (`aa61222`), posed/obsolete as membership
-(`febdd5d`), the four Elsewhere legend rows (`5d54daf`) and the runs list
-(`1141a16`). What is still open is the load-cutting, the "what will not draw"
-backfill and the legend axes. The rest of this section is kept for its
-groundwork, not as a to-do list.
+The six: the horizontal bar (`aa61222`), posed/obsolete as membership
+(`febdd5d`), the four Elsewhere legend rows (`5d54daf`), the runs list
+(`1141a16`), the legend axes (`582d287`) and the "what will not draw"
+backfill (`5b0b189`). The four: the failure-rate axis (`0fd76de`), the caret
+(`e285e82`), the grouped headings (`7f6e2eb`) and coverage stability across
+slots (`9f3511d`).
 
-**Cut more from the dashboard's load.** It is 1,597 ms now, down from 3,662
-(`91c82dd`, which has the profile). Mike's words: "that runs list, if it costs
-anything, is a waste" -- `_runs` is 103 ms and the Runs section goes. What is
-left after it: `_coverage` 349, `_phases` 476, `_cost_rows` 244, `_failures`
-253, `_latest_measurements` 164. `scripts/`-free profiler is in the session
-scratchpad; it is ten lines of `time.perf_counter` around each section and is
-worth rewriting rather than hunting for.
+**The dashboard load is ~1,460 ms, from 1,597.** The runs list was 103 ms of
+it and `measurements_latest_by_source` now covers the columns the latest-row
+queries read back. `_phases` at 438 ms is the biggest section left, and
+`_sum_paths` is 232 of it, over 19,980 split rows -- more than the JSON parse
+at 96 and `_bands` and `normalize` together at 81. A ten-line
+`time.perf_counter` profiler is the way to check it; it lives in a session
+scratchpad and is worth rewriting rather than hunting.
 
-**"Inside a render" becomes one horizontal bar of proportional segments**,
-instead of the `PhaseTree` it draws now.
+**A run is not a revision, and this is the trap under anything time-shaped
+here.** Run 1 landed rows from six builds at once, run 4 then landed two
+older ones, and a rebuild restamps all 47 `runs.started` with the time it
+read them back. So `tally.history` replays in run order and labels each step
+with the revision it carried, while `tally.by_build` keeps the date axis and
+is a rate, not a count. Do not merge them.
 
-**Backfill "what will not draw".** It has one point, taken when `tallies` was
-added. A real backfill IS possible and is not the `by_build` series: rows are
-kept per run, so "as of run R, what was each part's latest error" is a query,
-and every distinct build already dates from git. `tally.by_build` shows the
-shape of the answer.
-
-**Split the legend into axes** -- primary category (minifig, technic, duplo,
-weird, sticker), then features (magnet, electric, printed, composite), then
-popular, then retired/replaced, each its own axis rather than one flat list.
-
-**`posed` and `obsolete` move to the membership sidebar**, beside `moved` and
-`out of scope`, rather than being badge tags. The `posed` TAG is already
-deleted from `tags.TAGS` and `tags_for` in the working tree, uncommitted --
-that half is done and the filter half is not, so committing it as it stands
-loses the fact entirely. `parts.preview` is the source.
-
-**The four `*Elsewhere` legend rows go**, but the cells keep their own
-styling -- it is the legend entries that are surplus, not the distinction.
+**The two tag vocabularies are parallel lists, pinned by a test each.**
+`tags.TAG_AXES` and `paint.BADGE_AXES` carry the same four axes; the python
+test checks them against `TAGS`, the TS one against `ALL_BADGES`. A tag added
+to one and not the other passes both.
 
 ## Cones gp_Cone cannot hold are ruled now, and the corpus is stale for it
 
