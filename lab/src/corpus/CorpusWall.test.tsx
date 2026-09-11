@@ -221,12 +221,17 @@ it('drops the explicit caret back to the implied one on Escape', async () => {
   expect(await screen.findByRole('dialog', { name: /Part b/ })).toBeTruthy();
 });
 
-it("announces the caret's part through a live region", async () => {
+it("announces the caret's part once the keyboard has placed it", async () => {
+  // Silent at rest: the implied caret is whatever cell is nearest the middle
+  // of the screen, so announcing it read out a part nobody had navigated to
+  // and changed as the wall was panned.
   const { container } = render(<CorpusWall client={client} />);
-  await findCanvas(container);
+  const canvas = await findCanvas(container);
   const live = container.querySelector('[aria-live="polite"]');
   expect(live).toBeTruthy();
-  await waitFor(() => expect(live!.textContent).toBe('Part b'));
+  expect(live!.textContent).toBe('');
+  fireEvent.keyDown(canvas, { key: 'ArrowLeft' });
+  await waitFor(() => expect(live!.textContent).toBe('Part a'));
 });
 
 it("raises the lightbox from the card's Open button", async () => {

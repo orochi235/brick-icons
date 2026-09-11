@@ -169,6 +169,10 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
 
   const caretIndex = explicitCaret ?? implied;
   const caretCell = caretIndex != null ? cells[caretIndex] : undefined;
+  // Drawn only where somebody put it. The implied caret is the cell nearest
+  // the middle of the screen, so painting it gave the wall a rectangle that
+  // slid around under the pointer while nobody was navigating by keyboard.
+  const caretDrawn = explicitCaret;
 
   // Weasel takes a texture, not an <img>. Never closed: a paint can still be
   // holding the previous one when a slot swap replaces it, and a closed bitmap
@@ -194,7 +198,7 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
     const dpr = (window.devicePixelRatio || 1) * pixelScale;
     const cmds = paintCommands({
       cells, rects, visible, cam, manifest, palette, loose, vector, highlight, highlightTag,
-      caret: caretIndex,
+      caret: caretDrawn,
       appearance, bands, tint, gradient, stale,
     });
 
@@ -224,7 +228,7 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
     ctx.imageSmoothingEnabled = true;
     for (const cmd of cmds) drawPaintCommand(ctx, cmd, sheet, palette);
   }, [cells, rects, visible, cam, sheet, manifest, palette, loose, vector, highlight, highlightTag,
-      caretIndex,
+      caretDrawn,
       appearance, bands, tint, gradient, stale, width, height, pixelScale, sceneRenderer, sheetBitmap]);
 
   // The lens shows a magnified crop of what is already on screen -- zooming
@@ -250,13 +254,13 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
     const offset = { x: d / 2 - loupe.aim.x, y: d / 2 - loupe.aim.y };
     for (const cmd of paintCommands({
       cells, rects, visible, cam: magCam, manifest, palette, loose, vector, highlight, highlightTag,
-      caret: caretIndex,
+      caret: caretDrawn,
       appearance, bands, tint, gradient, stale,
     })) {
       drawPaintCommand(ctx, cmd, sheet, palette, offset);
     }
   }, [loupe.visible, loupe.aim, loupe.factor, loupeCapability.diameter,
-      cells, rects, visible, cam, sheet, manifest, palette, loose, vector, highlight, caretIndex,
+      cells, rects, visible, cam, sheet, manifest, palette, loose, vector, highlight, caretDrawn,
       appearance, bands, tint, gradient, stale, width, height]);
 
   const hitTest = (e: { clientX: number; clientY: number;
@@ -431,7 +435,7 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
         </LoupeBubble>
       )}
       <div className="corpus-caret-announce" aria-live="polite">
-        {caretCell ? caretCell.title : ''}
+        {caretDrawn != null ? cells[caretDrawn]?.title ?? '' : ''}
       </div>
     </>
   );
