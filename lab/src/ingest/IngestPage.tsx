@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { LabClient } from '@lab/api/client';
-import { PageNav } from '@lab/nav/PageNav';
+import { LabSwitcher } from '@weasel-js/labkit';
+import { PAGES } from '@lab/nav/pages';
 import { changeOf, outcomeOf } from '@lab/ingest/change';
 import type { IngestAttempts, IngestRun } from '@lab/ingest/types';
 import '@lab/ingest/ingest.css';
@@ -149,8 +150,7 @@ export function IngestPage({ client }: { client: LabClient }) {
   return (
     <main className="ingest-page">
       <header className="ingest-head">
-        <h1>Ingestion log</h1>
-        <PageNav />
+        <LabSwitcher title="Ingestion log" pages={PAGES} />
       </header>
       {error !== null && <p className="ingest-error">{error}</p>}
       {runs !== null && runs.length === 0 && <p>Nothing has been ingested yet.</p>}

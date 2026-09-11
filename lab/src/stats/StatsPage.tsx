@@ -9,7 +9,8 @@ import { useStats } from '@lab/stats/useStats';
 import { DEFAULT_SET, fromQuery, toQuery, wallHref,
          type WorkingSet } from '@lab/stats/workingSet';
 import '@lab/stats/stats.css';
-import { PageNav } from '@lab/nav/PageNav';
+import { LabSwitcher } from '@weasel-js/labkit';
+import { PAGES } from '@lab/nav/pages';
 
 const KINDS: { id: WorkingSet['kind']; label: string }[] = [
   { id: 'all', label: 'all parts' },
@@ -98,8 +99,7 @@ export function StatsPage({ client }: { client: LabClient }) {
   return (
     <div className="stats-page">
       <header className="stats-head">
-        <PageNav />
-        <h1>corpus stats</h1>
+        <LabSwitcher title="corpus stats" pages={PAGES} />
         <p className="stats-asof">
           {stats
             ? <>{stats.set.size.toLocaleString()} of {total.toLocaleString()} parts

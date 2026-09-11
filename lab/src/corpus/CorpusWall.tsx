@@ -12,7 +12,7 @@ import { FilterBar } from '@lab/corpus/FilterBar';
 import { bandedLayout, blockLayout } from '@lab/corpus/grouped';
 import { gridLayout } from '@lab/corpus/layout';
 import { Legend } from '@lab/corpus/Legend';
-import { PageNav } from '@lab/nav/PageNav';
+import { PAGES } from '@lab/nav/pages';
 import { levelFor, pickLevel } from '@lab/corpus/levels';
 import { Lightbox } from '@lab/corpus/Lightbox';
 import type { CellState } from '@lab/corpus/palette';
@@ -459,12 +459,9 @@ export function CorpusWall({ client }: { client: LabClient }) {
        params.washRetired]);
 
   return (
-    <LabShell title="brick-icons corpus"
+    <LabShell title="brick-icons corpus" pages={PAGES}
               header={(
                 <>
-                  {/* Outside the `cells` guard: leaving is the one thing you
-                      still want while the corpus is loading. */}
-                  <PageNav />
                   <FilterBar sources={sources} source={source} onSource={setSource} />
                   <PartSearch client={client} onOpen={openSearchedPart} />
                   {/* A one-item ToggleBar rather than a Button: this

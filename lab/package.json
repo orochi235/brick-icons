@@ -12,9 +12,9 @@
   "dependencies": {
     "@react-three/drei": "^10.7.8",
     "@react-three/fiber": "^9.7.0",
-    "@weasel-js/core": "^1.4.0",
-    "@weasel-js/labkit": "^1.4.0",
-    "@weasel-js/ui": "^1.4.0",
+    "@weasel-js/core": "^1.4.4",
+    "@weasel-js/labkit": "^1.4.4",
+    "@weasel-js/ui": "^1.4.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "three": "^0.170.0"
