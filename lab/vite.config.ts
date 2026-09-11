@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath, URL } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vitest/config';
@@ -29,11 +29,13 @@ function extensionlessPages(): Plugin {
 // `brick-icons-lab` listens on with no arguments.
 const API = process.env.LAB_API ?? 'http://127.0.0.1:8792';
 
-/** `WEASEL_SRC=~/src/weasel npm run dev` draws from a weasel checkout instead
- *  of the installed `@weasel-js/core`, for measuring an unreleased renderer
- *  change against `/bench`. Its `dist` has to be built; the alias points at
- *  the build, not the source, so what runs is what a release would ship.
- *  Unset by default -- several sessions share this checkout. */
+/** `WEASEL_SRC=~/src/weasel npm run dev` draws `@weasel-js/core` and
+ *  `@weasel-js/labkit` from a weasel checkout instead of the installed ones,
+ *  for measuring an unreleased renderer change against `/bench` or running the
+ *  lab against a labkit component that has not shipped yet. Each `dist` has to
+ *  be built; the alias points at the build, not the source, so what runs is
+ *  what a release would ship. Unset by default -- several sessions share this
+ *  checkout. */
 const WEASEL_SRC = process.env.WEASEL_SRC;
 // Regexes, not a bare string: a plain alias prefix-matches, and
 // `@weasel-js/svg` imports `@weasel-js/core/patterns-builtin`, which then
@@ -43,8 +45,28 @@ const weaselAlias = WEASEL_SRC
   ? [{ find: /^@weasel-js\/core$/,
        replacement: `${WEASEL_SRC}/packages/core/dist/index.js` },
      { find: /^@weasel-js\/core\/(.*)$/,
-       replacement: `${WEASEL_SRC}/packages/core/dist/$1.js` }]
+       replacement: `${WEASEL_SRC}/packages/core/dist/$1.js` },
+     ...labkitAlias(WEASEL_SRC)]
   : [];
+
+/** labkit's subpaths read off its own exports map rather than a pattern.
+ *  There isn't one to guess: most map to `dist/<name>/index.js`, but
+ *  `weasel-ui` and `weasel-canvas` are `dist/passthrough/<name>.js` and
+ *  `styles.css` is a file. Reading the map keeps this correct as labkit adds
+ *  entry points -- a wrong guess fails as ENOENT inside esbuild's dep scan,
+ *  which names the file it wanted and not the alias that asked for it. */
+function labkitAlias(src: string) {
+  const pkg = `${src}/packages/labkit`;
+  const { exports: map } = JSON.parse(
+    readFileSync(`${pkg}/package.json`, 'utf8')) as
+    { exports: Record<string, { import?: string } | string> };
+  return Object.entries(map).map(([sub, target]) => {
+    const file = typeof target === 'string' ? target : target.import!;
+    const name = sub === '.' ? '' : sub.slice(1);
+    return { find: new RegExp(`^@weasel-js/labkit${name.replace(/[./]/g, '\\$&')}$`),
+             replacement: `${pkg}/${file.slice(2)}` };
+  });
+}
 
 export default defineConfig({
   plugins: [react(), extensionlessPages()],
