@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { FloatingPanel } from '@weasel-js/labkit';
 import { BadgeSwatch } from '@lab/corpus/BadgeSwatch';
-import { ALL_BADGES, tally } from '@lab/corpus/paint';
+import { ALL_BADGES, BADGE_AXES, tally } from '@lab/corpus/paint';
 import { CELL_STATES, DEFAULT_PALETTE, LEGEND_STATES, STATE_CSS_VAR,
          STATE_FAMILY, STATE_LABEL, STATE_SHAPE,
          type CellState } from '@lab/corpus/palette';
@@ -19,10 +19,11 @@ export interface LegendProps {
   tagCells?: Cell[];
   highlight: CellState | null;
   onHighlight: (state: CellState | null) => void;
-  /** Badge tags the wall is filtered to, and a way to change them. Takes an
-   *  updater rather than the next array: two rows clicked in quick
-   *  succession both read `badges` from the same render, and the second
-   *  would drop the first's change. */
+  /** Badge tags the wall is filtered to, and a way to change them. Read
+   *  through `BADGE_AXES`: alternatives within one axis, narrowing across
+   *  them. Takes an updater rather than the next array: two rows clicked in
+   *  quick succession both read `badges` from the same render, and the
+   *  second would drop the first's change. */
   badges: string[];
   onBadges: (update: (prev: string[]) => string[]) => void;
   /** The tag row under the pointer, and a way to report it. Hovering a tag
@@ -110,28 +111,33 @@ export function Legend({ cells, tagCells, highlight, onHighlight,
           <button type="button" onClick={() => onBadges(() => [])}>clear</button>
         )}
       </div>
-      <ul className="corpus-legend-list">
-        {Object.entries(ALL_BADGES).map(([tag, badge]) => (
-          <li key={tag} className="corpus-legend-item">
-            <button type="button" className="corpus-legend-row corpus-legend-badge-row"
-                    aria-pressed={badges.includes(tag)}
-                    data-picked={badges.includes(tag)}
-                    data-highlighted={highlightTag === tag}
-                    aria-label={`${tag}, ${badgeCounts[tag]!.toLocaleString()} parts`}
-                    onClick={() => toggle(tag)}
-                    onMouseEnter={() => onHighlightTag(tag)}
-                    onMouseLeave={() => onHighlightTag(null)}
-                    onFocus={() => onHighlightTag(tag)}
-                    onBlur={() => onHighlightTag(null)}>
-              <BadgeSwatch badge={badge} className="corpus-legend-badge" />
-              <span className="corpus-legend-name">{tag}</span>
-              <span className="corpus-legend-count">
-                {badgeCounts[tag]!.toLocaleString()}
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
+      {BADGE_AXES.map((axis) => (
+        <section key={axis.key} className="corpus-legend-axis">
+          <h4 className="corpus-legend-axis-name">{axis.label}</h4>
+          <ul className="corpus-legend-list">
+            {axis.tags.filter((tag) => tag in ALL_BADGES).map((tag) => (
+              <li key={tag} className="corpus-legend-item">
+                <button type="button" className="corpus-legend-row corpus-legend-badge-row"
+                        aria-pressed={badges.includes(tag)}
+                        data-picked={badges.includes(tag)}
+                        data-highlighted={highlightTag === tag}
+                        aria-label={`${tag}, ${badgeCounts[tag]!.toLocaleString()} parts`}
+                        onClick={() => toggle(tag)}
+                        onMouseEnter={() => onHighlightTag(tag)}
+                        onMouseLeave={() => onHighlightTag(null)}
+                        onFocus={() => onHighlightTag(tag)}
+                        onBlur={() => onHighlightTag(null)}>
+                  <BadgeSwatch badge={ALL_BADGES[tag]!} className="corpus-legend-badge" />
+                  <span className="corpus-legend-name">{tag}</span>
+                  <span className="corpus-legend-count">
+                    {badgeCounts[tag]!.toLocaleString()}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
     </FloatingPanel>
   );
 }

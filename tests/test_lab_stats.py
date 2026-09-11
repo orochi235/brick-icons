@@ -122,11 +122,18 @@ def test_a_badge_narrows_to_parts_carrying_it(conn):
     assert stats.stats(conn, badges=["technic"])["set"]["size"] == 1
 
 
-def test_every_badge_asked_for_has_to_be_present(conn):
+def test_two_badges_on_one_axis_are_alternatives_and_two_axes_narrow(conn):
+    # The wall's legend groups the badges into axes and this has to agree with
+    # it: no part is both technic and duplo, so reading the pair as "carries
+    # both" answered every such pick with an empty wall.
     _part(conn, "t1", category="=Technic")
+    _part(conn, "d1", category="Duplo")
+    _part(conn, "t2", category="=Technic", printed=1)
     conn.commit()
-    assert stats.stats(conn, badges=["technic"])["set"]["size"] == 1
-    assert stats.stats(conn, badges=["technic", "duplo"])["set"]["size"] == 0
+    size = lambda **kw: stats.stats(conn, **kw)["set"]["size"]
+    assert size(badges=["technic"]) == 2
+    assert size(badges=["technic", "duplo"]) == 3
+    assert size(badges=["technic", "printed"]) == 1
 
 
 def test_the_kind_filters_pick_one_class_of_part(conn):

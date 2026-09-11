@@ -132,20 +132,34 @@ it('sorts by set count, most-used first', () => {
     .map((c) => c.id)).toEqual(['b', 'a', 'c']);
 });
 
-it('keeps a cell carrying ANY of the picked tags, not all of them', () => {
+it('reads two picks on one axis as alternatives and two axes as a narrowing', () => {
   const tagged = [
     cell({ id: 'a', index: 0, tags: ['technic'] }),
     cell({ id: 'b', index: 1, tags: ['duplo'] }),
     cell({ id: 'c', index: 2, tags: ['sticker'] }),
+    cell({ id: 'd', index: 3, tags: ['technic', 'printed'] }),
   ];
   const pick = (badges: string[]) => applySelection(tagged,
     { sort: 'id', filter: 'all', shown: DEFAULT_SHOWN, ...base, badges })
     .map((c) => c.id);
   // No part is both technic and duplo, so narrowing would empty the wall --
-  // picking a second badge asks to see that family too.
-  expect(pick(['technic', 'duplo'])).toEqual(['a', 'b']);
-  expect(pick(['technic'])).toEqual(['a']);
-  expect(pick([])).toEqual(['a', 'b', 'c']);
+  // picking a second system asks to see that family too.
+  expect(pick(['technic', 'duplo'])).toEqual(['a', 'b', 'd']);
+  // Across axes it is the other way: a printed technic part is a thing, and
+  // it is what picking the two plainly asks for.
+  expect(pick(['technic', 'printed'])).toEqual(['d']);
+  expect(pick(['technic'])).toEqual(['a', 'd']);
+  expect(pick([])).toEqual(['a', 'b', 'c', 'd']);
+});
+
+it('narrows by a tag no axis claims rather than dropping it', () => {
+  // An address bar outlives the axis table, and silently widening the wall to
+  // everything is worse than showing nothing for a tag nobody carries.
+  const tagged = [cell({ id: 'a', index: 0, tags: ['obscure'] }),
+                  cell({ id: 'b', index: 1, tags: ['technic'] })];
+  expect(applySelection(tagged, { sort: 'id', filter: 'all', shown: DEFAULT_SHOWN,
+                                  ...base, badges: ['obscure'] })
+    .map((c) => c.id)).toEqual(['a']);
 });
 
 it('sorts by category name, ascending, unnamed last', () => {

@@ -85,3 +85,19 @@ def test_a_sticker_is_not_a_printed_part():
     # "pattern" or "sticker" -- but a print is moulded into the brick and a
     # sticker is a sheet item you apply. One badge each, never both.
     assert tags.tags_for("Sticker", True) == ["sticker"]
+
+
+def test_every_tag_but_obscure_answers_exactly_one_axis():
+    # The axes are what filtering reads, so a tag in none of them would widen
+    # the working set instead of narrowing it, and one in two would narrow
+    # against itself. `obscure` has no badge, so the legend never offers it.
+    claimed = [t for axis in tags.TAG_AXES for t in axis]
+    assert sorted(claimed) == sorted(set(tags.TAGS) - {"obscure"})
+    assert len(claimed) == len(set(claimed))
+
+
+def test_by_axis_splits_the_picks_and_keeps_an_unclaimed_tag():
+    assert tags.by_axis(["technic", "duplo", "printed"]) == [
+        ["technic", "duplo"], ["printed"]]
+    assert tags.by_axis([]) == []
+    assert tags.by_axis(["obscure"]) == [["obscure"]]

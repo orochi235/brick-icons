@@ -3,6 +3,7 @@ import {
   type Filter, type Shown, type Sort,
 } from '@lab/corpus/criteria';
 import { categoryOf, type Grouping } from '@lab/corpus/facts';
+import { byAxis } from '@lab/corpus/paint';
 import { naturalCompare } from '@lab/corpus/natural';
 import type { RampName, TintMode } from '@lab/corpus/tint';
 import type { Cell } from '@lab/corpus/types';
@@ -18,9 +19,8 @@ export interface Selection {
   gradient: RampName;
   /** Clean category names to leave off the wall entirely. */
   excluded: string[];
-  /** Badge tags that keep a cell on the wall. Any one of them, not all:
-   *  picking `technic` and then `duplo` asks to see both families, and no
-   *  part is ever both, so narrowing would empty the wall. */
+  /** Badge tags that keep a cell on the wall, read through `BADGE_AXES`:
+   *  alternatives within one axis, narrowing across them. */
   badges: string[];
   /** Which way `release` runs, and nothing else. */
   desc: boolean;
@@ -35,10 +35,11 @@ export function applySelection(cells: Cell[], selection: Selection): Cell[] {
   const off = new Set(selection.excluded);
   const badges = selection.badges ?? [];
   const keep = FILTER[selection.filter].keep;
+  const axes = byAxis(badges);
   const kept = cells.filter((c) => keep(c)
                                    && !hidden.some((h) => h.member(c))
-                                   && (badges.length === 0
-                                       || badges.some((t) => c.tags?.includes(t)))
+                                   && axes.every((group) =>
+                                        group.some((t) => c.tags?.includes(t)))
                                    && !off.has(categoryOf(c)));
   const { value, desc } = SORT[selection.sort];
   return kept.slice().sort((a, b) => {

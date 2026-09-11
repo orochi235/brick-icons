@@ -9,6 +9,7 @@ judgment anyone has to keep up to date.
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from datetime import datetime, timezone
 
 #: Tags in the order they read best on a badge row: which system a part
@@ -16,6 +17,29 @@ from datetime import datetime, timezone
 TAGS = ("sticker", "minifig", "technic", "duplo", "weird",
         "electric", "magnet", "printed", "composite",
         "retired", "replaced", "popular", "obscure")
+
+#: The independent questions a tag answers, each with the tags that answer it.
+#: Mirrored by `BADGE_AXES` in the wall's `paint.ts`, which is what the legend
+#: lists; filtering on either page reads the axes, so two tags on one axis are
+#: alternatives and two axes narrow. `obscure` has no badge and so no axis --
+#: it filters on its own.
+TAG_AXES: tuple[tuple[str, ...], ...] = (
+    ("minifig", "technic", "duplo", "weird", "sticker"),
+    ("magnet", "electric", "printed", "composite"),
+    ("popular",),
+    ("retired", "replaced"),
+)
+
+
+def by_axis(picked: Sequence[str]) -> list[list[str]]:
+    """The picked tags, split by the axis each answers. A tag no axis claims
+    gets an axis of its own, so an old address bar narrows by it rather than
+    being silently dropped."""
+    out = [[t for t in picked if t in axis] for axis in TAG_AXES]
+    claimed = {t for axis in TAG_AXES for t in axis}
+    return [group for group in out if group] + [
+        [t] for t in picked if t not in claimed]
+
 
 #: A category maps to a tag of its own name once its LDraw marker is stripped.
 _CATEGORY_TAGS = {"sticker": "sticker", "minifig": "minifig",

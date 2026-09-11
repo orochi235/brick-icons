@@ -85,6 +85,18 @@
   border-top: 1px solid var(--lk-border, #3a3a42);
 }
 
+/* An axis heading. Lighter than `Tags` above it -- the four of them are
+   dividers inside one section, not four sections. */
+.corpus-legend-axis-name {
+  margin: 0.35rem 0 0.1rem;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--wzl-fg-muted);
+}
+.corpus-legend-axis:first-of-type .corpus-legend-axis-name { margin-top: 0.1rem; }
+
 .corpus-legend-badge-row {
   width: 100%;
   background: none;

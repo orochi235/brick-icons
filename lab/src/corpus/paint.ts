@@ -284,12 +284,42 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
                ink: 'oklch(0.8193 0.0851 189.02)', accent: 'oklch(0.5773 0.0871 187.97)', labelInk: 'oklch(1.0000 0 0)' },
 };
 
-/** Every badge the wall can draw, in the order the legend lists them:
- *  what became of the part, then which system it belongs to, then what is
- *  true of its drawing. */
+/** Every badge the wall can draw. `BADGE_AXES` below is the order the legend
+ *  lists them in; this is the lookup. */
 export const ALL_BADGES: Record<string, CellBadge> = {
   ...CORNER_BADGES, ...STRIP_BADGES,
 };
+
+/** The independent questions a badge answers, each with the badges that
+ *  answer it. Four separate things, not one list of thirteen: a part has one
+ *  system and any number of properties, and how widely it was used says
+ *  nothing about whether it is still made.
+ *
+ *  Filtering reads this. Within an axis the picks are alternatives -- no part
+ *  is both `technic` and `duplo`, so narrowing would empty the wall -- and
+ *  across axes they narrow, which is what picking `technic` and `printed`
+ *  plainly asks for. A flat list could only do one of the two, and did the
+ *  wrong one for the pair anybody actually picks. */
+export const BADGE_AXES: { key: string; label: string; tags: string[] }[] = [
+  { key: 'system', label: 'System',
+    tags: ['minifig', 'technic', 'duplo', 'weird', 'sticker'] },
+  { key: 'properties', label: 'Properties',
+    tags: ['magnet', 'electric', 'printed', 'composite'] },
+  { key: 'sets', label: 'Sets', tags: ['popular'] },
+  { key: 'fate', label: 'What became of it', tags: ['retired', 'replaced'] },
+];
+
+/** The picked tags, split by the axis each answers. A tag no axis claims gets
+ *  an axis of its own, so an old address bar narrows by it rather than being
+ *  silently dropped. */
+export function byAxis(picked: string[]): string[][] {
+  const out = BADGE_AXES
+    .map((axis) => picked.filter((tag) => axis.tags.includes(tag)))
+    .filter((group) => group.length > 0);
+  const claimed = new Set(BADGE_AXES.flatMap((a) => a.tags));
+  for (const tag of picked) if (!claimed.has(tag)) out.push([tag]);
+  return out;
+}
 
 /** The badge that links somewhere when clicked. Only one does. */
 export const LINKED_BADGE = 'replaced';

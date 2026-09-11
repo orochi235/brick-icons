@@ -3,7 +3,8 @@ import { badgeGeometry, badgesFor, captionsFor, CAPTION_ON_FILL,
   captionSize, cornerPad,
   cellState, DEFAULT_APPEARANCE, fillFor, paintCommands, PROPERTY_FIELD,
   LABEL_MIN_PX,
-  stripFor, stripGeometry, tally, thumbGround, ALL_BADGES, STALE_WASH,
+  stripFor, stripGeometry, tally, thumbGround, ALL_BADGES, BADGE_AXES, byAxis,
+  STALE_WASH,
   type Appearance }
   from '@lab/corpus/paint';
 import { MARK_SHAPES } from '@lab/corpus/markShapes';
@@ -828,6 +829,22 @@ it('captions a cell down to LABEL_MIN_PX and not below it', () => {
   expect(captionsFor(c, LABEL_MIN_PX, CAPTION_ON_FILL).map((x) => x.text))
     .toEqual(['1979–', '3001']);
   expect(captionsFor(c, LABEL_MIN_PX - 1, CAPTION_ON_FILL)).toEqual([]);
+});
+
+it('gives every badge exactly one axis, and names no badge that is gone', () => {
+  // The axes are what filtering reads, so a badge in none of them would be a
+  // row that widens the wall instead of narrowing it, and one in two would
+  // narrow against itself.
+  const claimed = BADGE_AXES.flatMap((a) => a.tags);
+  expect([...claimed].sort()).toEqual(Object.keys(ALL_BADGES).sort());
+  expect(new Set(claimed).size).toBe(claimed.length);
+});
+
+it('splits the picks by axis, and gives an unclaimed tag an axis of its own', () => {
+  expect(byAxis(['technic', 'duplo', 'printed']))
+    .toEqual([['technic', 'duplo'], ['printed']]);
+  expect(byAxis([])).toEqual([]);
+  expect(byAxis(['obscure'])).toEqual([['obscure']]);
 });
 
 it('has no badge for a class the sidebar decides membership by', () => {

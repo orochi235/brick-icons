@@ -115,7 +115,10 @@ def members(conn: sqlite3.Connection, *, kind: str = "all", moved: bool = False,
         "SELECT part_id FROM part_successors")}
 
     excluded_set = {e for e in excluded}
-    wanted_badges = set(badges)
+    # By axis, as the wall's legend groups them: two tags on one axis are
+    # alternatives, two axes narrow. A subset test read `technic` and `duplo`
+    # as a part that is both, which is no part at all.
+    wanted_axes = part_tags.by_axis(badges)
     keep = []
     for row in rows:
         if row["moved"] and not moved:
@@ -134,15 +137,15 @@ def members(conn: sqlite3.Connection, *, kind: str = "all", moved: bool = False,
             continue
         if part_tags.clean_category(row["category"]) in excluded_set:
             continue
-        if wanted_badges:
+        if wanted_axes:
             year = years.get(row["id"])
-            carried = part_tags.tags_for(
+            carried = set(part_tags.tags_for(
                 row["category"], bool(row["printed"]),
                 year["year_to"] if year else None,
                 year["sets"] if year else None,
                 title=row["title"], part_id=row["id"],
-                successor=row["id"] in successors or None)
-            if not wanted_badges <= set(carried):
+                successor=row["id"] in successors or None))
+            if not all(carried & set(group) for group in wanted_axes):
                 continue
         keep.append(row)
     return {r["id"] for r in keep}, keep

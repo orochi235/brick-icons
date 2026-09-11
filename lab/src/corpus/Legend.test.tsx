@@ -50,6 +50,21 @@ it('renders one row per state, in the table\'s own legend order', () => {
     .toEqual(conditionKeys().map((state) => STATE_LABEL[state]));
 });
 
+it('heads each badge axis, and lists its tags under it', () => {
+  const { container } = render(<Legend cells={cells} highlight={null} onHighlight={() => {}}
+                 badges={[]} onBadges={vi.fn()}
+                 highlightTag={null} onHighlightTag={vi.fn()} onClose={vi.fn()} />);
+  const axes = [...container.querySelectorAll('.corpus-legend-axis')];
+  expect(axes.map((a) => a.querySelector('h4')?.textContent))
+    .toEqual(['System', 'Properties', 'Sets', 'What became of it']);
+  const under = (label: string) => axes
+    .find((a) => a.querySelector('h4')?.textContent === label)!
+    .querySelectorAll('.corpus-legend-name');
+  expect([...under('System')].map((n) => n.textContent))
+    .toEqual(['minifig', 'technic', 'duplo', 'weird', 'sticker']);
+  expect([...under('Sets')].map((n) => n.textContent)).toEqual(['popular']);
+});
+
 it('reports the hovered state, and null once the pointer leaves', () => {
   const onHighlight = vi.fn();
   render(<Legend cells={cells} highlight={null} onHighlight={onHighlight} badges={[]} onBadges={vi.fn()}
