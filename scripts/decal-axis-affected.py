@@ -60,17 +60,30 @@ def parts_with_a_decal(db: str) -> list[str]:
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser()
+    p.add_argument("parts", nargs="*", help="part ids; one argument may hold "
+                                            "a comma-separated batch")
     p.add_argument("--list", help="part ids, one per line (default: every "
                                   "part with a decal in the store)")
     p.add_argument("--db", default="corpus.db")
     p.add_argument("--ldraw-dir", default="vendor/ldraw")
-    p.add_argument("--out", required=True, help="write the affected ids here")
+    p.add_argument("--out", required=True,
+                   help="write the affected ids here, or into this directory "
+                        "named for the batch's first part")
     args = p.parse_args(argv)
 
-    if args.list:
+    if args.parts:
+        parts = [x for arg in args.parts for x in arg.split(",") if x.strip()]
+    elif args.list:
         parts = [x.strip() for x in Path(args.list).read_text().split() if x.strip()]
     else:
         parts = parts_with_a_decal(args.db)
+
+    # Workers share the tree, so a batch that names its own file cannot
+    # collide with the one running beside it.
+    out = Path(args.out)
+    if out.is_dir() or args.out.endswith("/"):
+        out.mkdir(parents=True, exist_ok=True)
+        out = out / f"{parts[0]}.txt"
 
     hits, unreadable, t0 = [], 0, time.time()
     for i, part in enumerate(parts, 1):
@@ -91,9 +104,10 @@ def main(argv=None) -> int:
         if affected:
             hits.append(part)
 
-    Path(args.out).write_text("\n".join(hits) + "\n" if hits else "")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("\n".join(hits) + "\n" if hits else "")
     print(f"\n{len(hits)} of {len(parts)} affected "
-          f"({unreadable} kept unread) in {time.time() - t0:.0f}s -> {args.out}")
+          f"({unreadable} kept unread) in {time.time() - t0:.0f}s -> {out}")
     return 0
 
 
