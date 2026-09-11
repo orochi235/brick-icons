@@ -305,3 +305,149 @@ def totals(conn: sqlite3.Connection) -> dict:
                   "failed": decal["failed"] if decal else 0,
                   "timeout": decal["timeout"] if decal else 0},
     }
+
+
+def _revision(build: str | None) -> tuple[int, str] | None:
+    """A build's revision count and its sha, or None for anything that is not
+    a build. `1214.069c08b+` is the 1214th commit, `069c08b`, with the tree
+    dirty; the count is what orders two revisions a rebuild gave the same
+    date, which a sha alone cannot."""
+    if not build:
+        return None
+    head, _, tail = build.rpartition(".")
+    try:
+        return int(head), tail.rstrip("+")
+    except ValueError:
+        return None
+
+
+#: The last replay, against the corpus it was taken from. A pass over every
+#: measurement and every attempt is 300 ms and the dashboard re-reads every
+#: 30 seconds against a database that changes only on an ingest, so the answer
+#: is kept until one lands.
+_REPLAYED: tuple[tuple, list[dict]] | None = None
+
+
+def _corpus_mark(conn: sqlite3.Connection) -> tuple:
+    """What has to change before a replay can say something different."""
+    return tuple(conn.execute(
+        "SELECT (SELECT MAX(run_id) FROM measurements), "
+        "       (SELECT count(*) FROM measurements), "
+        "       (SELECT count(*) FROM attempts), "
+        "       (SELECT count(*) FROM defects WHERE status = 'open')"
+    ).fetchone())
+
+
+def history(conn: sqlite3.Connection,
+            sources: Sequence[str] | None = None) -> list[dict]:
+    """Each slot's failing count over the WHOLE corpus after every ingest --
+    the series for everything before anyone thought to write a tally.
+
+    Not `by_build`, which is a rate over the parts one revision happened to
+    touch. This carries each part's last known verdict forward, so an ingest
+    of 11 parts moves the count by at most 11 and leaves 23,000 standing where
+    they were, which is what "what will not draw" asks. Replayed in run order,
+    the same order `count` reads, so the last step of this and the first
+    recorded tally are the same number by construction.
+
+    Ingests, not dates, and the distinction is the whole difficulty. A run is
+    one ingest, not one revision: run 1 landed rows from six different builds
+    at once and run 4 then landed two older ones, so ordering these by the
+    commit each row names walks backwards through the history it is drawing.
+    `runs.started` is no use either -- a rebuild re-stamps all 47 of them with
+    the ingest time, which is why they read 11:16 on one morning. So the axis
+    is the order this corpus learned things, and each step says which revision
+    taught it: the newest build among that run's rows, or the run's own commit
+    where none of them carries one.
+
+    Within one run the newest revision wins, so run 1's six builds land
+    oldest-first and the slot ends that ingest holding what its newest code
+    said.
+
+    An attempt that finished clean and produced no drawing counts as a
+    failure of the slot, exactly as `coverage_of` reads it -- 2,480 printed
+    parts come back so from the decal finder, which files no measurements at
+    all and would otherwise show a flat 61.
+
+    Defects are read at today's status, the only one recorded. A part that
+    both errors and carries an open defect therefore reads `failed` here and
+    `defect` in `count`; none does today.
+    """
+    global _REPLAYED
+    mark = (*_corpus_mark(conn), tuple(sources) if sources else None)
+    if _REPLAYED is not None and _REPLAYED[0] == mark:
+        return _REPLAYED[1]
+
+    ids = in_scope(conn)
+    printed = {r["id"] for r in conn.execute(
+        "SELECT id FROM parts WHERE printed = 1")}
+    want = set(sources) if sources else None
+    flagged_by_engine: dict[str, set[str]] = {}
+    for row in conn.execute(
+            "SELECT part_id, engines FROM defects WHERE status = 'open'"):
+        for engine in ("naive", "occt"):
+            if engine in row["engines"]:
+                flagged_by_engine.setdefault(engine, set()).add(row["part_id"])
+
+    # Tuples, not rows, and every run's newest build tracked as the walk
+    # passes it: this is a pass over every measurement and every attempt in
+    # the corpus, 154,000 of them, and it runs on every dashboard read.
+    rows = [r for r in conn.execute(
+        "SELECT source, build, run_id, part_id, error, NULL AS state "
+        "FROM measurements WHERE source IS NOT NULL "
+        "UNION ALL "
+        "SELECT source, NULL AS build, run_id, part_id, error, state "
+        "FROM attempts").fetchall()
+        if r[3] in ids and (want is None or r[0] in want)]
+
+    commits = {r[0]: r[1] for r in conn.execute(
+        "SELECT id, commit_sha FROM runs")}
+    revisions = {r[1]: _revision(r[1]) for r in rows}
+    counts = {build: (mark[0] if mark else -1)
+              for build, mark in revisions.items()}
+
+    out: list[dict] = []
+    by_source: dict[str, list[tuple]] = {}
+    for row in rows:
+        by_source.setdefault(row[0], []).append(row)
+
+    for source, mine in sorted(by_source.items()):
+        flagged = flagged_by_engine.get(engine_for(source), set())
+        covers = not not_applicable(source, True, False)
+        covers_plain = not not_applicable(source, False, False)
+        mine.sort(key=lambda r: (r[2], counts[r[1]]))
+        verdict: dict[str, str | None] = {}
+        held = {"failed": 0, "timeout": 0}
+        newest: str | None = None
+        rank = -2
+
+        for i, row in enumerate(mine):
+            _, build, run_id, pid, error, state = row
+            if counts[build] > rank:
+                newest, rank = build, counts[build]
+            if pid in flagged:
+                now_ = None
+            elif error:
+                now_ = "timeout" if error == "TimeoutError" else "failed"
+            elif state == "none" and (covers if pid in printed else covers_plain):
+                now_ = "failed"
+            else:
+                now_ = None
+            was = verdict.get(pid)
+            if was != now_:
+                if was:
+                    held[was] -= 1
+                if now_:
+                    held[now_] += 1
+                verdict[pid] = now_
+            if i + 1 == len(mine) or mine[i + 1][2] != run_id:
+                out.append({"run": run_id, "source": source,
+                            "build": newest or commits.get(run_id),
+                            "size": len(ids),
+                            "failed": held["failed"],
+                            "timeout": held["timeout"],
+                            "bad": held["failed"] + held["timeout"]})
+                newest, rank = None, -2
+    out.sort(key=lambda r: (r["run"], r["source"]))
+    _REPLAYED = (mark, out)
+    return out

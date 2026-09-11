@@ -281,3 +281,70 @@ def test_the_tiles_read_the_last_tally_rather_than_recounting(conn):
     out = tally.totals(conn)
     assert out["occt"]["bad"] == 1
     assert out["taken"] == "2026-09-10T00:00:00+00:00"
+
+
+# -- the replayed history --------------------------------------------------
+
+def test_history_carries_a_verdict_forward_over_the_ingests_after_it(conn):
+    """The point of the replay: an ingest of one part moves the count by one
+    and leaves everything else standing, where `by_build` would report that
+    ingest as a rate over the single part it touched."""
+    _part(conn, "3001")
+    _part(conn, "3002")
+    _render(conn, "3001", "occt")
+    _render(conn, "3002", "occt")
+    _measure(conn, "3001", "occt", "occt", error="ProcessDied")
+    _measure(conn, "3002", "occt", "occt", error="ProcessDied")
+    _measure(conn, "3001", "occt", "occt")
+    steps = [r["bad"] for r in tally.history(conn, ["occt"])]
+    assert steps == [1, 2, 1]
+
+
+def test_history_ends_where_the_live_count_stands(conn):
+    """The replay reads the runs in the order `count` picks its latest row
+    from, so the two cannot drift -- a seam between them would read as a
+    regression at whichever ingest the tallies started."""
+    _part(conn, "3001", printed=1)
+    _part(conn, "3002")
+    _part(conn, "3003", printed=1)
+    _render(conn, "3002", "occt")
+    # `count` reads its slots off `renders`, so decal needs one to be a slot.
+    _render(conn, "3003", "decal")
+    _measure(conn, "3001", "occt", "occt", error="TimeoutError")
+    _measure(conn, "3002", "occt", "occt", error="ProcessDied")
+    _attempt(conn, "3001", "decal", "none")
+    live = {r["source"]: r["slot_failed"] + r["slot_timeout"]
+            for r in tally.count(conn)}
+    last = {}
+    for row in tally.history(conn):
+        last[row["source"]] = row["bad"]
+    assert last["occt"] == live["occt"] == 2
+    assert last["decal"] == live["decal"] == 1
+
+
+def test_history_reads_an_attempt_that_drew_nothing_as_a_failure(conn):
+    # decal files no measurements at all, so without this its line is flat at
+    # whatever handful of parts errored outright.
+    _part(conn, "3001", printed=1)
+    _attempt(conn, "3001", "decal", "none")
+    assert [r["bad"] for r in tally.history(conn, ["decal"])] == [1]
+    _attempt(conn, "3001", "decal", "stored")
+    assert [r["bad"] for r in tally.history(conn, ["decal"])] == [1, 0]
+
+
+def test_history_names_the_newest_revision_an_ingest_carried(conn):
+    # Run 1 in the live corpus landed rows from six builds at once. The step
+    # says which revision the slot ended that ingest holding, not the first
+    # one the rows happened to name.
+    head = subprocess.run(["git", "rev-parse", "--short", "HEAD"],
+                          capture_output=True, text=True).stdout.strip()
+    _part(conn, "3001")
+    _part(conn, "3002")
+    conn.execute("INSERT INTO runs (id, kind, started, commit_sha, args) "
+                 "VALUES (900, 'census', '2026-09-05T09:00:00+00:00', 'abc', '{}')")
+    for pid, build in (("3001", f"707.{head}"), ("3002", f"959.{head}")):
+        conn.execute("INSERT INTO measurements (run_id, part_id, engine, "
+                     "source, error, build) VALUES (900, ?, 'occt', 'occt', "
+                     "NULL, ?)", (pid, build))
+    rows = tally.history(conn, ["occt"])
+    assert [r["build"] for r in rows] == [f"959.{head}"]

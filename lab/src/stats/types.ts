@@ -85,6 +85,22 @@ export interface FailurePoint {
   bad: number;
 }
 
+/** One slot's failing count over the whole corpus after one ingest. Carries
+ *  the run rather than a date: a run is an ingest, not a revision, and the
+ *  order this corpus learned things is the only clock it has -- see
+ *  `tally.history`. */
+export interface HistoryPoint {
+  run: number;
+  source: string;
+  /** The newest revision among that ingest's rows, or the run's own commit
+   *  where none of them names one. */
+  build: string | null;
+  size: number;
+  failed: number;
+  timeout: number;
+  bad: number;
+}
+
 export interface FailureTotal {
   bad: number;
   failed: number;
@@ -100,6 +116,9 @@ export interface Failures {
   };
   /** Corpus-wide counts, one step per slot per change. */
   series: FailurePoint[];
+  /** The same counts replayed over every ingest that came before the first
+   *  tally. Optional: a lab API older than the field sends none. */
+  history?: HistoryPoint[];
   /** The sparse prefix off `measurements.build`, dated from git. */
   by_build: FailurePoint[];
 }

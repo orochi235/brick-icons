@@ -567,6 +567,7 @@ def _failures(conn: sqlite3.Connection) -> dict:
     return {
         "totals": tally.totals(conn),
         "series": tally.series(conn, tracked),
+        "history": tally.history(conn, tracked),
         "by_build": tally.by_build(conn, tracked),
     }
 

@@ -372,6 +372,9 @@ const slotRank = (source: string) => {
 interface FailurePoint { at: string; source: string; bad: number; size: number;
                          build: string | null }
 
+interface HistoryPoint { run: number; source: string; bad: number; size: number;
+                         build: string | null }
+
 /** Ticks that land on round numbers, so the axis reads without arithmetic.
  *
  *  The step list is finer than 1/2/5 on purpose: with three choices a max of
@@ -392,15 +395,17 @@ function ticksFor(max: number): number[] {
  *  two are never drawn on one pair of axes: a build that drew 11 parts and a
  *  corpus of 23,339 share no y-scale, and putting them together would read a
  *  tiny sample as a collapse in failures. */
+type FailureRow = FailurePoint | HistoryPoint;
+
 export function FailureLines({ rows, unit, caption }: {
-  rows: FailurePoint[];
+  rows: FailureRow[];
   unit: 'count' | 'rate';
   caption: string;
 }) {
-  const value = (r: FailurePoint) =>
+  const value = (r: FailureRow) =>
     unit === 'rate' ? (r.size > 0 ? (r.bad / r.size) * 100 : 0) : r.bad;
 
-  const bySlot = new Map<string, FailurePoint[]>();
+  const bySlot = new Map<string, FailureRow[]>();
   for (const r of rows) {
     if (!bySlot.has(r.source)) bySlot.set(r.source, []);
     bySlot.get(r.source)!.push(r);
@@ -410,17 +415,25 @@ export function FailureLines({ rows, unit, caption }: {
     return <p className="stats-empty">{caption}</p>;
   }
 
-  const times = rows.map((r) => Date.parse(r.at));
+  // Two clocks, because the corpus has two. A tally is dated; a replayed
+  // ingest is not -- a run lands rows from several revisions at once and a
+  // rebuild re-stamps every `started`, so its only order is the order this
+  // corpus learned things. See `tally.history`.
+  const at = (r: FailureRow) => ('at' in r ? Date.parse(r.at) : r.run);
+  const mark = (r: FailureRow) => ('at' in r ? r.at.slice(5, 10) : `run ${r.run}`);
+  const stamp = (r: FailureRow) =>
+    ('at' in r ? r.at.slice(0, 16).replace('T', ' ') : `run ${r.run}`);
+
+  const times = rows.map(at);
   const t0 = Math.min(...times);
   const t1 = Math.max(...times);
   const top = Math.max(...ticksFor(Math.max(...rows.map(value))));
 
   const W = 720, H = 260, padL = 52, padR = 16, padT = 12, padB = 30;
-  const x = (at: string) => padL + (t1 === t0 ? (W - padL - padR) / 2
-    : ((Date.parse(at) - t0) / (t1 - t0)) * (W - padL - padR));
+  const x = (r: FailureRow) => padL + (t1 === t0 ? (W - padL - padR) / 2
+    : ((at(r) - t0) / (t1 - t0)) * (W - padL - padR));
   const y = (v: number) => H - padB - (top === 0 ? 0 : (v / top) * (H - padT - padB));
   const ticks = ticksFor(Math.max(...rows.map(value)));
-  const day = (at: string) => at.slice(5, 10);
 
   return (
     <figure className="stats-failures">
@@ -436,27 +449,26 @@ export function FailureLines({ rows, unit, caption }: {
             </text>
           </g>
         ))}
-        <text className="stats-axis" x={padL} y={H - 8}>{day(rows[0]!.at)}</text>
+        <text className="stats-axis" x={padL} y={H - 8}>{mark(rows[0]!)}</text>
         {t1 !== t0 && (
           <text className="stats-axis" x={W - padR} y={H - 8} textAnchor="end">
-            {day(rows[rows.length - 1]!.at)}
+            {mark(rows[rows.length - 1]!)}
           </text>
         )}
 
         {slots.map((slot) => {
-          const points = [...bySlot.get(slot)!].sort(
-            (a, b) => Date.parse(a.at) - Date.parse(b.at));
+          const points = [...bySlot.get(slot)!].sort((a, b) => at(a) - at(b));
           const d = points.map((p, i) =>
-            `${i === 0 ? 'M' : 'L'}${x(p.at).toFixed(1)},${y(value(p)).toFixed(1)}`
+            `${i === 0 ? 'M' : 'L'}${x(p).toFixed(1)},${y(value(p)).toFixed(1)}`
           ).join(' ');
           return (
             <g key={slot}>
               <path className="stats-failure-line" data-slot={slot} d={d} />
               {points.map((p) => (
-                <circle key={p.at} className="stats-failure-dot"
-                        data-slot={slot} cx={x(p.at)} cy={y(value(p))} r={4}>
+                <circle key={stamp(p)} className="stats-failure-dot"
+                        data-slot={slot} cx={x(p)} cy={y(value(p))} r={4}>
                   <title>
-                    {`${slot} — ${p.at.slice(0, 16).replace('T', ' ')}`}
+                    {`${slot} — ${stamp(p)}`}
                     {unit === 'rate'
                       ? ` — ${value(p).toFixed(1)}% of ${p.size.toLocaleString()} drawn`
                       : ` — ${p.bad.toLocaleString()} of ${p.size.toLocaleString()}`}
@@ -468,7 +480,7 @@ export function FailureLines({ rows, unit, caption }: {
           );
         })}
       </svg>
-      {t1 === t0 && (
+      {t1 === t0 && 'at' in rows[0]! && (
         <p className="stats-note">
           One tally so far, so this is where the corpus stands rather than
           where it is going. A step appears each time an ingest moves a slot.

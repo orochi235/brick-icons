@@ -147,7 +147,7 @@ export function StatsPage({ client }: { client: LabClient }) {
 
           <section>
             <h2>What will not draw</h2>
-            <FailureLines rows={failures.series} unit="count"
+            <FailureLines rows={failures.history ?? failures.series} unit="count"
                           caption={unanswered ? STALE_API
                             : 'no tally has been taken yet — one is written on '
                               + 'the next ingest'} />
@@ -155,6 +155,13 @@ export function StatsPage({ client }: { client: LabClient }) {
               Counted over every in-scope part, so the Controls above do not
               move these. A part failing in more than one occt facet is one
               line per facet here, and one part in the tile.
+            </p>
+            <p className="stats-note">
+              One step per ingest, not per day: a run lands rows from several
+              engine revisions at once, and a rebuild restamps every run with
+              the time it was read back in — so the axis is the order this
+              corpus learned things, and each point names the newest revision
+              that taught it. The last step is where the corpus stands now.
             </p>
           </section>
 
