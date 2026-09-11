@@ -217,6 +217,10 @@ def watch(trees: list[Path], every: int, once: bool, bake: bool,
     seen: dict[Path, tuple[int, float]] = {}
     drawings: dict[Path, tuple[int, float]] = {}
     closing = False
+    # A bake or a fetch that fails stays failed; the per-icon parse error in
+    # _take_renders does not, because a half-written SVG is taken whole on the
+    # next pass. Counting those would report failures that fix themselves.
+    failed = 0
     while True:
         # Two trees can fill one slot -- a job per node, or a round each --
         # and the bake is per slot, so it happens once a pass however many
@@ -245,6 +249,10 @@ def watch(trees: list[Path], every: int, once: bool, bake: bool,
             print(f"{time.strftime('%H:%M:%S')} {tree.name} -> {source}: "
                   f"+{drawn} drawn, {redrew} redrawn, +{scores} scored, "
                   f"{total} in the slot", flush=True)
+            # onto has no total for a watcher, so it draws these as figures.
+            # Cumulative, because it re-reads a window of the log.
+            print(f"onto: count {total} in {source}", flush=True)
+            print(f"onto: count {failed} failed", flush=True)
         # One tally per PASS, not per tree: a tally is a statement about the
         # whole corpus at a moment, and taking one between two trees would
         # record a step that never existed.
@@ -259,6 +267,7 @@ def watch(trees: list[Path], every: int, once: bool, bake: bool,
 
         for source in sorted(touched) if bake else ():
             ok = _bake(source)
+            failed += 0 if ok else 1
             print(f"{time.strftime('%H:%M:%S')} baked {source}"
                   f"{'' if ok else '  BAKE FAILED'}", flush=True)
         if once or closing:
@@ -272,6 +281,7 @@ def watch(trees: list[Path], every: int, once: bool, bake: bool,
                 closing = True
                 for task in until if fetch else ():
                     ok = _fetch(task)
+                    failed += 0 if ok else 1
                     print(f"{time.strftime('%H:%M:%S')} fetched {task}"
                           f"{'' if ok else '  FETCH FAILED'}", flush=True)
                 print(f"{time.strftime('%H:%M:%S')} "
