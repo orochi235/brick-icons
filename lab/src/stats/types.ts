@@ -93,6 +93,38 @@ export interface Shape {
   dated: number;
 }
 
+/** One slot at one moment: how many parts it could not draw, out of how many
+ *  it was counted over. `size` is the corpus for a tally and the parts that
+ *  build drew for a build point, which is why the two never share a y-axis. */
+export interface FailurePoint {
+  at: string;
+  source: string;
+  build: string | null;
+  size: number;
+  failed: number;
+  timeout: number;
+  bad: number;
+}
+
+export interface FailureTotal {
+  bad: number;
+  failed: number;
+  timeout: number;
+}
+
+export interface Failures {
+  totals: {
+    /** In-scope parts the tiles are counted over. */
+    size: number;
+    occt: FailureTotal & { facets: string[] };
+    decal: FailureTotal;
+  };
+  /** Corpus-wide counts, one step per slot per change. */
+  series: FailurePoint[];
+  /** The sparse prefix off `measurements.build`, dated from git. */
+  by_build: FailurePoint[];
+}
+
 export interface Stats {
   set: {
     size: number;
@@ -109,6 +141,7 @@ export interface Stats {
   phases: PhaseRow[];
   runs: RunRow[];
   shape: Shape;
+  failures: Failures;
   as_of: string;
 }
 

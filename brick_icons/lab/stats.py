@@ -10,6 +10,7 @@ import sqlite3
 
 from brick_icons import tags as part_tags
 from brick_icons.db import MOVED_PREFIX, OUT_OF_SCOPE_CATEGORIES
+from brick_icons.lab import tally
 from brick_icons.lab.cells import (COVERAGE_ORDER, coverage_of, engine_for,
                                    not_applicable)
 
@@ -43,6 +44,12 @@ REST = "rest"
 # How many parts the per-part strip draws. Enough that the tail has a shape,
 # few enough to stay one screen wide.
 SLOWEST_N = 40
+
+# The engines the timing, phase and accuracy sections report on. naive is the
+# reference implementation, not a candidate, so comparing the two engines here
+# measured a race nobody is running. It keeps its coverage rows -- those say
+# how much of the library each slot has drawn, which is still worth seeing.
+REPORTED_ENGINES = ("occt",)
 
 
 def _quantile(sorted_values: list[float], q: float) -> float | None:
@@ -157,13 +164,21 @@ def _coverage(conn: sqlite3.Connection, ids: set[str]) -> list[dict]:
         flagged = {r["part_id"] for r in conn.execute(
             "SELECT part_id, engines FROM defects WHERE status = 'open'")
             if engine in r["engines"]}
+        # Without this the two pages disagree, which the module docstring
+        # promises they cannot: the wall reads a slot that ran and drew
+        # nothing as `failed`, and the dashboard was calling the same 2,480
+        # decal parts `untried` and asking the fleet to redo finished work.
+        drew_nothing = {r["part_id"] for r in conn.execute(
+            "SELECT DISTINCT part_id FROM attempts WHERE source = ? "
+            "AND state = 'none'", (source,))}
         counts = dict.fromkeys(COVERAGE_ORDER, 0)
         for pid in ids:
             label = coverage_of(sha="x" if pid in drawn else None,
                                 error=errors.get(pid),
                                 open_defects=1 if pid in flagged else 0,
                                 inapplicable=not_applicable(
-                                    source, pid in printed, pid in drawn))
+                                    source, pid in printed, pid in drawn),
+                                drew_nothing=pid in drew_nothing)
             counts[label] += 1
         out.append({"source": source, "engine": engine, "counts": counts,
                     "size": len(ids)})
@@ -383,6 +398,22 @@ def _shape(conn: sqlite3.Connection, rows: list[sqlite3.Row],
     }
 
 
+def _failures(conn: sqlite3.Connection) -> dict:
+    """What fails to draw, corpus-wide and over time.
+
+    Deliberately not filtered by the working set. The tiles answer "how much
+    of the library is broken", which is not a question the Controls should be
+    able to make a smaller number of -- so the labels say corpus-wide and the
+    figures ignore every filter beside them.
+    """
+    tracked = [s for s in tally.tracked_sources(conn)]
+    return {
+        "totals": tally.totals(conn),
+        "series": tally.series(conn, tracked),
+        "by_build": tally.by_build(conn, tracked),
+    }
+
+
 def stats(conn: sqlite3.Connection, *, kind: str = "all", moved: bool = False,
           out_of_scope: bool = True, excluded: tuple[str, ...] = (),
           badges: tuple[str, ...] = ()) -> dict:
@@ -391,7 +422,8 @@ def stats(conn: sqlite3.Connection, *, kind: str = "all", moved: bool = False,
                         out_of_scope=out_of_scope, excluded=tuple(excluded),
                         badges=tuple(badges))
     total = conn.execute("SELECT count(*) FROM parts").fetchone()[0]
-    latest = _latest_measurements(conn)
+    latest = [r for r in _latest_measurements(conn)
+              if r["engine"] in REPORTED_ENGINES]
     speed, error = _speed_and_error(latest, ids)
     return {
         "set": {"size": len(ids), "total": total, "kind": kind,
@@ -403,5 +435,6 @@ def stats(conn: sqlite3.Connection, *, kind: str = "all", moved: bool = False,
         "phases": _phases(latest, ids),
         "runs": _runs(conn, ids),
         "shape": _shape(conn, rows, ids),
+        "failures": _failures(conn),
         "as_of": dt.datetime.now(dt.timezone.utc).isoformat(),
     }

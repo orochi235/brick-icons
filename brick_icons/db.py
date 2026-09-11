@@ -177,6 +177,32 @@ CREATE TABLE IF NOT EXISTS part_successors (
   rel TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS tallies (
+  -- When this count was taken. The only honest clock in the database: every
+  -- other timestamp is stamped at ingest, and `rebuild` drops the file, so
+  -- `runs.started` and `renders.made_at` both read as "the last rebuild".
+  taken TEXT NOT NULL,
+  source TEXT NOT NULL,
+  -- The newest engine revision seen in the slot, for reading a step against
+  -- the commit that caused it. Null where the slot files no measurements.
+  build TEXT,
+  -- The population counted, so a step is readable as a change in the slot
+  -- rather than a change in what was in scope.
+  size INTEGER NOT NULL,
+  drawn INTEGER NOT NULL, failed INTEGER NOT NULL, timeout INTEGER NOT NULL,
+  defect INTEGER NOT NULL, untried INTEGER NOT NULL,
+  not_applicable INTEGER NOT NULL,
+  -- This slot's OWN failures, from its own measurements. The columns above
+  -- pool them per engine, which is right for coverage -- every occt failure
+  -- is written under whichever facet was running, so a slot asking only
+  -- about itself paints a clean wall over parts that do not draw at all --
+  -- and useless for following one facet: it makes all four report the same
+  -- number and draw as one line four times over.
+  slot_failed INTEGER NOT NULL DEFAULT 0,
+  slot_timeout INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (taken, source)
+);
+
 CREATE INDEX IF NOT EXISTS measurements_by_part ON measurements(part_id, engine);
 CREATE INDEX IF NOT EXISTS attempts_by_part ON attempts(part_id, source);
 CREATE INDEX IF NOT EXISTS renders_by_part ON renders(part_id);
@@ -199,7 +225,9 @@ def now() -> str:
 _ADDED_COLUMNS = (("defects", "classes", "TEXT"),
                   ("defects", "checked", "TEXT"),
                   ("measurements", "counts", "TEXT"),
-                  ("parts", "preview", "TEXT"))
+                  ("parts", "preview", "TEXT"),
+                  ("tallies", "slot_failed", "INTEGER NOT NULL DEFAULT 0"),
+                  ("tallies", "slot_timeout", "INTEGER NOT NULL DEFAULT 0"))
 
 
 def _add_missing_columns(conn: sqlite3.Connection) -> None:
@@ -793,6 +821,24 @@ def _stored_attempts(path: Path) -> list[tuple[str, list[tuple]]]:
         conn.close()
 
 
+def _stored_tallies(path: Path) -> list[tuple]:
+    """Every tally in the database about to be replaced.
+
+    Nothing on disk re-derives these: a tally is a count of how the corpus
+    stood at a moment, and the logs only ever say how it stands now.
+    """
+    if not path.is_file():
+        return []
+    conn = connect(path)
+    try:
+        return [tuple(r) for r in conn.execute(
+            "SELECT taken, source, build, size, drawn, failed, timeout, "
+            "defect, untried, not_applicable, slot_failed, slot_timeout "
+            "FROM tallies")]
+    finally:
+        conn.close()
+
+
 def ingest_store(conn: sqlite3.Connection, root: Path | str = ".",
                  commit_sha: str = "unknown",
                  progress=lambda msg: None) -> int:
@@ -827,6 +873,7 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
             progress=lambda msg: None) -> dict[str, int]:
     path = Path(path)
     carried = _stored_attempts(path)
+    carried_tallies = _stored_tallies(path)
     path.unlink(missing_ok=True)
     conn = connect(path)
     counts = {"parts": seed_parts(conn, ldraw_dir), "renders": 0,
@@ -930,6 +977,18 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
         counts["years"] = import_part_years(conn, years_path)
     if Path(successors_path).is_file():
         counts["successors"] = import_part_successors(conn, successors_path)
+    conn.executemany(
+        "INSERT OR REPLACE INTO tallies (taken, source, build, size, drawn, "
+        "failed, timeout, defect, untried, not_applicable, slot_failed, "
+        "slot_timeout) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        carried_tallies)
+    conn.commit()
+    progress(f"{len(carried_tallies)} tallies carried across")
+
+    from brick_icons.lab import tally as _tally
+    counts["tallies"] = _tally.take(conn)
+    progress(f"{counts['tallies']} slot tallies taken")
+
     progress(f"{counts['attempts']} store attempts, "
              f"{counts['defects']} defects, {counts['statuses']} statuses, "
              f"{counts['years']} part years, {counts['successors']} successors")

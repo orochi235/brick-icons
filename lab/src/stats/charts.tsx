@@ -110,18 +110,15 @@ export function CoverageLegend() {
 const binLabel = (from: number, to: number | null) =>
   to === null ? `${from}s+` : `${from}–${to}s`;
 
-/** Every engine's render times in one plot, sharing bins and one count scale.
- *
- *  Overlaid rather than a small multiple per engine, because the question the
- *  section asks is which engine is faster and a reader cannot answer it across
- *  a gap. Scaling each panel to its own tallest bin actively lied: naive's
- *  10-30s bin and occt's drew the same height on different counts.
+/** Render times, sharing bins and one count scale across whatever engines are
+ *  on screen -- occt alone today. The shared scale is the load-bearing part:
+ *  a panel scaled to its own tallest bin draws two different counts at the
+ *  same height, so a second engine must not bring per-panel scaling with it.
  *
  *  Identity is fill against hatch, not two hues. The status palette already
  *  spends gold, red and cyan and the phase palette blue, orange, green and
  *  purple; a spare hue on this page is one the reader has just been taught to
- *  read as something else. The hatch also survives being printed and being
- *  colorblind, which a hue pair does not. */
+ *  read as something else. */
 const SERIES_FILL = ['solid', 'hatch'] as const;
 
 export function SecsOverlay({ rows }: { rows: SpeedRow[] }) {
@@ -242,13 +239,11 @@ export function PhaseLegend() {
   );
 }
 
-/** Every engine's slowest parts in one plot, sharing one seconds scale, on the
- *  reasoning `SecsOverlay` sets out: a panel per engine scaled to its own
- *  tallest part actively lied, drawing naive's 8-minute tail and occt's
- *  10-minute one at the same height. The x position is a RANK, not a part --
- *  each engine has its own 40 slowest, and what the section asks is whose tail
- *  is worse, which two rank profiles on one scale answer and two part lists
- *  side by side do not. Longest last, so the climb reads left to right.
+/** The slowest parts, sharing one seconds scale, on the reasoning
+ *  `SecsOverlay` sets out. The x position is a RANK, not a part -- each engine
+ *  has its own 40 slowest, and what the section asks is how bad the tail is,
+ *  which a rank profile answers and a part list does not. Longest last, so the
+ *  climb reads left to right.
  *
  *  Identity is the same fill-against-hatch the histogram uses, and for the
  *  same reason: the columns are already spending four hues on the phases, so
@@ -312,6 +307,147 @@ export function PhaseColumns({ rows }: { rows: PhaseRow[] }) {
           );
         })}
       </div>
+    </figure>
+  );
+}
+
+/** The slots the failure chart follows, in a fixed order, each keeping its hue
+ *  however many are on screen. Color follows the SLOT, never its rank: a
+ *  filter that drops one must not repaint the others.
+ *
+ *  Categorical, not the status palette above -- these say which slot, not how
+ *  bad, and `--stats-failed` red is reserved for the state. Dark steps of the
+ *  default eight-hue theme; validated against this page's sunken surface, all
+ *  six checks pass (worst adjacent CVD dE 8.4, normal-vision 19.3). */
+export const SLOT_ORDER = ['occt', 'white-occt', 'silhouette-occt',
+                           'translucent-occt', 'decal'] as const;
+
+export const SLOT_COLOR: Record<string, string> = {
+  'occt': '#3987e5',
+  'white-occt': '#d95926',
+  'silhouette-occt': '#199e70',
+  'translucent-occt': '#c98500',
+  'decal': '#d55181',
+};
+
+const slotRank = (source: string) => {
+  const i = (SLOT_ORDER as readonly string[]).indexOf(source);
+  return i === -1 ? SLOT_ORDER.length : i;
+};
+
+interface FailurePoint { at: string; source: string; bad: number; size: number;
+                         build: string | null }
+
+/** Ticks that land on round numbers, so the axis reads without arithmetic.
+ *
+ *  The step list is finer than 1/2/5 on purpose: with three choices a max of
+ *  2,532 rounds up to 5,000 and the data uses half the panel. */
+const NICE = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
+
+function ticksFor(max: number): number[] {
+  if (max <= 0) return [0];
+  const step = Math.pow(10, Math.floor(Math.log10(max)));
+  const scaled = max / step;
+  const top = (NICE.find((n) => scaled <= n) ?? 10) * step;
+  return [0, top / 4, top / 2, (top * 3) / 4, top];
+}
+
+/** Failures over time, one line per slot.
+ *
+ *  `unit` is `count` for the tallies and `rate` for the build prefix, and the
+ *  two are never drawn on one pair of axes: a build that drew 11 parts and a
+ *  corpus of 23,339 share no y-scale, and putting them together would read a
+ *  tiny sample as a collapse in failures. */
+export function FailureLines({ rows, unit, caption }: {
+  rows: FailurePoint[];
+  unit: 'count' | 'rate';
+  caption: string;
+}) {
+  const value = (r: FailurePoint) =>
+    unit === 'rate' ? (r.size > 0 ? (r.bad / r.size) * 100 : 0) : r.bad;
+
+  const bySlot = new Map<string, FailurePoint[]>();
+  for (const r of rows) {
+    if (!bySlot.has(r.source)) bySlot.set(r.source, []);
+    bySlot.get(r.source)!.push(r);
+  }
+  const slots = [...bySlot.keys()].sort((a, b) => slotRank(a) - slotRank(b));
+  if (slots.length === 0) {
+    return <p className="stats-empty">{caption}</p>;
+  }
+
+  const times = rows.map((r) => Date.parse(r.at));
+  const t0 = Math.min(...times);
+  const t1 = Math.max(...times);
+  const top = Math.max(...ticksFor(Math.max(...rows.map(value))));
+
+  const W = 720, H = 260, padL = 52, padR = 16, padT = 12, padB = 30;
+  const x = (at: string) => padL + (t1 === t0 ? (W - padL - padR) / 2
+    : ((Date.parse(at) - t0) / (t1 - t0)) * (W - padL - padR));
+  const y = (v: number) => H - padB - (top === 0 ? 0 : (v / top) * (H - padT - padB));
+  const ticks = ticksFor(Math.max(...rows.map(value)));
+  const day = (at: string) => at.slice(5, 10);
+
+  return (
+    <figure className="stats-failures">
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={caption}
+           preserveAspectRatio="xMidYMid meet">
+        {ticks.map((t) => (
+          <g key={t}>
+            <line className="stats-gridline" x1={padL} x2={W - padR}
+                  y1={y(t)} y2={y(t)} />
+            <text className="stats-axis" x={padL - 8} y={y(t) + 4}
+                  textAnchor="end">
+              {unit === 'rate' ? `${t.toFixed(0)}%` : t.toLocaleString()}
+            </text>
+          </g>
+        ))}
+        <text className="stats-axis" x={padL} y={H - 8}>{day(rows[0]!.at)}</text>
+        {t1 !== t0 && (
+          <text className="stats-axis" x={W - padR} y={H - 8} textAnchor="end">
+            {day(rows[rows.length - 1]!.at)}
+          </text>
+        )}
+
+        {slots.map((slot) => {
+          const points = [...bySlot.get(slot)!].sort(
+            (a, b) => Date.parse(a.at) - Date.parse(b.at));
+          const d = points.map((p, i) =>
+            `${i === 0 ? 'M' : 'L'}${x(p.at).toFixed(1)},${y(value(p)).toFixed(1)}`
+          ).join(' ');
+          return (
+            <g key={slot}>
+              <path className="stats-failure-line" data-slot={slot} d={d} />
+              {points.map((p) => (
+                <circle key={p.at} className="stats-failure-dot"
+                        data-slot={slot} cx={x(p.at)} cy={y(value(p))} r={4}>
+                  <title>
+                    {`${slot} — ${p.at.slice(0, 16).replace('T', ' ')}`}
+                    {unit === 'rate'
+                      ? ` — ${value(p).toFixed(1)}% of ${p.size.toLocaleString()} drawn`
+                      : ` — ${p.bad.toLocaleString()} of ${p.size.toLocaleString()}`}
+                    {p.build ? ` — ${p.build}` : ''}
+                  </title>
+                </circle>
+              ))}
+            </g>
+          );
+        })}
+      </svg>
+      {t1 === t0 && (
+        <p className="stats-note">
+          One tally so far, so this is where the corpus stands rather than
+          where it is going. A step appears each time an ingest moves a slot.
+        </p>
+      )}
+      <figcaption className="stats-legend">
+        {slots.map((slot) => (
+          <span key={slot} className="stats-legend-item">
+            <span className="stats-swatch" data-slot={slot} />
+            {slot}
+          </span>
+        ))}
+      </figcaption>
     </figure>
   );
 }

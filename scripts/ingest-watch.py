@@ -44,6 +44,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from brick_icons import db  # noqa: E402
+from brick_icons.lab import tally  # noqa: E402
 
 
 def _engine(tree: Path, source: str) -> str:
@@ -244,6 +245,18 @@ def watch(trees: list[Path], every: int, once: bool, bake: bool,
             print(f"{time.strftime('%H:%M:%S')} {tree.name} -> {source}: "
                   f"+{drawn} drawn, {redrew} redrawn, +{scores} scored, "
                   f"{total} in the slot", flush=True)
+        # One tally per PASS, not per tree: a tally is a statement about the
+        # whole corpus at a moment, and taking one between two trees would
+        # record a step that never existed.
+        conn = db.connect()
+        try:
+            moved = tally.take(conn)
+        finally:
+            conn.close()
+        if moved:
+            print(f"{time.strftime('%H:%M:%S')} tallied {moved} slot(s)",
+                  flush=True)
+
         for source in sorted(touched) if bake else ():
             ok = _bake(source)
             print(f"{time.strftime('%H:%M:%S')} baked {source}"

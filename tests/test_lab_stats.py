@@ -4,7 +4,7 @@ import json
 import pytest
 
 from brick_icons import db
-from brick_icons.lab import stats
+from brick_icons.lab import stats, tally
 
 
 @pytest.fixture
@@ -171,9 +171,9 @@ def test_a_slot_with_no_renders_is_not_a_slot(conn):
 def test_speed_reports_the_spread_per_engine(conn):
     for i, secs in enumerate([1.0, 2.0, 3.0, 100.0]):
         _part(conn, f"300{i}")
-        _measure(conn, f"300{i}", "naive", secs=secs)
+        _measure(conn, f"300{i}", "occt", secs=secs)
     conn.commit()
-    row = {r["engine"]: r for r in stats.stats(conn)["speed"]}["naive"]
+    row = {r["engine"]: r for r in stats.stats(conn)["speed"]}["occt"]
     assert row["n"] == 4
     assert row["total"] == 106.0
     assert row["median"] == 2.5
@@ -184,8 +184,8 @@ def test_speed_reports_the_spread_per_engine(conn):
 def test_speed_ignores_a_part_outside_the_set(conn):
     _part(conn, "3001")
     _part(conn, "s1", category="|")
-    _measure(conn, "3001", "naive", secs=1.0)
-    _measure(conn, "s1", "naive", secs=50.0)
+    _measure(conn, "3001", "occt", secs=1.0)
+    _measure(conn, "s1", "occt", secs=50.0)
     conn.commit()
     row = stats.stats(conn, out_of_scope=False)["speed"][0]
     assert row["n"] == 1
@@ -374,3 +374,46 @@ def test_a_slowest_row_carries_its_split_when_it_has_one(conn):
     assert _at(slowest["3001"]["split"], "render/geometry")["secs"] \
         == pytest.approx(5.0)
     assert slowest["3002"]["split"] is None
+
+
+# -- naive is the reference, not a candidate -------------------------------
+
+def test_naive_is_left_out_of_timing_phases_and_accuracy(conn):
+    """Comparing the two engines here measured a race nobody is running."""
+    _part(conn, "3001")
+    _measure(conn, "3001", "naive", secs=1.0, extra_d99=9.0,
+             phases={"render": 1.0})
+    _measure(conn, "3001", "occt", secs=2.0, extra_d99=1.0,
+             phases={"render": 2.0})
+    conn.commit()
+    out = stats.stats(conn)
+    assert [r["engine"] for r in out["speed"]] == ["occt"]
+    assert [r["engine"] for r in out["error"]] == ["occt"]
+    assert [r["engine"] for r in out["phases"]] == ["occt"]
+
+
+def test_naive_keeps_its_coverage_rows(conn):
+    """Coverage says how much of the library each slot has drawn, which is
+    still worth seeing for the reference."""
+    _part(conn, "3001")
+    _render(conn, "3001", "white-naive")
+    _render(conn, "3001", "occt")
+    conn.commit()
+    sources = {r["source"] for r in stats.stats(conn)["coverage"]}
+    assert sources == {"white-naive", "occt"}
+
+
+def test_the_failure_tiles_ignore_the_working_set(conn):
+    """The tiles answer "how much of the library is broken", which is not a
+    question the Controls should be able to make a smaller number of."""
+    _part(conn, "3001")
+    _part(conn, "3002", printed=1)
+    _render(conn, "3001", "occt")
+    _render(conn, "3002", "occt")
+    _measure(conn, "3002", "occt", source="occt", error="MemoryError")
+    conn.commit()
+    tally.take(conn, at="2026-09-10T00:00:00+00:00")
+    wide = stats.stats(conn)["failures"]["totals"]
+    narrow = stats.stats(conn, kind="base")["failures"]["totals"]
+    assert wide["occt"]["bad"] == 1
+    assert narrow == wide

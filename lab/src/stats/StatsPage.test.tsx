@@ -6,6 +6,23 @@ import type { Stats } from '@lab/stats/types';
 const body = (over: Partial<Stats> = {}): Stats => ({
   set: { size: 20, total: 24, kind: 'all', moved: false, out_of_scope: true,
          excluded: [], badges: [] },
+  failures: {
+    totals: { size: 24,
+              occt: { bad: 5, failed: 3, timeout: 2, facets: ['occt'] },
+              decal: { bad: 7, failed: 7, timeout: 0 } },
+    series: [
+      { at: '2026-09-09T00:00:00+00:00', source: 'occt', build: '1.aaa',
+        size: 24, failed: 4, timeout: 2, bad: 6 },
+      { at: '2026-09-10T00:00:00+00:00', source: 'occt', build: '2.bbb',
+        size: 24, failed: 3, timeout: 2, bad: 5 },
+      { at: '2026-09-10T00:00:00+00:00', source: 'decal', build: null,
+        size: 24, failed: 7, timeout: 0, bad: 7 },
+    ],
+    by_build: [
+      { at: '2026-09-09T00:00:00+00:00', source: 'occt', build: '1.aaa',
+        size: 10, failed: 2, timeout: 0, bad: 2 },
+    ],
+  },
   coverage: [{ source: 'silhouette-naive', engine: 'naive', size: 20,
                counts: { defect: 1, failed: 2, timeout: 3, drawn: 8, untried: 6,
                           notApplicable: 0 } }],
@@ -60,6 +77,63 @@ const clientWith = (corpusStats: (q: URLSearchParams) => Promise<Stats>) =>
   ({ corpusStats, corpusSizes: async () => EMPTY_FOOTPRINT } as unknown as Client);
 
 describe('StatsPage', () => {
+  // -- the failure strip and chart ----------------------------------------
+
+  it('puts the tiles above the coverage bars', async () => {
+    const { container } = render(
+      <StatsPage client={clientWith(async () => body())} />);
+    await waitFor(() => container.querySelector('.stats-tiles'));
+    const headings = [...container.querySelectorAll('h2')].map((h) => h.textContent);
+    const tiles = container.querySelector('.stats-tiles')!;
+    const coverage = [...container.querySelectorAll('h2')]
+      .find((h) => h.textContent === 'Coverage')!;
+    expect(headings).toContain('Coverage');
+    expect(tiles.compareDocumentPosition(coverage)
+           & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('leads the strip with what occt and decal cannot draw, corpus-wide', async () => {
+    const { container } = render(
+      <StatsPage client={clientWith(async () => body())} />);
+    await waitFor(() => container.querySelector('.stats-tile-wide'));
+    const wide = [...container.querySelectorAll('.stats-tile-wide')];
+    expect(wide.length).toBe(2);
+    expect(wide[0]!.textContent).toContain('5');
+    expect(wide[0]!.textContent).toContain('parts occt cannot draw, corpus-wide');
+    expect(wide[1]!.textContent).toContain('7');
+    expect(wide[1]!.textContent).toContain('parts decal cannot draw, corpus-wide');
+    // First two in the strip, so the number a reader came for is not third.
+    const all = [...container.querySelectorAll('.stats-tile')];
+    expect(all.slice(0, 2)).toEqual(wide);
+  });
+
+  it('draws one failure line per slot, each keeping its own hue', async () => {
+    const { container } = render(
+      <StatsPage client={clientWith(async () => body())} />);
+    await waitFor(() => container.querySelector('.stats-failure-line'));
+    const slots = [...container.querySelectorAll('.stats-failures')][0]!
+      .querySelectorAll('.stats-failure-line');
+    expect([...slots].map((el) => el.getAttribute('data-slot')))
+      .toEqual(['occt', 'decal']);
+  });
+
+  it('says a tally is owed rather than drawing an empty chart', async () => {
+    const none = body();
+    none.failures.series = [];
+    render(<StatsPage client={clientWith(async () => none)} />);
+    await waitFor(() => screen.getByText(/no tally has been taken yet/));
+  });
+
+  it('keeps the build prefix on its own axis, as a rate', async () => {
+    const { container } = render(
+      <StatsPage client={clientWith(async () => body())} />);
+    await waitFor(() => container.querySelector('.stats-failures'));
+    const figures = container.querySelectorAll('.stats-failures');
+    expect(figures.length).toBe(2);
+    // 2 of 10 drawn, so the rate axis tops out in percent, not in parts.
+    expect(figures[1]!.textContent).toContain('%');
+  });
+
   it('says how big the working set is and when it was read', async () => {
     render(<StatsPage client={clientWith(async () => body())} />);
     await waitFor(() => screen.getByText(/20 of 24 parts/));

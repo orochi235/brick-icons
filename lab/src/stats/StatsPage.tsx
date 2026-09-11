@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { LabClient } from '@lab/api/client';
-import { CoverageBars, CoverageLegend, PhaseBars, PhaseColumns, PhaseLegend,
-         SecsOverlay } from '@lab/stats/charts';
+import { CoverageBars, CoverageLegend, FailureLines, PhaseBars, PhaseColumns,
+         PhaseLegend, SecsOverlay } from '@lab/stats/charts';
 import { Footprint } from '@lab/stats/Footprint';
 import { PhaseTree } from '@lab/stats/PhaseTree';
 import { useStats } from '@lab/stats/useStats';
@@ -108,14 +108,13 @@ export function StatsPage({ client }: { client: LabClient }) {
       {error && <p className="stats-error" role="alert">{error}</p>}
       {!stats ? <p className="stats-empty">loading…</p> : (
         <>
-          <section>
-            <h2>Coverage</h2>
-            <CoverageLegend />
-            <CoverageBars rows={stats.coverage}
-                          onOpen={(row) => wallHref(set, row.source)} />
-          </section>
-
           <section className="stats-tiles">
+            <Tile n={stats.failures.totals.occt.bad}
+                  of={stats.failures.totals.size} wide
+                  label="parts occt cannot draw, corpus-wide" />
+            <Tile n={stats.failures.totals.decal.bad}
+                  of={stats.failures.totals.size} wide
+                  label="parts decal cannot draw, corpus-wide" />
             <Tile n={stats.set.size} of={total} label="parts in the set" />
             <Tile n={stats.coverage.reduce((a, r) => a + r.counts.drawn, 0)}
                   label="renders across every slot" />
@@ -123,6 +122,37 @@ export function StatsPage({ client }: { client: LabClient }) {
                   label="timings, one per part per engine" />
             <Tile n={stats.shape.dated} of={stats.set.size}
                   label="carry set and year facts" />
+          </section>
+
+          <section>
+            <h2>What will not draw</h2>
+            <FailureLines rows={stats.failures.series} unit="count"
+                          caption="no tally has been taken yet — one is
+                                   written on the next ingest" />
+            <p className="stats-note">
+              Counted over every in-scope part, so the Controls above do not
+              move these. A part failing in more than one occt facet is one
+              line per facet here, and one part in the tile.
+            </p>
+          </section>
+
+          <section>
+            <h2>Failure rate by engine revision</h2>
+            <FailureLines rows={stats.failures.by_build} unit="rate"
+                          caption="no render in this corpus carries the build
+                                   that drew it" />
+            <p className="stats-note">
+              A share, not a count, and on its own axis for that reason: each
+              revision is measured over the parts it actually drew, which
+              ranges from a handful to the whole library.
+            </p>
+          </section>
+
+          <section>
+            <h2>Coverage</h2>
+            <CoverageLegend />
+            <CoverageBars rows={stats.coverage}
+                          onOpen={(row) => wallHref(set, row.source)} />
           </section>
 
           <section>
@@ -226,9 +256,11 @@ export function StatsPage({ client }: { client: LabClient }) {
 const fixed = (v: number | null, places = 2) =>
   v === null ? '—' : v.toFixed(places);
 
-function Tile({ n, of, label }: { n: number; of?: number; label: string }) {
+function Tile({ n, of, label, wide }: {
+  n: number; of?: number; label: string; wide?: boolean;
+}) {
   return (
-    <div className="stats-tile">
+    <div className={wide ? 'stats-tile stats-tile-wide' : 'stats-tile'}>
       <strong>{n.toLocaleString()}</strong>
       {of !== undefined && <span className="stats-muted">of {of.toLocaleString()}</span>}
       <span className="stats-tile-label">{label}</span>

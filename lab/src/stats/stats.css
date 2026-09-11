@@ -423,3 +423,53 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
   border-top: 1px solid var(--wzl-line);
   font-weight: 500;
 }
+
+/* The failure chart's slot hues. Categorical -- which slot, not how bad -- so
+ * deliberately not the `--stats-<state>` status colors above, which are
+ * reserved for the state a part is in. Dark steps of the default eight-hue
+ * theme, validated against this page's sunken surface. */
+.stats-failures {
+  --slot-occt:             #3987e5;
+  --slot-white-occt:       #d95926;
+  --slot-silhouette-occt:  #199e70;
+  --slot-translucent-occt: #c98500;
+  --slot-decal:            #d55181;
+  margin: 0;
+}
+
+.stats-failures svg { width: 100%; height: auto; }
+
+.stats-failure-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+/* A 2px surface ring, so two lines crossing stay two lines. */
+.stats-failure-dot { stroke: var(--wzl-surface-sunken, #111); stroke-width: 2; }
+
+.stats-failure-line[data-slot='occt'] { stroke: var(--slot-occt); }
+.stats-failure-line[data-slot='white-occt'] { stroke: var(--slot-white-occt); }
+.stats-failure-line[data-slot='silhouette-occt'] { stroke: var(--slot-silhouette-occt); }
+.stats-failure-line[data-slot='translucent-occt'] { stroke: var(--slot-translucent-occt); }
+.stats-failure-line[data-slot='decal'] { stroke: var(--slot-decal); }
+
+.stats-failure-dot[data-slot='occt'] { fill: var(--slot-occt); }
+.stats-failure-dot[data-slot='white-occt'] { fill: var(--slot-white-occt); }
+.stats-failure-dot[data-slot='silhouette-occt'] { fill: var(--slot-silhouette-occt); }
+.stats-failure-dot[data-slot='translucent-occt'] { fill: var(--slot-translucent-occt); }
+.stats-failure-dot[data-slot='decal'] { fill: var(--slot-decal); }
+
+.stats-swatch[data-slot='occt'] { background: var(--slot-occt); }
+.stats-swatch[data-slot='white-occt'] { background: var(--slot-white-occt); }
+.stats-swatch[data-slot='silhouette-occt'] { background: var(--slot-silhouette-occt); }
+.stats-swatch[data-slot='translucent-occt'] { background: var(--slot-translucent-occt); }
+.stats-swatch[data-slot='decal'] { background: var(--slot-decal); }
+
+.stats-gridline { stroke: var(--wzl-border-muted, #2a2a30); stroke-width: 1; }
+.stats-axis { fill: var(--wzl-text-muted, #8a8a92); font-size: 11px; }
+
+/* The corpus-wide tiles sit beside working-set ones, so they say so rather
+ * than silently ignoring the Controls above them. */
+.stats-tile-wide strong { color: var(--stats-failed); }
