@@ -245,27 +245,6 @@ export function StatsPage({ client }: { client: LabClient }) {
             </table>
           </section>
 
-          <section>
-            <h2>Runs</h2>
-            <table>
-              <thead>
-                <tr><th>started</th><th>kind</th><th>commit</th><th>parts</th>
-                    <th>finished</th></tr>
-              </thead>
-              <tbody>
-                {stats.runs.map((run) => (
-                  <tr key={run.id} data-open={run.open}>
-                    <td>{run.started.slice(0, 16).replace('T', ' ')}</td>
-                    <td>{run.kind}</td>
-                    <td>{run.commit_sha.slice(0, 7)}</td>
-                    <td>{run.parts.toLocaleString()}</td>
-                    <td>{run.open ? 'still running' : run.finished?.slice(11, 16)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-
           <Footprint client={client} />
 
           <section>

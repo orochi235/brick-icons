@@ -206,9 +206,12 @@ CREATE TABLE IF NOT EXISTS tallies (
 CREATE INDEX IF NOT EXISTS measurements_by_part ON measurements(part_id, engine);
 -- Source first: every "what is this slot's latest row per part" query groups
 -- by (part_id, source) and picks MAX(run_id), and the part-first index above
--- cannot serve it.
-CREATE INDEX IF NOT EXISTS measurements_by_source
-  ON measurements(source, part_id, run_id);
+-- cannot serve it. The trailing three columns are what those queries then
+-- read back, so the pick and the read are one index scan rather than 111,000
+-- row fetches.
+DROP INDEX IF EXISTS measurements_by_source;
+CREATE INDEX IF NOT EXISTS measurements_latest_by_source
+  ON measurements(source, part_id, run_id, error, secs, build);
 CREATE INDEX IF NOT EXISTS attempts_by_part ON attempts(part_id, source);
 CREATE INDEX IF NOT EXISTS renders_by_part ON renders(part_id);
 -- Feature first: the question this table exists for is "which parts have

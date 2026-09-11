@@ -52,9 +52,7 @@ const body = (over: Partial<Stats> = {}): Stats => ({
                { part_id: '3002', total: 10,
                  secs: { render: 7, rasterize: 1, truth_mask: 1, compare: 1 },
                  split: null }] }],
-  runs: [{ id: 1, kind: 'census', started: '2026-09-06T09:00:00+00:00',
-           finished: '2026-09-06T10:00:00+00:00', open: false,
-           commit_sha: 'abc1234def', args: '{}', note: null, parts: 14 }],
+  running: false,
   shape: { categories: [['Brick', 900], ['Minifig', 300], ['Rare', 4]],
            kinds: { printed: 2, obsolete: 1, base: 17, out_of_scope: 0, moved: 0 },
            dated: 11 },
@@ -350,11 +348,9 @@ describe('StatsPage', () => {
 
   it('says a run is still going, and only while it is', async () => {
     const open = body();
-    open.runs[0]!.open = true;
-    open.runs[0]!.finished = null;
+    open.running = true;
     render(<StatsPage client={clientWith(async () => open)} />);
-    await waitFor(() => screen.getByText('still running'));
-    expect(screen.getByText(/a run is open, re-reading/)).toBeTruthy();
+    await waitFor(() => screen.getByText(/a run is open, re-reading/));
   });
 
   it('shows what a failed read said without dropping the numbers', async () => {

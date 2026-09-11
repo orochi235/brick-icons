@@ -36,7 +36,7 @@ export function useStats(client: LabClient, set: WorkingSet,
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [nonce, setNonce] = useState(0);
-  const polling = stats?.runs.some((r) => r.open) ?? false;
+  const polling = stats?.running ?? false;
   // Read by the timer, which outlives the render that armed it.
   const live = useRef(true);
   // Through a ref, not the dependency list: a caller building its client
@@ -58,7 +58,7 @@ export function useStats(client: LabClient, set: WorkingSet,
         if (!live.current) return;
         setStats(next);
         setError(null);
-        timer = setTimeout(read, next.runs.some((r) => r.open) ? intervalMs : idleMs);
+        timer = setTimeout(read, next.running ? intervalMs : idleMs);
       } catch (e) {
         if (!live.current) return;
         setError(e instanceof Error ? e.message : String(e));

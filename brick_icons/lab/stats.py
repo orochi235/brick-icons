@@ -174,14 +174,14 @@ def _coverage(conn: sqlite3.Connection, ids: set[str]) -> list[dict]:
     for row in conn.execute(
             "SELECT DISTINCT part_id, source FROM attempts WHERE state = 'none'"):
         nothing_by_source.setdefault(row["source"], set()).add(row["part_id"])
+    open_defects = list(conn.execute(
+        "SELECT part_id, engines FROM defects WHERE status = 'open'"))
     out = []
     for source in sources:
         engine = engine_for(source)
         drawn = drawn_by_source.get(source, set())
         errors = errors_by_source.get(source, {})
-        flagged = {r["part_id"] for r in conn.execute(
-            "SELECT part_id, engines FROM defects WHERE status = 'open'")
-            if engine in r["engines"]}
+        flagged = {r["part_id"] for r in open_defects if engine in r["engines"]}
         # Without this the two pages disagree, which the module docstring
         # promises they cannot: the wall reads a slot that ran and drew
         # nothing as `failed`, and the dashboard was calling the same 2,480
@@ -190,21 +190,29 @@ def _coverage(conn: sqlite3.Connection, ids: set[str]) -> list[dict]:
         counts = dict.fromkeys(COVERAGE_ORDER, 0)
         # `coverage_of` stays the definition -- the wall reads the same
         # function, and re-deriving its precedence here is how the two pages
-        # come to disagree. It is only ever asked a handful of distinct
-        # questions, though, so the answers are remembered: 23,339 parts over
-        # nine slots was 210,000 calls and a third of the page's load.
-        seen: dict[tuple, str] = {}
-        for pid in ids:
-            key = ("x" if pid in drawn else None, errors.get(pid),
-                   1 if pid in flagged else 0,
-                   not_applicable(source, pid in printed, pid in drawn),
-                   pid in drew_nothing)
-            label = seen.get(key)
-            if label is None:
-                label = seen[key] = coverage_of(
-                    sha=key[0], error=key[1], open_defects=key[2],
-                    inapplicable=key[3], drew_nothing=key[4])
-            counts[label] += 1
+        # come to disagree. Only the parts carrying news are asked about one
+        # at a time; for the rest the answer turns on nothing but whether the
+        # slot drew it and whether it is printed, so four set sizes stand in
+        # for 23,000 calls a slot.
+        told = (errors.keys() | flagged | drew_nothing) & ids
+        for has_sha in (True, False):
+            group = (ids & drawn if has_sha else ids - drawn) - told
+            of_printed = len(group & printed)
+            for is_printed, n in ((True, of_printed),
+                                  (False, len(group) - of_printed)):
+                if not n:
+                    continue
+                counts[coverage_of(
+                    sha="x" if has_sha else None, error=None, open_defects=0,
+                    inapplicable=not_applicable(source, is_printed, has_sha),
+                    drew_nothing=False)] += n
+        for pid in told:
+            counts[coverage_of(
+                sha="x" if pid in drawn else None, error=errors.get(pid),
+                open_defects=1 if pid in flagged else 0,
+                inapplicable=not_applicable(source, pid in printed,
+                                            pid in drawn),
+                drew_nothing=pid in drew_nothing)] += 1
         out.append({"source": source, "engine": engine, "counts": counts,
                     "size": len(ids)})
     return out
@@ -501,17 +509,10 @@ def _cost(rows: list[sqlite3.Row], ids: set[str]) -> dict | None:
             "slots": sorted(slots, key=lambda r: -r["share"])}
 
 
-def _runs(conn: sqlite3.Connection, ids: set[str]) -> list[dict]:
-    measured: dict[int, int] = {}
-    for row in conn.execute("SELECT run_id, part_id FROM measurements "
-                            "GROUP BY run_id, part_id"):
-        if row["part_id"] in ids:
-            measured[row["run_id"]] = measured.get(row["run_id"], 0) + 1
-    return [{"id": r["id"], "kind": r["kind"], "started": r["started"],
-             "finished": r["finished"], "open": r["finished"] is None,
-             "commit_sha": r["commit_sha"], "args": r["args"],
-             "note": r["note"], "parts": measured.get(r["id"], 0)}
-            for r in conn.execute("SELECT * FROM runs ORDER BY started DESC, id DESC")]
+def _running(conn: sqlite3.Connection) -> bool:
+    """Whether any run is unfinished, which is what sets the poll interval."""
+    return conn.execute("SELECT 1 FROM runs WHERE finished IS NULL "
+                        "LIMIT 1").fetchone() is not None
 
 
 def _shape(conn: sqlite3.Connection, rows: list[sqlite3.Row],
@@ -570,7 +571,7 @@ def stats(conn: sqlite3.Connection, *, kind: str = "all", moved: bool = False,
         "error": error,
         "phases": _phases(latest, ids),
         "cost": _cost(_cost_rows(conn), ids),
-        "runs": _runs(conn, ids),
+        "running": _running(conn),
         "shape": _shape(conn, rows, ids),
         "failures": _failures(conn),
         "as_of": dt.datetime.now(dt.timezone.utc).isoformat(),

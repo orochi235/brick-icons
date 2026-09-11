@@ -217,16 +217,20 @@ def test_an_engine_reports_how_far_off_its_renders_were(conn):
     assert row["d99"]["median"] == 2.0
 
 
-# -- runs and shape -------------------------------------------------------
+# -- running and shape ----------------------------------------------------
 
-def test_a_run_says_what_it_measured_and_whether_it_is_open(conn):
+def test_an_unfinished_run_makes_the_payload_say_so(conn):
     _part(conn, "3001")
     _measure(conn, "3001", "naive", secs=1.0, finished=None)
     conn.commit()
-    run = stats.stats(conn)["runs"][0]
-    assert run["parts"] == 1
-    assert run["open"] is True
-    assert run["commit_sha"] == "abc1234"
+    assert stats.stats(conn)["running"] is True
+
+
+def test_a_corpus_with_every_run_finished_is_not_running(conn):
+    _part(conn, "3001")
+    _measure(conn, "3001", "naive", secs=1.0)
+    conn.commit()
+    assert stats.stats(conn)["running"] is False
 
 
 def test_shape_counts_the_set_by_category_and_kind(conn):

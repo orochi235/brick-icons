@@ -74,19 +74,6 @@ export interface SlowestRow {
   split: PhaseNode[] | null;
 }
 
-export interface RunRow {
-  id: number;
-  kind: string;
-  started: string;
-  finished: string | null;
-  open: boolean;
-  commit_sha: string;
-  args: string;
-  note: string | null;
-  /** Parts of the working set this run measured. */
-  parts: number;
-}
-
 export interface Shape {
   categories: [string, number][];
   kinds: Record<'printed' | 'obsolete' | 'base' | 'out_of_scope' | 'moved', number>;
@@ -167,7 +154,8 @@ export interface Stats {
   speed: SpeedRow[];
   error: ErrorRow[];
   phases: PhaseRow[];
-  runs: RunRow[];
+  /** Whether any run is unfinished, which is what sets the poll interval. */
+  running: boolean;
   shape: Shape;
   /** Optional because the lab API is a separate process: a dev server started
    *  before this field existed serves a payload without it, and the page must
