@@ -75,6 +75,32 @@ export default defineConfig({
       { find: '@lab', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
       ...weaselAlias,
     ],
+    // One React for the page however a dependency asked for it. R3F's hooks
+    // read a context, so a second copy makes them throw "Hooks can only be
+    // used within the Canvas component" from inside a Canvas.
+    dedupe: ['react', 'react-dom', 'three'],
+  },
+  /* Everything the lightbox needs, named here because nothing else imports it.
+   *
+   * Vite scans the entry graph at startup and optimizes what it finds. These
+   * are reachable only through the 3D preview, which loads when someone opens
+   * a part -- so they were discovered mid-session, and a re-optimize hands new
+   * hashes to modules requested after it while the ones already loaded keep
+   * the old. That is two copies of React in one page, and the wall crashed on
+   * the first part anybody opened.
+   *
+   * Add to this whenever a route starts importing a package no eager module
+   * does; `node_modules/.vite/deps/_metadata.json` lists what was optimized,
+   * and anything in it that is not reachable from an entry belongs here. */
+  optimizeDeps: {
+    include: [
+      '@react-three/fiber', '@react-three/drei', 'three',
+      'three/examples/jsm/loaders/LDrawLoader.js',
+      'three/examples/jsm/lines/LineMaterial.js',
+      'three/examples/jsm/lines/LineSegments2.js',
+      'three/examples/jsm/lines/LineSegmentsGeometry.js',
+      'three/examples/jsm/materials/LDrawConditionalLineMaterial.js',
+    ],
   },
   server: {
     // Both loopbacks answer; with this unset Node binds only whichever

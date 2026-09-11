@@ -120,7 +120,18 @@ working directory and cannot see each other's background processes; two once ran
 same `sheet-*.png`. Relaunching under a task name continues that task instead of
 forking a rival, and `onto jobs` answers "is this already running?" for everyone.
 
-Two traps. The agent's PATH is not your shell's, so pass `--env PATH=...`
+**Run every `onto` command with the Bash sandbox disabled.** Sandboxed, its
+connections to the other nodes fail and it reports every one of them `offline`
+with `no route to host` — while `ping`, `nc -z <host> 7423` and `curl` all
+succeed from the same shell, because they are not what is being blocked. So the
+fleet reads as down and each thing you reach for to check that says the network
+is fine. Run `onto status` once outside the sandbox before believing any of it.
+
+**The APPS column lists what is installed, not what is running.** Photoshop and
+Blender appear against a node that has never launched them. It says nothing
+about load; `ssh <node> uptime` does.
+
+Two more traps. The agent's PATH is not your shell's, so pass `--env PATH=...`
 covering everything the job shells out to — a missing `resvg` fails every part
 in about a second, silently. And check the deadline `onto run` prints: the agent
 clamps to 30 minutes unless it was installed with `-max-job-time`, and a
