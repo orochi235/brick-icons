@@ -56,17 +56,26 @@ geometry arrives. Teaching the loader that family is the durable fix and this
 is not it. 622 part files reference a torus directly, so it would pay for
 itself well beyond heads.
 
-**Only the four drawn heads are measured.** `--survey '3626*'` re-derives the
-corpus figures but was written against the old in-process variants; it has not
-been re-pointed at the shipped code. Nothing has run over the other 364 heads,
-and no decal store has been redrawn.
+**The head family is measured; nothing has been redrawn.** `--survey '3626*'`
+now runs against the shipped code, skirt disarmed in-process against HEAD. Over
+401 head files carrying decoration: 385 get a skirt, the carrier count falls on
+**278 and rises on none**, parts whose print lands on a single carrier go from
+71 to 214, and parts drawing no decal at all go 20 to 18 -- two gained, **none
+lost**. The collapse mostly turns several panels into one panel rather than
+turning nothing into something. No decal store has been redrawn.
 
-**Redraw only what this changed, never the whole slot.** Mike rejected a
-blanket `--force` over the decal store: it rewrites every sha, churns every
-decal cell on the wall and stales every `checked` stamp.
-`scripts/decal-axis-affected.py` is that predicate for the axis fix; the
-canvas fix never got one, and **this change now needs one too** -- every head
-whose ink runs past its wall is stale.
+**Never assume a whole new batch is available for a narrow change.** Work out
+which parts a fix actually moved and propose redrawing those. A blanket
+`--force` rewrites every sha, churning every decal cell on the wall and staling
+every `checked` stamp, including on parts the change could not have touched --
+and reaching for it because identifying the set is more work is the thing to
+avoid. `scripts/decal-axis-affected.py` is that predicate for the axis fix; the
+canvas fix never got one, and **this change needs one too**.
+
+This is not a ban on large batches, and this change is not narrow: 278 of 401
+heads moved, and that is before anything outside the 3626 family has been
+looked at. The size is a finding to state with its number, not a reason to skip
+identifying the set.
 
 `scripts/dome-projection-options.py` draws any head with the skirt off against
 HEAD, disarming `unwrap.skirt` in-process rather than by stashing, since this
