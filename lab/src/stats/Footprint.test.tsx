@@ -13,7 +13,7 @@ const DATA: FootprintData = {
   slots: [
     { source: 'silhouette-occt', renders: 398_000_000, bakes: 155_000_000,
       total: 553_000_000 },
-    { source: 'ldview', renders: 285_000_000, bakes: 135_000_000,
+    { source: 'reference', renders: 285_000_000, bakes: 135_000_000,
       total: 420_000_000 },
   ],
   as_of: '2026-09-07T05:00:00+00:00',

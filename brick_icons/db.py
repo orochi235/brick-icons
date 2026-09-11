@@ -31,7 +31,7 @@ PART_STATUSES = ("unreviewed", "good", "suspect", "broken", "wontfix")
 # Stickers were here and are not any more: occt draws 2,695 of the 2,701, so
 # the exclusion was hiding a drawn category from every coverage number.
 OUT_OF_SCOPE_CATEGORIES = ("|",)
-SOURCES = ("naive", "occt", "decal", "ldview", "reference",
+SOURCES = ("naive", "occt", "decal", "reference",
            "translucent-naive", "translucent-occt",
            "silhouette-naive", "silhouette-occt",
            "white-naive", "white-occt")
@@ -410,7 +410,6 @@ _CANONICAL = {
     "occt": ["--engine", "occt", "--shading", "outline",
              "--shade-style", "flat3", "--angle", "iso", "--format", "svg"],
     "decal": ["--decal", "--angle", "iso", "--format", "svg"],
-    "ldview": ["--ldview", "--angle", "iso"],
     # The reference that is mathematically compatible with the library:
     # orthographic, and three.js's LDrawLoader substitutes no primitives, so
     # what it draws is the authored tessellation our own engine reads. LDView
@@ -467,9 +466,9 @@ def canonical_argv(part_id: str, source: str) -> list[str]:
 
 
 #: What the rebuild will index. A slot's artifact is whatever its renderer
-#: emits, and a format missing here is silently invisible: re-encoding the
-#: ldview slot to WebP dropped all 3,896 of its rows and took the slot out of
-#: the wall's picker, which reads `SELECT source, count(*) FROM renders`.
+#: emits, and a format missing here is silently invisible: re-encoding a
+#: raster slot to WebP once dropped all 3,896 of its rows and took the slot
+#: out of the wall's picker, which reads `SELECT source, count(*) FROM renders`.
 RENDER_SUFFIXES = (".svg", ".png", ".webp")
 
 
@@ -478,8 +477,8 @@ def record_render(conn: sqlite3.Connection, part_id: str, source: str,
                   run_id: int | None = None) -> str:
     argv = canonical_argv(part_id, source)
     path = Path(path)
-    # A slot's artifact is whatever its renderer emits -- LDView writes a PNG
-    # -- so the bytes are hashed, and only an SVG is parsed for its box.
+    # A slot's artifact is whatever its renderer emits -- `reference` writes
+    # WebP -- so the bytes are hashed, and only an SVG is parsed for its box.
     raw = path.read_bytes()
     width = height = None
     if path.suffix == ".svg":
@@ -502,8 +501,8 @@ def store_render(conn: sqlite3.Connection, part_id: str, source: str,
                  run_id: int | None = None) -> Path:
     """Copy a freshly rendered artifact into the store and index it.
 
-    The extension follows what was made rather than being assumed: `ldview`
-    is a raster slot, and reading a PNG as text corrupts it.
+    The extension follows what was made rather than being assumed:
+    `reference` is a raster slot, and reading a WebP as text corrupts it.
     """
     made = Path(made)
     dest = Path(root) / "renders" / source / f"{part_id}{made.suffix}"

@@ -517,7 +517,7 @@ def test_render_route_serves_a_real_render(tmp_path):
 
 def test_render_route_types_a_render_by_what_it_actually_is(tmp_path):
     """The route's path says `.svg` because that is the wall's URL for a
-    render, not a claim about the bytes: the ldview slot is WebP. Typing
+    render, not a claim about the bytes: the reference slot is WebP. Typing
     every slot `image/svg+xml` left `createImageBitmap` unable to decode
     the blob, and the vector rung silently kept the 128px bake."""
     r = _render_client(
@@ -603,8 +603,8 @@ def test_part_route_gives_a_slot_that_failed_a_tile_of_its_own(tmp_path):
     client = _corpus_client(tmp_path)
     conn = db.connect(tmp_path / "corpus.db")
     conn.execute("INSERT INTO renders (part_id, source, config_key, made_at, "
-                 "path, sha256) VALUES ('3001', 'ldview', 'k', "
-                 "'2026-09-05T00:00:00+00:00', 'renders/ldview/3001.svg', 'abc')")
+                 "path, sha256) VALUES ('3001', 'reference', 'k', "
+                 "'2026-09-05T00:00:00+00:00', 'renders/reference/3001.svg', 'abc')")
     conn.execute("INSERT INTO runs (id, kind, started, commit_sha, args) "
                  "VALUES (1, 'store', '2026-09-05T09:00:00+00:00', 'abc', '{}')")
     conn.execute("INSERT INTO attempts (run_id, part_id, source, state, secs, "
@@ -616,18 +616,18 @@ def test_part_route_gives_a_slot_that_failed_a_tile_of_its_own(tmp_path):
         "/api/corpus/part/3001").json()["slots"]}
     # Only the two slots anything has ever been run against: `decal` and the
     # rest have never drawn, been tried or been measured.
-    assert set(slots) == {"occt", "ldview"}
+    assert set(slots) == {"occt", "reference"}
     assert slots["occt"]["sha256"] is None
     assert slots["occt"]["error"] == "TimeoutError"
     assert slots["occt"]["secs"] == 120.5
-    assert slots["ldview"]["sha256"] == "abc"
+    assert slots["reference"]["sha256"] == "abc"
 
 
 def test_part_route_lists_its_slots_in_the_module_s_own_order(tmp_path):
     from brick_icons import db
     client = _corpus_client(tmp_path)
     conn = db.connect(tmp_path / "corpus.db")
-    for source in ("white-occt", "occt", "ldview"):
+    for source in ("white-occt", "occt", "reference"):
         conn.execute("INSERT INTO renders (part_id, source, config_key, "
                      "made_at, path, sha256) VALUES ('3001', ?, 'k', "
                      "'2026-09-05T00:00:00+00:00', ?, 'abc')",
@@ -636,7 +636,7 @@ def test_part_route_lists_its_slots_in_the_module_s_own_order(tmp_path):
     conn.close()
 
     body = client.get("/api/corpus/part/3001").json()
-    assert [s["source"] for s in body["slots"]] == ["occt", "ldview", "white-occt"]
+    assert [s["source"] for s in body["slots"]] == ["occt", "reference", "white-occt"]
 
 
 def test_ingest_runs_route_lists_the_ingests(tmp_path):

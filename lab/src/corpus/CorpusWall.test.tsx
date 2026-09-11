@@ -500,7 +500,7 @@ it('drops the card on a zoom, but keeps the one the pointer is over', async () =
 
 it('picks up a slot that appears after the page is open, without moving off yours', async () => {
   // The slot list used to be fetched at mount alone, so a page open across an
-  // ingest showed a menu that no longer matched the store -- ldview was
+  // ingest showed a menu that no longer matched the store -- reference was
   // indexed and stayed invisible until someone reloaded.
   vi.useFakeTimers({ shouldAdvanceTime: true });
   let slots = [{ source: 'silhouette-naive', n: 2 }];
@@ -510,12 +510,12 @@ it('picks up a slot that appears after the page is open, without moving off your
   await waitFor(() => expect(screen.getByRole('radio', { name: 'Legacy' })).toBeTruthy());
 
   // A slot in a family nobody had drawn in arrives as a new Engine segment.
-  slots = [{ source: 'ldview', n: 9 }, { source: 'silhouette-naive', n: 2 }];
+  slots = [{ source: 'reference', n: 9 }, { source: 'silhouette-naive', n: 2 }];
   await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
   await waitFor(() => expect(screen.getAllByRole('radio').map((r) => r.textContent))
     .toEqual(['Legacy', 'Reference']));
 
-  // ldview now sorts first, but the wall stays on what was already open.
+  // reference now sorts first, but the wall stays on what was already open.
   expect(screen.getByRole('radio', { name: 'Legacy' }).getAttribute('aria-checked'))
     .toBe('true');
 
@@ -565,14 +565,14 @@ it('falls back to the most-populated slot when the engine has drawn nothing', as
     version: '2026-09-05T10:00:00+00:00', source,
   }));
   const noOcct = { ...client, cells, corpusSources: () => Promise.resolve({
-    sources: [{ source: 'ldview', n: 9 }, { source: 'silhouette-naive', n: 2 }],
+    sources: [{ source: 'reference', n: 9 }, { source: 'silhouette-naive', n: 2 }],
   }) } as any;
 
   const { container } = render(<CorpusWall client={noOcct} />);
   await findCanvas(container);
   await waitFor(() => expect(screen.getByRole('radio', { name: 'Reference' })
     .getAttribute('aria-checked')).toBe('true'));
-  await waitFor(() => expect(cells.mock.calls.map((c) => c[0])).toContain('ldview'));
+  await waitFor(() => expect(cells.mock.calls.map((c) => c[0])).toContain('reference'));
 });
 
 it('says the pictures belong to the old slot while the new one loads', async () => {

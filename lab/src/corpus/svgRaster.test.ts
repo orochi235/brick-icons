@@ -59,8 +59,8 @@ it('reads a render as bytes, so a raster slot survives the trip', async () => {
     fetched.push(url);
     return new Response(bytes, { headers: { 'content-type': 'image/webp' } });
   });
-  const blob = await fetchRender('/api/corpus/render/ldview/3001.svg');
-  expect(fetched).toEqual(['/api/corpus/render/ldview/3001.svg']);
+  const blob = await fetchRender('/api/corpus/render/reference/3001.svg');
+  expect(fetched).toEqual(['/api/corpus/render/reference/3001.svg']);
   expect(blob.type).toBe('image/webp');
   expect(new Uint8Array(await blob.arrayBuffer())).toEqual(bytes);
   vi.unstubAllGlobals();
@@ -68,12 +68,12 @@ it('reads a render as bytes, so a raster slot survives the trip', async () => {
 
 it('refuses a render the API could not find', async () => {
   vi.stubGlobal('fetch', async () => new Response('', { status: 404 }));
-  await expect(fetchRender('/api/corpus/render/ldview/9999.svg')).rejects.toThrow('404');
+  await expect(fetchRender('/api/corpus/render/reference/9999.svg')).rejects.toThrow('404');
   vi.unstubAllGlobals();
 });
 
 it('fits a tall render inside a square without changing its shape', () => {
-  // ldview's narrowest: 936x2048 stretched 2.19x wide before this.
+  // reference's narrowest: 936x2048 stretched 2.19x wide before this.
   const at = contain(936, 2048, 256, 256);
   expect(at.h).toBe(256);
   expect(Math.round(at.w)).toBe(117);

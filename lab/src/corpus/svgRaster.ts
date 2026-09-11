@@ -8,7 +8,7 @@
  *  `preserveAspectRatio` alone, so the letterboxing bakes did stays intact)
  *  fixes the size the decoder targets before any scaling happens.
  *
- *  A slot need not hold SVG at all -- `ldview` is WebP -- so a render travels
+ *  A slot need not hold SVG at all -- `reference` is WebP -- so a render travels
  *  as bytes, and is sized only where sizing means anything. A raster has no
  *  `preserveAspectRatio` to letterbox it, so it gets `contain()` instead:
  *  LDView frames its shot to the part, and its renders run from 936x2048 to
@@ -110,7 +110,7 @@ export async function rasterize(render: Blob, w: number, h: number):
 /** The render at `url`, as bytes -- held by the caller, because rerastering a
  *  cell the zoom drifted past must not cost another few hundred KB. Bytes and
  *  not text: reading a WebP slot as UTF-8 corrupts it past decoding, which is
- *  what left `ldview` on its 128px bake at the vector rung. */
+ *  what once left a raster slot on its 128px bake at the vector rung. */
 export async function fetchRender(url: string): Promise<Blob> {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`${url}: ${response.status}`);

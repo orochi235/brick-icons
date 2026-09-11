@@ -105,7 +105,7 @@ def _drawn(part_id: str, render: Path, out: Path) -> Image.Image:
     letterbox flag (`-w`, `-h`, `-z` only) and passing both -w and -h stretches
     a 256x170 render, so it is asked for a width and squared by `_square`.
 
-    A raster slot has no SVG to rasterize; ldview writes WebP. Feeding one to
+    A raster slot has no SVG to rasterize; `reference` writes WebP. Feeding one to
     resvg fails with "provided data has not an UTF-8 encoding", which reads
     like a corrupt file rather than the wrong kind of one.
     """

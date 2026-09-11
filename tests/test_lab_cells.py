@@ -500,7 +500,7 @@ def test_a_qualified_slot_files_its_measurements_under_the_last_segment():
     assert cells.engine_for("translucent-occt") == "occt"
     assert cells.engine_for("white-naive") == "naive"
     assert cells.engine_for("naive") == "naive"
-    assert cells.engine_for("ldview") == "ldview"
+    assert cells.engine_for("reference") == "reference"
 
 
 def test_slot_states_gives_every_facet_of_an_engine_that_engine_s_error(conn):
@@ -702,10 +702,10 @@ def test_a_slot_that_only_ever_failed_is_live(conn):
 
 def test_live_sources_are_in_the_module_s_own_order(conn):
     _part(conn, "3001")
-    for source in ("white-occt", "occt", "ldview"):
+    for source in ("white-occt", "occt", "reference"):
         _render(conn, "3001", "sha", "2026-09-05T00:00:00+00:00", source=source)
     conn.commit()
-    assert cells.live_sources(conn) == ["occt", "ldview", "white-occt"]
+    assert cells.live_sources(conn) == ["occt", "reference", "white-occt"]
 
 
 def test_an_attempt_says_how_long_a_slot_ran_before_it_gave_up(conn):

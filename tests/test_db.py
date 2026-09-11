@@ -894,7 +894,7 @@ def test_a_rebuild_keeps_the_part_years(tmp_path):
 
 
 def test_a_raster_slot_keeps_its_own_extension_and_its_bytes(tmp_path):
-    """ldview is a PNG slot. A store that assumed .svg wrote the file under a
+    """`reference` is a raster slot. A store that assumed .svg wrote the file under a
     name it is not, and read it as text on the way in, which corrupts it."""
     png = tmp_path / "made" / "3001.png"
     png.parent.mkdir(parents=True)
@@ -902,19 +902,19 @@ def test_a_raster_slot_keeps_its_own_extension_and_its_bytes(tmp_path):
     png.write_bytes(raw)
 
     conn = db.connect(tmp_path / "corpus.db")
-    dest = db.store_render(conn, "3001", "ldview", png, root=tmp_path)
+    dest = db.store_render(conn, "3001", "reference", png, root=tmp_path)
     assert dest.name == "3001.png"
     assert dest.read_bytes() == raw
 
     row = conn.execute("SELECT path, width, height FROM renders").fetchone()
-    assert row["path"] == "renders/ldview/3001.png"
+    assert row["path"] == "renders/reference/3001.png"
     assert row["width"] is None and row["height"] is None
 
 
 def test_the_rebuild_indexes_every_render_format_it_declares():
     """A format missing from `RENDER_SUFFIXES` is silently invisible.
 
-    Re-encoding the ldview slot to WebP dropped all 3,896 of its rows on the
+    Re-encoding a raster slot to WebP dropped all 3,896 of its rows on the
     next rebuild and took the slot out of the wall's picker, which lists
     whatever `renders` has rows for.
     """

@@ -170,7 +170,7 @@ def test_the_series_is_oldest_first_however_the_rows_went_in(conn):
 
 def test_tracked_sources_leaves_naive_out_and_keeps_decal(conn):
     _part(conn, "3001")
-    for source in ("occt", "white-occt", "silhouette-naive", "decal", "ldview"):
+    for source in ("occt", "white-occt", "silhouette-naive", "decal", "reference"):
         _render(conn, "3001", source)
     conn.commit()
     assert tally.tracked_sources(conn) == ["decal", "occt", "white-occt"]

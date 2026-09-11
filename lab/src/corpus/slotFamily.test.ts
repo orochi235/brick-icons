@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { facetOf, familiesIn, familyOf, slotIn } from '@lab/corpus/slotFamily';
 
-const ALL = ['naive', 'occt', 'decal', 'ldview', 'reference',
+const ALL = ['naive', 'occt', 'decal', 'reference',
              'translucent-naive', 'translucent-occt',
              'silhouette-naive', 'silhouette-occt',
              'white-naive', 'white-occt'].map((source) => ({ source }));
@@ -12,7 +12,7 @@ it('sorts every slot db.SOURCES names into a family', () => {
   expect(by).toEqual({
     occt: ['occt', 'translucent-occt', 'silhouette-occt', 'white-occt'],
     legacy: ['naive', 'translucent-naive', 'silhouette-naive', 'white-naive'],
-    reference: ['ldview', 'reference'],
+    reference: ['reference'],
     decal: ['decal'],
   });
 });
@@ -24,10 +24,9 @@ it('names the bare slot for the drawing it actually is', () => {
   expect(facetOf('translucent-naive')).toBe('translucent');
 });
 
-// The two references differ by renderer, not by what they drew, so splitting
-// a facet off them would leave both called the same thing.
+// A reference slot is named for the renderer that drew it, so splitting a
+// facet off it would leave nothing that names the slot.
 it('keeps a reference slot whole', () => {
-  expect(facetOf('ldview')).toBe('ldview');
   expect(facetOf('reference')).toBe('reference');
 });
 

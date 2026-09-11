@@ -19,5 +19,5 @@ it('falls back to the part alone when the title slugs to nothing', () => {
 it('reads the engine off a slot whose qualifier is not the census', () => {
   expect(engineFor('translucent-naive')).toBe('naive');
   expect(engineFor('translucent-occt')).toBe('occt');
-  expect(engineFor('ldview')).toBe('ldview');
+  expect(engineFor('reference')).toBe('reference');
 });

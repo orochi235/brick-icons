@@ -2,8 +2,7 @@
  *
  * The camera is `ThreePane`'s: direction from `orbitFromAngle`, projection
  * orthographic, and the model keeps the position its part file gives it.
- * LDView cannot render orthographic at all, which is why this exists -- the
- * `ldview` slot beside it stays, so the two can be compared.
+ * LDView cannot render orthographic at all, which is why this exists.
  *
  * One WebGL context draws the whole list: a page load per part costs more than
  * the render.

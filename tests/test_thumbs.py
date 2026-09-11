@@ -107,7 +107,7 @@ def test_a_baked_cell_carries_ink_and_no_ground(tmp_path):
 
 
 def test_it_bakes_a_raster_slot_without_going_near_resvg(tmp_path):
-    # ldview writes WebP, and resvg reads SVG only -- it fails on a raster with
+    # the reference slot writes WebP, and resvg reads SVG only -- it fails on a raster with
     # "provided data has not an UTF-8 encoding", which reads like a corrupt
     # file rather than the wrong kind of one.
     src = tmp_path / "3001.webp"

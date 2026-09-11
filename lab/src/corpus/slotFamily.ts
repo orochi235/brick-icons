@@ -36,8 +36,8 @@ export function familyOf(source: string): Family {
 }
 
 /** What the dropdown shows for a slot, once its family is decided elsewhere.
- *  A reference slot has no facet -- `ldview` and `reference` differ by which
- *  renderer drew them, not by what was drawn -- so it keeps its whole name. */
+ *  A reference slot has no facet -- it is named for the renderer that drew
+ *  it, not for what was drawn -- so it keeps its whole name. */
 export function facetOf(source: string): string {
   if (familyOf(source) === 'reference') return source;
   return source.includes('-') ? source.slice(0, source.lastIndexOf('-')) : BARE_FACET;
