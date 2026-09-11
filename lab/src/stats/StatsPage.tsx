@@ -97,7 +97,7 @@ export function StatsPage({ client }: { client: LabClient }) {
   const total = stats?.set.total ?? 0;
 
   return (
-    <div className="stats-page">
+    <div className="lk-root stats-page">
       <header className="stats-head">
         <LabSwitcher title="corpus stats" pages={PAGES} />
         <p className="stats-asof">

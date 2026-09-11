@@ -148,7 +148,7 @@ export function IngestPage({ client }: { client: LabClient }) {
   }, []);
 
   return (
-    <main className="ingest-page">
+    <main className="lk-root ingest-page">
       <header className="ingest-head">
         <LabSwitcher title="Ingestion log" pages={PAGES} />
       </header>
