@@ -11,6 +11,16 @@ one slot, split, no part in both. An `ingest-watch.py` covers both trees every
 Both draw at 1.4-2.5s a part. When they land silhouette-occt goes from 10,274
 drawn to roughly 19,000 of 20,597.
 
+**Neither job will empty its list, and they finish hours apart.** keiei runs
+about 28 parts a minute and clears its 1,700 by ~06:40; studio runs about 11
+and will reach roughly 4,000 of 7,015 by its 11:24 deadline. studio's share is
+the low ids, which are slower per part (9-55s against keiei's 2-10s) -- the
+split was by position in a sorted list, not by cost, and a cost-balanced split
+would have been better. Whatever is left is simply still missing; re-cut from
+the same query and run it again. **keiei sits idle from ~06:40**, so the
+obvious next move is to hand it the far end of studio's remaining list -- the
+two work from opposite ends and cannot collide.
+
 **The batch was cut by hand, and that is the point.** `slot-coverage.py
 --budget` sizes from the slot's mean seconds and orders never-tried first. Both
 are wrong for a fill: the mean is over parts the slot has ALREADY drawn, and
