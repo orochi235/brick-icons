@@ -17,7 +17,7 @@ from brick_icons.lab.cells import (COVERAGE_ORDER, coverage_of, engine_for,
 # Seconds a render took, in even 2-second buckets to a minute, then one open
 # bucket for the tail. Even is the point: bars of one width over buckets
 # spanning 1s, 7s and 30s drew the same area for wildly different densities.
-SECS_BUCKET = 2.0
+SECS_BUCKET = 1.0
 SECS_TOP = 60.0
 SECS_EDGES = tuple(SECS_BUCKET * i
                    for i in range(1, int(SECS_TOP // SECS_BUCKET) + 1))
@@ -46,11 +46,15 @@ LEGACY_PATHS = {"geometry": "render/geometry",
 # engine narrows `rest` instead of redefining the band above it.
 REST = "rest"
 
-# The engines the timing, phase and accuracy sections report on. naive is the
-# reference implementation, not a candidate, so comparing the two engines here
-# measured a race nobody is running. It keeps its coverage rows -- those say
-# how much of the library each slot has drawn, which is still worth seeing.
+# The engines the phase and accuracy sections report on. naive is the
+# reference implementation, not a candidate: it is what occt's d99 is measured
+# AGAINST, so its own accuracy row is a measure of itself.
 REPORTED_ENGINES = ("occt",)
+
+# What the render-seconds histogram times, first series first. Timing is the
+# exception to the line above -- both engines draw the same library, and what
+# a naive slot costs to fill is the question the chart is asked.
+TIMED_ENGINES = ("occt", "naive")
 
 
 def _quantile(sorted_values: list[float], q: float) -> float | None:
@@ -253,15 +257,19 @@ def _speed_and_error(rows: list[sqlite3.Row],
         if row["part_id"] not in ids:
             continue
         engine = row["engine"]
-        if row["secs"] is not None:
+        if row["secs"] is not None and engine in TIMED_ENGINES:
             secs.setdefault(engine, []).append(row["secs"])
+        if engine not in REPORTED_ENGINES:
+            continue
         if row["extra_d99"] is not None:
             d99.setdefault(engine, []).append(row["extra_d99"])
         if row["missing_px"] is not None:
             missing.setdefault(engine, []).append(float(row["missing_px"]))
 
-    speed = [{"engine": e, **_spread(v), "bins": _bins(v)}
-             for e, v in sorted(secs.items())]
+    # In TIMED_ENGINES order, not sorted: the overlay reads the first series
+    # as the solid one, and alphabetical would hand that to naive.
+    speed = [{"engine": e, **_spread(secs[e]), "bins": _bins(secs[e])}
+             for e in TIMED_ENGINES if e in secs]
     error = [{"engine": e, "d99": _spread(d99.get(e, [])),
               "missing_px": _spread(missing.get(e, []))}
              for e in sorted(set(d99) | set(missing))]
@@ -592,7 +600,7 @@ def stats(conn: sqlite3.Connection, *, kind: str = "all", moved: bool = False,
                         badges=tuple(badges))
     total = conn.execute("SELECT count(*) FROM parts").fetchone()[0]
     latest = [r for r in _latest_measurements(conn)
-              if r["engine"] in REPORTED_ENGINES]
+              if r["engine"] in TIMED_ENGINES]
     speed, error = _speed_and_error(latest, ids)
     return {
         "set": {"size": len(ids), "total": total, "kind": kind,
@@ -602,7 +610,8 @@ def stats(conn: sqlite3.Connection, *, kind: str = "all", moved: bool = False,
         "coverage": _coverage(conn, ids),
         "speed": speed,
         "error": error,
-        "phases": _phases(latest, ids),
+        "phases": _phases([r for r in latest
+                           if r["engine"] in REPORTED_ENGINES], ids),
         "cost": _cost(_cost_rows(conn), ids),
         "running": _running(conn),
         "shape": _shape(conn, rows, ids),

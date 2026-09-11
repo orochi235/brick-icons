@@ -237,15 +237,31 @@ def test_speed_reports_the_spread_per_engine(conn):
 
 
 def test_speed_buckets_seconds_evenly(conn):
+    """One second a bin: at two, the bulk of the corpus fell in the first
+    three bars and the shape of the fast end was invisible."""
     for i, secs in enumerate([0.5, 2.0, 3.9, 61.0, 4000.0]):
         _part(conn, f"300{i}")
         _measure(conn, f"300{i}", "occt", secs=secs)
     conn.commit()
     bins = {r["engine"]: r for r in stats.stats(conn)["speed"]}["occt"]["bins"]
     widths = {round(b["to"] - b["from"], 3) for b in bins if b["to"] is not None}
-    assert widths == {stats.SECS_BUCKET}
+    assert widths == {1.0}
     assert bins[-1] == {"from": stats.SECS_TOP, "to": None, "n": 2}
-    assert [b["n"] for b in bins[:3]] == [1, 2, 0]
+    assert [b["n"] for b in bins[:4]] == [1, 0, 1, 1]
+
+
+def test_the_histogram_times_naive_beside_occt(conn):
+    """Both engines draw the same library, and the slot fills are naive's --
+    what one costs against the other is the question the chart is for."""
+    _part(conn, "3001")
+    _measure(conn, "3001", "occt", secs=4.0)
+    _measure(conn, "3001", "naive", secs=30.0)
+    conn.commit()
+    rows = stats.stats(conn)["speed"]
+    # occt leads: the overlay gives the first series the solid fill, and this
+    # page is about the engine under work.
+    assert [r["engine"] for r in rows] == ["occt", "naive"]
+    assert [r["median"] for r in rows] == [4.0, 30.0]
 
 
 def test_speed_ignores_a_part_outside_the_set(conn):
@@ -418,8 +434,10 @@ def test_an_engine_whose_rows_all_predate_the_split_has_none(conn):
 
 # -- naive is the reference, not a candidate -------------------------------
 
-def test_naive_is_left_out_of_timing_phases_and_accuracy(conn):
-    """Comparing the two engines here measured a race nobody is running."""
+def test_naive_is_left_out_of_phases_and_accuracy(conn):
+    """naive is what occt's d99 is measured AGAINST, so its own accuracy row
+    is a measure of itself. The seconds histogram is the exception: it times
+    both, because both draw the same library."""
     _part(conn, "3001")
     _measure(conn, "3001", "naive", secs=1.0, extra_d99=9.0,
              phases={"render": 1.0})
@@ -427,7 +445,6 @@ def test_naive_is_left_out_of_timing_phases_and_accuracy(conn):
              phases={"render": 2.0})
     conn.commit()
     out = stats.stats(conn)
-    assert [r["engine"] for r in out["speed"]] == ["occt"]
     assert [r["engine"] for r in out["error"]] == ["occt"]
     assert [r["engine"] for r in out["phases"]] == ["occt"]
 
