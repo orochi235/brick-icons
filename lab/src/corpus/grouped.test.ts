@@ -78,9 +78,20 @@ describe('blockLayout', () => {
     expect(out.bands.map((b) => b.key)).toEqual(['drawn', 'untried']);
   });
 
-  it('drops a group nothing falls into', () => {
+  it('keeps a named group nothing falls into, in its place', () => {
+    // The wall is read by flipping slots. A class that vanished when it hit
+    // zero reflowed every block after it, so the same part moved across the
+    // screen for a reason that had nothing to do with it.
     const out = blockLayout(() => 'drawn', ['drawn', 'untried'])([c({})], opts);
-    expect(out.bands.map((b) => b.key)).toEqual(['drawn']);
+    expect(out.bands.map((b) => b.key)).toEqual(['drawn', 'untried']);
+    expect(out.bands.find((b) => b.key === 'untried')!.count).toBe(0);
+  });
+
+  it('leaves an unnamed group out when it is empty, having no place to keep', () => {
+    // `category` passes no order -- its groups are whatever the cells have,
+    // so there is no such thing as a category with nothing in it.
+    const out = blockLayout((x) => (x.sha ? 'drawn' : 'untried'), [])([c({})], opts);
+    expect(out.bands.map((b) => b.key)).toEqual(['untried']);
   });
 });
 

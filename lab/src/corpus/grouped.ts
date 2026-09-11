@@ -12,7 +12,12 @@ const BLOCK_ASPECT = 1.35;
 // Blocks are separated by two pitches; less and two groups read as one.
 const BLOCK_GAP_PITCHES = 2;
 
+// Wide enough that an empty block is a named space rather than a gap: with
+// one column its heading is narrower than its own word and `paint` drops it.
+const EMPTY_BLOCK_COLS = 4;
+
 export function blockCols(n: number, cols: number): number {
+  if (n === 0) return Math.min(cols, EMPTY_BLOCK_COLS);
   return Math.min(cols, Math.max(1, Math.ceil(Math.sqrt(n * BLOCK_ASPECT))));
 }
 
@@ -104,6 +109,11 @@ function rectsInOrder(cells: Cell[], placed: Placed[]): Rect[] {
 export function blockLayout(key: (c: Cell) => string, order: string[]): Layout {
   return (cells, opts) => {
     const held = bucket(cells, key);
+    // Every named class keeps its place whether or not this slot has any: the
+    // wall is read by flipping slots, and a class that vanished when it hit
+    // zero reflowed every block after it, so the same part moved across the
+    // screen for a reason that had nothing to do with it.
+    for (const k of order) if (!held.has(k)) held.set(k, []);
     const rank = new Map(order.map((k, i) => [k, i]));
     const groups: Group[] = [...held.entries()]
       .sort((a, b) => (rank.get(a[0]) ?? order.length)
