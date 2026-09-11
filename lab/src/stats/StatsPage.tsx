@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { LabClient } from '@lab/api/client';
 import { CostBars, CoverageBars, CoverageLegend, FailureLines, PhaseBars,
-         PhaseColumns, PhaseLegend, SecsOverlay } from '@lab/stats/charts';
+         PhaseLegend, SecsOverlay } from '@lab/stats/charts';
 import { Footprint } from '@lab/stats/Footprint';
-import { PhaseTree } from '@lab/stats/PhaseTree';
 import type { Failures } from '@lab/stats/types';
 import { useStats } from '@lab/stats/useStats';
 import { DEFAULT_SET, fromQuery, toQuery, wallHref,
@@ -201,26 +200,8 @@ export function StatsPage({ client }: { client: LabClient }) {
 
           <section>
             <h2>Where the time goes</h2>
-            <PhaseLegend />
+            <PhaseLegend rows={stats.phases} />
             <PhaseBars rows={stats.phases} />
-            <PhaseColumns rows={stats.phases} />
-          </section>
-
-          <section>
-            <h2>Inside a render</h2>
-            {stats.phases.every((row) => row.split === null)
-              ? <p className="stats-empty">
-                  nothing in this set was measured with the render broken down
-                </p>
-              : stats.phases.map((row) => row.split && (
-                <PhaseTree
-                  key={row.engine}
-                  nodes={row.split.nodes}
-                  caption={`${row.engine} — over the `
-                    + `${row.split.n.toLocaleString()} of `
-                    + `${row.n.toLocaleString()} parts whose render named its `
-                    + 'stages'} />
-              ))}
           </section>
 
           <section>

@@ -162,87 +162,27 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
 .stats-phase-mark[data-phase='truth_mask'] { background: var(--stats-phase-truth_mask); }
 .stats-phase-mark[data-phase='compare'] { background: var(--stats-phase-compare); }
 
-/* The second series, laid OVER whatever the phase painted rather than beside
- * it in a hue of its own: these columns already spend four colors saying what
- * the time went on. Must follow the phase rules -- they set `background`
- * whole, and this replaces only the image half of it. Fine and low-contrast
- * for the reason the histogram's is: a bold hatch reads as "disabled". */
-.stats-phase-mark[data-fill='hatch'] {
-  background-image: repeating-linear-gradient(
-    135deg,
-    transparent 0 2px,
-    color-mix(in srgb, var(--wzl-surface-sunken, #0e0f12) 50%, transparent) 2px 5px);
+/* `render` is nine tenths of the bar, so it is the band that divides. Its
+ * stages stay in the render hue and separate by step, which is what keeps the
+ * whole stretch readable as one phase; the unnamed remainder is the dim end
+ * so it never outranks a stage that was actually measured. */
+.stats-phase-mark[data-phase='render'][data-shade='1'] {
+  background: color-mix(in srgb, var(--stats-phase-render) 55%, #ffffff);
 }
-
-/* Phase tree ---------------------------------------------------------- */
-
-.stats-phase-rows {
-  list-style: none;
-  margin: 0 0 1.25rem;
-  padding: 0;
+.stats-phase-mark[data-phase='render'][data-shade='2'] {
+  background: color-mix(in srgb, var(--stats-phase-render) 62%, #06203c);
 }
-
-.stats-phase-row {
-  display: grid;
-  grid-template-columns: minmax(11rem, 18rem) 4.5rem 1fr 3.5rem 4rem;
-  gap: 0.5rem;
-  align-items: center;
-  padding: 0.0625rem 0;
-  font-size: 0.8125rem;
+.stats-phase-mark[data-phase='render'][data-shade='3'] {
+  background: color-mix(in srgb, var(--stats-phase-render) 30%, #ffffff);
 }
-
-.stats-phase-row:hover { background: var(--wzl-surface-hover); }
-
-.stats-phase-toggle {
-  border: 0;
-  background: none;
-  padding: 0;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-}
-
-.stats-phase-leaf { color: var(--wzl-fg); }
-
-.stats-phase-row[data-rest='true'] .stats-phase-leaf { font-style: italic; }
-
-.stats-phase-secs,
-.stats-phase-pct,
-.stats-phase-n {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-.stats-phase-pct,
-.stats-phase-n { color: var(--wzl-fg-muted); }
-
-.stats-phase-bar {
-  display: block;
-  height: 0.6875rem;
-  background: var(--wzl-line);
-  border-radius: 1px;
-  overflow: hidden;
-}
-
-.stats-phase-fill {
-  display: block;
-  height: 100%;
-  background: var(--stats-split-geometry);
-}
-
-.stats-phase-row[data-rest='true'] .stats-phase-fill {
-  background: var(--stats-split-rest);
-}
-
-.stats-phase-row[data-depth='0'] .stats-phase-fill {
-  background: var(--stats-split-fill);
+.stats-phase-mark[data-phase='render'][data-shade='rest'] {
+  background: color-mix(in srgb, var(--stats-phase-render) 34%,
+                        var(--wzl-surface-sunken, #0e0f12));
 }
 
 .stats-phases { display: flex; flex-direction: column; gap: 1.5rem; }
 .stats-phase-engine { margin: 0; }
 .stats-phase-engine figcaption { margin-bottom: 0.4rem; font-size: 0.9rem; }
-.stats-phase-split { margin-top: 0.5rem; }
-.stats-phase-note { margin: 0 0 0.3rem; font-size: 0.8rem; }
 
 /* The split bands carry their own names, so the shared hue never has to be
  * the identity channel. Dark ink because every step of the ramp is well
@@ -256,49 +196,6 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
   white-space: nowrap;
   overflow: hidden;
 }
-
-/* -- the slowest parts, one column each --------------------------------- */
-
-.stats-columns { margin: 1rem 0 0; }
-.stats-columns figcaption { margin-bottom: 0.4rem; font-size: 0.8rem; }
-
-.stats-column-plot {
-  display: flex;
-  align-items: flex-end;
-  gap: 2px;
-  height: 9rem;
-  border-bottom: 1px solid var(--wzl-line, #333);
-}
-
-/* The rank slot both engines stand in. Its children are positioned against
- * it, the way a histogram bin holds its two overlapping bars. */
-.stats-column { flex: 1; min-width: 3px; height: 100%; position: relative; }
-
-.stats-col-series {
-  display: block;
-  position: absolute;
-  inset-inline: 0;
-  bottom: 0;
-}
-
-/* The ring that keeps the front column's edge readable where it stands inside
- * the taller one; without it two columns read as one. */
-.stats-col-series[data-front] {
-  box-shadow: 0 -2px 0 var(--wzl-surface-sunken, #0e0f12),
-              2px 0 0 var(--wzl-surface-sunken, #0e0f12),
-              -2px 0 0 var(--wzl-surface-sunken, #0e0f12);
-}
-
-.stats-column-stack {
-  display: flex;
-  flex-direction: column-reverse;
-  height: 100%;
-  width: 100%;
-  border-radius: 3px 3px 0 0;
-  overflow: hidden;
-}
-
-.stats-col-seg { display: block; width: 100%; }
 
 /* -- tiles -------------------------------------------------------------- */
 

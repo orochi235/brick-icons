@@ -242,128 +242,89 @@ export const PHASE_LABEL: Record<Phase, string> = {
 const secs = (v: number) =>
   v >= 3600 ? `${(v / 3600).toFixed(1)}h` : v >= 60 ? `${(v / 60).toFixed(0)}m` : `${v.toFixed(1)}s`;
 
-/** Where a working set's wall-clock went, one bar per engine.
+/** The unnamed remainder of a stage, as `brick_icons.timing` names it. */
+const REST = 'rest';
+
+interface Segment { key: string; label: string; secs: number;
+                    phase: Phase; shade: string }
+
+/** The bar's segments: `render` broken into the stages the engine named, and
+ *  the other three bands whole.
  *
- *  The four bands only. How `render` divides is `PhaseTree`'s: it is tallied
- *  over its own much smaller n -- most of the census predates the
- *  instrumentation -- and nesting one denominator inside another reads as a
- *  single whole it is not. */
+ *  The stages come off the split tree rather than a list here, so an engine
+ *  that names a new one draws it instead of losing it in the remainder. They
+ *  replace the render band only when they add up to it: the tree carries its
+ *  own n, and a stage measured over fewer parts than its parent cannot be
+ *  drawn as a slice of it.
+ */
+export function phaseSegments(row: PhaseRow): Segment[] {
+  const render = row.split?.nodes.find((n) => n.path === 'render');
+  const stages = [...(render?.children ?? [])]
+    .sort((a, b) => Number(a.name === REST) - Number(b.name === REST));
+  const named = stages.reduce((a, n) => a + n.secs, 0);
+  const whole = stages.length > 0
+    && Math.abs(named - row.totals.render) <= row.totals.render * 1e-3;
+  const head: Segment[] = whole
+    ? stages.map((n, i) => ({
+        key: n.path, secs: n.secs, phase: 'render' as Phase,
+        label: n.name === REST ? 'render, unnamed' : n.name,
+        shade: n.name === REST ? 'rest' : String(Math.min(i, 3)) }))
+    : [{ key: 'render', label: PHASE_LABEL.render, secs: row.totals.render,
+         phase: 'render', shade: '0' }];
+  return [...head, ...PHASE_STACK.filter((p) => p !== 'render').map((p) => (
+    { key: p, label: PHASE_LABEL[p], secs: row.totals[p], phase: p,
+      shade: '0' }))];
+}
+
+/** Where a working set's wall-clock went, one bar per engine. */
 export function PhaseBars({ rows }: { rows: PhaseRow[] }) {
   if (rows.length === 0) {
     return <p className="stats-empty">nothing in this set carries phase timings</p>;
   }
   return (
     <div className="stats-phases">
-      {rows.map((row) => (
-        <figure key={row.engine} className="stats-phase-engine">
-          <figcaption>
-            <strong>{row.engine}</strong>
-            <span className="stats-muted">
-              {' '}{secs(row.total)} over {row.n.toLocaleString()} parts
-            </span>
-          </figcaption>
-          <div className="stats-bar" role="img"
-               aria-label={`${row.engine}: ${PHASE_STACK
-                 .map((k) => `${PHASE_LABEL[k]} ${secs(row.totals[k])}`).join(', ')}`}>
-            {PHASE_STACK.map((phase) => {
-              const v = row.totals[phase];
-              if (v === 0) return null;
-              return (
-                <span key={phase} className="stats-seg stats-phase-mark" data-phase={phase}
-                      style={{ width: `${pct(v, row.total)}%` }}
-                      title={`${PHASE_LABEL[phase]} — ${secs(v)}, `
-                             + `${pct(v, row.total).toFixed(1)}%`} />
-              );
-            })}
-          </div>
-        </figure>
-      ))}
+      {rows.map((row) => {
+        const segments = phaseSegments(row);
+        return (
+          <figure key={row.engine} className="stats-phase-engine">
+            <figcaption>
+              <strong>{row.engine}</strong>
+              <span className="stats-muted">
+                {' '}{secs(row.total)} over {row.n.toLocaleString()} parts
+              </span>
+            </figcaption>
+            <div className="stats-bar" role="img"
+                 aria-label={`${row.engine}: ${segments
+                   .map((s) => `${s.label} ${secs(s.secs)}`).join(', ')}`}>
+              {segments.map((seg) => seg.secs === 0 ? null : (
+                <span key={seg.key} className="stats-seg stats-phase-mark"
+                      data-phase={seg.phase} data-shade={seg.shade}
+                      style={{ width: `${pct(seg.secs, row.total)}%` }}
+                      title={`${seg.label} — ${secs(seg.secs)}, `
+                             + `${pct(seg.secs, row.total).toFixed(1)}%`} />
+              ))}
+            </div>
+          </figure>
+        );
+      })}
     </div>
   );
 }
 
-export function PhaseLegend() {
+/** Named off the first engine's own segments: the render stages are the
+ *  engine's to name, so a fixed list here would go stale behind it. */
+export function PhaseLegend({ rows }: { rows: PhaseRow[] }) {
+  const segments = rows[0] ? phaseSegments(rows[0]) : [];
   return (
-    <ul className="stats-legend">
-      {PHASE_STACK.map((phase) => (
-        <li key={phase}>
-          <span className="stats-swatch stats-phase-mark" data-phase={phase} aria-hidden="true" />
-          {PHASE_LABEL[phase]}
+    <ul className="stats-legend stats-phase-legend">
+      {segments.map((seg) => (
+        <li key={seg.key}>
+          <span className="stats-swatch stats-phase-mark" data-phase={seg.phase}
+                data-shade={seg.shade} aria-hidden="true" />
+          {seg.label}
         </li>
       ))}
     </ul>
-  );
-}
-
-/** The slowest parts, sharing one seconds scale, on the reasoning
- *  `SecsOverlay` sets out. The x position is a RANK, not a part -- each engine
- *  has its own 40 slowest, and what the section asks is how bad the tail is,
- *  which a rank profile answers and a part list does not. Longest last, so the
- *  climb reads left to right.
- *
- *  Identity is the same fill-against-hatch the histogram uses, and for the
- *  same reason: the columns are already spending four hues on the phases, so
- *  a fifth for the engine is one the reader has just been taught to read as
- *  something else. Here the hatch lies OVER whatever the phase painted. */
-export function PhaseColumns({ rows }: { rows: PhaseRow[] }) {
-  const series = rows.map((row) => ({ row, cols: [...row.slowest].reverse() }));
-  const ranks = Math.max(0, ...series.map((s) => s.cols.length));
-  const tallest = Math.max(1, ...series.flatMap((s) => s.cols.map((c) => c.total)));
-  if (ranks === 0) return null;
-  return (
-    <figure className="stats-columns stats-overlay">
-      <figcaption className="stats-overlay-keys">
-        {series.map(({ row, cols }, i) => (
-          <span key={row.engine} className="stats-overlay-key">
-            <span className="stats-swatch stats-phase-mark" aria-hidden="true"
-                  data-phase="render" data-fill={SERIES_FILL[i] ?? 'solid'} />
-            <strong>{row.engine}</strong>
-            <span className="stats-muted">
-              {' '}the {cols.length} longest ·
-              {' '}{secs(cols[cols.length - 1]?.total ?? 0)} at the tall end
-            </span>
-          </span>
-        ))}
-      </figcaption>
-      <div className="stats-column-plot">
-        {Array.from({ length: ranks }, (_, r) => {
-          const at = series.map((s) => s.cols[r]);
-          // Both series stand on the baseline, so the taller hides the shorter
-          // unless the shorter is in front — and which engine that is changes
-          // rank by rank, which is the whole point of the chart.
-          const shortest = Math.min(...at.map((c) => c?.total ?? Infinity));
-          return (
-            <div key={r} className="stats-column">
-              {at.map((col, i) => {
-                if (!col) return null;
-                const label = `${series[i]!.row.engine} #${r + 1}: `
-                  + `${col.part_id} — ${secs(col.total)}`;
-                const front = col.total === shortest;
-                return (
-                  <span key={series[i]!.row.engine} className="stats-col-series"
-                        data-front={front || undefined}
-                        style={{ height: `${pct(col.total, tallest)}%`,
-                                 zIndex: front ? 2 : 1 }}
-                        title={label}>
-                    <span className="stats-column-stack" aria-label={label}>
-                      {PHASE_STACK.map((phase) => {
-                        const v = col.secs[phase];
-                        if (v === 0) return null;
-                        return <span key={phase}
-                                     className="stats-col-seg stats-phase-mark"
-                                     data-phase={phase}
-                                     data-fill={SERIES_FILL[i] ?? 'solid'}
-                                     style={{ height: `${pct(v, col.total)}%` }} />;
-                      })}
-                    </span>
-                  </span>
-                );
-              })}
-            </div>
-          );
-        })}
-      </div>
-    </figure>
   );
 }
 

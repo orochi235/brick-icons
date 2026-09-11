@@ -46,10 +46,6 @@ LEGACY_PATHS = {"geometry": "render/geometry",
 # engine narrows `rest` instead of redefining the band above it.
 REST = "rest"
 
-# How many parts the per-part strip draws. Enough that the tail has a shape,
-# few enough to stay one screen wide.
-SLOWEST_N = 40
-
 # The engines the timing, phase and accuracy sections report on. naive is the
 # reference implementation, not a candidate, so comparing the two engines here
 # measured a race nobody is running. It keeps its coverage rows -- those say
@@ -379,20 +375,6 @@ def _sum_trees(rows: list[dict]) -> list[dict]:
     return summed
 
 
-def _split_of(phases: dict) -> list[dict] | None:
-    """The tree below the top four bands, or None if this row never named one.
-
-    Most of the census predates `brick_icons.timing`, and those rows carry
-    `render` and nothing under it. Folding them in would put every unmeasured
-    second into `rest` -- so the split is tallied over its own smaller `n`,
-    and the node-level `n` says which of those parts reached each stage.
-    """
-    named = normalize(phases)
-    if not any("/" in path for path in named):
-        return None
-    return tree(phases)
-
-
 def _phases(rows: list[sqlite3.Row], ids: set[str]) -> list[dict]:
     per_engine: dict[str, list[dict]] = {}
     for row in rows:
@@ -409,7 +391,6 @@ def _phases(rows: list[sqlite3.Row], ids: set[str]) -> list[dict]:
             # handful this page draws individually, and is built below for
             # those alone.
             "named": named,
-            "phases": phases,
             "split": any("/" in path for path in named),
         })
 
@@ -417,7 +398,6 @@ def _phases(rows: list[sqlite3.Row], ids: set[str]) -> list[dict]:
     for engine, measured in sorted(per_engine.items()):
         totals = {k: round(sum(m["bands"][k] for m in measured), 3)
                   for k in PHASE_ORDER}
-        ranked = sorted(measured, key=lambda m: -m["total"])
         split = [m for m in measured if m["split"]]
         nodes = _sum_paths([m["named"] for m in split]) if split else []
         out.append({
@@ -430,10 +410,6 @@ def _phases(rows: list[sqlite3.Row], ids: set[str]) -> list[dict]:
                 "total": round(sum(n["secs"] for n in nodes), 3),
                 "nodes": nodes,
             } if split else None,
-            "slowest": [{"part_id": m["part_id"], "total": m["total"],
-                         "secs": {k: round(v, 3) for k, v in m["bands"].items()},
-                         "split": _split_of(m["phases"])}
-                        for m in ranked[:SLOWEST_N]],
         })
     return out
 

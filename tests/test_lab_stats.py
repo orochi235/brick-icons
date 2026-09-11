@@ -298,24 +298,6 @@ def test_phases_count_only_the_working_set(conn):
     assert row["totals"]["render"] == pytest.approx(0.5)
 
 
-def test_the_slowest_parts_come_back_longest_first(conn):
-    for i, render in enumerate([0.1, 0.9, 0.5]):
-        _part(conn, f"300{i}")
-        _measure(conn, f"300{i}", "occt", secs=1.0, phases={"render": render})
-    conn.commit()
-    slowest = stats.stats(conn)["phases"][0]["slowest"]
-    assert [r["part_id"] for r in slowest] == ["3001", "3002", "3000"]
-    assert slowest[0]["secs"]["render"] == pytest.approx(0.9)
-
-
-def test_the_slowest_list_is_capped(conn):
-    for i in range(stats.SLOWEST_N + 5):
-        _part(conn, f"p{i}")
-        _measure(conn, f"p{i}", "occt", secs=1.0, phases={"render": float(i)})
-    conn.commit()
-    assert len(stats.stats(conn)["phases"][0]["slowest"]) == stats.SLOWEST_N
-
-
 def test_an_engine_with_no_phases_at_all_is_not_a_row(conn):
     _part(conn, "3001")
     _measure(conn, "3001", "naive", secs=1.0)
@@ -379,19 +361,6 @@ def test_an_engine_whose_rows_all_predate_the_split_has_none(conn):
     _measure(conn, "3001", "occt", secs=1.0, phases={"render": 1.0, "compare": 0.2})
     conn.commit()
     assert stats.stats(conn)["phases"][0]["split"] is None
-
-
-def test_a_slowest_row_carries_its_split_when_it_has_one(conn):
-    _part(conn, "3001")
-    _part(conn, "3002")
-    _measure(conn, "3001", "occt", secs=1.0, phases={
-        "render": 9.0, "geometry": 5.0, "fill": 1.0})
-    _measure(conn, "3002", "occt", secs=1.0, phases={"render": 1.0})
-    conn.commit()
-    slowest = {r["part_id"]: r for r in stats.stats(conn)["phases"][0]["slowest"]}
-    assert _at(slowest["3001"]["split"], "render/geometry")["secs"] \
-        == pytest.approx(5.0)
-    assert slowest["3002"]["split"] is None
 
 
 # -- naive is the reference, not a candidate -------------------------------

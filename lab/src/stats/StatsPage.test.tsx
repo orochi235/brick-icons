@@ -44,14 +44,7 @@ const body = (over: Partial<Stats> = {}): Stats => ({
                  { name: 'fill', path: 'render/fill', secs: 14, n: 2,
                    children: [] },
                  { name: 'rest', path: 'render/rest', secs: 2, children: [] }] }] },
-             slowest: [
-               { part_id: '3001', total: 30,
-                 secs: { render: 20, rasterize: 4, truth_mask: 5, compare: 1 },
-                 split: [{ name: 'render', path: 'render', secs: 20,
-                           children: [] }] },
-               { part_id: '3002', total: 10,
-                 secs: { render: 7, rasterize: 1, truth_mask: 1, compare: 1 },
-                 split: null }] }],
+             }],
   running: false,
   shape: { categories: [['Brick', 900], ['Minifig', 300], ['Rare', 4]],
            kinds: { printed: 2, obsolete: 1, base: 17, out_of_scope: 0, moved: 0 },
@@ -182,7 +175,8 @@ describe('StatsPage', () => {
   });
 
 
-  it('stacks the four phases per engine, longest first in the data order', async () => {
+  it('stacks the phases per engine in the order a census row runs them',
+     async () => {
     const { container } = render(<StatsPage client={clientWith(async () => body())} />);
     await waitFor(() => container.querySelector('.stats-phases'));
     const phases = [...container.querySelectorAll('.stats-phases .stats-bar')[0]!
@@ -190,62 +184,49 @@ describe('StatsPage', () => {
     expect(phases).toEqual(['render', 'rasterize', 'truth_mask', 'compare']);
   });
 
-  it('breaks the render down at every depth the engine named', async () => {
-    const { container } = render(<StatsPage client={clientWith(async () => body())} />);
-    await waitFor(() => container.querySelector('.stats-phase-tree'));
-    const names = [...container.querySelectorAll('.stats-phase-row')]
-      .map((el) => el.querySelector('.stats-phase-name')!.textContent!.trim());
-    expect(names).toEqual(['▾ render', '▾ geometry', 'engine', 'rest',
-                           'fill', 'rest']);
-  });
+  /** The fixture's tree is tallied over 3 of its 14 parts, so its stages come
+   *  to 40 seconds against a 70-second render band. */
+  const addingUp = () => {
+    const one = body();
+    const row = one.phases[0]!;
+    row.totals = { ...row.totals, render: 40 };
+    row.total = 70;
+    return one;
+  };
 
-  it('says how few of the set carry a breakdown at all', async () => {
-    render(<StatsPage client={clientWith(async () => body())} />);
-    expect(await screen.findByText(/3 of 14 parts whose render named its stages/))
-      .toBeTruthy();
-  });
-
-  it('says so rather than drawing a tree when no row carries one', async () => {
-    const none = body();
-    none.phases[0]!.split = null;
-    const { container } = render(<StatsPage client={clientWith(async () => none)} />);
+  it('divides the render band into the stages the engine named', async () => {
+    const { container } = render(
+      <StatsPage client={clientWith(async () => addingUp())} />);
     await waitFor(() => container.querySelector('.stats-phases'));
-    expect(container.querySelector('.stats-phase-tree')).toBe(null);
-    expect(screen.getByText(/nothing in this set was measured with the render/))
-      .toBeTruthy();
+    const segs = [...container.querySelectorAll('.stats-phases .stats-bar')[0]!
+      .querySelectorAll('.stats-seg')] as HTMLElement[];
+    expect(segs.map((el) => el.title.split(' —')[0]))
+      .toEqual(['geometry', 'fill', 'render, unnamed',
+                'rasterize', 'truth mask', 'compare']);
+    // Against the whole bar, not against the render band: 24 of 70.
+    expect(segs[0]!.style.width).toBe('34.285714285714285%');
   });
 
-  it('draws the slowest parts shortest first, scaled to the tallest', async () => {
+  it('names the render stages in the legend rather than a fixed four',
+     async () => {
+    const { container } = render(
+      <StatsPage client={clientWith(async () => addingUp())} />);
+    await waitFor(() => container.querySelector('.stats-phase-legend'));
+    expect([...container.querySelectorAll('.stats-phase-legend li')]
+      .map((el) => el.textContent))
+      .toEqual(['geometry', 'fill', 'render, unnamed',
+                'rasterize', 'truth mask', 'compare']);
+  });
+
+  it('leaves the render whole when its stages do not add up to it', async () => {
+    // The fixture as it stands: a tree over 3 parts under a band over 14.
+    // Drawing those stages as slices of this band would read as a whole they
+    // are not.
     const { container } = render(<StatsPage client={clientWith(async () => body())} />);
-    await waitFor(() => container.querySelector('.stats-column-plot'));
-    const cols = [...container.querySelectorAll('.stats-col-series')];
-    expect(cols.map((el) => el.getAttribute('title')))
-      .toEqual(['naive #1: 3002 — 10.0s', 'naive #2: 3001 — 30.0s']);
-    // The tallest part fills the plot; a third of its cost is a third as tall.
-    expect((cols[1] as HTMLElement).style.height).toBe('100%');
-    expect((cols[0] as HTMLElement).style.height).toBe('33.33333333333333%');
-  });
-
-  it('puts every engine\'s slowest parts on one seconds scale', async () => {
-    const two = body();
-    two.phases = [
-      { ...two.phases[0]!, engine: 'naive',
-        slowest: [{ part_id: 'a', total: 10, split: null,
-                    secs: { render: 10, rasterize: 0,
-                            truth_mask: 0, compare: 0 } }] },
-      { ...two.phases[0]!, engine: 'occt',
-        slowest: [{ part_id: 'b', total: 40, split: null,
-                    secs: { render: 40, rasterize: 0,
-                            truth_mask: 0, compare: 0 } }] },
-    ];
-    const { container } = render(<StatsPage client={clientWith(async () => two)} />);
-    await waitFor(() => container.querySelector('.stats-col-series'));
-    // One rank slot holding both engines, the shorter drawn in front, and the
-    // heights are a quarter and full against the taller of the two.
-    const cols = [...container.querySelectorAll('.stats-col-series')] as HTMLElement[];
-    expect(cols.map((el) => el.style.height)).toEqual(['25%', '100%']);
-    expect(cols[0]!.getAttribute('data-front')).toBe('true');
-    expect(cols[1]!.getAttribute('data-front')).toBe(null);
+    await waitFor(() => container.querySelector('.stats-phases'));
+    const segs = [...container.querySelectorAll('.stats-phases .stats-bar')[0]!
+      .querySelectorAll('.stats-seg')] as HTMLElement[];
+    expect(segs.map((el) => el.title.split(' —')[0])[0]).toBe('render');
   });
 
   it('scales both engines to one count, so their bars are comparable', async () => {

@@ -64,14 +64,6 @@ export interface PhaseRow {
   /** Null until some row in the set named anything below the top four bands.
    *  Its own `n` is smaller again, so it is never mixed into `totals`. */
   split: { n: number; total: number; nodes: PhaseNode[] } | null;
-  slowest: SlowestRow[];
-}
-
-export interface SlowestRow {
-  part_id: string;
-  total: number;
-  secs: Record<Phase, number>;
-  split: PhaseNode[] | null;
 }
 
 export interface Shape {
