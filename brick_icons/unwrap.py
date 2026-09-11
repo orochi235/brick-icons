@@ -84,7 +84,8 @@ def _radial_gap(pts, prim) -> float:
     r = float(np.linalg.norm(prim.R[:, 0]))
     h = float(np.linalg.norm(prim.R[:, 1]))
     y = p[:, 1]
-    if np.any(y < -BIND_TOL / h) or np.any(y > 1.0 + BIND_TOL / h):
+    top = getattr(prim, "level_top", 1.0) + BIND_TOL / h
+    if np.any(y < -BIND_TOL / h) or np.any(y > top):
         return np.inf
     want = np.array([prim.radius_at(float(v)) for v in y])
     return float(np.max(np.abs(np.hypot(p[:, 0], p[:, 2]) - want)) * r)
@@ -228,6 +229,115 @@ class Plane:
             n = self.normal / np.linalg.norm(self.normal)
             self._basis = (n,) + up_aligned(n)
         return self._basis
+
+
+@dataclass
+class Skirt:
+    """A wall carrier continued past its own end, over what it runs into.
+
+    A minifig head's print does not stop where its r=13 wall does -- it runs
+    onto the jaw, which LDraw builds from four `t04o6250` quarter-torus
+    subfiles that arrive tessellated, so `bind` had nothing to bind them to
+    and `bind_groups` dropped a quarter of the ink.
+
+    Everything the unwrap needs from a carrier it asks `radius_at` for -- the
+    bind test's target radius, the arc-length scale `to_uv` gives u, and the
+    radius `to_xyz` puts a point back at. So continuing the surface is a
+    matter of answering that question past level 1, and no other rule changes.
+
+    The profile is sampled off the part's own body tessellation rather than
+    read from the torus that declares it: `primitives.parse_primitive` matches
+    only `<num>-<den><family>` and has no torus case, so the declaration is
+    gone by the time geometry arrives here. Teaching the loader that family is
+    the durable fix and this is not it -- which is why the samples are a
+    MEDIAN per band and monotone-clamped, so a cracked or decoration-cut band
+    moves the profile by a vertex rather than by its worst vertex.
+    """
+    base: object
+    levels: np.ndarray
+    radii: np.ndarray
+
+    @property
+    def R(self):
+        return self.base.R
+
+    @property
+    def t(self):
+        return self.base.t
+
+    @property
+    def kind(self):
+        return self.base.kind
+
+    @property
+    def color(self):
+        return getattr(self.base, "color", 16)
+
+    @property
+    def level_top(self):
+        return float(self.levels[-1])
+
+    def radius_at(self, level):
+        level = float(level)
+        if level <= 1.0:
+            return self.base.radius_at(level)
+        return float(np.interp(level, self.levels, self.radii))
+
+
+#: How close two levels must be to count as the same latitude ring, in LDU,
+#: and how far past its section to continue a wall, as a multiple of the
+#: section's height. A fixed band grid was the first try and it conflated
+#: 3626bp39's last two rings -- 0.31 LDU apart, inside one band -- so the
+#: profile stopped at the wrong radius and the jaw's last course of ink was
+#: left a separate slab under the beard. A surface of revolution arrives as
+#: rings; read the rings.
+SKIRT_RING = 0.05
+SKIRT_REACH = 0.5
+
+
+def skirt(carrier, pts, reach=SKIRT_REACH):
+    """`carrier` continued over the geometry past its end, or unchanged.
+
+    Every triangle, not the color-16 ones: decoration lies on the same
+    surface, and a print that COVERS the skirt leaves almost no body
+    tessellation to read it from. 3626bp39's beard wraps the whole jaw.
+
+    `reach` bounds how far past the section to look -- a wall does not
+    continue forever, and without a bound the profile swallows the neck and
+    then the torso.
+    """
+    if isinstance(carrier, Plane) or carrier is None:
+        return carrier
+    pts = np.asarray(pts, float).reshape(-1, 3)
+    if not len(pts):
+        return carrier
+    h = float(np.linalg.norm(carrier.R[:, 1])) or 1.0
+    p = _local(pts, carrier)
+    y, rad = p[:, 1], np.hypot(p[:, 0], p[:, 2])
+    keep = (y > 1.0) & (y <= 1.0 + reach)
+    if not keep.any():
+        return carrier
+    y, rad = y[keep], rad[keep]
+    order = np.argsort(y)
+    y, rad = y[order], rad[order]
+    # one sample per latitude ring, cut where the level jumps by more than a
+    # ring's worth. A gap between rings is a coarse tessellation, not the end
+    # of the surface, so it splits clusters and nothing more.
+    cuts = np.flatnonzero(np.diff(y) > SKIRT_RING / h) + 1
+    levels, radii = [1.0], [float(carrier.radius_at(1.0))]
+    for grp in np.split(np.arange(len(y)), cuts):
+        lvl = float(np.median(y[grp]))
+        if lvl <= levels[-1]:
+            continue
+        levels.append(lvl)
+        # the median, and never wider than the ring below it: a skirt curves
+        # inward, and a ring left holding only its outer vertices where
+        # decoration cut it away would otherwise read as the wall flaring out
+        radii.append(min(float(np.median(rad[grp])), radii[-1]))
+    if len(levels) < 3:
+        return carrier
+    return Skirt(base=carrier, levels=np.asarray(levels, float),
+                 radii=np.asarray(radii, float))
 
 
 def to_uv(pts, carrier, theta0=0.0):
@@ -375,8 +485,9 @@ def carrier_extent(carrier, uv=None):
         return _corners(x0, y0, x1, y1)
     r = float(np.linalg.norm(carrier.R[:, 0]))
     h = float(np.linalg.norm(carrier.R[:, 1]))
+    top = getattr(carrier, "level_top", 1.0) * h
     ext = np.array([[-np.pi * r, 0.0], [np.pi * r, 0.0],
-                    [np.pi * r, h], [-np.pi * r, h]])
+                    [np.pi * r, top], [-np.pi * r, top]])
     if axis_reversed(carrier):
         ext = -ext
     if uv is None:
@@ -829,25 +940,32 @@ def decal_groups(tris, tri_colors, analytic):
         if fam is not None:
             families.setdefault(fam, []).append(p)
 
+    # One carrier per wall SURFACE, continued over whatever it runs into,
+    # and built before anything binds. Lazily, a skirt exists only once its
+    # wall has been bound to -- and by then a facet plane over the jaw's own
+    # tessellation has already claimed the ink sitting on it, which scattered
+    # 20 of 3626bp39's beard triangles into shards and left a 1.5-LDU band of
+    # its chin blank between the wall and what the skirt did recover.
+    all_pts = tris.reshape(-1, 3) if len(tris) else tris
+    carriers = []
+    for fam, sections in families.items():
+        span = span_carrier(sections) if len(sections) > 1 else sections[0]
+        carriers.append(skirt(span, all_pts))
+    carriers += [p for p in body_prims if _wall_family(p) is None]
+
     members = {}          # surface -> (carrier, [(code, world pts)])
 
     def add(carrier, code, pts):
-        key = _group_key(carrier)
-        if key in members:
-            members[key][1].append((code, pts))
-            return
-        sections = families.get(key)
-        span = (span_carrier(sections) if sections and len(sections) > 1
-                else carrier)
-        members[key] = (span, [(code, pts)])
+        members.setdefault(_group_key(carrier), (carrier, []))[1].append(
+            (code, pts))
 
     for t, code in zip(tris, tri_colors):
         if code == 16:
             continue
-        carrier = bind(t, body_prims) or bind(t, planes)
+        carrier = bind(t, carriers) or bind(t, planes)
         if carrier is not None:
             add(carrier, code, t)
-    for code, carrier, pts in prim_regions(analytic, body_prims + planes, skip):
+    for code, carrier, pts in prim_regions(analytic, carriers + planes, skip):
         add(carrier, code, pts)
 
     out = []

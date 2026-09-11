@@ -956,3 +956,84 @@ def test_a_raised_plane_reconstruction_moves_along_the_normal():
     pts = np.array([[3.0, 2.0, 5.0]])
     back = unwrap.to_xyz(unwrap.to_uv(pts, plane), plane, standoff=0.25)
     assert back == pytest.approx(np.array([[3.0, 2.25, 5.0]]), abs=1e-9)
+
+
+def _jaw_pts(r=20.0, h=24.0, drop=4.0, rings=(0.25, 0.5, 0.75, 1.0)):
+    """Tessellation of a wall plus the skirt it runs into: a quarter ellipse
+    from (r, top) inward, sampled as latitude rings the way LDraw's torus
+    subfiles arrive."""
+    pts = []
+    for lvl in (0.0, 0.5, 1.0):                     # the wall itself
+        for th in np.linspace(0, 2 * np.pi, 24, endpoint=False):
+            pts.append([r * np.cos(th), lvl * h, r * np.sin(th)])
+    for f in rings:                                 # the skirt, curving in
+        t = f * np.pi / 2
+        rr = r - (r * 0.4) * (1 - np.cos(t))
+        y = h + drop * np.sin(t)
+        for th in np.linspace(0, 2 * np.pi, 24, endpoint=False):
+            pts.append([rr * np.cos(th), y, rr * np.sin(th)])
+    return np.array(pts, float)
+
+
+def test_skirt_continues_a_wall_over_what_it_runs_into():
+    cyl = FakeCylinder(r=20.0, h=24.0)
+    s = unwrap.skirt(cyl, _jaw_pts())
+    assert isinstance(s, unwrap.Skirt)
+    assert s.level_top > 1.0
+    # inside its own section it is still the wall, exactly
+    assert s.radius_at(0.5) == pytest.approx(1.0)
+    # and past it the radius follows the tessellation inward
+    assert s.radius_at(s.level_top) < 0.95
+
+
+def test_a_skirt_binds_ink_its_own_section_cannot_reach():
+    cyl = FakeCylinder(r=20.0, h=24.0)
+    pts = _jaw_pts()
+    s = unwrap.skirt(cyl, pts)
+    on_skirt = pts[pts[:, 1] > 24.0 + 1e-9][:3]
+    assert unwrap.bind(on_skirt, [cyl]) is None
+    assert unwrap.bind(on_skirt, [s]) is s
+
+
+def test_a_skirt_round_trips_ink_back_onto_the_skirt_not_the_wall():
+    """The reason `to_xyz` has to know the profile: a cylinder's radius_at is
+    1.0 at every level, so ink bound past the section came back at the WALL
+    radius, off the surface it was lifted from."""
+    cyl = FakeCylinder(r=20.0, h=24.0)
+    pts = _jaw_pts()
+    s = unwrap.skirt(cyl, pts)
+    on_skirt = pts[pts[:, 1] > 26.0][:1]
+    back = unwrap.to_xyz(unwrap.to_uv(on_skirt, s), s)
+    assert back == pytest.approx(on_skirt, abs=0.3)
+    naive = unwrap.to_xyz(unwrap.to_uv(on_skirt, cyl), cyl)
+    assert np.hypot(naive[0, 0], naive[0, 2]) == pytest.approx(20.0, abs=1e-6)
+
+
+def test_a_gap_between_latitude_rings_does_not_end_the_skirt():
+    """A coarsely tessellated skirt has bare bands between its rings, and
+    stopping at the first one truncated 3626bp39's jaw to a third of itself."""
+    cyl = FakeCylinder(r=20.0, h=24.0)
+    sparse = unwrap.skirt(cyl, _jaw_pts(rings=(0.25, 1.0)))
+    dense = unwrap.skirt(cyl, _jaw_pts())
+    assert sparse.level_top == pytest.approx(dense.level_top, abs=0.05)
+
+
+def test_a_wall_with_nothing_past_it_is_left_alone():
+    cyl = FakeCylinder(r=20.0, h=24.0)
+    wall_only = _jaw_pts(rings=())
+    assert unwrap.skirt(cyl, wall_only) is cyl
+
+
+def test_a_skirt_never_flares_back_out():
+    """Decoration cuts bands of the skirt away, and a band left holding only
+    its outer vertices would otherwise read as the wall widening again."""
+    cyl = FakeCylinder(r=20.0, h=24.0)
+    pts = _jaw_pts()
+    stray = np.array([[20.0, 24.0 + 3.9, 0.0]])      # an outlier near the top
+    s = unwrap.skirt(cyl, np.vstack([pts, stray]))
+    assert np.all(np.diff(s.radii) <= 1e-9)
+
+
+def test_a_planar_carrier_has_no_skirt():
+    plane = unwrap.Plane(normal=np.array([0.0, 0.0, 1.0]), offset=2.0)
+    assert unwrap.skirt(plane, _jaw_pts()) is plane

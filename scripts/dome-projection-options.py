@@ -14,11 +14,10 @@ Each option is a 1-D reparametrization of the meridian, so all three run through
 the stock cylinder map with the dome vertices rewritten first. Nothing in the
 tree is edited.
 
-    leave     today. Dome ink is dropped.
-    cylinder  project the dome radially onto the infinite wall cylinder.
-              v = the point's own height.
-    dome      fit the dome's profile and lay it out by arc length along it.
-              v = wall height + distance travelled over the dome.
+    off   the wall carrier stops at its own section, so jaw ink is dropped.
+          `unwrap.skirt` is disarmed in-process to get this -- never by
+          stashing or checking out, since this tree is shared.
+    on    HEAD. The wall is continued over the jaw by `unwrap.Skirt`.
 
 It writes three sheets: the options side by side, the recovered band blown up,
 and a component-counted diff of the two working options. `--icons` adds the
@@ -257,40 +256,33 @@ def stretch(mode, y_top, r_wall, prof, y):
 
 
 def panels(part, mode, ldraw_dir):
-    """The part's decal panels under one option, plus what the option cost.
+    """The part's decal panels with the skirt off or on.
 
-    Panels, not a finished SVG: the three options grow the canvas by different
-    amounts, so letting each size its own would draw the three at three scales
-    and the sheet would compare nothing. The caller fixes one extent over all
-    of them.
+    Panels, not a finished SVG: the two grow the canvas by different amounts,
+    so letting each size its own would draw them at two scales and the sheet
+    would compare nothing. The caller fixes one extent over both.
     """
     tri, tri_colors, analytic = hlr.part_geometry(part, ldraw_dir)
     tri = np.asarray(tri, float)
-    _prim, r_wall, h_wall, y_base = wall(analytic)
-    y_top = y_base + h_wall
-    info = {"part": part, "mode": mode, "r_wall": r_wall, "y_top": y_top}
+    tri_colors = np.asarray(tri_colors)
+    found = wall(analytic)
+    info = {"part": part, "mode": mode}
+    if found is not None:
+        _prim, r_wall, h_wall, y_base = found
+        info.update(r_wall=r_wall, y_top=y_base + h_wall)
+        body = [c for c in analytic if getattr(c, "color", 16) == 16
+                and c.kind in ("cyli", "con")]
+        deco = tri[tri_colors != 16]
+        info["dropped"] = int(sum(unwrap.bind(t, body) is None for t in deco))
 
-    if mode == "leave":
-        return unwrap.decal_panels(tri, tri_colors, analytic), info
-
-    fit = fit_profile(tri, tri_colors, y_top, r_wall)
-    if fit is None:
-        return [], info
-    info["profile"] = {"a": fit[1], "p": fit[2], "q": fit[3],
-                       "resid_max": fit[0], "resid_rms": fit[4]}
-    prof = (fit[1], fit[2], fit[3])
-    deco = np.asarray(tri_colors) != 16
-    moved = tri.copy()
-    moved[deco] = rewrite(tri[deco].reshape(-1, 3), mode, y_top,
-                          r_wall, prof).reshape(-1, 3, 3)
-    top = float(tri[deco].reshape(-1, 3)[:, 1].max())
-    info["ink_top"] = top
-    info["stretch_at_top"] = stretch(mode, y_top, r_wall, prof, top)
-    unwrap._radial_gap = _extended_gap
-    try:
-        return unwrap.decal_panels(moved, tri_colors, analytic), info
-    finally:
-        unwrap._radial_gap = _radial_gap
+    if mode == "off":
+        real = unwrap.skirt
+        unwrap.skirt = lambda carrier, pts, **kw: carrier
+        try:
+            return unwrap.decal_panels(tri, tri_colors, analytic), info
+        finally:
+            unwrap.skirt = real
+    return unwrap.decal_panels(tri, tri_colors, analytic), info
 
 
 def ink_bounds(regions):
@@ -336,7 +328,7 @@ def render(part, out_dir, px, ldraw_dir, pad=1.0):
     return paths, {m: i for m, (_p, i) in got.items()}
 
 
-MODES = ("leave", "cylinder", "dome")
+MODES = ("off", "on")
 
 
 def survey(pattern, ldraw_dir):
@@ -439,11 +431,9 @@ def report(rows, skipped):
         print("  skipped:", counts)
 
 
-LABEL = {"leave": "leave it", "cylinder": "extend the cylinder",
-         "dome": "recognize the dome"}
-BLURB = {"leave": "dome ink dropped",
-         "cylinder": "v = the point's own height",
-         "dome": "v = arc length over the dome"}
+LABEL = {"off": "skirt off", "on": "skirt on"}
+BLURB = {"off": "jaw ink binds to nothing and is dropped",
+         "on": "the wall is continued over the jaw"}
 
 
 def _font(size):
@@ -502,11 +492,10 @@ def sheet(parts, out_dir, renders, cell=520, band=None):
     H = head + sum(h + cap + gut for h in row_h) + pad
     im = Image.new("RGB", (W, H), "#ffffff")
     d = ImageDraw.Draw(im)
-    d.text((pad, 20), "minifig head decals: what to do with ink that runs "
-           "off the wall cylinder onto the jaw dome", font=_font(21),
-           fill="#111111")
+    d.text((pad, 20), "minifig head decals: continuing the wall carrier over "
+           "the jaw it runs onto", font=_font(21), fill="#111111")
     d.text((pad, 48), "each row one part, at one scale across the row; "
-           "columns vary only in how dome ink is mapped",
+           "columns vary only in whether the skirt is built",
            font=_font(15), fill="#666666")
     y = head
     for (part, ps), h in zip(rows, row_h):
@@ -558,12 +547,12 @@ def diff_sheet(parts, out_dir, infos=None, cell=620):
     pad, gut, head, cap = 26, 14, 82, 58
     rows = []
     for part in parts:
-        f_cyl = out_dir / f"{part}.cylinder.svg"
-        f_dome = out_dir / f"{part}.dome.svg"
-        if not (f_cyl.exists() and f_dome.exists()):
+        f_off = out_dir / f"{part}.off.svg"
+        f_on = out_dir / f"{part}.on.svg"
+        if not (f_off.exists() and f_on.exists()):
             continue
-        a = _raster(f_cyl, cell)
-        b = _raster(f_dome, cell)
+        a = _raster(f_off, cell)
+        b = _raster(f_on, cell)
         A = np.asarray(a).astype(int)
         B = np.asarray(b).astype(int)
         mask = np.abs(A - B).max(axis=2) > 16
@@ -589,8 +578,8 @@ def diff_sheet(parts, out_dir, infos=None, cell=620):
     H = head + sum(h + cap + gut for h in row_h) + pad
     im = Image.new("RGB", (W, H), "#ffffff")
     d = ImageDraw.Draw(im)
-    d.text((pad, 18), "what actually moves between the two working options",
-           font=_font(21), fill="#111111")
+    d.text((pad, 18), "what the skirt puts back", font=_font(21),
+           fill="#111111")
     d.text((pad, 46), "magenta is every pixel the two draw differently; pale "
            "gray is ink they agree on. components under "
            f"{DIFF_MIN_PX}px dropped as antialias fringe",
@@ -603,8 +592,8 @@ def diff_sheet(parts, out_dir, infos=None, cell=620):
         if got:
             ldu, px = got
         caps = [
-            (f"{part}  -  extend the cylinder", BLURB["cylinder"]),
-            (f"{part}  -  recognize the dome", BLURB["dome"]),
+            (f"{part}  -  {LABEL['off']}", BLURB["off"]),
+            (f"{part}  -  {LABEL['on']}", BLURB["on"]),
             (f"{part}  -  diff",
              f"{chunky} components over {DIFF_MIN_PX}px  ({raw} raw)   "
              f"{share * 100:.1f}% of the ink"),
@@ -637,7 +626,7 @@ def band_sheet(parts, out_dir, infos=None, frac=0.34, cell=760):
     rows = []
     for part in parts:
         cut = []
-        for mode in ("cylinder", "dome"):
+        for mode in MODES:
             f = out_dir / f"{part}.{mode}.svg"
             if not f.exists():
                 cut.append(None)
@@ -651,16 +640,15 @@ def band_sheet(parts, out_dir, infos=None, frac=0.34, cell=760):
     H = head + sum(h + cap + gut for h in row_h) + pad
     im = Image.new("RGB", (W, H), "#ffffff")
     d = ImageDraw.Draw(im)
-    d.text((pad, 18), "the recovered band, blown up: extend the cylinder "
-           "against recognize the dome", font=_font(21), fill="#111111")
-    d.text((pad, 46), "bottom third of the same canvas. both restore the ink; "
-           "they disagree about how far down it sits",
-           font=_font(15), fill="#666666")
+    d.text((pad, 18), "the recovered band, blown up", font=_font(21),
+           fill="#111111")
+    d.text((pad, 46), "bottom third of the same canvas, skirt off against "
+           "skirt on", font=_font(15), fill="#666666")
     y = head
     for (part, ps), h in zip(rows, row_h):
         for i, p in enumerate(ps):
             x = pad + i * (cell + gut)
-            mode = ("cylinder", "dome")[i]
+            mode = MODES[i]
             st = ((infos or {}).get(part, {}).get(mode, {})
                   .get("stretch_at_top"))
             sub = BLURB[mode]
@@ -704,19 +692,10 @@ def main(argv=None):
     for i, part in enumerate(args.parts, 1):
         paths, infos = render(part, out, args.px, args.ldraw_dir)
         every[part] = infos
-        pr = infos["dome"].get("profile")
-        tail = ""
-        if pr:
-            tail = (f" profile r={pr['a']:.2f}+{pr['p']:.2f}cos t, "
-                    f"y={infos['dome']['y_top']:.1f}+{pr['q']:.2f}sin t "
-                    f"(resid max {pr['resid_max']:.3f})")
+        drop = infos.get("off", {}).get("dropped")
+        tail = "" if drop is None else f"  {drop} triangles bind to nothing"
         print(f"[{i}/{len(args.parts)}] {part}: "
               f"{', '.join(sorted(paths)) or 'no decal'}{tail}", flush=True)
-        for mode in MODES:
-            st = infos[mode].get("stretch_at_top")
-            if st:
-                print(f"      {mode:<9} ink top y={infos[mode]['ink_top']:.2f} "
-                      f"stretch h={st[0]:.2f} v={st[1]:.2f}", flush=True)
     if not args.no_sheet:
         print(f"sheet: {sheet(args.parts, out, args.renders)}", flush=True)
         print(f"sheet: {band_sheet(args.parts, out, every)}", flush=True)

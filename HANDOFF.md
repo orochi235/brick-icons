@@ -1,151 +1,100 @@
-## Minifig head decals: two bugs fixed, one open, 2026-09-11
+## Minifig head decals: the jaw skirt landed, 2026-09-11
 
-On `main`. `git log --oneline @{u}..HEAD` for what is unpushed — **another
-session shares this working directory and commits to `brick_icons/unwrap.py`
-too**, so unpushed commits are not necessarily yours. Stage explicit paths,
-never `git add -A`, and check `git branch --show-current` before assuming.
+On `main`, committed, unpushed. **Another session shares this working
+directory and commits to `brick_icons/unwrap.py` too**, so unpushed commits
+are not necessarily yours. Stage explicit paths, never `git add -A`.
 
-**Mike chose "extend the cylinder", 2026-09-11.** Nothing is implemented. Two
-things that choice did not settle are below, under "What extending the
-cylinder actually costs" -- the second one needs his answer before anything
-is built.
+A head's print does not stop where its r=13 wall does -- it runs onto the jaw,
+and `bind` had nothing to bind that ink to, so `bind_groups` dropped it.
+`unwrap.Skirt` continues the wall carrier over whatever it runs into, and
+`unwrap.skirt` builds one by reading the profile off the part's own latitude
+rings. Over the four drawn heads, decoration triangles binding to nothing went
+from **359 to 10**, and the ten left are `3626bp63`'s ink below the wall's
+BOTTOM -- a different end, untouched.
 
-### What a head's decal loses, and why it is two separate faults
+**Mike chose "extend the cylinder" over "recognize the dome", and the shipped
+code is that**: `v` is the point's own height, exactly as before. The skirt
+supplies only the RADIUS at a level, which both options needed -- see "what it
+cost" below.
 
-The bottom of a face was **clipped**: a curved carrier's extent was the SVG's
-viewport outright, so ink past the section it binds to was cut. Fixed — the
-extent is now a floor unioned with what has to fit. Where the print already
-fit, the drawing is byte-identical, which is what keeps this off the 71% of
-curved carriers that never overran.
+### Why it is a carrier and not a binding tweak
 
-Ink that runs off the **jaw** is **dropped before it is ever drawn**, and this
-is open. The part file is authored with +Y as LDraw DOWN -- the hollow stud is
-at y=-4..0 and the neck at y=21..24 -- so the ink that binds to nothing is
-below the chin, not on the cranium. A quarter of `3626cp7e`'s decoration
-triangles are there: its soul patch and the lower band of stubble.
-`bind_groups` drops what binds to nothing.
+Everything the unwrap asks a carrier is `radius_at`: the bind test's target
+radius, the arc-length scale `to_uv` gives u, and the radius `to_xyz` puts a
+point back at. So continuing a surface is answering that one question past
+level 1, and no other rule changes. `_radial_gap` now reads `level_top` off
+the carrier instead of assuming 1.0, and `carrier_extent` sizes to it.
 
-**The dome is declared, and the loader throws the declaration away.** `3626b`
-builds it from four `t04o6250` quarter-torus subfiles -- "Torus Outside 1 x
-0.6250 x 0.25" -- each with an explicit transform scaling the ring to radius 8
-and the tube to 5 horizontal by 4 vertical. That is an exact surface of
-revolution whose profile is the quarter ellipse `r = 8 + 5 cos t`,
-`y = 17 + 4 sin t`: outer radius 13 at y=17, meeting the wall cylinder's top
-exactly, and closing on the neck at y=21. Nothing is inferred and no crack
-matters. `primitives.parse_primitive` has no torus case at all -- its `_FRAC`
-pattern matches only `<num>-<den><family>`, and `t04o6250` is a different
-naming scheme -- so it falls through to faceted recursion and arrives
-tessellated. 622 part files reference a torus primitive directly.
+Three things were measured rather than assumed, each after the picture showed
+them wrong:
 
-So option one is **not** "fit a surface to defective tessellation". It is
-"read a declaration", which is the kind of rule this repo says survives.
-Fitting the profile back out of the tessellation instead recovers
-`r = 7.8 + 5.0 cos t` against the declared `8 + 5` -- the vertices are
-inscribed chords, so the fit is about 4% small.
+**Read the latitude rings, not a fixed band grid.** Bands conflated
+`3626bp39`'s last two rings -- 0.31 LDU apart, inside one 0.41-LDU band -- so
+its profile stopped at r=9.91 instead of r=8 and the jaw's last course drew as
+a separate slab under the beard. Clustering by level gap recovers r=8.0 at
+y=21 exactly, which is what the declared torus says.
 
-### The three options, measured, none built
+**Sample the profile from every triangle, not the color-16 ones.** A print
+that COVERS the skirt leaves almost no body tessellation to read it from;
+`3626bp39`'s beard wraps the whole jaw, and body-only sampling left 36 of its
+58 dropped triangles still dropped.
 
-A cylinder and cone unwrap isometrically; a torus does not, so this is a
-choice about distortion. All three keep the same horizontal scale, so they
-differ ONLY in what height dome ink is drawn at:
+**Build the skirts BEFORE anything binds.** Lazily, a skirt exists only once
+its wall has been bound to, and by then a facet plane over the jaw's own
+tessellation has claimed the ink sitting on it. That scattered 20 of
+`3626bp39`'s beard triangles into shards. Fixing it also collapsed the whole
+face onto ONE carrier -- `3626cp7e` went from 11 groups to 1, `3626bph6` from
+5 to 1 -- so a head is one texture now rather than a mosaic.
 
-- **Recognize the dome.** `v` = wall height plus arc length travelled over the
-  dome. Vertically exact. Most work, and the projection is itself a decision.
-- **Extend the wall cylinder's parameter space past its section**, so dome ink
-  binds to the nearest wall and `v` is the point's own height. Cheap, and it
-  compresses increasingly toward the neck.
-- **Leave it.** Heads keep losing their chins.
+### What it cost, and what is still owed
 
-**Over all 368 3626 heads that carry decoration**, ink runs past the wall on
-278 of them -- by 2.00 LDU at the median of those, and 4.00 at the worst; the
-dome is 4 LDU tall, so the worst runs the whole way. So `leave it` costs
-something on three quarters of the corpus, and that is the big visible
-difference.
+**The profile is sampled off tessellation, and that is the weak part.** The
+jaw IS declared -- four `t04o6250` quarter-torus subfiles, ring radius 8 and a
+5x4 elliptical tube, exact -- but `primitives.parse_primitive` matches only
+`<num>-<den><family>` and has no torus case, so the declaration is gone before
+geometry arrives. Teaching the loader that family is the durable fix and this
+is not it. 622 part files reference a torus directly, so it would pay for
+itself well beyond heads.
 
-**The two working options are nearly the same drawing.** Measure the
-disagreement as how far a part's lowest ink ends up sliding, and it is 0.05
-LDU at the median -- 2 pixels on a 510px panel -- over 0.5 LDU on 58 heads
-(16%), over 1 LDU on 18 (5%), and over 2 LDU on exactly one: `3626bp39`, at
-2.87 LDU, whose beard covers the whole jaw. Component-counting the rasters
-agrees: 2 chunky components and 14.5% of the ink on `3626bp39`, but 1 to 17
-components and under 3% on the other three drawn.
+**Only the four drawn heads are measured.** `--survey '3626*'` re-derives the
+corpus figures but was written against the old in-process variants; it has not
+been re-pointed at the shipped code. Nothing has run over the other 364 heads,
+and no decal store has been redrawn.
 
-Do not read the local stretch figure as that difference. "Extend the cylinder"
-compresses by 0.07 at `3626bp39`'s lowest ink, but that is the derivative at
-the last sliver; integrated over the print it is the 2.87 LDU above. The
-sliver piles up, the beard does not shrink fourteenfold.
+**Redraw only what this changed, never the whole slot.** Mike rejected a
+blanket `--force` over the decal store: it rewrites every sha, churns every
+decal cell on the wall and stales every `checked` stamp.
+`scripts/decal-axis-affected.py` is that predicate for the axis fix; the
+canvas fix never got one, and **this change now needs one too** -- every head
+whose ink runs past its wall is stale.
 
-`scripts/dome-projection-options.py` draws any head under all three on one
-shared canvas, prints the stretch figures, and component-counts the two
-working options against each other. `--icons` adds the pair that shows what
-`to_xyz` does with ink bound past the section. **Every corpus figure on this
-page comes from `--survey '3626*'`** -- re-run it rather than trusting the
-numbers. Four sheets are on the wall: the four-part comparison, the recovered
-band blown up, the diff, and the icons.
-
-### What extending the cylinder actually costs
-
-**A wider extent alone recovers about a third of the dropped ink, not all of
-it.** Over the corpus a pure extent bump takes back **34%** of the triangles
-that bind to nothing, 39% at the per-part median: 60 of 163 on `3626cp7e`, 76
-of 126 on `3626bph6`, 22 of 58 on `3626bp39`, 2 of 12 on `3626bp63`. The
-`_radial_gap` extent test is only half of what rejects jaw ink; the other half
-is the radial test, and the jaw curves away from the wall by far more than
-`BIND_TOL`. Today's unbound ink sits 0.59 LDU off the wall at the median on
-`3626cp7e` and 1.46 on `3626bp39`, reaching 1.49 and 5.00 -- against a
-tolerance of 0.5. So the option means **bind by projection in the extended
-region** -- take the point's azimuth and height and stop asking how far off the
-wall it is -- which needs a bound on how far out it may reach, or the wall
-claims every interior facet above it.
-
-**The 3D icon needs the dome's profile even under this option, and that is
-the open question.** `shade.decorate` sends decoration back through
-`unwrap.to_xyz`, and a cylinder's `radius_at` returns 1.0 at any level -- so
-ink that binds past the section comes back at the WALL radius, 1.5 LDU off the
-true surface on `3626cp7e` and 5.0 on `3626bp39`, and the depth clip then cuts
-it. Rendered, the soul patch reappears truncated at a hard edge rather than
-following the jaw; the sheet on the wall is that pair, looked at from
-`--angle -40,20` because the jaw faces away in iso. Landing it on the jaw
-means a height-dependent radius, which is the declared `t04o6250` profile --
-the same thing "recognize the dome" wanted. For the icon the two options
-converge, and what separates them collapses to one line: whether `v` is the
-point's height or its arc length.
-
-**So: does "extend the cylinder" mean the flat decal texture only, with icons
-still dropping jaw ink, or both?** Texture-only is genuinely cheap and is what
-the renders he chose from showed. Both is the profile either way.
-
-**40 of the 408 head files are outside every count above**: 27 have no dome
-the profile fit will take, 7 carry no decoration, and **6 have no color-16
-cylinder at all** -- `3626bp32` through `3626bp34` and three more author every
-primitive in color 14, and `decal_groups` filters body primitives to 16, so
-those have no curved carrier today whatsoever. Separate fault, not chased.
+`scripts/dome-projection-options.py` draws any head with the skirt off against
+HEAD, disarming `unwrap.skirt` in-process rather than by stashing, since this
+tree is shared. Two sheets are on the wall.
 
 ### Decisions made in conversation, not visible in the code
 
-**Redraw only what a fix actually changed, never the whole slot.** Mike
-rejected a blanket `--force` over the decal store: it rewrites every sha, which
-churns every decal cell on the wall and stales every `checked` stamp against
-one. Identify-first also costs about a third as much. `scripts/decal-axis-affected.py`
-is that predicate for the axis fix; **the canvas fix needs its own and does not
-have one** — a different and larger set of parts is now stale for it.
-
 **`onto run --in <tree>` does NOT sync.** `--in` names a tree the node already
 has. Without `onto sync <node>` first the job runs whatever the node last got,
-and `onto warm` reports `fetched` while changing no working file — it pulls git
-objects only. This cost two fill jobs today: they ran a day-stale engine and
+and `onto warm` reports `fetched` while changing no working file -- it pulls
+git objects only. This cost two fill jobs: they ran a day-stale engine and
 were killed and relaunched. The node's `git log` lags independently, because
-sync sends a base commit plus a patch and never moves `HEAD` — compare file
+sync sends a base commit plus a patch and never moves `HEAD` -- compare file
 hashes, not refs.
 
 **The decal slot's "25s per part" was never real.** It is `FALLBACK_SECS`,
-printed with a `~` because the slot writes no measurements and has no timing of
-its own. Measured through the real store builder it is about 0.9s. Any cost
+printed with a `~` because the slot writes no measurements and has no timing
+of its own. Measured through the real store builder it is about 0.9s. Any cost
 argument built on the 25s figure is wrong by a factor of thirty.
 
-**`AXIS_UP_TOL = 0.05` is a threshold nobody measured.** It separates a leaning
-carrier from one lying on its side. No part in the sample sat near the margin,
-so nothing is known to depend on it.
+**`AXIS_UP_TOL = 0.05` is a threshold nobody measured.** It separates a
+leaning carrier from one lying on its side. No part in the sample sat near the
+margin, so nothing is known to depend on it.
+
+**6 heads have no color-16 cylinder at all** -- `3626bp32` through `3626bp34`
+and three more author every primitive in color 14, and `decal_groups` filters
+body primitives to 16, so those have no curved carrier whatsoever. Separate
+fault, not chased.
 
 ### In flight
 
