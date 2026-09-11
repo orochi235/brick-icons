@@ -61,8 +61,9 @@ def test_cylinder_unwrap_uses_arc_length_not_degrees():
     quarter = np.array([[20.0, 0.0, 0.0], [0.0, 0.0, 20.0]])
     uv = unwrap.to_uv(quarter, cyl)
     assert uv[:, 1] == pytest.approx([0.0, 0.0])
-    # a quarter turn at r=20 is 20 * pi/2 of arc
-    assert uv[1, 0] - uv[0, 0] == pytest.approx(20.0 * np.pi / 2, rel=1e-6)
+    # a quarter turn at r=20 is 20 * pi/2 of arc. Magnitude, because this
+    # cylinder's axis is +Y and `axis_reversed` turns its unwrap 180 degrees.
+    assert abs(uv[1, 0] - uv[0, 0]) == pytest.approx(20.0 * np.pi / 2, rel=1e-6)
 
 
 def test_cylinder_unwrap_round_trips():
@@ -112,7 +113,61 @@ def test_curved_carrier_supplies_its_own_canvas_extent():
     ext = unwrap.carrier_extent(FakeCylinder(r=20.0, h=24.0))
     assert ext[:, 0].min() == pytest.approx(-20.0 * np.pi)
     assert ext[:, 0].max() == pytest.approx(20.0 * np.pi)
-    assert (ext[:, 1].min(), ext[:, 1].max()) == pytest.approx((0.0, 24.0))
+    # Spans, not endpoints: this cylinder's axis is +Y, so its canvas runs
+    # -h to 0 rather than 0 to h. Same rectangle either way.
+    assert ext[:, 1].max() - ext[:, 1].min() == pytest.approx(24.0)
+
+
+def _axis(vec, r=20.0, h=24.0):
+    """A cylinder whose axis is `vec`, everything else square."""
+    cyl = FakeCylinder(r=r, h=h)
+    a = np.asarray(vec, float)
+    a = a / np.linalg.norm(a)
+    other = np.array([1.0, 0.0, 0.0])
+    if abs(float(a @ other)) > 0.9:
+        other = np.array([0.0, 0.0, 1.0])
+    e1 = np.cross(a, other)
+    e1 /= np.linalg.norm(e1)
+    cyl.R = np.column_stack([r * e1, h * a, r * np.cross(a, e1)])
+    return cyl
+
+
+def test_an_axis_pointing_ldraw_down_is_reversed():
+    """A minifig head's wall cylinder is authored +Y, which is LDraw DOWN, so
+    its face unwrapped upside down until the axis was oriented."""
+    assert unwrap.axis_reversed(_axis([0.0, 1.0, 0.0]))
+    assert not unwrap.axis_reversed(_axis([0.0, -1.0, 0.0]))
+
+
+def test_a_carrier_on_its_side_is_decided_by_plus_z():
+    """No up to inherit, so +Z breaks the tie — the same fallback
+    `up_aligned` takes on a top or bottom face."""
+    assert not unwrap.axis_reversed(_axis([0.0, 0.0, 1.0]))
+    assert unwrap.axis_reversed(_axis([0.0, 0.0, -1.0]))
+    # and the tie-break must not reach a carrier that does have an up
+    assert not unwrap.axis_reversed(_axis([0.0, -1.0, 0.2]))
+
+
+def test_reversing_an_axis_rotates_rather_than_mirrors():
+    """Both components negate together, so glyphs turn instead of flipping.
+    A mirror would reverse the sign of the unwrap's cross product."""
+    down, up = _axis([0.0, 1.0, 0.0]), _axis([0.0, -1.0, 0.0])
+    pts = np.array([[20.0, 4.0, 0.0], [0.0, 4.0, 20.0], [20.0, 9.0, 0.0]])
+
+    def handedness(cyl):
+        uv = unwrap.to_uv(pts, cyl)
+        e0, e1 = uv[1] - uv[0], uv[2] - uv[0]
+        return np.sign(e0[0] * e1[1] - e0[1] * e1[0])
+
+    assert handedness(down) == handedness(up)
+
+
+def test_a_reversed_carrier_still_round_trips():
+    cyl = _axis([0.0, 1.0, 0.0])
+    assert unwrap.axis_reversed(cyl)
+    pts = np.array([[20.0, 3.0, 0.0], [0.0, 7.0, 20.0], [-20.0, 1.0, 0.0]])
+    back = unwrap.to_xyz(unwrap.to_uv(pts, cyl), cyl)
+    assert back == pytest.approx(pts, abs=1e-9)
 
 
 def test_a_plane_falls_back_to_the_decal_bounds():

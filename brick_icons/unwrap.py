@@ -179,6 +179,31 @@ def up_aligned(n):
     return np.cross(v, n), v
 
 
+#: How far off square to LDraw's up axis a carrier may lean before its own
+#: axis still settles which way is up. Past it the carrier is lying on its
+#: side, and +Z decides — the same fallback `up_aligned` takes above.
+AXIS_UP_TOL = 0.05
+AXIS_UP_ALT = np.array([0.0, 0.0, 1.0])
+
+
+def axis_reversed(carrier) -> bool:
+    """Whether a curved carrier's authored axis runs against the part's up.
+
+    `up_aligned` settles this for a plane; a cylinder or cone instead inherits
+    whatever direction the author gave `R[:, 1]`, and a minifig head's is +Y,
+    which is LDraw DOWN — so its face unwrapped upside down. Asks only about
+    the declared coordinate frame, so a cracked or unwelded carrier answers
+    the same as a sound one.
+    """
+    A = np.asarray(carrier.R[:, 1], float)
+    n = float(np.linalg.norm(A))
+    if n < 1e-9:
+        return False
+    a = A / n
+    d = float(a @ LDRAW_UP)
+    return (float(a @ AXIS_UP_ALT) if abs(d) < AXIS_UP_TOL else d) < 0
+
+
 @dataclass
 class Plane:
     """A flat carrier. Its unwrap is the identity in the face's own basis."""
@@ -205,7 +230,10 @@ def to_uv(pts, carrier, theta0=0.0):
     height = d @ a
     perp = d - np.outer(height, a)
     th = np.arctan2(perp @ e2, perp @ e1) - theta0
-    return np.column_stack([_radius(carrier, height / h, r) * _wrap(th), height])
+    uv = np.column_stack([_radius(carrier, height / h, r) * _wrap(th), height])
+    # Negating BOTH components is a 180-degree rotation, so a reversed axis
+    # turns the print upright without mirroring its glyphs.
+    return -uv if axis_reversed(carrier) else uv
 
 
 def to_xyz(uv, carrier, theta0=0.0, standoff=0.0):
@@ -221,6 +249,8 @@ def to_xyz(uv, carrier, theta0=0.0, standoff=0.0):
         n, u, v = carrier.basis()
         return (np.outer(uv[:, 0], u) + np.outer(uv[:, 1], v)
                 + (carrier.offset + standoff) * n)
+    if axis_reversed(carrier):
+        uv = -uv
     o, a, r, e1, e2, h = _circle_frame(carrier)
     rad = _radius(carrier, uv[:, 1] / h, r)
     th = uv[:, 0] / rad + theta0
@@ -318,8 +348,9 @@ def carrier_extent(carrier, uv=None):
         return np.array([[x0, y0], [x1, y0], [x1, y1], [x0, y1]])
     r = float(np.linalg.norm(carrier.R[:, 0]))
     h = float(np.linalg.norm(carrier.R[:, 1]))
-    return np.array([[-np.pi * r, 0.0], [np.pi * r, 0.0],
-                     [np.pi * r, h], [-np.pi * r, h]])
+    ext = np.array([[-np.pi * r, 0.0], [np.pi * r, 0.0],
+                    [np.pi * r, h], [-np.pi * r, h]])
+    return -ext if axis_reversed(carrier) else ext
 
 
 def bind_groups(tris, tri_colors, carriers):
