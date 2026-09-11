@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { RAMP_NAMES, TINT_MODES, ramp, tintFor } from '@lab/corpus/tint';
+import { MEASURED_MODES, RAMP_NAMES, SCALE_IS_LOG, SCALE_LABEL, STEPS,
+         TINT_MODES, formatScale, ramp, scaleAt, tintFor,
+         type MeasuredMode } from '@lab/corpus/tint';
 import { DEFAULT_PALETTE } from '@lab/corpus/palette';
 import type { Cell } from '@lab/corpus/types';
 
@@ -114,5 +116,56 @@ describe('tintFor', () => {
 
   it('names every mode it supports', () => {
     expect(TINT_MODES).toEqual(['status', 'secs', 'year', 'sets', 'colors']);
+  });
+});
+
+describe('scaleAt', () => {
+  // The invariant the scale rests on: a tick reading "26s" has to sit where a
+  // 26-second part is drawn. Both sides come from the same constants, so this
+  // fails the moment one is changed without the other.
+  it('inverts the value a cell is tinted by', () => {
+    const cases: [MeasuredMode, Partial<Cell>, number][] = [
+      ['secs', { secs: 26 }, 26],
+      ['secs', { secs: 202.7 }, 202.7],
+      ['year', { year_from: 1998 }, 1998],
+      ['sets', { sets: 95 }, 95],
+      ['colors', { colors: 9 }, 9],
+    ];
+    for (const [mode, over, expected] of cases) {
+      const cell = c(over);
+      // the t the ramp would use, recovered from the fill it produced
+      const style = tintFor(cell, mode, DEFAULT_PALETTE);
+      expect(style.fill).not.toBe(DEFAULT_PALETTE.unmatched.fill);
+      const t = (() => {
+        for (let i = 0; i <= 1000; i++) {
+          const probe = i / 1000;
+          if (ramp(probe) === style.fill) return probe;
+        }
+        throw new Error(`no t produced ${style.fill} for ${mode}`);
+      })();
+      // quantised to STEPS, so the recovered value lands in the right band
+      // rather than exactly on the input
+      const band = scaleAt(mode, 1 / (STEPS - 1)) / scaleAt(mode, 0);
+      const got = scaleAt(mode, t);
+      const ratio = mode === 'year' ? 1 + Math.abs(got - expected) / 100
+                                    : Math.max(got / expected, expected / got);
+      expect(ratio).toBeLessThanOrEqual(mode === 'year' ? 1.2 : band * 1.05);
+    }
+  });
+
+  it('spans the range each mode was measured over', () => {
+    expect(formatScale('secs', scaleAt('secs', 0))).toBe('1.0s');
+    expect(formatScale('secs', scaleAt('secs', 1))).toBe('680s');
+    expect(formatScale('year', scaleAt('year', 0))).toBe('1954');
+    expect(formatScale('year', scaleAt('year', 1))).toBe('2027');
+  });
+
+  it('covers every measured mode, so a new one cannot ship unlabeled', () => {
+    for (const mode of MEASURED_MODES) {
+      expect(SCALE_LABEL[mode]).toBeTruthy();
+      expect(Number.isFinite(scaleAt(mode, 0.5))).toBe(true);
+      expect(typeof SCALE_IS_LOG[mode]).toBe('boolean');
+    }
+    expect(MEASURED_MODES).toHaveLength(TINT_MODES.length - 1);
   });
 });

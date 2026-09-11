@@ -33,6 +33,13 @@ export interface LegendProps {
   /** Dismissal is the topbar's to own: a legend that closed itself had no way
    *  back short of a reload. */
   onClose: () => void;
+  /** Whether a measured tint owns the wall's colors. The state rows describe
+   *  `status` and nothing else, so under a tint they are a second panel
+   *  contradicting `TintScale` -- swatches for a coloring that is not on
+   *  screen, beside counts that still are. The tag rows stay either way:
+   *  they are filters, and filtering is unaffected by what the cells are
+   *  colored by. */
+  tinted?: boolean;
 }
 
 /** The wall's conditions, with a swatch, a name and a count over the wall.
@@ -40,7 +47,8 @@ export interface LegendProps {
  *  outside that row's family rather than brightening the ones in it. */
 export function Legend({ cells, tagCells, highlight, onHighlight,
                         badges, onBadges,
-                        highlightTag, onHighlightTag, onClose }: LegendProps) {
+                        highlightTag, onHighlightTag, onClose,
+                        tinted = false }: LegendProps) {
   const counts = useMemo(() => {
     // A row stands for its siblings too, so the rows still add up to the
     // wall: `timed out` counts the 1,930 parts that timed out in another
@@ -76,6 +84,11 @@ export function Legend({ cells, tagCells, highlight, onHighlight,
           x
         </button>
       </div>
+      {tinted ? (
+        <p className="corpus-legend-tinted">
+          Colors are the scale, not these states.
+        </p>
+      ) : (
       <ul className="corpus-legend-list">
         {/* Swatch colors come from the state table, not from a rule per
             state: the CSS enumerated seven of eleven and two states drew
@@ -105,6 +118,7 @@ export function Legend({ cells, tagCells, highlight, onHighlight,
           </li>
         ))}
       </ul>
+      )}
       <div className="corpus-legend-head corpus-legend-subhead">
         <strong>Tags</strong>
         {badges.length > 0 && (

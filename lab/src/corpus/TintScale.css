@@ -1,0 +1,66 @@
+.corpus-tint-scale {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 13rem;
+  padding: 0.5rem 0.6rem;
+  /* Matched to `.corpus-legend`: both float over the wall's own cell colors,
+   * so the raised surface is composed over an opaque one rather than blurred
+   * against what is behind it. */
+  background-color: var(--wzl-surface);
+  background-image: linear-gradient(var(--wzl-surface-raised), var(--wzl-surface-raised));
+  color: var(--wzl-fg);
+  border: var(--wzl-border-w) solid var(--wzl-border);
+  border-radius: var(--wzl-radius-md);
+  box-shadow: 0 6px 20px var(--wzl-shadow);
+  font: 12px/1.4 ui-monospace, monospace;
+}
+
+.corpus-tint-scale-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.corpus-tint-scale-note {
+  color: var(--wzl-fg-muted);
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.corpus-tint-scale-strip {
+  display: flex;
+  height: 0.75rem;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.corpus-tint-scale-swatch { flex: 1 1 0; }
+
+.corpus-tint-scale-ticks {
+  display: flex;
+  justify-content: space-between;
+  color: var(--wzl-fg-muted);
+}
+
+/* The middle tick sits over the strip's midpoint, not between the other two
+ * labels, which is where `space-between` would put a variable-width one. */
+.corpus-tint-scale-ticks > span { flex: 1 1 0; text-align: center; }
+.corpus-tint-scale-ticks > span:first-child { text-align: left; }
+.corpus-tint-scale-ticks > span:last-child { text-align: right; }
+
+.corpus-tint-scale-absent {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--wzl-fg-muted);
+}
+
+.corpus-tint-scale-absent .corpus-tint-scale-swatch {
+  flex: 0 0 auto;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 2px;
+}

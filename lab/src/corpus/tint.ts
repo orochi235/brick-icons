@@ -7,7 +7,7 @@ export type TintMode = typeof TINT_MODES[number];
 
 // Quantised, so two cells a few sets apart get the same swatch and a band of
 // the ramp reads as a band rather than as noise.
-const STEPS = 8;
+export const STEPS = 8;
 
 /** The gradients a measured mode can be drawn in.
  *
@@ -87,6 +87,42 @@ function value(cell: Cell, mode: TintMode): number | null {
     case 'colors': return cell.colors === null ? null
       : Math.log10(Math.max(1, cell.colors)) / MAX_LOG_COLORS;
   }
+}
+
+export type MeasuredMode = Exclude<TintMode, 'status'>;
+
+export const MEASURED_MODES = TINT_MODES.filter(
+  (m): m is MeasuredMode => m !== 'status');
+
+/** What a mode's ramp measures, as a reader would say it. */
+export const SCALE_LABEL: Record<MeasuredMode, string> = {
+  secs: 'render seconds',
+  year: 'first year',
+  sets: 'sets appeared in',
+  colors: 'colors made in',
+};
+
+/** Whether a mode's ramp is logarithmic, which a scale has to say out loud --
+ *  its midpoint sits at 26s, not at 340s, and nothing on the strip shows it. */
+export const SCALE_IS_LOG: Record<MeasuredMode, boolean> = {
+  secs: true, year: false, sets: true, colors: true,
+};
+
+/** The value a point along the ramp stands for: the inverse of `value`, built
+ *  from the same constants so a scale cannot drift from what it labels. */
+export function scaleAt(mode: MeasuredMode, t: number): number {
+  switch (mode) {
+    case 'secs': return 10 ** (t * MAX_LOG_SECS);
+    case 'year': return FIRST_YEAR + t * YEAR_SPAN;
+    case 'sets': return 10 ** (t * MAX_LOG_SETS);
+    case 'colors': return 10 ** (t * MAX_LOG_COLORS);
+  }
+}
+
+export function formatScale(mode: MeasuredMode, v: number): string {
+  if (mode === 'year') return String(Math.round(v));
+  if (mode === 'secs') return v < 10 ? `${v.toFixed(1)}s` : `${Math.round(v)}s`;
+  return Math.round(v).toLocaleString();
 }
 
 /** A cell's fill under one tint mode.

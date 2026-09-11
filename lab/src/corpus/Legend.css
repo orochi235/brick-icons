@@ -114,3 +114,10 @@
 .corpus-legend-badge {
   flex: 0 0 auto;
 }
+
+/* Stands in for the state rows while a measured tint owns the wall's colors.
+ * Muted and unbadged: it is a pointer to `TintScale`, not a row to read. */
+.corpus-legend-tinted {
+  margin: 0;
+  color: var(--wzl-fg-muted);
+}
