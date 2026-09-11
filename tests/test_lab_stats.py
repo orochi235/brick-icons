@@ -87,14 +87,15 @@ def test_out_of_scope_parts_can_be_dropped(conn):
     assert stats.stats(conn, out_of_scope=False)["set"]["size"] == 1
 
 
-def test_obsolete_parts_can_be_dropped_without_narrowing_to_them(conn):
-    # `kind="obsolete"` looks at nothing else; the flag says whether the class
-    # is in the set at all, which is the sidebar's question.
+def test_obsolete_parts_are_out_of_the_set_until_asked_for(conn):
+    # Out by default because no batch renders one, so every slot reported
+    # 2,733 of them as never attempted. `kind="obsolete"` looks at nothing
+    # else, and puts the class back whatever the flag says.
     _part(conn, "3001")
     _part(conn, "3002", obsolete=1)
     conn.commit()
-    assert stats.stats(conn)["set"]["size"] == 2
-    assert stats.stats(conn, obsolete=False)["set"]["size"] == 1
+    assert stats.stats(conn)["set"]["size"] == 1
+    assert stats.stats(conn, obsolete=True)["set"]["size"] == 2
     assert stats.stats(conn, kind="obsolete")["set"]["size"] == 1
 
 
@@ -170,6 +171,19 @@ def test_the_decal_slot_does_not_count_plain_parts_as_never_attempted(conn):
     assert counts["decal"]["notApplicable"] == 1
     assert counts["decal"]["untried"] == 0
     assert counts["decal"]["drawn"] == 1
+
+
+def test_an_obsolete_part_on_the_map_is_not_work_a_slot_still_owes(conn):
+    """Tick the box and they show as nothing to draw, not as never attempted:
+    the batch scripts take `obsolete = 0`, so the job is never queued."""
+    _part(conn, "3001")
+    _part(conn, "3002", obsolete=1)
+    _render(conn, "3001", "silhouette-occt")
+    conn.commit()
+    counts = {r["source"]: r["counts"]
+              for r in stats.stats(conn, obsolete=True)["coverage"]}
+    assert counts["silhouette-occt"]["notApplicable"] == 1
+    assert counts["silhouette-occt"]["untried"] == 0
 
 
 def test_a_slot_that_draws_everything_marks_nothing_inapplicable(conn):
@@ -556,7 +570,7 @@ def test_a_slot_already_measured_is_not_counted_twice_from_attempts(conn):
 
 def test_cost_counts_only_the_working_set(conn):
     _part(conn, "3001")
-    _part(conn, "3002", obsolete=1)
+    _part(conn, "3002", printed=1)
     for pid in ("3001", "3002"):
         _measure(conn, pid, "occt", source="occt", secs=10.0, build="b1")
         _measure(conn, pid, "occt", source="white-occt", secs=5.0, build="b1")

@@ -364,7 +364,7 @@ def create_app(root: Path | str = ".",
 
     @app.get("/api/corpus/stats")
     def get_corpus_stats(kind: str = "all", moved: bool = False,
-                         out_of_scope: bool = True, obsolete: bool = True,
+                         out_of_scope: bool = True, obsolete: bool = False,
                          posed: bool = True,
                          excluded: list[str] = Query(default=[]),
                          badges: list[str] = Query(default=[])):

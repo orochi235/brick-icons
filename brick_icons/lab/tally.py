@@ -41,8 +41,9 @@ def _column(label: str) -> str:
 
 
 def in_scope(conn: sqlite3.Connection) -> set[str]:
-    """Every part a slot is expected to draw -- the dashboard's own default
-    working set, with no filter applied."""
+    """Every part in scope, with no filter applied. Wider than the
+    dashboard's default working set, which leaves obsolete moulds out; here
+    they are counted and land in `not_applicable`."""
     marks = ",".join("?" * len(OUT_OF_SCOPE_CATEGORIES))
     return {r["id"] for r in conn.execute(
         f"SELECT id FROM parts WHERE category NOT IN ({marks}) "
@@ -60,6 +61,8 @@ def count(conn: sqlite3.Connection) -> list[dict]:
     marks = ",".join("?" * len(OUT_OF_SCOPE_CATEGORIES))
     printed = {r["id"] for r in conn.execute(
         "SELECT id FROM parts WHERE printed = 1")}
+    obsolete = {r["id"] for r in conn.execute(
+        "SELECT id FROM parts WHERE obsolete = 1")}
     flagged_by_engine: dict[str, set[str]] = {}
     for row in conn.execute(
             "SELECT part_id, engines FROM defects WHERE status = 'open'"):
@@ -105,7 +108,7 @@ def count(conn: sqlite3.Connection) -> list[dict]:
                 sha="x" if pid in drawn else None,
                 open_defects=1 if pid in flagged else 0,
                 inapplicable=not_applicable(source, pid in printed,
-                                            pid in drawn),
+                                            pid in drawn, pid in obsolete),
                 drew_nothing=pid in drew_nothing)
             counts[_column(coverage_of(error=slot_errors.get(pid),
                                        **shared))] += 1

@@ -26,6 +26,11 @@ describe('the working set in the address bar', () => {
     expect(q.getAll('excluded')).toEqual(['A', 'B']);
   });
 
+  it('leaves obsolete parts out until the address asks for them', () => {
+    expect(DEFAULT_SET.obsolete).toBe(false);
+    expect(fromQuery(new URLSearchParams('obsolete=true')).obsolete).toBe(true);
+  });
+
   it('falls back to all parts on a kind it does not have', () => {
     expect(fromQuery(new URLSearchParams('kind=rendered')).kind).toBe('all');
   });

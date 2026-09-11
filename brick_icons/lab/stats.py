@@ -89,7 +89,7 @@ def _bins(values: list[float]) -> list[dict]:
 
 
 def members(conn: sqlite3.Connection, *, kind: str = "all", moved: bool = False,
-            out_of_scope: bool = True, obsolete: bool = True,
+            out_of_scope: bool = True, obsolete: bool = False,
             posed: bool = True, excluded: tuple[str, ...] = (),
             badges: tuple[str, ...] = ()) -> tuple[set[str], list[sqlite3.Row]]:
     """The parts in the working set, and their rows.
@@ -114,6 +114,9 @@ def members(conn: sqlite3.Connection, *, kind: str = "all", moved: bool = False,
     successors = {r["part_id"] for r in conn.execute(
         "SELECT part_id FROM part_successors")}
 
+    # Narrowing to the class puts it back on the map whatever the flag says,
+    # which is what `kind="obsolete"` means and now matters: the flag is off.
+    obsolete = obsolete or kind == "obsolete"
     excluded_set = {e for e in excluded}
     # By axis, as the wall's legend groups them: two tags on one axis are
     # alternatives, two axes narrow. A subset test read `technic` and `duplo`
@@ -170,6 +173,8 @@ def _coverage(conn: sqlite3.Connection, ids: set[str]) -> list[dict]:
         "ORDER BY n DESC")]
     printed = {r["id"] for r in conn.execute(
         "SELECT id FROM parts WHERE printed = 1")}
+    obsolete = {r["id"] for r in conn.execute(
+        "SELECT id FROM parts WHERE obsolete = 1")}
     errors_by_source: dict[str, dict[str, str]] = {}
     for row in conn.execute(_LATEST_ERROR_BY_SOURCE):
         errors_by_source.setdefault(row["source"], {})[row["part_id"]] = row["error"]
@@ -198,26 +203,30 @@ def _coverage(conn: sqlite3.Connection, ids: set[str]) -> list[dict]:
         # function, and re-deriving its precedence here is how the two pages
         # come to disagree. Only the parts carrying news are asked about one
         # at a time; for the rest the answer turns on nothing but whether the
-        # slot drew it and whether it is printed, so four set sizes stand in
-        # for 23,000 calls a slot.
+        # slot drew it, whether it is printed and whether it is obsolete, so
+        # eight set sizes stand in for 23,000 calls a slot.
         told = (errors.keys() | flagged | drew_nothing) & ids
         for has_sha in (True, False):
             group = (ids & drawn if has_sha else ids - drawn) - told
-            of_printed = len(group & printed)
-            for is_printed, n in ((True, of_printed),
-                                  (False, len(group) - of_printed)):
-                if not n:
-                    continue
-                counts[coverage_of(
-                    sha="x" if has_sha else None, error=None, open_defects=0,
-                    inapplicable=not_applicable(source, is_printed, has_sha),
-                    drew_nothing=False)] += n
+            for is_printed in (True, False):
+                same = group & printed if is_printed else group - printed
+                for is_obsolete in (True, False):
+                    n = len(same & obsolete if is_obsolete
+                            else same - obsolete)
+                    if not n:
+                        continue
+                    counts[coverage_of(
+                        sha="x" if has_sha else None, error=None,
+                        open_defects=0,
+                        inapplicable=not_applicable(source, is_printed,
+                                                    has_sha, is_obsolete),
+                        drew_nothing=False)] += n
         for pid in told:
             counts[coverage_of(
                 sha="x" if pid in drawn else None, error=errors.get(pid),
                 open_defects=1 if pid in flagged else 0,
                 inapplicable=not_applicable(source, pid in printed,
-                                            pid in drawn),
+                                            pid in drawn, pid in obsolete),
                 drew_nothing=pid in drew_nothing)] += 1
         out.append({"source": source, "engine": engine, "counts": counts,
                     "size": len(ids)})
@@ -573,7 +582,7 @@ def _failures(conn: sqlite3.Connection) -> dict:
 
 
 def stats(conn: sqlite3.Connection, *, kind: str = "all", moved: bool = False,
-          out_of_scope: bool = True, obsolete: bool = True, posed: bool = True,
+          out_of_scope: bool = True, obsolete: bool = False, posed: bool = True,
           excluded: tuple[str, ...] = (),
           badges: tuple[str, ...] = ()) -> dict:
     """Every tally the dashboard draws, for one working set."""

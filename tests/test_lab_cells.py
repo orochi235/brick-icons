@@ -14,10 +14,11 @@ def conn(tmp_path):
     c.close()
 
 
-def _part(conn, pid, title="Brick", category="Brick", status="unreviewed"):
+def _part(conn, pid, title="Brick", category="Brick", status="unreviewed",
+          obsolete=0):
     conn.execute("INSERT INTO parts (id, title, category, printed, obsolete, "
-                 "status) VALUES (?, ?, ?, 0, 0, ?)",
-                 (pid, title, category, status))
+                 "status) VALUES (?, ?, ?, 0, ?, ?)",
+                 (pid, title, category, obsolete, status))
 
 
 def _render(conn, pid, sha, made_at, source="silhouette-naive"):
@@ -813,3 +814,32 @@ def test_a_part_the_slot_does_not_cover_stays_not_applicable(conn):
     conn.commit()
     cell = cells.cells(conn, source='decal')["cells"][0]
     assert cell["coverage"] == "notApplicable"
+
+
+def test_an_obsolete_part_is_nothing_for_any_slot_to_draw(conn):
+    # No batch ever asks for one: `census-scope.py` and `slot-coverage.py`
+    # both take `obsolete = 0`, so reading them as untried counts 2,733 parts
+    # as work owed that nothing will ever queue.
+    _part(conn, "3002", obsolete=1)
+    conn.commit()
+    cell = cells.cells(conn, source="silhouette-occt")["cells"][0]
+    assert cell["not_applicable"] is True
+    assert cell["coverage"] == "notApplicable"
+
+
+def test_an_obsolete_part_a_slot_did_draw_keeps_its_render(conn):
+    # `reference` draws the whole library, superseded moulds included.
+    _part(conn, "3002", obsolete=1)
+    _render(conn, "3002", "sha", "2026-09-08T00:00:00+00:00", source="reference")
+    conn.commit()
+    cell = cells.cells(conn, source="reference")["cells"][0]
+    assert cell["not_applicable"] is False
+    assert cell["coverage"] == "drawn"
+
+
+def test_a_slot_erroring_on_an_obsolete_part_still_says_so(conn):
+    _part(conn, "3002", obsolete=1)
+    _measure(conn, "3002", "occt", error="ValueError")
+    conn.commit()
+    cell = cells.cells(conn, source="silhouette-occt")["cells"][0]
+    assert cell["coverage"] == "failed"

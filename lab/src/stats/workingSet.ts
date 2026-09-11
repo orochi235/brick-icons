@@ -10,7 +10,9 @@ export interface WorkingSet {
   moved: boolean;
   outOfScope: boolean;
   /** Whether the class is in the set at all, which is not what `kind` asks:
-   *  `kind: 'obsolete'` looks at nothing else. */
+   *  `kind: 'obsolete'` looks at nothing else. Off by default -- no batch
+   *  renders a superseded mould, so counting them made every slot look
+   *  thousands of parts short of done. */
   obsolete: boolean;
   /** Parts LDraw gives a `!PREVIEW` turn. */
   posed: boolean;
@@ -21,7 +23,7 @@ export interface WorkingSet {
 }
 
 export const DEFAULT_SET: WorkingSet = {
-  kind: 'all', moved: false, outOfScope: true, obsolete: true, posed: true,
+  kind: 'all', moved: false, outOfScope: true, obsolete: false, posed: true,
   excluded: [], badges: [],
 };
 
@@ -49,7 +51,7 @@ export function fromQuery(q: URLSearchParams): WorkingSet {
     kind: kind && KINDS.has(kind) ? kind as WorkingSet['kind'] : 'all',
     moved: q.get('moved') === 'true',
     outOfScope: q.get('out_of_scope') !== 'false',
-    obsolete: q.get('obsolete') !== 'false',
+    obsolete: q.get('obsolete') === 'true',
     posed: q.get('posed') !== 'false',
     excluded: q.getAll('excluded'),
     badges: q.getAll('badges'),

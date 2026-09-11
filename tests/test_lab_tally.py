@@ -15,10 +15,10 @@ def conn(tmp_path):
     c.close()
 
 
-def _part(conn, pid, title="Brick", category="Brick", printed=0):
+def _part(conn, pid, title="Brick", category="Brick", printed=0, obsolete=0):
     conn.execute("INSERT INTO parts (id, title, category, printed, obsolete, "
-                 "status) VALUES (?, ?, ?, ?, 0, 'unreviewed')",
-                 (pid, title, category, printed))
+                 "status) VALUES (?, ?, ?, ?, ?, 'unreviewed')",
+                 (pid, title, category, printed, obsolete))
 
 
 def _render(conn, pid, source, sha="a"):
@@ -380,3 +380,14 @@ def test_history_leaves_a_part_no_run_has_reached_out_of_both_counts(conn):
     _measure(conn, "3001", "occt", "occt")
     row = tally.history(conn, ["occt"])[-1]
     assert (row["clean"], row["bad"], row["size"]) == (1, 0, 2)
+
+
+def test_an_obsolete_part_is_nothing_a_slot_owes(conn):
+    # The history line counted them as never attempted too, and no sweep has
+    # ever asked for one.
+    _part(conn, "3001")
+    _part(conn, "3002", obsolete=1)
+    _render(conn, "3001", "silhouette-occt")
+    conn.commit()
+    row = {r["source"]: r for r in tally.count(conn)}["silhouette-occt"]
+    assert (row["not_applicable"], row["untried"]) == (1, 0)

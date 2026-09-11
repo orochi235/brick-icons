@@ -57,16 +57,24 @@ CONDITIONS = ("review", "defect", "timeout", "failed", "accepted")
 SLOT_DRAWS = {"decal": lambda printed: printed}
 
 
-def not_applicable(source: str, printed: bool, drawn: bool) -> bool:
+def not_applicable(source: str, printed: bool, drawn: bool,
+                   obsolete: bool = False) -> bool:
     """Whether this slot has nothing to draw for this part.
 
-    Two signals have to agree: the part is one the slot does not cover, and
-    nothing was drawn for it. Where they ever disagree -- a plain part with a
-    decal against its name -- the cell keeps whatever state its render gives
-    it, so a contradiction shows rather than being colored over.
+    Two signals have to agree: the part is one no batch will ask this slot
+    for, and nothing was drawn for it. Where they ever disagree -- a plain
+    part with a decal against its name, an obsolete mould `reference` drew
+    anyway -- the cell keeps whatever state its render gives it, so a
+    contradiction shows rather than being colored over.
+
+    Obsolete is not a property of the slot: `census-scope.py` and
+    `slot-coverage.py` both take `obsolete = 0`, so a superseded mould is
+    outside every slot's corpus, and reading one as untried put 2,733 parts
+    into every occt slot's backlog that nothing would ever queue.
     """
     draws = SLOT_DRAWS.get(source)
-    return draws is not None and not draws(printed) and not drawn
+    covered = not obsolete and (draws is None or draws(printed))
+    return not covered and not drawn
 
 
 def errors_by_engine(conn: sqlite3.Connection) -> dict[str, dict[str, str]]:
@@ -392,7 +400,8 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
                 error=errors.get(pid),
                 open_defects=bucket["open"] + bucket["review"],
                 inapplicable=not_applicable(
-                    source, bool(part["printed"]), render is not None),
+                    source, bool(part["printed"]), render is not None,
+                    bool(part["obsolete"])),
                 drew_nothing=pid in drew_nothing),
             "open_defects": bucket["open"],
             "review_defects": bucket["review"],
@@ -402,7 +411,8 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
             # condition added here needs no second field of its own.
             "elsewhere": sorted(others.get(pid, ())),
             "not_applicable": not_applicable(
-                source, bool(part["printed"]), render is not None),
+                source, bool(part["printed"]), render is not None,
+                bool(part["obsolete"])),
         })
     return {"cells": rows, "count": len(order), "version": version,
             "source": source}
@@ -472,9 +482,10 @@ def slot_states(conn: sqlite3.Connection, part_id: str,
     # A slot that timed out files no measurement, so its own attempt is the
     # only thing that knows -- and it is what a tile with no render shows.
     tried = slot_attempts(conn, part_id)
-    printed = bool((conn.execute(
-        "SELECT printed FROM parts WHERE id = ?", (part_id,)).fetchone()
-        or {"printed": 0})["printed"])
+    row = conn.execute("SELECT printed, obsolete FROM parts WHERE id = ?",
+                       (part_id,)).fetchone()
+    printed = bool(row["printed"] if row else 0)
+    obsolete = bool(row["obsolete"] if row else 0)
     others = {source: other_conditions(conn, source, context)
               for source in sources}
     out: dict[str, dict] = {}
@@ -491,6 +502,7 @@ def slot_states(conn: sqlite3.Connection, part_id: str,
             "review_defects": bucket["review"],
             "accepted_defects": bucket["accepted"],
             "elsewhere": sorted(others[source].get(part_id, ())),
-            "not_applicable": not_applicable(source, printed, render is not None),
+            "not_applicable": not_applicable(source, printed,
+                                             render is not None, obsolete),
         }
     return out
