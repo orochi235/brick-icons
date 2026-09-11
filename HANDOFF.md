@@ -5,9 +5,10 @@ session shares this working directory and commits to `brick_icons/unwrap.py`
 too**, so unpushed commits are not necessarily yours. Stage explicit paths,
 never `git add -A`, and check `git branch --show-current` before assuming.
 
-**Next action: show Mike an example render of each dome-projection option
-below.** He asked for exactly that and the session ran out of room before it
-could draw them.
+**Mike chose "extend the cylinder", 2026-09-11.** Nothing is implemented. Two
+things that choice did not settle are below, under "What extending the
+cylinder actually costs" -- the second one needs his answer before anything
+is built.
 
 ### What a head's decal loses, and why it is two separate faults
 
@@ -17,25 +18,108 @@ extent is now a floor unioned with what has to fit. Where the print already
 fit, the drawing is byte-identical, which is what keeps this off the 71% of
 curved carriers that never overran.
 
-The top of a face is **dropped before it is ever drawn**, and this is open. A
-quarter of `3626cp7e`'s decoration triangles bind to nothing, and every one
-sits above the wall cylinder's 13-LDU span — on the domed top. The part has no
-dome primitive at all: LDraw builds it from torus subfiles that arrive
-tessellated, so the analytic set is `cyli`, `ring`, `disc`, `edge` and nothing
-else. `bind_groups` drops what binds to nothing. That is why `3626cp7e` has no
-mouth. Re-measure with the probe in this file's git history, or by counting
-unbound decoration triangles against `unwrap.bind(tri[i], analytic)`.
+Ink that runs off the **jaw** is **dropped before it is ever drawn**, and this
+is open. The part file is authored with +Y as LDraw DOWN -- the hollow stud is
+at y=-4..0 and the neck at y=21..24 -- so the ink that binds to nothing is
+below the chin, not on the cranium. A quarter of `3626cp7e`'s decoration
+triangles are there: its soul patch and the lower band of stubble.
+`bind_groups` drops what binds to nothing.
 
-### The three options, none built
+**The dome is declared, and the loader throws the declaration away.** `3626b`
+builds it from four `t04o6250` quarter-torus subfiles -- "Torus Outside 1 x
+0.6250 x 0.25" -- each with an explicit transform scaling the ring to radius 8
+and the tube to 5 horizontal by 4 vertical. That is an exact surface of
+revolution whose profile is the quarter ellipse `r = 8 + 5 cos t`,
+`y = 17 + 4 sin t`: outer radius 13 at y=17, meeting the wall cylinder's top
+exactly, and closing on the neck at y=21. Nothing is inferred and no crack
+matters. `primitives.parse_primitive` has no torus case at all -- its `_FRAC`
+pattern matches only `<num>-<den><family>`, and `t04o6250` is a different
+naming scheme -- so it falls through to faceted recursion and arrives
+tessellated. 622 part files reference a torus primitive directly.
 
-A cylinder and cone unwrap isometrically; a sphere or torus does not, so this
-is a choice about distortion and nobody has made it:
+So option one is **not** "fit a surface to defective tessellation". It is
+"read a declaration", which is the kind of rule this repo says survives.
+Fitting the profile back out of the tessellation instead recovers
+`r = 7.8 + 5.0 cos t` against the declared `8 + 5` -- the vertices are
+inscribed chords, so the fit is about 4% small.
 
-- **Recognize the dome and unwrap it under a chosen projection.** Truest to
-  the part, most work, and the projection is itself a decision.
+### The three options, measured, none built
+
+A cylinder and cone unwrap isometrically; a torus does not, so this is a
+choice about distortion. All three keep the same horizontal scale, so they
+differ ONLY in what height dome ink is drawn at:
+
+- **Recognize the dome.** `v` = wall height plus arc length travelled over the
+  dome. Vertically exact. Most work, and the projection is itself a decision.
 - **Extend the wall cylinder's parameter space past its section**, so dome ink
-  binds to the nearest wall. Cheap; distorts increasingly toward the pole.
-- **Leave it.** Heads keep losing their upper face.
+  binds to the nearest wall and `v` is the point's own height. Cheap, and it
+  compresses increasingly toward the neck.
+- **Leave it.** Heads keep losing their chins.
+
+**Over all 368 3626 heads that carry decoration**, ink runs past the wall on
+278 of them -- by 2.00 LDU at the median of those, and 4.00 at the worst; the
+dome is 4 LDU tall, so the worst runs the whole way. So `leave it` costs
+something on three quarters of the corpus, and that is the big visible
+difference.
+
+**The two working options are nearly the same drawing.** Measure the
+disagreement as how far a part's lowest ink ends up sliding, and it is 0.05
+LDU at the median -- 2 pixels on a 510px panel -- over 0.5 LDU on 58 heads
+(16%), over 1 LDU on 18 (5%), and over 2 LDU on exactly one: `3626bp39`, at
+2.87 LDU, whose beard covers the whole jaw. Component-counting the rasters
+agrees: 2 chunky components and 14.5% of the ink on `3626bp39`, but 1 to 17
+components and under 3% on the other three drawn.
+
+Do not read the local stretch figure as that difference. "Extend the cylinder"
+compresses by 0.07 at `3626bp39`'s lowest ink, but that is the derivative at
+the last sliver; integrated over the print it is the 2.87 LDU above. The
+sliver piles up, the beard does not shrink fourteenfold.
+
+`scripts/dome-projection-options.py` draws any head under all three on one
+shared canvas, prints the stretch figures, and component-counts the two
+working options against each other. `--icons` adds the pair that shows what
+`to_xyz` does with ink bound past the section. **Every corpus figure on this
+page comes from `--survey '3626*'`** -- re-run it rather than trusting the
+numbers. Four sheets are on the wall: the four-part comparison, the recovered
+band blown up, the diff, and the icons.
+
+### What extending the cylinder actually costs
+
+**A wider extent alone recovers about a third of the dropped ink, not all of
+it.** Over the corpus a pure extent bump takes back **34%** of the triangles
+that bind to nothing, 39% at the per-part median: 60 of 163 on `3626cp7e`, 76
+of 126 on `3626bph6`, 22 of 58 on `3626bp39`, 2 of 12 on `3626bp63`. The
+`_radial_gap` extent test is only half of what rejects jaw ink; the other half
+is the radial test, and the jaw curves away from the wall by far more than
+`BIND_TOL`. Today's unbound ink sits 0.59 LDU off the wall at the median on
+`3626cp7e` and 1.46 on `3626bp39`, reaching 1.49 and 5.00 -- against a
+tolerance of 0.5. So the option means **bind by projection in the extended
+region** -- take the point's azimuth and height and stop asking how far off the
+wall it is -- which needs a bound on how far out it may reach, or the wall
+claims every interior facet above it.
+
+**The 3D icon needs the dome's profile even under this option, and that is
+the open question.** `shade.decorate` sends decoration back through
+`unwrap.to_xyz`, and a cylinder's `radius_at` returns 1.0 at any level -- so
+ink that binds past the section comes back at the WALL radius, 1.5 LDU off the
+true surface on `3626cp7e` and 5.0 on `3626bp39`, and the depth clip then cuts
+it. Rendered, the soul patch reappears truncated at a hard edge rather than
+following the jaw; the sheet on the wall is that pair, looked at from
+`--angle -40,20` because the jaw faces away in iso. Landing it on the jaw
+means a height-dependent radius, which is the declared `t04o6250` profile --
+the same thing "recognize the dome" wanted. For the icon the two options
+converge, and what separates them collapses to one line: whether `v` is the
+point's height or its arc length.
+
+**So: does "extend the cylinder" mean the flat decal texture only, with icons
+still dropping jaw ink, or both?** Texture-only is genuinely cheap and is what
+the renders he chose from showed. Both is the profile either way.
+
+**40 of the 408 head files are outside every count above**: 27 have no dome
+the profile fit will take, 7 carry no decoration, and **6 have no color-16
+cylinder at all** -- `3626bp32` through `3626bp34` and three more author every
+primitive in color 14, and `decal_groups` filters body primitives to 16, so
+those have no curved carrier today whatsoever. Separate fault, not chased.
 
 ### Decisions made in conversation, not visible in the code
 
