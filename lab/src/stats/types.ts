@@ -109,9 +109,16 @@ export interface Failures {
  *  translucent pass costs 0.35 of an occt one". */
 export interface CostSlot {
   source: string;
-  /** Seconds this slot spent on the compared parts. */
+  /** The revision this slot's seconds were taken at. `Cost.build` for every
+   *  slot that ran there; its own when the slot has nothing at that one. */
+  build: string;
+  /** Parts this slot and the base both drew at their revisions. */
+  n: number;
+  /** Seconds this slot spent on those parts. */
   total: number;
-  /** Of the seconds every compared slot spent. The slots sum to 1. */
+  /** Of a pass of every slot, off the ratios rather than the seconds: the
+   *  rows are measured over different parts and do not share a denominator.
+   *  The slots sum to 1. */
   share: number;
   ratio: number | null;
   median: number | null;

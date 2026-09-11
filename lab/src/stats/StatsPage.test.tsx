@@ -70,12 +70,21 @@ const clientWith = (corpusStats: (q: URLSearchParams) => Promise<Stats>) =>
 const COST = {
   build: '1099.d500ca9+', base: 'occt', n: 1587, total: 1000,
   slots: [
-    { source: 'occt', total: 400, share: 0.4, ratio: 1, median: 6.2, p90: 58 },
-    { source: 'white-occt', total: 400, share: 0.4, ratio: 1.0, median: 6.2,
-      p90: 58.9 },
-    { source: 'translucent-occt', total: 200, share: 0.2, ratio: 0.5,
-      median: 3.7, p90: 17.5 },
+    { source: 'occt', build: '1099.d500ca9+', n: 1587, total: 400, share: 0.4,
+      ratio: 1, median: 6.2, p90: 58 },
+    { source: 'white-occt', build: '1099.d500ca9+', n: 1500, total: 400,
+      share: 0.4, ratio: 1.0, median: 6.2, p90: 58.9 },
+    { source: 'translucent-occt', build: '1099.d500ca9+', n: 900, total: 200,
+      share: 0.2, ratio: 0.5, median: 3.7, p90: 17.5 },
   ],
+};
+
+/** The same panel with a slot that never ran at its revision. */
+const COST_ELSEWHERE = {
+  ...COST,
+  slots: [...COST.slots,
+          { source: 'decal', build: 'f5e2883', n: 800, total: 40, share: 0.04,
+            ratio: 0.1, median: 0.7, p90: 2.1 }],
 };
 
 describe('StatsPage', () => {
@@ -367,10 +376,42 @@ describe('StatsPage', () => {
     const { container } = render(
       <StatsPage client={clientWith(async () => body({ cost: COST }))} />);
     await waitFor(() => container.querySelector('.stats-cost'));
-    const note = [...container.querySelectorAll('.stats-note')]
-      .find((n) => n.textContent?.includes('1099.d500ca9+'))!;
-    expect(note).toBeTruthy();
-    expect(note.textContent).toContain('1,587');
+    expect([...container.querySelectorAll('.stats-note')]
+      .some((n) => n.textContent?.includes('1099.d500ca9+'))).toBe(true);
+  });
+
+  it('gives every row the parts it was measured over', async () => {
+    const { container } = render(
+      <StatsPage client={clientWith(async () => body({ cost: COST }))} />);
+    await waitFor(() => container.querySelector('.stats-cost'));
+    const rows = [...container.querySelectorAll('.stats-cost-row')]
+      .filter((r) => !r.classList.contains('stats-cost-head'));
+    // The rows are NOT over one set of parts: a share read without its own
+    // count is read as more than it is.
+    expect(rows.map((r) => r.textContent)).toEqual(
+      expect.arrayContaining([expect.stringContaining('1,587'),
+                              expect.stringContaining('1,500'),
+                              expect.stringContaining('900')]));
+  });
+
+  it('marks a slot whose seconds came from another revision', async () => {
+    const { container } = render(
+      <StatsPage client={clientWith(async () => body({ cost: COST_ELSEWHERE }))} />);
+    await waitFor(() => container.querySelector('.stats-cost'));
+    const names = [...container.querySelectorAll('.stats-bar-name')]
+      .map((el) => el.textContent!.trim());
+    expect(names).toContain('decal †');
+    expect([...container.querySelectorAll('.stats-note')]
+      .some((n) => n.textContent?.includes('f5e2883'))).toBe(true);
+  });
+
+  it('leaves the mark off when every slot ran at the panel\'s revision',
+     async () => {
+    const { container } = render(
+      <StatsPage client={clientWith(async () => body({ cost: COST }))} />);
+    await waitFor(() => container.querySelector('.stats-cost'));
+    expect(container.querySelector('.stats-cost')!.textContent)
+      .not.toContain('†');
   });
 
   it('says what running every slot costs against one base pass', async () => {
@@ -379,7 +420,7 @@ describe('StatsPage', () => {
     await waitFor(() => container.querySelector('.stats-cost'));
     const note = [...container.querySelectorAll('.stats-note')]
       .find((n) => n.textContent?.includes('1099.d500ca9+'))!;
-    // occt is 0.4 of the whole, so the three passes cost 2.5 of one.
+    // The ratios are 1, 1 and 0.5, so the three passes cost 2.5 of one.
     expect(note.textContent).toContain('2.5');
   });
 

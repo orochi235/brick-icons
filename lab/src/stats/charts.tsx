@@ -94,12 +94,20 @@ export function CoverageBars({ rows, onOpen }: {
   );
 }
 
+/** The mark on a slot measured somewhere other than the panel's revision. */
+export const ELSEWHERE = '\u2020';
+
 /** What one pass costs, slot by slot, as a share of running them all.
  *
  *  One bar each rather than a single stack: the question is how the slots
  *  compare to each other, and a stack answers that only for the segment
  *  touching an edge. The bars share a scale, so the widths are comparable
- *  across rows. */
+ *  across rows.
+ *
+ *  Every row carries the parts it was measured over. They are not the same
+ *  parts from row to row -- a slot that has barely run is compared over the
+ *  handful it shares with the base -- and a share read without that count is
+ *  read as more than it is. */
 export function CostBars({ cost }: { cost: Cost }) {
   const widest = Math.max(...cost.slots.map((r) => r.share));
   return (
@@ -110,14 +118,22 @@ export function CostBars({ cost }: { cost: Cost }) {
         <span className="stats-bar-value">share</span>
         <span className="stats-bar-value">&times; {cost.base}</span>
         <span className="stats-bar-value">median</span>
+        <span className="stats-bar-value">parts</span>
       </div>
       {cost.slots.map((row) => (
         <div key={row.source} className="stats-bar-row stats-cost-row">
-          <span className="stats-bar-name">{row.source}</span>
+          <span className="stats-bar-name">
+            {row.source}
+            {row.build === cost.build ? null : (
+              <span className="stats-muted" title={`measured at ${row.build}`}>
+                {' '}{ELSEWHERE}
+              </span>
+            )}
+          </span>
           <div className="stats-bar" role="img"
                aria-label={`${row.source}: ${(row.share * 100).toFixed(1)}% of `
-                 + `the seconds, ${row.ratio?.toFixed(2) ?? '?'} times `
-                 + `${cost.base}`}>
+                 + `a pass of every slot, ${row.ratio?.toFixed(2) ?? '?'} times `
+                 + `${cost.base}, over ${row.n.toLocaleString()} parts`}>
             <span className="stats-seg" data-label="cost"
                   style={{ width: `${pct(row.share, widest)}%` }} />
           </div>
@@ -129,6 +145,7 @@ export function CostBars({ cost }: { cost: Cost }) {
             {row.median === null ? '—' : row.median.toFixed(1)}
             <span className="stats-muted">s</span>
           </span>
+          <span className="stats-bar-value">{row.n.toLocaleString()}</span>
         </div>
       ))}
     </div>

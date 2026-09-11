@@ -140,7 +140,7 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
 /* Cost rows carry three numeric columns instead of one. Fixed widths, not
  * auto: the point of the panel is reading a column down, which a column that
  * resizes to its widest cell per row does not allow. */
-.stats-cost-row { grid-template-columns: 11rem 1fr 4.5rem 5rem 5rem; }
+.stats-cost-row { grid-template-columns: 11rem 1fr 4.5rem 5rem 5rem 5rem; }
 .stats-cost-head { font-size: 0.8rem; color: var(--wzl-fg-muted, #9a9aa2); }
 .stats-seg[data-label='cost'] { background: var(--stats-drawn); }
 

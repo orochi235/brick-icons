@@ -387,9 +387,6 @@ def _phases(rows: list[sqlite3.Row], ids: set[str]) -> list[dict]:
             "part_id": row["part_id"],
             "bands": bands,
             "total": round(sum(bands.values()), 3),
-            # The paths, not a tree. A tree per row is only needed for the
-            # handful this page draws individually, and is built below for
-            # those alone.
             "named": named,
             "split": any("/" in path for path in named),
         })
@@ -414,75 +411,112 @@ def _phases(rows: list[sqlite3.Row], ids: set[str]) -> list[dict]:
     return out
 
 
+_TIMED_BY_SLOT = """
+SELECT m.part_id, m.source, m.build, m.secs FROM measurements m JOIN
+     (SELECT part_id, source, MAX(run_id) AS run_id FROM measurements
+      WHERE secs IS NOT NULL GROUP BY part_id, source) latest
+  ON m.part_id = latest.part_id AND m.source = latest.source
+ AND m.run_id = latest.run_id
+WHERE m.secs IS NOT NULL AND m.source IS NOT NULL AND m.build IS NOT NULL
+"""
+
+#: A slot that draws but never scores -- `decal` today -- records what it cost
+#: in `attempts` and nothing in `measurements`. It is still a pass someone
+#: pays for, so the panel reads it here, at the revision its run carried.
+_TIMED_BY_ATTEMPT = """
+SELECT a.part_id, a.source, r.commit_sha AS build, a.secs
+FROM attempts a
+JOIN runs r ON r.id = a.run_id
+JOIN (SELECT part_id, source, MAX(run_id) AS run_id FROM attempts
+      WHERE secs IS NOT NULL GROUP BY part_id, source) latest
+  ON a.part_id = latest.part_id AND a.source = latest.source
+ AND a.run_id = latest.run_id
+WHERE a.secs IS NOT NULL
+  AND a.source IN (SELECT DISTINCT source FROM renders)
+  AND a.source NOT IN (SELECT DISTINCT source FROM measurements
+                       WHERE source IS NOT NULL AND secs IS NOT NULL)
+"""
+
+
 def _cost_rows(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     """The newest timing per part per SLOT, which is not the same question as
     `_latest_measurements`: two facets of one engine are both `occt`, so a
     newest-per-engine pick hands a slot whichever facet ran last."""
-    return list(conn.execute(
-        "SELECT m.part_id, m.source, m.build, m.secs "
-        "FROM measurements m JOIN "
-        "(SELECT part_id, source, MAX(run_id) AS run_id FROM measurements "
-        " WHERE secs IS NOT NULL GROUP BY part_id, source) latest "
-        "ON m.part_id = latest.part_id AND m.source = latest.source "
-        "AND m.run_id = latest.run_id "
-        "WHERE m.secs IS NOT NULL AND m.source IS NOT NULL"))
+    return [*conn.execute(_TIMED_BY_SLOT), *conn.execute(_TIMED_BY_ATTEMPT)]
 
 
 def _cost(rows: list[sqlite3.Row], ids: set[str]) -> dict | None:
     """What one pass costs, slot by slot, as a share of running them all.
 
-    Taken at ONE engine revision over the parts that revision drew in every
-    slot. A slot's stored seconds otherwise span every revision that ever
-    drew it and the spread swamps the answer: silhouette-occt's oldest rows
-    average 48.9s against 17.9s for the same slot at the current build, which
-    is enough to reverse which slot reads as the expensive one.
+    Each slot is measured against the base slot over the parts the two share
+    at one revision, not over the parts every slot shares: intersecting all of
+    them cut a 17,611-part comparison down to 1,592, and any slot that has
+    barely run takes every other slot down with it.
+
+    Which revision matters, and it is per slot: a slot's stored seconds
+    otherwise span every revision that ever drew it, and the spread swamps the
+    answer -- silhouette-occt's oldest rows average 48.9s against 17.9s for
+    the same slot at the current build. A row says the revision it was taken
+    at, so a slot measured somewhere else than the base reads as what it is.
     """
     at: dict[str, dict[str, dict[str, float]]] = {}
     for row in rows:
         if row["part_id"] not in ids or not row["build"]:
             continue
-        # The same slots the timing sections report on. Intersecting across
-        # every slot in the corpus collapses the common set to nothing --
-        # taking naive's two facets in as well left 14 parts of 1,587.
-        if engine_for(row["source"]) not in REPORTED_ENGINES:
-            continue
-        by_source = at.setdefault(row["build"], {})
-        by_source.setdefault(row["source"], {})[row["part_id"]] = row["secs"]
-
-    best: tuple[int, str, list[str], set[str]] | None = None
-    for build, by_source in at.items():
-        if len(by_source) < 2:
-            continue          # nothing to be proportional to
-        sources = sorted(by_source)
-        common = set.intersection(*(set(by_source[s]) for s in sources))
-        if best is None or len(common) > best[0]:
-            best = (len(common), build, sources, common)
-    if best is None or not best[3]:
+        at.setdefault(row["source"], {}).setdefault(
+            row["build"], {})[row["part_id"]] = row["secs"]
+    if len(at) < 2:
         return None
 
-    _, build, sources, common = best
-    by_source = at[build]
-    totals = {s: sum(by_source[s][p] for p in common) for s in sources}
-    whole = sum(totals.values())
-    # The plain slot is the reference when it is here -- `occt` against
-    # `white-occt` is the comparison a reader means, and picking the biggest
-    # total instead flips the two on a half-percent difference.
-    plain = [s for s in sources if s == engine_for(s)]
-    base = plain[0] if plain else max(sources, key=lambda s: totals[s])
-    slots = []
-    for source in sources:
-        ordered = sorted(by_source[source][p] for p in common)
-        slots.append({
-            "source": source,
-            "total": round(totals[source], 1),
-            "share": totals[source] / whole if whole else 0.0,
-            "ratio": totals[source] / totals[base] if totals[base] else None,
+    def widest(source: str) -> tuple[str, dict[str, float]]:
+        build = max(at[source], key=lambda b: len(at[source][b]))
+        return build, at[source][build]
+
+    # A plain slot is the reference -- `occt` against `white-occt` is the
+    # comparison a reader means -- and the widest of them when more than one
+    # slot is nobody's facet.
+    plain = [s for s in at if s == engine_for(s)]
+    base = max(plain or list(at), key=lambda s: len(widest(s)[1]))
+    base_build, base_secs = widest(base)
+
+    measured = []
+    for source in sorted(at):
+        if source == base:
+            common, build, secs = set(base_secs), base_build, base_secs
+        else:
+            # The base's own revision whenever the slot has it. Falling back
+            # to whichever revision overlaps most would quietly pick a stale
+            # one -- silhouette-occt has a build averaging 48.9s against 17.9s
+            # for the same slot now -- so the fallback is a last resort and
+            # the row says it happened.
+            at_base = set(at[source].get(base_build, ())) & set(base_secs)
+            build, common = (base_build, at_base) if at_base else max(
+                ((b, set(by) & set(base_secs)) for b, by in at[source].items()),
+                key=lambda pair: len(pair[1]))
+            secs = at[source][build]
+            if not common:
+                continue
+        mine = sum(secs[p] for p in common)
+        theirs = sum(base_secs[p] for p in common)
+        ordered = sorted(secs[p] for p in common)
+        measured.append({
+            "source": source, "build": build, "n": len(common),
+            "total": round(mine, 1),
+            "ratio": mine / theirs if theirs else None,
             "median": _quantile(ordered, 0.5),
             "p90": _quantile(ordered, 0.9),
         })
-    return {"build": build, "base": base, "n": len(common),
-            "total": round(whole, 1),
-            "slots": sorted(slots, key=lambda r: -r["share"])}
+
+    # Shares off the ratios, not off the totals: the rows no longer share a
+    # denominator, and summing seconds measured over different parts would
+    # read a slot that has run more often as the expensive one.
+    whole = sum(r["ratio"] or 0.0 for r in measured)
+    for row in measured:
+        row["share"] = (row["ratio"] or 0.0) / whole if whole else 0.0
+    return {"build": base_build, "base": base,
+            "n": len(base_secs),
+            "total": round(sum(r["total"] for r in measured), 1),
+            "slots": sorted(measured, key=lambda r: -r["share"])}
 
 
 def _running(conn: sqlite3.Connection) -> bool:

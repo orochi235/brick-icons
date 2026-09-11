@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { LabClient } from '@lab/api/client';
-import { CostBars, CoverageBars, CoverageLegend, FailureLines, PhaseBars,
-         PhaseLegend, SecsOverlay } from '@lab/stats/charts';
+import { CostBars, CoverageBars, CoverageLegend, ELSEWHERE, FailureLines,
+         PhaseBars, PhaseLegend, SecsOverlay } from '@lab/stats/charts';
 import { Footprint } from '@lab/stats/Footprint';
-import type { Failures } from '@lab/stats/types';
+import type { Cost, Failures } from '@lab/stats/types';
 import { useStats } from '@lab/stats/useStats';
 import { DEFAULT_SET, fromQuery, toQuery, wallHref,
          type WorkingSet } from '@lab/stats/workingSet';
@@ -49,6 +49,16 @@ function Controls({ set, onChange, categories }: {
                onChange={(e) => onChange({ ...set, moved: e.target.checked })} />
         moved
       </label>
+      <label>
+        <input type="checkbox" checked={set.obsolete}
+               onChange={(e) => onChange({ ...set, obsolete: e.target.checked })} />
+        obsolete
+      </label>
+      <label>
+        <input type="checkbox" checked={set.posed}
+               onChange={(e) => onChange({ ...set, posed: e.target.checked })} />
+        posed
+      </label>
       <fieldset className="stats-categories">
         <legend>Categories</legend>
         {categories.filter(([, n]) => n >= CATEGORY_CUTOFF).map(([name, n]) => (
@@ -70,6 +80,10 @@ function Controls({ set, onChange, categories }: {
 
 /** Every tally the corpus database can answer for, over a working set you
  *  pick. The wall shows the same parts one cell at a time; this counts them. */
+/** The slots whose seconds came from another revision than the panel's. */
+const elsewhere = (cost: Cost) =>
+  cost.slots.filter((row) => row.build !== cost.build);
+
 export function StatsPage({ client }: { client: LabClient }) {
   const [set, setSet] = useState<WorkingSet>(
     () => (typeof window === 'undefined'
@@ -175,15 +189,21 @@ export function StatsPage({ client }: { client: LabClient }) {
                 <>
                   <CostBars cost={stats.cost} />
                   <p className="stats-note">
-                    One engine revision — <code>{stats.cost.build}</code> —
-                    over the {stats.cost.n.toLocaleString()} parts it drew in
-                    every slot above. Taken at one revision on purpose: a
-                    slot's stored seconds span every engine that ever drew it,
-                    and mixing them reverses which slot reads as the expensive
-                    one. Running all {stats.cost.slots.length} costs{' '}
-                    {(1 / (stats.cost.slots
-                      .find((r) => r.source === stats.cost!.base)?.share ?? 1))
-                      .toFixed(1)}× one {stats.cost.base} pass.
+                    Each slot against one {stats.cost.base} pass at{' '}
+                    <code>{stats.cost.build}</code>, over the parts the two
+                    share. The revision is not decoration: a slot's stored
+                    seconds span every engine that ever drew it, and mixing
+                    them reverses which slot reads as the expensive one.
+                    Running all {stats.cost.slots.length} costs{' '}
+                    {stats.cost.slots
+                      .reduce((a, r) => a + (r.ratio ?? 0), 0).toFixed(1)}×
+                    one {stats.cost.base} pass.
+                    {elsewhere(stats.cost).map((row) => (
+                      <span key={row.source}>
+                        {' '}{ELSEWHERE} {row.source} has no timing at that
+                        revision; its row is from <code>{row.build}</code>.
+                      </span>
+                    ))}
                   </p>
                 </>
               )}

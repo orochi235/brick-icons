@@ -44,6 +44,17 @@ def _measure(conn, pid, engine, source=None, error=None, secs=None,
                   extra_d99, json.dumps(phases) if phases else None, build))
 
 
+def _attempt(conn, pid, source, secs, commit_sha="f5e2883"):
+    """A slot that draws but never scores records what it cost here."""
+    global _run
+    _run += 1
+    conn.execute("INSERT INTO runs (id, kind, started, finished, commit_sha, "
+                 "args) VALUES (?, 'store', '2026-09-05T09:00:00+00:00', "
+                 "'2026-09-05T09:30:00+00:00', ?, '{}')", (_run, commit_sha))
+    conn.execute("INSERT INTO attempts (run_id, part_id, source, state, secs) "
+                 "VALUES (?, ?, ?, 'stored', ?)", (_run, pid, source, secs))
+
+
 def _defect(conn, did, pid, engines):
     conn.execute("INSERT INTO defects (id, part_id, engines, status, title, "
                  "filed) VALUES (?, ?, ?, 'open', 't', '2026-09-05')",
@@ -462,18 +473,57 @@ def test_a_build_only_one_slot_drew_cannot_be_the_comparison(conn):
     assert _cost(conn) is None
 
 
-def test_cost_leaves_out_the_slots_the_timing_sections_do(conn):
-    """naive keeps its coverage rows and nothing else here -- and taking its
-    facets in collapses the common set, since they draw different parts."""
+def test_a_thin_slot_does_not_shrink_the_others(conn):
+    """Every slot cut to the parts they ALL share took a 17,611-part
+    comparison down to 1,592 the moment a slot that had barely run joined."""
     _part(conn, "3001")
     _part(conn, "3002")
     for pid in ("3001", "3002"):
         _measure(conn, pid, "occt", source="occt", secs=10.0, build="b1")
         _measure(conn, pid, "occt", source="white-occt", secs=4.0, build="b1")
     _measure(conn, "3001", "naive", source="white-naive", secs=99.0, build="b1")
+    rows = {r["source"]: r for r in _cost(conn)["slots"]}
+    assert rows["white-occt"]["n"] == 2
+    assert rows["white-naive"]["n"] == 1
+    assert rows["white-naive"]["ratio"] == pytest.approx(9.9)
+
+
+def test_a_slot_missing_from_the_base_revision_says_where_it_came_from(conn):
+    _part(conn, "3001")
+    _part(conn, "3002")
+    for pid in ("3001", "3002"):
+        _measure(conn, pid, "occt", source="occt", secs=10.0, build="b1")
+        _measure(conn, pid, "occt", source="white-occt", secs=4.0, build="b0")
     cost = _cost(conn)
-    assert [r["source"] for r in cost["slots"]] == ["occt", "white-occt"]
-    assert cost["n"] == 2
+    rows = {r["source"]: r for r in cost["slots"]}
+    assert cost["build"] == "b1"
+    assert rows["occt"]["build"] == "b1"
+    assert rows["white-occt"]["build"] == "b0"
+
+
+def test_a_slot_that_only_ever_attempted_still_costs_something(conn):
+    """`decal` draws and never scores, so its seconds are in `attempts`."""
+    _part(conn, "3001")
+    _part(conn, "3002")
+    for pid in ("3001", "3002"):
+        _measure(conn, pid, "occt", source="occt", secs=10.0, build="b1")
+        _measure(conn, pid, "occt", source="white-occt", secs=4.0, build="b1")
+        _render(conn, pid, "decal")
+        _attempt(conn, pid, "decal", 2.0)
+    rows = {r["source"]: r for r in _cost(conn)["slots"]}
+    assert rows["decal"]["n"] == 2
+    assert rows["decal"]["ratio"] == pytest.approx(0.2)
+    assert rows["decal"]["build"] == "f5e2883"
+
+
+def test_a_slot_already_measured_is_not_counted_twice_from_attempts(conn):
+    _part(conn, "3001")
+    _measure(conn, "3001", "occt", source="occt", secs=10.0, build="b1")
+    _measure(conn, "3001", "occt", source="white-occt", secs=4.0, build="b1")
+    _render(conn, "3001", "white-occt")
+    _attempt(conn, "3001", "white-occt", 99.0)
+    rows = {r["source"]: r for r in _cost(conn)["slots"]}
+    assert rows["white-occt"]["ratio"] == pytest.approx(0.4)
 
 
 def test_cost_counts_only_the_working_set(conn):
