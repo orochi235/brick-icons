@@ -310,7 +310,8 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                 contour = geom2d.contour_d(
                     geom2d.union_all([sil_geom]
                                      + geom2d.arc_regions(shifted, sil_geom)),
-                    geom2d.arc_candidates(ells)) \
+                    geom2d.arc_candidates(ells),
+                    stroke=cfg.silhouette_mm / 0.4 * s) \
                     if sil_geom is not None else None
                 w_mm = vb_w / s * 0.4
                 h_mm = vb_h / s * 0.4
@@ -347,7 +348,8 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                 contour = geom2d.contour_d(
                     geom2d.union_all([sil_geom]
                                      + geom2d.arc_regions(fit, sil_geom)),
-                    geom2d.arc_candidates(ells)) \
+                    geom2d.arc_candidates(ells),
+                    stroke=cfg.silhouette_width) \
                     if sil_geom is not None else None
                 trace.segments_to_svg(fit, cfg.width, cfg.height, out_dir / f"{name}.svg",
                                       line_px=cfg.line_width, sil_px=cfg.silhouette_width,
@@ -359,7 +361,7 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                 _emit_fit(out_dir, name, res, *hlr.view_basis(lat, long),
                           f, ox, oy, cfg.width, cfg.height, style)
         if cfg.fmt in ("png", "both"):
-            def sil_rings(W, H, fit_segs):
+            def sil_rings(W, H, fit_segs, stroke):
                 f, ox, oy = hlr.fit_affine(bbox, W, H, cfg.margin, cfg.scale)
                 faces = (shade.apply_affine_faces(res.faces, f, ox, oy)
                          or _sil_faces(res, f, ox, oy))
@@ -369,7 +371,7 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                 g = geom2d.close_slivers(
                     geom2d.union_all([sil]
                                      + geom2d.arc_regions(fit_segs, sil)))
-                return geom2d.rings(g, min_area=0.5)
+                return geom2d.rings(geom2d.drop_thin(g, stroke), min_area=0.5)
             if cfg.mode in ("gray", "both"):
                 gpx = max(cfg.width, cfg.height, cfg.render_px // 2)
                 gfit = hlr.fit_segments(segs, bbox, gpx, gpx, cfg.margin, cfg.scale)
@@ -377,7 +379,9 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                 g = process.draw_segments(gfit, gpx, gpx,
                                           line_px=cfg.line_width * ratio,
                                           sil_px=cfg.silhouette_width * ratio,
-                                          contour_rings=sil_rings(gpx, gpx, gfit))
+                                          contour_rings=sil_rings(
+                                              gpx, gpx, gfit,
+                                              cfg.silhouette_width * ratio))
                 if label:
                     process.stamp_label(g, label)
                 g.save(out_dir / f"{name}.gray.png")
@@ -386,7 +390,9 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                 m = process.segments_mono(mfit, cfg.width, cfg.height,
                                           line_px=cfg.line_width,
                                           sil_px=cfg.silhouette_width,
-                                          contour_rings=sil_rings(cfg.width, cfg.height, mfit))
+                                          contour_rings=sil_rings(
+                                              cfg.width, cfg.height, mfit,
+                                              cfg.silhouette_width))
                 if label:
                     process.stamp_label(m, label)
                 m.save(out_dir / f"{name}.mono.png")

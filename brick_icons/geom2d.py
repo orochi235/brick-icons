@@ -464,12 +464,53 @@ def close_slivers(g, eps=0.1):
         return g
 
 
-def contour_d(g, arcs=None, min_ring_area=0.5):
+def _survives_erosion(poly, half):
+    """Whether `poly` still holds area once eroded by `half`."""
+    if half <= 0:
+        return True
+    try:
+        return not poly.buffer(-half, join_style="mitre").is_empty
+    except Exception:
+        return True                      # never lose a ring to a GEOS failure
+
+
+def drop_thin(g, stroke):
+    """Components and holes that a stroke this wide would fill in solid.
+
+    A ring narrower than its own stroke cannot draw as an outline -- the two
+    sides of the stroke meet over it -- so wherever it lands it lands as a
+    tick. Area does not separate these from real shapes: 5651's flank slivers
+    are 7 x 0.2 px, over any sub-pixel area gate and under any width that
+    could show a shape.
+    """
+    if g is None or g.is_empty or stroke <= 0:
+        return g
+    half = stroke / 2.0
+    keep = []
+    for p in getattr(g, "geoms", [g]):
+        if p.geom_type != "Polygon" or p.is_empty:
+            continue
+        if not _survives_erosion(p, half):
+            continue
+        holes = [r for r in p.interiors
+                 if _survives_erosion(Polygon(r), half)]
+        keep.append(Polygon(p.exterior, holes))
+    if not keep:
+        return _EMPTY
+    return keep[0] if len(keep) == 1 else shapely.MultiPolygon(keep)
+
+
+def contour_d(g, arcs=None, min_ring_area=0.5, stroke=0.0):
     """Silhouette contour as an SVG path 'd': the cleaned outer boundary,
     for stroking under the per-edge strokes (mitered corner joins). Unlike
     the exact fill boundaries, hairline slivers and sub-pixel rings must NOT
-    survive here — stroked at full width they render as tick marks."""
+    survive here — stroked at full width they render as tick marks.
+
+    `stroke` is the width this path will be drawn at, and is what decides
+    which rings are slivers — see drop_thin. Left at 0 the width is unknown
+    and only the area gate applies."""
     g = close_slivers(g)
+    g = drop_thin(g, stroke)
     if g is None or g.is_empty:
         return ""
     return path_d(g, arcs, min_area=min_ring_area,

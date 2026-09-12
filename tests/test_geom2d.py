@@ -166,6 +166,29 @@ def test_contour_d_drops_subpixel_rings():
     assert d.count("M ") == 1
 
 
+def test_contour_d_drops_a_ring_thinner_than_its_stroke():
+    # 5651's flank slivers: separate components, 7 x 0.2 px, over any
+    # sub-pixel area gate and under any width that could draw as a shape.
+    outer = geom2d.to_geom(sq(0, 0, 20, 20))
+    sliver = geom2d.to_geom(np.array([(30, 10), (37, 10), (37, 10.2),
+                                      (30, 10.2)], float))
+    g = geom2d.union_all([outer, sliver])
+    assert geom2d.contour_d(g).count("M ") == 2          # no width, no gate
+    d = geom2d.contour_d(g, stroke=2.0)
+    assert d.count("M ") == 1                            # the square alone
+    assert "0.00 0.00" in d and "20.00 20.00" in d
+
+
+def test_contour_d_keeps_a_ring_as_wide_as_its_stroke():
+    # the gate is thickness against the stroke, not size: a 7 x 3 px bar is
+    # small and draws perfectly well at 2 px.
+    outer = geom2d.to_geom(sq(0, 0, 20, 20))
+    bar = geom2d.to_geom(np.array([(30, 10), (37, 10), (37, 13), (30, 13)],
+                                  float))
+    d = geom2d.contour_d(geom2d.union_all([outer, bar]), stroke=2.0)
+    assert d.count("M ") == 2
+
+
 def test_densify_on_arcs_subdivides_facet_chords():
     # a 16-gon ring inscribed in a candidate circle (22.5 deg steps): edges
     # on the candidate get intermediate TRUE-circle vertices so booleans cut
