@@ -59,6 +59,22 @@ Never-tried parts come before previously-errored ones. A part that times out
 costs its whole cap and yields nothing, so a run cut short by its deadline
 should spend the time on parts that might succeed.
 
+**`--only never` fills nothing but untried parts, and `--only errored` nothing
+but repeats.** Read the `never` and `errored` split before picking: a slot can
+be 95% drawn and have a gap that is ENTIRELY repeats, in which case a fill
+round buys almost nothing. silhouette-occt reached 19,513 of 20,597 with all
+1,084 of its gap errored -- 862 of them `ProcessDied` -- and two jobs spent 43
+core-hours re-crashing them for 52 recoveries. A retry round is worth
+launching against an engine change and not otherwise; `--only never` is the
+default choice for a round nobody has a reason to aim.
+
+A part that ran clean and drew nothing is `errored`, not `never`. It has been
+asked and it answered, so a "never tried" set counted as "has no error" will
+be wrong -- the other occt facets draw these parts fine and only the
+silhouette variant comes back empty. `--only never` writes no file and exits
+1 when the class is empty, because an empty batch list launches a job that
+dies in seconds with an empty log and reads as the node refusing the work.
+
 ### 3. Say what you are about to schedule, before you schedule it
 
 This spends hours of somebody else's machine. Before launching, state in one

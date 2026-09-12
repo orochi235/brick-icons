@@ -94,7 +94,8 @@
   font-size: 0.85rem;
 }
 
-.stats-legend li { display: flex; align-items: center; gap: 0.35rem; }
+.stats-legend li,
+.stats-legend-item { display: flex; align-items: center; gap: 0.35rem; }
 
 .stats-swatch {
   width: 0.75rem;

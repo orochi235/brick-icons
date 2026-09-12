@@ -161,10 +161,19 @@ def owed(conn, slot: str, scope: list[str]) -> dict:
     return out
 
 
-def batch(owed_: dict, budget_secs: float) -> list[str]:
-    """As many owed parts as fit the budget, cheapest information first."""
+def batch(owed_: dict, budget_secs: float, only: str = "all") -> list[str]:
+    """As many owed parts as fit the budget, cheapest information first.
+
+    `only` narrows the pool to one class. `never` is the useful one: a slot
+    whose whole gap is `errored` has already answered every part in it, and a
+    retry is worth launching only against an engine change -- silhouette-occt
+    spent 43 core-hours re-crashing 1,020 parts for 52 recoveries.
+    """
+    pool = {"all": owed_["never"] + owed_["errored"],
+            "never": owed_["never"],
+            "errored": owed_["errored"]}[only]
     picked, spent = [], 0.0
-    for pid in owed_["never"] + owed_["errored"]:
+    for pid in pool:
         c = owed_["secs"].get(pid) or owed_["median"]
         if picked and spent + c > budget_secs:
             break
@@ -183,6 +192,9 @@ def main() -> int:
                     help="workers the job will run, for the core-hour sum")
     ap.add_argument("--per-batch", type=int, default=12,
                     help="parts per line; a line is one onto item")
+    ap.add_argument("--only", choices=("all", "never", "errored"), default="all",
+                    help="narrow the batch to parts never tried, or to ones "
+                         "that errored (default: never first, then errored)")
     ap.add_argument("--out", help="write the batch lines here")
     args = ap.parse_args()
 
@@ -217,7 +229,7 @@ def main() -> int:
 
     o = owed(conn, args.slot, corpus(conn, args.slot))
     flags = flags_for(args.slot)
-    picked = batch(o, args.budget * args.workers * 3600)
+    picked = batch(o, args.budget * args.workers * 3600, args.only)
     spent = sum(o["secs"].get(p) or o["median"] for p in picked)
 
     print(f"{args.slot}", flush=True)
@@ -228,9 +240,18 @@ def main() -> int:
               "fallback": f"nothing measured yet; the {FALLBACK_SECS:.0f}s "
                           f"default"}.get(o["borrowed"], "this slot's own rows")
     print(f"  mean       {o['median']:6.1f}s per part  ({origin})", flush=True)
-    print(f"\n  batch of {len(picked)}: about {spent / 3600:5.1f} core-hours, "
-          f"{spent / 3600 / args.workers:5.1f}h on {args.workers} workers",
-          flush=True)
+    scoped = "" if args.only == "all" else f" ({args.only} only)"
+    print(f"\n  batch of {len(picked)}{scoped}: about {spent / 3600:5.1f} "
+          f"core-hours, {spent / 3600 / args.workers:5.1f}h on {args.workers} "
+          f"workers", flush=True)
+
+    # Loudly, and with nothing written: an empty batches.txt launches a job
+    # that dies in seconds with an empty log, which reads as the node
+    # refusing the work rather than as there being no work.
+    if not picked:
+        print(f"\n  NOTHING TO DO: no {args.only} parts for {args.slot}. "
+              f"Do not launch.", flush=True)
+        return 1
 
     if args.out:
         lines = [",".join(picked[i:i + args.per_batch])
