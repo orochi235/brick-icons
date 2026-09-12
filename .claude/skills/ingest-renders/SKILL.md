@@ -47,7 +47,11 @@ slots, `--stream`'s final pass after the job stops is the one to index.
 database as they land:
 
     nohup .venv/bin/python scripts/ingest-watch.py out/slot-occt \
-      --every 300 > out/ingest-watch.log 2>&1 &
+      --every 300 --until slot-occt > out/ingest-watch-slot-occt.log 2>&1 &
+
+`--until` is the task the job runs under, and the script now refuses a launch
+without it (or `--once`, or an explicit `--forever`): a watch with no end
+outlives its job and spins over a finished tree for good.
 
 It appends rather than rebuilding — only the parts it has not recorded, then a
 bake of the slot — and produces exactly what a rebuild of the same tree would,

@@ -28,6 +28,13 @@ that task the watch keeps going, and once it does not, one `onto fetch
 --stream` and a last pass close the round. A node onto cannot reach is not an
 answer -- a task on it is invisible rather than finished -- so the watch stays
 up.
+
+**One of `--until`, `--once` or `--forever` is required.** Without a
+termination condition a watch outlives the job it was started for and then
+spins over a finished tree for good: seven of them were found running, two
+past a day and a half, reporting `+0 drawn` every five minutes because the
+fetch stream that fed them had died hours earlier. `--forever` is the honest
+spelling for the case that really wants it.
 """
 from __future__ import annotations
 
@@ -309,7 +316,14 @@ def main() -> int:
                          "of them is running, then fetch and close")
     ap.add_argument("--no-fetch", dest="fetch", action="store_false",
                     help="with --until, skip the closing onto fetch")
+    ap.add_argument("--forever", action="store_true",
+                    help="watch with no end, for a tree no onto task owns")
     a = ap.parse_args()
+    if not (a.until or a.once or a.forever):
+        ap.error("give the watch an end: --until <task> closes it when the "
+                 "job stops, --once takes one pass, --forever says you mean "
+                 "it. Without one a watch outlives its job and spins over a "
+                 "finished tree for good.")
     until = [t for t in a.until.split(",") if t]
     return watch([Path(t) for t in a.trees], a.every, a.once, a.bake,
                  a.overwrite, until, a.fetch)
