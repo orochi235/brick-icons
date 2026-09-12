@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { StatsPage } from '@lab/stats/StatsPage';
 import type { Stats } from '@lab/stats/types';
@@ -96,6 +96,9 @@ const COST_POOLED = {
 };
 
 describe('StatsPage', () => {
+  // The page keeps the reader's place in the hash, so one case's clicks are
+  // the next one's starting state unless the address is put back.
+  beforeEach(() => window.history.replaceState(null, '', '/'));
 
   // -- the failure strip and chart ----------------------------------------
 
@@ -478,6 +481,97 @@ describe('StatsPage', () => {
       expect.arrayContaining([expect.stringContaining('1,587'),
                               expect.stringContaining('1,500'),
                               expect.stringContaining('900')]));
+  });
+
+  // -- the legend as a filter ---------------------------------------------
+
+  it('drops a coverage band from every bar when its legend entry is clicked',
+     async () => {
+    const { container } = render(
+      <StatsPage client={clientWith(async () => body())} />);
+    await waitFor(() => container.querySelector('.stats-bars'));
+    const before = container.querySelectorAll('.stats-seg[data-label="drawn"]');
+    expect(before.length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: /drawn/ }));
+    expect(container.querySelectorAll('.stats-seg[data-label="drawn"]').length)
+      .toBe(0);
+    // The bands that stay keep the width they had: they are shares of one
+    // set, so rescaling would stop two rows comparing.
+    expect(container.querySelector('.stats-seg[data-label="untried"]'))
+      .not.toBeNull();
+  });
+
+  it('says in the entry itself that a band is off', async () => {
+    const { container } = render(
+      <StatsPage client={clientWith(async () => body())} />);
+    await waitFor(() => container.querySelector('.stats-bars'));
+    const entry = screen.getByRole('button', { name: /drawn/ });
+    expect(entry.getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(entry);
+    expect(entry.getAttribute('aria-pressed')).toBe('false');
+    expect(entry.getAttribute('title')).toMatch(/show/);
+  });
+
+  it('keeps both when two entries are clicked before a repaint', async () => {
+    // Reading the set out of the render closure rather than the updater
+    // dropped the first of two clicks in one tick.
+    const { container } = render(
+      <StatsPage client={clientWith(async () => body())} />);
+    await waitFor(() => container.querySelector('.stats-bars'));
+    fireEvent.click(screen.getByRole('button', { name: /drawn/ }));
+    fireEvent.click(screen.getByRole('button', { name: /timed out/ }));
+    expect(container.querySelectorAll('.stats-seg[data-label="drawn"]').length)
+      .toBe(0);
+    expect(container.querySelectorAll('.stats-seg[data-label="timeout"]').length)
+      .toBe(0);
+  });
+
+  it('puts a band back when its entry is clicked again', async () => {
+    const { container } = render(
+      <StatsPage client={clientWith(async () => body())} />);
+    await waitFor(() => container.querySelector('.stats-bars'));
+    const entry = screen.getByRole('button', { name: /drawn/ });
+    fireEvent.click(entry);
+    fireEvent.click(entry);
+    expect(container.querySelectorAll('.stats-seg[data-label="drawn"]').length)
+      .toBeGreaterThan(0);
+  });
+
+  it('leaves the tally chart legend alone: those slots are not one whole',
+     async () => {
+    const { container } = render(
+      <StatsPage client={clientWith(async () => body())} />);
+    await waitFor(() => container.querySelector('.stats-bars'));
+    for (const item of container.querySelectorAll('.stats-legend-item')) {
+      expect(item.querySelector('button')).toBeNull();
+    }
+  });
+
+  it('writes what is turned off into the hash, and reads it back on reload',
+     async () => {
+    const first = render(
+      <StatsPage client={clientWith(async () => body())} />);
+    await waitFor(() => first.container.querySelector('.stats-bars'));
+    fireEvent.click(screen.getByRole('button', { name: /drawn/ }));
+    expect(window.location.hash).toContain('hide=drawn');
+    first.unmount();
+
+    // Same address, fresh page: the band is still off.
+    const again = render(
+      <StatsPage client={clientWith(async () => body())} />);
+    await waitFor(() => again.container.querySelector('.stats-bars'));
+    expect(again.container
+      .querySelectorAll('.stats-seg[data-label="drawn"]').length).toBe(0);
+  });
+
+  it('keeps the working set in the query when the hash changes', async () => {
+    window.history.replaceState(null, '', '/?kind=printed');
+    const { container } = render(
+      <StatsPage client={clientWith(async () => body())} />);
+    await waitFor(() => container.querySelector('.stats-bars'));
+    fireEvent.click(screen.getByRole('button', { name: /drawn/ }));
+    expect(window.location.search).toContain('kind=printed');
+    expect(window.location.hash).toContain('hide=drawn');
   });
 
   it('marks a slot whose seconds came from another revision', async () => {

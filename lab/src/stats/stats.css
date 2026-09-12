@@ -105,6 +105,35 @@
 .stats-legend li,
 .stats-legend-item { display: flex; align-items: center; gap: 0.35rem; }
 
+/* A legend entry that filters. It inherits everything the plain entry has, so
+ * a legend with toggles and one without sit at the same weight. */
+.stats-legend-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.stats-legend-toggle:focus-visible { outline: 2px solid var(--wzl-fg); }
+
+/* Off: the entry says what it is and that it is not on the chart. Struck
+ * through and dimmed toward the surface, with the swatch drained of the hue
+ * the band is drawn in -- a legend that only dimmed would read as disabled
+ * rather than dropped. */
+.stats-legend-toggle[aria-pressed='false'] {
+  color: var(--wzl-fg-faint, #5a5a62);
+  text-decoration: line-through;
+}
+
+.stats-legend-toggle[aria-pressed='false'] .stats-swatch {
+  filter: saturate(0.1) brightness(0.6);
+}
+
 .stats-swatch {
   width: 0.75rem;
   height: 0.75rem;

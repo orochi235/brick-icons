@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LabClient } from '@lab/api/client';
 import { CostBars, CoverageBars, CoverageLegend, ELSEWHERE, isThin, SlotLines,
          PhaseBars, PhaseLegend, SecsOverlay, THIN } from '@lab/stats/charts';
 import { Footprint } from '@lab/stats/Footprint';
 import type { Cost, Failures } from '@lab/stats/types';
 import { useStats } from '@lab/stats/useStats';
+import { DEFAULT_VIEWPORT, fromHash, toHash } from '@lab/stats/viewport';
 import { DEFAULT_SET, fromQuery, toQuery, wallHref,
          type WorkingSet } from '@lab/stats/workingSet';
 import '@lab/stats/stats.css';
@@ -95,19 +96,74 @@ function sentence(parts: string[]): string {
   return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
 }
 
+/** The same set with one member turned on or off. */
+const drop = (was: ReadonlySet<string>, key: string): ReadonlySet<string> => {
+  const next = new Set(was);
+  if (!next.delete(key)) next.add(key);
+  return next;
+};
+
 export function StatsPage({ client }: { client: LabClient }) {
   const [set, setSet] = useState<WorkingSet>(
     () => (typeof window === 'undefined'
       ? DEFAULT_SET : fromQuery(new URLSearchParams(window.location.search))));
   const { stats, error, busy, polling, reload } = useStats(client, set);
+  // Where the page was left: scroll and the bands clicked off, out of the
+  // hash. In the hash rather than the query because none of it changes which
+  // parts are counted -- see `viewport.ts`.
+  const opened = useRef(typeof window === 'undefined'
+    ? DEFAULT_VIEWPORT : fromHash(window.location.hash));
+  const [hiddenCoverage, setHiddenCoverage] =
+    useState<ReadonlySet<string>>(() => new Set(opened.current.hide));
+  const [hiddenPhases, setHiddenPhases] =
+    useState<ReadonlySet<string>>(() => new Set(opened.current.hidePhase));
 
   // The address bar is the working set's only home: reload the page and you
-  // get the same numbers, and the link you send names the same parts.
+  // get the same numbers, and the link you send names the same parts. The
+  // hash rides along untouched -- writing the query alone drops it, and the
+  // place you were reading with it.
   useEffect(() => {
     const q = toQuery(set).toString();
-    const next = q ? `?${q}` : window.location.pathname;
-    window.history.replaceState(null, '', next);
+    window.history.replaceState(
+      null, '', `${window.location.pathname}${q ? `?${q}` : ''}`
+               + `${window.location.hash}`);
   }, [set]);
+
+  // Scroll is written straight to the address rather than held in state: it
+  // changes on every wheel notch, and a page this size must not repaint for
+  // it. Coalesced to one write a frame.
+  useEffect(() => {
+    let queued = 0;
+    const write = () => {
+      queued = 0;
+      const hash = toHash({
+        y: window.scrollY,
+        hide: [...hiddenCoverage],
+        hidePhase: [...hiddenPhases],
+      });
+      window.history.replaceState(
+        null, '', `${window.location.pathname}${window.location.search}`
+                 + `${hash ? `#${hash}` : ''}`);
+    };
+    const onScroll = () => {
+      if (!queued) queued = window.requestAnimationFrame(write);
+    };
+    write();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (queued) window.cancelAnimationFrame(queued);
+    };
+  }, [hiddenCoverage, hiddenPhases]);
+
+  // Put the reader back, once, after the tallies arrive: the page is a
+  // spinner until then and has nothing to scroll through.
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current || !stats) return;
+    restored.current = true;
+    if (opened.current.y > 0) window.scrollTo(0, opened.current.y);
+  }, [stats]);
 
   const change = useCallback((next: WorkingSet) => setSet(next), []);
   // A lab API older than this bundle sends no `failures`. Read through a
@@ -206,8 +262,10 @@ export function StatsPage({ client }: { client: LabClient }) {
 
           <section>
             <h2>Coverage</h2>
-            <CoverageLegend />
-            <CoverageBars rows={stats.coverage}
+            <CoverageLegend off={hiddenCoverage}
+                            onToggle={(label) => setHiddenCoverage(
+                              (was) => drop(was, label))} />
+            <CoverageBars rows={stats.coverage} off={hiddenCoverage}
                           onOpen={(row) => wallHref(set, row.source)} />
           </section>
 
@@ -269,8 +327,10 @@ export function StatsPage({ client }: { client: LabClient }) {
 
           <section>
             <h2>Where the time goes</h2>
-            <PhaseLegend rows={stats.phases} />
-            <PhaseBars rows={stats.phases} />
+            <PhaseLegend rows={stats.phases} off={hiddenPhases}
+                         onToggle={(key) => setHiddenPhases(
+                           (was) => drop(was, key))} />
+            <PhaseBars rows={stats.phases} off={hiddenPhases} />
           </section>
 
           <section>

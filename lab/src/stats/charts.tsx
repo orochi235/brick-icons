@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import type { Coverage } from '@lab/corpus/facts';
 import type { Cost, CoverageRow, Phase, PhaseRow, SpeedRow } from '@lab/stats/types';
 
@@ -53,9 +53,10 @@ const pct = (n: number, whole: number) => (whole > 0 ? (n / whole) * 100 : 0);
  *  Segments are separated by a 2px surface gap rather than a stroke, so a
  *  one-part segment is still visible as a sliver instead of being swallowed
  *  by its neighbor's border. */
-export function CoverageBars({ rows, onOpen }: {
+export function CoverageBars({ rows, onOpen, off }: {
   rows: CoverageRow[];
   onOpen?: (row: CoverageRow, label: Coverage) => string;
+  off?: ReadonlySet<string>;
 }) {
   if (rows.length === 0) return <p className="stats-empty">no slot has drawn anything yet</p>;
   return (
@@ -69,7 +70,12 @@ export function CoverageBars({ rows, onOpen }: {
                  .join(', ')}`}>
             {STACK.map((label) => {
               const n = row.counts[label];
-              if (n === 0) return null;
+              // The bands that stay keep their widths -- they are shares of
+              // one set, and rescaling to the remainder would stop two rows
+              // comparing. They do close up to the left, which is the point:
+              // drop `drawn` and the problem bands finally sit against each
+              // other rather than each starting somewhere else.
+              if (n === 0 || off?.has(label)) return null;
               const width = `${pct(n, row.size)}%`;
               const href = onOpen?.(row, label);
               const title = `${n.toLocaleString()} ${COVERAGE_LABEL[label]}`;
@@ -182,16 +188,47 @@ export function CostBars({ cost }: { cost: Cost }) {
   );
 }
 
-export function CoverageLegend() {
+/** The six coverage states, each a filter when `onToggle` is given.
+ *
+ *  Only worth offering because the states PARTITION the set -- every part is
+ *  in exactly one -- so dropping one leaves the others meaning what they
+ *  meant. The same control over a set of series would be a different claim. */
+export function CoverageLegend({ off, onToggle }: {
+  off?: ReadonlySet<string>;
+  onToggle?: (label: Coverage) => void;
+} = {}) {
   return (
     <ul className="stats-legend">
       {STACK.map((label) => (
         <li key={label}>
-          <span className="stats-swatch" data-label={label} aria-hidden="true" />
-          {COVERAGE_LABEL[label]}
+          <LegendToggle name={COVERAGE_LABEL[label]} on={!off?.has(label)}
+                        onToggle={onToggle && (() => onToggle(label))}>
+            <span className="stats-swatch" data-label={label} aria-hidden="true" />
+          </LegendToggle>
         </li>
       ))}
     </ul>
+  );
+}
+
+/** A legend entry that can be clicked off, or plain text where it cannot.
+ *
+ *  A real `<button>`: the label is one short line, so none of the baseline
+ *  trouble an atomic box causes around a run of text applies, and it carries
+ *  the role, the name and Enter/Space without writing any of them. */
+function LegendToggle({ name, on, onToggle, children }: {
+  name: string;
+  on: boolean;
+  onToggle?: () => void;
+  children: ReactNode;
+}) {
+  if (!onToggle) return <>{children}{name}</>;
+  return (
+    <button type="button" className="stats-legend-toggle" aria-pressed={on}
+            onClick={onToggle}
+            title={on ? `hide ${name}` : `show ${name}`}>
+      {children}{name}
+    </button>
   );
 }
 
@@ -354,14 +391,17 @@ export function phaseSegments(row: PhaseRow): Segment[] {
 }
 
 /** Where a working set's wall-clock went, one bar per engine. */
-export function PhaseBars({ rows }: { rows: PhaseRow[] }) {
+export function PhaseBars({ rows, off }: {
+  rows: PhaseRow[];
+  off?: ReadonlySet<string>;
+}) {
   if (rows.length === 0) {
     return <p className="stats-empty">nothing in this set carries phase timings</p>;
   }
   return (
     <div className="stats-phases">
       {rows.map((row) => {
-        const segments = phaseSegments(row);
+        const segments = phaseSegments(row).filter((seg) => !off?.has(seg.key));
         return (
           <figure key={row.engine} className="stats-phase-engine">
             <figcaption>
@@ -390,15 +430,21 @@ export function PhaseBars({ rows }: { rows: PhaseRow[] }) {
 
 /** Named off the first engine's own segments: the render stages are the
  *  engine's to name, so a fixed list here would go stale behind it. */
-export function PhaseLegend({ rows }: { rows: PhaseRow[] }) {
+export function PhaseLegend({ rows, off, onToggle }: {
+  rows: PhaseRow[];
+  off?: ReadonlySet<string>;
+  onToggle?: (key: string) => void;
+}) {
   const segments = rows[0] ? phaseSegments(rows[0]) : [];
   return (
     <ul className="stats-legend stats-phase-legend">
       {segments.map((seg) => (
         <li key={seg.key}>
-          <span className="stats-swatch stats-phase-mark" data-phase={seg.phase}
-                data-shade={seg.shade} aria-hidden="true" />
-          {seg.label}
+          <LegendToggle name={seg.label} on={!off?.has(seg.key)}
+                        onToggle={onToggle && (() => onToggle(seg.key))}>
+            <span className="stats-swatch stats-phase-mark" data-phase={seg.phase}
+                  data-shade={seg.shade} aria-hidden="true" />
+          </LegendToggle>
         </li>
       ))}
     </ul>
