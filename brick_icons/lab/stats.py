@@ -4,6 +4,7 @@ The dashboard's whole backend. Coverage labels come from `cells.coverage_of`,
 the same function the wall's own grouping reads, so the two pages cannot come
 to disagree about what `drawn` means.
 """
+import bisect
 import datetime as dt
 import functools
 import json
@@ -15,13 +16,35 @@ from brick_icons.lab import tally
 from brick_icons.lab.cells import (COVERAGE_ORDER, coverage_of, engine_for,
                                    judged, not_applicable)
 
-# Seconds a render took, in even 2-second buckets to a minute, then one open
-# bucket for the tail. Even is the point: bars of one width over buckets
-# spanning 1s, 7s and 30s drew the same area for wildly different densities.
-SECS_BUCKET = 1.0
-SECS_TOP = 60.0
-SECS_EDGES = tuple(SECS_BUCKET * i
-                   for i in range(1, int(SECS_TOP // SECS_BUCKET) + 1))
+# Seconds a render took: fine where the parts are, coarse where they thin out
+# -- half a second to ten, one to twenty, two to forty, five to a minute, ten
+# to five minutes, then one open bucket. Up to the break the bars are drawn
+# proportional to their span, so that stretch is a true histogram; equal-width
+# bars over unequal buckets draw the same area for wildly different densities.
+#
+# Past the break the chart trades that for reach: a tenth of occt's
+# measurements and near a quarter of naive's sit beyond a minute, and drawn to
+# scale they would take four times the width of everything before them. The
+# tail's buckets are one width, narrow, and stood off from the rest so the
+# axis reads as broken rather than continuous.
+SECS_STEPS = ((10.0, 0.5), (20.0, 1.0), (40.0, 2.0), (60.0, 5.0), (300.0, 10.0))
+SECS_BREAK = 60.0
+# 300s is the census render cap, so the open bucket is "ran past the cap"
+# rather than an arbitrary edge. 309 of 165,751 measurements are out there.
+SECS_TOP = SECS_STEPS[-1][0]
+
+
+def _secs_edges() -> tuple[float, ...]:
+    edges: list[float] = []
+    lo = 0.0
+    for top, step in SECS_STEPS:
+        for i in range(int(round((top - lo) / step))):
+            edges.append(round(lo + step * (i + 1), 3))
+        lo = top
+    return tuple(edges)
+
+
+SECS_EDGES = _secs_edges()
 
 # The part-kind filters. The wall's `rendered` / `unrendered` / `errors` are
 # not here: each is a statement about one slot, and the coverage chart already
@@ -91,11 +114,13 @@ def _spread(values: list[float]) -> dict:
 
 def _bins(values: list[float]) -> list[dict]:
     edges = (0.0, *SECS_EDGES)
-    out = [{"from": lo, "to": hi, "n": 0}
+    out = [{"from": lo, "to": hi, "n": 0, "tail": lo >= SECS_BREAK}
            for lo, hi in zip(edges, (*SECS_EDGES, None))]
     for v in values:
-        index = min(max(int(v // SECS_BUCKET), 0), len(SECS_EDGES))
-        out[index]["n"] += 1
+        # bisect_right, so a value sitting exactly on an edge falls in the
+        # bucket that edge opens -- 10.0 is the first of the one-second run,
+        # not the last of the half-second one.
+        out[bisect.bisect_right(SECS_EDGES, v)]["n"] += 1
     return out
 
 
