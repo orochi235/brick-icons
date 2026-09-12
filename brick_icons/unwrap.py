@@ -11,6 +11,7 @@ segment count.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -373,6 +374,8 @@ def to_uv(pts, carrier, theta0=0.0):
     """Carrier parameter space, in LDU on both axes so one uniform scale
     keeps the texture isometric. `theta0` places the branch cut."""
     pts = np.asarray(pts, float)
+    if isinstance(carrier, Mesh):
+        return carrier.at(pts)
     if isinstance(carrier, Plane):
         n, u, v = carrier.basis()
         return np.column_stack([pts @ u, pts @ v])
@@ -394,6 +397,10 @@ def to_xyz(uv, carrier, theta0=0.0, standoff=0.0):
     lifts it without sliding it around the part.
     """
     uv = np.asarray(uv, float)
+    if isinstance(carrier, Mesh):
+        # no standoff: a mesh carrier IS the tessellation the ink sits on, so
+        # there is no gap between the two to raise the result out of
+        return carrier.to_world(uv)
     if isinstance(carrier, Plane):
         n, u, v = carrier.basis()
         return (np.outer(uv[:, 0], u) + np.outer(uv[:, 1], v)
@@ -507,7 +514,7 @@ def carrier_extent(carrier, uv=None):
     the median and 7.7% at the worst, always at the top and bottom of a face.
     Where the ink does fit, the union is the carrier's own rectangle and the
     drawing is unchanged."""
-    if isinstance(carrier, Plane) or carrier is None:
+    if isinstance(carrier, (Plane, Mesh)) or carrier is None:
         pts = np.asarray(uv, float).reshape(-1, 2)
         x0, y0 = pts.min(axis=0)
         x1, y1 = pts.max(axis=0)
@@ -1029,7 +1036,8 @@ def _print_area(group):
     return float(sum(r.area for _c, r in group[2]))
 
 
-def significant_groups(groups):
+def significant_groups(groups, cap: int | None = MAX_DECALS,
+                       shatter: bool = True):
     """Drop decoration that is not a usable decal, from `decal_groups` output.
 
     A print bound to facet planes rather than one carrier splits across them:
@@ -1048,23 +1056,314 @@ def significant_groups(groups):
     second print runs as low as 0.069 of its dominant while shards reach 0.82,
     so neither bound separates them alone. `scripts/measure-decal-slivers.py`
     re-derives both numbers.
+
+    `cap=None` and `shatter=False` turn off the two rules that read a count
+    as evidence of breakage, for groups that cannot break that way: a welded
+    mesh carries each island of ink whole, so seventeen of them is a print
+    with seventeen islands -- 30117p62's insectoid markings -- and not one
+    print in seventeen pieces. The sliver rule survives either way, because a
+    region far smaller than the biggest is noise under both readings.
     """
     areas = [_print_area(g) for g in groups]
     total = sum(areas)
     if not groups or total <= 0:
         return []
     top = max(areas)
-    if top / total < SHATTER_SHARE:
+    if shatter and top / total < SHATTER_SHARE:
         return []
     kept = [g for g, a in zip(groups, areas) if a >= top * SLIVER_FRAC]
-    return [] if len(kept) > MAX_DECALS else kept
+    return [] if cap is not None and len(kept) > cap else kept
+
+
+#: LDU within which two decoration vertices are the same vertex. LDraw parts
+#: arrive unwelded, so a parameterization has no connectivity to work with
+#: until they are merged. Not a tuned number: over 250 parts the count that
+#: welds into a single piece is 100 / 110 / 108 at 0.001 / 0.01 / 0.1.
+WELD_TOL = 0.01
+
+#: What a flattening has to clear to be worth drawing. A patch that is not a
+#: disk -- a torso closing round, a cap closing over -- folds onto itself,
+#: and overlapping ink unions into a different picture rather than a
+#: distorted one. `scripts/unwrap-decal-mesh.py` re-derives both: area spread
+#: is bimodal over the same 250 parts, 69% under 1.5 and the top decile past
+#: 37, so a bound anywhere between separates them.
+MESH_FLIP_MAX = 0.02
+MESH_STRETCH_MAX = 4.0
+
+
+@dataclass
+class Mesh:
+    """A carrier that is the print's own triangles, flattened.
+
+    A sculpted mould declares no surface, so there is nothing for the
+    cylindrical map to be the arc length of and every facet plane claims its
+    own shard of the ink. The print is a triangle patch either way, so this
+    carries it as one: `uv` is a conformal flattening, and the map either way
+    is piecewise linear over the same triangles. Exact on the tessellation --
+    which, on a part with no analytic surface, is the surface, so there is no
+    sagitta left for `to_xyz` to close.
+    """
+    V: np.ndarray                        # welded world vertices
+    F: np.ndarray                        # triangles, indices into V
+    uv: np.ndarray                       # one uv per vertex
+    kind = "mesh"
+    color = 16
+    _lookup: dict = field(default=None, repr=False)
+    _tree: object = field(default=None, repr=False)
+
+    def at(self, pts):
+        """uv for points that are the mesh's own vertices."""
+        if self._lookup is None:
+            self._lookup = {tuple(k): i for i, k in
+                            enumerate(np.round(self.V / WELD_TOL).astype(np.int64))}
+        pts = np.asarray(pts, float).reshape(-1, 3)
+        keys = np.round(pts / WELD_TOL).astype(np.int64)
+        out = np.empty((len(pts), 2))
+        for i, k in enumerate(keys):
+            j = self._lookup.get(tuple(k))
+            if j is None:                # not a welded vertex: nearest one
+                j = int(np.argmin(np.linalg.norm(self.V - pts[i], axis=1)))
+            out[i] = self.uv[j]
+        return out
+
+    def to_world(self, uv):
+        """Back onto the mesh, barycentrically in the triangle that holds
+        each uv point."""
+        if self._tree is None:
+            self._tree = shapely.STRtree(
+                [shapely.Polygon(self.uv[f]) for f in self.F])
+        uv = np.asarray(uv, float).reshape(-1, 2)
+        out = np.empty((len(uv), 3))
+        for i, p in enumerate(uv):
+            hits = self._tree.query(shapely.Point(p))
+            f = self.F[hits[0]] if len(hits) else self.F[
+                int(np.argmin(np.linalg.norm(self.uv[self.F[:, 0]] - p, axis=1)))]
+            a, b, c = self.uv[f]
+            M = np.array([[b[0] - a[0], c[0] - a[0]],
+                          [b[1] - a[1], c[1] - a[1]]])
+            try:
+                st = np.linalg.solve(M, p - a)
+            except np.linalg.LinAlgError:
+                st = np.zeros(2)
+            A, B, C = self.V[f]
+            out[i] = A + st[0] * (B - A) + st[1] * (C - A)
+        return out
+
+
+def weld_decoration(tris, tri_colors, tol: float = WELD_TOL):
+    """(V, F, codes) -- every decoration triangle, vertices merged by
+    position. Body facets are left out: the carrier is the print itself."""
+    keep = [(np.asarray(t, float).reshape(3, 3), c)
+            for t, c in zip(tris, tri_colors) if c != 16 and c != 24]
+    if not keep:
+        return np.zeros((0, 3)), np.zeros((0, 3), int), []
+    P = np.vstack([t for t, _c in keep])
+    q = np.round(P / tol).astype(np.int64)
+    uniq, inv = np.unique(q, axis=0, return_inverse=True)
+    V = np.zeros((len(uniq), 3))
+    np.add.at(V, inv, P)
+    V /= np.bincount(inv, minlength=len(uniq))[:, None]
+    return V, inv.reshape(-1, 3), [c for _t, c in keep]
+
+
+def mesh_pieces(V, F):
+    """Face indices of each connected piece, largest first. A piece is an
+    island of ink -- two eyes and a mouth are three, and each flattens on its
+    own -- not a shard of one print, which is what facet binding produces."""
+    parent = np.arange(len(V))
+
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    for f in F:
+        for a, b in ((f[0], f[1]), (f[1], f[2])):
+            ra, rb = find(a), find(b)
+            if ra != rb:
+                parent[ra] = rb
+    root = np.array([find(int(v)) for v in F[:, 0]])
+    order = sorted(set(root.tolist()),
+                   key=lambda r: -int((root == r).sum()))
+    return [np.flatnonzero(root == r) for r in order]
+
+
+def _triangle_frames(V, F):
+    """Each triangle flattened isometrically into its own plane, and its
+    area."""
+    p1, p2, p3 = V[F[:, 0]], V[F[:, 1]], V[F[:, 2]]
+    a, b = p2 - p1, p3 - p1
+    la = np.linalg.norm(a, axis=1)
+    e1 = a / np.maximum(la, 1e-12)[:, None]
+    n = np.cross(a, b)
+    area = 0.5 * np.linalg.norm(n, axis=1)
+    nh = n / np.maximum(np.linalg.norm(n, axis=1), 1e-12)[:, None]
+    e2 = np.cross(nh, e1)
+    zero = np.zeros(len(F))
+    X = np.column_stack([zero, la, (b * e1).sum(1)])
+    Y = np.column_stack([zero, zero, (b * e2).sum(1)])
+    return X, Y, area
+
+
+def _lsq_cg(rows, cols, vals, rhs, n, iters=4000, tol=1e-12):
+    """Least squares by conjugate gradient on the normal equations, Jacobi
+    preconditioned, with the matrix held as COO triples.
+
+    numpy only, deliberately: scipy is not a dependency of the renderer, and
+    a node that syncs without it still has to draw -- the `census` extra
+    exists because one that did not killed every worker on the import.
+    """
+    def A(x):
+        return np.bincount(rows, weights=vals * x[cols], minlength=len(rhs))
+
+    def AT(y):
+        return np.bincount(cols, weights=vals * y[rows], minlength=n)
+
+    diag = np.bincount(cols, weights=vals * vals, minlength=n)
+    inv = np.where(diag > 1e-14, 1.0 / np.maximum(diag, 1e-14), 1.0)
+    x = np.zeros(n)
+    r = AT(rhs)
+    z = inv * r
+    p = z.copy()
+    rz = float(r @ z)
+    start = rz
+    for _ in range(iters):
+        Ap = AT(A(p))
+        denom = float(p @ Ap)
+        if abs(denom) < 1e-300:
+            break
+        alpha = rz / denom
+        x += alpha * p
+        r -= alpha * Ap
+        z = inv * r
+        rz_new = float(r @ z)
+        if rz_new <= tol * max(start, 1e-30):
+            break
+        p = z + (rz_new / rz) * p
+        rz = rz_new
+    return x
+
+
+def lscm(V, F, pins):
+    """Conformal uv for every vertex, with `pins` -- two vertex indices --
+    laid on the u axis, which fixes the map's rotation, translation and scale
+    and nothing else. Levy's least squares conformal maps."""
+    X, Y, area = _triangle_frames(V, F)
+    live = area > 1e-12
+    F, X, Y, area = F[live], X[live], Y[live], area[live]
+    w = 1.0 / np.sqrt(area)
+    # W_j = (x_{j+2} - x_{j+1}) + i (y_{j+2} - y_{j+1}), the conformality
+    # residual of the linear system
+    Wr = np.column_stack([X[:, 2] - X[:, 1], X[:, 0] - X[:, 2],
+                          X[:, 1] - X[:, 0]]) * w[:, None]
+    Wi = np.column_stack([Y[:, 2] - Y[:, 1], Y[:, 0] - Y[:, 2],
+                          Y[:, 1] - Y[:, 0]]) * w[:, None]
+
+    m, nt = len(V), len(F)
+    free = np.setdiff1d(np.arange(m), pins)
+    col = -np.ones(m, int)
+    col[free] = np.arange(len(free))
+    nf = len(free)
+    pin_uv = np.zeros((m, 2))
+    pin_uv[pins[1]] = (1.0, 0.0)
+
+    t = np.arange(nt)
+    rows, cols, vals = [], [], []
+    rhs = np.zeros(2 * nt)
+    for j in range(3):
+        v = F[:, j]
+        held = col[v] < 0
+        for off, (cr, ci) in ((0, (Wr[:, j], -Wi[:, j])),
+                              (nt, (Wi[:, j], Wr[:, j]))):
+            for block, coef in ((0, cr), (nf, ci)):
+                rows.append(off + t[~held])
+                cols.append(block + col[v[~held]])
+                vals.append(coef[~held])
+                if held.any():
+                    np.add.at(rhs, off + t[held],
+                              -coef[held] * pin_uv[v[held], 0 if block == 0 else 1])
+    sol = _lsq_cg(np.concatenate(rows), np.concatenate(cols),
+                  np.concatenate(vals), rhs, 2 * nf)
+    uv = np.zeros((m, 2))
+    uv[free, 0] = sol[:nf]
+    uv[free, 1] = sol[nf:]
+    uv[list(pins)] = pin_uv[list(pins)]
+    return uv, F
+
+
+def flatten_quality(V, F, uv):
+    """(flipped share, area-scale spread). A conformal map keeps angles and
+    pays in area, so the spread is what it cost; a flipped triangle is not a
+    cost but a fold, and ink on both sides of one unions into a shape the
+    part does not carry."""
+    _x, _y, area3 = _triangle_frames(V, F)
+    a = uv[F[:, 1]] - uv[F[:, 0]]
+    b = uv[F[:, 2]] - uv[F[:, 0]]
+    signed = 0.5 * (a[:, 0] * b[:, 1] - a[:, 1] * b[:, 0])
+    if not len(signed):
+        return 1.0, float("inf")
+    flipped = float(min((signed > 0).mean(), (signed < 0).mean()))
+    live = (area3 > 1e-12) & (np.abs(signed) > 1e-18)
+    if live.sum() < 4:
+        return flipped, float("inf")
+    s = np.sqrt(np.abs(signed[live]) / area3[live])
+    lo, hi = np.percentile(s, 5), np.percentile(s, 95)
+    return flipped, float(hi / max(lo, 1e-12))
+
+
+def mesh_groups(tris, tri_colors, tol: float = WELD_TOL):
+    """[(carrier, theta0, regions, face)] from the print's own mesh.
+
+    The shape `decal_groups` returns, so everything downstream is unchanged:
+    `theta0` is 0 because a flattening has no seam to place, and `face` is
+    None because a mesh carrier has no outline of its own to draw the print
+    against.
+    """
+    V, F, codes = weld_decoration(tris, tri_colors, tol)
+    if not len(F):
+        return []
+    codes = np.asarray(codes)
+    out = []
+    for faces in mesh_pieces(V, F):
+        used = np.unique(F[faces])
+        remap = -np.ones(len(V), int)
+        remap[used] = np.arange(len(used))
+        Vc, Fc = V[used], remap[F[faces]]
+        if len(Fc) < 2:
+            continue
+        d = np.linalg.norm(Vc - Vc.mean(0), axis=1)
+        p0 = int(d.argmax())
+        p1 = int(np.linalg.norm(Vc - Vc[p0], axis=1).argmax())
+        if p0 == p1:
+            continue
+        uv, Fk = lscm(Vc, Fc, (p0, p1))
+        flipped, spread = flatten_quality(Vc, Fk, uv)
+        if flipped > MESH_FLIP_MAX or spread > MESH_STRETCH_MAX:
+            continue
+        keep = codes[faces][:len(Fk)] if len(Fk) != len(faces) else codes[faces]
+        regions = merge_regions([(c, uv[f]) for f, c in zip(Fk, keep)])
+        if regions:
+            out.append((Mesh(Vc, Fk, uv), 0.0, regions, None))
+    out.sort(key=lambda g: -sum(r.area for _c, r in g[2]))
+    return out
 
 
 def decal_panels(tris, tri_colors, analytic):
-    """[(extent, regions, face)] for every decal a part is worth drawing."""
+    """[(extent, regions, face)] for every decal a part is worth drawing.
+
+    Carrier first, mesh second, and only where the first found nothing: a
+    declared surface puts the ink back where it really lies and closes the
+    sagitta, which a flattening of the author's tessellation cannot. The
+    fallback is for the moulds that declare no surface at all -- where the
+    tessellation is all there is, so nothing is given up by using it.
+    """
+    groups = significant_groups(decal_groups(tris, tri_colors, analytic))
+    if not groups:
+        groups = significant_groups(mesh_groups(tris, tri_colors), cap=None,
+                                    shatter=False)
     out = []
-    for carrier, _theta0, regions, face in significant_groups(
-            decal_groups(tris, tri_colors, analytic)):
+    for carrier, _theta0, regions, face in groups:
         # a merged region can come back with no ring at all — a sliver that
         # collapses to a line, which is not something to draw or to size a
         # canvas from
@@ -1101,7 +1400,10 @@ def sheet_grid(n):
     thumbnailed down to nothing on the wall."""
     if n <= 1:
         return 1, 1
-    return (2, 1) if n == 2 else (2, 2)
+    if n == 2:
+        return 2, 1
+    cols = math.ceil(math.sqrt(n))
+    return cols, math.ceil(n / cols)
 
 
 def decal_sheet(tris, tri_colors, analytic, px=900, ldraw_dir="vendor/ldraw",
