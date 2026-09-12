@@ -1,4 +1,5 @@
 import json
+import os
 import re
 import sqlite3
 from pathlib import Path
@@ -176,6 +177,26 @@ def test_a_second_render_of_the_same_config_replaces_the_row(tmp_path):
     db.record_render(conn, "3001", "naive", svg, root=tmp_path)
     rows = conn.execute("SELECT * FROM renders").fetchall()
     assert len(rows) == 1 and rows[0]["width"] == 300.0
+
+
+def test_an_older_drawing_does_not_displace_a_newer_one(tmp_path):
+    """`made_at` is stamped at ingest and cannot order two drawings, so a
+    census tree fetched late would otherwise walk a slot backwards."""
+    conn = db.connect(tmp_path / "corpus.db")
+    new = tmp_path / "renders" / "naive" / "3001.svg"
+    new.parent.mkdir(parents=True)
+    new.write_text(SVG.replace("240", "300"))
+    db.record_render(conn, "3001", "naive", new, root=tmp_path)
+
+    old = tmp_path / "census" / "renders" / "naive" / "3001.svg"
+    old.parent.mkdir(parents=True)
+    old.write_text(SVG)
+    os.utime(old, (0, 0))
+    db.record_render(conn, "3001", "naive", old, root=tmp_path)
+
+    row = conn.execute("SELECT * FROM renders").fetchone()
+    assert row["width"] == 300.0
+    assert row["path"] == "renders/naive/3001.svg"
 
 
 def test_an_unknown_source_is_refused(tmp_path):

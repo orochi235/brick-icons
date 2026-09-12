@@ -124,7 +124,7 @@ def _take_renders(conn: sqlite3.Connection, tree: Path, engine: str,
                   source: str, run_id: int, overwrite: bool = False,
                   seen: dict[Path, tuple[int, float]] | None = None
                   ) -> tuple[int, int]:
-    """Index the drawings this tree holds, as (new, replaced).
+    """Index the drawings this tree holds, as (new, replaced, slots touched).
 
     The job is still writing, so a half-written SVG is expected traffic:
     `record_render` parses it, raises, and the next pass takes it whole.
@@ -135,18 +135,29 @@ def _take_renders(conn: sqlite3.Connection, tree: Path, engine: str,
     redrawn. The size/mtime map is what keeps that from rewriting every row
     every pass.
     """
-    kept = tree / "renders" / engine
-    if not kept.is_dir():
-        return 0, 0
+    root = tree / "renders"
+    if not root.is_dir():
+        return 0, 0, set()
+    # Every engine directory the tree holds, not the one a log happened to
+    # name first: a base census tree carries naive AND occt, and walking one
+    # of them left 30,000 occt drawings indexed as nothing -- the tree read
+    # `naive` off its first log and looked for a directory that was not there.
+    walks = [(d, db.census_source(tree, d.name))
+             for d in sorted(root.iterdir()) if d.is_dir()]
+    if not walks:
+        return 0, 0, set()
     if seen is None:
         seen = {}
     known = {r[0] for r in conn.execute("SELECT id FROM parts")}
-    have = {r[0] for r in conn.execute(
-        "SELECT part_id FROM renders WHERE source = ?", (source,))}
+    have = {slot: {r[0] for r in conn.execute(
+        "SELECT part_id FROM renders WHERE source = ?", (slot,))}
+        for _d, slot in walks}
     took = redrew = 0
-    for svg in sorted(kept.glob("*.svg")):
+    touched: set[str] = set()
+    for kept, slot in walks:
+      for svg in sorted(kept.glob("*.svg")):
         pid = svg.stem
-        if pid not in known or (pid in have and not overwrite):
+        if pid not in known or (pid in have[slot] and not overwrite):
             continue
         try:
             st = svg.stat()
@@ -155,18 +166,19 @@ def _take_renders(conn: sqlite3.Connection, tree: Path, engine: str,
         if seen.get(svg) == (st.st_size, st.st_mtime):
             continue
         try:
-            db.record_render(conn, pid, source, svg, root=ROOT, run_id=run_id)
+            db.record_render(conn, pid, slot, svg, root=ROOT, run_id=run_id)
         except Exception as e:  # noqa: BLE001
             print(f"  {pid}: {type(e).__name__} {e}", flush=True)
             continue
         seen[svg] = (st.st_size, st.st_mtime)
-        if pid in have:
+        touched.add(slot)
+        if pid in have[slot]:
             redrew += 1
         else:
             took += 1
     if took or redrew:
         conn.commit()
-    return took, redrew
+    return took, redrew, touched
 
 
 def _tasks_running(tasks: Sequence[str]) -> bool | None:
@@ -244,15 +256,14 @@ def watch(trees: list[Path], every: int, once: bool, bake: bool,
                 engine = _engine(tree, source)
                 run_id = _watch_run(conn, tree)
                 scores = _take_scores(conn, tree, run_id, seen)
-                drawn, redrew = _take_renders(conn, tree, engine, source,
-                                              run_id, overwrite, drawings)
+                drawn, redrew, slots = _take_renders(
+                    conn, tree, engine, source, run_id, overwrite, drawings)
                 total = conn.execute(
                     "SELECT count(*) FROM renders WHERE source = ?",
                     (source,)).fetchone()[0]
             finally:
                 conn.close()
-            if drawn or redrew:
-                touched.add(source)
+            touched |= slots
             print(f"{time.strftime('%H:%M:%S')} {tree.name} -> {source}: "
                   f"+{drawn} drawn, {redrew} redrawn, +{scores} scored, "
                   f"{total} in the slot", flush=True)

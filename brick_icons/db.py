@@ -494,6 +494,20 @@ def record_render(conn: sqlite3.Connection, part_id: str, source: str,
         if box:
             _, _, width, height = (float(v) for v in box.split())
     key = cache.key(argv)
+    # Never let an older drawing displace a newer one. `made_at` is stamped at
+    # ingest and cannot order two of them, so the files are asked instead: a
+    # census tree fetched late holds drawings from a build the slot has since
+    # moved past, and indexing it would walk the slot backwards with nothing
+    # in the row to say so.
+    held = conn.execute(
+        "SELECT path FROM renders WHERE part_id = ? AND source = ? "
+        "AND config_key = ?", (part_id, source, key)).fetchone()
+    if held is not None:
+        try:
+            if (Path(root) / held[0]).stat().st_mtime > path.stat().st_mtime:
+                return key
+        except OSError:
+            pass
     conn.execute(
         "INSERT OR REPLACE INTO renders (part_id, source, config_key, run_id, "
         "made_at, path, sha256, width, height) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
