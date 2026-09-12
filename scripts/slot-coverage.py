@@ -106,6 +106,23 @@ def flags_for(slot: str) -> dict:
     return {"engine": cfg.engine, "extra": " ".join(extra)}
 
 
+def _rank(build: str) -> int:
+    """A build sorts by the commit count it leads with. The most COMMON build
+    is not the newest one and reading it as such inverts the answer: occt
+    holds 18,995 parts at the revision before its current one, so a modal pick
+    called the 586 parts that HAD met the current engine the stale ones."""
+    head = build.split(".", 1)[0].rstrip("+")
+    return int(head) if head.isdigit() else -1
+
+
+def _newest(builds) -> str | None:
+    """The latest revision the slot was measured at, or None where no build
+    states a commit count -- `decal` files a bare sha and cannot be ordered."""
+    ranked = [(b, _rank(b)) for b in set(builds)]
+    ranked = [(b, r) for b, r in ranked if r >= 0]
+    return max(ranked, key=lambda pair: pair[1])[0] if ranked else None
+
+
 def owed(conn, slot: str, scope: list[str]) -> dict:
     """The slot's parts split by how much is known about each.
 
@@ -121,6 +138,14 @@ def owed(conn, slot: str, scope: list[str]) -> dict:
     """
     drawn = {r["part_id"] for r in conn.execute(
         "SELECT part_id FROM renders WHERE source = ?", (slot,))}
+    # The revision each part last MET, and the newest any of them met. A part
+    # that failed under an older engine has not been asked the current
+    # question; one that failed under this one has, and re-asking it is the
+    # 43 core-hours silhouette-occt spent re-crashing 862 ProcessDied parts.
+    seen = {r["part_id"]: r["build"] for r in conn.execute(
+        "SELECT part_id, build FROM measurements WHERE source = ? AND build "
+        "IS NOT NULL ORDER BY run_id", (slot,))}
+    newest = _newest(seen.values())
     tried, cost = {}, []
     for r in conn.execute(
             "SELECT part_id, error, secs FROM measurements WHERE source = ?",
@@ -145,8 +170,8 @@ def owed(conn, slot: str, scope: list[str]) -> dict:
         # all got FALLBACK_SECS, and must not report it as measurement.
         borrowed = "engine" if peers else "fallback"
 
-    out = {"drawn": [], "never": [], "errored": [], "median": median,
-           "borrowed": borrowed, "secs": {}}
+    out = {"drawn": [], "never": [], "errored": [], "stale": [],
+           "median": median, "borrowed": borrowed, "secs": {}, "build": newest}
     for pid in scope:
         if pid in drawn:
             out["drawn"].append(pid)
@@ -154,6 +179,8 @@ def owed(conn, slot: str, scope: list[str]) -> dict:
             out["never"].append(pid)
         else:
             out["errored"].append(pid)
+            if newest and seen.get(pid) != newest:
+                out["stale"].append(pid)
     for r in conn.execute(
             "SELECT part_id, MAX(secs) s FROM measurements WHERE source = ? "
             "AND error IS NULL GROUP BY part_id", (slot,)):
@@ -171,7 +198,8 @@ def batch(owed_: dict, budget_secs: float, only: str = "all") -> list[str]:
     """
     pool = {"all": owed_["never"] + owed_["errored"],
             "never": owed_["never"],
-            "errored": owed_["errored"]}[only]
+            "errored": owed_["errored"],
+            "stale": owed_["stale"]}[only]
     picked, spent = [], 0.0
     for pid in pool:
         c = owed_["secs"].get(pid) or owed_["median"]
@@ -192,9 +220,12 @@ def main() -> int:
                     help="workers the job will run, for the core-hour sum")
     ap.add_argument("--per-batch", type=int, default=12,
                     help="parts per line; a line is one onto item")
-    ap.add_argument("--only", choices=("all", "never", "errored"), default="all",
-                    help="narrow the batch to parts never tried, or to ones "
-                         "that errored (default: never first, then errored)")
+    ap.add_argument("--only", choices=("all", "never", "errored", "stale"),
+                    default="all",
+                    help="narrow the batch to parts never tried, to ones that "
+                         "errored, or to `stale` -- the errored ones that have "
+                         "not met the slot's current revision (default: never "
+                         "first, then errored)")
     ap.add_argument("--out", help="write the batch lines here")
     args = ap.parse_args()
 
@@ -236,6 +267,9 @@ def main() -> int:
     print(f"  drawn      {len(o['drawn']):6}", flush=True)
     print(f"  never      {len(o['never']):6}", flush=True)
     print(f"  errored    {len(o['errored']):6}", flush=True)
+    if o["build"]:
+        print(f"  stale      {len(o['stale']):6}  errored, and last seen "
+              f"before {o['build']}", flush=True)
     origin = {"engine": f"borrowed from every {flags['engine']} row",
               "fallback": f"nothing measured yet; the {FALLBACK_SECS:.0f}s "
                           f"default"}.get(o["borrowed"], "this slot's own rows")
