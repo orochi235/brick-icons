@@ -177,30 +177,28 @@ export function StatsPage({ client }: { client: LabClient }) {
             </section>
 
             <section>
-              <h2>Failure rate by engine revision</h2>
-              <SlotLines rows={failures.by_build} unit="rate" compact
+              <h2>Failure rate over time</h2>
+              <SlotLines rows={failures.series} unit="rate" compact
                             caption={unanswered ? STALE_API
-                              : 'no render in this corpus carries the build that '
-                                + 'drew it'} />
+                              : 'no tally has been taken yet'} />
               <p className="stats-note">
-                A share, not a count, and on its own y-axis for that reason:
-                a revision is measured over the parts it touched, not over the
-                corpus. Only revisions that swept at least a tenth of their
-                slot are here, so this ends at the last sweep rather than at
-                today — a retry queue is aimed at the parts already known to
-                break, and 60% of a thousand picked parts is not the same
-                measurement as 1% of twenty thousand.
+                The chart to the left as a share of each slot&rsquo;s own set,
+                which is the only way the slots compare: decal&rsquo;s 2,532
+                broken parts are a fifth of what it draws, and occt&rsquo;s
+                655 are a thirtieth. Each step names the revision the slot was
+                on.
               </p>
             </section>
           </div>
 
           <p className="stats-note">
-            All three read calendar dates, off the tallies and off the commit
-            each engine revision names. The first two start where the tallies
-            do: a rebuild restamped all 45 earlier ingests, 33 of them inside
-            one four-minute window, so there is no date to draw them at. The
-            replayed run-axis history is still in the API for anything that
-            wants it, and is no longer drawn.
+            One axis across all three: every tally, dated by when it was
+            taken. They start where the tallies do, because nothing before
+            that has a date — a rebuild restamped all 45 earlier ingests, 33
+            of them inside one four-minute window. Dating a revision by its
+            commit instead put six days on the axis for work that all ingested
+            over two, which is why these no longer read builds. The run-axis
+            history and the by-revision rates are still in the API.
           </p>
 
           <section>

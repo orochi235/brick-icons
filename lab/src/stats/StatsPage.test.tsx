@@ -147,20 +147,44 @@ describe('StatsPage', () => {
     const none = body();
     none.failures!.series = [];
     render(<StatsPage client={clientWith(async () => none)} />);
-    // Both tally charts read the same series, so both say it.
+    // All three charts read the same series, so all three say it.
     await waitFor(() =>
-      expect(screen.getAllByText(/no tally has been taken yet/).length).toBe(2));
+      expect(screen.getAllByText(/no tally has been taken yet/).length).toBe(3));
   });
 
-  it('keeps the build prefix on its own axis, as a rate', async () => {
+  it('reads the rate chart in percent, on its own y-axis', async () => {
     const { container } = render(
       <StatsPage client={clientWith(async () => body())} />);
     await waitFor(() => container.querySelector('.stats-failures'));
     const figures = container.querySelectorAll('.stats-failures');
-    // Count, coverage, then the build rate -- three to the row.
+    // Count, coverage, rate -- three to the row.
     expect(figures.length).toBe(3);
-    // 2 of 10 drawn, so the rate axis tops out in percent, not in parts.
+    expect(figures[0]!.textContent).not.toContain('%');
     expect(figures[2]!.textContent).toContain('%');
+  });
+
+  it('rates every slot over its own set, on one shared range', async () => {
+    const some = body();
+    // decal's 3 broken of 12 owed is a quarter; occt's 6 of 24 owed is also
+    // a quarter -- the counts differ, the rates do not.
+    some.failures!.series = [
+      { at: '2026-09-09T00:00:00+00:00', source: 'occt', build: '1.aaa',
+        size: 24, owed: 24, clean: 18, failed: 6, timeout: 0, bad: 6 },
+      { at: '2026-09-10T00:00:00+00:00', source: 'decal', build: null,
+        size: 24, owed: 12, clean: 9, failed: 3, timeout: 0, bad: 3 },
+    ];
+    const { container } = render(<StatsPage client={clientWith(async () => some)} />);
+    await waitFor(() => container.querySelector('.stats-trio'));
+    const figs = [...container.querySelectorAll('.stats-trio .stats-failures')];
+    // Every panel spans the same dates, so they read left-to-right together.
+    for (const f of figs) {
+      expect(f.textContent).toContain('09-09');
+      expect(f.textContent).toContain('09-10');
+    }
+    const titles = [...figs[2]!.querySelectorAll('.stats-failure-dot title')]
+      .map((t) => t.textContent);
+    expect(titles.some((t) => t!.includes('3 of 12, 25.0%'))).toBe(true);
+    expect(titles.some((t) => t!.includes('6 of 24, 25.0%'))).toBe(true);
   });
 
   it('puts the three tally charts on one calendar axis', async () => {

@@ -425,13 +425,13 @@ export function SlotLines({ rows, unit, caption, compact = false }: {
   compact?: boolean;
 }) {
   const share = (n: number, of: number) => (of > 0 ? (n / of) * 100 : 0);
-  // Coverage is a share of what the slot was ever going to draw, not of the
+  // Both shares are of what the slot was ever going to draw, not of the
   // library: decal draws printed parts and nothing else, and against `size`
   // it reads as failing at two thirds of a corpus nobody asked it about.
-  // `rate` keeps `size`, which on a build row is that revision's own
-  // measurements rather than a corpus.
+  // `size` is the fallback for a build row, where it is that revision's own
+  // parts and `owed` means nothing.
   const value = (r: FailureRow) =>
-    unit === 'rate' ? share(r.bad, r.size)
+    unit === 'rate' ? share(r.bad, r.owed ?? r.size)
       : unit === 'coverage' ? share(r.clean ?? 0, r.owed ?? r.size)
       : r.bad;
 
@@ -509,7 +509,9 @@ export function SlotLines({ rows, unit, caption, compact = false }: {
                   <title>
                     {`${slot} — ${stamp(p)}`}
                     {unit === 'rate'
-                      ? ` — ${value(p).toFixed(1)}% of ${p.size.toLocaleString()} drawn`
+                      ? ` — ${p.bad.toLocaleString()} of `
+                        + `${(p.owed ?? p.size).toLocaleString()}, `
+                        + `${value(p).toFixed(1)}%`
                       : unit === 'coverage'
                       ? ` — ${(p.clean ?? 0).toLocaleString()} of `
                         + `${(p.owed ?? p.size).toLocaleString()}, `
