@@ -1,3 +1,47 @@
+## Curved-top and carrier-face defects: 13 closed, 2026-09-12
+
+On `main`, committed, unpushed (`ed133b0`, `460ddfb`). Another session shares
+this working directory -- stage explicit paths, never `git add -A`.
+
+Most of the two clusters were already fixed and nobody had looked. Eleven
+curved-top parts and five printed round tiles were drawn at HEAD and laid over
+the LDView reference (`scripts/overlay-reference.py`, new); eleven of the
+sixteen defects were gone and are marked `fixed` with the sha of the drawing
+that was judged. **The stored corpus renders are older than HEAD for 8 of the
+11 curved parts**, so the wall still shows the old drawings -- the slot wants a
+re-bake before the wall agrees with the defect list.
+
+The one real bug found: a stroked contour ring narrower than its own stroke
+draws as a tick mark, because the gate was area (0.5 px^2) and 5651's flank
+slivers are 7 x 0.2 px. `geom2d.drop_thin` erodes by half the stroke width,
+which `cli` now passes down for both the SVG and PNG contours. That cleared
+5651's flank dashes, two ticks floating on 3626's blank face, and 3626cp7d's
+floating black diamond.
+
+### Still open in these clusters
+
+`24434-extra-diagonal-under-closer-arch` (naive) carries the full measurement
+in its own note: the extra curves are declared type-2 edges, no suppression of
+condlines / rim arcs / silhouette generators / fitted arcs moves them, and at
+their drawn samples they are genuinely frontmost -- the wall planes are FARTHER
+along the ray, not nearer. What is wrong is which surface the edge is taken to
+bound, and the next step is to identify the primitive behind each arc rather
+than its depth. The probes that establish this are
+`scripts/probe-drawn-classes.py`, `probe-segs-in-box.py` (its `--mark` writes an
+SVG with one op in red) and `probe-occluder-field.py`.
+
+Four shading defects stay open with their outline halves noted as fixed: 5846,
+5847, 5849 and 79756.
+
+### What the contour change was measured against
+
+`scripts/thin-contour-drift.py` draws each part twice in one process, with
+`drop_thin` disarmed for the `before` pass. Over an 18-part spread picked for
+what could be lost whole -- a sticker, a bar, a 1x1 tile, thin plates -- 15 came
+back pixel for pixel and 3 lost only ticks. **A wider random sample has not
+run**: every fleet node already holds a running brick-icons job, and an hour of
+it locally got nowhere. Worth a `--n 300` on the fleet when one frees up.
+
 ## Minifig head decals: the jaw skirt landed, 2026-09-11
 
 On `main`, committed, unpushed. **Another session shares this working

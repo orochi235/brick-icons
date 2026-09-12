@@ -52,10 +52,14 @@ def main() -> int:
                 sd = np.asarray(depth_fn(params), float)
             O = ray_origin(xs, ys)
             field = np.full(xs.shape, np.inf)
-            for occ in occluders:
+            winner = np.full(xs.shape, -1)
+            for k, occ in enumerate(occluders):
                 if occ is exclude:
                     continue
-                field = np.minimum(field, occ.depth(O, fwd))
+                d = occ.depth(O, fwd)
+                closer = d < field
+                field = np.where(closer, d, field)
+                winner = np.where(closer, k, winner)
             behind = sd > field + eps
             vis = ~behind
             covered = np.isfinite(field)
@@ -70,6 +74,10 @@ def main() -> int:
                 "x": float(np.median(xs)), "y": float(np.median(ys)),
                 "excluded": exclude is not None,
                 "vis": float(vis.mean()),
+                "winners": {type(occluders[k]).__name__ if k >= 0 else "none":
+                            int((winner[vis] == k).sum())
+                            for k in set(winner[vis].tolist())} if vis.any()
+                else {},
             })
         return original(op_specs, occluders, ray_origin, fwd, eps, n=n)
 
@@ -94,6 +102,8 @@ def main() -> int:
               f"vis={s['vis']:5.0%} clear={s['clear']:+8.3f} "
               f"at ({s['x']:7.1f},{s['y']:7.1f})"
               f"{'  [self-excluded]' if s['excluded'] else ''}")
+        if s["winners"]:
+            print(f"        nearest over the drawn samples: {s['winners']}")
     return 0
 
 
