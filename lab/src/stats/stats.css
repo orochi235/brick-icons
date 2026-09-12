@@ -153,6 +153,12 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
 .stats-cost-head { font-size: 0.8rem; color: var(--wzl-fg-muted, #9a9aa2); }
 .stats-seg[data-label='cost'] { background: var(--stats-drawn); }
 
+/* A cost row is ONE segment where a coverage row is a stack, so the fill is
+ * the shape the eye reads rather than a partial filling of the track. Round
+ * it on its own: a radius that lives only on the track rounds the end the
+ * fill starts at and leaves the end it stops at square. */
+.stats-cost .stats-seg { border-radius: 3px; }
+
 
 .stats-swatch[data-label='defect'] { background: var(--stats-defect); }
 .stats-swatch[data-label='failed'] { background: var(--stats-failed); }

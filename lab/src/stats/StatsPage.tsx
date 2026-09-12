@@ -80,9 +80,9 @@ function Controls({ set, onChange, categories }: {
 
 /** Every tally the corpus database can answer for, over a working set you
  *  pick. The wall shows the same parts one cell at a time; this counts them. */
-/** The slots whose seconds came from another revision than the panel's. */
+/** The slots whose seconds do not all come from the panel's revision. */
 const elsewhere = (cost: Cost) =>
-  cost.slots.filter((row) => row.build !== cost.build);
+  cost.slots.filter((row) => row.build !== cost.build || row.revisions > 1);
 
 /** The slots whose ratio rests on a slice of the base's parts. */
 const thin = (cost: Cost) =>
@@ -222,19 +222,24 @@ export function StatsPage({ client }: { client: LabClient }) {
                 <>
                   <CostBars cost={stats.cost} />
                   <p className="stats-note">
-                    Each slot against one {stats.cost.base} pass at{' '}
-                    <code>{stats.cost.build}</code>, over the parts the two
-                    share. The revision is not decoration: a slot's stored
-                    seconds span every engine that ever drew it, and mixing
-                    them reverses which slot reads as the expensive one.
+                    Each slot against one {stats.cost.base} pass, over the
+                    parts the two share, every part at the newest seconds it
+                    has -- most of them{' '}
+                    <code>{stats.cost.build}</code>. A slot pools whatever
+                    revisions drew it: held against
+                    the same part, two revisions of a slot cost the same, and
+                    reading a slot at one revision instead moves its ratio by
+                    half with which parts that revision happened to draw.
                     Running all {stats.cost.slots.length} costs{' '}
                     {stats.cost.slots
                       .reduce((a, r) => a + (r.ratio ?? 0), 0).toFixed(1)}×
                     one {stats.cost.base} pass.
                     {elsewhere(stats.cost).map((row) => (
                       <span key={row.source}>
-                        {' '}{ELSEWHERE} {row.source} has no timing at that
-                        revision; its row is from <code>{row.build}</code>.
+                        {' '}{ELSEWHERE} {row.source} spans{' '}
+                        {row.revisions === 1 ? 'one revision'
+                          : `${row.revisions} revisions`}, most of it{' '}
+                        <code>{row.build}</code>.
                       </span>
                     ))}
                     {thin(stats.cost).length === 0 ? null : (

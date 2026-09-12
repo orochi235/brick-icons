@@ -672,3 +672,31 @@ def test_a_measurement_with_no_build_cannot_be_placed_on_a_revision(conn):
     _measure(conn, "3001", "occt", source="occt", secs=10.0)
     _measure(conn, "3001", "occt", source="white-occt", secs=5.0)
     assert _cost(conn) is None
+
+
+def test_a_slot_pools_every_revision_that_drew_it(conn):
+    """Reading one revision costs more than the drift between them: a fill
+    round draws the parts that failed before, and a ratio summed over them is
+    a ratio over the hardest parts the slot has."""
+    for pid in ("3001", "3002", "3003"):
+        _part(conn, pid)
+        _measure(conn, pid, "occt", source="occt", secs=10.0, build="b2")
+    for pid in ("3001", "3002"):
+        _measure(conn, pid, "occt", source="white-occt", secs=5.0, build="b1")
+    _measure(conn, "3003", "occt", source="white-occt", secs=5.0, build="b2")
+    rows = {r["source"]: r for r in _cost(conn)["slots"]}
+    assert rows["white-occt"]["n"] == 3
+    assert rows["white-occt"]["revisions"] == 2
+    assert rows["white-occt"]["ratio"] == pytest.approx(0.5)
+
+
+def test_a_pooled_slot_names_the_revision_most_of_it_came_from(conn):
+    for pid in ("3001", "3002", "3003"):
+        _part(conn, pid)
+        _measure(conn, pid, "occt", source="occt", secs=10.0, build="b2")
+    for pid in ("3001", "3002"):
+        _measure(conn, pid, "occt", source="white-occt", secs=5.0, build="b1")
+    _measure(conn, "3003", "occt", source="white-occt", secs=5.0, build="b9")
+    rows = {r["source"]: r for r in _cost(conn)["slots"]}
+    assert rows["white-occt"]["build"] == "b1"
+    assert rows["white-occt"]["revisions"] == 2

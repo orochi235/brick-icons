@@ -96,7 +96,8 @@ export function CoverageBars({ rows, onOpen }: {
   );
 }
 
-/** The mark on a slot measured somewhere other than the panel's revision. */
+/** The mark on a slot whose seconds come from more than one revision, or
+ *  from a different one than the base's. */
 export const ELSEWHERE = '\u2020';
 
 /** The mark on a slot whose ratio rests on a slice of the base's parts. */
@@ -140,8 +141,10 @@ export function CostBars({ cost }: { cost: Cost }) {
         <div key={row.source} className="stats-bar-row stats-cost-row">
           <span className="stats-bar-name">
             {row.source}
-            {row.build === cost.build ? null : (
-              <span className="stats-muted" title={`measured at ${row.build}`}>
+            {row.build === cost.build && row.revisions === 1 ? null : (
+              <span className="stats-muted"
+                    title={row.revisions === 1 ? `measured at ${row.build}`
+                      : `${row.revisions} revisions, most at ${row.build}`}>
                 {' '}{ELSEWHERE}
               </span>
             )}

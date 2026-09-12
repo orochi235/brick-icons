@@ -5,6 +5,7 @@ the same function the wall's own grouping reads, so the two pages cannot come
 to disagree about what `drawn` means.
 """
 import bisect
+import collections
 import datetime as dt
 import functools
 import json
@@ -526,59 +527,52 @@ def _cost_rows(conn: sqlite3.Connection) -> list[sqlite3.Row]:
 def _cost(rows: list[sqlite3.Row], ids: set[str]) -> dict | None:
     """What one pass costs, slot by slot, as a share of running them all.
 
-    Each slot is measured against the base slot over the parts the two share
-    at one revision, not over the parts every slot shares: intersecting all of
-    them cut a 17,611-part comparison down to 1,592, and any slot that has
-    barely run takes every other slot down with it.
+    Each slot is measured against the base slot over the parts the two share,
+    not over the parts every slot shares: intersecting all of them cut a
+    17,611-part comparison down to 1,592, and any slot that has barely run
+    takes every other slot down with it.
 
-    Which revision matters, and it is per slot: a slot's stored seconds
-    otherwise span every revision that ever drew it, and the spread swamps the
-    answer -- silhouette-occt's oldest rows average 48.9s against 17.9s for
-    the same slot at the current build. A row says the revision it was taken
-    at, so a slot measured somewhere else than the base reads as what it is.
+    A slot's revisions are POOLED, every part at its own latest row. Reading a
+    slot at one revision was the larger error by an order of magnitude: a
+    ratio summed over one revision's parts moves with which parts those are,
+    and silhouette-naive reads 0.98 over its 2,195 older parts against 0.66
+    over the 2,312 a backfill drew, on part sets whose base medians are 1.8s
+    and 4.9s. Pooling costs the drift between revisions instead, and there
+    almost is none: held against the same part at two revisions, occt reads
+    1.00x over 760 parts and white-occt 1.02x over 12,145.
+    `scripts/cost-revision-drift.py` is that measurement, and the one real
+    drift it finds -- silhouette-occt at 843.6637300+, 0.86x over 244 parts --
+    reaches 1.7% of that slot's row.
     """
-    at: dict[str, dict[str, dict[str, float]]] = {}
+    at: dict[str, dict[str, float]] = {}
+    builds: dict[str, collections.Counter] = {}
     for row in rows:
         if row["part_id"] not in ids or not row["build"]:
             continue
-        at.setdefault(row["source"], {}).setdefault(
-            row["build"], {})[row["part_id"]] = row["secs"]
+        at.setdefault(row["source"], {})[row["part_id"]] = row["secs"]
+        builds.setdefault(row["source"], collections.Counter())[row["build"]] += 1
     if len(at) < 2:
         return None
-
-    def widest(source: str) -> tuple[str, dict[str, float]]:
-        build = max(at[source], key=lambda b: len(at[source][b]))
-        return build, at[source][build]
 
     # A plain slot is the reference -- `occt` against `white-occt` is the
     # comparison a reader means -- and the widest of them when more than one
     # slot is nobody's facet.
     plain = [s for s in at if s == engine_for(s)]
-    base = max(plain or list(at), key=lambda s: len(widest(s)[1]))
-    base_build, base_secs = widest(base)
+    base = max(plain or list(at), key=lambda s: len(at[s]))
+    base_secs = at[base]
 
     measured = []
     for source in sorted(at):
-        if source == base:
-            common, build, secs = set(base_secs), base_build, base_secs
-        else:
-            # The base's own revision whenever the slot has it. Falling back
-            # to whichever revision overlaps most would quietly pick a stale
-            # one -- silhouette-occt has a build averaging 48.9s against 17.9s
-            # for the same slot now -- so the fallback is a last resort and
-            # the row says it happened.
-            at_base = set(at[source].get(base_build, ())) & set(base_secs)
-            build, common = (base_build, at_base) if at_base else max(
-                ((b, set(by) & set(base_secs)) for b, by in at[source].items()),
-                key=lambda pair: len(pair[1]))
-            secs = at[source][build]
-            if not common:
-                continue
+        secs = at[source]
+        common = set(secs) if source == base else set(secs) & set(base_secs)
+        if not common:
+            continue
         mine = sum(secs[p] for p in common)
         theirs = sum(base_secs[p] for p in common)
         ordered = sorted(secs[p] for p in common)
         measured.append({
-            "source": source, "build": build, "n": len(common),
+            "source": source, "build": builds[source].most_common(1)[0][0],
+            "revisions": len(builds[source]), "n": len(common),
             "total": round(mine, 1),
             "ratio": mine / theirs if theirs else None,
             "median": _quantile(ordered, 0.5),
@@ -591,7 +585,7 @@ def _cost(rows: list[sqlite3.Row], ids: set[str]) -> dict | None:
     whole = sum(r["ratio"] or 0.0 for r in measured)
     for row in measured:
         row["share"] = (row["ratio"] or 0.0) / whole if whole else 0.0
-    return {"build": base_build, "base": base,
+    return {"build": builds[base].most_common(1)[0][0], "base": base,
             "n": len(base_secs),
             "total": round(sum(r["total"] for r in measured), 1),
             "slots": sorted(measured, key=lambda r: -r["share"])}
