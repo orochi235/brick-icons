@@ -13,6 +13,10 @@ export interface SecsBin {
   /** Open-ended on the last bin. */
   to: number | null;
   n: number;
+  /** Past the axis break, where the buckets are one coarse width and the bars
+   *  are drawn narrow rather than to scale. Absent from an API older than the
+   *  field. */
+  tail?: boolean;
 }
 
 export interface CoverageRow {

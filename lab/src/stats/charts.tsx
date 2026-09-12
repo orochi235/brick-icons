@@ -99,6 +99,20 @@ export function CoverageBars({ rows, onOpen }: {
 /** The mark on a slot measured somewhere other than the panel's revision. */
 export const ELSEWHERE = '\u2020';
 
+/** The mark on a slot whose ratio rests on a slice of the base's parts. */
+export const THIN = '\u2021';
+
+/** Below this share of the base's parts a row is marked rather than read.
+ *  The parts a slot holds at the current revision are the ones something
+ *  re-drew recently, and in a fill round those are the stragglers -- which is
+ *  how silhouette-occt shows a 93.5s median off 513 parts against occt's 3.9s
+ *  off 856, where over the whole corpus the two cost about the same. */
+export const THIN_SHARE = 0.25;
+
+export function isThin(row: { n: number }, cost: { n: number }): boolean {
+  return cost.n > 0 && row.n < cost.n * THIN_SHARE;
+}
+
 /** What one pass costs, slot by slot, as a share of running them all.
  *
  *  One bar each rather than a single stack: the question is how the slots
@@ -131,11 +145,19 @@ export function CostBars({ cost }: { cost: Cost }) {
                 {' '}{ELSEWHERE}
               </span>
             )}
+            {isThin(row, cost) ? (
+              <span className="stats-muted"
+                    title={`over ${row.n.toLocaleString()} of `
+                      + `${cost.n.toLocaleString()} parts`}>
+                {' '}{THIN}
+              </span>
+            ) : null}
           </span>
           <div className="stats-bar" role="img"
                aria-label={`${row.source}: ${(row.share * 100).toFixed(1)}% of `
                  + `a pass of every slot, ${row.ratio?.toFixed(2) ?? '?'} times `
-                 + `${cost.base}, over ${row.n.toLocaleString()} parts`}>
+                 + `${cost.base}, over ${row.n.toLocaleString()} of `
+                 + `${cost.n.toLocaleString()} parts`}>
             <span className="stats-seg" data-label="cost"
                   style={{ width: `${pct(row.share, widest)}%` }} />
           </div>
@@ -147,7 +169,10 @@ export function CostBars({ cost }: { cost: Cost }) {
             {row.median === null ? '—' : row.median.toFixed(1)}
             <span className="stats-muted">s</span>
           </span>
-          <span className="stats-bar-value">{row.n.toLocaleString()}</span>
+          <span className="stats-bar-value"
+                data-thin={isThin(row, cost) ? '' : undefined}>
+            {row.n.toLocaleString()}
+          </span>
         </div>
       ))}
     </div>
@@ -176,16 +201,27 @@ const binLabel = (from: number, to: number | null) =>
  *  engine must not bring per-panel scaling with it.
  *
  *  The bins are not one width -- the server runs half a second to ten, one to
- *  twenty, two to forty, five to a minute -- so each bar is as wide as it
- *  covers. Equal-width bars over unequal buckets draw the same area for
- *  wildly different densities, which is the whole reason the fine end can be
- *  fine. There are too many to label one by one: a tick sits at every ten
- *  seconds and the rest of a bin's reading is its tooltip.
+ *  twenty, two to forty, five to a minute -- so up to the break each bar is
+ *  drawn as wide as the span it covers. Equal-width bars over unequal buckets
+ *  draw the same area for wildly different densities, which is the whole
+ *  reason the fine end can be fine.
  *
- *  Identity is fill against hatch, not two hues. The status palette already
- *  spends gold, red and cyan and the phase palette blue, orange, green and
- *  purple; a spare hue on this page is one the reader has just been taught to
- *  read as something else. */
+ *  Past the break the server's buckets are ten seconds each and the bars are
+ *  one narrow width, standing off from the rest: a tenth of occt's parts and
+ *  near a quarter of naive's are out there, and to scale they would take four
+ *  times the width of everything before them. The gap is what says the axis
+ *  is broken, so nothing in the tail should touch the run before it.
+ *
+ *  There are too many bins to label one by one: a tick sits at every ten
+ *  seconds before the break and every minute after it, and the rest of a
+ *  bin's reading is its tooltip.
+ *
+ *  Identity is hue AND fill. occt takes the blue the failure chart already
+ *  paints the occt slot, so no hue on this page gains a second meaning -- the
+ *  status palette spends gold, red and cyan, the phase palette blue, orange,
+ *  green and purple, and every spare hue measured within 4 dE of one of them.
+ *  naive stays the neutral it is: the reference implementation, and the only
+ *  neutral that clears the CVD floor against blue is a true gray. */
 const SERIES_FILL = ['solid', 'hatch'] as const;
 
 /** A tick every ten seconds, read off the bin's own boundary rather than
@@ -195,16 +231,19 @@ const TICK_SECS = 10;
 export function SecsOverlay({ rows }: { rows: SpeedRow[] }) {
   const bins = rows[0]?.bins ?? [];
   const tallest = Math.max(1, ...rows.flatMap((r) => r.bins.map((b) => b.n)));
-  // The open bucket runs to the slowest part there is, so it has no span to
-  // draw; it takes the widest the server used and stands off on its own.
+  // Width carries the span only up to the break; past it every bucket is ten
+  // seconds and the CSS draws them all narrow. The open bucket runs to the
+  // slowest part there is, so it has no span of its own either way.
   const spans = bins.map((b) => (b.to === null ? null : b.to - b.from));
   const widest = Math.max(1, ...spans.filter((s): s is number => s !== null));
+  const breaks = bins.findIndex((b) => b.tail);
   return (
     <figure className="stats-histogram stats-overlay">
       <figcaption className="stats-overlay-keys">
         {rows.map((row, i) => (
           <span key={row.engine} className="stats-overlay-key">
             <span className="stats-swatch stats-bin-mark" aria-hidden="true"
+                  data-engine={row.engine}
                   data-fill={SERIES_FILL[i] ?? 'solid'} />
             <strong>{row.engine}</strong>
             <span className="stats-muted">
@@ -213,35 +252,43 @@ export function SecsOverlay({ rows }: { rows: SpeedRow[] }) {
             </span>
           </span>
         ))}
+        <span className="stats-overlay-note stats-muted">
+          Counted per engine, not per slot: a part drawn as white-naive counts
+          under naive here, so a series runs larger than any one slot's tally.
+        </span>
       </figcaption>
       <div className="stats-bins">
         {bins.map((bin, b) => {
           const counts = rows.map((row) => row.bins[b]?.n ?? 0);
-          // Both bars stand on the baseline, so the taller one hides the
-          // shorter completely unless the shorter is the one in front. Which
-          // engine that is changes bin by bin -- that is the whole point of
-          // the chart -- so it cannot be a fixed order.
-          const shortest = Math.min(...counts);
           const open = bin.to === null;
+          // A tick every ten seconds is one per tail bucket, on bars a few
+          // pixels wide; out there a minute is the readable step.
+          const ticks = bin.tail ? TICK_SECS * 6 : TICK_SECS;
           return (
             <div key={bin.from} className="stats-bin" data-open={open || undefined}
+                 data-tail={bin.tail || undefined}
+                 data-break={b === breaks || undefined}
                  style={{ '--span': spans[b] ?? widest } as CSSProperties}>
               <span className="stats-bin-stack">
                 {rows.map((row, i) => {
                   const n = counts[i] ?? 0;
-                  if (n === 0) return null;
+                  // An engine with nothing in this bucket still holds its
+                  // half of the column: let the other one spread into it and
+                  // a lone bar reads as twice the count it is.
+                  if (n === 0) {
+                    return <span key={row.engine} className="stats-bin-gap"
+                                 aria-hidden="true" />;
+                  }
                   return (
                     <span key={row.engine} className="stats-bin-fill stats-bin-mark"
                           data-engine={row.engine} data-fill={SERIES_FILL[i] ?? 'solid'}
-                          data-front={n === shortest || undefined}
-                          style={{ height: `${pct(n, tallest)}%`,
-                                   zIndex: n === shortest ? 2 : 1 }}
+                          style={{ height: `${pct(n, tallest)}%` }}
                           title={`${row.engine}: ${n.toLocaleString()} parts took `
                                  + binLabel(bin.from, bin.to)} />
                   );
                 })}
               </span>
-              {(open || bin.from % TICK_SECS === 0) && (
+              {(open || bin.from % ticks === 0) && (
                 <span className="stats-bin-label"
                       data-at={open ? 'bin' : b === 0 ? 'first' : 'edge'}>
                   {open ? binLabel(bin.from, null) : `${bin.from}s`}
@@ -399,18 +446,12 @@ function ticksFor(max: number): number[] {
   return [0, top / 4, top / 2, (top * 3) / 4, top];
 }
 
-/** Failures over time, one line per slot.
- *
- *  `unit` is `count` for the tallies and `rate` for the build prefix, and the
- *  two are never drawn on one pair of axes: a build that drew 11 parts and a
- *  corpus of 23,339 share no y-scale, and putting them together would read a
- *  tiny sample as a collapse in failures. */
+/** Failures over time, one line per slot. */
 type FailureRow = FailurePoint | HistoryPoint;
 
-/** What a line is worth reading off a slot: how many parts it cannot draw, as
- *  a count or as a share of what the revision touched, or how much of the
- *  library it renders without failing. */
-export type SlotUnit = 'count' | 'rate' | 'coverage';
+/** What a line is worth reading off a slot: how many parts it cannot draw, or
+ *  how much of the library it renders without failing. */
+export type SlotUnit = 'count' | 'coverage';
 
 /** One line per slot, over ingests or over time -- `FailureRow` carries `run`
  *  for the first and `at` for the second. */
@@ -418,7 +459,7 @@ export function SlotLines({ rows, unit, caption, compact = false }: {
   rows: FailureRow[];
   unit: SlotUnit;
   caption: string;
-  /** Three to a row rather than full width. A narrower viewBox, because the
+  /** Side by side rather than full width. A narrower viewBox, because the
    *  whole SVG is scaled down to fit and its text with it -- keeping the wide
    *  geometry and letting CSS shrink it renders the axis at about six
    *  pixels. */
@@ -431,9 +472,7 @@ export function SlotLines({ rows, unit, caption, compact = false }: {
   // `size` is the fallback for a build row, where it is that revision's own
   // parts and `owed` means nothing.
   const value = (r: FailureRow) =>
-    unit === 'rate' ? share(r.bad, r.owed ?? r.size)
-      : unit === 'coverage' ? share(r.clean ?? 0, r.owed ?? r.size)
-      : r.bad;
+    unit === 'coverage' ? share(r.clean ?? 0, r.owed ?? r.size) : r.bad;
 
   const bySlot = new Map<string, FailureRow[]>();
   for (const r of rows) {
@@ -508,11 +547,7 @@ export function SlotLines({ rows, unit, caption, compact = false }: {
                         r={compact ? 1.8 : 2.2}>
                   <title>
                     {`${slot} — ${stamp(p)}`}
-                    {unit === 'rate'
-                      ? ` — ${p.bad.toLocaleString()} of `
-                        + `${(p.owed ?? p.size).toLocaleString()}, `
-                        + `${value(p).toFixed(1)}%`
-                      : unit === 'coverage'
+                    {unit === 'coverage'
                       ? ` — ${(p.clean ?? 0).toLocaleString()} of `
                         + `${(p.owed ?? p.size).toLocaleString()}, `
                         + `${value(p).toFixed(1)}%`

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { LabClient } from '@lab/api/client';
-import { CostBars, CoverageBars, CoverageLegend, ELSEWHERE, SlotLines,
-         PhaseBars, PhaseLegend, SecsOverlay } from '@lab/stats/charts';
+import { CostBars, CoverageBars, CoverageLegend, ELSEWHERE, isThin, SlotLines,
+         PhaseBars, PhaseLegend, SecsOverlay, THIN } from '@lab/stats/charts';
 import { Footprint } from '@lab/stats/Footprint';
 import type { Cost, Failures } from '@lab/stats/types';
 import { useStats } from '@lab/stats/useStats';
@@ -84,6 +84,17 @@ function Controls({ set, onChange, categories }: {
 const elsewhere = (cost: Cost) =>
   cost.slots.filter((row) => row.build !== cost.build);
 
+/** The slots whose ratio rests on a slice of the base's parts. */
+const thin = (cost: Cost) =>
+  cost.slots.filter((row) => isThin(row, cost));
+
+/** "a, b and c" -- the footnote names every thin slot and there are usually
+ *  two or three. */
+function sentence(parts: string[]): string {
+  if (parts.length < 2) return parts.join('');
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+}
+
 export function StatsPage({ client }: { client: LabClient }) {
   const [set, setSet] = useState<WorkingSet>(
     () => (typeof window === 'undefined'
@@ -145,10 +156,13 @@ export function StatsPage({ client }: { client: LabClient }) {
                   label="carry set and year facts" />
           </section>
 
-          {/* Three to a row, each description under its own chart: they
-              share an x-axis and are read against each other, and stacked
-              full-width the second was a scroll away from the first. */}
-          <div className="stats-trio">
+          {/* Side by side, each description under its own chart: they share
+              an x-axis and are read against each other, and stacked
+              full-width the second was a scroll away from the first. One
+              absolute and one share -- a third chart plotting the counts as a
+              share of each slot's set moved with the coverage beside it and
+              said nothing the pair does not. */}
+          <div className="stats-pair">
             <section>
               <h2>What will not draw</h2>
               <SlotLines rows={failures.series} unit="count" compact
@@ -158,7 +172,9 @@ export function StatsPage({ client }: { client: LabClient }) {
               <p className="stats-note">
                 Counted over every in-scope part, so the Controls above do not
                 move these. A part failing in more than one occt facet is one
-                line per facet here, and one part in the tile.
+                line per facet here, and one part in the tile. Counts, so the
+                slots do not compare directly: decal&rsquo;s 2,532 are a fifth
+                of what it draws where occt&rsquo;s 655 are a thirtieth.
               </p>
             </section>
 
@@ -176,23 +192,10 @@ export function StatsPage({ client }: { client: LabClient }) {
               </p>
             </section>
 
-            <section>
-              <h2>Failure rate over time</h2>
-              <SlotLines rows={failures.series} unit="rate" compact
-                            caption={unanswered ? STALE_API
-                              : 'no tally has been taken yet'} />
-              <p className="stats-note">
-                The chart to the left as a share of each slot&rsquo;s own set,
-                which is the only way the slots compare: decal&rsquo;s 2,532
-                broken parts are a fifth of what it draws, and occt&rsquo;s
-                655 are a thirtieth. Each step names the revision the slot was
-                on.
-              </p>
-            </section>
           </div>
 
           <p className="stats-note">
-            One axis across all three: every tally, dated by when it was
+            One axis across both: every tally, dated by when it was
             taken. They start where the tallies do, because nothing before
             that has a date — a rebuild restamped all 45 earlier ingests, 33
             of them inside one four-minute window. Dating a revision by its
@@ -234,6 +237,17 @@ export function StatsPage({ client }: { client: LabClient }) {
                         revision; its row is from <code>{row.build}</code>.
                       </span>
                     ))}
+                    {thin(stats.cost).length === 0 ? null : (
+                      <span>
+                        {' '}{THIN} {sentence(thin(stats.cost)
+                          .map((row) => `${row.source} over `
+                            + row.n.toLocaleString()))} of the{' '}
+                        {stats.cost.n.toLocaleString()} parts, so those ratios
+                        are not comparable with the rest: what a slot holds at
+                        a revision is whatever was drawn into it last, and a
+                        fill round draws the parts that failed before.
+                      </span>
+                    )}
                   </p>
                 </>
               )}

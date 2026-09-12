@@ -9,8 +9,16 @@
   --stats-notApplicable: #3f3f46;
   /* Deliberately none of the status colors above: a histogram bar is a count,
    * not a state, and painting it cyan would say "timed out" to anyone who
-   * just read the coverage legend. */
-  --stats-bin: #7f8ca6;
+   * just read the coverage legend.
+   *
+   * occt wears the blue this page already means occt by (`--slot-occt`), so
+   * the histogram spends no hue the reader has not already been taught. naive
+   * is the reference implementation and stays neutral -- a TRUE gray, not the
+   * blue-slate it was: against a blue-cast neutral no hue on this page clears
+   * the CVD floor, and blue itself reads at 10.5 normal-vision against it.
+   * Measured on the sunken surface -- CVD 11.9 worst, normal-vision 15.9. */
+  --stats-bin: #7a7a80;
+  --stats-bin-occt: #3987e5;
 
   /* The phase palette: categorical, four exclusive stages. Validated with the
    * dataviz validator against this page's sunken surface -- lightness band,
@@ -249,44 +257,56 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
   position: relative;
 }
 
-/* The open bucket is not the same width as the rest -- it runs to the slowest
- * part there is -- so it stands off from the even ones. */
-.stats-bin[data-open] { margin-inline-start: 0.75rem; }
+/* Past the break the buckets are one coarse width and the bars stop carrying
+ * their span: to scale the tail would take four times the width of the run
+ * before it. Wide enough for two series and a hairline between them. */
+.stats-bin[data-tail] { flex: 0 0 9px; }
 
-/* The two series share the column and overlap. The shorter one is drawn over
- * the taller, so a bin where one engine is far ahead still shows both. */
+/* The gap is what says the axis is broken rather than continuous, so it sits
+ * before the first tail bucket and nowhere else. */
+.stats-bin[data-break] { margin-inline-start: 0.9rem; }
+
+/* The two series stand side by side in the column, one half each. Overlaid,
+ * the taller hid the shorter completely unless the shorter was drawn in
+ * front, and which engine that was changed bin by bin. */
 .stats-bin-stack {
   display: flex;
   align-items: flex-end;
+  gap: 1px;
   height: 100%;
-  position: relative;
+}
+
+.stats-bin-fill,
+.stats-bin-gap {
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .stats-bin-fill {
   display: block;
-  border-radius: 3px 3px 0 0;
+  border-radius: 2px 2px 0 0;
   min-height: 1px;
-  position: absolute;
-  inset-inline: 0;
-  bottom: 0;
 }
 
-/* The ring is what keeps the front bar's edge readable where it sits inside
- * the back one; without it two bars of the same color read as one. */
-.stats-bin-fill[data-front] {
-  box-shadow: 0 -2px 0 var(--wzl-surface-sunken, #0e0f12),
-              1px 0 0 var(--wzl-surface-sunken, #0e0f12),
-              -1px 0 0 var(--wzl-surface-sunken, #0e0f12);
-}
+.stats-bin-mark { --mark: var(--stats-bin); background: var(--mark); }
+.stats-bin-mark[data-engine="occt"] { --mark: var(--stats-bin-occt); }
 
-.stats-bin-mark { background: var(--stats-bin); }
 /* Fine and low-contrast on purpose. A bold hatch across a bar this wide reads
- * as "disabled" rather than as a second series. */
+ * as "disabled" rather than as a second series. Kept now that the series
+ * differ in hue too: it is what carries identity in forced-colors, in print,
+ * and for a reader the hue pair does not reach. */
 .stats-bin-mark[data-fill="hatch"] {
   background: repeating-linear-gradient(
     135deg,
-    var(--stats-bin) 0 2px,
-    color-mix(in srgb, var(--stats-bin) 62%, var(--wzl-surface-sunken, #0e0f12)) 2px 5px);
+    var(--mark) 0 2px,
+    color-mix(in srgb, var(--mark) 62%, var(--wzl-surface-sunken, #0e0f12)) 2px 5px);
+}
+
+/* Its own line under the keys: the counts it qualifies are in those keys, and
+ * beside them it reads as part of the last engine's readout. */
+.stats-overlay-note {
+  flex-basis: 100%;
+  font-size: 0.75rem;
 }
 
 .stats-bins { border-bottom: 1px solid var(--wzl-border, #333); }
@@ -362,17 +382,24 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
 
 .stats-failures svg { width: 100%; height: auto; }
 
-/* Three charts to a row, each with its own description beneath it. Collapses
+/* Two charts to a row, each with its own description beneath it. Collapses
  * to one column before the panels get too narrow to read a date axis in. */
-.stats-trio {
+.stats-pair {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1.5rem;
   align-items: start;
 }
 
 @media (max-width: 1100px) {
-  .stats-trio { grid-template-columns: 1fr; }
+  .stats-pair { grid-template-columns: 1fr; }
+}
+
+/* A parts count resting on a slice of the base's parts: dimmed, because the
+ * ratio beside it is not comparable with the rows that carry a full one. */
+.stats-bar-value[data-thin] {
+  color: var(--wzl-fg-muted);
+  font-style: italic;
 }
 
 /* The compact viewBox is scaled down to a third of the page, and its text
