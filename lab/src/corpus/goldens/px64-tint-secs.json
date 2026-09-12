@@ -1,18 +1,18 @@
 [
   {
-    "kind": "fill",
+    "kind": "sprite",
     "dx": 0,
     "dy": 0,
     "dw": 64,
     "dh": 64,
-    "fill": "rgb(58,58,63)",
-    "border": null,
-    "borderWidth": 0,
-    "shape": "square",
-    "captions": [],
+    "sx": 2,
+    "sy": 2,
+    "sw": 32,
+    "sh": 32,
+    "ground": "rgb(58,58,63)",
     "badges": [],
     "strip": [],
-    "slash": false
+    "captions": []
   },
   {
     "kind": "fill",
@@ -58,76 +58,76 @@
     "slash": false
   },
   {
-    "kind": "fill",
+    "kind": "sprite",
     "dx": 0,
     "dy": 68,
     "dw": 64,
     "dh": 64,
-    "fill": "rgb(58,58,63)",
-    "border": null,
-    "borderWidth": 0,
-    "shape": "square",
-    "captions": [],
+    "sx": 2,
+    "sy": 38,
+    "sw": 32,
+    "sh": 32,
+    "ground": "rgb(58,58,63)",
     "badges": [],
     "strip": [],
-    "slash": false
+    "captions": []
   },
   {
-    "kind": "fill",
+    "kind": "sprite",
     "dx": 68,
     "dy": 68,
     "dw": 64,
     "dh": 64,
-    "fill": "rgb(58,58,63)",
-    "border": null,
-    "borderWidth": 0,
-    "shape": "square",
-    "captions": [],
+    "sx": 38,
+    "sy": 38,
+    "sw": 32,
+    "sh": 32,
+    "ground": "rgb(58,58,63)",
     "badges": [],
     "strip": [],
-    "slash": false
+    "captions": []
   },
   {
-    "kind": "fill",
+    "kind": "sprite",
     "dx": 136,
     "dy": 68,
     "dw": 64,
     "dh": 64,
-    "fill": "rgb(58,58,63)",
-    "border": null,
-    "borderWidth": 0,
-    "shape": "square",
-    "captions": [],
+    "sx": 74,
+    "sy": 38,
+    "sw": 32,
+    "sh": 32,
+    "ground": "rgb(58,58,63)",
     "badges": [],
     "strip": [],
-    "slash": false
+    "captions": []
   },
   {
-    "kind": "fill",
+    "kind": "sprite",
     "dx": 204,
     "dy": 68,
     "dw": 64,
     "dh": 64,
-    "fill": "rgb(58,58,63)",
-    "border": null,
-    "borderWidth": 0,
-    "shape": "square",
-    "captions": [],
+    "sx": 110,
+    "sy": 38,
+    "sw": 32,
+    "sh": 32,
+    "ground": "rgb(58,58,63)",
     "badges": [],
     "strip": [],
-    "slash": false
+    "captions": []
   },
   {
-    "kind": "fill",
+    "kind": "sprite",
     "dx": 0,
     "dy": 136,
     "dw": 64,
     "dh": 64,
-    "fill": "rgb(58,58,63)",
-    "border": null,
-    "borderWidth": 0,
-    "shape": "square",
-    "captions": [],
+    "sx": 2,
+    "sy": 74,
+    "sw": 32,
+    "sh": 32,
+    "ground": "rgb(58,58,63)",
     "badges": [
       {
         "tag": "retired",
@@ -138,19 +138,19 @@
       }
     ],
     "strip": [],
-    "slash": false
+    "captions": []
   },
   {
-    "kind": "fill",
+    "kind": "sprite",
     "dx": 68,
     "dy": 136,
     "dw": 64,
     "dh": 64,
-    "fill": "rgb(58,58,63)",
-    "border": null,
-    "borderWidth": 0,
-    "shape": "square",
-    "captions": [],
+    "sx": 38,
+    "sy": 74,
+    "sw": 32,
+    "sh": 32,
+    "ground": "rgb(58,58,63)",
     "badges": [
       {
         "tag": "popular",
@@ -168,19 +168,19 @@
         "ink": "oklch(1.0000 0 0)"
       }
     ],
-    "slash": false
+    "captions": []
   },
   {
-    "kind": "fill",
+    "kind": "sprite",
     "dx": 136,
     "dy": 136,
     "dw": 64,
     "dh": 64,
-    "fill": "rgb(58,58,63)",
-    "border": null,
-    "borderWidth": 0,
-    "shape": "square",
-    "captions": [],
+    "sx": 74,
+    "sy": 74,
+    "sw": 32,
+    "sh": 32,
+    "ground": "rgb(58,58,63)",
     "badges": [
       {
         "tag": "replaced",
@@ -193,7 +193,7 @@
       }
     ],
     "strip": [],
-    "slash": false
+    "captions": []
   },
   {
     "kind": "fill",
@@ -211,18 +211,18 @@
     "slash": false
   },
   {
-    "kind": "fill",
+    "kind": "sprite",
     "dx": 0,
     "dy": 204,
     "dw": 64,
     "dh": 64,
-    "fill": "rgb(58,58,63)",
-    "border": null,
-    "borderWidth": 0,
-    "shape": "square",
-    "captions": [],
+    "sx": 2,
+    "sy": 110,
+    "sw": 32,
+    "sh": 32,
+    "ground": "rgb(58,58,63)",
     "badges": [],
     "strip": [],
-    "slash": false
+    "captions": []
   }
 ]

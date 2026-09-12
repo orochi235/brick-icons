@@ -50,19 +50,38 @@ it('renders one row per state, in the table\'s own legend order', () => {
     .toEqual(conditionKeys().map((state) => STATE_LABEL[state]));
 });
 
-it('heads each badge axis, and lists its tags under it', () => {
+it('groups the badges by axis without writing the axis names on screen', () => {
   const { container } = render(<Legend cells={cells} highlight={null} onHighlight={() => {}}
                  badges={[]} onBadges={vi.fn()}
                  highlightTag={null} onHighlightTag={vi.fn()} onClose={vi.fn()} />);
   const axes = [...container.querySelectorAll('.corpus-legend-axis')];
-  expect(axes.map((a) => a.querySelector('h4')?.textContent))
-    .toEqual(['System', 'Properties', 'Sets', 'What became of it']);
+  expect(container.querySelector('.corpus-legend-axis h4')).toBeNull();
+  expect(axes.map((a) => a.getAttribute('aria-label')))
+    .toEqual(['Sets', 'System', 'Properties', 'What became of it']);
   const under = (label: string) => axes
-    .find((a) => a.querySelector('h4')?.textContent === label)!
+    .find((a) => a.getAttribute('aria-label') === label)!
     .querySelectorAll('.corpus-legend-name');
   expect([...under('System')].map((n) => n.textContent))
     .toEqual(['minifig', 'technic', 'duplo', 'weird', 'sticker']);
-  expect([...under('Sets')].map((n) => n.textContent)).toEqual(['popular']);
+  // Popular leads: it is the row most often reached for, and it was four
+  // groups down.
+  expect([...axes[0]!.querySelectorAll('.corpus-legend-name')]
+    .map((n) => n.textContent)).toEqual(['popular']);
+});
+
+it('puts the scale where the state rows are once a measured tint is on', () => {
+  const { container, rerender } = render(
+    <Legend cells={cells} highlight={null} onHighlight={() => {}}
+            badges={[]} onBadges={vi.fn()} highlightTag={null}
+            onHighlightTag={vi.fn()} onClose={vi.fn()} tint="secs" gradient="ember" />);
+  expect(container.querySelector('.corpus-tint-scale')).toBeTruthy();
+  expect(container.querySelector('[data-state]')).toBeNull();
+  rerender(
+    <Legend cells={cells} highlight={null} onHighlight={() => {}}
+            badges={[]} onBadges={vi.fn()} highlightTag={null}
+            onHighlightTag={vi.fn()} onClose={vi.fn()} tint="status" />);
+  expect(container.querySelector('.corpus-tint-scale')).toBeNull();
+  expect(container.querySelector('[data-state]')).toBeTruthy();
 });
 
 it('reports the hovered state, and null once the pointer leaves', () => {

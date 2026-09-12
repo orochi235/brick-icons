@@ -1,19 +1,9 @@
+/* A section of the legend, not a panel: the surface, border and shadow are
+   the legend's own. */
 .corpus-tint-scale {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
-  min-width: 13rem;
-  padding: 0.5rem 0.6rem;
-  /* Matched to `.corpus-legend`: both float over the wall's own cell colors,
-   * so the raised surface is composed over an opaque one rather than blurred
-   * against what is behind it. */
-  background-color: var(--wzl-surface);
-  background-image: linear-gradient(var(--wzl-surface-raised), var(--wzl-surface-raised));
-  color: var(--wzl-fg);
-  border: var(--wzl-border-w) solid var(--wzl-border);
-  border-radius: var(--wzl-radius-md);
-  box-shadow: 0 6px 20px var(--wzl-shadow);
-  font: 12px/1.4 ui-monospace, monospace;
 }
 
 .corpus-tint-scale-head {

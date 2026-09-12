@@ -773,9 +773,10 @@ describe('tint', () => {
                   cam: { x: 0, y: 0, scale: { x: 1, y: 1 } }, palette: CELL_FILL,
                   manifest, loose: new Map([['a', img]]) };
 
-  it('drops the thumbnail for the ramp outside status mode', () => {
+  it('keeps the thumbnail outside status mode, on the ramp as its ground', () => {
     expect(paintCommands({ ...drawn, tint: 'sets' })[0]).toMatchObject({
-      kind: 'fill', fill: tintFor(drawn.cells[0]!, 'sets', CELL_FILL).fill,
+      kind: 'image', image: img,
+      ground: tintFor(drawn.cells[0]!, 'sets', CELL_FILL).fill,
     });
   });
 
@@ -793,13 +794,16 @@ describe('tint', () => {
     expect(paintCommands({ ...drawn, loose: new Map() })[0]!.kind).toBe('sprite');
   });
 
-  it('hides the sheet outside status mode, so the ramp is what is read', () => {
-    expect(paintCommands({ ...drawn, loose: new Map(), tint: 'sets' })[0]!.kind)
-      .toBe('fill');
+  it('keeps the sheet outside status mode too', () => {
+    expect(paintCommands({ ...drawn, loose: new Map(), tint: 'sets' })[0])
+      .toMatchObject({ kind: 'sprite',
+                       ground: tintFor(drawn.cells[0]!, 'sets', CELL_FILL).fill });
   });
 
   it('paints an unmatched part its own tone rather than the ramp floor', () => {
-    const [cmd] = paintCommands({ ...drawn, cells: [cell('a', 0, null)], tint: 'sets' });
+    const [cmd] = paintCommands({
+      ...drawn, cells: [cell('a', 0, null)], loose: new Map(), manifest: null,
+      tint: 'sets' });
     expect(cmd).toMatchObject({ kind: 'fill', fill: CELL_FILL.unmatched.fill });
   });
 });

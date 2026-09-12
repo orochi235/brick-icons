@@ -1,10 +1,12 @@
 import { useMemo } from 'react';
 import { FloatingPanel } from '@weasel-js/labkit';
 import { BadgeSwatch } from '@lab/corpus/BadgeSwatch';
+import { TintScale } from '@lab/corpus/TintScale';
 import { ALL_BADGES, BADGE_AXES, tally } from '@lab/corpus/paint';
 import { CELL_STATES, DEFAULT_PALETTE, LEGEND_STATES, STATE_CSS_VAR,
          STATE_FAMILY, STATE_LABEL, STATE_SHAPE,
          type CellState } from '@lab/corpus/palette';
+import type { MeasuredMode, RampName, TintMode } from '@lab/corpus/tint';
 import type { Cell } from '@lab/corpus/types';
 import '@lab/corpus/Legend.css';
 
@@ -33,13 +35,14 @@ export interface LegendProps {
   /** Dismissal is the topbar's to own: a legend that closed itself had no way
    *  back short of a reload. */
   onClose: () => void;
-  /** Whether a measured tint owns the wall's colors. The state rows describe
-   *  `status` and nothing else, so under a tint they are a second panel
-   *  contradicting `TintScale` -- swatches for a coloring that is not on
-   *  screen, beside counts that still are. The tag rows stay either way:
-   *  they are filters, and filtering is unaffected by what the cells are
-   *  colored by. */
-  tinted?: boolean;
+  /** What the wall is colored by, and the ramp a measured mode draws in.
+   *  The state rows describe `status` and nothing else, so a measured mode
+   *  puts its scale in their place rather than beside it -- swatches for a
+   *  coloring that is not on screen were the panel's whole top half. The tag
+   *  rows stay either way: they are filters, and filtering is unaffected by
+   *  what the cells are colored by. */
+  tint?: TintMode;
+  gradient?: RampName;
 }
 
 /** The wall's conditions, with a swatch, a name and a count over the wall.
@@ -48,7 +51,7 @@ export interface LegendProps {
 export function Legend({ cells, tagCells, highlight, onHighlight,
                         badges, onBadges,
                         highlightTag, onHighlightTag, onClose,
-                        tinted = false }: LegendProps) {
+                        tint = 'status', gradient = 'ember' }: LegendProps) {
   const counts = useMemo(() => {
     // A row stands for its siblings too, so the rows still add up to the
     // wall: `timed out` counts the 1,930 parts that timed out in another
@@ -84,10 +87,8 @@ export function Legend({ cells, tagCells, highlight, onHighlight,
           x
         </button>
       </div>
-      {tinted ? (
-        <p className="corpus-legend-tinted">
-          Colors are the scale, not these states.
-        </p>
+      {tint !== 'status' ? (
+        <TintScale mode={tint as MeasuredMode} gradient={gradient} />
       ) : (
       <ul className="corpus-legend-list">
         {/* Swatch colors come from the state table, not from a rule per
@@ -126,8 +127,8 @@ export function Legend({ cells, tagCells, highlight, onHighlight,
         )}
       </div>
       {BADGE_AXES.map((axis) => (
-        <section key={axis.key} className="corpus-legend-axis">
-          <h4 className="corpus-legend-axis-name">{axis.label}</h4>
+        <section key={axis.key} className="corpus-legend-axis"
+                 aria-label={axis.label}>
           <ul className="corpus-legend-list">
             {axis.tags.filter((tag) => tag in ALL_BADGES).map((tag) => (
               <li key={tag} className="corpus-legend-item">

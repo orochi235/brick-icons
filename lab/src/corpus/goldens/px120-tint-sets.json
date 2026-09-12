@@ -1,31 +1,31 @@
 [
   {
-    "kind": "fill",
+    "kind": "sprite",
     "dx": 0,
     "dy": 0,
     "dw": 120,
     "dh": 120,
-    "fill": "rgb(133,117,87)",
-    "border": null,
-    "borderWidth": 0,
-    "shape": "square",
+    "sx": 2,
+    "sy": 2,
+    "sw": 32,
+    "sh": 32,
+    "ground": "rgb(133,117,87)",
+    "badges": [],
+    "strip": [],
     "captions": [
       {
         "text": "1978–",
         "corner": "tr",
-        "ink": "#ffffff",
+        "ink": "#4a4a4f",
         "weight": 300
       },
       {
         "text": "unknown",
         "corner": "bl",
-        "ink": "#ffffff",
+        "ink": "#4a4a4f",
         "weight": 500
       }
-    ],
-    "badges": [],
-    "strip": [],
-    "slash": false
+    ]
   },
   {
     "kind": "fill",
@@ -97,169 +97,156 @@
     "slash": false
   },
   {
-    "kind": "fill",
+    "kind": "sprite",
     "dx": 0,
     "dy": 124,
     "dw": 120,
     "dh": 120,
-    "fill": "rgb(133,117,87)",
-    "border": null,
-    "borderWidth": 0,
-    "shape": "square",
+    "sx": 2,
+    "sy": 38,
+    "sw": 32,
+    "sh": 32,
+    "ground": "rgb(133,117,87)",
+    "badges": [],
+    "strip": [],
     "captions": [
       {
         "text": "1978–",
         "corner": "tr",
-        "ink": "#ffffff",
+        "ink": "#4a4a4f",
         "weight": 300
       },
       {
         "text": "defect",
         "corner": "bl",
-        "ink": "#ffffff",
+        "ink": "#4a4a4f",
         "weight": 500
       }
-    ],
-    "badges": [],
-    "strip": [],
-    "slash": false
+    ]
   },
   {
-    "kind": "fill",
+    "kind": "sprite",
     "dx": 124,
     "dy": 124,
     "dw": 120,
     "dh": 120,
-    "fill": "rgb(133,117,87)",
-    "border": null,
-    "borderWidth": 0,
-    "shape": "square",
+    "sx": 38,
+    "sy": 38,
+    "sw": 32,
+    "sh": 32,
+    "ground": "rgb(133,117,87)",
+    "badges": [],
+    "strip": [],
     "captions": [
       {
         "text": "1978–",
         "corner": "tr",
-        "ink": "#ffffff",
+        "ink": "#4a4a4f",
         "weight": 300
       },
       {
         "text": "accepted",
         "corner": "bl",
-        "ink": "#ffffff",
+        "ink": "#4a4a4f",
         "weight": 500
       }
-    ],
-    "badges": [],
-    "strip": [],
-    "slash": false
+    ]
   },
   {
-    "kind": "fill",
+    "kind": "sprite",
     "dx": 248,
     "dy": 124,
     "dw": 120,
     "dh": 120,
-    "fill": "rgb(133,117,87)",
-    "border": null,
-    "borderWidth": 0,
-    "shape": "square",
+    "sx": 74,
+    "sy": 38,
+    "sw": 32,
+    "sh": 32,
+    "ground": "rgb(133,117,87)",
+    "badges": [],
+    "strip": [],
     "captions": [
       {
         "text": "1978–",
         "corner": "tr",
-        "ink": "#ffffff",
+        "ink": "#4a4a4f",
         "weight": 300
       },
       {
         "text": "probelse",
         "corner": "bl",
-        "ink": "#ffffff",
+        "ink": "#4a4a4f",
         "weight": 500
       }
-    ],
-    "badges": [],
-    "strip": [],
-    "slash": false
+    ]
   },
   {
-    "kind": "fill",
+    "kind": "sprite",
     "dx": 372,
     "dy": 124,
     "dw": 120,
     "dh": 120,
-    "fill": "rgb(133,117,87)",
-    "border": null,
-    "borderWidth": 0,
-    "shape": "square",
+    "sx": 110,
+    "sy": 38,
+    "sw": 32,
+    "sh": 32,
+    "ground": "rgb(133,117,87)",
+    "badges": [],
+    "strip": [],
     "captions": [
       {
         "text": "1978–",
         "corner": "tr",
-        "ink": "#ffffff",
+        "ink": "#4a4a4f",
         "weight": 300
       },
       {
         "text": "defelse",
         "corner": "bl",
-        "ink": "#ffffff",
+        "ink": "#4a4a4f",
         "weight": 500
       }
-    ],
-    "badges": [],
-    "strip": [],
-    "slash": false
+    ]
   },
   {
-    "kind": "fill",
+    "kind": "sprite",
     "dx": 0,
     "dy": 248,
     "dw": 120,
     "dh": 120,
-    "fill": "rgb(133,117,87)",
-    "border": null,
-    "borderWidth": 0,
-    "shape": "square",
+    "sx": 2,
+    "sy": 74,
+    "sw": 32,
+    "sh": 32,
+    "ground": "rgb(133,117,87)",
+    "badges": [],
+    "strip": [],
     "captions": [
       {
         "text": "1978–1994",
         "corner": "tr",
-        "ink": "#ffffff",
+        "ink": "#4a4a4f",
         "weight": 300
       },
       {
         "text": "retired",
         "corner": "bl",
-        "ink": "#ffffff",
+        "ink": "#4a4a4f",
         "weight": 500
       }
-    ],
-    "badges": [],
-    "strip": [],
-    "slash": false
+    ]
   },
   {
-    "kind": "fill",
+    "kind": "sprite",
     "dx": 124,
     "dy": 248,
     "dw": 120,
     "dh": 120,
-    "fill": "rgb(133,117,87)",
-    "border": null,
-    "borderWidth": 0,
-    "shape": "square",
-    "captions": [
-      {
-        "text": "1978–",
-        "corner": "tr",
-        "ink": "#ffffff",
-        "weight": 300
-      },
-      {
-        "text": "popular",
-        "corner": "bl",
-        "ink": "#ffffff",
-        "weight": 500
-      }
-    ],
+    "sx": 38,
+    "sy": 74,
+    "sw": 32,
+    "sh": 32,
+    "ground": "rgb(133,117,87)",
     "badges": [
       {
         "tag": "popular",
@@ -277,32 +264,32 @@
         "ink": "oklch(1.0000 0 0)"
       }
     ],
-    "slash": false
+    "captions": [
+      {
+        "text": "1978–",
+        "corner": "tr",
+        "ink": "#4a4a4f",
+        "weight": 300
+      },
+      {
+        "text": "popular",
+        "corner": "bl",
+        "ink": "#4a4a4f",
+        "weight": 500
+      }
+    ]
   },
   {
-    "kind": "fill",
+    "kind": "sprite",
     "dx": 248,
     "dy": 248,
     "dw": 120,
     "dh": 120,
-    "fill": "rgb(133,117,87)",
-    "border": null,
-    "borderWidth": 0,
-    "shape": "square",
-    "captions": [
-      {
-        "text": "1978–1994",
-        "corner": "tr",
-        "ink": "#ffffff",
-        "weight": 300
-      },
-      {
-        "text": "replaced",
-        "corner": "bl",
-        "ink": "#ffffff",
-        "weight": 500
-      }
-    ],
+    "sx": 74,
+    "sy": 74,
+    "sw": 32,
+    "sh": 32,
+    "ground": "rgb(133,117,87)",
     "badges": [
       {
         "tag": "replaced",
@@ -315,7 +302,20 @@
       }
     ],
     "strip": [],
-    "slash": false
+    "captions": [
+      {
+        "text": "1978–1994",
+        "corner": "tr",
+        "ink": "#4a4a4f",
+        "weight": 300
+      },
+      {
+        "text": "replaced",
+        "corner": "bl",
+        "ink": "#4a4a4f",
+        "weight": 500
+      }
+    ]
   },
   {
     "kind": "fill",
@@ -346,25 +346,25 @@
     "slash": false
   },
   {
-    "kind": "fill",
+    "kind": "sprite",
     "dx": 0,
     "dy": 372,
     "dw": 120,
     "dh": 120,
-    "fill": "#2a2a2e",
-    "border": null,
-    "borderWidth": 0,
-    "shape": "square",
+    "sx": 2,
+    "sy": 110,
+    "sw": 32,
+    "sh": 32,
+    "ground": "#2a2a2e",
+    "badges": [],
+    "strip": [],
     "captions": [
       {
         "text": "nodata",
         "corner": "bl",
-        "ink": "#ffffff",
+        "ink": "#4a4a4f",
         "weight": 500
       }
-    ],
-    "badges": [],
-    "strip": [],
-    "slash": false
+    ]
   }
 ]

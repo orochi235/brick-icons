@@ -12,7 +12,6 @@ import { FilterBar } from '@lab/corpus/FilterBar';
 import { bandedLayout, blockLayout } from '@lab/corpus/grouped';
 import { gridLayout } from '@lab/corpus/layout';
 import { Legend } from '@lab/corpus/Legend';
-import { TintScale } from '@lab/corpus/TintScale';
 import { PAGES } from '@lab/nav/pages';
 import { levelFor, pickLevel } from '@lab/corpus/levels';
 import { Lightbox } from '@lab/corpus/Lightbox';
@@ -546,13 +545,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
                     onBadges={(update) => setSelection((s) => ({ ...s, badges: update(s.badges) }))}
                     highlightTag={highlightTag} onHighlightTag={setHighlightTag}
                     onClose={() => setLegendOpen(false)}
-                    tinted={selection.tint !== 'status'} />
-          )}
-          {/* Not behind `legendOpen`: the legend's swatches describe `status`,
-              so while a measured tint is on it is the scale that says what
-              the colors mean and the legend that is beside the point. */}
-          {selection.tint !== 'status' && (
-            <TintScale mode={selection.tint} gradient={selection.gradient} />
+                    tint={selection.tint} gradient={selection.gradient} />
           )}
         </div>
         {picked && (

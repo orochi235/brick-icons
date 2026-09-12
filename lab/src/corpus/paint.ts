@@ -301,11 +301,11 @@ export const ALL_BADGES: Record<string, CellBadge> = {
  *  plainly asks for. A flat list could only do one of the two, and did the
  *  wrong one for the pair anybody actually picks. */
 export const BADGE_AXES: { key: string; label: string; tags: string[] }[] = [
+  { key: 'sets', label: 'Sets', tags: ['popular'] },
   { key: 'system', label: 'System',
     tags: ['minifig', 'technic', 'duplo', 'weird', 'sticker'] },
   { key: 'properties', label: 'Properties',
     tags: ['magnet', 'electric', 'printed', 'composite'] },
-  { key: 'sets', label: 'Sets', tags: ['popular'] },
   { key: 'fate', label: 'What became of it', tags: ['retired', 'replaced'] },
 ];
 
@@ -496,8 +496,9 @@ export interface PaintInput {
   appearance?: Appearance;
   /** Group headers the layout asked for. Absent for a dense grid. */
   bands?: Band[];
-  /** What a cell's color says. Outside `status` the thumbnail gives way to
-   *  the ramp -- an opaque drawing and a ramp cannot both be read. */
+  /** What a cell's color says. A measured mode takes the ground a drawn cell
+   *  would otherwise get, so the ramp and the drawing are read together --
+   *  the same place `status` puts a state color. */
   tint?: TintMode;
   /** Which gradient a measured tint draws in. */
   gradient?: RampName;
@@ -538,7 +539,9 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
     const style = dimmed ? palette.unknown : tintFor(cell, tint, palette, gradient);
     const border = style.border;
     const borderWidth = borderWidthFor(style.weight, dw, appearance);
-    const ground = border ?? thumbGround();
+    // A measured tint has no border to carry it, so it takes the ground; the
+    // drawing stays on top, as it does over a state color.
+    const ground = tint === 'status' ? border ?? thumbGround() : style.fill;
     // Captions off and the years are not drawn at any size, so the retired
     // disc has nothing to be a duplicate of.
     const badges = appearance.showBadges
@@ -551,8 +554,8 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
     const wash = stale ? Math.max(STALE_WASH, appearance.retiredWash)
       : appearance.washRetired && isRetired(cell) ? appearance.retiredWash
       : undefined;
-    const vectored = tint === 'status' ? vector?.get(cell.id) : undefined;
-    const image = tint === 'status' ? (vectored ?? loose?.get(cell.id)) : undefined;
+    const vectored = vector?.get(cell.id);
+    const image = vectored ?? loose?.get(cell.id);
     if (image) {
       out.push({ kind: 'image', dx, dy, dw, dh, image, ground,
                  alpha, caret: isCaret, badges, strip, captions, wash });
@@ -560,7 +563,7 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
     }
     // Drawn whenever the sheet has a tile, stale or not. Freshness decides
     // whether to fetch a better one, never whether to show a picture.
-    const box = tint === 'status' && manifest && hasTile(manifest, cell)
+    const box = manifest && hasTile(manifest, cell)
       ? sourceBox(manifest, cell.index)
       : null;
     if (box) {

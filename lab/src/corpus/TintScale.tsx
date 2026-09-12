@@ -1,4 +1,3 @@
-import { FloatingPanel } from '@weasel-js/labkit';
 import { DEFAULT_PALETTE } from '@lab/corpus/palette';
 import { formatScale, ramp, scaleAt, SCALE_IS_LOG, SCALE_LABEL, STEPS,
          type MeasuredMode, type RampName } from '@lab/corpus/tint';
@@ -15,6 +14,9 @@ export interface TintScaleProps {
 
 /** What the wall's colors mean while a measured tint is on.
  *
+ *  Drawn inside `Legend`, in the place the state rows hold under `status`:
+ *  one panel says what a cell's color means, whatever it is coloring by.
+ *
  *  Read-only on purpose. Every row of `Legend` is also a filter, and the two
  *  sit on the same wall -- so a strip that looked clickable would promise a
  *  narrowing that does not exist. Nothing here takes focus or a handler.
@@ -28,9 +30,7 @@ export function TintScale({ mode, gradient }: TintScaleProps) {
   const high = formatScale(mode, scaleAt(mode, 1));
 
   return (
-    <FloatingPanel anchor="bottom-right"
-                   storageKey="brick-icons-lab.corpus-tint-scale"
-                   className="corpus-tint-scale">
+    <section className="corpus-tint-scale">
       <div className="corpus-tint-scale-head">
         <strong>{SCALE_LABEL[mode]}</strong>
         {SCALE_IS_LOG[mode] && (
@@ -57,6 +57,6 @@ export function TintScale({ mode, gradient }: TintScaleProps) {
               style={{ background: DEFAULT_PALETTE.unmatched.fill }} />
         <span>not measured</span>
       </div>
-    </FloatingPanel>
+    </section>
   );
 }
