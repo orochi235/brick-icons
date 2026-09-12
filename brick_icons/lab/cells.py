@@ -31,11 +31,12 @@ WHERE m.source = ?
 # wall: the alternative is a query per slot per part, and the wall asks for all
 # 24,591.
 _LATEST_ERRORS = """
-SELECT m.part_id, m.source, m.error FROM measurements m
+SELECT m.part_id, m.source, m.error, r.finished FROM measurements m
 JOIN (SELECT part_id, source, MAX(run_id) AS run_id FROM measurements
       GROUP BY part_id, source) latest
   ON m.part_id = latest.part_id AND m.source = latest.source
  AND m.run_id = latest.run_id
+JOIN runs r ON r.id = m.run_id
 WHERE m.error IS NOT NULL
 """
 
@@ -89,14 +90,33 @@ def errors_by_engine(conn: sqlite3.Connection) -> dict[str, dict[str, str]]:
     timeout, so one facet giving up on the clock cannot mask another failing
     outright.
     """
+    return _latest_errors(conn)[0]
+
+
+def _latest_errors(
+        conn: sqlite3.Connection) -> tuple[dict[str, dict[str, str]],
+                                           dict[str, dict[str, str]]]:
+    """Each engine's latest error per part, and when the run recording it
+    finished. One query, because the wall wants both and this one is a
+    group-by over the whole measurements table.
+
+    The two disagree on purpose where an engine's facets do: the text is the
+    worst news, so a timeout cannot mask a failure, while the time is the
+    latest of them -- what "this failed most recently" has to mean.
+    """
     out: dict[str, dict[str, str]] = {}
+    at: dict[str, dict[str, str]] = {}
     for row in conn.execute(_LATEST_ERRORS):
-        bucket = out.setdefault(engine_for(row["source"]), {})
+        engine = engine_for(row["source"])
+        bucket = out.setdefault(engine, {})
         have = bucket.get(row["part_id"])
         if have is None or (have == "TimeoutError"
                             and row["error"] != "TimeoutError"):
             bucket[row["part_id"]] = row["error"]
-    return out
+        when = at.setdefault(engine, {})
+        if row["finished"] and row["finished"] > when.get(row["part_id"], ""):
+            when[row["part_id"]] = row["finished"]
+    return out, at
 
 
 _NO_DEFECTS = {"open": 0, "review": 0, "accepted": 0}
@@ -269,7 +289,7 @@ def coverage_of(*, sha: str | None, error: str | None, open_defects: int,
     return "failed" if drew_nothing else "untried"
 
 
-def _judged(conn: sqlite3.Connection) -> tuple[set[str], str]:
+def judged(conn: sqlite3.Connection) -> tuple[set[str], str]:
     """The parts somebody has said something about, and a stamp over what was
     said. Small -- defects and reviewed statuses are in the tens against
     twenty thousand parts -- so resending all of them when the stamp moves
@@ -302,7 +322,9 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
     engine = engine_for(source)
     measures = {r["part_id"]: r for r in conn.execute(
         _LATEST_MEASURE, (source, source))}
-    errors = errors_by_engine(conn).get(engine, {})
+    errors_text, errors_at = _latest_errors(conn)
+    errors = errors_text.get(engine, {})
+    errored_at = errors_at.get(engine, {})
     # By SOURCE, unlike `errors`: drawing nothing is this slot's own outcome,
     # not the engine's. A stale one cannot mislead -- a later render gives the
     # cell a sha, and `coverage_of` answers "drawn" before it looks here.
@@ -318,7 +340,7 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
     # a defect updated the lightbox and left the cell behind it stale until a
     # reload -- the delta is built from renders, and no render had happened.
     drawn = max((r["made_at"] for r in renders.values()), default="")
-    judged, stamp = _judged(conn)
+    said_about, stamp = judged(conn)
     version = f"{drawn}|{stamp}"
     wanted = order
     if since is not None:
@@ -326,7 +348,7 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
         wanted = {pid for pid, r in renders.items()
                   if r["made_at"] > was_drawn}
         if was_stamp != stamp:
-            wanted |= judged
+            wanted |= said_about
         wanted = sorted(wanted)
 
     records = live_defects(conn)
@@ -395,6 +417,7 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
             "extra_d99": measure["extra_d99"] if measure else None,
             "secs": measure["secs"] if measure else None,
             "error": errors.get(pid),
+            "error_at": errored_at.get(pid),
             "coverage": coverage_of(
                 sha=render["sha256"] if render else None,
                 error=errors.get(pid),

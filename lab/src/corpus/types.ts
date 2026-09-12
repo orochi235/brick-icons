@@ -34,6 +34,10 @@ export interface Cell {
   extra_d99: number | null;
   secs: number | null;
   error: string | null;
+  /** When the run recording that error finished, so the wall can be put in
+   *  order of what broke most recently. Absent from an API older than the
+   *  field. */
+  error_at?: string | null;
   /** How far this slot got: see `coverage_of` in `brick_icons/lab/cells.py`.
    *  Absent from an API older than the field. */
   coverage?: 'defect' | 'failed' | 'timeout' | 'drawn' | 'untried';

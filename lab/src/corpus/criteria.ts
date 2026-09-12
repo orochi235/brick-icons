@@ -8,6 +8,7 @@ export interface SortFacts {
   extra_d99: number | null;
   secs: number | null;
   made_at: string | null;
+  error_at?: string | null;
   year_from: number | null;
   sets: number | null;
 }
@@ -36,6 +37,11 @@ export const SORT_SPECS = [
     value: (f: SortFacts) => f.secs, desc: true },
   { key: 'made_at', label: 'made_at',
     value: (f: SortFacts) => f.made_at, desc: true },
+  // The latest error, not the latest render: a part that failed an hour ago
+  // leads whatever failed last week, and everything that draws sorts behind
+  // both on the null rule above.
+  { key: 'error_at', label: 'last error',
+    value: (f: SortFacts) => f.error_at ?? null, desc: true },
   { key: 'year', label: 'year',
     value: (f: SortFacts) => f.year_from, desc: false },
   { key: 'sets', label: 'sets',

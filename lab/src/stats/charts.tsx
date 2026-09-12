@@ -86,7 +86,8 @@ export function CoverageBars({ rows, onOpen }: {
           </div>
           <span className="stats-bar-value">
             {row.counts.drawn.toLocaleString()}
-            <span className="stats-muted"> / {row.size.toLocaleString()}</span>
+            <span className="stats-muted">
+              {' / '}{(row.owed ?? row.size).toLocaleString()}</span>
           </span>
         </div>
       ))}

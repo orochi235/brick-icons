@@ -5,6 +5,7 @@ the same function the wall's own grouping reads, so the two pages cannot come
 to disagree about what `drawn` means.
 """
 import datetime as dt
+import functools
 import json
 import sqlite3
 
@@ -12,7 +13,7 @@ from brick_icons import tags as part_tags
 from brick_icons.db import MOVED_PREFIX, OUT_OF_SCOPE_CATEGORIES
 from brick_icons.lab import tally
 from brick_icons.lab.cells import (COVERAGE_ORDER, coverage_of, engine_for,
-                                   not_applicable)
+                                   judged, not_applicable)
 
 # Seconds a render took, in even 2-second buckets to a minute, then one open
 # bucket for the tail. Even is the point: bars of one width over buckets
@@ -232,8 +233,14 @@ def _coverage(conn: sqlite3.Connection, ids: set[str]) -> list[dict]:
                 inapplicable=not_applicable(source, pid in printed,
                                             pid in drawn, pid in obsolete),
                 drew_nothing=pid in drew_nothing)] += 1
+        # Two wholes, because the bar and its label answer different
+        # questions. `size` is the working set, which every bar is a share of
+        # so the rows stay comparable by one edge. `owed` drops the parts this
+        # slot was never going to draw: decal is short of 12,432 decorated
+        # parts, not of the library.
         out.append({"source": source, "engine": engine, "counts": counts,
-                    "size": len(ids)})
+                    "size": len(ids),
+                    "owed": len(ids) - counts["notApplicable"]})
     return out
 
 
@@ -328,10 +335,25 @@ def tree(phases: dict) -> list[dict]:
     return roots
 
 
-def _bands(phases: dict) -> dict[str, float]:
-    """The four top-level bands, for the stacked bar that compares engines."""
-    named = normalize(phases)
+def _bands(named: dict[str, float]) -> dict[str, float]:
+    """The four top-level bands, for the stacked bar that compares engines.
+
+    Takes an already-normalized row: the caller needs the same dict for the
+    tree, and normalizing twice a row was 20,000 wasted passes a page.
+    """
     return {k: float(named.get(k, 0.0)) for k in PHASE_ORDER}
+
+
+@functools.lru_cache(maxsize=None)
+def _prefixes(path: str) -> tuple[str, ...]:
+    """`a/b/c` as ('a', 'a/b', 'a/b/c').
+
+    Cached on the path, because the corpus names 24 phases between all of it
+    and `_sum_paths` asked for the same handful once per part: a million
+    string joins a page to answer 24 questions.
+    """
+    parts = path.split("/")
+    return tuple("/".join(parts[:i + 1]) for i in range(len(parts)))
 
 
 def _sum_paths(named: list[dict[str, float]]) -> list[dict]:
@@ -350,9 +372,7 @@ def _sum_paths(named: list[dict[str, float]]) -> list[dict]:
         # against `render` -- `seen` is how many parts reached a stage.
         reached: set[str] = set()
         for path in row:
-            parts = path.split("/")
-            for i in range(len(parts)):
-                reached.add("/".join(parts[:i + 1]))
+            reached.update(_prefixes(path))
         for path in reached:
             secs[path] = secs.get(path, 0.0) + row.get(path, 0.0)
             seen[path] = seen.get(path, 0) + 1
@@ -407,9 +427,8 @@ def _phases(rows: list[sqlite3.Row], ids: set[str]) -> list[dict]:
     for row in rows:
         if row["part_id"] not in ids or not row["phases"]:
             continue
-        phases = json.loads(row["phases"])
-        bands = _bands(phases)
-        named = normalize(phases)
+        named = normalize(json.loads(row["phases"]))
+        bands = _bands(named)
         per_engine.setdefault(row["engine"], []).append({
             "part_id": row["part_id"],
             "bands": bands,
@@ -550,6 +569,36 @@ def _running(conn: sqlite3.Connection) -> bool:
     """Whether any run is unfinished, which is what sets the poll interval."""
     return conn.execute("SELECT 1 FROM runs WHERE finished IS NULL "
                         "LIMIT 1").fetchone() is not None
+
+
+#: What every number on the dashboard is derived from, in one round trip.
+#: Anything that moves one of them moves a count here: a run lands
+#: measurements, a fetch lands renders and attempts, an ingest lands parts and
+#: part_years, and opening or closing a run is what `_running` reports.
+_FRESHNESS = """
+SELECT (SELECT MAX(run_id) FROM measurements),
+       (SELECT count(*) FROM measurements),
+       (SELECT count(*) FROM renders),
+       (SELECT count(*) FROM attempts),
+       (SELECT count(*) FROM parts),
+       (SELECT count(*) FROM part_years),
+       (SELECT count(*) FROM runs),
+       (SELECT count(*) FROM runs WHERE finished IS NULL)
+"""
+
+
+def freshness(conn: sqlite3.Connection) -> str:
+    """A key that changes whenever `stats` would answer differently.
+
+    About 5 ms against the 1.3 seconds of the answer itself, which is what
+    makes caching the answer worth doing. Counts rather than timestamps
+    because a row deleted and a row added is still a different corpus, and
+    `judged` on the end for the two edits nothing dates or counts -- a
+    defect's status, a part's review -- which is the same fingerprint the
+    wall already trusts for them.
+    """
+    counts = conn.execute(_FRESHNESS).fetchone()
+    return "|".join(str(c) for c in counts) + "|" + judged(conn)[1]
 
 
 def _shape(conn: sqlite3.Connection, rows: list[sqlite3.Row],

@@ -21,6 +21,11 @@ export interface CoverageRow {
   counts: Record<Coverage, number>;
   /** The working set's size, so a bar knows its own whole. */
   size: number;
+  /** The set less the parts this slot was never going to draw -- what it is
+   *  actually short of, which is the figure the row reads out. The bar still
+   *  spans `size`, so the rows stay comparable by one edge. Absent from an
+   *  API older than the field. */
+  owed?: number;
 }
 
 export interface SpeedRow extends Spread {

@@ -215,6 +215,31 @@ def test_coverage_counts_only_the_working_set(conn):
     assert rows[0]["counts"]["drawn"] == 1
 
 
+def test_a_slot_is_owed_only_what_it_could_draw(conn):
+    """`decal` has nothing to draw for a plain brick, so the brick is not in
+    the count the row reads out -- it said 1 of 2 when only one part was ever
+    owed. The bar still spans the whole set, so the rows line up."""
+    _part(conn, "3001")
+    _part(conn, "3068bp01", printed=1)
+    _render(conn, "3068bp01", "decal")
+    conn.commit()
+    row = stats.stats(conn)["coverage"][0]
+    assert row["source"] == "decal"
+    assert row["counts"]["notApplicable"] == 1
+    assert row["owed"] == 1
+    assert row["size"] == 2
+
+
+def test_a_slot_that_draws_everything_is_owed_the_whole_set(conn):
+    _part(conn, "3001")
+    _part(conn, "3002")
+    _render(conn, "3001", "silhouette-naive")
+    conn.commit()
+    row = stats.stats(conn)["coverage"][0]
+    assert row["counts"]["notApplicable"] == 0
+    assert row["owed"] == row["size"] == 2
+
+
 def test_a_slot_with_no_renders_is_not_a_slot(conn):
     _part(conn, "3001")
     conn.commit()

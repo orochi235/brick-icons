@@ -78,6 +78,7 @@ def create_app(root: Path | str = ".",
     app.state.ldraw_dir = load_config(root=str(root)).ldraw_dir
     app.state.index = None
     app.state.sizes = None
+    app.state.stats_cache = {}
     app.state.jobs = jobs.Registry()
     app.state.defects_path = Path(defects_path) if defects_path else (
         root / defects.DEFAULT_PATH)
@@ -373,10 +374,29 @@ def create_app(root: Path | str = ".",
             raise HTTPException(422, f"kind must be one of {stats.KINDS}")
         conn = corpus_conn()
         try:
-            return stats.stats(conn, kind=kind, moved=moved,
-                               out_of_scope=out_of_scope, obsolete=obsolete,
-                               posed=posed,
-                               excluded=tuple(excluded), badges=tuple(badges))
+            # 1.3 seconds of work over 20,000 parts, against 5 ms to ask
+            # whether any of it would come out different. The key is the
+            # corpus, not a clock: a held answer is served only while every
+            # count it was computed from still holds, so an ingest landing
+            # mid-look invalidates it rather than being waited out.
+            asked = (kind, moved, out_of_scope, obsolete, posed,
+                     tuple(excluded), tuple(badges))
+            now = stats.freshness(conn)
+            held = app.state.stats_cache.get(asked)
+            if held is not None and held[0] == now:
+                return held[1]
+            answer = stats.stats(conn, kind=kind, moved=moved,
+                                 out_of_scope=out_of_scope, obsolete=obsolete,
+                                 posed=posed,
+                                 excluded=tuple(excluded), badges=tuple(badges))
+            # The controls are a handful of toggles, so the set of questions
+            # asked is small and bounded; a stale corpus's answers go when
+            # the question is next asked.
+            app.state.stats_cache = {k: v for k, v
+                                     in app.state.stats_cache.items()
+                                     if v[0] == now}
+            app.state.stats_cache[asked] = (now, answer)
+            return answer
         finally:
             conn.close()
 

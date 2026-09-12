@@ -655,3 +655,57 @@ def test_ingest_runs_route_lists_the_ingests(tmp_path):
     body = client.get(f"/api/ingest/runs/{run}/attempts").json()
     assert [r["part_id"] for r in body["rows"]] == ["3001"]
     assert body["total"] == 1
+
+
+# -- the dashboard's held answer -------------------------------------------
+
+def _add_part(tmp_path, pid):
+    from brick_icons import db
+    conn = db.connect(tmp_path / "corpus.db")
+    conn.execute("INSERT INTO parts (id, title, category, printed, obsolete, "
+                 "status) VALUES (?, 'Brick', 'Brick', 0, 0, 'good')", (pid,))
+    conn.commit()
+    conn.close()
+
+
+def test_the_dashboard_holds_its_answer_while_the_corpus_stands(tmp_path):
+    client = _corpus_client(tmp_path)
+    first = client.get("/api/corpus/stats").json()
+    again = client.get("/api/corpus/stats").json()
+    # Same object, not merely equal: `as_of` is stamped per computation, so
+    # an equal one would mean it recomputed.
+    assert again["as_of"] == first["as_of"]
+
+
+def test_a_part_landing_drops_the_held_answer(tmp_path):
+    """The whole risk of holding one. An ingest mid-look has to invalidate
+    it, not be waited out."""
+    client = _corpus_client(tmp_path)
+    before = client.get("/api/corpus/stats").json()
+    assert before["set"]["size"] == 1
+    _add_part(tmp_path, "3002")
+    after = client.get("/api/corpus/stats").json()
+    assert after["set"]["size"] == 2
+    assert after["as_of"] != before["as_of"]
+
+
+def test_a_judged_part_drops_the_held_answer(tmp_path):
+    """A review changes no count and dates no row -- the case a fingerprint
+    of table sizes alone would serve straight through."""
+    from brick_icons import db
+    client = _corpus_client(tmp_path)
+    before = client.get("/api/corpus/stats").json()
+    conn = db.connect(tmp_path / "corpus.db")
+    conn.execute("UPDATE parts SET status = 'bad' WHERE id = '3001'")
+    conn.commit()
+    conn.close()
+    assert client.get("/api/corpus/stats").json()["as_of"] != before["as_of"]
+
+
+def test_each_question_is_held_separately(tmp_path):
+    client = _corpus_client(tmp_path)
+    all_parts = client.get("/api/corpus/stats").json()
+    obsolete = client.get("/api/corpus/stats",
+                          params={"kind": "obsolete"}).json()
+    assert obsolete["set"]["kind"] == "obsolete"
+    assert client.get("/api/corpus/stats").json()["as_of"] == all_parts["as_of"]

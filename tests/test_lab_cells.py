@@ -38,12 +38,13 @@ def _defect(conn, defect_id, pid, engines, status="open", checked=None):
 _run_id = 0
 
 
-def _measure(conn, pid, engine, error=None, source=None):
+def _measure(conn, pid, engine, error=None, source=None, finished=None):
     global _run_id
     _run_id += 1
-    conn.execute("INSERT INTO runs (id, kind, started, commit_sha, args) "
-                 "VALUES (?, 'census', '2026-09-05T09:00:00+00:00', 'abc', '{}')",
-                 (_run_id,))
+    conn.execute("INSERT INTO runs (id, kind, started, finished, commit_sha, "
+                 "args) VALUES (?, 'census', '2026-09-05T09:00:00+00:00', ?, "
+                 "'abc', '{}')",
+                 (_run_id, finished))
     conn.execute("INSERT INTO measurements (run_id, part_id, engine, source, "
                  "error) VALUES (?, ?, ?, ?, ?)",
                  (_run_id, pid, engine, source or f"silhouette-{engine}", error))
@@ -843,3 +844,37 @@ def test_a_slot_erroring_on_an_obsolete_part_still_says_so(conn):
     conn.commit()
     cell = cells.cells(conn, source="silhouette-occt")["cells"][0]
     assert cell["coverage"] == "failed"
+
+
+# -- when a part last failed ----------------------------------------------
+
+def test_a_cell_says_when_it_last_errored(conn):
+    _part(conn, "3001")
+    _measure(conn, "3001", "naive", error="ValueError",
+             finished="2026-09-05T09:30:00+00:00")
+    conn.commit()
+    cell = cells.cells(conn)["cells"][0]
+    assert cell["error"] == "ValueError"
+    assert cell["error_at"] == "2026-09-05T09:30:00+00:00"
+
+
+def test_a_cell_that_never_errored_has_no_time(conn):
+    _part(conn, "3001")
+    _render(conn, "3001", "a", "2026-09-05T10:00:00+00:00")
+    conn.commit()
+    assert cells.cells(conn)["cells"][0]["error_at"] is None
+
+
+def test_the_error_time_is_the_latest_facet_the_text_is_the_worst(conn):
+    """Both halves at once, because they disagree on purpose: a timeout
+    recorded later must not hide a real failure, and the failure's older
+    stamp must not make the part look like it has not broken since."""
+    _part(conn, "3001")
+    _measure(conn, "3001", "naive", error="ValueError",
+             source="silhouette-naive", finished="2026-09-05T09:00:00+00:00")
+    _measure(conn, "3001", "naive", error="TimeoutError",
+             source="white-naive", finished="2026-09-06T09:00:00+00:00")
+    conn.commit()
+    cell = cells.cells(conn)["cells"][0]
+    assert cell["error"] == "ValueError"
+    assert cell["error_at"] == "2026-09-06T09:00:00+00:00"

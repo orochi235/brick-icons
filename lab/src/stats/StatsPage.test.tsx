@@ -175,6 +175,32 @@ describe('StatsPage', () => {
     expect(labels).toEqual(['drawn', 'defect', 'failed', 'timeout', 'untried']);
   });
 
+  it('reads out what the slot is owed, over a bar that spans the whole set',
+     async () => {
+    // decal has nothing to draw for a plain brick: the row is short 12 parts
+    // of 20, and the segment for the other 8 stays on the bar.
+    const some = body();
+    some.coverage[0]!.counts.notApplicable = 8;
+    some.coverage[0]!.counts.untried = 0;
+    some.coverage[0]!.owed = 12;
+    const { container } = render(<StatsPage client={clientWith(async () => some)} />);
+    await waitFor(() => container.querySelector('.stats-bar-value'));
+    expect(container.querySelector('.stats-bar-value')!.textContent)
+      .toContain('8 / 12');
+    const seg = [...container.querySelectorAll('.stats-bars .stats-seg')]
+      .find((el) => el.getAttribute('data-label') === 'notApplicable')!;
+    expect((seg as HTMLElement).style.width).toBe('40%');
+  });
+
+  it('falls back to the whole set where the server sends no owed', async () => {
+    const old = body();
+    delete old.coverage[0]!.owed;
+    const { container } = render(<StatsPage client={clientWith(async () => old)} />);
+    await waitFor(() => container.querySelector('.stats-bar-value'));
+    expect(container.querySelector('.stats-bar-value')!.textContent)
+      .toContain('8 / 20');
+  });
+
   it('leaves out a label no part is in', async () => {
     const none = body();
     none.coverage[0]!.counts.defect = 0;
