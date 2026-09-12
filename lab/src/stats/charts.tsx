@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import type { Coverage } from '@lab/corpus/facts';
 import type { Cost, CoverageRow, Phase, PhaseRow, SpeedRow } from '@lab/stats/types';
 
@@ -174,9 +175,12 @@ const binLabel = (from: number, to: number | null) =>
  *  own tallest bin draws two different counts at the same height, so a second
  *  engine must not bring per-panel scaling with it.
  *
- *  The bins are even and the server decides how wide (2s today), so there are
- *  too many to label one by one: a tick sits at every ten seconds and the rest
- *  of a bin's reading is its tooltip.
+ *  The bins are not one width -- the server runs half a second to ten, one to
+ *  twenty, two to forty, five to a minute -- so each bar is as wide as it
+ *  covers. Equal-width bars over unequal buckets draw the same area for
+ *  wildly different densities, which is the whole reason the fine end can be
+ *  fine. There are too many to label one by one: a tick sits at every ten
+ *  seconds and the rest of a bin's reading is its tooltip.
  *
  *  Identity is fill against hatch, not two hues. The status palette already
  *  spends gold, red and cyan and the phase palette blue, orange, green and
@@ -191,6 +195,10 @@ const TICK_SECS = 10;
 export function SecsOverlay({ rows }: { rows: SpeedRow[] }) {
   const bins = rows[0]?.bins ?? [];
   const tallest = Math.max(1, ...rows.flatMap((r) => r.bins.map((b) => b.n)));
+  // The open bucket runs to the slowest part there is, so it has no span to
+  // draw; it takes the widest the server used and stands off on its own.
+  const spans = bins.map((b) => (b.to === null ? null : b.to - b.from));
+  const widest = Math.max(1, ...spans.filter((s): s is number => s !== null));
   return (
     <figure className="stats-histogram stats-overlay">
       <figcaption className="stats-overlay-keys">
@@ -216,7 +224,8 @@ export function SecsOverlay({ rows }: { rows: SpeedRow[] }) {
           const shortest = Math.min(...counts);
           const open = bin.to === null;
           return (
-            <div key={bin.from} className="stats-bin" data-open={open || undefined}>
+            <div key={bin.from} className="stats-bin" data-open={open || undefined}
+                 style={{ '--span': spans[b] ?? widest } as CSSProperties}>
               <span className="stats-bin-stack">
                 {rows.map((row, i) => {
                   const n = counts[i] ?? 0;
@@ -371,10 +380,10 @@ const slotRank = (source: string) => {
 };
 
 interface FailurePoint { at: string; source: string; bad: number; size: number;
-                         build: string | null }
+                         owed?: number; clean?: number; build: string | null }
 
 interface HistoryPoint { run: number; source: string; bad: number; size: number;
-                         clean: number; build: string | null }
+                         owed?: number; clean?: number; build: string | null }
 
 /** Ticks that land on round numbers, so the axis reads without arithmetic.
  *
@@ -405,15 +414,25 @@ export type SlotUnit = 'count' | 'rate' | 'coverage';
 
 /** One line per slot, over ingests or over time -- `FailureRow` carries `run`
  *  for the first and `at` for the second. */
-export function SlotLines({ rows, unit, caption }: {
+export function SlotLines({ rows, unit, caption, compact = false }: {
   rows: FailureRow[];
   unit: SlotUnit;
   caption: string;
+  /** Three to a row rather than full width. A narrower viewBox, because the
+   *  whole SVG is scaled down to fit and its text with it -- keeping the wide
+   *  geometry and letting CSS shrink it renders the axis at about six
+   *  pixels. */
+  compact?: boolean;
 }) {
   const share = (n: number, of: number) => (of > 0 ? (n / of) * 100 : 0);
+  // Coverage is a share of what the slot was ever going to draw, not of the
+  // library: decal draws printed parts and nothing else, and against `size`
+  // it reads as failing at two thirds of a corpus nobody asked it about.
+  // `rate` keeps `size`, which on a build row is that revision's own
+  // measurements rather than a corpus.
   const value = (r: FailureRow) =>
     unit === 'rate' ? share(r.bad, r.size)
-      : unit === 'coverage' ? share('clean' in r ? r.clean : 0, r.size)
+      : unit === 'coverage' ? share(r.clean ?? 0, r.owed ?? r.size)
       : r.bad;
 
   const bySlot = new Map<string, FailureRow[]>();
@@ -435,19 +454,27 @@ export function SlotLines({ rows, unit, caption }: {
   const stamp = (r: FailureRow) =>
     ('at' in r ? r.at.slice(0, 16).replace('T', ' ') : `run ${r.run}`);
 
+  // A dot per point is a mark on a sparse series and a smear on a dense one:
+  // the tallies run to hundreds of steps, where the dots merge into a fat
+  // line and the hover they carry is unusable anyway. The line itself is the
+  // data; dots only earn their place when you could count them.
+  const dots = Math.max(...[...bySlot.values()].map((r) => r.length)) <= 30;
+
   const times = rows.map(at);
   const t0 = Math.min(...times);
   const t1 = Math.max(...times);
   const top = Math.max(...ticksFor(Math.max(...rows.map(value))));
 
-  const W = 720, H = 260, padL = 52, padR = 16, padT = 12, padB = 30;
+  const [W, H] = compact ? [420, 280] : [720, 260];
+  const padL = compact ? 44 : 52, padR = compact ? 10 : 16;
+  const padT = compact ? 10 : 12, padB = compact ? 26 : 30;
   const x = (r: FailureRow) => padL + (t1 === t0 ? (W - padL - padR) / 2
     : ((at(r) - t0) / (t1 - t0)) * (W - padL - padR));
   const y = (v: number) => H - padB - (top === 0 ? 0 : (v / top) * (H - padT - padB));
   const ticks = ticksFor(Math.max(...rows.map(value)));
 
   return (
-    <figure className="stats-failures">
+    <figure className={`stats-failures${compact ? ' stats-failures-compact' : ''}`}>
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={caption}
            preserveAspectRatio="xMidYMid meet">
         {ticks.map((t) => (
@@ -475,16 +502,18 @@ export function SlotLines({ rows, unit, caption }: {
           return (
             <g key={slot}>
               <path className="stats-failure-line" data-slot={slot} d={d} />
-              {points.map((p) => (
+              {dots && points.map((p) => (
                 <circle key={stamp(p)} className="stats-failure-dot"
-                        data-slot={slot} cx={x(p)} cy={y(value(p))} r={4}>
+                        data-slot={slot} cx={x(p)} cy={y(value(p))}
+                        r={compact ? 1.8 : 2.2}>
                   <title>
                     {`${slot} — ${stamp(p)}`}
                     {unit === 'rate'
                       ? ` — ${value(p).toFixed(1)}% of ${p.size.toLocaleString()} drawn`
                       : unit === 'coverage'
-                      ? ` — ${('clean' in p ? p.clean : 0).toLocaleString()} of `
-                        + `${p.size.toLocaleString()}, ${value(p).toFixed(1)}%`
+                      ? ` — ${(p.clean ?? 0).toLocaleString()} of `
+                        + `${(p.owed ?? p.size).toLocaleString()}, `
+                        + `${value(p).toFixed(1)}%`
                       : ` — ${p.bad.toLocaleString()} of ${p.size.toLocaleString()}`}
                     {p.build ? ` — ${p.build}` : ''}
                   </title>

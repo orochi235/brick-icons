@@ -145,56 +145,63 @@ export function StatsPage({ client }: { client: LabClient }) {
                   label="carry set and year facts" />
           </section>
 
-          <section>
-            <h2>What will not draw</h2>
-            <SlotLines rows={failures.history ?? failures.series} unit="count"
-                          caption={unanswered ? STALE_API
-                            : 'no tally has been taken yet — one is written on '
-                              + 'the next ingest'} />
-            <p className="stats-note">
-              Counted over every in-scope part, so the Controls above do not
-              move these. A part failing in more than one occt facet is one
-              line per facet here, and one part in the tile.
-            </p>
-            <p className="stats-note">
-              One step per ingest, not per day: a run lands rows from several
-              engine revisions at once, and a rebuild restamps every run with
-              the time it was read back in — so the axis is the order this
-              corpus learned things, and each point names the newest revision
-              that taught it. The last step is where the corpus stands now.
-            </p>
-          </section>
+          {/* Three to a row, each description under its own chart: they
+              share an x-axis and are read against each other, and stacked
+              full-width the second was a scroll away from the first. */}
+          <div className="stats-trio">
+            <section>
+              <h2>What will not draw</h2>
+              <SlotLines rows={failures.series} unit="count" compact
+                            caption={unanswered ? STALE_API
+                              : 'no tally has been taken yet — one is written on '
+                                + 'the next ingest'} />
+              <p className="stats-note">
+                Counted over every in-scope part, so the Controls above do not
+                move these. A part failing in more than one occt facet is one
+                line per facet here, and one part in the tile.
+              </p>
+            </section>
 
-          <section>
-            <h2>Coverage over time</h2>
-            <SlotLines rows={failures.history ?? []} unit="coverage"
-                       caption={unanswered ? STALE_API
-                         : 'no ingest has been recorded yet'} />
-            <p className="stats-note">
-              How much of the library each slot renders without failing, over
-              the same ingests. What is on disk cannot be drawn here: 66,238
-              of the corpus&rsquo;s 112,861 drawings carry no run, a rebuild
-              stamped every one with the morning it read them back, and the
-              row that survives a re-bake names the re-bake — read that way
-              white-occt sits at 7% for forty ingests and reaches 80% at run
-              45, where 18,034 of that bake&rsquo;s 18,117 drawings were parts
-              it had already measured clean.
-            </p>
-          </section>
+            <section>
+              <h2>Coverage over time</h2>
+              <SlotLines rows={failures.series} unit="coverage" compact
+                         caption={unanswered ? STALE_API
+                           : 'no tally has been taken yet'} />
+              <p className="stats-note">
+                How much of what each slot was ever going to draw it has
+                drawn. A share of its own slot&rsquo;s set, not of the library
+                — decal draws printed parts and nothing else, and obsolete
+                moulds are outside every slot, so against the whole corpus
+                decal read as short of a library nothing asked it about.
+              </p>
+            </section>
 
-          <section>
-            <h2>Failure rate by engine revision</h2>
-            <SlotLines rows={failures.by_build} unit="rate"
-                          caption={unanswered ? STALE_API
-                            : 'no render in this corpus carries the build that '
-                              + 'drew it'} />
-            <p className="stats-note">
-              A share, not a count, and on its own axis for that reason. A
-              revision that covered less than a tenth of its slot's widest run
-              is left out — a bring-up run and a spot check are not rates, and
-              they are what sets the axis.
-            </p>
-          </section>
+            <section>
+              <h2>Failure rate by engine revision</h2>
+              <SlotLines rows={failures.by_build} unit="rate" compact
+                            caption={unanswered ? STALE_API
+                              : 'no render in this corpus carries the build that '
+                                + 'drew it'} />
+              <p className="stats-note">
+                A share, not a count, and on its own y-axis for that reason:
+                a revision is measured over the parts it touched, not over the
+                corpus. Only revisions that swept at least a tenth of their
+                slot are here, so this ends at the last sweep rather than at
+                today — a retry queue is aimed at the parts already known to
+                break, and 60% of a thousand picked parts is not the same
+                measurement as 1% of twenty thousand.
+              </p>
+            </section>
+          </div>
+
+          <p className="stats-note">
+            All three read calendar dates, off the tallies and off the commit
+            each engine revision names. The first two start where the tallies
+            do: a rebuild restamped all 45 earlier ingests, 33 of them inside
+            one four-minute window, so there is no date to draw them at. The
+            replayed run-axis history is still in the API for anything that
+            wants it, and is no longer drawn.
+          </p>
 
           <section>
             <h2>Coverage</h2>

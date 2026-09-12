@@ -147,7 +147,9 @@ describe('StatsPage', () => {
     const none = body();
     none.failures!.series = [];
     render(<StatsPage client={clientWith(async () => none)} />);
-    await waitFor(() => screen.getByText(/no tally has been taken yet/));
+    // Both tally charts read the same series, so both say it.
+    await waitFor(() =>
+      expect(screen.getAllByText(/no tally has been taken yet/).length).toBe(2));
   });
 
   it('keeps the build prefix on its own axis, as a rate', async () => {
@@ -155,9 +157,39 @@ describe('StatsPage', () => {
       <StatsPage client={clientWith(async () => body())} />);
     await waitFor(() => container.querySelector('.stats-failures'));
     const figures = container.querySelectorAll('.stats-failures');
-    expect(figures.length).toBe(2);
+    // Count, coverage, then the build rate -- three to the row.
+    expect(figures.length).toBe(3);
     // 2 of 10 drawn, so the rate axis tops out in percent, not in parts.
-    expect(figures[1]!.textContent).toContain('%');
+    expect(figures[2]!.textContent).toContain('%');
+  });
+
+  it('puts the three tally charts on one calendar axis', async () => {
+    const { container } = render(
+      <StatsPage client={clientWith(async () => body())} />);
+    await waitFor(() => container.querySelector('.stats-trio'));
+    const figures = container.querySelectorAll('.stats-trio .stats-failures');
+    expect(figures.length).toBe(3);
+    // A date, not `run N`: the axis labels come off `at`.
+    for (const fig of figures) {
+      expect(fig.querySelector('.stats-axis')!.textContent)
+        .not.toContain('run');
+    }
+    expect(figures[0]!.textContent).toContain('09-09');
+  });
+
+  it('reads a coverage share off what the slot was owed', async () => {
+    const some = body();
+    // decal is owed 12 of the 24, and has drawn 6 of them: half, not a
+    // quarter, which is what the whole corpus as a denominator said.
+    some.failures!.series = [
+      { at: '2026-09-10T00:00:00+00:00', source: 'decal', build: null,
+        size: 24, owed: 12, clean: 6, failed: 0, timeout: 0, bad: 0 },
+    ];
+    const { container } = render(<StatsPage client={clientWith(async () => some)} />);
+    await waitFor(() => container.querySelector('.stats-trio'));
+    const dot = container.querySelectorAll('.stats-trio .stats-failures')[1]!
+      .querySelector('.stats-failure-dot title')!;
+    expect(dot.textContent).toContain('6 of 12, 50.0%');
   });
 
   it('says how big the working set is and when it was read', async () => {

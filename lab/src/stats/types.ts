@@ -85,6 +85,14 @@ export interface FailurePoint {
   source: string;
   build: string | null;
   size: number;
+  /** The parts this slot was ever going to draw -- the set less what it
+   *  covers nothing of. The denominator for a coverage share, so decal is
+   *  measured against printed parts rather than the library. Absent from an
+   *  API older than the field. */
+  owed?: number;
+  /** Parts this slot has drawn, as the tally counted them on its own date.
+   *  Absent from an API older than the field. */
+  clean?: number;
   failed: number;
   timeout: number;
   bad: number;
@@ -105,6 +113,11 @@ export interface HistoryPoint {
    *  where none of them names one. */
   build: string | null;
   size: number;
+  /** The parts this slot was ever going to draw -- the set less what it
+   *  covers nothing of. The denominator for a coverage share, so decal is
+   *  measured against printed parts rather than the library. Absent from an
+   *  API older than the field. */
+  owed?: number;
   failed: number;
   timeout: number;
   bad: number;

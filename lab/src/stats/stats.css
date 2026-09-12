@@ -236,8 +236,10 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
   height: 8rem;
 }
 
+/* `--span` is the bucket's width in seconds, set per bar because the server
+ * owns the buckets: half a second at the fast end, five at the slow. */
 .stats-bin {
-  flex: 1;
+  flex: var(--span, 1) 1 0;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -359,6 +361,26 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
 
 .stats-failures svg { width: 100%; height: auto; }
 
+/* Three charts to a row, each with its own description beneath it. Collapses
+ * to one column before the panels get too narrow to read a date axis in. */
+.stats-trio {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .stats-trio { grid-template-columns: 1fr; }
+}
+
+/* The compact viewBox is scaled down to a third of the page, and its text
+ * with it -- so the type is set larger in user units to land near the
+ * full-width chart's rendered size. */
+.stats-failures-compact .stats-axis { font-size: 14px; }
+.stats-failures-compact .stats-failure-line { stroke-width: 2.5; }
+
+
 .stats-failure-line {
   fill: none;
   stroke-width: 2;
@@ -366,8 +388,9 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
   stroke-linecap: round;
 }
 
-/* A 2px surface ring, so two lines crossing stay two lines. */
-.stats-failure-dot { stroke: var(--wzl-surface-sunken, #111); stroke-width: 2; }
+/* No ring: at these radii the stroke was most of the dot, which read as a
+ * lighter halo along the line rather than as a mark on it. */
+.stats-failure-dot { stroke: none; }
 
 .stats-failure-line[data-slot='occt'] { stroke: var(--slot-occt); }
 .stats-failure-line[data-slot='white-occt'] { stroke: var(--slot-white-occt); }

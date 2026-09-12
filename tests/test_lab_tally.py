@@ -391,3 +391,108 @@ def test_an_obsolete_part_is_nothing_a_slot_owes(conn):
     conn.commit()
     row = {r["source"]: r for r in tally.count(conn)}["silhouette-occt"]
     assert (row["not_applicable"], row["untried"]) == (1, 0)
+
+
+# -- what a slot was owed --------------------------------------------------
+
+def test_a_slot_is_owed_only_the_parts_it_draws(conn):
+    """decal draws printed parts and nothing else, so the plain brick is not
+    in its denominator -- against the whole corpus its coverage read half of
+    what the same work scores for a slot covering the library."""
+    _part(conn, "3001")
+    _part(conn, "3068bp01", printed=1)
+    _render(conn, "3068bp01", "decal")
+    _render(conn, "3001", "occt")
+    conn.commit()
+    assert tally.owed(conn) == {"decal": 1, "occt": 2}
+
+
+def test_an_obsolete_mould_is_outside_every_slot(conn):
+    """`census-scope.py` takes obsolete = 0, so nothing ever queues one --
+    counting them left 2,733 parts in every slot's denominator."""
+    _part(conn, "3001")
+    _part(conn, "3002", obsolete=1)
+    _render(conn, "3001", "occt")
+    conn.commit()
+    assert tally.owed(conn, ["occt"]) == {"occt": 1}
+
+
+def test_the_history_carries_each_slot_its_own_denominator(conn):
+    _part(conn, "3001")
+    _part(conn, "3068bp01", printed=1)
+    _render(conn, "3068bp01", "decal")
+    _render(conn, "3001", "occt")
+    _measure(conn, "3001", "occt", "occt")
+    _attempt(conn, "3068bp01", "decal", "wrote")
+    conn.commit()
+    owed = {r["source"]: r["owed"] for r in tally.history(conn)}
+    assert owed == {"decal": 1, "occt": 2}
+    assert {r["size"] for r in tally.history(conn)} == {2}
+
+
+def test_a_tally_step_is_owed_what_the_slot_draws(conn):
+    _part(conn, "3001")
+    _part(conn, "3068bp01", printed=1)
+    _render(conn, "3068bp01", "decal")
+    conn.commit()
+    tally.take(conn, at="2026-09-05T10:00:00+00:00")
+    row = tally.series(conn, ["decal"])[-1]
+    assert row["owed"] == 1
+    assert row["size"] == 2
+
+
+def test_a_stale_writers_tally_cannot_move_the_denominator(conn):
+    """Several lab servers write this table and the old ones predate
+    `obsolete` reaching `not_applicable`. Read per step, the coverage line
+    swung between two writers' answers on alternate tallies."""
+    _part(conn, "3001")
+    _part(conn, "3068bp01", printed=1)
+    _render(conn, "3068bp01", "decal")
+    conn.commit()
+    tally.take(conn, at="2026-09-05T10:00:00+00:00")
+    # What a server without the obsolete rule writes: nothing inapplicable.
+    conn.execute("UPDATE tallies SET not_applicable = 0 WHERE source = 'decal'")
+    conn.commit()
+    assert tally.series(conn, ["decal"])[-1]["owed"] == 1
+
+
+def test_a_retry_queue_is_not_a_failure_rate(conn):
+    """The chart's whole filter. A revision aimed at the parts already known
+    to break reads 60% where the sweep beside it reads 1%, and one such point
+    took the axis to 80% and flattened every real line under it."""
+    head = subprocess.run(["git", "rev-parse", "--short", "HEAD"],
+                          capture_output=True, text=True).stdout.strip()
+    for i in range(40):
+        _part(conn, f"30{i:02d}")
+        _render(conn, f"30{i:02d}", "occt")
+    # A sweep of every part, three of them failing: 7.5%.
+    for i in range(40):
+        _measure(conn, f"30{i:02d}", "occt", "occt",
+                 error="ValueError" if i < 3 else None, build=f"100.{head}")
+    # A retry aimed at the three that broke, still broken: 100%, over three
+    # parts of the forty this slot draws.
+    for i in range(3):
+        _measure(conn, f"30{i:02d}", "occt", "occt", error="ValueError",
+                 build=f"200.{head}")
+    conn.commit()
+    kept = tally.by_build(conn, ["occt"])
+    assert [r["build"] for r in kept] == [f"100.{head}"]
+    assert kept[0]["bad"] == 3
+    assert kept[0]["size"] == 40
+
+
+def test_a_revision_is_rated_over_parts_not_measurement_rows(conn):
+    """A census that measured a part twice under one build counted it twice,
+    which put occt's widest run at 32,312 against 20,598 parts it draws."""
+    head = subprocess.run(["git", "rev-parse", "--short", "HEAD"],
+                          capture_output=True, text=True).stdout.strip()
+    _part(conn, "3001")
+    _part(conn, "3002")
+    _render(conn, "3001", "occt")
+    _measure(conn, "3001", "occt", "occt", error="ValueError", build=f"100.{head}")
+    _measure(conn, "3001", "occt", "occt", error="ValueError", build=f"100.{head}")
+    _measure(conn, "3002", "occt", "occt", build=f"100.{head}")
+    conn.commit()
+    row = tally.by_build(conn, ["occt"])[0]
+    assert row["size"] == 2
+    assert row["bad"] == 1

@@ -121,6 +121,37 @@ def count(conn: sqlite3.Connection) -> list[dict]:
     return out
 
 
+def owed(conn: sqlite3.Connection,
+         sources: Sequence[str] | None = None) -> dict[str, int]:
+    """How many parts each slot was ever going to draw.
+
+    The denominator every share on the coverage chart needs. `size` is the
+    whole in-scope corpus, and reading a line off that puts decal -- which
+    draws printed parts and nothing else -- at half of what a slot covering
+    the library scores for the same work. Obsolete moulds come out for every
+    slot on the same grounds: `census-scope.py` takes `obsolete = 0`, so
+    nothing ever queues one.
+
+    The slot's own scope only, unlike `_coverage`'s `owed` in `stats.py`,
+    which subtracts a count `coverage_of` has already let a render or an
+    error displace. The two differ only where a slot errored on a part it
+    does not cover, which is the contradiction `not_applicable` exists to
+    show and is not something a denominator should move with.
+    """
+    ids = in_scope(conn)
+    printed = {r["id"] for r in conn.execute(
+        "SELECT id FROM parts WHERE printed = 1")}
+    obsolete = {r["id"] for r in conn.execute(
+        "SELECT id FROM parts WHERE obsolete = 1")}
+    out = {}
+    for source in (sources if sources is not None else tracked_sources(conn)):
+        out[source] = sum(
+            1 for pid in ids
+            if not not_applicable(source, pid in printed, False,
+                                  pid in obsolete))
+    return out
+
+
 def tracked_sources(conn: sqlite3.Connection) -> list[str]:
     """The slots the failure chart follows: every occt facet, and decal.
 
@@ -174,12 +205,27 @@ def series(conn: sqlite3.Connection,
     pooled number draw as one line four times over, and the point of a line
     per facet is to see them diverge."""
     rows = conn.execute(
-        "SELECT taken, source, build, size, slot_failed, slot_timeout "
-        "FROM tallies ORDER BY taken, source")
+        "SELECT taken, source, build, size, drawn, "
+        "slot_failed, slot_timeout FROM tallies ORDER BY taken, source").fetchall()
+    owed_by = owed(conn, sorted({r["source"] for r in rows}))
     want = set(sources) if sources else None
+    # `owed` recomputed here, NOT read off the step's own `not_applicable`.
+    # That column is only as good as whichever process wrote the row, and
+    # several lab servers share this database: the stale ones predate
+    # `obsolete` reaching `not_applicable` and write 0 where current code
+    # writes 2,737. Read per step, the coverage line oscillated between 82.8%
+    # and 93.5% on alternate tallies -- one writer's answer, then the
+    # other's. One denominator for the whole series cannot do that.
+    #
+    # `clean` is what is on disk, which `history` must not read and this may:
+    # the artifact there is that a rebuild re-stamped every `made_at` and a
+    # run axis then credits a re-bake with parts it had already drawn. A
+    # tally is dated by when it was taken and counts what stood at that
+    # moment, and every tally in this corpus was taken after that rebuild.
     return [{"at": r["taken"], "source": r["source"], "build": r["build"],
-             "size": r["size"], "failed": r["slot_failed"],
-             "timeout": r["slot_timeout"],
+             "size": r["size"], "owed": owed_by.get(r["source"], r["size"]),
+             "clean": r["drawn"],
+             "failed": r["slot_failed"], "timeout": r["slot_timeout"],
              "bad": r["slot_failed"] + r["slot_timeout"]}
             for r in rows if want is None or r["source"] in want]
 
@@ -210,10 +256,20 @@ def _commit_dates(shas: Sequence[str]) -> dict[str, str]:
     return out
 
 
-#: The least of a slot's widest run a revision has to cover before its failure
-#: rate means anything. white-occt's first revision drew 277 parts of the
-#: 20,213 it draws now and 58% of them failed, which took the chart's axis to
-#: 60% and flattened every real line into the bottom tenth of it.
+#: How much of a slot's OWED set a revision has to have measured before its
+#: failure rate means anything.
+#:
+#: What disqualifies a revision is not a small sample but a chosen one. A
+#: retry queue is aimed at the parts already known to break, so its rate is
+#: high however many parts it covers: 1264.9cb8965 measured 1,298 parts of
+#: silhouette-occt at 60.9% against the 10,513-part sweep's 1.4%, and one
+#: point took the axis to 80% and flattened every real line under it.
+#:
+#: Against the slot's owed set, not against its widest run, which is what
+#: this compared and which a growing retry queue walks straight past -- that
+#: 60.9% point crossed a tenth of the widest run while this was being
+#: written. Owed is a fixed target, so the bar means the same thing in
+#: March as in September: did this revision sweep the slot, or pick at it?
 MEANINGFUL_SHARE = 0.10
 
 
@@ -226,32 +282,37 @@ def by_build(conn: sqlite3.Connection,
     was dirty; the sha is what git can date, and a dirty tree is still that
     commit's code plus something uncommitted.
 
-    A revision that covered a sliver of what its slot has drawn is left out:
-    a bring-up run and a spot check are not rates, and they are the points
-    that set the axis -- see `MEANINGFUL_SHARE`.
+    A revision that picked at its slot rather than sweeping it is left out: a
+    retry queue and a spot check are not rates, and they are the points that
+    set the axis -- see `MEANINGFUL_SHARE`.
+
+    Parts, not measurement rows. A census that measured a part twice under
+    one build counted it twice, which put occt's widest run at 32,312 against
+    an owed set of 20,598 -- a share over 100%, and a denominator no rate
+    could be read against.
     """
     want = set(sources) if sources else None
     rows = [r for r in conn.execute(
         "SELECT source, build, "
-        "sum(error IS NOT NULL AND error != 'TimeoutError') AS failed, "
-        "sum(error = 'TimeoutError') AS timeout, count(*) AS n "
+        "count(DISTINCT CASE WHEN error IS NOT NULL "
+        "     AND error != 'TimeoutError' THEN part_id END) AS failed, "
+        "count(DISTINCT CASE WHEN error = 'TimeoutError' THEN part_id END) "
+        "     AS timeout, "
+        "count(DISTINCT part_id) AS n "
         "FROM measurements WHERE build IS NOT NULL AND source IS NOT NULL "
         "GROUP BY source, build")
         if want is None or r["source"] in want]
 
     shas = {r["build"].split(".")[-1].rstrip("+") for r in rows}
     dates = _commit_dates(sorted(shas))
-
-    widest: dict[str, int] = {}
-    for r in rows:
-        widest[r["source"]] = max(widest.get(r["source"], 0), r["n"])
+    owed_by = owed(conn, sorted({r["source"] for r in rows}))
 
     out = []
     for r in rows:
         sha = r["build"].split(".")[-1].rstrip("+")
         if sha not in dates:
             continue
-        if r["n"] < widest[r["source"]] * MEANINGFUL_SHARE:
+        if r["n"] < owed_by.get(r["source"], 0) * MEANINGFUL_SHARE:
             continue
         out.append({"at": dates[sha], "source": r["source"], "build": r["build"],
                     "size": r["n"], "failed": r["failed"] or 0,
@@ -423,6 +484,7 @@ def history(conn: sqlite3.Connection,
     for row in rows:
         by_source.setdefault(row[0], []).append(row)
 
+    owed_by = owed(conn, sorted(by_source))
     for source, mine in sorted(by_source.items()):
         flagged = flagged_by_engine.get(engine_for(source), set())
         mine.sort(key=lambda r: (r[2], counts[r[1]]))
@@ -463,6 +525,7 @@ def history(conn: sqlite3.Connection,
                 out.append({"run": run_id, "source": source,
                             "build": newest or commits.get(run_id),
                             "size": len(ids),
+                            "owed": owed_by.get(source, len(ids)),
                             "failed": held["failed"],
                             "timeout": held["timeout"],
                             "bad": bad,
