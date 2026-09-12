@@ -8,14 +8,15 @@ import bisect
 import collections
 import datetime as dt
 import functools
+import itertools
 import json
 import sqlite3
 
 from brick_icons import tags as part_tags
 from brick_icons.db import MOVED_PREFIX, OUT_OF_SCOPE_CATEGORIES
 from brick_icons.lab import tally
-from brick_icons.lab.cells import (COVERAGE_ORDER, coverage_of, engine_for,
-                                   judged, not_applicable)
+from brick_icons.lab.cells import (COVERAGE_ORDER, coverage_of, degenerate,
+                                   engine_for, judged, not_applicable)
 
 # Seconds a render took: fine where the parts are, coarse where they thin out
 # -- half a second to ten, one to twenty, two to forty, five to a minute, ten
@@ -204,6 +205,22 @@ WHERE m.error IS NOT NULL
 """
 
 
+def _classes(group: set[str], marks: tuple[set[str], ...]):
+    """`group` split every way the marks can combine, as (flags, size).
+
+    What a part with no news of its own counts as turns on nothing but these,
+    so a handful of set sizes stands in for 23,000 `coverage_of` calls a slot.
+    """
+    for flags in itertools.product((True, False), repeat=len(marks)):
+        same = group
+        for flag, mark in zip(flags, marks):
+            same = same & mark if flag else same - mark
+            if not same:
+                break
+        if same:
+            yield flags, len(same)
+
+
 def _coverage(conn: sqlite3.Connection, ids: set[str]) -> list[dict]:
     sources = [r["source"] for r in conn.execute(
         "SELECT source, count(*) AS n FROM renders GROUP BY source "
@@ -212,6 +229,10 @@ def _coverage(conn: sqlite3.Connection, ids: set[str]) -> list[dict]:
         "SELECT id FROM parts WHERE printed = 1")}
     obsolete = {r["id"] for r in conn.execute(
         "SELECT id FROM parts WHERE obsolete = 1")}
+    marks = ",".join("?" * len(OUT_OF_SCOPE_CATEGORIES))
+    out_of_scope = {r["id"] for r in conn.execute(
+        f"SELECT id FROM parts WHERE category IN ({marks})",
+        OUT_OF_SCOPE_CATEGORIES)} | degenerate()
     errors_by_source: dict[str, dict[str, str]] = {}
     for row in conn.execute(_LATEST_ERROR_BY_SOURCE):
         errors_by_source.setdefault(row["source"], {})[row["part_id"]] = row["error"]
@@ -246,25 +267,21 @@ def _coverage(conn: sqlite3.Connection, ids: set[str]) -> list[dict]:
         told = (errors.keys() | flagged | drew_nothing) & ids
         for has_sha in (True, False):
             group = (ids & drawn if has_sha else ids - drawn) - told
-            for is_printed in (True, False):
-                same = group & printed if is_printed else group - printed
-                for is_obsolete in (True, False):
-                    n = len(same & obsolete if is_obsolete
-                            else same - obsolete)
-                    if not n:
-                        continue
-                    counts[coverage_of(
-                        sha="x" if has_sha else None, error=None,
-                        open_defects=0,
-                        inapplicable=not_applicable(source, is_printed,
-                                                    has_sha, is_obsolete),
-                        drew_nothing=False)] += n
+            for (is_printed, is_obsolete, is_out), n in _classes(
+                    group, (printed, obsolete, out_of_scope)):
+                counts[coverage_of(
+                    sha="x" if has_sha else None, error=None,
+                    open_defects=0,
+                    inapplicable=not_applicable(source, is_printed, has_sha,
+                                                is_obsolete, is_out),
+                    drew_nothing=False)] += n
         for pid in told:
             counts[coverage_of(
                 sha="x" if pid in drawn else None, error=errors.get(pid),
                 open_defects=1 if pid in flagged else 0,
                 inapplicable=not_applicable(source, pid in printed,
-                                            pid in drawn, pid in obsolete),
+                                            pid in drawn, pid in obsolete,
+                                            pid in out_of_scope),
                 drew_nothing=pid in drew_nothing)] += 1
         # Two wholes, because the bar and its label answer different
         # questions. `size` is the working set, which every bar is a share of

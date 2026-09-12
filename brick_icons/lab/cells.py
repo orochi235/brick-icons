@@ -9,6 +9,8 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+import tomllib
+from pathlib import Path
 
 from brick_icons import tags as part_tags
 from brick_icons.lab import defects as defects_toml
@@ -58,8 +60,24 @@ CONDITIONS = ("review", "defect", "timeout", "failed", "accepted")
 SLOT_DRAWS = {"decal": lambda printed: printed}
 
 
+#: Parts that take a machine down rather than failing. Every generated batch
+#: drops them, so they are the same practical class as an out-of-scope
+#: category: something nothing will ever queue. Read from the file
+#: `slot-coverage.py` reads, so the two cannot come to disagree about it.
+DEGENERATE_PATH = Path("tests/goldens/degenerate-parts.toml")
+
+
+def degenerate(path: Path | str = DEGENERATE_PATH) -> frozenset[str]:
+    """The ids on that list, or nothing where the file is not there."""
+    try:
+        raw = Path(path).read_bytes()
+    except OSError:
+        return frozenset()
+    return frozenset(e["id"] for e in tomllib.loads(raw.decode()).get("part", ()))
+
+
 def not_applicable(source: str, printed: bool, drawn: bool,
-                   obsolete: bool = False) -> bool:
+                   obsolete: bool = False, out_of_scope: bool = False) -> bool:
     """Whether this slot has nothing to draw for this part.
 
     Two signals have to agree: the part is one no batch will ask this slot
@@ -68,13 +86,16 @@ def not_applicable(source: str, printed: bool, drawn: bool,
     anyway -- the cell keeps whatever state its render gives it, so a
     contradiction shows rather than being colored over.
 
-    Obsolete is not a property of the slot: `census-scope.py` and
-    `slot-coverage.py` both take `obsolete = 0`, so a superseded mould is
-    outside every slot's corpus, and reading one as untried put 2,733 parts
-    into every occt slot's backlog that nothing would ever queue.
+    Neither obsolete nor out of scope is a property of the slot: both are
+    parts `census-scope.py` and `slot-coverage.py` drop before a batch is
+    picked, so nothing will ever queue them. Reading an obsolete mould as
+    untried put 2,733 parts into every occt slot's backlog; the `|` categories
+    -- LDraw's mark for parts nobody at LEGO made -- were occt's ENTIRE
+    22-part untried count, a dark tip on the bar that no job could clear.
     """
     draws = SLOT_DRAWS.get(source)
-    covered = not obsolete and (draws is None or draws(printed))
+    covered = (not obsolete and not out_of_scope
+               and (draws is None or draws(printed)))
     return not covered and not drawn
 
 
@@ -328,6 +349,7 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
     # By SOURCE, unlike `errors`: drawing nothing is this slot's own outcome,
     # not the engine's. A stale one cannot mislead -- a later render gives the
     # cell a sha, and `coverage_of` answers "drawn" before it looks here.
+    never_queued = degenerate()
     drew_nothing = {r["part_id"] for r in conn.execute(
         "SELECT DISTINCT part_id FROM attempts WHERE source = ? "
         "AND state = 'none'", (source,))}
@@ -424,7 +446,9 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
                 open_defects=bucket["open"] + bucket["review"],
                 inapplicable=not_applicable(
                     source, bool(part["printed"]), render is not None,
-                    bool(part["obsolete"])),
+                    bool(part["obsolete"]),
+                    part["category"] in OUT_OF_SCOPE_CATEGORIES
+                    or pid in never_queued),
                 drew_nothing=pid in drew_nothing),
             "open_defects": bucket["open"],
             "review_defects": bucket["review"],

@@ -186,6 +186,50 @@ def test_an_obsolete_part_on_the_map_is_not_work_a_slot_still_owes(conn):
     assert counts["silhouette-occt"]["untried"] == 0
 
 
+def test_a_part_nobody_made_is_not_work_a_slot_still_owes(conn):
+    """`|` is LDraw's mark for a part nobody at LEGO made, and it was occt's
+    ENTIRE untried count: 22 third-party wheels and electronics drawn as a
+    dark tip on a bar that no job could ever clear."""
+    _part(conn, "3001")
+    _part(conn, "t1017", category="|")
+    _render(conn, "3001", "silhouette-occt")
+    conn.commit()
+    counts = {r["source"]: r["counts"] for r in stats.stats(conn)["coverage"]}
+    assert counts["silhouette-occt"]["notApplicable"] == 1
+    assert counts["silhouette-occt"]["untried"] == 0
+
+
+def test_a_part_out_of_scope_that_was_drawn_anyway_keeps_its_drawing(conn):
+    """The contradiction shows rather than being colored over."""
+    _part(conn, "t1017", category="|")
+    _render(conn, "t1017", "silhouette-occt")
+    conn.commit()
+    counts = {r["source"]: r["counts"] for r in stats.stats(conn)["coverage"]}
+    assert counts["silhouette-occt"]["drawn"] == 1
+    assert counts["silhouette-occt"]["notApplicable"] == 0
+
+
+def test_a_degenerate_part_is_not_work_a_slot_still_owes(conn, tmp_path):
+    """A part that takes the machine down is dropped from every generated
+    batch, so nothing will ever queue it."""
+    listed = tmp_path / "degenerate-parts.toml"
+    listed.write_text('[[part]]\nid = "501ac01"\n')
+    _part(conn, "3001")
+    _part(conn, "501ac01")
+    _render(conn, "3001", "silhouette-occt")
+    conn.commit()
+    from brick_icons.lab import cells as cells_mod
+    was = cells_mod.DEGENERATE_PATH
+    cells_mod.DEGENERATE_PATH = listed
+    try:
+        counts = {r["source"]: r["counts"]
+                  for r in stats.stats(conn)["coverage"]}
+    finally:
+        cells_mod.DEGENERATE_PATH = was
+    assert counts["silhouette-occt"]["notApplicable"] == 1
+    assert counts["silhouette-occt"]["untried"] == 0
+
+
 def test_a_slot_that_draws_everything_marks_nothing_inapplicable(conn):
     _part(conn, "3001")
     _render(conn, "3001", "silhouette-naive")
