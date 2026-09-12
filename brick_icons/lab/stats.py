@@ -57,6 +57,12 @@ REPORTED_ENGINES = ("occt",)
 # a naive slot costs to fill is the question the chart is asked.
 TIMED_ENGINES = ("occt", "naive")
 
+# Slots whose open defects do not displace `drawn` on the coverage chart. A
+# defect against `reference` is a complaint about the truth image, not
+# coverage the slot owes: it drew the part, and reading it as `defect` says
+# the oracle failed to cover something it covered.
+DEFECTS_NOT_COUNTED = ("reference",)
+
 
 def _quantile(sorted_values: list[float], q: float) -> float | None:
     """Linear interpolation between the two neighbouring samples, which is
@@ -197,7 +203,8 @@ def _coverage(conn: sqlite3.Connection, ids: set[str]) -> list[dict]:
         engine = engine_for(source)
         drawn = drawn_by_source.get(source, set())
         errors = errors_by_source.get(source, {})
-        flagged = {r["part_id"] for r in open_defects if engine in r["engines"]}
+        flagged = set() if source in DEFECTS_NOT_COUNTED else {
+            r["part_id"] for r in open_defects if engine in r["engines"]}
         # Without this the two pages disagree, which the module docstring
         # promises they cannot: the wall reads a slot that ran and drew
         # nothing as `failed`, and the dashboard was calling the same 2,480

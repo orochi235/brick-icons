@@ -240,6 +240,18 @@ def test_a_slot_that_draws_everything_is_owed_the_whole_set(conn):
     assert row["owed"] == row["size"] == 2
 
 
+def test_a_reference_defect_still_counts_as_drawn(conn):
+    """A defect on the truth image is not coverage the reference slot owes."""
+    _part(conn, "3001")
+    _render(conn, "3001", "reference")
+    _defect(conn, "d1", "3001", ["reference"])
+    conn.commit()
+    row = stats.stats(conn)["coverage"][0]
+    assert row["source"] == "reference"
+    assert row["counts"]["defect"] == 0
+    assert row["counts"]["drawn"] == 1
+
+
 def test_a_slot_with_no_renders_is_not_a_slot(conn):
     _part(conn, "3001")
     conn.commit()
