@@ -1945,6 +1945,7 @@ status = "open"
 title = "lots of missing lines"
 checked = { translucent-occt = "649faadc5e31cfffaeae23902b527c1e0cfb363bdd4437d94a2e30dc4f7c7d69" }
 filed = "2026-09-13"
+notes = "Drawn right at HEAD: the translucent-occt drawing on the wall (renders/translucent-occt/45417.svg, sha 649faadc) is from an older build with broken hidden strokes; HEAD with the canonical translucent-occt flags draws every inner wall and rim line. Nothing to fix in the engine; the slot's drawing is stale and needs a redraw before this can close."
 
 [[defect]]
 id = "50950-curved-face-is-shaded-wrong"
@@ -2125,6 +2126,7 @@ status = "open"
 title = "occt version has zero outines??"
 checked = { occt = "047407244fd4966acff0000267eb57b7ddc7b51dd78ee2b9845e146d2ab6744c" }
 filed = "2026-09-13"
+notes = "Not an engine fault: the occt slot's drawing for this part is strokeless. out/slot-occt-crack (the 2026-09-10 crack-repair refresh) ran census-batch.sh without EXTRA stroke widths, so its JSONL records strokes [0, 0] and every drawing is byte-identical to the part's silhouette-occt render. 972 of that tree's 976 occt rows are affected; HEAD with the canonical occt flags draws 19954 fully outlined. Redraw list is out/slot-occt-crackfix/batches.txt (122 batches, 972 parts). Leave open until the redraw is ingested and the new sha has been looked at."
 
 [[defect]]
 id = "22385d01-minor-geometry-issues-on-decal"
@@ -2407,10 +2409,11 @@ filed = "2026-09-13"
 id = "4739b-missing-outlines"
 part = "4739b"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "missing outlines"
 checked = { occt = "c6e1eb7e00efb26a8378c6d06cc0107e849c69896e53d1614d76365c41d8f637" }
 filed = "2026-09-13"
+notes = "Fixed in 8d8c30f. The three panel sides were dropped by occt's line mask (_drop_lines_hlr_hides): HLR is asked about a loose copy of each type-2 line, and a copy lying on the recess wall tied with it and came back hidden. The copies now move LINE_MASK_NUDGE (0.05 LDU) toward the eye. Regression test: test_a_line_on_a_face_it_bounds_is_still_drawn. The occt slot's stored drawing still predates the fix."
 
 [[defect]]
 id = "194325ac01-far-faces-not-rendering"
