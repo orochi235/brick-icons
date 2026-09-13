@@ -35,7 +35,7 @@ export const SORT_SPECS = [
     value: (f: SortFacts) => f.extra_d99, desc: true },
   { key: 'secs', label: 'render time',
     value: (f: SortFacts) => f.secs, desc: true },
-  { key: 'made_at', label: 'made_at',
+  { key: 'made_at', label: 'last drawn',
     value: (f: SortFacts) => f.made_at, desc: true },
   // The latest error, not the latest render: a part that failed an hour ago
   // leads whatever failed last week, and everything that draws sorts behind
