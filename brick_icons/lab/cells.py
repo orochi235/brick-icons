@@ -232,17 +232,20 @@ def colors_for(year: sqlite3.Row | None) -> int | None:
 #: can use, but the span each reads is this part's own -- the sets LDraw names
 #: for it, and the years of the prints cut from the mould.
 #:
-#: `base` is not: it is the plain mould's span, and a print is far younger
-#: than its mould -- every Unikitty `3622p*` brick read 1978. Nor is a design
-#: id, which names every mould cut from that id: 699 printed torsos read
-#: 1983-2026 that way.
-BORROWED_YEAR_ROUTES = frozenset({"base", "design", "design-id-base"})
+#: A design id is not: it names every mould cut from that id, and the span is
+#: the union across all of them. 699 printed torsos read 1983-2026 that way.
+#: Nor is `base` for a print, which is far younger than its plain mould --
+#: every Unikitty `3622p*` brick read 1978 -- though it is for a re-cut or an
+#: alias of that mould (2654b, 11187a).
+BORROWED_YEAR_ROUTES = frozenset({"design", "design-id-base"})
 
 
-def years_for(year: sqlite3.Row | None) -> tuple[int | None, int | None]:
+def years_for(year: sqlite3.Row | None,
+              printed: bool) -> tuple[int | None, int | None]:
     """The years this part was made, or a pair of Nones where the span is not
     its own."""
-    if year is None or year["matched"] in BORROWED_YEAR_ROUTES:
+    if (year is None or year["matched"] in BORROWED_YEAR_ROUTES
+            or (printed and year["matched"] == "base")):
         return None, None
     return year["year_from"], year["year_to"]
 
@@ -417,8 +420,8 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
             # A redirect to the part that replaced it, not a part -- LDraw
             # keeps the file so old models still load.
             "moved": bool(part["moved"]),
-            "year_from": years_for(year)[0],
-            "year_to": years_for(year)[1],
+            "year_from": years_for(year, bool(part["printed"]))[0],
+            "year_to": years_for(year, bool(part["printed"]))[1],
             "sets": sets_for(year),
             "colors": colors_for(year),
             # The part that replaced this one, where one is known: the wall's

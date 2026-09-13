@@ -497,7 +497,8 @@ def create_app(root: Path | str = ".",
         finally:
             conn.close()
         part = dict(row)
-        part["year_from"], part["year_to"] = cells.years_for(years)
+        part["year_from"], part["year_to"] = cells.years_for(
+            years, bool(part["printed"]))
         part["sets"] = cells.sets_for(years)
         part["tags"] = tags.tags_for(part["category"], bool(part["printed"]),
                                      part["year_to"], part["sets"])

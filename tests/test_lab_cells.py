@@ -15,10 +15,10 @@ def conn(tmp_path):
 
 
 def _part(conn, pid, title="Brick", category="Brick", status="unreviewed",
-          obsolete=0):
+          obsolete=0, printed=0):
     conn.execute("INSERT INTO parts (id, title, category, printed, obsolete, "
-                 "status) VALUES (?, ?, ?, 0, ?, ?)",
-                 (pid, title, category, obsolete, status))
+                 "status) VALUES (?, ?, ?, ?, ?, ?)",
+                 (pid, title, category, printed, obsolete, status))
 
 
 def _render(conn, pid, sha, made_at, source="silhouette-naive"):
@@ -280,13 +280,24 @@ def test_a_print_does_not_inherit_its_base_part_s_history(conn):
     # 3069bp1f is one silver-arched-window print, read off the plain 1 x 2
     # tile it is struck on. That tile's 5,766 sets made a one-set print
     # `popular`, and its 1977 is the mould's year, not the print's.
-    _part(conn, "3069bp1f", title="Tile 1 x 2 with Silver Arched Window")
+    _part(conn, "3069bp1f", title="Tile 1 x 2 with Silver Arched Window Pattern",
+          printed=1)
     _years(conn, "3069bp1f", 1977, 2027, 5766, "base")
     row = cells.cells(conn)["cells"][0]
     assert (row["year_from"], row["year_to"]) == (None, None)
     assert row["sets"] is None
     assert row["colors"] is None
     assert "popular" not in row["tags"]
+
+
+def test_an_unprinted_variant_keeps_its_base_part_s_years(conn):
+    # 11187a is an alias of the snowshoe 11187, and 2654b a re-cut of the dish:
+    # the plain part's span is theirs, where a print is far younger than it.
+    _part(conn, "11187a", title="=Minifig Snowshoe with Short Toe Webbing")
+    _years(conn, "11187a", 2014, 2024, 40, "base")
+    row = cells.cells(conn)["cells"][0]
+    assert (row["year_from"], row["year_to"]) == (2014, 2024)
+    assert row["sets"] is None
 
 
 def test_a_plain_part_is_base(conn):
