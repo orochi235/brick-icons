@@ -2355,3 +2355,59 @@ title = "decal sheet draws ink another component hides"
 classes = ["decal"]
 filed = "2026-09-13"
 notes = "Since 6e040b0 a sub-part placed in a color is body, so print authored on that sub-part can find a carrier where before it bound to nothing. Two kinds surfaced, both hidden on the real part. 18603c02p*: the gold (494) antenna of the RFID tag u9512 sitting inside the brick draws as a second panel, and the shared sheet scale shrinks the real print. 16360p5i / 16360p5l: color-84 wrist-end discs authored in 16000p05, covered by the hands, draw as two dots (16360p5l golden re-frozen at 4 panels). Wanted: drop decoration another component covers or encloses. The rule has to ask what is declared, not infer from tessellation."
+
+[[defect]]
+id = "3176-borehole-shading-is-wrong"
+part = "3176"
+engines = ["occt"]
+status = "open"
+title = "borehole shading is wrong"
+checked = { occt = "778c571adc15d1ed568faf0a8516faeaf8799222aac137e1b65974ebb13e0c1f" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "3170-connector-rod-has-extra-outline"
+part = "3170"
+engines = ["occt"]
+status = "open"
+title = "connector rod has extra outline tail; sphere shading is very poor"
+checked = { occt = "216bb8ec40254b79546cd55c2d01740b9bc7dd6c4496737ea7238c178e4f0afb" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "58123p01-decal-shatters-to-mesh"
+part = "58123p01"
+engines = ["decal"]
+status = "open"
+title = "decal sheet shatters into 12 mesh shards"
+classes = ["decal"]
+filed = "2026-09-13"
+notes = "Since 6e040b0. The IR receiver places its sub-parts in their own colors (58148p01 in 72, 58149 in 32, 58150 in 25). Before, those counted as print, and the sheet showed the housing, window and orange cap with the V2 label on top: a tidy picture, but mostly moulded parts. Now they are body. What is left is small real print: V2 in 0, marks in 1 and 4, contacts in 494. It comes out as five groups of similar size, all above the sliver bar, so MAX_DECALS rejects the carrier path and the mesh fallback draws 12 pieces. 58123p01c01 does the same. Wanted: the true print on its carriers. The cap, or the contacts (hidden ink, see 18603c02p08-hidden-ink-panels), is what trips it."
+
+[[defect]]
+id = "92456p09-body-colored-slivers"
+part = "92456p09"
+engines = ["decal"]
+status = "open"
+title = "two body-colored slivers beside the bikini print"
+classes = ["decal"]
+filed = "2026-09-13"
+notes = "Seen in the uai torso redraw (run 78, drawn at 6e040b0 plus later commits). The sheet draws the shell bikini top and its back strap correctly, flattened onto the sculpted Friends torso, which matches the reference render. It also draws two thin pale lime slivers in roughly the body color, one beside the print and one below it, and nothing on the part carries them. Cause not investigated. Likely body-colored geometry counted as print: a sub-part or subfile placed in its own color that the component-body rule does not cover."
+
+[[defect]]
+id = "4740-borehole-backface-is-missing"
+part = "4740"
+engines = ["occt"]
+status = "open"
+title = "borehole backface is missing"
+checked = { occt = "719d697e199edf58dd574b374b5fd968a0d7dbe220c35fe2c543c5c874d48cda" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "4739b-missing-outlines"
+part = "4739b"
+engines = ["occt"]
+status = "open"
+title = "missing outlines"
+checked = { occt = "c6e1eb7e00efb26a8378c6d06cc0107e849c69896e53d1614d76365c41d8f637" }
+filed = "2026-09-13"
