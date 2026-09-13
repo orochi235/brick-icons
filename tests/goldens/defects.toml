@@ -26,7 +26,40 @@ mark = { x = 0.3322, y = 0.4281, w = 0.02, h = 0.0436 }
 seen = { angle = "iso", shading = "outline", shade_style = "flat3" }
 checked = { white-naive = "e5314c45e330b9cc402ff7b20ebbade9ab80293c854a92368bafb62689b0cc67" }
 filed = "2026-09-03"
-notes = "naive draws a ring at r=12.80 LDU; 6589.dat authors circles only at r=9, 10, 12 and 16. The counterbore separator refit in hlr._snap_rim_crossings refits the authored r=16 ring onto this circumcircle (0.800x radius, sweep 121.72 -> 220.79 deg). SEP_REFIT_MAX_GROWTH caps angular growth at 10x, so 1.81x passes; nothing guards the radius. occt draws the authored set and is right."
+notes = """
+naive draws a ring at r=12.80 LDU; 6589.dat authors circles only at r=9, 10, 12 and 16. The counterbore separator refit in hlr._snap_rim_crossings refits the authored r=16 ring onto this circumcircle (0.800x radius, sweep 121.72 -> 220.79 deg). SEP_REFIT_MAX_GROWTH caps angular growth at 10x, so 1.81x passes; nothing guards the radius. occt draws the authored set and is right.
+
+2026-09-12: three candidate guards measured over 1,500 corpus parts (201 that
+refit, 593 refits; `scripts/measure-refit-radius.py`, rows in
+out/refit-radius/rows.jsonl). All three fail to separate this defect from a
+sound refit:
+
+  radius ratio  legitimate refits shrink as hard as this one -- 0.830-0.856x
+                against 6589's 0.800x and 0.944x.
+  displacement  `dev`, how far the refit moves the curve it claims to snap
+                (the quantity `_refit_candidates` already computes). Looked
+                decisive on 138 parts -- everything <=0.242, nothing until
+                0.543, 6589's 0.27/0.29 in the gap -- and the gap filled in
+                completely at 1,500: 0.242, 0.244, 0.254, 0.274, 0.286,
+                0.308, 0.317.
+  result sweep  6589 refits to 344.7 and 220.8 deg; parts whose refits are
+                CORRECT sit at 271-273. p50 over the corpus is 273.
+
+`scripts/refit-ink-ab.py` draws a part twice in one process, disarming pass 2
+by dropping SEP_REFIT_MAX_GROWTH to 0, and component-counts the diff. It is
+what judged those parts, and the oracle cannot: the census draws strokeless,
+so a spurious ring contributes no silhouette and both passes measure
+identically (6589 d99 0.53 either way).
+
+What the A/B sheet shows is that a BAD refit lays an ellipse across the
+part's FACE while a sound one adds short arcs sitting ON the rim it snaps to
+-- a difference in what the refit attached itself to, not in any scalar about
+the resulting curve. That points at candidate selection rather than at the
+guards: `emms` takes any arc within 1% of the full circle's radius whose
+centre is under rF away, and `bores` any arc under 0.9 rF within 0.35 rF.
+Both are inferences from measured geometry, which is the rule shape CLAUDE.md
+says is wrong by construction here. A fourth scalar guard is fighting the
+wrong thing."""
 
 [[defect]]
 id = "6589-naive-halo-r11.3"
@@ -38,7 +71,40 @@ mark = { x = 0.4168, y = 0.6034, w = 0.059, h = 0.0262 }
 seen = { angle = "iso", shading = "outline", shade_style = "flat3" }
 checked = { white-naive = "e5314c45e330b9cc402ff7b20ebbade9ab80293c854a92368bafb62689b0cc67" }
 filed = "2026-09-03"
-notes = "naive draws a ring at r=11.33 LDU, unauthored the same way as 6589-naive-halo-r12.8. Refit of the authored r=12 ring: 0.944x radius, sweep 180.00 -> 344.69 deg (1.92x, under the same cap)."
+notes = """
+naive draws a ring at r=11.33 LDU, unauthored the same way as 6589-naive-halo-r12.8. Refit of the authored r=12 ring: 0.944x radius, sweep 180.00 -> 344.69 deg (1.92x, under the same cap).
+
+2026-09-12: three candidate guards measured over 1,500 corpus parts (201 that
+refit, 593 refits; `scripts/measure-refit-radius.py`, rows in
+out/refit-radius/rows.jsonl). All three fail to separate this defect from a
+sound refit:
+
+  radius ratio  legitimate refits shrink as hard as this one -- 0.830-0.856x
+                against 6589's 0.800x and 0.944x.
+  displacement  `dev`, how far the refit moves the curve it claims to snap
+                (the quantity `_refit_candidates` already computes). Looked
+                decisive on 138 parts -- everything <=0.242, nothing until
+                0.543, 6589's 0.27/0.29 in the gap -- and the gap filled in
+                completely at 1,500: 0.242, 0.244, 0.254, 0.274, 0.286,
+                0.308, 0.317.
+  result sweep  6589 refits to 344.7 and 220.8 deg; parts whose refits are
+                CORRECT sit at 271-273. p50 over the corpus is 273.
+
+`scripts/refit-ink-ab.py` draws a part twice in one process, disarming pass 2
+by dropping SEP_REFIT_MAX_GROWTH to 0, and component-counts the diff. It is
+what judged those parts, and the oracle cannot: the census draws strokeless,
+so a spurious ring contributes no silhouette and both passes measure
+identically (6589 d99 0.53 either way).
+
+What the A/B sheet shows is that a BAD refit lays an ellipse across the
+part's FACE while a sound one adds short arcs sitting ON the rim it snaps to
+-- a difference in what the refit attached itself to, not in any scalar about
+the resulting curve. That points at candidate selection rather than at the
+guards: `emms` takes any arc within 1% of the full circle's radius whose
+centre is under rF away, and `bores` any arc under 0.9 rF within 0.35 rF.
+Both are inferences from measured geometry, which is the rule shape CLAUDE.md
+says is wrong by construction here. A fourth scalar guard is fighting the
+wrong thing."""
 
 [[defect]]
 id = "6589-occt-this-is-weird"
@@ -64,7 +130,27 @@ title = "a circle whose visible part is several arcs is drawn whole"
 classes = ["arc-split"]
 checked = { silhouette-naive = "d6e00187e4ea339406ab1f35d9b5ba2344cc16d0a20dae15507391344004a309", white-naive = "118d2e260fcff0edcd558556d02c8abab775c0f6bbec6a3b283e377a1727b9c7" }
 filed = "2026-09-04"
-notes = "The neck ring keeps a complete ellipse where the near rim should cut it. In the SVG the ring comes out as 4-chunk closed arc runs (paths 11 and 13 of 21) alongside genuine 1- and 2-chunk partial arcs elsewhere in the same drawing, so partial arcs work and these specifically did not. Suspected rule: when occlusion breaks one circle into more than one visible span, the whole circle survives instead of the spans. 27448 shows the same thing."
+notes = """
+The neck ring keeps a complete ellipse where the near rim should cut it. In the SVG the ring comes out as 4-chunk closed arc runs (paths 11 and 13 of 21) alongside genuine 1- and 2-chunk partial arcs elsewhere in the same drawing, so partial arcs work and these specifically did not. Suspected rule: when occlusion breaks one circle into more than one visible span, the whole circle survives instead of the spans. 27448 shows the same thing.
+
+2026-09-12: the suspected rule is WRONG, and the measurement says so. The
+circles are not being broken into spans and re-closed -- they are never split
+at all. Each one tests visible at EVERY sample against the full occluder set
+(4524 r=100.09: 314/314; 27448 r=68.76: 216/216; 30152a r=106.89: 335/335),
+and in each part it is the NEAR rim that draws whole while the far rim at the
+same radius is cut correctly (4524 121/314, 27448 108/216, 30152a 204/407).
+A near rim of a cylinder IS a complete ellipse, so `dedupe_segments`' circular
+union and `visible_subops`' run-splitting are both behaving.
+
+What the LDView overlay shows instead (scripts/overlay-reference.py, slot
+white-naive) is that these arcs sit on FLAT SHADING, offset inward from the
+shading boundary the reference draws -- clearest where 30152a's rim runs
+across the stem. Over those samples the nearest occluder's depth EQUALS the
+arc's own to within 0.005 (eps is 0.039): the arc is lying on its own carrier
+surface and nothing is in front of it to cut it. So the question is not which
+spans survive occlusion but why an edge is drawn on that carrier at all --
+identify the primitive behind the arc, as 24434's entry had to.
+"""
 
 [[defect]]
 id = "27448-ring-whole-circle"
@@ -75,7 +161,27 @@ title = "same split-arc ellipse as 4524"
 classes = ["arc-split"]
 checked = { silhouette-naive = "f0d642fc8c1ae71b63e4a99a776041872f5f2854c9b251d8e40082e5a69e0471", white-naive = "de417c3d5861e707920d6878580a6f27f84c7ba31bd3a2f17f55d2c7b430fccf" }
 filed = "2026-09-04"
-notes = "Second instance of 4524-ring-whole-circle; two parts make it a class rather than a one-part quirk."
+notes = """
+Second instance of 4524-ring-whole-circle; two parts make it a class rather than a one-part quirk.
+
+2026-09-12: the suspected rule is WRONG, and the measurement says so. The
+circles are not being broken into spans and re-closed -- they are never split
+at all. Each one tests visible at EVERY sample against the full occluder set
+(4524 r=100.09: 314/314; 27448 r=68.76: 216/216; 30152a r=106.89: 335/335),
+and in each part it is the NEAR rim that draws whole while the far rim at the
+same radius is cut correctly (4524 121/314, 27448 108/216, 30152a 204/407).
+A near rim of a cylinder IS a complete ellipse, so `dedupe_segments`' circular
+union and `visible_subops`' run-splitting are both behaving.
+
+What the LDView overlay shows instead (scripts/overlay-reference.py, slot
+white-naive) is that these arcs sit on FLAT SHADING, offset inward from the
+shading boundary the reference draws -- clearest where 30152a's rim runs
+across the stem. Over those samples the nearest occluder's depth EQUALS the
+arc's own to within 0.005 (eps is 0.039): the arc is lying on its own carrier
+surface and nothing is in front of it to cut it. So the question is not which
+spans survive occlusion but why an edge is drawn on that carrier at all --
+identify the primitive behind the arc, as 24434's entry had to.
+"""
 
 [[defect]]
 id = "6107-pockets-through-wall"
@@ -129,7 +235,27 @@ title = "same split-arc ellipse as 4524"
 classes = ["arc-split"]
 checked = { silhouette-naive = "4ef2cd58154d52be5333af691a550cda4d92f9aa930b3292be3987ad0f889169", white-naive = "2ae706049bce7a586a13a6bbe2dadac77b356fc32d619475aa810378c97694b4" }
 filed = "2026-09-04"
-notes = "Third instance after 4524 and 27448. Also carries a couple of stray dots against the annulus, which may or may not be the same cause."
+notes = """
+Third instance after 4524 and 27448. Also carries a couple of stray dots against the annulus, which may or may not be the same cause.
+
+2026-09-12: the suspected rule is WRONG, and the measurement says so. The
+circles are not being broken into spans and re-closed -- they are never split
+at all. Each one tests visible at EVERY sample against the full occluder set
+(4524 r=100.09: 314/314; 27448 r=68.76: 216/216; 30152a r=106.89: 335/335),
+and in each part it is the NEAR rim that draws whole while the far rim at the
+same radius is cut correctly (4524 121/314, 27448 108/216, 30152a 204/407).
+A near rim of a cylinder IS a complete ellipse, so `dedupe_segments`' circular
+union and `visible_subops`' run-splitting are both behaving.
+
+What the LDView overlay shows instead (scripts/overlay-reference.py, slot
+white-naive) is that these arcs sit on FLAT SHADING, offset inward from the
+shading boundary the reference draws -- clearest where 30152a's rim runs
+across the stem. Over those samples the nearest occluder's depth EQUALS the
+arc's own to within 0.005 (eps is 0.039): the arc is lying on its own carrier
+surface and nothing is in front of it to cut it. So the question is not which
+spans survive occlusion but why an edge is drawn on that carrier at all --
+identify the primitive behind the arc, as 24434's entry had to.
+"""
 
 [[defect]]
 id = "28192dy0-decal-torn"
@@ -203,8 +329,9 @@ engines = ["naive"]
 status = "open"
 title = "extra diagonal under closer arch"
 classes = ["hidden-leak"]
-checked = { white-naive = "4ae5e4c465a33a8b0f7bfb70710a0cce2f7ab3427ab2aabfd73dee9271d6f611" }
+checked = { white-naive = "8fc55aca5b2ccfcc9e7e1b82d76eb0985d4720cbfa7532d28c3dfc6081c9d29a", naive = "cd282f0de2f549bfc6f311f1dfc44f7f5b4894d097bbbc389e4175810f7ebd21" }
 filed = "2026-09-06"
+notes = "2026-09-12, measured (scripts/probe-drawn-classes.py, probe-segs-in-box.py, probe-occluder-field.py). The extra curves are declared type-2 edges: suppressing conditional lines, wall rim arcs, cylinder silhouette generators, fitted edge arcs and silhouette arc refitting each moves 0 px of them. They are drawn because they pass the depth test -- at their drawn samples the nearest occluder is a cylinder band, and the wall planes that might hide them are FARTHER along the ray, not nearer (mid sample: arc at 34.36, z=+6 plane 53.96, z=+10 plane 60.49). So this is not a bias or a missing occluder: those samples really are frontmost, and what is wrong is which surface the edge is taken to bound. The reference draws plain material across the whole path (zoomed, no tone break) and occt draws nothing, so the ink is wrong whatever the depths say. Next step is to identify the primitive each arc belongs to rather than its depth."
 
 [[defect]]
 id = "3484-occt-handle-missing-arcs-extra"
@@ -655,10 +782,11 @@ filed = "2026-09-08"
 id = "78666-missing-contour-edge-on-front"
 part = "78666"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "missing contour edge on front curve"
-checked = { occt = "f0a31c3790d8c7d0cff61b88f6f4a5c0784995a8beb36671b29fdd9124c04537", silhouette-occt = "fd9c4bfd8dd8b42dd6a50e2c6f7a4760b268cf74735eee6af2fe24a04b082e05", white-occt = "4cabace4350808113daec3ada725314395ebc09435614a05109016dc77087bcb" }
+checked = { white-occt = "8c8f98fa8ba8143e2b6f4469ac76295174e8c65e20c18f1525afd008102382f5" }
 filed = "2026-09-08"
+notes = "2026-09-11: drawn at HEAD and laid over the LDView reference (scripts/overlay-reference.py). The front curve's near edge is drawn."
 
 [[defect]]
 id = "3626cp7d-glasses-lose-their-color"
@@ -720,9 +848,11 @@ notes = "A panel on the right of the head reads as a distinctly darker rectangle
 id = "5651-extra-chord-across-top-shouldn"
 part = "5651"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "extra chord across top shouldn't be there in outlines"
+checked = { white-occt = "8659470dbc1d1c28f99fe8b0445c1f3b708c1489190dadad30545a83b763c9b5" }
 filed = "2026-09-08"
+notes = "2026-09-11: drawn at HEAD and laid over the LDView reference (scripts/overlay-reference.py). No chord across the top in occt outlines."
 
 [[defect]]
 id = "4107582e-missing-inner-square"
@@ -780,11 +910,11 @@ notes = "A 28.2 x 3.3 px gray taper runs off the right end of the orange eyebrow
 id = "3626cp7d-floating-ink-diamond"
 part = "3626cp7d"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "a black diamond floats in the middle of the head with nothing under it"
 classes = ["stray-ink"]
 filed = "2026-09-08"
-notes = "A black lozenge sits mid-head to the right of the glasses arm with no feature under it -- LDView has nothing there and naive draws nothing there. It is a CLOSED 5-point subpath in the interior stroke layer, `M 159.65 84.93 L 158.85 84.66 L 159.76 84.36 L 160.70 84.66 Z`: 1.85 x 0.57 SVG units, so the 2px stroke fills it solid and it reads as a blob rather than as a loop. Do not look for a fill: removing every <path/> in the fill layer leaves it, and it disappears with the one big interior-stroke path. occt only and print only -- absent from the naive render of the same part and from the unprinted 3626c. Scan for it with the tiny-subpath sweep: split the stroke path's d on `M `, and flag any subpath whose bbox is under ~6 units."
+notes = "2026-09-11, fixed by 460ddfb: the stroked contour now drops rings thinner than the stroke that draws them. The diamond was one such ring; the gray bore sliver over the eyebrow and the lips are separate and still open."
 
 [[defect]]
 id = "3626cp7d-lips-lose-a-facet"
@@ -1000,10 +1130,11 @@ filed = "2026-09-09"
 id = "5065-extra-chord-outline-both-engines"
 part = "5065"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "extra chord outline (both engines)"
-checked = { white-occt = "08e669152e16639f1b570fb537abc923a5464303bd95cb32540689506848b853" }
+checked = { white-occt = "f1bbde4bb6af97b6cf256a6a8a2b935fa23b665f297c383df9c3bbbc6358753f", white-naive = "67256074c856a4ac66842b2f6de9859656c4f07205ca3776b43f433cf0c16bc9" }
 filed = "2026-09-09"
+notes = "2026-09-11: drawn at HEAD and laid over the LDView reference (scripts/overlay-reference.py). Gone in both engines."
 
 [[defect]]
 id = "7610-missing-lots-of-outlines-regression"
@@ -1173,8 +1304,9 @@ part = "5849"
 engines = ["occt"]
 status = "open"
 title = "almost perfect. shaded curved face has an extra dark strip at bottom"
-checked = { occt = "7d4cbdb426723e7f9da7a7e1f8fe2d3f366b7c7e162ab53cbf2433b822104084" }
+checked = { occt = "ff19b070b79c729f43650164fd917a07158fae24d85a1c9864a5679e61890728" }
 filed = "2026-09-10"
+notes = "2026-09-11: looked at HEAD over the reference. Outline is clean; the dark strip along the bottom of the curved face is still there."
 
 [[defect]]
 id = "15068dy6-decal-alignment-issues"
@@ -1252,27 +1384,31 @@ filed = "2026-09-10"
 id = "4162pt1-transparent-carrier-face"
 part = "4162pt1"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "transparent carrier face"
+checked = { white-occt = "12c8c2d08d91b229079920bbbcd8c0f70a99ffe85be815ada94f98b94a714a04" }
 filed = "2026-09-10"
+notes = "2026-09-11: drawn at HEAD on a magenta ground, where an unfilled face shows as a hole. Face is opaque."
 
 [[defect]]
 id = "5841-missing-outline-contour"
 part = "5841"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "missing outline contour"
-checked = { white-occt = "43cd8f17356d08f4e7d15a97d3ec49ace910ffd771b98af1364ce4d0dee62dfa" }
+checked = { white-occt = "85447163521159a81fd538500178040ac976eceb215954d2b532526d589838d5" }
 filed = "2026-09-10"
+notes = "2026-09-11: drawn at HEAD and laid over the LDView reference (scripts/overlay-reference.py). Every edge the reference shows carries a stroke."
 
 [[defect]]
 id = "5843-naive-has-extra-chord-occt"
 part = "5843"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "naive has extra chord; occt missing arc"
-checked = { white-occt = "b3fdb94c7eeccd80c6210e67a94dad0824604119b64e11adc76ec65fe17952c5" }
+checked = { white-occt = "b2cf56f30fe5c5a98739f036ca3d9444def825b204ef7c5cfb0ab78142c56370", white-naive = "4d759bf177c445b0c04217b4f3e4b00b6a21f28740eb0238d2984cf76ede46ab" }
 filed = "2026-09-10"
+notes = "2026-09-11: drawn at HEAD and laid over the LDView reference (scripts/overlay-reference.py). No chord in naive; occt draws the arc."
 
 [[defect]]
 id = "5847-lots-of-line-and-shading"
@@ -1280,8 +1416,9 @@ part = "5847"
 engines = ["occt"]
 status = "open"
 title = "lots of line and shading issues"
-checked = { white-occt = "1705b96c5b91c0367169f4a8a681c765ae8ab3bac61fb46573dbd4ae992d68ab" }
+checked = { white-occt = "4bfd19644129ea957f8e5b61d839152db07563b1d5b68879457f986a7295c7c8", occt = "294fea47612175e0965aad32f39759aabe7b1f4dcee5c890b37b5141f116286c" }
 filed = "2026-09-10"
+notes = "2026-09-11: looked at HEAD over the reference. Lines match the reference; the shading is what is left to judge."
 
 [[defect]]
 id = "5846-missing-contours-really-badly-mapped"
@@ -1289,17 +1426,19 @@ part = "5846"
 engines = ["occt"]
 status = "open"
 title = "missing contours; really badly mapped shaded faces"
-checked = { white-occt = "42d8fd76a4ab436315b6dd5332e2f3ee32b35dc684d12984df206edfb5359758" }
+checked = { white-occt = "410319ff375da22af58d9516126fcbe4ce3e24a661635829a1f090b403a62dc7", occt = "d08938dc4de570295cfdf0408bb995bd3bd8f00699f3b700a9d095928d45b324" }
 filed = "2026-09-10"
+notes = "2026-09-11: looked at HEAD over the reference. Contours are all there now; the shaded curved corner still breaks into mismatched tones, which is the half left open."
 
 [[defect]]
 id = "5845-naive-has-extra-chord-occt"
 part = "5845"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "naive has extra chord; occt missing arc"
-checked = { white-occt = "1819bf2cddc9e0936752ad9fd586ebffcd53070d9378080f2f7f5c6a35456040" }
+checked = { white-occt = "5a381b7cdd99bd0ee25a8b72538f3a87f2accdb4ab29daf53f7e8a689d4c1187", white-naive = "732ce75189103f5e5f8d4084d05189c143665c03ceec4796dc85532688ad5bbc" }
 filed = "2026-09-10"
+notes = "2026-09-11: drawn at HEAD and laid over the LDView reference (scripts/overlay-reference.py). No chord in naive; occt draws the arc."
 
 [[defect]]
 id = "30503-white-occt-is-showing-bottom"
@@ -1340,10 +1479,11 @@ filed = "2026-09-10"
 id = "49311ps1-missing-carrier-face"
 part = "49311ps1"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "missing carrier face"
-checked = { occt = "cab17e93612e2023faadbdd31a30fd9b44255156ec0fe413c1318f6696237268" }
+checked = { white-occt = "f323ccb20e4236d2aeccb6fb6ca4ed0f66de4f75c8f3ddb706edc86901694bc5" }
 filed = "2026-09-10"
+notes = "2026-09-11: drawn at HEAD on a magenta ground, where an unfilled face shows as a hole. Face is filled."
 
 [[defect]]
 id = "169665fc01-decal-and-occt-renders-are"
@@ -1394,19 +1534,21 @@ filed = "2026-09-10"
 id = "98138pt1-missing-carrier-face-and-contour"
 part = "98138pt1"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "missing carrier face and contour arc"
-checked = { white-occt = "4881c723312ea6988863d730f733d7ffa22d80ac4d1b5ee47fc3b6540f64da94" }
+checked = { white-occt = "a1f9a58828c65dc6fb2a8d3574545177926a29abceb08f93b71f4347ee461baa" }
 filed = "2026-09-10"
+notes = "2026-09-11: drawn at HEAD on a magenta ground, where an unfilled face shows as a hole. Face is filled and the top rim arc is drawn."
 
 [[defect]]
 id = "98138p1x-missing-carrier-face"
 part = "98138p1x"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "missing carrier face"
-checked = { white-occt = "6e941df1c68b7f34ab591a565d25f2732a414563a8c50ffee2864ad328a7af2d" }
+checked = { white-occt = "d7fe169380c483e60795ea47f9cd1e00723f0ef6b783d4e5ef8f5fd5e714c990" }
 filed = "2026-09-10"
+notes = "2026-09-11: drawn at HEAD on a magenta ground, where an unfilled face shows as a hole. Face is filled."
 
 [[defect]]
 id = "54196-not-simplifying-properly"
@@ -1448,10 +1590,11 @@ filed = "2026-09-10"
 id = "3068bp69-missing-carrier-face"
 part = "3068bp69"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "missing carrier face"
-checked = { white-occt = "48ffee165a3a104dad5d0f137004c68ed7cf6df651e3a6824e0557e35a7b189e" }
+checked = { white-occt = "7f11ca27971d125b77987de0396a5dcaee547508d84d28d2cebcc3ae12f5a42f" }
 filed = "2026-09-10"
+notes = "2026-09-11: drawn at HEAD on a magenta ground, where an unfilled face shows as a hole. Face is filled."
 
 [[defect]]
 id = "3846p4j-extra-outline-inside-gold-shield"
@@ -1591,5 +1734,624 @@ part = "79756"
 engines = ["naive"]
 status = "open"
 title = "has dark tangent band problem that we solved in other curved pieces a few days ago"
-checked = { silhouette-naive = "7c47aca2ef0e4a47c18ca7fc9ab810df1a9de2972ecde382b94cdd2b171661ee" }
+checked = { naive = "66ab21ddf66efe6241f767fc87624c0050aea51841965b29bcdd7122daef7165" }
 filed = "2026-09-11"
+notes = "2026-09-11: looked at HEAD over the reference. Still a hard dark band along the lower flank where the reference is a smooth gradient."
+
+[[defect]]
+id = "22385d01-white-cracks-between-lettering-and"
+part = "22385d01"
+engines = ["decal"]
+status = "open"
+title = "white cracks between lettering and bk"
+checked = { decal = "37146117548683ef130205e26e9cbb9ec1b97f3159f9d9f9c48fbae068dee836" }
+filed = "2026-09-12"
+
+[[defect]]
+id = "27149p01-side-shading-is-bad-works"
+part = "27149p01"
+engines = ["occt"]
+status = "open"
+title = "side shading is bad; works in naive"
+checked = { occt = "7ec924f32aa7bbd365d2518f2ce25cee10c0eab0d48321d5e375613bccfb5fbd" }
+filed = "2026-09-12"
+
+[[defect]]
+id = "71711p01-shading-and-studding-issues-on"
+part = "71711p01"
+engines = ["occt"]
+status = "open"
+title = "shading and studding issues on outer rim"
+checked = { white-occt = "4ae1c27996c9e85c65f29c27e2411fc1a0fd0f2e051790d6a3d6110159f73701" }
+filed = "2026-09-12"
+
+[[defect]]
+id = "85984d0d-decal-upside-down-occt-omitting"
+part = "85984d0d"
+engines = ["naive"]
+status = "open"
+title = "decal upside-down; occt omitting most of decal"
+filed = "2026-09-12"
+
+[[defect]]
+id = "93606dym-decal-too-small-projected-decal"
+part = "93606dym"
+engines = ["occt"]
+status = "open"
+title = "decal too small; projected decal missing polys"
+checked = { white-occt = "f778cb3a17695d8fa531b7bf514a239f148e9e7c4182a36d4a2ec6709ed2bd44" }
+filed = "2026-09-12"
+
+[[defect]]
+id = "6148328ac-blue-field-corners-are-clipped"
+part = "6148328ac"
+engines = ["occt"]
+status = "open"
+title = "blue field corners are clipped; imprecise decal plotting"
+checked = { white-occt = "b761581a3d6be775cf1709e2859a67b45d6b473875473ec9c3898f8e025eef48" }
+filed = "2026-09-12"
+
+[[defect]]
+id = "6170752h-yellow-color-is-wrong-squares"
+part = "6170752h"
+engines = ["occt"]
+status = "open"
+title = "yellow color is wrong; squares have issues at rounded corners"
+checked = { white-occt = "e2292197ac6ab24a2e00b3197f50b94e54ae6a19d9ed1fd4520ac0541a468150" }
+filed = "2026-09-12"
+
+[[defect]]
+id = "6177970g-decal-renders-correctly-but-then"
+part = "6177970g"
+engines = ["occt"]
+status = "open"
+title = "decal renders correctly but then projects poorly (may be stale)"
+checked = { white-occt = "6bfac92198b14ef7ab61316b389463f7af9430f130446745781c1245c93654e8" }
+filed = "2026-09-12"
+
+[[defect]]
+id = "t1115-missing-outline-near-front"
+part = "t1115"
+engines = ["occt"]
+status = "open"
+title = "missing outline near front"
+checked = { occt = "bd31bfff39e06058614d7bf29ae9922d1de071f3a54b5fb7e379a922fb99d214" }
+filed = "2026-09-12"
+
+[[defect]]
+id = "u1125-circular-arc-near-right-tip"
+part = "u1125"
+engines = ["occt"]
+status = "open"
+title = "circular arc near right tip showing through"
+checked = { occt = "798e3a54fa158670aa2520c52c60f4f10756652ec46957787480b90e6d44fda3" }
+filed = "2026-09-12"
+
+[[defect]]
+id = "6177969zc01-decal-broken-into-pieces-projected"
+part = "6177969zc01"
+engines = ["decal"]
+status = "open"
+title = "decal broken into pieces; projected version uneven"
+checked = { decal = "071c363cd4b4915edeb5669229c26da80b0e1e24b88d0d2ade895297bc25e914" }
+filed = "2026-09-12"
+
+[[defect]]
+id = "6155286wc01-decal-bisected-and-scrambled"
+part = "6155286wc01"
+engines = ["occt"]
+status = "open"
+title = "decal bisected and scrambled"
+checked = { white-occt = "cf92affcac8bc9f722f6d467daa0dc1405dd85ab3cef859d1d86496214ede7c4" }
+filed = "2026-09-12"
+
+[[defect]]
+id = "6155286wc01-occt-versions-think-every-tri"
+part = "6155286wc01"
+engines = ["occt"]
+status = "open"
+title = "occt versions think every tri in the decal is a face"
+checked = { white-occt = "cf92affcac8bc9f722f6d467daa0dc1405dd85ab3cef859d1d86496214ede7c4" }
+filed = "2026-09-12"
+
+[[defect]]
+id = "6288456b-decal-mirrored-and-rotated"
+part = "6288456b"
+engines = ["occt"]
+status = "open"
+title = "decal mirrored and rotated"
+checked = { white-occt = "20a7e7f7a47e12b2db5e9f21c33d2600b4455ce0bf027e4214fb6c66211729e5" }
+filed = "2026-09-12"
+
+[[defect]]
+id = "3069bd0j-decal-glyphs-are-a-bit"
+part = "3069bd0j"
+engines = ["occt"]
+status = "open"
+title = "decal glyphs are a bit sloppy"
+checked = { white-occt = "32ad7d7cd2e608db38ee0a6afe372014cbf2c09ed8f9c740feae3d4207d9be7d" }
+filed = "2026-09-12"
+
+[[defect]]
+id = "5651-naive-dashes-on-underside"
+part = "5651"
+engines = ["naive"]
+status = "fixed"
+title = "dashes float on the underside flank in naive"
+classes = ["stray-ink"]
+checked = { white-naive = "040e13ef23c9c51999b148aba715db5237c8bf636621c556872e9f2a43724f96" }
+filed = "2026-09-11"
+notes = "2026-09-11, fixed by 460ddfb: the stroked contour now drops rings thinner than the stroke that draws them. The four flank slivers were 7 x 0.2 px each."
+
+[[defect]]
+id = "3813-missing-outline-segment-around-sphere"
+part = "3813"
+engines = ["occt"]
+status = "open"
+title = "missing outline segment around sphere"
+checked = { occt = "81518b632a8d28ac0174db474735ab414ad8451c930bb4a82e1a7fff08d05792" }
+filed = "2026-09-12"
+
+[[defect]]
+id = "10830-missing-outline-segments"
+part = "10830"
+engines = ["occt"]
+status = "open"
+title = "missing outline segments"
+checked = { occt = "8ceecd48eee6e3c4692cf68ba522cbf7d1306f249dbfc8166da74007c37d8f96" }
+filed = "2026-09-12"
+
+[[defect]]
+id = "31561-occt-exposes-inner-shaft-segment"
+part = "31561"
+engines = ["occt"]
+status = "open"
+title = "occt exposes inner shaft segment in middle"
+checked = { occt = "90820fec7f4f85b70c805e9b98c8b37a76cea4ea9983843d24d4963ed8396b89" }
+filed = "2026-09-12"
+
+[[defect]]
+id = "32533p447-rim-shading-has-wrong-gradients"
+part = "32533p447"
+engines = ["occt"]
+status = "open"
+title = "rim shading has wrong gradients and is broken into disjoint-colored 8ths"
+checked = { occt = "a46d5972de31f79e501b09c7a65a46c31c88c4b2cf453bafd54288c6b3f97433" }
+filed = "2026-09-12"
+
+[[defect]]
+id = "43898p02-gradient-banding"
+part = "43898p02"
+engines = ["occt"]
+status = "open"
+title = "gradient banding"
+checked = { silhouette-occt = "de24637e1af02921863de49d109b9d650ec91ccbfe31eace6ee7e0da64ada0ab" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "43898p02-badly-warped-decal"
+part = "43898p02"
+engines = ["decal"]
+status = "open"
+title = "badly warped decal"
+checked = { decal = "5edb15459c0e4c6ac616c9608dab2cf922400eb6bb4165f9a69e2a1ea17b1cac" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "45417-lots-of-missing-lines"
+part = "45417"
+engines = ["occt"]
+status = "open"
+title = "lots of missing lines"
+checked = { translucent-occt = "649faadc5e31cfffaeae23902b527c1e0cfb363bdd4437d94a2e30dc4f7c7d69" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "50950-curved-face-is-shaded-wrong"
+part = "50950"
+engines = ["occt"]
+status = "open"
+title = "curved face is shaded wrong in occt"
+checked = { occt = "478d6f9d179a934a683c8516b5b8a488c9cdd51093ffbaba623454b68a382e5a" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "59349pa0-none-of-the-3d-ones"
+part = "59349pa0"
+engines = ["occt"]
+status = "open"
+title = "none of the 3d ones seem to project decal properly"
+checked = { occt = "947f2f60667fd9c75c8c451d6de3416e58321001553f016d38d48dd8f15f6395" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "59349pa0-reference-is-busted-on-this"
+part = "59349pa0"
+engines = ["reference"]
+status = "open"
+title = "reference is busted on this one"
+checked = { reference = "77d39b3f4cac4f76cabb124b17fd0d624732e2842e5a4b4e6db5ef4ec91a47ef" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "85984d0i-decal-projection-is-clipped"
+part = "85984d0i"
+engines = ["occt"]
+status = "open"
+title = "decal projection is clipped"
+checked = { silhouette-occt = "e5c79d35bccb1d9771332a4a5b747c02057bf265ad880bc396c2b9b56fce7103" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "85984d0h-decal-text-backwards"
+part = "85984d0h"
+engines = ["occt"]
+status = "open"
+title = "decal text backwards"
+checked = { occt = "4a95ef183efc240757fb4815222d6274c17d09324d3878c57915cec5e6012513" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "85984d0h-decal-projection-has-inconsistent-text"
+part = "85984d0h"
+engines = ["occt"]
+status = "open"
+title = "decal projection has inconsistent text weight"
+checked = { occt = "4a95ef183efc240757fb4815222d6274c17d09324d3878c57915cec5e6012513" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "97784-inner-rim-missing-outlines"
+part = "97784"
+engines = ["occt"]
+status = "open"
+title = "inner rim missing outlines"
+checked = { occt = "17b5ccfbd385cb16ce7cd87b6aadb59365b69d6232f09d682d854b042f0c64e0" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "97784-shading-issues-in-front-facing"
+part = "97784"
+engines = ["occt"]
+status = "open"
+title = "shading issues in front-facing ribs"
+checked = { occt = "17b5ccfbd385cb16ce7cd87b6aadb59365b69d6232f09d682d854b042f0c64e0" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "98138p16-white-spot-in-middle-of"
+part = "98138p16"
+engines = ["decal"]
+status = "open"
+title = "white spot in middle of heart"
+checked = { decal = "f55bb09e365a7db63b6ae57de0a124ef9290c0cae6ed5e8ac5213ba82c210b97" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "4620856dc01-decal-has-transparent-and-warped"
+part = "4620856dc01"
+engines = ["occt"]
+status = "open"
+title = "decal has transparent and warped areas in center"
+checked = { occt = "90233792dba4c0502423c8f9c4e96c3b529ce254271b482a3894d732c5c733c0" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "6177970h-decal-projection-is-wrong"
+part = "6177970h"
+engines = ["occt"]
+status = "open"
+title = "decal projection is wrong"
+checked = { occt = "dc3cea573353701c9d5443454ff5f4a6d0d1b2c773da56f871ff2d6f9d2d9ebd" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "6296256dc01-way-too-many-outlines-on"
+part = "6296256dc01"
+engines = ["occt"]
+status = "open"
+title = "way too many outlines on curve geometry"
+checked = { occt = "36a95b6f30c339a9ef3b260da26673c838e46523cc652b4f27b73afc5c56f107" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "6501596f-decal-mirrored"
+part = "6501596f"
+engines = ["decal"]
+status = "open"
+title = "decal mirrored"
+checked = { decal = "5f4fc2cbce3a7245c9eb4bb3f9e51d0c37afae39df38d96ebbb0703da44fd29b" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "u768p01c01-enormous-mess-in-occt-i"
+part = "u768p01c01"
+engines = ["occt"]
+status = "open"
+title = "enormous mess in occt--i think this is cloth"
+checked = { occt = "802d837b01bbb493c5db1f4a2c104e4b653a782e9e4f9505663ee02702f53333" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "6278968d-decal-is-mirrored"
+part = "6278968d"
+engines = ["decal"]
+status = "open"
+title = "decal is mirrored"
+checked = { decal = "346ac84643a754f60c5cd4279b59734690d2b698f95195a1d6eaa97ad48741ae" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "6258203g-decal-mirrored-and-inconsistent-text"
+part = "6258203g"
+engines = ["decal"]
+status = "open"
+title = "decal mirrored and inconsistent text weight"
+checked = { decal = "600bfaf2bdeca47789948c811c33c1c4f0d078ecf6328d7a62372a0d0d30ec57" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "6258203fc01-major-decal-projection-issues"
+part = "6258203fc01"
+engines = ["occt"]
+status = "open"
+title = "major decal projection issues"
+checked = { silhouette-occt = "46243149f6ec94e28c0b7a0242bc96665f47b54f8e59626c5f0e5e30fb81319b" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "6255869mc01-decal-and-projections-incoherent"
+part = "6255869mc01"
+engines = ["occt"]
+status = "open"
+title = "decal and projections incoherent"
+checked = { occt = "f586b714c7a5e8d0d7852a1538d152f4a70f7c9ca54c9e2f7d48306fc5916296" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "004659e-missing-top-stripes"
+part = "004659e"
+engines = ["occt"]
+status = "open"
+title = "missing top stripes"
+checked = { occt = "749b661e75b737bf2711845766c641948dccc1524d0edfbc528d8b311f7e3e41" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "19954-occt-version-has-zero-outines"
+part = "19954"
+engines = ["occt"]
+status = "open"
+title = "occt version has zero outines??"
+checked = { occt = "047407244fd4966acff0000267eb57b7ddc7b51dd78ee2b9845e146d2ab6744c" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "22385d01-minor-geometry-issues-on-decal"
+part = "22385d01"
+engines = ["decal"]
+status = "open"
+title = "minor geometry issues on decal"
+checked = { decal = "37146117548683ef130205e26e9cbb9ec1b97f3159f9d9f9c48fbae068dee836" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "61484d01-heart-isn-t-filled-in"
+part = "61484d01"
+engines = ["decal"]
+status = "open"
+title = "heart isn't filled in; i suspect this is a projection-over-curved-surface issue"
+checked = { decal = "ba42316c78ae49857dfe6582f08c6cea6462cd0807514537d0fc142cb681c21f" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "85080-curved-front-should-be-a"
+part = "85080"
+engines = ["occt"]
+status = "open"
+title = "curved front should be a single gradient but is several vertical bands"
+checked = { occt = "7e08c18a551ef1807baa3689e6195ec017f0cd864e4cf3b4f0533622477eb945" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "93091-outlines-are-admittedly-challenging-but"
+part = "93091"
+engines = ["occt"]
+status = "open"
+title = "outlines are admittedly challenging but not where they need to be"
+checked = { occt = "366eb0fee8178ec825edbdadcdd7357bc908edfacbbf09c8ba1156f642c187e4" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "6141955a-mirrored-decal-odd-projection-in"
+part = "6141955a"
+engines = ["decal"]
+status = "open"
+title = "mirrored decal; odd projection in occt"
+checked = { decal = "0a741c9b68805a0fe2b1a1d918d346db9b035fba2a7c976a30754dfa1fd31c83" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "6372023dc01-sloppy-decal-spiderwebs"
+part = "6372023dc01"
+engines = ["occt"]
+status = "open"
+title = "sloppy decal; spiderwebs"
+checked = { occt = "252abf74fdd38190591273b207b208ea8c5750a082024f141b5689b4f6d24923" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "6372023dc01-reference-is-wrong"
+part = "6372023dc01"
+engines = ["occt"]
+status = "open"
+title = "reference is wrong"
+checked = { occt = "252abf74fdd38190591273b207b208ea8c5750a082024f141b5689b4f6d24923" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "6133216mc01-spiderweb"
+part = "6133216mc01"
+engines = ["occt"]
+status = "open"
+title = "spiderweb"
+checked = { occt = "950c0afb58e2121833cff5a5f653916af36d74c9ad67a5b39233d4a295a66deb" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "4624296dc01-tessellated-arcs-faces-should-become"
+part = "4624296dc01"
+engines = ["occt"]
+status = "open"
+title = "tessellated arcs/faces should become curves"
+checked = { occt = "2da0fcda85ffcbe56d4b0b21224b0543ea8ba04d1605d7d92a4c42e861538599" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "4629677f-imprecise-decal-rendering"
+part = "4629677f"
+engines = ["occt"]
+status = "open"
+title = "imprecise decal rendering"
+checked = { occt = "2ede1359ceab37b17e24ace947e85cb742e20c434be4c740ec4d3a5568d5047e" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "4297014f-decal-is-empty-and-shouldn"
+part = "4297014f"
+engines = ["occt"]
+status = "open"
+title = "decal is empty and shouldn't be"
+checked = { occt = "f2c89949fa718e390e2c4d4b7668c15ab22af21d975681803ec4fb924af07a7d" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "4297014e-empty-decal-slot"
+part = "4297014e"
+engines = ["occt"]
+status = "open"
+title = "empty decal slot"
+checked = { occt = "90eb9ae8040c6d48ed88395e1516f5e74b6efc77321d87a37395f813d8e3986c" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "4613857e-empty-decal"
+part = "4613857e"
+engines = ["occt"]
+status = "open"
+title = "empty decal"
+checked = { occt = "47290fbaed43d195ca14db712359b1d921857cc9d1baff28771e7efe412fc221" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "4174735bc01-decal-field-improperly-assembled"
+part = "4174735bc01"
+engines = ["occt"]
+status = "open"
+title = "decal field improperly assembled"
+checked = { occt = "9aa1423716ab2e3098cfdfa95a6ca62f756cc600a98dfa02ef8890a0725e0650" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "4603014e-far-polys-rendering-without-color"
+part = "4603014e"
+engines = ["occt"]
+status = "open"
+title = "far polys rendering without color"
+checked = { silhouette-occt = "68d527f92adde7cd2fc221a29fb341ef7e9f0aeaf752af4f012938c621a62c92" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "6009194dc01-occt-renders-have-missing-tris"
+part = "6009194dc01"
+engines = ["occt"]
+status = "open"
+title = "occt renders have missing tris and/or seams between them"
+checked = { silhouette-occt = "fe7aad3615e3b92b21b6986e5c7877e38b393b501ce591b1dad723596aaa7d69" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "76382p0u-no-idea-what-s-going"
+part = "76382p0u"
+engines = ["decal"]
+status = "fixed"
+title = "no idea what's going on with the decal here but it's not good"
+classes = ["decal"]
+checked = { decal = "6af8e3fabe5665d71607fd24be0ddce0aa669dbdc7f78aa6bb0c59925415cab4" }
+filed = "2026-09-13"
+notes = "Fixed by 6e040b0. The arms and hands are placed in their own color (76382p0u: 3818 in 71, 3820 in 78), and extraction read any non-16 color as print. The shoulders pushed the torso past MAX_DECALS and the sheet fell to the mesh fallback, which rotates each piece to wherever its LSCM pins land. A part file placed in a color is now a separate component, and its own color is body. The decal slot still holds the old sheet until it is redrawn."
+
+[[defect]]
+id = "76382p0033-decal-is-a-hot-mess"
+part = "76382p0033"
+engines = ["decal"]
+status = "fixed"
+title = "decal is a hot mess"
+classes = ["decal"]
+checked = { decal = "29485173b9939da25d90ac642e6a6fe92ce239aff73176eb98d631038fec11ec" }
+filed = "2026-09-13"
+notes = "Fixed by 6e040b0. The arms and hands are placed in their own color (76382p0u: 3818 in 71, 3820 in 78), and extraction read any non-16 color as print. The shoulders pushed the torso past MAX_DECALS and the sheet fell to the mesh fallback, which rotates each piece to wherever its LSCM pins land. A part file placed in a color is now a separate component, and its own color is body. The decal slot still holds the old sheet until it is redrawn."
+
+[[defect]]
+id = "165395ec01-decal-layout-and-projection-both"
+part = "165395ec01"
+engines = ["decal"]
+status = "open"
+title = "decal layout and projection both wrong"
+checked = { decal = "ef94c630620b4d2071b3ce873729ae0aead3ae108b7fceed70806745896089db" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "11833-extra-line-around-medial-axis"
+part = "11833"
+engines = ["occt"]
+status = "open"
+title = "extra line around medial axis of outer annulus"
+checked = { occt = "d4545c88e91c046b64942fea9b67ec3ef09bbdf311bd8e5f8262d9081b59ab7b" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "32348-rims-around-peg-holes-too"
+part = "32348"
+engines = ["naive"]
+status = "open"
+title = "rims around peg holes too heavy"
+checked = { white-naive = "41109b68f43015e1a2f713b88c110c58bf90b54e265d3e15a3010949cefe6e42" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "58176-dome-and-adjacent-band-should"
+part = "58176"
+engines = ["occt"]
+status = "open"
+title = "dome and adjacent band should be one shaded gradient field"
+checked = { occt = "cf8407af58ca5a04c8520c1560dc67c82d841c89a2fb9972f1b5875b6d85cf7a" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "65304-fill-is-a-hot-mess"
+part = "65304"
+engines = ["occt"]
+status = "open"
+title = "fill is a hot mess"
+checked = { occt = "d5b8be0115111a2b84d0d52156bf4425bc526a1f7241af7519015c118f8d3bd3" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "77844-occt-render-has-a-weird"
+part = "77844"
+engines = ["occt"]
+status = "open"
+title = "occt render has a weird chip taken out of one of the edges"
+checked = { occt = "50ac8d8ddb6046a39d9d275b301ab9fe9a13b5c0a0a5db8b826b4bc6a8b25dc6" }
+filed = "2026-09-13"
+
+[[defect]]
+id = "18603c02p08-hidden-ink-panels"
+part = "18603c02p08"
+engines = ["decal"]
+status = "open"
+title = "decal sheet draws ink another component hides"
+classes = ["decal"]
+filed = "2026-09-13"
+notes = "Since 6e040b0 a sub-part placed in a color is body, so print authored on that sub-part can find a carrier where before it bound to nothing. Two kinds surfaced, both hidden on the real part. 18603c02p*: the gold (494) antenna of the RFID tag u9512 sitting inside the brick draws as a second panel, and the shared sheet scale shrinks the real print. 16360p5i / 16360p5l: color-84 wrist-end discs authored in 16000p05, covered by the hands, draw as two dots (16360p5l golden re-frozen at 4 panels). Wanted: drop decoration another component covers or encloses. The rule has to ask what is declared, not infer from tessellation."
