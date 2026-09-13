@@ -2051,10 +2051,11 @@ filed = "2026-09-13"
 id = "6296256dc01-way-too-many-outlines-on"
 part = "6296256dc01"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "way too many outlines on curve geometry"
 checked = { occt = "36a95b6f30c339a9ef3b260da26673c838e46523cc652b4f27b73afc5c56f107" }
 filed = "2026-09-13"
+notes = "Draws right at HEAD (checked at 728474b): the occt slot's stored drawing on the wall predates the fix. Not from today's fallback change (58dc7e4) -- HEAD draws it byte-identically with FALLBACK_CREASES_ONLY off; the fixing commit was not bisected. The slot drawing needs a redraw."
 
 [[defect]]
 id = "6501596f-decal-mirrored"
@@ -2114,10 +2115,11 @@ filed = "2026-09-13"
 id = "004659e-missing-top-stripes"
 part = "004659e"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "missing top stripes"
 checked = { occt = "749b661e75b737bf2711845766c641948dccc1524d0edfbc528d8b311f7e3e41" }
 filed = "2026-09-13"
+notes = "Draws right at HEAD (checked at 728474b): the occt slot's stored drawing on the wall predates the fix. Not from today's fallback change (58dc7e4) -- HEAD draws it byte-identically with FALLBACK_CREASES_ONLY off; the fixing commit was not bisected. The slot drawing needs a redraw."
 
 [[defect]]
 id = "19954-occt-version-has-zero-outines"
@@ -2421,10 +2423,11 @@ notes = "Fixed in 8d8c30f. The three panel sides were dropped by occt's line mas
 id = "194325ac01-far-faces-not-rendering"
 part = "194325ac01"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "far faces not rendering"
 checked = { occt = "f41ad80f350071b4cdfa67631e947a3c8b2b83283cb83162861c14ef0126fa34" }
 filed = "2026-09-13"
+notes = "Draws right at HEAD (checked at 728474b): the occt slot's stored drawing on the wall predates the fix. Not from today's fallback change (58dc7e4) -- HEAD draws it byte-identically with FALLBACK_CREASES_ONLY off; the fixing commit was not bisected. The slot drawing needs a redraw."
 
 [[defect]]
 id = "168365e-naive-stickers-drawn-at-1e5-scale"
