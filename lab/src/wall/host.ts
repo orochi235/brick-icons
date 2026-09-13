@@ -1,8 +1,8 @@
-import { bandedLayout, blockLayout } from '@castleblack/wall/src/grouped';
-import type { Layout } from '@castleblack/wall/src/layout';
-import type { CorpusSpec } from '@castleblack/wall/src/schema';
-import type { WallGrouping } from '@castleblack/wall/src/WallView';
-import { BRICK_ICONS } from '@castleblack/host-brick-icons/src/spec';
+import { bandedLayout, blockLayout } from '@pezlie/wall/src/grouped';
+import type { Layout } from '@pezlie/wall/src/layout';
+import type { CorpusSpec } from '@pezlie/wall/src/schema';
+import type { WallGrouping } from '@pezlie/wall/src/WallView';
+import { BRICK_ICONS } from '@pezlie/host-brick-icons/src/spec';
 import {
   categoryOf, COVERAGE_ORDER, coverageOf, decadeOf, rollUp, yearOf,
 } from '@lab/corpus/facts';

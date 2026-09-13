@@ -30,15 +30,15 @@ function extensionlessPages(): Plugin {
 // `brick-icons-lab` listens on with no arguments.
 const API = process.env.LAB_API ?? 'http://127.0.0.1:8792';
 
-/** castleblack's `wall` and brick-icons spec, as TypeScript source from the
- *  git dependency package.json pins by sha. `CASTLEBLACK=~/src/castleblack`
- *  reads a checkout instead, for trying unpinned castleblack work on `/wall`. */
-const CASTLEBLACK = process.env.CASTLEBLACK
-  ?? fileURLToPath(new URL('./node_modules/castleblack', import.meta.url));
-const castleblackAlias = [
-  { find: /^@castleblack\/wall\/(.*)$/, replacement: `${CASTLEBLACK}/wall/$1` },
-  { find: /^@castleblack\/host-brick-icons\/(.*)$/,
-    replacement: `${CASTLEBLACK}/hosts/brick-icons/$1` },
+/** pezlie's `wall` and brick-icons spec, as TypeScript source from the
+ *  git dependency package.json pins by sha. `PEZLIE=~/src/pezlie`
+ *  reads a checkout instead, for trying unpinned pezlie work on `/wall`. */
+const PEZLIE = process.env.PEZLIE
+  ?? fileURLToPath(new URL('./node_modules/pezlie', import.meta.url));
+const pezlieAlias = [
+  { find: /^@pezlie\/wall\/(.*)$/, replacement: `${PEZLIE}/wall/$1` },
+  { find: /^@pezlie\/host-brick-icons\/(.*)$/,
+    replacement: `${PEZLIE}/hosts/brick-icons/$1` },
 ];
 
 /** `WEASEL_SRC=~/src/weasel npm run dev` draws `@weasel-js/core` and
@@ -86,7 +86,7 @@ export default defineConfig({
     alias: [
       { find: '@lab', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
       ...weaselAlias,
-      ...castleblackAlias,
+      ...pezlieAlias,
     ],
     // One React for the page however a dependency asked for it. R3F's hooks
     // read a context, so a second copy makes them throw "Hooks can only be
@@ -109,7 +109,7 @@ export default defineConfig({
   optimizeDeps: {
     // Served as source: pre-bundled, a module WallView also imports relatively
     // would load twice.
-    exclude: ['castleblack'],
+    exclude: ['pezlie'],
     include: [
       '@react-three/fiber', '@react-three/drei', 'three',
       'three/examples/jsm/loaders/LDrawLoader.js',
@@ -124,7 +124,7 @@ export default defineConfig({
     // `localhost` resolves to first and 127.0.0.1:5178 refuses.
     host: '::',
     port: 5178,
-    fs: { allow: [searchForWorkspaceRoot(process.cwd()), CASTLEBLACK] },
+    fs: { allow: [searchForWorkspaceRoot(process.cwd()), PEZLIE] },
     proxy: { '/api': API, '/ldraw': API },
   },
   build: {
@@ -152,6 +152,6 @@ export default defineConfig({
     // it that can be tested without one lives in panes/orbit.ts.
     exclude: ['**/node_modules/**', '**/ThreePane*'],
     // Source, not a build: left external, Node would load its .ts itself.
-    server: { deps: { inline: [/castleblack/] } },
+    server: { deps: { inline: [/pezlie/] } },
   },
 });

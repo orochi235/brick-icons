@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compileSpec } from '@castleblack/wall/src/cel';
+import { compileSpec } from '@pezlie/wall/src/cel';
 import { DEFAULT_SHOWN } from '@lab/corpus/criteria';
 import { RAMP_NAMES } from '@lab/corpus/tint';
 import { openingState, stateHash } from '@lab/wall/hash';

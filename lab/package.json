@@ -16,7 +16,7 @@
     "@weasel-js/core": "^1.4.4",
     "@weasel-js/labkit": "^1.4.4",
     "@weasel-js/ui": "^1.4.4",
-    "castleblack": "github:orochi235/castleblack#5701f14c40053a9e0eac767f2c4f5d942f1bed2d",
+    "pezlie": "github:orochi235/pezlie#ce83c99ee96ff9c3d0582c4c342ee8e2d88fe43a",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "three": "^0.170.0"

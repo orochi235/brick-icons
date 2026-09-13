@@ -4557,14 +4557,12 @@ give back whatever share of the run they are. A 512px baked level between the
 128px PNG and the SVG was considered and deferred once the vector rung got
 fast; it would cost roughly 600MB per slot.
 
-**`~/src/castleblack`** holds the design for pulling the wall out into two
-domain-free packages, with this corpus as the first host --
-`docs/superpowers/specs/2026-09-07-abstract-wall-design.md`. The earlier
-`wall/README.md` it superseded survives only at `a1fffd0`. Its first phase is
-built here on branch `states-as-data`: the cell states and the selection
-vocabulary are now tables, behind 45 `paintCommands` goldens. Nothing in this
-repo imports anything from castleblack, and nothing is meant to until the
-packages exist.
+**`~/src/pezlie`** (formerly castleblack, repo `orochi235/pezlie`) holds the
+design for pulling the wall out into two domain-free packages, with this corpus
+as the first host -- `docs/superpowers/specs/2026-09-07-abstract-wall-design.md`.
+The earlier `wall/README.md` it superseded survives only at `a1fffd0`. The lab's
+`/wall` page draws the corpus with its `WallView`, installed as a git dependency
+pinned by sha in `lab/package.json`; `/corpus` still runs on this repo's copy.
 
 **Grouping is on the wall.** `corpus-grouping-v2` merged, giving the sidebar
 four groupings -- nothing, coverage, category, release year -- an order and a

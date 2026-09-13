@@ -12,8 +12,8 @@
     "baseUrl": ".",
     "paths": {
       "@lab/*": ["src/*"],
-      "@castleblack/wall/*": ["node_modules/castleblack/wall/*"],
-      "@castleblack/host-brick-icons/*": ["node_modules/castleblack/hosts/brick-icons/*"]
+      "@pezlie/wall/*": ["node_modules/pezlie/wall/*"],
+      "@pezlie/host-brick-icons/*": ["node_modules/pezlie/hosts/brick-icons/*"]
     }
   },
   "include": ["src"]

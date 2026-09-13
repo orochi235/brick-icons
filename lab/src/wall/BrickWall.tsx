@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react';
-import { defaultUrls } from '@castleblack/wall/src/urls';
-import { WallView, type WallViewState } from '@castleblack/wall/src/WallView';
+import { defaultUrls } from '@pezlie/wall/src/urls';
+import { WallView, type WallViewState } from '@pezlie/wall/src/WallView';
 import type { LabClient } from '@lab/api/client';
 import { DEFAULT_SOURCE } from '@lab/corpus/CorpusWall';
 import { drawSticker } from '@lab/corpus/draw2d';
@@ -24,7 +24,7 @@ const drawMark = (ctx: CanvasRenderingContext2D, _mark: string, cx: number, cy: 
 const linkTarget = (cell: Cell, tag: string) =>
   (tag === LINKED_BADGE ? cell.successor ?? null : null);
 
-/** The corpus wall drawn by castleblack's `WallView`, beside `CorpusWall`. */
+/** The corpus wall drawn by pezlie's `WallView`, beside `CorpusWall`. */
 export function BrickWall({ client }: { client: LabClient }) {
   const initial = useMemo(() => openingState(window.location.hash, window.location.search), []);
   // A link is a hand-off: left in the bar, a reload would put back a selection
