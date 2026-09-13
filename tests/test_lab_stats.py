@@ -190,6 +190,20 @@ def test_the_decal_slot_does_not_count_plain_parts_as_never_attempted(conn):
     assert counts["decal"]["drawn"] == 1
 
 
+def test_a_decal_attempt_that_errored_is_not_counted_as_never_attempted(conn):
+    """decal files no measurements, so its failures live only in `attempts`."""
+    _part(conn, "3001p01", printed=1)
+    _part(conn, "3001p02", printed=1)
+    _render(conn, "3001p01", "decal")
+    _attempt(conn, "3001p02", "decal", 300.0)
+    conn.execute("UPDATE attempts SET state = NULL, error = 'TimeoutError' "
+                 "WHERE part_id = '3001p02'")
+    conn.commit()
+    counts = {r["source"]: r["counts"] for r in stats.stats(conn)["coverage"]}
+    assert counts["decal"]["untried"] == 0
+    assert counts["decal"]["timeout"] == 1
+
+
 def test_an_obsolete_part_on_the_map_is_not_work_a_slot_still_owes(conn):
     """Tick the box and they show as nothing to draw, not as never attempted:
     the batch scripts take `obsolete = 0`, so the job is never queued."""

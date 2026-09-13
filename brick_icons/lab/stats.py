@@ -229,6 +229,15 @@ JOIN (SELECT part_id, source, MAX(run_id) AS run_id FROM measurements
 WHERE m.error IS NOT NULL
 """
 
+_LATEST_ATTEMPT_ERROR = """
+SELECT a.part_id, a.source, a.error FROM attempts a
+JOIN (SELECT part_id, source, MAX(run_id) AS run_id FROM attempts
+      GROUP BY part_id, source) latest
+  ON a.part_id = latest.part_id AND a.source = latest.source
+ AND a.run_id = latest.run_id
+WHERE a.error IS NOT NULL
+"""
+
 
 def _classes(group: set[str], marks: tuple[set[str], ...]):
     """`group` split every way the marks can combine, as (flags, size).
@@ -261,6 +270,10 @@ def _coverage(conn: sqlite3.Connection, ids: set[str]) -> list[dict]:
     errors_by_source: dict[str, dict[str, str]] = {}
     for row in conn.execute(_LATEST_ERROR_BY_SOURCE):
         errors_by_source.setdefault(row["source"], {})[row["part_id"]] = row["error"]
+    # decal files no measurements, so its timeouts and crashes are only here.
+    for row in conn.execute(_LATEST_ATTEMPT_ERROR):
+        errors_by_source.setdefault(row["source"], {}).setdefault(
+            row["part_id"], row["error"])
     drawn_by_source: dict[str, set[str]] = {}
     for row in conn.execute("SELECT part_id, source FROM renders"):
         drawn_by_source.setdefault(row["source"], set()).add(row["part_id"])
