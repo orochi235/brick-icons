@@ -135,3 +135,31 @@ def test_a_census_row_files_its_edge_score_under_the_census_slot(tmp_path):
     db.import_census_jsonl(conn, run, log, census_dir=tree)
     got = conn.execute("SELECT part_id, source, sha256 FROM edge_scores").fetchall()
     assert [tuple(r) for r in got] == [("3001", "white-occt", "cafe")]
+
+
+def test_a_row_naming_no_part_is_filed_under_every_part_with_that_drawing(tmp_path):
+    """The first fleet run wrote rows with no part id. The drawing's sha finds
+    it again -- for every part whose stored drawing has those bytes."""
+    import importlib.util
+    from pathlib import Path
+
+    from brick_icons import db
+
+    spec = importlib.util.spec_from_file_location(
+        "sde", Path(__file__).resolve().parent.parent
+        / "scripts" / "score-declared-edges.py")
+    sde = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(sde)
+
+    conn = db.connect(tmp_path / "corpus.db")
+    for pid, sha in (("3001", "same"), ("3001old", "same"), ("3002", "other")):
+        conn.execute("INSERT INTO parts (id, title, printed, obsolete, status) "
+                     "VALUES (?, 'Brick', 0, 0, 'unreviewed')", (pid,))
+        conn.execute("INSERT INTO renders (part_id, source, config_key, made_at, "
+                     "path, sha256) VALUES (?, 'white-occt', 'k', 't', 'p', ?)",
+                     (pid, sha))
+    rows = sde.attach_parts(conn, [
+        {"source": "white-occt", "sha256": "same", "missing_comps": 1},
+        {"source": "white-occt", "sha256": "gone", "missing_comps": 1},
+        {"part": "3002", "source": "white-occt", "sha256": "other"}])
+    assert sorted(r["part"] for r in rows) == ["3001", "3001old", "3002"]

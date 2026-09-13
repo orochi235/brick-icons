@@ -49,7 +49,29 @@ def one(svg: Path, source: str, zoom: int, overlay: Path | None) -> dict:
                                    pose=pose, zoom=zoom)
     if overlay:
         draw_overlay(part, source, svg, fit, roots, pose, zoom, got, overlay)
-    return {"source": source, **got}
+    # Runner stamps the key only onto a failure's row; a success names its part
+    # here or not at all.
+    return {"part": part, "source": source, **got}
+
+
+def attach_parts(conn, rows: list[dict]) -> list[dict]:
+    """Rows written before `one` named its part carry only the drawing's sha.
+    Every part whose stored drawing in that slot has those bytes gets the
+    score -- identical bytes are identical geometry, as with a moved part and
+    the part it redirects to. A sha no stored drawing has any more is dropped."""
+    owners: dict[tuple, list[str]] = {}
+    for src in {r.get("source") for r in rows if not r.get("part")}:
+        for pid, sha in conn.execute(
+                "SELECT part_id, sha256 FROM renders WHERE source = ?", (src,)):
+            owners.setdefault((src, sha), []).append(pid)
+    out = []
+    for r in rows:
+        if r.get("part"):
+            out.append(r)
+        else:
+            out += [{**r, "part": pid}
+                    for pid in owners.get((r.get("source"), r.get("sha256")), [])]
+    return out
 
 
 def draw_overlay(part, source, svg, fit, roots, pose, zoom, got, out_dir):
@@ -103,7 +125,8 @@ def main() -> int:
         rows = [json.loads(ln) for ln in Path(args.ingest).read_text().splitlines()
                 if ln.strip()]
         conn = db.connect()
-        print(f"filed {db.record_edge_scores(conn, rows)} of {len(rows)} rows")
+        print(f"filed {db.record_edge_scores(conn, attach_parts(conn, rows))} "
+              f"from {len(rows)} rows")
         return 0
     if not args.source:
         ap.error("--source is required")
