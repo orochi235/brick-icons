@@ -12,9 +12,8 @@
     "baseUrl": ".",
     "paths": {
       "@lab/*": ["src/*"],
-      "@castleblack/wall/*": ["../../castleblack/wall/*", "../../../../../castleblack/wall/*"],
-      "@castleblack/host-brick-icons/*": [
-        "../../castleblack/hosts/brick-icons/*", "../../../../../castleblack/hosts/brick-icons/*"]
+      "@castleblack/wall/*": ["node_modules/castleblack/wall/*"],
+      "@castleblack/host-brick-icons/*": ["node_modules/castleblack/hosts/brick-icons/*"]
     }
   },
   "include": ["src"]

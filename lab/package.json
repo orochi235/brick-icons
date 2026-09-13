@@ -10,11 +10,13 @@
     "typecheck": "tsc -b --noEmit"
   },
   "dependencies": {
+    "@bufbuild/cel": "^0.6.1",
     "@react-three/drei": "^10.7.8",
     "@react-three/fiber": "^9.7.0",
     "@weasel-js/core": "^1.4.4",
     "@weasel-js/labkit": "^1.4.4",
     "@weasel-js/ui": "^1.4.4",
+    "castleblack": "github:orochi235/castleblack#5701f14c40053a9e0eac767f2c4f5d942f1bed2d",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "three": "^0.170.0"
