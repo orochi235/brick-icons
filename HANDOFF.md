@@ -1,3 +1,46 @@
+## The bars asked for the fleet's time for work that did not exist, 2026-09-12
+
+On `main`, committed. `untried` on the coverage chart was counting three
+different things, and only one of them was work.
+
+**Parts nothing will ever draw.** `not_applicable` already took `obsolete` for
+this reason; the `|` categories -- LDraw's mark for a part nobody at LEGO made
+-- and the degenerate list are the same class and now read the same way. That
+was occt's ENTIRE untried count of 22. Each bar's denominator is now the
+fleet's own scope, so naive reads `/ 20,597`, the number `slot-coverage.py`
+prints.
+
+**Drawings that were never indexed.** 31 silhouette-occt parts carried a
+scored measurement, no `renders` row, and no file in any tree -- reported once
+as "ran clean and drew nothing", which was wrong: re-rendered at the canonical
+config, 29 of the 31 drew on the first attempt and 2 died `ProcessDied`. The
+slot's untried count is 0.
+
+**Why those 31 lost their drawings is NOT established.** Whether a pass ran
+with `KEEP` pointing outside its own tree, or a tree was never indexed, nobody
+knows, and nothing stops it happening again. The signature is the `answered`
+column of `scripts/coverage-gap.py`: measured, not drawn, no error. Read it
+before believing a slot's untried count, and re-render rather than reclassify
+-- these parts are not faults.
+
+**occt's gap is exhausted at this engine.** 773 errored parts, of which 187
+had not met the current revision; a retry drew 3 and the other 184 died the
+same way they had (182 `ProcessDied`, 2 `MemoryError`). Nothing in occt is
+untried and nothing there is worth another round until the OCCT path changes.
+`slot-coverage.py --only stale` names that class, and note it blooms to the
+whole errored set the moment an engine bump moves the slot's newest revision:
+it means "not asked at this revision", never "worth retrying".
+
+**A watcher can file a tree's drawings under `silhouette-`.** Seen on three
+launches: the first pass runs before the tree's `SOURCE` marker arrives from
+the node, and the slot derives with an empty engine. Nothing has been ingested
+in that window yet, because the drawings arrive after the marker -- a pass
+that did land in it would file them under a slot no coverage number reads.
+
+**`measurements` is keyed `(run_id, part_id, engine)` and not by `source`.** No
+run writes two facets of one engine today, so nothing has been lost; one that
+did would overwrite row for row in silence.
+
 ## The silhouette oracle read every translucent fill as a hole, 2026-09-12
 
 On `main`, committed. `compare-silhouette-truth.py` masked the render as
@@ -489,6 +532,27 @@ rows and read `translucent-occt` correctly on the next pass, but a watcher
 started in the same breath as its job can win that race.
 
 ## Open, asked for and not started
+
+**A drawn part that later failed is filed under the failure, not the drawing.**
+`coverage_of` is documented "worst news first", so 1,053 silhouette-occt parts
+and 128 white-occt ones have drawings on the wall while the bar says they do
+not. Flipping the precedence would hide live regressions, so it is a decision
+rather than a bug: does the bar answer "how far did this slot get" or "what is
+the latest news"? Nobody has been asked.
+
+**The cost panel compares slots over different part sets.** Each slot's ratio
+is over the parts it shares with the base, and those sets differ by four times
+between slots -- silhouette-naive over easy parts is not on equal footing with
+occt over 19,940. The proof it matters is in the slot itself: silhouette-naive
+read 0.98 or 0.66 purely on which parts a revision drew. Standardizing each
+slot to the base's own weight distribution is the fix, and the binned
+estimator in `scripts/cost-revision-drift.py` is NOT good enough to ship --
+it reads occt at 0.68x where the paired test says 1.00x, because a fill
+round's stragglers sit low inside every bin.
+
+**`scripts/run-slot.sh` is untracked** while the `render-corpus-batch` skill
+tells you to launch through it, and two commits describe its behavior as
+though it were in. A fresh clone cannot run a fill round.
 
 **The lightbox's interactive preview draws a different projection from the
 thumbnails beside it.** Mike asked for it to render like any other thumbnail,

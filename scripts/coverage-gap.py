@@ -59,7 +59,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--db", default=str(db.DEFAULT_PATH))
     p.add_argument("--slot", action="append", help="one slot (repeatable)")
     p.add_argument("--list", metavar="SLOT",
-                   help="print the disputed part ids for one slot")
+                   help="print one class of part id for this slot")
+    p.add_argument("--class", dest="klass", default="scope",
+                   choices=("scope", "answered", "left"),
+                   help="which class --list prints (default: scope)")
+    p.add_argument("--batch", metavar="FILE",
+                   help="write --list as a batch file instead: one onto item "
+                        "a line, the shape census-batch.sh --each reads")
+    p.add_argument("--per-batch", type=int, default=12)
     args = p.parse_args(argv)
 
     sc = _slot_coverage()
@@ -108,14 +115,29 @@ def main(argv: list[str] | None = None) -> int:
               f"{len(have):7,d} {len(news):9,d}")
 
     if args.list:
-        have, told = drawn.get(args.list, set()), latest.get(args.list, {})
-        disputed = sorted((ids - have - told.keys()
-                           - nothing.get(args.list, set())) - scope)
-        print(f"\n{len(disputed)} untried and out of scope in {args.list}:")
-        for pid in disputed:
+        slot = args.list
+        have, told = drawn.get(slot, set()), latest.get(slot, {})
+        untried = {p for p in ids - have - told.keys() - nothing.get(slot, set())
+                   if not not_applicable(slot, p in printed, False,
+                                         p in obsolete)}
+        answered = untried & measured.get(slot, set())
+        picked = sorted({"scope": untried - scope,
+                         "answered": answered,
+                         "left": (untried & scope) - answered}[args.klass])
+        if args.batch:
+            out = Path(args.batch)
+            out.parent.mkdir(parents=True, exist_ok=True)
+            lines = [",".join(picked[i:i + args.per_batch])
+                     for i in range(0, len(picked), args.per_batch)]
+            out.write_text("\n".join(lines) + "\n" if lines else "")
+            print(f"\nwrote {out} -- {len(picked)} parts, {len(lines)} batches")
+            return 0 if picked else 1
+        print(f"\n{len(picked)} {args.klass} in {slot}:")
+        for pid in picked:
             row = conn.execute("SELECT category, title FROM parts WHERE id = ?",
                                (pid,)).fetchone()
-            why = "degenerate" if pid in degenerate else f"category {row['category']!r}"
+            why = ("degenerate" if pid in degenerate
+                   else f"category {row['category']!r}")
             print(f"  {pid:14s} {why:22s} {row['title'][:44]}")
     print("\n'of scope' can never be rendered and is a permanent dark tip on the "
           "bars.\n'answered' ran and produced no drawing, so asking for it again "
