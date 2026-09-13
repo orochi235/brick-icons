@@ -68,9 +68,25 @@ def _bfc_certified(ln: str) -> bool:
     return False
 
 
+def _component_body(sub: Path, color: int) -> int | None:
+    """The color a placed file's own geometry is moulded in, when that file is
+    a separate component -- or None when it continues the component placing
+    it.
+
+    A part file placed in a color is a sub-part of an assembly, and the color
+    is what it was moulded in: 76382p0u's arms are 3818 in 71. A primitive or
+    `s/` subfile placed in a color is the author drawing print, and so is a
+    sticker, whose colored faces are the print whatever part they sit on."""
+    if color == 16 or sub.parent.name != "parts":
+        return None
+    first = _lines(sub)[0] if _lines(sub) else ""
+    return None if first[1:].strip().lower().startswith("sticker") else color
+
+
 def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
             roots: list[Path], depth: int = 0,
-            inherited_invert: bool = False, color: int = 16) -> None:
+            inherited_invert: bool = False, color: int = 16,
+            body: int = 16) -> None:
     if depth > 30:
         return
     out.setdefault("tri_meta", [])
@@ -120,14 +136,17 @@ def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
                 prim = primitives.from_ref(ref, Rsub, tsub)
                 if prim is not None and "analytic" in out:
                     prim.color = cur
+                    prim.body = body
                     out["analytic"].append(prim)
                 else:
                     sub = resolve(ref, roots)
                     if sub is not None:
                         m_reflect = bool(np.linalg.det(M) < 0)
+                        own_body = _component_body(sub, cur)
                         flatten(sub, Rsub, tsub, out, roots, depth + 1,
                                 inherited_invert=base_invert ^ invert_next
-                                ^ m_reflect, color=cur)
+                                ^ m_reflect, color=cur,
+                                body=body if own_body is None else own_body)
             invert_next = False
         elif typ in ("2", "5") and len(tok) >= 8:
             pts = np.array(list(map(float, tok[2:])), float).reshape(-1, 3)
@@ -138,7 +157,7 @@ def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
                 pts = np.array(list(map(float, tok[2:2 + 3 * n])), float).reshape(n, 3) @ R.T + t
                 tri_invert = base_invert ^ local_cw
                 meta = {"certified": certified, "invert": tri_invert,
-                        "color": cur}
+                        "color": cur, "body": body}
                 if n == 3:
                     out["tri"].append(pts)
                     out["tri_meta"].append(dict(meta))
@@ -1038,11 +1057,18 @@ def part_geometry(part: str, ldraw_dir):
     path = _resolve_input(part, roots)
     out = {"2": [], "5": [], "tri": [], "tri_meta": [], "analytic": []}
     flatten(path, np.eye(3), np.zeros(3), out, roots)
+    # print is what differs from the component it is on, and 16 is how the
+    # extraction spells "body": a sub-part's own color is not decoration
+    for p in out["analytic"]:
+        if p.color == getattr(p, "body", 16):
+            p.color = 16
     if not out["tri"]:
         return [], [], out["analytic"]
     fixed = repair.repaired_tris(np.array(out["tri"]), out["tri_meta"],
                                  MESH_CACHE_DIR)
-    return (list(fixed), [m["color"] for m in out["tri_meta"]],
+    return (list(fixed),
+            [16 if m["color"] == m["body"] else m["color"]
+             for m in out["tri_meta"]],
             out["analytic"])
 
 

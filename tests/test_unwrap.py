@@ -1072,3 +1072,39 @@ def test_ink_over_the_crown_binds_and_round_trips():
 def test_a_planar_carrier_has_no_skirt():
     plane = unwrap.Plane(normal=np.array([0.0, 0.0, 1.0]), offset=2.0)
     assert unwrap.skirt(plane, _jaw_pts()) is plane
+
+
+def _panel_areas(part, ldraw_dir):
+    from brick_icons import hlr
+    tri, tri_colors, analytic = hlr.part_geometry(part, ldraw_dir)
+    return sorted((sum(g.area for _c, g in regions)
+                   for _ext, regions, _face in
+                   unwrap.decal_panels(tri, tri_colors, analytic)),
+                  reverse=True)
+
+
+def test_an_arm_placed_in_its_own_color_is_not_print(ldraw_dir):
+    """76382p0u is 973p0u with arms placed in color 71 and hands in 78. A
+    sub-part's color is the color it was moulded in, so the arms are body --
+    read as print, their shoulders outnumbered MAX_DECALS and the torso's own
+    print went to the mesh fallback, rotated and cut into pieces."""
+    assert _panel_areas("76382p0u", ldraw_dir) == pytest.approx(
+        _panel_areas("973p0u", ldraw_dir), rel=0.01)
+
+
+def test_a_printed_arm_keeps_its_print(ldraw_dir):
+    """76382p0033's arms are 3818pv0 in color 191: the 191 is body, and the
+    black shoulder the arm file declares is still print, beside the torso's."""
+    torso = _panel_areas("973pv1", ldraw_dir)
+    assert _panel_areas("76382p0033", ldraw_dir)[:2] == pytest.approx(
+        torso, rel=0.01)
+
+
+def test_a_sticker_placed_in_a_color_is_still_print(ldraw_dir):
+    """3004d01 places its sticker in color 0. A sticker's faces are its
+    print, so that color is decoration, not a moulded body."""
+    from brick_icons import hlr
+    tri, tri_colors, analytic = hlr.part_geometry("3004d01", ldraw_dir)
+    panels = unwrap.decal_panels(tri, tri_colors, analytic)
+    assert panels and 0 in {c for _e, regions, _f in panels
+                            for c, _g in regions}
