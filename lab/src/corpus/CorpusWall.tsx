@@ -6,7 +6,8 @@ import { LabShell } from '@weasel-js/labkit';
 import { ToggleBar } from '@weasel-js/ui';
 import type { LabClient } from '@lab/api/client';
 import { clampWallView, DEFAULT_BLANK_PX, sameView } from '@lab/corpus/clamp';
-import { readWallHash, wallHashString } from '@lab/corpus/wallHash';
+import { readWallHash, readWallLink, WALL_LINK_PARAMS, wallHashString }
+  from '@lab/corpus/wallHash';
 import { categoryOf, COVERAGE_ORDER, groupers, rollUp } from '@lab/corpus/facts';
 import { FilterBar } from '@lab/corpus/FilterBar';
 import { bandedLayout, blockLayout } from '@lab/corpus/grouped';
@@ -98,17 +99,30 @@ export function CorpusWall({ client }: { client: LabClient }) {
   // fetch the default slot's cells before replacing them, and the sources poll
   // below would have already chosen for us.
   const fromHash = useRef(readWallHash(window.location.hash));
+  const fromLink = useRef(readWallLink(window.location.search));
   const [sources, setSources] = useState<{ source: string; n: number }[]>([]);
-  const [source, setSource] = useState(fromHash.current.source ?? DEFAULT_SOURCE);
+  const [source, setSource] = useState(
+    fromLink.current.source ?? fromHash.current.source ?? DEFAULT_SOURCE);
   const fetched = useCells(client, source, params.pollMs);
   const loaded = useSheets(client, source);
   const [level, setLevel] = useState(32);
   const [selection, setSelection] = useState<Selection>({
-    sort: 'id', filter: 'all', shown: DEFAULT_SHOWN, grouping: 'none',
+    sort: 'id', filter: fromLink.current.filter ?? 'all',
+    shown: { ...DEFAULT_SHOWN, ...fromLink.current.shown }, grouping: 'none',
     tint: fromHash.current.tint ?? 'status',
     gradient: fromHash.current.gradient ?? 'ember',
-    excluded: [], badges: [], desc: true,
+    excluded: fromLink.current.excluded ?? [],
+    badges: fromLink.current.badges ?? [], desc: true,
   });
+  // The link has been taken; left in the bar, a reload would put back a
+  // selection the reader has since changed.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const had = WALL_LINK_PARAMS.filter((name) => url.searchParams.has(name));
+    if (had.length === 0) return;
+    for (const name of had) url.searchParams.delete(name);
+    window.history.replaceState(null, '', url);
+  }, []);
   const [cam, setCam] = useState<View | null>(null);
   const [picked, setPicked] = useState<string | null>(fromHash.current.part ?? null);
   const [carded, setCarded] = useState<{ cell: Cell; at: { x: number; y: number } } | null>(null);
@@ -167,7 +181,7 @@ export function CorpusWall({ client }: { client: LabClient }) {
   // later poll adds entries without moving anyone off what they are looking
   // at: a slot named in the hash is a choice already made, and so is the
   // default.
-  const opened = useRef(!!fromHash.current.source);
+  const opened = useRef(!!(fromLink.current.source ?? fromHash.current.source));
   useEffect(() => {
     let live = true;
     const load = () => void client.corpusSources().then(({ sources: got }) => {

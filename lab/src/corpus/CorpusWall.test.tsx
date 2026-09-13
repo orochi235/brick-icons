@@ -152,6 +152,15 @@ it('reports how much of the corpus the filter is showing', async () => {
   await waitFor(() => screen.getByText('1 of 2'));
 });
 
+it('takes the parts a link hands it, then drops the link from the address', async () => {
+  // The dashboard's "open on the wall" writes these; the wall once read none
+  // of them and opened on everything.
+  window.history.replaceState(null, '', '/corpus?filter=unrendered&moved=true');
+  render(<CorpusWall client={client} />);
+  await waitFor(() => screen.getByText('1 of 2'));
+  expect(window.location.search).toBe('');
+});
+
 it('raises a card on a single click', async () => {
   const { container } = render(<CorpusWall client={client} />);
   const canvas = await findCanvas(container);

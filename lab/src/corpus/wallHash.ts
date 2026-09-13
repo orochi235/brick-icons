@@ -1,3 +1,5 @@
+import { CLASS_SPECS, filterKeys, type Filter, type Shown }
+  from '@lab/corpus/criteria';
 import { RAMP_NAMES, TINT_MODES, type RampName, type TintMode }
   from '@lab/corpus/tint';
 
@@ -77,4 +79,54 @@ export function wallHashString(state: WallHash): string {
   }
   const text = q.toString();
   return text ? `#${text}` : '';
+}
+
+/** Which parts to put on the wall, handed over by a link from another page --
+ *  the dashboard's "open on the wall". In the query, not the hash, and read
+ *  once: like `?part=` it is a hand-off, dropped once the wall has taken it. */
+export interface WallLink {
+  source?: string;
+  filter?: Filter;
+  /** Only the classes the link names; the rest keep the wall's defaults. */
+  shown?: Partial<Shown>;
+  excluded?: string[];
+  badges?: string[];
+}
+
+/** Every query parameter a `WallLink` can be spelled with, so the wall can
+ *  take them back out of the address bar. */
+export const WALL_LINK_PARAMS: readonly string[] =
+  ['source', 'filter', 'excluded', 'badges', ...CLASS_SPECS.map((c) => c.key)];
+
+export function wallLinkQuery(link: WallLink): URLSearchParams {
+  const q = new URLSearchParams();
+  if (link.source) q.set('source', link.source);
+  if (link.filter && link.filter !== 'all') q.set('filter', link.filter);
+  for (const { key } of CLASS_SPECS) {
+    const on = link.shown?.[key];
+    if (on !== undefined) q.set(key, String(on));
+  }
+  for (const name of link.excluded ?? []) q.append('excluded', name);
+  for (const tag of link.badges ?? []) q.append('badges', tag);
+  return q;
+}
+
+export function readWallLink(search: string): WallLink {
+  const q = new URLSearchParams(search.replace(/^\?/, ''));
+  const out: WallLink = {};
+  const source = clean(q.get('source'));
+  const filter = known(filterKeys(), q.get('filter'));
+  if (source) out.source = source;
+  if (filter) out.filter = filter;
+  const shown: Partial<Shown> = {};
+  for (const { key } of CLASS_SPECS) {
+    const value = q.get(key);
+    if (value === 'true' || value === 'false') shown[key] = value === 'true';
+  }
+  if (Object.keys(shown).length > 0) out.shown = shown;
+  const excluded = q.getAll('excluded');
+  const badges = q.getAll('badges');
+  if (excluded.length > 0) out.excluded = excluded;
+  if (badges.length > 0) out.badges = badges;
+  return out;
 }

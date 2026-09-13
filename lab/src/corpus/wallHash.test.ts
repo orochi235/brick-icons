@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { readWallHash, wallHashString } from '@lab/corpus/wallHash';
+import { readWallHash, readWallLink, wallHashString, wallLinkQuery }
+  from '@lab/corpus/wallHash';
 
 describe('readWallHash', () => {
   it('takes the open part and the slot it is drawn from', () => {
@@ -66,5 +67,23 @@ describe('tint in the hash', () => {
   it('refuses a mode or ramp it does not know', () => {
     expect(readWallHash('#tint=heat&gradient=rainbow')).toEqual({});
     expect(readWallHash('#tint=secs&gradient=rainbow')).toEqual({ tint: 'secs' });
+  });
+});
+
+describe('readWallLink', () => {
+  it('round-trips what it wrote', () => {
+    const link = { source: 'occt', filter: 'printed' as const,
+                   shown: { moved: true, obsolete: false },
+                   excluded: ['Sticker', 'Minifig'], badges: ['technic'] };
+    expect(readWallLink(`?${wallLinkQuery(link)}`)).toEqual(link);
+  });
+
+  it('reads nothing from a bare address', () => {
+    expect(readWallLink('')).toEqual({});
+  });
+
+  it('drops a filter, a class value or a slot it does not recognize', () => {
+    expect(readWallLink('?filter=everything&posed=maybe&source=%3Cimg%3E'))
+      .toEqual({});
   });
 });

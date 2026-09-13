@@ -1,5 +1,6 @@
 import { CLASS_SPECS, DEFAULT_SHOWN, type CellClass, type Shown }
   from '@lab/corpus/criteria';
+import { wallLinkQuery } from '@lab/corpus/wallHash';
 
 /** Which parts the tallies are about. The membership half of the wall's
  *  `Selection` and nothing else: `sort`, `grouping` and `tint` change how the
@@ -64,15 +65,11 @@ export function fromQuery(q: URLSearchParams): WorkingSet {
   };
 }
 
-/** The wall showing the same parts. It spells a class `outOfScope=false`
- *  against its own defaults, and needs a slot. */
+/** The wall showing the same parts, in the link the wall reads. */
 export function wallHref(set: WorkingSet, source: string): string {
-  const q = new URLSearchParams({ source });
-  if (set.kind !== 'all') q.set('filter', set.kind);
-  for (const { key } of CLASS_SPECS) {
-    if (set.shown[key] !== DEFAULT_SHOWN[key]) q.set(key, String(set.shown[key]));
-  }
-  for (const name of set.excluded) q.append('excluded', name);
-  for (const tag of set.badges) q.append('badges', tag);
+  const q = wallLinkQuery({
+    source, filter: set.kind, shown: set.shown,
+    excluded: set.excluded, badges: set.badges,
+  });
   return `/corpus?${q}`;
 }

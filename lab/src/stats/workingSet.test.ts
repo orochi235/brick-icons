@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CLASS_SPECS } from '@lab/corpus/criteria';
+import { readWallLink } from '@lab/corpus/wallHash';
 import { DEFAULT_SET, fromQuery, toQuery, wallHref,
          type WorkingSet } from '@lab/stats/workingSet';
 
@@ -77,5 +78,17 @@ describe('wallHref', () => {
     const q = new URLSearchParams(href.slice(href.indexOf('?')));
     expect(q.get('obsolete')).toBe('false');
     expect(q.get('posed')).toBe('false');
+  });
+
+  it('is read back by the wall as the same parts', () => {
+    const set: WorkingSet = { kind: 'printed',
+                              shown: { moved: true, outOfScope: false,
+                                       obsolete: false, posed: true },
+                              excluded: ['Sticker'], badges: ['technic'] };
+    const href = wallHref(set, 'occt');
+    expect(readWallLink(href.slice(href.indexOf('?')))).toEqual({
+      source: 'occt', filter: 'printed', shown: set.shown,
+      excluded: ['Sticker'], badges: ['technic'],
+    });
   });
 });
