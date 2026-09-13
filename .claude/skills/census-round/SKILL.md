@@ -28,8 +28,14 @@ back in the next coverage list either way.
 
 ### 2. Collect before you ingest, and check nobody else is already collecting
 
+    onto returns | head
     pgrep -fl "onto fetch"
     onto fetch --stream <task>
+
+A job launched through `run-slot.sh` already has its stream; one launched any
+other way probably has nothing, whatever `--to` was passed. `onto returns`
+settles it -- a NEWEST in hours under a job that has been running for hours
+means the results are still on the node.
 
 **Two streams on one task race each other into the same directory.** Sessions
 share this repo, so a stream is often already running; a second one is not
@@ -81,12 +87,18 @@ Batch the list (a dozen parts a line — `import cadquery` is 6.2s against a
 21.6s median part), rsync it to the node because `out/` is gitignored and
 `--each` reads its list in the node's own tree, then:
 
-    onto run --detach --timeout 12h --in brick-icons --task <task> \
+    scripts/run-slot.sh --detach --timeout 12h --in brick-icons --task <task> \
       --each <list> --workers 10 --retries 1 \
       --env PATH=/Users/mike/.local/bin:/opt/homebrew/bin:/usr/bin:/bin \
       --out out/<dir> --to out/<dir> \
       <node> -- scripts/census-batch.sh <engine> 300 out/<dir> {}
 
+- **`run-slot.sh` is `onto run` with the returns wired home** -- a
+  `onto fetch --stream <task>` and an `ingest-watch.py` on the tree, both
+  started with the job and both refusing to start without `--task` and `--to`.
+  A job launched through `onto run` directly delivers only what the agent
+  pushes, which on 2026-09-11 was one file apiece across seven running jobs.
+  `--no-stream` and `--no-watch` opt out; nothing else does.
 - **`--env PATH` is not optional.** The agent's PATH has no `~/.local/bin`, so
   `resvg` is missing and every part fails `FileNotFoundError` in about a second
   — fast enough to write hundreds of error rows before anyone looks, and
