@@ -723,6 +723,28 @@ def test_a_judged_part_drops_the_held_answer(tmp_path):
     assert client.get("/api/corpus/stats").json()["as_of"] != before["as_of"]
 
 
+def test_a_tally_taken_drops_the_held_answer(tmp_path):
+    """The answer carries the tally series the coverage chart draws, and a
+    tally moves no other count: held on those alone, a fresh tally stayed off
+    the chart until some unrelated ingest landed."""
+    from brick_icons import db
+    from brick_icons.lab import tally
+    client = _corpus_client(tmp_path)
+    before = client.get("/api/corpus/stats").json()
+    conn = db.connect(tmp_path / "corpus.db")
+    conn.execute("INSERT INTO renders (part_id, source, config_key, made_at, "
+                 "path, sha256) VALUES ('3001', 'occt', 'k', "
+                 "'2026-09-05T10:00:00+00:00', 'r/3001.svg', 'a')")
+    conn.commit()
+    client.get("/api/corpus/stats")
+    tally.take(conn, at="2026-09-13T00:00:00+00:00")
+    conn.close()
+    after = client.get("/api/corpus/stats").json()
+    assert after["as_of"] != before["as_of"]
+    assert any(r["at"] == "2026-09-13T00:00:00+00:00"
+               for r in after["failures"]["series"])
+
+
 def test_each_question_is_held_separately(tmp_path):
     client = _corpus_client(tmp_path)
     all_parts = client.get("/api/corpus/stats").json()

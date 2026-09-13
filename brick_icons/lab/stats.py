@@ -651,7 +651,9 @@ SELECT (SELECT MAX(run_id) FROM measurements),
        (SELECT count(*) FROM parts),
        (SELECT count(*) FROM part_years),
        (SELECT count(*) FROM runs),
-       (SELECT count(*) FROM runs WHERE finished IS NULL)
+       (SELECT count(*) FROM runs WHERE finished IS NULL),
+       (SELECT count(*) FROM tallies),
+       (SELECT MAX(taken) FROM tallies)
 """
 
 
