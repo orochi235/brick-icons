@@ -145,7 +145,7 @@ def _overlap_witness(pa, pb, ha=(), hb=(), grid=48):
     return (x0 + xs[j] / sx, y0 + ys[j] / sy)
 
 
-def _stall_release(remaining, succ, faces):
+def _stall_release(remaining, succ, faces, tied=None):
     """Pick the face to force-release at a topological stall: the deepest
     member of a SOURCE strongly-connected component of the remaining
     subgraph. At a stall every source component IS a cycle, and only its
@@ -199,6 +199,10 @@ def _stall_release(remaining, succ, faces):
                 comp_in[comp_id[w]] += 1
     cand = [v for v in rem
             if comp_in[comp_id[v]] == 0 and comp_size[comp_id[v]] > 1]
+    if tied:
+        # Print never jumps the surface it is printed on. That tie is exact,
+        # where a depth edge in the same cycle can be a curled sheet's thickness.
+        cand = [v for v in cand if not (tied[v] & rem)] or cand
     return max(cand or rem, key=lambda i: faces[i]["depth"])
 
 
@@ -278,6 +282,7 @@ def order_faces(faces, proj=None, eps=1e-6, own_occ=None):
         return dfs[i](x, y)
 
     succ = defaultdict(set)
+    tied = defaultdict(set)
     indeg = [0] * n
     polys = [np.asarray(f["poly"], float) for f in faces]
     for i, j in _bbox_pairs(polys):
@@ -303,6 +308,7 @@ def order_faces(faces, proj=None, eps=1e-6, own_occ=None):
             if faces[i].get("color", 16) == faces[j].get("color", 16):
                 continue
             a, b = (i, j) if i < j else (j, i)
+            tied[b].add(a)
         else:
             a, b = (i, j) if di > dj else (j, i)  # farther paints first
         if b not in succ[a]:
@@ -315,7 +321,7 @@ def order_faces(faces, proj=None, eps=1e-6, own_occ=None):
     remaining = set(range(n))
     while len(out) < n:
         if not ready:                            # cycle: release a member
-            k = _stall_release(remaining, succ, faces)
+            k = _stall_release(remaining, succ, faces, tied)
             heapq.heappush(ready, (-faces[k]["depth"], k))
             indeg[k] = 0
         _, i = heapq.heappop(ready)
@@ -562,9 +568,11 @@ def _half_plane(a, b, c, bounds, pad=8.0):
     if n < 1e-12:                     # parallel depths: all of it or none
         return None if c < 0 else _P([(x0 - pad, y0 - pad), (x1 + pad, y0 - pad),
                                       (x1 + pad, y1 + pad), (x0 - pad, y1 + pad)])
-    L = 2.0 * math.hypot(x1 - x0, y1 - y0) + pad
     ux, uy = a / n, b / n                          # unit normal, into the region
-    d = (a * cx + b * cy + c) / n                  # centre's signed distance
+    d = (a * cx + b * cy + c) / n                  # center's signed distance
+    # Reach past the center however far the line is: two nearly parallel depth
+    # planes put it far outside, and a fixed reach stopped short of the bounds.
+    L = 2.0 * math.hypot(x1 - x0, y1 - y0) + pad + abs(d)
     px, py = cx - d * ux, cy - d * uy              # foot on the line
     vx, vy = -uy, ux                               # along the line
     return _P([(px + vx * L, py + vy * L), (px - vx * L, py - vy * L),
@@ -2040,6 +2048,12 @@ def _body_planes(faces):
     return unwrap.dedupe_planes(seen.values())
 
 
+def _spans_uv(verts, carrier) -> bool:
+    uv = np.asarray(unwrap.to_uv(np.asarray(verts, float), carrier), float)
+    s = np.linalg.svd(uv - uv.mean(axis=0), compute_uv=False)
+    return s[0] > 0 and s[-1] / s[0] > 1e-4
+
+
 def unwrap_decoration(faces, carriers, proj, step=0.25, ellipses_out=None):
     """Replace bound decoration facets with one face per merged UV region.
 
@@ -2060,6 +2074,10 @@ def unwrap_decoration(faces, carriers, proj, step=0.25, ellipses_out=None):
         # facets is a plane the decoration sits exactly on — matching one
         # would flatten the very curvature the unwrap exists to dissolve
         carrier = unwrap.bind(f["_verts"], carriers)
+        if carrier is not None and not _spans_uv(f["_verts"], carrier):
+            # a chord cap has every vertex on its primitive's circle, so it
+            # binds to the wall -- where it unwraps to a line and is dropped
+            carrier = None
         if carrier is None:
             carrier = unwrap.bind(f["_verts"], planes)
         if carrier is None:

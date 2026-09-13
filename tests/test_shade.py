@@ -1144,6 +1144,15 @@ def test_refine_order_clips_restores_pass_through_victim():
     assert len(ops) == 1 and ops[0]["depth"] == -5.0   # true front face wins
 
 
+def test_half_plane_covers_bounds_when_its_line_is_far_away():
+    # Two nearly parallel depth planes put the line where they cross far
+    # outside the region; 6155286wc01's black rings were 0.29 nearer than the
+    # panel under them and still lost to it, because the half-plane stopped short.
+    from shapely.geometry import box
+    front = shade._half_plane(1e-4, 0.0, 0.3, (0.0, 0.0, 10.0, 10.0))
+    assert front.contains(box(0.0, 0.0, 10.0, 10.0))
+
+
 def test_silhouette_geom_unions_all_faces():
     from brick_icons import geom2d
     faces = [{"poly": np.array([(0, 0), (10, 0), (10, 10), (0, 10)], float),
