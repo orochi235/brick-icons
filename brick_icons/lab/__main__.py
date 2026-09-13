@@ -12,6 +12,7 @@ from .app import create_app
 #: fresh process, which never sees the parsed arguments, so the one thing the
 #: factory needs travels in the environment.
 ROOT_ENV = "BRICK_ICONS_LAB_ROOT"
+GRACEFUL_SHUTDOWN_S = 5
 
 
 def _factory():
@@ -39,10 +40,15 @@ def main(argv=None) -> int:
         # The qualified path, not `__name__`: under `python -m` that is
         # "__main__", and the reloader's subprocess would re-import uvicorn's
         # entry point under that name rather than this module.
+        # A reload waits for in-flight requests before the new worker starts,
+        # and one proxied request that never finished held the lab dark for
+        # good. Past this, the old worker drops what it still holds.
         uvicorn.run("brick_icons.lab.__main__:_factory", factory=True, reload=True,
-                    reload_dirs=["brick_icons"], host=args.host, port=args.port)
+                    reload_dirs=["brick_icons"], host=args.host, port=args.port,
+                    timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_S)
     else:
-        uvicorn.run(create_app(root=args.root), host=args.host, port=args.port)
+        uvicorn.run(create_app(root=args.root), host=args.host, port=args.port,
+                    timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_S)
     return 0
 
 
