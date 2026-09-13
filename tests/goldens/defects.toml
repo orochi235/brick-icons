@@ -2351,6 +2351,7 @@ status = "open"
 title = "occt render has a weird chip taken out of one of the edges"
 checked = { occt = "50ac8d8ddb6046a39d9d275b301ab9fe9a13b5c0a0a5db8b826b4bc6a8b25dc6" }
 filed = "2026-09-13"
+notes = "Cause found, not fixed. The light strip is face fill from the plate's internal y=4 ceiling (plane y=4), painted over the inner-corner wall at x=-10 between screen y 60.41 and 62.45. shade.order_faces' witness depths are right pairwise (the ceiling is farther than that wall), but 11 faces -- stud walls, both inner-corner walls, the y=4 ceiling and planes at y=7.5, x=6, z=-10, z=6 -- form a constraint cycle, and _stall_release breaks it by releasing the x=6 wall and then the x=-10 wall ahead of the ceiling. Releasing the member with the fewest unmet constraints instead picks the same walls (a tie broken by depth) and changes 4019, so it was reverted. A fix has to stop the hidden ceiling face entering the cycle, not tune the release."
 
 [[defect]]
 id = "18603c02p08-hidden-ink-panels"
@@ -2448,3 +2449,12 @@ title = "extra tangent outlines"
 checked = { occt = "062b3e49262c1f6b6659797faf9519aaa01f43d78d8076613be3a1d28ecb8b3f" }
 filed = "2026-09-13"
 notes = "Fixed in 58dc7e4. The part declares no type-2 or type-5 line, so occt drew HLR's whole sharp set, cracks included; the tangent lines were one-face edges where its ndis pieces meet the printed discs. That fallback now keeps only fragments on edges shared by two non-tangent faces. It also drops the disc outlines, which were cracks too. Regression test: test_a_part_declaring_no_edges_draws_no_crack. The occt slot's stored drawing still predates the fix."
+
+[[defect]]
+id = "309p03-too-many-studs"
+part = "309p03"
+engines = ["occt"]
+status = "open"
+title = "too many studs?"
+checked = { white-occt = "31cf75f96e26a1d679dfefbb2dc3dd981341c30c75b54b8b45e3f202b306f8b3" }
+filed = "2026-09-13"
