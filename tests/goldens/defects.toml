@@ -2440,7 +2440,8 @@ notes = "Stands for every sticker naive draws this way, not only 168365e. Coordi
 id = "194325b-extra-tangent-outlines"
 part = "194325b"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "extra tangent outlines"
 checked = { occt = "062b3e49262c1f6b6659797faf9519aaa01f43d78d8076613be3a1d28ecb8b3f" }
 filed = "2026-09-13"
+notes = "Fixed in 58dc7e4. The part declares no type-2 or type-5 line, so occt drew HLR's whole sharp set, cracks included; the tangent lines were one-face edges where its ndis pieces meet the printed discs. That fallback now keeps only fragments on edges shared by two non-tangent faces. It also drops the disc outlines, which were cracks too. Regression test: test_a_part_declaring_no_edges_draws_no_crack. The occt slot's stored drawing still predates the fix."
