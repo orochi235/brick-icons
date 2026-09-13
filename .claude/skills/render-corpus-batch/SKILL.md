@@ -15,6 +15,10 @@ against the part's own polygons. There is no draw-only route here on purpose —
 a render nobody measured is a cell on the wall that no coverage number can
 check.
 
+**Launch through `scripts/run-slot.sh`, not `onto run`.** It is `onto run` with
+the job's returns wired home as part of the launch -- the fetch stream and the
+ingest watcher -- and opting out of either is a flag you have to type.
+
 Two neighbors own the steps either side of this one. `onto-job` is the fleet
 mechanics — nodes, sync, detach, fetch. `ingest-renders` is step 7, and it is
 not optional reading: indexing is not baking, and a rebuild that is not swapped
@@ -117,9 +121,20 @@ reads like the node refusing the work rather than a missing file. Confirm it
 landed (`onto run -in brick-icons <node> -- wc -l < out/slot-<slot>/batches.txt`)
 before launching, because once the job holds the tree lock that check 409s.
 
+**The node's tree must draw at this checkout's build, and `run-slot.sh` makes
+it.** Every row records the build that drew it, and a slot counts a part stale
+when that build predates the engine's last change -- so a node trailing HEAD
+spends its whole run producing parts that land still stale. Before launching,
+the script asks the node (and each `--with` helper) for `brick_icons.build()`,
+runs `onto sync` if it differs from this checkout's or this checkout is dirty,
+and refuses to launch if the node still disagrees. It refuses `--any` for the
+same reason: a node it cannot name is a revision it cannot check. A sync that
+refuses because the node holds uncollected files stops the launch; copy those
+files off before reaching for `--force`.
+
 Then, with the three values step 2 printed:
 
-    onto run --detach --timeout 12h --in brick-icons --task slot-occt \
+    scripts/run-slot.sh --detach --timeout 12h --in brick-icons --task slot-occt \
       --each out/slot-occt/batches.txt --workers 10 --retries 1 \
       --env PATH=/Users/mike/.local/bin:/opt/homebrew/bin:/usr/bin:/bin \
       --env SOURCE=occt --env KEEP=out/slot-occt/renders \
@@ -151,30 +166,29 @@ Then, with the three values step 2 printed:
   batch appends to that pass's file — and `--skip-done` reads the old timeout
   rows as done and skips exactly the parts being retried.
 
-### 5. Check the results are coming home, do not assume they are not
+### 5. The returns are wired at the launch, not chased afterwards
 
-**A detached job that names `--out` and `--to` already delivers as it goes.**
-Measured on this round: the job launched at 17:05 and its first renders were
-on this machine at 17:06:32, with nobody running a fetch. `readCadence`
-defaults to items when no cadence file exists, and `recordDelivery` fires
-whenever `--to` is set.
+`run-slot.sh` is `onto run` plus the two instruments that get results home and
+into the database: an `onto fetch --stream <task>` and an `ingest-watch.py` on
+the tree. Every other flag passes through untouched, so there is no second
+launch interface to keep in step, and it refuses a launch with no `--task` or
+no `--to` because both instruments key on those. `--no-stream` and `--no-watch`
+opt out; say in the same breath what will collect the job instead.
 
-The help text says otherwise and it is worth not believing: `-out` reads
-"path under the tree holding this job's results, for a later fetch", and the
-launch banner prints `onto fetch --stream <task>` as though that were the step
-that starts delivery. It is not -- it is the controller-side pull, useful when
-you want a guaranteed-quiet pass after the job stops, and redundant with the
-push the rest of the time.
+**Do not trust `--to` to deliver on its own.** It records a destination and the
+agent does push to it, sometimes: on 2026-09-11 seven running jobs had
+delivered one file apiece while 10,000 sat on their nodes, and four hours of
+renders were invisible to every coverage number and to the wall. Nothing
+reports this -- `onto jobs` says running, the logs say drawing, and the local
+tree simply stops growing.
 
-So the check is a check, not a ritual:
+So the check is a real check:
 
-    find out/<task>/renders -name '*.svg' | wc -l     # against the job's own count
-    onto logs <job-id> | grep -c 'occt@iso'
+    onto returns | head                # FILES and NEWEST, per task
+    onto fetch --dry-run <node>:brick-icons/out/<task> out/<task>
 
-If those two track each other, delivery is working and there is nothing to
-start. If the first stays at zero while the second climbs, THEN something is
-wrong -- and `onto deliver --at items <job-id>` is how you turn it on for a
-job that somehow has it off.
+The dry run names the gap in files and MiB and moves nothing. A NEWEST in hours
+under a job that has been running for hours is the failure.
 
 ### 6. Wait, and watch for the two silent failures
 
@@ -187,42 +201,46 @@ inside the first minute that parts are completing rather than erroring — a bad
 run reaches its end having written only error rows.
 
 Do not start a second `onto fetch` on a task that already has one streaming:
-two streams race each other into the same directory. `pgrep -fl "onto fetch"`.
+two streams race each other into the same directory. `run-slot.sh` checks
+before it starts one; by hand, `pgrep -fl "onto fetch"` first.
 
-### 6b. Start the watcher in the same breath as the job
+### 6b. What the watcher is doing while you wait
 
-A render job delivers for hours, and results sitting on disk are results
-nobody can query: the wall and every coverage number go on describing the
-corpus as it was before the launch. **Start this when you launch, not when
-somebody asks what came back:**
+`run-slot.sh` started it; this is what it is. Per pass it takes the parts it
+has not already recorded and bakes the slot, so the wall and the coverage
+numbers track the job instead of describing the corpus as it was before the
+launch. It appends.
+
+**It is not `census-ingest.sh` and must never be confused for it**: that one
+REBUILDS, dropping and reseeding every table from every tree, which costs the
+whole corpus each pass and overwrites what another session ingested by hand.
+
+What the watcher makes is what a later rebuild would make of the same tree, so
+the rebuild after the job is a no-op rather than a correction.
+
+Started by hand -- a job someone else launched, or a stream restarted after a
+gap -- it is:
 
     nohup .venv/bin/python scripts/ingest-watch.py out/slot-<slot> \
-      --every 300 > out/ingest-watch.log 2>&1 &
+      --every 300 --until <task> > out/ingest-watch-<task>.log 2>&1 &
 
-It appends — per pass it takes only the parts it has not recorded, then bakes
-the slot — so it is not `census-ingest.sh` and must not be confused for it:
-that one REBUILDS, dropping and reseeding every table from every tree, which
-costs the whole corpus each pass and overwrites what another session ingested
-by hand. Name the trees a job is writing to, several if several jobs are
-running; a finished tree has nothing to add.
-
-What it makes is what a later rebuild would make of the same tree, so the
-rebuild after the job is a no-op rather than a correction.
+`--until` is what closes the round on its own: while onto still lists the task
+the watch keeps going, and once it does not, one last fetch and one last pass
+end it. Without it the watcher runs forever over a finished tree.
 
 ### 7. Ingest
 
-    onto fetch --stream slot-occt
+With step 4's stream and watcher up, this step is already happening and the
+round closes itself: the stream's final pass is the only one guaranteed to see
+a tree nobody is writing to, and the watcher's `--until` waits for it before
+its own last pass.
 
-With the watcher running this is the last mile, not the whole job: let the
-stream's final pass land — the only one guaranteed to see a tree nobody is
-writing to — and the watcher's next pass takes what it brought. For an SVG
-slot a half-written file fails its parse and the next pass takes it whole,
-but a truncated raster is only hashed, so `ldview` and `reference` must wait
-for that final pass before anything indexes them.
+For an SVG slot a half-written file fails its parse and the next pass takes it
+whole, but a truncated raster is only hashed -- so `ldview` and `reference`
+must wait for that final pass before anything indexes them.
 
-Then stop the watcher and follow `ingest-renders` if the tree needs the
-rebuild route for anything the watcher does not carry — part-years, features,
-defects, `attempts`.
+Then follow `ingest-renders` if the tree needs the rebuild route for anything
+the watcher does not carry -- part-years, features, defects, `attempts`.
 
 ### 8. Report what is owed, not that it finished
 
