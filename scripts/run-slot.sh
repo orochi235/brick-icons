@@ -84,7 +84,14 @@ for node in "${nodes[@]}"; do
     echo "run-slot: $node:$tree draws as ${have:-unknown}, this checkout as $want; syncing"
     onto sync -in "$tree" "$node" || { echo "run-slot: sync to $node refused; not launching" >&2; exit 1; }
     have=$(build_of "$node")
-    [ "$have" = "$want" ] || { echo "run-slot: $node still draws as ${have:-unknown} after sync; not launching" >&2; exit 1; }
+    if [ "$have" != "$want" ]; then
+      echo "run-slot: $node still draws as ${have:-unknown} after sync; not launching" >&2
+      # A node fetches its base commit from the remote and takes the rest as a
+      # patch, so its build names the last pushed commit, never an unpushed one.
+      ahead=$(git -C "$ROOT" rev-list --count '@{upstream}..HEAD' 2>/dev/null || echo 0)
+      [ "$ahead" = "0" ] || echo "run-slot: this checkout is $ahead commit(s) ahead of its upstream; push, then launch again" >&2
+      exit 1
+    fi
   fi
   echo "run-slot: $node:$tree at $have"
 done
