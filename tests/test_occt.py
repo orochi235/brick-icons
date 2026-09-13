@@ -813,6 +813,24 @@ def test_a_crease_on_a_hidden_authored_line_is_not_drawn(ldraw_dir):
     assert len(res.segs) > 40, "the part's real edges are still drawn"
 
 
+def test_a_line_on_a_face_it_bounds_is_still_drawn(ldraw_dir):
+    """The line mask asks HLR about a loose copy of each type-2 line, and a copy
+    lying on a face ties with it. 4739b's panel sides lie on their recess wall,
+    lost the tie, and all three went undrawn while naive draws them."""
+    right, up = hlr.view_basis(30.0, 45.0)[:2]
+    ax, ay = occt._screen_axes(right, up)
+    res = _occt_render("4739b", ldraw_dir)
+    for x in (-15.0, 10.0, 35.0):
+        a3, b3 = np.array([x, 13.0, -19.8]), np.array([x, 8.64, -18.93])
+        a = np.array([a3 @ ax, -(a3 @ ay)])
+        d = np.array([b3 @ ax, -(b3 @ ay)]) - a
+        n = np.array([-d[1], d[0]]) / np.linalg.norm(d)
+        on = [o for o in res.segs if o[0] == "line"
+              and abs((np.array(o[1:3]) - a) @ n) < 0.05
+              and abs((np.array(o[3:5]) - a) @ n) < 0.05]
+        assert on, f"panel side at x={x} not drawn"
+
+
 def test_50950_wall_draws_as_one_arc(ldraw_dir):
     """HLR hands a projected ELLIPSE back as a BSpline approximation -- only a
     projected circle survives as a conic -- so the wall drew as 31 straight

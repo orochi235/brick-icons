@@ -1030,6 +1030,9 @@ def projector_axes(right, up):
 
 
 MATCH_TOL = 1e-3       # 2D LDU; a fragment lies exactly on its own curve
+# LDU the line mask's loose copies move toward the eye, so a face the line
+# lies on cannot win HLR's tie. 0.02 and 0.1 draw 4739b/49612 identically.
+LINE_MASK_NUDGE = 0.05
 RIM_STEP_DEG = 25.0    # arc-candidate max step for a drawn circle, as naive
 
 
@@ -1273,9 +1276,11 @@ def _straight_lines(out, right, up):
     chord lies inside the material its arc bulges out of, so HLR calls it
     hidden and masking on it would delete every fitted arc.
     """
+    z, _ = projector_axes(right, up)
+    toward_eye = LINE_MASK_NUDGE * np.asarray(z, float) / np.linalg.norm(z)
     hard, cond = [], []
     for e in out.get("2", ()):
-        seg = np.asarray(e, float)
+        seg = np.asarray(e, float) + toward_eye
         ed = _line_edge(seg[0], seg[1])
         if ed is not None:
             hard.append(ed)
@@ -1333,9 +1338,11 @@ def _drop_lines_hlr_hides(picked, spans):
     since a tessellated dome's profile is a facet boundary and the condline is
     what distinguishes it. A rim circle is coincident with the
     cylinder it bounds, and a loose copy of it defeats HLR's tie -- which is
-    why select_authored reads the shape's own fragments in the first place --
-    but a plane cannot hide its own boundary, so for a line the loose copy is
-    a straight answer.
+    why select_authored reads the shape's own fragments in the first place.
+    A line has the same tie with every face it bounds: 4739b's panel sides lie
+    on a recess wall, lost it, and went undrawn. `_straight_lines` moves the
+    copies LINE_MASK_NUDGE toward the eye, which settles a tie and nothing
+    else -- 49612's lines are behind the dome by far more.
     """
     keep = []
     for edge, locus in picked:
