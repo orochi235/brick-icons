@@ -127,9 +127,14 @@ def main() -> int:
     runner = Runner(args.jsonl, timeout=args.timeout, key="part",
                     extra=extra) if args.jsonl else None
     ids = list(by_part)
+    total = len(ids)
     if runner and args.skip_done:
         ids = runner.remaining(ids)
+    # onto reads these off the item's own pipe: without them a batch is a bar
+    # that moves once, when the batch ends.
+    print(f"onto: plan {total - len(ids)}/{total}", flush=True)
     for n, pid in enumerate(ids, 1):
+        print(f"onto: progress {total - len(ids) + n - 1}/{total}", flush=True)
         def work(part):
             return one(by_part[part], args.source, args.zoom, args.overlay)
         if runner:
