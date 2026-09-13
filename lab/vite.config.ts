@@ -107,6 +107,9 @@ export default defineConfig({
    * does; `node_modules/.vite/deps/_metadata.json` lists what was optimized,
    * and anything in it that is not reachable from an entry belongs here. */
   optimizeDeps: {
+    // Served as source: pre-bundled, a module WallView also imports relatively
+    // would load twice.
+    exclude: ['castleblack'],
     include: [
       '@react-three/fiber', '@react-three/drei', 'three',
       'three/examples/jsm/loaders/LDrawLoader.js',
