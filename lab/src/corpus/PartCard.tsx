@@ -82,14 +82,28 @@ export function PartCard({ cell, source, at, viewport, tint = 'status',
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const years = yearRange(cell.year_from, cell.year_to,
-                          (cell.tags ?? []).includes('retired'));
-
   return (
     <div className="corpus-card" ref={ref} role="dialog"
          aria-label={`${cell.title} card`}
          onPointerEnter={() => onHoverChange?.(true)}
          onPointerLeave={() => onHoverChange?.(false)}>
+      <PartCardBody cell={cell} source={source} tint={tint} onOpen={onOpen} />
+    </div>
+  );
+}
+
+/** The card's contents, for a wall that floats and dismisses the card itself. */
+export function PartCardBody({ cell, source, tint = 'status', onOpen }: {
+  cell: Cell;
+  source: string;
+  tint?: TintMode;
+  onOpen: (id: string) => void;
+}) {
+  const years = yearRange(cell.year_from, cell.year_to,
+                          (cell.tags ?? []).includes('retired'));
+
+  return (
+    <>
       <div className="corpus-card-head">
         {cell.sha ? (
           <img className="corpus-card-thumb" alt={`${cell.id} render`}
@@ -145,6 +159,6 @@ export function PartCard({ cell, source, at, viewport, tint = 'status',
               onClick={() => onOpen(cell.id)}>
         Open
       </button>
-    </div>
+    </>
   );
 }

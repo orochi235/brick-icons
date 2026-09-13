@@ -1,6 +1,9 @@
+import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import react from '@vitejs/plugin-react';
+import { searchForWorkspaceRoot } from 'vite';
 import { defineConfig, type Plugin } from 'vitest/config';
 
 /** Serves `/corpus` from `corpus.html`, so a lab URL carries no extension.
@@ -28,6 +31,28 @@ function extensionlessPages(): Plugin {
 // A worktree runs its own lab server on its own port; the default is the one
 // `brick-icons-lab` listens on with no arguments.
 const API = process.env.LAB_API ?? 'http://127.0.0.1:8792';
+
+/** castleblack, read from source for `/wall`: `$CASTLEBLACK`, else the
+ *  checkout beside this repo's main tree, which a worktree finds too. Not an
+ *  npm dependency until the render nodes can read the private repo, so a tree
+ *  without it builds everything but `/wall`. */
+function castleblack(): string | null {
+  if (process.env.CASTLEBLACK) return process.env.CASTLEBLACK;
+  try {
+    const common = execSync('git rev-parse --path-format=absolute --git-common-dir',
+      { cwd: fileURLToPath(new URL('.', import.meta.url)), stdio: ['ignore', 'pipe', 'ignore'] });
+    const dir = resolve(common.toString().trim(), '../../castleblack');
+    return existsSync(dir) ? dir : null;
+  } catch {
+    return null;
+  }
+}
+const CASTLEBLACK = castleblack();
+const castleblackAlias = CASTLEBLACK
+  ? [{ find: /^@castleblack\/wall\/(.*)$/, replacement: `${CASTLEBLACK}/wall/$1` },
+     { find: /^@castleblack\/host-brick-icons\/(.*)$/,
+       replacement: `${CASTLEBLACK}/hosts/brick-icons/$1` }]
+  : [];
 
 /** `WEASEL_SRC=~/src/weasel npm run dev` draws `@weasel-js/core` and
  *  `@weasel-js/labkit` from a weasel checkout instead of the installed ones,
@@ -74,11 +99,13 @@ export default defineConfig({
     alias: [
       { find: '@lab', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
       ...weaselAlias,
+      ...castleblackAlias,
     ],
     // One React for the page however a dependency asked for it. R3F's hooks
     // read a context, so a second copy makes them throw "Hooks can only be
     // used within the Canvas component" from inside a Canvas.
-    dedupe: ['react', 'react-dom', 'three'],
+    dedupe: ['react', 'react-dom', 'three',
+             '@weasel-js/core', '@weasel-js/labkit', '@weasel-js/ui'],
   },
   /* Everything the lightbox needs, named here because nothing else imports it.
    *
@@ -107,6 +134,7 @@ export default defineConfig({
     // `localhost` resolves to first and 127.0.0.1:5178 refuses.
     host: '::',
     port: 5178,
+    fs: { allow: [searchForWorkspaceRoot(process.cwd()), ...(CASTLEBLACK ? [CASTLEBLACK] : [])] },
     proxy: { '/api': API, '/ldraw': API },
   },
   build: {
@@ -115,6 +143,8 @@ export default defineConfig({
       input: {
         main: fileURLToPath(new URL('./index.html', import.meta.url)),
         corpus: fileURLToPath(new URL('./corpus.html', import.meta.url)),
+        ...(CASTLEBLACK
+          ? { wall: fileURLToPath(new URL('./wall.html', import.meta.url)) } : {}),
         badges: fileURLToPath(new URL('./badges.html', import.meta.url)),
         stats: fileURLToPath(new URL('./stats.html', import.meta.url)),
         ingest: fileURLToPath(new URL('./ingest.html', import.meta.url)),

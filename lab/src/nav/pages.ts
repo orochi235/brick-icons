@@ -8,6 +8,7 @@ import type { LabPage } from '@weasel-js/labkit';
  *  which `currentPage` matches too. */
 export const PAGES: LabPage[] = [
   { href: '/corpus', label: 'Wall' },
+  { href: '/wall', label: 'New wall' },
   { href: '/stats', label: 'Dashboard' },
   { href: '/ingest', label: 'Ingestion' },
 ];
