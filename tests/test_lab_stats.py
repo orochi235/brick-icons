@@ -334,23 +334,18 @@ def test_speed_reports_the_spread_per_engine(conn):
     assert sum(b["n"] for b in row["bins"]) == 4
 
 
-def test_speed_buckets_fine_where_the_parts_are(conn):
-    """Half a second to ten, one to twenty, two to forty, five to a minute.
-    At an even second the bulk of the corpus fell in the first three bars and
-    the shape of the fast end was invisible."""
+def test_speed_buckets_half_a_second_up_to_a_minute(conn):
+    """One width across the whole run before the break. At an even second the
+    bulk of the corpus fell in the first three bars and the shape of the fast
+    end was invisible."""
     for i, secs in enumerate([0.4, 2.0, 3.9, 61.0, 4000.0]):
         _part(conn, f"300{i}")
         _measure(conn, f"300{i}", "occt", secs=secs)
     conn.commit()
     bins = {r["engine"]: r for r in stats.stats(conn)["speed"]}["occt"]["bins"]
-    assert {round(b["to"] - b["from"], 3) for b in bins
-            if b["to"] is not None and b["from"] < 10.0} == {0.5}
-    assert {round(b["to"] - b["from"], 3) for b in bins
-            if b["to"] is not None and 10.0 <= b["from"] < 20.0} == {1.0}
-    assert {round(b["to"] - b["from"], 3) for b in bins
-            if b["to"] is not None and 20.0 <= b["from"] < 40.0} == {2.0}
-    assert {round(b["to"] - b["from"], 3) for b in bins
-            if b["to"] is not None and 40.0 <= b["from"] < 60.0} == {5.0}
+    head = [b for b in bins if b["from"] < 60.0]
+    assert len(head) == 120
+    assert {round(b["to"] - b["from"], 3) for b in head} == {0.5}
     assert {round(b["to"] - b["from"], 3) for b in bins
             if b["to"] is not None and b["from"] >= 60.0} == {10.0}
     assert bins[-1] == {"from": stats.SECS_TOP, "to": None, "n": 1,
@@ -368,12 +363,13 @@ def test_the_tail_is_flagged_so_the_chart_can_break_its_axis(conn):
     bins = {r["engine"]: r for r in stats.stats(conn)["speed"]}["occt"]["bins"]
     assert {b["from"] for b in bins if b["tail"]} == {
         *(60.0 + 10.0 * i for i in range(24)), stats.SECS_TOP}
-    assert max(b["from"] for b in bins if not b["tail"]) == 55.0
+    assert max(b["from"] for b in bins if not b["tail"]) == 59.5
 
 
 def test_a_value_on_a_bucket_edge_opens_that_bucket(conn):
-    """10.0 is the first of the one-second run, not the last of the
-    half-second one -- the seam is where an off-by-one would hide."""
+    """10.0 opens the bucket at 10, and 60.0 the first of the tail rather than
+    the last of the half-second run -- the seam is where an off-by-one would
+    hide."""
     for i, secs in enumerate([10.0, 20.0, 60.0]):
         _part(conn, f"310{i}")
         _measure(conn, f"310{i}", "occt", secs=secs)

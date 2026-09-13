@@ -18,18 +18,15 @@ from brick_icons.lab import tally
 from brick_icons.lab.cells import (COVERAGE_ORDER, coverage_of, degenerate,
                                    engine_for, judged, not_applicable)
 
-# Seconds a render took: fine where the parts are, coarse where they thin out
-# -- half a second to ten, one to twenty, two to forty, five to a minute, ten
-# to five minutes, then one open bucket. Up to the break the bars are drawn
-# proportional to their span, so that stretch is a true histogram; equal-width
-# bars over unequal buckets draw the same area for wildly different densities.
+# Seconds a render took: half a second to a minute, ten to five minutes, then
+# one open bucket.
 #
-# Past the break the chart trades that for reach: a tenth of occt's
+# Past the break the chart trades scale for reach: a tenth of occt's
 # measurements and near a quarter of naive's sit beyond a minute, and drawn to
 # scale they would take four times the width of everything before them. The
 # tail's buckets are one width, narrow, and stood off from the rest so the
 # axis reads as broken rather than continuous.
-SECS_STEPS = ((10.0, 0.5), (20.0, 1.0), (40.0, 2.0), (60.0, 5.0), (300.0, 10.0))
+SECS_STEPS = ((60.0, 0.5), (300.0, 10.0))
 SECS_BREAK = 60.0
 # 300s is the census render cap, so the open bucket is "ran past the cap"
 # rather than an arbitrary edge. 309 of 165,751 measurements are out there.
@@ -120,8 +117,8 @@ def _bins(values: list[float]) -> list[dict]:
            for lo, hi in zip(edges, (*SECS_EDGES, None))]
     for v in values:
         # bisect_right, so a value sitting exactly on an edge falls in the
-        # bucket that edge opens -- 10.0 is the first of the one-second run,
-        # not the last of the half-second one.
+        # bucket that edge opens -- 60.0 is the first of the tail, not the
+        # last of the half-second run.
         out[bisect.bisect_right(SECS_EDGES, v)]["n"] += 1
     return out
 

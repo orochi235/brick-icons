@@ -240,11 +240,9 @@ const binLabel = (from: number, to: number | null) =>
  *  own tallest bin draws two different counts at the same height, so a second
  *  engine must not bring per-panel scaling with it.
  *
- *  The bins are not one width -- the server runs half a second to ten, one to
- *  twenty, two to forty, five to a minute -- so up to the break each bar is
- *  drawn as wide as the span it covers. Equal-width bars over unequal buckets
- *  draw the same area for wildly different densities, which is the whole
- *  reason the fine end can be fine.
+ *  Up to the break each bar is drawn as wide as the span it covers, so the
+ *  stretch stays a true histogram whatever widths the server picks; today it
+ *  is half a second throughout.
  *
  *  Past the break the server's buckets are ten seconds each and the bars are
  *  one narrow width, standing off from the rest: a tenth of occt's parts and

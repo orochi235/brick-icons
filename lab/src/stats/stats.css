@@ -281,7 +281,7 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
 }
 
 /* `--span` is the bucket's width in seconds, set per bar because the server
- * owns the buckets: half a second at the fast end, five at the slow. */
+ * owns the buckets. */
 .stats-bin {
   flex: var(--span, 1) 1 0;
   min-width: 0;
