@@ -35,6 +35,30 @@ def test_binds_a_facet_on_the_wall_to_its_cylinder():
     assert unwrap.bind(on_wall, [cyl]) is cyl
 
 
+def test_flat_ink_at_a_rounded_corner_does_not_bind_to_the_corner_wall():
+    """6148328s's red field runs to its tile's rounded corners, within reach of
+    the 1.5-LDU corner cylinders. Walls are tried first, so all 46 corner
+    triangles bound there and unwrapped to zero width."""
+    corner = FakeCylinder(r=1.5, h=2.0)
+    flat = np.array([[1.5, 0.5, 0.0], [1.6, 0.5, 0.3], [1.3, 0.5, 0.4]])
+    assert unwrap.bind(flat, [corner]) is None
+    top = unwrap.Plane(normal=np.array([0.0, 1.0, 0.0]), offset=0.5)
+    assert unwrap.bind(flat, [top]) is top
+
+
+def test_the_plane_a_print_lies_along_beats_a_nearer_tilted_one():
+    """4215ad0a's sticker covers its face, so the nearest plane parallel to the
+    print is 0.25 LDU behind it, and planes of the mould's tiny tilted facets
+    cross the letters nearer than that."""
+    print_ = np.array([[0.0, 0.0, 0.3], [1.0, 0.0, 0.3], [0.0, 1.0, 0.3]])
+    face = unwrap.Plane(normal=np.array([0.0, 0.0, 1.0]), offset=0.0)
+    s, c = np.sin(np.radians(7.0)), np.cos(np.radians(7.0))
+    tilted = unwrap.Plane(normal=np.array([s, 0.0, c]), offset=0.3 * c + 0.06)
+    assert unwrap._gap(print_, tilted) < unwrap._gap(print_, face)
+    assert unwrap.bind(print_, [tilted, face]) is face
+    assert unwrap.bind(print_, [face, tilted]) is face
+
+
 def test_does_not_bind_geometry_further_than_the_tolerance():
     cyl = FakeCylinder(r=20.0)
     standoff = np.array([[24.0, 1.0, 0.0], [24.0, 1.0, 4.0], [24.0, 5.0, 0.0]])
@@ -199,27 +223,24 @@ def test_a_reversed_carrier_still_round_trips():
     assert back == pytest.approx(pts, abs=1e-9)
 
 
-def test_a_curved_canvas_grows_to_hold_ink_that_overruns_it():
+def test_a_curved_canvas_holds_ink_that_overruns_the_wall():
     """A minifig head's print runs onto the dome its wall cylinder stops at.
     The canvas is the SVG's viewport, so ink past the section is cut, not
-    merely off-centre."""
+    merely off-center."""
     cyl = _axis([0.0, -1.0, 0.0], r=20.0, h=24.0)
-    over = np.array([[0.0, -1.5], [0.0, 25.5]])
+    over = np.array([[-3.0, -1.5], [5.0, 25.5]])
     ext = unwrap.carrier_extent(cyl, over)
-    assert ext[:, 1].min() == pytest.approx(-1.5)
-    assert ext[:, 1].max() == pytest.approx(25.5)
-    # and the wrap is still the carrier's, not the ink's
-    assert ext[:, 0].min() == pytest.approx(-20.0 * np.pi)
-    assert ext[:, 0].max() == pytest.approx(20.0 * np.pi)
+    assert (ext[:, 1].min(), ext[:, 1].max()) == pytest.approx((-1.5, 25.5))
 
 
-def test_ink_inside_the_carrier_leaves_the_canvas_alone():
-    """The union has to be a no-op where the print fits, or every decal in the
-    store is redrawn to fix the few that overrun."""
+def test_a_narrow_print_on_a_wide_wall_fills_its_canvas():
+    """15068dy6 prints 35 LDU of ink on a 45-degree wall whose full turn is
+    310 LDU; a canvas the size of the turn drew it as a speck."""
     cyl = _axis([0.0, -1.0, 0.0], r=20.0, h=24.0)
-    bare = unwrap.carrier_extent(cyl)
-    inside = np.array([[0.0, 2.0], [1.0, 22.0]])
-    assert unwrap.carrier_extent(cyl, inside) == pytest.approx(bare)
+    ink = np.array([[2.0, 3.0], [9.0, 20.0]])
+    ext = unwrap.carrier_extent(cyl, ink)
+    assert (ext[:, 0].min(), ext[:, 0].max()) == pytest.approx((2.0, 9.0))
+    assert (ext[:, 1].min(), ext[:, 1].max()) == pytest.approx((3.0, 20.0))
 
 
 def test_a_plane_falls_back_to_the_decal_bounds():
@@ -350,7 +371,8 @@ def test_a_poor_fit_is_rejected_rather_than_forced():
 def test_region_path_emits_arc_commands_for_a_recovered_circle():
     th = np.linspace(0, 2 * np.pi, 17)[:-1]
     poly = np.column_stack([3.0 + 2.0 * np.cos(th), 5.0 + 2.0 * np.sin(th)])
-    d = unwrap.region_path(geom2d.to_geom(poly))
+    # the fitted outline is the first subpath; the polygon under it follows
+    d = unwrap.region_path(geom2d.to_geom(poly)).split(" Z")[0]
     assert "A" in d              # true arcs, not 16 L commands
     assert d.count("L") <= 2
 
@@ -391,7 +413,7 @@ def test_a_circle_is_not_mistaken_for_a_rounded_rectangle():
 
 def test_region_path_rounds_the_corners_of_a_panel():
     ring = _rounded_rect_ring(-8.0, 2.0, 8.0, 12.0, 2.0)
-    d = unwrap.region_path(geom2d.to_geom(ring))
+    d = unwrap.region_path(geom2d.to_geom(ring)).split(" Z")[0]
     assert d.count("L") == 4          # one per straight run, not 20 chords
     assert d.count("A") == 4          # one per corner
 
@@ -1108,3 +1130,233 @@ def test_a_sticker_placed_in_a_color_is_still_print(ldraw_dir):
     panels = unwrap.decal_panels(tri, tri_colors, analytic)
     assert panels and 0 in {c for _e, regions, _f in panels
                             for c, _g in regions}
+
+
+def _book(print_a, print_b, reverse=False):
+    """(tris, colors) for a sheet bent 30 degrees about a vertical crease at
+    x=10, with a color-4 print strip on each leaf. `print_a` and `print_b` are
+    (start, end) distances from the crease along each leaf; a strip reaching 0
+    shares the crease vertices with its twin, so the two weld into one piece.
+    """
+    c, s = np.cos(np.radians(30.0)), np.sin(np.radians(30.0))
+
+    def on_a(d, y):
+        return [10.0 - d, y, 0.0]
+
+    def on_b(d, y):
+        return [10.0 + d * c, y, d * s]
+
+    def quad(f, d0, d1, y0, y1, n=3):
+        # several cells, not one: a flattening needs a few triangles to
+        # measure its own distortion against
+        ds = np.linspace(d0, d1, n + 1)
+        return [t for a, b in zip(ds[:-1], ds[1:])
+                for t in _quad_tris([f(a, y0), f(b, y0), f(b, y1), f(a, y1)])]
+
+    body = quad(on_a, 0.0, 10.0, -10.0, 0.0) + quad(on_b, 0.0, 10.0, -10.0, 0.0)
+    ink = (quad(on_a, *print_a, -6.0, -4.0) + quad(on_b, *print_b, -6.0, -4.0))
+    if reverse:
+        ink = [t[::-1] for t in ink]
+    tris = [np.asarray(t, float) for t in body + ink]
+    return tris, [16] * len(body) + [4] * len(ink)
+
+
+def test_a_print_bent_over_a_crease_draws_as_one_panel():
+    """6155286wc01's sign is one print on a sheet formed over facets; binding
+    each facet's share to its own plane drew it as two halves, and the mesh
+    flattening that keeps it whole only ran when no carrier bound anything."""
+    tris, colors = _book((0.0, 6.0), (0.0, 4.0))
+    panels = unwrap.decal_panels(tris, colors, [])
+    assert len(panels) == 1
+    area = sum(g.area for _c, g in panels[0][1])
+    assert area == pytest.approx(12.0 + 8.0, rel=0.01)
+
+
+def test_prints_on_two_faces_that_do_not_touch_stay_two_panels():
+    tris, colors = _book((2.0, 6.0), (2.0, 6.0))
+    assert len(unwrap.decal_panels(tris, colors, [])) == 2
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_a_flattened_print_reads_the_way_its_plane_does(reverse):
+    """A conformal flattening fixes rotation by which two vertices it pins and
+    handedness by the authored winding, which LDraw does not guarantee:
+    4174735bc01's band came off it rotated. On a flat print it must agree
+    with the plane unwrap, which settles both."""
+    tris, colors = _book((0.0, 6.0), (0.0, 0.0), reverse=reverse)
+    # the whole body, so the part has an inside to be outward from; ink on
+    # the first leaf only, so one plane carries it
+    area = [np.linalg.norm(np.cross(t[1] - t[0], t[2] - t[0])) for t in tris]
+    keep = [i for i, t in enumerate(tris)
+            if colors[i] == 16 or (t[:, 2].max() == 0 and area[i] > 0)]
+    tris, colors = [tris[i] for i in keep], [colors[i] for i in keep]
+    (plane, theta0, _r, _f), = unwrap.decal_groups(tris, colors, [])
+    (mesh, _t, _r2, _f2), = unwrap.mesh_groups(tris, colors)
+    p = np.array([[4.0, -6.0, 0.0], [10.0, -6.0, 0.0], [4.0, -4.0, 0.0]])
+    flat, bent = unwrap.to_uv(p, plane, theta0), mesh.at(p)
+    for k in (1, 2):
+        a, b = flat[k] - flat[0], bent[k] - bent[0]
+        cos = float(a @ b) / (np.linalg.norm(a) * np.linalg.norm(b))
+        assert cos == pytest.approx(1.0, abs=1e-3)
+
+
+def test_winding_is_made_to_agree_across_shared_edges():
+    # two faces over edge 1-2, both authored 1 -> 2
+    F = unwrap.consistent_winding([[0, 1, 2], [1, 2, 3]])
+    directed = [{(f[0], f[1]), (f[1], f[2]), (f[2], f[0])} for f in F]
+    assert (1, 2) in directed[0] and (2, 1) in directed[1]
+
+
+def test_a_region_drawn_with_arcs_still_covers_its_own_polygon(tmp_path, ldraw_dir):
+    """A hole fitted as a circle is larger than the 16-gon it was fitted to,
+    so the fill around it lost a sliver beyond every chord -- and a neighbor
+    drawn as the polygon left those slivers showing as ground: 4531d01's dots,
+    98138p16's heart seam."""
+    import io
+    import subprocess
+
+    import shapely
+    from PIL import Image, ImageDraw
+
+    th = np.radians(np.arange(16) * 22.5)
+    hole = np.column_stack([500 + 300 * np.cos(th), 500 + 300 * np.sin(th)])
+    square = np.array([[100.0, 100.0], [900.0, 100.0], [900.0, 900.0], [100.0, 900.0]])
+    region = shapely.Polygon(square, [hole])
+    canvas = np.array([[0.0, 0.0], [1000.0, 0.0], [1000.0, 1000.0], [0.0, 1000.0]])
+    path, = unwrap._panel_paths(canvas, [(0, region)], 1.0, ldraw_dir, None)
+    svg = tmp_path / "region.svg"
+    svg.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="1000" '
+                   'height="1000"><rect width="1000" height="1000" fill="white"/>'
+                   + path + "</svg>")
+    png = subprocess.run(["resvg", str(svg), "-c"], capture_output=True,
+                         check=True).stdout
+    ink = np.asarray(Image.open(io.BytesIO(png)).convert("L")) < 128
+    truth = Image.new("L", (1000, 1000), 0)
+    draw = ImageDraw.Draw(truth)
+    draw.polygon([(x, 1000 - y) for x, y in square], fill=255)
+    draw.polygon([(x, 1000 - y) for x, y in hole], fill=0)
+    missed = (np.asarray(truth) > 0) & ~ink
+    # one pixel of erosion clears antialias fringe; a chord's sliver is
+    # about six pixels deep at this radius and survives it
+    from scipy import ndimage
+    assert ndimage.binary_erosion(missed).sum() == 0
+
+
+def test_a_print_that_only_spills_onto_a_second_face_stays_on_its_carrier():
+    """u9102p04's strap is 92% on the helmet's front plane and 8% on the
+    skirt below it. Flattening it on its own split it from the dots printed
+    beside it; losing the spill on the carrier's drawing is the smaller harm."""
+    tris, colors = _book((0.0, 6.0), (0.0, 0.5))
+    panels = unwrap.decal_panels(tris, colors, [])
+    assert panels and panels[0][2] is not None      # a carrier panel keeps its face
+
+
+def test_a_print_around_a_sticker_edge_is_not_one_surface():
+    """u9533's print wraps a 0.25 LDU sheet's edge from its front to its back.
+    Front and back are parallel planes: nothing is cut across facets, so the
+    two sides stay two panels instead of unfolding into one strip."""
+    def quad(a, b, c, d):
+        return _quad_tris([a, b, c, d])
+
+    body = (quad([0, -10, 0], [10, -10, 0], [10, 0, 0], [0, 0, 0])
+            + quad([10, -10, -0.25], [0, -10, -0.25], [0, 0, -0.25], [10, 0, -0.25])
+            + quad([10, -10, 0], [10, -10, -0.25], [10, 0, -0.25], [10, 0, 0]))
+    ink = []
+    for x0, x1 in ((4.0, 6.0), (6.0, 8.0), (8.0, 10.0)):
+        ink += quad([x0, -6, 0], [x1, -6, 0], [x1, -4, 0], [x0, -4, 0])
+        ink += quad([x1, -6, -0.25], [x0, -6, -0.25], [x0, -4, -0.25], [x1, -4, -0.25])
+    ink += quad([10, -6, 0], [10, -6, -0.25], [10, -4, -0.25], [10, -4, 0])
+    tris = [np.asarray(t, float) for t in body + ink]
+    colors = [16] * len(body) + [4] * len(ink)
+    panels = unwrap.decal_panels(tris, colors, [])
+    assert len(panels) == 2 and all(face is not None for _e, _r, face in panels)
+
+
+def test_a_wall_family_that_widens_along_its_axis_still_carries_its_print():
+    """43898p02's dish is stacked cone sections authored axis-down, so they
+    widen along the axis span_carrier picks. Its end radii went into a cone
+    with a negative taper, a negative radius law, and a wall 24 LDU from where
+    the sections are: all 32 blue stripes bound to nothing."""
+    from brick_icons import primitives
+
+    R = np.array([[2.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, -2.0]])
+    upper = primitives.Cone(R=R, t=np.array([0.0, 0.0, 0.0]), sector=360.0,
+                            color=16, top=4.0)       # radius 10 at y=0, 8 at y=-1
+    lower = primitives.Cone(R=R, t=np.array([0.0, -1.0, 0.0]), sector=360.0,
+                            color=16, top=3.0)       # radius 8 at y=-1, 6 at y=-2
+    th = np.radians([0.0, 4.0, 2.0])
+    rad = np.array([9.0, 9.0, 9.2])
+    y = np.array([-0.5, -0.5, -0.4])
+    stripe = np.column_stack([rad * np.cos(th), y, rad * np.sin(th)])
+    span = unwrap.span_carrier([upper, lower])
+    assert unwrap._gap(stripe, span) < 0.05
+    assert len(unwrap.decal_groups([stripe], [1], [upper, lower])) == 1
+
+
+def test_a_round_carrier_face_is_still_filled(tmp_path, ldraw_dir):
+    """A round tile's face fits as a circle and carries its polygon beneath,
+    the same as a print region; drawn evenodd the two cancelled and 98138p83's
+    tile lost its face."""
+    import io
+    import subprocess
+
+    import shapely
+    from PIL import Image
+
+    th = np.radians(np.arange(16) * 22.5)
+    disc = shapely.Polygon(np.column_stack([500 + 300 * np.cos(th),
+                                            500 + 300 * np.sin(th)]))
+    canvas = np.array([[0.0, 0.0], [1000.0, 0.0], [1000.0, 1000.0], [0.0, 1000.0]])
+    path, = unwrap._panel_paths(canvas, [], 1.0, ldraw_dir, disc)
+    svg = tmp_path / "face.svg"
+    svg.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="1000" '
+                   'height="1000"><rect width="1000" height="1000" fill="white"/>'
+                   + path + "</svg>")
+    png = subprocess.run(["resvg", str(svg), "-c"], capture_output=True,
+                         check=True).stdout
+    painted = np.asarray(Image.open(io.BytesIO(png)).convert("L")) < 250
+    assert painted[500, 500] and painted.sum() > 0.9 * disc.area
+
+
+def test_a_print_lying_on_two_planes_at_a_crease_takes_the_nearer():
+    """4740p03's silver band crosses the crease between its dish's flat floor
+    and a facet 6 degrees off, and one triangle lies on both within 0.004 LDU.
+    Taking the more parallel plane split it from its neighbors and drew a stub
+    across the band; tangency only has a say among planes a print is not on."""
+    # a sliver along the crease line x=0, parallel to the floor
+    print_ = np.array([[0.0, 0.0, 0.003], [0.0, 1.0, 0.003], [0.02, 0.5, 0.003]])
+    floor = unwrap.Plane(normal=np.array([0.0, 0.0, 1.0]), offset=0.009)
+    s, c = np.sin(np.radians(6.0)), np.cos(np.radians(6.0))
+    facet = unwrap.Plane(normal=np.array([s, 0.0, c]), offset=0.0)
+    assert unwrap._gap(print_, facet) < unwrap._gap(print_, floor) <= 0.01
+    assert unwrap.bind(print_, [floor, facet]) is facet
+
+
+def _bodyless_sticker():
+    """(tris, colors) for a 10 x 10 sticker 0.25 thick with no color-16
+    geometry at all: a printed side facing LDraw up in colors 4 and 0, and a
+    back and rim in the sheet's own color 4 -- 4297014e's construction."""
+    def quad(a, b, c, d):
+        return _quad_tris([a, b, c, d])
+
+    top, back = -0.25, 0.0
+    front = (quad([0, top, 0], [5, top, 0], [5, top, 10], [0, top, 10])
+             + quad([5, top, 0], [10, top, 0], [10, top, 10], [5, top, 10]))
+    sheet = quad([0, back, 0], [0, back, 10], [10, back, 10], [10, back, 0])
+    rim = []
+    for (x0, z0), (x1, z1) in (((0, 0), (10, 0)), ((10, 0), (10, 10)),
+                               ((10, 10), (0, 10)), ((0, 10), (0, 0))):
+        rim += quad([x0, top, z0], [x1, top, z1], [x1, back, z1], [x0, back, z0])
+    tris = [np.asarray(t, float) for t in front + sheet + rim]
+    return tris, [4, 4, 0, 0] + [4] * (len(sheet) + len(rim))
+
+
+def test_a_sticker_with_no_body_carries_its_print_on_its_own_sheet():
+    """Every face of 4297014e is in a color, so no plane was ever built to
+    carry the print, and front and back weld into a slab that will not
+    flatten. Its own facets are the carrier; the back, one region of the
+    sheet's color filling its face, is not print."""
+    tris, colors = _bodyless_sticker()
+    panels = unwrap.decal_panels(tris, colors, [])
+    assert len(panels) == 1
+    assert {int(c) for c, _g in panels[0][1]} == {0, 4}

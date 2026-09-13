@@ -158,16 +158,74 @@ def standoff(pts, carrier) -> float:
     return max(0.0, float(np.max(np.hypot(p[:, 0], p[:, 2]) - want)) * r)
 
 
+#: How far a triangle may lean off a wall's own surface normal and still lie
+#: on it. Over 400 printed parts, flat ink a wall captured from an adjoining
+#: face measured |n.n_wall| < 0.1 and ink on the wall ran from 0.5 up.
+WALL_TANGENT_MIN = 0.5
+
+#: LDU within which a print lies ON a surface, and distance alone decides.
+#: Under it sit crease triangles on two planes at once (4740p03, 0.003 and
+#: 0.004); every print a nearer tilted plane stole was at least 0.017 off it.
+BIND_ON_TOL = 0.01
+
+
+def _facet_normal(pts):
+    """Unit normal of a triangle, or None for anything else or a degenerate one."""
+    P = np.asarray(pts, float)
+    if P.shape != (3, 3):
+        return None
+    n = np.cross(P[1] - P[0], P[2] - P[0])
+    ln = float(np.linalg.norm(n))
+    return n / ln if ln > 1e-12 else None
+
+
+def _wall_normal(prim, p):
+    """Unit surface normal of a wall at world point `p`, exact under scale,
+    shear and taper: the gradient of |xz| - radius_at(y) in the primitive's
+    own frame, carried out by R^-T."""
+    loc = _local(np.asarray(p, float)[None, :], prim)[0]
+    rho = max(float(np.hypot(loc[0], loc[2])), 1e-12)
+    h = 1e-4
+    dr = (prim.radius_at(float(loc[1]) + h)
+          - prim.radius_at(float(loc[1]) - h)) / (2 * h)
+    n = np.linalg.inv(prim.R).T @ np.array([loc[0] / rho, -dr, loc[2] / rho])
+    return n / np.linalg.norm(n)
+
+
 def bind(pts, carriers, tol: float = BIND_TOL):
-    """The carrier `pts` lies on, or None. None means 'leave as authored'."""
-    best, best_gap = None, tol
+    """The carrier `pts` lies on, or None. None means 'leave as authored'.
+
+    A triangle binds only to a surface it lies ALONG, not merely one it is
+    near. 6148328s's red field runs to its tile's rounded corners, within
+    reach of the corner cylinders, and bound there edge-on to unwrap as a line.
+    A surface the print lies on (BIND_ON_TOL) wins by distance. Otherwise the
+    most nearly parallel in reach wins and distance breaks ties: 4215ad0a's
+    sticker covers its face, so the plane parallel to it is 0.25 LDU back, and
+    planes of the mould's tiny tilted facets cross its letters nearer than that.
+    """
+    n = _facet_normal(pts)
+    best, best_key = None, None
     for c in carriers:
         try:
             gap = _gap(pts, c)
-        except (AttributeError, ValueError, IndexError):
+            along = 1.0
+            if n is not None:
+                if isinstance(c, Plane):
+                    along = abs(float(n @ c.normal)) / float(np.linalg.norm(c.normal))
+                else:
+                    along = abs(float(n @ _wall_normal(c, np.mean(pts, axis=0))))
+                    if along < WALL_TANGENT_MIN:
+                        continue
+        except (AttributeError, ValueError, IndexError, np.linalg.LinAlgError):
             continue
-        if gap <= best_gap:
-            best, best_gap = c, gap
+        if gap > tol:
+            continue
+        # buckets as wide as PLANE_COS, so noise that would not split a plane
+        # does not outrank distance either
+        key = ((1, 0, -gap) if gap <= BIND_ON_TOL
+               else (0, round(along / (1.0 - PLANE_COS)), -gap))
+        if best_key is None or key >= best_key:
+            best, best_key = c, key
     return best
 
 
@@ -468,12 +526,13 @@ def _panel_paths(carrier_uv, regions, s, ldraw_dir, face):
     body = []
     if face is not None and not face.is_empty:
         body.append(f'<path d="{_region_d(face, x0, y1, s)}" '
-                    f'fill="#f2f2f2" fill-rule="evenodd"/>')
+                    f'fill="#f2f2f2" fill-rule="{REGION_FILL_RULE}"/>')
     for code, poly in regions:
         hex_str, _ = _colors.resolve(str(code), ldraw_dir)
         d = _region_d(poly, x0, y1, s)
+        rule = REGION_FILL_RULE if hasattr(poly, "geom_type") else "evenodd"
         body.append(f'<path d="{d}" fill="#{hex_str[2:]}" '
-                    f'fill-rule="evenodd"/>')
+                    f'fill-rule="{rule}"/>')
     return body
 
 
@@ -501,24 +560,20 @@ def _corners(x0, y0, x1, y1):
 
 
 def carrier_extent(carrier, uv=None):
-    """The canvas the texture is drawn on, as UV corners. A curved carrier
-    knows its own extent — full wrap by full height — so the decal sits where
-    it really lies on the part; a plane has none, and falls back to the
-    decal's own bounds.
+    """The canvas the texture is drawn on, as UV corners: the bounds of what
+    it holds, for every carrier kind. A curved carrier's full wrap is only the
+    fallback for a caller with nothing to hold.
 
-    A curved carrier's extent is a floor, not a bound. A minifig head's print
-    runs onto the dome the wall cylinder stops at, so its ink reaches past
-    both ends of that 13-LDU section — and the canvas is the SVG's viewport,
-    so whatever sits outside is cut rather than merely off-centre. Measured
-    over 400 parts: 29% of curved carriers overrun, by 3.7% of the canvas at
-    the median and 7.7% at the worst, always at the top and bottom of a face.
-    Where the ink does fit, the union is the carrier's own rectangle and the
-    drawing is unchanged."""
-    if isinstance(carrier, (Plane, Mesh)) or carrier is None:
+    The wrap was the canvas once, so a print sat where it lies on the part,
+    and it drew a narrow print as a speck: 15068dy6 puts 35 LDU of ink on a
+    45-degree wall whose full turn is 310."""
+    if uv is not None and len(np.asarray(uv, float).reshape(-1, 2)):
         pts = np.asarray(uv, float).reshape(-1, 2)
         x0, y0 = pts.min(axis=0)
         x1, y1 = pts.max(axis=0)
         return _corners(x0, y0, x1, y1)
+    if isinstance(carrier, (Plane, Mesh)) or carrier is None:
+        raise ValueError("a flat carrier has no extent of its own")
     r = float(np.linalg.norm(carrier.R[:, 0]))
     h = float(np.linalg.norm(carrier.R[:, 1]))
     top = getattr(carrier, "level_top", 1.0) * h
@@ -656,14 +711,20 @@ def fit_rounded_rect(poly, tol: float = CIRCLE_TOL):
     return (float(x0), float(y0), float(x1), float(y1), r)
 
 
-def _rounded_rect_d(x0, y0, x1, y1, r):
+def _rounded_rect_d(x0, y0, x1, y1, r, clockwise=False):
     """One subpath, four arcs. Emitted directly rather than through path_d's
     candidate matching: a corner sweeps exactly 90 deg, which lands on the
     wrong side of that emitter's 90 deg chunk boundary by one float bit and
-    doubles every corner."""
+    doubles every corner. Counter-clockwise unless asked, since a hole has to
+    wind against its exterior under a nonzero fill."""
     def f(v):
         return f"{v:.2f}"
-    a = f"A {f(r)} {f(r)} 0 0 1 "
+    a = f"A {f(r)} {f(r)} 0 0 {0 if clockwise else 1} "
+    if clockwise:
+        return (f"M {f(x0 + r)} {f(y0)} " + a + f"{f(x0)} {f(y0 + r)} "
+                + f"L {f(x0)} {f(y1 - r)} " + a + f"{f(x0 + r)} {f(y1)} "
+                + f"L {f(x1 - r)} {f(y1)} " + a + f"{f(x1)} {f(y1 - r)} "
+                + f"L {f(x1)} {f(y0 + r)} " + a + f"{f(x1 - r)} {f(y0)} Z")
     return (f"M {f(x0 + r)} {f(y0)} L {f(x1 - r)} {f(y0)} "
             + a + f"{f(x1)} {f(y0 + r)} "
             + f"L {f(x1)} {f(y1 - r)} " + a + f"{f(x1 - r)} {f(y1)} "
@@ -671,28 +732,57 @@ def _rounded_rect_d(x0, y0, x1, y1, r):
             + f"L {f(x0)} {f(y0 + r)} " + a + f"{f(x0 + r)} {f(y0)} Z")
 
 
+#: A region's rings are wound exterior against hole, and a ring drawn with
+#: arcs carries its own polygon too; under nonzero the two union.
+REGION_FILL_RULE = "nonzero"
+
+
 def region_path(g, tol=CIRCLE_TOL):
     """SVG path data for a UV region, with recovered shapes as A commands.
     Rounded rectangles are tried before circles: it is the commonest decal
-    shape, and a circle fit would reject it anyway."""
+    shape, and a circle fit would reject it anyway.
+
+    Draw it with REGION_FILL_RULE. A fitted curve passes through the ring's
+    vertices and bows past its chords, into the region on a concave run -- a
+    hole fitted as a circle is larger than its 16-gon -- and a neighbor that
+    shares those vertices is fitted separately or not at all. So a ring with
+    arcs also emits its polygon, and the region is the union of the two: it
+    never draws inside the polygons that tile the print, which is what left
+    ground showing between 4531d01's dots and their field."""
     parts = []
-    for ring in geom2d.rings(g):
-        rr = fit_rounded_rect(ring, tol)
-        if rr is not None:
-            parts.append(_rounded_rect_d(*rr))
+    g = shapely.orient_polygons(g)
+    for poly in getattr(g, "geoms", [g]):
+        if poly.geom_type != "Polygon" or poly.is_empty:
             continue
-        c = fit_circle(ring, tol)
-        if c is not None:
-            cx, cy, r = c
-            arcs = geom2d.arc_candidates([(cx, cy, r, 0.0, 0.0, r,
-                                           ARC_STEP, tol)])
-        else:
-            # the whole ring is not one circle, but parts of it may still
-            # follow one — a union leaves strays, and an emblem can be several
-            # concentric arcs joined by straight runs
-            arcs = _circle_arcs(ring, max(tol, SNAP_TOL * tol / CIRCLE_TOL))
-        parts.append(geom2d.path_d(geom2d.to_geom(ring), arcs=arcs))
+        rings = [(np.asarray(r.coords, float)[:-1], hole) for r, hole in
+                 [(poly.exterior, False), *[(r, True) for r in poly.interiors]]]
+        rings = [(pts, hole) for pts, hole in rings if len(pts) >= 3]
+        fitted = [_ring_shape_d(pts, tol, hole) for pts, hole in rings]
+        parts += fitted
+        # the whole polygon, holes too: a hole's ring alone would subtract
+        # twice under nonzero rather than union
+        if any("A" in d for d in fitted):
+            parts += ["M " + " L ".join(f"{x:.2f} {y:.2f}" for x, y in pts) + " Z"
+                      for pts, _hole in rings]
     return " ".join(x for x in parts if x)
+
+
+def _ring_shape_d(pts, tol, clockwise):
+    """One ring's subpath with its recovered shape, wound the way `pts` is."""
+    rr = fit_rounded_rect(pts, tol)
+    if rr is not None:
+        return _rounded_rect_d(*rr, clockwise=clockwise)
+    c = fit_circle(pts, tol)
+    if c is not None:
+        cx, cy, r = c
+        arcs = geom2d.arc_candidates([(cx, cy, r, 0.0, 0.0, r, ARC_STEP, tol)])
+    else:
+        # the whole ring is not one circle, but parts of it may still
+        # follow one — a union leaves strays, and an emblem can be several
+        # concentric arcs joined by straight runs
+        arcs = _circle_arcs(pts, max(tol, SNAP_TOL * tol / CIRCLE_TOL))
+    # the ring as it stands, not through to_geom, which may rewind it
+    return geom2d.path_d(shapely.Polygon(pts), arcs=arcs)
 
 
 def decorate(tris, tri_colors, carriers):
@@ -952,6 +1042,13 @@ def decal_groups(tris, tri_colors, analytic):
     where they are four bands on one cone.
     """
     tris = np.asarray(tris, float) if len(tris) else np.empty((0, 3, 3))
+    members, inside, flat = _decoration_members(tris, tri_colors, analytic)
+    return _carrier_groups(members, tris, inside, flat)
+
+
+def _decoration_members(tris, tri_colors, analytic):
+    """(members, inside, flat) for `decal_groups`: surface key ->
+    (carrier, [(code, world pts, index into tris or None for a primitive)])."""
     tri_colors = np.asarray(tri_colors)
     # only WALLS are curved carriers. A disc or ring is flat, but to_uv sends
     # every non-Plane carrier through the cylindrical map, where a flat
@@ -967,8 +1064,10 @@ def decal_groups(tris, tri_colors, analytic):
     # decoration facets bound to nothing at all
     flat = [prim_loop(p) for p in analytic
             if getattr(p, "color", 16) == 16 and p.kind in ("disc", "ring")]
-    planes = planes_from([t for t, c in zip(tris, tri_colors) if c == 16]
-                         + flat, inside=inside)
+    # a sticker with no color-16 geometry at all is its own carrier: every
+    # face of 4297014e is in a color, so no plane was built to bind its print
+    body = [t for t, c in zip(tris, tri_colors) if c == 16] + flat
+    planes = planes_from(body or list(tris), inside=inside)
     skip = marker_prims(analytic, tris, tri_colors)
 
     families = {}         # surface -> every body section on it
@@ -990,23 +1089,31 @@ def decal_groups(tris, tri_colors, analytic):
         carriers.append(skirt(span, all_pts))
     carriers += [p for p in body_prims if _wall_family(p) is None]
 
-    members = {}          # surface -> (carrier, [(code, world pts)])
+    members = {}
 
-    def add(carrier, code, pts):
+    def add(carrier, code, pts, index):
         members.setdefault(_group_key(carrier), (carrier, []))[1].append(
-            (code, pts))
+            (code, pts, index))
 
-    for t, code in zip(tris, tri_colors):
+    for i, (t, code) in enumerate(zip(tris, tri_colors)):
         if code == 16:
             continue
         carrier = bind(t, carriers) or bind(t, planes)
         if carrier is not None:
-            add(carrier, code, t)
+            add(carrier, code, t, i)
     for code, carrier, pts in prim_regions(analytic, carriers + planes, skip):
-        add(carrier, code, pts)
+        add(carrier, code, pts, None)
+    return members, inside, flat
 
+
+def _carrier_groups(members, tris, inside, flat, exclude=frozenset()):
+    """`decal_groups`' output from bound members, leaving out the triangles
+    in `exclude` -- print that is drawn some other way."""
     out = []
     for carrier, group in members.values():
+        group = [(code, p) for code, p, i in group if i not in exclude]
+        if not group:
+            continue
         pts = np.vstack([p for _, p in group])
         carrier = reseat_plane(carrier, pts, inside)
         theta0 = _seam_origin(pts, carrier)
@@ -1323,30 +1430,204 @@ def mesh_groups(tris, tri_colors, tol: float = WELD_TOL):
     V, F, codes = weld_decoration(tris, tri_colors, tol)
     if not len(F):
         return []
+    inside = np.asarray(tris, float).reshape(-1, 3).mean(axis=0)
     codes = np.asarray(codes)
-    out = []
-    for faces in mesh_pieces(V, F):
-        used = np.unique(F[faces])
-        remap = -np.ones(len(V), int)
-        remap[used] = np.arange(len(used))
-        Vc, Fc = V[used], remap[F[faces]]
-        if len(Fc) < 2:
-            continue
-        d = np.linalg.norm(Vc - Vc.mean(0), axis=1)
-        p0 = int(d.argmax())
-        p1 = int(np.linalg.norm(Vc - Vc[p0], axis=1).argmax())
-        if p0 == p1:
-            continue
-        uv, Fk = lscm(Vc, Fc, (p0, p1))
-        flipped, spread = flatten_quality(Vc, Fk, uv)
-        if flipped > MESH_FLIP_MAX or spread > MESH_STRETCH_MAX:
-            continue
-        keep = codes[faces][:len(Fk)] if len(Fk) != len(faces) else codes[faces]
-        regions = merge_regions([(c, uv[f]) for f, c in zip(Fk, keep)])
-        if regions:
-            out.append((Mesh(Vc, Fk, uv), 0.0, regions, None))
+    out = [g for faces in mesh_pieces(V, F)
+           if (g := _flatten_piece(V, F[faces], codes[faces], inside)) is not None]
     out.sort(key=lambda g: -sum(r.area for _c, r in g[2]))
     return out
+
+
+def _flatten_piece(V, F, codes, inside):
+    """One welded piece of print as a mesh group, or None when it will not
+    flatten without folding or tearing."""
+    used = np.unique(F)
+    remap = -np.ones(len(V), int)
+    remap[used] = np.arange(len(used))
+    Vc, Fc = V[used], remap[F]
+    if len(Fc) < 2:
+        return None
+    d = np.linalg.norm(Vc - Vc.mean(0), axis=1)
+    p0 = int(d.argmax())
+    p1 = int(np.linalg.norm(Vc - Vc[p0], axis=1).argmax())
+    if p0 == p1:
+        return None
+    # lscm flattens each face in its own winding, so a piece wound both ways
+    # folds onto itself, and flatten_quality reads winding too and cannot see it
+    Fc = consistent_winding(Fc)
+    # lscm drops the degenerate faces; drop their colors by the same test,
+    # not by truncating, or every color after the first dropped face shifts
+    live = _triangle_frames(Vc, Fc)[2] > 1e-12
+    uv, Fk = lscm(Vc, Fc, (p0, p1))
+    flipped, spread = flatten_quality(Vc, Fk, uv)
+    if flipped > MESH_FLIP_MAX or spread > MESH_STRETCH_MAX:
+        return None
+    uv = _true_size(Vc, Fk, _orient_flattening(Vc, Fk, uv, inside))
+    regions = merge_regions([(c, uv[f]) for f, c in zip(Fk, np.asarray(codes)[live])])
+    return (Mesh(Vc, Fk, uv), 0.0, regions, None) if regions else None
+
+
+def consistent_winding(F):
+    """`F` with faces reversed so neighbors traverse every shared edge in
+    opposite directions. Which of the two orientations is left to the caller;
+    an edge shared by three or more faces carries no agreement and is not
+    walked across."""
+    F = np.array(F, int)
+    edges = {}
+    for i, (a, b, c) in enumerate(F):
+        for u, v in ((a, b), (b, c), (c, a)):
+            edges.setdefault((min(u, v), max(u, v)), []).append(i)
+    flip = np.zeros(len(F), bool)
+    seen = np.zeros(len(F), bool)
+
+    def directed(i):
+        a, b, c = F[i][::-1] if flip[i] else F[i]
+        return {(a, b), (b, c), (c, a)}
+
+    for start in range(len(F)):
+        if seen[start]:
+            continue
+        seen[start] = True
+        stack = [start]
+        while stack:
+            i = stack.pop()
+            mine = directed(i)
+            a, b, c = F[i]
+            for u, v in ((a, b), (b, c), (c, a)):
+                nbrs = edges[(min(u, v), max(u, v))]
+                if len(nbrs) != 2:
+                    continue
+                j = nbrs[0] if nbrs[1] == i else nbrs[1]
+                if seen[j]:
+                    continue
+                seen[j] = True
+                # the same directed edge in both faces means they disagree
+                flip[j] = bool(mine & set(directed(j)))
+                stack.append(j)
+    F[flip] = F[flip][:, ::-1]
+    return F
+
+
+def _true_size(V, F, uv):
+    """`uv` scaled to the print's own area. lscm pins its two vertices a unit
+    apart, so a flattening has no size, and a sheet drew it beside carrier
+    panels at a scale of its own."""
+    a, b = uv[F[:, 1]] - uv[F[:, 0]], uv[F[:, 2]] - uv[F[:, 0]]
+    flat = 0.5 * float(np.abs(a[:, 0] * b[:, 1] - a[:, 1] * b[:, 0]).sum())
+    world = float(_triangle_frames(V, F)[2].sum())
+    return uv * np.sqrt(world / flat) if flat > 0 else uv
+
+
+def _orient_flattening(V, F, uv, inside):
+    """`uv` turned to read the way a plane unwrap reads: u x v along the
+    outward normal, and LDraw up toward +v.
+
+    `lscm` fixes rotation by the two vertices it pins and handedness by the
+    authored winding, and LDraw guarantees neither. Outward is judged against
+    the part's interior, as `planes_from` does, not by winding."""
+    A, B, C = V[F[:, 0]], V[F[:, 1]], V[F[:, 2]]
+    e1, e2 = uv[F[:, 1]] - uv[F[:, 0]], uv[F[:, 2]] - uv[F[:, 0]]
+    det = e1[:, 0] * e2[:, 1] - e1[:, 1] * e2[:, 0]
+    n3 = np.cross(B - A, C - A)
+    w = 0.5 * np.linalg.norm(n3, axis=1)
+    outward = np.einsum("ij,ij->i", n3, (A + B + C) / 3 - np.asarray(inside, float))
+    if float(np.sum(w * np.sign(det) * np.sign(outward))) < 0:
+        uv = uv * np.array([-1.0, 1.0])
+        e1, e2, det = e1 * [-1.0, 1.0], e2 * [-1.0, 1.0], -det
+    ok = np.abs(det) > 1e-18
+    P, Q, e1, e2, det, w = (B - A)[ok], (C - A)[ok], e1[ok], e2[ok], det[ok], w[ok]
+    if not len(det):
+        return uv
+
+    def pull(up):
+        # the world step J takes along each uv axis, [B-A, C-A] = J [b-a, c-a],
+        # projected on `up` and summed by area
+        pu, qu = P @ up, Q @ up
+        return (float(np.sum(w * (pu * e2[:, 1] - qu * e1[:, 1]) / det)),
+                float(np.sum(w * (qu * e1[:, 0] - pu * e2[:, 0]) / det)))
+
+    su, sv = pull(LDRAW_UP)
+    scale = float(np.sum(w * (np.linalg.norm(P, axis=1) + np.linalg.norm(Q, axis=1))
+                         / (np.linalg.norm(e1, axis=1) + np.linalg.norm(e2, axis=1))))
+    if np.hypot(su, sv) < 1e-6 * max(scale, 1e-12):
+        su, sv = pull(AXIS_UP_ALT)       # facing up: +Z, as up_aligned does
+    th = np.arctan2(su, sv)
+    c, s_ = np.cos(th), np.sin(th)
+    return uv @ np.array([[c, -s_], [s_, c]]).T
+
+
+#: When a connected print is one decoration cut across carriers rather than a
+#: print on one carrier that touches another. Measured over 25 parts: pieces
+#: that are shards keep at most 0.56 of their area on the biggest carrier and
+#: at least 0.62 bound at all; a spill onto a second face sat at 0.93
+#: (u9102p04), a print wrapped onto a sticker's back at 0.86 once parallel
+#: faces count as one (u9533), and a piece mostly bound to nothing at 0.35
+#: (49588p04).
+SPAN_SHARE = 0.02       # least share that counts a carrier as crossed
+SPAN_DOMINANT = 0.8     # most share one carrier may hold
+SPAN_BOUND = 0.5        # least share bound to any carrier
+
+
+def _pieces_across_carriers(tris, tri_colors, members, inside):
+    """[(indices into tris, mesh group)] for each connected piece of print
+    that is cut across carriers (see SPAN_SHARE) and flattens.
+
+    Facet planes cut one print into shards (6155286wc01's sign, 4174735bc01's
+    band), and a shard count at or under MAX_DECALS passed as that many
+    prints. Connection is only welded vertices, so a cracked print falls
+    apart into pieces that each stay on their carrier, as before."""
+    index = np.array([i for i, c in enumerate(tri_colors) if c != 16 and c != 24])
+    if not len(index):
+        return []
+    # a print cannot wrap across parallel faces, so those are one owner: a
+    # sticker's front and back, or one face split by a small offset
+    surface, normals = {}, []
+    for key, (c, _group) in members.items():
+        if not isinstance(c, Plane):
+            surface[key] = key
+            continue
+        n = c.normal / np.linalg.norm(c.normal)
+        match = next((k for k, m in normals if abs(float(n @ m)) > PLANE_COS), None)
+        if match is None:
+            normals.append((key, n))
+            match = key
+        surface[key] = match
+    owner = {i: surface[key] for key, (_c, group) in members.items()
+             for _code, _p, i in group if i is not None}
+    V, F, codes = weld_decoration(tris, tri_colors)
+    codes = np.asarray(codes)
+    area = 0.5 * np.linalg.norm(np.cross(V[F[:, 1]] - V[F[:, 0]],
+                                         V[F[:, 2]] - V[F[:, 0]]), axis=1)
+    out = []
+    for faces in mesh_pieces(V, F):
+        share = {}
+        for f in faces:
+            k = owner.get(int(index[f]))
+            if k is not None:
+                share[k] = share.get(k, 0.0) + float(area[f])
+        total = float(area[faces].sum())
+        if (total <= 0 or sum(share.values()) < SPAN_BOUND * total
+                or max(share.values(), default=0.0) > SPAN_DOMINANT * total
+                or sum(a >= SPAN_SHARE * total for a in share.values()) < 2):
+            continue
+        g = _flatten_piece(V, F[faces], codes[faces], inside)
+        if g is not None:
+            out.append((index[faces], g))
+    return out
+
+
+def _bare(group) -> bool:
+    """One region of one color filling its whole face."""
+    _carrier, _theta0, regions, face = group
+    return (len(regions) == 1 and face is not None and not face.is_empty
+            and regions[0][1].area >= 0.98 * face.area)
+
+
+def _drop_bare_sheet(groups):
+    """A bodyless sticker's back and rim are the sheet in its own color, not
+    print; drop them while a printed side remains."""
+    printed = [g for g in groups if not _bare(g)]
+    return printed or groups
 
 
 def decal_panels(tris, tri_colors, analytic):
@@ -1358,7 +1639,20 @@ def decal_panels(tris, tri_colors, analytic):
     fallback is for the moulds that declare no surface at all -- where the
     tessellation is all there is, so nothing is given up by using it.
     """
-    groups = significant_groups(decal_groups(tris, tri_colors, analytic))
+    tris = np.asarray(tris, float) if len(tris) else np.empty((0, 3, 3))
+    members, inside, flat = _decoration_members(tris, tri_colors, analytic)
+    whole = _pieces_across_carriers(tris, tri_colors, members, inside)
+    taken = {int(i) for idx, _g in whole for i in idx}
+    groups = _carrier_groups(members, tris, inside, flat, exclude=taken)
+    if not any(c == 16 for c in tri_colors) and not any(
+            getattr(p, "color", 16) == 16 for p in analytic):
+        groups = _drop_bare_sheet(groups)
+    if whole:
+        # the shatter the count rules guard against is already drawn whole
+        groups = sorted(groups + [g for _i, g in whole], key=lambda g: -_print_area(g))
+        groups = significant_groups(groups, cap=None, shatter=False)
+    else:
+        groups = significant_groups(groups)
     if not groups:
         groups = significant_groups(mesh_groups(tris, tri_colors), cap=None,
                                     shatter=False)
@@ -1512,7 +1806,7 @@ def span_carrier(prims):
         rp = float(np.linalg.norm(p.R[:, 0]))
         for lvl, s in ((0.0, float(p.t @ a)), (1.0, float((p.t + Ap) @ a))):
             ss.append(s)
-            radii.append(rp * p.radius_at(lvl))
+            radii.append(abs(rp * p.radius_at(lvl)))
     ss, radii = np.asarray(ss, float), np.asarray(radii, float)
     smin, smax = float(ss.min()), float(ss.max())
     if smax - smin < 1e-9:
@@ -1523,6 +1817,12 @@ def span_carrier(prims):
     # needle-thin cone
     rb = float(radii[np.isclose(ss, smin)].mean())
     rt = float(radii[np.isclose(ss, smax)].mean())
+    if rt > rb:
+        # run the axis the way the wall narrows: widening along it made the
+        # taper negative, and with it every radius the cone predicts (43898p02)
+        a, ss = -a, -ss
+        smin, smax = float(ss.min()), float(ss.max())
+        rb, rt = rt, rb
 
     _o, a_ref, _r, e1, e2, _h = _circle_frame(ref)
     if float(a_ref @ a) < 0:        # keep theta running the same way about `a`

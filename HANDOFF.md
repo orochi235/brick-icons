@@ -1,3 +1,192 @@
+## Decal sheet defects: six fixes, committed, 2026-09-13
+
+On `main`, committed with the re-frozen `tests/goldens/decal-hashes.txt`;
+nothing is pushed and nothing is redrawn. The A/B scripts and labeled sheets
+are in `debug/decal-causes/`, which is gitignored, and every A/B disarms the
+change in-process.
+
+**Next is the render pass.** `renders/decal` was drawn 2026-09-08, and every
+sheet in it differs from the tree.
+
+1. **`bind` checks tangency, not just distance.** A wall refuses a triangle
+   leaning more than 60 deg off its surface normal (`WALL_TANGENT_MIN`). Over
+   400 printed parts, flat ink captured by a wall measured under 0.1 and real
+   wall ink 0.5 and up. Among planes, the most parallel wins, unless the print
+   lies on a plane (`BIND_ON_TOL`, 0.01 LDU), where distance decides; that
+   exception keeps 4740p03's crease clean. Fixes the rounded-corner ink
+   (3070bd05, 6148328s, 35787d01), the true circle on round tiles (6057849d)
+   and POLICE (4215ad0a/b).
+2. **A curved carrier's canvas is the bounds of its ink**, not the full turn
+   (15068dy6, 93606dym, the heads).
+3. **A connected print cut across carriers is flattened whole**
+   (`_pieces_across_carriers`). It qualifies when two or more carriers each
+   hold 2% of it, none holds more than 80%, at least half of it is bound, and
+   parallel planes count as one carrier. The flattening now reads LDraw up and
+   keeps outward handedness. It is re-wound consistently first, because `lscm`
+   folded pieces of mixed winding, and scaled to the print's own area, where
+   before it had no size at all. Fixes 4616559cc01, 6155286wc01, 169665fc01,
+   18973p02, 4174735bc01 and 6255869mc01.
+4. **A region drawn with arcs also carries its polygon, under a nonzero
+   fill**, so neighbors can no longer crack apart. Enclosed ground specks on
+   the 59 went from 1,489 to 347, against 310 with fitting off entirely.
+   Carrier faces use the same fill rule.
+5. **`span_carrier` turns its axis for a cone family that widens.** The
+   negative taper had put 43898p02's wall 24 LDU off, so nothing bound to it.
+6. **A part with no color-16 geometry carries its print on its own facets**
+   and drops the bare sheet side: 4297014e/f, 4613857e, 59718a, 168315d and
+   4188571a now draw their fronts.
+
+Verified: on the 393-part decal corpus, with every change on and off, 376
+sheets change, 2 lose area (46413d02, 73200bpw4; both read better) and 13
+change panel count, all reviewed on `sheets/ab-final-flag-*.png`. Under
+`BRICK_GOLDENS=full` only outline-flat3__32062, outline__32062 and
+outline-flat3__3941p01 drift, and all three drift at a clean HEAD too.
+
+Still wrong:
+
+- 49098py1's tire text sits on a torus sidewall, so each letter flattens alone
+  and falls under the sliver rule. Fixing it needs a torus carrier, and
+  `parse_primitive` has no torus case.
+- A crossing piece is flattened apart from the pieces beside it on the same
+  carrier (194305fc01's "2", 49588p04, 27062p01). Flattening the sheet under
+  the print, not the ink alone, would keep them together.
+- A cone print unwraps as a rectangle, so a flat dish's stripes come out as a
+  thin band (43898p02). The fix is the cone's development, but Skirt carriers
+  have no single apex.
+- 85984d0d reads 180 deg off, but LDView draws the plate upside down on the
+  part as well.
+- In occt, not on the sheet: 4215ad0a draws undeclared letter edges on "ICE"
+  only (the part declares no type-2 lines). 15068dy6 and 93606dym lose a wedge
+  of print to a body facet judged nearer; their ink is inside the wall's
+  sector and levels, so this is not the 3941p01 miss. 85984d0h and 3069bd0j
+  lose glyph pieces under `MIN_FRAG_AREA`. The spiderwebs on formed stickers
+  are gone at the tree (7311033).
+- Tried and rejected: painting regions largest first and extending each under
+  its later neighbors cleared the cracks, but lost 4620856dc01's dots and
+  moved 6148328ac's stripes.
+
+## occt draws a decal as a triangle spiderweb, and 780 render rows point at nothing, 2026-09-13
+
+Four things came out of one night. Two are findings with the measurements
+behind them, one is a fix waiting to be committed, and one is a small piece of
+UI nobody has built. Read the first two before touching `_snap_rim_crossings`
+or the coverage numbers -- both have dead ends already paid for.
+
+### The lab index page crashed; the one-line fix is committed (9e51486)
+
+`lab/src/config/nodes.ts` declared the `sources` control as `f.value`, which
+labkit documents as "a leaf with no declared kind: the rule chain decides".
+Nothing gives `sources` a kind, and `ControlPanel` sorts every node into a leaf
+or a group with no third case -- so it reached `Object.keys(undefined)` and took
+the whole index page down. `/corpus` was fine because it builds its panel from
+`PARAM_GROUPS` instead.
+
+`.hidden()` is the fix: `isLeafVisible` runs BEFORE the leaf/group test, so a
+hidden leaf is skipped entirely, and this one should never have been a control
+-- no renderer is keyed for it and the pane toggles are what set it. It still
+persists in the trial config. `lab/src/config/ControlPanelSchema.test.tsx` is
+new and renders the panel over everything `buildSchema` produces, which is the
+class of bug nothing was guarding.
+
+**This was not caused by the backend restart.** The CLI flag set is
+byte-identical between the pre-restart commit and HEAD.
+
+### A decal becomes a spiderweb because composites never merge
+
+`6155286wc01` is the clearest specimen: the flat `--decal` sheet is two clean
+printed panels, and the projection is a web of triangle chords. **480 of its
+489 drawn ops are lines tagged `sil`** -- silhouettes, not declared edges --
+against `98138p83`'s 5.
+
+The sewn shape is unmerged: **290 triangles to 265 faces**, where it should be
+about 4. Those 261 planar faces collapse to **27 distinct planes** (biggest
+coplanar groups 94 and 76; median angle to the nearest other normal 0.00 deg),
+so they are flat and coplanar and simply did not merge. Every leftover face
+boundary then reads as a silhouette.
+
+Eliminated, with the measurement: `timing.counts()` is EMPTY, so
+`_unify_survives` did not trip the segfault guard -- `UnifySameDomain` ran.
+`_pierce_seams` pins 0 edges, so nothing was held back by `KeepShape`.
+
+The split is by part form, tris-to-faces:
+
+    printed p       20.9x  34.0x  40.5x  11.9x
+    composite c01    1.1x   1.6x   1.6x   1.1x   1.2x
+    sticker d        1.4x   2.3x   4.2x  13.0x
+
+**Every composite fails.** That is the thread to pull.
+
+**Unmerged is necessary and not sufficient**, so do not stop at it: `93606dym`
+is equally unmerged (586 to 427) and draws 0 sil ops -- its defect is "missing
+polys", the opposite failure. Something else decides whether an unmerged shape
+produces a web or nothing.
+
+### 780 render rows point at deleted files, and they inflate occt's coverage
+
+    out/slot-occt-fill/renders/occt              712 rows  occt
+    out/slot-silhouette-occt-fill3/renders/occt   68 rows  silhouette-occt
+
+All 780 are in scope. The row says the slot HAS a drawing, so `slot-coverage.py`
+counts them as drawn while the wall has nothing to show -- which is why
+`u66p03`'s thumbnail is blank. occt reads 19,827 drawn against 770 missing; 712
+of that 19,827 are dead, so its real gap is close to double the table. The files
+are gone, so this is a re-render and not a re-point. The in-scope occt list is
+`out/dead-occt-parts.txt`.
+
+### "Unofficial" is the `t` parts, and only the badge is missing
+
+The `t`-prefixed parts are third-party -- BuWizz hubs and cases, not LEGO. Their
+marker is `|` in the description, already the sole entry in
+`db.OUT_OF_SCOPE_CATEGORIES`. 162 of them, 93 live, all rendered.
+
+`u9` is NOT this set: those carry `0 !LDRAW_ORG Part` and are official LDraw
+parts that merely lack a LEGO element number. The real `Unofficial_*` header is
+on 3 subparts under `vendor/ldraw/unofficial/`.
+
+The flag already exists end to end -- computed at `lab/app.py:479`, in the cell
+payload as `out_of_scope`, with a `shown.outOfScope` filter on the wall. You can
+filter by it and cannot see it. The work is a badge beside the others in
+`BadgeSwatch.tsx` / `Legend.tsx`.
+
+### Dead ends already paid for -- both are written into the defect entries
+
+**6589's separator refit: three guards measured over 1,500 parts, all dead.**
+Radius ratio cannot separate it (sound refits shrink 0.830-0.856x against
+6589's 0.800x). `dev`, the curve's displacement, looked decisive on 138 parts
+and the gap filled in completely at 1,500 -- 0.242, 0.254, 0.274, 0.286, 0.318
+straight through 6589's 0.271 and 0.290. Resulting sweep is worse: parts whose
+refits are CORRECT sit at 271-273 deg where 6589 refits to 344.7. The evidence
+says candidate selection, not a fourth scalar guard: `emms` and `bores` both
+infer a counterbore from measured geometry, which CLAUDE.md calls wrong by
+construction here. Rows in `out/refit-radius/rows.jsonl` (2h27m of keiei).
+
+**The split-arc ring class is not what its entries said.** The circles are never
+split -- each tests visible at EVERY sample (4524 314/314, 27448 216/216,
+30152a 335/335), and it is the NEAR rim that draws whole while the far rim at
+the same radius is cut correctly. What the LDView overlay shows instead is
+arcs sitting on flat shading, offset inward from the reference's shading
+boundary, with the nearest occluder's depth equal to the arc's own to within
+0.005 against an eps of 0.039.
+
+### Committed
+
+The crash fix and its test (9e51486), the defect filings and notes (4ba1dc5),
+and `scripts/refit-ink-ab.py` with the two 6589 tests (9d21eb2). The RED one is
+`xfail(strict=True)`, so it goes red again the day the guard lands -- remove the
+mark then.
+
+`renders/**/*.svg` is gitignored, so the 11,691 decal drawings are local
+artifacts -- they are not at risk from a sync and they exist nowhere else.
+
+### Owed
+
+`refit-ab-201` needs relaunching: it burned 1h08m of keiei writing nothing but
+`FileNotFoundError` because the launch had no `--env PATH`, so `resvg` was
+missing. Both nodes are free.
+
+**Do not fill `translucent-naive`.** It heads `slot-coverage.py` at 20,597
+missing and is the most expensive round available; Mike has said no to it.
+
 ## The bars asked for the fleet's time for work that did not exist, 2026-09-12
 
 On `main`, committed. `untried` on the coverage chart was counting three
