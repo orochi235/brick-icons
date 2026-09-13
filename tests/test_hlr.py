@@ -1055,3 +1055,49 @@ def test_snap_keeps_a_sliver_separator_rather_than_refitting_it():
     out, refits = hlr._snap_rim_crossings([F, B, sliver])
     assert not refits, "an 8-degree sliver must not be re-fit"
     assert out[2] == sliver, "the authored separator is kept verbatim"
+
+
+def _refits_of(part, ldraw_dir):
+    """Every pass-2 separator refit the naive engine performs on this part."""
+    got = []
+    orig = hlr._snap_rim_crossings
+
+    def spy(segs, **kw):
+        out, refits = orig(segs, **kw)
+        got.extend(refits)
+        return out, refits
+
+    hlr._snap_rim_crossings = spy
+    try:
+        hlr.visible_segments(part, ldraw_dir, render_px=512, engine="naive")
+    finally:
+        hlr._snap_rim_crossings = orig
+    return got
+
+
+def _radius(op):
+    return (math.hypot(op[3], op[4]) + math.hypot(op[5], op[6])) / 2.0
+
+
+@pytest.mark.xfail(strict=True, reason="open: 6589-naive-halo-r12.8 / r11.3")
+def test_6589_refits_no_separator_onto_an_unauthored_radius(ldraw_dir):
+    """A refit is a seam snapping, so it may not become a different curve.
+
+    6589 draws rings at r=12.80 and r=11.33 LDU where the .dat authors only
+    9, 10, 12 and 16: the refit puts the authored r=16 and r=12 circles on
+    circumcircles at 0.800x and 0.944x. SEP_REFIT_MAX_GROWTH caps the sweep
+    and 1.81x passes it, so nothing stopped them.
+    """
+    assert _refits_of("6589", ldraw_dir) == []
+
+
+def test_a_counterbore_separator_still_refits(ldraw_dir):
+    """The guard must not cost the feature it guards.
+
+    32527's two refits move the curve 0.172 of its radius, mid-pack for the
+    corpus (p50 0.162), where 6589's move 0.27 and 0.29.
+    """
+    refits = _refits_of("32527", ldraw_dir)
+    assert refits, "32527 should still refit its counterbore separator"
+    for old, new, _bore in refits:
+        assert 0.8 < _radius(new) / _radius(old) < 0.9
