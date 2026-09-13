@@ -163,3 +163,32 @@ def test_a_row_naming_no_part_is_filed_under_every_part_with_that_drawing(tmp_pa
         {"source": "white-occt", "sha256": "gone", "missing_comps": 1},
         {"part": "3002", "source": "white-occt", "sha256": "other"}])
     assert sorted(r["part"] for r in rows) == ["3001", "3001old", "3002"]
+
+
+def test_a_conditional_line_buried_behind_a_deep_part_s_wall_is_hidden(tmp_path):
+    """The naive engine's slack is 3% of the depth range, so on a long part a
+    line inside a wall counted as visible -- 32278's pin-hole limbs."""
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    fmt = lambda p: " ".join(f"{v:.4f}" for v in p)  # noqa: E731
+
+    def part(depth, name):
+        wall = [c * 60 * right + d * 60 * up for c, d in
+                ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+        far = [200 * fwd + 300 * right + o for o in (0 * up, 5 * up, 5 * right)]
+        a, b = depth * fwd, depth * fwd + 20 * up
+        text = "\n".join([
+            "0 wall", "4 16 " + "  ".join(map(fmt, wall)),
+            "3 16 " + "  ".join(map(fmt, far)),
+            f"5 24 {fmt(a)}  {fmt(b)}  {fmt(a + 5 * right)}  {fmt(b + 5 * right)}"])
+        path = tmp_path / f"{name}.dat"
+        path.write_text(text + "\n")
+        return path
+
+    points = [c * 60 * right + d * 60 * up for c in (-1, 1) for d in (-1, 1)]
+    fit = _fit(points + [200 * fwd + 305 * right])
+    behind = edge_truth.visible_edges(
+        edge_truth.load(part(3.0, "behind"), [tmp_path]), fit, zoom=4)
+    front = edge_truth.visible_edges(
+        edge_truth.load(part(-3.0, "front"), [tmp_path]), fit, zoom=4)
+    assert not [s for s in behind if s[4] == "sil"]
+    assert [s for s in front if s[4] == "sil"]

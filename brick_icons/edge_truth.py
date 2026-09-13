@@ -20,6 +20,10 @@ from brick_icons import goldens, hlr
 SAMPLE_STEP = 0.5   # canvas px between samples along an edge
 TOLERANCE = 1.5     # canvas px of slack past the stroke's half-width
 MIN_GAP = 4.0       # canvas px; shorter uncovered runs are antialias noise
+# LDU. The naive engine lets a conditional line sit 3% of the part's depth
+# range behind a surface; on a 200-LDU beam that is 6 LDU, and 32278's pin-hole
+# limbs counted as visible through the wall -- 14 false gaps. Capped, it is 0.
+SIL_SLACK_CAP = 1.0
 
 
 def load(part: str | Path, roots: list[Path], pose=None) -> dict:
@@ -54,12 +58,14 @@ def visible_edges(out: dict, fit: dict, zoom: int) -> list[tuple]:
     else:
         zbuf, zrange = np.full((H, W), np.inf), 1.0
     zedge = hlr.dilate_zbuffer(zbuf, max(2, round(max(W, H) * hlr.EDGE_DILATE)))
+    edge_bias = hlr.EDGE_BIAS * zrange
+    sil_bias = min(hlr.SIL_BIAS * zrange, SIL_SLACK_CAP)
 
     runs = []
     for e in out["2"]:
         x, y, z = _to_px(np.asarray(e, float).reshape(2, 3), fit, zoom)
         runs += hlr.clip_visible((x[0], y[0], x[1], y[1], "edge"), zedge, W, H,
-                                 (z[0], z[1]), hlr.EDGE_BIAS * zrange)
+                                 (z[0], z[1]), edge_bias)
     for q in out["5"]:
         x, y, z = _to_px(np.asarray(q, float).reshape(4, 3), fit, zoom)
         p1, p2 = np.array([x[0], y[0]]), np.array([x[1], y[1]])
@@ -67,7 +73,7 @@ def visible_edges(out: dict, fit: dict, zoom: int) -> list[tuple]:
             continue
         if hlr.same_side(p1, p2, np.array([x[2], y[2]]), np.array([x[3], y[3]])):
             runs += hlr.clip_visible((x[0], y[0], x[1], y[1], "sil"), zbuf, W, H,
-                                     (z[0], z[1]), hlr.SIL_BIAS * zrange)
+                                     (z[0], z[1]), sil_bias)
     return [(x1 / zoom, y1 / zoom, x2 / zoom, y2 / zoom, kind)
             for x1, y1, x2, y2, kind in runs]
 
@@ -82,15 +88,16 @@ def score(segs: list[tuple], ink: np.ndarray, zoom: int,
           stroke_width: float) -> dict:
     """Declared length, uncovered length and gaps, all in canvas px."""
     H, W = ink.shape
-    pts = []
-    for x1, y1, x2, y2, _ in segs:
+    pts, conditional = [], []
+    for x1, y1, x2, y2, kind in segs:
         n = max(2, int(np.ceil(np.hypot(x2 - x1, y2 - y1) / SAMPLE_STEP)) + 1)
         t = np.linspace(0.0, 1.0, n)
         pts.append(np.stack([x1 + (x2 - x1) * t, y1 + (y2 - y1) * t], 1))
+        conditional.append(np.full(n, kind == "sil"))
     if not pts:
         return {"declared_len": 0.0, "missing_len": 0.0, "missing_comps": 0,
                 "gaps": []}
-    P = np.concatenate(pts)
+    P, sil = np.concatenate(pts), np.concatenate(conditional)
     xi = np.clip((P[:, 0] * zoom).astype(int), 0, W - 1)
     yi = np.clip((P[:, 1] * zoom).astype(int), 0, H - 1)
     reach = (stroke_width / 2 + TOLERANCE) * zoom
@@ -112,6 +119,8 @@ def score(segs: list[tuple], ink: np.ndarray, zoom: int,
         if length < MIN_GAP:
             continue
         gaps.append({"len": round(length, 1),
+                     "kind": "sil" if sil[bare][owner == comp].mean() > 0.5
+                     else "edge",
                      "x": [round(float(mine[:, 0].min()), 1),
                            round(float(mine[:, 0].max()), 1)],
                      "y": [round(float(mine[:, 1].min()), 1),

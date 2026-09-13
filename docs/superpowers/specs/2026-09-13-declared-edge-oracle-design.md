@@ -26,10 +26,12 @@ not a defect signal.
   points project to the same side of it (`hlr.same_side`).
 - Visibility: a z-buffer of the triangles at canvas x zoom; type-2 edges
   depth-tested against the dilated buffer with `EDGE_BIAS`, type-5 against the
-  plain buffer with `SIL_BIAS`, via `hlr.rasterize_zbuffer`, `dilate_zbuffer`
-  and `clip_visible`. These are the naive engine's occlusion constants; the
-  oracle shares them and nothing downstream of them (no snapping, culls or
-  arc fitting).
+  plain buffer with `SIL_BIAS` capped at 1 LDU, via `hlr.rasterize_zbuffer`,
+  `dilate_zbuffer` and `clip_visible`. The oracle shares the naive engine's
+  occlusion and nothing downstream of it (no snapping, culls or arc fitting).
+  The cap is the one departure: `SIL_BIAS` is 3% of the depth range, which on
+  a long part let conditional lines inside a wall count as visible (32278, 14
+  false gaps, 0 capped); on the other 11 sampled parts it changed nothing.
 
 ## Scoring
 
