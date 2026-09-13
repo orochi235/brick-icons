@@ -104,6 +104,17 @@ def components(m: np.ndarray, zoom: int, floor_px: int):
     return out
 
 
+def ink_mask(rgba: np.ndarray, opacity: float | None) -> np.ndarray:
+    """Which pixels the render drew, at the antialias midpoint of its own fills.
+
+    The midpoint scales with the fill opacity or it stops being a midpoint: a
+    surface drawn at 0.5 rasterizes to alpha 128, so an absolute `> 128` reads
+    every single-layer region as undrawn and passes only where two surfaces
+    overlap. Solid slots pass opacity None and keep the old threshold exactly.
+    """
+    return rgba[:, :, 3] > 128 * (1.0 if opacity is None else opacity)
+
+
 def drawn_as(args) -> dict:
     """What this run drew, as the fields every row carries. One definition:
     three sites build these rows and a field added to two of them says
@@ -148,7 +159,7 @@ def one(part: str, args, tmp: Path) -> dict:
     svg, png = tmp / f"{part}.svg", tmp / f"{part}.png"
     subprocess.run(["resvg", "--zoom", str(args.zoom), str(svg), str(png)],
                    check=True, capture_output=True)
-    ours = np.array(Image.open(png).convert("RGBA"))[:, :, 3] > 128
+    ours = ink_mask(np.array(Image.open(png).convert("RGBA")), args.opacity)
     phase["rasterize"] = round(time.perf_counter() - t0, 2)
 
     t0 = time.perf_counter()

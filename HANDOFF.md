@@ -1,3 +1,23 @@
+## The silhouette oracle read every translucent fill as a hole, 2026-09-12
+
+On `main`, committed. `compare-silhouette-truth.py` masked the render as
+`alpha > 128`; the `translucent-*` slots draw at `--opacity 0.5`, so a single
+surface rasterizes to alpha **exactly 128** and fell outside the mask. Only
+places where two surfaces overlap along the ray (0.5 over 0.5 -> 192) scored as
+drawn, so a row measured the part's doubled-up interior and called the rest
+omitted geometry. `ink_mask` now scales the midpoint by the opacity the render
+was drawn at; `None` keeps `> 128` exactly, so no solid slot's row moves.
+
+3005 goes from 551,225 missing px over 2 components to 0, 3001 from 460,911
+over 6 to 0. Round parts were already near zero -- every ray through them
+crosses two surfaces -- which is why looking at one never showed it.
+
+**Every `translucent-occt` row in `corpus.db` is stale**: 15,864 measurements,
+4,509 of them carrying missing components against `occt`'s 2.6% rate on the
+same parts. They were not deleted, because another session is writing to the
+database. The slot wants a re-measure before anyone reads its numbers or
+ranks findings by them.
+
 ## Curved-top and carrier-face defects: 13 closed, 2026-09-12
 
 On `main`, committed, unpushed (`ed133b0`, `460ddfb`). Another session shares

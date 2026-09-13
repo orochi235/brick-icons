@@ -399,3 +399,45 @@ def test_the_census_oracle_is_posed_with_the_render(ldraw_dir):
     posed = cst.truth_mask(part, ldraw_dir, fit, 1, pose=pose)
     assert plain.sum() and posed.sum()
     assert not np.array_equal(plain, posed)
+
+
+def _cst():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "cst", Path(__file__).resolve().parent.parent
+        / "scripts" / "compare-silhouette-truth.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _alpha(value: int) -> np.ndarray:
+    rgba = np.zeros((4, 4, 4), np.uint8)
+    rgba[:, :, 3] = value
+    return rgba
+
+
+def test_a_translucent_fill_is_ink_rather_than_a_hole():
+    """One surface at --opacity 0.5 rasterizes to alpha exactly 128.
+
+    Read against the opaque threshold it is not ink, so every place the part
+    shows a single layer measures as omitted geometry and only the doubled-up
+    places pass -- 42% of 3005's drawing, and 28.4% of translucent-occt's
+    parts carrying missing components against occt's 2.6%.
+    """
+    assert _cst().ink_mask(_alpha(128), 0.5).all()
+
+
+def test_the_opaque_ink_threshold_is_still_the_antialias_midpoint():
+    """The rule scales with opacity, so a solid slot's rows do not move."""
+    cst = _cst()
+    assert not cst.ink_mask(_alpha(128), None).any()
+    assert cst.ink_mask(_alpha(129), None).all()
+
+
+def test_a_translucent_edge_at_half_coverage_is_not_ink():
+    """Half-covered at 0.5 opacity is alpha 64 -- the same midpoint, scaled."""
+    cst = _cst()
+    assert not cst.ink_mask(_alpha(64), 0.5).any()
+    assert cst.ink_mask(_alpha(65), 0.5).all()
