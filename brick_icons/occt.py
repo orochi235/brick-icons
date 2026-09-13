@@ -2635,6 +2635,10 @@ def _union_bbox(bbox, polys):
             max(bbox[2], P[:, 0].max()), max(bbox[3], P[:, 1].max()))
 
 
+def _declares_smooth_seams(out) -> bool:
+    return bool(out.get("5"))
+
+
 def _undeclared_ops(comps):
     """What to draw for a part that declared no edge of its own.
 
@@ -2651,16 +2655,18 @@ def _undeclared_ops(comps):
     a flat wall's interior facet seams are gone and what survives is the
     part's real creases and its boundary.
 
-    The guard is that nothing was drawn -- not that nothing was declared. A
-    declaration only counts where OCCT has an edge to hang it on, and two
-    kinds routinely have none. A condline is conditional by construction, so
-    on a flat plate seen from outside none qualify (36 formed stickers, type-5
-    only, 26 to 204 sharp edges from HLR and not one locus matched). And an
+    The guard is that nothing was drawn and no condline was declared. An
     artwork line inside a face is not an edge of anything: 6342851a draws two
     along its print, UnifySameDomain merges the print into the plate's top
-    face, and both loci sit in that face's interior.
+    face, and both loci sit in that face's interior, so a type-2 that drew
+    nothing does not block the fallback. A condline does, even one that drew
+    nothing from this view: it declares that its facet seam is smooth, and a
+    part that declares that is faceting a curve UnifySameDomain cannot merge.
+    270 formed stickers declare condlines and no type-2, and on the curved
+    ones the sharp set is every facet seam -- 6155286wc01 drew 489 of them as
+    a web across its print. Those draw their faces and contour, as naive does.
 
-    A part with no geometry to read a sharp set from still raises.
+    A part with no faces to draw still raises.
     """
     return [op for edge in _edges_of(comps.get("sharp"))
             for op in _edge_ops(edge, "sil")] if comps.get("sharp") else []
@@ -2695,12 +2701,19 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None):
             continue
         for edge in _edges_of(comp):
             ops += _edge_ops(edge, "sil")
-    if not ops:
+    if not ops and not _declares_smooth_seams(out):
         ops = _undeclared_ops(comps)
     ops = _negate_y(ops)
-    if not ops:
-        raise RuntimeError("OCCT engine produced no edges")
-    bbox = _ops_bbox(ops)
+    if ops:
+        bbox = _ops_bbox(ops)
+    else:
+        # Nothing to stroke, so the faces frame it -- a coarse pass, then the
+        # real one at the deflection that span implies.
+        rough = face_polys(shape, right, up, 1.0)
+        if not len(rough):
+            raise RuntimeError("OCCT engine produced no edges")
+        P = np.vstack([np.asarray(p, float) for p in rough])
+        bbox = (P[:, 0].min(), P[:, 1].min(), P[:, 0].max(), P[:, 1].max())
     span = max(bbox[2] - bbox[0], bbox[3] - bbox[1]) or 1.0
     # Sub-pixel, or the contour under an exact arc stroke reads as a polygon
     # and its chords poke out from behind it.

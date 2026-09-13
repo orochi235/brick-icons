@@ -1628,18 +1628,22 @@ def test_an_artwork_line_inside_a_face_does_not_count_as_a_declaration(
     assert occt.visible_segments(out, right, up, 900).segs
 
 
-def test_condlines_alone_do_not_count_as_declaring_an_edge(ldraw_dir):
-    """A condline is conditional by construction -- it draws only where its two
-    faces straddle the view -- so on a flat plate seen from outside none of them
-    qualify and the part is left with no boundary at all. 36 formed stickers and
-    their composite siblings sit exactly there: type-5 and no type-2, 26 to 204
-    sharp edges from HLR, not one locus matched. Treating type-5 as a
-    declaration left every one of them blank."""
+def test_a_part_declaring_only_condlines_draws_its_faces_not_its_facet_seams(
+        ldraw_dir, monkeypatch):
+    """A condline declares its seam smooth, so a formed sticker that declares
+    only condlines is faceting a curve, and HLR's sharp set there is every facet
+    seam: 6155286wc01 drew 489 of them as a web across its print. Such a part
+    draws only the condlines that read as a silhouette, and is still framed and
+    filled rather than raised."""
+    def fallback(comps):
+        raise AssertionError("the sharp set was drawn")
+    monkeypatch.setattr(occt, "_undeclared_ops", fallback)
     right, up = hlr.view_basis(30.0, 65.0)[:2]
-    for part in ("003497bc01", "164325d", "4620856b", "162275dc01"):
+    for part in ("6155286wc01", "003497bc01", "164325d", "4620856b", "162275dc01"):
         out = occt.flatten_part(part, ldraw_dir)
         assert out["5"] and not out["2"], part
-        assert occt.visible_segments(out, right, up, 900).segs, part
+        res = occt.visible_segments(out, right, up, 900)
+        assert len(res.sil_polys), part
 
 
 def test_an_end_face_hides_the_bore_limb_behind_it(ldraw_dir):
