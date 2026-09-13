@@ -2411,3 +2411,13 @@ status = "open"
 title = "missing outlines"
 checked = { occt = "c6e1eb7e00efb26a8378c6d06cc0107e849c69896e53d1614d76365c41d8f637" }
 filed = "2026-09-13"
+
+[[defect]]
+id = "168365e-naive-stickers-drawn-at-1e5-scale"
+part = "168365e"
+engines = ["naive"]
+status = "open"
+title = "naive draws stickers at ~1e5 scale, so they come out blank"
+checked = { naive = "9661acb065122716a1284ecbeec2a8bad1942c50c8fa1e80b740888a9bf78324" }
+filed = "2026-09-13"
+notes = "Stands for every sticker naive draws this way, not only 168365e. Coordinates reach ~1e5 against a 256x170 viewBox, so the drawing is blank or overruns the frame, and it scores extra_px 0 / missing_px 0 as if perfect. occt draws the same parts correctly. 230 stickers were marked broken for this in tests/goldens/part-status.toml; that list is at `git show 234100c:tests/goldens/part-status.toml`, cleared 2026-09-13 in favor of this one record, because a part status carries no engine and showed 'broken' on the occt drawing too."
