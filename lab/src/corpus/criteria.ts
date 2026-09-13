@@ -103,7 +103,10 @@ export interface ClassSpec {
  *  all, and a `~Moved to` redirect is not a part anyone can draw.
  *
  *  Redirects are off by default; everything else stays on the map, because
- *  knowing what is not being drawn is the point of it. */
+ *  knowing what is not being drawn is the point of it.
+ *
+ *  The dashboard's server needs each class's SQL: a row added here needs one
+ *  in `CLASSES` in brick_icons/lab/stats.py, and a test fails until it has. */
 export const CLASS_SPECS = [
   { key: 'moved', label: 'moved',
     member: (f: ClassFacts) => f.moved, shown: false },

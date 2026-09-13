@@ -5,7 +5,7 @@ import { DEFAULT_SET } from '@lab/stats/workingSet';
 import type { Stats } from '@lab/stats/types';
 
 const body = (open: boolean): Stats => ({
-  set: { size: 2, total: 3, kind: 'all', moved: false, out_of_scope: true,
+  set: { size: 2, total: 3, kind: 'all', shown: { moved: false },
          excluded: [], badges: [] },
   coverage: [], speed: [], error: [], phases: [],
   failures: { totals: { size: 3,

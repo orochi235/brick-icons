@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CLASS_SPECS } from '@lab/corpus/criteria';
 import { DEFAULT_SET, fromQuery, toQuery, wallHref,
          type WorkingSet } from '@lab/stats/workingSet';
 
@@ -14,11 +15,28 @@ describe('the working set in the address bar', () => {
   });
 
   it('survives the round trip', () => {
-    const set: WorkingSet = { kind: 'base', moved: true, outOfScope: false,
-                              obsolete: false, posed: false,
+    const set: WorkingSet = { kind: 'base',
+                              shown: { moved: true, outOfScope: false,
+                                       obsolete: true, posed: false },
                               excluded: ['Sticker', 'Minifig'],
                               badges: ['technic', 'popular'] };
     expect(round(set)).toEqual(set);
+  });
+
+  it('names a class only where it departs from the default', () => {
+    const q = toQuery({ ...DEFAULT_SET,
+                        shown: { ...DEFAULT_SET.shown, moved: true, posed: false } });
+    expect(q.getAll('show')).toEqual(['moved']);
+    expect(q.getAll('hide')).toEqual(['posed']);
+  });
+
+  it('writes every class the wall has, however the table grows', () => {
+    for (const { key } of CLASS_SPECS) {
+      const flipped = { ...DEFAULT_SET,
+                        shown: { ...DEFAULT_SET.shown, [key]: !DEFAULT_SET.shown[key] } };
+      expect(toQuery(flipped).toString(), key).not.toBe('');
+      expect(round(flipped)).toEqual(flipped);
+    }
   });
 
   it('keeps every excluded category rather than the last one', () => {
@@ -27,8 +45,12 @@ describe('the working set in the address bar', () => {
   });
 
   it('leaves obsolete parts out until the address asks for them', () => {
-    expect(DEFAULT_SET.obsolete).toBe(false);
-    expect(fromQuery(new URLSearchParams('obsolete=true')).obsolete).toBe(true);
+    expect(DEFAULT_SET.shown.obsolete).toBe(false);
+    expect(fromQuery(new URLSearchParams('show=obsolete')).shown.obsolete).toBe(true);
+  });
+
+  it('ignores a class it does not have', () => {
+    expect(fromQuery(new URLSearchParams('hide=retired'))).toEqual(DEFAULT_SET);
   });
 
   it('falls back to all parts on a kind it does not have', () => {
@@ -38,7 +60,8 @@ describe('the working set in the address bar', () => {
 
 describe('wallHref', () => {
   it('hands the wall the slot and the same membership', () => {
-    const href = wallHref({ ...DEFAULT_SET, outOfScope: false,
+    const href = wallHref({ ...DEFAULT_SET,
+                            shown: { ...DEFAULT_SET.shown, outOfScope: false },
                             excluded: ['Sticker'] }, 'silhouette-naive');
     const q = new URLSearchParams(href.slice(href.indexOf('?')));
     expect(href.startsWith('/corpus?')).toBe(true);
@@ -48,7 +71,8 @@ describe('wallHref', () => {
   });
 
   it('carries the two newer classes across as well', () => {
-    const href = wallHref({ ...DEFAULT_SET, obsolete: false, posed: false },
+    const href = wallHref({ ...DEFAULT_SET,
+                            shown: { ...DEFAULT_SET.shown, obsolete: false, posed: false } },
                           'silhouette-naive');
     const q = new URLSearchParams(href.slice(href.indexOf('?')));
     expect(q.get('obsolete')).toBe('false');

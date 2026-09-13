@@ -1,5 +1,7 @@
 """The corpus dashboard's tallies."""
 import json
+import re
+from pathlib import Path
 
 import pytest
 
@@ -76,7 +78,7 @@ def test_redirects_come_back_when_asked_for(conn):
     _part(conn, "3001")
     _part(conn, "3002", title="~Moved to 3001")
     conn.commit()
-    assert stats.stats(conn, moved=True)["set"]["size"] == 2
+    assert stats.stats(conn, shown={"moved": True})["set"]["size"] == 2
 
 
 def test_out_of_scope_parts_can_be_dropped(conn):
@@ -84,7 +86,7 @@ def test_out_of_scope_parts_can_be_dropped(conn):
     _part(conn, "s1", category="|")
     conn.commit()
     assert stats.stats(conn)["set"]["size"] == 2
-    assert stats.stats(conn, out_of_scope=False)["set"]["size"] == 1
+    assert stats.stats(conn, shown={"outOfScope": False})["set"]["size"] == 1
 
 
 def test_obsolete_parts_are_out_of_the_set_until_asked_for(conn):
@@ -95,7 +97,7 @@ def test_obsolete_parts_are_out_of_the_set_until_asked_for(conn):
     _part(conn, "3002", obsolete=1)
     conn.commit()
     assert stats.stats(conn)["set"]["size"] == 1
-    assert stats.stats(conn, obsolete=True)["set"]["size"] == 2
+    assert stats.stats(conn, shown={"obsolete": True})["set"]["size"] == 2
     assert stats.stats(conn, kind="obsolete")["set"]["size"] == 1
 
 
@@ -106,7 +108,7 @@ def test_a_part_ldraw_gives_a_preview_turn_can_be_dropped(conn):
                  "WHERE id = '87544dq0'")
     conn.commit()
     assert stats.stats(conn)["set"]["size"] == 2
-    assert stats.stats(conn, posed=False)["set"]["size"] == 1
+    assert stats.stats(conn, shown={"posed": False})["set"]["size"] == 1
 
 
 def test_a_category_can_be_excluded_by_its_clean_name(conn):
@@ -135,6 +137,21 @@ def test_two_badges_on_one_axis_are_alternatives_and_two_axes_narrow(conn):
     assert size(badges=["technic"]) == 2
     assert size(badges=["technic", "duplo"]) == 3
     assert size(badges=["technic", "printed"]) == 1
+
+
+def test_a_class_the_table_does_not_have_is_refused(conn):
+    with pytest.raises(ValueError, match="unknown classes"):
+        stats.stats(conn, shown={"retired": False})
+
+
+def test_the_class_table_names_every_class_the_wall_has():
+    # The wall hides a class the dashboard would otherwise go on counting,
+    # with nothing anywhere to say so.
+    source = (Path(__file__).parent.parent
+              / "lab/src/corpus/criteria.ts").read_text()
+    table = source[source.index("export const CLASS_SPECS"):]
+    table = table[:table.index("] as const")]
+    assert re.findall(r"key: '(\w+)'", table) == list(stats.CLASSES)
 
 
 def test_the_kind_filters_pick_one_class_of_part(conn):
@@ -181,7 +198,7 @@ def test_an_obsolete_part_on_the_map_is_not_work_a_slot_still_owes(conn):
     _render(conn, "3001", "silhouette-occt")
     conn.commit()
     counts = {r["source"]: r["counts"]
-              for r in stats.stats(conn, obsolete=True)["coverage"]}
+              for r in stats.stats(conn, shown={"obsolete": True})["coverage"]}
     assert counts["silhouette-occt"]["notApplicable"] == 1
     assert counts["silhouette-occt"]["untried"] == 0
 
@@ -255,7 +272,7 @@ def test_coverage_counts_only_the_working_set(conn):
     _render(conn, "3001", "silhouette-naive")
     _render(conn, "s1", "silhouette-naive")
     conn.commit()
-    rows = stats.stats(conn, out_of_scope=False)["coverage"]
+    rows = stats.stats(conn, shown={"outOfScope": False})["coverage"]
     assert rows[0]["counts"]["drawn"] == 1
 
 
@@ -386,7 +403,7 @@ def test_speed_ignores_a_part_outside_the_set(conn):
     _measure(conn, "3001", "occt", secs=1.0)
     _measure(conn, "s1", "occt", secs=50.0)
     conn.commit()
-    row = stats.stats(conn, out_of_scope=False)["speed"][0]
+    row = stats.stats(conn, shown={"outOfScope": False})["speed"][0]
     assert row["n"] == 1
     assert row["total"] == 1.0
 

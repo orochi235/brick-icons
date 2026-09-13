@@ -126,35 +126,69 @@ def _bins(values: list[float]) -> list[dict]:
     return out
 
 
-def members(conn: sqlite3.Connection, *, kind: str = "all", moved: bool = False,
-            out_of_scope: bool = True, obsolete: bool = False,
-            posed: bool = True, excluded: tuple[str, ...] = (),
+_SCOPE_MARKS = ",".join("?" * len(OUT_OF_SCOPE_CATEGORIES))
+
+#: The wall's classes of part, keyed as `CLASS_SPECS` in
+#: lab/src/corpus/criteria.ts spells them: the SQL that makes a part a member,
+#: its bound values, and whether the working set counts the class unless told
+#: otherwise. `tests/test_lab_stats.py` fails when the two lists disagree.
+CLASSES = {
+    "moved": (f"title LIKE '{MOVED_PREFIX}%'", (), False),
+    "outOfScope": (f"category IN ({_SCOPE_MARKS})", OUT_OF_SCOPE_CATEGORIES,
+                   True),
+    # No batch renders a superseded mould, so counting them made every slot
+    # look thousands of parts short of done.
+    "obsolete": ("COALESCE(obsolete, 0) != 0", (), False),
+    "posed": ("COALESCE(preview, '') != ''", (), True),
+}
+
+
+def shown_classes(asked: dict[str, bool] | None = None) -> dict[str, bool]:
+    """Every class's on/off, `asked` laid over the defaults. Raises
+    `ValueError` on a class this table does not have."""
+    asked = dict(asked or {})
+    unknown = sorted(set(asked) - set(CLASSES))
+    if unknown:
+        raise ValueError(f"unknown classes {unknown}; "
+                         f"known: {sorted(CLASSES)}")
+    return {key: asked.get(key, default)
+            for key, (_, _, default) in CLASSES.items()}
+
+
+def members(conn: sqlite3.Connection, *, kind: str = "all",
+            shown: dict[str, bool] | None = None,
+            excluded: tuple[str, ...] = (),
             badges: tuple[str, ...] = ()) -> tuple[set[str], list[sqlite3.Row]]:
     """The parts in the working set, and their rows.
 
     The same membership the wall's sidebar expresses, decided here so the
     tallies and the wall agree on which parts they are about.
 
-    `obsolete` and `posed` say whether that class is on the map at all, which
-    is not what `kind` asks: `kind="obsolete"` looks at nothing else.
+    `shown` says whether each class is on the map at all, which is not what
+    `kind` asks: `kind="obsolete"` looks at nothing else.
     """
-    scope_marks = ",".join("?" * len(OUT_OF_SCOPE_CATEGORIES))
+    shown = shown_classes(shown)
+    # Narrowing to the class puts it back on the map whatever the flag says,
+    # which is what `kind="obsolete"` means and now matters: the flag is off.
+    if kind == "obsolete":
+        shown["obsolete"] = True
+    class_cols = "".join(f", ({sql}) AS \"class:{key}\""
+                         for key, (sql, _, _) in CLASSES.items())
+    class_args = tuple(arg for sql, args, _ in CLASSES.values() for arg in args)
     rows = list(conn.execute(
         f"SELECT id, title, category, printed, obsolete, preview, "
         f"(printed = 0 AND obsolete = 0 AND id NOT LIKE '%c__' "
         f"AND id NOT LIKE '%d__' AND id NOT LIKE 'u9%') AS base, "
-        f"(category IN ({scope_marks})) AS out_of_scope, "
-        f"(title LIKE '{MOVED_PREFIX}%') AS moved "
-        f"FROM parts ORDER BY id", OUT_OF_SCOPE_CATEGORIES))
+        f"(category IN ({_SCOPE_MARKS})) AS out_of_scope, "
+        f"(title LIKE '{MOVED_PREFIX}%') AS moved{class_cols} "
+        f"FROM parts ORDER BY id", OUT_OF_SCOPE_CATEGORIES + class_args))
+    hidden = [f"class:{key}" for key, on in shown.items() if not on]
 
     years = {r["part_id"]: r for r in conn.execute(
         "SELECT part_id, year_to, sets FROM part_years")}
     successors = {r["part_id"] for r in conn.execute(
         "SELECT part_id FROM part_successors")}
 
-    # Narrowing to the class puts it back on the map whatever the flag says,
-    # which is what `kind="obsolete"` means and now matters: the flag is off.
-    obsolete = obsolete or kind == "obsolete"
     excluded_set = {e for e in excluded}
     # By axis, as the wall's legend groups them: two tags on one axis are
     # alternatives, two axes narrow. A subset test read `technic` and `duplo`
@@ -162,13 +196,7 @@ def members(conn: sqlite3.Connection, *, kind: str = "all", moved: bool = False,
     wanted_axes = part_tags.by_axis(badges)
     keep = []
     for row in rows:
-        if row["moved"] and not moved:
-            continue
-        if row["out_of_scope"] and not out_of_scope:
-            continue
-        if row["obsolete"] and not obsolete:
-            continue
-        if row["preview"] and not posed:
+        if any(row[col] for col in hidden):
             continue
         if kind == "printed" and not row["printed"]:
             continue
@@ -681,23 +709,20 @@ def _failures(conn: sqlite3.Connection) -> dict:
     }
 
 
-def stats(conn: sqlite3.Connection, *, kind: str = "all", moved: bool = False,
-          out_of_scope: bool = True, obsolete: bool = False, posed: bool = True,
+def stats(conn: sqlite3.Connection, *, kind: str = "all",
+          shown: dict[str, bool] | None = None,
           excluded: tuple[str, ...] = (),
           badges: tuple[str, ...] = ()) -> dict:
     """Every tally the dashboard draws, for one working set."""
-    ids, rows = members(conn, kind=kind, moved=moved,
-                        out_of_scope=out_of_scope, obsolete=obsolete,
-                        posed=posed, excluded=tuple(excluded),
-                        badges=tuple(badges))
+    ids, rows = members(conn, kind=kind, shown=shown,
+                        excluded=tuple(excluded), badges=tuple(badges))
     total = conn.execute("SELECT count(*) FROM parts").fetchone()[0]
     latest = [r for r in _latest_measurements(conn)
               if r["engine"] in TIMED_ENGINES]
     speed, error = _speed_and_error(latest, ids)
     return {
         "set": {"size": len(ids), "total": total, "kind": kind,
-                "moved": moved, "out_of_scope": out_of_scope,
-                "obsolete": obsolete, "posed": posed,
+                "shown": shown_classes(shown),
                 "excluded": list(excluded), "badges": list(badges)},
         "coverage": _coverage(conn, ids),
         "speed": speed,

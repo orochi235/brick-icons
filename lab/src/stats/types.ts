@@ -189,8 +189,8 @@ export interface Stats {
     size: number;
     total: number;
     kind: string;
-    moved: boolean;
-    out_of_scope: boolean;
+    /** Keyed by `CLASS_SPECS`. Absent from an API older than the bundle. */
+    shown?: Record<string, boolean>;
     excluded: string[];
     badges: string[];
   };

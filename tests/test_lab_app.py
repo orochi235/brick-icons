@@ -422,6 +422,27 @@ def test_stats_route_carries_the_working_set_through(tmp_path):
     assert body["set"]["kind"] == "printed"
 
 
+def test_stats_route_takes_classes_by_name(tmp_path):
+    client = _corpus_client(tmp_path)
+    body = client.get("/api/corpus/stats",
+                      params=[("show", "moved"), ("hide", "posed")]).json()
+    assert body["set"]["shown"]["moved"] is True
+    assert body["set"]["shown"]["posed"] is False
+
+
+def test_stats_route_still_takes_the_old_class_flags(tmp_path):
+    body = _corpus_client(tmp_path).get(
+        "/api/corpus/stats",
+        params={"moved": "true", "out_of_scope": "false"}).json()
+    assert body["set"]["shown"]["moved"] is True
+    assert body["set"]["shown"]["outOfScope"] is False
+
+
+def test_stats_route_refuses_a_class_it_does_not_have(tmp_path):
+    assert _corpus_client(tmp_path).get(
+        "/api/corpus/stats", params={"hide": "retired"}).status_code == 422
+
+
 def test_stats_route_refuses_a_kind_it_does_not_have(tmp_path):
     assert _corpus_client(tmp_path).get(
         "/api/corpus/stats", params={"kind": "rendered"}).status_code == 422

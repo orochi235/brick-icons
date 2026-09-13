@@ -1,3 +1,6 @@
+import { CLASS_SPECS, DEFAULT_SHOWN, type CellClass, type Shown }
+  from '@lab/corpus/criteria';
+
 /** Which parts the tallies are about. The membership half of the wall's
  *  `Selection` and nothing else: `sort`, `grouping` and `tint` change how the
  *  wall draws, not which parts are in. */
@@ -6,16 +9,9 @@ export interface WorkingSet {
    *  / `errors` are absent on purpose -- each is a statement about a single
    *  slot, and the coverage chart already breaks every slot out that way. */
   kind: 'all' | 'printed' | 'obsolete' | 'base';
-  /** `~Moved to` redirects, which are not parts anyone can draw. */
-  moved: boolean;
-  outOfScope: boolean;
-  /** Whether the class is in the set at all, which is not what `kind` asks:
-   *  `kind: 'obsolete'` looks at nothing else. Off by default -- no batch
-   *  renders a superseded mould, so counting them made every slot look
-   *  thousands of parts short of done. */
-  obsolete: boolean;
-  /** Parts LDraw gives a `!PREVIEW` turn. */
-  posed: boolean;
+  /** Whether each of the wall's classes is in the set at all, which is not
+   *  what `kind` asks: `kind: 'obsolete'` looks at nothing else. */
+  shown: Shown;
   /** Clean category names left out entirely. */
   excluded: string[];
   /** Badge tags a part must carry -- every one of them, as on the wall. */
@@ -23,23 +19,30 @@ export interface WorkingSet {
 }
 
 export const DEFAULT_SET: WorkingSet = {
-  kind: 'all', moved: false, outOfScope: true, obsolete: false, posed: true,
+  kind: 'all',
+  // Obsolete parts are off here though the wall shows them: no batch renders
+  // a superseded mould, so counting them made every slot look thousands of
+  // parts short of done. `stats.CLASSES` holds the same defaults.
+  shown: { ...DEFAULT_SHOWN, obsolete: false },
   excluded: [], badges: [],
 };
 
 const KINDS = new Set(['all', 'printed', 'obsolete', 'base']);
 
+const CLASS_KEYS = new Set<string>(CLASS_SPECS.map((c) => c.key));
+
 /** The query the API takes, which is also what goes in the address bar: one
- *  spelling, so a link and a request cannot describe different sets. */
+ *  spelling, so a link and a request cannot describe different sets. A class
+ *  is named only where it departs from the default -- `show=moved`,
+ *  `hide=posed`. */
 export function toQuery(set: WorkingSet): URLSearchParams {
   const q = new URLSearchParams();
   if (set.kind !== DEFAULT_SET.kind) q.set('kind', set.kind);
-  if (set.moved !== DEFAULT_SET.moved) q.set('moved', String(set.moved));
-  if (set.outOfScope !== DEFAULT_SET.outOfScope) {
-    q.set('out_of_scope', String(set.outOfScope));
+  for (const { key } of CLASS_SPECS) {
+    if (set.shown[key] !== DEFAULT_SET.shown[key]) {
+      q.append(set.shown[key] ? 'show' : 'hide', key);
+    }
   }
-  if (set.obsolete !== DEFAULT_SET.obsolete) q.set('obsolete', String(set.obsolete));
-  if (set.posed !== DEFAULT_SET.posed) q.set('posed', String(set.posed));
   for (const name of set.excluded) q.append('excluded', name);
   for (const tag of set.badges) q.append('badges', tag);
   return q;
@@ -47,27 +50,28 @@ export function toQuery(set: WorkingSet): URLSearchParams {
 
 export function fromQuery(q: URLSearchParams): WorkingSet {
   const kind = q.get('kind');
+  const shown = { ...DEFAULT_SET.shown };
+  for (const [param, value] of [['show', true], ['hide', false]] as const) {
+    for (const key of q.getAll(param)) {
+      if (CLASS_KEYS.has(key)) shown[key as CellClass] = value;
+    }
+  }
   return {
     kind: kind && KINDS.has(kind) ? kind as WorkingSet['kind'] : 'all',
-    moved: q.get('moved') === 'true',
-    outOfScope: q.get('out_of_scope') !== 'false',
-    obsolete: q.get('obsolete') === 'true',
-    posed: q.get('posed') !== 'false',
+    shown,
     excluded: q.getAll('excluded'),
     badges: q.getAll('badges'),
   };
 }
 
-/** The wall showing the same parts. Its own vocabulary differs -- it says
- *  `shown` where this says `moved` and `outOfScope`, and it needs a slot --
- *  so the translation happens here rather than in the markup. */
+/** The wall showing the same parts. It spells a class `outOfScope=false`
+ *  against its own defaults, and needs a slot. */
 export function wallHref(set: WorkingSet, source: string): string {
   const q = new URLSearchParams({ source });
   if (set.kind !== 'all') q.set('filter', set.kind);
-  if (set.moved) q.set('moved', 'true');
-  if (!set.outOfScope) q.set('outOfScope', 'false');
-  if (!set.obsolete) q.set('obsolete', 'false');
-  if (!set.posed) q.set('posed', 'false');
+  for (const { key } of CLASS_SPECS) {
+    if (set.shown[key] !== DEFAULT_SHOWN[key]) q.set(key, String(set.shown[key]));
+  }
   for (const name of set.excluded) q.append('excluded', name);
   for (const tag of set.badges) q.append('badges', tag);
   return `/corpus?${q}`;

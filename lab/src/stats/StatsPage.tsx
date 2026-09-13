@@ -11,6 +11,7 @@ import { DEFAULT_SET, fromQuery, toQuery, wallHref,
 import '@lab/stats/stats.css';
 import { LabSwitcher } from '@weasel-js/labkit';
 import { PAGES } from '@lab/nav/pages';
+import { CLASS_SPECS } from '@lab/corpus/criteria';
 
 const KINDS: { id: WorkingSet['kind']; label: string }[] = [
   { id: 'all', label: 'all parts' },
@@ -40,26 +41,15 @@ function Controls({ set, onChange, categories }: {
           {KINDS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
         </select>
       </label>
-      <label>
-        <input type="checkbox" checked={set.outOfScope}
-               onChange={(e) => onChange({ ...set, outOfScope: e.target.checked })} />
-        out of scope
-      </label>
-      <label>
-        <input type="checkbox" checked={set.moved}
-               onChange={(e) => onChange({ ...set, moved: e.target.checked })} />
-        moved
-      </label>
-      <label>
-        <input type="checkbox" checked={set.obsolete}
-               onChange={(e) => onChange({ ...set, obsolete: e.target.checked })} />
-        obsolete
-      </label>
-      <label>
-        <input type="checkbox" checked={set.posed}
-               onChange={(e) => onChange({ ...set, posed: e.target.checked })} />
-        posed
-      </label>
+      {CLASS_SPECS.map((cls) => (
+        <label key={cls.key}>
+          <input type="checkbox" checked={set.shown[cls.key]}
+                 onChange={(e) => onChange({
+                   ...set, shown: { ...set.shown, [cls.key]: e.target.checked },
+                 })} />
+          {cls.label}
+        </label>
+      ))}
       <fieldset className="stats-categories">
         <legend>Categories</legend>
         {categories.filter(([, n]) => n >= CATEGORY_CUTOFF).map(([name, n]) => (

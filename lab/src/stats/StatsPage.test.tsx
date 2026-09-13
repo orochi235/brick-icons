@@ -4,7 +4,7 @@ import { StatsPage } from '@lab/stats/StatsPage';
 import type { Stats } from '@lab/stats/types';
 
 const body = (over: Partial<Stats> = {}): Stats => ({
-  set: { size: 20, total: 24, kind: 'all', moved: false, out_of_scope: true,
+  set: { size: 20, total: 24, kind: 'all', shown: { moved: false },
          excluded: [], badges: [] },
   failures: {
     totals: { size: 24,

@@ -364,14 +364,29 @@ def create_app(root: Path | str = ".",
             conn.close()
 
     @app.get("/api/corpus/stats")
-    def get_corpus_stats(kind: str = "all", moved: bool = False,
-                         out_of_scope: bool = True, obsolete: bool = False,
-                         posed: bool = True,
+    def get_corpus_stats(kind: str = "all",
+                         show: list[str] = Query(default=[]),
+                         hide: list[str] = Query(default=[]),
+                         moved: bool | None = None,
+                         out_of_scope: bool | None = None,
+                         obsolete: bool | None = None,
+                         posed: bool | None = None,
                          excluded: list[str] = Query(default=[]),
                          badges: list[str] = Query(default=[])):
         """Every tally the dashboard draws, over one working set."""
         if kind not in stats.KINDS:
             raise HTTPException(422, f"kind must be one of {stats.KINDS}")
+        # The four named flags are what a bundle older than `show`/`hide`
+        # sends (before 2026-09-13); drop them once no such bundle is open.
+        legacy = {"moved": moved, "outOfScope": out_of_scope,
+                  "obsolete": obsolete, "posed": posed}
+        asked_classes = {k: v for k, v in legacy.items() if v is not None}
+        asked_classes.update({k: True for k in show})
+        asked_classes.update({k: False for k in hide})
+        try:
+            shown = stats.shown_classes(asked_classes)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
         conn = corpus_conn()
         try:
             # 1.3 seconds of work over 20,000 parts, against 5 ms to ask
@@ -379,15 +394,13 @@ def create_app(root: Path | str = ".",
             # corpus, not a clock: a held answer is served only while every
             # count it was computed from still holds, so an ingest landing
             # mid-look invalidates it rather than being waited out.
-            asked = (kind, moved, out_of_scope, obsolete, posed,
+            asked = (kind, tuple(shown.items()),
                      tuple(excluded), tuple(badges))
             now = stats.freshness(conn)
             held = app.state.stats_cache.get(asked)
             if held is not None and held[0] == now:
                 return held[1]
-            answer = stats.stats(conn, kind=kind, moved=moved,
-                                 out_of_scope=out_of_scope, obsolete=obsolete,
-                                 posed=posed,
+            answer = stats.stats(conn, kind=kind, shown=shown,
                                  excluded=tuple(excluded), badges=tuple(badges))
             # The controls are a handful of toggles, so the set of questions
             # asked is small and bounded; a stale corpus's answers go when
