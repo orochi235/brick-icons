@@ -200,6 +200,10 @@ CREATE TABLE IF NOT EXISTS tallies (
   -- number and draw as one line four times over.
   slot_failed INTEGER NOT NULL DEFAULT 0,
   slot_timeout INTEGER NOT NULL DEFAULT 0,
+  -- What the slot drew without its OWN measurements failing it, for the same
+  -- reason: read off the pooled `drawn`, every occt facet's coverage line sat
+  -- on one number. Null in a row from a writer older than the column.
+  slot_drawn INTEGER,
   PRIMARY KEY (taken, source)
 );
 
@@ -235,7 +239,8 @@ _ADDED_COLUMNS = (("defects", "classes", "TEXT"),
                   ("measurements", "counts", "TEXT"),
                   ("parts", "preview", "TEXT"),
                   ("tallies", "slot_failed", "INTEGER NOT NULL DEFAULT 0"),
-                  ("tallies", "slot_timeout", "INTEGER NOT NULL DEFAULT 0"))
+                  ("tallies", "slot_timeout", "INTEGER NOT NULL DEFAULT 0"),
+                  ("tallies", "slot_drawn", "INTEGER"))
 
 
 def _add_missing_columns(conn: sqlite3.Connection) -> None:
@@ -854,8 +859,8 @@ def _stored_tallies(path: Path) -> list[tuple]:
     try:
         return [tuple(r) for r in conn.execute(
             "SELECT taken, source, build, size, drawn, failed, timeout, "
-            "defect, untried, not_applicable, slot_failed, slot_timeout "
-            "FROM tallies")]
+            "defect, untried, not_applicable, slot_failed, slot_timeout, "
+            "slot_drawn FROM tallies")]
     finally:
         conn.close()
 
@@ -1001,7 +1006,7 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
     conn.executemany(
         "INSERT OR REPLACE INTO tallies (taken, source, build, size, drawn, "
         "failed, timeout, defect, untried, not_applicable, slot_failed, "
-        "slot_timeout) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "slot_timeout, slot_drawn) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         carried_tallies)
     conn.commit()
     progress(f"{len(carried_tallies)} tallies carried across")

@@ -268,6 +268,37 @@ def test_each_facet_follows_its_own_failures_not_the_engines(conn):
     assert pooled["occt"] == 2 and pooled["white-occt"] == 2
 
 
+
+def test_each_facet_draws_its_own_coverage_line(conn):
+    """Read off the pooled count, a failure in one facet takes the part off
+    every facet's coverage, and the four occt lines draw on top of each
+    other."""
+    _part(conn, "3001")
+    _part(conn, "3002")
+    for source in ("occt", "white-occt"):
+        _render(conn, "3001", source)
+        _render(conn, "3002", source)
+    _measure(conn, "3001", "occt", "white-occt", error="MemoryError")
+    conn.commit()
+    tally.take(conn, at="2026-09-10T00:00:00+00:00")
+    clean = {r["source"]: r["clean"] for r in tally.series(conn)}
+    assert clean == {"occt": 2, "white-occt": 1}
+
+
+def test_a_row_from_an_older_writer_keeps_the_slots_own_count(conn):
+    """Watchers started before `slot_drawn` existed keep writing tallies with
+    it null, interleaved with current ones."""
+    _part(conn, "3001")
+    for taken, drawn, slot_drawn in (("2026-09-10T00:00:00+00:00", 5, None),
+                                     ("2026-09-11T00:00:00+00:00", 5, 9),
+                                     ("2026-09-12T00:00:00+00:00", 4, None)):
+        conn.execute("INSERT INTO tallies (taken, source, size, drawn, failed, "
+                     "timeout, defect, untried, not_applicable, slot_drawn) "
+                     "VALUES (?, 'occt', 10, ?, 0, 0, 0, 0, 0, ?)",
+                     (taken, drawn, slot_drawn))
+    conn.commit()
+    assert [r["clean"] for r in tally.series(conn)] == [5, 9, 9]
+
 def test_the_tiles_read_the_last_tally_rather_than_recounting(conn):
     """Counting is a pass over every part in every slot; doing it per page
     load put ten seconds on the dashboard. It also keeps the tile and the

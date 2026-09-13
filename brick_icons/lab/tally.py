@@ -27,7 +27,7 @@ from brick_icons.lab.cells import (COVERAGE_ORDER, coverage_of, engine_for,
 # The counted columns, in schema order. `not_applicable` is the odd spelling:
 # `coverage_of` returns the label in camelCase, the column is snake.
 _COLUMNS = ("drawn", "failed", "timeout", "defect", "untried",
-            "not_applicable", "slot_failed", "slot_timeout")
+            "not_applicable", "slot_failed", "slot_timeout", "slot_drawn")
 
 #: What "bad" means in a tile: the part did not draw. A `defect` drew
 #: something and is wrong about it, which is a different question and has its
@@ -102,7 +102,7 @@ def count(conn: sqlite3.Connection) -> list[dict]:
             "AND error IS NOT NULL", (source,))})
 
         counts = dict.fromkeys((_column(c) for c in COVERAGE_ORDER), 0)
-        own = {"failed": 0, "timeout": 0}
+        own = {"failed": 0, "timeout": 0, "drawn": 0}
         for pid in ids:
             shared = dict(
                 sha="x" if pid in drawn else None,
@@ -117,7 +117,8 @@ def count(conn: sqlite3.Connection) -> list[dict]:
                 own[mine] += 1
         out.append({"source": source, "build": build["build"] if build else None,
                     "size": len(ids), "slot_failed": own["failed"],
-                    "slot_timeout": own["timeout"], **counts})
+                    "slot_timeout": own["timeout"], "slot_drawn": own["drawn"],
+                    **counts})
     return out
 
 
@@ -188,8 +189,8 @@ def take(conn: sqlite3.Connection, at: str | None = None) -> int:
         conn.execute(
             "INSERT OR REPLACE INTO tallies (taken, source, build, size, "
             "drawn, failed, timeout, defect, untried, not_applicable, "
-            "slot_failed, slot_timeout) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "slot_failed, slot_timeout, slot_drawn) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (at, row["source"], row["build"], row["size"],
              *(row[c] for c in _COLUMNS)))
         written += 1
@@ -205,8 +206,8 @@ def series(conn: sqlite3.Connection,
     pooled number draw as one line four times over, and the point of a line
     per facet is to see them diverge."""
     rows = conn.execute(
-        "SELECT taken, source, build, size, drawn, "
-        "slot_failed, slot_timeout FROM tallies ORDER BY taken, source").fetchall()
+        "SELECT taken, source, build, size, drawn, slot_failed, "
+        "slot_timeout, slot_drawn FROM tallies ORDER BY taken, source").fetchall()
     owed_by = owed(conn, sorted({r["source"] for r in rows}))
     want = set(sources) if sources else None
     # `owed` recomputed here, NOT read off the step's own `not_applicable`.
@@ -222,12 +223,22 @@ def series(conn: sqlite3.Connection,
     # run axis then credits a re-bake with parts it had already drawn. A
     # tally is dated by when it was taken and counts what stood at that
     # moment, and every tally in this corpus was taken after that rebuild.
-    return [{"at": r["taken"], "source": r["source"], "build": r["build"],
-             "size": r["size"], "owed": owed_by.get(r["source"], r["size"]),
-             "clean": r["drawn"],
-             "failed": r["slot_failed"], "timeout": r["slot_timeout"],
-             "bad": r["slot_failed"] + r["slot_timeout"]}
-            for r in rows if want is None or r["source"] in want]
+    # A slot's own drawn count, carried over a row whose writer predates the
+    # column: falling back to the pooled `drawn` there would step the line
+    # between two different numbers on alternate tallies.
+    own: dict[str, int] = {}
+    out = []
+    for r in rows:
+        if r["slot_drawn"] is not None:
+            own[r["source"]] = r["slot_drawn"]
+        if want is not None and r["source"] not in want:
+            continue
+        out.append({"at": r["taken"], "source": r["source"], "build": r["build"],
+                    "size": r["size"], "owed": owed_by.get(r["source"], r["size"]),
+                    "clean": own.get(r["source"], r["drawn"]),
+                    "failed": r["slot_failed"], "timeout": r["slot_timeout"],
+                    "bad": r["slot_failed"] + r["slot_timeout"]})
+    return out
 
 
 _DATES: dict[str, str | None] = {}
