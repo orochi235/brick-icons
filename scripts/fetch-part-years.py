@@ -232,6 +232,38 @@ def keyword_years(dat: Path, set_year: dict[str, int],
     return (min(years), max(years)) if years else None
 
 
+def year_row(part_id: str, dat: Path, facts: dict[str, tuple[int, int, int, int]],
+             designs: dict[str, set[str]], set_year: dict[str, int],
+             bare: dict[str, list[int]],
+             moulds: frozenset[str] = frozenset()) -> tuple | None:
+    """`part_id`'s CSV row: (part_id, year_from, year_to, sets, route, colors).
+
+    A print's own keyword sets outrank its base mould's inventory. `3622p04`
+    names Rebrickable `3622pr0003`, which no inventory holds, and set 70810
+    from 2014 -- read off `3622` it claimed 1978-2026, the brick's history."""
+    hit = match(part_id, facts, designs, keyword_parts(dat), moulds)
+    if hit is not None and hit[1] != "base":
+        part_nums, how = hit
+        spans = [facts[n] for n in part_nums]
+        # A design id can name several moulds. The span is all of them;
+        # the counts are the largest single mould's, because summing them
+        # would count one set once per mould cut from it.
+        best = max(spans, key=lambda s: s[2])
+        return (part_id, min(s[0] for s in spans), max(s[1] for s in spans),
+                best[2], how, best[3])
+    # Nothing in any inventory. LDraw's own keywords are the last resort,
+    # and the row is marked so the wall can tell an estimate from a count:
+    # `sets` and `colors` stay 0 because there is no inventory behind them,
+    # which is also why `cells` must not read a popularity out of them.
+    span = keyword_years(dat, set_year, bare)
+    if span is not None:
+        return (part_id, span[0], span[1], 0, "keywords", 0)
+    if hit is not None:
+        mould = facts[next(iter(hit[0]))]
+        return (part_id, mould[0], mould[1], mould[2], "base", mould[3])
+    return None
+
+
 def from_prints(plain: dict[str, bool], spans: dict[str, tuple[int, int]],
                 obsolete: set[str] = frozenset()) -> list[tuple]:
     """Years for a base mould that was never issued undecorated, read off the
@@ -356,25 +388,10 @@ def main() -> int:
     for i, part_id in enumerate(ids, 1):
         if i % 5000 == 0:
             print(f"  matched {i:,}/{len(ids):,}", flush=True)
-        hit = match(part_id, facts, designs,
-                    keyword_parts(parts_dir / f"{part_id}.dat"), moulds)
-        if hit is not None:
-            part_nums, how = hit
-            spans = [facts[n] for n in part_nums]
-            # A design id can name several moulds. The span is all of them;
-            # the counts are the largest single mould's, because summing them
-            # would count one set once per mould cut from it.
-            best = max(spans, key=lambda s: s[2])
-            matched.append((part_id, min(s[0] for s in spans),
-                            max(s[1] for s in spans), best[2], how, best[3]))
-            continue
-        # Nothing in any inventory. LDraw's own keywords are the last resort,
-        # and the row is marked so the wall can tell an estimate from a count:
-        # `sets` and `colors` stay 0 because there is no inventory behind them,
-        # which is also why `cells` must not read a popularity out of them.
-        span = keyword_years(parts_dir / f"{part_id}.dat", set_year, bare)
-        if span is not None:
-            matched.append((part_id, span[0], span[1], 0, "keywords", 0))
+        row = year_row(part_id, parts_dir / f"{part_id}.dat", facts, designs,
+                       set_year, bare, moulds)
+        if row is not None:
+            matched.append(row)
 
     # A second pass, because it reads what the first one matched: a base
     # mould nobody ever sold undecorated takes the span of its prints.

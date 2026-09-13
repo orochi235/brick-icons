@@ -276,15 +276,14 @@ def test_a_mould_dated_by_its_prints_reports_no_set_count(conn):
     assert "obscure" not in row["tags"]
 
 
-def test_a_print_does_not_inherit_its_base_part_s_popularity(conn):
-    # 3069bp1f is one silver-arched-window print. Its years come from the
-    # plain 1 x 2 tile it is struck on, which is fair -- the mould is that
-    # old -- but that tile's 5,766 sets are not the print's, and reporting
-    # them made a one-set print `popular`.
+def test_a_print_does_not_inherit_its_base_part_s_history(conn):
+    # 3069bp1f is one silver-arched-window print, read off the plain 1 x 2
+    # tile it is struck on. That tile's 5,766 sets made a one-set print
+    # `popular`, and its 1977 is the mould's year, not the print's.
     _part(conn, "3069bp1f", title="Tile 1 x 2 with Silver Arched Window")
     _years(conn, "3069bp1f", 1977, 2027, 5766, "base")
     row = cells.cells(conn)["cells"][0]
-    assert row["year_from"] == 1977
+    assert (row["year_from"], row["year_to"]) == (None, None)
     assert row["sets"] is None
     assert row["colors"] is None
     assert "popular" not in row["tags"]

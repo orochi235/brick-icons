@@ -230,13 +230,13 @@ def colors_for(year: sqlite3.Row | None) -> int | None:
 #: Routes whose YEARS describe another part, which is a shorter list than
 #: `BORROWED_COUNT_ROUTES`. `keywords` and `prints` carry no set count anyone
 #: can use, but the span each reads is this part's own -- the sets LDraw names
-#: for it, and the years of the prints cut from the mould. `base` is the span
-#: of the one mould the print is struck on, which is a fact about the print.
+#: for it, and the years of the prints cut from the mould.
 #:
-#: A design id is not: it names every mould cut from that id, and the span is
-#: the union across all of them. 699 printed torsos read 1983-2026 that way,
-#: and the wall drew every one as still in production since 1983.
-BORROWED_YEAR_ROUTES = frozenset({"design", "design-id-base"})
+#: `base` is not: it is the plain mould's span, and a print is far younger
+#: than its mould -- every Unikitty `3622p*` brick read 1978. Nor is a design
+#: id, which names every mould cut from that id: 699 printed torsos read
+#: 1983-2026 that way.
+BORROWED_YEAR_ROUTES = frozenset({"base", "design", "design-id-base"})
 
 
 def years_for(year: sqlite3.Row | None) -> tuple[int | None, int | None]:

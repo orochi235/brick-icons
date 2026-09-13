@@ -70,6 +70,24 @@ def test_a_named_number_the_inventories_do_not_have_is_skipped(tmp_path):
         {"3005"}, "base")
 
 
+def test_a_print_s_own_sets_outrank_its_base_mould(tmp_path):
+    """3622p04 names 3622pr0003, which no inventory holds, and set 70810.
+    Falling through to 3622 dated a 2014 print 1978-2026."""
+    facts = {"3622": (1978, 2026, 3222, 62)}
+    dat = _dat(tmp_path, "3622p04",
+               "0 !KEYWORDS BrickLink 3622pb052, Queasy Kitty",
+               "0 !KEYWORDS Rebrickable 3622pr0003, Set 70810, The LEGO Movie")
+    assert years.year_row("3622p04", dat, facts, {}, {"70810-1": 2014},
+                          {"70810": [2014]}) == (
+        "3622p04", 2014, 2014, 0, "keywords", 0)
+
+
+def test_a_print_naming_no_dated_set_still_falls_back_to_its_mould(tmp_path):
+    dat = _dat(tmp_path, "3005pq9", "0 !KEYWORDS Harry Potter")
+    assert years.year_row("3005pq9", dat, FACTS, {}, {}, {}) == (
+        "3005pq9", 1954, 2026, 5144, "base", 77)
+
+
 def test_the_parts_own_id_still_wins(tmp_path):
     """`exact` stays first: if the LDraw id IS a Rebrickable part number, no
     keyword can improve on it."""
