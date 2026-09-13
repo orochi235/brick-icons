@@ -146,12 +146,13 @@ def owed(conn, slot: str, scope: list[str]) -> dict:
         "SELECT part_id, build FROM measurements WHERE source = ? AND build "
         "IS NOT NULL ORDER BY run_id", (slot,))}
     newest = _newest(seen.values())
-    tried, cost = {}, []
+    tried, latest, cost = {}, {}, []
     for r in conn.execute(
-            "SELECT part_id, error, secs FROM measurements WHERE source = ?",
-            (slot,)):
+            "SELECT part_id, error, secs FROM measurements WHERE source = ? "
+            "ORDER BY run_id", (slot,)):
         if r["error"] is None and r["secs"]:
             cost.append(r["secs"])
+        latest[r["part_id"]] = r["error"]
         # A part that ever completed is not an "errored" one, whatever a
         # later run recorded: the run it completed in proves it can be drawn.
         tried[r["part_id"]] = tried.get(r["part_id"], False) or r["error"] is None
@@ -170,7 +171,7 @@ def owed(conn, slot: str, scope: list[str]) -> dict:
         # all got FALLBACK_SECS, and must not report it as measurement.
         borrowed = "engine" if peers else "fallback"
 
-    out = {"drawn": [], "never": [], "errored": [], "stale": [],
+    out = {"drawn": [], "never": [], "errored": [], "stale": [], "crashed": [],
            "median": median, "borrowed": borrowed, "secs": {}, "build": newest}
     for pid in scope:
         if pid in drawn:
@@ -179,6 +180,8 @@ def owed(conn, slot: str, scope: list[str]) -> dict:
             out["never"].append(pid)
         else:
             out["errored"].append(pid)
+            if latest.get(pid) == "ProcessDied":
+                out["crashed"].append(pid)
             if newest and seen.get(pid) != newest:
                 out["stale"].append(pid)
     for r in conn.execute(
@@ -199,7 +202,8 @@ def batch(owed_: dict, budget_secs: float, only: str = "all") -> list[str]:
     pool = {"all": owed_["never"] + owed_["errored"],
             "never": owed_["never"],
             "errored": owed_["errored"],
-            "stale": owed_["stale"]}[only]
+            "stale": owed_["stale"],
+            "crashed": owed_["crashed"]}[only]
     picked, spent = [], 0.0
     for pid in pool:
         c = owed_["secs"].get(pid) or owed_["median"]
@@ -220,12 +224,15 @@ def main() -> int:
                     help="workers the job will run, for the core-hour sum")
     ap.add_argument("--per-batch", type=int, default=12,
                     help="parts per line; a line is one onto item")
-    ap.add_argument("--only", choices=("all", "never", "errored", "stale"),
+    ap.add_argument("--only",
+                    choices=("all", "never", "errored", "stale", "crashed"),
                     default="all",
                     help="narrow the batch to parts never tried, to ones that "
-                         "errored, or to `stale` -- the errored ones that have "
-                         "not met the slot's current revision (default: never "
-                         "first, then errored)")
+                         "errored, to `stale` -- the errored ones that have "
+                         "not met the slot's current revision -- or to "
+                         "`crashed`, the errored ones whose latest attempt "
+                         "was ProcessDied (default: never first, then "
+                         "errored)")
     ap.add_argument("--out", help="write the batch lines here")
     args = ap.parse_args()
 
@@ -267,6 +274,8 @@ def main() -> int:
     print(f"  drawn      {len(o['drawn']):6}", flush=True)
     print(f"  never      {len(o['never']):6}", flush=True)
     print(f"  errored    {len(o['errored']):6}", flush=True)
+    print(f"  crashed    {len(o['crashed']):6}  errored, and last seen "
+          f"ProcessDied", flush=True)
     if o["build"]:
         print(f"  stale      {len(o['stale']):6}  errored, and last seen "
               f"before {o['build']}", flush=True)

@@ -98,6 +98,22 @@ def test_only_never_takes_nothing_that_has_been_tried(conn):
     assert sc.batch(o, budget, "all") == ["3001", "3002"]
 
 
+def test_only_crashed_takes_parts_whose_latest_attempt_died(conn):
+    """A crash retry is aimed at an engine fix for a segfault, so a timeout or
+    an exception is not what it is asking about -- and a part that crashed
+    once and has since timed out answers the timeout now."""
+    for pid in ("3001", "3002", "3003", "3004"):
+        _part(conn, pid)
+    _measure(conn, "3002", SLOT, error="ProcessDied")
+    _measure(conn, "3003", SLOT, error="TimeoutError")
+    _measure(conn, "3004", SLOT, error="ProcessDied")
+    _measure(conn, "3004", SLOT, error="TimeoutError")
+    conn.commit()
+    o = _owed(conn)
+    assert o["crashed"] == ["3002"]
+    assert sc.batch(o, 10 * 3600.0, "crashed") == ["3002"]
+
+
 def test_only_never_is_empty_where_the_whole_gap_is_repeats(conn):
     """silhouette-occt's real state: 95% drawn, and every part of the gap
     already answered. A retry round is worth launching against an engine

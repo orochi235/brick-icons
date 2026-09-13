@@ -72,6 +72,11 @@ core-hours re-crashing them for 52 recoveries. A retry round is worth
 launching against an engine change and not otherwise; `--only never` is the
 default choice for a round nobody has a reason to aim.
 
+**`--only crashed` is the retry round for a crash fix**: the errored parts
+whose latest attempt was `ProcessDied`. Timeouts and Python exceptions stay
+out, and so does a part that crashed once and has timed out since.
+`MemoryError` is an exception, not a crash, and is not included.
+
 A part that ran clean and drew nothing is `errored`, not `never`. It has been
 asked and it answered, so a "never tried" set counted as "has no error" will
 be wrong -- the other occt facets draw these parts fine and only the
