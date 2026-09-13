@@ -20,8 +20,13 @@ sheet in it differs from the tree.
    (15068dy6, 93606dym, the heads).
 3. **A connected print cut across carriers is flattened whole**
    (`_pieces_across_carriers`). It qualifies when two or more carriers each
-   hold 2% of it, none holds more than 80%, at least half of it is bound, and
-   parallel planes count as one carrier. The flattening now reads LDraw up and
+   hold 2% of it, at least half of it is bound, and parallel planes count as
+   one carrier. The rest of the print on its main plane is carried into the
+   flattening by a similarity fitted on that plane (rigid there to 0.026 LDU),
+   so it stays beside the piece: u9102p04's dots, 194305fc01's "402". Only
+   when that rest cannot come along, or the main surface is a sheet's front
+   and back (u9533), does a piece over 80% on one carrier stay on it -- the
+   flat 80% cap had dropped 2345p05's print on its corner returns. The flattening now reads LDraw up and
    keeps outward handedness. It is re-wound consistently first, because `lscm`
    folded pieces of mixed winding, and scaled to the print's own area, where
    before it had no size at all. Fixes 4616559cc01, 6155286wc01, 169665fc01,
@@ -47,9 +52,9 @@ Still wrong:
 - 49098py1's tire text sits on a torus sidewall, so each letter flattens alone
   and falls under the sliver rule. Fixing it needs a torus carrier, and
   `parse_primitive` has no torus case.
-- A crossing piece is flattened apart from the pieces beside it on the same
-  carrier (194305fc01's "2", 49588p04, 27062p01). Flattening the sheet under
-  the print, not the ink alone, would keep them together.
+- A crossing piece still lands apart from the print beside it when it does
+  not qualify: 49588p04 is under half bound (0.35), and 27062p01's pieces do
+  not flatten.
 - A cone print unwraps as a rectangle, so a flat dish's stripes come out as a
   thin band (43898p02). The fix is the cone's development, but Skirt carriers
   have no single apex.

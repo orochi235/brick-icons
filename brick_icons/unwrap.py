@@ -1106,11 +1106,15 @@ def _decoration_members(tris, tri_colors, analytic):
     return members, inside, flat
 
 
-def _carrier_groups(members, tris, inside, flat, exclude=frozenset()):
+def _carrier_groups(members, tris, inside, flat, exclude=frozenset(),
+                    exclude_keys=frozenset()):
     """`decal_groups`' output from bound members, leaving out the triangles
-    in `exclude` -- print that is drawn some other way."""
+    in `exclude` and the members in `exclude_keys` -- print that is drawn some
+    other way."""
     out = []
-    for carrier, group in members.values():
+    for key, (carrier, group) in members.items():
+        if key in exclude_keys:
+            continue
         group = [(code, p) for code, p, i in group if i not in exclude]
         if not group:
             continue
@@ -1438,9 +1442,10 @@ def mesh_groups(tris, tri_colors, tol: float = WELD_TOL):
     return out
 
 
-def _flatten_piece(V, F, codes, inside):
+def _flatten_piece(V, F, codes, inside, extra=None):
     """One welded piece of print as a mesh group, or None when it will not
-    flatten without folding or tearing."""
+    flatten without folding or tearing. `extra(mesh)` returns more
+    (code, uv polygon) print placed in the flattening, or None to refuse it."""
     used = np.unique(F)
     remap = -np.ones(len(V), int)
     remap[used] = np.arange(len(used))
@@ -1463,8 +1468,13 @@ def _flatten_piece(V, F, codes, inside):
     if flipped > MESH_FLIP_MAX or spread > MESH_STRETCH_MAX:
         return None
     uv = _true_size(Vc, Fk, _orient_flattening(Vc, Fk, uv, inside))
-    regions = merge_regions([(c, uv[f]) for f, c in zip(Fk, np.asarray(codes)[live])])
-    return (Mesh(Vc, Fk, uv), 0.0, regions, None) if regions else None
+    mesh = Mesh(Vc, Fk, uv)
+    more = extra(mesh) if extra is not None else []
+    if more is None:
+        return None
+    regions = merge_regions([(c, uv[f]) for f, c in zip(Fk, np.asarray(codes)[live])]
+                            + more)
+    return (mesh, 0.0, regions, None) if regions else None
 
 
 def consistent_winding(F):
@@ -1564,18 +1574,45 @@ def _orient_flattening(V, F, uv, inside):
 #: faces count as one (u9533), and a piece mostly bound to nothing at 0.35
 #: (49588p04).
 SPAN_SHARE = 0.02       # least share that counts a carrier as crossed
-SPAN_DOMINANT = 0.8     # most share one carrier may hold
+SPAN_DOMINANT = 0.8     # most share one carrier may hold, unless its other print comes along
 SPAN_BOUND = 0.5        # least share bound to any carrier
+#: LDU a flattening may stray from its main plane's own unwrap and still carry
+#: that plane's other print; flat faces measured 0.026 at most over 6 parts.
+CARRY_FIT_TOL = 0.05
+
+
+def _plane_to_flat(carrier, mesh, pts):
+    """The similarity taking `carrier`'s plane unwrap onto `mesh`'s
+    flattening, fitted at `pts` on that plane -- or None when the carrier is
+    not a plane or the flattening is not rigid there."""
+    if not isinstance(carrier, Plane) or len(pts) < 3:
+        return None
+    a, b = to_uv(pts, carrier), mesh.at(pts)
+    ma, mb = a.mean(0), b.mean(0)
+    a0, b0 = a - ma, b - mb
+    U, S, Vt = np.linalg.svd(a0.T @ b0)
+    if S[0] <= 0 or S[1] <= 1e-9 * S[0]:
+        return None
+    R, scale = U @ Vt, float(S.sum()) / float((a0 ** 2).sum())
+    if np.linalg.norm(scale * a0 @ R - b0, axis=1).max() > CARRY_FIT_TOL:
+        return None
+    return lambda uv: scale * (np.asarray(uv, float) - ma) @ R + mb
 
 
 def _pieces_across_carriers(tris, tri_colors, members, inside):
-    """[(indices into tris, mesh group)] for each connected piece of print
-    that is cut across carriers (see SPAN_SHARE) and flattens.
+    """[(indices into tris, mesh group, member keys carried)] for each
+    connected piece of print that is cut across carriers (see SPAN_SHARE) and
+    flattens.
 
     Facet planes cut one print into shards (6155286wc01's sign, 4174735bc01's
     band), and a shard count at or under MAX_DECALS passed as that many
     prints. Connection is only welded vertices, so a cracked print falls
-    apart into pieces that each stay on their carrier, as before."""
+    apart into pieces that each stay on their carrier, as before.
+
+    The rest of the print on a piece's main plane goes into its flattening,
+    or a piece leaves it behind on a panel of its own: u9102p04's dots, with
+    holes in the strap where they belong. A piece mostly on one carrier whose
+    rest cannot come along stays on that carrier."""
     index = np.array([i for i, c in enumerate(tri_colors) if c != 16 and c != 24])
     if not len(index):
         return []
@@ -1592,27 +1629,54 @@ def _pieces_across_carriers(tris, tri_colors, members, inside):
             normals.append((key, n))
             match = key
         surface[key] = match
-    owner = {i: surface[key] for key, (_c, group) in members.items()
+    owner = {i: key for key, (_c, group) in members.items()
              for _code, _p, i in group if i is not None}
     V, F, codes = weld_decoration(tris, tri_colors)
     codes = np.asarray(codes)
     area = 0.5 * np.linalg.norm(np.cross(V[F[:, 1]] - V[F[:, 0]],
                                          V[F[:, 2]] - V[F[:, 0]]), axis=1)
-    out = []
+    pieces = []
     for faces in mesh_pieces(V, F):
-        share = {}
+        share, held = {}, {}
         for f in faces:
             k = owner.get(int(index[f]))
             if k is not None:
-                share[k] = share.get(k, 0.0) + float(area[f])
+                share[surface[k]] = share.get(surface[k], 0.0) + float(area[f])
+                held[k] = held.get(k, 0.0) + float(area[f])
         total = float(area[faces].sum())
         if (total <= 0 or sum(share.values()) < SPAN_BOUND * total
-                or max(share.values(), default=0.0) > SPAN_DOMINANT * total
                 or sum(a >= SPAN_SHARE * total for a in share.values()) < 2):
             continue
-        g = _flatten_piece(V, F[faces], codes[faces], inside)
+        main = max(share, key=share.get)
+        dominant = share[main] > SPAN_DOMINANT * total
+        on_main = {k: a for k, a in held.items() if surface[k] == main}
+        # mostly on a face and its parallel twin is a wrap round a sheet's
+        # edge, which no flattening lays out: u9533's front and back
+        if dominant and sum(a >= SPAN_SHARE * total for a in on_main.values()) > 1:
+            continue
+        pieces.append((total, faces, max(on_main, key=on_main.get), dominant))
+    crossing = {int(index[f]) for _t, faces, _k, _d in pieces for f in faces}
+    carried, out = set(), []
+    for _total, faces, top, dominant in sorted(pieces, key=lambda p: -p[0]):
+        carrier, group = members[top]
+        rest = [] if top in carried else [
+            (code, p) for code, p, i in group if i not in crossing]
+        own = index[[f for f in faces if owner.get(int(index[f])) == top]]
+        took = []
+
+        def extra(mesh):
+            if not rest:
+                return []
+            to_flat = _plane_to_flat(carrier, mesh, tris[own].reshape(-1, 3))
+            if to_flat is None:
+                return None if dominant else []
+            took.append(top)
+            return [(code, to_flat(to_uv(p, carrier))) for code, p in rest]
+
+        g = _flatten_piece(V, F[faces], codes[faces], inside, extra)
         if g is not None:
-            out.append((index[faces], g))
+            carried.update(took)
+            out.append((index[faces], g, set(took)))
     return out
 
 
@@ -1642,14 +1706,15 @@ def decal_panels(tris, tri_colors, analytic):
     tris = np.asarray(tris, float) if len(tris) else np.empty((0, 3, 3))
     members, inside, flat = _decoration_members(tris, tri_colors, analytic)
     whole = _pieces_across_carriers(tris, tri_colors, members, inside)
-    taken = {int(i) for idx, _g in whole for i in idx}
-    groups = _carrier_groups(members, tris, inside, flat, exclude=taken)
+    taken = {int(i) for idx, _g, _k in whole for i in idx}
+    groups = _carrier_groups(members, tris, inside, flat, exclude=taken,
+                             exclude_keys={k for _i, _g, keys in whole for k in keys})
     if not any(c == 16 for c in tri_colors) and not any(
             getattr(p, "color", 16) == 16 for p in analytic):
         groups = _drop_bare_sheet(groups)
     if whole:
         # the shatter the count rules guard against is already drawn whole
-        groups = sorted(groups + [g for _i, g in whole], key=lambda g: -_print_area(g))
+        groups = sorted(groups + [g for _i, g, _k in whole], key=lambda g: -_print_area(g))
         groups = significant_groups(groups, cap=None, shatter=False)
     else:
         groups = significant_groups(groups)

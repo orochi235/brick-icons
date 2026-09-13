@@ -1242,13 +1242,32 @@ def test_a_region_drawn_with_arcs_still_covers_its_own_polygon(tmp_path, ldraw_d
     assert ndimage.binary_erosion(missed).sum() == 0
 
 
-def test_a_print_that_only_spills_onto_a_second_face_stays_on_its_carrier():
-    """u9102p04's strap is 92% on the helmet's front plane and 8% on the
-    skirt below it. Flattening it on its own split it from the dots printed
-    beside it; losing the spill on the carrier's drawing is the smaller harm."""
+def test_a_print_that_only_spills_onto_a_second_face_keeps_the_spill():
+    """2345p05's jungle is 86% on the corner panel's diagonal face and the rest
+    on the two faces beside it; left on its carrier, that rest was not drawn."""
     tris, colors = _book((0.0, 6.0), (0.0, 0.5))
     panels = unwrap.decal_panels(tris, colors, [])
-    assert panels and panels[0][2] is not None      # a carrier panel keeps its face
+    assert len(panels) == 1
+    assert sum(g.area for _c, g in panels[0][1]) == pytest.approx(12.0 + 1.0, rel=0.01)
+
+
+def test_a_print_flattened_whole_takes_its_face_neighbors_with_it():
+    """u9102p04's strap is 92% on the helmet's front plane and 8% on the skirt
+    below it. Flattened on its own, it left the dots printed beside it on the
+    plane's panel, with holes in the strap where they belong."""
+    tris, colors = _book((0.0, 6.0), (0.0, 0.5))
+    dot = _quad_tris([[3.0, -2.0, 0.0], [1.0, -2.0, 0.0],
+                      [1.0, -1.0, 0.0], [3.0, -1.0, 0.0]])
+    tris += [np.asarray(t, float) for t in dot]
+    colors += [4] * len(dot)
+    panels = unwrap.decal_panels(tris, colors, [])
+    assert len(panels) == 1
+    assert sum(g.area for _c, g in panels[0][1]) == pytest.approx(12.0 + 1.0 + 2.0, rel=0.01)
+
+
+@pytest.mark.parametrize("part, whole", [("2345p05", 6791.1), ("u9102p04", 572.1)])
+def test_a_crossing_print_draws_whole_beside_its_neighbors(ldraw_dir, part, whole):
+    assert _panel_areas(part, ldraw_dir) == pytest.approx([whole], rel=0.01)
 
 
 def test_a_print_around_a_sticker_edge_is_not_one_surface():
