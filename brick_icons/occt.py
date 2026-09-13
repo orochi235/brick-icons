@@ -1033,6 +1033,10 @@ MATCH_TOL = 1e-3       # 2D LDU; a fragment lies exactly on its own curve
 # LDU the line mask's loose copies move toward the eye, so a face the line
 # lies on cannot win HLR's tie. 0.02 and 0.1 draw 4739b/49612 identically.
 LINE_MASK_NUDGE = 0.05
+# A part declaring no edge draws only junctions of two non-tangent faces, not
+# HLR's whole sharp set: that set carries every unsewn crack, and 194325b drew
+# the straight sides of its ndis pieces as lines tangent to its printed discs.
+FALLBACK_CREASES_ONLY = True
 RIM_STEP_DEG = 25.0    # arc-candidate max step for a drawn circle, as naive
 
 
@@ -2646,6 +2650,52 @@ def _declares_smooth_seams(out) -> bool:
     return bool(out.get("5"))
 
 
+def _two_face_creases(shape):
+    """Edges shared by exactly two faces that are not tangent there. A one-face
+    edge is a crack and declares nothing, as in analytic_creases."""
+    amap = TopTools_IndexedDataMapOfShapeListOfShape()
+    TopExp.MapShapesAndAncestors_s(shape, TopAbs_ShapeEnum.TopAbs_EDGE,
+                                   TopAbs_ShapeEnum.TopAbs_FACE, amap)
+    cos_tol = math.cos(math.radians(TANGENT_DEG))
+    keep = []
+    for i in range(1, amap.Extent() + 1):
+        fl = amap.FindFromIndex(i)
+        if fl.Size() != 2 or fl.First().IsSame(fl.Last()):
+            continue
+        edge = TopoDS.Edge_s(amap.FindKey(i))
+        a, b = _face_normal(fl.First(), edge), _face_normal(fl.Last(), edge)
+        if a is None or b is None:
+            continue
+        na, nb = np.linalg.norm(a), np.linalg.norm(b)
+        if na < 1e-9 or nb < 1e-9 or abs(float(a @ b)) / (na * nb) > cos_tol:
+            continue
+        keep.append(edge)
+    return _compound(keep) if keep else None
+
+
+def _crease_loci(comp, ax, ay):
+    """Line and circle creases as 2D loci; any other curve type is left out."""
+    loci = []
+    for e in _edges_of(comp) if comp is not None else ():
+        try:
+            c = BRepAdaptor_Curve(e)
+            t = c.GetType()
+            if t == GeomAbs_CurveType.GeomAbs_Line:
+                p, q = c.Value(c.FirstParameter()), c.Value(c.LastParameter())
+                loci.append(_seg_locus(np.array([p.X(), p.Y(), p.Z()]),
+                                       np.array([q.X(), q.Y(), q.Z()]), "sil", ax, ay))
+            elif t == GeomAbs_CurveType.GeomAbs_Circle:
+                g = c.Circle(); pos = g.Position(); o = g.Location()
+                x, y = pos.XDirection(), pos.YDirection()
+                loci.append(_ell_locus(np.array([o.X(), o.Y(), o.Z()]),
+                                       np.array([x.X(), x.Y(), x.Z()]),
+                                       np.array([y.X(), y.Y(), y.Z()]),
+                                       g.Radius(), g.Radius(), "sil", ax, ay))
+        except Exception:
+            continue
+    return _merge_collinear([l for l in loci if l is not None])
+
+
 def _undeclared_ops(comps):
     """What to draw for a part that declared no edge of its own.
 
@@ -2709,6 +2759,14 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None):
         for edge in _edges_of(comp):
             ops += _edge_ops(edge, "sil")
     if not ops and not _declares_smooth_seams(out):
+        if FALLBACK_CREASES_ONLY:
+            # read off the shape's own fragments, never a loose copy: a crease
+            # lies on its faces and a copy of it ties with them (see 4739b)
+            ax, ay = _screen_axes(right, up)
+            creases = _crease_loci(_two_face_creases(shape), ax, ay)
+            kept = [e for e, _l in select_authored(comps.get("sharp"), creases)] \
+                if creases else []
+            comps = dict(comps, sharp=_compound(kept) if kept else None)
         ops = _undeclared_ops(comps)
     ops = _negate_y(ops)
     if ops:

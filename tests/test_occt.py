@@ -831,6 +831,24 @@ def test_a_line_on_a_face_it_bounds_is_still_drawn(ldraw_dir):
         assert on, f"panel side at x={x} not drawn"
 
 
+def test_a_part_declaring_no_edges_draws_no_crack(ldraw_dir):
+    """194325b declares no edge, so it draws off HLR's sharp set, which holds
+    every unsewn crack: the straight sides of its ndis pieces came out as lines
+    tangent to its printed discs. Only a junction of two faces may draw."""
+    right, up = hlr.view_basis(30.0, 45.0)[:2]
+    ax, ay = occt._screen_axes(right, up)
+    res = _occt_render("194325b", ldraw_dir)
+    a3, b3 = np.array([11.0, -0.25, -6.2]), np.array([11.0, -0.25, -17.2])
+    a = np.array([a3 @ ax, -(a3 @ ay)])
+    d = np.array([b3 @ ax, -(b3 @ ay)]) - a
+    n = np.array([-d[1], d[0]]) / np.linalg.norm(d)
+    on = [o for o in res.segs if o[0] == "line"
+          and abs((np.array(o[1:3]) - a) @ n) < 0.05
+          and abs((np.array(o[3:5]) - a) @ n) < 0.05]
+    assert not on, f"{len(on)} crack lines drawn tangent to the disc"
+    assert res.segs, "the sticker's own edges are still drawn"
+
+
 def test_50950_wall_draws_as_one_arc(ldraw_dir):
     """HLR hands a projected ELLIPSE back as a BSpline approximation -- only a
     projected circle survives as a conic -- so the wall drew as 31 straight
