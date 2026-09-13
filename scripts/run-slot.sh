@@ -71,13 +71,16 @@ build_of() {  # node, or empty for this checkout
   if [ -z "$1" ]; then
     (cd "$ROOT" && .venv/bin/python -c "$py")
   else
-    onto run -in "$tree" "$1" -- .venv/bin/python -c "$py" 2>&1 | grep -E '^[0-9]+\.[0-9a-f]+\+?$' | tail -1
+    onto run -in "$tree" "$1" -- .venv/bin/python -c "$py" 2>&1 | grep -E '^[0-9]+\.[0-9a-f]+\+?$' | tail -1 || true
   fi
 }
 
 want=$(build_of "")
 for node in "${nodes[@]}"; do
   have=$(build_of "$node")
+  # A job already holding the node's tree refuses the probe, and pipefail used
+  # to end the launch here with no output at all.
+  [ -n "$have" ] || { echo "run-slot: could not read $node:$tree's build -- is a job holding the tree? (onto jobs)" >&2; exit 1; }
   # A dirty label cannot tell two different sets of uncommitted edits apart, so
   # a dirty checkout always ships.
   if [ "$have" != "$want" ] || [ "${want%+}" != "$want" ]; then
