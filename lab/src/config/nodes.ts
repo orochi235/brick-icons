@@ -37,7 +37,13 @@ export const LAYOUTS = ['grid', 'split', 'stack'] as const;
 function labNodes() {
   return {
     layout: f.enum(LAYOUTS[0], [...LAYOUTS]).section('Panes'),
-    sources: f.value<SourceId[]>([...DEFAULT_SOURCES]).section('Panes'),
+    // `.hidden()`, because this one is not a control: the pane toggles set it
+    // and no renderer is keyed for it. `f.value` takes its kind from the rule
+    // chain, nothing gives this one a kind, and ControlPanel sorts a node into
+    // a leaf or a group with no third case -- so on the panel it reached
+    // `Object.keys(undefined)` and took the page down. Hidden leaves are
+    // skipped before that test, and it still persists in the trial config.
+    sources: f.value<SourceId[]>([...DEFAULT_SOURCES]).section('Panes').hidden(),
     marking: f.boolean(false).section('Panes')
       .describe('Show defect marks; a drag on a pane draws one instead of panning'),
     loupe_factor: f.number(DEFAULT_FACTOR).section('Panes')
