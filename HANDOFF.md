@@ -2289,7 +2289,7 @@ costs nothing, and is `scripts/snap-element-delta.py`.
 
 1. **`cull_orphan_runs` deletes real geometry on occt** -- see the item list
    below, which carries the numbers and the disproof.
-2. **The wall's hash should carry its whole client state** -- designed, unbuilt,
+2. **The wall's hash carries its whole client state** -- BUILT 2026-09-13,
    `docs/superpowers/specs/2026-09-08-wall-hash-state-design.md`.
 3. **CLOSED by a peer while this was being written** (`847a916`): `db.rebuild`
    takes up every log under `out/store` as a run of kind `store` and files one
@@ -2414,12 +2414,10 @@ keys on the drawn cell size and the viewport instead.
    right in principle and wrong against occt's geometry. That is where to
    start. Probes are in the scratchpad and are not committed; they monkeypatch
    `hlr.cull_orphan_runs` to identity and render the four corners.
-4. **The wall's hash should carry its whole client state**, so a reload keeps
-   the camera, the grid selection and the caret rather than just the slot and
-   the lightbox. Designed and NOT BUILT --
-   `docs/superpowers/specs/2026-09-08-wall-hash-state-design.md`. Mike picked
-   the shape: everything in, condensing optional behind a `condenseHash` param
-   in `useParams`.
+4. **CLOSED 2026-09-13: the wall's hash carries its whole client state** --
+   camera, caret, and every `Selection` field, readable by default or as one
+   `w=` token behind the `condenseHash` param.
+   `docs/superpowers/specs/2026-09-08-wall-hash-state-design.md`.
 5. **Pass 2's sweep-direction bug is fixable and nobody has said whether to
    fix it.** The refit emits the circumcircle through (pinch1, pinch2, apex)
    the long way round: 23801 goes from a 41.7-degree separator to 288.7. The

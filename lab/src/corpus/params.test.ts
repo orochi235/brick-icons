@@ -72,6 +72,8 @@ const PRE_TASK_LITERALS: Params = {
   levelUpHysteresis: 1.5,
   levelDownHysteresis: 0.67,
   pollMs: 10_000,
+  // Post-snapshot, and off: the readable hash is the one a person can edit.
+  condenseHash: false,
 };
 
 it('matches the wall\'s appearance and feel from before this schema existed', () => {

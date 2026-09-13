@@ -58,7 +58,8 @@ export function rollUp(cells: Cell[], minimum = 25): Map<string, string> {
   return out;
 }
 
-export type Grouping = 'none' | 'coverage' | 'category' | 'release';
+export const GROUPING_KEYS = ['none', 'coverage', 'category', 'release'] as const;
+export type Grouping = typeof GROUPING_KEYS[number];
 
 /** The key functions each grouping needs, outermost first. `release` is the
  *  only two-level one. */

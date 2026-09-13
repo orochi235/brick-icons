@@ -615,3 +615,32 @@ it('says the pictures belong to the old slot while the new one loads', async () 
   expect(said.textContent).toContain('occt');
   expect(said.textContent).toContain('silhouette-naive');
 });
+
+it('comes back from a reload with its camera, selection and caret', async () => {
+  const first = render(<CorpusWall client={client} />);
+  const canvas = await findCanvas(first.container);
+  fireEvent.keyDown(canvas, { key: 'ArrowLeft' });
+  fireEvent.change(screen.getByLabelText('Group'), { target: { value: 'category' } });
+  fireEvent.wheel(first.container.querySelector('.corpus-stage')!,
+                  { deltaY: -1, clientX: 10, clientY: 10 });
+  await waitFor(() => {
+    expect(window.location.hash).toContain('cam=');
+    expect(window.location.hash).toContain('caret=a');
+    expect(window.location.hash).toContain('group=category');
+  });
+  const written = window.location.hash;
+  first.unmount();
+
+  const fit = vi.mocked(core.fitViewToBounds);
+  fit.mockClear();
+  const second = render(<CorpusWall client={client} />);
+  const again = await findCanvas(second.container);
+  expect((screen.getByLabelText('Group') as HTMLSelectElement).value).toBe('category');
+  // A refit would have put the camera back at the top; the restore writes
+  // back exactly what the first wall left.
+  await new Promise((r) => setTimeout(r, 250));
+  expect(window.location.hash).toBe(written);
+  expect(fit).not.toHaveBeenCalled();
+  fireEvent.keyDown(again, { key: 'Enter' });
+  expect(await screen.findByRole('dialog', { name: /Part a/ })).toBeTruthy();
+});

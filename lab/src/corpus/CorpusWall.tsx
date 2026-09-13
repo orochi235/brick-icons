@@ -6,8 +6,8 @@ import { LabShell } from '@weasel-js/labkit';
 import { ToggleBar } from '@weasel-js/ui';
 import type { LabClient } from '@lab/api/client';
 import { clampWallView, DEFAULT_BLANK_PX, sameView } from '@lab/corpus/clamp';
-import { readWallHash, readWallLink, WALL_LINK_PARAMS, wallHashString }
-  from '@lab/corpus/wallHash';
+import { readWallHash, readWallLink, WALL_LINK_PARAMS, wallHashString,
+         type WallCam } from '@lab/corpus/wallHash';
 import { categoryOf, COVERAGE_ORDER, groupers, rollUp } from '@lab/corpus/facts';
 import { FilterBar } from '@lab/corpus/FilterBar';
 import { bandedLayout, blockLayout } from '@lab/corpus/grouped';
@@ -59,6 +59,8 @@ const MAX_PIXEL_SCALE = 3;
  *  as blank ground. */
 const SLICE_PAD = 0.25;
 
+const HASH_WRITE_MS = 150;
+
 /** The whole app, minus its mount -- including labkit's `<LabShell>`, so this
  *  is a standalone lab and must not be nested inside a `<Lab>` or another
  *  `<LabShell>`. */
@@ -106,13 +108,20 @@ export function CorpusWall({ client }: { client: LabClient }) {
   const fetched = useCells(client, source, params.pollMs);
   const loaded = useSheets(client, source);
   const [level, setLevel] = useState(32);
+  // A link outranks the hash field by field: it is a hand-off naming parts to
+  // look at now, and the hash is only where this tab last was.
   const [selection, setSelection] = useState<Selection>({
-    sort: 'id', filter: fromLink.current.filter ?? 'all',
-    shown: { ...DEFAULT_SHOWN, ...fromLink.current.shown }, grouping: 'none',
+    sort: fromHash.current.sort ?? 'id',
+    filter: fromLink.current.filter ?? fromHash.current.filter ?? 'all',
+    shown: fromLink.current.shown
+      ? { ...DEFAULT_SHOWN, ...fromLink.current.shown }
+      : fromHash.current.shown ?? DEFAULT_SHOWN,
+    grouping: fromHash.current.grouping ?? 'none',
     tint: fromHash.current.tint ?? 'status',
     gradient: fromHash.current.gradient ?? 'ember',
-    excluded: fromLink.current.excluded ?? [],
-    badges: fromLink.current.badges ?? [], desc: true,
+    excluded: fromLink.current.excluded ?? fromHash.current.excluded ?? [],
+    badges: fromLink.current.badges ?? fromHash.current.badges ?? [],
+    desc: fromHash.current.desc ?? true,
   });
   // The link has been taken; left in the bar, a reload would put back a
   // selection the reader has since changed.
@@ -173,7 +182,14 @@ export function CorpusWall({ client }: { client: LabClient }) {
   const camInitialized = useRef(false);
   const camRef = useRef<View | null>(null);
   camRef.current = cam;
-  const fittedGrouping = useRef<Selection['grouping']>('none');
+  // Not the default: a grouping restored from the hash would never match it,
+  // and the wall would never fit.
+  const fittedGrouping = useRef<Selection['grouping']>(selection.grouping);
+  // Held until there is something to restore them against. The camera clamps
+  // to the laid-out wall, and restored against a wall of zero size it lands
+  // somewhere other than where it was left; the caret names a cell of `shown`.
+  const pendingCam = useRef<WallCam | null>(fromHash.current.cam ?? null);
+  const pendingCaret = useRef<string | null>(fromHash.current.caret ?? null);
 
   // Polled, not fetched once: a slot appears when its renders are indexed, and
   // fetching at mount alone left a page open across an ingest showing a menu
@@ -270,16 +286,34 @@ export function CorpusWall({ client }: { client: LabClient }) {
   // Written on every change, not on unload: a reload is not the only way back
   // here, and a link someone copies mid-session has to carry what they can see.
   // `replaceState`, so the browser's Back button still leaves the wall rather
-  // than walking through every part that has been opened.
+  // than walking through every part that has been opened. Debounced, because
+  // the camera changes on every frame of a pan and of a flick's decay.
+  // Anything still waiting to be restored is written as it was read, so a
+  // reload while the corpus loads does not lose it.
   useEffect(() => {
-    const next = wallHashString({
-      source, part: picked ?? undefined,
-      tint: selection.tint, gradient: selection.gradient,
-    });
-    if (next !== window.location.hash) {
-      window.history.replaceState(null, '', next || window.location.pathname);
-    }
-  }, [source, picked, selection.tint, selection.gradient]);
+    const id = setTimeout(() => {
+      const live = camRef.current;
+      const next = wallHashString({
+        ...selection, source, part: picked ?? undefined,
+        cam: pendingCam.current ?? (touched.current && live
+          ? { x: live.x, y: live.y, scale: live.scale.x } : undefined),
+        caret: pendingCaret.current
+          ?? (explicitCaret === null ? undefined : shown[explicitCaret]?.id),
+      }, params.condenseHash);
+      if (next !== window.location.hash) {
+        window.history.replaceState(null, '', next || window.location.pathname);
+      }
+    }, HASH_WRITE_MS);
+    return () => clearTimeout(id);
+  }, [source, picked, selection, cam, explicitCaret, shown, params.condenseHash]);
+
+  useEffect(() => {
+    const id = pendingCaret.current;
+    if (id === null || !cells) return;
+    pendingCaret.current = null;
+    const index = shown.findIndex((c) => c.id === id);
+    if (index >= 0) setExplicitCaret(index);
+  }, [cells, shown]);
 
   // Every camera write goes through this, so a flick's inertia decay -- which
   // calls `view.set` directly, bypassing any handler below -- gets clamped on
@@ -343,6 +377,13 @@ export function CorpusWall({ client }: { client: LabClient }) {
 
   useEffect(() => {
     if (fittedGrouping.current !== selection.grouping) return;
+    const saved = pendingCam.current;
+    if (saved && cells && laid.bounds.w > 0 && size.width > 0 && size.height > 0) {
+      pendingCam.current = null;
+      touched.current = true;
+      updateCam({ x: saved.x, y: saved.y, scale: { x: saved.scale, y: saved.scale } });
+      return;
+    }
     if (touched.current) return;
     fitToWall();
   }, [laid.bounds.w, laid.bounds.h, size.width, size.height]);

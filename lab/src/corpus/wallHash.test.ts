@@ -70,6 +70,70 @@ describe('tint in the hash', () => {
   });
 });
 
+describe('the whole wall in the hash', () => {
+  const full = {
+    source: 'occt', part: '3001', cam: { x: 1240, y: 880, scale: 2.4 },
+    caret: '3003', sort: 'year' as const, filter: 'printed' as const,
+    shown: { moved: true, outOfScope: true, obsolete: false, posed: true },
+    grouping: 'category' as const, tint: 'secs' as const,
+    gradient: 'ironbow' as const, desc: false,
+    excluded: ['Sticker', '|'], badges: ['technic'],
+  };
+
+  it('round-trips in the readable spelling', () => {
+    const text = wallHashString(full);
+    expect(text).not.toContain('w=');
+    expect(readWallHash(text)).toEqual(full);
+  });
+
+  it('round-trips in the condensed spelling', () => {
+    const text = wallHashString(full, true);
+    expect(text).toMatch(/^#w=[A-Za-z0-9_-]+$/);
+    expect(readWallHash(text)).toEqual(full);
+  });
+
+  it('spells the camera rounded, so a pan does not write noise', () => {
+    expect(wallHashString({ cam: { x: 1240.4, y: 880.6, scale: 2.41234 } }))
+      .toBe('#cam=1240,881,2.412');
+  });
+
+  it('leaves every field at its default out of both spellings', () => {
+    const defaults = {
+      sort: 'id' as const, filter: 'all' as const, grouping: 'none' as const,
+      tint: 'status' as const, gradient: 'ember' as const, desc: true,
+      shown: { moved: false, outOfScope: true, obsolete: true, posed: true },
+      excluded: [], badges: [],
+    };
+    expect(wallHashString(defaults)).toBe('');
+    expect(wallHashString(defaults, true)).toBe('');
+  });
+
+  it('still reads a link written before the hash carried more', () => {
+    expect(readWallHash('#source=occt&part=3001'))
+      .toEqual({ source: 'occt', part: '3001' });
+  });
+
+  it('drops a value it does not recognize back to the default', () => {
+    expect(readWallHash('#sort=bogus&filter=nope&group=x&desc=maybe&cam=1,2'))
+      .toEqual({});
+    expect(readWallHash('#shown=moved,flying')).toEqual(
+      { shown: { moved: true, outOfScope: false, obsolete: false, posed: false } });
+    expect(readWallHash('#caret=%3Cimg%3E&cam=1,2,-3')).toEqual({});
+  });
+
+  it('caps the opaque lists rather than trusting their size', () => {
+    const many = Array.from({ length: 200 }, (_, i) => `c${i}`).join(',');
+    const read = readWallHash(`#excl=${many},${'y'.repeat(300)}`);
+    expect(read.excluded!.length).toBeLessThanOrEqual(64);
+    expect(read.excluded!.every((name) => name.length <= 80)).toBe(true);
+  });
+
+  it('reads nothing from a condensed hash it did not write', () => {
+    expect(readWallHash('#w=!!!')).toEqual({});
+    expect(readWallHash('#w=bm90IGpzb24')).toEqual({});
+  });
+});
+
 describe('readWallLink', () => {
   it('round-trips what it wrote', () => {
     const link = { source: 'occt', filter: 'printed' as const,

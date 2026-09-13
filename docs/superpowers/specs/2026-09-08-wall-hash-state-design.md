@@ -3,11 +3,16 @@
 For whoever implements it. It answers: **what goes in the hash, in what
 spelling, and what breaks if you restore it at the wrong moment.**
 
-Today `lab/src/corpus/wallHash.ts` carries two fields, `source` and `part`.
-Reload the wall and you keep the slot and the open lightbox and lose everything
-else: where the camera was, how the grid was sorted and filtered, which cell you
-were on. `useParams` already persists `cell`, `gap`, `cols` and `pollMs` to
+**Built 2026-09-13.** Before it, `lab/src/corpus/wallHash.ts` carried `source`,
+`part` and `tint`, and a reload lost the camera, the grid's sort and filter, and
+the caret. `useParams` already persists `cell`, `gap`, `cols` and `pollMs` to
 `localStorage`, so those are not in scope.
+
+Three places the build departs from the design below: the caret is written as
+a part id, not an index, because an index moves when a poll adds a cell ahead
+of it; `desc` defaults to true, so the hash spells `desc=0`; and the condensed
+token's values are the readable strings under one-letter keys, so both
+spellings share one validator.
 
 ## What the hash holds
 

@@ -66,6 +66,9 @@ interface FixedParams {
   levelUpHysteresis: number;
   levelDownHysteresis: number;
   pollMs: number;
+  /** Write the wall's URL hash as one opaque `w=` token instead of readable
+   *  params. Both spellings are always read. */
+  condenseHash: boolean;
 }
 
 /** The fixed fields stay a strict interface -- widening the whole shape to
@@ -105,6 +108,7 @@ export const DEFAULT_PARAMS: Params = {
   levelUpHysteresis: 1.5,
   levelDownHysteresis: 0.67,
   pollMs: 10_000,
+  condenseHash: false,
 };
 
 export const COLOR_PARAM_KEYS: readonly ColorParamKey[] =
@@ -174,6 +178,8 @@ export const FEEL_FIELDS: ConfigField[] = [
     default: DEFAULT_PARAMS.levelDownHysteresis, min: 0.3, max: 1, step: 0.01 },
   { key: 'pollMs', label: 'Poll interval', type: 'number',
     default: DEFAULT_PARAMS.pollMs, min: 1000, max: 60_000, step: 1000 },
+  { key: 'condenseHash', label: 'Condensed URL hash', type: 'checkbox',
+    default: DEFAULT_PARAMS.condenseHash },
 ];
 
 export interface ParamGroup { label: string; fields: ConfigField[] }
