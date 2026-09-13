@@ -2005,10 +2005,11 @@ filed = "2026-09-13"
 id = "97784-inner-rim-missing-outlines"
 part = "97784"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "inner rim missing outlines"
 checked = { occt = "17b5ccfbd385cb16ce7cd87b6aadb59365b69d6232f09d682d854b042f0c64e0" }
 filed = "2026-09-13"
+notes = "Fixed in 287b1bb. occt emitted the whole near inner rim; hlr.dedupe_segments then dropped one lobe chord whose polar span started past -180 degrees (its merge-membership test read raw angles in a 360-wrapped frame, and keep_order passed the neighbor through alone). The broken rim kept a free end, so cull_orphan_runs peeled the rest. Regression test: test_dedupe_keep_order_merges_a_span_that_starts_past_minus_180. The occt slot's stored drawing still predates the fix."
 
 [[defect]]
 id = "97784-shading-issues-in-front-facing"
@@ -2311,6 +2312,7 @@ status = "open"
 title = "extra line around medial axis of outer annulus"
 checked = { occt = "d4545c88e91c046b64942fea9b67ec3ef09bbdf311bd8e5f8262d9081b59ab7b" }
 filed = "2026-09-13"
+notes = "Cause found, not fixed. The ring is the tangent seam between 11833s01's two stacked outer-wall cylinders (48\\1-8cyli y0-4 and 48\\1-12cyli y4-8, both r=40); nothing is declared there. It is drawn because authored_loci turns every `edge` primitive into a WHOLE-circle locus, and the eight 48\\1-48edge at y=4, r=40 (7.5 degrees each, the notch steps) then claim the seam all the way round. Bounding edge/crease loci to their declared sectors (merged per carrier) removes the ring but is not usable: 4019's hole rims and 2654a's base ring are drawn only through that whole-circle expansion (their carriers hold two partial edge primitives and nothing else), and they lose real edges. A fix has to tell this seam apart from those rims -- e.g. by what the fragment's two faces are (same cylinder surface) -- rather than by the locus extent."
 
 [[defect]]
 id = "32348-rims-around-peg-holes-too"
