@@ -43,7 +43,7 @@ from scipy import ndimage
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from brick_icons import cli, hlr, timing
+from brick_icons import cli, edge_truth, hlr, timing
 from brick_icons import build
 from brick_icons.batch import Runner
 
@@ -163,9 +163,9 @@ def one(part: str, args, tmp: Path) -> dict:
     phase["rasterize"] = round(time.perf_counter() - t0, 2)
 
     t0 = time.perf_counter()
-    truth = truth_mask(part, cfg.ldraw_dir,
-                       json.loads((tmp / f"{part}.fit.json").read_text()),
-                       args.zoom, pose=cli.part_pose(cfg, part))
+    fit = json.loads((tmp / f"{part}.fit.json").read_text())
+    truth = truth_mask(part, cfg.ldraw_dir, fit, args.zoom,
+                       pose=cli.part_pose(cfg, part))
     phase["truth_mask"] = round(time.perf_counter() - t0, 2)
 
     t0 = time.perf_counter()
@@ -180,6 +180,13 @@ def one(part: str, args, tmp: Path) -> dict:
            "missing": components(missing, args.zoom, args.floor),
            "extra": components(extra, args.zoom, args.floor)}
     phase["compare"] = round(time.perf_counter() - t0, 2)
+    # A strokeless drawing has no interior lines to score.
+    if args.line_width or args.silhouette_width:
+        t0 = time.perf_counter()
+        row["edges"] = edge_truth.score_drawing(
+            part, svg, fit, hlr.default_roots(cfg.ldraw_dir), args.line_width,
+            pose=cli.part_pose(cfg, part), zoom=args.zoom, png=png)
+        phase["edges"] = round(time.perf_counter() - t0, 2)
     row["phase"] = phase
     # Facts about the render that are not times -- a kernel call the engine
     # had to work around still took seconds, so no phase can carry one.

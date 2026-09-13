@@ -352,6 +352,27 @@ export function Lightbox({ partId, source, client, onClose }: {
               ))}
             </tbody>
           </table>
+          {detail.edges && detail.edges.length > 0 && (
+            <>
+              <h3>Declared edges</h3>
+              <table>
+                <thead>
+                  <tr><th>slot</th><th>gaps</th><th>missing px</th>
+                      <th>declared px</th></tr>
+                </thead>
+                <tbody>
+                  {detail.edges.map((e) => (
+                    <tr key={e.source}>
+                      <td>{e.source}</td>
+                      <td>{e.error ?? e.missing_comps ?? '—'}</td>
+                      <td>{e.missing_len ?? '—'}</td>
+                      <td>{e.declared_len ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
           <h3>Defects</h3>
           {detail.defects.length === 0 ? <p>none</p> : (
             <ul>

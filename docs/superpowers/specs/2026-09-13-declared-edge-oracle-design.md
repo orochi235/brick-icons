@@ -1,6 +1,10 @@
 # Declared-edge oracle
 
-**Status: designed 2026-09-13, not built.** Remove this line when it lands.
+**Status: built 2026-09-13. The 39,602 stored white drawings are not scored
+yet** -- `scripts/score-declared-edges.py` runs that; until it has, the wall's
+`missing_edges` sort is empty. `T` = 1.5 held on the specimens: 3001 and 4151a
+score 0 gaps, and 3941 under occt scores 4, the open defect
+`3941-top-features-unfilled`, where naive scores 0.
 
 For whoever builds or reads the scores. Answers: does a stroked drawing draw
 the edges the part file declares, where they are visible?

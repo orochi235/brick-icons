@@ -35,6 +35,9 @@ export interface Cell {
   /** Pieces of the part's own silhouette the drawing leaves out. Absent from
    *  an API older than the field. */
   missing_comps?: number | null;
+  /** Gaps where this drawing has no ink on a visible declared edge. Absent
+   *  from an API older than the field. */
+  missing_edges?: number | null;
   secs: number | null;
   error: string | null;
   /** When the run recording that error finished, so the wall can be put in
@@ -113,6 +116,10 @@ export interface PartDetail {
               extra_d99: number | null;
               missing_px: number | null; missing_comps?: number | null;
               secs: number | null; error: string | null }[];
+  /** Absent from an API older than the field. */
+  edges?: { source: string; declared_len: number | null;
+            missing_len: number | null; missing_comps: number | null;
+            error: string | null }[];
   runs: { id: number; kind: string; started: string; commit_sha: string;
           engine: string; extra_d99: number | null; missing_px: number | null;
           secs: number | null; error: string | null }[];

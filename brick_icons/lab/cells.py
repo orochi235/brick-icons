@@ -347,6 +347,13 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
     engine = engine_for(source)
     measures = {r["part_id"]: r for r in conn.execute(
         _LATEST_MEASURE, (source, source))}
+    # Only the score of the drawing this slot shows now: a redrawn part's old
+    # score says nothing about the new drawing.
+    edge_gaps = {r["part_id"]: r["missing_comps"] for r in conn.execute(
+        "SELECT e.part_id, e.missing_comps FROM edge_scores e "
+        "JOIN renders r ON r.part_id = e.part_id AND r.source = e.source "
+        "AND r.sha256 = e.sha256 WHERE e.source = ? AND e.error IS NULL",
+        (source,))}
     errors_text, errors_at = _latest_errors(conn)
     errors = errors_text.get(engine, {})
     errored_at = errors_at.get(engine, {})
@@ -442,6 +449,7 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
             # facet was asked.
             "extra_d99": measure["extra_d99"] if measure else None,
             "missing_comps": measure["missing_comps"] if measure else None,
+            "missing_edges": edge_gaps.get(pid),
             "secs": measure["secs"] if measure else None,
             "error": errors.get(pid),
             "error_at": errored_at.get(pid),

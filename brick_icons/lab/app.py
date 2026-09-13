@@ -457,6 +457,13 @@ def create_app(root: Path | str = ".",
             found = [f for f in findings.findings(conn, part=part_id,
                                                   limit=50)["rows"]
                      if f["part_id"] == part_id]
+            # Only the score of the drawing each slot shows now.
+            edges = [dict(r) for r in conn.execute(
+                "SELECT e.source, e.declared_len, e.missing_len, "
+                "e.missing_comps, e.error FROM edge_scores e "
+                "JOIN renders r ON r.part_id = e.part_id "
+                "AND r.source = e.source AND r.sha256 = e.sha256 "
+                "WHERE e.part_id = ? ORDER BY e.source", (part_id,))]
             runs = [dict(r) for r in conn.execute(
                 "SELECT r.id, r.kind, r.started, r.commit_sha, m.engine, "
                 "m.extra_d99, m.missing_px, m.secs, m.error "
@@ -506,7 +513,7 @@ def create_app(root: Path | str = ".",
         for slot in slots:
             slot.update(states[slot["source"]])
             slot["requested_at"] = asked.get(slot["source"])
-        return {"part": part, "findings": found, "runs": runs,
+        return {"part": part, "findings": found, "edges": edges, "runs": runs,
                 "slots": slots, "features": built,
                 "defects": [d for d in defects.load(app.state.defects_path)
                             if d["part"] == part_id]}

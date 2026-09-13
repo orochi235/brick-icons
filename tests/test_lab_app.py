@@ -457,6 +457,7 @@ def test_part_route_carries_measurements_and_defects(tmp_path):
     body = _corpus_client(tmp_path).get("/api/corpus/part/3001").json()
     assert body["part"]["title"] == "Brick 2 x 4"
     assert body["findings"] == []
+    assert body["edges"] == []
     assert body["defects"] == []
 
 

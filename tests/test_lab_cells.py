@@ -889,3 +889,19 @@ def test_the_error_time_is_the_latest_facet_the_text_is_the_worst(conn):
     cell = cells.cells(conn)["cells"][0]
     assert cell["error"] == "ValueError"
     assert cell["error_at"] == "2026-09-06T09:00:00+00:00"
+
+
+def test_a_cell_carries_the_edge_score_of_the_drawing_it_shows(conn):
+    """A score for an earlier drawing of the part says nothing about this one."""
+    _part(conn, "3001")
+    _part(conn, "3002")
+    _render(conn, "3001", "now", "2026-09-05T10:00:00+00:00", source="white-occt")
+    _render(conn, "3002", "now", "2026-09-05T10:00:00+00:00", source="white-occt")
+    for pid, sha, gaps in (("3001", "now", 2), ("3002", "before", 5)):
+        conn.execute("INSERT INTO edge_scores (part_id, source, sha256, "
+                     "missing_comps, scored_at) VALUES (?, 'white-occt', ?, ?, "
+                     "'2026-09-05T11:00:00+00:00')", (pid, sha, gaps))
+    conn.commit()
+    got = {c["id"]: c["missing_edges"]
+           for c in cells.cells(conn, source="white-occt")["cells"]}
+    assert got == {"3001": 2, "3002": None}

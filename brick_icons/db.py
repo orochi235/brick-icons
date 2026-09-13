@@ -116,6 +116,22 @@ CREATE TABLE IF NOT EXISTS attempts (
   PRIMARY KEY (run_id, part_id, source)
 );
 
+-- Declared edges a stroked drawing leaves out (`brick_icons/edge_truth.py`).
+-- Keyed by the drawing, not a run: a quarter of the stored white drawings have
+-- no census row, and a redrawn part must not inherit its old drawing's score.
+-- Lengths are canvas px.
+CREATE TABLE IF NOT EXISTS edge_scores (
+  part_id TEXT NOT NULL,
+  source TEXT NOT NULL,
+  sha256 TEXT NOT NULL,
+  build TEXT,
+  declared_len REAL, missing_len REAL, missing_comps INTEGER,
+  gaps TEXT,
+  error TEXT, detail TEXT,
+  scored_at TEXT NOT NULL,
+  PRIMARY KEY (part_id, source, sha256)
+);
+
 CREATE TABLE IF NOT EXISTS defects (
   id TEXT PRIMARY KEY,
   part_id TEXT NOT NULL,
@@ -388,7 +404,32 @@ def import_census_jsonl(conn: sqlite3.Connection, run_id: int,
         "secs, phases, counts, error, detail) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
     conn.commit()
+    # Without a tree there is no slot to file a drawing's score under.
+    if census_dir:
+        record_edge_scores(conn, [
+            {"part": r["part"], "build": r.get("build"), **r["edges"],
+             "source": census_source(census_dir, r["engine"])}
+            for r in (json.loads(ln) for ln in Path(path).read_text().splitlines()
+                      if ln.strip())
+            if "edges" in r])
     return len(rows)
+
+
+def record_edge_scores(conn: sqlite3.Connection, rows: list[dict]) -> int:
+    """Edge-oracle rows, each carrying `part`, `source` and the drawing's
+    `sha256`. A row with no sha names no drawing -- a render that failed before
+    there was one -- and is skipped."""
+    out = [(r["part"], r["source"], r["sha256"], r.get("build"),
+            r.get("declared_len"), r.get("missing_len"), r.get("missing_comps"),
+            json.dumps(r["gaps"]) if r.get("gaps") is not None else None,
+            r.get("error"), r.get("detail"), now())
+           for r in rows if r.get("sha256") and r.get("source")]
+    conn.executemany(
+        "INSERT OR REPLACE INTO edge_scores (part_id, source, sha256, build, "
+        "declared_len, missing_len, missing_comps, gaps, error, detail, "
+        "scored_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", out)
+    conn.commit()
+    return len(out)
 
 
 def import_store_jsonl(conn: sqlite3.Connection, run_id: int,
