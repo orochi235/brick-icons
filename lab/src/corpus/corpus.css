@@ -2,10 +2,8 @@
  * nothing around a shell that already manages its own edges. */
 body { margin: 0; }
 
-/* The cell-state canvas fills, read by `palette.ts` -- CSS cannot reach a
- * canvas fill any other way. None of the tuned values coincides with a
- * `--wzl-*` token, so they stay literal rather than drifting to a
- * close-but-different one; see `palette.ts` for the values these mirror. */
+/* The cell-state colors are not declared here: `states.ts` is their only
+ * table, and a value set here would win over it in `readPalette`. */
 .lk-root {
   /* Every floating panel is this wide, and a pan may leave exactly this much
    * of the wall blank -- enough to pull the cells under a panel into the
@@ -18,21 +16,7 @@ body { margin: 0; }
   --corpus-thumb-ground: #ffffff;
   --corpus-thumb-ground-retired: #d8d8d8;
 
-  --corpus-cell-unknown-fill: #3a3a3f;
-  --corpus-cell-out-of-scope-fill: #b2a3dd;
-  --corpus-cell-timeout-fill: #26383f;
-  --corpus-cell-timeout-border: #30b0d0;
-  --corpus-cell-failed-fill: #4a2626;
-  --corpus-cell-failed-border: #e03030;
-  --corpus-cell-defect-fill: #453c27;
-  --corpus-cell-defect-border: #daa520;
-  --corpus-cell-accepted-fill: #26382c;
-  --corpus-cell-accepted-border: #6f9e78;
-  --corpus-cell-failed-elsewhere-fill: #26383f;
-  --corpus-cell-failed-elsewhere-border: #97bcc5;
-  --corpus-cell-defect-elsewhere-fill: #453c27;
-  --corpus-cell-defect-elsewhere-border: #c7b78f;
-  /* The caret's own ring -- distinct from every cell-state border above, so
+  /* The caret's own ring -- distinct from every cell-state border, so
    * it still reads when a caret'd cell also carries the ochre defect ring. */
   --corpus-caret-color: #ffffff;
 
