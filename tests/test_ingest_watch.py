@@ -30,6 +30,8 @@ def tree(tmp_path, monkeypatch):
     new.mkdir(parents=True)
     (new / "3001.svg").write_text(WIDER)
     (new / "3004.svg").write_text(SVG)
+    for tree_dir in (old.parent.parent, new.parent.parent):
+        (tree_dir / db.SOURCE_MARKER).write_text("occt\n")
 
     conn = db.connect(tmp_path / "corpus.db")
     for pid in ("3001", "3004"):
@@ -49,7 +51,7 @@ def _row(conn, pid):
 
 def test_the_default_pass_leaves_a_part_already_in_the_slot(tree):
     root, conn = tree
-    took, redrew = watch_mod._take_renders(
+    took, redrew, _ = watch_mod._take_renders(
         conn, root / "out" / "store-restale-occt", "occt", "occt", 1)
     assert (took, redrew) == (1, 0)
     assert _row(conn, "3001")["path"].endswith("out/slot-occt/renders/occt/3001.svg")
@@ -58,13 +60,33 @@ def test_the_default_pass_leaves_a_part_already_in_the_slot(tree):
 def test_overwrite_replaces_the_row_with_the_refresh(tree):
     root, conn = tree
     before = _row(conn, "3001")["sha256"]
-    took, redrew = watch_mod._take_renders(
+    took, redrew, _ = watch_mod._take_renders(
         conn, root / "out" / "store-restale-occt", "occt", "occt", 1,
         overwrite=True)
     assert (took, redrew) == (1, 1)
     after = _row(conn, "3001")
     assert after["path"].endswith("out/store-restale-occt/renders/occt/3001.svg")
     assert after["sha256"] != before
+
+
+def test_a_requested_redraw_replaces_only_the_part_asked_for(tree):
+    from brick_icons import requests as render_requests
+    root, conn = tree
+    render_requests.add(root / render_requests.DEFAULT_PATH, "3001", "occt")
+    took, redrew, *_ = watch_mod._take_renders(
+        conn, root / "out" / "store-restale-occt", "occt", "occt", 1,
+        requested=True)
+    assert (took, redrew) == (1, 1)
+    assert _row(conn, "3001")["path"].endswith(
+        "out/store-restale-occt/renders/occt/3001.svg")
+
+
+def test_no_request_leaves_a_drawn_part_alone(tree):
+    root, conn = tree
+    took, redrew, *_ = watch_mod._take_renders(
+        conn, root / "out" / "store-restale-occt", "occt", "occt", 1,
+        requested=True)
+    assert (took, redrew) == (1, 0)
 
 
 def test_overwrite_keeps_one_row_per_part(tree):
@@ -84,8 +106,8 @@ def test_an_unchanged_drawing_is_not_rewritten_next_pass(tree):
                                     "occt", "occt", 1, True, seen)
     second = watch_mod._take_renders(conn, root / "out" / "store-restale-occt",
                                      "occt", "occt", 1, True, seen)
-    assert first == (1, 1)
-    assert second == (0, 0)
+    assert first[:2] == (1, 1)
+    assert second[:2] == (0, 0)
 
 
 def test_a_redrawn_drawing_is_taken_again(tree):
@@ -96,7 +118,7 @@ def test_a_redrawn_drawing_is_taken_again(tree):
                             "occt", "occt", 1, True, seen)
     (new / "3004.svg").write_text(WIDER)
     assert watch_mod._take_renders(conn, root / "out" / "store-restale-occt",
-                                   "occt", "occt", 1, True, seen) == (0, 1)
+                                   "occt", "occt", 1, True, seen)[:2] == (0, 1)
 
 
 def _jobs(monkeypatch, payload, code=0):

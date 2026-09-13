@@ -412,3 +412,50 @@ it('says nothing about a pose for a part that declares none', async () => {
   await waitFor(() => screen.getByText('Brick 2 x 4'));
   expect(screen.queryByText(/turn about/)).toBeNull();
 });
+
+const settled = (overrides: Record<string, unknown> = {}) => ({
+  id: 'j1', kind: 'redraw', state: 'done', total: 1, done: 1, failed: 0,
+  events: [], results: [], ...overrides,
+});
+
+it('redraws a cheap slot on the spot and shows what it drew', async () => {
+  const redrawn = { ...detail, slots: [detail.slots[0],
+                                       { ...detail.slots[1], sha256: 'feedface0000' }] };
+  const corpusPart = vi.fn().mockResolvedValueOnce(detail).mockResolvedValue(redrawn);
+  const redraw = vi.fn(async () => ({ local: true, job: 'j1', secs: 2 }));
+  const job = vi.fn(async () => settled());
+  render(<Lightbox partId="3001" source="naive" onClose={() => {}}
+                   client={{ corpusPart, redraw, job } as any} />);
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  fireEvent.click(screen.getByText('Redraw naive'));
+  await waitFor(() => expect(
+    screen.getByRole('img', { name: '3001 drawn by naive' }).getAttribute('src'))
+    .toContain('v=feedface'));
+  expect(redraw).toHaveBeenCalledWith('3001', 'naive');
+});
+
+it('says a slow slot is queued for its next round', async () => {
+  const asked = '2026-09-13T12:00:00+00:00';
+  const queued = { ...detail, slots: [detail.slots[0],
+                                      { ...detail.slots[1], requested_at: asked }] };
+  const corpusPart = vi.fn().mockResolvedValueOnce(detail).mockResolvedValue(queued);
+  const redraw = vi.fn(async () => ({ local: false, requested_at: asked, secs: 300 }));
+  render(<Lightbox partId="3001" source="naive" onClose={() => {}}
+                   client={{ corpusPart, redraw } as any} />);
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  fireEvent.click(screen.getByText('Redraw naive'));
+  await waitFor(() => screen.getByText('Queued for the next naive round · asked 2026-09-13'));
+});
+
+it('says why a redraw failed', async () => {
+  const corpusPart = vi.fn().mockResolvedValue(detail);
+  const redraw = vi.fn(async () => ({ local: true, job: 'j1', secs: 2 }));
+  const job = vi.fn(async () => settled({
+    done: 0, failed: 1,
+    events: [{ index: 1, total: 1, message: 'RuntimeError: boom', ok: false }] }));
+  render(<Lightbox partId="3001" source="naive" onClose={() => {}}
+                   client={{ corpusPart, redraw, job } as any} />);
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  fireEvent.click(screen.getByText('Redraw naive'));
+  await waitFor(() => screen.getByText('Redraw failed: RuntimeError: boom'));
+});

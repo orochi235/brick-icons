@@ -122,7 +122,8 @@ if [ $watch -eq 1 ]; then
     echo "run-slot: a watcher is already reading $to; leaving it alone"
   else
     nohup "$ROOT/.venv/bin/python" "$ROOT/scripts/ingest-watch.py" "$to" \
-      --every 300 --until "$task" > "$ROOT/out/ingest-watch-$task.log" 2>&1 &
+      --every 300 --until "$task" --overwrite-requested \
+      > "$ROOT/out/ingest-watch-$task.log" 2>&1 &
     echo "run-slot: ingesting as it lands  pid $!  out/ingest-watch-$task.log"
   fi
 else

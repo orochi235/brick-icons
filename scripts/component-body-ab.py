@@ -51,8 +51,8 @@ def sheet(part):
         groups = unwrap.significant_groups(unwrap.mesh_groups(tri, cols),
                                            cap=None, shatter=False)
     panels = [g for g in groups
-              if any(len(r) for _c, reg in g[2:3] for _k, gg in reg
-                     for r in unwrap._rings_of(gg))]
+              if any(len(r) for _c, geom in g[2]
+                     for r in unwrap._rings_of(geom))]
     return {"panels": len(panels), "mesh": bool(panels) and mesh}
 
 

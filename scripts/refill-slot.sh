@@ -49,13 +49,26 @@ mkdir -p "$dir"
 # first part, so a second pass starting on a part that began an earlier batch
 # appends to that file -- and `--skip-done` then reads the old timeout rows as
 # done and skips exactly the parts being redrawn.
+rm -f "$list"
+survey_rc=0
 survey=$(.venv/bin/python scripts/slot-coverage.py --slot "$slot" \
-    --budget "$budget" --workers "$workers" --only "$only" --out "$list")
+    --budget "$budget" --workers "$workers" --only "$only" --out "$list") \
+  || survey_rc=$?
 echo "$survey"
 
-engine=$(printf '%s\n' "$survey" | sed -n 's/^  ENGINE=//p')
-source=$(printf '%s\n' "$survey" | sed -n 's/^  SOURCE=//p')
-extra=$(printf '%s\n' "$survey" | sed -n "s/^  EXTRA='\(.*\)'$/\1/p")
+# Redraws somebody asked for go first, whatever the gap selection picked, and
+# a round still launches when the gap itself is empty.
+asked=$(.venv/bin/python scripts/render-requests.py pending --slot "$slot" \
+    --into "$list")
+requested=$(printf '%s\n' "$asked" | tail -1)
+echo "requested redraws: $requested"
+[ "$survey_rc" -eq 0 ] || [ "$requested" -gt 0 ] || exit "$survey_rc"
+survey="$survey
+$asked"
+
+engine=$(printf '%s\n' "$survey" | sed -n 's/^  ENGINE=//p' | head -1)
+source=$(printf '%s\n' "$survey" | sed -n 's/^  SOURCE=//p' | head -1)
+extra=$(printf '%s\n' "$survey" | sed -n "s/^  EXTRA='\(.*\)'$/\1/p" | head -1)
 [ -n "$engine" ] && [ -n "$source" ] || {
   echo "slot-coverage printed no ENGINE/SOURCE; nothing launched" >&2; exit 1; }
 [ -s "$list" ] || { echo "$slot has nothing left to draw" >&2; exit 1; }

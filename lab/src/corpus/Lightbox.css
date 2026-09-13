@@ -192,3 +192,11 @@
   color: var(--wzl-fg-muted);
   text-align: center;
 }
+
+.corpus-queued {
+  margin: 0 0 0.6rem;
+  border-left: 3px solid var(--wzl-fg-muted);
+  padding-left: 0.5rem;
+  color: var(--wzl-fg);
+  font-size: 0.9em;
+}

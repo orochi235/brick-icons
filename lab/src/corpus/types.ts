@@ -101,6 +101,8 @@ export interface PartDetail {
     /** This slot has nothing to draw for this part -- a plain brick on the
      *  decal slot. `cells.not_applicable` is the server's rule. */
     not_applicable?: boolean;
+    /** When a redraw of this slot was asked for and has not landed yet. */
+    requested_at?: string | null;
   }[];
   findings: { part_id: string; engine: string; extra_d99: number | null;
               missing_px: number | null; secs: number | null;

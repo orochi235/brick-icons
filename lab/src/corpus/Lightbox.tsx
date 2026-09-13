@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { LabClient } from '@lab/api/client';
+import { settledJob } from '@lab/api/jobPoll';
 import { BadgeSwatch } from '@lab/corpus/BadgeSwatch';
 import { CATALOGS } from '@lab/corpus/catalogs';
 import { Fingerprint } from '@lab/corpus/Fingerprint';
@@ -102,6 +103,8 @@ export function Lightbox({ partId, source, client, onClose }: {
   const [turning, setTurning] = useState(true);
   const [title, setTitle] = useState('');
   const [flagError, setFlagError] = useState<string | null>(null);
+  const [redraw, setRedraw] = useState<{ drawing: true } | { error: string } | null>(null);
+  const gone = useRef(new AbortController());
   const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -119,6 +122,11 @@ export function Lightbox({ partId, source, client, onClose }: {
   }, [onClose]);
 
   useEffect(() => { closeRef.current?.focus(); }, []);
+
+  useEffect(() => {
+    const ctl = gone.current;
+    return () => ctl.abort();
+  }, []);
 
   // An API older than this component sends no slots -- the lab's server is a
   // long-lived process and outlives a reload of the page in front of it.
@@ -151,6 +159,29 @@ export function Lightbox({ partId, source, client, onClose }: {
   };
   const shaOf = (source: string) =>
     slots.find((slot) => slot.source === source)?.sha256;
+
+  /** Draw the slot on screen again. The server decides whether that happens
+   *  now or in the slot's next fleet round; either way the detail is reloaded,
+   *  so the new drawing or the queued note is what shows. */
+  const redrawShown = async () => {
+    setRedraw({ drawing: true });
+    try {
+      const answer = await client.redraw(partId, shown);
+      if (answer.local && answer.job) {
+        const job = await settledJob(client, answer.job, { signal: gone.current.signal });
+        if (!job) return;
+        const failure = job.events.find((event) => !event.ok);
+        setRedraw(failure ? { error: failure.message } : null);
+      } else {
+        setRedraw(null);
+      }
+      setDetail(await client.corpusPart(partId));
+    } catch (e) {
+      setRedraw({ error: e instanceof Error ? e.message : String(e) });
+    }
+  };
+  const drawing = redraw !== null && 'drawing' in redraw;
+  const queuedAt = slots.find((slot) => slot.source === shown)?.requested_at;
 
   /** Close a defect out, or send it back round. Either way the render in
    *  front of you is stamped as judged, so a defect left open stops asking
@@ -261,12 +292,24 @@ export function Lightbox({ partId, source, client, onClose }: {
                     onClick={() => setTurning((was) => !was)}>
               {turning ? 'Hide 3D' : 'Turn it around'}
             </button>
+            <button type="button" className="corpus-action" disabled={drawing}
+                    onClick={() => void redrawShown()}>
+              {drawing ? 'Drawing…' : `Redraw ${shown}`}
+            </button>
             <button type="button"
                     className={flagging ? 'corpus-action' : 'corpus-action corpus-action-flag'}
                     onClick={() => setFlagging((was) => !was)}>
               {flagging ? 'Cancel' : 'Flag a problem'}
             </button>
           </div>
+          {queuedAt && (
+            <p className="corpus-queued">
+              Queued for the next {shown} round · asked {queuedAt.slice(0, 10)}
+            </p>
+          )}
+          {redraw !== null && 'error' in redraw && (
+            <p className="corpus-flag-error" role="alert">Redraw failed: {redraw.error}</p>
+          )}
           {flagging && (
             <form className="corpus-flag" onSubmit={(e) => { e.preventDefault(); void file(); }}>
               <label>

@@ -730,3 +730,61 @@ def test_each_question_is_held_separately(tmp_path):
                           params={"kind": "obsolete"}).json()
     assert obsolete["set"]["kind"] == "obsolete"
     assert client.get("/api/corpus/stats").json()["as_of"] == all_parts["as_of"]
+
+
+def _redraw_client(tmp_path, secs=None):
+    from brick_icons import db
+    conn = db.connect(tmp_path / "corpus.db")
+    conn.execute("INSERT INTO parts (id, title, category, printed, obsolete, "
+                 "status) VALUES ('3001', 'Brick 2 x 4', 'Brick', 0, 0, 'good')")
+    conn.execute("INSERT INTO renders (part_id, source, config_key, made_at, "
+                 "path, sha256) VALUES ('3001', 'occt', 'k', "
+                 "'2020-01-01T00:00:00+00:00', 'renders/occt/3001.svg', 'x')")
+    if secs is not None:
+        conn.execute("INSERT INTO attempts (run_id, part_id, source, state, "
+                     "secs) VALUES (1, '3001', 'occt', 'stored', ?)", (secs,))
+    conn.commit()
+    conn.close()
+    return TestClient(lab_app.create_app(
+        root=tmp_path, cache_root=tmp_path / "cache",
+        corpus_db=tmp_path / "corpus.db",
+        requests_path=tmp_path / "requests.jsonl"))
+
+
+def test_a_cheap_redraw_draws_now_rather_than_queueing(tmp_path, monkeypatch):
+    drawn = []
+
+    def fake(part, source, run_id, conn, force, store_root, lab_root):
+        drawn.append((part, source, force))
+        return {"part": part, "source": source, "state": "stored"}
+
+    monkeypatch.setattr(lab_app.store, "render_into_store", fake)
+    client = _redraw_client(tmp_path, secs=3.0)
+    body = client.post("/api/corpus/redraw",
+                       json={"part": "3001", "source": "occt"}).json()
+    assert body["local"] is True
+    assert _finish(client, body["job"])["done"] == 1
+    assert drawn == [("3001", "occt", True)]
+    assert not (tmp_path / "requests.jsonl").exists()
+
+
+def test_a_slow_redraw_is_queued_and_the_part_says_so(tmp_path):
+    client = _redraw_client(tmp_path, secs=300.0)
+    body = client.post("/api/corpus/redraw",
+                       json={"part": "3001", "source": "occt"}).json()
+    assert body["local"] is False
+    slots = client.get("/api/corpus/part/3001").json()["slots"]
+    occt = next(s for s in slots if s["source"] == "occt")
+    assert occt["requested_at"] == body["requested_at"]
+
+
+def test_a_slot_drawn_elsewhere_refuses_a_redraw(tmp_path):
+    assert _redraw_client(tmp_path).post(
+        "/api/corpus/redraw",
+        json={"part": "3001", "source": "reference"}).status_code == 400
+
+
+def test_a_redraw_of_an_unknown_part_is_404(tmp_path):
+    assert _redraw_client(tmp_path).post(
+        "/api/corpus/redraw",
+        json={"part": "9999", "source": "occt"}).status_code == 404

@@ -16,13 +16,15 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from pydantic import BaseModel
 
+from .. import build
 from .. import colors as ldraw_colors
+from .. import requests as render_requests
 from .. import features
 from .. import tags
 from ..config import load_config
 from . import (cache, cells, corpus, decal, defects, diff, findings,
                goldens_status, ingest, jobs, partindex, reference, runner,
-               schema, sizes, stats)
+               schema, sizes, stats, store)
 from .. import db as corpus_db_module
 
 # One entry per `db.RENDER_SUFFIXES`: a slot's renders are whatever the engine
@@ -57,6 +59,11 @@ class GoldenCheckRequest(BaseModel):
     part: str
 
 
+class RedrawRequest(BaseModel):
+    part: str
+    source: str
+
+
 class BatchRequest(BaseModel):
     parts: list[str]
     config: dict = {}
@@ -67,7 +74,8 @@ def create_app(root: Path | str = ".",
                cache_root: Path | str = cache.DEFAULT_ROOT,
                defects_path: Path | str | None = None,
                corpus_db: Path | str | None = None,
-               thumbs_root: Path | str | None = None) -> FastAPI:
+               thumbs_root: Path | str | None = None,
+               requests_path: Path | str | None = None) -> FastAPI:
     root = Path(root)
     app = FastAPI(title="brick-icons lab")
     # 24,591 cells is ~6.5MB of JSON and highly repetitive; gzip takes it under
@@ -88,6 +96,8 @@ def create_app(root: Path | str = ".",
         root / corpus_db_module.DEFAULT_PATH)
     app.state.thumbs_root = Path(thumbs_root) if thumbs_root else (
         root / "out" / "thumbs")
+    app.state.requests_path = Path(requests_path) if requests_path else (
+        root / render_requests.DEFAULT_PATH)
 
     def index() -> dict:
         if app.state.index is None:
@@ -482,6 +492,8 @@ def create_app(root: Path | str = ".",
             built = {name: held[name]
                      for name in (*features.FLAGS, *features.MEASURES)
                      if name in held}
+            asked = render_requests.pending_for(conn, part_id,
+                                                app.state.requests_path)
         finally:
             conn.close()
         part = dict(row)
@@ -492,10 +504,53 @@ def create_app(root: Path | str = ".",
         part["out_of_scope"] = part["category"] in cells.OUT_OF_SCOPE_CATEGORIES
         for slot in slots:
             slot.update(states[slot["source"]])
+            slot["requested_at"] = asked.get(slot["source"])
         return {"part": part, "findings": found, "runs": runs,
                 "slots": slots, "features": built,
                 "defects": [d for d in defects.load(app.state.defects_path)
                             if d["part"] == part_id]}
+
+    @app.post("/api/corpus/redraw")
+    def post_redraw(req: RedrawRequest):
+        """Draw a part again in one slot: now, on this machine, when it is
+        cheap; queued for the slot's next fleet round when it is not."""
+        _check_source(req.source)
+        if req.source in render_requests.DRAWN_ELSEWHERE:
+            raise HTTPException(400, f"{req.source} is not drawn by this "
+                                     f"repository")
+        conn = corpus_conn()
+        try:
+            if conn.execute("SELECT 1 FROM parts WHERE id = ?",
+                            (req.part,)).fetchone() is None:
+                raise HTTPException(404, "no such part")
+            secs = render_requests.cost(conn, req.part, req.source)
+        finally:
+            conn.close()
+        if not render_requests.draws_here(req.source, secs):
+            asked = render_requests.add(app.state.requests_path, req.part,
+                                        req.source)
+            return {"local": False, "requested_at": asked["at"], "secs": secs}
+
+        def work(item, emit, cancel):
+            conn = corpus_db_module.connect(app.state.corpus_db)
+            try:
+                run_id = corpus_db_module.start_run(
+                    conn, "render", {"sources": [req.source], "via": "lab"},
+                    build())
+                try:
+                    result = store.render_into_store(
+                        item, req.source, run_id, conn, force=True,
+                        store_root=app.state.root,
+                        lab_root=app.state.cache_root)
+                finally:
+                    corpus_db_module.finish_run(conn, run_id)
+            finally:
+                conn.close()
+            emit(f"{item}: {result['state']}")
+            return result
+
+        return {"local": True, "secs": secs,
+                "job": app.state.jobs.start("redraw", [req.part], work)}
 
     def _thumb_file(slot: Path, stem: str) -> Path | None:
         """The baked file for `stem`, whatever it was encoded as.

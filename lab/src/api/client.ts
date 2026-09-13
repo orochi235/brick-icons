@@ -98,6 +98,14 @@ export function createClient({ base = '', fetchImpl = fetch }: ClientOptions = {
       });
     },
 
+    /** Ask for a part to be drawn again in one slot. A cheap slot draws now,
+     *  as a job; anything slower is queued for the slot's next fleet round. */
+    async redraw(part: string, source: string) {
+      return json<{ local: boolean; job?: string; requested_at?: string;
+                    secs: number | null }>(
+        fetchImpl, at('/api/corpus/redraw'), post('/api/corpus/redraw', { part, source }));
+    },
+
     async reference(part: string, angle: string, partColor?: string) {
       const params = new URLSearchParams({ part, angle });
       if (partColor) params.set('part_color', partColor);
