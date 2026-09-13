@@ -2351,7 +2351,7 @@ status = "open"
 title = "occt render has a weird chip taken out of one of the edges"
 checked = { occt = "50ac8d8ddb6046a39d9d275b301ab9fe9a13b5c0a0a5db8b826b4bc6a8b25dc6" }
 filed = "2026-09-13"
-notes = "Cause found, not fixed. The light strip is face fill from the plate's internal y=4 ceiling (plane y=4), painted over the inner-corner wall at x=-10 between screen y 60.41 and 62.45. shade.order_faces' witness depths are right pairwise (the ceiling is farther than that wall), but 11 faces -- stud walls, both inner-corner walls, the y=4 ceiling and planes at y=7.5, x=6, z=-10, z=6 -- form a constraint cycle, and _stall_release breaks it by releasing the x=6 wall and then the x=-10 wall ahead of the ceiling. Releasing the member with the fewest unmet constraints instead picks the same walls (a tie broken by depth) and changes 4019, so it was reverted. A fix has to stop the hidden ceiling face entering the cycle, not tune the release."
+notes = "Cause found, not fixed. The light strip is face fill from the plate's internal y=4 ceiling, painted over the inner-corner wall at x=-10 between screen y 60.41 and 62.45. shade.order_faces' witness depths are right pairwise (the ceiling is farther than that wall), but 11 faces -- stud walls, both inner-corner walls, the y=4 ceiling and planes at y=7.5, x=6, z=-10, z=6 -- form a constraint cycle, and _stall_release breaks it by releasing the x=6 wall and then the x=-10 wall ahead of the ceiling. Every edge in the cycle comes from a real depth (plane equations and real hits on the walls), so the cycle is genuine interpenetration, not a bad proxy. Releasing the member with the fewest unmet constraints picks the same walls (a tie broken by depth) and changes 4019, so it was reverted. Same class as 4740: a fix has to split an overlap where depth order flips, not tune the release."
 
 [[defect]]
 id = "18603c02p08-hidden-ink-panels"
@@ -2409,6 +2409,7 @@ status = "open"
 title = "borehole backface is missing"
 checked = { occt = "719d697e199edf58dd574b374b5fd968a0d7dbe220c35fe2c543c5c874d48cda" }
 filed = "2026-09-13"
+notes = "Cause found, not fixed; same class as 77844. A ray through the light band first hits the stud's r=4 bore wall (y=-2.06), then the r=6 wall, then the inner cone. occt paints the cone ('turn' face, order 15) over the bore wall (order 12): shade.order_faces found four interior half-walls in a constraint cycle and _stall_release force-released two of them ahead of the cone. Every constraint in that cycle comes from a real hit on its surface (no unclamped proxy), so the cycle is genuine: coaxial curved walls whose front-to-back order changes inside one screen overlap. One witness point per pair cannot order them; a fix has to split the overlap where depth order flips."
 
 [[defect]]
 id = "4739b-missing-outlines"
