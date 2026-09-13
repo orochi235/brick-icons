@@ -6,6 +6,7 @@ export interface SortFacts {
   category: string | null;
   status: string;
   extra_d99: number | null;
+  missing_comps?: number | null;
   secs: number | null;
   made_at: string | null;
   error_at?: string | null;
@@ -33,6 +34,8 @@ export const SORT_SPECS = [
     value: (f: SortFacts) => f.status, desc: false },
   { key: 'extra_d99', label: 'extra_d99',
     value: (f: SortFacts) => f.extra_d99, desc: true },
+  { key: 'missing_comps', label: 'missing_comps',
+    value: (f: SortFacts) => f.missing_comps ?? null, desc: true },
   { key: 'secs', label: 'render time',
     value: (f: SortFacts) => f.secs, desc: true },
   { key: 'made_at', label: 'last drawn',

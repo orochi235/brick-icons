@@ -336,15 +336,16 @@ export function Lightbox({ partId, source, client, onClose }: {
           <h3>Measurements</h3>
           <table>
             <thead>
-              <tr><th>engine</th><th>extra d99</th><th>missing px</th>
-                  <th>secs</th><th>error</th></tr>
+              <tr><th>slot</th><th>extra d99</th><th>missing px</th>
+                  <th>missing comps</th><th>secs</th><th>error</th></tr>
             </thead>
             <tbody>
               {detail.findings.map((f) => (
-                <tr key={f.engine}>
-                  <td>{f.engine}</td>
+                <tr key={f.source ?? f.engine}>
+                  <td>{f.source ?? f.engine}</td>
                   <td>{f.extra_d99 ?? '—'}</td>
                   <td>{f.missing_px ?? '—'}</td>
+                  <td>{f.missing_comps ?? '—'}</td>
                   <td>{f.secs ?? '—'}</td>
                   <td>{f.error ?? ''}</td>
                 </tr>

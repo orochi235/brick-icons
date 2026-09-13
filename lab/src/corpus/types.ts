@@ -32,6 +32,9 @@ export interface Cell {
   sha: string | null;
   made_at: string | null;
   extra_d99: number | null;
+  /** Pieces of the part's own silhouette the drawing leaves out. Absent from
+   *  an API older than the field. */
+  missing_comps?: number | null;
   secs: number | null;
   error: string | null;
   /** When the run recording that error finished, so the wall can be put in
@@ -104,9 +107,12 @@ export interface PartDetail {
     /** When a redraw of this slot was asked for and has not landed yet. */
     requested_at?: string | null;
   }[];
-  findings: { part_id: string; engine: string; extra_d99: number | null;
-              missing_px: number | null; secs: number | null;
-              error: string | null }[];
+  findings: { part_id: string; engine: string;
+              /** Absent from an API older than the field. */
+              source?: string | null;
+              extra_d99: number | null;
+              missing_px: number | null; missing_comps?: number | null;
+              secs: number | null; error: string | null }[];
   runs: { id: number; kind: string; started: string; commit_sha: string;
           engine: string; extra_d99: number | null; missing_px: number | null;
           secs: number | null; error: string | null }[];

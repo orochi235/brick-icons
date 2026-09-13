@@ -121,6 +121,11 @@ export function PartCard({ cell, source, at, viewport, tint = 'status',
                 <dt>extra d99</dt><dd>{cell.extra_d99}</dd>
               </>
             )}
+            {cell.missing_comps != null && (
+              <>
+                <dt>missing comps</dt><dd>{cell.missing_comps}</dd>
+              </>
+            )}
             {/* Not under a `secs` tint: the row above is already this
                 number, said in the units the scale uses. */}
             {cell.secs !== null && tint !== 'secs' && (

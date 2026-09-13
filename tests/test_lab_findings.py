@@ -10,17 +10,17 @@ def _part(conn, pid, title="Brick", status="unreviewed", printed=0):
                  "VALUES (?, ?, ?, 0, ?)", (pid, title, printed, status))
 
 
-def _measure(conn, run_id, pid, engine="naive", **kw):
+def _measure(conn, run_id, pid, engine="naive", source=None, **kw):
     row = {"missing_px": 0, "extra_px": 0, "missing_comps": 0,
            "extra_d99": 0.0, "extra_d100": 0.0, "secs": 1.0,
            "error": None, "detail": None} | kw
     conn.execute(
-        "INSERT INTO measurements (run_id, part_id, engine, missing_px, "
-        "extra_px, missing_comps, extra_d99, extra_d100, secs, error, detail) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (run_id, pid, engine, row["missing_px"], row["extra_px"],
-         row["missing_comps"], row["extra_d99"], row["extra_d100"],
-         row["secs"], row["error"], row["detail"]))
+        "INSERT INTO measurements (run_id, part_id, engine, source, "
+        "missing_px, extra_px, missing_comps, extra_d99, extra_d100, secs, "
+        "error, detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (run_id, pid, engine, source or engine, row["missing_px"],
+         row["extra_px"], row["missing_comps"], row["extra_d99"],
+         row["extra_d100"], row["secs"], row["error"], row["detail"]))
 
 
 @pytest.fixture
@@ -66,6 +66,23 @@ def test_each_engine_is_its_own_finding(conn):
     assert findings.findings(conn)["total"] == 2
     only = findings.findings(conn, engine="occt")
     assert only["total"] == 1 and only["rows"][0]["extra_d99"] == 7.12
+
+
+def test_each_facet_of_one_engine_is_its_own_finding(conn):
+    """white-occt and silhouette-occt both file under engine "occt". Keyed on
+    the engine, the newer white run replaced the oracle's figures."""
+    _part(conn, "3001")
+    oracle = db.start_run(conn, "census", {}, "old")
+    white = db.start_run(conn, "census", {}, "new")
+    _measure(conn, oracle, "3001", engine="occt", source="silhouette-occt",
+             missing_comps=4)
+    _measure(conn, white, "3001", engine="occt", source="white-occt",
+             missing_comps=0)
+    conn.commit()
+    assert findings.findings(conn)["total"] == 2
+    only = findings.findings(conn, source="silhouette-occt")["rows"]
+    assert [(r["source"], r["missing_comps"]) for r in only] == [
+        ("silhouette-occt", 4)]
 
 
 def test_a_row_says_whether_its_render_is_already_stored(conn, tmp_path):

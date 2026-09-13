@@ -18,18 +18,20 @@ ORDERS = {
     "part": "m.part_id",
 }
 
-# One row per part and engine, from that pair's newest run. A part measured
-# again is one finding carrying the newer number, not two.
+# One row per part and render source, from that pair's newest run. Per source,
+# not per engine: two facets of one engine are both "occt", and a newer white
+# run would otherwise hand the oracle slot its figures.
 _LATEST = """
 SELECT m.* FROM measurements m
-JOIN (SELECT part_id, engine, MAX(run_id) AS run_id
-      FROM measurements GROUP BY part_id, engine) latest
-  ON m.part_id = latest.part_id AND m.engine = latest.engine
+JOIN (SELECT part_id, source, MAX(run_id) AS run_id
+      FROM measurements GROUP BY part_id, source) latest
+  ON m.part_id = latest.part_id AND m.source = latest.source
  AND m.run_id = latest.run_id
 """
 
 
 def findings(conn: sqlite3.Connection, engine: str | None = None,
+             source: str | None = None,
              status: str | None = None, part: str | None = None,
              stored: bool | None = None, errors_only: bool = False,
              order: str = "extra_d99", ascending: bool = False,
@@ -46,6 +48,9 @@ def findings(conn: sqlite3.Connection, engine: str | None = None,
     if engine:
         where.append("m.engine = ?")
         args.append(engine)
+    if source:
+        where.append("m.source = ?")
+        args.append(source)
     if status:
         where.append("p.status = ?")
         args.append(status)
@@ -60,19 +65,18 @@ def findings(conn: sqlite3.Connection, engine: str | None = None,
         where.append("r.path IS NULL")
     clause = f"WHERE {' AND '.join(where)}" if where else ""
 
-    # The render is joined on the engine's own source, so a naive finding never
-    # reports occt's drawing as its own.
     body = f"""
     FROM ({_LATEST}) m
     LEFT JOIN parts p ON p.id = m.part_id
-    LEFT JOIN renders r ON r.part_id = m.part_id AND r.source = m.engine
+    LEFT JOIN renders r ON r.part_id = m.part_id AND r.source = m.source
     {clause}
     """
 
     total = conn.execute(f"SELECT count(*) {body}", args).fetchone()[0]
     direction = "ASC" if ascending else "DESC"
     rows = conn.execute(
-        f"""SELECT m.part_id, m.engine, m.run_id, m.missing_px, m.extra_px,
+        f"""SELECT m.part_id, m.engine, m.source, m.run_id, m.missing_px,
+                   m.extra_px,
                    m.missing_comps, m.extra_d99, m.extra_d100, m.secs,
                    m.error, m.detail,
                    p.title, p.status, p.status_note, p.printed,

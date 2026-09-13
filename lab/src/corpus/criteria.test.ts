@@ -19,8 +19,8 @@ const unclassed: ClassFacts = { moved: false, out_of_scope: false,
 
 it('lists the orders the way the menu offers them', () => {
   expect(sortKeys()).toEqual([
-    'id', 'category', 'status', 'extra_d99', 'secs', 'made_at', 'error_at',
-    'year', 'sets',
+    'id', 'category', 'status', 'extra_d99', 'missing_comps', 'secs', 'made_at',
+    'error_at', 'year', 'sets',
   ]);
 });
 
@@ -30,6 +30,7 @@ it('reads each order off the field it names', () => {
   expect(by('category').value(facts)).toBe('Brick');
   expect(by('status').value(facts)).toBe('unreviewed');
   expect(by('extra_d99').value({ ...facts, extra_d99: 4 })).toBe(4);
+  expect(by('missing_comps').value({ ...facts, missing_comps: 3 })).toBe(3);
   expect(by('secs').value({ ...facts, secs: 1.5 })).toBe(1.5);
   expect(by('made_at').value({ ...facts, made_at: '2025-01-01' })).toBe('2025-01-01');
   expect(by('error_at').value({ ...facts, error_at: '2026-09-05T09:30:00+00:00' }))
@@ -39,7 +40,7 @@ it('reads each order off the field it names', () => {
 });
 
 it('has no answer for a part nothing measured', () => {
-  const measured = ['extra_d99', 'secs', 'made_at', 'error_at', 'year', 'sets'];
+  const measured = ['extra_d99', 'missing_comps', 'secs', 'made_at', 'error_at', 'year', 'sets'];
   for (const key of measured) {
     expect(SORT_SPECS.find((s) => s.key === key)!.value(facts)).toBeNull();
   }
@@ -48,7 +49,7 @@ it('has no answer for a part nothing measured', () => {
 // The metrics read worst-first; the descriptive keys read alphabetically.
 it('runs the metrics backwards and the descriptive keys forwards', () => {
   expect(SORT_SPECS.filter((s) => s.desc).map((s) => s.key))
-    .toEqual(['extra_d99', 'secs', 'made_at', 'error_at', 'sets']);
+    .toEqual(['extra_d99', 'missing_comps', 'secs', 'made_at', 'error_at', 'sets']);
   expect(SORT_SPECS.filter((s) => !s.desc).map((s) => s.key))
     .toEqual(['id', 'category', 'status', 'year']);
 });
@@ -101,7 +102,7 @@ it('starts the wall with the redirects off and the out-of-scope parts on', () =>
 
 it('names every sort, filter and class the way the menus do', () => {
   expect(SORT_SPECS.map((s) => s.label)).toEqual([
-    'id', 'category', 'status', 'extra_d99', 'render time', 'last drawn',
+    'id', 'category', 'status', 'extra_d99', 'missing_comps', 'render time', 'last drawn',
     'last error', 'year', 'sets',
   ]);
   expect(FILTER_SPECS.map((f) => f.label)).toEqual([

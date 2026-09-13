@@ -22,7 +22,8 @@ from brick_icons.db import MOVED_PREFIX, OUT_OF_SCOPE_CATEGORIES, SOURCES
 # with no measurements of its own shows none: these numbers are not comparable
 # across facets, so a borrowed one is worse than a blank.
 _LATEST_MEASURE = """
-SELECT m.part_id, m.extra_d99, m.secs, m.error FROM measurements m
+SELECT m.part_id, m.extra_d99, m.missing_comps, m.secs, m.error
+FROM measurements m
 JOIN (SELECT part_id, MAX(run_id) AS run_id FROM measurements
       WHERE source = ? GROUP BY part_id) latest
   ON m.part_id = latest.part_id AND m.run_id = latest.run_id
@@ -440,6 +441,7 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
             # the engine's, because failing to draw is not a property of which
             # facet was asked.
             "extra_d99": measure["extra_d99"] if measure else None,
+            "missing_comps": measure["missing_comps"] if measure else None,
             "secs": measure["secs"] if measure else None,
             "error": errors.get(pid),
             "error_at": errored_at.get(pid),

@@ -158,11 +158,12 @@ def test_a_cell_carries_the_metric_from_its_slot_s_engine(conn):
     conn.execute("INSERT INTO runs (id, kind, started, commit_sha, args) "
                  "VALUES (1, 'census', '2026-09-05T09:00:00+00:00', 'abc', '{}')")
     conn.execute("INSERT INTO measurements (run_id, part_id, engine, source, "
-                 "extra_d99, secs) "
-                 "VALUES (1, '3001', 'naive', 'silhouette-naive', 4.5, 12.0)")
+                 "extra_d99, missing_comps, secs) "
+                 "VALUES (1, '3001', 'naive', 'silhouette-naive', 4.5, 3, 12.0)")
     conn.commit()
     cell = cells.cells(conn, source="silhouette-naive")["cells"][0]
     assert cell["extra_d99"] == 4.5
+    assert cell["missing_comps"] == 3
     assert cell["secs"] == 12.0
 
 
