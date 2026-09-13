@@ -1288,7 +1288,13 @@ def dedupe_segments(segs, eps=0.05, keep_order=False):
             merged[0][0] = merged[-1][0] - 360.0
             merged.pop()
         for a, b in merged:
-            src = [s for s in spans if a - eps <= s[0] and s[1] <= b + eps]
+            # membership in the frame `merged` was built in: a span starting
+            # past -180 polar wraps to +180s, and read raw it fell out of the
+            # run it merged into -- keep_order then passed its neighbor alone
+            src = [s for s in spans
+                   if any(a - eps <= s[0] % 360.0 + k
+                          and s[0] % 360.0 + (s[1] - s[0]) + k <= b + eps
+                          for k in (-360.0, 0.0, 360.0))]
             i = min((s[3] for s in src), default=i0)
             if b - a >= 359.9:
                 out.append((i, ("arc", cx, cy, ux, uy, vx, vy, 0.0, 360.0, kind)))

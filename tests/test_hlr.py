@@ -522,6 +522,15 @@ def test_dedupe_wraparound_arcs_merge():
     assert abs(out[8] - out[7]) == pytest.approx(120.0, abs=0.1)
 
 
+def test_dedupe_keep_order_merges_a_span_that_starts_past_minus_180():
+    # b's polar range is -175..-165, which merges with a's 175..185 only
+    # once wrapped; keep_order passed a through alone and dropped b
+    a = ("arc", 0.0, 0.0, 10.0, 0.0, 0.0, 10.0, 175.0, 185.0, "edge")
+    b = ("arc", 0.0, 0.0, 10.0, 0.0, 0.0, 10.0, 185.0, 195.0, "edge")
+    (out,) = hlr.dedupe_segments([a, b], keep_order=True)
+    assert abs(out[8] - out[7]) == pytest.approx(20.0, abs=0.1)
+
+
 def test_dedupe_legacy_tuples_normalized():
     out = hlr.dedupe_segments([(0.0, 0.0, 5.0, 0.0, "edge"),
                                (0.0, 0.0, 5.0, 0.0, "edge")])
