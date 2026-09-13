@@ -14,7 +14,9 @@
 # sharing one JSONL would share that marker — a crash in one would record a
 # part from another as ProcessDied, and their appends would interleave.
 #
-# HARD (default 240s) is a watchdog, not a second measurement cap. --timeout
+# HARD (default the per-part timeout plus 60s) is a watchdog, not a second
+# measurement cap; a fixed 240 under a 300s timeout buried every part needing
+# 240-300s as ProcessDied before it could draw or time out. --timeout
 # now renders each part in a forked child and kills its process group, so a
 # part inside one long OCCT call is stopped where signal.setitimer alone never
 # reached it -- one had a 185.9 GB footprint over 2h58m and nearly filled
@@ -29,7 +31,7 @@ timeout=${2:?per-part timeout}
 dir=${3:?directory to write this run of JSONLs into}
 batch=${4:?comma-separated part ids}
 KEEP=${KEEP:-out/census/renders}
-HARD=${HARD:-240}
+HARD=${HARD:-$((timeout + 60))}
 POLL=${POLL:-15}
 # Resident GB one render may reach. A healthy part on this corpus peaks under
 # 1 GB; the parts that wedge a node pass 4 GB inside a minute and keep going,
