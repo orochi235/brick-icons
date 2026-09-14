@@ -2455,7 +2455,8 @@ notes = "Fixed in 58dc7e4. The part declares no type-2 or type-5 line, so occt d
 id = "309p03-too-many-studs"
 part = "309p03"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "too many studs?"
 checked = { white-occt = "31cf75f96e26a1d679dfefbb2dc3dd981341c30c75b54b8b45e3f202b306f8b3" }
 filed = "2026-09-13"
+notes = "Fixed in 9885879. Nothing failed to detect the studs: at icon size they are 3.25 px across on a 5.4 px pitch, and a 2 px stroke on every rim merged each stud field into solid black. An arc's stroke is now capped at half its radius (trace.THIN_ARCS), so the rims draw at 0.8 px and the studs read as studs. Regression test: test_a_small_arc_strokes_thinner_than_its_radius. The stored slot drawings predate the change."
