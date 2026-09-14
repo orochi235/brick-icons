@@ -4,8 +4,8 @@ import {
 } from 'react';
 import {
   clientToCanvas, viewToTransform, worldToScreen, useDecayLoop, usePinchGesture,
-  viewportDragPanAction, zoomAt,
-  type InvocationCtx, type OngoingHandle, type View,
+  viewportDragPanAction, zoomAt, openPointerSession,
+  type InvocationCtx, type OngoingHandle, type PointerSession, type View,
 } from '@weasel-js/core';
 import { LoupeBubble, resolveLoupe, useLoupe } from '@weasel-js/labkit/loupe';
 import { adjacent, impliedCaret, type Direction } from '@lab/corpus/caret';
@@ -107,10 +107,10 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
   const draggedRef = useRef(false);
   const suppressClickRef = useRef(false);
   const startRef = useRef({ x: 0, y: 0 });
-  // Which pointers are on the glass, and which one the pan is following --
-  // a touch canvas gets more than one, and only the first of them pans.
+  // Which pointers are on the glass -- a touch canvas gets more than one, and
+  // only the first of them pans, through `sessionRef`.
   const downRef = useRef(new Set<number>());
-  const dragPointerRef = useRef<number | null>(null);
+  const sessionRef = useRef<PointerSession | null>(null);
   const pinchAtRef = useRef<{ x: number; y: number } | null>(null);
 
   const view = { get: () => camRef.current, set: onPan, decay: decay.start };
@@ -298,20 +298,22 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
   });
 
   const endDrag = (delta: { x: number; y: number }, reason: 'commit' | 'cancel') => {
-    dragPointerRef.current = null;
-    if (!handleRef.current) return;
-    handleRef.current.onEnd?.(dragCtx(delta), reason);
+    // Both taken before the session is canceled: canceling reports back
+    // through `onCancel`, which lands here again and must find nothing to end.
+    const handle = handleRef.current;
     handleRef.current = null;
+    const session = sessionRef.current;
+    sessionRef.current = null;
+    session?.cancel();
+    if (!handle) return;
+    handle.onEnd?.(dragCtx(delta), reason);
     setDragging(false);
     if (reason === 'commit' && draggedRef.current) suppressClickRef.current = true;
   };
 
-  const dragDelta = (e: ReactPointerEvent<HTMLCanvasElement>) =>
+  const dragDelta = (e: { clientX: number; clientY: number }) =>
     ({ x: e.clientX - startRef.current.x, y: e.clientY - startRef.current.y });
 
-  // A plain onPointerDown/Move/Up trio with pointer capture, rather than
-  // weasel's `openPointerSession`: that helper (lost-capture and missed-release
-  // recovery included) landed in core after 1.4.0, the version this lab has.
   const onPointerDown = (e: ReactPointerEvent<HTMLCanvasElement>) => {
     downRef.current.add(e.pointerId);
     // A second finger turns the gesture into a pinch, which `usePinchGesture`
@@ -322,34 +324,44 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
     // Not every gesture ends in a click that would clear it -- a pinch
     // usually ends in none at all -- so a fresh press is what unlatches it.
     suppressClickRef.current = false;
-    // Best-effort: capture keeps the drag alive once the pointer leaves the
-    // canvas, but its absence is not a reason to refuse the drag.
-    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* uncaptured is fine */ }
     startRef.current = { x: e.clientX, y: e.clientY };
     draggedRef.current = false;
-    dragPointerRef.current = e.pointerId;
     handleRef.current = ongoingInvoker(viewportDragPanAction)
       .start(dragCtx({ x: 0, y: 0 }), { params: { inertia: {} } });
+    const pointerId = e.pointerId;
+    let last = { x: 0, y: 0 };
+    sessionRef.current = openPointerSession(e.currentTarget, e, {
+      onMove: (move) => {
+        if (!handleRef.current) return;
+        last = dragDelta(move);
+        if (!draggedRef.current) {
+          if (Math.hypot(last.x, last.y) < dragThresholdPx) return;
+          draggedRef.current = true;
+          setDragging(true);
+          onDragStart?.();
+        }
+        handleRef.current.onMove?.(dragCtx(last));
+      },
+      onEnd: (up) => {
+        downRef.current.delete(pointerId);
+        endDrag(dragDelta(up), 'commit');
+      },
+      onCancel: (reason) => {
+        // `aborted` is this component cancelling it -- a second finger -- and
+        // the first one is still down.
+        if (reason !== 'aborted') downRef.current.delete(pointerId);
+        endDrag(last, 'cancel');
+      },
+    });
   };
 
-  const onPointerMove = (e: ReactPointerEvent<HTMLCanvasElement>) => {
-    if (!handleRef.current || e.pointerId !== dragPointerRef.current) return;
-    const { x: dx, y: dy } = dragDelta(e);
-    if (!draggedRef.current) {
-      if (Math.hypot(dx, dy) < dragThresholdPx) return;
-      draggedRef.current = true;
-      setDragging(true);
-      onDragStart?.();
-    }
-    handleRef.current.onMove?.(dragCtx({ x: dx, y: dy }));
-  };
-
-  const onPointerRelease = (e: ReactPointerEvent<HTMLCanvasElement>,
-                            reason: 'commit' | 'cancel') => {
+  // Only the finger count for pinch: the drag's own release is the session's.
+  const onPointerRelease = (e: ReactPointerEvent<HTMLCanvasElement>) => {
     downRef.current.delete(e.pointerId);
     if (downRef.current.size < 2) pinchAtRef.current = null;
-    if (e.pointerId === dragPointerRef.current) endDrag(dragDelta(e), reason);
   };
+
+  useEffect(() => () => sessionRef.current?.cancel(), []);
 
   // Two-finger zoom, anchored where the fingers are so the cell under them
   // stays under them. The midpoint travels too, which is the same gesture's
@@ -409,9 +421,8 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
         tabIndex={0}
         onKeyDown={onKeyDown}
         onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={(e) => onPointerRelease(e, 'commit')}
-        onPointerCancel={(e) => onPointerRelease(e, 'cancel')}
+        onPointerUp={onPointerRelease}
+        onPointerCancel={onPointerRelease}
         onClick={(e) => {
           if (suppressClickRef.current) { suppressClickRef.current = false; return; }
           // A double click's first click also fires this handler; e.detail

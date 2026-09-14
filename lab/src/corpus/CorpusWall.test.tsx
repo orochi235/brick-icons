@@ -175,7 +175,7 @@ it('drops the card once a drag starts moving the wall under it', async () => {
   fireEvent.click(canvas, { clientX: 10, clientY: 10 });
   expect(await screen.findByRole('dialog', { name: /Part a/ })).toBeTruthy();
   fireEvent.pointerDown(canvas, { button: 0, clientX: 10, clientY: 10, pointerId: 1 });
-  fireEvent.pointerMove(canvas, { clientX: 60, clientY: 40, pointerId: 1 });
+  fireEvent.pointerMove(canvas, { clientX: 60, clientY: 40, pointerId: 1, buttons: 1 });
   await waitFor(() => expect(container.querySelector('.corpus-card')).toBeNull());
 });
 
@@ -186,7 +186,7 @@ it('drops the card when two fingers start a pinch over it', async () => {
   expect(await screen.findByRole('dialog', { name: /Part a/ })).toBeTruthy();
   fireEvent.pointerDown(canvas, { button: 0, clientX: 40, clientY: 40, pointerId: 1 });
   fireEvent.pointerDown(canvas, { button: 0, clientX: 60, clientY: 40, pointerId: 2 });
-  fireEvent.pointerMove(canvas, { clientX: 80, clientY: 40, pointerId: 2 });
+  fireEvent.pointerMove(canvas, { clientX: 80, clientY: 40, pointerId: 2, buttons: 1 });
   await waitFor(() => expect(container.querySelector('.corpus-card')).toBeNull());
 });
 
@@ -195,11 +195,25 @@ it('does not raise a card from the click that ends a pinch', async () => {
   const canvas = await findCanvas(container);
   fireEvent.pointerDown(canvas, { button: 0, clientX: 10, clientY: 10, pointerId: 1 });
   fireEvent.pointerDown(canvas, { button: 0, clientX: 30, clientY: 10, pointerId: 2 });
-  fireEvent.pointerMove(canvas, { clientX: 50, clientY: 10, pointerId: 2 });
+  fireEvent.pointerMove(canvas, { clientX: 50, clientY: 10, pointerId: 2, buttons: 1 });
   fireEvent.pointerUp(canvas, { clientX: 50, clientY: 10, pointerId: 2 });
   fireEvent.pointerUp(canvas, { clientX: 10, clientY: 10, pointerId: 1 });
   fireEvent.click(canvas, { clientX: 10, clientY: 10 });
   expect(container.querySelector('.corpus-card')).toBeNull();
+});
+
+it('ends a drag whose release never arrived on the next move with no button held', async () => {
+  const { container } = render(<CorpusWall client={client} />);
+  const canvas = await findCanvas(container);
+  // `buttons` on the press too: the session trusts a buttonless move as a
+  // release only from a pointer whose press reported its buttons.
+  fireEvent.pointerDown(canvas,
+    { button: 0, buttons: 1, clientX: 10, clientY: 10, pointerId: 1 });
+  fireEvent.pointerMove(canvas, { clientX: 60, clientY: 40, pointerId: 1, buttons: 1 });
+  expect(canvas.classList.contains('corpus-canvas-dragging')).toBe(true);
+  // The pointerup went to some other window; the next move is all there is.
+  fireEvent.pointerMove(canvas, { clientX: 70, clientY: 40, pointerId: 1, buttons: 0 });
+  await waitFor(() => expect(canvas.classList.contains('corpus-canvas-dragging')).toBe(false));
 });
 
 // Both cells land fully on screen at the initial fit, but 'b' sits nearer
