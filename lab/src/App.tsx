@@ -29,7 +29,7 @@ function AllDefects({ client }: { client: LabClient }) {
   }
 
   return (
-    <FloatingPanel anchor="bottom-right" storageKey="brick-icons-lab.defects"
+    <FloatingPanel anchor="bottom-right" persist="defects"
       className="defects-panel">
       <div className="defects-panel-head">
         <strong>Defects</strong>

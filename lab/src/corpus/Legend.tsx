@@ -79,7 +79,7 @@ export function Legend({ cells, tagCells, highlight, onHighlight,
   };
 
   return (
-    <FloatingPanel anchor="top-right" storageKey="brick-icons-lab.corpus-legend"
+    <FloatingPanel anchor="top-right" persist="corpus-legend"
       className="corpus-legend">
       <div className="corpus-legend-head">
         <strong>Legend</strong>
