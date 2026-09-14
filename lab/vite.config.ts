@@ -41,13 +41,13 @@ const pezlieAlias = [
     replacement: `${PEZLIE}/hosts/brick-icons/$1` },
 ];
 
-/** `WEASEL_SRC=~/src/weasel npm run dev` draws `@weasel-js/core` and
- *  `@weasel-js/labkit` from a weasel checkout instead of the installed ones,
- *  for measuring an unreleased renderer change against `/bench` or running the
- *  lab against a labkit component that has not shipped yet. Each `dist` has to
- *  be built; the alias points at the build, not the source, so what runs is
- *  what a release would ship. Unset by default -- several sessions share this
- *  checkout. */
+/** `WEASEL_SRC=~/src/weasel npm run dev` draws `@weasel-js/core`,
+ *  `@weasel-js/labkit` and `@weasel-js/ui` from a weasel checkout instead of
+ *  the installed ones, for measuring an unreleased renderer change against
+ *  `/bench` or running the lab against a kit component that has not shipped
+ *  yet. Each `dist` has to be built; the alias points at the build, not the
+ *  source, so what runs is what a release would ship. Unset by default --
+ *  several sessions share this checkout. */
 const WEASEL_SRC = process.env.WEASEL_SRC;
 // Regexes, not a bare string: a plain alias prefix-matches, and
 // `@weasel-js/svg` imports `@weasel-js/core/patterns-builtin`, which then
@@ -58,6 +58,15 @@ const weaselAlias = WEASEL_SRC
        replacement: `${WEASEL_SRC}/packages/core/dist/index.js` },
      { find: /^@weasel-js\/core\/(.*)$/,
        replacement: `${WEASEL_SRC}/packages/core/dist/$1.js` },
+     // `@weasel-js/ui`'s components subpath is a wildcard whose target puts
+     // the star mid-path (`dist/components/*/index.js`), so it is spelled out
+     // rather than read off the map the way labkit's is.
+     { find: /^@weasel-js\/ui$/,
+       replacement: `${WEASEL_SRC}/packages/ui/dist/index.js` },
+     { find: /^@weasel-js\/ui\/style\.css$/,
+       replacement: `${WEASEL_SRC}/packages/ui/dist/style.css` },
+     { find: /^@weasel-js\/ui\/components\/(.*)$/,
+       replacement: `${WEASEL_SRC}/packages/ui/dist/components/$1/index.js` },
      ...labkitAlias(WEASEL_SRC)]
   : [];
 
