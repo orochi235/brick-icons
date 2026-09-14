@@ -51,6 +51,13 @@ export function rollUp(cells: Cell[], minimum = 25): Map<string, string> {
     const name = categoryOf(c);
     counts.set(name, (counts.get(name) ?? 0) + 1);
   }
+  return rollUpCounts(counts, minimum);
+}
+
+/** `rollUp` from counts already taken, for a caller holding columns rather
+ *  than cells. */
+export function rollUpCounts(counts: ReadonlyMap<string, number>,
+                             minimum = 25): Map<string, string> {
   const out = new Map<string, string>();
   for (const [name, n] of counts) {
     out.set(name, name === NO_CATEGORY || n >= minimum ? name : 'Other');
