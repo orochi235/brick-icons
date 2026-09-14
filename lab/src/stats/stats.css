@@ -479,3 +479,25 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
 /* The corpus-wide tiles sit beside working-set ones, so they say so rather
  * than silently ignoring the Controls above them. */
 .stats-tile-wide strong { color: var(--stats-failed); }
+
+/* -- declared edges ------------------------------------------------------ */
+
+/* Gaps per drawing is an ordered count, so one hue light to dark. No gaps
+ * wears the neutral bulk, and nothing declared the color this page already
+ * means "nothing for this slot to draw" by. */
+.stats-page {
+  --stats-edges-gap1: #d7d0fb;
+  --stats-edges-gap3: #b3a8f3;
+  --stats-edges-gap6: #8f7fe6;
+  --stats-edges-gap21: #6a58c9;
+}
+
+.stats-page [data-bin='0'] { background: var(--stats-drawn); }
+.stats-page [data-bin='1-2'] { background: var(--stats-edges-gap1); }
+.stats-page [data-bin='3-5'] { background: var(--stats-edges-gap3); }
+.stats-page [data-bin='6-20'] { background: var(--stats-edges-gap6); }
+.stats-page [data-bin='21+'] { background: var(--stats-edges-gap21); }
+.stats-page [data-bin='none'] { background: var(--stats-notApplicable); }
+
+.stats-edges table { margin-top: 1rem; }
+.stats-num { text-align: right; font-variant-numeric: tabular-nums; }

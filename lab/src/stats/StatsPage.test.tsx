@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { StatsPage } from '@lab/stats/StatsPage';
 import type { Stats } from '@lab/stats/types';
+import { wallHashString } from '@lab/corpus/wallHash';
 
 const body = (over: Partial<Stats> = {}): Stats => ({
   set: { size: 20, total: 24, kind: 'all', shown: { moved: false },
@@ -632,4 +633,42 @@ describe('StatsPage', () => {
     expect([...container.querySelectorAll('h2')].map((h) => h.textContent))
       .toContain('Coverage');
   });
+});
+
+// -- declared edges -------------------------------------------------------
+
+const EDGES = {
+  slots: [{ source: 'white-occt', scored: 10, none_declared: 1,
+            bins: [{ label: '0', n: 6 }, { label: '1-2', n: 2 },
+                   { label: '3-5', n: 1 }, { label: '6-20', n: 0 },
+                   { label: '21+', n: 0 }] }],
+  worst: [{ part: '99143', title: 'Battery Lid', source: 'white-occt',
+            gaps: 56, uncovered: 18.2 }],
+};
+
+it('stacks a slot by gaps per drawing and reads out the share with gaps', async () => {
+  const { container } = render(
+    <StatsPage client={clientWith(async () => body({ edges: EDGES }))} />);
+  await waitFor(() => container.querySelector('.stats-edges'));
+  const segs = [...container.querySelectorAll('.stats-edges .stats-seg')];
+  // An empty bin draws nothing, and nothing declared stacks last.
+  expect(segs.map((s) => s.getAttribute('data-bin'))).toEqual(['0', '1-2', '3-5', 'none']);
+  expect(container.querySelector('.stats-edges .stats-bar-value')!.textContent)
+    .toContain('30.0%');
+});
+
+it('sends a drawing with the most gaps into the wall on that part and slot', async () => {
+  const { container } = render(
+    <StatsPage client={clientWith(async () => body({ edges: EDGES }))} />);
+  await waitFor(() => container.querySelector('.stats-edges-worst'));
+  const link = container.querySelector('.stats-edges-worst a')!;
+  expect(link.getAttribute('href'))
+    .toBe(`/corpus${wallHashString({ source: 'white-occt', part: '99143' })}`);
+  expect(container.querySelector('.stats-edges-worst tbody tr')!.textContent)
+    .toContain('18.2%');
+});
+
+it('says the API predates the edge scores rather than dropping the section', async () => {
+  render(<StatsPage client={clientWith(async () => body())} />);
+  await screen.findByText(/predates the edge scores/);
 });

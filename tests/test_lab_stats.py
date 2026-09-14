@@ -771,3 +771,43 @@ def test_a_pooled_slot_names_the_revision_most_of_it_came_from(conn):
     rows = {r["source"]: r for r in _cost(conn)["slots"]}
     assert rows["white-occt"]["build"] == "b1"
     assert rows["white-occt"]["revisions"] == 2
+
+
+# -- declared edges ---------------------------------------------------------
+
+def test_edge_scores_count_the_drawing_each_slot_shows_over_the_set(conn):
+    for pid in ("clean", "gappy", "bare", "stale"):
+        _part(conn, pid)
+    _part(conn, "old", obsolete=1)
+    for pid in ("clean", "gappy", "bare", "stale", "old"):
+        _render(conn, pid, "white-occt", sha="now")
+    for pid, sha, declared, gaps in (("clean", "now", 40, 0),
+                                     ("gappy", "now", 40, 7),
+                                     ("bare", "now", 0, 0),
+                                     ("stale", "before", 40, 3),
+                                     ("old", "now", 40, 30)):
+        conn.execute("INSERT INTO edge_scores (part_id, source, sha256, "
+                     "declared_len, missing_len, missing_comps, scored_at) "
+                     "VALUES (?, 'white-occt', ?, ?, 4.0, ?, 't')",
+                     (pid, sha, declared, gaps))
+    conn.commit()
+    got = stats.stats(conn)["edges"]
+    (slot,) = got["slots"]
+    # `stale` scored an older drawing and `old` is outside the default set.
+    assert (slot["scored"], slot["none_declared"]) == (3, 1)
+    assert {b["label"]: b["n"] for b in slot["bins"]} == {
+        "0": 1, "1-2": 0, "3-5": 0, "6-20": 1, "21+": 0}
+    assert got["worst"] == [{"part": "gappy", "title": "Brick",
+                             "source": "white-occt", "gaps": 7,
+                             "uncovered": 10.0}]
+
+
+def test_an_edge_score_landing_moves_the_freshness_key(conn):
+    _part(conn, "3001")
+    _render(conn, "3001", "white-occt", sha="now")
+    conn.commit()
+    before = stats.freshness(conn)
+    db.record_edge_scores(conn, [{"part": "3001", "source": "white-occt",
+                                  "sha256": "now", "declared_len": 1.0,
+                                  "missing_len": 0.0, "missing_comps": 0}])
+    assert stats.freshness(conn) != before

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { EdgeScores } from '@lab/stats/Edges';
 import type { LabClient } from '@lab/api/client';
 import { CostBars, CoverageBars, CoverageLegend, ELSEWHERE, isThin, SlotLines,
          PhaseBars, PhaseLegend, SecsOverlay, THIN } from '@lab/stats/charts';
@@ -345,6 +346,13 @@ export function StatsPage({ client }: { client: LabClient }) {
             </table>
           </section>
 
+          <section>
+            <h2>Declared edges drawn</h2>
+            {stats.edges
+              ? <EdgeScores edges={stats.edges} />
+              : <p className="stats-empty">{STALE_EDGES}</p>}
+          </section>
+
           <Footprint client={client} />
 
           <section>
@@ -371,6 +379,9 @@ const fixed = (v: number | null, places = 2) =>
   v === null ? '—' : v.toFixed(places);
 
 const STALE_API = 'this lab API predates the failure tallies — restart it '
+  + '(python -m brick_icons.lab) to see them';
+
+const STALE_EDGES = 'this lab API predates the edge scores — restart it '
   + '(python -m brick_icons.lab) to see them';
 
 const NO_FAILURES: Failures = {

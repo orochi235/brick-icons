@@ -666,7 +666,9 @@ SELECT (SELECT MAX(run_id) FROM measurements),
        (SELECT count(*) FROM runs),
        (SELECT count(*) FROM runs WHERE finished IS NULL),
        (SELECT count(*) FROM tallies),
-       (SELECT MAX(taken) FROM tallies)
+       (SELECT MAX(taken) FROM tallies),
+       (SELECT count(*) FROM edge_scores),
+       (SELECT MAX(scored_at) FROM edge_scores)
 """
 
 
@@ -721,6 +723,52 @@ def _failures(conn: sqlite3.Connection) -> dict:
     }
 
 
+#: Gaps per drawing, as (lowest, highest or None for open, label).
+EDGE_BINS = ((0, 0, "0"), (1, 2, "1-2"), (3, 5, "3-5"), (6, 20, "6-20"),
+             (21, None, "21+"))
+
+
+def _edges(conn: sqlite3.Connection, ids: set[str], worst: int = 20) -> dict:
+    """Declared-edge scores of the drawing each slot shows now, over the set.
+
+    A drawing with nothing declared is counted apart: it scored no gaps
+    because there was nothing to miss, which is not the same as clean."""
+    slots: dict[str, dict] = {}
+    worst_rows = []
+    for r in conn.execute(
+            "SELECT e.part_id, e.source, e.declared_len, e.missing_len, "
+            "e.missing_comps, p.title FROM edge_scores e "
+            "JOIN renders r ON r.part_id = e.part_id AND r.source = e.source "
+            "AND r.sha256 = e.sha256 JOIN parts p ON p.id = e.part_id "
+            "WHERE e.error IS NULL"):
+        if r["part_id"] not in ids:
+            continue
+        slot = slots.setdefault(r["source"], {
+            "source": r["source"], "scored": 0, "none_declared": 0,
+            "bins": {label: 0 for *_, label in EDGE_BINS}})
+        slot["scored"] += 1
+        if not r["declared_len"]:
+            slot["none_declared"] += 1
+            continue
+        gaps = r["missing_comps"] or 0
+        for lo, hi, label in EDGE_BINS:
+            if gaps >= lo and (hi is None or gaps <= hi):
+                slot["bins"][label] += 1
+                break
+        if gaps:
+            worst_rows.append({
+                "part": r["part_id"], "title": r["title"],
+                "source": r["source"], "gaps": gaps,
+                "uncovered": round(100 * r["missing_len"] / r["declared_len"], 1)})
+    worst_rows.sort(key=lambda w: (-w["gaps"], w["part"], w["source"]))
+    return {
+        "slots": [{**s, "bins": [{"label": k, "n": n}
+                                 for k, n in s["bins"].items()]}
+                  for _, s in sorted(slots.items())],
+        "worst": worst_rows[:worst],
+    }
+
+
 def stats(conn: sqlite3.Connection, *, kind: str = "all",
           shown: dict[str, bool] | None = None,
           excluded: tuple[str, ...] = (),
@@ -745,5 +793,6 @@ def stats(conn: sqlite3.Connection, *, kind: str = "all",
         "running": _running(conn),
         "shape": _shape(conn, rows, ids),
         "failures": _failures(conn),
+        "edges": _edges(conn, ids),
         "as_of": dt.datetime.now(dt.timezone.utc).isoformat(),
     }

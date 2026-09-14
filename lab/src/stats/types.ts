@@ -184,6 +184,29 @@ export interface Cost {
   slots: CostSlot[];
 }
 
+/** One slot's declared-edge scores over the working set. `bins` count the
+ *  drawings that declared something, by gaps per drawing, in order. */
+export interface EdgeSlot {
+  source: string;
+  scored: number;
+  none_declared: number;
+  bins: { label: string; n: number }[];
+}
+
+export interface EdgeWorst {
+  part: string;
+  title: string;
+  source: string;
+  gaps: number;
+  /** Percent of the visible declared length with no ink on it. */
+  uncovered: number;
+}
+
+export interface Edges {
+  slots: EdgeSlot[];
+  worst: EdgeWorst[];
+}
+
 export interface Stats {
   set: {
     size: number;
@@ -208,6 +231,8 @@ export interface Stats {
   /** Optional for the same reason as `failures`: a lab API older than this
    *  bundle sends no `cost`, and the page's other sections must still draw. */
   cost?: Cost | null;
+  /** Optional for the same reason as `failures`. */
+  edges?: Edges;
   as_of: string;
 }
 
