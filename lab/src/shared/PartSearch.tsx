@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Input } from '@weasel-js/ui';
-import type { LabClient, PartHit } from '@lab/api/client';
+import { ComboBox, useAsyncOptions, type ComboBoxCommit } from '@weasel-js/ui';
+import type { LabClient } from '@lab/api/client';
 import '@lab/shared/PartSearch.css';
 
 export interface PartSearchProps {
@@ -10,55 +9,44 @@ export interface PartSearchProps {
 }
 
 export function PartSearch({ client, onOpen }: PartSearchProps) {
-  const [query, setQuery] = useState('');
-  const [hits, setHits] = useState<PartHit[]>([]);
+  const search = useAsyncOptions<string>({
+    load: async (query, signal) => {
+      if (!query.trim()) return [];
+      const hits = await client.searchParts(query, 25, signal);
+      return hits.map((hit) => ({
+        value: hit.id,
+        textValue: `${hit.id} ${hit.description}`,
+        label: (
+          <span className="part-search-hit">
+            <strong>{hit.id}</strong> {hit.description}
+          </span>
+        ),
+      }));
+    },
+    debounceMs: 120,
+    minLength: 1,
+  });
 
-  useEffect(() => {
-    if (!query.trim()) {
-      setHits([]);
-      return;
-    }
-    let live = true;
-    const timer = setTimeout(() => {
-      client.searchParts(query).then((found) => { if (live) setHits(found); })
-        .catch(() => { if (live) setHits([]); });
-    }, 120);
-    return () => { live = false; clearTimeout(timer); };
-  }, [query]);
+  const commit = (picked: ComboBoxCommit<string>) => {
+    const part = (picked.source === 'option' ? picked.key : picked.text).trim();
+    if (!part) return;
+    onOpen(part);
+    search.onInputChange('');
+  };
 
-  function open(part: string) {
-    if (!part.trim()) return;
-    onOpen(part.trim());
-    setQuery('');
-    setHits([]);
-  }
-
+  // A typed id opens even when no hit names it, so the text commits too.
   return (
-    <div className="part-search">
-      <Input
-        type="search"
-        aria-label="Search parts"
-        placeholder="part id or description"
-        value={query}
-        onChange={setQuery}
-        onKeyDown={(e) => { if (e.key === 'Enter') open(query); }}
-      />
-      {hits.length > 0 ? (
-        <ul className="part-search-hits">
-          {hits.map((hit) => (
-            <li key={hit.id}>
-              <span
-                role="button"
-                tabIndex={0}
-                onClick={() => open(hit.id)}
-                onKeyDown={(e) => { if (e.key === 'Enter') open(hit.id); }}
-              >
-                <strong>{hit.id}</strong> {hit.description}
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </div>
+    <ComboBox<string>
+      aria-label="Search parts"
+      placeholder="part id or description"
+      className="part-search"
+      filter="none"
+      allowsCustomValue
+      selectedKey={null}
+      emptyLabel="no parts match"
+      errorLabel="search failed"
+      {...search}
+      onCommit={commit}
+    />
   );
 }

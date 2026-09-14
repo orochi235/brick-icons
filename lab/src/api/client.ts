@@ -43,9 +43,10 @@ export function createClient({ base = '', fetchImpl = fetch }: ClientOptions = {
       return (await json<{ colors: LdrawColor[] }>(fetchImpl, at('/api/colors'))).colors;
     },
 
-    async searchParts(q: string, limit = 25): Promise<PartHit[]> {
+    async searchParts(q: string, limit = 25, signal?: AbortSignal): Promise<PartHit[]> {
       const url = at(`/api/parts?q=${encodeURIComponent(q)}&limit=${limit}`);
-      return (await json<{ results: PartHit[] }>(fetchImpl, url)).results;
+      return (await json<{ results: PartHit[] }>(fetchImpl, url,
+                                                 signal ? { signal } : undefined)).results;
     },
 
     /** The argv the server would run. Asked for rather than mirrored: a second
