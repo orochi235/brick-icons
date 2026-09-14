@@ -65,6 +65,18 @@ def test_segments_to_svg_emits_arc_path(tmp_path):
     assert "<path" in txt and " A " in txt          # elliptical-arc command
 
 
+def test_a_small_arc_strokes_thinner_than_its_radius(tmp_path):
+    # 309p03's studs are 3.25 px across at icon size; a full-width stroke on
+    # every rim merged the stud field into solid black
+    ops = [("arc", 20.0, 20.0, 1.6, 0.0, 0.0, 1.6, 0.0, 360.0, "line"),
+           ("arc", 60.0, 60.0, 18.0, 0.0, 0.0, 18.0, 0.0, 360.0, "line"),
+           ("line", 5.0, 90.0, 6.0, 90.0, "line")]
+    txt = _trace.segments_to_svg(ops, 100, 100, tmp_path / "t.svg", line_px=2).read_text()
+    widths = set(re.findall(r'stroke-width="([0-9.]+)"', txt))
+    assert "0.80" in widths, widths          # the stud-sized rim
+    assert "2.00" in widths, widths          # the brick-sized rim and the line
+
+
 def test_full_ellipse_arc_splits_into_quarter_segments(tmp_path):
     # A 0..360 sweep (e.g. a fully-visible stud top rim). A single SVG arc
     # whose endpoints coincide renders as nothing — and any span near 180 has
