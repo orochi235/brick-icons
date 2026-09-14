@@ -3,7 +3,7 @@ import {
   clientToCanvas, fitViewToBounds, useCanvasSize, useViewAnimation, zoomAt, type View,
 } from '@weasel-js/core';
 import { LabShell } from '@weasel-js/labkit';
-import { ToggleBar } from '@weasel-js/ui';
+import { Button } from '@weasel-js/ui';
 import type { LabClient } from '@lab/api/client';
 import { clampWallView, DEFAULT_BLANK_PX, sameView } from '@lab/corpus/clamp';
 import { readWallHash, readWallLink, WALL_LINK_PARAMS, wallHashString,
@@ -524,17 +524,10 @@ export function CorpusWall({ client }: { client: LabClient }) {
                 <>
                   <FilterBar sources={sources} source={source} onSource={setSource} />
                   <PartSearch client={client} onOpen={openSearchedPart} />
-                  {/* A one-item ToggleBar rather than a Button: this
-                      reports a state, and `aria-pressed` is what says so.
-                      Button grew a `pressed` prop for exactly this, but not
-                      until @weasel-js/ui 1.4.1 -- the lab is on 1.4.0.
-                      `lab-nav-alike` gives it the page nav's segmented look:
-                      the two sit side by side and both are places to be. */}
-                  <ToggleBar mode="multiple" size="sm" variant="minimal"
-                             ariaLabel="Panels" className="lab-nav-alike"
-                             items={[{ value: 'legend', label: 'Legend' }]}
-                             value={legendOpen ? ['legend'] : []}
-                             onChange={(v) => setLegendOpen(v.includes('legend'))} />
+                  <Button size="sm" variant="ghost" pressed={legendOpen}
+                          onClick={() => setLegendOpen((open) => !open)}>
+                    Legend
+                  </Button>
                   <CacheFailureButton
                     report={gatherCacheReport}
                     reset={() => {
