@@ -80,8 +80,21 @@ function labkitAlias(src: string) {
   });
 }
 
+/** The port this server was started on, when the command line names one. */
+function launchPort(): string | undefined {
+  const argv = process.argv;
+  const at = argv.findIndex((a) => a === '--port' || a.startsWith('--port='));
+  if (at === -1) return undefined;
+  return argv[at].includes('=') ? argv[at].split('=')[1] : argv[at + 1];
+}
+const PORT = launchPort();
+
 export default defineConfig({
   plugins: [react(), extensionlessPages()],
+  // One dependency cache per server. Two servers in this checkout once
+  // re-optimized at the same moment, each rename clobbered the other's, and
+  // both served 504 for React until restarted.
+  cacheDir: PORT ? `node_modules/.vite/port-${PORT}` : undefined,
   resolve: {
     alias: [
       { find: '@lab', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
