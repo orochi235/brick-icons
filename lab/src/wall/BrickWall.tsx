@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { defaultUrls } from '@pezlie/wall/src/urls';
-import { WallView, type WallViewState } from '@pezlie/wall/src/WallView';
+import { WallView, type WallHeader, type WallViewState } from '@pezlie/wall/src/WallView';
 import type { LabClient } from '@lab/api/client';
+import '@lab/corpus/corpus.css';
 import { DEFAULT_SOURCE } from '@lab/corpus/CorpusWall';
 import { drawSticker } from '@lab/corpus/draw2d';
 import { familyOf } from '@lab/corpus/families';
+import { FilterBar } from '@lab/corpus/FilterBar';
 import { Lightbox } from '@lab/corpus/Lightbox';
 import { LINKED_BADGE, RETIRED_WASH, thumbGround } from '@lab/corpus/paint';
 import { PartCardBody } from '@lab/corpus/PartCard';
@@ -12,8 +14,10 @@ import type { TintMode } from '@lab/corpus/tint';
 import type { Cell } from '@lab/corpus/types';
 import { WALL_LINK_PARAMS } from '@lab/corpus/wallHash';
 import { PAGES } from '@lab/nav/pages';
+import { PartSearch } from '@lab/shared/PartSearch';
 import { openingState, stateHash } from '@lab/wall/hash';
 import { GROUPINGS, SPEC } from '@lab/wall/host';
+import { searchNotice } from '@lab/wall/searchNotice';
 
 const URLS = defaultUrls('/api');
 const LINKED = [LINKED_BADGE];
@@ -52,11 +56,23 @@ export function BrickWall({ client }: { client: LabClient }) {
     }
   }, []);
 
+  const [notice, setNotice] = useState<string | null>(null);
+  const header = useCallback((wall: WallHeader) => (
+    <>
+      <FilterBar sources={wall.slots.map(({ slot, n }) => ({ source: slot, n }))}
+                 source={wall.slot} onSource={wall.setSlot} />
+      <PartSearch client={client}
+                  onOpen={(partId) => setNotice(searchNotice(partId, wall.reveal(partId)))} />
+      {notice && <span className="corpus-search-notice" role="status">{notice}</span>}
+    </>
+  ), [client, notice]);
+
   return (
     <WallView title="brick-icons wall" pages={PAGES} spec={SPEC} urls={URLS}
               fetchItems={fetchItems} fetchSlots={fetchSlots} defaultSlot={DEFAULT_SOURCE}
               storageKey="brick-icons.wall-view.params" groupings={GROUPINGS} facet={FACET}
               initial={initial} onChange={onChange}
+              slotPicker={false} header={header}
               renderCard={(cell, slot, card) => (
                 <PartCardBody cell={cell} source={slot} tint={card.tint as TintMode}
                               onOpen={card.open} />
