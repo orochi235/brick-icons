@@ -1,0 +1,43 @@
+.corpus-measures {
+  border-collapse: collapse;
+  font-family: var(--wzl-font-ui);
+  font-variant-numeric: tabular-nums;
+}
+
+.corpus-lightbox .corpus-measures th,
+.corpus-lightbox .corpus-measures td {
+  padding: 0.05rem 0.35rem;
+  height: 1.5rem;
+}
+
+.corpus-measures thead th {
+  vertical-align: bottom;
+  line-height: 1.15;
+}
+
+.corpus-lightbox .corpus-measures .corpus-measure-num {
+  min-width: 3.2em;
+  text-align: right;
+}
+.corpus-measures thead .corpus-measure-num { max-width: 4.6em; }
+
+/* Light cells on the dark panel, so the number on them is near-black. */
+.corpus-measure-num[data-tier='warm'] { background: #f6dfa6; color: #1a1a1a; }
+.corpus-measure-num[data-tier='hot'] { background: #e8998d; color: #1a1a1a; font-weight: 700; }
+
+.corpus-measure-slot { font-weight: 400; }
+.corpus-chip-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+.corpus-chip-label .material-bar { margin-top: 0.2em; }
+
+.corpus-measure-error { color: var(--corpus-cell-failed-border, #e03030); }
+
+.corpus-measure-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.corpus-measure-value[data-timed-out] { color: var(--wzl-fg-muted); }
