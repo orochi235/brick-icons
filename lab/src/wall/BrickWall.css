@@ -1,4 +1,4 @@
-.brick-wall-search { position: relative; display: flex; flex: 0 1 18rem; min-width: 12rem; }
+.brick-wall-search { position: relative; display: flex; flex: 0 1 auto; width: 18rem; min-width: 12rem; }
 .brick-wall-search .part-search { flex: 1; min-width: 0; }
 
 /* Out of the header row's flow, so a real notice (~281px of text) widens
