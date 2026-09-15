@@ -45,15 +45,18 @@ export const CHART_ORDER = [
   'decal',
 ] as const;
 
-/** A slot the order does not list sorts just before decal. */
+/** A slot the order does not list ranks just before the last entry. */
 export function chartRank(source: string): number {
   const i = (CHART_ORDER as readonly string[]).indexOf(source);
   return i === -1 ? CHART_ORDER.length - 1.5 : i;
 }
 
+const HEX_RE = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i;
+
 /** `hex` with its HLS lightness moved by `amount`, clamped to [0, 1]. */
 export function shade(hex: string, amount: number): string {
-  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255) as
+  const m = HEX_RE.exec(hex)!;
+  const [r, g, b] = [m[1]!, m[2]!, m[3]!].map((c) => parseInt(c, 16) / 255) as
     [number, number, number];
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
