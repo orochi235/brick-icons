@@ -143,21 +143,28 @@ def theme_tree(cache: Path) -> dict[str, tuple[str, str | None]]:
 def root_theme(theme_id: str, tree: dict[str, tuple[str, str | None]],
                memo: dict[str, str]) -> str:
     """`theme_id` walked up `parent_id` to the top-level theme it sits under.
-    Memoized: the walk repeats for every set a part is in."""
+    Memoized: the walk repeats for every set a part is in.
+
+    Stops at a missing parent (the returned id is then not in `tree`, which
+    `theme_rows` filters out) or at a repeated id, so a broken or cyclic dump
+    ends the walk rather than hanging it.
+    """
     if theme_id in memo:
         return memo[theme_id]
-    seen = []
+    path = []
+    visited = set()
     cur = theme_id
-    while True:
+    while cur not in visited:
+        visited.add(cur)
         row = tree.get(cur)
         if row is None:
             break
-        seen.append(cur)
+        path.append(cur)
         _, parent = row
         if parent is None:
             break
         cur = parent
-    for s in seen:
+    for s in path:
         memo[s] = cur
     return cur
 
@@ -184,9 +191,9 @@ def theme_rows(ids: list[str], parts_dir: Path,
                designs: dict[str, set[str]],
                set_theme: dict[str, str],
                tree: dict[str, tuple[str, str | None]],
-               moulds: frozenset[str]) -> list[tuple[str, str, float, int]]:
-    """(part_id, theme name, share, own set count) for every id in `ids`
-    whose own matched sets carry a dominant top-level theme."""
+               moulds: frozenset[str]) -> list[tuple[str, str, str, int]]:
+    """(part_id, theme name, share, themed own set count) for every id in
+    `ids` whose own matched sets carry a dominant top-level theme."""
     memo: dict[str, str] = {}
     out = []
     for part_id in ids:
@@ -194,18 +201,30 @@ def theme_rows(ids: list[str], parts_dir: Path,
                     keyword_parts(parts_dir / f"{part_id}.dat"), moulds)
         if hit is None or hit[1] not in OWN_ROUTES:
             continue
+        part_nums, how = hit
+        if how == "named":
+            # A `!KEYWORDS` Rebrickable number can still name the plain
+            # mould rather than the print -- 109373p01 names 109373. `match`
+            # has no way to tell, so the route this function owns rejects it;
+            # a number merely in `moulds` is not, or a real sticker-sheet
+            # match like 004695a->4695 would be dropped too.
+            printed = _PRINT_SUFFIX.match(part_id)
+            if printed and printed.group(1) in part_nums:
+                continue
         own_sets: set[str] = set()
-        for number in hit[0]:
+        for number in part_nums:
             own_sets |= sets_with.get(number, set())
         if not own_sets:
             continue
-        roots = [root_theme(set_theme[s], tree, memo)
-                 for s in own_sets if s in set_theme]
+        roots = [root for root in
+                (root_theme(set_theme[s], tree, memo)
+                 for s in own_sets if s in set_theme)
+                if root in tree]
         dominant = dominant_theme(roots)
         if dominant is None:
             continue
         root_id, share = dominant
-        out.append((part_id, tree[root_id][0], f"{share:.2f}", len(own_sets)))
+        out.append((part_id, tree[root_id][0], f"{share:.2f}", len(roots)))
     return out
 
 

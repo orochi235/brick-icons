@@ -193,9 +193,8 @@ CREATE TABLE IF NOT EXISTS part_successors (
   rel TEXT NOT NULL
 );
 
--- The top-level Rebrickable theme most of a printed or sticker part's OWN
--- sets belong to, from scripts/fetch-part-years.py. Only a part whose own
--- sets have one theme covering THEME_DOMINANCE of them gets a row.
+-- The top-level Rebrickable theme most of a printed or sticker part's own
+-- sets belong to; see THEME_DOMINANCE in scripts/fetch-part-years.py.
 CREATE TABLE IF NOT EXISTS part_themes (
   part_id TEXT PRIMARY KEY,
   theme TEXT NOT NULL,
@@ -697,10 +696,16 @@ def import_part_years(conn: sqlite3.Connection, path: Path | str) -> int:
 
 
 def import_part_themes(conn: sqlite3.Connection, path: Path | str) -> int:
-    """Load `scripts/fetch-part-years.py`'s theme CSV into `part_themes`."""
+    """Load `scripts/fetch-part-years.py`'s theme CSV into `part_themes`.
+
+    Cleared first rather than upserted: the CSV is the complete record, and a
+    part that falls below THEME_DOMINANCE on a re-run has to lose its label,
+    not keep a stale one an upsert would leave behind.
+    """
     with Path(path).open(newline="") as fh:
         rows = [(r["part_id"], r["theme"], float(r["share"]), int(r["sets"]))
                 for r in csv.DictReader(fh)]
+    conn.execute("DELETE FROM part_themes")
     conn.executemany(
         "INSERT OR REPLACE INTO part_themes (part_id, theme, share, sets) "
         "VALUES (?, ?, ?, ?)", rows)
@@ -1084,6 +1089,7 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
 
     progress(f"{counts['attempts']} store attempts, "
              f"{counts['defects']} defects, {counts['statuses']} statuses, "
-             f"{counts['years']} part years, {counts['successors']} successors")
+             f"{counts['years']} part years, {counts['successors']} successors, "
+             f"{counts['themes']} themes")
     conn.close()
     return counts
