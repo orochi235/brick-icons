@@ -45,12 +45,12 @@ it('says when a searched part is not in the slot', async () => {
 });
 
 it('clears a stale notice when the engine changes', async () => {
-  render(<BrickWall client={client} />);
+  const { container } = render(<BrickWall client={client} />);
+  const notice = () => container.querySelector('.brick-wall-search [role=status]');
   fireEvent.click(await screen.findByRole('button', { name: 'search' }));
-  const status = await screen.findByRole('status');
-  expect(status.textContent).toBe('nope is not drawn in this slot');
+  await waitFor(() => expect(notice()?.textContent).toBe('nope is not drawn in this slot'));
 
   const group = await screen.findByRole('radiogroup', { name: 'Engine' });
   fireEvent.click(within(group).getByRole('radio', { name: 'Legacy' }));
-  await waitFor(() => expect(status.textContent).toBe(''));
+  await waitFor(() => expect(notice()?.textContent).toBe(''));
 });

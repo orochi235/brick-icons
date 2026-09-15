@@ -15,7 +15,7 @@ import type { Cell } from '@lab/corpus/types';
 import { WALL_LINK_PARAMS } from '@lab/corpus/wallHash';
 import { PAGES } from '@lab/nav/pages';
 import { PartSearch } from '@lab/shared/PartSearch';
-import './BrickWall.css';
+import '@lab/wall/BrickWall.css';
 import { openingState, stateHash } from '@lab/wall/hash';
 import { GROUPINGS, SPEC } from '@lab/wall/host';
 import { searchNotice } from '@lab/wall/searchNotice';
@@ -51,8 +51,7 @@ export function BrickWall({ client }: { client: LabClient }) {
     return sources.map(({ source, n }) => ({ slot: source, n }));
   }, [client]);
   const [notice, setNotice] = useState<string | null>(null);
-  // A slot change (picker, hash nav, or the sources poll) makes the last
-  // search's notice stale.
+  // A slot change makes the last search's notice stale.
   const lastSlot = useRef<string | null>(null);
   const onChange = useCallback((state: WallViewState) => {
     if (lastSlot.current !== null && state.slot !== lastSlot.current) setNotice(null);

@@ -8,10 +8,14 @@
   margin: 0;
   padding: 0.3rem 0.6rem;
   border-radius: 0.35rem;
-  background: var(--wzl-bg, #fff);
+  background: var(--wzl-surface-raised);
+  border: 1px solid var(--wzl-border);
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.18);
   font: 13px/1.4 ui-monospace, monospace;
   color: var(--wzl-fg-muted);
 }
 
-.brick-wall-search .corpus-search-notice:empty { display: none; }
+/* Stays in the tree for the live region; only the surface disappears. */
+.brick-wall-search .corpus-search-notice:empty {
+  padding: 0; background: none; box-shadow: none; border: 0;
+}
