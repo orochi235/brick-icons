@@ -105,7 +105,9 @@
   .corpus-big {
   background: var(--corpus-thumb-ground-retired, #d8d8d8);
 }
-/* Top-aligned, so a name that wraps keeps its chip on the first line. */
+/* Top-aligned, so a name that wraps keeps its chip on the first line. Opts
+ * out of the panel's monospace to match .corpus-chip-label in
+ * Measurements.css, so the chip-and-name pairing reads the same in both. */
 .corpus-slot-name {
   display: flex;
   align-items: flex-start;

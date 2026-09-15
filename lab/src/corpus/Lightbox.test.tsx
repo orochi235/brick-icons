@@ -98,8 +98,9 @@ it('puts a material chip before each slot name', async () => {
   render(box());
   await screen.findByRole('radio', { name: 'naive' });
   const names = [...document.querySelectorAll('.corpus-slot-name')];
-  expect(names.map((el) => el.firstElementChild?.classList.contains('material-bar')))
-    .toEqual([true, true]);
+  // The first *node*, not the first element: an element-only check would
+  // still pass with the chip after the name, since it's still the only one.
+  expect(names.map((el) => el.firstChild?.nodeName)).toEqual(['svg', 'svg']);
   expect(names.map((el) => el.textContent)).toEqual(['naive', 'silhouette-occt']);
 });
 
