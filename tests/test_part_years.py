@@ -149,3 +149,135 @@ def test_an_obsolete_base_gets_no_row():
 
 def test_a_base_whose_prints_are_all_undated_gets_no_row():
     assert years.from_prints({"11778": True, "11778p01": False}, {}) == []
+
+
+def test_a_single_theme_dominates():
+    assert years.dominant_theme(["246", "246", "246"]) == ("246", 1.0)
+
+
+def test_exactly_the_threshold_dominates():
+    assert years.dominant_theme(["246", "246", "246", "246", "1"]) == ("246", 0.8)
+
+
+def test_below_the_threshold_dominates_nothing():
+    assert years.dominant_theme(["246", "246", "246", "1", "1"]) is None
+
+
+def test_no_themed_sets_dominates_nothing():
+    assert years.dominant_theme([]) is None
+
+
+def test_root_theme_walks_a_chain_to_its_root():
+    tree = {"30": ("City Hall", "20"), "20": ("Town Center", "10"),
+            "10": ("Town", None)}
+    assert years.root_theme("30", tree, {}) == "10"
+
+
+def test_root_theme_stops_at_a_missing_parent():
+    tree = {"30": ("City Hall", "20")}   # "20" is not in the dump
+    assert years.root_theme("30", tree, {}) == "20"
+
+
+def test_root_theme_stops_at_a_cycle():
+    """A corrupt or cyclic dump ends the walk instead of hanging it."""
+    tree = {"a": ("A", "b"), "b": ("B", "a")}
+    assert years.root_theme("a", tree, {}) == "a"
+
+
+def test_theme_rows_covers_the_known_routes(tmp_path):
+    """One id per route `theme_rows` treats differently: the OWN routes roll
+    the part's own inventory sets up to a theme; `base` and `design` fall
+    through with no row.
+
+    Every "no row" id here has real themed sets of its own behind it, so the
+    assertion is on the ROUTE being excluded, not on there being nothing to
+    find -- widening OWN_ROUTES locally to include `base` and `design` turns
+    every one of them into a row and fails this test.
+    """
+    facts = {
+        "7000pr01": (0, 0, 3, 0),  # the print's own Rebrickable number
+        "8000": (0, 0, 5, 0),      # base mould only -- 8000p01 reads as "base"
+        "099999": (0, 0, 2, 0),    # a real sticker sheet -- "sheet"
+        "055555": (0, 0, 2, 0),    # a corpus mould -- 055555a reads as "base"
+        "7777": (0, 0, 2, 0),      # reached only via a design id -- "design"
+    }
+    sets_with = {
+        "7000pr01": {"S1", "S2", "S3"},
+        "8000": {"S8"},
+        "099999": {"S4", "S5"},
+        "055555": {"S6", "S7"},
+        "7777": {"S9", "S10"},
+    }
+    # S3 has a theme_id ("999") the dump never defines -- dropped, not
+    # KeyError'd, and not counted toward `sets`.
+    set_theme = {"S1": "30", "S2": "30", "S3": "999", "S4": "77", "S5": "77",
+                "S6": "10", "S7": "10", "S8": "10", "S9": "10", "S10": "10"}
+    # A 3-level chain: S1/S2's theme (30) sits under 20, which sits under the
+    # root 10 -- root_theme has to walk all the way, not stop at the first hop.
+    tree = {"10": ("Town", None), "20": ("Town Center", "10"),
+            "30": ("City Hall", "20"), "77": ("Space", None)}
+    moulds = frozenset({"055555"})   # not "099999" -- that one is a real sheet
+    designs = {"9999": {"7777"}}     # 9999p01's design id -- "design"
+
+    parts = tmp_path / "parts"
+    parts.mkdir()
+    _dat(parts, "7000pr01")   # exact: the id IS the Rebrickable number
+    _dat(parts, "8000p01")    # base-only print -- reads as "base"
+    _dat(parts, "099999a")    # sheet sticker
+    _dat(parts, "055555a")    # sticker off a corpus mould -- reads as "base"
+    _dat(parts, "9999p01")    # only a design id names it -- reads as "design"
+
+    rows = years.theme_rows(
+        ["7000pr01", "8000p01", "099999a", "055555a", "9999p01"], parts,
+        facts, sets_with, designs, set_theme, tree, moulds)
+
+    assert rows == [("7000pr01", "Town", "1.00", 2),
+                    ("099999a", "Space", "1.00", 2)]
+
+
+def test_theme_rows_drops_a_named_hit_that_is_really_the_base_mould(tmp_path):
+    """109373p01's own `!KEYWORDS` line names 109373 -- its plain mould, not a
+    print number of its own -- so the `named` route must not read the mould's
+    sets as if they were the print's."""
+    facts = {"109373": (0, 0, 4, 0)}
+    sets_with = {"109373": {"S1", "S2", "S3", "S4"}}
+    set_theme = {"S1": "10", "S2": "10", "S3": "10", "S4": "10"}
+    tree = {"10": ("Town", None)}
+    parts = tmp_path / "parts"
+    parts.mkdir()
+    _dat(parts, "109373p01", "0 !KEYWORDS Rebrickable 109373")
+
+    assert years.theme_rows(["109373p01"], parts, facts, sets_with, {},
+                            set_theme, tree, frozenset()) == []
+
+
+def test_theme_rows_keeps_a_named_hit_that_is_not_the_base_mould(tmp_path):
+    """A real sticker-sheet match like 004695a->4695 must not be dropped just
+    because 4695 happens to be in `moulds`."""
+    facts = {"4695": (0, 0, 2, 0)}
+    sets_with = {"4695": {"S1", "S2"}}
+    set_theme = {"S1": "10", "S2": "10"}
+    tree = {"10": ("Town", None)}
+    parts = tmp_path / "parts"
+    parts.mkdir()
+    _dat(parts, "004695a", "0 !KEYWORDS Rebrickable 4695")
+
+    assert years.theme_rows(["004695a"], parts, facts, sets_with, {},
+                            set_theme, tree, frozenset({"4695"})) == [
+        ("004695a", "Town", "1.00", 2)]
+
+
+def test_theme_rows_drops_a_named_hit_for_a_composite_print(tmp_path):
+    """`_PRINT_SUFFIX` can't parse a composite's print suffix, so
+    3677c01p01's own `!KEYWORDS` number (3677c01, its mould) slipped past the
+    plain-mould guard; the guard has to catch this shape too."""
+    facts = {"3677c01": (0, 0, 4, 0)}
+    sets_with = {"3677c01": {"S1", "S2", "S3", "S4"}}
+    set_theme = {"S1": "10", "S2": "10", "S3": "10", "S4": "10"}
+    tree = {"10": ("Town", None)}
+    parts = tmp_path / "parts"
+    parts.mkdir()
+    _dat(parts, "3677c01p01", "0 !KEYWORDS Rebrickable 3677c01")
+
+    assert years.theme_rows(["3677c01p01"], parts, facts, sets_with, {},
+                            set_theme, tree, frozenset()) == []

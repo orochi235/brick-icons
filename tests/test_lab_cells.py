@@ -400,6 +400,26 @@ def test_a_cell_with_no_catalog_entry_says_so(conn):
     assert cell["colors"] is None
 
 
+def _theme(conn, pid, theme, share=1.0, sets=1):
+    conn.execute("INSERT INTO part_themes (part_id, theme, share, sets) "
+                 "VALUES (?, ?, ?, ?)", (pid, theme, share, sets))
+
+
+def test_a_cell_carries_its_theme(conn):
+    _part(conn, "3005pz0", printed=1)
+    _theme(conn, "3005pz0", "Harry Potter", share=1.0, sets=3)
+    conn.commit()
+    cell = cells.cells(conn)["cells"][0]
+    assert cell["theme"] == "Harry Potter"
+
+
+def test_a_cell_with_no_dominant_theme_says_so(conn):
+    _part(conn, "3001")
+    conn.commit()
+    cell = cells.cells(conn)["cells"][0]
+    assert cell["theme"] is None
+
+
 def test_a_facet_slot_still_names_its_engine():
     assert cells.engine_for("white-naive") == "naive"
     assert cells.engine_for("silhouette-occt") == "occt"

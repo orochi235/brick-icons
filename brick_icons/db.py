@@ -193,6 +193,15 @@ CREATE TABLE IF NOT EXISTS part_successors (
   rel TEXT NOT NULL
 );
 
+-- The top-level Rebrickable theme most of a printed or sticker part's own
+-- sets belong to; see THEME_DOMINANCE in scripts/fetch-part-years.py.
+CREATE TABLE IF NOT EXISTS part_themes (
+  part_id TEXT PRIMARY KEY,
+  theme TEXT NOT NULL,
+  share REAL NOT NULL,
+  sets INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS tallies (
   -- When this count was taken. The only honest clock in the database: every
   -- other timestamp is stamped at ingest, and `rebuild` drops the file, so
@@ -686,6 +695,21 @@ def import_part_years(conn: sqlite3.Connection, path: Path | str) -> int:
     return len(rows)
 
 
+def import_part_themes(conn: sqlite3.Connection, path: Path | str) -> int:
+    """Load `scripts/fetch-part-years.py`'s theme CSV into `part_themes`,
+    replacing it whole: a part missing from the CSV must lose its row, not
+    keep a stale one from a previous load."""
+    with Path(path).open(newline="") as fh:
+        rows = [(r["part_id"], r["theme"], float(r["share"]), int(r["sets"]))
+                for r in csv.DictReader(fh)]
+    conn.execute("DELETE FROM part_themes")
+    conn.executemany(
+        "INSERT OR REPLACE INTO part_themes (part_id, theme, share, sets) "
+        "VALUES (?, ?, ?, ?)", rows)
+    conn.commit()
+    return len(rows)
+
+
 def add_note(conn: sqlite3.Connection, body: str, part_id: str | None = None,
              defect_id: str | None = None) -> int:
     cur = conn.execute(
@@ -751,6 +775,7 @@ def import_statuses(conn: sqlite3.Connection, path: Path | str) -> int:
 DEFAULT_STATUS_PATH = Path("tests/goldens/part-status.toml")
 DEFAULT_YEARS_PATH = Path("tests/goldens/part-years.csv")
 DEFAULT_SUCCESSORS_PATH = Path("tests/goldens/part-successors.csv")
+DEFAULT_THEMES_PATH = Path("tests/goldens/part-themes.csv")
 
 
 def _relative(path: Path, root: Path) -> str:
@@ -936,6 +961,7 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
             status_path: Path | str = DEFAULT_STATUS_PATH,
             years_path: Path | str = DEFAULT_YEARS_PATH,
             successors_path: Path | str = DEFAULT_SUCCESSORS_PATH,
+            themes_path: Path | str = DEFAULT_THEMES_PATH,
             commit_sha: str = "unknown",
             progress=lambda msg: None) -> dict[str, int]:
     path = Path(path)
@@ -946,7 +972,7 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
     counts = {"parts": seed_parts(conn, ldraw_dir), "renders": 0,
               "measurements": 0, "attempts": 0, "skipped": 0, "replaced": 0,
               "defects": 0, "statuses": 0, "years": 0, "successors": 0,
-              "features": 0}
+              "themes": 0, "features": 0}
     progress(f"seeded {counts['parts']} parts")
     counts["features"] = seed_part_features(
         conn, ldraw_dir, progress=lambda m: progress(f"features {m}"))
@@ -1044,6 +1070,8 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
         counts["years"] = import_part_years(conn, years_path)
     if Path(successors_path).is_file():
         counts["successors"] = import_part_successors(conn, successors_path)
+    if Path(themes_path).is_file():
+        counts["themes"] = import_part_themes(conn, themes_path)
     conn.executemany(
         "INSERT OR REPLACE INTO tallies (taken, source, build, size, drawn, "
         "failed, timeout, defect, untried, not_applicable, slot_failed, "
@@ -1058,6 +1086,7 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
 
     progress(f"{counts['attempts']} store attempts, "
              f"{counts['defects']} defects, {counts['statuses']} statuses, "
-             f"{counts['years']} part years, {counts['successors']} successors")
+             f"{counts['years']} part years, {counts['successors']} successors, "
+             f"{counts['themes']} themes")
     conn.close()
     return counts
