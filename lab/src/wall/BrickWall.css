@@ -1,0 +1,17 @@
+.brick-wall-search { position: relative; display: flex; flex: 0 1 18rem; min-width: 12rem; }
+.brick-wall-search .part-search { flex: 1; min-width: 0; }
+
+/* Out of the header row's flow, so a real notice (~281px of text) widens
+   nothing and never wraps the row. */
+.brick-wall-search .corpus-search-notice {
+  position: absolute; top: calc(100% + 0.4rem); left: 0; z-index: 2; white-space: nowrap;
+  margin: 0;
+  padding: 0.3rem 0.6rem;
+  border-radius: 0.35rem;
+  background: var(--wzl-bg, #fff);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.18);
+  font: 13px/1.4 ui-monospace, monospace;
+  color: var(--wzl-fg-muted);
+}
+
+.brick-wall-search .corpus-search-notice:empty { display: none; }

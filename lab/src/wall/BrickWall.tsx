@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { defaultUrls } from '@pezlie/wall/src/urls';
 import { WallView, type WallHeader, type WallViewState } from '@pezlie/wall/src/WallView';
 import type { LabClient } from '@lab/api/client';
@@ -15,6 +15,7 @@ import type { Cell } from '@lab/corpus/types';
 import { WALL_LINK_PARAMS } from '@lab/corpus/wallHash';
 import { PAGES } from '@lab/nav/pages';
 import { PartSearch } from '@lab/shared/PartSearch';
+import './BrickWall.css';
 import { openingState, stateHash } from '@lab/wall/hash';
 import { GROUPINGS, SPEC } from '@lab/wall/host';
 import { searchNotice } from '@lab/wall/searchNotice';
@@ -49,21 +50,28 @@ export function BrickWall({ client }: { client: LabClient }) {
     const { sources } = await client.corpusSources();
     return sources.map(({ source, n }) => ({ slot: source, n }));
   }, [client]);
+  const [notice, setNotice] = useState<string | null>(null);
+  // A slot change (picker, hash nav, or the sources poll) makes the last
+  // search's notice stale.
+  const lastSlot = useRef<string | null>(null);
   const onChange = useCallback((state: WallViewState) => {
+    if (lastSlot.current !== null && state.slot !== lastSlot.current) setNotice(null);
+    lastSlot.current = state.slot;
     const next = stateHash(state);
     if (next !== window.location.hash) {
       window.history.replaceState(null, '', next || window.location.pathname);
     }
   }, []);
 
-  const [notice, setNotice] = useState<string | null>(null);
   const header = useCallback((wall: WallHeader) => (
     <>
       <FilterBar sources={wall.slots.map(({ slot, n }) => ({ source: slot, n }))}
                  source={wall.slot} onSource={wall.setSlot} />
-      <PartSearch client={client}
-                  onOpen={(partId) => setNotice(searchNotice(partId, wall.reveal(partId)))} />
-      {notice && <span className="corpus-search-notice" role="status">{notice}</span>}
+      <span className="brick-wall-search">
+        <PartSearch client={client}
+                    onOpen={(partId) => setNotice(searchNotice(partId, wall.reveal(partId)))} />
+        <span className="corpus-search-notice" role="status">{notice ?? ''}</span>
+      </span>
     </>
   ), [client, notice]);
 

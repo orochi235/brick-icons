@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { BrickWall } from '@lab/wall/BrickWall';
 
 // The real search is an async ComboBox; the wiring under test is what its
@@ -32,7 +32,9 @@ afterEach(() => {
 
 it('puts the engine toggle where pezlie drew its slot select', async () => {
   render(<BrickWall client={client} />);
-  expect(await screen.findByRole('radio', { name: 'Engine' })).toBeTruthy();
+  const group = await screen.findByRole('radiogroup', { name: 'Engine' });
+  expect(within(group).getByRole('radio', { name: 'Engine' })).toBeTruthy();
+  expect(within(group).getByRole('radio', { name: 'Legacy' })).toBeTruthy();
   expect(document.querySelector('.wall-slot')).toBeNull();
 });
 
@@ -40,4 +42,15 @@ it('says when a searched part is not in the slot', async () => {
   render(<BrickWall client={client} />);
   fireEvent.click(await screen.findByRole('button', { name: 'search' }));
   expect(await screen.findByText('nope is not drawn in this slot')).toBeTruthy();
+});
+
+it('clears a stale notice when the engine changes', async () => {
+  render(<BrickWall client={client} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'search' }));
+  const status = await screen.findByRole('status');
+  expect(status.textContent).toBe('nope is not drawn in this slot');
+
+  const group = await screen.findByRole('radiogroup', { name: 'Engine' });
+  fireEvent.click(within(group).getByRole('radio', { name: 'Legacy' }));
+  await waitFor(() => expect(status.textContent).toBe(''));
 });
