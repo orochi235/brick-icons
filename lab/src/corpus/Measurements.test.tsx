@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { Measurements, tier } from '@lab/corpus/Measurements';
 
@@ -74,4 +74,43 @@ it('puts a chip before each slot name', () => {
   const label = container.querySelector('tbody th .corpus-chip-label')!;
   expect(label.firstElementChild?.classList.contains('material-bar')).toBe(true);
   expect(label.textContent).toBe('reference');
+});
+
+it('renders both rows when an unmigrated null-source finding collides with a sourced one', () => {
+  const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const { container } = render(<Measurements findings={[
+    { ...finding('naive'), source: undefined }, finding('naive')]} />);
+  expect(rowsOf(container)).toEqual(['naive', 'naive']);
+  expect(spy.mock.calls.some((args) => String(args[0]).includes('same key'))).toBe(false);
+  spy.mockRestore();
+});
+
+it('falls back the chart scale when every row has no secs', () => {
+  const { container } = render(<Measurements findings={[
+    finding('occt', { secs: null }), finding('naive', { secs: null })]} />);
+  expect(container.querySelectorAll('.corpus-measure-bar .material-bar').length).toBe(0);
+  expect([...container.querySelectorAll('.corpus-measure-value')].map((el) => el.textContent))
+    .toEqual(['—', '—']);
+});
+
+it('falls back the chart scale when every row took zero seconds', () => {
+  const { container } = render(<Measurements findings={[
+    finding('occt', { secs: 0 }), finding('naive', { secs: 0 })]} />);
+  const widths = [...container.querySelectorAll('.corpus-measure-bar .material-bar')]
+    .map((svg) => Number(svg.getAttribute('width')));
+  expect(widths).toEqual([3, 3]);
+});
+
+it('fills the full track when there is only one row', () => {
+  const { container } = render(<Measurements findings={[finding('occt', { secs: 42 })]} />);
+  const width = Number(container.querySelector('.corpus-measure-bar .material-bar')
+    ?.getAttribute('width'));
+  expect(width).toBe(300);
+});
+
+it('clamps a negative secs to the minimum bar width', () => {
+  const { container } = render(<Measurements findings={[finding('occt', { secs: -5 })]} />);
+  const width = Number(container.querySelector('.corpus-measure-bar .material-bar')
+    ?.getAttribute('width'));
+  expect(width).toBe(3);
 });

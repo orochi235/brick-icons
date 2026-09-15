@@ -4,8 +4,10 @@
   font-variant-numeric: tabular-nums;
 }
 
-.corpus-lightbox .corpus-measures th,
-.corpus-lightbox .corpus-measures td {
+/* table.corpus-measures beats Lightbox.css's `.corpus-lightbox td, .corpus-lightbox
+   th` (0,1,1) on specificity (0,1,2) regardless of import order. */
+table.corpus-measures th,
+table.corpus-measures td {
   padding: 0.05rem 0.35rem;
   height: 1.5rem;
 }
@@ -15,11 +17,11 @@
   line-height: 1.15;
 }
 
-.corpus-lightbox .corpus-measures .corpus-measure-num {
+table.corpus-measures .corpus-measure-num {
   min-width: 3.2em;
   text-align: right;
 }
-.corpus-measures thead .corpus-measure-num { max-width: 4.6em; }
+table.corpus-measures thead .corpus-measure-num { max-width: 4.6em; }
 
 /* Light cells on the dark panel, so the number on them is near-black. */
 .corpus-measure-num[data-tier='warm'] { background: #f6dfa6; color: #1a1a1a; }

@@ -22,7 +22,7 @@ export function tier(measure: Measure, value: number | null | undefined):
 
 const COLUMNS: { key: Measure; label: string; format: (v: number) => string }[] = [
   { key: 'extra_d99', label: 'extra d99', format: (v) => v.toFixed(2) },
-  { key: 'missing_px', label: 'missing px', format: (v) => v.toLocaleString('en-US') },
+  { key: 'missing_px', label: 'missing px', format: (v) => v.toLocaleString() },
   { key: 'missing_comps', label: 'missing comps', format: (v) => String(v) },
 ];
 
@@ -38,7 +38,7 @@ export function Measurements({ findings }: { findings: Finding[] }) {
     <table className="corpus-measures">
       <thead>
         <tr>
-          <th><span className="corpus-visually-hidden">slot</span></th>
+          <th />
           {COLUMNS.map((c) => <th key={c.key} className="corpus-measure-num">{c.label}</th>)}
           <th>secs</th>
         </tr>
@@ -47,8 +47,11 @@ export function Measurements({ findings }: { findings: Finding[] }) {
         {rows.map((f) => {
           const slot = slotOf(f);
           const timedOut = /timeout/i.test(f.error ?? '');
+          // `source` is nullable in the DB, so two findings can share a display
+          // slot; key by the row's own identity, not the name it renders.
+          const key = `${f.part_id}:${f.engine}:${f.source ?? ''}`;
           return (
-            <tr key={slot} data-slot={slot}>
+            <tr key={key} data-slot={slot}>
               <th scope="row" className="corpus-measure-slot">
                 <span className="corpus-chip-label">
                   <MaterialBar source={slot} {...CHIP} />{slot}
