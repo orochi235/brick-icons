@@ -889,8 +889,8 @@ git commit -m "remove SLOT_COLOR, which nothing read"
 
 - [ ] **Step 1: Make sure the lab API and dev server are up**
 
-Run: `curl -sf -o /dev/null http://127.0.0.1:8792/ && echo api-up; curl -sf -o /dev/null http://localhost:5178/corpus && echo ui-up`
-Expected: `api-up` and `ui-up`. If the API is down, start it from the repo root with `.venv/bin/python -m brick_icons.lab` in the background; if the UI is down, run `npm run dev` in `lab/` in the background.
+Run: `curl -s -o /dev/null -m 5 -w 'api %{http_code}\n' http://localhost:5178/api/corpus/part/4449-f1; curl -s -o /dev/null -m 5 -w 'ui %{http_code}\n' http://localhost:5178/corpus`
+Expected: `api 200` and `ui 200`. Probe a real endpoint, not `/`: the lab serves nothing at its root, so `/` answers 404 and a `curl -sf` check there reports the API down while it is running. If the API really is down, start it from the repo root with `.venv/bin/python -m brick_icons.lab` in the background; if the UI is down, run `npm run dev` in `lab/` in the background. Check `lsof -nP -iTCP:8792 -sTCP:LISTEN` before starting one — another session may already be running it.
 
 - [ ] **Step 2: Screenshot the lightbox on two parts, headless**
 
