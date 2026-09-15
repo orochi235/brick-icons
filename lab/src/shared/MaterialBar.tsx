@@ -6,6 +6,17 @@ const LID = 3;
 const STEP = 2;
 const STRIPE_PERIOD = 16;
 const STRIPE_WIDTH = 9;
+// Widest real use is a 300px bar; this leaves headroom while keeping the
+// print-stripe loop bounded no matter what a caller computes.
+const MAX_DIMENSION = 2000;
+
+/** A computed width/height can arrive negative, NaN, or Infinity (e.g. a
+ *  `value / max * 300` where `max` is 0) — never let that reach the
+ *  print-stripe loop or the outer <svg>'s attributes. */
+function clampDimension(value: number): number {
+  if (Number.isNaN(value)) return 0;
+  return Math.min(MAX_DIMENSION, Math.max(0, value));
+}
 
 type Stop = [offset: number, color: string, opacity: number];
 
@@ -44,11 +55,13 @@ export function MaterialBar({ source, width, height, timedOut = false }: {
 }) {
   const id = `mb${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const material = materialOf(source);
+  const safeWidth = clampDimension(width);
+  const safeHeight = clampDimension(height);
   const x = 0.5;
   const y = 0.5;
-  const w = Math.max(0, width - 1);
+  const w = Math.max(0, safeWidth - 1);
   const top = y + LID;
-  const frontH = Math.max(0, height - 1 - LID);
+  const frontH = Math.max(0, safeHeight - 1 - LID);
   const step = Math.min(STEP, w / 4);
   const lid = `${x},${y} ${x + w - step},${y} ${x + w},${top} ${x},${top}`;
   const edge = material.stroke
@@ -135,8 +148,8 @@ export function MaterialBar({ source, width, height, timedOut = false }: {
   }
 
   return (
-    <svg className="material-bar" width={width} height={height}
-         viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
+    <svg className="material-bar" width={safeWidth} height={safeHeight}
+         viewBox={`0 0 ${safeWidth} ${safeHeight}`} aria-hidden="true">
       {body}
     </svg>
   );
