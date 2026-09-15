@@ -449,24 +449,12 @@ export function PhaseLegend({ rows, off, onToggle }: {
   );
 }
 
-/** The slots the failure chart follows, in a fixed order, each keeping its hue
- *  however many are on screen. Color follows the SLOT, never its rank: a
- *  filter that drops one must not repaint the others.
- *
- *  Categorical, not the status palette above -- these say which slot, not how
- *  bad, and `--stats-failed` red is reserved for the state. Dark steps of the
- *  default eight-hue theme; validated against this page's sunken surface, all
- *  six checks pass (worst adjacent CVD dE 8.4, normal-vision 19.3). */
+/** The slots the failure chart follows, in a fixed order. Each line's hue is
+ *  `--slot-<name>` in stats.css, keyed by slot and never by rank, so a filter
+ *  that drops one must not repaint the others. Not the slot materials: three
+ *  occt slots share one material color, and this chart needs a hue apiece. */
 export const SLOT_ORDER = ['occt', 'white-occt', 'silhouette-occt',
                            'translucent-occt', 'decal'] as const;
-
-export const SLOT_COLOR: Record<string, string> = {
-  'occt': '#3987e5',
-  'white-occt': '#d95926',
-  'silhouette-occt': '#199e70',
-  'translucent-occt': '#c98500',
-  'decal': '#d55181',
-};
 
 const slotRank = (source: string) => {
   const i = (SLOT_ORDER as readonly string[]).indexOf(source);
