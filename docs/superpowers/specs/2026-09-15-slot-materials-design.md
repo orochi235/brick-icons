@@ -94,7 +94,8 @@ Declared edges stays a table.
 
 ## Slot tiles
 
-Each render tile in the lightbox gets a chip in front of the slot name, the chip
+The render tiles follow the same chart order as the Measurements rows. Each
+tile gets a chip in front of the slot name, the chip
 and the name both top-aligned so a name that wraps keeps its chip on the first
 line. The tile's background still carries the wall's state color.
 
