@@ -211,12 +211,28 @@ export interface CellBadge {
   dy?: number;
 }
 
-/** The two discs that keep a corner of their own. `retired` and `replaced`
- *  share the bottom-right slot and never both apply -- a part that stopped
- *  and a part that was replaced are different things wearing one badge
- *  today. */
+/** One field for the whole property family, so a run of them reads as a
+ *  group against the system badges' own liveries. */
+export const PROPERTY_FIELD = 'oklch(0.4109 0.0082 286.03)';
+
+/** The discs that keep a corner of their own, drawn as a row inward from it.
+ *  `retired` and `replaced` share the top-right slot and never both apply -- a
+ *  part that stopped and a part that was replaced are different things wearing
+ *  one badge today. */
 export const CORNER_BADGES: Record<string, CellBadge> = {
   popular: { tag: 'popular', mark: 'star', corner: 'tl', field: 'oklch(0.6800 0.1760 50.54)', ink: 'oklch(1.0000 0 0)' },
+  // What is on the part rather than what it is: beside the star, ahead of the
+  // family caption, so the decoration a print or sticker carries reads at the
+  // same glance as the drawing it sits on.
+  printed: { tag: 'printed', mark: 'printed', corner: 'tl', field: 'oklch(1.0000 0 0)',
+             ink: PROPERTY_FIELD, stroke: 'oklch(0.8814 0.0076 260.73)', strokeScale: 0.5,
+             ringOnDisc: true, labelField: 'oklch(0.8814 0.0076 260.73)', labelInk: PROPERTY_FIELD },
+  // Navy rather than the property field: a sticker is a thing you apply, not
+  // a fact about the moulding, and the blue is the one every police sticker
+  // in the library is printed on.
+  sticker: { tag: 'sticker', mark: 'stickerPolice', corner: 'tl',
+             field: 'oklch(0.3900 0.1370 256.93)',
+             ink: 'oklch(1.0000 0 0)', accent: 'oklch(0.8380 0.0096 286.19)' },
   // Top right, outboard of the year: what these two say is when the part
   // stopped, so they belong beside the dates rather than in the opposite
   // corner from them. The year caption gives way and sets to their left.
@@ -234,10 +250,6 @@ export const WEIRD_FACE = '"STIX Two Text", "Times New Roman", Times, serif';
 
 export const SYSTEM_FACE =
   '"SF Pro Rounded", "Avenir Next", Futura, "Trebuchet MS", sans-serif';
-
-/** One field for the whole property family, so a run of them reads as a
- *  group against the system badges' own liveries. */
-export const PROPERTY_FIELD = 'oklch(0.4109 0.0082 286.03)';
 
 /** The magnet's pole tips, and so its name. */
 const MAGNET_POLES = 'oklch(0.9500 0.0040 286.29)';
@@ -264,19 +276,6 @@ export const STRIP_BADGES: Record<string, CellBadge> = {
   // field down behind it made it fainter.
   magnet: { tag: 'magnet', mark: 'magnet', field: PROPERTY_FIELD, ink: 'oklch(0.5928 0.2106 26.53)',
             accent: MAGNET_POLES, labelInk: MAGNET_POLES, scale: 0.97 },
-  // Navy rather than the property field: a sticker is a thing you apply, not
-  // a fact about the moulding, and the blue is the one every police sticker
-  // in the library is printed on.
-  sticker: { tag: 'sticker', mark: 'stickerPolice', field: 'oklch(0.3900 0.1370 256.93)',
-             ink: 'oklch(1.0000 0 0)', accent: 'oklch(0.8380 0.0096 286.19)' },
-  // The one badge whose ink runs to its own edge, so the ring is what gives
-  // it an edge at all: without it the outermost dots are the silhouette and
-  // the disc reads as a torn patch rather than a printed one.
-  // Reversed: the ink is the dots and the field is the paper under them,
-  // which is the way a screen actually prints.
-  printed: { tag: 'printed', mark: 'printed', field: 'oklch(1.0000 0 0)',
-             ink: PROPERTY_FIELD, stroke: 'oklch(0.8814 0.0076 260.73)', strokeScale: 0.5,
-             ringOnDisc: true, labelField: 'oklch(0.8814 0.0076 260.73)', labelInk: PROPERTY_FIELD },
   // One hue in two values: the join reads as a step in a single object,
   // which is what interlocked pieces are. Cyan against orange read as two
   // materials, and its orange was the popular badge's field.
