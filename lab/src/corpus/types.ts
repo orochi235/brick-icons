@@ -28,6 +28,10 @@ export interface Cell {
    *  lab's server is long-lived and can be older than the page in front of
    *  it, and a missing field must not break the view. */
   successor?: string | null;
+  /** The top-level Rebrickable theme most of a printed or sticker part's own
+   *  sets belong to, or null where none dominates. Optional for the same
+   *  reason `tags` is: the lab's server can be older than the page. */
+  theme?: string | null;
   status: string;
   sha: string | null;
   made_at: string | null;

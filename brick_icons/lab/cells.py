@@ -390,6 +390,8 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
         "FROM part_years")}
     successors = {r["part_id"]: r["successor"] for r in conn.execute(
         "SELECT part_id, successor FROM part_successors")}
+    themes = {r["part_id"]: r["theme"] for r in conn.execute(
+        "SELECT part_id, theme FROM part_themes")}
 
     rows = []
     marks = ",".join("?" * len(wanted)) if wanted else "NULL"
@@ -435,6 +437,9 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
             # The part that replaced this one, where one is known: the wall's
             # updated badge links to it.
             "successor": successor,
+            # The top-level Rebrickable theme most of a printed or sticker
+            # part's own sets belong to, or null where none dominates.
+            "theme": themes.get(pid),
             "tags": part_tags.tags_for(
                 part["category"], bool(part["printed"]),
                 year["year_to"] if year else None,

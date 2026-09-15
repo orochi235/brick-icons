@@ -18,6 +18,10 @@ Writes `tests/goldens/part-years.csv`, which is committed: it is 24k small
 rows, and regenerating it otherwise means another 15MB of downloads. Also
 writes the rows straight into `corpus.db`, so a live wall picks them up
 without a rebuild.
+
+The same sets also carry a theme (`themes.csv`, walked to its top-level
+ancestor), so a printed or sticker part whose OWN sets mostly share one gets
+labeled with it in `tests/goldens/part-themes.csv` -- see `dominant_theme`.
 """
 from __future__ import annotations
 
@@ -28,7 +32,7 @@ import io
 import re
 import sys
 import urllib.request
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -37,11 +41,16 @@ sys.path.insert(0, str(ROOT))
 from brick_icons import db  # noqa: E402
 
 BASE = "https://cdn.rebrickable.com/media/downloads"
-DUMPS = ("parts", "sets", "inventories", "inventory_parts",
+DUMPS = ("parts", "sets", "themes", "inventories", "inventory_parts",
          "part_relationships", "elements")
 DEFAULT_CACHE = Path("out") / "rebrickable"
 DEFAULT_OUT = Path("tests") / "goldens" / "part-years.csv"
 DEFAULT_SUCCESSORS = Path("tests") / "goldens" / "part-successors.csv"
+DEFAULT_THEMES = Path("tests") / "goldens" / "part-themes.csv"
+
+#: The share of a part's own THEMED sets one root theme must cover for the
+#: part to carry that theme's label.
+THEME_DOMINANCE = 0.80
 
 #: Relation types that can name a replacement, best first. A mould is a
 #: re-cut of the same part; an alternate merely fits the same hole, which
@@ -89,8 +98,11 @@ def rows(path: Path):
         yield from csv.DictReader(io.TextIOWrapper(fh, encoding="utf-8"))
 
 
-def part_facts(cache: Path) -> dict[str, tuple[int, int, int, int]]:
-    """(first year, last year, set count, color count) per Rebrickable part."""
+def part_facts(cache: Path) -> tuple[dict[str, tuple[int, int, int, int]],
+                                     dict[str, set[str]]]:
+    """(first year, last year, set count, color count) per Rebrickable part,
+    and the raw set-of-set-numbers each part was read off -- what
+    `dominant_theme` walks to a theme."""
     set_year = {r["set_num"]: int(r["year"]) for r in rows(cache / "sets.csv.gz")
                 if r["year"]}
     print(f"  {len(set_year):,} sets", flush=True)
@@ -116,6 +128,84 @@ def part_facts(cache: Path) -> dict[str, tuple[int, int, int, int]]:
         years = [set_year[s] for s in in_sets]
         out[part_num] = (min(years), max(years), len(in_sets),
                          len(colors_of[part_num]))
+    return out, dict(sets_with)
+
+
+def theme_tree(cache: Path) -> dict[str, tuple[str, str | None]]:
+    """Rebrickable theme id -> (name, parent theme id)."""
+    out = {}
+    for r in rows(cache / "themes.csv.gz"):
+        out[r["id"]] = (r["name"], r["parent_id"] or None)
+    print(f"  {len(out):,} themes", flush=True)
+    return out
+
+
+def root_theme(theme_id: str, tree: dict[str, tuple[str, str | None]],
+               memo: dict[str, str]) -> str:
+    """`theme_id` walked up `parent_id` to the top-level theme it sits under.
+    Memoized: the walk repeats for every set a part is in."""
+    if theme_id in memo:
+        return memo[theme_id]
+    seen = []
+    cur = theme_id
+    while True:
+        row = tree.get(cur)
+        if row is None:
+            break
+        seen.append(cur)
+        _, parent = row
+        if parent is None:
+            break
+        cur = parent
+    for s in seen:
+        memo[s] = cur
+    return cur
+
+
+def dominant_theme(root_ids: list[str]) -> tuple[str, float] | None:
+    """The top-level theme id most of `root_ids` (one per own THEMED set)
+    share, and its share, if that share is at least THEME_DOMINANCE -- or
+    None where nothing dominates, `root_ids` included empty."""
+    if not root_ids:
+        return None
+    root, n = Counter(root_ids).most_common(1)[0]
+    share = n / len(root_ids)
+    return (root, share) if share >= THEME_DOMINANCE else None
+
+
+#: Routes that are the part's OWN inventory rows -- `base` and `design` give
+#: the plain mould's sets, not this print's or sticker's own.
+OWN_ROUTES = frozenset({"exact", "named", "sheet"})
+
+
+def theme_rows(ids: list[str], parts_dir: Path,
+               facts: dict[str, tuple[int, int, int, int]],
+               sets_with: dict[str, set[str]],
+               designs: dict[str, set[str]],
+               set_theme: dict[str, str],
+               tree: dict[str, tuple[str, str | None]],
+               moulds: frozenset[str]) -> list[tuple[str, str, float, int]]:
+    """(part_id, theme name, share, own set count) for every id in `ids`
+    whose own matched sets carry a dominant top-level theme."""
+    memo: dict[str, str] = {}
+    out = []
+    for part_id in ids:
+        hit = match(part_id, facts, designs,
+                    keyword_parts(parts_dir / f"{part_id}.dat"), moulds)
+        if hit is None or hit[1] not in OWN_ROUTES:
+            continue
+        own_sets: set[str] = set()
+        for number in hit[0]:
+            own_sets |= sets_with.get(number, set())
+        if not own_sets:
+            continue
+        roots = [root_theme(set_theme[s], tree, memo)
+                 for s in own_sets if s in set_theme]
+        dominant = dominant_theme(roots)
+        if dominant is None:
+            continue
+        root_id, share = dominant
+        out.append((part_id, tree[root_id][0], f"{share:.2f}", len(own_sets)))
     return out
 
 
@@ -349,6 +439,7 @@ def main() -> int:
     ap.add_argument("--cache", default=str(ROOT / DEFAULT_CACHE))
     ap.add_argument("--out", default=str(ROOT / DEFAULT_OUT))
     ap.add_argument("--successors-out", default=str(ROOT / DEFAULT_SUCCESSORS))
+    ap.add_argument("--themes-out", default=str(ROOT / DEFAULT_THEMES))
     ap.add_argument("--ldraw-dir", default=str(ROOT / "vendor" / "ldraw"),
                     help="the library to read `!KEYWORDS` set references from")
     ap.add_argument("--refresh", action="store_true",
@@ -360,10 +451,13 @@ def main() -> int:
     for name in DUMPS:
         fetch(name, cache, args.refresh)
 
-    facts = part_facts(cache)
+    facts, sets_with = part_facts(cache)
     designs = design_index(cache)
     set_year = {r["set_num"]: int(r["year"])
                 for r in rows(cache / "sets.csv.gz") if r["year"]}
+    set_theme = {r["set_num"]: r["theme_id"] for r in rows(cache / "sets.csv.gz")
+                 if r["theme_id"]}
+    tree = theme_tree(cache)
     bare: dict[str, list[int]] = defaultdict(list)
     for set_num, year in set_year.items():
         bare[set_num.split("-")[0]].append(year)
@@ -373,12 +467,15 @@ def main() -> int:
         # `printed` comes with the id: a base mould that inherits from its
         # prints has to be told apart from a print, and the .dat's own
         # description is what says so -- an id suffix is ambiguous.
-        part_rows = conn.execute("SELECT id, printed, obsolete FROM parts "
-                                 "ORDER BY id").fetchall()
+        part_rows = conn.execute("SELECT id, printed, obsolete, category "
+                                 "FROM parts ORDER BY id").fetchall()
         ids = [r["id"] for r in part_rows]
         plain = {r["id"]: not r["printed"] for r in part_rows}
         moulds = frozenset(i for i, undecorated in plain.items() if undecorated)
         retired = {r["id"] for r in part_rows if r["obsolete"]}
+        theme_target = [r["id"] for r in part_rows
+                        if r["printed"] and not r["obsolete"]
+                        and r["category"] not in db.OUT_OF_SCOPE_CATEGORIES]
     finally:
         conn.close()
     print(f"{len(ids):,} parts in the corpus", flush=True)
@@ -416,6 +513,16 @@ def main() -> int:
     print(f"wrote {out}: {len(matched):,} of {len(ids):,} parts ({routes})",
           flush=True)
 
+    themed = theme_rows(theme_target, parts_dir, facts, sets_with, designs,
+                        set_theme, tree, moulds)
+    themes_out = Path(args.themes_out)
+    with themes_out.open("w", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["part_id", "theme", "share", "sets"])
+        w.writerows(themed)
+    print(f"wrote {themes_out}: {len(themed):,} of {len(theme_target):,} "
+          f"printed/sticker parts", flush=True)
+
     found = successors(cache, facts, set(ids))
     succ_out = Path(args.successors_out)
     with succ_out.open("w", newline="") as fh:
@@ -430,9 +537,11 @@ def main() -> int:
     try:
         n = db.import_part_years(conn, out)
         m = db.import_part_successors(conn, succ_out)
+        t = db.import_part_themes(conn, themes_out)
     finally:
         conn.close()
-    print(f"loaded {n:,} year rows and {m:,} successors into {args.db}", flush=True)
+    print(f"loaded {n:,} year rows, {m:,} successors and {t:,} themes into "
+          f"{args.db}", flush=True)
     return 0
 
 

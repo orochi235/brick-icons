@@ -368,6 +368,7 @@ def test_rebuild_walks_renders_and_toml_and_jsonl(tmp_path):
                         root=tmp_path, census_dirs=[tmp_path / "census"],
                         defects_path=defects, years_path=tmp_path / "none.csv",
                         successors_path=tmp_path / "none.csv",
+                        themes_path=tmp_path / "none.csv",
                         # without this the rebuild reads the repo's own status
                         # file, so the count is whatever the lab last filed
                         status_path=tmp_path / "none.toml",
@@ -377,7 +378,7 @@ def test_rebuild_walks_renders_and_toml_and_jsonl(tmp_path):
     assert counts.pop("features") > 0
     assert counts == {"parts": 6, "renders": 1, "measurements": 1,
                       "attempts": 0, "skipped": 0, "replaced": 0, "defects": 0,
-                      "statuses": 0, "years": 0, "successors": 0,
+                      "statuses": 0, "years": 0, "successors": 0, "themes": 0,
                       "tallies": 1}
 
     conn = db.connect(tmp_path / "corpus.db")
@@ -912,6 +913,35 @@ def test_a_rebuild_keeps_the_part_years(tmp_path):
         conn.close()
     assert (row["year_from"], row["year_to"], row["sets"], row["colors"]) == \
         (1979, 2026, 4252, 57)
+
+
+def test_import_part_themes_loads_the_csv(tmp_path):
+    conn = db.connect(tmp_path / "corpus.db")
+    path = tmp_path / "part-themes.csv"
+    path.write_text("part_id,theme,share,sets\n"
+                    "3005pz0,Harry Potter,1.00,3\n")
+    assert db.import_part_themes(conn, path) == 1
+    row = conn.execute(
+        "SELECT * FROM part_themes WHERE part_id = '3005pz0'").fetchone()
+    assert (row["theme"], row["share"], row["sets"]) == ("Harry Potter", 1.0, 3)
+
+
+def test_a_rebuild_keeps_the_part_themes(tmp_path):
+    library = _library(tmp_path)
+    themes = tmp_path / "part-themes.csv"
+    themes.write_text("part_id,theme,share,sets\n"
+                      "3001,Town,0.85,20\n")
+    out = tmp_path / "corpus.db"
+    counts = db.rebuild(out, ldraw_dir=library, root=tmp_path,
+                        census_dirs=[], themes_path=themes)
+    assert counts["themes"] == 1
+    conn = db.connect(out)
+    try:
+        row = conn.execute(
+            "SELECT * FROM part_themes WHERE part_id = '3001'").fetchone()
+    finally:
+        conn.close()
+    assert (row["theme"], row["share"], row["sets"]) == ("Town", 0.85, 20)
 
 
 def test_a_raster_slot_keeps_its_own_extension_and_its_bytes(tmp_path):

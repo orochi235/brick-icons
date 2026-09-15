@@ -149,3 +149,19 @@ def test_an_obsolete_base_gets_no_row():
 
 def test_a_base_whose_prints_are_all_undated_gets_no_row():
     assert years.from_prints({"11778": True, "11778p01": False}, {}) == []
+
+
+def test_a_single_theme_dominates():
+    assert years.dominant_theme(["246", "246", "246"]) == ("246", 1.0)
+
+
+def test_exactly_the_threshold_dominates():
+    assert years.dominant_theme(["246", "246", "246", "246", "1"]) == ("246", 0.8)
+
+
+def test_below_the_threshold_dominates_nothing():
+    assert years.dominant_theme(["246", "246", "246", "1", "1"]) is None
+
+
+def test_no_themed_sets_dominates_nothing():
+    assert years.dominant_theme([]) is None
