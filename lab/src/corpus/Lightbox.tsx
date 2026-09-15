@@ -5,6 +5,7 @@ import { settledJob } from '@lab/api/jobPoll';
 import { BadgeSwatch } from '@lab/corpus/BadgeSwatch';
 import { CATALOGS } from '@lab/corpus/catalogs';
 import { Fingerprint } from '@lab/corpus/Fingerprint';
+import { Measurements } from '@lab/corpus/Measurements';
 import { poseNote } from '@lab/corpus/posed';
 import { Tags, yearRange } from '@lab/corpus/tags';
 import { defectId, engineFor } from '@lab/corpus/flag';
@@ -14,6 +15,8 @@ import { cssVarTable } from '@lab/corpus/states';
 import type { PartDetail } from '@lab/corpus/types';
 import { STATUSES, type DefectStatus } from '@lab/defects/useDefects';
 import { STATUS_BADGES } from '@lab/defects/statusBadges';
+import { MaterialBar } from '@lab/shared/MaterialBar';
+import { chartRank } from '@lab/shared/materials';
 import '@lab/corpus/Lightbox.css';
 
 // Lazy, and the only import of it: three.js, the LDraw loader and drei are
@@ -133,8 +136,9 @@ export function Lightbox({ partId, source, client, onClose }: {
   //
   // The slot you arrived on survives the filter: opening a plain brick from
   // the decal wall and finding no decal slot disagrees with the wall behind.
-  const slots = (detail?.slots ?? []).filter(
-    (slot) => !slot.not_applicable || slot.source === shown);
+  const slots = (detail?.slots ?? [])
+    .filter((slot) => !slot.not_applicable || slot.source === shown)
+    .sort((a, b) => chartRank(a.source) - chartRank(b.source));
 
   const file = async () => {
     setFlagError(null);
@@ -274,7 +278,10 @@ export function Lightbox({ partId, source, client, onClose }: {
                       {whyNothing(slot).map((line) => <span key={line}>{line}</span>)}
                     </span>
                   )}
-                  <span className="corpus-slot-name">{slot.source}</span>
+                  <span className="corpus-slot-name">
+                    <MaterialBar source={slot.source} width={34} height={14} />
+                    {slot.source}
+                  </span>
                 </label>
               </li>
             ))}
@@ -334,24 +341,7 @@ export function Lightbox({ partId, source, client, onClose }: {
           <h3>Built from</h3>
           <Fingerprint features={detail.features} />
           <h3>Measurements</h3>
-          <table>
-            <thead>
-              <tr><th>slot</th><th>extra d99</th><th>missing px</th>
-                  <th>missing comps</th><th>secs</th><th>error</th></tr>
-            </thead>
-            <tbody>
-              {detail.findings.map((f) => (
-                <tr key={f.source ?? f.engine}>
-                  <td>{f.source ?? f.engine}</td>
-                  <td>{f.extra_d99 ?? '—'}</td>
-                  <td>{f.missing_px ?? '—'}</td>
-                  <td>{f.missing_comps ?? '—'}</td>
-                  <td>{f.secs ?? '—'}</td>
-                  <td>{f.error ?? ''}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <Measurements findings={detail.findings} />
           {detail.edges && detail.edges.length > 0 && (
             <>
               <h3>Declared edges</h3>

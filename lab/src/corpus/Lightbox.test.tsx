@@ -31,8 +31,8 @@ it('shows the part title and the part as every slot drew it', async () => {
   const srcs = screen.getAllByRole('img', { name: /3001/ })
     .map((img) => img.getAttribute('src'));
   expect(srcs).toEqual([
-    '/api/corpus/render/silhouette-occt/3001.svg?v=cafebabe',
     '/api/corpus/render/naive/3001.svg?v=deadbeef',
+    '/api/corpus/render/silhouette-occt/3001.svg?v=cafebabe',
   ]);
 });
 
@@ -91,7 +91,16 @@ it('follows the wall again when the wall changes slot', async () => {
 
 it('lists each engine measurement', async () => {
   render(box());
-  await waitFor(() => screen.getByText('1.5'));
+  await waitFor(() => screen.getByText('1.50'));
+});
+
+it('puts a material chip before each slot name', async () => {
+  render(box());
+  await screen.findByRole('radio', { name: 'naive' });
+  const names = [...document.querySelectorAll('.corpus-slot-name')];
+  expect(names.map((el) => el.firstElementChild?.classList.contains('material-bar')))
+    .toEqual([true, true]);
+  expect(names.map((el) => el.textContent)).toEqual(['naive', 'silhouette-occt']);
 });
 
 it('lists open defects', async () => {
@@ -171,9 +180,10 @@ it('marks each slot with the state the wall would color its cell', async () => {
   };
   render(box({ client: { corpusPart: () => Promise.resolve(detailed), addDefect } }));
   await waitFor(() => screen.getByText('Brick 2 x 4'));
-  const states = [...document.querySelectorAll('.corpus-slot')]
-    .map((el) => el.getAttribute('data-state'));
-  expect(states).toEqual(['timeout', 'defect']);
+  const states = Object.fromEntries(
+    [...document.querySelectorAll('.corpus-slot')]
+      .map((li) => [li.getAttribute('data-source'), li.getAttribute('data-state')]));
+  expect(states).toEqual({ 'silhouette-occt': 'timeout', naive: 'defect' });
 });
 
 it('leaves a slot from an API older than the state fields unmarked', async () => {
@@ -360,7 +370,7 @@ it('names each slot on its own row, so the decal one can be grounded differently
   // `container` holds none of it.
   const sources = [...document.querySelectorAll('.corpus-slot')]
     .map((li) => li.getAttribute('data-source'));
-  expect(sources).toEqual(['silhouette-occt', 'naive', 'decal']);
+  expect(sources).toEqual(['naive', 'silhouette-occt', 'decal']);
 });
 
 it('does not offer a slot with nothing to draw for this part', async () => {
@@ -376,7 +386,7 @@ it('does not offer a slot with nothing to draw for this part', async () => {
   render(box({ client: { corpusPart: () => Promise.resolve(plain), addDefect } }));
   await screen.findByRole('radio', { name: 'naive' });
   expect(screen.getAllByRole('radio').map((r) => r.getAttribute('aria-label')))
-    .toEqual(['silhouette-occt', 'naive']);
+    .toEqual(['naive', 'silhouette-occt']);
 });
 
 // Arriving from the decal wall and finding no decal slot would be the page
@@ -391,7 +401,7 @@ it('keeps the slot you arrived on, even where it does not apply', async () => {
                client: { corpusPart: () => Promise.resolve(plain), addDefect } }));
   await screen.findByRole('radio', { name: 'decal' });
   expect(screen.getAllByRole('radio').map((r) => r.getAttribute('aria-label')))
-    .toEqual(['silhouette-occt', 'naive', 'decal']);
+    .toEqual(['naive', 'silhouette-occt', 'decal']);
 });
 
 it('says when LDraw poses the part, and which way', async () => {

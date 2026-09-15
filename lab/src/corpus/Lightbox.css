@@ -105,7 +105,15 @@
   .corpus-big {
   background: var(--corpus-thumb-ground-retired, #d8d8d8);
 }
-.corpus-slot-name { color: var(--wzl-fg-muted); }
+/* Top-aligned, so a name that wraps keeps its chip on the first line. */
+.corpus-slot-name {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  color: var(--wzl-fg-muted);
+  font-family: var(--wzl-font-ui);
+}
+.corpus-slot-name .material-bar { margin-top: 0.2em; }
 .corpus-slot[data-current='true'] .corpus-slot-name {
   color: var(--wzl-fg);
   font-weight: 700;
