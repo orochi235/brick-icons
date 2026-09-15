@@ -696,12 +696,9 @@ def import_part_years(conn: sqlite3.Connection, path: Path | str) -> int:
 
 
 def import_part_themes(conn: sqlite3.Connection, path: Path | str) -> int:
-    """Load `scripts/fetch-part-years.py`'s theme CSV into `part_themes`.
-
-    Cleared first rather than upserted: the CSV is the complete record, and a
-    part that falls below THEME_DOMINANCE on a re-run has to lose its label,
-    not keep a stale one an upsert would leave behind.
-    """
+    """Load `scripts/fetch-part-years.py`'s theme CSV into `part_themes`,
+    replacing it whole: a part missing from the CSV must lose its row, not
+    keep a stale one from a previous load."""
     with Path(path).open(newline="") as fh:
         rows = [(r["part_id"], r["theme"], float(r["share"]), int(r["sets"]))
                 for r in csv.DictReader(fh)]

@@ -926,6 +926,20 @@ def test_import_part_themes_loads_the_csv(tmp_path):
     assert (row["theme"], row["share"], row["sets"]) == ("Harry Potter", 1.0, 3)
 
 
+def test_import_part_themes_replaces_the_table(tmp_path):
+    conn = db.connect(tmp_path / "corpus.db")
+    path = tmp_path / "part-themes.csv"
+    path.write_text("part_id,theme,share,sets\n"
+                    "3001,Town,1.00,4\n"
+                    "3005,Space,1.00,2\n")
+    assert db.import_part_themes(conn, path) == 2
+    path.write_text("part_id,theme,share,sets\n"
+                    "3001,Town,1.00,4\n")
+    assert db.import_part_themes(conn, path) == 1
+    assert conn.execute(
+        "SELECT count(*) FROM part_themes").fetchone()[0] == 1
+
+
 def test_a_rebuild_keeps_the_part_themes(tmp_path):
     library = _library(tmp_path)
     themes = tmp_path / "part-themes.csv"

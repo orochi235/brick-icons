@@ -186,38 +186,50 @@ def test_root_theme_stops_at_a_cycle():
 
 def test_theme_rows_covers_the_known_routes(tmp_path):
     """One id per route `theme_rows` treats differently: the OWN routes roll
-    the part's own inventory sets up to a theme; `base` falls through with no
-    row, whether the id is a print or a sticker off a corpus mould."""
+    the part's own inventory sets up to a theme; `base` and `design` fall
+    through with no row.
+
+    Every "no row" id here has real themed sets of its own behind it, so the
+    assertion is on the ROUTE being excluded, not on there being nothing to
+    find -- widening OWN_ROUTES locally to include `base` and `design` turns
+    every one of them into a row and fails this test.
+    """
     facts = {
         "7000pr01": (0, 0, 3, 0),  # the print's own Rebrickable number
         "8000": (0, 0, 5, 0),      # base mould only -- 8000p01 reads as "base"
         "099999": (0, 0, 2, 0),    # a real sticker sheet -- "sheet"
         "055555": (0, 0, 2, 0),    # a corpus mould -- 055555a reads as "base"
+        "7777": (0, 0, 2, 0),      # reached only via a design id -- "design"
     }
     sets_with = {
         "7000pr01": {"S1", "S2", "S3"},
+        "8000": {"S8"},
         "099999": {"S4", "S5"},
         "055555": {"S6", "S7"},
+        "7777": {"S9", "S10"},
     }
     # S3 has a theme_id ("999") the dump never defines -- dropped, not
     # KeyError'd, and not counted toward `sets`.
-    set_theme = {"S1": "30", "S2": "30", "S3": "999", "S4": "77", "S5": "77"}
+    set_theme = {"S1": "30", "S2": "30", "S3": "999", "S4": "77", "S5": "77",
+                "S6": "10", "S7": "10", "S8": "10", "S9": "10", "S10": "10"}
     # A 3-level chain: S1/S2's theme (30) sits under 20, which sits under the
     # root 10 -- root_theme has to walk all the way, not stop at the first hop.
     tree = {"10": ("Town", None), "20": ("Town Center", "10"),
             "30": ("City Hall", "20"), "77": ("Space", None)}
     moulds = frozenset({"055555"})   # not "099999" -- that one is a real sheet
+    designs = {"9999": {"7777"}}     # 9999p01's design id -- "design"
 
     parts = tmp_path / "parts"
     parts.mkdir()
     _dat(parts, "7000pr01")   # exact: the id IS the Rebrickable number
-    _dat(parts, "8000p01")    # base-only print -- no own inventory, no row
+    _dat(parts, "8000p01")    # base-only print -- reads as "base"
     _dat(parts, "099999a")    # sheet sticker
-    _dat(parts, "055555a")    # sticker off a corpus mould -- reads as base
+    _dat(parts, "055555a")    # sticker off a corpus mould -- reads as "base"
+    _dat(parts, "9999p01")    # only a design id names it -- reads as "design"
 
     rows = years.theme_rows(
-        ["7000pr01", "8000p01", "099999a", "055555a"], parts,
-        facts, sets_with, {}, set_theme, tree, moulds)
+        ["7000pr01", "8000p01", "099999a", "055555a", "9999p01"], parts,
+        facts, sets_with, designs, set_theme, tree, moulds)
 
     assert rows == [("7000pr01", "Town", "1.00", 2),
                     ("099999a", "Space", "1.00", 2)]
@@ -253,3 +265,19 @@ def test_theme_rows_keeps_a_named_hit_that_is_not_the_base_mould(tmp_path):
     assert years.theme_rows(["004695a"], parts, facts, sets_with, {},
                             set_theme, tree, frozenset({"4695"})) == [
         ("004695a", "Town", "1.00", 2)]
+
+
+def test_theme_rows_drops_a_named_hit_for_a_composite_print(tmp_path):
+    """`_PRINT_SUFFIX` can't parse a composite's print suffix, so
+    3677c01p01's own `!KEYWORDS` number (3677c01, its mould) slipped past the
+    plain-mould guard; the guard has to catch this shape too."""
+    facts = {"3677c01": (0, 0, 4, 0)}
+    sets_with = {"3677c01": {"S1", "S2", "S3", "S4"}}
+    set_theme = {"S1": "10", "S2": "10", "S3": "10", "S4": "10"}
+    tree = {"10": ("Town", None)}
+    parts = tmp_path / "parts"
+    parts.mkdir()
+    _dat(parts, "3677c01p01", "0 !KEYWORDS Rebrickable 3677c01")
+
+    assert years.theme_rows(["3677c01p01"], parts, facts, sets_with, {},
+                            set_theme, tree, frozenset()) == []

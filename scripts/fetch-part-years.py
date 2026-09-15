@@ -67,6 +67,11 @@ _PRINT_SUFFIX = re.compile(r"^(\d{3,}[a-z]?)(p[0-9a-z]+|pr\d+)$")
 # sticker off sheet `003238`, and the sheet is what Rebrickable inventories.
 _STICKER = re.compile(r"^(\d+)[a-z]+$")
 
+# Like `_PRINT_SUFFIX`, but without assuming what precedes the print marker is
+# a plain digit id -- `3677c01p01` strips to the composite `3677c01`, which
+# `_PRINT_SUFFIX` cannot parse. Used only by theme_rows' `named` guard.
+_TRAILING_PRINT = re.compile(r"^(.+)(?:p[0-9a-z]+|pr\d+)$")
+
 #: LDraw names the sets a part was made for in its `!KEYWORDS` line, with or
 #: without the variant suffix: "set 375-2", "Set 1620-2", "set 6075".
 _KW_LINE = re.compile(r"^0\s+!KEYWORDS\s+(.*)$", re.IGNORECASE)
@@ -142,13 +147,9 @@ def theme_tree(cache: Path) -> dict[str, tuple[str, str | None]]:
 
 def root_theme(theme_id: str, tree: dict[str, tuple[str, str | None]],
                memo: dict[str, str]) -> str:
-    """`theme_id` walked up `parent_id` to the top-level theme it sits under.
-    Memoized: the walk repeats for every set a part is in.
-
-    Stops at a missing parent (the returned id is then not in `tree`, which
-    `theme_rows` filters out) or at a repeated id, so a broken or cyclic dump
-    ends the walk rather than hanging it.
-    """
+    """`theme_id` walked up `parent_id` to its top-level theme, memoized
+    across sets. Stops at a missing parent or a repeated id -- a broken or
+    cyclic dump ends the walk instead of hanging it."""
     if theme_id in memo:
         return memo[theme_id]
     path = []
@@ -203,13 +204,10 @@ def theme_rows(ids: list[str], parts_dir: Path,
             continue
         part_nums, how = hit
         if how == "named":
-            # A `!KEYWORDS` Rebrickable number can still name the plain
-            # mould rather than the print -- 109373p01 names 109373. `match`
-            # has no way to tell, so the route this function owns rejects it;
-            # a number merely in `moulds` is not, or a real sticker-sheet
-            # match like 004695a->4695 would be dropped too.
-            printed = _PRINT_SUFFIX.match(part_id)
-            if printed and printed.group(1) in part_nums:
+            # A `!KEYWORDS` number can name the plain mould (109373p01 ->
+            # 109373, 3677c01p01 -> 3677c01) instead of the print's own.
+            stripped = _TRAILING_PRINT.match(part_id)
+            if stripped and stripped.group(1) in part_nums:
                 continue
         own_sets: set[str] = set()
         for number in part_nums:
