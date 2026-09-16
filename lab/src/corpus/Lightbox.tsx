@@ -7,9 +7,9 @@ import { CATALOGS } from '@lab/corpus/catalogs';
 import { Fingerprint } from '@lab/corpus/Fingerprint';
 import { Measurements } from '@lab/corpus/Measurements';
 import { poseNote } from '@lab/corpus/posed';
-import { Tags, yearRange } from '@lab/corpus/tags';
+import { Tags, TAG_BOX, yearRange } from '@lab/corpus/tags';
 import { defectId, engineFor } from '@lab/corpus/flag';
-import { cellState } from '@lab/corpus/paint';
+import { ALL_BADGES, cellState } from '@lab/corpus/paint';
 import type { CellState } from '@lab/corpus/palette';
 import { cssVarTable } from '@lab/corpus/states';
 import type { PartDetail } from '@lab/corpus/types';
@@ -48,6 +48,13 @@ function slotState(slot: Slot, part: PartDetail['part']): CellState {
     accepted_defects: slot.accepted_defects ?? 0,
     elsewhere: slot.elsewhere ?? [],
   });
+}
+
+/** The badge the sub-line draws in place of a plain word, when one of its
+ *  tokens -- in practice the category -- names one. Matched case-insensitively:
+ *  `ALL_BADGES` keys are lowercase tags, `category` is titled for display. */
+function tokenBadge(token: string | null) {
+  return token ? ALL_BADGES[token.toLowerCase()] : undefined;
 }
 
 const STATE_VAR = cssVarTable();
@@ -206,6 +213,13 @@ export function Lightbox({ partId, source, client, onClose }: {
                 (detail.part.tags ?? []).includes('retired'))
     : null;
   const pose = detail ? poseNote(detail.part.preview) : null;
+  const categoryBadge = detail ? tokenBadge(detail.part.category) : undefined;
+  // The badge stands in for the plain word above, so the same mark must not
+  // also show in the tag row below it.
+  const subTags = detail
+    ? (detail.part.tags ?? []).filter((tag) =>
+        !categoryBadge || tag.toLowerCase() !== detail.part.category!.toLowerCase())
+    : [];
 
   // Portaled to the theme root rather than left inside the workspace: as a
   // child of the wall it drew under the shell's header, and a panel with the
@@ -223,17 +237,27 @@ export function Lightbox({ partId, source, client, onClose }: {
           with a loading screen reads as slower than one that opens and fills
           in, and the id is a real heading rather than a placeholder for the
           title that replaces it. */}
-      <h2>{detail?.part.title ?? partId}</h2>
+      <div className="corpus-title-row">
+        <h2>{detail?.part.title ?? partId}</h2>
+        {years && <span className="corpus-years">{years}</span>}
+      </div>
       {detail && (
         <>
           <p className="corpus-sub">
-            {detail.part.id} · {detail.part.category ?? 'uncategorised'} ·
+            {/* Opts into the panel's UI font, like the slot names below --
+                the id is what the eye should land on, not the monospace body. */}
+            <span className="corpus-id">{detail.part.id}</span> ·{' '}
+            {categoryBadge ? (
+              <>
+                <BadgeSwatch badge={categoryBadge} label={detail.part.category!} box={TAG_BOX} />
+                <span className="corpus-visually-hidden">{detail.part.category}</span>
+              </>
+            ) : (detail.part.category ?? 'uncategorised')} ·
             {' '}{detail.part.status}
             {detail.part.status_note ? ` · ${detail.part.status_note}` : ''}
-            {years ? ` · ${years}` : ''}
             {detail.part.sets != null ? ` · ${detail.part.sets} sets` : ''}
           </p>
-          <Tags tags={detail.part.tags ?? []} />
+          <Tags tags={subTags} />
           {/* Every render below is drawn from the one global angle, so a part
               the library poses is one the drawings may be showing the wrong
               side of. */}

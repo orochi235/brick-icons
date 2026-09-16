@@ -36,6 +36,61 @@ it('shows the part title and the part as every slot drew it', async () => {
   ]);
 });
 
+// --- the header: title row, id styling, category-as-badge -----------------
+
+it('puts the year range on the title row, not the sub-line', async () => {
+  const dated = {
+    ...detail,
+    part: { ...detail.part, year_from: 1979, year_to: null },
+  };
+  render(box({ client: { corpusPart: () => Promise.resolve(dated), addDefect } }));
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  expect(document.querySelector('.corpus-title-row')?.textContent).toContain('1979');
+  expect(document.querySelector('.corpus-sub')?.textContent).not.toContain('1979');
+});
+
+it('shows no year on the title row for a part with no year range', async () => {
+  render(box());
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  expect(document.querySelector('.corpus-years')).toBeNull();
+});
+
+it('sets the part id apart from the rest of the sub-line', async () => {
+  render(box());
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  expect(document.querySelector('.corpus-id')?.textContent).toBe('3001');
+});
+
+it('draws a category with a badge as that badge, and drops it from the tag row', async () => {
+  // 'technic' is a real STRIP_BADGES key (paint.ts) -- confirmed by reading
+  // ALL_BADGES rather than assumed.
+  const technic = {
+    ...detail,
+    part: { ...detail.part, category: 'Technic', tags: ['technic', 'popular'] },
+  };
+  render(box({ client: { corpusPart: () => Promise.resolve(technic), addDefect } }));
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  const sub = document.querySelector('.corpus-sub');
+  expect(sub?.querySelector('.corpus-badge')).toBeTruthy();
+  expect(sub?.textContent).toContain('Technic');
+  const tagRow = document.querySelector('.corpus-tags');
+  expect(tagRow?.querySelector('[data-tag="technic"]')).toBeNull();
+  expect(tagRow?.querySelector('[data-tag="popular"]')).toBeTruthy();
+});
+
+it('leaves a category with no badge as a plain word, and the tag row unchanged', async () => {
+  const plain = {
+    ...detail,
+    part: { ...detail.part, category: 'Brick', tags: ['popular'] },
+  };
+  render(box({ client: { corpusPart: () => Promise.resolve(plain), addDefect } }));
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  const sub = document.querySelector('.corpus-sub');
+  expect(sub?.querySelector('.corpus-badge')).toBeNull();
+  expect(sub?.textContent).toContain('Brick');
+  expect(document.querySelector('[data-tag="popular"]')).toBeTruthy();
+});
+
 it('marks which of the slots the wall is showing', async () => {
   // Queried off the document, not the render container: the panel is
   // portaled to the theme root so it can cover the shell's header.

@@ -117,7 +117,18 @@
   font-weight: 700;
 }
 .corpus-slot[data-current='true'] .corpus-big { outline: 2px solid var(--wzl-fg); }
+
+.corpus-title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.corpus-title-row h2 { margin: 0; }
+.corpus-years { color: var(--wzl-fg-muted); white-space: nowrap; }
+
 .corpus-sub { color: var(--wzl-fg-muted); }
+.corpus-id { color: var(--wzl-fg); font-weight: 700; font-family: var(--wzl-font-ui); }
 
 /* Set apart from the muted sub-line rather than with it: this one is a
    caveat about the renders underneath it, not more of the part's catalog

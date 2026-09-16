@@ -7,8 +7,9 @@ export { yearRange };
 
 /** How big a tag badge is set here. Larger than the legend's 14px swatch:
  *  this one carries a word, and the word has to hold its own against the
- *  body copy beside it. */
-const TAG_BOX = 17;
+ *  body copy beside it. Shared with the sub-line above, which draws a badge
+ *  the same size. */
+export const TAG_BOX = 17;
 
 /** The tag row both detail views show under the part's name.
  *
