@@ -8,6 +8,13 @@
 
 **Tech Stack:** React 19, TypeScript, vitest + @testing-library/react (jsdom), plain CSS. Spec: `docs/superpowers/specs/2026-09-15-slot-materials-design.md`.
 
+**Built 2026-09-15, in `fa32e98`..`14f0312`. The code blocks below are the
+pre-review drafts, not what shipped** — review changed four things: `shade`
+throws on malformed hex, `MaterialBar` clamps its dimensions, a Measurements
+row is keyed by `part:engine:source` rather than by its display slot, and that
+table's CSS is scoped `table.corpus-measures` to beat `Lightbox.css`. Read the
+code, not this file.
+
 ---
 
 **Conventions for every task**

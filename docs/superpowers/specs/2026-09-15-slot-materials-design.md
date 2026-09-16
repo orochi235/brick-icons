@@ -4,7 +4,9 @@ For whoever builds or next touches the lightbox's Measurements section or any
 place a render slot is drawn as a swatch. It answers: what each slot looks like
 when it is not a render, and how the lightbox shows what a slot cost.
 
-**Status: designed 2026-09-15, not built.**
+**Status: built 2026-09-15** (`fa32e98`..`14f0312`). The code is in
+`lab/src/shared/materials.ts`, `lab/src/shared/MaterialBar.tsx` and
+`lab/src/corpus/Measurements.tsx`.
 
 ## A material per slot
 
