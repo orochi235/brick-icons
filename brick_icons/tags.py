@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 #: belongs to, then what is true of the drawing, then what became of it.
 TAGS = ("sticker", "minifig", "technic", "duplo", "weird",
         "electric", "magnet", "printed", "composite",
-        "retired", "replaced", "popular", "obscure")
+        "retired", "replaced", "replaces", "popular", "obscure")
 
 #: The independent questions a tag answers, each with the tags that answer it.
 #: Mirrored by `BADGE_AXES` in the wall's `paint.ts`, which is what the legend
@@ -28,6 +28,9 @@ TAG_AXES: tuple[tuple[str, ...], ...] = (
     ("magnet", "electric", "printed", "composite"),
     ("popular",),
     ("retired", "replaced"),
+    # Its own axis rather than beside the other two: within an axis the picks
+    # are alternatives, and a chain part is asked for with both at once.
+    ("replaces",),
 )
 
 
@@ -122,7 +125,8 @@ def tags_for(category: str | None, printed: bool,
              year_to: int | None = None, sets: int | None = None,
              this_year: int | None = None, *,
              title: str | None = None, part_id: str | None = None,
-             successor: str | None = None) -> list[str]:
+             successor: str | None = None,
+             predecessors: Sequence[str] | None = None) -> list[str]:
     """Every tag that applies, in `TAGS` order.
 
     `year_to` and `sets` are None for a part Rebrickable does not catalog --
@@ -131,6 +135,8 @@ def tags_for(category: str | None, printed: bool,
 
     `retired` and `replaced` are exclusive: a part that stopped and a part that
     was replaced share a badge slot on the wall, and 2780 is the second.
+    `replaces` is independent of both -- 24 parts replaced one part and were
+    themselves replaced by another.
     """
     if this_year is None:
         this_year = datetime.now(timezone.utc).year
@@ -150,6 +156,8 @@ def tags_for(category: str | None, printed: bool,
         out.add("composite")
     if year_to is not None and year_to <= this_year - RETIRED_AFTER_YEARS:
         out.add("replaced" if successor else "retired")
+    if predecessors:
+        out.add("replaces")
     if sets is not None:
         if sets >= POPULAR_SETS:
             out.add("popular")

@@ -28,6 +28,10 @@ export interface Cell {
    *  lab's server is long-lived and can be older than the page in front of
    *  it, and a missing field must not break the view. */
   successor?: string | null;
+  /** The parts this one replaced, in id order -- the same links read
+   *  backwards. Optional for the same reason `successor` is; empty, not
+   *  absent, for a part that replaced nothing. */
+  predecessors?: string[];
   /** The top-level Rebrickable theme most of a printed or sticker part's own
    *  sets belong to, or null where none dominates. Optional for the same
    *  reason `tags` is: the lab's server can be older than the page. */
@@ -91,6 +95,11 @@ export interface PartDetail {
           status: string; status_note: string | null;
           year_from: number | null; year_to: number | null;
           sets: number | null; tags: string[];
+          /** Both ends of the replacement link, so the detail view's tags and
+           *  lineage do not depend on having come from a cell. Absent from an
+           *  API older than the fields. */
+          successor?: string | null;
+          predecessors?: string[];
           /** LDraw's `!PREVIEW` line, verbatim, for the 394 parts that carry
            *  one. Absent from an API older than the field, like `slots`. */
           preview?: string | null;

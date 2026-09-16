@@ -420,6 +420,34 @@ def test_a_cell_with_no_dominant_theme_says_so(conn):
     assert cell["theme"] is None
 
 
+def _successor(conn, pid, successor, rel="Replacement"):
+    conn.execute("INSERT INTO part_successors (part_id, successor, rel) "
+                 "VALUES (?, ?, ?)", (pid, successor, rel))
+
+
+def test_a_cell_names_every_part_it_replaced(conn):
+    for pid in ("3001", "3002", "3003"):
+        _part(conn, pid)
+    _successor(conn, "3002", "3001")
+    _successor(conn, "3003", "3001")
+    conn.commit()
+    by_id = {c["id"]: c for c in cells.cells(conn)["cells"]}
+    assert by_id["3001"]["predecessors"] == ["3002", "3003"]
+    assert "replaces" in by_id["3001"]["tags"]
+    # One row read from either end: neither part gets the other's direction.
+    assert by_id["3002"]["successor"] == "3001"
+    assert by_id["3002"]["predecessors"] == []
+    assert "replaces" not in by_id["3002"]["tags"]
+
+
+def test_a_part_that_replaced_nothing_has_an_empty_list(conn):
+    _part(conn, "3001")
+    conn.commit()
+    cell = cells.cells(conn)["cells"][0]
+    assert cell["predecessors"] == []
+    assert cell["successor"] is None
+
+
 def test_a_facet_slot_still_names_its_engine():
     assert cells.engine_for("white-naive") == "naive"
     assert cells.engine_for("silhouette-occt") == "occt"

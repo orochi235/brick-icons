@@ -92,15 +92,35 @@ export function drawSticker(ctx: CanvasRenderingContext2D, cx: number, cy: numbe
 /** Where a corner badge's disc sits. Shared with the hit test, so a click
  *  cannot land somewhere the disc is not drawn. */
 export function cornerBadgeAt(badge: CellBadge,
-                              cmd: { dx: number; dy: number; dw: number; dh: number }) {
-  const { size, radius, inset, rise, fall } = badgeGeometry(cmd.dw);
+                              cmd: { dx: number; dy: number; dw: number; dh: number },
+                              index = 0) {
+  const { size, radius, gap, inset, rise, fall } = badgeGeometry(cmd.dw);
   const right = badge.corner === 'br' || badge.corner === 'tr';
   const bottom = badge.corner === 'br';
+  const along = index * (radius * 2 + gap);
   return {
-    cx: right ? cmd.dx + cmd.dw - inset : cmd.dx + inset,
+    cx: right ? cmd.dx + cmd.dw - inset - along : cmd.dx + inset + along,
     cy: bottom ? cmd.dy + cmd.dh - fall : cmd.dy + rise,
     size, radius,
   };
+}
+
+/** Every corner badge's disc, in the order given, each placed along the row
+ *  its corner's badges form inward from that corner. Drawing and the hit test
+ *  both go through this: placed without an index, two discs sharing a corner
+ *  paint on top of each other and only one of them can be clicked. */
+export function cornerBadgesAt(badges: readonly CellBadge[],
+                               cmd: { dx: number; dy: number; dw: number; dh: number }) {
+  const { radius, gap, inset } = badgeGeometry(cmd.dw);
+  // A radius of headroom: the rows from facing corners must not meet.
+  const last = Math.max(0, Math.floor((cmd.dw / 2 - inset - radius) / (radius * 2 + gap)));
+  const seen: Record<string, number> = {};
+  return badges.map((badge) => {
+    const corner = badge.corner ?? 'tl';
+    const index = seen[corner] ?? 0;
+    seen[corner] = index + 1;
+    return cornerBadgeAt(badge, cmd, Math.min(index, last));
+  });
 }
 
 /** The kind badges, running right along the bottom edge from wherever the
@@ -195,13 +215,15 @@ export function drawOverlays(ctx: CanvasRenderingContext2D,
   // their left or the two overlap. Measured off the same geometry the discs
   // are placed with, never a guess at how many there are.
   const topRight = (cmd.badges ?? []).filter((b) => b.corner === 'tr').length;
+  const disc = badgeGeometry(box.dw);
   const trPad = topRight === 0 ? 0
-    : topRight * badgeGeometry(box.dw).radius * 2 + radius * 0.6;
+    : topRight * disc.radius * 2 + (topRight - 1) * disc.gap + radius * 0.6;
   for (const caption of cmd.captions ?? []) {
     const end = drawCaption(ctx, caption, box, caption.corner === 'tr' ? trPad : 0);
     if (caption.corner === 'bl') stripX = end + radius * 0.6;
   }
-  for (const badge of cmd.badges ?? []) drawBadge(ctx, badge, cornerBadgeAt(badge, box));
+  const discs = cornerBadgesAt(cmd.badges ?? [], box);
+  (cmd.badges ?? []).forEach((badge, i) => drawBadge(ctx, badge, discs[i]!));
   drawStrip(ctx, cmd.strip ?? [], box, stripX);
 }
 

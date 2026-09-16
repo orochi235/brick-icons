@@ -139,6 +139,18 @@ def test_two_badges_on_one_axis_are_alternatives_and_two_axes_narrow(conn):
     assert size(badges=["technic", "printed"]) == 1
 
 
+def test_the_replaces_badge_narrows_to_the_part_that_replaced_another(conn):
+    # Built from the same rows read backwards. Without them this badge matched
+    # no part at all and the page reported that as a fact about the library.
+    _part(conn, "3001")
+    _part(conn, "3002")
+    conn.execute("INSERT INTO part_successors (part_id, successor, rel) "
+                 "VALUES ('3002', '3001', 'Replacement')")
+    conn.commit()
+    ids, _ = stats.members(conn, badges=("replaces",))
+    assert ids == {"3001"}
+
+
 def test_a_class_the_table_does_not_have_is_refused(conn):
     with pytest.raises(ValueError, match="unknown classes"):
         stats.stats(conn, shown={"retired": False})

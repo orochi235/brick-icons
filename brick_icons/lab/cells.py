@@ -390,6 +390,13 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
         "FROM part_years")}
     successors = {r["part_id"]: r["successor"] for r in conn.execute(
         "SELECT part_id, successor FROM part_successors")}
+    # The same links read backwards, built once rather than per part: 434
+    # parts replaced something, and 25 of them replaced more than one.
+    predecessors: dict[str, list[str]] = {}
+    for replaced_id, succ in successors.items():
+        predecessors.setdefault(succ, []).append(replaced_id)
+    for ids in predecessors.values():
+        ids.sort()
     themes = {r["part_id"]: r["theme"] for r in conn.execute(
         "SELECT part_id, theme FROM part_themes")}
 
@@ -411,6 +418,7 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
                                render["sha256"] if render else None)
         year = years.get(pid)
         successor = successors.get(pid)
+        earlier = predecessors.get(pid, [])
         rows.append({
             "id": pid,
             "index": index[pid],
@@ -437,6 +445,9 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
             # The part that replaced this one, where one is known: the wall's
             # updated badge links to it.
             "successor": successor,
+            # The parts this one replaced, in id order -- the same links read
+            # backwards, which nothing showed before.
+            "predecessors": earlier,
             # The top-level Rebrickable theme most of a printed or sticker
             # part's own sets belong to, or null where none dominates.
             "theme": themes.get(pid),
@@ -444,7 +455,8 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
                 part["category"], bool(part["printed"]),
                 year["year_to"] if year else None,
                 sets_for(year),
-                title=part["title"], part_id=pid, successor=successor),
+                title=part["title"], part_id=pid, successor=successor,
+                predecessors=earlier),
             "status": part["status"],
             "sha": render["sha256"] if render else None,
             "made_at": render["made_at"] if render else None,

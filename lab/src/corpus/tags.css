@@ -29,6 +29,24 @@
   line-height: 1;
 }
 
+/* What replaced this part and what it replaced: a pointer somewhere else in
+ * the library, so it sets apart from the tags, which are about this part. */
+.corpus-lineage {
+  margin: 0.2rem 0 0;
+  color: var(--wzl-fg-muted);
+  font-size: 0.9em;
+}
+
+.corpus-lineage-part {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 /* The badge is aria-hidden, so its word reaches a screen reader only through
  * the text beside it. */
 .corpus-visually-hidden {

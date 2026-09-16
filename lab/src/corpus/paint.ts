@@ -164,7 +164,7 @@ export const LABEL_MIN_PX = 88;
 
 /** A picture rather than a letter, where a letter would need explaining. */
 export type BadgeMark = 'stickerPolice' | 'stickerFlames'
-  | 'star' | 'archive' | 'redo' | 'bolt' | 'magnet' | 'printed'
+  | 'star' | 'archive' | 'redo' | 'redoBack' | 'bolt' | 'magnet' | 'printed'
                       | 'brush' | 'minifig' | 'technic' | 'composite' | 'duplo'
   | 'cobweb';
 
@@ -216,9 +216,9 @@ export interface CellBadge {
 export const PROPERTY_FIELD = 'oklch(0.4109 0.0082 286.03)';
 
 /** The discs that keep a corner of their own, drawn as a row inward from it.
- *  `retired` and `replaced` share the top-right slot and never both apply -- a
- *  part that stopped and a part that was replaced are different things wearing
- *  one badge today. */
+ *  `retired` and `replaced` never both apply -- a part that stopped and a part
+ *  that was replaced are different things wearing one badge today -- so the
+ *  top-right row holds at most two: one of those, and `replaces`. */
 export const CORNER_BADGES: Record<string, CellBadge> = {
   popular: { tag: 'popular', mark: 'star', corner: 'tl', field: 'oklch(0.6800 0.1760 50.54)', ink: 'oklch(1.0000 0 0)' },
   // What is on the part rather than what it is: beside the star, ahead of the
@@ -238,6 +238,11 @@ export const CORNER_BADGES: Record<string, CellBadge> = {
   // corner from them. The year caption gives way and sets to their left.
   retired: { tag: 'retired', mark: 'archive', corner: 'tr', field: 'oklch(0.5302 0.0108 286.02)', ink: 'oklch(1.0000 0 0)' },
   replaced: { tag: 'replaced', mark: 'redo', corner: 'tr', field: 'oklch(0.4950 0.1230 154.41)',
+             ink: 'oklch(1.0000 0 0)', accent: 'oklch(1.0000 0 0)', scale: 1.14 },
+  // The link read backwards, so the same arrow mirrored. Its own hue at the
+  // green's lightness and chroma: the pair is one relation from either end,
+  // and a part wearing both must not read as one badge drawn twice.
+  replaces: { tag: 'replaces', mark: 'redoBack', corner: 'tr', field: 'oklch(0.4950 0.1230 250.00)',
              ink: 'oklch(1.0000 0 0)', accent: 'oklch(1.0000 0 0)', scale: 1.14 },
 };
 
@@ -306,6 +311,9 @@ export const BADGE_AXES: { key: string; label: string; tags: string[] }[] = [
   { key: 'properties', label: 'Properties',
     tags: ['magnet', 'electric', 'printed', 'composite'] },
   { key: 'fate', label: 'What became of it', tags: ['retired', 'replaced'] },
+  // Its own axis rather than beside the other two: within an axis the picks
+  // are alternatives, and the 24 chain parts are asked for with both at once.
+  { key: 'replaces', label: 'What it replaced', tags: ['replaces'] },
 ];
 
 /** The picked tags, split by the axis each answers. A tag no axis claims gets
@@ -320,8 +328,20 @@ export function byAxis(picked: string[]): string[][] {
   return out;
 }
 
-/** The badge that links somewhere when clicked. Only one does. */
+/** The badges that lead somewhere when clicked: forward to the part that
+ *  replaced this one, and back to the part it replaced. */
 export const LINKED_BADGE = 'replaced';
+export const REPLACES_BADGE = 'replaces';
+
+/** The part a linked badge leads to, or null where there is no single one:
+ *  a part that replaced several has no one target, so the click falls through
+ *  to a normal pick and the card names them all. Both walls follow this. */
+export function linkedPart(cell: Cell, tag: string): string | null {
+  if (tag === LINKED_BADGE) return cell.successor ?? null;
+  if (tag !== REPLACES_BADGE) return null;
+  const from = cell.predecessors ?? [];
+  return from.length === 1 ? from[0]! : null;
+}
 
 export function isRetired(cell: Cell): boolean {
   return (cell.tags?.includes('retired') ?? false)
@@ -339,11 +359,14 @@ export function badgeGeometry(cellPx: number) {
   const size = captionSize(cellPx);
   const radius = size * 0.78;
   const pad = cornerPad(cellPx, size);
+  // Between two discs sharing a corner, the same half-radius pezlie leaves.
+  const gap = radius * 0.5;
   // One inset on every edge, the same one the year caption keeps: a corner
   // mark is a box tangent to the pad, whichever corner it is in. Chasing the
   // caption's ink line instead made a top disc sit 0.21 of the type size
   // nearer its edge than a bottom one, so no two corners agreed.
-  return { size, radius, inset: radius + pad, rise: radius + pad, fall: radius + pad };
+  return { size, radius, gap, inset: radius + pad, rise: radius + pad,
+           fall: radius + pad };
 }
 
 /** How far a caption's ink centers above the `middle` baseline canvas sets

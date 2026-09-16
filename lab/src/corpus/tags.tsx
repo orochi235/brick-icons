@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { BadgeSwatch } from '@lab/corpus/BadgeSwatch';
 import { ALL_BADGES } from '@lab/corpus/paint';
 import { yearRange } from '@lab/corpus/years';
@@ -40,5 +41,40 @@ export function Tags({ tags }: { tags?: string[] }) {
         );
       })}
     </ul>
+  );
+}
+
+/** Both ends of the replacement link, under the tag row: what replaced this
+ *  part, and what it replaced. The corpus records one direction and the wall
+ *  showed only that one.
+ *
+ *  An id is a link where the view it is in can go to a part, and plain text
+ *  where it cannot -- `/corpus` gives no handler. */
+export function Lineage({ successor, predecessors, onPart }: {
+  successor?: string | null;
+  predecessors?: string[];
+  onPart?: (id: string) => void;
+}) {
+  const replaced = predecessors ?? [];
+  if (!successor && replaced.length === 0) return null;
+  const part = (id: string) => (onPart
+    ? (
+      <button type="button" className="corpus-lineage-part"
+              onClick={() => onPart(id)}>{id}</button>
+      )
+    : id);
+  return (
+    <p className="corpus-lineage">
+      {successor && <>Replaced by {part(successor)}</>}
+      {successor && replaced.length > 0 && ' · '}
+      {replaced.length > 0 && (
+        <>
+          Replaces{' '}
+          {replaced.map((id, i) => (
+            <Fragment key={id}>{i > 0 && ', '}{part(id)}</Fragment>
+          ))}
+        </>
+      )}
+    </p>
   );
 }

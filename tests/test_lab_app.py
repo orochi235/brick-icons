@@ -488,6 +488,26 @@ def test_part_route_sends_no_features_for_a_part_that_has_none(tmp_path):
         "/api/corpus/part/3001").json()["features"] == {}
 
 
+def test_part_route_carries_both_ends_of_the_replacement_link(tmp_path):
+    from brick_icons import db
+
+    client = _corpus_client(tmp_path)
+    conn = db.connect(tmp_path / "corpus.db")
+    conn.executemany(
+        "INSERT INTO part_successors (part_id, successor, rel) "
+        "VALUES (?, ?, ?)",
+        [("3002", "3001", "Replacement"), ("3003", "3001", "Replacement")])
+    conn.commit()
+    conn.close()
+
+    part = client.get("/api/corpus/part/3001").json()["part"]
+    # The detail view is opened from places that carry no cell, so without
+    # these its tag row could never say what the part replaced.
+    assert part["predecessors"] == ["3002", "3003"]
+    assert part["successor"] is None
+    assert "replaces" in part["tags"]
+
+
 def test_part_route_404s_on_an_unknown_part(tmp_path):
     assert _corpus_client(tmp_path).get("/api/corpus/part/nope").status_code == 404
 

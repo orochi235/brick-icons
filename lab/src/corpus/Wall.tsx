@@ -10,8 +10,9 @@ import {
 import { LoupeBubble, resolveLoupe, useLoupe } from '@weasel-js/labkit/loupe';
 import { adjacent, impliedCaret, type Direction } from '@lab/corpus/caret';
 import type { Band, Rect } from '@lab/corpus/layout';
-import { LINKED_BADGE, paintCommands, type Appearance } from '@lab/corpus/paint';
-import { cornerBadgeAt, drawPaintCommand } from '@lab/corpus/draw2d';
+import { linkedPart, LINKED_BADGE, paintCommands, REPLACES_BADGE,
+  type Appearance } from '@lab/corpus/paint';
+import { cornerBadgesAt, drawPaintCommand } from '@lab/corpus/draw2d';
 import { scenePainter, type SceneWallPainter } from '@lab/corpus/drawScene';
 import { DEFAULT_PALETTE, readPalette, type CellState, type Palette } from '@lab/corpus/palette';
 import { DEFAULT_PARAMS } from '@lab/corpus/params';
@@ -152,14 +153,15 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
     [rects, visible, cam, width, height]);
   const byId = useMemo(() => new Map(cells.map((c, i) => [c.id, i])), [cells]);
 
-  /** Follow an updated badge to the part that replaced this one: put the
-   *  caret on it and center it. Centered rather than an arrow key's minimum
-   *  shift -- the successor is somewhere else in the wall entirely, and
-   *  landing it against an edge leaves the reader hunting for what they
-   *  asked to be taken to. */
-  const goToSuccessor = (cell: Cell): boolean => {
-    if (!cell.successor) return false;
-    const next = byId.get(cell.successor);
+  /** Follow a replacement badge to the part at its other end: put the caret
+   *  on it and center it. Centered rather than an arrow key's minimum shift
+   *  -- the part is somewhere else in the wall entirely, and landing it
+   *  against an edge leaves the reader hunting for what they asked to be
+   *  taken to. */
+  const goToLinked = (cell: Cell, tag: string): boolean => {
+    const target = linkedPart(cell, tag);
+    if (!target) return false;
+    const next = byId.get(target);
     if (next == null) return false;
     onExplicitCaretChange(next);
     const rect = rects[next];
@@ -279,9 +281,11 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
         if (!cell) return null;
         // Before the cell itself: the updated badge goes somewhere else, and
         // it sits inside the cell's own box.
-        const badge = (('badges' in c ? c.badges : undefined) ?? []).find((b) => {
-          if (b.tag !== LINKED_BADGE) return false;
-          const { cx, cy, radius } = cornerBadgeAt(b, c);
+        const worn = ('badges' in c ? c.badges : undefined) ?? [];
+        const discs = cornerBadgesAt(worn, c);
+        const badge = worn.find((b, i) => {
+          if (b.tag !== LINKED_BADGE && b.tag !== REPLACES_BADGE) return false;
+          const { cx, cy, radius } = discs[i]!;
           return Math.hypot(sx - cx, sy - cy) <= radius;
         });
         return { cell, at: { x: sx, y: sy }, badge };
@@ -431,7 +435,7 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
           if (e.detail === 2) return;
           const hit = hitTest(e);
           if (!hit) return;
-          if (hit.badge && goToSuccessor(hit.cell)) return;
+          if (hit.badge && goToLinked(hit.cell, hit.badge.tag)) return;
           onPick(hit.cell, hit.at);
         }}
         onDoubleClick={(e) => {

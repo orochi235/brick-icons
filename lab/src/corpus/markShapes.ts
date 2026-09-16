@@ -185,6 +185,14 @@ const redo: MarkShape[] = [
   { d: polys(REDO_SPARK), fill: 'accent' },
 ];
 
+// The same arrow turned back, for the part at the other end of the link:
+// what replaced something is what `replaced` says, run the other way.
+const MIRROR_X: Matrix = [-1, 0, 0, 1, 0, 0];
+const redoBack: MarkShape[] = [
+  { d: poly(through(MIRROR_X, REDO)) },
+  { d: polys(REDO_SPARK.map((spark) => through(MIRROR_X, spark))), fill: 'accent' },
+];
+
 // A lightning bolt. A zigzag silhouette is the shape that survives the mark
 // budget best -- a little over 4px at the badge floor -- and it wants some
 // mass to survive it, so the strokes are wide.
@@ -562,7 +570,7 @@ const cobweb: MarkShape[] = [
 // ------------------------------------------------------------------ the set
 
 export const MARK_SHAPES: Record<string, MarkShape[]> = {
-  star, archive, redo, bolt, magnet, minifig, technic, composite, duplo,
+  star, archive, redo, redoBack, bolt, magnet, minifig, technic, composite, duplo,
   printed, brush, cobweb,
   stickerPolice: sticker('police'), stickerFlames: sticker('flames'),
 };
