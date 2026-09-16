@@ -6,7 +6,7 @@ import { LabShell } from '@weasel-js/labkit';
 import { Button } from '@weasel-js/ui';
 import type { LabClient } from '@lab/api/client';
 import { clampWallView, DEFAULT_BLANK_PX, sameView } from '@lab/corpus/clamp';
-import { readWallHash, readWallLink, WALL_LINK_PARAMS, wallHashString,
+import { DEFAULT_SOURCE, readWallHash, readWallLink, WALL_LINK_PARAMS, wallHashString,
          type WallCam } from '@lab/corpus/wallHash';
 import { categoryOf, COVERAGE_ORDER, groupers, rollUp } from '@lab/corpus/facts';
 import { FilterBar } from '@lab/corpus/FilterBar';
@@ -86,13 +86,6 @@ function WallSkeleton({ cell, gap, width, height }: {
     </div>
   );
 }
-
-
-/** The slot the wall opens on with nothing in the hash: the engine's own
- *  canonical drawing. Population picked this before, which meant `reference`
- *  -- LDView drew every part in the library, so the biggest slot is never
- *  ours. */
-export const DEFAULT_SOURCE = 'occt';
 
 
 export function CorpusWall({ client }: { client: LabClient }) {

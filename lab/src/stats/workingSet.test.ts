@@ -65,7 +65,7 @@ describe('wallHref', () => {
                             shown: { ...DEFAULT_SET.shown, outOfScope: false },
                             excluded: ['Sticker'] }, 'silhouette-naive');
     const q = new URLSearchParams(href.slice(href.indexOf('?')));
-    expect(href.startsWith('/corpus?')).toBe(true);
+    expect(href.startsWith('/wall?')).toBe(true);
     expect(q.get('source')).toBe('silhouette-naive');
     expect(q.get('outOfScope')).toBe('false');
     expect(q.getAll('excluded')).toEqual(['Sticker']);

@@ -3,7 +3,6 @@ import { defaultUrls } from '@pezlie/wall/src/urls';
 import { WallView, type WallHeader, type WallViewState } from '@pezlie/wall/src/WallView';
 import type { LabClient } from '@lab/api/client';
 import '@lab/corpus/corpus.css';
-import { DEFAULT_SOURCE } from '@lab/corpus/CorpusWall';
 import { drawSticker } from '@lab/corpus/draw2d';
 import { familyOf } from '@lab/corpus/families';
 import { FilterBar } from '@lab/corpus/FilterBar';
@@ -13,7 +12,7 @@ import { linkedPart, LINKED_BADGE, REPLACES_BADGE, RETIRED_WASH,
 import { PartCardBody } from '@lab/corpus/PartCard';
 import type { TintMode } from '@lab/corpus/tint';
 import type { Cell } from '@lab/corpus/types';
-import { WALL_LINK_PARAMS } from '@lab/corpus/wallHash';
+import { DEFAULT_SOURCE, WALL_LINK_PARAMS } from '@lab/corpus/wallHash';
 import { PAGES } from '@lab/nav/pages';
 import { PartSearch } from '@lab/shared/PartSearch';
 import '@lab/wall/BrickWall.css';

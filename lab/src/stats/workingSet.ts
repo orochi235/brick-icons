@@ -71,5 +71,5 @@ export function wallHref(set: WorkingSet, source: string): string {
     source, filter: set.kind, shown: set.shown,
     excluded: set.excluded, badges: set.badges,
   });
-  return `/corpus?${q}`;
+  return `/wall?${q}`;
 }

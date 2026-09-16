@@ -5,6 +5,12 @@ import { decodeHashJson, encodeHashJson } from '@lab/corpus/hashCodec';
 import { RAMP_NAMES, TINT_MODES, type RampName, type TintMode }
   from '@lab/corpus/tint';
 
+/** The slot the wall opens on with nothing in the hash: the engine's own
+ *  canonical drawing. Population picked this before, which meant `reference`
+ *  -- LDView drew every part in the library, so the biggest slot is never
+ *  ours. */
+export const DEFAULT_SOURCE = 'occt';
+
 /** What the corpus wall keeps in its URL, so a reload lands where you were.
  *
  *  The lightbox is the reason this exists: it is a whole page's worth of a

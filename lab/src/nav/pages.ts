@@ -12,8 +12,7 @@ export const LAB_PATH = '/index';
 
 export const PAGES: LabPage[] = [
   { href: LAB_PATH, label: 'Lab' },
-  { href: '/corpus', label: 'Wall' },
-  { href: '/wall', label: 'New wall' },
+  { href: '/wall', label: 'Wall' },
   { href: '/stats', label: 'Dashboard' },
   { href: '/ingest', label: 'Ingestion' },
 ];
