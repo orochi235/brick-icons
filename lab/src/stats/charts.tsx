@@ -1,6 +1,7 @@
-import type { CSSProperties, ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type { Coverage } from '@lab/corpus/facts';
 import type { Cost, CoverageRow, Phase, PhaseRow, SpeedRow } from '@lab/stats/types';
+import { CHIP, MaterialBar } from '@lab/shared/MaterialBar';
 
 /** Stack order: `drawn` leads, so a row reads from the left as how much of
  *  the slot is done, the way any progress bar does, and the rows can be
@@ -63,7 +64,10 @@ export function CoverageBars({ rows, onOpen, off }: {
     <div className="stats-bars">
       {rows.map((row) => (
         <div key={row.source} className="stats-bar-row">
-          <span className="stats-bar-name">{row.source}</span>
+          <span className="stats-bar-name material-chip-label">
+            <MaterialBar {...CHIP} source={row.source} />
+            <span>{row.source}</span>
+          </span>
           <div className="stats-bar" role="img"
                aria-label={`${row.source}: ${STACK
                  .map((k) => `${row.counts[k].toLocaleString()} ${COVERAGE_LABEL[k]}`)
@@ -131,13 +135,32 @@ export function isThin(row: { n: number }, cost: { n: number }): boolean {
  *  parts from row to row -- a slot that has barely run is compared over the
  *  handful it shares with the base -- and a share read without that count is
  *  read as more than it is. */
+/** `.stats-bar`'s own height (1.5rem at the default root size) -- a material
+ *  fill keeps the row rhythm the flat span it replaces had. */
+const COST_BAR_HEIGHT = 24;
+
 export function CostBars({ cost }: { cost: Cost }) {
   const widest = Math.max(...cost.slots.map((r) => r.share));
+  const trackRef = useRef<HTMLSpanElement>(null);
+  const [trackWidth, setTrackWidth] = useState<number | null>(null);
+
+  // Every row's bar sits in the same grid column, so one measurement serves
+  // them all -- the header's own column stands in for a row that might not
+  // exist yet. `MaterialBar` wants pixels, and stretching an SVG to a percent
+  // width instead would shear decal's hatching and double its outline.
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setTrackWidth(entry!.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   return (
     <div className="stats-bars stats-cost">
       <div className="stats-bar-row stats-cost-row stats-cost-head">
         <span />
-        <span />
+        <span ref={trackRef} />
         <span className="stats-bar-value">share</span>
         <span className="stats-bar-value">&times; {cost.base}</span>
         <span className="stats-bar-value">median</span>
@@ -145,30 +168,35 @@ export function CostBars({ cost }: { cost: Cost }) {
       </div>
       {cost.slots.map((row) => (
         <div key={row.source} className="stats-bar-row stats-cost-row">
-          <span className="stats-bar-name">
-            {row.source}
-            {row.build === cost.build && row.revisions === 1 ? null : (
-              <span className="stats-muted"
-                    title={row.revisions === 1 ? `measured at ${row.build}`
-                      : `${row.revisions} revisions, most at ${row.build}`}>
-                {' '}{ELSEWHERE}
-              </span>
-            )}
-            {isThin(row, cost) ? (
-              <span className="stats-muted"
-                    title={`over ${row.n.toLocaleString()} of `
-                      + `${cost.n.toLocaleString()} parts`}>
-                {' '}{THIN}
-              </span>
-            ) : null}
+          <span className="stats-bar-name material-chip-label">
+            <MaterialBar {...CHIP} source={row.source} />
+            <span>
+              {row.source}
+              {row.build === cost.build && row.revisions === 1 ? null : (
+                <span className="stats-muted"
+                      title={row.revisions === 1 ? `measured at ${row.build}`
+                        : `${row.revisions} revisions, most at ${row.build}`}>
+                  {' '}{ELSEWHERE}
+                </span>
+              )}
+              {isThin(row, cost) ? (
+                <span className="stats-muted"
+                      title={`over ${row.n.toLocaleString()} of `
+                        + `${cost.n.toLocaleString()} parts`}>
+                  {' '}{THIN}
+                </span>
+              ) : null}
+            </span>
           </span>
           <div className="stats-bar" role="img"
                aria-label={`${row.source}: ${(row.share * 100).toFixed(1)}% of `
                  + `a pass of every slot, ${row.ratio?.toFixed(2) ?? '?'} times `
                  + `${cost.base}, over ${row.n.toLocaleString()} of `
                  + `${cost.n.toLocaleString()} parts`}>
-            <span className="stats-seg" data-label="cost"
-                  style={{ width: `${pct(row.share, widest)}%` }} />
+            {trackWidth != null && (
+              <MaterialBar source={row.source} height={COST_BAR_HEIGHT}
+                           width={trackWidth * pct(row.share, widest) / 100} />
+            )}
           </div>
           <span className="stats-bar-value">{(row.share * 100).toFixed(1)}%</span>
           <span className="stats-bar-value">
@@ -278,11 +306,9 @@ export function SecsOverlay({ rows }: { rows: SpeedRow[] }) {
   return (
     <figure className="stats-histogram stats-overlay">
       <figcaption className="stats-overlay-keys">
-        {rows.map((row, i) => (
+        {rows.map((row) => (
           <span key={row.engine} className="stats-overlay-key">
-            <span className="stats-swatch stats-bin-mark" aria-hidden="true"
-                  data-engine={row.engine}
-                  data-fill={SERIES_FILL[i] ?? 'solid'} />
+            <MaterialBar {...CHIP} source={row.engine} />
             <strong>{row.engine}</strong>
             <span className="stats-muted">
               {' '}median {row.median?.toFixed(1)}s · p95 {row.p95?.toFixed(0)}s ·

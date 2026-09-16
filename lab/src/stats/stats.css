@@ -11,14 +11,13 @@
    * not a state, and painting it cyan would say "timed out" to anyone who
    * just read the coverage legend.
    *
-   * occt wears the blue this page already means occt by (`--slot-occt`), so
-   * the histogram spends no hue the reader has not already been taught. naive
-   * is the reference implementation and stays neutral -- a TRUE gray, not the
-   * blue-slate it was: against a blue-cast neutral no hue on this page clears
-   * the CVD floor, and blue itself reads at 10.5 normal-vision against it.
-   * Measured on the sunken surface -- CVD 11.9 worst, normal-vision 15.9. */
+   * occt and naive instead take their own material color (`MATERIALS` in
+   * materials.ts), so this histogram and the lightbox mean the same thing by
+   * an engine's color. `--stats-bin` is the fallback for an engine neither
+   * names. */
   --stats-bin: #7a7a80;
-  --stats-bin-occt: #3987e5;
+  --stats-bin-occt: #0055BF;
+  --stats-bin-naive: #FE8A18;
 
   /* The phase palette: categorical, four exclusive stages. Validated with the
    * dataviz validator against this page's sunken surface -- lightness band,
@@ -180,13 +179,6 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
  * resizes to its widest cell per row does not allow. */
 .stats-cost-row { grid-template-columns: 11rem 1fr 4.5rem 5rem 5rem 5rem; }
 .stats-cost-head { font-size: 0.8rem; color: var(--wzl-fg-muted, #9a9aa2); }
-.stats-seg[data-label='cost'] { background: var(--stats-drawn); }
-
-/* A cost row is ONE segment where a coverage row is a stack, so the fill is
- * the shape the eye reads rather than a partial filling of the track. Round
- * it on its own: a radius that lives only on the track rounds the end the
- * fill starts at and leaves the end it stops at square. */
-.stats-cost .stats-seg { border-radius: 3px; }
 
 
 .stats-swatch[data-label='defect'] { background: var(--stats-defect); }
@@ -325,6 +317,7 @@ a.stats-seg:hover, a.stats-seg:focus-visible { outline: 2px solid var(--wzl-fg);
 
 .stats-bin-mark { --mark: var(--stats-bin); background: var(--mark); }
 .stats-bin-mark[data-engine="occt"] { --mark: var(--stats-bin-occt); }
+.stats-bin-mark[data-engine="naive"] { --mark: var(--stats-bin-naive); }
 
 /* Fine and low-contrast on purpose. A bold hatch across a bar this wide reads
  * as "disabled" rather than as a second series. Kept now that the series
