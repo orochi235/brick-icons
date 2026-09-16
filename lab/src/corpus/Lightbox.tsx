@@ -13,6 +13,7 @@ import { ALL_BADGES, cellState } from '@lab/corpus/paint';
 import type { CellState } from '@lab/corpus/palette';
 import { cssVarTable } from '@lab/corpus/states';
 import type { PartDetail } from '@lab/corpus/types';
+import { ZoomView } from '@lab/corpus/ZoomView';
 import { STATUSES, type DefectStatus } from '@lab/defects/useDefects';
 import { STATUS_BADGES } from '@lab/defects/statusBadges';
 import { CHIP, MaterialBar } from '@lab/shared/MaterialBar';
@@ -120,8 +121,12 @@ export function Lightbox({ partId, source, client, onClose }: {
   const [title, setTitle] = useState('');
   const [flagError, setFlagError] = useState<string | null>(null);
   const [redraw, setRedraw] = useState<{ drawing: true } | { error: string } | null>(null);
+  const [zoomedSlot, setZoomedSlot] = useState<Slot | null>(null);
   const gone = useRef(new AbortController());
   const closeRef = useRef<HTMLButtonElement>(null);
+  // The radio a double-click opened the zoomed view from, so closing it can
+  // hand focus back rather than dropping it to the document body.
+  const zoomOpenerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -131,13 +136,26 @@ export function Lightbox({ partId, source, client, onClose }: {
 
   useEffect(() => { setShown(source); }, [source]);
 
+  // One listener deciding both cases, rather than a second one on the zoomed
+  // view racing it: closing the zoom first, when it is open, cannot depend on
+  // which of two listeners on `window` ran first, because there is only one.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (zoomedSlot !== null) { setZoomedSlot(null); return; }
+      onClose();
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, zoomedSlot]);
 
   useEffect(() => { closeRef.current?.focus(); }, []);
+
+  // Only fires on the close transition: the ref stays null until a
+  // double-click sets it, so mounting with no zoom open focuses nothing.
+  useEffect(() => {
+    if (zoomedSlot === null) zoomOpenerRef.current?.focus();
+  }, [zoomedSlot]);
 
   useEffect(() => {
     const ctl = gone.current;
@@ -234,6 +252,7 @@ export function Lightbox({ partId, source, client, onClose }: {
     ? null : document.querySelector('.lk-root') ?? document.body;
 
   const panel = (
+    <>
     <div className="corpus-lightbox-scrim" role="presentation" onClick={onClose}>
     <div className="corpus-lightbox" role="dialog" aria-modal="true"
          aria-label={`Part ${partId}`} onClick={(e) => e.stopPropagation()}>
@@ -297,6 +316,14 @@ export function Lightbox({ partId, source, client, onClose }: {
                          e.stopPropagation();
                          window.open(renderSrc(detail.part.id, slot, outlineTranslucent),
                                      '_blank', 'noopener');
+                       }}
+                       onDoubleClick={(e) => {
+                         // The two clicks a dblclick follows already picked the
+                         // slot; shift-click's own handler above sent it to a
+                         // new tab instead, and this must stay out of its way.
+                         if (e.shiftKey || !slot.sha256) return;
+                         zoomOpenerRef.current = e.currentTarget.querySelector('input');
+                         setZoomedSlot(slot);
                        }}>
                   <input type="radio" name="corpus-slot-shown" aria-label={slot.source}
                          className="corpus-slot-radio" checked={slot.source === shown}
@@ -441,6 +468,12 @@ export function Lightbox({ partId, source, client, onClose }: {
       )}
     </div>
     </div>
+    {zoomedSlot && detail && (
+      <ZoomView partId={detail.part.id} source={zoomedSlot.source}
+                src={renderSrc(detail.part.id, zoomedSlot, outlineTranslucent)}
+                onClose={() => setZoomedSlot(null)} />
+    )}
+    </>
   );
 
   return host ? createPortal(panel, host) : panel;

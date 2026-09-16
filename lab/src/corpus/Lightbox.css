@@ -118,11 +118,16 @@
 }
 .corpus-slot[data-current='true'] .corpus-big { outline: 2px solid var(--wzl-fg); }
 
+/* .corpus-close sits at right:1rem and is ~34px wide (the theme's 24px
+ * control height, 12px of padding each side, plus its "x" glyph) -- 18px of
+ * that box falls inside this row's own content column past the panel's 2rem
+ * padding. Reserve enough on the right that the years span clears it. */
 .corpus-title-row {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 1rem;
+  padding-right: 1.25rem;
 }
 .corpus-title-row h2 { margin: 0; }
 .corpus-years { color: var(--wzl-fg-muted); white-space: nowrap; }

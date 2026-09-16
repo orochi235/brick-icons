@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Lightbox } from '@lab/corpus/Lightbox';
 
 const detail = {
@@ -562,4 +562,59 @@ it('drops the outline param again once unchecked', async () => {
   fireEvent.click(checkbox);
   expect(screen.getByRole('img', { name: '3001 drawn by translucent-occt' }).getAttribute('src'))
     .toBe('/api/corpus/render/translucent-occt/3001.svg?v=f00dface');
+});
+
+// --- a zoomed viewer on double-click ----------------------------------------
+
+it('opens a zoomed viewer on a double-click, showing that slot\'s render', async () => {
+  render(box());
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  fireEvent.doubleClick(screen.getByRole('radio', { name: 'silhouette-occt' }));
+  const zoomed = await screen.findByRole('dialog', { name: /silhouette-occt/ });
+  expect(within(zoomed).getByRole('img').getAttribute('src'))
+    .toBe('/api/corpus/render/silhouette-occt/3001.svg?v=cafebabe');
+});
+
+it('closes the zoomed viewer on Escape, and the lightbox on a second', async () => {
+  const onClose = vi.fn();
+  render(box({ onClose }));
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  fireEvent.doubleClick(screen.getByRole('radio', { name: 'silhouette-occt' }));
+  await screen.findByRole('dialog', { name: /silhouette-occt/ });
+  fireEvent.keyDown(window, { key: 'Escape' });
+  expect(screen.queryByRole('dialog', { name: /silhouette-occt/ })).toBeNull();
+  expect(onClose).not.toHaveBeenCalled();
+  fireEvent.keyDown(window, { key: 'Escape' });
+  expect(onClose).toHaveBeenCalled();
+});
+
+it('still opens a new tab on shift-click, and not the zoomed viewer', async () => {
+  const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+  render(box());
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  fireEvent.click(screen.getByRole('radio', { name: 'silhouette-occt' }), { shiftKey: true });
+  expect(open).toHaveBeenCalled();
+  expect(screen.queryByRole('dialog', { name: /silhouette-occt/ })).toBeNull();
+  open.mockRestore();
+});
+
+it('carries the outline param into the zoomed viewer for a translucent slot', async () => {
+  render(box({ client: {
+    corpusPart: () => Promise.resolve(withTranslucentSlot), addDefect } }));
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  fireEvent.click(screen.getByLabelText('Outlines in translucent views'));
+  fireEvent.doubleClick(screen.getByRole('radio', { name: 'translucent-occt' }));
+  const zoomed = await screen.findByRole('dialog', { name: /translucent-occt/ });
+  expect(within(zoomed).getByRole('img').getAttribute('src'))
+    .toBe('/api/corpus/render/translucent-occt/3001.svg?v=f00dface&outline=1');
+});
+
+it('returns focus to the tile that opened the zoomed viewer, on close', async () => {
+  render(box());
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  const radio = screen.getByRole('radio', { name: 'silhouette-occt' });
+  fireEvent.doubleClick(radio);
+  await screen.findByRole('dialog', { name: /silhouette-occt/ });
+  fireEvent.keyDown(window, { key: 'Escape' });
+  expect(document.activeElement).toBe(radio);
 });

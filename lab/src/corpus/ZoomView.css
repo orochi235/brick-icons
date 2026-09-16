@@ -1,0 +1,40 @@
+/* Above the lightbox (z-index 100), which stays mounted behind it. */
+.zoomview-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: flex;
+  padding: 2rem;
+  background: rgb(0 0 0 / 70%);
+}
+
+.zoomview-panel {
+  position: relative;
+  margin: auto;
+  width: min(96rem, 100%);
+  height: 100%;
+  border: 1px solid var(--wzl-border);
+  border-radius: 6px;
+  box-shadow: 0 1.5rem 3rem var(--wzl-shadow, rgb(0 0 0 / 35%));
+  background: var(--wzl-surface);
+}
+
+.zoomview-close { position: absolute; top: 1rem; right: 1rem; z-index: 1; }
+
+.zoomview-frame {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--corpus-thumb-ground, #ffffff);
+}
+
+.zoomview-img {
+  max-width: 100%;
+  max-height: 100%;
+  touch-action: none;
+  cursor: grab;
+}
+.zoomview-img-dragging { cursor: grabbing; }
