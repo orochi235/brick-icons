@@ -491,14 +491,16 @@ it('keeps the replaced disc beside the years — it is not what they say', () =>
 it('strips the kind badges in tag order, system before property', () => {
   const part = cell('a', 0, 'sha-a',
     { tags: ['technic', 'electric', 'printed', 'retired'] });
-  expect(stripFor(part, 200).map((b) => b.tag))
-    .toEqual(['technic', 'electric', 'printed']);
+  expect(stripFor(part, 200).map((b) => b.tag)).toEqual(['technic', 'electric']);
+  // What is printed on the part keeps a corner of its own, off the strip.
+  expect(badgesFor(part, 200).map((b) => b.tag)).toContain('printed');
   expect(stripFor(part, 20)).toEqual([]);
 });
 
 it('gives the property family one field and each system badge its own', () => {
   const part = cell('a', 0, 'sha-a', { tags: ['duplo', 'magnet', 'printed'] });
-  const [system, magnet, printed] = stripFor(part, 200);
+  const [system, magnet] = stripFor(part, 200);
+  const printed = badgesFor(part, 200).find((b) => b.tag === 'printed');
   expect(system!.field).not.toEqual(PROPERTY_FIELD);
   expect(magnet!.field).toEqual(PROPERTY_FIELD);
   // printed carries the family's color as its ink instead: its dots are the
@@ -856,7 +858,7 @@ it('has no badge for a class the sidebar decides membership by', () => {
   // Classes checkboxes answer. A badge for it marked every cell with a fact
   // that was already true of every cell you could see.
   const part = cell('a', 0, 'sha-a', { tags: ['technic', 'printed', 'obsolete'] });
-  expect(stripFor(part, 200).map((b) => b.tag)).toEqual(['technic', 'printed']);
+  expect(stripFor(part, 200).map((b) => b.tag)).toEqual(['technic']);
   expect(ALL_BADGES.obsolete).toBeUndefined();
   expect(ALL_BADGES.posed).toBeUndefined();
 });

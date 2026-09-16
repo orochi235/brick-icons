@@ -7,6 +7,7 @@ import { rowsFor } from '@lab/config/rows';
 import { DefectList } from '@lab/defects/DefectList';
 import type { Defect, DefectStatus } from '@lab/defects/useDefects';
 import { setPendingPart, useOpenPart } from '@lab/config/pending';
+import { LAB_PATH, PAGES } from '@lab/nav/pages';
 import '@lab/app.css';
 
 // `FloatingPanel` is a positioned box and nothing else -- it carries neither a
@@ -121,6 +122,8 @@ export function App({ instruments, client }:
       defaultInstrument="part-inspector"
       storageKey="brick-icons-lab"
       title="brick-icons lab"
+      pages={PAGES}
+      path={LAB_PATH}
       chrome={TRIAL_CHROME}
       controls={controls}
       suppress={['snapshot']}
