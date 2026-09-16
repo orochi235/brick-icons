@@ -525,3 +525,41 @@ it('says why a redraw failed', async () => {
   fireEvent.click(screen.getByText('Redraw naive'));
   await waitFor(() => screen.getByText('Redraw failed: RuntimeError: boom'));
 });
+
+// --- outlines in translucent views -----------------------------------------
+
+const withTranslucentSlot = {
+  ...detail,
+  slots: [...detail.slots,
+          { source: 'translucent-occt', sha256: 'f00dface0000',
+            made_at: '2026-09-05T12:00:00+00:00' }],
+};
+
+it('starts with the outline checkbox off', async () => {
+  render(box());
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  expect((screen.getByLabelText('Outlines in translucent views') as HTMLInputElement).checked)
+    .toBe(false);
+});
+
+it('adds the outline param to a translucent slot only, once checked', async () => {
+  render(box({ client: {
+    corpusPart: () => Promise.resolve(withTranslucentSlot), addDefect } }));
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  fireEvent.click(screen.getByLabelText('Outlines in translucent views'));
+  expect(screen.getByRole('img', { name: '3001 drawn by naive' }).getAttribute('src'))
+    .toBe('/api/corpus/render/naive/3001.svg?v=deadbeef');
+  expect(screen.getByRole('img', { name: '3001 drawn by translucent-occt' }).getAttribute('src'))
+    .toBe('/api/corpus/render/translucent-occt/3001.svg?v=f00dface&outline=1');
+});
+
+it('drops the outline param again once unchecked', async () => {
+  render(box({ client: {
+    corpusPart: () => Promise.resolve(withTranslucentSlot), addDefect } }));
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  const checkbox = screen.getByLabelText('Outlines in translucent views');
+  fireEvent.click(checkbox);
+  fireEvent.click(checkbox);
+  expect(screen.getByRole('img', { name: '3001 drawn by translucent-occt' }).getAttribute('src'))
+    .toBe('/api/corpus/render/translucent-occt/3001.svg?v=f00dface');
+});

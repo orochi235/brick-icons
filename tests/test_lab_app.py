@@ -567,6 +567,41 @@ def test_render_route_refuses_escaping_the_store(tmp_path):
     assert r.status_code == 404
 
 
+_TRANSLUCENT_SVG = ('<svg viewBox="0 0 256 170">'
+                     '<path d="M0 0" stroke-width="0.00"/>'
+                     '<line x1="0" y1="0" x2="1" y2="1" stroke-width="0.8"/>'
+                     '</svg>')
+
+
+def test_render_route_plain_request_is_byte_identical_without_outline(tmp_path):
+    render_path = "out/census/renders/naive/3001.svg"
+    client = _render_client(tmp_path, render_path=render_path)
+    (tmp_path / render_path).write_text(_TRANSLUCENT_SVG)
+    r = client.get("/api/corpus/render/naive/3001.svg")
+    assert r.status_code == 200
+    assert r.content == (tmp_path / render_path).read_bytes()
+
+
+def test_render_route_outline_param_widens_only_zero_stroke_widths(tmp_path):
+    render_path = "out/census/renders/naive/3001.svg"
+    client = _render_client(tmp_path, render_path=render_path)
+    (tmp_path / render_path).write_text(_TRANSLUCENT_SVG)
+    r = client.get("/api/corpus/render/naive/3001.svg?outline=1")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "image/svg+xml"
+    assert 'stroke-width="0.00"' not in r.text
+    # The already-visible stroke keeps its own width, not the hairline's.
+    assert r.text.count('stroke-width="0.8"') == 2
+
+
+def test_render_route_outline_param_is_a_no_op_off_svg(tmp_path):
+    r = _render_client(
+        tmp_path, render_path="out/census/renders/naive/3001.webp").get(
+            "/api/corpus/render/naive/3001.svg?outline=1")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "image/webp"
+
+
 def test_sizes_route_answers_with_tiles_and_slots(tmp_path):
     r = _render_client(tmp_path).get("/api/corpus/sizes")
     assert r.status_code == 200

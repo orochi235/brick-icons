@@ -6,12 +6,13 @@ server, and nothing here decides anything about rendering.
 from __future__ import annotations
 
 import json
+import re
 import time
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from pydantic import BaseModel
@@ -32,6 +33,23 @@ from .. import db as corpus_db_module
 # them.
 RENDER_MEDIA_TYPES = {".svg": "image/svg+xml", ".png": "image/png",
                       ".webp": "image/webp"}
+
+# Matches trace.py's/shade.py's own fine stroke (a fill's 0.8px self-stroke,
+# closing AA seams) rather than the 2px edge weight, so an outlined
+# translucent render reads as the same drawing system, not a new one.
+OUTLINE_HAIRLINE_WIDTH = "0.8"
+
+_STROKE_WIDTH_RE = re.compile(r'stroke-width="([0-9.]+)"')
+
+
+def _with_outline_hairlines(svg_text: str) -> str:
+    """A translucent render's edges are already drawn at stroke-width="0.00";
+    give only those a visible width and leave every real stroke untouched."""
+    def _widen(match: "re.Match[str]") -> str:
+        if float(match.group(1)) != 0.0:
+            return match.group(0)
+        return f'stroke-width="{OUTLINE_HAIRLINE_WIDTH}"'
+    return _STROKE_WIDTH_RE.sub(_widen, svg_text)
 
 # How long a footprint answer stands before the next request walks again. The
 # numbers move when a census lands, not between two clicks of Reload.
@@ -601,12 +619,17 @@ def create_app(root: Path | str = ".",
         return FileResponse(path)
 
     @app.get("/api/corpus/render/{source}/{part_id}.svg")
-    def get_corpus_render(source: str, part_id: str):
+    def get_corpus_render(source: str, part_id: str,
+                           outline: bool = Query(False)):
         """A part's rendered SVG for a slot, for the wall's vector rung.
 
         The path a caller could smuggle in is never trusted -- only `source`
         and `part_id` reach the filesystem, and only after `renders` names a
         row for them, so there is nothing here to traverse with.
+
+        `?outline=1` is for a translucent slot, whose edges are already drawn
+        but at zero width; it widens only those, and is a no-op on any other
+        render (nothing there is zero-width already).
         """
         _check_source(source)
         conn = corpus_conn()
@@ -622,8 +645,12 @@ def create_app(root: Path | str = ".",
         path = (render_root / row["path"]).resolve()
         if render_root not in path.parents or not path.is_file():
             raise HTTPException(404, "no such render")
-        return FileResponse(path, media_type=RENDER_MEDIA_TYPES.get(
-            path.suffix, "application/octet-stream"))
+        media_type = RENDER_MEDIA_TYPES.get(path.suffix,
+                                             "application/octet-stream")
+        if outline and path.suffix == ".svg":
+            svg = _with_outline_hairlines(path.read_text())
+            return Response(content=svg, media_type=media_type)
+        return FileResponse(path, media_type=media_type)
 
     ldraw = app.state.ldraw_dir
     if Path(ldraw).is_dir():

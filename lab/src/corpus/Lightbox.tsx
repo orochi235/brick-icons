@@ -16,7 +16,7 @@ import type { PartDetail } from '@lab/corpus/types';
 import { STATUSES, type DefectStatus } from '@lab/defects/useDefects';
 import { STATUS_BADGES } from '@lab/defects/statusBadges';
 import { CHIP, MaterialBar } from '@lab/shared/MaterialBar';
-import { chartRank } from '@lab/shared/materials';
+import { chartRank, materialOf } from '@lab/shared/materials';
 import '@lab/corpus/Lightbox.css';
 
 // Lazy, and the only import of it: three.js, the LDraw loader and drei are
@@ -25,8 +25,13 @@ const PartOrbit = lazy(() => import('@lab/corpus/PartOrbit'));
 
 type Slot = PartDetail['slots'][number];
 
-function renderSrc(partId: string, slot: Slot) {
-  return `/api/corpus/render/${slot.source}/${partId}.svg?v=${slot.sha256?.slice(0, 8)}`;
+// Zero-width strokes only hide inside a translucent slot's own render --
+// `materialOf` says which slots those are, so every other slot's src is
+// untouched by the toggle.
+function renderSrc(partId: string, slot: Slot, outlineTranslucent: boolean) {
+  const outline = outlineTranslucent && materialOf(slot.source).finish === 'trans';
+  const params = `v=${slot.sha256?.slice(0, 8)}${outline ? '&outline=1' : ''}`;
+  return `/api/corpus/render/${slot.source}/${partId}.svg?${params}`;
 }
 
 /** What a slot with no render has to say for itself: the error that stopped
@@ -111,6 +116,7 @@ export function Lightbox({ partId, source, client, onClose }: {
   // the wall pays for three.js when a lightbox opens and not to draw a
   // thumbnail; the button is there to put it away.
   const [turning, setTurning] = useState(true);
+  const [outlineTranslucent, setOutlineTranslucent] = useState(false);
   const [title, setTitle] = useState('');
   const [flagError, setFlagError] = useState<string | null>(null);
   const [redraw, setRedraw] = useState<{ drawing: true } | { error: string } | null>(null);
@@ -289,14 +295,15 @@ export function Lightbox({ partId, source, client, onClose }: {
                          if (!e.shiftKey || !slot.sha256) return;
                          e.preventDefault();
                          e.stopPropagation();
-                         window.open(renderSrc(detail.part.id, slot), '_blank', 'noopener');
+                         window.open(renderSrc(detail.part.id, slot, outlineTranslucent),
+                                     '_blank', 'noopener');
                        }}>
                   <input type="radio" name="corpus-slot-shown" aria-label={slot.source}
                          className="corpus-slot-radio" checked={slot.source === shown}
                          onChange={() => setShown(slot.source)} />
                   {slot.sha256 ? (
                     <img className="corpus-big" alt={`${detail.part.id} drawn by ${slot.source}`}
-                         src={renderSrc(detail.part.id, slot)} />
+                         src={renderSrc(detail.part.id, slot, outlineTranslucent)} />
                   ) : (
                     <span className="corpus-big corpus-slot-empty">
                       {whyNothing(slot).map((line) => <span key={line}>{line}</span>)}
@@ -327,6 +334,11 @@ export function Lightbox({ partId, source, client, onClose }: {
                     onClick={() => void redrawShown()}>
               {drawing ? 'Drawing…' : `Redraw ${shown}`}
             </button>
+            <label className="corpus-action-toggle">
+              <input type="checkbox" checked={outlineTranslucent}
+                     onChange={(e) => setOutlineTranslucent(e.target.checked)} />
+              Outlines in translucent views
+            </label>
             <button type="button"
                     className={flagging ? 'corpus-action' : 'corpus-action corpus-action-flag'}
                     onClick={() => setFlagging((was) => !was)}>
