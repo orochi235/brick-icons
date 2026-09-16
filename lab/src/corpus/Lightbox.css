@@ -129,6 +129,16 @@
   gap: 1rem;
   padding-right: 1.25rem;
 }
+/* Title and year read as one line, so they share a face and a size. Portaled
+   out of `.lk-lab`, so the kit's heading rule never reaches this panel and
+   both fall back to its monospace. 1.5em is the size the title already had;
+   the year comes up to meet it. */
+.corpus-title-row h2,
+.corpus-years {
+  font-family: var(--wzl-font-display);
+  font-size: 1.5em;
+  line-height: 1.5;
+}
 .corpus-title-row h2 { margin: 0; }
 .corpus-years { color: var(--wzl-fg-muted); white-space: nowrap; }
 
