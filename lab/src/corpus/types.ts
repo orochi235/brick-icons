@@ -28,6 +28,10 @@ export interface Cell {
    *  lab's server is long-lived and can be older than the page in front of
    *  it, and a missing field must not break the view. */
   successor?: string | null;
+  /** The parts this one replaced, in id order -- the same links read
+   *  backwards. Optional for the same reason `successor` is; empty, not
+   *  absent, for a part that replaced nothing. */
+  predecessors?: string[];
   /** The top-level Rebrickable theme most of a printed or sticker part's own
    *  sets belong to, or null where none dominates. Optional for the same
    *  reason `tags` is: the lab's server can be older than the page. */

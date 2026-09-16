@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { cellState } from '@lab/corpus/paint';
-import { Tags, yearRange } from '@lab/corpus/tags';
+import { Lineage, Tags, yearRange } from '@lab/corpus/tags';
 import { cellValue, formatScale, SCALE_LABEL, type TintMode }
   from '@lab/corpus/tint';
 import type { Cell } from '@lab/corpus/types';
@@ -47,7 +47,7 @@ function cellStateLabel(cell: Cell): string | null {
 }
 
 export function PartCard({ cell, source, at, viewport, tint = 'status',
-                          onOpen, onClose, onHoverChange }: {
+                          onOpen, onClose, onHoverChange, onPart }: {
   cell: Cell;
   source: string;
   /** What the wall is colored by. The card is how you find out why a cell is
@@ -62,6 +62,7 @@ export function PartCard({ cell, source, at, viewport, tint = 'status',
   /** Whether the pointer is over the card. The wall drops the card on a zoom,
    *  and this is the exception: the one you are reading stays. */
   onHoverChange?: (over: boolean) => void;
+  onPart?: (id: string) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -87,17 +88,21 @@ export function PartCard({ cell, source, at, viewport, tint = 'status',
          aria-label={`${cell.title} card`}
          onPointerEnter={() => onHoverChange?.(true)}
          onPointerLeave={() => onHoverChange?.(false)}>
-      <PartCardBody cell={cell} source={source} tint={tint} onOpen={onOpen} />
+      <PartCardBody cell={cell} source={source} tint={tint} onOpen={onOpen}
+                    onPart={onPart} />
     </div>
   );
 }
 
 /** The card's contents, for a wall that floats and dismisses the card itself. */
-export function PartCardBody({ cell, source, tint = 'status', onOpen }: {
+export function PartCardBody({ cell, source, tint = 'status', onOpen, onPart }: {
   cell: Cell;
   source: string;
   tint?: TintMode;
   onOpen: (id: string) => void;
+  /** Where a link to another part takes the reader. Without one the ids are
+   *  plain text, which is what `/corpus` gets. */
+  onPart?: (id: string) => void;
 }) {
   const years = yearRange(cell.year_from, cell.year_to,
                           (cell.tags ?? []).includes('retired'));
@@ -118,6 +123,8 @@ export function PartCardBody({ cell, source, tint = 'status', onOpen }: {
             {years ? ` · ${years}` : ''}
           </p>
           <Tags tags={cell.tags} />
+          <Lineage successor={cell.successor} predecessors={cell.predecessors}
+                   onPart={onPart} />
           {cellStateLabel(cell) && <p className="corpus-card-state">{cellStateLabel(cell)}</p>}
           <dl className="corpus-card-stats">
             {tint !== 'status' && (

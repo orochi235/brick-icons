@@ -72,6 +72,21 @@ def test_a_part_still_being_made_is_neither_however_many_successors():
                          this_year=2026, successor="99999") == []
 
 
+def test_a_part_that_replaced_another_says_so():
+    assert tags.tags_for("Brick", False, predecessors=["3001"]) == ["replaces"]
+    assert tags.tags_for("Brick", False, predecessors=[]) == []
+
+
+def test_replacing_and_being_replaced_are_independent():
+    # 24 parts replaced one part and were themselves replaced by another, so
+    # neither tag can stand in for the absence of the other.
+    both = tags.tags_for("Electric", False, year_to=2021, sets=2492,
+                         this_year=2026, successor="61332",
+                         predecessors=["4109"])
+    assert "replaced" in both
+    assert "replaces" in both
+
+
 def test_an_uncatalogued_part_is_neither_popular_nor_obscure():
     assert tags.tags_for("Brick", False) == []
 

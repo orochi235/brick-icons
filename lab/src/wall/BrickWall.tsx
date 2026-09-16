@@ -8,7 +8,7 @@ import { drawSticker } from '@lab/corpus/draw2d';
 import { familyOf } from '@lab/corpus/families';
 import { FilterBar } from '@lab/corpus/FilterBar';
 import { Lightbox } from '@lab/corpus/Lightbox';
-import { LINKED_BADGE, RETIRED_WASH, thumbGround } from '@lab/corpus/paint';
+import { LINKED_BADGE, REPLACES_BADGE, RETIRED_WASH, thumbGround } from '@lab/corpus/paint';
 import { PartCardBody } from '@lab/corpus/PartCard';
 import type { TintMode } from '@lab/corpus/tint';
 import type { Cell } from '@lab/corpus/types';
@@ -21,13 +21,19 @@ import { GROUPINGS, SPEC } from '@lab/wall/host';
 import { searchNotice } from '@lab/wall/searchNotice';
 
 const URLS = defaultUrls('/api');
-const LINKED = [LINKED_BADGE];
+const LINKED = [LINKED_BADGE, REPLACES_BADGE];
 const FACET = { key: 'category', label: 'category', groupOf: familyOf };
 
 const drawMark = (ctx: CanvasRenderingContext2D, _mark: string, cx: number, cy: number,
                   r: number) => drawSticker(ctx, cx, cy, r);
-const linkTarget = (cell: Cell, tag: string) =>
-  (tag === LINKED_BADGE ? cell.successor ?? null : null);
+export const linkTarget = (cell: Cell, tag: string): string | null => {
+  if (tag === LINKED_BADGE) return cell.successor ?? null;
+  if (tag !== REPLACES_BADGE) return null;
+  // No one part to go to when it replaced several, so the click falls through
+  // to a normal pick and the card names them all.
+  const from = cell.predecessors ?? [];
+  return from.length === 1 ? from[0]! : null;
+};
 
 /** The corpus wall drawn by pezlie's `WallView`, beside `CorpusWall`. */
 export function BrickWall({ client }: { client: LabClient }) {
@@ -62,17 +68,26 @@ export function BrickWall({ client }: { client: LabClient }) {
     }
   }, []);
 
-  const header = useCallback((wall: WallHeader) => (
-    <>
-      <FilterBar sources={wall.slots.map(({ slot, n }) => ({ source: slot, n }))}
-                 source={wall.slot} onSource={wall.setSlot} />
-      <span className="brick-wall-search">
-        <PartSearch client={client}
-                    onOpen={(partId) => setNotice(searchNotice(partId, wall.reveal(partId)))} />
-        <span className="corpus-search-notice" role="status">{notice ?? ''}</span>
-      </span>
-    </>
-  ), [client, notice]);
+  // The header is the only thing handed `reveal`, and the card and lightbox
+  // need it to follow a part link, so the latest one is kept here.
+  const wall = useRef<WallHeader | null>(null);
+  const header = useCallback((state: WallHeader) => {
+    wall.current = state;
+    return (
+      <>
+        <FilterBar sources={state.slots.map(({ slot, n }) => ({ source: slot, n }))}
+                   source={state.slot} onSource={state.setSlot} />
+        <span className="brick-wall-search">
+          <PartSearch client={client}
+                      onOpen={(partId) => setNotice(searchNotice(partId, state.reveal(partId)))} />
+          <span className="corpus-search-notice" role="status">{notice ?? ''}</span>
+        </span>
+      </>
+    );
+  }, [client, notice]);
+  const goToPart = useCallback((partId: string) => {
+    setNotice(searchNotice(partId, wall.current?.reveal(partId) ?? 'absent'));
+  }, []);
 
   return (
     <WallView title="brick-icons wall" pages={PAGES} spec={SPEC} urls={URLS}
@@ -82,10 +97,12 @@ export function BrickWall({ client }: { client: LabClient }) {
               slotPicker={false} header={header}
               renderCard={(cell, slot, card) => (
                 <PartCardBody cell={cell} source={slot} tint={card.tint as TintMode}
-                              onOpen={card.open} />
+                              onOpen={card.open} onPart={goToPart} />
               )}
               renderDetail={(cell, slot, close) => (
-                <Lightbox partId={cell.id} source={slot} client={client} onClose={close} />
+                <Lightbox partId={cell.id} source={slot} client={client} onClose={close}
+                          successor={cell.successor} predecessors={cell.predecessors}
+                          onPart={(partId) => { close(); goToPart(partId); }} />
               )}
               linkedBadges={LINKED} linkTarget={linkTarget}
               cssRoot="--corpus"

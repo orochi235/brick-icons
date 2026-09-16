@@ -7,7 +7,7 @@ import { CATALOGS } from '@lab/corpus/catalogs';
 import { Fingerprint } from '@lab/corpus/Fingerprint';
 import { Measurements } from '@lab/corpus/Measurements';
 import { poseNote } from '@lab/corpus/posed';
-import { Tags, yearRange } from '@lab/corpus/tags';
+import { Lineage, Tags, yearRange } from '@lab/corpus/tags';
 import { defectId, engineFor } from '@lab/corpus/flag';
 import { cellState } from '@lab/corpus/paint';
 import type { CellState } from '@lab/corpus/palette';
@@ -87,11 +87,17 @@ function DefectStatusBadge({ status }: { status: string }) {
   );
 }
 
-export function Lightbox({ partId, source, client, onClose }: {
+export function Lightbox({ partId, source, client, onClose,
+                          successor, predecessors, onPart }: {
   partId: string;
   source: string;
   client: LabClient;
   onClose: () => void;
+  /** Both ends of the replacement link, from the cell the wall opened this
+   *  from: the part detail the server sends carries neither. */
+  successor?: string | null;
+  predecessors?: string[];
+  onPart?: (id: string) => void;
 }) {
   const [detail, setDetail] = useState<PartDetail | null>(null);
   // The slot this view is *about* -- which render is marked, and which engine
@@ -234,6 +240,8 @@ export function Lightbox({ partId, source, client, onClose }: {
             {detail.part.sets != null ? ` · ${detail.part.sets} sets` : ''}
           </p>
           <Tags tags={detail.part.tags ?? []} />
+          <Lineage successor={successor} predecessors={predecessors}
+                   onPart={onPart} />
           {/* Every render below is drawn from the one global angle, so a part
               the library poses is one the drawings may be showing the wrong
               side of. */}

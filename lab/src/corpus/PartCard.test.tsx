@@ -76,6 +76,35 @@ it('names a defect filed against another slot as belonging elsewhere', () => {
   expect(screen.getByText(/open defect in another slot/)).toBeTruthy();
 });
 
+const lineage = (container: HTMLElement) =>
+  container.querySelector('.corpus-lineage')?.textContent;
+
+it('says what replaced this part and what it replaced', () => {
+  const { container } = render(card({
+    cell: { ...cell, successor: '3002', predecessors: ['3000', '3004'] } }));
+  expect(lineage(container)).toBe('Replaced by 3002 · Replaces 3000, 3004');
+});
+
+it('takes the wall to a part named on the card', () => {
+  const onPart = vi.fn();
+  render(card({ cell: { ...cell, successor: '3002', predecessors: ['3000'] }, onPart }));
+  fireEvent.click(screen.getByRole('button', { name: '3000' }));
+  expect(onPart).toHaveBeenCalledWith('3000');
+  fireEvent.click(screen.getByRole('button', { name: '3002' }));
+  expect(onPart).toHaveBeenCalledWith('3002');
+});
+
+it('leaves the ids as plain text where the view cannot follow them', () => {
+  const { container } = render(card({ cell: { ...cell, predecessors: ['3000'] } }));
+  expect(lineage(container)).toBe('Replaces 3000');
+  expect(screen.queryByRole('button', { name: '3000' })).toBeNull();
+});
+
+it('says nothing at all for a part at neither end of a replacement', () => {
+  const { container } = render(card());
+  expect(container.querySelector('.corpus-lineage')).toBeNull();
+});
+
 it('leads with the render and sets the text beside it', () => {
   const { container } = render(card());
   const head = container.querySelector('.corpus-card-head');
