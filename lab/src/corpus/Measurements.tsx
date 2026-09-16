@@ -1,13 +1,16 @@
 import type { PartDetail } from '@lab/corpus/types';
-import { MaterialBar } from '@lab/shared/MaterialBar';
+import { CHIP, MaterialBar } from '@lab/shared/MaterialBar';
 import { chartRank } from '@lab/shared/materials';
 import '@lab/corpus/Measurements.css';
 
 type Finding = PartDetail['findings'][number];
 type Measure = 'extra_d99' | 'missing_px' | 'missing_comps';
 
-// Latest measurement per part and slot in corpus.db, 2026-09-15.
-export const CUTOFFS: Record<Measure, readonly [p90: number, p99: number]> = {
+// p90/p99 of extra_d99, missing_px and missing_comps over `findings.py`'s
+// `_LATEST` CTE (latest measurement per part and slot) in corpus.db,
+// 2026-09-15: `SELECT extra_d99, missing_px, missing_comps FROM (${_LATEST})`,
+// each column's values sorted and read off at the 90th/99th percentile.
+const CUTOFFS: Record<Measure, readonly [p90: number, p99: number]> = {
   extra_d99: [1.41, 7.44],
   missing_px: [724, 61026],
   missing_comps: [1, 6],
@@ -20,6 +23,8 @@ export function tier(measure: Measure, value: number | null | undefined):
   return value >= p99 ? 'hot' : value >= p90 ? 'warm' : undefined;
 }
 
+const TIER_TITLE = { warm: 'at or above the corpus p90', hot: 'at or above the corpus p99' };
+
 const COLUMNS: { key: Measure; label: string; format: (v: number) => string }[] = [
   { key: 'extra_d99', label: 'extra d99', format: (v) => v.toFixed(2) },
   { key: 'missing_px', label: 'missing px', format: (v) => v.toLocaleString() },
@@ -27,7 +32,6 @@ const COLUMNS: { key: Measure; label: string; format: (v: number) => string }[] 
 ];
 
 const TRACK = 300;
-const CHIP = { width: 34, height: 14 };
 
 const slotOf = (f: Finding) => f.source ?? f.engine;
 
@@ -53,7 +57,7 @@ export function Measurements({ findings }: { findings: Finding[] }) {
           return (
             <tr key={key} data-slot={slot}>
               <th scope="row" className="corpus-measure-slot">
-                <span className="corpus-chip-label">
+                <span className="material-chip-label">
                   <MaterialBar source={slot} {...CHIP} />{slot}
                 </span>
               </th>
@@ -61,8 +65,10 @@ export function Measurements({ findings }: { findings: Finding[] }) {
                 <td colSpan={COLUMNS.length} className="corpus-measure-error">{f.error}</td>
               ) : COLUMNS.map((c) => {
                 const value = f[c.key];
+                const cellTier = tier(c.key, value);
                 return (
-                  <td key={c.key} className="corpus-measure-num" data-tier={tier(c.key, value)}>
+                  <td key={c.key} className="corpus-measure-num" data-tier={cellTier}
+                      title={cellTier && TIER_TITLE[cellTier]}>
                     {value == null ? '—' : c.format(value)}
                   </td>
                 );

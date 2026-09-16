@@ -15,7 +15,7 @@ import { cssVarTable } from '@lab/corpus/states';
 import type { PartDetail } from '@lab/corpus/types';
 import { STATUSES, type DefectStatus } from '@lab/defects/useDefects';
 import { STATUS_BADGES } from '@lab/defects/statusBadges';
-import { MaterialBar } from '@lab/shared/MaterialBar';
+import { CHIP, MaterialBar } from '@lab/shared/MaterialBar';
 import { chartRank } from '@lab/shared/materials';
 import '@lab/corpus/Lightbox.css';
 
@@ -278,8 +278,8 @@ export function Lightbox({ partId, source, client, onClose }: {
                       {whyNothing(slot).map((line) => <span key={line}>{line}</span>)}
                     </span>
                   )}
-                  <span className="corpus-slot-name">
-                    <MaterialBar source={slot.source} width={34} height={14} />
+                  <span className="corpus-slot-name material-chip-label">
+                    <MaterialBar source={slot.source} {...CHIP} />
                     {slot.source}
                   </span>
                 </label>

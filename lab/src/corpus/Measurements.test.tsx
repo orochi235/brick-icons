@@ -71,7 +71,7 @@ it('draws a timeout as a dashed bar with its value dimmed', () => {
 
 it('puts a chip before each slot name', () => {
   const { container } = render(<Measurements findings={[finding('reference')]} />);
-  const label = container.querySelector('tbody th .corpus-chip-label')!;
+  const label = container.querySelector('tbody th .material-chip-label')!;
   expect(label.firstElementChild?.classList.contains('material-bar')).toBe(true);
   expect(label.textContent).toBe('reference');
 });
@@ -113,4 +113,18 @@ it('clamps a negative secs to the minimum bar width', () => {
   const width = Number(container.querySelector('.corpus-measure-bar .material-bar')
     ?.getAttribute('width'));
   expect(width).toBe(3);
+});
+
+it('renders the header with no findings', () => {
+  const { container } = render(<Measurements findings={[]} />);
+  expect(container.querySelectorAll('thead th')).toHaveLength(5);
+  expect(container.querySelectorAll('tbody tr')).toHaveLength(0);
+});
+
+it('titles a shaded cell with the percentile it crossed, and leaves an unshaded one untitled', () => {
+  const { container } = render(<Measurements findings={[
+    finding('occt', { missing_px: 2927, missing_comps: 6 })]} />);
+  const cells = [...container.querySelectorAll('tbody td.corpus-measure-num')];
+  expect(cells.map((td) => td.getAttribute('title'))).toEqual(
+    [null, 'at or above the corpus p90', 'at or above the corpus p99']);
 });

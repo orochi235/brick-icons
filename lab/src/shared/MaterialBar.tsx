@@ -10,6 +10,9 @@ const STRIPE_WIDTH = 9;
 // print-stripe loop bounded no matter what a caller computes.
 const MAX_DIMENSION = 2000;
 
+/** The bar's size wherever it labels a slot name rather than a measurement. */
+export const CHIP = { width: 34, height: 14 };
+
 /** A computed width/height can arrive negative, NaN, or Infinity (e.g. a
  *  `value / max * 300` where `max` is 0) — never let that reach the
  *  print-stripe loop or the outer <svg>'s attributes. */

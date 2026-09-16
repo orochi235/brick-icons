@@ -1,4 +1,4 @@
-export type Finish = 'solid' | 'trans' | 'metallic' | 'print';
+type Finish = 'solid' | 'trans' | 'metallic' | 'print';
 
 export interface Material {
   color: string;
@@ -12,7 +12,9 @@ const BLUE = '#0055BF';
 const ORANGE = '#FE8A18';
 const WHITE = '#F2F3F2';
 
-/** Each material resembles the render setting its slot stands for. */
+/** Each material resembles the render setting its slot stands for. Tracks
+ *  `db.SOURCES`: a slot the server can produce and this table does not know
+ *  draws as the gray fallback below. */
 export const MATERIALS: Record<string, Material> = {
   'occt':              { color: BLUE,      finish: 'solid',    opacity: 1,    stroke: '#000000' },
   'white-occt':        { color: WHITE,     finish: 'solid',    opacity: 1,    stroke: BLUE },
@@ -45,7 +47,11 @@ export const CHART_ORDER = [
   'decal',
 ] as const;
 
-/** A slot the order does not list ranks just before the last entry. */
+/** A slot the order does not list ranks just before the last entry, so decal
+ *  stays the last column even next to slots this table has never heard of.
+ *  Unlike `charts.tsx`'s `slotRank`, which puts an unknown slot after decal
+ *  rather than before it -- that chart is tracking failures by slot, with no
+ *  reason to hold decal's column down. */
 export function chartRank(source: string): number {
   const i = (CHART_ORDER as readonly string[]).indexOf(source);
   return i === -1 ? CHART_ORDER.length - 1.5 : i;
@@ -55,7 +61,8 @@ const HEX_RE = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i;
 
 /** `hex` with its HLS lightness moved by `amount`, clamped to [0, 1]. */
 export function shade(hex: string, amount: number): string {
-  const m = HEX_RE.exec(hex)!;
+  const m = HEX_RE.exec(hex);
+  if (!m) throw new Error(`shade: not a #rrggbb hex color: ${hex}`);
   const [r, g, b] = [m[1]!, m[2]!, m[3]!].map((c) => parseInt(c, 16) / 255) as
     [number, number, number];
   const max = Math.max(r, g, b);

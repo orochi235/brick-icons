@@ -2,3 +2,14 @@
   display: block;
   flex: none;
 }
+
+/* A chip and the slot name beside it, top-aligned so a name that wraps keeps
+   its chip on the first line. */
+.material-chip-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+.material-chip-label .material-bar {
+  margin-top: 0.2em;
+}

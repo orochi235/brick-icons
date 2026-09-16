@@ -95,10 +95,11 @@ export interface PartDetail {
            *  one. Absent from an API older than the field, like `slots`. */
           preview?: string | null;
           out_of_scope?: boolean };
-  /** Every live slot, in slot order, each carrying what the wall would color
-   *  its cell by. A slot with no `sha256` did not draw this part -- it timed
-   *  out, it failed, or nothing has run it. The state fields are optional for
-   *  the same reason `slots` itself is. */
+  /** Every live slot, in the order the server sends them -- `Lightbox` and
+   *  `Measurements` re-sort by `chartRank` for display. A slot with no
+   *  `sha256` did not draw this part -- it timed out, it failed, or nothing
+   *  has run it. The state fields are optional for the same reason `slots`
+   *  itself is. */
   slots: {
     source: string; sha256: string | null; made_at: string | null;
     /** How long the last run of this slot took, from its attempt row. */

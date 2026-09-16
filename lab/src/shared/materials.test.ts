@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { CHART_ORDER, chartRank, familyInk, materialOf, shade } from '@lab/shared/materials';
+import { CHART_ORDER, chartRank, familyInk, MATERIALS, materialOf, shade } from '@lab/shared/materials';
 
 it('gives every family member its family color', () => {
   expect(materialOf('silhouette-occt').color).toBe(materialOf('occt').color);
@@ -29,6 +29,10 @@ it('ranks an unlisted slot just before the last entry', () => {
   expect(chartRank('mystery')).toBe(CHART_ORDER.length - 1.5);
 });
 
+it('lists the same slots as MATERIALS, just in a chart order', () => {
+  expect([...CHART_ORDER].sort()).toEqual(Object.keys(MATERIALS).sort());
+});
+
 it('returns the same fallback object for two different unknown slots', () => {
   expect(materialOf('ldview')).toBe(materialOf('pov-ray'));
   expect(materialOf('occt')).toBe(materialOf('occt'));
@@ -44,6 +48,6 @@ it('shifts HLS lightness and clamps it', () => {
 });
 
 it('throws on a hex string it cannot parse', () => {
-  expect(() => shade('#fff', 0)).toThrow();
-  expect(() => shade('0055BF', 0)).toThrow();
+  expect(() => shade('#fff', 0)).toThrow('shade: not a #rrggbb hex color: #fff');
+  expect(() => shade('0055BF', 0)).toThrow('shade: not a #rrggbb hex color: 0055BF');
 });
