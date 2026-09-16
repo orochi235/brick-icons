@@ -65,6 +65,7 @@ export function BrickWall({ client }: { client: LabClient }) {
                 <Lightbox partId={cell.id} source={slot} client={client} onClose={close} />
               )}
               linkedBadges={LINKED} linkTarget={linkTarget}
+              cssRoot="--corpus"
               drawMark={drawMark} washColor={RETIRED_WASH} ground={thumbGround()} />
   );
 }
