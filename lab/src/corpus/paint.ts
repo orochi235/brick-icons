@@ -337,7 +337,7 @@ export function badgeGeometry(cellPx: number) {
   // 0.14 of the cell against the strip's 0.1, so the same tag drew larger in
   // the corner than it did in the line of the part number. One size for both.
   const size = captionSize(cellPx);
-  const radius = size * 0.63;
+  const radius = size * 0.78;
   const pad = cornerPad(cellPx, size);
   // One inset on every edge, the same one the year caption keeps: a corner
   // mark is a box tangent to the pad, whichever corner it is in. Chasing the
@@ -370,7 +370,7 @@ export function stripGeometry(cellPx: number) {
  *  their floor sizes, so at the small end of the zoom a margin measured off
  *  them crowds the corner. */
 export function cornerPad(cellPx: number, size: number): number {
-  return Math.max(size * 0.35, cellPx * 0.06);
+  return Math.max(size * 0.18, cellPx * 0.03);
 }
 
 /** The corner discs a drawn cell wears, if it is drawn big enough to hold
@@ -407,6 +407,12 @@ export interface CellCaption {
   ink: string;
   /** Heavier for the part number than for what it is captioned with. */
   weight?: number;
+  /** A type size other than the caption default, for a line set smaller than
+   *  the rest -- the replacement line above the part number. */
+  size?: number;
+  /** Pushed further from the edge than this corner's usual pad, in pixels --
+   *  how a second line stacks above the first without its own geometry. */
+  riseAbove?: number;
 }
 
 /** Dark on a thumbnail's white ground, white on a state fill -- the same two
@@ -414,10 +420,46 @@ export interface CellCaption {
 export const CAPTION_ON_THUMB = '#4a4a4f';
 export const CAPTION_ON_FILL = '#ffffff';
 
+/** How much smaller the replacement line sets than the part number above
+ *  which it sits, and the type size it never drops below regardless of zoom. */
+const REPLACEMENT_CAPTION_SCALE = 0.6;
+const REPLACEMENT_MIN_PX = 8;
+
+export function replacementCaptionSize(cellPx: number): number {
+  return Math.max(REPLACEMENT_MIN_PX, captionSize(cellPx) * REPLACEMENT_CAPTION_SCALE);
+}
+
+/** `successor` inverted: cell id -> the id of the cell that names it as a
+ *  successor, i.e. what that cell replaces. Built once per cell array and
+ *  cached on its identity, since inverting 24k cells a frame would undo the
+ *  point of drawing only what is on screen. Where more than one part names
+ *  the same successor, the last one found wins -- rare enough not to earn a
+ *  tie-break. */
+const replacesCache = new WeakMap<Cell[], Map<string, string>>();
+
+export function replacesIndex(cells: Cell[]): Map<string, string> {
+  let idx = replacesCache.get(cells);
+  if (!idx) {
+    idx = new Map();
+    for (const c of cells) if (c.successor) idx.set(c.successor, c.id);
+    replacesCache.set(cells, idx);
+  }
+  return idx;
+}
+
+/** The line above the part number, where this cell is part of a replacement.
+ *  A cell that both replaced something and was itself replaced says only the
+ *  latter -- what it replaces is history, what replaced it is current. */
+export function replacementLine(cell: Cell, replaces?: string): string | undefined {
+  if (cell.successor) return `replaced by ${cell.successor}`;
+  if (replaces) return `replaces ${replaces}`;
+  return undefined;
+}
+
 /** What a cell says about itself once it is drawn big enough to read: its
  *  years on the top edge, its part number on the bottom. */
 export function captionsFor(cell: Cell, cellPx: number, ink: string,
-                            minPx = LABEL_MIN_PX): CellCaption[] {
+                            minPx = LABEL_MIN_PX, replaces?: string): CellCaption[] {
   if (cellPx < minPx) return [];
   const out: CellCaption[] = [];
   const years = yearRange(cell.year_from, cell.year_to, isRetired(cell));
@@ -426,6 +468,16 @@ export function captionsFor(cell: Cell, cellPx: number, ink: string,
   // as one if the wall says so, and the badge alone says "weird".
   if (cell.family) {
     out.push({ text: cell.family, corner: 'tl', ink, weight: WEIGHT_TEXT });
+  }
+  // Pushed before the id so the id -- not this -- is what the strip's
+  // starting x reads off, same as when this line does not exist.
+  const line = replacementLine(cell, replaces);
+  if (line) {
+    const repSize = replacementCaptionSize(cellPx);
+    // Enough rise to clear the id's own half-height plus a sliver of air,
+    // or the two lines' bounding boxes touch.
+    out.push({ text: line, corner: 'bl', ink, weight: WEIGHT_TEXT,
+               size: repSize, riseAbove: captionSize(cellPx) + repSize * 0.4 });
   }
   out.push({ text: cell.id, corner: 'bl', ink, weight: WEIGHT_ID });
   return out;
@@ -516,6 +568,7 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
                                 stale = false }: PaintInput): PaintCommand[] {
   const out: PaintCommand[] = [];
   const transform = viewToTransform(cam);
+  const replaces = replacesIndex(cells);
   for (const i of visible) {
     const cell = cells[i];
     const rect = rects[i];
@@ -549,7 +602,8 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
       : NO_BADGES;
     const strip = appearance.showBadges ? stripFor(cell, dw) : NO_BADGES;
     const captions = appearance.showCaptions
-      ? captionsFor(cell, dw, CAPTION_ON_THUMB) : NO_CAPTIONS;
+      ? captionsFor(cell, dw, CAPTION_ON_THUMB, LABEL_MIN_PX, replaces.get(cell.id))
+      : NO_CAPTIONS;
     const wash = stale ? Math.max(STALE_WASH, appearance.retiredWash)
       : appearance.washRetired && isRetired(cell) ? appearance.retiredWash
       : undefined;
@@ -578,7 +632,8 @@ export function paintCommands({ cells, rects, visible, cam, manifest, palette, l
                // thing on the wall, and captions would undo that.
                captions: state === 'outOfScope' ? undefined
                  : appearance.showCaptions
-                   ? captionsFor(cell, dw, CAPTION_ON_FILL) : NO_CAPTIONS,
+                   ? captionsFor(cell, dw, CAPTION_ON_FILL, LABEL_MIN_PX, replaces.get(cell.id))
+                   : NO_CAPTIONS,
                badges: state === 'outOfScope' ? undefined : badges,
                strip: state === 'outOfScope' ? undefined : strip,
                slash: border !== null, caret: isCaret, wash });

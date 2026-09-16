@@ -4,7 +4,7 @@ import { badgeGeometry, badgesFor, captionsFor, CAPTION_ON_FILL,
   cellState, DEFAULT_APPEARANCE, fillFor, paintCommands, PROPERTY_FIELD,
   LABEL_MIN_PX,
   stripFor, stripGeometry, tally, thumbGround, ALL_BADGES, BADGE_AXES, byAxis,
-  STALE_WASH,
+  STALE_WASH, replacementCaptionSize, replacesIndex,
   type Appearance }
   from '@lab/corpus/paint';
 import { MARK_SHAPES } from '@lab/corpus/markShapes';
@@ -526,9 +526,9 @@ it('draws a letter at twice the height of a mark in the same disc', () => {
   const { size, radius } = badgeGeometry(200);
   expect(size).toBe(captionSize(200));
   expect(size).toBe(18);
-  expect(radius * 0.66).toBeCloseTo(size * 0.4158, 2);
-  // At the badge floor a mark is a little over 4px across.
-  expect(badgeGeometry(56).radius * 0.66).toBeCloseTo(4.16, 2);
+  expect(radius * 0.66).toBeCloseTo(size * 0.5148, 2);
+  // At the badge floor a mark is a little over 5px across.
+  expect(badgeGeometry(56).radius * 0.66).toBeCloseTo(5.15, 2);
 });
 
 it('sizes a corner badge exactly like one in the strip', () => {
@@ -835,6 +835,61 @@ it('captions a cell down to LABEL_MIN_PX and not below it', () => {
   expect(captionsFor(c, LABEL_MIN_PX, CAPTION_ON_FILL).map((x) => x.text))
     .toEqual(['1979–', '3001']);
   expect(captionsFor(c, LABEL_MIN_PX - 1, CAPTION_ON_FILL)).toEqual([]);
+});
+
+it('says what replaced a cell, above the id and smaller than it', () => {
+  const c = cell('3001', 0, null, { successor: '3002' });
+  const [line, id] = captionsFor(c, 200, CAPTION_ON_FILL);
+  expect(line).toMatchObject({ text: 'replaced by 3002', corner: 'bl' });
+  expect(id).toMatchObject({ text: '3001', corner: 'bl' });
+  expect(line!.size).toBeLessThan(id!.size ?? captionSize(200));
+  expect(line!.riseAbove).toBeGreaterThan(0);
+  expect(id!.riseAbove ?? 0).toBe(0);
+});
+
+it('says what a cell replaces, given the reverse lookup', () => {
+  const c = cell('3002', 0, null);
+  expect(captionsFor(c, 200, CAPTION_ON_FILL, LABEL_MIN_PX, '3001').map((x) => x.text))
+    .toEqual(['replaces 3001', '3002']);
+});
+
+it('prefers replaced-by when a cell is both replaced and replacing', () => {
+  const c = cell('3002', 0, null, { successor: '3003' });
+  expect(captionsFor(c, 200, CAPTION_ON_FILL, LABEL_MIN_PX, '3001').map((x) => x.text))
+    .toEqual(['replaced by 3003', '3002']);
+});
+
+it('leaves an unreplaced cell with no extra line', () => {
+  expect(captionsFor(cell('3001', 0, null), 200, CAPTION_ON_FILL).map((x) => x.text))
+    .toEqual(['3001']);
+});
+
+it('floors the replacement line so it never becomes mush', () => {
+  expect(replacementCaptionSize(0)).toBeGreaterThanOrEqual(8);
+  expect(replacementCaptionSize(56)).toBeLessThan(captionSize(56));
+});
+
+it('inverts successor into a reverse lookup, cached on the array', () => {
+  const cells = [cell('3001', 0, null, { successor: '3002' }), cell('3002', 1, null)];
+  const idx = replacesIndex(cells);
+  expect(idx.get('3002')).toBe('3001');
+  expect(idx.get('3001')).toBeUndefined();
+  expect(replacesIndex(cells)).toBe(idx);
+});
+
+it('draws the replacement line on the wall in both directions', () => {
+  const predecessor = cell('3001', 0, 'sha-1', { successor: '3002' });
+  const successor = cell('3002', 1, 'sha-2');
+  const [cmdA, cmdB] = paintCommands({
+    cells: [predecessor, successor],
+    rects: [{ x: 0, y: 0, w: 10, h: 10 }, { x: 20, y: 0, w: 10, h: 10 }],
+    visible: [0, 1], cam: { x: 0, y: 0, scale: { x: 20, y: 20 } },
+    palette: CELL_FILL, manifest,
+  });
+  expect((cmdA as { captions?: { text: string }[] }).captions?.map((c) => c.text))
+    .toContain('replaced by 3002');
+  expect((cmdB as { captions?: { text: string }[] }).captions?.map((c) => c.text))
+    .toContain('replaces 3001');
 });
 
 it('gives every badge exactly one axis, and names no badge that is gone', () => {

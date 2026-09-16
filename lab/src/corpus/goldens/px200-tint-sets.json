@@ -310,6 +310,14 @@
         "weight": 300
       },
       {
+        "text": "replaced by 3002",
+        "corner": "bl",
+        "ink": "#4a4a4f",
+        "weight": 300,
+        "size": 10.799999999999999,
+        "riseAbove": 22.32
+      },
+      {
         "text": "replaced",
         "corner": "bl",
         "ink": "#4a4a4f",

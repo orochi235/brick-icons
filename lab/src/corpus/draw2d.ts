@@ -145,18 +145,23 @@ function drawStrip(ctx: CanvasRenderingContext2D, strip: CellBadge[],
 function drawCaption(ctx: CanvasRenderingContext2D, caption: CellCaption,
                      cmd: { dx: number; dy: number; dw: number; dh: number },
                      rightPad = 0): number {
-  const size = captionSize(cmd.dw);
+  // The pad comes off the cell's usual caption size regardless of this
+  // caption's own -- the replacement line sets smaller than the part number
+  // above which it stacks, but shares its left edge.
+  const primarySize = captionSize(cmd.dw);
+  const size = caption.size ?? primarySize;
   const right = caption.corner === 'tr';
   const top = caption.corner[0] === 't';
   ctx.save();
   ctx.font = `${caption.weight ?? WEIGHT_TEXT} ${size}px ${THUMB_FACE}`;
   ctx.textAlign = right ? 'right' : 'left';
   ctx.textBaseline = 'middle';
-  const pad = cornerPad(cmd.dw, size);
+  const pad = cornerPad(cmd.dw, primarySize);
+  const rise = caption.riseAbove ?? 0;
   ctx.fillStyle = caption.ink;
   const x = right ? cmd.dx + cmd.dw - pad - rightPad : cmd.dx + pad;
   ctx.fillText(caption.text, x,
-               top ? cmd.dy + pad + size * 0.5 : cmd.dy + cmd.dh - pad - size * 0.5);
+               top ? cmd.dy + pad + size * 0.5 + rise : cmd.dy + cmd.dh - pad - size * 0.5 - rise);
   const width = ctx.measureText(caption.text).width;
   ctx.restore();
   return right ? x - width : x + width;
