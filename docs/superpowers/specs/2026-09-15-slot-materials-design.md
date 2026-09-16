@@ -101,6 +101,27 @@ tile gets a chip in front of the slot name, the chip
 and the name both top-aligned so a name that wraps keeps its chip on the first
 line. The tile's background still carries the wall's state color.
 
+## The stats dashboard
+
+Materials go where a bar IS a slot, and a chip goes where a slot is named.
+
+- **What a pass costs** (`CostBars`): each row's bar becomes that slot's
+  material. The bar is a percentage of a shared track, and `MaterialBar` needs
+  pixels -- stretching one instead would shear decal's hatching and double its
+  outline -- so the track is measured once with a `ResizeObserver` (already
+  stubbed in `test-setup.ts`, and the pattern `PartOrbit` and `SourcePane` use)
+  and each row's width is computed from it.
+- **Coverage** (`CoverageBars`): a chip before the slot name. The bar itself
+  keeps its state colors -- its segments say drawn, defect, timeout, and that
+  is not what a material means.
+- **Render seconds** (`SecsOverlay`): the two series take their engines'
+  material colors, occt blue and naive orange, and the legend swatches become
+  chips. The bins are a few pixels wide, so they take the color, not the bar.
+
+A slot name in either bar chart carries its chip inside `.stats-bar-name`, with
+the name and its daggers wrapped in one child so the chip gap does not push
+them apart.
+
 ## Not using materials: the stats failure chart
 
 `SlotLines` draws one line per slot and needs a hue per slot. Three occt slots
