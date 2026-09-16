@@ -1171,11 +1171,15 @@ def _ellipse_ring(op, n=360):
 
 
 def _refit_scene():
-    # canvas-space counterbore trio (same layout as tests/test_hlr.py):
-    # F opening, B bore, M old separator; annulus = M - B, wall = F - M
+    # canvas-space counterbore trio (the layout of tests/test_hlr.py's
+    # _counterbore_trio): F opening, B bore whose ends lie on F, M old
+    # separator sharing B's center; annulus = M - B, wall = F - M
+    d, rb = 0.30, 0.75
+    tb = math.degrees(math.asin((1.0 - rb * rb - d * d) / (2.0 * d * rb)))
+    tm = math.degrees(math.asin(d / 2.0))
     F = ("arc", 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 360.0, "sil")
-    B = ("arc", 0.0, 0.15, 0.55, 0.0, 0.0, 0.55, 195.0, 345.0, "sil")
-    M = ("arc", 0.0, 0.30, 1.0, 0.0, 0.0, 1.0, 190.0, 350.0, "sil")
+    B = ("arc", 0.0, d, rb, 0.0, 0.0, rb, 180.0 - tb, 360.0 + tb, "sil")
+    M = ("arc", 0.0, d, 1.0, 0.0, 0.0, 1.0, 180.0 + tm, 360.0 - tm, "sil")
     (_, _, new), refits = hlr._snap_rim_crossings([F, B, M])
     from brick_icons import geom2d
     annulus = geom2d.difference(geom2d.to_geom(_ellipse_ring(M)),

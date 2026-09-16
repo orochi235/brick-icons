@@ -171,6 +171,9 @@ def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
 SIGN_Z = -1.0          # tuned so parts face the camera (matches LDView iso)
 SEP_REFIT_MAX_GROWTH = 10.0  # every refit in the corpus grows 1.3-4.6x; only
                              # 4019's complement-flipped sliver reaches 43x.
+PINCH_ON_F_TOL = 0.05        # a bore end's distance from the opening circle,
+                             # in the opening's unit space: sampled visibility
+                             # stops a sample short (32527 reaches 0.025)
 MESH_CACHE_DIR = Path(".cache/mesh")
 
 
@@ -708,8 +711,23 @@ def _snap_rim_crossings(segs, max_snap=4.0, vertex_tol=0.25):
 
         emms = [(i, op) for i, op in part
                 if abs(radius(op) - rF) <= 0.01 * rF and 1e-6 < sep_from_F(op) < rF]
+        try:
+            MFinv = np.linalg.inv(np.array([[F[3], F[5]], [F[4], F[6]]], float))
+        except np.linalg.LinAlgError:
+            continue
+
+        def pinches_on_F(op):
+            # The bore is hidden by the counterbore wall, so its visible run
+            # ends ON the opening: that is what makes its endpoints pinch
+            # points. A short arc that merely sits inside F is some other
+            # rim -- 6589's gear stacks concentric rings on two faces and read
+            # as counterbores, refitting an authored r=16 onto 0.8 of itself.
+            return all(abs(np.hypot(*(MFinv @ (point(op, t) - cF))) - 1.0)
+                       <= PINCH_ON_F_TOL for t in (op[7], op[8]))
+
         bores = [(i, op) for i, op in part
-                 if radius(op) < 0.9 * rF and sep_from_F(op) <= 0.35 * rF]
+                 if radius(op) < 0.9 * rF and sep_from_F(op) <= 0.35 * rF
+                 and pinches_on_F(op)]
         if not emms or not bores:
             continue
         mi, M = min(emms, key=lambda t: sep_from_F(t[1]))
@@ -758,30 +776,33 @@ def _snap_rim_crossings(segs, max_snap=4.0, vertex_tol=0.25):
     return out, refits
 
 
-def _refit_candidates(refits):
+def _refit_candidates(refits, px=1.0):
     """Fill arc-candidates for refit separators: (cx,cy,ux,uy,vx,vy, step,
     snap_tol) 8-tuples. The snap tolerance is MEASURED (cf. fit_ells): the
     old (authored) curve's max radial deviation from the new one over the
     drawn span, +AA margin, capped — fill seams authored along the old
     curve snap onto the DRAWN curve (densify_on_arcs) instead of opening a
-    tone lens beside the stroke (3941's boss/rim pinch wedge)."""
+    tone lens beside the stroke (3941's boss/rim pinch wedge).
+
+    `px` is one render pixel in op units (see _stylize): the margin and cap
+    are pixel sizes, so an engine drawing in projected LDU scales them."""
     cands = []
     for old, new, _bore in refits:
         ts = np.radians(np.linspace(old[7], old[8], 33))
-        px = old[1] + np.cos(ts) * old[3] + np.sin(ts) * old[5]
-        py = old[2] + np.cos(ts) * old[4] + np.sin(ts) * old[6]
+        xs = old[1] + np.cos(ts) * old[3] + np.sin(ts) * old[5]
+        ys = old[2] + np.cos(ts) * old[4] + np.sin(ts) * old[6]
         try:
             Mninv = np.linalg.inv(np.array([[new[3], new[5]],
                                             [new[4], new[6]]], float))
         except np.linalg.LinAlgError:
             cands.append(new[1:7] + (25.0,))
             continue
-        mu = Mninv @ (np.stack([px, py], 0)
+        mu = Mninv @ (np.stack([xs, ys], 0)
                       - np.array(new[1:3], float).reshape(2, 1))
         ru = np.hypot(mu[0], mu[1])
-        pr = np.hypot(px - new[1], py - new[2])
+        pr = np.hypot(xs - new[1], ys - new[2])
         dev = float(np.max(np.abs(ru - 1.0) * pr / np.maximum(ru, 1e-9)))
-        cands.append(new[1:7] + (25.0, min(dev * 1.25 + 0.5, 6.0)))
+        cands.append(new[1:7] + (25.0, min(dev * 1.25 + 0.5 * px, 6.0 * px)))
     return cands
 
 
@@ -1132,18 +1153,13 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
         # A circle reaches here as contiguous spans -- 4740's outer rim as
         # 225-360 plus 180-225 -- drawn as two strokes meeting at a seam that
         # composites its antialiasing twice. Over 36 parts this drops 2,202
-        # drawn ops to 1,692. `eps` is divided by the fit scale because occt
-        # works in projected LDU where naive works in canvas px.
+        # drawn ops to 1,692. occt draws in projected LDU where naive draws
+        # in render px, so every pixel-sized tolerance from here on is
+        # scaled by `px`, one render pixel in its op units.
+        px = 1.0 / (res.s or 1.0)
         with timing.phase("dedupe"):
-            segs = dedupe_segments(res.segs, eps=0.05 / (res.s or 1.0),
-                                   keep_order=True)
-        with timing.phase("arcfit"):
-            segs, sil_ells = arcfit.fit_silhouette_arcs(segs)
-        if cull:
-            with timing.phase("cull"):
-                segs = cull_orphan_runs(segs)
-        return res._replace(segs=segs,
-                            ellipses=list(res.ellipses) + sil_ells)
+            segs = dedupe_segments(res.segs, eps=0.05 * px, keep_order=True)
+        return _stylize(res, segs, cull, px)
     if engine == "cadquery":
         from . import cqsvg
         return cqsvg.visible_segments(out, right, up, render_px, cull=cull)
@@ -1155,24 +1171,38 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
         with timing.phase("engine"):
             res = _visible_segments_faceted(out, right, up, fwd, render_px,
                                             cull=cull)
+    with timing.phase("dedupe"):
+        segs = dedupe_segments(res.segs)
+    res = _stylize(res, segs, cull, px=1.0)
+    return res._replace(tri=out["tri"], tri_colors=out.get("tri_colors", ()))
+
+
+def _stylize(res, segs, cull, px):
+    """The stylization tail every engine's deduped ops go through.
+
+    One function on purpose: the tail ran only on the naive branch once, and
+    occt drew the dashes and unrefit separators naive had already cleaned
+    up. `px` is one render pixel in the engine's op units -- 1 for naive,
+    whose ops are render px, and 1/s for occt, whose ops are projected LDU
+    -- and scales every tolerance here that is a pixel size. Angles and
+    extent fractions pass through unchanged.
+    """
     with timing.phase("snap"):
-        segs, refits = _snap_rim_crossings(dedupe_segments(res.segs))
+        segs, refits = _snap_rim_crossings(segs, vertex_tol=0.25 * px)
     with timing.phase("arcfit"):
         segs, sil_ells = arcfit.fit_silhouette_arcs(segs)
-    if sil_ells:
-        res = res._replace(ellipses=list(res.ellipses) + sil_ells)
+    ells = list(res.ellipses) + sil_ells
+    fold = set(res.fold_ells or ())
     if cull:
         with timing.phase("cull"):
-            segs = cull_orphan_runs(segs, protect=set(res.fold_ells or ()))
+            segs = cull_orphan_runs(segs, join_tol=0.75 * px, protect=fold)
     if refits:
         # refit separators are arc-recovery candidates too, so the moved
         # fill seam emits as a true arc (25 deg step, like the rim ones)
         # and carries a measured snap tolerance for the old-curve seams
-        res = res._replace(ellipses=list(res.ellipses)
-                           + _refit_candidates(refits))
+        ells += _refit_candidates(refits, px)
     loops = _fold_arc_loops(segs, res.fold_ells) if res.fold_ells else []
-    return res._replace(segs=segs, refits=refits, loops=loops,
-                        tri=out["tri"], tri_colors=out.get("tri_colors", ()))
+    return res._replace(segs=segs, ellipses=ells, refits=refits, loops=loops)
 
 
 def _merge_intervals(iv, eps):

@@ -2747,10 +2747,15 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None):
                                        _visible_line_spans(comps.get("lines")))
     else:
         picked += select_authored(comps.get("sharp_hidden"), loci)
-    ops = []
+    ops, fold_idx = [], []
     for edge, locus in picked:
         kind = locus[3]
         arc = locus_arc(edge, locus, kind)
+        if arc is not None and locus[0] == "seg":
+            # a chord re-read against its conic: the only seg loci that carry
+            # one are arcfit's, so this arc is a stylized fold span (naive's
+            # fold_ells) -- protected from the orphan cull, chained into loops
+            fold_idx.append(len(ops))
         ops += [arc] if arc is not None else _edge_ops(edge, kind)
     for name in ("outline", "outline_hidden"):
         comp = comps.get(name)
@@ -2769,6 +2774,9 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None):
             comps = dict(comps, sharp=_compound(kept) if kept else None)
         ops = _undeclared_ops(comps)
     ops = _negate_y(ops)
+    # keyed off the ops as drawn, so the keys match segs bit for bit downstream
+    fold_keys = list({tuple(round(v, 6) for v in ops[i][1:7])
+                      for i in fold_idx})
     if ops:
         bbox = _ops_bbox(ops)
     else:
@@ -2798,7 +2806,14 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None):
     # boundary, and an LDraw 16-gon rings a hole in 22.5 deg chords -- under
     # the default MAX_STEP 15 those runs stay polylines. occt's own surface
     # boundaries sample at BOUNDARY_STEP_DEG and do not need this.
+    proj = op_projection(right, up, fwd)
     ells, seen = [], set()
+    # fitted rounds first: they carry the chain's own step and a measured
+    # snap tolerance, and the generic 25-degree entry below must not shadow
+    # them
+    for cand in _fit_arc_candidates(out.get("fit_arcs", ()), proj, 1.0 / s):
+        seen.add(tuple(round(v, 4) for v in cand[:6]))
+        ells.append(cand)
     for op in ops:
         if op[0] != "arc":
             continue
@@ -2806,7 +2821,6 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None):
         if k not in seen:
             seen.add(k)
             ells.append(tuple(op[1:7]) + (RIM_STEP_DEG,))
-    proj = op_projection(right, up, fwd)
     decal_ells = []
     faces = ordered_faces(shape, proj, out, ellipses_out=decal_ells)
     for cand in _boundary_conics(shape, proj):
@@ -2822,5 +2836,43 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None):
             seen.add(k)
             ells.append(cand)
     return VisResult(ops, bbox, s, faces=faces, analytic=out.get("analytic", ()),
-                     ellipses=tuple(ells), proj=proj, sil_polys=polys,
+                     ellipses=tuple(ells), proj=proj, fold_ells=fold_keys,
+                     sil_polys=polys,
                      tri=out.get("tri", ()), tri_colors=out.get("tri_colors", ()))
+
+
+def _fit_arc_candidates(fit_arcs, proj, px):
+    """Arc candidates for arcfit's fitted rounds, as the naive engine emits
+    them: (cx, cy, ux, uy, vx, vy, step, snap_tol) in op space.
+
+    The step is the chain's own coarsest sweep, so a 45-degree hand-faceted
+    round is still recovered where the 25-degree rim default would leave it
+    chords. The snap tolerance is the chord vertices' measured radial
+    deviation from the fitted curve, plus an antialias margin and a cap that
+    are pixel sizes -- `px` is one render pixel in op units -- so the fill
+    boundary sewn from those chords pulls onto the drawn arc instead of
+    scalloping past the stroke at every facet corner (3941's X outline).
+    """
+    out = []
+    for a in fit_arcs:
+        C, U, V = (np.asarray(a[k], float) for k in ("C", "U", "V"))
+        cx, cy, _ = proj.to_px(C[None, :])
+        ux, uy, _ = proj.to_px((C + U)[None, :])
+        vx, vy, _ = proj.to_px((C + V)[None, :])
+        c = np.array([cx[0], cy[0]])
+        M = np.array([[ux[0] - c[0], vx[0] - c[0]],
+                      [uy[0] - c[1], vy[0] - c[1]]])
+        px_, py_, _ = proj.to_px(np.asarray(a["P"], float))
+        try:
+            mu = np.linalg.inv(M) @ (np.stack([px_, py_], 0) - c.reshape(2, 1))
+            ru = np.hypot(mu[0], mu[1])
+            pr = np.hypot(px_ - c[0], py_ - c[1])
+            dev = float(np.max(np.abs(ru - 1.0) * pr / np.maximum(ru, 1e-9)))
+        except np.linalg.LinAlgError:
+            dev = 0.0                     # edge-on: no radial gap to bridge
+        out.append((float(c[0]), float(c[1]),
+                    float(M[0, 0]), float(M[1, 0]),
+                    float(M[0, 1]), float(M[1, 1]),
+                    a["step"] * 1.15 + 1.0,
+                    min(dev * 1.25 + 0.5 * px, 6.0 * px)))
+    return out

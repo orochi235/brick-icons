@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-occt = pytest.importorskip("brick_icons.occt", reason="needs the [occt] extra")
+occt = pytest.importorskip("brick_icons.occt", reason="needs the [occt] extra", exc_type=ImportError)
 
 from brick_icons import arcfit, geom2d, hlr, goldens, primitives  # noqa: E402
 from brick_icons.cli import process_one  # noqa: E402
@@ -1292,7 +1292,8 @@ def test_occt_segments_go_through_the_orphan_cull(ldraw_dir):
 
     Spelled out as the composition rather than a count, so a stage added to
     the tail has to be added here too: this is the record of what occt's
-    output goes through between the engine and the caller.
+    output goes through between the engine and the caller. Every pixel-sized
+    tolerance is scaled by 1/s, one render pixel in occt's projected LDU.
     """
     out = occt.flatten_part("30162", ldraw_dir)
     right, up, fwd = hlr.view_basis(30.0, 45.0)
@@ -1300,10 +1301,75 @@ def test_occt_segments_go_through_the_orphan_cull(ldraw_dir):
     kept = hlr.visible_segments("30162", ldraw_dir, render_px=512,
                                 engine="occt").segs
     assert len(kept) < len(res.segs)
-    tail = hlr.dedupe_segments(list(res.segs), eps=0.05 / res.s,
-                               keep_order=True)
+    px = 1.0 / res.s
+    tail = hlr.dedupe_segments(list(res.segs), eps=0.05 * px, keep_order=True)
+    tail, _refits = hlr._snap_rim_crossings(tail, vertex_tol=0.25 * px)
     tail, _sil = arcfit.fit_silhouette_arcs(tail)
-    assert list(kept) == hlr.cull_orphan_runs(tail)
+    assert list(kept) == hlr.cull_orphan_runs(tail, join_tol=0.75 * px,
+                                              protect=set(res.fold_ells))
+
+
+def _prepared(part, ldraw_dir):
+    """The flattened part as hlr.visible_segments hands it to an engine --
+    flatten_part alone runs no arcfit, so it has no fitted rounds."""
+    out = occt.flatten_part(part, ldraw_dir)
+    out["fit_arcs"], out["2"] = arcfit.fit_edge_arcs(out["2"], out["5"])
+    return out
+
+
+def test_occt_reports_its_fitted_rounds_as_fold_ellipses(ldraw_dir):
+    """3941's axle-cross post is hand-faceted; arcfit fits its chains and
+    naive marks the drawn spans as fold_ells, which the orphan cull leaves
+    alone and _fold_arc_loops chains into the post outline the fills are
+    cut to. occt drew the same arcs and reported none, so its cull could
+    peel them and its fills got no loop. The keys are the drawn arcs' own,
+    so they match `segs` bit for bit."""
+    res = hlr.visible_segments("3941", ldraw_dir, render_px=512,
+                               engine="occt")
+    assert res.fold_ells
+    drawn = {tuple(round(v, 6) for v in op[1:7])
+             for op in res.segs if op[0] == "arc"}
+    assert set(res.fold_ells) <= drawn
+    assert len(res.loops) == 1
+    naive = hlr.visible_segments("3941", ldraw_dir, render_px=512,
+                                 engine="naive")
+    assert len(naive.loops) == 1
+
+
+def test_occt_refits_a_counterbore_separator_like_naive(ldraw_dir):
+    """3700's Technic hole: the separator between counterbore wall and floor
+    is refit through the bore's pinch points so it reads concentric with the
+    bore. Only the naive tail did this; occt drew the authored separator."""
+    res = hlr.visible_segments("3700", ldraw_dir, render_px=512,
+                               engine="occt")
+    naive = hlr.visible_segments("3700", ldraw_dir, render_px=512,
+                                 engine="naive")
+    assert len(res.refits) == len(naive.refits) == 1
+    old, new, _bore = res.refits[0]
+    assert new in res.segs and old not in res.segs
+    key = tuple(round(v, 6) for v in new[1:7])
+    assert any(tuple(round(v, 6) for v in e[:6]) == key and len(e) == 8
+               for e in res.ellipses)
+
+
+def test_a_fitted_round_candidate_carries_its_chain_step(ldraw_dir):
+    """A hand-faceted round's fill boundary is the sewn chord polygon, and
+    under the 25-degree rim default a coarser chain stays chords while the
+    stroke is an arc -- so the candidate carries the chain's own step and a
+    measured snap tolerance, as naive's fit_ells do."""
+    out = _prepared("3941", ldraw_dir)
+    assert out["fit_arcs"]
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    res = occt.visible_segments(out, right, up, 512, cull=True, fwd=fwd)
+    fold = {tuple(round(v, 4) for v in k) for k in res.fold_ells}
+    cands = [e for e in res.ellipses
+             if tuple(round(v, 4) for v in e[:6]) in fold]
+    assert cands
+    steps = {a["step"] * 1.15 + 1.0 for a in out["fit_arcs"]}
+    for e in cands:
+        assert len(e) == 8
+        assert any(e[6] == pytest.approx(st) for st in steps)
+        assert 0.0 < e[7] <= 6.0 / res.s
 
 
 def test_a_zero_height_cylinder_face_gets_no_occluder(ldraw_dir):

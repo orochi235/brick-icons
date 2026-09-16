@@ -620,13 +620,18 @@ def _arc_pt(op, t):
                      op[2] + math.cos(th) * op[4] + math.sin(th) * op[6]])
 
 
-def _counterbore_trio():
-    # F: full opening circle. B: smaller bore arc (center within 0.35*rF of
-    # F's), visible span ending at the annulus pinch points. M: wall/annulus
-    # separator, congruent to F, visible lens inside F bulging past the bore.
+def _counterbore_trio(d=0.30, rb=0.75):
+    # F: the opening, a full unit circle. The counterbore floor sits d below
+    # it in projection, so the floor's rim M (congruent to F) and the bore B
+    # share a center offset by d -- the layout every refit in the corpus has
+    # (3700, 32527, 3894: sep(M, B) = 0, rB = 0.75 rF). B is hidden by the
+    # wall wherever it lies outside F, so its visible ends ARE its crossings
+    # with F, the pinch points; M is visible where it lies inside F.
+    tb = math.degrees(math.asin((1.0 - rb * rb - d * d) / (2.0 * d * rb)))
+    tm = math.degrees(math.asin(d / 2.0))
     F = ("arc", 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 360.0, "sil")
-    B = ("arc", 0.0, 0.15, 0.55, 0.0, 0.0, 0.55, 195.0, 345.0, "sil")
-    M = ("arc", 0.0, 0.30, 1.0, 0.0, 0.0, 1.0, 190.0, 350.0, "sil")
+    B = ("arc", 0.0, d, rb, 0.0, 0.0, rb, 180.0 - tb, 360.0 + tb, "sil")
+    M = ("arc", 0.0, d, 1.0, 0.0, 0.0, 1.0, 180.0 + tm, 360.0 - tm, "sil")
     return F, B, M
 
 
@@ -637,7 +642,11 @@ def test_snap_refits_separator_through_bore_pinch_points():
     # opening. Endpoints land on the bore's visible ends (pinch points).
     F, B, M = _counterbore_trio()
     out, refits = hlr._snap_rim_crossings([F, B, M])
-    assert out[0] == F and out[1] == B  # opening and bore untouched
+    assert out[0] == F                          # opening untouched
+    # the bore's ends already sit on the opening, so pass 1 moves them by
+    # float noise at most
+    assert out[1][1:7] == B[1:7]
+    assert out[1][7:9] == pytest.approx(B[7:9], abs=1e-9)
     new = out[2]
     assert new[0] == "arc" and new != M
     # the refit is reported so fill seams can follow the new boundary:
@@ -658,27 +667,43 @@ def test_snap_refits_separator_through_bore_pinch_points():
     d = [np.linalg.norm(_arc_pt(new, t) - apex) for t in ts]
     assert min(d) < 1e-3
 
-    # genuinely re-fit: radius near the bore's, not the opening's
+    # genuinely re-fit: smaller than the opening it was congruent to (the
+    # corpus's refits land at 0.83-0.86 of it)
     r_new = (math.hypot(new[3], new[4]) + math.hypot(new[5], new[6])) / 2.0
-    assert r_new < 0.8  # was 1.0 (congruent to opening)
+    assert r_new < 0.9
 
 
 def test_snap_separator_refit_keeps_bore_aspect():
     # circumcircle is fit in the BORE's unit space, so for an elliptical
     # bore the replacement is an ellipse with the bore's aspect ratio.
-    sq = math.sqrt
-    q = 0.5  # y-squash applied to the whole scene
-    F = ("arc", 0.0, 0.0, 1.0, 0.0, 0.0, q, 0.0, 360.0, "sil")
-    B = ("arc", 0.0, 0.15 * q, 0.55, 0.0, 0.0, 0.55 * q, 195.0, 345.0, "sil")
-    M = ("arc", 0.0, 0.30 * q, 1.0, 0.0, 0.0, q, 190.0, 350.0, "sil")
+    q = 0.5  # y-squash applied to the whole scene (the param angles hold)
+    F0, B0, M0 = _counterbore_trio()
+    F = F0[:6] + (F0[6] * q,) + F0[7:]
+    B = B0[:2] + (B0[2] * q,) + B0[3:6] + (B0[6] * q,) + B0[7:]
+    M = M0[:2] + (M0[2] * q,) + M0[3:6] + (M0[6] * q,) + M0[7:]
     out, _ = hlr._snap_rim_crossings([F, B, M])
     new = out[2]
     # actually re-fit (axes shrank toward the bore's scale) ...
     a1 = math.hypot(new[3], new[4])
     a2 = math.hypot(new[5], new[6])
-    assert a1 < 0.8
+    assert a1 < 0.9
     # ... with the bore's aspect ratio preserved
     assert a2 / a1 == pytest.approx(q, rel=1e-6)
+
+
+def test_snap_refits_only_a_bore_that_pinches_on_the_opening():
+    """6589's halo: a gear stacks concentric rings on two faces, and a ring
+    pair read as opening and separator with an inner ring as the bore. The
+    refit then drew the authored r=16 at 0.8 of itself, across the face.
+    A bore's visible ends are where the counterbore wall hides it -- on the
+    opening -- so an arc ending well inside the opening is some other rim,
+    and the separator is left as authored."""
+    F, _B, M = _counterbore_trio()
+    inner = ("arc", 0.0, 0.15, 0.55, 0.0, 0.0, 0.55, 195.0, 345.0, "sil")
+    # ends 0.53 of the opening's radius from its center, nowhere near it
+    out, refits = hlr._snap_rim_crossings([F, inner, M])
+    assert refits == []
+    assert out[2][1:7] == M[1:7]
 
 
 def test_snap_no_refit_without_full_opening():
@@ -1088,14 +1113,15 @@ def _radius(op):
     return (math.hypot(op[3], op[4]) + math.hypot(op[5], op[6])) / 2.0
 
 
-@pytest.mark.xfail(strict=True, reason="open: 6589-naive-halo-r12.8 / r11.3")
 def test_6589_refits_no_separator_onto_an_unauthored_radius(ldraw_dir):
     """A refit is a seam snapping, so it may not become a different curve.
 
-    6589 draws rings at r=12.80 and r=11.33 LDU where the .dat authors only
-    9, 10, 12 and 16: the refit puts the authored r=16 and r=12 circles on
+    6589 drew rings at r=12.80 and r=11.33 LDU where the .dat authors only
+    9, 10, 12 and 16: the refit put the authored r=16 and r=12 circles on
     circumcircles at 0.800x and 0.944x. SEP_REFIT_MAX_GROWTH caps the sweep
-    and 1.81x passes it, so nothing stopped them.
+    and 1.81x passed it. What stops them now is the pinch test: a bore's
+    visible ends lie on the opening, and the gear's inner rings end nowhere
+    near it (0.75 and 0.64 of the opening's radius).
     """
     assert _refits_of("6589", ldraw_dir) == []
 
