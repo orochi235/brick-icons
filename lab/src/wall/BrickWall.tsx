@@ -8,7 +8,8 @@ import { drawSticker } from '@lab/corpus/draw2d';
 import { familyOf } from '@lab/corpus/families';
 import { FilterBar } from '@lab/corpus/FilterBar';
 import { Lightbox } from '@lab/corpus/Lightbox';
-import { LINKED_BADGE, REPLACES_BADGE, RETIRED_WASH, thumbGround } from '@lab/corpus/paint';
+import { linkedPart, LINKED_BADGE, REPLACES_BADGE, RETIRED_WASH,
+  thumbGround } from '@lab/corpus/paint';
 import { PartCardBody } from '@lab/corpus/PartCard';
 import type { TintMode } from '@lab/corpus/tint';
 import type { Cell } from '@lab/corpus/types';
@@ -26,14 +27,7 @@ const FACET = { key: 'category', label: 'category', groupOf: familyOf };
 
 const drawMark = (ctx: CanvasRenderingContext2D, _mark: string, cx: number, cy: number,
                   r: number) => drawSticker(ctx, cx, cy, r);
-export const linkTarget = (cell: Cell, tag: string): string | null => {
-  if (tag === LINKED_BADGE) return cell.successor ?? null;
-  if (tag !== REPLACES_BADGE) return null;
-  // No one part to go to when it replaced several, so the click falls through
-  // to a normal pick and the card names them all.
-  const from = cell.predecessors ?? [];
-  return from.length === 1 ? from[0]! : null;
-};
+export const linkTarget = linkedPart;
 
 /** The corpus wall drawn by pezlie's `WallView`, beside `CorpusWall`. */
 export function BrickWall({ client }: { client: LabClient }) {
@@ -86,7 +80,10 @@ export function BrickWall({ client }: { client: LabClient }) {
     );
   }, [client, notice]);
   const goToPart = useCallback((partId: string) => {
-    setNotice(searchNotice(partId, wall.current?.reveal(partId) ?? 'absent'));
+    // No wall to ask is not a part that is missing from it, so it earns no
+    // notice of its own.
+    if (!wall.current) { setNotice(null); return; }
+    setNotice(searchNotice(partId, wall.current.reveal(partId)));
   }, []);
 
   return (

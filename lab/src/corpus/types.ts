@@ -95,6 +95,11 @@ export interface PartDetail {
           status: string; status_note: string | null;
           year_from: number | null; year_to: number | null;
           sets: number | null; tags: string[];
+          /** Both ends of the replacement link, so the detail view's tags and
+           *  lineage do not depend on having come from a cell. Absent from an
+           *  API older than the fields. */
+          successor?: string | null;
+          predecessors?: string[];
           /** LDraw's `!PREVIEW` line, verbatim, for the 394 parts that carry
            *  one. Absent from an API older than the field, like `slots`. */
           preview?: string | null;

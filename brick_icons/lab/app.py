@@ -490,6 +490,14 @@ def create_app(root: Path | str = ".",
             years = conn.execute(
                 "SELECT year_from, year_to, sets, colors, matched "
                 "FROM part_years WHERE part_id = ?", (part_id,)).fetchone()
+            # Both ends of the replacement link. The detail view is opened
+            # from places that carry no cell, so it cannot be told them.
+            replaced_by = conn.execute(
+                "SELECT successor FROM part_successors WHERE part_id = ?",
+                (part_id,)).fetchone()
+            replaced = [r["part_id"] for r in conn.execute(
+                "SELECT part_id FROM part_successors WHERE successor = ? "
+                "ORDER BY part_id", (part_id,))]
             # In the module's own order, and a flag keeps its null value: the
             # page tells a flag from a measure by that null and so never has
             # to carry a copy of the vocabulary.
@@ -507,8 +515,12 @@ def create_app(root: Path | str = ".",
         part["year_from"], part["year_to"] = cells.years_for(
             years, bool(part["printed"]))
         part["sets"] = cells.sets_for(years)
+        part["successor"] = replaced_by["successor"] if replaced_by else None
+        part["predecessors"] = replaced
         part["tags"] = tags.tags_for(part["category"], bool(part["printed"]),
-                                     part["year_to"], part["sets"])
+                                     part["year_to"], part["sets"],
+                                     successor=part["successor"],
+                                     predecessors=replaced)
         part["out_of_scope"] = part["category"] in cells.OUT_OF_SCOPE_CATEGORIES
         for slot in slots:
             slot.update(states[slot["source"]])

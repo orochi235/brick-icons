@@ -310,8 +310,10 @@ export const BADGE_AXES: { key: string; label: string; tags: string[] }[] = [
     tags: ['minifig', 'technic', 'duplo', 'weird', 'sticker'] },
   { key: 'properties', label: 'Properties',
     tags: ['magnet', 'electric', 'printed', 'composite'] },
-  { key: 'fate', label: 'What became of it',
-    tags: ['retired', 'replaced', 'replaces'] },
+  { key: 'fate', label: 'What became of it', tags: ['retired', 'replaced'] },
+  // Its own axis rather than beside the other two: within an axis the picks
+  // are alternatives, and the 24 chain parts are asked for with both at once.
+  { key: 'replaces', label: 'What it replaced', tags: ['replaces'] },
 ];
 
 /** The picked tags, split by the axis each answers. A tag no axis claims gets
@@ -331,6 +333,16 @@ export function byAxis(picked: string[]): string[][] {
 export const LINKED_BADGE = 'replaced';
 export const REPLACES_BADGE = 'replaces';
 
+/** The part a linked badge leads to, or null where there is no single one:
+ *  a part that replaced several has no one target, so the click falls through
+ *  to a normal pick and the card names them all. Both walls follow this. */
+export function linkedPart(cell: Cell, tag: string): string | null {
+  if (tag === LINKED_BADGE) return cell.successor ?? null;
+  if (tag !== REPLACES_BADGE) return null;
+  const from = cell.predecessors ?? [];
+  return from.length === 1 ? from[0]! : null;
+}
+
 export function isRetired(cell: Cell): boolean {
   return (cell.tags?.includes('retired') ?? false)
       || (cell.tags?.includes('replaced') ?? false);
@@ -347,11 +359,14 @@ export function badgeGeometry(cellPx: number) {
   const size = captionSize(cellPx);
   const radius = size * 0.63;
   const pad = cornerPad(cellPx, size);
+  // Between two discs sharing a corner, the same half-radius pezlie leaves.
+  const gap = radius * 0.5;
   // One inset on every edge, the same one the year caption keeps: a corner
   // mark is a box tangent to the pad, whichever corner it is in. Chasing the
   // caption's ink line instead made a top disc sit 0.21 of the type size
   // nearer its edge than a bottom one, so no two corners agreed.
-  return { size, radius, inset: radius + pad, rise: radius + pad, fall: radius + pad };
+  return { size, radius, gap, inset: radius + pad, rise: radius + pad,
+           fall: radius + pad };
 }
 
 /** How far a caption's ink centers above the `middle` baseline canvas sets

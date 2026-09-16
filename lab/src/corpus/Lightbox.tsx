@@ -240,7 +240,8 @@ export function Lightbox({ partId, source, client, onClose,
             {detail.part.sets != null ? ` · ${detail.part.sets} sets` : ''}
           </p>
           <Tags tags={detail.part.tags ?? []} />
-          <Lineage successor={successor} predecessors={predecessors}
+          <Lineage successor={successor ?? detail.part.successor}
+                   predecessors={predecessors ?? detail.part.predecessors}
                    onPart={onPart} />
           {/* Every render below is drawn from the one global angle, so a part
               the library poses is one the drawings may be showing the wrong

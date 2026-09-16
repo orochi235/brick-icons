@@ -57,7 +57,8 @@ it('groups the badges by axis without writing the axis names on screen', () => {
   const axes = [...container.querySelectorAll('.corpus-legend-axis')];
   expect(container.querySelector('.corpus-legend-axis h4')).toBeNull();
   expect(axes.map((a) => a.getAttribute('aria-label')))
-    .toEqual(['Sets', 'System', 'Properties', 'What became of it']);
+    .toEqual(['Sets', 'System', 'Properties', 'What became of it',
+              'What it replaced']);
   const under = (label: string) => axes
     .find((a) => a.getAttribute('aria-label') === label)!
     .querySelectorAll('.corpus-legend-name');

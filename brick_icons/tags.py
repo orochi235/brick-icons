@@ -27,7 +27,10 @@ TAG_AXES: tuple[tuple[str, ...], ...] = (
     ("minifig", "technic", "duplo", "weird", "sticker"),
     ("magnet", "electric", "printed", "composite"),
     ("popular",),
-    ("retired", "replaced", "replaces"),
+    ("retired", "replaced"),
+    # Its own axis rather than beside the other two: within an axis the picks
+    # are alternatives, and a chain part is asked for with both at once.
+    ("replaces",),
 )
 
 

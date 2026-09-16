@@ -183,8 +183,14 @@ def members(conn: sqlite3.Connection, *, kind: str = "all",
 
     years = {r["part_id"]: r for r in conn.execute(
         "SELECT part_id, year_to, sets FROM part_years")}
-    successors = {r["part_id"] for r in conn.execute(
-        "SELECT part_id FROM part_successors")}
+    successor_of = {r["part_id"]: r["successor"] for r in conn.execute(
+        "SELECT part_id, successor FROM part_successors")}
+    successors = set(successor_of)
+    # The same links read backwards, or `replaces` narrows to nothing and the
+    # page reports the empty set as a fact about the library.
+    predecessors: dict[str, list[str]] = {}
+    for replaced_id, succ in successor_of.items():
+        predecessors.setdefault(succ, []).append(replaced_id)
 
     excluded_set = {e for e in excluded}
     # By axis, as the wall's legend groups them: two tags on one axis are
@@ -210,7 +216,8 @@ def members(conn: sqlite3.Connection, *, kind: str = "all",
                 year["year_to"] if year else None,
                 year["sets"] if year else None,
                 title=row["title"], part_id=row["id"],
-                successor=row["id"] in successors or None))
+                successor=row["id"] in successors or None,
+                predecessors=predecessors.get(row["id"])))
             if not all(carried & set(group) for group in wanted_axes):
                 continue
         keep.append(row)
