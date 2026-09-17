@@ -1,3 +1,174 @@
+## occt refresh at the tail-parity engine, in flight -- 2026-09-17
+
+Two fleet jobs redraw every `occt`-slot part at `143ed40`, the first build
+after `490c87d` ran occt through the naive stylization tail. Launched 00:29,
+deadline 12:29; `onto jobs` for state, `onto logs <id>` for progress.
+
+| task | node | parts | workers | dir |
+|---|---|---|---|---|
+| `slot-occt-tail-studio` (`149dd1f5`) | studio | 8,912 | 8 | `out/slot-occt-tail-studio` |
+| `slot-occt-tail-uai` (`a682e001`) | msb-uai | 11,139 | 10 | `out/slot-occt-tail-uai` |
+
+Each has its own `onto fetch --stream` and `ingest-watch.py --overwrite --until`
+(pids in `out/fetch-<task>.log`, `out/ingest-watch-<task>.log`). The lists are
+`stale-renders.py --slot occt`, shuffled and split 8:10; the slot's 658 errored
+parts are not in them. When both land: `scripts/stale-renders.py` should show
+`occt` fresh, and `slot-coverage.py` still 658 missing.
+
+Done to launch it: `main` pushed to `origin` (52 commits, the nodes take their
+base from the remote); both nodes force-synced, the 21 files studio held being
+committed sources, not job output; `scripts/run-slot.sh` grew `--overwrite`,
+which reaches the watcher -- a refresh without it fetches everything and
+indexes nothing (see the skill).
+
+**Open, and not begun -- Mike's words, 2026-09-17: "we also need to figure
+this out at some point":**
+
+- **Extent-keyed tail tolerances.** His phrase. `490c87d` scales the shared
+  tail's pixel-sized tolerances by `px`, one render pixel in engine op units;
+  the likely reading is whether they should key on the part's drawn extent
+  instead. Not confirmed with him, and nothing measured.
+- **Whether 6589's axle dashes stay.** His phrase; nobody has looked at the
+  render in this session. Look at `6589` under `occt` at `143ed40` before
+  arguing either way.
+
+## Slot materials, lightbox viewing, cell corners — 2026-09-15
+
+**A merge someone else started is open in this checkout.** At handoff, `main`
+was mid-merge of `replaces-both-ways` (built in the agent worktree
+`.claude/worktrees/agent-ad4ead163d4041051`, on top of the `replaces` work
+below), with one unresolved conflict in `lab/src/corpus/Lightbox.tsx` and a
+large index of that session's staged changes. It is not ours: do not resolve,
+abort or continue it, do not stage anything while it is open, and do not run a
+bare `git commit`, which would take the whole merge under your message. A
+path-scoped commit simply refuses during a merge, which is how it was found.
+**This section of HANDOFF.md is therefore uncommitted** — commit it once the
+merge is finished by whoever owns it, naming the path.
+
+On `main`, in this shared checkout. Nothing is pushed: run
+`git log --oneline @{u}..HEAD` for what is ahead, and `git status --short` for
+what other sessions have left uncommitted. **Leave those alone** — at handoff
+they were `tests/goldens/defects.toml`, `pyproject.toml`, `uv.lock`,
+`tests/test_cqsvg.py` and `tests/test_occt.py`, none of them mine. A worktree
+sibling session (`tn-backfill-0f`, in `.claude/worktrees/tn-backfill`) shares
+the repository.
+
+**Commit by naming paths on the commit itself** — `git commit <paths> -m …` —
+never a bare `git commit`, which takes the whole shared index. A pathspec only
+matches files git already tracks, so `git add` a new file first, then still
+name it on the commit.
+
+### What landed
+
+Two specs, both marked built: `docs/superpowers/specs/2026-09-15-slot-materials-design.md`
+and `…-lightbox-viewing-design.md`. The implementation plan beside them is the
+pre-review draft, not what shipped; read the code.
+
+- **Slot materials** (`fa32e98`…`56bdbf9`): `lab/src/shared/materials.ts` gives
+  each render slot a color, finish, opacity and optional stroke;
+  `MaterialBar.tsx` draws one at any size and exports `CHIP` (34×14) plus the
+  shared `.material-chip-label` layout. The lightbox's Measurements section
+  (`lab/src/corpus/Measurements.tsx`) is now chart-ordered rows with chips,
+  p90/p99 shaded cells and secs as material bars.
+- **Stats dashboard** (`de4a42e`): cost bars filled with materials, chips on
+  coverage and cost rows, render-seconds recolored to the engines' material
+  colors.
+- **Lightbox header** (`b9e76ea`): id white/bold in `--wzl-font-ui`, a category
+  that has a badge drawn as that badge inline and filtered out of the tag row,
+  year range on the title line.
+- **Outline toggle** (`ae4bf34`): `?outline=1` on the render route rewrites
+  zero stroke widths as it serves the SVG; the lightbox checkbox adds it for
+  translucent slots only.
+- **Zoom viewer** (`ebc6055`): double-click a tile for a 1×–8× pan/zoom modal.
+- **Cell corners** (`bc592f0`): badge radius factor 0.63 → 0.78, `cornerPad`
+  halved, and a `replaced by <id>` / `replaces <id>` line above the part number.
+
+### Decisions made in conversation, not recoverable from the code
+
+- **The two stats line charts keep their own `--slot-*` palette.** Three occt
+  slots share one material color, and a line chart needs a hue apiece. Their
+  legends get no chips either — a chip beside a differently-colored line swatch
+  gives one slot two colors. This was asked and answered explicitly; do not
+  "finish the job" by materializing them.
+- **A timed-out bar is a dashed outline, not a faded bar.** Fading was tried
+  and rejected: a faded solid bar reads as a translucent material.
+- **A low `extra_d99` is not shaded.** Every silhouette slot sits near 0.45, so
+  shading low values would mark them all.
+- **`replaces` is a client-side reverse index** over the loaded cells, not a
+  server field. A part that is both shows `replaced by`.
+- **The translucent-naive renders already draw their strokes**, so the outline
+  toggle is a deliberate no-op there; only translucent-occt ships zero widths.
+- **The Measurements table's corner `<th />` is deliberately empty.** Putting
+  text back means borrowing or duplicating `corpus-visually-hidden`, which an
+  earlier review rejected.
+- **Escape ordering in the lightbox** is one handler checking `zoomedSlot`, not
+  a second listener — two listeners on `window` cannot be ordered reliably when
+  `window` is also the event target.
+
+### Traps worth knowing before touching cell painting
+
+- **The goldens do not cover the corner geometry.** `paintCommands` stores
+  caption and badge objects; the radius/pad maths runs in `draw2d.ts` at draw
+  time. Goldens stay green while the geometry moves, so a visual check is the
+  only gate.
+- **The wall cannot show you this.** Its camera keeps on-screen cells around
+  44px, under `BADGE_MIN_PX` 56 and `LABEL_MIN_PX` 88, so badges and captions
+  never draw in a plain screenshot however you set the cell-size slider. The
+  way that works is a temporary preview page calling the real
+  `drawOverlays`/`captionsFor`/`badgesFor` at fixed sizes, captured headless,
+  then deleted.
+- **Headless captures of the lab need CDP, not `--screenshot`.** Chrome's
+  `--virtual-time-budget` fast-forwards timers while real fetches are still in
+  flight, so the lab's 5s "page did not start" trap fires and that is all you
+  photograph. `debug/shots/shoot3.mjs` (gitignored) waits on a selector and
+  clips to an element; `shoot5.mjs` captures the viewport instead, which is
+  what a `position: fixed` overlay needs. Both take a URL, an out path, a wait
+  selector, a clip selector, a port, optional click text and an optional JS
+  prep snippet.
+- **Do not leave headless Chrome running.** 21 leaked instances each loading
+  the full 24k-part wall wedged the lab server for about a minute.
+
+### In flight and next
+
+1. **A subagent was mid-task at handoff**: moving the `family`/theme caption to
+   the bottom-right corner (`CellCaption.corner` has no `'br'` yet — it has to
+   be added and handled in `draw2d.ts`), and easing `cornerPad` at small sizes
+   where the top text now crowds the edge. Large cells should stay as tight as
+   they are. Check `git log --oneline -5` for whether it committed; if it did
+   not, the work is unstarted.
+2. **Queued, not begun: `minifig` joins `printed` and `sticker`.** Move it from
+   `STRIP_BADGES` to `CORNER_BADGES` at `'tl'`. Corner badges draw as a row
+   inward from the corner.
+
+   Only two discs fit that row across the usable range, and one below 88px —
+   measured off the real `badgeGeometry`, not derived. With minifig added, four
+   tags compete for those slots, and exactly one three-disc combination is
+   reachable: minifig + printed + popular, on six printed minifig heads.
+   **Mike's ruling, 2026-09-15: fit three at larger cells** and drop to two only
+   at small sizes, so raise the clamp rather than write a precedence rule for
+   the common case. **When the row must trim, favorite (`popular`) is the most
+   important of the three and survives** — his words. He did not rule between
+   `minifig` and `printed`; ask rather than invent it.
+
+   Related and pre-existing, found in review, deliberately NOT folded into the
+   in-flight change: `Math.min(index, last)` stacks discs on one center past the
+   clamp instead of dropping them, and the hit test disagrees with the paint —
+   `Wall.tsx`'s `worn.find(...)` takes the first match in array order while
+   `drawOverlays` paints in that order, so the last one lands on top and a click
+   follows the badge you cannot see. 24 parts tagged both `replaced` and
+   `replaces` below 88px navigate to the wrong one. `findLast`, or matching on
+   disc index, keeps them in agreement. This belongs on GitHub, not in
+   `tests/goldens/defects.toml` — that file is a render tracker keyed to part,
+   engine, mark and judged sha, with a closed symptom vocabulary, and a slotless
+   row in it either never asks for review or asks forever.
+3. **Owed: one consolidated review** across the second batch (dashboard, header,
+   outline toggle, zoom viewer, cell corners). The first batch's reviews caught
+   a reachable duplicate React key, an unbounded loop and a test that passed
+   with its subject reversed, so this is worth running rather than skipping.
+4. **Offered and not taken up**: the zoom viewer is a full-viewport white sheet
+   because that is the render's own ground; the user may want the drawing on a
+   panel sized to it instead.
+
 ## Decal sheet defects: six fixes, committed, 2026-09-13
 
 On `main`, committed with the re-frozen `tests/goldens/decal-hashes.txt`;

@@ -17,15 +17,20 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 stream=1
 watch=1
+# A refresh redraws parts the slot already holds, and the watcher skips those
+# unless told to replace them -- a 7,379-part re-render once landed and indexed
+# as nothing. `--overwrite` here is the watcher's flag, named at the launch.
+watch_flags=(--overwrite-requested)
 while [ $# -gt 0 ]; do
   case $1 in
     --no-stream) stream=0; shift ;;
     --no-watch)  watch=0;  shift ;;
+    --overwrite) watch_flags+=(--overwrite); shift ;;
     *) break ;;
   esac
 done
 
-[ $# -gt 0 ] || { echo "usage: $0 [--no-stream] [--no-watch] <onto run args...>" >&2; exit 2; }
+[ $# -gt 0 ] || { echo "usage: $0 [--no-stream] [--no-watch] [--overwrite] <onto run args...>" >&2; exit 2; }
 
 task=""; to=""; detach=0
 args=("$@")
@@ -125,7 +130,7 @@ if [ $watch -eq 1 ]; then
     echo "run-slot: a watcher is already reading $to; leaving it alone"
   else
     nohup "$ROOT/.venv/bin/python" "$ROOT/scripts/ingest-watch.py" "$to" \
-      --every 300 --until "$task" --overwrite-requested \
+      --every 300 --until "$task" "${watch_flags[@]}" \
       > "$ROOT/out/ingest-watch-$task.log" 2>&1 &
     echo "run-slot: ingesting as it lands  pid $!  out/ingest-watch-$task.log"
   fi
