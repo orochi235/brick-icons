@@ -746,9 +746,9 @@ def region_path(g, tol=CIRCLE_TOL):
     vertices and bows past its chords, into the region on a concave run -- a
     hole fitted as a circle is larger than its 16-gon -- and a neighbor that
     shares those vertices is fitted separately or not at all. So a ring with
-    arcs also emits its polygon, and the region is the union of the two: it
-    never draws inside the polygons that tile the print, which is what left
-    ground showing between 4531d01's dots and their field."""
+    arcs or Beziers also emits its polygon, and the region is the union of
+    the two: it never draws inside the polygons that tile the print, which is
+    what left ground showing between 4531d01's dots and their field."""
     parts = []
     g = shapely.orient_polygons(g)
     for poly in getattr(g, "geoms", [g]):
@@ -761,7 +761,7 @@ def region_path(g, tol=CIRCLE_TOL):
         parts += fitted
         # the whole polygon, holes too: a hole's ring alone would subtract
         # twice under nonzero rather than union
-        if any("A" in d for d in fitted):
+        if any(" A " in d or " C " in d for d in fitted):
             parts += ["M " + " L ".join(f"{x:.2f} {y:.2f}" for x, y in pts) + " Z"
                       for pts, _hole in rings]
     return " ".join(x for x in parts if x)
@@ -781,8 +781,38 @@ def _ring_shape_d(pts, tol, clockwise):
         # follow one — a union leaves strays, and an emblem can be several
         # concentric arcs joined by straight runs
         arcs = _circle_arcs(pts, max(tol, SNAP_TOL * tol / CIRCLE_TOL))
-    # the ring as it stands, not through to_geom, which may rewind it
+        # the ring as it stands, not through to_geom, which may rewind it
+        return _smooth_d(pts, arcs)
     return geom2d.path_d(shapely.Polygon(pts), arcs=arcs)
+
+
+CORNER_TURN = 40.0      # deg; a vertex turning this far is a corner the
+                        # author drew, not a sample of a curve. A strawberry
+                        # outline (6057849d) turns 5-15 deg between samples
+                        # and 60-100 at its leaf notches; an authored octagon
+                        # turns 45 everywhere and so stays an octagon
+
+
+def ring_corners(pts, turn=CORNER_TURN):
+    """Indices of the vertices that stay sharp when the ring is smoothed."""
+    P = np.asarray(pts, float)
+    d = np.roll(P, -1, axis=0) - P
+    ang = np.degrees(np.arctan2(d[:, 1], d[:, 0]))
+    bend = np.abs(((ang - np.roll(ang, 1) + 180.0) % 360.0) - 180.0)
+    return [int(i) for i in np.nonzero(bend >= turn)[0]]
+
+
+def _smooth_d(pts, arcs=None):
+    """A freeform ring -- a fruit, a leaf, a letter's bowl -- as the curve
+    its vertices sample, with any runs that follow a recovered circle drawn
+    as that circle's arcs. The author tessellated a curve into chords;
+    drawing the chords shows the tessellation, which the print never had.
+    A ring that is corner at every vertex -- an authored octagon -- is drawn
+    as the polygon it is."""
+    corners = ring_corners(pts)
+    if len(corners) == len(pts):
+        corners = None
+    return geom2d.ring_d(pts, arcs, corners=corners)
 
 
 def decorate(tris, tri_colors, carriers):

@@ -1,3 +1,5 @@
+import re
+
 import numpy as np
 
 from brick_icons import geom2d
@@ -384,3 +386,45 @@ def test_a_bulge_grows_the_silhouette_and_a_hollow_does_not():
     kept = geom2d.arc_regions([bulge, hollow, grazing], sq)
     assert len(kept) == 1
     assert kept[0].bounds[2] > 100.0        # the bulge, not the other two
+
+
+def test_smooth_ring_d_passes_through_every_vertex_of_a_sampled_circle():
+    """A 12-gon read as the circle it samples: one cubic per edge, every
+    vertex on the curve, and the curve's midpoints on the circle to within
+    a small fraction of the radius rather than on the chord."""
+    from brick_icons import geom2d
+    th = np.linspace(0, 2 * np.pi, 12, endpoint=False)
+    pts = np.column_stack([np.cos(th), np.sin(th)])
+    d = geom2d.smooth_ring_d(pts)
+    assert d.startswith("M ") and d.endswith(" Z")
+    assert d.count(" C ") == 12 and " L " not in d
+    nums = [float(v) for v in re.findall(r"-?\d+\.\d+", d)]
+    # the anchor of each cubic is the next vertex
+    anchors = np.array(nums[2:]).reshape(12, 6)[:, 4:6]
+    assert np.allclose(anchors, np.roll(pts, -1, axis=0), atol=0.006)
+    # a cubic's midpoint: (P0 + 3 B1 + 3 B2 + P3) / 8
+    P0 = np.vstack([pts[0], anchors[:-1]])
+    B = np.array(nums[2:]).reshape(12, 6)
+    mid = (P0 + 3 * B[:, 0:2] + 3 * B[:, 2:4] + anchors) / 8.0
+    r = np.hypot(mid[:, 0], mid[:, 1])
+    assert np.all(np.abs(r - 1.0) < 0.01)          # a chord midpoint sits at 0.966
+
+
+def test_smooth_ring_d_keeps_a_corner_sharp_and_a_corner_run_straight():
+    """A wedge: two straight sides meeting at the apex, an arc across the
+    far end. The sides are runs between consecutive corners with nothing
+    between them, so they stay L; the arc is smoothed; the apex is a
+    corner on both sides."""
+    from brick_icons import geom2d
+    th = np.radians(np.linspace(-30, 30, 7))
+    arc = np.column_stack([4 * np.cos(th), 4 * np.sin(th)])
+    pts = np.vstack([[0.0, 0.0], arc])            # apex, then the arc
+    d = geom2d.smooth_ring_d(pts, corners=[0, 1, len(pts) - 1])
+    cmds = [c for c in d.split() if c in ("M", "L", "C", "Z")]
+    assert cmds[0] == "M" and cmds[-1] == "Z"
+    assert cmds.count("L") == 2                    # apex->arc start, arc end->apex
+    assert cmds.count("C") == 6                    # one per arc edge
+    # the L commands are the wedge sides, exactly at the authored vertices
+    sides = re.findall(r"L (-?\d+\.\d+) (-?\d+\.\d+)", d)
+    assert [tuple(map(float, s)) for s in sides] == [
+        (round(arc[0, 0], 2), round(arc[0, 1], 2)), (0.0, 0.0)]

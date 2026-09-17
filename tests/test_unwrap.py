@@ -1379,3 +1379,42 @@ def test_a_sticker_with_no_body_carries_its_print_on_its_own_sheet():
     panels = unwrap.decal_panels(tris, colors, [])
     assert len(panels) == 1
     assert {int(c) for c, _g in panels[0][1]} == {0, 4}
+
+
+def test_ring_corners_separates_drawn_corners_from_curve_samples():
+    """6057849d's strawberry turns 5-15 degrees between the samples of its
+    outline and 60-100 at the leaf notches; an authored square turns 90 at
+    every vertex and is all corner."""
+    th = np.radians(np.linspace(0, 300, 31))
+    body = np.column_stack([np.cos(th), np.sin(th)])
+    notch = np.array([[0.7, -0.2], [0.55, 0.0], [0.7, 0.2]])   # a sharp V
+    ring = np.vstack([body, notch])
+    corners = unwrap.ring_corners(ring)
+    # the notch's three vertices and the two arc ends it meets; nothing
+    # along the sampled arc
+    assert set(corners) == {0, len(body) - 1, len(body), len(body) + 1,
+                            len(body) + 2}
+    square = np.array([[0, 0], [1, 0], [1, 1], [0, 1]], float)
+    assert unwrap.ring_corners(square) == [0, 1, 2, 3]
+
+
+def test_region_path_smooths_a_freeform_ring_and_keeps_its_polygon():
+    """A ring that is no circle and no rounded rectangle came out as its
+    chords -- 6057849d's strawberry, its leaves and every seed. It is now
+    the curve through those vertices, and the polygon is emitted under it
+    (REGION_FILL_RULE unions them) so the region never draws inside the
+    print's tiling on a concave run."""
+    th = np.linspace(0, 2 * np.pi, 20, endpoint=False)
+    egg = np.column_stack([3.0 * np.cos(th), 2.0 * np.sin(th) + 0.4 * np.cos(th) ** 2])
+    d = unwrap.region_path(geom2d.to_geom(egg))
+    first, rest = d.split(" Z", 1)
+    assert " C " in first and " L " not in first
+    assert rest.count(" L ") >= len(egg) - 1        # the polygon, whole
+
+
+def test_region_path_leaves_an_authored_octagon_alone():
+    th = np.linspace(0, 2 * np.pi, 8, endpoint=False)
+    octagon = np.column_stack([2.0 * np.cos(th), 2.0 * np.sin(th)])
+    d = unwrap.region_path(geom2d.to_geom(octagon))
+    assert " C " not in d and " A " not in d
+    assert d.count("M ") == 1                       # one subpath, no curve under it

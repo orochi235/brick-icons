@@ -166,9 +166,12 @@ def _arc_cmds(pts, idxs, dts, cand):
     return out
 
 
-def _ring_d(pts, cands, tol, wide=False):
-    """One ring -> SVG subpath, snapping sampled runs back to true arcs."""
+def _ring_d(pts, cands, tol, wide=False, corners=None):
+    """One ring -> SVG subpath, snapping sampled runs back to true arcs.
+    `corners` (see ring_d) smooths the runs between arcs; the junction with
+    an arc is always a corner, since a spline cannot pick up its tangent."""
     n = len(pts)
+    sharp = None if corners is None else {int(i) % n for i in corners}
     assign = (_assign_edges(pts, cands, tol, wide=wide)
               if cands and n >= 3 else [None] * n)
     if wide and any(a is not None for a in assign):
@@ -221,24 +224,121 @@ def _ring_d(pts, cands, tol, wide=False):
         start += 1                     # rotate so no run crosses the seam
     cmds = ["M " + _fmt(pts[start])]
     i = 0
+    plain = []                         # vertex indices of the chord run so far
+
+    def flush_plain():
+        if not plain:
+            return
+        if sharp is None or len(plain) == 2:
+            cmds.extend("L " + _fmt(pts[j]) for j in plain[1:])
+        else:
+            cmds.extend(_run_cmds([pts[j] for j in plain],
+                                  [j in sharp for j in plain]))
+        plain.clear()
+
     while i < n:
         e = (start + i) % n
-        if assign[e] is None:
-            cmds.append("L " + _fmt(pts[(e + 1) % n]))
-            i += 1
-            continue
-        run = [e]
-        while i + len(run) < n and joined(assign[run[-1]], assign[(run[-1] + 1) % n]):
+        run = [e] if assign[e] is not None else []
+        while run and i + len(run) < n and joined(assign[run[-1]],
+                                                  assign[(run[-1] + 1) % n]):
             run.append((run[-1] + 1) % n)
-        if len(run) < 2:               # lone matching edge: not worth an arc
-            cmds.append("L " + _fmt(pts[(e + 1) % n]))
+        if len(run) < 2:               # a chord, or a lone matching edge
+            if not plain:
+                plain.append(e)
+            plain.append((e + 1) % n)
             i += 1
             continue
+        flush_plain()
         idxs = run + [(run[-1] + 1) % n]
         cmds += _arc_cmds(pts, idxs, [assign[j][1] for j in run],
                           cands[assign[e][0]])
         i += len(run)
+    flush_plain()
     return " ".join(cmds) + " Z"
+
+
+SPLINE_ALPHA = 0.5     # centripetal Catmull-Rom: chord-length parametrization
+
+
+def _bezier_run(run, closed=False):
+    """Cubic Bezier commands through every point of `run`, in order.
+
+    A centripetal Catmull-Rom spline: it passes through each point, so the
+    curve is the author's outline read as the curve they sampled, and its
+    chord-length parametrization keeps a 0.2 LDU edge beside a 4 LDU one
+    from throwing a loop. Each span is the equivalent cubic, exactly. An
+    open run mirrors its neighbor across each end for a natural tangent;
+    a closed one wraps.
+    """
+    P = [np.asarray(p, float) for p in run]
+    if closed:
+        n = len(P)
+        quads = [(P[i - 1], P[i], P[(i + 1) % n], P[(i + 2) % n])
+                 for i in range(n)]
+    else:
+        ext = [2 * P[0] - P[1], *P, 2 * P[-1] - P[-2]]
+        quads = [(ext[j - 1], ext[j], ext[j + 1], ext[j + 2])
+                 for j in range(1, len(ext) - 2)]
+    out = []
+    for p0, p1, p2, p3 in quads:
+        a = SPLINE_ALPHA
+        d1 = max(np.linalg.norm(p1 - p0) ** a, 1e-9)
+        d2 = max(np.linalg.norm(p2 - p1) ** a, 1e-9)
+        d3 = max(np.linalg.norm(p3 - p2) ** a, 1e-9)
+        b1 = (d1 * d1 * p2 - d2 * d2 * p0
+              + (2 * d1 * d1 + 3 * d1 * d2 + d2 * d2) * p1) / (3 * d1 * (d1 + d2))
+        b2 = (d3 * d3 * p1 - d2 * d2 * p3
+              + (2 * d3 * d3 + 3 * d3 * d2 + d2 * d2) * p2) / (3 * d3 * (d3 + d2))
+        out.append(f"C {_fmt(b1)} {_fmt(b2)} {_fmt(p2)}")
+    return out
+
+
+def _run_cmds(run, corners):
+    """Commands along an open run of ring vertices, `corners` flagging the
+    ones that stay sharp: straight between two adjacent corners, a spline
+    through everything else. The run's own ends always count as corners."""
+    flags = list(corners)
+    flags[0] = flags[-1] = True
+    cmds = []
+    seg = [run[0]]
+    for p, sharp in zip(run[1:], flags[1:]):
+        seg.append(p)
+        if sharp:
+            cmds += ["L " + _fmt(seg[1])] if len(seg) == 2 else _bezier_run(seg)
+            seg = [p]
+    return cmds
+
+
+def smooth_ring_d(pts, corners=()):
+    """One closed ring as cubic Beziers through its vertices, as an SVG
+    subpath. Vertices in `corners` stay sharp; between two consecutive
+    corners with nothing in between the run is a straight `L`."""
+    P = np.asarray(pts, float)
+    n = len(P)
+    if n < 3:
+        return ""
+    corners = sorted({int(i) % n for i in corners})
+    if not corners:
+        return "M " + _fmt(P[0]) + " " + " ".join(_bezier_run(P, closed=True)) + " Z"
+    start = corners[0]
+    idxs = [(start + j) % n for j in range(n + 1)]     # back round to start
+    flags = [i in corners for i in idxs]
+    return ("M " + _fmt(P[start]) + " "
+            + " ".join(_run_cmds([P[i] for i in idxs], flags)) + " Z")
+
+
+def ring_d(pts, arcs=None, tol=ARC_TOL, corners=None):
+    """One ring -> SVG subpath. With `arcs`, runs on a candidate ellipse are
+    emitted as arcs; with `corners` (ring vertex indices that stay sharp),
+    every run that is not an arc is a spline through its vertices, straight
+    only between adjacent corners. Without `corners` those runs are chords."""
+    pts = np.asarray(pts, float)
+    if len(pts) < 3:
+        return ""
+    if not arcs:
+        return (smooth_ring_d(pts, corners) if corners is not None
+                else "M " + " L ".join(_fmt(p) for p in pts) + " Z")
+    return _ring_d(pts, arcs, tol, corners=corners)
 
 
 def _only_area(g):

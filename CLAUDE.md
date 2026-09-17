@@ -73,7 +73,11 @@ LEGO made — third-party electronics and wheels that fit LEGO.
   take the claim on trust -- so post the pair in the same turn that closes the
   entry, not when asked. Both panels come from the SAME tree: render `after` at
   HEAD and `before` by disarming the new code in-process, never by stashing or
-  checking out (this checkout is shared).
+  checking out (this checkout is shared). **Every before/after carries a third
+  panel showing the diff** -- the changed pixels painted over a faded `after`,
+  with the component count -- because two panels that look alike hide a
+  one-stroke change and two that differ leave the reader hunting for where.
+  `scripts/_sheet.py` draws it.
 - **An image on the wall labels what VARIES between its panels.** Several
   sessions post to one zone, so a sheet arrives with no conversation around it
   and has to answer "what am I looking at" by itself. Give it a title line, and
