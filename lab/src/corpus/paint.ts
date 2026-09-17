@@ -388,12 +388,18 @@ export function stripGeometry(cellPx: number) {
   return badgeGeometry(cellPx);
 }
 
+/** Below this a fraction-of-cell pad reads as no margin at all -- the top
+ *  caption's own ink was landing 3px off a 88px cell's edge. */
+const MIN_CORNER_PAD_PX = 6;
+
 /** How far a corner mark sits off the cell's edge. A fraction of the cell
  *  rather than of the mark: both the badge and the caption stop scaling at
  *  their floor sizes, so at the small end of the zoom a margin measured off
- *  them crowds the corner. */
+ *  them crowds the corner. Floored in absolute pixels so that crowding stops
+ *  at the small end without touching the large end, where the fraction
+ *  already clears the floor on its own. */
 export function cornerPad(cellPx: number, size: number): number {
-  return Math.max(size * 0.18, cellPx * 0.03);
+  return Math.max(size * 0.18, cellPx * 0.03, MIN_CORNER_PAD_PX);
 }
 
 /** The corner discs a drawn cell wears, if it is drawn big enough to hold
@@ -425,8 +431,9 @@ export function stripFor(cell: Cell, cellPx: number,
 
 export interface CellCaption {
   text: string;
-  /** The corners the badges leave free -- the strip owns the bottom right. */
-  corner: 'tl' | 'tr' | 'bl';
+  /** The corners the badges leave free, plus `br`, which no badge ever
+   *  claims -- the strip runs along the bottom edge and gives way to it. */
+  corner: 'tl' | 'tr' | 'bl' | 'br';
   ink: string;
   /** Heavier for the part number than for what it is captioned with. */
   weight?: number;
@@ -487,10 +494,11 @@ export function captionsFor(cell: Cell, cellPx: number, ink: string,
   const out: CellCaption[] = [];
   const years = yearRange(cell.year_from, cell.year_to, isRetired(cell));
   if (years) out.push({ text: years, corner: 'tr', ink, weight: WEIGHT_TEXT });
-  // The sideline theme, opposite the years: a Fabuland part is only legible
-  // as one if the wall says so, and the badge alone says "weird".
+  // The sideline theme, opposite the id: a Fabuland part is only legible as
+  // one if the wall says so, and the badge alone says "weird". Bottom right
+  // is the one corner nothing else claims.
   if (cell.family) {
-    out.push({ text: cell.family, corner: 'tl', ink, weight: WEIGHT_TEXT });
+    out.push({ text: cell.family, corner: 'br', ink, weight: WEIGHT_TEXT });
   }
   // Pushed before the id so the id -- not this -- is what the strip's
   // starting x reads off, same as when this line does not exist.
