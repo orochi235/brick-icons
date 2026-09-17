@@ -20,13 +20,15 @@
 id = "6589-naive-halo-r12.8"
 part = "6589"
 engines = ["naive"]
-status = "open"
+status = "fixed"
 title = "spurious ring at r=12.80 (separator refit)"
 mark = { x = 0.3322, y = 0.4281, w = 0.02, h = 0.0436 }
 seen = { angle = "iso", shading = "outline", shade_style = "flat3" }
 checked = { white-naive = "e5314c45e330b9cc402ff7b20ebbade9ab80293c854a92368bafb62689b0cc67" }
 filed = "2026-09-03"
 notes = """
+Fixed by 490c87d. The refit read a bore's visible endpoints as pinch points wherever they lay; PINCH_ON_F_TOL now requires them on the opening circle, and both 6589 rings end at least 0.11 away. Before/after from one tree (scripts/tail-before-after.py 6589:white-naive): both rings gone, 11 diff components, 3393 px, nothing else on the part moved. Over the 201 corpus parts that refit, 458 refits survive and 135 drop.
+
 naive draws a ring at r=12.80 LDU; 6589.dat authors circles only at r=9, 10, 12 and 16. The counterbore separator refit in hlr._snap_rim_crossings refits the authored r=16 ring onto this circumcircle (0.800x radius, sweep 121.72 -> 220.79 deg). SEP_REFIT_MAX_GROWTH caps angular growth at 10x, so 1.81x passes; nothing guards the radius. occt draws the authored set and is right.
 
 2026-09-12: three candidate guards measured over 1,500 corpus parts (201 that
@@ -65,13 +67,15 @@ wrong thing."""
 id = "6589-naive-halo-r11.3"
 part = "6589"
 engines = ["naive"]
-status = "open"
+status = "fixed"
 title = "spurious ring at r=11.33 (separator refit)"
 mark = { x = 0.4168, y = 0.6034, w = 0.059, h = 0.0262 }
 seen = { angle = "iso", shading = "outline", shade_style = "flat3" }
 checked = { white-naive = "e5314c45e330b9cc402ff7b20ebbade9ab80293c854a92368bafb62689b0cc67" }
 filed = "2026-09-03"
 notes = """
+Fixed by 490c87d. The refit read a bore's visible endpoints as pinch points wherever they lay; PINCH_ON_F_TOL now requires them on the opening circle, and both 6589 rings end at least 0.11 away. Before/after from one tree (scripts/tail-before-after.py 6589:white-naive): both rings gone, 11 diff components, 3393 px, nothing else on the part moved. Over the 201 corpus parts that refit, 458 refits survive and 135 drop.
+
 naive draws a ring at r=11.33 LDU, unauthored the same way as 6589-naive-halo-r12.8. Refit of the authored r=12 ring: 0.944x radius, sweep 180.00 -> 344.69 deg (1.92x, under the same cap).
 
 2026-09-12: three candidate guards measured over 1,500 corpus parts (201 that
