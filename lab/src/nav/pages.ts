@@ -15,4 +15,5 @@ export const PAGES: LabPage[] = [
   { href: '/wall', label: 'Wall' },
   { href: '/stats', label: 'Dashboard' },
   { href: '/ingest', label: 'Ingestion' },
+  { href: '/review', label: 'Review' },
 ];

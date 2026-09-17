@@ -25,12 +25,16 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=None,
                     help="stop after this many (default: all of them)")
-    ap.add_argument("--db", default=str(ROOT / db.DEFAULT_PATH))
+    ap.add_argument("--root", type=Path, default=ROOT,
+                    help="the checkout whose log and corpus.db this reads "
+                         "and writes (default: this one)")
+    ap.add_argument("--db", default=None)
     a = ap.parse_args()
-    conn = db.connect(a.db)
+    root = a.root.resolve()
+    conn = db.connect(a.db or root / db.DEFAULT_PATH)
     try:
         done, failed = review.measure_unmeasured(
-            conn, ROOT, ROOT / review.DEFAULT_PATH, ROOT / ".cache" / "review",
+            conn, root, root / review.DEFAULT_PATH, root / ".cache" / "review",
             a.limit, progress=lambda m: print(m, flush=True))
     finally:
         conn.close()

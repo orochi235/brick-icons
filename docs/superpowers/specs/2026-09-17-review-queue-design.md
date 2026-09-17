@@ -1,6 +1,6 @@
 # Review queue
 
-**Status: unbuilt.** This line changes to "built" with the commit that lands it.
+**Status: built, 2026-09-17.** Read the code where it and this disagree.
 
 For whoever next touches how a redrawn part gets judged. The lab page at
 `/review` shows every render that displaced an older one, before beside after

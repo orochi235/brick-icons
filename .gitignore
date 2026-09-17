@@ -35,3 +35,7 @@ renders/**/*.webp
 # node does not ignore but we do is untracked in tracked space there, and every
 # later `onto sync` refuses rather than delete it.
 renders/**/*.fit.json
+# The review queue's record and the drawings it kept aside: a log appended at
+# ingest and a copy per displaced render, hundreds of megabytes per round.
+store-queue/*.jsonl
+store-queue/before/

@@ -73,8 +73,12 @@ def entry(conn: sqlite3.Connection, row: sqlite3.Row, records: list[dict],
     title = conn.execute("SELECT title FROM parts WHERE id = ?",
                          (part,)).fetchone()
     held = conn.execute(
-        "SELECT sha256 FROM renders WHERE part_id = ? AND source = ?",
+        "SELECT sha256, made_at FROM renders WHERE part_id = ? AND source = ?",
         (part, source)).fetchone()
+    # The slot's own stamp while it still shows this drawing; the line's time
+    # is when the displacement was recorded, which a backfill makes today.
+    after_made = (held["made_at"] if held and held["sha256"] == row["after_sha"]
+                  else row["at"])
     superseded = None
     if held is not None and held["sha256"] != row["after_sha"]:
         later = conn.execute(
@@ -109,7 +113,7 @@ def entry(conn: sqlite3.Connection, row: sqlite3.Row, records: list[dict],
                    **_measurement(conn, row["before_run_id"], part, source),
                    "edge": _edge(conn, part, source, row["before_sha"])},
         "after": {"path": row["after_path"], "sha256": row["after_sha"],
-                  "made_at": row["at"], "run_id": row["run_id"],
+                  "made_at": after_made, "run_id": row["run_id"],
                   **_measurement(conn, row["run_id"], part, source),
                   "edge": _edge(conn, part, source, row["after_sha"])},
         "diff": diffed,
@@ -251,6 +255,19 @@ def install(app: FastAPI, corpus_conn) -> None:
                 touched.append(record["id"])
             review.record_judged(conn, log(), eid, body.verdict, body.note,
                                  by="lab", defects=touched)
+            item = entry(conn, row_for(eid, conn),
+                         defects.load(app.state.defects_path),
+                         render_requests.load(app.state.requests_path))
+        finally:
+            conn.close()
+        return item
+
+    # Last: `{eid:path}` is greedy and would take `.../after` and
+    # `.../diff.png` if it were registered before them.
+    @app.get("/api/review/{eid:path}")
+    def get_entry(eid: str):
+        conn = corpus_conn()
+        try:
             item = entry(conn, row_for(eid, conn),
                          defects.load(app.state.defects_path),
                          render_requests.load(app.state.requests_path))

@@ -159,6 +159,7 @@ export default defineConfig({
         badges: fileURLToPath(new URL('./badges.html', import.meta.url)),
         stats: fileURLToPath(new URL('./stats.html', import.meta.url)),
         ingest: fileURLToPath(new URL('./ingest.html', import.meta.url)),
+        review: fileURLToPath(new URL('./review.html', import.meta.url)),
         bench: fileURLToPath(new URL('./bench.html', import.meta.url)),
         // Built so `scripts/shot-sink.py` can serve the page itself. A bake of
         // the whole library must not need a dev server running beside it.

@@ -114,6 +114,13 @@ def test_the_images_are_served_by_id_and_not_by_path(lab):
     assert client.get("/api/review/../../etc/passwd/before").status_code == 404
 
 
+def test_one_entry_is_read_by_id(lab):
+    client, _root = lab
+    eid = review.entry_id("occt", "3001", _sha(SVG2))
+    assert client.get(f"/api/review/{eid}").json()["id"] == eid
+    assert client.get("/api/review/occt/3001/nope").status_code == 404
+
+
 def test_a_verdict_closes_the_defect_and_stamps_what_was_judged(lab):
     client, root = lab
     eid = review.entry_id("occt", "3001", _sha(SVG2))

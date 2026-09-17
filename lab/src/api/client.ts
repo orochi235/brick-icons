@@ -3,6 +3,7 @@ import type { Artifact, JobState, LabConfig, LdrawColor, PartHit, RenderResult,
 import type { Footprint, Stats } from '@lab/stats/types';
 import type { CellsBody, PartDetail, SheetManifest } from '@lab/corpus/types';
 import type { IngestAttempts, IngestRun } from '@lab/ingest/types';
+import type { ReviewEntry, ReviewList, ReviewView, Verdict } from '@lab/review/types';
 
 export interface ClientOptions {
   base?: string;
@@ -174,6 +175,29 @@ export function createClient({ base = '', fetchImpl = fetch }: ClientOptions = {
 
     async ingestAttempts(runId: number, failed = false): Promise<IngestAttempts> {
       return json(fetchImpl, at(`/api/ingest/runs/${runId}/attempts${failed ? '?failed=1' : ''}`));
+    },
+
+    /** Renders that displaced an older one. `linked` keeps the ones an open
+     *  defect or a redraw request speaks to; `all` keeps every one whose diff
+     *  has at least `minComponents` components, and the unmeasured. */
+    async review(view: ReviewView, minComponents = 1, judged = false,
+                 limit = 200): Promise<ReviewList> {
+      const q = new URLSearchParams({ view, min_components: String(minComponents),
+                                      judged: judged ? '1' : '0', limit: String(limit) });
+      return json<ReviewList>(fetchImpl, at(`/api/review?${q}`));
+    },
+
+    async reviewEntry(id: string): Promise<ReviewEntry> {
+      return json<ReviewEntry>(fetchImpl, at(`/api/review/${id}`));
+    },
+
+    async judge(id: string, verdict: Verdict, note: string): Promise<ReviewEntry> {
+      return json<ReviewEntry>(fetchImpl, at(`/api/review/${id}/verdict`),
+                               post(`/api/review/${id}/verdict`, { verdict, note }));
+    },
+
+    async measureReview(limit = 20): Promise<{ measured: number; failed: { id: string; error: string }[] }> {
+      return json(fetchImpl, at(`/api/review/measure?limit=${limit}`), { method: 'POST' });
     },
 
     async sheetManifest(source: string, level: number): Promise<SheetManifest> {
