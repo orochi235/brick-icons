@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 cqsvg = pytest.importorskip("brick_icons.cqsvg",
-                            reason="needs the [cadquery] extra")
+                            reason="needs the [cadquery] extra", exc_type=ImportError)
 
 from brick_icons import hlr, occt  # noqa: E402
 

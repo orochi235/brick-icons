@@ -125,7 +125,7 @@ export function cornerBadgesAt(badges: readonly CellBadge[],
 
 /** The kind badges, running right along the bottom edge from wherever the
  *  part number ended. Stops short of the bottom-right corner rather than
- *  drawing under the badge that lives there. */
+ *  drawing under whatever lives there -- a badge, or the theme caption. */
 /** Half a capital's height in the current font, measured rather than
  *  assumed: it is what turns the caption's `middle` position into the
  *  baseline the badges have to sit on. */
@@ -136,21 +136,27 @@ function capHalf(ctx: CanvasRenderingContext2D, size: number): number {
 
 function drawStrip(ctx: CanvasRenderingContext2D, strip: CellBadge[],
                    cmd: { dx: number; dy: number; dw: number; dh: number },
-                   startX: number) {
+                   startX: number, brLeft?: number) {
   if (strip.length === 0) return;
   const { size, radius } = stripGeometry(cmd.dw);
   const gap = radius * 0.5;
   // Stop at the corner badge's left edge, not a badge-width short of it:
   // `inset` is already that badge's center, so subtracting a strip diameter
-  // on top of it cost the strip about two badges' room.
+  // on top of it cost the strip about two badges' room. `brLeft`, when a
+  // theme caption is set there, can be the nearer limit -- its text runs
+  // wider than a badge's own reserved margin.
   const corner = badgeGeometry(cmd.dw);
-  const limit = cmd.dx + cmd.dw - corner.inset - corner.radius - gap;
+  const cornerLimit = cmd.dx + cmd.dw - corner.inset - corner.radius - gap;
+  const limit = brLeft === undefined ? cornerLimit : Math.min(cornerLimit, brLeft - gap);
   ctx.save();
   ctx.font = `${BADGE_WEIGHT} ${size}px ${BADGE_FACE}`;
   const half = capHalf(ctx, size);
   ctx.restore();
-  // The part number's baseline, derived from where drawCaption centers it.
-  const baseline = cmd.dy + cmd.dh - cornerPad(cmd.dw, size) - size * 0.5 + half;
+  // The part number's baseline, derived from where drawCaption centers it --
+  // including its own ink-rise correction, or the strip sits a fraction of
+  // the type size off the line it is meant to share.
+  const baseline = cmd.dy + cmd.dh - cornerPad(cmd.dw, size) - size * 0.5 + half
+    + size * CAPTION_INK_RISE;
   const cy = baseline - half - size * CAPTION_INK_RISE;
   let cx = startX + radius;
   for (const badge of strip) {
@@ -164,25 +170,36 @@ function drawStrip(ctx: CanvasRenderingContext2D, strip: CellBadge[],
 // the cell: the drawing is centered and letterboxed, so its corners are empty.
 function drawCaption(ctx: CanvasRenderingContext2D, caption: CellCaption,
                      cmd: { dx: number; dy: number; dw: number; dh: number },
-                     rightPad = 0): number {
+                     rightPad = 0, minLeft?: number): number | undefined {
   // The pad comes off the cell's usual caption size regardless of this
   // caption's own -- the replacement line sets smaller than the part number
   // above which it stacks, but shares its left edge.
   const primarySize = captionSize(cmd.dw);
   const size = caption.size ?? primarySize;
-  const right = caption.corner === 'tr';
+  const right = caption.corner === 'tr' || caption.corner === 'br';
   const top = caption.corner[0] === 't';
   ctx.save();
   ctx.font = `${caption.weight ?? WEIGHT_TEXT} ${size}px ${THUMB_FACE}`;
-  ctx.textAlign = right ? 'right' : 'left';
-  ctx.textBaseline = 'middle';
   const pad = cornerPad(cmd.dw, primarySize);
   const rise = caption.riseAbove ?? 0;
-  ctx.fillStyle = caption.ink;
   const x = right ? cmd.dx + cmd.dw - pad - rightPad : cmd.dx + pad;
-  ctx.fillText(caption.text, x,
-               top ? cmd.dy + pad + size * 0.5 + rise : cmd.dy + cmd.dh - pad - size * 0.5 - rise);
   const width = ctx.measureText(caption.text).width;
+  // The part id owns the bottom edge over a theme name that would run into
+  // it -- a small cell loses the theme rather than the two overlapping.
+  if (right && minLeft !== undefined && x - width < minLeft) {
+    ctx.restore();
+    return undefined;
+  }
+  ctx.textAlign = right ? 'right' : 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = caption.ink;
+  // `middle` centers on the em box, not the cap-height ink -- the same
+  // offset every corner's ink sits high by, so nudging both directions by
+  // it (rather than only correcting one) keeps top and bottom equally clear
+  // of their edges instead of trading one's margin for the other's.
+  const y = (top ? cmd.dy + pad + size * 0.5 + rise : cmd.dy + cmd.dh - pad - size * 0.5 - rise)
+    + size * CAPTION_INK_RISE;
+  ctx.fillText(caption.text, x, y);
   ctx.restore();
   return right ? x - width : x + width;
 }
@@ -218,13 +235,27 @@ export function drawOverlays(ctx: CanvasRenderingContext2D,
   const disc = badgeGeometry(box.dw);
   const trPad = topRight === 0 ? 0
     : topRight * disc.radius * 2 + (topRight - 1) * disc.gap + radius * 0.6;
+  // Left corners first: the id's own end is the boundary the theme caption
+  // (br) and the strip both have to clear, and it has to be known already.
+  let blRight = box.dx;
   for (const caption of cmd.captions ?? []) {
-    const end = drawCaption(ctx, caption, box, caption.corner === 'tr' ? trPad : 0);
-    if (caption.corner === 'bl') stripX = end + radius * 0.6;
+    if (caption.corner === 'tr' || caption.corner === 'br') continue;
+    const end = drawCaption(ctx, caption, box)!;
+    if (caption.corner === 'bl') {
+      stripX = end + radius * 0.6;
+      if (!caption.riseAbove) blRight = end;
+    }
+  }
+  let brLeft: number | undefined;
+  for (const caption of cmd.captions ?? []) {
+    if (caption.corner !== 'tr' && caption.corner !== 'br') continue;
+    const end = drawCaption(ctx, caption, box, caption.corner === 'tr' ? trPad : 0,
+                            caption.corner === 'br' ? blRight + radius * 0.6 : undefined);
+    if (caption.corner === 'br') brLeft = end;
   }
   const discs = cornerBadgesAt(cmd.badges ?? [], box);
   (cmd.badges ?? []).forEach((badge, i) => drawBadge(ctx, badge, discs[i]!));
-  drawStrip(ctx, cmd.strip ?? [], box, stripX);
+  drawStrip(ctx, cmd.strip ?? [], box, stripX, brLeft);
 }
 
 /** One paint command, drawn into `ctx` and shifted by `offset` -- the loupe

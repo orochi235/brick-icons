@@ -223,6 +223,16 @@ whole corpus each pass and overwrites what another session ingested by hand.
 What the watcher makes is what a later rebuild would make of the same tree, so
 the rebuild after the job is a no-op rather than a correction.
 
+**A round that REDRAWS parts the slot already holds needs `--overwrite`, and
+without it the whole round ingests nothing.** `_take_renders` skips any part
+already filed under the slot, which is right for a fill and exactly wrong for
+a refresh: on 2026-09-16 a 7,379-part occt re-render at a newer engine fetched
+every drawing home and left `renders` untouched, and nothing said so -- the
+watcher logged its passes, the tree filled up, and the slot's build stamps did
+not move. Add `--overwrite` at launch when the batch list came from parts that
+are already drawn, or file the parts as redraw requests and use
+`--overwrite-requested`.
+
 Started by hand -- a job someone else launched, or a stream restarted after a
 gap -- it is:
 
