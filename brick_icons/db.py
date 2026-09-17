@@ -16,7 +16,7 @@ from pathlib import Path
 
 from brick_icons import goldens
 from brick_icons.lab import cache, partindex
-from brick_icons import features
+from brick_icons import features, review
 from brick_icons.lab import defects as defects_toml
 
 DEFAULT_PATH = Path("corpus.db")
@@ -159,6 +159,10 @@ CREATE TABLE IF NOT EXISTS notes (
   written TEXT NOT NULL,
   body TEXT NOT NULL
 );
+
+-- Renders that displaced an older one, mirrored from store-queue/review.jsonl
+-- by brick_icons.review, which owns the columns.
+""" + review.SCHEMA + """
 
 -- Production years and how many sets a part appears in, derived from
 -- Rebrickable's dumps by scripts/fetch-part-years.py. Its own table rather
@@ -537,7 +541,16 @@ RENDER_SUFFIXES = (".svg", ".png", ".webp")
 
 def record_render(conn: sqlite3.Connection, part_id: str, source: str,
                   path: Path | str, root: Path | str = ".",
-                  run_id: int | None = None) -> str:
+                  run_id: int | None = None,
+                  review_log: Path | str | None = review.DEFAULT_PATH,
+                  by: str | None = None) -> str:
+    """Index one drawing as the slot's current render.
+
+    A row the new file displaces is logged to `review_log` (relative paths
+    are under root) with the displaced file kept aside, unless it is None:
+    `rebuild` walks every tree in order and would otherwise log thousands of
+    displacements that never happened in time.
+    """
     argv = canonical_argv(part_id, source)
     path = Path(path)
     # A slot's artifact is whatever its renderer emits -- `reference` writes
@@ -555,20 +568,29 @@ def record_render(conn: sqlite3.Connection, part_id: str, source: str,
     # moved past, and indexing it would walk the slot backwards with nothing
     # in the row to say so.
     held = conn.execute(
-        "SELECT path FROM renders WHERE part_id = ? AND source = ? "
-        "AND config_key = ?", (part_id, source, key)).fetchone()
+        "SELECT path, sha256, made_at, run_id FROM renders WHERE part_id = ? "
+        "AND source = ? AND config_key = ?", (part_id, source, key)).fetchone()
     if held is not None:
         try:
             if (Path(root) / held[0]).stat().st_mtime > path.stat().st_mtime:
                 return key
         except OSError:
             pass
+    sha = goldens.sha256(raw)
+    where = str(path.resolve().relative_to(Path(root).resolve()))
+    if held is not None and held["sha256"] != sha and review_log is not None:
+        log = Path(review_log)
+        review.record_replaced(
+            conn, root, log if log.is_absolute() else Path(root) / log,
+            part=part_id, source=source, run_id=run_id,
+            by=by or review.by_from_path(where),
+            before={"path": held["path"], "sha256": held["sha256"],
+                    "made_at": held["made_at"], "run_id": held["run_id"]},
+            after={"path": where, "sha256": sha})
     conn.execute(
         "INSERT OR REPLACE INTO renders (part_id, source, config_key, run_id, "
         "made_at, path, sha256, width, height) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (part_id, source, key, run_id, now(),
-         str(path.resolve().relative_to(Path(root).resolve())),
-         goldens.sha256(raw), width, height))
+        (part_id, source, key, run_id, now(), where, sha, width, height))
     conn.commit()
     return key
 
@@ -584,8 +606,17 @@ def store_render(conn: sqlite3.Connection, part_id: str, source: str,
     made = Path(made)
     dest = Path(root) / "renders" / source / f"{part_id}{made.suffix}"
     dest.parent.mkdir(parents=True, exist_ok=True)
+    # The displaced drawing is read before it is written over: `record_render`
+    # keeps a copy of what the row named, and this is the one path that
+    # rewrites that file in place.
+    held = conn.execute(
+        "SELECT path, sha256 FROM renders WHERE part_id = ? AND source = ?",
+        (part_id, source)).fetchone()
+    if held is not None:
+        review.keep_before(root, source, part_id, held["path"], held["sha256"])
     dest.write_bytes(made.read_bytes())
-    record_render(conn, part_id, source, dest, root=root, run_id=run_id)
+    record_render(conn, part_id, source, dest, root=root, run_id=run_id,
+                  by="lab")
     return dest
 
 
@@ -986,7 +1017,8 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
 
     for made in sorted(p for p in (root / "renders").rglob("*")
                        if p.suffix in RENDER_SUFFIXES):
-        record_render(conn, made.stem, made.parent.name, made, root=root)
+        record_render(conn, made.stem, made.parent.name, made, root=root,
+                      review_log=None)
         counts["renders"] += 1
         progress(f"render {counts['renders']}: {made.parent.name}/{made.stem}")
 
@@ -1014,7 +1046,8 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
                 counts["replaced"] += 1
                 progress(f"replaced {source}/{svg.stem}: {first} by {svg}")
             try:
-                record_render(conn, svg.stem, source, svg, root=root)
+                record_render(conn, svg.stem, source, svg, root=root,
+                              review_log=None)
             except Exception as e:  # noqa: BLE001
                 # A census still running leaves half-written files behind it.
                 counts["skipped"] += 1
@@ -1062,6 +1095,7 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
         "SELECT count(*) FROM attempts").fetchone()[0]
 
     counts["defects"] = import_defects(conn, defects_path)
+    counts["review"] = review.replay(conn, root / review.DEFAULT_PATH)
     counts["statuses"] = import_statuses(conn, status_path)
     # The CSV is the record, the way part-status.toml is: a rebuild drops the
     # database, and re-deriving these means downloading Rebrickable's dumps

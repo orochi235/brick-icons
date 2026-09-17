@@ -378,7 +378,7 @@ def test_rebuild_walks_renders_and_toml_and_jsonl(tmp_path):
     assert counts.pop("features") > 0
     assert counts == {"parts": 6, "renders": 1, "measurements": 1,
                       "attempts": 0, "skipped": 0, "replaced": 0, "defects": 0,
-                      "statuses": 0, "years": 0, "successors": 0, "themes": 0,
+                      "statuses": 0, "years": 0, "successors": 0, "themes": 0, "review": 0,
                       "tallies": 1}
 
     conn = db.connect(tmp_path / "corpus.db")

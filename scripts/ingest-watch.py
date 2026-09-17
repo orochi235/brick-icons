@@ -52,6 +52,7 @@ sys.path.insert(0, str(ROOT))
 
 from brick_icons import db  # noqa: E402
 from brick_icons import requests as render_requests  # noqa: E402
+from brick_icons import review  # noqa: E402
 from brick_icons.lab import tally  # noqa: E402
 
 
@@ -239,7 +240,8 @@ def _bake(source: str) -> bool:
 
 def watch(trees: list[Path], every: int, once: bool, bake: bool,
           overwrite: bool = False, until: Sequence[str] = (),
-          fetch: bool = True, overwrite_requested: bool = False) -> int:
+          fetch: bool = True, overwrite_requested: bool = False,
+          measure: bool = False) -> int:
     seen: dict[Path, tuple[int, float]] = {}
     drawings: dict[Path, tuple[int, float]] = {}
     closing = False
@@ -291,6 +293,20 @@ def watch(trees: list[Path], every: int, once: bool, bake: bool,
             print(f"{time.strftime('%H:%M:%S')} tallied {moved} slot(s)",
                   flush=True)
 
+        # The review queue's gate. A refresh round redraws every part it
+        # holds, and the diff is what says which of them actually moved.
+        if measure:
+            conn = db.connect()
+            try:
+                done, failed = review.measure_unmeasured(
+                    conn, ROOT, ROOT / review.DEFAULT_PATH,
+                    ROOT / ".cache" / "review")
+            finally:
+                conn.close()
+            if done or failed:
+                print(f"{time.strftime('%H:%M:%S')} diffed {done} replaced "
+                      f"render(s), {len(failed)} unmeasurable", flush=True)
+
         for source in sorted(touched) if bake else ():
             ok = _bake(source)
             failed += 0 if ok else 1
@@ -340,6 +356,10 @@ def main() -> int:
                     help="with --until, skip the closing onto fetch")
     ap.add_argument("--forever", action="store_true",
                     help="watch with no end, for a tree no onto task owns")
+    ap.add_argument("--diff", dest="measure", action="store_true",
+                    help="component-count each replaced render against the "
+                         "drawing it displaced, so the review queue's all "
+                         "view can gate on it")
     a = ap.parse_args()
     if not (a.until or a.once or a.forever):
         ap.error("give the watch an end: --until <task> closes it when the "
@@ -348,7 +368,8 @@ def main() -> int:
                  "finished tree for good.")
     until = [t for t in a.until.split(",") if t]
     return watch([Path(t) for t in a.trees], a.every, a.once, a.bake,
-                 a.overwrite, until, a.fetch, a.overwrite_requested)
+                 a.overwrite, until, a.fetch, a.overwrite_requested,
+                 a.measure)
 
 
 if __name__ == "__main__":

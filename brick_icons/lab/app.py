@@ -24,9 +24,10 @@ from .. import features
 from .. import tags
 from ..config import load_config
 from . import (cache, cells, corpus, decal, defects, diff, findings,
-               goldens_status, ingest, jobs, partindex, reference, runner,
-               schema, sizes, stats, store)
+               goldens_status, ingest, jobs, partindex, reference, review_api,
+               runner, schema, sizes, stats, store)
 from .. import db as corpus_db_module
+from .. import review
 
 # One entry per `db.RENDER_SUFFIXES`: a slot's renders are whatever the engine
 # that filled it wrote, and the wall's render URL ends `.svg` for every one of
@@ -93,7 +94,8 @@ def create_app(root: Path | str = ".",
                defects_path: Path | str | None = None,
                corpus_db: Path | str | None = None,
                thumbs_root: Path | str | None = None,
-               requests_path: Path | str | None = None) -> FastAPI:
+               requests_path: Path | str | None = None,
+               review_path: Path | str | None = None) -> FastAPI:
     root = Path(root)
     app = FastAPI(title="brick-icons lab")
     # 24,591 cells is ~6.5MB of JSON and highly repetitive; gzip takes it under
@@ -116,6 +118,8 @@ def create_app(root: Path | str = ".",
         root / "out" / "thumbs")
     app.state.requests_path = Path(requests_path) if requests_path else (
         root / render_requests.DEFAULT_PATH)
+    app.state.review_path = Path(review_path) if review_path else (
+        root / review.DEFAULT_PATH)
 
     def index() -> dict:
         if app.state.index is None:
@@ -663,6 +667,8 @@ def create_app(root: Path | str = ".",
             svg = _with_outline_hairlines(path.read_text())
             return Response(content=svg, media_type=media_type)
         return FileResponse(path, media_type=media_type)
+
+    review_api.install(app, corpus_conn)
 
     ldraw = app.state.ldraw_dir
     if Path(ldraw).is_dir():
