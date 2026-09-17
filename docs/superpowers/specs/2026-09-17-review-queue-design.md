@@ -59,6 +59,13 @@ arrive gated. Without it, or for entries created before it existed,
 `scripts/review-diff.py` measures the unmeasured ones in bulk, and the lab
 server measures an entry when the page first asks for its diff panel.
 
+A round ingested before the log existed left its displaced drawings in the
+tree the slot used to point at. `scripts/review-backfill.py --slot occt
+--previous renders/occt` walks that tree and enters a line for every part
+whose current row is drawn elsewhere with a different sha; the before's
+made-at is the file's mtime and its run is unknown. Both scripts take
+`--root` so a worktree can point them at the checkout that holds the data.
+
 ## Server
 
 All under `/api/review`, in `brick_icons/lab/review_api.py` registered from
@@ -117,7 +124,7 @@ entry:
   verdict; `record_render` with a differing sha writes the line and the copy,
   and with the same sha or a first render writes nothing; a rebuild replays the
   log; a kept copy survives an in-place overwrite.
-- `tests/test_lab_app.py`: the list route joins a defect and a request; the
+- `tests/test_lab_review.py`: the list route joins a defect and a request; the
   linked view drops an unlinked entry and the all view gates on components;
   the image routes answer by id and 404 an unknown one; a verdict updates the
   defect's status, checked and notes and the entry's verdict.
