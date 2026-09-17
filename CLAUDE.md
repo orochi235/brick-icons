@@ -140,3 +140,12 @@ covering everything the job shells out to — a missing `resvg` fails every part
 in about a second, silently. And check the deadline `onto run` prints: the agent
 clamps to 30 minutes unless it was installed with `-max-job-time`, and a
 reinstall reverts that.
+
+## A redraw that displaced a render is judged on `/review`, not by hand
+
+`record_render` logs every displacement to `store-queue/review.jsonl` and keeps
+the displaced file under `store-queue/before/`; the lab's Review page shows
+before, after and the diff and takes fixed / better / neutral / regression,
+stamping the linked defect's `checked` and closing it on fixed. Editing
+`checked` in `defects.toml` by hand does the same job without the record.
+Spec: `docs/superpowers/specs/2026-09-17-review-queue-design.md`.
