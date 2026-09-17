@@ -1,8 +1,12 @@
-## occt refresh at the tail-parity engine, in flight -- 2026-09-17
+## occt refresh at the tail-parity engine, landed -- 2026-09-17
 
-Two fleet jobs redraw every `occt`-slot part at `143ed40`, the first build
+Two fleet jobs redrew every `occt`-slot part at `143ed40`, the first build
 after `490c87d` ran occt through the naive stylization tail. Launched 00:29,
-deadline 12:29; `onto jobs` for state, `onto logs <id>` for progress.
+both home and indexed by 09:05; `stale-renders.py` shows `occt` 19,962 fresh
+and 89 still stale -- the parts that did not come back (71 timeouts at the
+300s cap, all but 3 on msb-uai, 8 GEOSException, 5 ProcessDied; list in
+`out/slot-occt-tail-missing.txt`). The other occt slots (white, silhouette,
+translucent) were not refreshed and are all stale.
 
 | task | node | parts | workers | dir |
 |---|---|---|---|---|
@@ -28,9 +32,12 @@ this out at some point":**
   tail's pixel-sized tolerances by `px`, one render pixel in engine op units;
   the likely reading is whether they should key on the part's drawn extent
   instead. Not confirmed with him, and nothing measured.
-- **Whether 6589's axle dashes stay.** His phrase; nobody has looked at the
-  render in this session. Look at `6589` under `occt` at `143ed40` before
-  arguing either way.
+- **Whether 6589's axle dashes stay.** His phrase. The sheet
+  `out/sheets/6589-tail-guard.png` (on the wall, zone brick-icons) shows the
+  occt drawing before and after the tail change: the pinch guard removed a
+  K-shaped mark beside the axle hole and left short dashes on it. Undecided.
+  The two naive halo rows for 6589 in `defects.toml` are closed by the same
+  commit; that is a separate matter from the dashes.
 
 ## Slot materials, lightbox viewing, cell corners — 2026-09-15
 
