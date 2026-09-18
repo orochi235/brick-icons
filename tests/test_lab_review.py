@@ -1,5 +1,6 @@
 """The review queue's routes: what is listed, what is served, what a verdict
 does to the defect it speaks to."""
+import json
 import pytest
 from fastapi.testclient import TestClient
 
@@ -181,3 +182,83 @@ def test_measure_fills_in_every_unmeasured_entry(lab):
     assert client.post("/api/review/measure").json()["measured"] == 0
     body = client.get("/api/review", params={"view": "all"}).json()
     assert all(e["diff"]["components"] >= 1 for e in body["entries"])
+
+
+def test_undo_puts_the_defect_back_exactly_as_the_verdict_found_it(lab):
+    client, root = lab
+    eid = review.entry_id("occt", "3001", _sha(SVG2))
+    before = defects.load(root / "defects.toml")
+    assert client.post(f"/api/review/{eid}/verdict",
+                       json={"verdict": "fixed", "note": "rim is back"}
+                       ).status_code == 200
+    judged = defects.load(root / "defects.toml")[0]
+    assert judged["status"] == "fixed" and judged["checked"]["occt"] != "stale"
+
+    item = client.post(f"/api/review/{eid}/undo").json()
+    assert item["judged"] is None
+    assert defects.load(root / "defects.toml") == before
+
+
+def test_undo_returns_the_entry_to_the_unjudged_queue(lab):
+    client, _root = lab
+    eid = review.entry_id("occt", "3001", _sha(SVG2))
+    client.post(f"/api/review/{eid}/verdict", json={"verdict": "fixed"})
+    assert eid not in [e["id"] for e in
+                       client.get("/api/review").json()["entries"]]
+    client.post(f"/api/review/{eid}/undo")
+    assert eid in [e["id"] for e in client.get("/api/review").json()["entries"]]
+
+
+def test_a_verdict_can_be_cast_again_after_an_undo(lab):
+    client, root = lab
+    eid = review.entry_id("occt", "3001", _sha(SVG2))
+    client.post(f"/api/review/{eid}/verdict", json={"verdict": "fixed"})
+    client.post(f"/api/review/{eid}/undo")
+    item = client.post(f"/api/review/{eid}/verdict",
+                       json={"verdict": "regression"}).json()
+    assert item["judged"]["verdict"] == "regression"
+    assert defects.load(root / "defects.toml")[0]["status"] == "open"
+
+
+def test_undoing_an_unjudged_entry_is_400(lab):
+    client, _root = lab
+    eid = review.entry_id("occt", "3001", _sha(SVG2))
+    assert client.post(f"/api/review/{eid}/undo").status_code == 400
+
+
+def test_undo_of_a_legacy_verdict_says_it_could_not_restore(lab):
+    """A judged line written before `restore` existed cannot give back the
+    previous `checked` sha, so the undo reopens the defect and says so."""
+    client, root = lab
+    eid = review.entry_id("occt", "3001", _sha(SVG2))
+    client.post(f"/api/review/{eid}/verdict", json={"verdict": "fixed"})
+    log = root / "store-queue" / "review.jsonl"
+    kept = [line for line in log.read_text().splitlines()]
+    stripped = []
+    for line in kept:
+        row = json.loads(line)
+        row.pop("restore", None)
+        stripped.append(json.dumps(row))
+    log.write_text("\n".join(stripped) + "\n")
+
+    item = client.post(f"/api/review/{eid}/undo").json()
+    assert item["restored"] is False
+    record = defects.load(root / "defects.toml")[0]
+    assert record["status"] == "open"
+    assert "occt" not in record["checked"]
+
+
+def test_the_reference_panel_is_served_for_the_entry(lab):
+    client, _root = lab
+    eid = review.entry_id("occt", "3001", _sha(SVG2))
+    r = client.get(f"/api/review/{eid}/reference.png")
+    # LDView is vendored on a dev box and absent on a bare checkout; either
+    # answer is fine, a traceback is not.
+    assert r.status_code in (200, 404, 503)
+    if r.status_code == 200:
+        assert r.headers["content-type"] == "image/png"
+
+
+def test_the_list_says_which_angle_a_reference_would_be_drawn_at(lab):
+    client, _root = lab
+    assert client.get("/api/review").json()["reference_angle"] == "iso"

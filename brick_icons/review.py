@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS review (
   diff_pixels INTEGER,
   diff_width INTEGER,
   diff_at TEXT,
+  diff_panel TEXT,
   verdict TEXT,
   note TEXT,
   judged_at TEXT,
@@ -48,6 +49,28 @@ CREATE TABLE IF NOT EXISTS review (
 );
 CREATE INDEX IF NOT EXISTS review_part ON review(part_id, source);
 """
+
+
+#: Columns added to `review` after the table shipped. `CREATE TABLE IF NOT
+#: EXISTS` cannot add one, so an existing corpus.db needs them put on.
+_ADDED_COLUMNS = (("diff_panel", "TEXT"),)
+
+
+def ensure_schema(conn: sqlite3.Connection) -> None:
+    conn.executescript(SCHEMA)
+    have = {r[1] for r in conn.execute("PRAGMA table_info(review)")}
+    for column, decl in _ADDED_COLUMNS:
+        if column not in have:
+            conn.execute(f"ALTER TABLE review ADD COLUMN {column} {decl}")
+    conn.commit()
+
+
+def _column(row, name, default=None):
+    """A column an older row object may predate."""
+    try:
+        return row[name]
+    except (IndexError, KeyError):
+        return default
 
 
 def _now() -> str:
@@ -107,11 +130,13 @@ def fold(lines: list[dict]) -> dict[str, dict]:
         elif eid in entries and kind == "judged":
             entries[eid]["judged"] = {k: line.get(k) for k in
                                       ("verdict", "note", "by", "defects", "at")}
+        elif eid in entries and kind == "unjudged":
+            entries[eid]["judged"] = None
     return entries
 
 
 def upsert(conn: sqlite3.Connection, entry: dict) -> None:
-    conn.executescript(SCHEMA)
+    ensure_schema(conn)
     diff, judged = entry.get("diff") or {}, entry.get("judged") or {}
     conn.execute(
         "INSERT OR REPLACE INTO review (id, part_id, source, at, run_id, "
@@ -135,7 +160,7 @@ def upsert(conn: sqlite3.Connection, entry: dict) -> None:
 
 
 def replay(conn: sqlite3.Connection, path: Path | str) -> int:
-    conn.executescript(SCHEMA)
+    ensure_schema(conn)
     entries = fold(load(path))
     for entry in entries.values():
         upsert(conn, entry)
@@ -165,7 +190,7 @@ def record_replaced(conn: sqlite3.Connection, root: Path | str,
     `sha256`, both relative to root. Nothing is written when the id is
     already in the table: the watcher re-reads a tree every pass."""
     eid = entry_id(source, part, after["sha256"])
-    conn.executescript(SCHEMA)
+    ensure_schema(conn)
     if conn.execute("SELECT 1 FROM review WHERE id = ?", (eid,)).fetchone():
         return None
     kept = keep_before(root, source, part, before["path"], before["sha256"])
@@ -191,16 +216,49 @@ def record_diff(conn: sqlite3.Connection, log: Path | str, eid: str,
 
 def record_judged(conn: sqlite3.Connection, log: Path | str, eid: str,
                   verdict: str, note: str, *, by: str,
-                  defects: list[str]) -> dict:
+                  defects: list[str],
+                  restore: dict[str, dict] | None = None) -> dict:
+    """`restore` is what the verdict is about to overwrite, per defect id:
+    the `status`, `checked` and `notes` held before the write, so an undo
+    puts them back verbatim rather than reconstructing them. Lines written
+    before it existed have none, and an undo on one can only guess."""
     if verdict not in VERDICTS:
         raise ValueError(f"verdict must be one of {VERDICTS}, not {verdict!r}")
     line = {"kind": "judged", "id": eid, "at": _now(), "verdict": verdict,
-            "note": note, "by": by, "defects": list(defects)}
+            "note": note, "by": by, "defects": list(defects),
+            "restore": restore or {}}
     append(log, line)
     conn.execute("UPDATE review SET verdict = ?, note = ?, judged_at = ?, "
                  "judged_by = ?, judged_defects = ? WHERE id = ?",
                  (verdict, note, line["at"], by, json.dumps(line["defects"]),
                   eid))
+    conn.commit()
+    return line
+
+
+def last_judged(log: Path | str, eid: str) -> dict | None:
+    """The `judged` line an undo of this entry is taking back, or None when
+    the entry has been unjudged since -- or was never judged at all."""
+    found = None
+    for line in load(log):
+        if line["id"] != eid:
+            continue
+        if line["kind"] == "judged":
+            found = line
+        elif line["kind"] == "unjudged":
+            found = None
+    return found
+
+
+def record_unjudged(conn: sqlite3.Connection, log: Path | str, eid: str, *,
+                    by: str) -> dict:
+    """Take a verdict back. The log is append-only, so this is a line of its
+    own and `fold` clears the verdict when it replays one."""
+    line = {"kind": "unjudged", "id": eid, "at": _now(), "by": by}
+    append(log, line)
+    conn.execute("UPDATE review SET verdict = NULL, note = NULL, "
+                 "judged_at = NULL, judged_by = NULL, judged_defects = NULL "
+                 "WHERE id = ?", (eid,))
     conn.commit()
     return line
 
@@ -221,6 +279,16 @@ def side_files(root: Path | str, row) -> tuple[Path, Path] | None:
     return (before, after) if before and after else None
 
 
+def panel_signature() -> str:
+    """What the cached panel was painted with. A row stamped with anything
+    else is measured again: the threshold moved once and every entry already
+    measured kept its old drawing and its old count, which was the bug the
+    move existed to fix."""
+    from .lab import diff
+    return (f"thr={diff.PANEL_THRESHOLD} min={diff.PANEL_MIN_PX} "
+            f"w={diff.RASTER_WIDTH}")
+
+
 def measure(conn: sqlite3.Connection, root: Path | str, log: Path | str,
             cache_dir: Path | str, row) -> Path:
     """Paint the row's diff panel into `cache_dir/<id>/diff.png`, recording
@@ -229,7 +297,9 @@ def measure(conn: sqlite3.Connection, root: Path | str, log: Path | str,
     from .lab import diff
     out = Path(cache_dir) / row["id"].replace("/", "_")
     panel = out / "diff.png"
-    if panel.is_file() and row["diff_components"] is not None:
+    signature = panel_signature()
+    stale = _column(row, "diff_panel") != signature
+    if panel.is_file() and row["diff_components"] is not None and not stale:
         return panel
     sides = side_files(root, row)
     if sides is None:
@@ -237,8 +307,11 @@ def measure(conn: sqlite3.Connection, root: Path | str, log: Path | str,
     image, components, pixels = diff.measure_pair(*sides, out)
     out.mkdir(parents=True, exist_ok=True)
     image.save(panel)
-    if row["diff_components"] is None:
+    if row["diff_components"] is None or stale:
         record_diff(conn, log, row["id"], components, pixels, diff.RASTER_WIDTH)
+    conn.execute("UPDATE review SET diff_panel = ? WHERE id = ?",
+                 (signature, row["id"]))
+    conn.commit()
     return panel
 
 
@@ -248,7 +321,7 @@ def measure_unmeasured(conn: sqlite3.Connection, root: Path | str,
                        progress=lambda msg: None) -> tuple[int, list[dict]]:
     """Measure the newest entries with no diff, `limit` of them or all.
     (measured, [{id, error}] for the ones that could not be)."""
-    conn.executescript(SCHEMA)
+    ensure_schema(conn)
     rows = conn.execute(
         "SELECT * FROM review WHERE diff_components IS NULL ORDER BY at DESC"
         + (f" LIMIT {int(limit)}" if limit is not None else "")).fetchall()

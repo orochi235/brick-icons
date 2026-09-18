@@ -10,12 +10,17 @@ from __future__ import annotations
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
-from scipy import ndimage
 
-DIFF_COLOR = (214, 0, 147)
-DIFF_THRESHOLD = 64      # max channel delta that counts as a changed pixel
-MIN_PX = 12              # component size below which a change is AA fringe
-FADE = 0.75              # how far `after` fades toward white under the paint
+from brick_icons.lab import diff as _diff
+
+# The panel is `brick_icons.lab.diff`'s, not a second one held in step with it
+# by hand: a sheet on the wall and the lab's /review panel have to be the same
+# drawing, and two copies of a threshold drift the moment one is tuned.
+DIFF_COLOR = _diff.PANEL_COLOR
+DIFF_FAINT = _diff.PANEL_FAINT
+DIFF_THRESHOLD = _diff.PANEL_THRESHOLD
+MIN_PX = _diff.PANEL_MIN_PX
+FADE = _diff.PANEL_FADE
 
 
 def changed(a, b):
@@ -29,27 +34,12 @@ def changed(a, b):
 
 def components(mask, min_px=MIN_PX):
     """Changed components at least `min_px` pixels: the real changes."""
-    lab, n = ndimage.label(mask)
-    if not n:
-        return 0
-    sizes = ndimage.sum(mask, lab, range(1, n + 1))
-    return int((sizes >= min_px).sum())
+    return int((_diff.label(mask)[1] >= min_px).sum())
 
 
 def diff_panel(before, after):
-    """(image, components, pixels): `after` faded, changed pixels painted.
-
-    Both counts, because they fail differently: an outline that moves by a
-    sagitta is thousands of pixels in slivers too thin to make one component
-    (6057849d's smoothing counted 0 components), and antialias fringe is
-    hundreds of pixels that make no component at all.
-    """
-    mask = changed(before, after)
-    A = np.asarray(after.convert("RGB"), float)[:mask.shape[0], :mask.shape[1]]
-    faded = A * (1 - FADE) + 255 * FADE
-    faded[mask] = DIFF_COLOR
-    return (Image.fromarray(faded.astype(np.uint8), "RGB"), components(mask),
-            int(mask.sum()))
+    """(image, components, pixels): `after` faded, changed pixels painted."""
+    return _diff.panel(before, after)
 
 
 def sheet(title, rows, columns=("before", "after"), out=None):

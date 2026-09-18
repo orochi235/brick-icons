@@ -24,13 +24,15 @@ const entry = (over: Partial<ReviewEntry> = {}): ReviewEntry => ({
   request: null, judged: null, superseded_by: null,
   urls: { before: '/api/review/occt/3001/bbbbbbbbbbbb/before',
           after: '/api/review/occt/3001/bbbbbbbbbbbb/after',
-          diff: '/api/review/occt/3001/bbbbbbbbbbbb/diff.png' },
+          diff: '/api/review/occt/3001/bbbbbbbbbbbb/diff.png',
+          reference: '/api/review/occt/3001/bbbbbbbbbbbb/reference.png' },
   ...over,
 });
 
 const list = (entries: ReviewEntry[], over: Partial<ReviewList> = {}): ReviewList => ({
   entries, total: entries.length, view: 'linked',
-  verdicts: ['fixed', 'better', 'neutral', 'regression'], ...over,
+  verdicts: ['fixed', 'better', 'neutral', 'regression'],
+  reference_angle: 'iso', ...over,
 });
 
 function client(entries: ReviewEntry[]) {
@@ -39,9 +41,13 @@ function client(entries: ReviewEntry[]) {
     ...entries.find((e) => e.id === id)!,
     judged: { verdict, note, at: '2026-09-17T00:00:00+00:00', by: 'lab', defects: ['3001-occt-rim'] },
   }));
+  const undoJudgement = vi.fn().mockImplementation(async (id: string) => ({
+    ...entries.find((e) => e.id === id)!, judged: null, restored: true,
+  }));
   return {
-    client: { review, judge, reviewEntry: vi.fn(), measureReview: vi.fn() } as unknown as LabClient,
-    review, judge,
+    client: { review, judge, reviewEntry: vi.fn(), measureReview: vi.fn(),
+              undoJudgement } as unknown as LabClient,
+    review, judge, undoJudgement,
   };
 }
 
@@ -59,15 +65,18 @@ it('shows a card with its three panels, both columns and the linked defect', asy
   expect(screen.getByText('1 of 1 shown')).toBeTruthy();
 });
 
-it('posts a verdict with the note and drops the card from the waiting list', async () => {
+it('posts a verdict with the note and marks the card judged in place', async () => {
   const c = client([entry()]);
   render(<ReviewPage client={c.client} />);
   await screen.findByText('Brick 2 x 4');
   fireEvent.change(screen.getByLabelText('note for 3001'), { target: { value: 'rim is back' } });
   fireEvent.click(screen.getByRole('button', { name: /^fixed/ }));
   await waitFor(() => expect(c.judge).toHaveBeenCalledWith('occt/3001/bbbbbbbbbbbb', 'fixed', 'rim is back'));
-  await waitFor(() => expect(screen.queryByText('Brick 2 x 4')).toBeNull());
-  expect(screen.getByText('0 of 0 shown')).toBeTruthy();
+  // The card holds its place rather than vanishing, or the undo it just
+  // earned would be unreachable without ticking "show judged".
+  await waitFor(() => expect(screen.getByText('rim is back')).toBeTruthy());
+  expect(screen.getByText('Brick 2 x 4')).toBeTruthy();
+  expect(screen.queryByLabelText('note for 3001')).toBeNull();
 });
 
 it('keeps a judged card, showing its verdict, when judged cards are shown', async () => {
@@ -115,4 +124,49 @@ it('rowsFor drops rows both sides leave empty and keeps the ones that differ', (
   expect(labels).toContain('secs');
   expect(rows.find(([label]) => label === 'edge gap')).toEqual(['edge gap', '184.0 of 2259.5', '']);
   expect(rowsFor(side({ error: null }), side({ error: null })).map(([l]) => l)).not.toContain('error');
+});
+
+it('shows the reference panel and says which pose it is drawn at', async () => {
+  render(<ReviewPage client={client([entry()]).client} />);
+  expect(await screen.findByAltText('3001 reference')).toBeTruthy();
+  expect(screen.getByText(/reference · iso/)).toBeTruthy();
+});
+
+it('keeps a judged card in place so its undo is reachable', async () => {
+  const { client: c } = client([entry()]);
+  render(<ReviewPage client={c} />);
+  fireEvent.click(await screen.findByText(/^fixed/));
+  await waitFor(() => expect(screen.getByText('undo')).toBeTruthy());
+  expect(screen.getByText('Brick 2 x 4')).toBeTruthy();
+  expect(screen.getByText(/1 judged/)).toBeTruthy();
+});
+
+it('undoes a verdict from the button and puts the card back in the queue', async () => {
+  const { client: c, undoJudgement } = client([entry()]);
+  render(<ReviewPage client={c} />);
+  fireEvent.click(await screen.findByText(/^fixed/));
+  fireEvent.click(await screen.findByText('undo'));
+  await waitFor(() => expect(undoJudgement).toHaveBeenCalledWith('occt/3001/bbbbbbbbbbbb'));
+  await waitFor(() => expect(screen.queryByText('undo')).toBeNull());
+});
+
+it('undoes the focused card on the u key, and ignores it when unjudged', async () => {
+  const { client: c, undoJudgement } = client([entry()]);
+  render(<ReviewPage client={c} />);
+  await screen.findByText('Brick 2 x 4');
+  fireEvent.keyDown(window, { key: 'u' });
+  expect(undoJudgement).not.toHaveBeenCalled();
+  fireEvent.keyDown(window, { key: 'f' });
+  await waitFor(() => expect(screen.getByText('undo')).toBeTruthy());
+  fireEvent.keyDown(window, { key: 'u' });
+  await waitFor(() => expect(undoJudgement).toHaveBeenCalledOnce());
+});
+
+it('says so when a verdict was too old to restore', async () => {
+  const { client: c, undoJudgement } = client([entry()]);
+  undoJudgement.mockResolvedValue({ ...entry(), judged: null, restored: false });
+  render(<ReviewPage client={c} />);
+  fireEvent.click(await screen.findByText(/^fixed/));
+  fireEvent.click(await screen.findByText('undo'));
+  expect(await screen.findByText(/previous checked sha is gone/)).toBeTruthy();
 });

@@ -61,12 +61,12 @@
 
 .review-superseded { margin: 0 0 0.5rem; color: var(--wzl-fg-muted); }
 
-/* Three panels at one size, so the eye can go straight across a row. The
+/* Four panels at one size, so the eye can go straight across a row. The
    drawings are white-ground, and stay white in a dark theme: a drawing is
    evidence, not chrome. */
 .review-panels {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.75rem;
 }
 .review-panel { margin: 0; }
@@ -92,9 +92,24 @@
   gap: 1rem;
   margin-top: 0.75rem;
 }
+@media (max-width: 1100px) {
+  .review-panels { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 @media (max-width: 720px) {
   .review-facts { grid-template-columns: 1fr; }
   .review-panels { grid-template-columns: 1fr; }
+}
+
+/* A card with no reference keeps its four columns rather than reflowing the
+   three that matter. */
+.review-no-reference {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 4 / 3;
+  border: 1px dashed var(--wzl-border);
+  border-radius: 4px;
+  color: var(--wzl-fg-muted);
+  font-size: 0.8rem;
 }
 
 .review-numbers {
@@ -169,6 +184,9 @@
   margin: 0.75rem 0 0;
 }
 .review-judged time { color: var(--wzl-fg-muted); font-size: 0.85rem; }
+/* Last in the row: the verdict and note either side of it are variable
+   length, and anything after them would shift as a card is judged. */
+.review-undo { margin-inline-start: auto; }
 .review-card[data-verdict="fixed"] .review-judged strong,
 .review-card[data-verdict="better"] .review-judged strong { color: var(--wzl-success, #4caf70); }
 .review-card[data-verdict="regression"] .review-judged strong { color: var(--wzl-danger, #e03030); }

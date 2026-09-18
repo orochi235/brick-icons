@@ -38,22 +38,48 @@ export function rowsFor(before: ReviewSide, after: ReviewSide): Row[] {
   ].filter(([, b, a]) => b !== '' || a !== '') as Row[];
 }
 
-function Panel({ src, label, alt, onLoad }: {
-  src: string; label: React.ReactNode; alt: string; onLoad?: () => void;
+function Panel({ src, label, alt, onLoad, onError }: {
+  src: string; label: React.ReactNode; alt: string;
+  onLoad?: () => void; onError?: () => void;
 }) {
   return (
     <figure className="review-panel">
-      <img src={src} alt={alt} loading="lazy" onLoad={onLoad} />
+      <img src={src} alt={alt} loading="lazy" onLoad={onLoad} onError={onError} />
       <figcaption>{label}</figcaption>
     </figure>
   );
 }
 
-function Card({ entry, focused, onFocus, onVerdict, onMeasured }: {
+/** LDView's drawing of the same part: what before and after cannot say,
+ *  which is which of them is right. Absent on a checkout with no LDView,
+ *  and the card carries on without it. */
+function ReferencePanel({ src, part, angle }: {
+  src: string; part: string; angle: string;
+}) {
+  const [missing, setMissing] = useState(false);
+  const label = <>reference · {angle}</>;
+  if (missing) {
+    return (
+      <figure className="review-panel review-panel-missing">
+        <div className="review-no-reference">no reference render</div>
+        <figcaption>{label}</figcaption>
+      </figure>
+    );
+  }
+  return (
+    <Panel src={src} label={label} alt={`${part} reference`}
+           onError={() => setMissing(true)} />
+  );
+}
+
+function Card({ entry, focused, referenceAngle, onFocus, onVerdict, onUndo,
+                onMeasured }: {
   entry: ReviewEntry;
   focused: boolean;
+  referenceAngle: string;
   onFocus: () => void;
   onVerdict: (verdict: Verdict, note: string) => void;
+  onUndo: () => void;
   onMeasured: () => void;
 }) {
   const [note, setNote] = useState('');
@@ -92,6 +118,8 @@ function Card({ entry, focused, onFocus, onVerdict, onMeasured }: {
       )}
 
       <div className="review-panels">
+        <ReferencePanel src={entry.urls.reference} part={entry.part}
+                        angle={referenceAngle} />
         <Panel src={entry.urls.before} label="before" alt={`${entry.part} before`} />
         <Panel src={entry.urls.after} label="after" alt={`${entry.part} after`} />
         <Panel src={entry.urls.diff} label={diffLabel} alt={`${entry.part} diff`}
@@ -148,6 +176,9 @@ function Card({ entry, focused, onFocus, onVerdict, onMeasured }: {
           <strong>{entry.judged.verdict}</strong>
           {entry.judged.note && <span className="review-note">{entry.judged.note}</span>}
           <time dateTime={entry.judged.at}>{when(entry.judged.at)}</time>
+          <button type="button" className="review-undo" onClick={onUndo}>
+            undo <kbd>u</kbd>
+          </button>
         </p>
       ) : (
         <div className="review-verdicts">
@@ -194,21 +225,29 @@ export function ReviewPage({ client }: { client: LabClient }) {
     });
   }, []);
 
+  // A card judged in this session keeps its place in the list instead of
+  // vanishing, so `undo` is reachable without first ticking "show judged".
+  // A reload drops them, which is what the filter is for.
   const judge = useCallback(async (entry: ReviewEntry, verdict: Verdict, note: string) => {
     try {
-      const updated = await client.judge(entry.id, verdict, note);
-      if (showJudged) {
-        replace(updated);
-      } else {
-        setList((prev) => prev && {
-          ...prev, total: prev.total - 1,
-          entries: prev.entries.filter((e) => e.id !== entry.id),
-        });
+      replace(await client.judge(entry.id, verdict, note));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }, [client, replace]);
+
+  const undo = useCallback(async (entry: ReviewEntry) => {
+    try {
+      const updated = await client.undoJudgement(entry.id);
+      replace(updated);
+      if (updated.restored === false) {
+        setError(`${entry.part}: the verdict predates the undo record, so the `
+          + 'defect is open again but its previous checked sha is gone.');
       }
     } catch (e) {
       setError((e as Error).message);
     }
-  }, [client, showJudged, replace]);
+  }, [client, replace]);
 
   const refresh = useCallback((entry: ReviewEntry) => {
     client.reviewEntry(entry.id).then(replace).catch(() => {});
@@ -235,6 +274,11 @@ export function ReviewPage({ client }: { client: LabClient }) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === 'j') { setFocus((f) => Math.min(entries.length - 1, f + 1)); return; }
       if (e.key === 'k') { setFocus((f) => Math.max(0, f - 1)); return; }
+      if (e.key === 'u') {
+        const judged = entries[focus];
+        if (judged?.judged) void undo(judged);
+        return;
+      }
       const hit = VERDICT_KEYS.find(([, key]) => key === e.key);
       const entry = entries[focus];
       if (hit && entry && !entry.judged) {
@@ -245,13 +289,14 @@ export function ReviewPage({ client }: { client: LabClient }) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [entries, focus, judge]);
+  }, [entries, focus, judge, undo]);
 
   useEffect(() => {
     setFocus((f) => Math.min(f, Math.max(0, entries.length - 1)));
   }, [entries.length]);
 
   const unmeasured = entries.filter((e) => e.diff === null).length;
+  const judgedHere = entries.filter((e) => e.judged !== null).length;
 
   return (
     <main className="lk-root review-page">
@@ -286,6 +331,7 @@ export function ReviewPage({ client }: { client: LabClient }) {
         {list && (
           <p className="review-count">
             {entries.length.toLocaleString()} of {list.total.toLocaleString()} shown
+            {judgedHere > 0 && <> · {judgedHere.toLocaleString()} judged</>}
           </p>
         )}
       </header>
@@ -300,8 +346,10 @@ export function ReviewPage({ client }: { client: LabClient }) {
       <div className="review-cards">
         {entries.map((entry, i) => (
           <Card key={entry.id} entry={entry} focused={i === focus}
+                referenceAngle={list?.reference_angle ?? ''}
                 onFocus={() => setFocus(i)}
                 onVerdict={(verdict, note) => void judge(entry, verdict, note)}
+                onUndo={() => void undo(entry)}
                 onMeasured={() => refresh(entry)} />
         ))}
       </div>

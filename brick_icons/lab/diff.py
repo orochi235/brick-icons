@@ -13,25 +13,53 @@ import numpy as np
 from PIL import Image
 
 
-def _label(mask: np.ndarray) -> list[int]:
-    """Sizes of 4-connected True regions, by iterative flood fill."""
+def label(mask: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """(labels, sizes) for the 4-connected True regions. `labels` is 0 off
+    the mask and a 1-based component index on it; `sizes[i]` is the size of
+    component `i + 1`.
+
+    Union-find over the neighbor edges rather than `scipy.ndimage.label`:
+    scipy is declared only under the `census` extra, and package code that
+    imports it dies on a node provisioned without it.
+    """
     h, w = mask.shape
-    seen = np.zeros((h, w), bool)
-    sizes = []
-    for sy, sx in zip(*np.nonzero(mask)):
-        if seen[sy, sx]:
-            continue
-        stack, size = [(sy, sx)], 0
-        seen[sy, sx] = True
-        while stack:
-            y, x = stack.pop()
-            size += 1
-            for ny, nx in ((y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1)):
-                if 0 <= ny < h and 0 <= nx < w and mask[ny, nx] and not seen[ny, nx]:
-                    seen[ny, nx] = True
-                    stack.append((ny, nx))
-        sizes.append(size)
-    return sizes
+    flat = mask.reshape(-1)
+    parent = np.arange(flat.size, dtype=np.int64)
+
+    def find(i: int) -> int:
+        root = i
+        while parent[root] != root:
+            root = parent[root]
+        while parent[i] != root:          # path compression, iterative
+            parent[i], i = root, parent[i]
+        return root
+
+    def union(a: np.ndarray, b: np.ndarray) -> None:
+        for i, j in zip(a.tolist(), b.tolist()):
+            ri, rj = find(i), find(j)
+            if ri != rj:
+                parent[max(ri, rj)] = min(ri, rj)
+
+    idx = np.arange(flat.size).reshape(h, w)
+    down = mask[:-1, :] & mask[1:, :]
+    union(idx[:-1, :][down], idx[1:, :][down])
+    right = mask[:, :-1] & mask[:, 1:]
+    union(idx[:, :-1][right], idx[:, 1:][right])
+
+    roots = np.array([find(i) for i in np.nonzero(flat)[0].tolist()], np.int64)
+    labels = np.zeros(flat.size, np.int32)
+    if roots.size:
+        _uniq, inverse, sizes = np.unique(roots, return_inverse=True,
+                                          return_counts=True)
+        labels[flat] = inverse + 1
+    else:
+        sizes = np.zeros(0, np.int64)
+    return labels.reshape(h, w), sizes
+
+
+def _label(mask: np.ndarray) -> list[int]:
+    """Sizes of 4-connected True regions."""
+    return label(mask)[1].tolist()
 
 
 def compare(a: Image.Image, b: Image.Image, threshold: int = 16,
@@ -88,9 +116,14 @@ def as_raster(path: Path | str, cache_dir: Path | str,
 #: The before/after sheet's own palette and thresholds (`scripts/_sheet.py`),
 #: so a diff panel served by the lab is the drawing a sheet on the wall shows.
 PANEL_COLOR = (214, 0, 147)
-PANEL_THRESHOLD = 64
+#: 8 of 255, not the 64 this started at. A shading shift across a whole part
+#: peaks around a delta of 13 and measured as no change at all under 64 --
+#: five of the ten entries the queue drew as "0 components" were hiding one.
+PANEL_THRESHOLD = 8
 PANEL_MIN_PX = 12
 PANEL_FADE = 0.75
+#: The second tier: changed, but in a component too small to be a finding.
+PANEL_FAINT = tuple(round(c * 0.35 + 255 * 0.65) for c in PANEL_COLOR)
 
 
 def panel(before: Image.Image, after: Image.Image) -> tuple[Image.Image, int, int]:
@@ -100,17 +133,25 @@ def panel(before: Image.Image, after: Image.Image) -> tuple[Image.Image, int, in
     outline that moves by a sagitta is thousands of pixels in slivers too
     thin to make one component, and antialias fringe is hundreds of pixels
     that make no component at all. Two rasters of different sizes are
-    compared over the box they share."""
+    compared over the box they share.
+
+    Two tiers, keyed on component size and never on amplitude: a broad
+    low-amplitude shift is a real regression that an amplitude tier would
+    paint as faintly as fringe.
+    """
     a = np.asarray(before.convert("RGB"), int)
     b = np.asarray(after.convert("RGB"), int)
     h, w = min(a.shape[0], b.shape[0]), min(a.shape[1], b.shape[1])
     a, b = a[:h, :w], b[:h, :w]
     mask = np.abs(a - b).max(axis=2) > PANEL_THRESHOLD
+    labels, sizes = label(mask)
+    big = np.concatenate(([False], sizes >= PANEL_MIN_PX))
+    strong = big[labels]
     faded = b.astype(float) * (1 - PANEL_FADE) + 255 * PANEL_FADE
-    faded[mask] = PANEL_COLOR
-    components = sum(1 for s in _label(mask) if s >= PANEL_MIN_PX)
-    return (Image.fromarray(faded.astype(np.uint8), "RGB"), components,
-            int(mask.sum()))
+    faded[mask & ~strong] = PANEL_FAINT
+    faded[strong] = PANEL_COLOR
+    return (Image.fromarray(faded.astype(np.uint8), "RGB"),
+            int((sizes >= PANEL_MIN_PX).sum()), int(mask.sum()))
 
 
 def measure_pair(before: Path | str, after: Path | str, cache_dir: Path | str,

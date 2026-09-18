@@ -196,6 +196,13 @@ export function createClient({ base = '', fetchImpl = fetch }: ClientOptions = {
                                post(`/api/review/${id}/verdict`, { verdict, note }));
     },
 
+    /** Take a verdict back: the entry returns to the queue and every
+     *  defect it stamped goes back to what it held before. */
+    async undoJudgement(id: string): Promise<ReviewEntry> {
+      return json<ReviewEntry>(fetchImpl, at(`/api/review/${id}/undo`),
+                               { method: 'POST' });
+    },
+
     async measureReview(limit = 20): Promise<{ measured: number; failed: { id: string; error: string }[] }> {
       return json(fetchImpl, at(`/api/review/measure?limit=${limit}`), { method: 'POST' });
     },

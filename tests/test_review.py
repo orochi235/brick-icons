@@ -1,6 +1,7 @@
 """The review log: what a displaced render leaves behind, and what a verdict
 does to it."""
 import json
+import sqlite3
 
 import pytest
 
@@ -154,3 +155,115 @@ def test_a_verdict_must_be_one_of_the_four(conn, tmp_path):
 def test_by_is_the_round_or_the_store():
     assert review.by_from_path("out/slot-occt-refresh/renders/occt/1.svg") == "slot-occt-refresh"
     assert review.by_from_path("renders/occt/1.svg") == "store"
+
+
+def test_fold_clears_a_verdict_an_unjudged_line_takes_back():
+    lines = [
+        {"kind": "replaced", "id": "s/p/a", "at": "1",
+         "part": "p", "source": "s",
+         "before": {"path": "b.svg", "sha256": "bb"},
+         "after": {"path": "a.svg", "sha256": "aa"}},
+        {"kind": "judged", "id": "s/p/a", "at": "2", "verdict": "fixed",
+         "note": "", "by": "lab", "defects": ["d1"]},
+        {"kind": "unjudged", "id": "s/p/a", "at": "3", "by": "lab"},
+    ]
+    assert review.fold(lines)["s/p/a"]["judged"] is None
+
+
+def test_fold_takes_a_verdict_cast_again_after_an_undo():
+    lines = [
+        {"kind": "replaced", "id": "s/p/a", "at": "1",
+         "part": "p", "source": "s",
+         "before": {"path": "b.svg", "sha256": "bb"},
+         "after": {"path": "a.svg", "sha256": "aa"}},
+        {"kind": "judged", "id": "s/p/a", "at": "2", "verdict": "fixed",
+         "note": "", "by": "lab", "defects": []},
+        {"kind": "unjudged", "id": "s/p/a", "at": "3", "by": "lab"},
+        {"kind": "judged", "id": "s/p/a", "at": "4", "verdict": "regression",
+         "note": "no", "by": "lab", "defects": []},
+    ]
+    assert review.fold(lines)["s/p/a"]["judged"]["verdict"] == "regression"
+
+
+def test_a_judged_line_carries_what_the_verdict_overwrote(tmp_path):
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.executescript(review.SCHEMA)
+    log = tmp_path / "review.jsonl"
+    restore = {"d1": {"status": "open", "checked": {"occt": "old"},
+                      "notes": "first"}}
+    review.record_judged(conn, log, "s/p/a", "fixed", "", by="lab",
+                         defects=["d1"], restore=restore)
+    line = json.loads(log.read_text().splitlines()[-1])
+    assert line["restore"] == restore
+
+
+def test_record_unjudged_clears_the_row_and_appends_a_line(tmp_path):
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.executescript(review.SCHEMA)
+    conn.execute("INSERT INTO review (id, part_id, source, at, before_path, "
+                 "before_sha, after_path, after_sha, verdict, note, "
+                 "judged_at, judged_by, judged_defects) VALUES "
+                 "('s/p/a', 'p', 's', '1', 'b.svg', 'bb', 'a.svg', 'aa', "
+                 "'fixed', 'n', '2', 'lab', '[\"d1\"]')")
+    conn.commit()
+    review.record_unjudged(conn, log := tmp_path / "review.jsonl", "s/p/a",
+                           by="lab")
+    row = conn.execute("SELECT * FROM review WHERE id = 's/p/a'").fetchone()
+    assert (row["verdict"], row["note"], row["judged_at"], row["judged_by"],
+            row["judged_defects"]) == (None, None, None, None, None)
+    assert json.loads(log.read_text().splitlines()[-1])["kind"] == "unjudged"
+
+
+def test_a_panel_measured_under_other_settings_is_measured_again(tmp_path):
+    """The threshold moved once and every entry already measured kept its
+    old panel and its old count, which is the bug the move was fixing."""
+    from brick_icons.lab import diff as lab_diff
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.executescript(review.SCHEMA)
+    before = tmp_path / "before.svg"
+    after = tmp_path / "after.svg"
+    before.write_text(SVG)
+    after.write_text(SVG2)
+    log = tmp_path / "review.jsonl"
+    conn.execute(
+        "INSERT INTO review (id, part_id, source, at, before_path, before_sha, "
+        "after_path, after_sha) VALUES ('s/p/a', 'p', 's', '1', 'before.svg', "
+        "'bb', 'after.svg', 'aa')")
+    conn.commit()
+    row = conn.execute("SELECT * FROM review").fetchone()
+    panel = review.measure(conn, tmp_path, log, tmp_path / "cache", row)
+    first = panel.read_bytes()
+    assert conn.execute("SELECT diff_panel FROM review").fetchone()[0] == \
+        review.panel_signature()
+
+    conn.execute("UPDATE review SET diff_panel = 'thr=64 min=12 w=900'")
+    conn.commit()
+    row = conn.execute("SELECT * FROM review").fetchone()
+    review.measure(conn, tmp_path, log, tmp_path / "cache", row)
+    assert conn.execute("SELECT diff_panel FROM review").fetchone()[0] == \
+        review.panel_signature()
+    assert lab_diff.PANEL_THRESHOLD == 8   # the signature tracks the settings
+    assert first == panel.read_bytes()
+
+
+def test_a_panel_measured_under_the_same_settings_is_left_alone(tmp_path):
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.executescript(review.SCHEMA)
+    (tmp_path / "before.svg").write_text(SVG)
+    (tmp_path / "after.svg").write_text(SVG2)
+    log = tmp_path / "review.jsonl"
+    conn.execute(
+        "INSERT INTO review (id, part_id, source, at, before_path, before_sha, "
+        "after_path, after_sha) VALUES ('s/p/a', 'p', 's', '1', 'before.svg', "
+        "'bb', 'after.svg', 'aa')")
+    conn.commit()
+    row = conn.execute("SELECT * FROM review").fetchone()
+    panel = review.measure(conn, tmp_path, log, tmp_path / "cache", row)
+    stamped = panel.stat().st_mtime_ns
+    row = conn.execute("SELECT * FROM review").fetchone()
+    review.measure(conn, tmp_path, log, tmp_path / "cache", row)
+    assert panel.stat().st_mtime_ns == stamped

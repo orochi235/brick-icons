@@ -43,7 +43,11 @@ export interface ReviewEntry {
   judged: { verdict: Verdict; note: string; at: string; by: string;
             defects: string[] } | null;
   superseded_by: string | null;
-  urls: { before: string; after: string; diff: string };
+  urls: { before: string; after: string; diff: string;
+          reference: string };
+  /** Set by an undo: false when the verdict predates the restore record
+   *  and the previous `checked` sha could not be given back. */
+  restored?: boolean;
 }
 
 export type ReviewView = 'linked' | 'all';
@@ -53,4 +57,6 @@ export interface ReviewList {
   total: number;
   view: ReviewView;
   verdicts: Verdict[];
+  /** The pose every corpus render is drawn at, and so the reference. */
+  reference_angle: string;
 }

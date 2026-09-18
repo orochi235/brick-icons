@@ -18,11 +18,15 @@ from pydantic import BaseModel
 from .. import db as corpus_db
 from .. import requests as render_requests
 from .. import review
-from . import cells, defects
+from ..config import load_config
+from . import cells, defects, reference
 
 MEDIA_TYPES = {".svg": "image/svg+xml", ".png": "image/png",
                ".webp": "image/webp"}
 VIEWS = ("linked", "all")
+#: The card shows the reference at about 300px; 600 covers a retina panel
+#: without paying for the 2048 a census render uses.
+REFERENCE_PX = 600
 
 
 class Verdict(BaseModel):
@@ -124,7 +128,8 @@ def entry(conn: sqlite3.Connection, row: sqlite3.Row, records: list[dict],
         "judged": judged,
         "superseded_by": superseded,
         "urls": {"before": f"{base}/before", "after": f"{base}/after",
-                 "diff": f"{base}/diff.png"},
+                 "diff": f"{base}/diff.png",
+                 "reference": f"{base}/reference.png"},
     }
 
 
@@ -145,7 +150,7 @@ def install(app: FastAPI, corpus_conn) -> None:
         return Path(app.state.review_path)
 
     def row_for(eid: str, conn: sqlite3.Connection) -> sqlite3.Row:
-        conn.executescript(review.SCHEMA)
+        review.ensure_schema(conn)
         row = conn.execute("SELECT * FROM review WHERE id = ?",
                            (eid,)).fetchone()
         if row is None:
@@ -176,7 +181,7 @@ def install(app: FastAPI, corpus_conn) -> None:
             raise HTTPException(400, f"view must be one of {VIEWS}")
         conn = corpus_conn()
         try:
-            conn.executescript(review.SCHEMA)
+            review.ensure_schema(conn)
             records = defects.load(app.state.defects_path)
             asked = render_requests.load(app.state.requests_path)
             out, total = [], 0
@@ -188,8 +193,12 @@ def install(app: FastAPI, corpus_conn) -> None:
                         out.append(item)
         finally:
             conn.close()
+        # The row records no angle: every corpus render is drawn at the
+        # config default, and the panel has to say which that is or the
+        # first part posed differently shows a reference that does not match.
         return {"entries": out, "total": total, "view": view,
-                "verdicts": list(review.VERDICTS)}
+                "verdicts": list(review.VERDICTS),
+                "reference_angle": load_config(root=str(root())).angle}
 
     @app.get("/api/review/{eid:path}/before")
     def get_before(eid: str):
@@ -238,10 +247,17 @@ def install(app: FastAPI, corpus_conn) -> None:
         try:
             row = row_for(eid, conn)
             records = defects.load(app.state.defects_path)
-            touched = []
+            touched, restore = [], {}
             stamp = f"{date.today().isoformat()} review {body.verdict}"
             line = f"{stamp}: {body.note.strip()}" if body.note.strip() else stamp
             for record in linked_defects(records, row["part_id"], row["source"]):
+                # What the verdict is about to overwrite, so an undo puts it
+                # back verbatim instead of reconstructing a previous sha it
+                # has no other record of.
+                restore[record["id"]] = {
+                    "status": record.get("status", "open"),
+                    "checked": dict(record.get("checked") or {}),
+                    "notes": record.get("notes") or ""}
                 changes = {"checked": {**(record.get("checked") or {}),
                                        row["source"]: row["after_sha"]},
                            "notes": "\n\n".join(
@@ -254,13 +270,67 @@ def install(app: FastAPI, corpus_conn) -> None:
                 corpus_db.upsert_defect(conn, updated)
                 touched.append(record["id"])
             review.record_judged(conn, log(), eid, body.verdict, body.note,
-                                 by="lab", defects=touched)
+                                 by="lab", defects=touched, restore=restore)
             item = entry(conn, row_for(eid, conn),
                          defects.load(app.state.defects_path),
                          render_requests.load(app.state.requests_path))
         finally:
             conn.close()
         return item
+
+    @app.post("/api/review/{eid:path}/undo")
+    def post_undo(eid: str):
+        conn = corpus_conn()
+        try:
+            row = row_for(eid, conn)
+            if not row["verdict"]:
+                raise HTTPException(400, f"review entry {eid!r} is not judged")
+            was = review.last_judged(log(), eid) or {}
+            held = was.get("restore") or {}
+            by_id = {r["id"]: r for r in
+                     defects.load(app.state.defects_path)}
+            for defect_id in json.loads(row["judged_defects"] or "[]"):
+                if defect_id not in by_id:
+                    continue
+                if defect_id in held:
+                    changes = {k: held[defect_id][k]
+                               for k in ("status", "checked", "notes")}
+                else:
+                    # A verdict cast before `restore` existed. The previous
+                    # sha is gone, so the slot goes back to never-judged
+                    # rather than to a sha that would be a guess.
+                    checked = dict(by_id[defect_id].get("checked") or {})
+                    checked.pop(row["source"], None)
+                    changes = {"status": "open", "checked": checked}
+                updated = defects.update(app.state.defects_path, defect_id,
+                                         changes)
+                corpus_db.upsert_defect(conn, updated)
+            review.record_unjudged(conn, log(), eid, by="lab")
+            item = entry(conn, row_for(eid, conn),
+                         defects.load(app.state.defects_path),
+                         render_requests.load(app.state.requests_path))
+            item["restored"] = bool(held) or not row["judged_defects"] or \
+                json.loads(row["judged_defects"]) == []
+        finally:
+            conn.close()
+        return item
+
+    @app.get("/api/review/{eid:path}/reference.png")
+    def get_reference_panel(eid: str):
+        conn = corpus_conn()
+        try:
+            row = row_for(eid, conn)
+        finally:
+            conn.close()
+        angle = load_config(root=str(root())).angle
+        got = reference.render_reference(
+            row["part_id"], angle, root=root(),
+            cache_root=app.state.reference_root, render_px=REFERENCE_PX)
+        if not got["ok"]:
+            code = 503 if "not installed" in (got["error"] or "") else 404
+            raise HTTPException(code, got["error"])
+        path = Path(app.state.reference_root) / got["key"] / got["name"]
+        return FileResponse(path, media_type="image/png")
 
     # Last: `{eid:path}` is greedy and would take `.../after` and
     # `.../diff.png` if it were registered before them.

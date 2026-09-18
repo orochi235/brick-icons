@@ -100,3 +100,55 @@ def test_as_raster_rasterizes_an_svg_beside_it(tmp_path):
     got = diff.as_raster(svg, tmp_path, width=48)
     assert got.suffix == ".png"
     assert got.exists()
+
+
+def _rgb(fill=255, boxes=(), shade=None):
+    """A gray page, optional black boxes, and an optional whole-image shift."""
+    a = np.full((64, 64), fill, np.uint8)
+    for x0, y0, x1, y1 in boxes:
+        a[y0:y1, x0:x1] = 0
+    if shade is not None:
+        a = np.clip(a.astype(int) - shade, 0, 255).astype(np.uint8)
+    return Image.fromarray(a, "L").convert("RGB")
+
+
+def test_label_returns_a_label_image_beside_the_sizes():
+    mask = np.zeros((8, 8), bool)
+    mask[1:3, 1:3] = True
+    mask[6, 6] = True
+    labels, sizes = diff.label(mask)
+    assert sorted(sizes) == [1, 4]
+    assert labels[1, 1] == labels[2, 2] != 0
+    assert labels[6, 6] not in (0, labels[1, 1])
+    assert labels[0, 0] == 0
+
+
+def test_a_low_amplitude_shift_over_the_whole_part_is_painted():
+    """The 4342/56640 class: every pixel changes by ~13 of 255. Under the
+    old threshold of 64 this measured as no change at all."""
+    _panel, components, pixels = diff.panel(_rgb(), _rgb(shade=13))
+    assert pixels == 64 * 64
+    assert components == 1
+
+
+def test_a_chunky_change_paints_in_the_strong_color():
+    img, components, _px = diff.panel(_rgb(), _rgb(boxes=[(10, 10, 30, 30)]))
+    assert components == 1
+    assert tuple(np.asarray(img)[20, 20]) == diff.PANEL_COLOR
+
+
+def test_a_speck_paints_faint_and_is_not_counted():
+    """Antialias fringe is present on the panel but never a finding."""
+    img, components, pixels = diff.panel(_rgb(), _rgb(boxes=[(5, 5, 6, 6)]))
+    assert components == 0
+    assert pixels == 1
+    assert tuple(np.asarray(img)[5, 5]) == diff.PANEL_FAINT
+    assert tuple(np.asarray(img)[5, 5]) != diff.PANEL_COLOR
+
+
+def test_identical_rasters_paint_nothing():
+    img, components, pixels = diff.panel(_rgb(), _rgb())
+    assert (components, pixels) == (0, 0)
+    painted = np.asarray(img)
+    assert not (painted == np.array(diff.PANEL_COLOR)).all(axis=2).any()
+    assert not (painted == np.array(diff.PANEL_FAINT)).all(axis=2).any()
