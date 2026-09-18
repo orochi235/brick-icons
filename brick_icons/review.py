@@ -319,12 +319,20 @@ def measure_unmeasured(conn: sqlite3.Connection, root: Path | str,
                        log: Path | str, cache_dir: Path | str,
                        limit: int | None = None,
                        progress=lambda msg: None) -> tuple[int, list[dict]]:
-    """Measure the newest entries with no diff, `limit` of them or all.
-    (measured, [{id, error}] for the ones that could not be)."""
+    """Measure the newest entries with no diff, and the ones whose panel was
+    painted under other settings, `limit` of them or all. (measured,
+    [{id, error}] for the ones that could not be).
+
+    A stale panel counts as unmeasured or a threshold change reaches only the
+    entries someone happens to open: the rest keep the drawing the change
+    exists to replace.
+    """
     ensure_schema(conn)
     rows = conn.execute(
-        "SELECT * FROM review WHERE diff_components IS NULL ORDER BY at DESC"
-        + (f" LIMIT {int(limit)}" if limit is not None else "")).fetchall()
+        "SELECT * FROM review WHERE diff_components IS NULL "
+        "   OR diff_panel IS NOT ? ORDER BY at DESC"
+        + (f" LIMIT {int(limit)}" if limit is not None else ""),
+        (panel_signature(),)).fetchall()
     measured, failed = 0, []
     for i, row in enumerate(rows, 1):
         try:

@@ -267,3 +267,28 @@ def test_a_panel_measured_under_the_same_settings_is_left_alone(tmp_path):
     row = conn.execute("SELECT * FROM review").fetchone()
     review.measure(conn, tmp_path, log, tmp_path / "cache", row)
     assert panel.stat().st_mtime_ns == stamped
+
+
+def test_measure_unmeasured_takes_the_panels_painted_under_old_settings(tmp_path):
+    """Otherwise a threshold change reaches only the entries someone opens."""
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.executescript(review.SCHEMA)
+    (tmp_path / "before.svg").write_text(SVG)
+    (tmp_path / "after.svg").write_text(SVG2)
+    conn.execute(
+        "INSERT INTO review (id, part_id, source, at, before_path, before_sha, "
+        "after_path, after_sha, diff_components, diff_pixels, diff_panel) "
+        "VALUES ('s/p/a', 'p', 's', '1', 'before.svg', 'bb', 'after.svg', "
+        "'aa', 1, 462, 'thr=64 min=12 w=900')")
+    conn.commit()
+    measured, failed = review.measure_unmeasured(
+        conn, tmp_path, tmp_path / "review.jsonl", tmp_path / "cache")
+    assert (measured, failed) == (1, [])
+    row = conn.execute("SELECT * FROM review").fetchone()
+    assert row["diff_panel"] == review.panel_signature()
+    assert row["diff_components"] != 1 or row["diff_pixels"] != 462
+
+    # Nothing left to do on a second pass.
+    assert review.measure_unmeasured(
+        conn, tmp_path, tmp_path / "review.jsonl", tmp_path / "cache") == (0, [])
