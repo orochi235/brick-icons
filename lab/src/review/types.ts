@@ -57,6 +57,4 @@ export interface ReviewList {
   total: number;
   view: ReviewView;
   verdicts: Verdict[];
-  /** The pose every corpus render is drawn at, and so the reference. */
-  reference_angle: string;
 }

@@ -3,6 +3,7 @@ does to the defect it speaks to."""
 import json
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from brick_icons import db, goldens, requests as render_requests, review
 from brick_icons.lab import app as lab_app
@@ -248,17 +249,32 @@ def test_undo_of_a_legacy_verdict_says_it_could_not_restore(lab):
     assert "occt" not in record["checked"]
 
 
-def test_the_reference_panel_is_served_for_the_entry(lab):
+def test_the_reference_panel_serves_the_corpus_reference_slot(lab):
+    """The baked slot every reference script and the wall use, not a live
+    LDView call: a subprocess per card draws a different picture, in the
+    wrong colors."""
+    client, root = lab
+    conn = db.connect(root / "corpus.db")
+    ref = root / "renders" / "reference" / "3001.webp"
+    ref.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (8, 8), (200, 190, 90)).save(ref)
+    db.record_render(conn, "3001", "reference", ref, root=root)
+    conn.close()
+
+    eid = review.entry_id("occt", "3001", _sha(SVG2))
+    r = client.get(f"/api/review/{eid}/reference")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "image/webp"
+    assert r.content == ref.read_bytes()
+
+
+def test_a_part_with_no_reference_render_is_404_not_a_broken_card(lab):
     client, _root = lab
     eid = review.entry_id("occt", "3001", _sha(SVG2))
-    r = client.get(f"/api/review/{eid}/reference.png")
-    # LDView is vendored on a dev box and absent on a bare checkout; either
-    # answer is fine, a traceback is not.
-    assert r.status_code in (200, 404, 503)
-    if r.status_code == 200:
-        assert r.headers["content-type"] == "image/png"
+    assert client.get(f"/api/review/{eid}/reference").status_code == 404
 
 
-def test_the_list_says_which_angle_a_reference_would_be_drawn_at(lab):
+def test_the_entry_points_at_its_reference(lab):
     client, _root = lab
-    assert client.get("/api/review").json()["reference_angle"] == "iso"
+    entry = client.get("/api/review").json()["entries"][0]
+    assert entry["urls"]["reference"] == f"/api/review/{entry['id']}/reference"

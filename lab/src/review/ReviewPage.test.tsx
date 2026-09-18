@@ -25,14 +25,13 @@ const entry = (over: Partial<ReviewEntry> = {}): ReviewEntry => ({
   urls: { before: '/api/review/occt/3001/bbbbbbbbbbbb/before',
           after: '/api/review/occt/3001/bbbbbbbbbbbb/after',
           diff: '/api/review/occt/3001/bbbbbbbbbbbb/diff.png',
-          reference: '/api/review/occt/3001/bbbbbbbbbbbb/reference.png' },
+          reference: '/api/review/occt/3001/bbbbbbbbbbbb/reference' },
   ...over,
 });
 
 const list = (entries: ReviewEntry[], over: Partial<ReviewList> = {}): ReviewList => ({
   entries, total: entries.length, view: 'linked',
-  verdicts: ['fixed', 'better', 'neutral', 'regression'],
-  reference_angle: 'iso', ...over,
+  verdicts: ['fixed', 'better', 'neutral', 'regression'], ...over,
 });
 
 function client(entries: ReviewEntry[]) {
@@ -126,10 +125,11 @@ it('rowsFor drops rows both sides leave empty and keeps the ones that differ', (
   expect(rowsFor(side({ error: null }), side({ error: null })).map(([l]) => l)).not.toContain('error');
 });
 
-it('shows the reference panel and says which pose it is drawn at', async () => {
+it('shows the reference panel from the corpus reference slot', async () => {
   render(<ReviewPage client={client([entry()]).client} />);
-  expect(await screen.findByAltText('3001 reference')).toBeTruthy();
-  expect(screen.getByText(/reference · iso/)).toBeTruthy();
+  const img = await screen.findByAltText('3001 reference') as HTMLImageElement;
+  expect(img.getAttribute('src')).toBe('/api/review/occt/3001/bbbbbbbbbbbb/reference');
+  expect(screen.getByText(/reference · LDView/)).toBeTruthy();
 });
 
 it('keeps a judged card in place so its undo is reachable', async () => {

@@ -98,16 +98,21 @@ LDView reference answers it: on `56640` it shows the dome clearly lighter
 than the flange under one smooth highlight, which `before` matches and
 `after` does not.
 
-`GET /api/review/{eid}/reference.png` renders through the existing
-`reference.render_reference` and streams the cached PNG. One hop, so the card
-is an `<img loading="lazy">` and offscreen cards never spawn an LDView
-subprocess.
+`GET /api/review/{eid}/reference` serves the corpus's **`reference` slot** —
+the LDView bake that already exists for all 24,591 parts, in each part's
+authored LDraw colors. One hop, so the card is an `<img loading="lazy">`.
 
-The review row records no angle. Corpus renders are all drawn at the config
-default, so the panel uses `load_config(root).angle` and captions itself
-`reference · <angle>`; without that, the first part drawn at another pose
-shows a reference that silently does not match it.
+**Not a live `reference.render_reference` call**, which is what this shipped
+as first and was wrong. That path draws a different picture: the lab's
+reference pane renders color 16 in the configured part color, so 56640 came
+out gray where the slot has it olive, and it frames the part differently
+again. A card has to show the reference the wall, `overlay-reference.py` and
+every other reference script show, or the panel is evidence for a question
+nobody asked. It also cost an LDView subprocess per uncached part for a
+picture already on disk.
 
 It is ground truth for structure, not pixels — a shaded color render against
-line art — so it never feeds the diff. When LDView is missing or errors the
-panel is a captioned empty tile and the card still works.
+line art — so it never feeds the diff. The two renderers fit a part to the
+canvas differently, which `overlay-reference.py` already documents; the panel
+is read for shape and shading, never registered against the others. A part
+with no reference render gets a captioned empty tile and a working card.

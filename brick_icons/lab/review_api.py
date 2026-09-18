@@ -18,15 +18,16 @@ from pydantic import BaseModel
 from .. import db as corpus_db
 from .. import requests as render_requests
 from .. import review
-from ..config import load_config
-from . import cells, defects, reference
+from . import cells, defects
 
 MEDIA_TYPES = {".svg": "image/svg+xml", ".png": "image/png",
                ".webp": "image/webp"}
 VIEWS = ("linked", "all")
-#: The card shows the reference at about 300px; 600 covers a retina panel
-#: without paying for the 2048 a census render uses.
-REFERENCE_PX = 600
+#: LDView's drawing of the part, in its authored LDraw colors. It is a corpus
+#: slot baked for every part, not a live LDView call: the card has to show
+#: the same reference the wall and every reference script use, and a
+#: subprocess per card would draw a different one.
+REFERENCE_SOURCE = "reference"
 
 
 class Verdict(BaseModel):
@@ -129,7 +130,7 @@ def entry(conn: sqlite3.Connection, row: sqlite3.Row, records: list[dict],
         "superseded_by": superseded,
         "urls": {"before": f"{base}/before", "after": f"{base}/after",
                  "diff": f"{base}/diff.png",
-                 "reference": f"{base}/reference.png"},
+                 "reference": f"{base}/reference"},
     }
 
 
@@ -193,12 +194,8 @@ def install(app: FastAPI, corpus_conn) -> None:
                         out.append(item)
         finally:
             conn.close()
-        # The row records no angle: every corpus render is drawn at the
-        # config default, and the panel has to say which that is or the
-        # first part posed differently shows a reference that does not match.
         return {"entries": out, "total": total, "view": view,
-                "verdicts": list(review.VERDICTS),
-                "reference_angle": load_config(root=str(root())).angle}
+                "verdicts": list(review.VERDICTS)}
 
     @app.get("/api/review/{eid:path}/before")
     def get_before(eid: str):
@@ -315,22 +312,25 @@ def install(app: FastAPI, corpus_conn) -> None:
             conn.close()
         return item
 
-    @app.get("/api/review/{eid:path}/reference.png")
+    @app.get("/api/review/{eid:path}/reference")
     def get_reference_panel(eid: str):
         conn = corpus_conn()
         try:
             row = row_for(eid, conn)
+            held = conn.execute(
+                "SELECT path FROM renders WHERE source = ? AND part_id = ? "
+                "LIMIT 1", (REFERENCE_SOURCE, row["part_id"])).fetchone()
         finally:
             conn.close()
-        angle = load_config(root=str(root())).angle
-        got = reference.render_reference(
-            row["part_id"], angle, root=root(),
-            cache_root=app.state.reference_root, render_px=REFERENCE_PX)
-        if not got["ok"]:
-            code = 503 if "not installed" in (got["error"] or "") else 404
-            raise HTTPException(code, got["error"])
-        path = Path(app.state.reference_root) / got["key"] / got["name"]
-        return FileResponse(path, media_type="image/png")
+        if held is None:
+            raise HTTPException(404, f"no {REFERENCE_SOURCE} render for "
+                                     f"{row['part_id']}")
+        base = Path(app.state.root).resolve()
+        path = (base / held["path"]).resolve()
+        if base not in path.parents or not path.is_file():
+            raise HTTPException(404, "the reference render is not on disk")
+        return FileResponse(path, media_type=MEDIA_TYPES.get(
+            path.suffix, "application/octet-stream"))
 
     # Last: `{eid:path}` is greedy and would take `.../after` and
     # `.../diff.png` if it were registered before them.

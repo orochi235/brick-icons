@@ -50,14 +50,12 @@ function Panel({ src, label, alt, onLoad, onError }: {
   );
 }
 
-/** LDView's drawing of the same part: what before and after cannot say,
- *  which is which of them is right. Absent on a checkout with no LDView,
- *  and the card carries on without it. */
-function ReferencePanel({ src, part, angle }: {
-  src: string; part: string; angle: string;
-}) {
+/** The corpus `reference` slot: LDView's drawing of the same part in its
+ *  authored LDraw colors. It says which of before and after is right, which
+ *  neither of them can. A part with no reference render still gets a card. */
+function ReferencePanel({ src, part }: { src: string; part: string }) {
   const [missing, setMissing] = useState(false);
-  const label = <>reference · {angle}</>;
+  const label = <>reference · LDView</>;
   if (missing) {
     return (
       <figure className="review-panel review-panel-missing">
@@ -72,11 +70,10 @@ function ReferencePanel({ src, part, angle }: {
   );
 }
 
-function Card({ entry, focused, referenceAngle, onFocus, onVerdict, onUndo,
+function Card({ entry, focused, onFocus, onVerdict, onUndo,
                 onMeasured }: {
   entry: ReviewEntry;
   focused: boolean;
-  referenceAngle: string;
   onFocus: () => void;
   onVerdict: (verdict: Verdict, note: string) => void;
   onUndo: () => void;
@@ -118,8 +115,7 @@ function Card({ entry, focused, referenceAngle, onFocus, onVerdict, onUndo,
       )}
 
       <div className="review-panels">
-        <ReferencePanel src={entry.urls.reference} part={entry.part}
-                        angle={referenceAngle} />
+        <ReferencePanel src={entry.urls.reference} part={entry.part} />
         <Panel src={entry.urls.before} label="before" alt={`${entry.part} before`} />
         <Panel src={entry.urls.after} label="after" alt={`${entry.part} after`} />
         <Panel src={entry.urls.diff} label={diffLabel} alt={`${entry.part} diff`}
@@ -346,7 +342,6 @@ export function ReviewPage({ client }: { client: LabClient }) {
       <div className="review-cards">
         {entries.map((entry, i) => (
           <Card key={entry.id} entry={entry} focused={i === focus}
-                referenceAngle={list?.reference_angle ?? ''}
                 onFocus={() => setFocus(i)}
                 onVerdict={(verdict, note) => void judge(entry, verdict, note)}
                 onUndo={() => void undo(entry)}
