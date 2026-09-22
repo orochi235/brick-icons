@@ -118,7 +118,7 @@ status = "open"
 title = "this is weird"
 mark = { x = 0.3369, y = 0.4772, w = 0.0463, h = 0.0215 }
 seen = { angle = "iso", shading = "outline", shade_style = "flat3" }
-checked = { occt = "4f26ac666995432f43df8ec2e1e809a196009969efd00cde198284d22cd27613", silhouette-occt = "2812981ad4b5fed7982c9db5ea74f2894347a8066e25cf20ef5dec5a65690e93", white-occt = "faaad659a271aa3532452387989bda6e3448a8296cd2076bfd95eb5b7584d721" }
+checked = { occt = "fd77c9ff07f3517949347cca6567f9bca9eca61cc3aae2205413ad29680342af", silhouette-occt = "2812981ad4b5fed7982c9db5ea74f2894347a8066e25cf20ef5dec5a65690e93", white-occt = "faaad659a271aa3532452387989bda6e3448a8296cd2076bfd95eb5b7584d721" }
 filed = "2026-09-03"
 notes = """
 2026-09-16: the occt drawing on the wall changed under this row today, and it was my refresh round that shipped it -- corpus.db's occt render for 6589 is now out/slot-occt-refresh, drawn at 161156e, replacing the 2026-09-08 store. The change is 3 components against that store, the large one 1,970 px over x34-51% y61-80%: the inner annulus lost a lighter band at its lower left.
@@ -138,7 +138,9 @@ The white-occt half of this part is a separate matter and not a regression: thos
 
 Still weird after c95e2c9 (138 ops to 134). No surface is dropped -- 1 con,
 4 cyli, 4 ring all build. The mess is in the hub, where the ink bunches
-black."""
+black.
+
+2026-09-17 review regression"""
 
 [[defect]]
 id = "4524-ring-whole-circle"
@@ -359,14 +361,16 @@ engines = ["occt"]
 status = "open"
 title = "occt handle missing arcs; extra garbage below R hook hand on both engines"
 classes = ["arc-loss", "stray-ink"]
-checked = { occt = "eb734a40fb71618202c816a88f9eb719592ff5ee5efb55e6b7c0ef8524af5b04", silhouette-occt = "667012f91a4260397ada168e911f25ffca08133dd274829000efd15e0e73ba78", translucent-occt = "dd33821c0f70a45e498486e5b03372d652bb76978ca4490b31138d51ca340602", white-occt = "be499779166db405c9da587c1522e38c941e72beb40882b0d1384f608a49dc19" }
+checked = { occt = "45184bd5e6e2e8e4a75af60abfbf765de5538c5a36380e09af7221cd18e5b728", silhouette-occt = "667012f91a4260397ada168e911f25ffca08133dd274829000efd15e0e73ba78", translucent-occt = "dd33821c0f70a45e498486e5b03372d652bb76978ca4490b31138d51ca340602", white-occt = "be499779166db405c9da587c1522e38c941e72beb40882b0d1384f608a49dc19" }
 filed = "2026-09-06"
 notes = """
 2026-09-16: the missing-arcs half is nearly gone at HEAD 161156e -- 1 gap, 17.0 px of 816.0 px of declared edge. The extra-garbage half is untested: the oracle scores declared linework and is blind to ink nothing declared. Evidence: out/edge-overlays3/3484-occt-edges.png.
 
 Not a dropped surface: every cyli and disc builds a face (5 edge prims are
 stroke-only). c95e2c9 removed 2 ops here and did not close it. Still open with
-no diagnosis."""
+no diagnosis.
+
+2026-09-17 review better"""
 
 [[defect]]
 id = "3820-c-grip-fills-solid"
@@ -393,11 +397,12 @@ notes = "The opposite failure to 3820-c-grip-fills-solid on a part of the same s
 id = "59443-a-strip-along-the-bottom"
 part = "59443"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "a strip along the bottom that's totally occluded is instead rendering as a hole"
 classes = ["fill-hole"]
-checked = { occt = "1d7180b5bac0ce0bcbe2509fa0f6cbc23b3d0df605249a728ad1f24f492eadcf", silhouette-occt = "813c412398abb85a316b8bf49b6b8fa4afd7ac7e8f43907c14cd62c93c03a905", white-occt = "222cc829709ee385ffc80828d1ac0b31a959a04e41fbe6b8624a3d640b9688fe" }
+checked = { occt = "6f2c65e1caae1b0c00f7e38ded437061b9093130bb3ae273ffe2aa8b7bdd3dd1", silhouette-occt = "813c412398abb85a316b8bf49b6b8fa4afd7ac7e8f43907c14cd62c93c03a905", white-occt = "222cc829709ee385ffc80828d1ac0b31a959a04e41fbe6b8624a3d640b9688fe" }
 filed = "2026-09-07"
+notes = "2026-09-17 review fixed"
 
 [[defect]]
 id = "35485-ring-is-broken"
@@ -467,8 +472,9 @@ engines = ["occt"]
 status = "open"
 title = "hole in base shows through opaque tube"
 classes = ["hidden-leak"]
-checked = { occt = "bf5d079c33f7e008c727852f1eb2fd3e6aa4a695004f3184093cf04cfcb80f72", silhouette-occt = "b56f4225b0ce2170e765746ac99939c861c66562f7c1f27d198335b0a4b9ee35", translucent-occt = "9b932813d64cfef555b013419711aa64ec1cdf3ab1e0317eb06798d7c2a462c8", white-occt = "78803ddccbe87b18dafee56b2b3e1767b8b28ac1c6b56cf40bc3f2811a304eee" }
+checked = { occt = "71340e5ad80e8eb22175250dc4aa0d7742ad65e4bce41fada2b33c569e9a49fb", silhouette-occt = "b56f4225b0ce2170e765746ac99939c861c66562f7c1f27d198335b0a4b9ee35", translucent-occt = "9b932813d64cfef555b013419711aa64ec1cdf3ab1e0317eb06798d7c2a462c8", white-occt = "78803ddccbe87b18dafee56b2b3e1767b8b28ac1c6b56cf40bc3f2811a304eee" }
 filed = "2026-09-07"
+notes = "2026-09-17 review better"
 
 [[defect]]
 id = "14653-f1-left-hole-should-be-invisible"
@@ -490,8 +496,7 @@ title = "curved lower face in occt is culled"
 classes = ["over-cull"]
 checked = { silhouette-occt = "eb016875e13389b7cbe45b5bf9391dca144968cabab7cb5bb10930f067d856bd", translucent-occt = "5278ab07b0fd3c58119ad79fd099617290e931a6957792f2834752649a40845d", white-occt = "6e941623ab2495a44d7bffc67b0bdaf64447d5f63b4abcd8703f76a99b793245" }
 filed = "2026-09-07"
-notes = """
-2026-09-16: not settled at HEAD 161156e, and the drawing has moved in a way that needs a person. The lower body now draws as a shaded cylinder rather than being culled, so the row's own claim looks answered -- but the browser reference draws that body with a flat front face, and occt draws it round. Either the reference is wrong about the mould or occt has smoothed away a flat, and this pass cannot tell which. The other row on this part, 11090-hand-at-top-is-missing, is measured: 1 gap, 19.5 px of 1200.0 declared. Evidence: out/sheets/surface-1.png."""
+notes = "2026-09-16: not settled at HEAD 161156e, and the drawing has moved in a way that needs a person. The lower body now draws as a shaded cylinder rather than being culled, so the row's own claim looks answered -- but the browser reference draws that body with a flat front face, and occt draws it round. Either the reference is wrong about the mould or occt has smoothed away a flat, and this pass cannot tell which. The other row on this part, 11090-hand-at-top-is-missing, is measured: 1 gap, 19.5 px of 1200.0 declared. Evidence: out/sheets/surface-1.png."
 
 [[defect]]
 id = "11090-hand-at-top-is-missing"
@@ -502,8 +507,7 @@ title = "hand at top is missing a curve too"
 classes = ["arc-loss"]
 checked = { silhouette-occt = "eb016875e13389b7cbe45b5bf9391dca144968cabab7cb5bb10930f067d856bd", translucent-occt = "5278ab07b0fd3c58119ad79fd099617290e931a6957792f2834752649a40845d", white-occt = "6e941623ab2495a44d7bffc67b0bdaf64447d5f63b4abcd8703f76a99b793245" }
 filed = "2026-09-07"
-notes = """
-2026-09-16: one curve, and the oracle agrees with the title. 1 gap, 19.5 px of 1200.0 px of declared edge at HEAD 161156e. Measured with 11090-curved-lower-face-in-occt, whose culled-face claim the oracle cannot see. Evidence: out/edge-overlays3/11090-occt-edges.png."""
+notes = "2026-09-16: one curve, and the oracle agrees with the title. 1 gap, 19.5 px of 1200.0 px of declared edge at HEAD 161156e. Measured with 11090-curved-lower-face-in-occt, whose culled-face claim the oracle cannot see. Evidence: out/edge-overlays3/11090-occt-edges.png."
 
 [[defect]]
 id = "2310-crap-on-darkest-face-and"
@@ -512,7 +516,7 @@ engines = ["occt"]
 status = "open"
 title = "crap on darkest face and inside hollow stud"
 classes = ["stray-ink"]
-checked = { occt = "7e13c0fd749f7f5382e2f0ad640feb3129f283e8c7aa051b34a269a530a79bdb", silhouette-occt = "ae019ee739cd5714535ad8f9ac2e38de3a1fc015f1d99a481ed8168d1c7166ca", translucent-occt = "0d8e4bb0d3e2aac11d4a0ead28df0dc1ecba082d852b29225de8d5bcd7991858", white-occt = "aff6d4b77eae302eccf3a9ee2d3793b2de15769bb02510fa007c8f04369c3915" }
+checked = { occt = "7f837752236461cf90238b87380cdb37fb4a27d6161f26ff95e356762c32e013", silhouette-occt = "ae019ee739cd5714535ad8f9ac2e38de3a1fc015f1d99a481ed8168d1c7166ca", translucent-occt = "0d8e4bb0d3e2aac11d4a0ead28df0dc1ecba082d852b29225de8d5bcd7991858", white-occt = "aff6d4b77eae302eccf3a9ee2d3793b2de15769bb02510fa007c8f04369c3915" }
 filed = "2026-09-07"
 notes = """
 Paint order, not geometry. Rendered per face
@@ -520,7 +524,9 @@ Paint order, not geometry. Rendered per face
 overlap, and the stud is painted over the slope that hides it. order_faces
 settles a screen-overlapping pair on ONE witness point, which is the same
 single-bit decision the pierce-seam rows come back to. Nothing is dropped here
--- every primitive builds a face."""
+-- every primitive builds a face.
+
+2026-09-17 review neutral"""
 
 [[defect]]
 id = "38317-left-stud-shading-is-very"
@@ -529,8 +535,9 @@ engines = ["occt"]
 status = "open"
 title = "left stud shading is very weird"
 classes = ["shading"]
-checked = { occt = "d14141844848bd52f07fd879bd39905d04b128fad8c557118fb5ce6533df5d87", silhouette-occt = "0c9e0cd8360704da6e1bdc2cd95f31a27d50eecb00bd155bfbb9e9ab913493fc", translucent-occt = "78453dfa1fa762be316e9d39277735f86dff86637bc850ebe689756f0183e4af", white-occt = "487f7a53ddeabcc0b42529e02c7f31a254081236745b481436b24c0cf79fc345" }
+checked = { occt = "b7d1c592dc36cfbcbbee5421d654e67af4563edb23efae5e9a636713fb7d60d7", silhouette-occt = "0c9e0cd8360704da6e1bdc2cd95f31a27d50eecb00bd155bfbb9e9ab913493fc", translucent-occt = "78453dfa1fa762be316e9d39277735f86dff86637bc850ebe689756f0183e4af", white-occt = "487f7a53ddeabcc0b42529e02c7f31a254081236745b481436b24c0cf79fc345" }
 filed = "2026-09-07"
+notes = "2026-09-17 review better"
 
 [[defect]]
 id = "39789-occt-has-issues-with-top"
@@ -538,7 +545,7 @@ part = "39789"
 engines = ["occt"]
 status = "open"
 title = "occt has issues with top main face"
-checked = { occt = "c493976f83e4ec5d1a4f1ed994eb2e802ae866132dd187c2c32b47a39dd6f637", silhouette-occt = "5ecc0c54a4a0c932ed040f6fdcc42e515b4a273221874fe09f5c3c7776d3bac7", translucent-occt = "46bb85e9a242f89ab2db292c85f4fe8e1ab9f27c7b8434b2b614eca4bcc303d0", white-occt = "4597743f11ca61b1d963ecb4fc99ca24b256abac1c0611fd03917b62ab7ca15b" }
+checked = { occt = "f89c7d68278e099fa5b160b1637e743e145a0d67473bee9eca945ac7ffa2c329", silhouette-occt = "5ecc0c54a4a0c932ed040f6fdcc42e515b4a273221874fe09f5c3c7776d3bac7", translucent-occt = "46bb85e9a242f89ab2db292c85f4fe8e1ab9f27c7b8434b2b614eca4bcc303d0", white-occt = "4597743f11ca61b1d963ecb4fc99ca24b256abac1c0611fd03917b62ab7ca15b" }
 filed = "2026-09-07"
 notes = """
 Two different things, and only one is occt's. The dark fans between the
@@ -547,7 +554,9 @@ they are the constant-stroke-width row, not an occt defect. What is occt-only
 is a cup-handle loop hanging off each stud rim: small arcs at 8 centres with
 projected axes (4.80, 2.80), (3.53, 4.29) and (3.33, 5.32), none of which is
 the 2:1 a horizontal circle projects to at this view. Undiagnosed; start by
-naming which primitive owns those centres."""
+naming which primitive owns those centres.
+
+2026-09-17 review better: face is there now but still failing to remove some lines"""
 
 [[defect]]
 id = "53119-occt-has-a-bunch-of"
@@ -556,7 +565,7 @@ engines = ["occt"]
 status = "open"
 title = "occt has a bunch of stray lines and shaded version has bad banding"
 classes = ["stray-ink", "banding"]
-checked = { occt = "6766c75fcc1fe7e86533c4abd5656f8ee687edd5aa716fa813f0ad4db499b4d4", silhouette-occt = "a8d53b605db61d2f4e0ac2b0a1d402e65adf7a2bfd4cb399813bb092cc760276", translucent-occt = "655af7fec3f45d4351dcf9fb4db48a1c6738500bdfc9f30b7d827c7bafbf8d35", white-occt = "834ab33fe1420d6455f5c8df07c0ddeb22ed841ace2365d8c28dada71d69085a" }
+checked = { occt = "d662cc61b72531e7f4bb897903b01d91f759edb92d86e2c0c704017d757ae452", silhouette-occt = "a8d53b605db61d2f4e0ac2b0a1d402e65adf7a2bfd4cb399813bb092cc760276", translucent-occt = "655af7fec3f45d4351dcf9fb4db48a1c6738500bdfc9f30b7d827c7bafbf8d35", white-occt = "834ab33fe1420d6455f5c8df07c0ddeb22ed841ace2365d8c28dada71d69085a" }
 filed = "2026-09-07"
 notes = """
 The stray lines are FIXED by c95e2c9 -- 77 drawn ops to 34, and the swirl
@@ -590,7 +599,9 @@ occluders only. At iso the render goes from four ink components to one; over
 the 22 specimens plus 92692 and 2947bc01 nothing else moves a pixel except 5
 sub-pixel components on 3649. Cost 1.03-1.17x.
 
-The banding half is untouched, so this row stays open for it."""
+The banding half is untouched, so this row stays open for it.
+
+2026-09-17 review better: still bad shading"""
 
 [[defect]]
 id = "96910-weird-dot-near-bottom-inset"
@@ -599,8 +610,9 @@ engines = ["occt"]
 status = "open"
 title = "weird dot near bottom inset in shaded version"
 classes = ["stray-ink"]
-checked = { occt = "e71cd75fb42c3739a09fd93db8d5a76f21cd9c0a32bbd26a7c782cc985f928eb", silhouette-occt = "36d2d9d9ea10acc2b8a33945bd54ac6d43836e0e30c02157a7301d844d66b9ac", white-occt = "e20854784e7dbb616d601ea6de1f9ae0e1991e8b4bd4db359b7d593a2829b4ef" }
+checked = { occt = "00077b15c5498c6e748f075f75007ba42041b2157bfcfc74395bbd86350c322b", silhouette-occt = "36d2d9d9ea10acc2b8a33945bd54ac6d43836e0e30c02157a7301d844d66b9ac", white-occt = "e20854784e7dbb616d601ea6de1f9ae0e1991e8b4bd4db359b7d593a2829b4ef" }
 filed = "2026-09-07"
+notes = "2026-09-17 review regression"
 
 [[defect]]
 id = "96904-top-annulus-missing-other-arc"
@@ -611,8 +623,7 @@ title = "top annulus missing, other arc-based issues"
 classes = ["arc-loss"]
 checked = { occt = "2bde9b04208133659f346bb2aa47d82adf689dd2ab5164ef828d8c95a5826837", silhouette-occt = "13fbcf75301c7677ba56fe07968dceab1a0376afef72e6ab11fafb43074f9ad4", white-occt = "866484e68bbaa921ce61e152ad997b59c2506ca562e8b7800c2033430f5d4eb4" }
 filed = "2026-09-07"
-notes = """
-Does not reproduce at HEAD 161156e. scripts/edge-gaps-now.py covers 2168.0 px of declared edge with 0 gaps, so the top annulus and every other arc 96904.dat declares is drawn. "Other arc-based issues" is as answered as the oracle can answer it -- it scores declared linework and nothing else. Fixing commit not bisected. Evidence: out/edge-overlays3/96904-occt-edges.png."""
+notes = "Does not reproduce at HEAD 161156e. scripts/edge-gaps-now.py covers 2168.0 px of declared edge with 0 gaps, so the top annulus and every other arc 96904.dat declares is drawn. \"Other arc-based issues\" is as answered as the oracle can answer it -- it scores declared linework and nothing else. Fixing commit not bisected. Evidence: out/edge-overlays3/96904-occt-edges.png."
 
 [[defect]]
 id = "92692-joint-where-front-tube-meets"
@@ -661,8 +672,9 @@ engines = ["occt"]
 status = "open"
 title = "gradient shading is a really weird, harsh, banded blob on the largest body"
 classes = ["banding"]
-checked = { occt = "0efbf75180c3f219d2e40e9f252a15085e5bde2f58478bfac43a4626a4185771", silhouette-occt = "71365d7824718c59fac56d4ceba2414bc11964dfd830e7a2ef0ca0bdd07591ca", white-occt = "4ca41862ab856ea11a977f1caaac6c5e2e9768278dc1d33410ae0c8eb8c0a965" }
+checked = { occt = "c7c30a4ca091092da722c787f5a4bdb26f15fb0fc6ded914703d24ceeaa0e5e6", silhouette-occt = "71365d7824718c59fac56d4ceba2414bc11964dfd830e7a2ef0ca0bdd07591ca", white-occt = "4ca41862ab856ea11a977f1caaac6c5e2e9768278dc1d33410ae0c8eb8c0a965" }
 filed = "2026-09-07"
+notes = "2026-09-17 review neutral"
 
 [[defect]]
 id = "4616559cc01-very-messy-decal"
@@ -678,11 +690,12 @@ filed = "2026-09-07"
 id = "4629677c-looks-like-another-painter-s"
 part = "4629677c"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "looks like another painter's algo problem on a sticker projection with variable z"
 classes = ["hidden-leak", "decal"]
-checked = { occt = "ca0e92f32831f1507edd032cb07ee0f2acf713c2f8db763033d32f39fb49314e", silhouette-occt = "711a6f99dbcbd71cfd57e95ec2c0c37eec2eb90ecbf30abc20f754b7d7bf4009" }
+checked = { occt = "f229175f87a69e55499acc621ae8b68166302664264c12a6541d6d18eced725c", silhouette-occt = "711a6f99dbcbd71cfd57e95ec2c0c37eec2eb90ecbf30abc20f754b7d7bf4009" }
 filed = "2026-09-07"
+notes = "2026-09-17 review fixed"
 
 [[defect]]
 id = "28660-lots-of-random-stitches-across"
@@ -704,9 +717,12 @@ engines = ["occt"]
 status = "open"
 title = "looking down a stud the tube has no depth, where LDView shows a lit far wall"
 classes = ["shading"]
-checked = { occt = "0a7b51c87faabbf877206ba43b8d281304e3148a57bef2aa1dcd0b7c2a460bd9", silhouette-occt = "51f19071ce2808715c584c704edec3146097de03b51488d0cc7b596fd6d64feb", translucent-occt = "65c7a96055d5944b98b724c86510370b6fa55f1ccf60017f7daf4197e83135a3", white-occt = "83c97f8d2580322ffcf725863cb15bcb26dde3a6706d23cc099ee0b4581760eb" }
+checked = { occt = "41fde82a78162f7d8aaf965e490ead482747912c24699c76a6d1bda9cdc557a5", silhouette-occt = "51f19071ce2808715c584c704edec3146097de03b51488d0cc7b596fd6d64feb", translucent-occt = "65c7a96055d5944b98b724c86510370b6fa55f1ccf60017f7daf4197e83135a3", white-occt = "83c97f8d2580322ffcf725863cb15bcb26dde3a6706d23cc099ee0b4581760eb" }
 filed = "2026-09-07"
-notes = "Not a missing fill. The bore is drawn as two correctly-split fills that shade consistently across the seam f832da6 keeps. What flattens it is the max(0.0, n . L) clamp in shade._axis_binned_stops (also shade.ramp, and the b array above it). Looking down a bore you see the half of the tube whose normals sweep a full 180 degrees, so the terminator lands mid-span: face 29's eight raw n.L bins run -0.44 -0.19 +0.03 +0.24 - +0.41 +0.52 +0.53 and the first two floor to the same value. The SVG shows it -- g9's stops at 0%, 6.2% and 18.8% are all #565656, and a quarter of the face's area sits pinned at that floor. An exterior wall does not show it because its visible half is mostly lit and the terminator sits near a limb. LDView gives the shadowed side ambient falloff instead of a floor. THE FIX IS A LIGHTING-MODEL CHANGE AND MOVES EVERY RENDER IN THE CORPUS, so it is Mike's call, like the constant stroke width. Before scoping it, check a Technic pin hole: any deep recess seen down its own axis should show the same thing. Measured by brick-icons-e4."
+notes = """
+Not a missing fill. The bore is drawn as two correctly-split fills that shade consistently across the seam f832da6 keeps. What flattens it is the max(0.0, n . L) clamp in shade._axis_binned_stops (also shade.ramp, and the b array above it). Looking down a bore you see the half of the tube whose normals sweep a full 180 degrees, so the terminator lands mid-span: face 29's eight raw n.L bins run -0.44 -0.19 +0.03 +0.24 - +0.41 +0.52 +0.53 and the first two floor to the same value. The SVG shows it -- g9's stops at 0%, 6.2% and 18.8% are all #565656, and a quarter of the face's area sits pinned at that floor. An exterior wall does not show it because its visible half is mostly lit and the terminator sits near a limb. LDView gives the shadowed side ambient falloff instead of a floor. THE FIX IS A LIGHTING-MODEL CHANGE AND MOVES EVERY RENDER IN THE CORPUS, so it is Mike's call, like the constant stroke width. Before scoping it, check a Technic pin hole: any deep recess seen down its own axis should show the same thing. Measured by brick-icons-e4.
+
+2026-09-17 review neutral: front wall is better but borehole shading is worse"""
 
 [[defect]]
 id = "35480-wall-fill-hairline"
@@ -715,9 +731,12 @@ engines = ["occt"]
 status = "open"
 title = "the plate's outer wall shows a hairline where two fill fragments meet"
 classes = ["seam"]
-checked = { occt = "0a7b51c87faabbf877206ba43b8d281304e3148a57bef2aa1dcd0b7c2a460bd9", silhouette-occt = "51f19071ce2808715c584c704edec3146097de03b51488d0cc7b596fd6d64feb", translucent-occt = "65c7a96055d5944b98b724c86510370b6fa55f1ccf60017f7daf4197e83135a3", white-occt = "83c97f8d2580322ffcf725863cb15bcb26dde3a6706d23cc099ee0b4581760eb" }
+checked = { occt = "41fde82a78162f7d8aaf965e490ead482747912c24699c76a6d1bda9cdc557a5", silhouette-occt = "51f19071ce2808715c584c704edec3146097de03b51488d0cc7b596fd6d64feb", translucent-occt = "65c7a96055d5944b98b724c86510370b6fa55f1ccf60017f7daf4197e83135a3", white-occt = "83c97f8d2580322ffcf725863cb15bcb26dde3a6706d23cc099ee0b4581760eb" }
 filed = "2026-09-07"
-notes = "A one-pixel tone step down the plate's front wall where its fill splits, visible at 8x. It is not new -- f832da6 only moved it, the transition column going from x=204 at value 146 to x=205 at 137 in a 410px frame -- but that is the point: an unrelated change to face topology renumbers what follows and the boundary re-rounds, so the seam drifts under changes that should not touch it. Worth a row because it is the visible half of the fill-fragment seam class and it makes byte-level A/Bs of unrelated fixes noisier than they should be."
+notes = """
+A one-pixel tone step down the plate's front wall where its fill splits, visible at 8x. It is not new -- f832da6 only moved it, the transition column going from x=204 at value 146 to x=205 at 137 in a 410px frame -- but that is the point: an unrelated change to face topology renumbers what follows and the boundary re-rounds, so the seam drifts under changes that should not touch it. Worth a row because it is the visible half of the fill-fragment seam class and it makes byte-level A/Bs of unrelated fixes noisier than they should be.
+
+2026-09-17 review neutral: front wall is better but borehole shading is worse"""
 
 [[defect]]
 id = "3626bpsk-tab-under-neck-stud"
@@ -750,14 +769,16 @@ engines = ["occt"]
 status = "open"
 title = "a square notch is cut through the steering wheel's hub wall"
 classes = ["hidden-leak"]
-checked = { occt = "43ef68df8d48bb7af39719c22456e6c8d46b8ffc616b1f6c4d1f94a784da85bf", silhouette-occt = "fe0eb61bdec1c38bb610253a8fe8a6ed52e5961f49a89caf2edb94edaebbeb17", white-occt = "e76893811f26514308bdde3eeb9ffb9aa35f51e00c24d8722a6b500f013323fd" }
+checked = { occt = "560e5123944315fd13c321395ec7cb8a981e823f4c1348e2e4b2baf144764a4a", silhouette-occt = "fe0eb61bdec1c38bb610253a8fe8a6ed52e5961f49a89caf2edb94edaebbeb17", white-occt = "e76893811f26514308bdde3eeb9ffb9aa35f51e00c24d8722a6b500f013323fd" }
 filed = "2026-09-07"
 notes = """
 No single seam owns it: over the 17 kept seams, dropping ANY one moves at
 most 16 px, while all-vs-none moves 4905 px in a 4829 px component
 (scripts/pierce-seam-ab.py). So the notch survives on a redundant group and
 per-seam bisection cannot name a culprit -- unlike 3626bpsk, where seam 2
-alone draws the tab. Same disproven narrowings as that row."""
+alone draws the tab. Same disproven narrowings as that row.
+
+2026-09-17 review better"""
 
 [[defect]]
 id = "3941p01-decal-under-its-own-wall"
@@ -775,12 +796,14 @@ engines = ["occt"]
 status = "open"
 title = "centre stud has no top ellipse and the brace between the studs is unfilled"
 classes = ["over-cull", "arc-loss"]
-checked = { occt = "580e268deb0341303ed4910919e1bd267cf07c981b3dab7bdf2199a0ddf6175d", silhouette-occt = "f7ef240eaef5f85396e8121958a7ec645aedaeb107d1bb5760e99b69dd5b665d", translucent-occt = "dab44897869ec37829f198984e72a11bc8119c1d55d14dc2ea48209627a4ef87", white-occt = "fbe0159b003f114a1af7408cfbe945a18589669a852019907de50cdacf454714" }
+checked = { occt = "a6bc6a64dd6d6a19f7d9703132ff3f69659012ed468ed5d68c8b11c529876977", silhouette-occt = "f7ef240eaef5f85396e8121958a7ec645aedaeb107d1bb5760e99b69dd5b665d", translucent-occt = "dab44897869ec37829f198984e72a11bc8119c1d55d14dc2ea48209627a4ef87", white-occt = "fbe0159b003f114a1af7408cfbe945a18589669a852019907de50cdacf454714" }
 filed = "2026-09-07"
 notes = """
 Reopened 2026-09-14: a check at 718d9e4 closed this as drawing right at HEAD; it does not draw right.
 
-Two symptoms on the top face, against naive at the same pose. The front-centre stud is drawn as an open cup: its top ellipse is absent where the other three studs each carry one. The four-armed brace between the studs comes out as an outline in top-face tone with a stray thin arc floating inside it; naive fills the same shape dark. Total top-face-tone area is not the tell -- occt paints 348,827 px of it against naive's 323,132, so this is features not being built, not fill being lost. Spotted on a wall sheet stamped 4b290bc and blamed on the full-turn merge; it is not that. At 8e436a5, the commit before that merge, the render differs by 36 px in 9 components of 1-4 px each, which is antialias. flat3 disables gradients in fill_ops, so a shading change cannot move this part. Confirmed at --shading outline with no shade-style, where the render carries no fills at all: both features are missing as STROKES. naive draws the center stud's top ellipse and all four brace arms; occt draws neither, so 'unfilled' in the title is too narrow -- nothing is filled wrongly, the ops never reach the stroke list. Measured with scripts/engine-overlay.py at 1000 px wide: 88.8% shared ink, naive-only 4,445 px in 14 components, of which two are chunky -- 4,051 px over the brace and the center stud rim, and 372 px continuing it on the rim's lower right -- and the other twelve are 1-4 px antialias crumbs."""
+Two symptoms on the top face, against naive at the same pose. The front-centre stud is drawn as an open cup: its top ellipse is absent where the other three studs each carry one. The four-armed brace between the studs comes out as an outline in top-face tone with a stray thin arc floating inside it; naive fills the same shape dark. Total top-face-tone area is not the tell -- occt paints 348,827 px of it against naive's 323,132, so this is features not being built, not fill being lost. Spotted on a wall sheet stamped 4b290bc and blamed on the full-turn merge; it is not that. At 8e436a5, the commit before that merge, the render differs by 36 px in 9 components of 1-4 px each, which is antialias. flat3 disables gradients in fill_ops, so a shading change cannot move this part. Confirmed at --shading outline with no shade-style, where the render carries no fills at all: both features are missing as STROKES. naive draws the center stud's top ellipse and all four brace arms; occt draws neither, so 'unfilled' in the title is too narrow -- nothing is filled wrongly, the ops never reach the stroke list. Measured with scripts/engine-overlay.py at 1000 px wide: 88.8% shared ink, naive-only 4,445 px in 14 components, of which two are chunky -- 4,051 px over the brace and the center stud rim, and 372 px continuing it on the rim's lower right -- and the other twelve are 1-4 px antialias crumbs.
+
+2026-09-17 review better: still has borehole problems around frontmost stud"""
 
 [[defect]]
 id = "49612-extra-vertical-line-extending-down"
@@ -801,10 +824,11 @@ that line visible."""
 id = "6296256ec01-utter-disaster-in-occt"
 part = "6296256ec01"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "utter disaster in occt"
-checked = { occt = "c00af7bde865b671c83d34410fa1d5483b3df65eeba3183633779e4e481113b8", silhouette-occt = "71b4a7ac5cc70a4f2f0cb17a092002163cc9163f1795b87c1fbb3c0303d1c30f" }
+checked = { occt = "7694c0f2e722806975812d30bc2d0e8d482a25204e5b8714403c55bd62855d00", silhouette-occt = "71b4a7ac5cc70a4f2f0cb17a092002163cc9163f1795b87c1fbb3c0303d1c30f" }
 filed = "2026-09-08"
+notes = "2026-09-17 review fixed"
 
 [[defect]]
 id = "76382psj-missing-outlines-reference-is-wrong"
@@ -814,8 +838,7 @@ status = "fixed"
 title = "missing outlines. reference is wrong too"
 checked = { occt = "61e41a586ff0441a1ffddfe93838c7743f44e62814f77e40b27b7cce8ad22198" }
 filed = "2026-09-08"
-notes = """
-Does not reproduce at HEAD 161156e, on the half that names occt: 0 gaps in 1878.0 px of declared edge. The row's aside that the browser reference is wrong too is untouched by this -- the reference slot is drawn by a browser and nothing in the occt path can move it. Fixing commit not bisected. Evidence: out/edge-overlays3/76382psj-occt-edges.png."""
+notes = "Does not reproduce at HEAD 161156e, on the half that names occt: 0 gaps in 1878.0 px of declared edge. The row's aside that the browser reference is wrong too is untouched by this -- the reference slot is drawn by a browser and nothing in the occt path can move it. Fixing commit not bisected. Evidence: out/edge-overlays3/76382psj-occt-edges.png."
 
 [[defect]]
 id = "78666-missing-contour-edge-on-front"
@@ -843,8 +866,9 @@ part = "56640"
 engines = ["occt"]
 status = "open"
 title = "too convex; banding in shaded version"
-checked = { occt = "3540bac04a269ee5eab4895c4df4789cd414dbd1bd5f8ecd136d7b90e6db6222", silhouette-occt = "cd70adfa083a677c1832d96ae0fb88b6a2bf53928af493ca0ac3fb51244602a4", white-occt = "9e7e4fd35e903cb1f044ff30c0a97b2aaa32b7b8d2a201adf044b473cbc020df" }
+checked = { occt = "80f6182de2396696144fc37971ba6b0a06153ae1a763716000560e67313e542d", silhouette-occt = "cd70adfa083a677c1832d96ae0fb88b6a2bf53928af493ca0ac3fb51244602a4", white-occt = "9e7e4fd35e903cb1f044ff30c0a97b2aaa32b7b8d2a201adf044b473cbc020df" }
 filed = "2026-09-08"
+notes = "2026-09-17 review regression"
 
 [[defect]]
 id = "6155286t-silhouette-occt-is-wrong-but"
@@ -852,8 +876,9 @@ part = "6155286t"
 engines = ["occt"]
 status = "open"
 title = "silhouette-occt is wrong but might be stale"
-checked = { occt = "b17aa6004b432a2df14bc0c6733162cc8d48e72d74292452a9b25f340a1e966b", silhouette-occt = "f16c87ae8fff963480235340308fbff29c37441d3333d45103e182ba84ba3b78" }
+checked = { occt = "7558be0c57a52e8304a3b456028fec129106d950166422669f204cd3e6eada12", silhouette-occt = "f16c87ae8fff963480235340308fbff29c37441d3333d45103e182ba84ba3b78" }
 filed = "2026-09-08"
+notes = "2026-09-17 review better"
 
 [[defect]]
 id = "6055874bc01-very-bad-probably-because-curved"
@@ -934,10 +959,12 @@ part = "2947bc01"
 engines = ["occt"]
 status = "open"
 title = "missing some lines near bottom"
-checked = { occt = "66397f96f4a0dcaebeb1f52decd9f81e00412d275dad2c83ef5aeebf46da4742", silhouette-occt = "e987d3324e95eac814e1877fce7175e6f296f5b4e456e7fbd3c32a03b4ccdd39", translucent-occt = "c138815714cf92b0c0e7e101759810c14569a55684dfa39558d69c046017d567", white-occt = "74a0eb24384a76d9e1ca1aae4a5897c389cc25275b29cc1730341505c24b05b5" }
+checked = { occt = "d253e4d021dd09eaeffb5902d3b052385445e4f33fb05afb2070935445c6eb01", silhouette-occt = "e987d3324e95eac814e1877fce7175e6f296f5b4e456e7fbd3c32a03b4ccdd39", translucent-occt = "c138815714cf92b0c0e7e101759810c14569a55684dfa39558d69c046017d567", white-occt = "74a0eb24384a76d9e1ca1aae4a5897c389cc25275b29cc1730341505c24b05b5" }
 filed = "2026-09-08"
 notes = """
-2026-09-16: one line, not several, at HEAD 161156e. The edge oracle finds a single gap of 17.5 px in 1951.5 px of declared edge, boxed where the lower side pin meets the ring boss -- which is the "near bottom" this row names. Evidence: out/sheets/edge-gaps.png, out/edge-overlays/2947bc01-occt-edges.png."""
+2026-09-16: one line, not several, at HEAD 161156e. The edge oracle finds a single gap of 17.5 px in 1951.5 px of declared edge, boxed where the lower side pin meets the ring boss -- which is the "near bottom" this row names. Evidence: out/sheets/edge-gaps.png, out/edge-overlays/2947bc01-occt-edges.png.
+
+2026-09-17 review regression"""
 
 [[defect]]
 id = "3626cp7d-bore-sliver-over-brow"
@@ -1025,10 +1052,12 @@ part = "46372"
 engines = ["occt"]
 status = "open"
 title = "shading is just an unholy mess and lots of contours missing from inner rim"
-checked = { occt = "e0b4473045b457c22db6c3cd2452a072d083f96b5ca32cc6769d388f1908991c" }
+checked = { occt = "0d33b3952fbc88ca37b5b0ef92916c1dcca0a14270c2eddb7f67b16410b78d5c" }
 filed = "2026-09-08"
 notes = """
-2026-09-16: "lots of contours missing" is now three of them at HEAD 161156e -- 3 gaps, 24.0 px of 6161.0 px declared, the largest declared total in this pass and the smallest uncovered fraction in it. The shading half is untouched by that number. Evidence: out/edge-overlays3/46372-occt-edges.png."""
+2026-09-16: "lots of contours missing" is now three of them at HEAD 161156e -- 3 gaps, 24.0 px of 6161.0 px declared, the largest declared total in this pass and the smallest uncovered fraction in it. The shading half is untouched by that number. Evidence: out/edge-overlays3/46372-occt-edges.png.
+
+2026-09-17 review better"""
 
 [[defect]]
 id = "4342-incoherent"
@@ -1036,8 +1065,9 @@ part = "4342"
 engines = ["occt"]
 status = "open"
 title = "incoherent"
-checked = { translucent-occt = "d9358a60df3f94cdc1bdb701f04a8fcaed8fb1802cd9c4132bd678762f1e3b5d" }
+checked = { translucent-occt = "d9358a60df3f94cdc1bdb701f04a8fcaed8fb1802cd9c4132bd678762f1e3b5d", occt = "9a16b8f204b621cf02e3b80d75cc5e212b384d830114c1f28c7831d5d8fb42c3" }
 filed = "2026-09-08"
+notes = "2026-09-17 review neutral"
 
 [[defect]]
 id = "4121723f-looks-like-decal-layer-is"
@@ -1056,8 +1086,7 @@ status = "fixed"
 title = "backwards and also very wobbly"
 checked = { decal = "c2d638767c8000c0a80fe42e82f61bdcfe9b123edbeb42615cc4d973c0565b47" }
 filed = "2026-09-09"
-notes = """
-Does not reproduce at HEAD 161156e, same as 195125a-backwards-and-wobbly: the logo reads the right way round and its outlines are smooth. Identical at 44aeaf1. Evidence: out/sheets/wobbly-ab.png."""
+notes = "Does not reproduce at HEAD 161156e, same as 195125a-backwards-and-wobbly: the logo reads the right way round and its outlines are smooth. Identical at 44aeaf1. Evidence: out/sheets/wobbly-ab.png."
 
 [[defect]]
 id = "195125a-backwards-and-wobbly"
@@ -1067,8 +1096,7 @@ status = "fixed"
 title = "backwards and wobbly"
 checked = { decal = "7dcd1de3c454e86af5221e834f1bd72af6107d934a64a8a1ca2440c41589b883" }
 filed = "2026-09-09"
-notes = """
-Does not reproduce at HEAD 161156e. The LEGO logo reads the right way round with clean outlines, and is identical at 44aeaf1. The browser reference draws this sticker's texture in gray, so it is evidence for the orientation and not for the color. Fixing commit not bisected. Evidence: out/sheets/wobbly-ab.png, reference / 44aeaf1 / HEAD, decal iso, 512 wide."""
+notes = "Does not reproduce at HEAD 161156e. The LEGO logo reads the right way round with clean outlines, and is identical at 44aeaf1. The browser reference draws this sticker's texture in gray, so it is evidence for the orientation and not for the color. Fixing commit not bisected. Evidence: out/sheets/wobbly-ab.png, reference / 44aeaf1 / HEAD, decal iso, 512 wide."
 
 [[defect]]
 id = "6057849d-pink-field-should-resolve-as"
@@ -1078,8 +1106,7 @@ status = "fixed"
 title = "pink field should resolve as an analytic circle"
 checked = { decal = "f7d56a4ce5bab40b86490798d35a86a02a7b7176e526023b7aa74d8961404350" }
 filed = "2026-09-09"
-notes = """
-Does not reproduce at HEAD 161156e. The pink field is a clean circle with no faceting. Worth noting for anyone reading the reference as truth: the browser reference draws the SAME field as a visible polygon, so on this row the engine is ahead of the reference and a reference comparison would have argued the wrong way. Fixing commit not bisected. Evidence: out/sheets/decal-quality.png."""
+notes = "Does not reproduce at HEAD 161156e. The pink field is a clean circle with no faceting. Worth noting for anyone reading the reference as truth: the browser reference draws the SAME field as a visible polygon, so on this row the engine is ahead of the reference and a reference comparison would have argued the wrong way. Fixing commit not bisected. Evidence: out/sheets/decal-quality.png."
 
 [[defect]]
 id = "63864p07-malformed-text"
@@ -1089,8 +1116,7 @@ status = "fixed"
 title = "malformed text"
 checked = { decal = "33c73a287c7612cc790a72fa7f2ef6c486243c82771f4b8d13998438b4699ff5" }
 filed = "2026-09-09"
-notes = """
-Does not reproduce at HEAD 161156e. "RESET" draws as five clean letterforms with even strokes and closed counters, matching the browser reference. Fixing commit not bisected. Evidence: out/sheets/decal-text.png."""
+notes = "Does not reproduce at HEAD 161156e. \"RESET\" draws as five clean letterforms with even strokes and closed counters, matching the browser reference. Fixing commit not bisected. Evidence: out/sheets/decal-text.png."
 
 [[defect]]
 id = "63864p06-malformed-text"
@@ -1100,8 +1126,7 @@ status = "fixed"
 title = "malformed text"
 checked = { decal = "0b52b0126f2f13854a484311ec82e32773da9be440b82292c18d38634d280f35" }
 filed = "2026-09-09"
-notes = """
-Does not reproduce at HEAD 161156e, same as 63864p07-malformed-text: "POWER" draws clean. Evidence: out/sheets/decal-text.png."""
+notes = "Does not reproduce at HEAD 161156e, same as 63864p07-malformed-text: \"POWER\" draws clean. Evidence: out/sheets/decal-text.png."
 
 [[defect]]
 id = "66857p05-some-noise-on-the-r"
@@ -1111,8 +1136,7 @@ status = "open"
 title = "Some noise on the R"
 checked = { decal = "28625475b3d6dc8a1d41a27060e970edf21fa601df500ef7592347022a279ea8" }
 filed = "2026-09-09"
-notes = """
-2026-09-16: not confirmed and not refuted at HEAD 161156e. Drawn at 900 px the six letterforms of AFRICA are clean -- even strokes, closed outlines, no speckle anywhere on the R. The only thing on the R that could be meant is a small dark nick where the bowl meets the leg, which reads as part of the typeface. Leaving this open: whoever filed it knows what they saw, and "I cannot see it" is not a refutation. Evidence: out/sheets/decal-text.png and the 900 px draw on the wall."""
+notes = "2026-09-16: not confirmed and not refuted at HEAD 161156e. Drawn at 900 px the six letterforms of AFRICA are clean -- even strokes, closed outlines, no speckle anywhere on the R. The only thing on the R that could be meant is a small dark nick where the bowl meets the leg, which reads as part of the typeface. Leaving this open: whoever filed it knows what they saw, and \"I cannot see it\" is not a refutation. Evidence: out/sheets/decal-text.png and the 900 px draw on the wall."
 
 [[defect]]
 id = "49098py1-edges-of-text-are-clipped"
@@ -1122,8 +1146,7 @@ status = "open"
 title = "edges of text are clipped"
 checked = { decal = "6273ec41dbbc3e8b0cefbdd5ba5a7084e1a885cc12366c2580041872c46ae1ac" }
 filed = "2026-09-09"
-notes = """
-2026-09-16: worse than the title at HEAD 161156e, not better. The text is not clipped at its edges -- it is absent. The decal slot draws four blue arcs, one teal circle and a short blue stub, and neither "Cinturato" round the tyre's shoulder nor "PIRELLI" across it survives at all; the browser reference has both. Retitling this row as an empty decal would name what it now is. Evidence: out/sheets/decal-text.png."""
+notes = "2026-09-16: worse than the title at HEAD 161156e, not better. The text is not clipped at its edges -- it is absent. The decal slot draws four blue arcs, one teal circle and a short blue stub, and neither \"Cinturato\" round the tyre's shoulder nor \"PIRELLI\" across it survives at all; the browser reference has both. Retitling this row as an empty decal would name what it now is. Evidence: out/sheets/decal-text.png."
 
 [[defect]]
 id = "18973p02-big-mess"
@@ -1146,8 +1169,7 @@ status = "fixed"
 title = "questionable decal render"
 checked = { decal = "1ae9a05344e8ffdf6e001a251c06def373e55b61fe2f8661819851e518c4f0cf" }
 filed = "2026-09-09"
-notes = """
-Does not reproduce at HEAD 161156e. The screen graphic draws whole and coherent -- the road with its two cars in the upper panel, the dials and buttons in the lower, the pink bezel around both. The browser reference is no help on this one: LDView draws the slope bare. Fixing commit not bisected. Evidence: out/sheets/decal-quality.png."""
+notes = "Does not reproduce at HEAD 161156e. The screen graphic draws whole and coherent -- the road with its two cars in the upper panel, the dials and buttons in the lower, the pink bezel around both. The browser reference is no help on this one: LDView draws the slope bare. Fixing commit not bisected. Evidence: out/sheets/decal-quality.png."
 
 [[defect]]
 id = "7904-missing-edge-arc"
@@ -1157,8 +1179,7 @@ status = "fixed"
 title = "missing edge arc"
 checked = { white-occt = "eed14ec32916b52c637de962afb6b1cb2fd2d48493e2819c6aaa73aa339e0d12" }
 filed = "2026-09-09"
-notes = """
-Does not reproduce at HEAD 161156e. 0 gaps in 1761.5 px of declared edge; the quarter-round's curved edge and its two notches are drawn, matching the browser reference. Fixing commit not bisected. Evidence: out/sheets/missing-2.png, out/edge-overlays/7904-occt-edges.png."""
+notes = "Does not reproduce at HEAD 161156e. 0 gaps in 1761.5 px of declared edge; the quarter-round's curved edge and its two notches are drawn, matching the browser reference. Fixing commit not bisected. Evidence: out/sheets/missing-2.png, out/edge-overlays/7904-occt-edges.png."
 
 [[defect]]
 id = "4616559cc01-outlines-around-polys"
@@ -1195,8 +1216,7 @@ status = "open"
 title = "Missing far polys"
 checked = { occt = "749b661e75b737bf2711845766c641948dccc1524d0edfbc528d8b311f7e3e41" }
 filed = "2026-09-09"
-notes = """
-2026-09-16: still reproduces at HEAD 161156e, and the missing polys are the stars. The browser reference draws about fifty white stars in the blue canton; occt draws the canton as flat blue with nothing in it. The stripes are all present. The edge oracle cannot see this -- 005048b declares no type-2 edges, so it scores 0 of 0 px. Evidence: out/sheets/missing-2.png."""
+notes = "2026-09-16: still reproduces at HEAD 161156e, and the missing polys are the stars. The browser reference draws about fifty white stars in the blue canton; occt draws the canton as flat blue with nothing in it. The stripes are all present. The edge oracle cannot see this -- 005048b declares no type-2 edges, so it scores 0 of 0 px. Evidence: out/sheets/missing-2.png."
 
 [[defect]]
 id = "5065-extra-chord-outline-both-engines"
@@ -1216,8 +1236,7 @@ status = "open"
 title = "missing lots of outlines; regression from naive"
 checked = { white-occt = "025f58e78d983378606b77cd13de99679e5f5b66a0571daa743338dc5d0945ea" }
 filed = "2026-09-09"
-notes = """
-2026-09-16: still reproduces at HEAD 161156e, and "lots" is now three: 3 gaps, 184.0 px of 2259.5 px of declared edge. That is the largest uncovered length of any row measured in this pass. Evidence: out/edge-overlays2/7610-occt-edges.png."""
+notes = "2026-09-16: still reproduces at HEAD 161156e, and \"lots\" is now three: 3 gaps, 184.0 px of 2259.5 px of declared edge. That is the largest uncovered length of any row measured in this pass. Evidence: out/edge-overlays2/7610-occt-edges.png."
 
 [[defect]]
 id = "10202p04-missing-top-plane"
@@ -1227,8 +1246,7 @@ status = "fixed"
 title = "missing top plane"
 checked = { occt = "1aa2c6e4fee2f75a4da0868b335459dbdec63177a42a6af8df89149a967481ee" }
 filed = "2026-09-09"
-notes = """
-Does not reproduce at HEAD 161156e. The top plane is drawn with its print on it, and the edge oracle finds 0 gaps in 1134.5 px of declared edge. Fixing commit not bisected. Evidence: out/sheets/missing-2.png beside the browser reference."""
+notes = "Does not reproduce at HEAD 161156e. The top plane is drawn with its print on it, and the edge oracle finds 0 gaps in 1134.5 px of declared edge. Fixing commit not bisected. Evidence: out/sheets/missing-2.png beside the browser reference."
 
 [[defect]]
 id = "14769pt0-bottom-showing-through-surface"
@@ -1247,8 +1265,7 @@ status = "fixed"
 title = "studs missing bottom contours"
 checked = { white-occt = "e694c1ff9bff4735c6552d03b51d07389e19d4b347eb8b5d41b251cdba6ea803" }
 filed = "2026-09-09"
-notes = """
-Does not reproduce at HEAD 161156e. scripts/score-declared-edges.py scores the occt drawing against the edges 3437.dat declares and finds 0 gaps in 2029.5 px of declared edge -- every stud's bottom ring is drawn, and the overlay (out/edge-overlays/3437-occt-edges.png) puts red on all four. Fixing commit not bisected. Evidence: out/sheets/missing-1.png beside the browser reference."""
+notes = "Does not reproduce at HEAD 161156e. scripts/score-declared-edges.py scores the occt drawing against the edges 3437.dat declares and finds 0 gaps in 2029.5 px of declared edge -- every stud's bottom ring is drawn, and the overlay (out/edge-overlays/3437-occt-edges.png) puts red on all four. Fixing commit not bisected. Evidence: out/sheets/missing-1.png beside the browser reference."
 
 [[defect]]
 id = "3070bp1k-top-surface-below-print-missing"
@@ -1258,8 +1275,7 @@ status = "fixed"
 title = "top surface below print missing"
 checked = { white-occt = "06030331d87f5caa7ebfc810985dd8459e1fe55141d8c2ff130e7c9f1f941e0c" }
 filed = "2026-09-09"
-notes = """
-Does not reproduce at HEAD 161156e. The tile's top draws as a solid blue field with the print on it and its four edges closed, exactly as the browser reference has it; 0 gaps in 1122.0 px of declared edge alongside. Fixing commit not bisected. Evidence: out/sheets/surface-1.png."""
+notes = "Does not reproduce at HEAD 161156e. The tile's top draws as a solid blue field with the print on it and its four edges closed, exactly as the browser reference has it; 0 gaps in 1122.0 px of declared edge alongside. Fixing commit not bisected. Evidence: out/sheets/surface-1.png."
 
 [[defect]]
 id = "20546p03-band-loops-are-either-missing"
@@ -1269,8 +1285,7 @@ status = "open"
 title = "band loops are either missing or rotated 90° in a bizarre direction"
 checked = { white-occt = "abb1aae7e937201c7037fbcf430c5ea4a71b042957b665359aec2a35bd0668f4" }
 filed = "2026-09-09"
-notes = """
-2026-09-16: measurably missing rather than rotated, at least in part: 4 gaps, 82.0 px of 1042.5 px of declared edge at HEAD 161156e -- 8% uncovered, the worst fraction measured in this pass. Evidence: out/edge-overlays3/20546p03-occt-edges.png."""
+notes = "2026-09-16: measurably missing rather than rotated, at least in part: 4 gaps, 82.0 px of 1042.5 px of declared edge at HEAD 161156e -- 8% uncovered, the worst fraction measured in this pass. Evidence: out/edge-overlays3/20546p03-occt-edges.png."
 
 [[defect]]
 id = "25269p00-missing-surface-layer"
@@ -1280,8 +1295,7 @@ status = "fixed"
 title = "missing surface layer"
 checked = { white-occt = "52b9106c36168668f65abd39ffb67d071e089d171d3a0c105265984a60662449" }
 filed = "2026-09-09"
-notes = """
-Does not reproduce at HEAD 161156e. Every band of the rainbow print is drawn on the wedge's top, in the browser reference's own order, and the edge oracle finds 0 gaps in 1105.5 px of declared edge. Fixing commit not bisected. Evidence: out/sheets/mixed-1.png, out/edge-overlays2/25269p00-occt-edges.png."""
+notes = "Does not reproduce at HEAD 161156e. Every band of the rainbow print is drawn on the wedge's top, in the browser reference's own order, and the edge oracle finds 0 gaps in 1105.5 px of declared edge. Fixing commit not bisected. Evidence: out/sheets/mixed-1.png, out/edge-overlays2/25269p00-occt-edges.png."
 
 [[defect]]
 id = "25269-notch-not-cut-out"
@@ -1291,8 +1305,7 @@ status = "fixed"
 title = "notch not cut out"
 checked = { white-occt = "2c455a34a98efcc08bcb94edaa60523ae67eeb79b5ed1d466d07110e741b5271" }
 filed = "2026-09-09"
-notes = """
-Does not reproduce at HEAD 161156e. Both notches are cut into the wedge's front edge, as the browser reference shows them, and the edge oracle finds 0 gaps in 1106.0 px of declared edge. Fixing commit not bisected. Evidence: out/sheets/mixed-1.png."""
+notes = "Does not reproduce at HEAD 161156e. Both notches are cut into the wedge's front edge, as the browser reference shows them, and the edge oracle finds 0 gaps in 1106.0 px of declared edge. Fixing commit not bisected. Evidence: out/sheets/mixed-1.png."
 
 [[defect]]
 id = "38301p01c02-backface-issues-scrambled-fill"
@@ -1311,8 +1324,7 @@ status = "fixed"
 title = "bar missing contours"
 checked = { white-occt = "bb7f14c85bc8a32299338251b8c795639bb22b93d9b5307f78c077a6f4338448" }
 filed = "2026-09-09"
-notes = """
-Does not reproduce at HEAD 161156e. 0 gaps in 1769.0 px of declared edge; the bar's cylinder, its slot and its end ring are all drawn, matching the browser reference. Fixing commit not bisected. Evidence: out/sheets/missing-1.png, out/edge-overlays/34816-occt-edges.png."""
+notes = "Does not reproduce at HEAD 161156e. 0 gaps in 1769.0 px of declared edge; the bar's cylinder, its slot and its end ring are all drawn, matching the browser reference. Fixing commit not bisected. Evidence: out/sheets/missing-1.png, out/edge-overlays/34816-occt-edges.png."
 
 [[defect]]
 id = "38583-missing-arch-contours"
@@ -1320,10 +1332,12 @@ part = "38583"
 engines = ["occt"]
 status = "open"
 title = "missing arch contours"
-checked = { white-occt = "8b541e397f77d0c6e0e4e75007176e1dba305dd72054f9c499b3d33600f04b62" }
+checked = { white-occt = "8b541e397f77d0c6e0e4e75007176e1dba305dd72054f9c499b3d33600f04b62", occt = "84c8a4d520b7ec643e376885e9ee43f944536c9a52d323a07218c7f0d8a5d732" }
 filed = "2026-09-09"
 notes = """
-2026-09-16: nearly gone at HEAD 161156e, and what is left is one segment. scripts/score-declared-edges.py finds a single gap of 22.0 px in 1336.5 px of declared edge, and the overlay boxes it at the arch's inner corner where the curve meets the notch at bottom right -- every other arch contour is drawn. Evidence: out/sheets/edge-gaps.png, out/edge-overlays/38583-occt-edges.png."""
+2026-09-16: nearly gone at HEAD 161156e, and what is left is one segment. scripts/score-declared-edges.py finds a single gap of 22.0 px in 1336.5 px of declared edge, and the overlay boxes it at the arch's inner corner where the curve meets the notch at bottom right -- every other arch contour is drawn. Evidence: out/sheets/edge-gaps.png, out/edge-overlays/38583-occt-edges.png.
+
+2026-09-17 review neutral: outline is fixed but under-arch shading is worse"""
 
 [[defect]]
 id = "30136-missing-front-surface"
@@ -1333,8 +1347,7 @@ status = "fixed"
 title = "missing front surface"
 checked = { silhouette-occt = "f781161c6dc802425788b269ca7a9ba1406c59bb8a45275d0ae3351d96113103" }
 filed = "2026-09-09"
-notes = """
-Does not reproduce at HEAD 161156e. The front is drawn and shaded, its two ribs separated by the contour between them, and the edge oracle finds 0 gaps in 1343.0 px of declared edge. Fixing commit not bisected. Evidence: out/sheets/missing-1.png, out/edge-overlays/30136-occt-edges.png."""
+notes = "Does not reproduce at HEAD 161156e. The front is drawn and shaded, its two ribs separated by the contour between them, and the edge oracle finds 0 gaps in 1343.0 px of declared edge. Fixing commit not bisected. Evidence: out/sheets/missing-1.png, out/edge-overlays/30136-occt-edges.png."
 
 [[defect]]
 id = "30137-missing-front"
@@ -1344,8 +1357,7 @@ status = "fixed"
 title = "missing front"
 checked = { white-occt = "a6c2687ce477900f4607d05b3750c060a6ecc0ca46d61bf408a5f3b8576ba76d" }
 filed = "2026-09-09"
-notes = """
-Does not reproduce at HEAD 161156e: the front is drawn, all four ribs, 0 gaps in 1892.0 px of declared edge. A different fault is visible on that face now -- a light wedge across the second and third ribs, filed as 30137-light-wedge-across-ribs. Evidence: out/sheets/missing-1.png, out/edge-overlays/30137-occt-edges.png."""
+notes = "Does not reproduce at HEAD 161156e: the front is drawn, all four ribs, 0 gaps in 1892.0 px of declared edge. A different fault is visible on that face now -- a light wedge across the second and third ribs, filed as 30137-light-wedge-across-ribs. Evidence: out/sheets/missing-1.png, out/edge-overlays/30137-occt-edges.png."
 
 [[defect]]
 id = "30132-missing-contours"
@@ -1355,8 +1367,7 @@ status = "fixed"
 title = "missing contours"
 checked = { white-occt = "0878c4f509267577730489bff050a6a370e25801b3033f4129300b90a5a40ec8" }
 filed = "2026-09-09"
-notes = """
-Does not reproduce at HEAD 161156e. 0 gaps in 1498.0 px of declared edge. Fixing commit not bisected. Evidence: out/sheets/missing-1.png, out/edge-overlays/30132-occt-edges.png."""
+notes = "Does not reproduce at HEAD 161156e. 0 gaps in 1498.0 px of declared edge. Fixing commit not bisected. Evidence: out/sheets/missing-1.png, out/edge-overlays/30132-occt-edges.png."
 
 [[defect]]
 id = "31990-lots-of-extra-outlines-and"
@@ -1366,8 +1377,7 @@ status = "fixed"
 title = "lots of extra outlines AND some missing contours"
 checked = { white-occt = "694980d1ab44bf04bc93db6006e502644303e04d19998b57fb03613338925f1e" }
 filed = "2026-09-09"
-notes = """
-Does not reproduce at HEAD 161156e, in either half. The missing half is measured: 0 gaps in 981.0 px of declared edge. The extra half is not -- the oracle cannot see ink nothing declared -- and the drawing beside the browser reference carries no clutter, only the contours the reference's own shading breaks at. Fixing commit not bisected. Evidence: out/sheets/mixed-1.png, out/edge-overlays2/31990-occt-edges.png."""
+notes = "Does not reproduce at HEAD 161156e, in either half. The missing half is measured: 0 gaps in 981.0 px of declared edge. The extra half is not -- the oracle cannot see ink nothing declared -- and the drawing beside the browser reference carries no clutter, only the contours the reference's own shading breaks at. Fixing commit not bisected. Evidence: out/sheets/mixed-1.png, out/edge-overlays2/31990-occt-edges.png."
 
 [[defect]]
 id = "30258p05-another-missing-surface"
@@ -1377,8 +1387,7 @@ status = "fixed"
 title = "another missing surface"
 checked = { white-occt = "c1ecd03dace1ca77878aaacbb096a748a2274ed52d3cae148cb302923beffdd6" }
 filed = "2026-09-09"
-notes = """
-Does not reproduce at HEAD 161156e. The sign draws its blue field, its P and its edge thickness, matching the browser reference; 0 gaps in 669.0 px of declared edge. Fixing commit not bisected. Evidence: out/sheets/mixed-1.png."""
+notes = "Does not reproduce at HEAD 161156e. The sign draws its blue field, its P and its edge thickness, matching the browser reference; 0 gaps in 669.0 px of declared edge. Fixing commit not bisected. Evidence: out/sheets/mixed-1.png."
 
 [[defect]]
 id = "93273dy4-decal-is-misaligned-and-half"
@@ -1388,8 +1397,7 @@ status = "open"
 title = "decal is misaligned and half-missing, as are most sibling pieces'"
 checked = { occt = "5720a4586d52d343d5e7a743b7c92c807e7b412e1f98ce29d181316b0d725c91" }
 filed = "2026-09-10"
-notes = """
-2026-09-16: not settled at HEAD 161156e, because the browser reference cannot settle it. occt draws a full glazing band with a centred star and grille lines along the curve; LDView draws the same face as a plain dark strip with no logo at all, so the reference has LESS content than the engine and cannot say whether the engine's placement is right. This row needs a photograph of the part or the sticker sheet, not another render. Evidence: out/sheets/decal-align.png."""
+notes = "2026-09-16: not settled at HEAD 161156e, because the browser reference cannot settle it. occt draws a full glazing band with a centred star and grille lines along the curve; LDView draws the same face as a plain dark strip with no logo at all, so the reference has LESS content than the engine and cannot say whether the engine's placement is right. This row needs a photograph of the part or the sticker sheet, not another render. Evidence: out/sheets/decal-align.png."
 
 [[defect]]
 id = "51270-white-has-collar-stud-issues"
@@ -1397,18 +1405,22 @@ part = "51270"
 engines = ["occt"]
 status = "open"
 title = "white has collar/stud issues"
-checked = { white-occt = "8e1398d05a5a355bee51d8240664178cd26e65a0511af10f29b51d0d3a25ff6c" }
+checked = { white-occt = "8e1398d05a5a355bee51d8240664178cd26e65a0511af10f29b51d0d3a25ff6c", occt = "17f01f77617947d9b2b19c56784c8f64b9bde99e79dcf3ec3fbbdad69d6049b9" }
 filed = "2026-09-10"
+notes = "2026-09-17 review better"
 
 [[defect]]
 id = "5849-almost-perfect-shaded-curved-face"
 part = "5849"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "almost perfect. shaded curved face has an extra dark strip at bottom"
-checked = { occt = "ff19b070b79c729f43650164fd917a07158fae24d85a1c9864a5679e61890728" }
+checked = { occt = "4a76605a458467e22c877f4457fe26318f276568591f7e27c063fec3215beac3" }
 filed = "2026-09-10"
-notes = "2026-09-11: looked at HEAD over the reference. Outline is clean; the dark strip along the bottom of the curved face is still there."
+notes = """
+2026-09-11: looked at HEAD over the reference. Outline is clean; the dark strip along the bottom of the curved face is still there.
+
+2026-09-17 review fixed"""
 
 [[defect]]
 id = "15068dy6-decal-alignment-issues"
@@ -1427,8 +1439,7 @@ status = "fixed"
 title = "decal render is tiny"
 checked = { decal = "78a92e4a32a5d6845d25d1034378eba83dd38bd9708b2e01dbfde0ade3701b4a" }
 filed = "2026-09-10"
-notes = """
-Does not reproduce at HEAD 161156e. The decal fills its canvas -- the three chevrons and their dark blue field run edge to edge -- where this row says it came out small. Fixing commit not bisected. Evidence: out/sheets/decal-text.png."""
+notes = "Does not reproduce at HEAD 161156e. The decal fills its canvas -- the three chevrons and their dark blue field run edge to edge -- where this row says it came out small. Fixing commit not bisected. Evidence: out/sheets/decal-text.png."
 
 [[defect]]
 id = "14769d08-decal-has-actual-depth-looks"
@@ -1456,8 +1467,7 @@ status = "open"
 title = "decal is zoomed in too tight and doesn't smooth curves properly"
 checked = { decal = "27e2a574f942ed77cac35027579e4cbc10cbebb87d4615d3c1a5a3ef0ab9b84a" }
 filed = "2026-09-10"
-notes = """
-2026-09-16: the framing half still reproduces at HEAD 161156e. The ring of hearts runs off the canvas -- the hearts at top and bottom are cut through -- where the browser reference keeps the whole ring inside the tile. The curves themselves are smooth now; the hearts and the inner circle carry no faceting. So what is left of this row is the framing. Evidence: out/sheets/decal-text.png."""
+notes = "2026-09-16: the framing half still reproduces at HEAD 161156e. The ring of hearts runs off the canvas -- the hearts at top and bottom are cut through -- where the browser reference keeps the whole ring inside the tile. The curves themselves are smooth now; the hearts and the inner circle carry no faceting. So what is left of this row is the framing. Evidence: out/sheets/decal-text.png."
 
 [[defect]]
 id = "4150p22-decal-zoomed-in"
@@ -1465,8 +1475,9 @@ part = "4150p22"
 engines = ["occt"]
 status = "open"
 title = "decal zoomed in"
-checked = { white-occt = "37afee19f7aef446d5f1d550eb01be23fa66d5c94ef15a60e15bfea4a99d01f3" }
+checked = { white-occt = "37afee19f7aef446d5f1d550eb01be23fa66d5c94ef15a60e15bfea4a99d01f3", occt = "63344791673a31d2b308ef9b8d3cc5aca49061c4b3414c209bd000c3362cf56d" }
 filed = "2026-09-10"
+notes = "2026-09-17 review better: slight improvement but still multiple problems"
 
 [[defect]]
 id = "4162p20-the-e-in-the-decal"
@@ -1476,8 +1487,7 @@ status = "fixed"
 title = "the 'e' in the decal is clipped at top right"
 checked = { white-occt = "aee92f229ef748a648a84581d4dec65aa93bb393e8ee95aebd0f332e207e8f86" }
 filed = "2026-09-10"
-notes = """
-Does not reproduce at HEAD 161156e. "City of Love" draws complete along the tile, and the final e is whole -- not clipped at its top right or anywhere else -- matching the browser reference. Fixing commit not bisected. Evidence: out/sheets/decal-align.png."""
+notes = "Does not reproduce at HEAD 161156e. \"City of Love\" draws complete along the tile, and the final e is whole -- not clipped at its top right or anywhere else -- matching the browser reference. Fixing commit not bisected. Evidence: out/sheets/decal-align.png."
 
 [[defect]]
 id = "4162p20-occt-destroying-decal"
@@ -1524,12 +1534,14 @@ part = "5847"
 engines = ["occt"]
 status = "open"
 title = "lots of line and shading issues"
-checked = { white-occt = "4bfd19644129ea957f8e5b61d839152db07563b1d5b68879457f986a7295c7c8", occt = "294fea47612175e0965aad32f39759aabe7b1f4dcee5c890b37b5141f116286c" }
+checked = { white-occt = "4bfd19644129ea957f8e5b61d839152db07563b1d5b68879457f986a7295c7c8", occt = "3ef086713323cd38f933fd71ea8e9c93a3ccea9dde5c47077c8bf878048346cb" }
 filed = "2026-09-10"
 notes = """
 2026-09-16: the line half is two lines at HEAD 161156e -- 2 gaps, 24.0 px of 1916.5 px of declared edge. The shading half is untested. Evidence: out/edge-overlays3/5847-occt-edges.png.
 
-2026-09-11: looked at HEAD over the reference. Lines match the reference; the shading is what is left to judge."""
+2026-09-11: looked at HEAD over the reference. Lines match the reference; the shading is what is left to judge.
+
+2026-09-17 review neutral"""
 
 [[defect]]
 id = "5846-missing-contours-really-badly-mapped"
@@ -1537,12 +1549,14 @@ part = "5846"
 engines = ["occt"]
 status = "open"
 title = "missing contours; really badly mapped shaded faces"
-checked = { white-occt = "410319ff375da22af58d9516126fcbe4ce3e24a661635829a1f090b403a62dc7", occt = "d08938dc4de570295cfdf0408bb995bd3bd8f00699f3b700a9d095928d45b324" }
+checked = { white-occt = "410319ff375da22af58d9516126fcbe4ce3e24a661635829a1f090b403a62dc7", occt = "262576122aba854f4f937b89f92d893fffa15d6bfd6fd48e26e2de6ac4d93def" }
 filed = "2026-09-10"
 notes = """
 2026-09-16: the missing-contours half does not reproduce at HEAD 161156e -- 0 gaps in 1084.5 px of declared edge. The badly-mapped-shaded-faces half is why this row stays open, and the oracle says nothing about it. Evidence: out/edge-overlays3/5846-occt-edges.png.
 
-2026-09-11: looked at HEAD over the reference. Contours are all there now; the shaded curved corner still breaks into mismatched tones, which is the half left open."""
+2026-09-11: looked at HEAD over the reference. Contours are all there now; the shaded curved corner still breaks into mismatched tones, which is the half left open.
+
+2026-09-17 review neutral"""
 
 [[defect]]
 id = "5845-naive-has-extra-chord-occt"
@@ -1571,8 +1585,7 @@ status = "open"
 title = "decal corners are munged"
 checked = { white-occt = "7ef833d4892c2933b3268c96f7161dc929b334cf2f767db048b484c8c8868f7e" }
 filed = "2026-09-10"
-notes = """
-2026-09-16: not settled at HEAD 161156e. At 300 px the triangular field's corners read clean against the browser reference, but "munged" is a fine-detail claim and this pass did not draw it large enough to refute. Left open deliberately rather than closed on a thumbnail. Evidence: out/sheets/decal-align.png."""
+notes = "2026-09-16: not settled at HEAD 161156e. At 300 px the triangular field's corners read clean against the browser reference, but \"munged\" is a fine-detail claim and this pass did not draw it large enough to refute. Left open deliberately rather than closed on a thumbnail. Evidence: out/sheets/decal-align.png."
 
 [[defect]]
 id = "35787ps1-extra-stroke-across-white-occt"
@@ -1627,8 +1640,7 @@ status = "fixed"
 title = "decal is mirrored and white oval tips are clipped; occt versions missing some decal content"
 checked = { white-occt = "86b34e88d326e510021888194715912f1923eb7bfcdb9f1e8ea02cbff865667e" }
 filed = "2026-09-10"
-notes = """
-Does not reproduce at HEAD 161156e, in any of its three halves. The occt slot draws "BUGATTI" the right way round, the oval's white tips are whole, and the dotted surround and center monogram are both present -- the drawing matches the browser reference element for element. Fixing commit not bisected. Evidence: out/sheets/mirrored-occt.png, reference beside occt iso outline/flat3, 512 wide."""
+notes = "Does not reproduce at HEAD 161156e, in any of its three halves. The occt slot draws \"BUGATTI\" the right way round, the oval's white tips are whole, and the dotted surround and center monogram are both present -- the drawing matches the browser reference element for element. Fixing commit not bisected. Evidence: out/sheets/mirrored-occt.png, reference beside occt iso outline/flat3, 512 wide."
 
 [[defect]]
 id = "4638848f-field-should-be-generalizing-to"
@@ -1674,8 +1686,9 @@ part = "54196"
 engines = ["occt"]
 status = "open"
 title = "not simplifying properly"
-checked = { white-occt = "5d5f0c270f02d4ce66d9123aaff95ae802121d43cea492ff4092b77d40ce1ce6" }
+checked = { white-occt = "5d5f0c270f02d4ce66d9123aaff95ae802121d43cea492ff4092b77d40ce1ce6", occt = "01b8b7b68bd4df89e00c76c6385f0c9125e886813557b6c3a15cf1fe98bdaef4" }
 filed = "2026-09-10"
+notes = "2026-09-17 review better: much better; inner surface of concave side of dish is still shaded wrong"
 
 [[defect]]
 id = "28192dy0-decal-not-projecting-properly-on"
@@ -1694,8 +1707,7 @@ status = "open"
 title = "decal sized wrong and upside-down; has black mark on temple like many minifig heads"
 checked = { white-occt = "b122b01dc534cfadbd2b4e5f94f3aca54d425464c991acc08b666396eb4bec24" }
 filed = "2026-09-10"
-notes = """
-2026-09-16: half of this is gone at HEAD 161156e. The face decal is the right way up and the right size -- glasses, eyes and mouth sit where the browser reference puts them. The black mark on the temple is still drawn, above and right of the glasses, and the reference has nothing there. Identical at 44aeaf1, so the mark is not a recent regression. What is left of this row is the temple mark alone. Evidence: out/sheets/upside-ab.png, reference / 44aeaf1 / HEAD, occt iso outline/flat3, 512 wide."""
+notes = "2026-09-16: half of this is gone at HEAD 161156e. The face decal is the right way up and the right size -- glasses, eyes and mouth sit where the browser reference puts them. The black mark on the temple is still drawn, above and right of the glasses, and the reference has nothing there. Identical at 44aeaf1, so the mark is not a recent regression. What is left of this row is the temple mark alone. Evidence: out/sheets/upside-ab.png, reference / 44aeaf1 / HEAD, occt iso outline/flat3, 512 wide."
 
 [[defect]]
 id = "3070bd05-decal-is-messy"
@@ -1724,8 +1736,7 @@ status = "open"
 title = "extra outline inside gold shield border"
 checked = { white-occt = "cb3b6e272a1d0ed1cc3c0957ad48bbcd95bca560fc3c575f16371c96a48e1038" }
 filed = "2026-09-10"
-notes = """
-2026-09-16: still reproduces at HEAD 161156e. A dark line runs inside the gold border, between the border and the blue field, all the way round the shield; the browser reference draws that border as one band with no line inside it. Nothing is missing alongside it -- 0 gaps in 758.0 px of declared edge -- so this is ink nothing declared. Evidence: out/sheets/surface-1.png."""
+notes = "2026-09-16: still reproduces at HEAD 161156e. A dark line runs inside the gold border, between the border and the blue field, all the way round the shield; the browser reference draws that border as one band with no line inside it. Nothing is missing alongside it -- 0 gaps in 758.0 px of declared edge -- so this is ink nothing declared. Evidence: out/sheets/surface-1.png."
 
 [[defect]]
 id = "14769p0p-area-surrounding-front-notch-not"
@@ -1735,8 +1746,7 @@ status = "open"
 title = "area surrounding front notch not reducing properly; missing lines"
 checked = { white-occt = "369047ce1778e2fc14c397134731d4d035012df48f93f14f961ac231d67dc404" }
 filed = "2026-09-10"
-notes = """
-2026-09-16: the missing-lines half is one line at HEAD 161156e -- 1 gap, 37.5 px of 1266.0 px of declared edge. The not-reducing-properly half is untested. Evidence: out/edge-overlays3/14769p0p-occt-edges.png."""
+notes = "2026-09-16: the missing-lines half is one line at HEAD 161156e -- 1 gap, 37.5 px of 1266.0 px of declared edge. The not-reducing-properly half is untested. Evidence: out/edge-overlays3/14769p0p-occt-edges.png."
 
 [[defect]]
 id = "36756p01-back-stripe-makes-it-looks"
@@ -1764,8 +1774,7 @@ status = "fixed"
 title = "entire torso notch outline is missing"
 checked = { white-occt = "a8dd81389b898ef38fa21cc90fc52b6928dca362bccad45092fd69a6d81aa21f" }
 filed = "2026-09-10"
-notes = """
-Does not reproduce at HEAD 161156e. The torso notch outline is drawn, and the edge oracle finds 0 gaps in 1064.0 px of declared edge over the whole part. Fixing commit not bisected. Evidence: out/edge-overlays2/92253p05-occt-edges.png."""
+notes = "Does not reproduce at HEAD 161156e. The torso notch outline is drawn, and the edge oracle finds 0 gaps in 1064.0 px of declared edge over the whole part. Fixing commit not bisected. Evidence: out/edge-overlays2/92253p05-occt-edges.png."
 
 [[defect]]
 id = "93273pz3-misaligned-decal"
@@ -1775,8 +1784,7 @@ status = "open"
 title = "misaligned decal"
 checked = { white-occt = "801f4963bd617bacf77b4f35eb048cba5a62e5242e4238e4330c74ba86be8382" }
 filed = "2026-09-10"
-notes = """
-2026-09-16: still reproduces at HEAD 161156e, with a second symptom the title does not name. The logo sits off the curve's centre, and it is drawn on an opaque white patch -- a rectangle of decal background laid over the slope -- where the browser reference shows the logo directly on the body. The backing is the more obvious of the two. Evidence: out/sheets/decal-align.png."""
+notes = "2026-09-16: still reproduces at HEAD 161156e, with a second symptom the title does not name. The logo sits off the curve's centre, and it is drawn on an opaque white patch -- a rectangle of decal background laid over the slope -- where the browser reference shows the logo directly on the body. The backing is the more obvious of the two. Evidence: out/sheets/decal-align.png."
 
 [[defect]]
 id = "003605b-decal-contents-mirrored"
@@ -1786,8 +1794,7 @@ status = "fixed"
 title = "decal contents mirrored"
 checked = { decal = "b08512aa371df02a3d0ad58f5a10b5f1839a54789c8c0dfdb8a72fb4505c1940" }
 filed = "2026-09-10"
-notes = """
-Does not reproduce at HEAD 161156e. The decal slot draws the Shell wordmark the right way round, and drew it the right way round at 44aeaf1 too: the two panels are pixel-identical, so nothing between those builds fixed it and no build since 2026-09-10 has drawn it mirrored. The corpus drawing this was filed against is gone -- the decal slot was redrawn on 2026-09-15. Fixing commit not bisected. Evidence: out/sheets/mirrored-decal-ab.png, reference / 44aeaf1 / HEAD, decal iso, 512 wide."""
+notes = "Does not reproduce at HEAD 161156e. The decal slot draws the Shell wordmark the right way round, and drew it the right way round at 44aeaf1 too: the two panels are pixel-identical, so nothing between those builds fixed it and no build since 2026-09-10 has drawn it mirrored. The corpus drawing this was filed against is gone -- the decal slot was redrawn on 2026-09-15. Fixing commit not bisected. Evidence: out/sheets/mirrored-decal-ab.png, reference / 44aeaf1 / HEAD, decal iso, 512 wide."
 
 [[defect]]
 id = "6258203fc01-could-render-as-a-decal"
@@ -1804,8 +1811,7 @@ engines = ["occt"]
 status = "open"
 title = "decal backwards; weird geometry issues at corners"
 filed = "2026-09-10"
-notes = """
-2026-09-16: the "decal backwards" half is gone at HEAD 161156e -- the "23" reads the right way round, in the browser reference's own pose. The corners half stands: the reference draws this sticker as a diamond with rounded corners, and occt draws four sharp points, so the carrier is not following the authored outline. Identical at 44aeaf1. What is left of this row is the corners. Evidence: out/sheets/upside-ab.png."""
+notes = "2026-09-16: the \"decal backwards\" half is gone at HEAD 161156e -- the \"23\" reads the right way round, in the browser reference's own pose. The corners half stands: the reference draws this sticker as a diamond with rounded corners, and occt draws four sharp points, so the carrier is not following the authored outline. Identical at 44aeaf1. What is left of this row is the corners. Evidence: out/sheets/upside-ab.png."
 
 [[defect]]
 id = "98138p83-occt-decal-is-tessellated-and"
@@ -1821,8 +1827,9 @@ part = "35480"
 engines = ["occt"]
 status = "open"
 title = "Stud interior gradient is wrong"
-checked = { occt = "0a7b51c87faabbf877206ba43b8d281304e3148a57bef2aa1dcd0b7c2a460bd9" }
+checked = { occt = "41fde82a78162f7d8aaf965e490ead482747912c24699c76a6d1bda9cdc557a5" }
 filed = "2026-09-10"
+notes = "2026-09-17 review neutral: front wall is better but borehole shading is worse"
 
 [[defect]]
 id = "4531d01-dots-have-white-artifacts-around"
@@ -1832,8 +1839,7 @@ status = "fixed"
 title = "dots have white artifacts around them"
 checked = { decal = "b346abb3c90eb37d6c1489c21acf990b94ec2eef28c9064b35ea5ca2e4dc01cb" }
 filed = "2026-09-11"
-notes = """
-Does not reproduce at HEAD 161156e. The dots are clean discs on the dark field with no light fringe around any of them. Fixing commit not bisected. Evidence: out/sheets/empty-decal.png."""
+notes = "Does not reproduce at HEAD 161156e. The dots are clean discs on the dark field with no light fringe around any of them. Fixing commit not bisected. Evidence: out/sheets/empty-decal.png."
 
 [[defect]]
 id = "4215ad0b-decal-is-a-disaster-depth"
@@ -1852,8 +1858,7 @@ status = "fixed"
 title = "decal is a mess"
 checked = { occt = "a7b6eac17edc67f6512573da359b1740c9927abbdc68c529ac97f7fe5183da47" }
 filed = "2026-09-11"
-notes = """
-Does not reproduce at HEAD 161156e. The panel draws clean, with the POLICE sign square on its face and its letterforms whole. The browser reference is no help on this one -- LDView draws the panel bare -- so this rests on the drawing being coherent rather than on a comparison. Fixing commit not bisected. Evidence: out/sheets/spiderweb.png."""
+notes = "Does not reproduce at HEAD 161156e. The panel draws clean, with the POLICE sign square on its face and its letterforms whole. The browser reference is no help on this one -- LDView draws the panel bare -- so this rests on the drawing being coherent rather than on a comparison. Fixing commit not bisected. Evidence: out/sheets/spiderweb.png."
 
 [[defect]]
 id = "15068d0i-decal-scale-wrong-should-be"
@@ -1863,8 +1868,7 @@ status = "open"
 title = "decal scale wrong, should be rotated 90 ccw"
 checked = { decal = "2214cc322eac6d5e1051539f7cec6ff27af2dfc609650e6976975d050e529710" }
 filed = "2026-09-11"
-notes = """
-2026-09-16: still reproduces at HEAD 161156e. The nuova500 badge runs diagonally across its canvas and reads backwards, where the part carries it along the slope's width. Evidence: out/sheets/decal-quality.png."""
+notes = "2026-09-16: still reproduces at HEAD 161156e. The nuova500 badge runs diagonally across its canvas and reads backwards, where the part carries it along the slope's width. Evidence: out/sheets/decal-quality.png."
 
 [[defect]]
 id = "79756-has-dark-tangent-band-problem"
@@ -1884,8 +1888,7 @@ status = "fixed"
 title = "white cracks between lettering and bk"
 checked = { decal = "37146117548683ef130205e26e9cbb9ec1b97f3159f9d9f9c48fbae068dee836" }
 filed = "2026-09-12"
-notes = """
-Does not reproduce at HEAD 161156e. Drawn at 950 px there is no white anywhere between the gold lettering and the brown field -- every glyph, including the fine scrollwork under "Pole", sits directly on the brown. The only white in the drawing is outside the sign's own outline, where it belongs. A separate fault on this part is recorded under 22385d01-minor-geometry-issues-on-decal. Evidence: the 950 px draw on the wall, and out/sheets/decal-quality.png."""
+notes = "Does not reproduce at HEAD 161156e. Drawn at 950 px there is no white anywhere between the gold lettering and the brown field -- every glyph, including the fine scrollwork under \"Pole\", sits directly on the brown. The only white in the drawing is outside the sign's own outline, where it belongs. A separate fault on this part is recorded under 22385d01-minor-geometry-issues-on-decal. Evidence: the 950 px draw on the wall, and out/sheets/decal-quality.png."
 
 [[defect]]
 id = "27149p01-side-shading-is-bad-works"
@@ -1893,8 +1896,9 @@ part = "27149p01"
 engines = ["occt"]
 status = "open"
 title = "side shading is bad; works in naive"
-checked = { occt = "7ec924f32aa7bbd365d2518f2ce25cee10c0eab0d48321d5e375613bccfb5fbd" }
+checked = { occt = "259c44b74b99ed53892fe11b0d6d52d89f7b37445dae9706e19ed166dcf43243" }
 filed = "2026-09-12"
+notes = "2026-09-17 review better"
 
 [[defect]]
 id = "71711p01-shading-and-studding-issues-on"
@@ -1902,8 +1906,9 @@ part = "71711p01"
 engines = ["occt"]
 status = "open"
 title = "shading and studding issues on outer rim"
-checked = { white-occt = "4ae1c27996c9e85c65f29c27e2411fc1a0fd0f2e051790d6a3d6110159f73701" }
+checked = { white-occt = "4ae1c27996c9e85c65f29c27e2411fc1a0fd0f2e051790d6a3d6110159f73701", occt = "7c5fc1f08851a5e2d8aeccec17841ef4243cc829407c2f562b8cd00978d34a7e" }
 filed = "2026-09-12"
+notes = "2026-09-17 review better"
 
 [[defect]]
 id = "85984d0d-decal-upside-down-occt-omitting"
@@ -1957,8 +1962,7 @@ status = "fixed"
 title = "missing outline near front"
 checked = { occt = "bd31bfff39e06058614d7bf29ae9922d1de071f3a54b5fb7e379a922fb99d214" }
 filed = "2026-09-12"
-notes = """
-Does not reproduce at HEAD 161156e. 0 gaps in 1912.5 px of declared edge. Fixing commit not bisected. Evidence: out/edge-overlays2/t1115-occt-edges.png."""
+notes = "Does not reproduce at HEAD 161156e. 0 gaps in 1912.5 px of declared edge. Fixing commit not bisected. Evidence: out/edge-overlays2/t1115-occt-edges.png."
 
 [[defect]]
 id = "u1125-circular-arc-near-right-tip"
@@ -1966,8 +1970,9 @@ part = "u1125"
 engines = ["occt"]
 status = "open"
 title = "circular arc near right tip showing through"
-checked = { occt = "798e3a54fa158670aa2520c52c60f4f10756652ec46957787480b90e6d44fda3" }
+checked = { occt = "b6da4ed1439768a689dfd7c9427454f0973043b95e8011d263d506756a808cff" }
 filed = "2026-09-12"
+notes = "2026-09-17 review regression"
 
 [[defect]]
 id = "6177969zc01-decal-broken-into-pieces-projected"
@@ -2004,8 +2009,7 @@ status = "open"
 title = "decal mirrored and rotated"
 checked = { white-occt = "20a7e7f7a47e12b2db5e9f21c33d2600b4455ce0bf027e4214fb6c66211729e5" }
 filed = "2026-09-12"
-notes = """
-2026-09-16: nothing is mirrored at HEAD 161156e, and the occt slot draws this sticker in the browser reference's own pose. The DECAL slot is what is wrong, and it is wrong in the canvas rather than the ink: 6288456b is authored 1.8 wide by 2.8 tall, the artwork runs along the long axis, and the flat decal comes out on a landscape canvas with the text turned across it -- the canvas aspect is transposed. Identical at 44aeaf1. This row should be read against `decal`, not `occt`. Evidence: out/sheets/mirrored-decal-ab.png (decal) and out/sheets/mirrored-occt.png (occt)."""
+notes = "2026-09-16: nothing is mirrored at HEAD 161156e, and the occt slot draws this sticker in the browser reference's own pose. The DECAL slot is what is wrong, and it is wrong in the canvas rather than the ink: 6288456b is authored 1.8 wide by 2.8 tall, the artwork runs along the long axis, and the flat decal comes out on a landscape canvas with the text turned across it -- the canvas aspect is transposed. Identical at 44aeaf1. This row should be read against `decal`, not `occt`. Evidence: out/sheets/mirrored-decal-ab.png (decal) and out/sheets/mirrored-occt.png (occt)."
 
 [[defect]]
 id = "3069bd0j-decal-glyphs-are-a-bit"
@@ -2015,8 +2019,7 @@ status = "open"
 title = "decal glyphs are a bit sloppy"
 checked = { white-occt = "32ad7d7cd2e608db38ee0a6afe372014cbf2c09ed8f9c740feae3d4207d9be7d" }
 filed = "2026-09-12"
-notes = """
-2026-09-16: still reproduces at HEAD 161156e, and it is the small type that is sloppy, not the large. "M31 OD4" draws clean and even; the "CALIFORNIA" caption above it collapses into a row of marks where the browser reference has it legible. Evidence: out/sheets/decal-align.png."""
+notes = "2026-09-16: still reproduces at HEAD 161156e, and it is the small type that is sloppy, not the large. \"M31 OD4\" draws clean and even; the \"CALIFORNIA\" caption above it collapses into a row of marks where the browser reference has it legible. Evidence: out/sheets/decal-align.png."
 
 [[defect]]
 id = "5651-naive-dashes-on-underside"
@@ -2035,10 +2038,12 @@ part = "3813"
 engines = ["occt"]
 status = "open"
 title = "missing outline segment around sphere"
-checked = { occt = "81518b632a8d28ac0174db474735ab414ad8451c930bb4a82e1a7fff08d05792" }
+checked = { occt = "063eaffb1a21b403d6b2883b4c99b2d2d644a3ae3e3ae6a58d26753e21a3629b" }
 filed = "2026-09-12"
 notes = """
-2026-09-16: still reproduces at HEAD 161156e, and the oracle agrees with the title exactly: one gap of 25.0 px in 1410.0 px of declared edge, boxed on the sphere's silhouette where it runs into the collar. Evidence: out/sheets/edge-gaps.png, out/edge-overlays/3813-occt-edges.png."""
+2026-09-16: still reproduces at HEAD 161156e, and the oracle agrees with the title exactly: one gap of 25.0 px in 1410.0 px of declared edge, boxed on the sphere's silhouette where it runs into the collar. Evidence: out/sheets/edge-gaps.png, out/edge-overlays/3813-occt-edges.png.
+
+2026-09-17 review better"""
 
 [[defect]]
 id = "10830-missing-outline-segments"
@@ -2046,10 +2051,12 @@ part = "10830"
 engines = ["occt"]
 status = "open"
 title = "missing outline segments"
-checked = { occt = "8ceecd48eee6e3c4692cf68ba522cbf7d1306f249dbfc8166da74007c37d8f96" }
+checked = { occt = "50e1ca21796fe92b1c7b505c42efe7dec2fca3348eb08c22d0c74afddc14e7ad" }
 filed = "2026-09-12"
 notes = """
-2026-09-16: one segment, not several, at HEAD 161156e. scripts/score-declared-edges.py finds a single gap of 10.5 px in 1139.5 px of declared edge. Evidence: out/edge-overlays2/10830-occt-edges.png."""
+2026-09-16: one segment, not several, at HEAD 161156e. scripts/score-declared-edges.py finds a single gap of 10.5 px in 1139.5 px of declared edge. Evidence: out/edge-overlays2/10830-occt-edges.png.
+
+2026-09-17 review better"""
 
 [[defect]]
 id = "31561-occt-exposes-inner-shaft-segment"
@@ -2057,10 +2064,12 @@ part = "31561"
 engines = ["occt"]
 status = "open"
 title = "occt exposes inner shaft segment in middle"
-checked = { occt = "90820fec7f4f85b70c805e9b98c8b37a76cea4ea9983843d24d4963ed8396b89" }
+checked = { occt = "c73088c8db77e1fae2a872002b2074e55c4075b21a8e96e5bb90b868b1b2e16e" }
 filed = "2026-09-12"
 notes = """
-2026-09-16: still reproduces at HEAD 161156e. The stud's wall is broken by a horizontal step partway up, with the two sides shaded differently, where the browser reference draws that wall as one unbroken cylinder. Evidence: out/sheets/surface-1.png."""
+2026-09-16: still reproduces at HEAD 161156e. The stud's wall is broken by a horizontal step partway up, with the two sides shaded differently, where the browser reference draws that wall as one unbroken cylinder. Evidence: out/sheets/surface-1.png.
+
+2026-09-17 review better: still drawing hidden borehole shaft"""
 
 [[defect]]
 id = "32533p447-rim-shading-has-wrong-gradients"
@@ -2108,8 +2117,9 @@ part = "50950"
 engines = ["occt"]
 status = "open"
 title = "curved face is shaded wrong in occt"
-checked = { occt = "478d6f9d179a934a683c8516b5b8a488c9cdd51093ffbaba623454b68a382e5a" }
+checked = { occt = "a9f1f77f8521af645ffd0c4bbba6e5933cc89356572d61d404c344cb29ebb033" }
 filed = "2026-09-13"
+notes = "2026-09-17 review regression"
 
 [[defect]]
 id = "59349pa0-none-of-the-3d-ones"
@@ -2146,8 +2156,7 @@ status = "fixed"
 title = "decal text backwards"
 checked = { occt = "4a95ef183efc240757fb4815222d6274c17d09324d3878c57915cec5e6012513" }
 filed = "2026-09-13"
-notes = """
-Does not reproduce at HEAD 161156e. "Yellow Brick Road / Brickadilly Circus / Twobytwo Square" reads left to right on the slope's face, matching the browser reference line for line. The body draws gray against the reference's yellow, which is the occt slot's own body color and not this defect. Fixing commit not bisected. Evidence: out/sheets/mirrored-occt.png."""
+notes = "Does not reproduce at HEAD 161156e. \"Yellow Brick Road / Brickadilly Circus / Twobytwo Square\" reads left to right on the slope's face, matching the browser reference line for line. The body draws gray against the reference's yellow, which is the occt slot's own body color and not this defect. Fixing commit not bisected. Evidence: out/sheets/mirrored-occt.png."
 
 [[defect]]
 id = "85984d0h-decal-projection-has-inconsistent-text"
@@ -2174,8 +2183,9 @@ part = "97784"
 engines = ["occt"]
 status = "open"
 title = "shading issues in front-facing ribs"
-checked = { occt = "17b5ccfbd385cb16ce7cd87b6aadb59365b69d6232f09d682d854b042f0c64e0" }
+checked = { occt = "b9003e9cb39239f9c3c649fbe058269227cc2ea59a357d30050e06225af8a27e" }
 filed = "2026-09-13"
+notes = "2026-09-17 review better"
 
 [[defect]]
 id = "98138p16-white-spot-in-middle-of"
@@ -2185,8 +2195,7 @@ status = "open"
 title = "white spot in middle of heart"
 checked = { decal = "f55bb09e365a7db63b6ae57de0a124ef9290c0cae6ed5e8ac5213ba82c210b97" }
 filed = "2026-09-13"
-notes = """
-2026-09-16: the white spot is in the browser reference too, at the same place -- a small pale notch where the two halves of the broken heart meet. Both pictures come from 98138p16.dat, so this points at the part file authoring it rather than at either engine, and the row is a candidate for `notabug` once somebody confirms the sticker itself has no such notch. Drawn at HEAD 161156e. Evidence: out/sheets/empty-decal.png."""
+notes = "2026-09-16: the white spot is in the browser reference too, at the same place -- a small pale notch where the two halves of the broken heart meet. Both pictures come from 98138p16.dat, so this points at the part file authoring it rather than at either engine, and the row is a candidate for `notabug` once somebody confirms the sticker itself has no such notch. Drawn at HEAD 161156e. Evidence: out/sheets/empty-decal.png."
 
 [[defect]]
 id = "4620856dc01-decal-has-transparent-and-warped"
@@ -2196,8 +2205,7 @@ status = "fixed"
 title = "decal has transparent and warped areas in center"
 checked = { occt = "90233792dba4c0502423c8f9c4e96c3b529ce254271b482a3894d732c5c733c0" }
 filed = "2026-09-13"
-notes = """
-Does not reproduce at HEAD 161156e. The centre of the decal is opaque: the red heart, the dotted arc and both blue flowers draw solid on the pink field, and nothing shows through. Fixing commit not bisected. Evidence: out/sheets/spiderweb.png."""
+notes = "Does not reproduce at HEAD 161156e. The centre of the decal is opaque: the red heart, the dotted arc and both blue flowers draw solid on the pink field, and nothing shows through. Fixing commit not bisected. Evidence: out/sheets/spiderweb.png."
 
 [[defect]]
 id = "6177970h-decal-projection-is-wrong"
@@ -2226,17 +2234,17 @@ status = "fixed"
 title = "decal mirrored"
 checked = { decal = "5f4fc2cbce3a7245c9eb4bb3f9e51d0c37afae39df38d96ebbb0703da44fd29b" }
 filed = "2026-09-13"
-notes = """
-Does not reproduce at HEAD 161156e. "WA" and the rule lines under it read the right way round, matching the browser reference. Identical at 44aeaf1, so no build since 2026-09-10 draws it mirrored; the corpus drawing it was filed against is gone, the decal slot having been redrawn on 2026-09-15. Fixing commit not bisected. Evidence: out/sheets/mirrored-decal-ab.png."""
+notes = "Does not reproduce at HEAD 161156e. \"WA\" and the rule lines under it read the right way round, matching the browser reference. Identical at 44aeaf1, so no build since 2026-09-10 draws it mirrored; the corpus drawing it was filed against is gone, the decal slot having been redrawn on 2026-09-15. Fixing commit not bisected. Evidence: out/sheets/mirrored-decal-ab.png."
 
 [[defect]]
 id = "u768p01c01-enormous-mess-in-occt-i"
 part = "u768p01c01"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "enormous mess in occt--i think this is cloth"
-checked = { occt = "802d837b01bbb493c5db1f4a2c104e4b653a782e9e4f9505663ee02702f53333" }
+checked = { occt = "3675a3114a4a392fe80a521820e4c8aedd87b28b04a323e2fe5dea353bf95f78" }
 filed = "2026-09-13"
+notes = "2026-09-17 review fixed"
 
 [[defect]]
 id = "6278968d-decal-is-mirrored"
@@ -2246,8 +2254,7 @@ status = "fixed"
 title = "decal is mirrored"
 checked = { decal = "346ac84643a754f60c5cd4279b59734690d2b698f95195a1d6eaa97ad48741ae" }
 filed = "2026-09-13"
-notes = """
-Does not reproduce at HEAD 161156e. "ALL DESTINATIONS (NOTHING UNDERWATER)" reads left to right, matching both the browser reference and the .dat's own description line. Identical at 44aeaf1. Fixing commit not bisected. Evidence: out/sheets/mirrored-decal-ab.png."""
+notes = "Does not reproduce at HEAD 161156e. \"ALL DESTINATIONS (NOTHING UNDERWATER)\" reads left to right, matching both the browser reference and the .dat's own description line. Identical at 44aeaf1. Fixing commit not bisected. Evidence: out/sheets/mirrored-decal-ab.png."
 
 [[defect]]
 id = "6258203g-decal-mirrored-and-inconsistent-text"
@@ -2257,8 +2264,7 @@ status = "fixed"
 title = "decal mirrored and inconsistent text weight"
 checked = { decal = "600bfaf2bdeca47789948c811c33c1c4f0d078ecf6328d7a62372a0d0d30ec57" }
 filed = "2026-09-13"
-notes = """
-Does not reproduce at HEAD 161156e, in either half. "NSW BAD.5296" reads the right way round, and the small stacked NSW beside the large plate number is how the plate is authored -- the browser reference shows the same two weights. Identical at 44aeaf1. Fixing commit not bisected. Evidence: out/sheets/mirrored-decal-ab.png."""
+notes = "Does not reproduce at HEAD 161156e, in either half. \"NSW BAD.5296\" reads the right way round, and the small stacked NSW beside the large plate number is how the plate is authored -- the browser reference shows the same two weights. Identical at 44aeaf1. Fixing commit not bisected. Evidence: out/sheets/mirrored-decal-ab.png."
 
 [[defect]]
 id = "6258203fc01-major-decal-projection-issues"
@@ -2275,8 +2281,9 @@ part = "6255869mc01"
 engines = ["occt"]
 status = "open"
 title = "decal and projections incoherent"
-checked = { occt = "f586b714c7a5e8d0d7852a1538d152f4a70f7c9ca54c9e2f7d48306fc5916296" }
+checked = { occt = "19e7196e8481324a846adedad438b4d141a889ad5348d1053176319e4de7ed50" }
 filed = "2026-09-13"
+notes = "2026-09-17 review better"
 
 [[defect]]
 id = "004659e-missing-top-stripes"
@@ -2309,8 +2316,7 @@ status = "open"
 title = "minor geometry issues on decal"
 checked = { decal = "37146117548683ef130205e26e9cbb9ec1b97f3159f9d9f9c48fbae068dee836" }
 filed = "2026-09-13"
-notes = """
-2026-09-16: the live fault on this part at HEAD 161156e is the decal canvas, not the geometry. The sign is a tall banner and its flat decal comes out portrait with "North" and "Pole" running bottom to top, where the part carries them along the sign's own axis. That is the same transposed canvas as 6288456b-decal-mirrored-and-rotated, and the two rows are worth fixing together. The white-cracks row on this part is closed. Evidence: the 950 px draw on the wall, out/sheets/decal-quality.png."""
+notes = "2026-09-16: the live fault on this part at HEAD 161156e is the decal canvas, not the geometry. The sign is a tall banner and its flat decal comes out portrait with \"North\" and \"Pole\" running bottom to top, where the part carries them along the sign's own axis. That is the same transposed canvas as 6288456b-decal-mirrored-and-rotated, and the two rows are worth fixing together. The white-cracks row on this part is closed. Evidence: the 950 px draw on the wall, out/sheets/decal-quality.png."
 
 [[defect]]
 id = "61484d01-heart-isn-t-filled-in"
@@ -2327,8 +2333,9 @@ part = "85080"
 engines = ["occt"]
 status = "open"
 title = "curved front should be a single gradient but is several vertical bands"
-checked = { occt = "7e08c18a551ef1807baa3689e6195ec017f0cd864e4cf3b4f0533622477eb945" }
+checked = { occt = "0e94de08f949c093652261aad149e52ca034db77b64494a1ef92568f092f56e3" }
 filed = "2026-09-13"
+notes = "2026-09-17 review better"
 
 [[defect]]
 id = "93091-outlines-are-admittedly-challenging-but"
@@ -2336,10 +2343,12 @@ part = "93091"
 engines = ["occt"]
 status = "open"
 title = "outlines are admittedly challenging but not where they need to be"
-checked = { occt = "366eb0fee8178ec825edbdadcdd7357bc908edfacbbf09c8ba1156f642c187e4" }
+checked = { occt = "9d8e97dcad4c07f5e26d56bdbda71372a8180b73f38659394dcc0b9a4e0172ab" }
 filed = "2026-09-13"
 notes = """
-2026-09-16: still reproduces at HEAD 161156e. 5 gaps, 91.0 px of 2496.5 px of declared edge. Evidence: out/edge-overlays2/93091-occt-edges.png."""
+2026-09-16: still reproduces at HEAD 161156e. 5 gaps, 91.0 px of 2496.5 px of declared edge. Evidence: out/edge-overlays2/93091-occt-edges.png.
+
+2026-09-17 review better"""
 
 [[defect]]
 id = "6141955a-mirrored-decal-odd-projection-in"
@@ -2349,8 +2358,7 @@ status = "fixed"
 title = "mirrored decal; odd projection in occt"
 checked = { decal = "0a741c9b68805a0fe2b1a1d918d346db9b035fba2a7c976a30754dfa1fd31c83" }
 filed = "2026-09-13"
-notes = """
-Does not reproduce at HEAD 161156e, in either slot. The decal slot draws "LAP TIME", the 06.26 readout and all four lamps the right way round; the occt slot projects the same content onto the sticker in the reference's own pose. Identical at 44aeaf1 in the decal slot. Fixing commit not bisected. Evidence: out/sheets/mirrored-decal-ab.png and out/sheets/mirrored-occt.png."""
+notes = "Does not reproduce at HEAD 161156e, in either slot. The decal slot draws \"LAP TIME\", the 06.26 readout and all four lamps the right way round; the occt slot projects the same content onto the sticker in the reference's own pose. Identical at 44aeaf1 in the decal slot. Fixing commit not bisected. Evidence: out/sheets/mirrored-decal-ab.png and out/sheets/mirrored-occt.png."
 
 [[defect]]
 id = "6372023dc01-sloppy-decal-spiderwebs"
@@ -2360,8 +2368,7 @@ status = "fixed"
 title = "sloppy decal; spiderwebs"
 checked = { occt = "252abf74fdd38190591273b207b208ea8c5750a082024f141b5689b4f6d24923" }
 filed = "2026-09-13"
-notes = """
-Does not reproduce at HEAD 161156e. No spiderweb: the blue panel's grille, its two dials and the centre fitting all draw as closed shapes with clean boundaries, and no mesh edges show through any fill. The separate row 6372023dc01-reference-is-wrong on this part is untouched. Fixing commit not bisected. Evidence: out/sheets/spiderweb.png."""
+notes = "Does not reproduce at HEAD 161156e. No spiderweb: the blue panel's grille, its two dials and the centre fitting all draw as closed shapes with clean boundaries, and no mesh edges show through any fill. The separate row 6372023dc01-reference-is-wrong on this part is untouched. Fixing commit not bisected. Evidence: out/sheets/spiderweb.png."
 
 [[defect]]
 id = "6372023dc01-reference-is-wrong"
@@ -2380,8 +2387,7 @@ status = "fixed"
 title = "spiderweb"
 checked = { occt = "950c0afb58e2121833cff5a5f653916af36d74c9ad67a5b39233d4a295a66deb" }
 filed = "2026-09-13"
-notes = """
-Does not reproduce at HEAD 161156e. The curved sail draws as three closed bands with clean boundaries and no mesh edges anywhere in the fill. Fixing commit not bisected. Evidence: out/sheets/spiderweb.png."""
+notes = "Does not reproduce at HEAD 161156e. The curved sail draws as three closed bands with clean boundaries and no mesh edges anywhere in the fill. Fixing commit not bisected. Evidence: out/sheets/spiderweb.png."
 
 [[defect]]
 id = "4624296dc01-tessellated-arcs-faces-should-become"
@@ -2400,8 +2406,7 @@ status = "open"
 title = "imprecise decal rendering"
 checked = { occt = "2ede1359ceab37b17e24ace947e85cb742e20c434be4c740ec4d3a5568d5047e" }
 filed = "2026-09-13"
-notes = """
-2026-09-16: still reproduces at HEAD 161156e, and the imprecision is in which colors land where. The strings, the bridge and the body outline are all in place, but the soundhole the browser reference draws as a dark oval is absent, and the rim and inner ring come out orange and gray where the reference has them brown and black. So the shapes are right and the fill assignment is not. Evidence: out/sheets/spiderweb.png."""
+notes = "2026-09-16: still reproduces at HEAD 161156e, and the imprecision is in which colors land where. The strings, the bridge and the body outline are all in place, but the soundhole the browser reference draws as a dark oval is absent, and the rim and inner ring come out orange and gray where the reference has them brown and black. So the shapes are right and the fill assignment is not. Evidence: out/sheets/spiderweb.png."
 
 [[defect]]
 id = "4297014f-decal-is-empty-and-shouldn"
@@ -2411,8 +2416,7 @@ status = "fixed"
 title = "decal is empty and shouldn't be"
 checked = { occt = "f2c89949fa718e390e2c4d4b7668c15ab22af21d975681803ec4fb924af07a7d" }
 filed = "2026-09-13"
-notes = """
-Does not reproduce at HEAD 161156e. The decal slot draws the whole Joker face -- green hair, white face, the red and yellow rings behind it -- on the dark green field, matching the browser reference. Fixing commit not bisected. Evidence: out/sheets/empty-decal.png."""
+notes = "Does not reproduce at HEAD 161156e. The decal slot draws the whole Joker face -- green hair, white face, the red and yellow rings behind it -- on the dark green field, matching the browser reference. Fixing commit not bisected. Evidence: out/sheets/empty-decal.png."
 
 [[defect]]
 id = "4297014e-empty-decal-slot"
@@ -2422,8 +2426,7 @@ status = "fixed"
 title = "empty decal slot"
 checked = { occt = "90eb9ae8040c6d48ed88395e1516f5e74b6efc77321d87a37395f813d8e3986c" }
 filed = "2026-09-13"
-notes = """
-Does not reproduce at HEAD 161156e. The slot is not empty: it draws the dark green field with its two columns of lighter green dots, which is what the browser reference shows on the part. Fixing commit not bisected. Evidence: out/sheets/empty-decal.png."""
+notes = "Does not reproduce at HEAD 161156e. The slot is not empty: it draws the dark green field with its two columns of lighter green dots, which is what the browser reference shows on the part. Fixing commit not bisected. Evidence: out/sheets/empty-decal.png."
 
 [[defect]]
 id = "4613857e-empty-decal"
@@ -2433,8 +2436,7 @@ status = "fixed"
 title = "empty decal"
 checked = { occt = "47290fbaed43d195ca14db712359b1d921857cc9d1baff28771e7efe412fc221" }
 filed = "2026-09-13"
-notes = """
-Does not reproduce at HEAD 161156e. The decal slot draws the eagle and the "Spirit of Luis" script on the dark red field, matching the browser reference. Fixing commit not bisected. Evidence: out/sheets/empty-decal.png."""
+notes = "Does not reproduce at HEAD 161156e. The decal slot draws the eagle and the \"Spirit of Luis\" script on the dark red field, matching the browser reference. Fixing commit not bisected. Evidence: out/sheets/empty-decal.png."
 
 [[defect]]
 id = "4174735bc01-decal-field-improperly-assembled"
@@ -2444,8 +2446,7 @@ status = "open"
 title = "decal field improperly assembled"
 checked = { occt = "9aa1423716ab2e3098cfdfa95a6ca62f756cc600a98dfa02ef8890a0725e0650" }
 filed = "2026-09-13"
-notes = """
-2026-09-16: still reproduces at HEAD 161156e. The left third of the curved band draws in body gray with no decal on it at all, and the SANTA FE lettering is cut where the field stops; the browser reference carries the yellow field and the whole legend round the full arc. Evidence: out/sheets/spiderweb.png."""
+notes = "2026-09-16: still reproduces at HEAD 161156e. The left third of the curved band draws in body gray with no decal on it at all, and the SANTA FE lettering is cut where the field stops; the browser reference carries the yellow field and the whole legend round the full arc. Evidence: out/sheets/spiderweb.png."
 
 [[defect]]
 id = "4603014e-far-polys-rendering-without-color"
@@ -2502,12 +2503,14 @@ part = "11833"
 engines = ["occt"]
 status = "open"
 title = "extra line around medial axis of outer annulus"
-checked = { occt = "d4545c88e91c046b64942fea9b67ec3ef09bbdf311bd8e5f8262d9081b59ab7b" }
+checked = { occt = "164ac37adc1743a42bca067faa47c157537ae6c96c1c372f1e2b3e6755a9c176" }
 filed = "2026-09-13"
 notes = """
 2026-09-16: still reproduces at HEAD 161156e, and it is plain at 900 px where a 300 px panel hides it: a line runs the whole way round the disc's side wall at about half its height, splitting the wall into an upper and a lower band. The browser reference draws that wall as one surface. Nothing is missing alongside it -- the edge oracle covers 3435.0 px of declared edge with 0 gaps -- so this is ink nothing declared, not a contour in the wrong place.
 
-Cause found, not fixed. The ring is the tangent seam between 11833s01's two stacked outer-wall cylinders (48\\1-8cyli y0-4 and 48\\1-12cyli y4-8, both r=40); nothing is declared there. It is drawn because authored_loci turns every `edge` primitive into a WHOLE-circle locus, and the eight 48\\1-48edge at y=4, r=40 (7.5 degrees each, the notch steps) then claim the seam all the way round. Bounding edge/crease loci to their declared sectors (merged per carrier) removes the ring but is not usable: 4019's hole rims and 2654a's base ring are drawn only through that whole-circle expansion (their carriers hold two partial edge primitives and nothing else), and they lose real edges. A fix has to tell this seam apart from those rims -- e.g. by what the fragment's two faces are (same cylinder surface) -- rather than by the locus extent."""
+Cause found, not fixed. The ring is the tangent seam between 11833s01's two stacked outer-wall cylinders (48\\1-8cyli y0-4 and 48\\1-12cyli y4-8, both r=40); nothing is declared there. It is drawn because authored_loci turns every `edge` primitive into a WHOLE-circle locus, and the eight 48\\1-48edge at y=4, r=40 (7.5 degrees each, the notch steps) then claim the seam all the way round. Bounding edge/crease loci to their declared sectors (merged per carrier) removes the ring but is not usable: 4019's hole rims and 2654a's base ring are drawn only through that whole-circle expansion (their carriers hold two partial edge primitives and nothing else), and they lose real edges. A fix has to tell this seam apart from those rims -- e.g. by what the fragment's two faces are (same cylinder surface) -- rather than by the locus extent.
+
+2026-09-17 review better"""
 
 [[defect]]
 id = "32348-rims-around-peg-holes-too"
@@ -2524,8 +2527,9 @@ part = "58176"
 engines = ["occt"]
 status = "open"
 title = "dome and adjacent band should be one shaded gradient field"
-checked = { occt = "cf8407af58ca5a04c8520c1560dc67c82d841c89a2fb9972f1b5875b6d85cf7a" }
+checked = { occt = "484f3f326e1c78f8541fc213fe9768ca674045cbb0a8be2bb04e997a8bd2f6d1" }
 filed = "2026-09-13"
+notes = "2026-09-17 review better"
 
 [[defect]]
 id = "65304-fill-is-a-hot-mess"
@@ -2533,8 +2537,9 @@ part = "65304"
 engines = ["occt"]
 status = "open"
 title = "fill is a hot mess"
-checked = { occt = "d5b8be0115111a2b84d0d52156bf4425bc526a1f7241af7519015c118f8d3bd3" }
+checked = { occt = "3cae8835f1e6c70c5a22ef4804d898308337a822b3471929191f3efb671af860" }
 filed = "2026-09-13"
+notes = "2026-09-17 review regression"
 
 [[defect]]
 id = "77844-occt-render-has-a-weird"
@@ -2565,8 +2570,9 @@ part = "3176"
 engines = ["occt"]
 status = "open"
 title = "borehole shading is wrong"
-checked = { occt = "778c571adc15d1ed568faf0a8516faeaf8799222aac137e1b65974ebb13e0c1f" }
+checked = { occt = "d31951a74babb71399eb16eb3ad0975e469514b1464fbccf1059b23ed68941aa" }
 filed = "2026-09-13"
+notes = "2026-09-17 review better"
 
 [[defect]]
 id = "3170-connector-rod-has-extra-outline"
@@ -2574,10 +2580,12 @@ part = "3170"
 engines = ["occt"]
 status = "open"
 title = "connector rod has extra outline tail; sphere shading is very poor"
-checked = { occt = "216bb8ec40254b79546cd55c2d01740b9bc7dd6c4496737ea7238c178e4f0afb" }
+checked = { occt = "ab699aa577a920d2f09caffbaca7c3d28da87ce833f7732d78df50a77803df56" }
 filed = "2026-09-13"
 notes = """
-2026-09-16: the oracle finds 2 gaps, 16.5 px of 1973.0 px of declared edge at HEAD 161156e, which is not what this row is about -- both of its claims, the extra outline tail and the sphere shading, are things a declared-edge score cannot see. Recorded so nobody re-measures it expecting an answer. Evidence: out/edge-overlays3/3170-occt-edges.png."""
+2026-09-16: the oracle finds 2 gaps, 16.5 px of 1973.0 px of declared edge at HEAD 161156e, which is not what this row is about -- both of its claims, the extra outline tail and the sphere shading, are things a declared-edge score cannot see. Recorded so nobody re-measures it expecting an answer. Evidence: out/edge-overlays3/3170-occt-edges.png.
+
+2026-09-17 review regression"""
 
 [[defect]]
 id = "58123p01-decal-shatters-to-mesh"
@@ -2668,10 +2676,12 @@ part = "61482"
 engines = ["occt"]
 status = "open"
 title = "missing some contour lines"
-checked = { occt = "449f79df37538f7e18798c721fdb35bfd91d614bc4c7b5fc12491a73bb4be21f" }
+checked = { occt = "5e01816406467284e463eb407be52148259a0c815043209cf96d18315cabba3f" }
 filed = "2026-09-15"
 notes = """
-2026-09-16: still reproduces at HEAD 161156e and this is the worst of the missing-edge rows measured so far: 5 gaps, 136.0 px of 2517.0 px of declared edge left undrawn. Evidence: out/edge-overlays2/61482-occt-edges.png."""
+2026-09-16: still reproduces at HEAD 161156e and this is the worst of the missing-edge rows measured so far: 5 gaps, 136.0 px of 2517.0 px of declared edge left undrawn. Evidence: out/edge-overlays2/61482-occt-edges.png.
+
+2026-09-17 review better"""
 
 [[defect]]
 id = "61482-missing-contours-on-nearer-hook"
@@ -2679,10 +2689,12 @@ part = "61482"
 engines = ["occt"]
 status = "open"
 title = "missing contours on nearer hook"
-checked = { white-occt = "094bb5abaf68be7e8a15633f9d656af0dd4e9986596e1b175fd1b911cc6d4c8e" }
+checked = { white-occt = "094bb5abaf68be7e8a15633f9d656af0dd4e9986596e1b175fd1b911cc6d4c8e", occt = "5e01816406467284e463eb407be52148259a0c815043209cf96d18315cabba3f" }
 filed = "2026-09-15"
 notes = """
-2026-09-16: measured with 61482-missing-some-contour-lines -- 5 gaps, 136.0 px of 2517.0 declared, at HEAD 161156e. The two rows are one fault and should be judged together. Evidence: out/edge-overlays2/61482-occt-edges.png."""
+2026-09-16: measured with 61482-missing-some-contour-lines -- 5 gaps, 136.0 px of 2517.0 declared, at HEAD 161156e. The two rows are one fault and should be judged together. Evidence: out/edge-overlays2/61482-occt-edges.png.
+
+2026-09-17 review better"""
 
 [[defect]]
 id = "50747p01-decal-is-a-mess-render"
@@ -2692,8 +2704,7 @@ status = "open"
 title = "decal is a mess; render is upside-down"
 checked = { occt = "6d14a422d3f36b96fca79f74162490da6f54f00b7ca01077fa35a382df634ce0" }
 filed = "2026-09-15"
-notes = """
-2026-09-16: still reproduces at HEAD 161156e, unchanged from 44aeaf1. The cat face is drawn onto the upper left of the dome, turned about a quarter turn from where the browser reference puts it, with the whiskers running off the silhouette. Evidence: out/sheets/upside-ab.png."""
+notes = "2026-09-16: still reproduces at HEAD 161156e, unchanged from 44aeaf1. The cat face is drawn onto the upper left of the dome, turned about a quarter turn from where the browser reference puts it, with the whiskers running off the silhouette. Evidence: out/sheets/upside-ab.png."
 
 [[defect]]
 id = "u9236c01-occt-doesn-t-draw-and"
@@ -2702,8 +2713,7 @@ engines = ["occt"]
 status = "open"
 title = "occt doesn't draw and probably should"
 filed = "2026-09-15"
-notes = """
-2026-09-16: half answered at HEAD 161156e, and the half that is answered is the engine's. Asked directly, occt draws u9236c01 fine: a clean motor housing with its studs, contours and side notch, 197 KB of SVG. What it has no render of is the corpus, because u9236c01.dat is "~Motor Windup 4 x 10 x 3" and `db.is_obsolete` keeps every `~` title out. So "occt doesn't draw" is false and "probably should" is a scope decision, the same one 32183-why-is-this-excluded raises. Evidence: the 700 px draw on the wall."""
+notes = "2026-09-16: half answered at HEAD 161156e, and the half that is answered is the engine's. Asked directly, occt draws u9236c01 fine: a clean motor housing with its studs, contours and side notch, 197 KB of SVG. What it has no render of is the corpus, because u9236c01.dat is \"~Motor Windup 4 x 10 x 3\" and `db.is_obsolete` keeps every `~` title out. So \"occt doesn't draw\" is false and \"probably should\" is a scope decision, the same one 32183-why-is-this-excluded raises. Evidence: the 700 px draw on the wall."
 
 [[defect]]
 id = "3846p45-tessellation-in-decal-edges-should"
@@ -2713,8 +2723,7 @@ status = "open"
 title = "tessellation in decal edges should be reduced"
 checked = { decal = "cec66a6815b2048ba4a022810d911300cee1a655abaf5f265b123ce31ea3d8ef" }
 filed = "2026-09-15"
-notes = """
-2026-09-16: left open. The shield's outline and the eagle's edges read smooth at 300 px, but this row was filed 2026-09-15 against a decal slot last drawn 2026-09-15, so the drawing looked at here is the one that was filed against -- nothing has changed and a cleaner read is not a refutation. What would settle it is which zoom, or which slot, the tessellation was seen at. Evidence: out/sheets/decal-quality.png."""
+notes = "2026-09-16: left open. The shield's outline and the eagle's edges read smooth at 300 px, but this row was filed 2026-09-15 against a decal slot last drawn 2026-09-15, so the drawing looked at here is the one that was filed against -- nothing has changed and a cleaner read is not a refutation. What would settle it is which zoom, or which slot, the tessellation was seen at. Evidence: out/sheets/decal-quality.png."
 
 [[defect]]
 id = "54568-outlines-missing-inner-annulus-not"
@@ -2722,10 +2731,12 @@ part = "54568"
 engines = ["occt"]
 status = "open"
 title = "outlines missing; inner annulus not shaded"
-checked = { occt = "2053f228a4f7dc2df41ade5aa78a537a732862895c46cddff04320af4027f5b9" }
+checked = { occt = "10996f88484fbc36b06ae573e931a1a903d7f17ecfd19ab5024ddd2423d6a088" }
 filed = "2026-09-15"
 notes = """
-2026-09-16: the outlines half is nearly gone at HEAD 161156e -- one gap of 27.5 px in 1549.5 px of declared edge. The inner annulus shading half is untested by the oracle, which only scores linework, and still needs a look. Evidence: out/edge-overlays2/54568-occt-edges.png."""
+2026-09-16: the outlines half is nearly gone at HEAD 161156e -- one gap of 27.5 px in 1549.5 px of declared edge. The inner annulus shading half is untested by the oracle, which only scores linework, and still needs a look. Evidence: out/edge-overlays2/54568-occt-edges.png.
+
+2026-09-17 review regression"""
 
 [[defect]]
 id = "47207-only-one-surface-is-properly"
@@ -2733,8 +2744,9 @@ part = "47207"
 engines = ["occt"]
 status = "open"
 title = "only one surface is properly shaded"
-checked = { occt = "444f39283b88b8ef5ea4c0aa3e2999ca5e4b31924c1933fffea3a0a57492be3c" }
+checked = { occt = "7787136f747a93632fb656406fe73c56ad6f549e6f71d64721414141350c2afe" }
 filed = "2026-09-15"
+notes = "2026-09-17 review neutral"
 
 [[defect]]
 id = "47207-weird-hiccup-around-edges-of"
@@ -2742,8 +2754,9 @@ part = "47207"
 engines = ["occt"]
 status = "open"
 title = "weird \"hiccup\" around edges of what should be the thickest outline"
-checked = { white-occt = "45953808eb3631b6c3829b5ce285ad502c40debedd628233aba79a92279653c9" }
+checked = { white-occt = "45953808eb3631b6c3829b5ce285ad502c40debedd628233aba79a92279653c9", occt = "7787136f747a93632fb656406fe73c56ad6f549e6f71d64721414141350c2afe" }
 filed = "2026-09-15"
+notes = "2026-09-17 review neutral"
 
 [[defect]]
 id = "50687-outlines-and-shading-are-just"
@@ -2751,10 +2764,12 @@ part = "50687"
 engines = ["occt"]
 status = "open"
 title = "outlines and shading are just all wrong"
-checked = { occt = "00d87bc9f897b09c26ea199f3d1f63580efc19be673385a89feceebd48faffb5" }
+checked = { occt = "38e854d6cbad0b843fbdc3b377786670a45236fa6a9ab97e6d85fadfcd14535c" }
 filed = "2026-09-15"
 notes = """
-2026-09-16: half of "all wrong" is not. 0 gaps in 908.0 px of declared edge at HEAD 161156e, so no outline 50687.dat declares is left out; whatever is wrong with the outlines is their placement or their weight, not their presence. The shading half stands untested. Evidence: out/edge-overlays3/50687-occt-edges.png."""
+2026-09-16: half of "all wrong" is not. 0 gaps in 908.0 px of declared edge at HEAD 161156e, so no outline 50687.dat declares is left out; whatever is wrong with the outlines is their placement or their weight, not their presence. The shading half stands untested. Evidence: out/edge-overlays3/50687-occt-edges.png.
+
+2026-09-17 review neutral"""
 
 [[defect]]
 id = "50665-bad-poly-joins-near-crown"
@@ -2762,8 +2777,9 @@ part = "50665"
 engines = ["occt"]
 status = "open"
 title = "bad poly joins near crown; excessive banding along cutout edge of facemask"
-checked = { silhouette-occt = "d2ba78aecb66a23ba7a818f7971f6b7729d7ff0f1541f5eac00699f874a5f441" }
+checked = { silhouette-occt = "d2ba78aecb66a23ba7a818f7971f6b7729d7ff0f1541f5eac00699f874a5f441", occt = "d8e818760261a91fc00d03e85a1ea1410e7b912dcefb24aaaf4201a6698ff171" }
 filed = "2026-09-15"
+notes = "2026-09-17 review better"
 
 [[defect]]
 id = "58367-butt-end-shades-differently-than"
@@ -2771,8 +2787,9 @@ part = "58367"
 engines = ["occt"]
 status = "open"
 title = "butt end shades differently than rest of barrel"
-checked = { occt = "50945074231f75108640840958c0df308494594fb1694b2f0225474339401701" }
+checked = { occt = "1ce88282dfa37465c1abef61fee079e77798b33eb30f8d6117e1779edcb081b9" }
 filed = "2026-09-15"
+notes = "2026-09-17 review better"
 
 [[defect]]
 id = "58367-grip-ridges-are-sloppy"
@@ -2780,8 +2797,9 @@ part = "58367"
 engines = ["occt"]
 status = "open"
 title = "grip ridges are sloppy"
-checked = { occt = "50945074231f75108640840958c0df308494594fb1694b2f0225474339401701" }
+checked = { occt = "1ce88282dfa37465c1abef61fee079e77798b33eb30f8d6117e1779edcb081b9" }
 filed = "2026-09-15"
+notes = "2026-09-17 review better"
 
 [[defect]]
 id = "94717-tiny-missing-edges-near-center"
@@ -2791,8 +2809,7 @@ status = "fixed"
 title = "tiny missing edges near center"
 checked = { occt = "b143b1ce0d4b5874c56c4e6e904daa2d3c8d1de277cacb44f5015ee752f63463" }
 filed = "2026-09-15"
-notes = """
-Does not reproduce at HEAD 161156e. 0 gaps in 1764.5 px of declared edge; the oracle resolves to a few px and finds nothing left out at the centre or anywhere else. Fixing commit not bisected. Evidence: out/edge-overlays2/94717-occt-edges.png."""
+notes = "Does not reproduce at HEAD 161156e. 0 gaps in 1764.5 px of declared edge; the oracle resolves to a few px and finds nothing left out at the centre or anywhere else. Fixing commit not bisected. Evidence: out/edge-overlays2/94717-occt-edges.png."
 
 [[defect]]
 id = "93160-surface-is-segmented-shading-is"
@@ -2809,8 +2826,9 @@ part = "93168"
 engines = ["occt"]
 status = "open"
 title = "severe shading issues; missing edges"
-checked = { occt = "9eb6b9aab2747a4b1e8858b4e282745ec3c4bdfe462437c38a99fa26691b54d2" }
+checked = { occt = "100039e3ae716c9a7978fb3d4106d08c14fae15157f5a5b21e6f014d2578d9c4" }
 filed = "2026-09-15"
+notes = "2026-09-17 review better"
 
 [[defect]]
 id = "71861-tube-segments-have-disjoint-shading"
@@ -2818,8 +2836,9 @@ part = "71861"
 engines = ["occt"]
 status = "open"
 title = "tube segments have disjoint shading"
-checked = { occt = "1fb1a248dfc68b7e1e74364580635e32f39b0788f8846c4a6f29ebefb3098859" }
+checked = { occt = "494adab3f35c3ae3bd87a37d43fb3fa7c28e8600defcbd978be16d2c636da920" }
 filed = "2026-09-15"
+notes = "2026-09-17 review better: handle is better; rest is still a mess"
 
 [[defect]]
 id = "4697b-a-true-rainbow-of-failure"
@@ -2827,8 +2846,9 @@ part = "4697b"
 engines = ["occt"]
 status = "open"
 title = "a true rainbow of failure: one leg is transparent, one is shaded, and the center shading is banded"
-checked = { occt = "e48114351f66d15a32e12f8a7919c180c6ff84fb6c55322922445a60d7f7ae8e" }
+checked = { occt = "7ef666283a3ba9ace77c848aecfcfc3f2c3f1c22c0f5fa4c2f7d2e210c9e761d" }
 filed = "2026-09-16"
+notes = "2026-09-17 review regression"
 
 [[defect]]
 id = "37993-missing-outlines-and-suspect-shading"
@@ -2836,8 +2856,9 @@ part = "37993"
 engines = ["occt"]
 status = "open"
 title = "missing outlines and suspect shading"
-checked = { occt = "d41b6ba51ca4125fc79e7b386b784374ecabaf129b487d67a0424e9911cc27d1" }
+checked = { occt = "0f456963d7d943c3d4687550727eb9b649c3f5198e991985de9a85b10de8f22b" }
 filed = "2026-09-16"
+notes = "2026-09-17 review better"
 
 [[defect]]
 id = "32183-why-is-this-excluded"
@@ -2853,8 +2874,9 @@ part = "101777"
 engines = ["occt"]
 status = "open"
 title = "shading is a mess"
-checked = { occt = "af980270789ba425feeb3399f7cec23fdf7c866ec7a4a0d8e1e10e3e1af7eddf" }
+checked = { occt = "bc9400ab9241895fe499f351575e8283a8b507cc3c82028e6572dd9065399200" }
 filed = "2026-09-16"
+notes = "2026-09-17 review neutral"
 
 [[defect]]
 id = "30137-light-wedge-across-ribs"
@@ -2863,6 +2885,7 @@ engines = ["occt"]
 status = "open"
 title = "a light wedge cuts across the front of the second and third ribs"
 classes = ["shading"]
+checked = { occt = "9dae68f127d73ecb7db978802014963bebe14c04f8a2967b579544407f050e61" }
 filed = "2026-09-16"
 notes = """
 Found while checking 30137-missing-front, which this replaces as the live
@@ -2872,4 +2895,17 @@ boundary down to the bottom edge. The browser reference shades the whole
 front evenly. Every declared edge is drawn -- 0 gaps in 1892.0 px -- so this
 is the fill, not the linework, and the edge oracle cannot see it.
 Evidence: out/edge-overlays/30137-occt-edges.png, occt iso outline/flat3 at
-HEAD 161156e."""
+HEAD 161156e.
+
+2026-09-17 review regression"""
+
+[[defect]]
+id = "u768p01c01-occt-hole-rims-lumpy-and-stroke-width-varies"
+part = "u768p01c01"
+engines = ["occt"]
+status = "open"
+title = "hole rims lumpy and stroke width varies along the contour"
+classes = ["stroke-scale"]
+checked = { occt = "3675a3114a4a392fe80a521820e4c8aedd87b28b04a323e2fe5dea353bf95f78" }
+filed = "2026-09-17"
+notes = "Filed after the 2026-09-17 review marked u768p01c01-enormous-mess-in-occt-i fixed on this same render. The mess is gone; the outlines are not right. The silhouette stroke changes width along its length, and all three borehole rims are drawn as lumpy closed loops of uneven thickness rather than ellipses -- the bottom-left one reads as a hexagon."
