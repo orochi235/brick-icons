@@ -2,7 +2,7 @@ import math
 
 import numpy as np
 import pytest
-from brick_icons import shade, hlr
+from brick_icons import shade, hlr, geom2d
 from brick_icons import primitives as P
 
 
@@ -465,6 +465,60 @@ def test_fill_ops_keeps_stud_cylinder_corners():
     ops = shade.fill_ops([f], shade.Flat3Style(), strokes=strokes,
                          line_px=2.0, sil_px=2.0)
     assert not any(o.get("fill") == "#000000" for o in ops)
+
+
+def _stud_junction(kind):
+    """A stud cap: two rim ellipses and the cylinder limb that dies on
+    them, tangentially, at 2.3 stroke widths long."""
+    base = geom2d.to_geom(np.array([(0, 0), (30, 0), (30, 30), (0, 30)], float))
+    strokes = [("arc", 15.0, 10.0, 8.0, 0.0, 0.0, 4.0, 0.0, 360.0, "edge"),
+               ("arc", 15.0, 14.6, 8.0, 0.0, 0.0, 4.0, 0.0, 360.0, "edge"),
+               ("line", 7.0, 10.0, 7.0, 14.6, kind)]
+    return strokes, base
+
+
+def test_weld_keeps_a_short_silhouette_limb_on_its_rim():
+    # u8204's studs: a cylinder limb is TANGENT to its cap rim by
+    # construction, so it arrives exactly like the graze the weld exists
+    # for, and once the part is drawn small enough the limb falls under
+    # the stub bar (2.49 stroke widths at the canonical canvas width, 3.2
+    # at a wider one). The bar is output-px and the geometry is not, so
+    # the 2026-07-18 veto walked off at one scale and inked two wedges
+    # onto every stud of the part.
+    strokes, base = _stud_junction("sil")
+    assert shade._weld_junction_notches(strokes, base, 2.0, 2.0) == []
+
+
+def test_weld_still_takes_that_junction_from_an_edge_stub():
+    # the same pile-up with the dying stroke tagged `edge` (30137's
+    # bridge, which the weld exists for) still welds: the gate reads the
+    # declaration, not the length.
+    strokes, base = _stud_junction("edge")
+    assert shade._weld_junction_notches(strokes, base, 2.0, 2.0)
+
+
+def test_weld_leaves_a_steep_stub_on_the_outer_curve():
+    # u8204's rounded end, strokes verbatim from the render: where the
+    # curve's tangent transition meets a stud, a 0.88-stroke-width chord
+    # dies on the cap rim at 52 degrees and the pockets either side of it
+    # were inked -- knuckles strung along the outer curve. A weld is for a
+    # GRAZE, and 30137's bridge arrives at 6.7 degrees. An arrival this
+    # steep makes a corner, whose wedge is surface.
+    strokes = [("line", 36.5, 36.01, 24.36, 42.08, "line"),
+               ("line", 38.04, 41.09, 38.04, 36.11, "sil"),
+               ("line", 38.15, 35.41, 36.5, 36.01, "line"),
+               ("arc", 46.67, 36.11, 8.63, -0.0, -0.0, -4.31, 0.0, 360.0, "line"),
+               ("arc", 46.67, 41.09, 8.63, -0.0, -0.0, -4.31, 180.0, 360.0,
+                "line")]
+    base = geom2d.to_geom(np.array([(20, 30), (60, 30), (60, 50), (20, 50)],
+                                   float))
+    assert shade._weld_junction_notches(strokes, base, 2.0, 2.0) == []
+
+
+def test_weld_corners_still_welds_a_silhouette_limb():
+    # --weld-corners drops every gate, this one included.
+    strokes, base = _stud_junction("sil")
+    assert shade._weld_junction_notches(strokes, base, 2.0, 2.0, broad=True)
 
 
 def _cyl_and_surface_tris(radius=10.0, th0=100.0, th1=120.0, r_tri=None):

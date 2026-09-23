@@ -1294,6 +1294,31 @@ def _ink_lens_pockets(base, vis, strokes, sil, line_px, sil_px):
     return out, whites
 
 
+#: How far off the landed-on band a dying stub may arrive and still count as
+#: a graze. Measured: 30137's bridge 6.7 deg, u8204's curve-to-stud chords
+#: 22.6 and 52.1.
+GRAZE_MAX_DEG = 18.0
+
+
+def _arrival_deg(landed, at, stub):
+    """The angle between a stub and the band it dies on, at the landing."""
+    from shapely.geometry import Point
+    a = np.asarray(stub.coords[0], float)
+    b = np.asarray(stub.coords[-1], float)
+    at = np.asarray(at, float)
+    far = b if np.linalg.norm(a - at) < np.linalg.norm(b - at) else a
+    u = far - at
+    s = landed.project(Point(at))
+    p0 = np.asarray(landed.interpolate(max(0.0, s - 0.5)).coords[0], float)
+    p1 = np.asarray(landed.interpolate(min(landed.length, s + 0.5)).coords[0],
+                    float)
+    v = p1 - p0
+    nu, nv = np.linalg.norm(u), np.linalg.norm(v)
+    if nu < 1e-9 or nv < 1e-9:
+        return 0.0
+    return math.degrees(math.acos(min(1.0, abs(float((u / nu) @ (v / nv))))))
+
+
 def _weld_junction_notches(strokes, base, line_px, sil_px, broad=False):
     """Thin uncovered notches at a multi-stroke T-graze junction, welded
     solid as ink. Where a drawn stroke terminates on the INTERIOR of
@@ -1311,14 +1336,20 @@ def _weld_junction_notches(strokes, base, line_px, sil_px, broad=False):
     and the silhouette's outer profile is not ours to reshape.
     Shared-vertex (V) joins do not count as junctions — every ordinary
     face corner is one, and the wedge between its bands is surface.
-    Two gates keep this from restyling every corner in the library
+    Three gates keep this from restyling every corner in the library
     (vetoed 2026-07-18 — stud-cylinder limb/rim corners especially):
     the dying stroke must be a STUB (shorter than 3x its stroke width —
-    30137's 6.7 deg bridge between the scallop V and the rim; a limb
-    line or seam dying on a rim is long and keeps its corner), and the
-    notch must touch >= 3 distinct stroke bands (the arc + stub + rim
-    pile-up; a two-band tangency sliver is an ordinary corner wedge).
-    `broad=True` (opt-in --weld-corners) drops both gates and welds
+    30137's 6.7 deg bridge between the scallop V and the rim), it must
+    not be a SILHOUETTE stroke, and the notch must touch >= 3 distinct
+    stroke bands (the arc + stub + rim pile-up; a two-band tangency
+    sliver is an ordinary corner wedge). The silhouette gate carries the
+    veto that the stub length alone cannot: a cylinder limb is tangent to
+    its cap rim by construction, so it arrives like a graze, and the stub
+    bar is output-px while the geometry is not — u8204's limbs measure
+    2.49 stroke widths at the canonical canvas width and 3.2 at a wider
+    one, inking two wedges onto every stud at the first and none at the
+    second. A silhouette stroke is declared geometry, never stylization.
+    `broad=True` (opt-in --weld-corners) drops every gate and welds
     every T-graze notch, the pre-veto census-P look."""
     import shapely as _sh
     from shapely import STRtree
@@ -1346,7 +1377,7 @@ def _weld_junction_notches(strokes, base, line_px, sil_px, broad=False):
         lines.append(ln)
         sws.append(sw)
         ends.append(eps)
-        stub.append(length < 3.0 * sw)
+        stub.append(length < 3.0 * sw and op[-1] != "sil")
     if len(bands) < 2 or base is None or base.is_empty:
         return []
 
@@ -1379,6 +1410,15 @@ def _weld_junction_notches(strokes, base, line_px, sil_px, broad=False):
                 # tip in, so most of its length stays outside the band.
                 if lines[i].difference(bands[j]).length \
                         < 0.25 * lines[i].length:
+                    continue
+                # a GRAZE arrives nearly along the band it dies on, which
+                # is what traps a long tapering sliver; a steep arrival
+                # makes an ordinary corner whose wedge is surface. 30137's
+                # bridge comes in at 6.7 deg, while u8204's curve-to-stud
+                # chords come in at 22.6 and 52.1 and were inking knuckles
+                # along the rounded end.
+                if not broad and _arrival_deg(lines[j], e, lines[i]) \
+                        > GRAZE_MAX_DEG:
                     continue
                 joins.append(pt)
                 break
