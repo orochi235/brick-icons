@@ -1222,7 +1222,11 @@ status = "open"
 title = "Missing far polys"
 checked = { occt = "749b661e75b737bf2711845766c641948dccc1524d0edfbc528d8b311f7e3e41" }
 filed = "2026-09-09"
-notes = "2026-09-16: still reproduces at HEAD 161156e, and the missing polys are the stars. The browser reference draws about fifty white stars in the blue canton; occt draws the canton as flat blue with nothing in it. The stripes are all present. The edge oracle cannot see this -- 005048b declares no type-2 edges, so it scores 0 of 0 px. Evidence: out/sheets/missing-2.png."
+notes = """
+2026-09-16: still reproduces at HEAD 161156e, and the missing polys are the stars. The browser reference draws about fifty white stars in the blue canton; occt draws the canton as flat blue with nothing in it. The stripes are all present. The edge oracle cannot see this -- 005048b declares no type-2 edges, so it scores 0 of 0 px. Evidence: out/sheets/missing-2.png.
+
+2026-09-23: narrowed to fill_ops. The stars are NOT lost at load, at the unwrap, or in the merge -- they reach the fill stage and die inside it. Traced through the CLI's own path at 1176d65: 1,210 triangles arrive carrying colors (768 blue, 417 white, 15 red), and unwrap_decoration returns the flag correctly -- one blue region with FIFTY star holes, 56 white regions, 7 red. fill_ops is handed exactly that (70 faces, 50 holes) and emits 14 ops: 7 red stripes, 6 white stripes and one blue canton with no holes at all. So both halves of the symptom -- the 50 white star faces and the blue region's 50 holes -- are lost between fill_ops' input and its output, which is the clip/residue/merge pipeline and nothing upstream of it. The `decal` slot draws all 50 stars from the same geometry, so the sheet is right and only the 3D fill path is wrong. Two hypotheses ruled out by their own thresholds: the crumb cull exempts decoration, and _residue_trims exempts any group holding a colored face. Instrument the clip loop next.
+Also worth recording for whoever instruments it: occt.flatten_part does NOT set tri_colors -- only hlr.flatten's render path does -- so a script that builds `out` that way sees a part with no decoration at all and measures the wrong thing."""
 
 [[defect]]
 id = "5065-extra-chord-outline-both-engines"
