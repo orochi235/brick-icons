@@ -3196,11 +3196,13 @@ title = "two black-filled wedges per stud thicken every stud outline"
 classes = ["stray-ink"]
 filed = "2026-09-23"
 notes = """
-At the canonical canvas width (256) u8204 emits 62 hairline paths filled #000000 -- two per stud, at the left and right extremes where the stud cylinder limbs meet the top ellipse. They read as heavy stud outlines. The mirror partner u8205 draws 1 under the same config.
+SOLVED 4bb451a: both wedge families came from _weld_junction_notches, not the lens pockets (instrumented: lens=0, weld=62/12/1/59 across u8204 and u8205 at canvas widths 256 and 200).
 
-Not the part: at canvas width 200 the counts swap -- u8205 grows 59 and u8204 drops to 12; at 297 and 400 both sit at 2-10. So the inking fires in a scale band, not on a geometry the part alone has. Both parts flatten to 474 tris and the same bbox (160 x 8 x 80).
+The stud wedges: the gate for "stylization bridge, not a real edge" was the dying stroke length under 3 stroke widths, measured in OUTPUT px. A stud limb is 2.49 sw at width 256 and 3.2 at 297, so the 2026-07-18 veto walked off at one scale. A silhouette stroke is now never a stub -- declared geometry, and a limb is tangent to its cap rim by construction, so arrival angle cannot separate it from a graze (measured 0 and 6.6 deg against 30137's documented 6.7).
 
-Repro: .venv/bin/python -m brick_icons.cli u8204 --format svg --shading outline --shade-style white --angle iso --engine occt --line-width 2 --silhouette-width 2 --width 256, then count elements carrying stroke-width="0.8" and fill="#000000"."""
+The curve knuckles: the 6 that survived that gate are plain chords dying on a stud rim at 22.6 and 52.1 deg. A graze must now arrive within GRAZE_MAX_DEG = 18.
+
+After: 0 welds on both parts at both widths. Golden effect: one invisible weld removed from outline-flat3__3040b and __3040bp08 (max pixel delta 1)."""
 
 [[defect]]
 id = "30130-contours-are-ugly-and-our"
@@ -3228,3 +3230,141 @@ status = "open"
 title = "occt shading on thighs is too harsh/linear"
 checked = { occt = "a5f5cd3d00bf25a88df5728030592b2d89651d0d1cf69b6bd734723f9a0cc910" }
 filed = "2026-09-23"
+
+[[defect]]
+id = "4595-interior-borehole-shading-problems-and"
+part = "4595"
+engines = ["occt"]
+status = "open"
+title = "interior borehole shading problems and several unculled internal shafts"
+checked = { occt = "ff3cd24f9ed87bc90d11d138daa758455f9b2b95beaae65c79a4efd02138b650" }
+filed = "2026-09-23"
+
+[[defect]]
+id = "6542b-one-inner-ring-is-totally"
+part = "6542b"
+engines = ["occt"]
+status = "open"
+title = "one inner ring is totally unshaded"
+checked = { occt = "9b3ef6cac1f7bf4499873086684f78850795ba221d88917648022aa7368f3d10" }
+filed = "2026-09-23"
+
+[[defect]]
+id = "13670-inner-borehole-improperly-lit-shaded"
+part = "13670"
+engines = ["occt"]
+status = "open"
+title = "inner borehole improperly lit/shaded"
+checked = { occt = "25c1a80f50bc10be1c699f1cd85c64b095a9881d7e128d024e17641e3b99d9d4" }
+filed = "2026-09-23"
+
+[[defect]]
+id = "11477dy8-doing-a-bad-job-projecting"
+part = "11477dy8"
+engines = ["occt"]
+status = "open"
+title = "doing a bad job projecting halftone print over a curved surface"
+checked = { occt = "6e621b93a20b3485e298c0212518de40853f84f6759b16f85ba29687caeea449" }
+filed = "2026-09-23"
+
+[[defect]]
+id = "6942-bad-culling"
+part = "6942"
+engines = ["occt"]
+status = "open"
+title = "bad culling"
+checked = { occt = "92a71c530d783004c45d32dd6cf15ec4ff44fedd80f7384ae5f852b3800bbe11" }
+filed = "2026-09-23"
+
+[[defect]]
+id = "6558-faces-are-an-enormous-mess"
+part = "6558"
+engines = ["occt"]
+status = "open"
+title = "faces are an enormous mess"
+checked = { occt = "2ee8b8ff8bbc59111d984ee6ef48dc14cdc6ce22a66a5bd5b9826568249f559b" }
+filed = "2026-09-23"
+
+[[defect]]
+id = "6553-messy-shading"
+part = "6553"
+engines = ["occt"]
+status = "open"
+title = "messy shading"
+checked = { occt = "e52ee09568b3b26eceba2e2f38ac2067d05f77d527d4d2cc6b122aad485cee1d" }
+filed = "2026-09-23"
+
+[[defect]]
+id = "6249-messy-peg-wall-shading"
+part = "6249"
+engines = ["occt"]
+status = "open"
+title = "messy peg wall shading"
+checked = { occt = "35d3d356737a77bcad2a4b84648800eeca1c63a2a3234b5490bb126f5629a3ba" }
+filed = "2026-09-23"
+
+[[defect]]
+id = "4150pf1-top-face-missing-outline-segments"
+part = "4150pf1"
+engines = ["occt"]
+status = "open"
+title = "top face missing outline segments; front annulus curve not reducing"
+checked = { occt = "88f2dac309e64cb9ef49f2ce7f87be313caa16a1010c5a25fe975b995692276a" }
+filed = "2026-09-23"
+
+[[defect]]
+id = "2528ap39-all-pieces-in-this-family"
+part = "2528ap39"
+engines = ["occt"]
+status = "open"
+title = "all pieces in this family have shading problems, particularly around the cylinder"
+checked = { occt = "387c46ad7963bb86a22922dbc281cf450e964db93f1480e5903bb20aba438055" }
+filed = "2026-09-23"
+
+[[defect]]
+id = "2528ap38-severe-shading-problems"
+part = "2528ap38"
+engines = ["occt"]
+status = "open"
+title = "severe shading problems"
+checked = { occt = "b8eb2b6e529b6a74d6c3ea75f44257848f73e3b0e99bf66054d321c9645737fe" }
+filed = "2026-09-23"
+
+[[defect]]
+id = "1871-face-is-broken-into-two"
+part = "1871"
+engines = ["naive"]
+status = "open"
+title = "face is broken into two gradient regions instead of one smooth one"
+checked = { translucent-naive = "52e5aa463b397b81b0beaf2070fc07351bfa69eca80dd823f6ae3e18b9514e6e" }
+filed = "2026-09-23"
+
+[[defect]]
+id = "1686-minor-tessellation-artifacts-in-top"
+part = "1686"
+engines = ["occt"]
+status = "open"
+title = "minor tessellation artifacts in top-left edges"
+checked = { occt = "8ff4e09b79ef76eb588029bfb2879b45b6ade03467a3ba6028b916aad05faf6b" }
+filed = "2026-09-23"
+
+[[defect]]
+id = "19121-occt-bore-interior-flat-toned"
+part = "19121"
+engines = ["occt"]
+status = "open"
+title = "the inside wall of a round bore draws flat instead of ramped"
+classes = ["shading"]
+filed = "2026-09-23"
+notes = """
+Each open stud draws its OUTER cylinder wall with a linear ramp and the bore interior as one flat mid-grey disc. Splitting the SVG by fill type shows it: every gradient element is an outer wall or an ornament band, and the bore interiors are in the flat set. LDView shades the inside of the tube brightly on the far side.
+
+What is NOT the cause, measured:
+- Not ink. The 28 #000000 fills in the render are junction wedges scattered over the fence panel (11 from _ink_lens_pockets, 17 from _weld_junction_notches); none of them is inside a bore.
+- Not a missing analytic surface. 19121 flattens to 15 Cylinder primitives, r=4 (bore) and r=6 (outer wall) per stud.
+- Not a missing gradient at construction. Instrumenting occt._span_face gives 28 wall faces for this part, 14 interior and 14 exterior, EVERY one of them carrying grad_axis -- the bore interior halves among them.
+- Not primitives.Cylinder.faces, whose docstring covers the interior far half (4019 white voids): shade.faces_from_analytic is never called on the occt path.
+
+So the ramp is built and lost downstream of _span_face -- ordering, clipping or the group-ramp handoff (occt.py around 2137-2170 and 2280-2330 pop grad_axis in favour of a group ramp). Next step: instrument those pops and the visibility sort for the r=4 spans.
+
+Repro: .venv/bin/python -m brick_icons.cli 19121 --engine occt --shading outline --shade-style flat3 --angle iso --format svg"""
