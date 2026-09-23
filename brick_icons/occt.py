@@ -669,6 +669,141 @@ def tangent_junctions(shape: TopoDS_Shape):
     return out
 
 
+def tangent_seam_edges(shape: TopoDS_Shape):
+    """Edges where two exact CURVED faces carry on through each other.
+
+    11833 stacks two r=40 cylinders and the wall crosses their junction with
+    nothing declared on it, but its eight `48\\1-48edge` sit at that height
+    and authored_loci expands each into the whole circle, so the seam was
+    claimed the whole way round. The notch steps on the same circle are
+    plane/cylinder at 90 degrees and are not seams, which is why the test is
+    per edge rather than per locus.
+    """
+    amap = TopTools_IndexedDataMapOfShapeListOfShape()
+    TopExp.MapShapesAndAncestors_s(shape, TopAbs_ShapeEnum.TopAbs_EDGE,
+                                   TopAbs_ShapeEnum.TopAbs_FACE, amap)
+    cos_tol = math.cos(math.radians(TANGENT_DEG))
+    out = []
+    for i in range(1, amap.Extent() + 1):
+        fl = amap.FindFromIndex(i)
+        if fl.Size() != 2 or fl.First().IsSame(fl.Last()):
+            continue
+        faces = (fl.First(), fl.Last())
+        try:
+            kinds = [BRepAdaptor_Surface(TopoDS.Face_s(f)).GetType()
+                     for f in faces]
+        except Exception:
+            continue
+        if not all(k in CURVED for k in kinds):
+            continue
+        edge = TopoDS.Edge_s(amap.FindKey(i))
+        a, b = _face_normal(faces[0], edge), _face_normal(faces[1], edge)
+        if a is None or b is None:
+            continue
+        na, nb = np.linalg.norm(a), np.linalg.norm(b)
+        if na < 1e-9 or nb < 1e-9:
+            continue
+        if abs(float(a @ b)) / (na * nb) > cos_tol:
+            out.append(edge)
+    return out
+
+
+def _seam_sectors(edges, ax, ay):
+    """(locus, lo, hi) per seam edge: its projected conic and the angular
+    span it actually occupies, so a veto covers the seam and not the rest of
+    the circle the locus expanded to."""
+    sectors = []
+    for e in edges:
+        try:
+            c = BRepAdaptor_Curve(e)
+            if c.GetType() != GeomAbs_CurveType.GeomAbs_Circle:
+                continue
+            g = c.Circle()
+            pos, o = g.Position(), g.Location()
+            ctr = np.array([o.X(), o.Y(), o.Z()])
+            u = np.array([pos.XDirection().X(), pos.XDirection().Y(),
+                          pos.XDirection().Z()])
+            v = np.array([pos.YDirection().X(), pos.YDirection().Y(),
+                          pos.YDirection().Z()])
+            loc = _ell_locus(ctr, u, v, g.Radius(), g.Radius(), "line", ax, ay)
+            if loc is None:
+                continue
+            ts = np.linspace(c.FirstParameter(), c.LastParameter(), 9)
+            pts = _proj2([[p.X(), p.Y(), p.Z()]
+                          for p in (c.Value(float(t)) for t in ts)], ax, ay)
+        except Exception:
+            continue
+        cs = (pts - loc[1]) @ loc[2].T
+        th = np.unwrap(np.arctan2(cs[:, 1], cs[:, 0]))
+        sectors.append((loc, float(min(th)), float(max(th))))
+    return sectors
+
+
+#: Angular slack on a seam sector, in radians: a fragment ending a hair past
+#: the seam's own sample points is still that seam.
+SEAM_PAD = math.radians(1.0)
+
+
+def _on_seam(pts, sectors):
+    """Whether every sample of a fragment lies on some seam sector.
+
+    Point by point against the union rather than the whole fragment against
+    one sector: 11833's seam reaches HLR as five edges and comes back as
+    fragments spanning two of them, which match neither alone. Sampling is
+    dense (see `_seam_points`) so a fragment cannot step over the 7.5-degree
+    notch sectors between seams and read as seam throughout."""
+    if not len(sectors):
+        return False
+    on = [np.zeros(len(pts), bool)]
+    for loc, lo, hi in sectors:
+        cs = (pts - loc[1]) @ loc[2].T
+        rad = np.linalg.norm(cs, axis=1)
+        th = np.arctan2(cs[:, 1], cs[:, 0])
+        hit = np.abs(rad - 1.0) < MATCH_TOL
+        within = np.zeros(len(pts), bool)
+        for k in (-1, 0, 1):
+            s = th + k * 2 * math.pi
+            within |= (s >= lo - SEAM_PAD) & (s <= hi + SEAM_PAD)
+        on.append(hit & within)
+    return bool(np.all(np.any(np.stack(on[1:]), axis=0))) if len(on) > 1 else False
+
+
+def _seam_points(edge, n=33):
+    """A fragment sampled densely enough to notice a 7.5-degree gap in it."""
+    c = BRepAdaptor_Curve(edge)
+    ts = np.linspace(c.FirstParameter(), c.LastParameter(), n)
+    out = []
+    for t in ts:
+        p = c.Value(float(t))
+        out.append([p.X(), p.Y()])
+    return np.asarray(out, float)
+
+
+def _drop_tangent_seams(picked, shape, right, up):
+    """Fragments an `edge` primitive's whole-circle locus claimed where the
+    shape says the two surfaces continue tangentially.
+
+    Only an "ell" locus is vetoed: that is the whole-conic expansion this
+    guards, and a type-2 line comes through as a "seg", so anything actually
+    declared along a seam still draws."""
+    if not any(locus[0] == "ell" for _e, locus in picked):
+        return picked
+    sectors = _seam_sectors(tangent_seam_edges(shape), *_screen_axes(right, up))
+    if not sectors:
+        return picked
+    kept = []
+    for edge, locus in picked:
+        if locus[0] == "ell":
+            try:
+                pts = _seam_points(edge)
+            except Exception:
+                pts = None
+            if pts is not None and _on_seam(pts, sectors):
+                continue
+        kept.append((edge, locus))
+    return kept
+
+
 def tangent_wall_pairs(shape: TopoDS_Shape):
     """(planar face, curved face) for each plane/curved tangential junction."""
     plane = GeomAbs_SurfaceType.GeomAbs_Plane
@@ -2747,6 +2882,7 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None):
                                        _visible_line_spans(comps.get("lines")))
     else:
         picked += select_authored(comps.get("sharp_hidden"), loci)
+    picked = _drop_tangent_seams(picked, shape, right, up)
     ops, fold_idx = [], []
     for edge, locus in picked:
         kind = locus[3]

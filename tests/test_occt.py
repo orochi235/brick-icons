@@ -2304,3 +2304,54 @@ def test_a_tangent_plane_joins_its_walls_fill_and_ramp(ldraw_dir):
         peers = [w for w in walls.values() if w.get("group") == f.get("group")]
         assert peers, "the plane must share a wall's group"
         assert peers[0]["grad_samples"] is f["grad_samples"]
+
+
+def _picked_for(part, ldraw_dir, lat=30.0, long=45.0):
+    """(shape, right, up, picked) at the point the seam veto runs."""
+    out = occt.flatten_part(part, ldraw_dir)
+    shape = occt.build_shape(out)
+    right, up, _fwd = hlr.view_basis(lat, long)
+    lines, _cond = occt._straight_lines(out, right, up)
+    crescents = occt.chord_crescents(shape, out.get("tri", ()))
+    comps = occt.hlr_edges(shape, right, up, cull=True, lines=lines,
+                           occluders=occt._compound(crescents) if crescents else None)
+    picked = occt.select_authored(comps.get("sharp"),
+                                  occt.authored_loci(shape, out, right, up))
+    picked = occt._drop_lines_hlr_hides(
+        picked, occt._visible_line_spans(comps.get("lines")))
+    return shape, right, up, picked
+
+
+def test_stacked_cylinders_declare_a_tangent_seam(ldraw_dir):
+    """11833 stacks two r=40 walls; where they meet nothing is declared, and
+    the notch steps on the same circle are plane/cylinder at 90 degrees."""
+    shape = occt.build_shape(occt.flatten_part("11833", ldraw_dir))
+    assert len(occt.tangent_seam_edges(shape)) == 5
+    assert occt.tangent_seam_edges(
+        occt.build_shape(occt.flatten_part("3001", ldraw_dir))) == []
+
+
+def test_a_whole_circle_locus_does_not_draw_a_tangent_seam(ldraw_dir):
+    """The eight 48\\1-48edge at that height expand to the whole circle, so
+    the seam drew as a ring round the wall. What is left on that circle is
+    the notch steps, which are real: they stay."""
+    shape, right, up, picked = _picked_for("11833", ldraw_dir)
+    kept = occt._drop_tangent_seams(picked, shape, right, up)
+    dropped = [e for e, _l in picked if not any(e.IsSame(k) for k, _ in kept)]
+    assert len(dropped) == 2, "both visible seam arcs go"
+    sectors = occt._seam_sectors(occt.tangent_seam_edges(shape),
+                                 *occt._screen_axes(right, up))
+    for edge in dropped:
+        assert occt._on_seam(occt._seam_points(edge), sectors)
+    on_circle = [e for e, l in kept if l[0] == "ell"
+                 and occt._on_locus(occt._fragment_points(e), sectors[0][0])]
+    assert len(on_circle) >= 4, "the notch steps still draw"
+
+
+def test_the_seam_veto_leaves_a_declared_rim_alone(ldraw_dir):
+    """2654a's base ring reaches the drawing ONLY through the whole-circle
+    expansion, and its stacked studs carry tangent seams of their own -- the
+    veto must not take the rim with them."""
+    shape, right, up, picked = _picked_for("2654a", ldraw_dir)
+    kept = occt._drop_tangent_seams(picked, shape, right, up)
+    assert len(kept) >= len(picked) - 2
