@@ -230,12 +230,15 @@ notes = "Not a stud bug and not a count bug -- a scale bug. Stroke width is a co
 id = "7037-gradient-banding"
 part = "7037"
 engines = ["naive"]
-status = "open"
+status = "fixed"
 title = "gradients spend half their stops repeating the previous color"
 classes = ["banding"]
 checked = { silhouette-naive = "49785ffdeda920cc3e7f932c9f06332d9ca75b04553f129d0d0c43e00263e95d", white-naive = "5b3d6b85d74b4b828ac4b51846e2feca13ef65c406a091f2d818330a1d4bd5b8" }
 filed = "2026-09-04"
-notes = "Measured on the stored SVG: 102 stops across 4 gradients, 50 of them the same color as the stop before. g1 is the worst -- 59 stops for 14 distinct greys, 43 exact repeats. Consecutive equal stops are flat plateaus, so this is the banding rather than a symptom beside it. Merging equal-color runs is the obvious fix and costs no fidelity."
+notes = """
+Measured on the stored SVG: 102 stops across 4 gradients, 50 of them the same color as the stop before. g1 is the worst -- 59 stops for 14 distinct greys, 43 exact repeats. Consecutive equal stops are flat plateaus, so this is the banding rather than a symptom beside it. Merging equal-color runs is the obvious fix and costs no fidelity.
+
+2026-09-22: does not reproduce at HEAD 1176d65. Binning landed since this was filed: 7037 draws 4 gradients / 38 stops where the filed measurement was 102 stops over 4 gradients, and at 1400 px the plate's curved wall and both stud walls ramp smoothly with no plateau visible. 11 of the 38 stops still repeat the previous color, but a repeat is a bin whose mean rounds to its neighbor's gray, and dropping one would make the picture less faithful, not more."""
 
 [[defect]]
 id = "15469-tweaks"
@@ -304,12 +307,15 @@ notes = "Filed separately from the split-arc defect on the same part: a shared p
 id = "curved-surface-gradient-banding"
 part = "44300"
 engines = ["naive"]
-status = "open"
+status = "fixed"
 title = "gradients over curved surfaces band, and one oscillates between two greys"
 classes = ["banding"]
 checked = { silhouette-naive = "67f619b965ac3933ad41289221ac4fa1d4bdfcdbd645cb6598baf2b8c7fe6632", white-naive = "40ebdf3070490dbdfe3f8b17b606a94869e5e3bf9a931e725ba310876fa71868" }
 filed = "2026-09-04"
-notes = "Class defect; 44300 near the hole is the clearest case and 7037 is the other measured one. 44300's g6 spends 67 stops on exactly two colors, #9c9c9c and #c0c0c0, alternating -- a stripe pattern, not a ramp. Across the parts measured so far: 52 gradients, 587 stops, 192 of them repeating the previous color (33%), and every single gradient is LINEAR -- zero radial. The binned-stop path is radial-only, so it never runs on any of these. That is the lead: either bin the linear path too, or emit these as radial where the surface is one."
+notes = """
+Class defect; 44300 near the hole is the clearest case and 7037 is the other measured one. 44300's g6 spends 67 stops on exactly two colors, #9c9c9c and #c0c0c0, alternating -- a stripe pattern, not a ramp. Across the parts measured so far: 52 gradients, 587 stops, 192 of them repeating the previous color (33%), and every single gradient is LINEAR -- zero radial. The binned-stop path is radial-only, so it never runs on any of these. That is the lead: either bin the linear path too, or emit these as radial where the surface is one.
+
+2026-09-22: does not reproduce at HEAD 1176d65. 44300's g6 no longer spends 67 stops on two alternating colors -- occt draws 15 gradients over 123 stops, naive 20 over 179, and at 2400 px the boss and its socket shade smoothly with no stripe anywhere on the part. What was left of the row was one gradient whose nine stops were all one gray; 1176d65 paints that as a flat fill, with no pixel changing over seven parts in both engines."""
 
 [[defect]]
 id = "65068-studs-drowned"
@@ -2009,7 +2015,10 @@ status = "open"
 title = "decal mirrored and rotated"
 checked = { white-occt = "20a7e7f7a47e12b2db5e9f21c33d2600b4455ce0bf027e4214fb6c66211729e5" }
 filed = "2026-09-12"
-notes = "2026-09-16: nothing is mirrored at HEAD 161156e, and the occt slot draws this sticker in the browser reference's own pose. The DECAL slot is what is wrong, and it is wrong in the canvas rather than the ink: 6288456b is authored 1.8 wide by 2.8 tall, the artwork runs along the long axis, and the flat decal comes out on a landscape canvas with the text turned across it -- the canvas aspect is transposed. Identical at 44aeaf1. This row should be read against `decal`, not `occt`. Evidence: out/sheets/mirrored-decal-ab.png (decal) and out/sheets/mirrored-occt.png (occt)."
+notes = """
+2026-09-16: nothing is mirrored at HEAD 161156e, and the occt slot draws this sticker in the browser reference's own pose. The DECAL slot is what is wrong, and it is wrong in the canvas rather than the ink: 6288456b is authored 1.8 wide by 2.8 tall, the artwork runs along the long axis, and the flat decal comes out on a landscape canvas with the text turned across it -- the canvas aspect is transposed. Identical at 44aeaf1. This row should be read against `decal`, not `occt`. Evidence: out/sheets/mirrored-decal-ab.png (decal) and out/sheets/mirrored-occt.png (occt).
+
+2026-09-23: measured, not fixed. The flat decal is the whole picture turned 90 degrees, not ink misplaced on a right-shaped canvas: 6288456b is authored "Sticker 1.8 x 2.8" and its canvas comes out 900x579, aspect 1.554 against the part's 1.556, so the long authored axis became the canvas WIDTH and the lettering reads bottom to top. 22385d01 ('Tile 3 x 2') comes out 530x900 the same way. Both carriers are flat and level, so unwrap.up_aligned takes its documented fallback -- a face whose normal is LDraw up has no up to inherit, and +Z is used as the top of a glyph, measured once on 2431pt2 and 3068bpfi. These two parts want +X. Fixing it means choosing the frame per part rather than by a fixed axis, and the engine has no oracle for which way up a sticker reads: the browser reference draws the part, not the sheet. Someone has to settle the convention before this is code."""
 
 [[defect]]
 id = "3069bd0j-decal-glyphs-are-a-bit"
@@ -2316,7 +2325,10 @@ status = "open"
 title = "minor geometry issues on decal"
 checked = { decal = "37146117548683ef130205e26e9cbb9ec1b97f3159f9d9f9c48fbae068dee836" }
 filed = "2026-09-13"
-notes = "2026-09-16: the live fault on this part at HEAD 161156e is the decal canvas, not the geometry. The sign is a tall banner and its flat decal comes out portrait with \"North\" and \"Pole\" running bottom to top, where the part carries them along the sign's own axis. That is the same transposed canvas as 6288456b-decal-mirrored-and-rotated, and the two rows are worth fixing together. The white-cracks row on this part is closed. Evidence: the 950 px draw on the wall, out/sheets/decal-quality.png."
+notes = """
+2026-09-16: the live fault on this part at HEAD 161156e is the decal canvas, not the geometry. The sign is a tall banner and its flat decal comes out portrait with "North" and "Pole" running bottom to top, where the part carries them along the sign's own axis. That is the same transposed canvas as 6288456b-decal-mirrored-and-rotated, and the two rows are worth fixing together. The white-cracks row on this part is closed. Evidence: the 950 px draw on the wall, out/sheets/decal-quality.png.
+
+2026-09-23: measured, not fixed. The flat decal is the whole picture turned 90 degrees, not ink misplaced on a right-shaped canvas: 6288456b is authored "Sticker 1.8 x 2.8" and its canvas comes out 900x579, aspect 1.554 against the part's 1.556, so the long authored axis became the canvas WIDTH and the lettering reads bottom to top. 22385d01 ('Tile 3 x 2') comes out 530x900 the same way. Both carriers are flat and level, so unwrap.up_aligned takes its documented fallback -- a face whose normal is LDraw up has no up to inherit, and +Z is used as the top of a glyph, measured once on 2431pt2 and 3068bpfi. These two parts want +X. Fixing it means choosing the frame per part rather than by a fixed axis, and the engine has no oracle for which way up a sticker reads: the browser reference draws the part, not the sheet. Someone has to settle the convention before this is code."""
 
 [[defect]]
 id = "61484d01-heart-isn-t-filled-in"
@@ -2501,7 +2513,7 @@ filed = "2026-09-13"
 id = "11833-extra-line-around-medial-axis"
 part = "11833"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "extra line around medial axis of outer annulus"
 checked = { occt = "164ac37adc1743a42bca067faa47c157537ae6c96c1c372f1e2b3e6755a9c176" }
 filed = "2026-09-13"
@@ -2510,7 +2522,9 @@ notes = """
 
 Cause found, not fixed. The ring is the tangent seam between 11833s01's two stacked outer-wall cylinders (48\\1-8cyli y0-4 and 48\\1-12cyli y4-8, both r=40); nothing is declared there. It is drawn because authored_loci turns every `edge` primitive into a WHOLE-circle locus, and the eight 48\\1-48edge at y=4, r=40 (7.5 degrees each, the notch steps) then claim the seam all the way round. Bounding edge/crease loci to their declared sectors (merged per carrier) removes the ring but is not usable: 4019's hole rims and 2654a's base ring are drawn only through that whole-circle expansion (their carriers hold two partial edge primitives and nothing else), and they lose real edges. A fix has to tell this seam apart from those rims -- e.g. by what the fragment's two faces are (same cylinder surface) -- rather than by the locus extent.
 
-2026-09-17 review better"""
+2026-09-17 review better
+
+2026-09-23: fixed by 09da739. The seam is told from the rims it shares a circle with by what its two faces are, which is what this row asked for: five of that circle's edges join two r=40 cylinders at 0 degrees and are dropped, the four notch steps join a plane to a cylinder at 90 degrees and still draw. The wall is one surface again -- 3 components, 5,961 px against the same tree with the veto disarmed in process -- and 2654a's base ring, 4019's hole rims, 4740, 3001, 30136 and 16 sampled corpus parts that carry tangent seams are pixel-identical. Before/after/diff on the wall (brick-icons zone). One gap left open deliberately: an arc a part DECLARES that happens to lie on a tangent junction would be dropped with the seam, which no part measured does."""
 
 [[defect]]
 id = "32348-rims-around-peg-holes-too"
@@ -2897,7 +2911,9 @@ is the fill, not the linework, and the edge oracle cannot see it.
 Evidence: out/edge-overlays/30137-occt-edges.png, occt iso outline/flat3 at
 HEAD 161156e.
 
-2026-09-17 review regression"""
+2026-09-17 review regression
+
+2026-09-23: diagnosed, not fixed. The wedge is a lighter fill painted OVER the rib front, with a straight diagonal boundary, which is what two interpenetrating faces look like under a painter's algorithm -- the same single-witness decision 2310-crap-on-darkest-face-and comes back to. order_faces settles each overlapping pair at ONE most-interior witness point, so a pair whose depth order REVERSES across the overlap gets one answer for a region that needs two. Measured at iso on the 480 ordered faces: sampling each pair inside its own rasterized overlap (not its bbox), 102 pairs of 9,856 have samples of both signs, so the reversal is common rather than exotic. Caveat on that number: it reads every face through its plane depth function, where order_faces reads an analytic face through its own occluder, so curved faces are over-counted and the planar pairs are the solid part of it. No single witness can order an interpenetrating pair; the classic answer is to split one face along the pair's screen-space intersection line and order the pieces, which is a real piece of work and a decision to take deliberately."""
 
 [[defect]]
 id = "u768p01c01-occt-hole-rims-lumpy-and-stroke-width-varies"
