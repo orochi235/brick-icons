@@ -787,7 +787,7 @@ def declared_arcs(out, ax, ay):
     3813 declares an arc right on the sphere/collar tangent junction, and
     vetoing the junction took 18.5 px of declared edge with it."""
     arcs = []
-    for prim in out["analytic"]:
+    for prim in out.get("analytic", ()):
         if prim.kind != "edge" and not prim.rims_declared:
             continue
         f = frame(prim)
