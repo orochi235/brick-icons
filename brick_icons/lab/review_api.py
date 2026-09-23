@@ -134,11 +134,20 @@ def entry(conn: sqlite3.Connection, row: sqlite3.Row, records: list[dict],
     }
 
 
-def keep(item: dict, view: str, min_components: int, judged: bool) -> bool:
+def in_view(item: dict, view: str, judged: bool) -> bool:
+    """Whether the view is about this entry at all, before its diff is
+    weighed."""
     if item["judged"] is not None and not judged:
         return False
     if view == "linked":
         return bool(item["defects"]) or item["request"] is not None
+    return True
+
+
+def over_bar(item: dict, min_components: int) -> bool:
+    """An unmeasured entry is over the bar: a gate cannot judge a diff nobody
+    has taken, and a screen that dropped them would hide the entries the
+    measure button exists to reach."""
     d = item["diff"]
     return d is None or d["components"] >= min_components
 
@@ -185,17 +194,21 @@ def install(app: FastAPI, corpus_conn) -> None:
             review.ensure_schema(conn)
             records = defects.load(app.state.defects_path)
             asked = render_requests.load(app.state.requests_path)
-            out, total = [], 0
+            out, total, hidden = [], 0, 0
             for row in conn.execute("SELECT * FROM review ORDER BY at DESC"):
                 item = entry(conn, row, records, asked)
-                if keep(item, view, min_components, judged):
-                    total += 1
-                    if len(out) < limit:
-                        out.append(item)
+                if not in_view(item, view, judged):
+                    continue
+                if not over_bar(item, min_components):
+                    hidden += 1
+                    continue
+                total += 1
+                if len(out) < limit:
+                    out.append(item)
         finally:
             conn.close()
-        return {"entries": out, "total": total, "view": view,
-                "verdicts": list(review.VERDICTS)}
+        return {"entries": out, "total": total, "hidden": hidden,
+                "view": view, "verdicts": list(review.VERDICTS)}
 
     @app.get("/api/review/{eid:path}/before")
     def get_before(eid: str):
@@ -227,11 +240,28 @@ def install(app: FastAPI, corpus_conn) -> None:
         return FileResponse(panel, media_type="image/png")
 
     @app.post("/api/review/measure")
-    def measure_unmeasured(limit: int = Query(20, le=500)):
+    def measure_unmeasured(limit: int = Query(20, le=500),
+                           view: str | None = None):
+        """Measure unmeasured entries, newest first, or only the ones `view`
+        is about -- the queue cannot screen out an unchanged redraw until its
+        diff has been taken, and taking every slot's would measure thousands
+        to reach the hundred a defect is linked to."""
+        if view is not None and view not in VIEWS:
+            raise HTTPException(400, f"view must be one of {VIEWS}")
         conn = corpus_conn()
         try:
+            only = None
+            if view is not None:
+                review.ensure_schema(conn)
+                records = defects.load(app.state.defects_path)
+                asked = render_requests.load(app.state.requests_path)
+                only = [row["id"] for row
+                        in conn.execute("SELECT * FROM review "
+                                        "ORDER BY at DESC").fetchall()
+                        if in_view(entry(conn, row, records, asked), view,
+                                   judged=False)]
             measured, failed = review.measure_unmeasured(
-                conn, root(), log(), cache_dir(), limit)
+                conn, root(), log(), cache_dir(), limit, only=only)
         finally:
             conn.close()
         return {"measured": measured, "failed": failed}

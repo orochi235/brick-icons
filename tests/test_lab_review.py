@@ -13,6 +13,10 @@ SVG = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180">'
        '<rect x="20" y="20" width="100" height="60" fill="black"/></svg>')
 SVG2 = SVG.replace('width="100"', 'width="160"')
 SVG3 = SVG.replace('width="100"', 'width="10"')
+# A speck under `diff.PANEL_MIN_PX`: measurable, and not a change anyone
+# would look at.
+SPECK = '<rect x="200" y="150" width="0.5" height="0.5" fill="black"/>'
+SVG2_SPECK = SVG2.replace('</svg>', SPECK + '</svg>')
 
 DEFECT = {"id": "3001-occt-short", "part": "3001", "engines": ["occt"],
           "status": "open", "title": "rect too short",
@@ -183,6 +187,50 @@ def test_measure_fills_in_every_unmeasured_entry(lab):
     assert client.post("/api/review/measure").json()["measured"] == 0
     body = client.get("/api/review", params={"view": "all"}).json()
     assert all(e["diff"]["components"] >= 1 for e in body["entries"])
+
+
+def _displace(root, part, text, source="occt"):
+    """Draw `text` over the slot's render, recording the displacement."""
+    conn = db.connect(root / "corpus.db")
+    run = db.start_run(conn, "census", {"dir": "out/c"}, "ccc3333")
+    db.record_render(conn, part, source, _draw(root, "out/c", part, text),
+                     root=root, run_id=run)
+    conn.commit()
+    conn.close()
+
+
+def test_the_linked_view_screens_out_a_redraw_that_changed_nothing(lab):
+    client, root = lab
+    _displace(root, "3002", SVG2_SPECK)
+    assert client.post("/api/review/measure").json()["measured"] == 3
+    speck = review.entry_id("occt", "3002", _sha(SVG2_SPECK))
+    body = client.get("/api/review").json()
+    assert {e["id"] for e in body["entries"]}.isdisjoint({speck})
+    assert body["hidden"] == 1
+    shown = client.get("/api/review", params={"min_components": 0}).json()
+    assert speck in {e["id"] for e in shown["entries"]}
+    assert shown["hidden"] == 0
+
+
+def test_an_unmeasured_linked_entry_is_kept_because_no_diff_screens_it(lab):
+    client, _root = lab
+    body = client.get("/api/review").json()
+    assert [e["diff"] for e in body["entries"]] == [None, None]
+    assert body["hidden"] == 0
+
+
+def test_measure_can_be_pointed_at_one_view(lab):
+    client, root = lab
+    defects.save(root / "defects.toml", [])
+    (root / "requests.jsonl").unlink()
+    assert client.post("/api/review/measure",
+                       params={"view": "linked"}).json()["measured"] == 0
+    defects.save(root / "defects.toml", [DEFECT])
+    assert client.post("/api/review/measure",
+                       params={"view": "linked"}).json()["measured"] == 1
+    body = client.get("/api/review", params={"view": "all"}).json()
+    measured = {e["part"]: e["diff"] for e in body["entries"]}
+    assert measured["3001"]["components"] >= 1 and measured["3002"] is None
 
 
 def test_undo_puts_the_defect_back_exactly_as_the_verdict_found_it(lab):

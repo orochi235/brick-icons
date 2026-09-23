@@ -252,14 +252,14 @@ export function ReviewPage({ client }: { client: LabClient }) {
   const measure = useCallback(async () => {
     setMeasuring(true);
     try {
-      await client.measureReview(50);
+      await client.measureReview(50, view);
       load();
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setMeasuring(false);
     }
-  }, [client, load]);
+  }, [client, load, view]);
 
   // Keys act on the focused card. Typing in the note or a control is typing,
   // not a verdict, so anything editable swallows them.
@@ -317,7 +317,14 @@ export function ReviewPage({ client }: { client: LabClient }) {
                    onChange={(e) => setShowJudged(e.target.checked)} />
             show judged
           </label>
-          {view === 'all' && unmeasured > 0 && (
+          {view === 'linked' && (
+            <label className="review-show-unchanged">
+              <input type="checkbox" checked={minComponents === 0}
+                     onChange={(e) => setMinComponents(e.target.checked ? 0 : 1)} />
+              show unchanged
+            </label>
+          )}
+          {unmeasured > 0 && (
             <button type="button" className="review-measure" disabled={measuring}
                     onClick={() => void measure()}>
               {measuring ? 'measuring…' : `measure ${Math.min(50, unmeasured)} of ${unmeasured} unmeasured`}
@@ -327,6 +334,7 @@ export function ReviewPage({ client }: { client: LabClient }) {
         {list && (
           <p className="review-count">
             {entries.length.toLocaleString()} of {list.total.toLocaleString()} shown
+            {list.hidden > 0 && <> · {list.hidden.toLocaleString()} unchanged, hidden</>}
             {judgedHere > 0 && <> · {judgedHere.toLocaleString()} judged</>}
           </p>
         )}

@@ -203,8 +203,11 @@ export function createClient({ base = '', fetchImpl = fetch }: ClientOptions = {
                                { method: 'POST' });
     },
 
-    async measureReview(limit = 20): Promise<{ measured: number; failed: { id: string; error: string }[] }> {
-      return json(fetchImpl, at(`/api/review/measure?limit=${limit}`), { method: 'POST' });
+    async measureReview(limit = 20, view?: ReviewView):
+    Promise<{ measured: number; failed: { id: string; error: string }[] }> {
+      const q = new URLSearchParams({ limit: String(limit) });
+      if (view) q.set('view', view);
+      return json(fetchImpl, at(`/api/review/measure?${q}`), { method: 'POST' });
     },
 
     async sheetManifest(source: string, level: number): Promise<SheetManifest> {

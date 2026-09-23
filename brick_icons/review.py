@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import shutil
 import sqlite3
+from collections.abc import Iterable
 from pathlib import Path
 
 DEFAULT_PATH = Path("store-queue") / "review.jsonl"
@@ -318,21 +319,29 @@ def measure(conn: sqlite3.Connection, root: Path | str, log: Path | str,
 def measure_unmeasured(conn: sqlite3.Connection, root: Path | str,
                        log: Path | str, cache_dir: Path | str,
                        limit: int | None = None,
-                       progress=lambda msg: None) -> tuple[int, list[dict]]:
+                       progress=lambda msg: None,
+                       only: Iterable[str] | None = None) -> tuple[int, list[dict]]:
     """Measure the newest entries with no diff, and the ones whose panel was
-    painted under other settings, `limit` of them or all. (measured,
-    [{id, error}] for the ones that could not be).
+    painted under other settings, `limit` of them or all, narrowed to the ids
+    in `only` when it is given. (measured, [{id, error}] for the ones that
+    could not be).
 
     A stale panel counts as unmeasured or a threshold change reaches only the
     entries someone happens to open: the rest keep the drawing the change
     exists to replace.
     """
     ensure_schema(conn)
+    ids = None if only is None else list(only)
+    if ids is not None and not ids:
+        return 0, []
     rows = conn.execute(
-        "SELECT * FROM review WHERE diff_components IS NULL "
-        "   OR diff_panel IS NOT ? ORDER BY at DESC"
+        "SELECT * FROM review WHERE (diff_components IS NULL "
+        "   OR diff_panel IS NOT ?)"
+        + ("" if ids is None
+           else f" AND id IN ({','.join('?' * len(ids))})")
+        + " ORDER BY at DESC"
         + (f" LIMIT {int(limit)}" if limit is not None else ""),
-        (panel_signature(),)).fetchall()
+        (panel_signature(), *(ids or ()))).fetchall()
     measured, failed = 0, []
     for i, row in enumerate(rows, 1):
         try:

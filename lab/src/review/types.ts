@@ -55,6 +55,9 @@ export type ReviewView = 'linked' | 'all';
 export interface ReviewList {
   entries: ReviewEntry[];
   total: number;
+  /** Entries this view is about that fell under the component bar: a redraw
+   *  that displaced a render without changing what it draws. */
+  hidden: number;
   view: ReviewView;
   verdicts: Verdict[];
 }

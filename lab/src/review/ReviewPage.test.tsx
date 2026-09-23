@@ -30,7 +30,7 @@ const entry = (over: Partial<ReviewEntry> = {}): ReviewEntry => ({
 });
 
 const list = (entries: ReviewEntry[], over: Partial<ReviewList> = {}): ReviewList => ({
-  entries, total: entries.length, view: 'linked',
+  entries, total: entries.length, hidden: 0, view: 'linked',
   verdicts: ['fixed', 'better', 'neutral', 'regression'], ...over,
 });
 
@@ -169,4 +169,25 @@ it('says so when a verdict was too old to restore', async () => {
   fireEvent.click(await screen.findByText(/^fixed/));
   fireEvent.click(await screen.findByText('undo'));
   expect(await screen.findByText(/previous checked sha is gone/)).toBeTruthy();
+});
+
+it('says how many unchanged redraws the screen hid, and can show them', async () => {
+  const c = client([entry()]);
+  c.review.mockResolvedValue(list([entry()], { hidden: 20 }));
+  render(<ReviewPage client={c.client} />);
+  await screen.findByText('Brick 2 x 4');
+  expect(screen.getByText(/20 unchanged, hidden/)).toBeTruthy();
+  await waitFor(() => expect(c.review).toHaveBeenCalledWith('linked', 1, false));
+  fireEvent.click(screen.getByLabelText('show unchanged'));
+  await waitFor(() => expect(c.review).toHaveBeenCalledWith('linked', 0, false));
+});
+
+it('measures the linked entries the screen cannot weigh yet', async () => {
+  const c = client([entry({ diff: null })]);
+  const measureReview = vi.fn().mockResolvedValue({ measured: 1, failed: [] });
+  const withMeasure = { ...c.client, measureReview } as unknown as LabClient;
+  render(<ReviewPage client={withMeasure} />);
+  await screen.findByText('Brick 2 x 4');
+  fireEvent.click(screen.getByRole('button', { name: /measure 1 of 1 unmeasured/ }));
+  await waitFor(() => expect(measureReview).toHaveBeenCalledWith(50, 'linked'));
 });
