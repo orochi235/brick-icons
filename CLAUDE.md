@@ -37,7 +37,12 @@ Counts are from the vendored library, 24,591 part files.
 | `3069bpr0001` | 20 | printed, newer convention |
 | `...c01` | 2033 | composite/assembly |
 | `...d01` | 899 | sticker (863 of them) |
-| `u9…` | 1164 | unofficial |
+| `u…` (878 of them `u9`) | 1164 | LDraw-assigned id, for a part with no known LEGO design number |
+
+A `u` id does not mean unofficial: every file in the vendored tree is
+`!LDRAW_ORG Part` or `Shortcut`. They are mostly Fabuland (296), electric and
+Power Functions (284), 12V train and track (67), sails and sheets (64) and
+Modulex (39) — families LEGO never published design numbers for.
 
 **Identify printed parts by the description line** (`Pattern`/`Sticker` in line
 1 of the `.dat`), not the id: `^\d{3,}p\d+$` catches 3254 of 13081, a plain
