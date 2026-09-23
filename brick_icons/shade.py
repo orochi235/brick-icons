@@ -486,6 +486,16 @@ def _axis_binned_stops(samples, style, nbins=8):
     return stops
 
 
+def _one_color(stops):
+    """The single color every stop carries, or None if they differ.
+
+    A binned ramp whose bins all round to one gray paints what a plain fill
+    paints, so emitting the def is bytes for nothing — the same reason
+    WhiteStyle sets `flat`."""
+    colors = {c for _, c in stops}
+    return colors.pop() if len(colors) == 1 else None
+
+
 def _band_edge(run, band, end):
     """The tone at one end of the outermost band.
 
@@ -1639,16 +1649,24 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
             g = f["grad_radial"]
             stops, (fx, fy) = _radial_focal_stops(
                 f["grad_samples"], style, exact=f.get("grad_exact", False))
-            ops.append({"d": d, "depth": f["depth"],
-                        "gradient": {"type": "radial", "cx": g["cx"], "cy": g["cy"],
-                                     "r": g["r"], "ratio": g["ratio"],
-                                     "fx": fx, "fy": fy, "stops": stops}})
+            flat_color = _one_color(stops)
+            if flat_color is not None:
+                ops.append({"d": d, "fill": flat_color, "depth": f["depth"]})
+            else:
+                ops.append({"d": d, "depth": f["depth"],
+                            "gradient": {"type": "radial", "cx": g["cx"], "cy": g["cy"],
+                                         "r": g["r"], "ratio": g["ratio"],
+                                         "fx": fx, "fy": fy, "stops": stops}})
         elif "grad_axis" in f and not deco and not flat:
             p0, p1 = f["grad_axis"]
             stops = _axis_binned_stops(f["grad_samples"], style)
-            ops.append({"d": d, "depth": f["depth"],
-                        "gradient": {"x1": p0[0], "y1": p0[1], "x2": p1[0], "y2": p1[1],
-                                     "stops": stops}})
+            flat_color = _one_color(stops)
+            if flat_color is not None:
+                ops.append({"d": d, "fill": flat_color, "depth": f["depth"]})
+            else:
+                ops.append({"d": d, "depth": f["depth"],
+                            "gradient": {"x1": p0[0], "y1": p0[1],
+                                         "x2": p1[0], "y2": p1[1], "stops": stops}})
         else:
             ops.append({"d": d, "fill": face_fill(f, style, ldraw_dir),
                         "depth": f["depth"]})

@@ -99,8 +99,11 @@ def test_body_geometry_on_a_curved_wall_still_shades_as_a_gradient():
     body = {"poly": np.array([[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]]),
             "normal": np.array([0.0, 0.0, -1.0]), "depth": 1.0, "color": 16,
             "grad_axis": ((0.0, 0.0), (10.0, 10.0)),
-            "grad_samples": [(0.0, np.array([0.0, 0.0, -1.0])),
-                             (1.0, np.array([0.0, 0.0, -1.0]))]}
+            # normals sweep, so the ramp has somewhere to go: one repeated
+            # normal is a one-color ramp, which now paints flat
+            "grad_samples": [(0.0, np.array([-1.0, 0.0, 0.0])),
+                             (0.5, np.array([0.0, 0.0, -1.0])),
+                             (1.0, np.array([1.0, 0.0, 0.0]))]}
     ops = shade.fill_ops([body], style, clip=False, ldraw_dir="vendor/ldraw")
     assert ops and "gradient" in ops[0]
 
@@ -124,3 +127,20 @@ def test_body_facets_still_need_coplanarity_or_a_seam_to_union():
     faces = shade.faces_from_tris(np.array([a, b]), FakeProj(), colors=[16, 16])
     assert len(faces) == 2
     assert faces[0]["group"] != faces[1]["group"]
+
+
+def test_a_gradient_whose_stops_are_one_color_paints_flat():
+    """A curved face whose every binned stop rounds to the same grey is a
+    flat fill wearing a gradient def. 44300's boss carried one with 9 stops
+    and 1 distinct color; the def costs bytes and paints nothing a plain
+    fill would not."""
+    style = shade.Flat3Style(part_color=(157, 157, 157))
+    n = np.array([0.0, 0.0, -1.0])
+    body = {"poly": np.array([[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]]),
+            "normal": n, "depth": 1.0, "color": 16,
+            "grad_axis": ((0.0, 0.0), (10.0, 10.0)),
+            "grad_samples": [(t / 8, n) for t in range(9)]}
+    ops = shade.fill_ops([body], style, clip=False, ldraw_dir="vendor/ldraw")
+    assert ops
+    assert "gradient" not in ops[0], "one-color stops should collapse to a flat fill"
+    assert ops[0]["fill"] == style.ramp(n)
