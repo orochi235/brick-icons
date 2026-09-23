@@ -2355,3 +2355,17 @@ def test_the_seam_veto_leaves_a_declared_rim_alone(ldraw_dir):
     shape, right, up, picked = _picked_for("2654a", ldraw_dir)
     kept = occt._drop_tangent_seams(picked, shape, right, up)
     assert len(kept) >= len(picked) - 2
+
+
+def test_the_seam_veto_keeps_an_arc_the_part_declares(ldraw_dir):
+    """3813 declares an arc right where its sphere meets the collar
+    tangentially. Vetoing the junction alone took 18.5 px of declared edge
+    with it -- the score went from 1 gap to 2 -- so a fragment on a sector a
+    primitive itself covers is kept."""
+    out = occt.flatten_part("3813", ldraw_dir)
+    shape, right, up, picked = _picked_for("3813", ldraw_dir)
+    assert occt.tangent_seam_edges(shape), "the junction is tangent"
+    blind = occt._drop_tangent_seams(picked, shape, right, up)
+    guarded = occt._drop_tangent_seams(picked, shape, right, up, out)
+    assert len(blind) < len(picked), "the junction is claimed by a whole circle"
+    assert len(guarded) == len(picked), "and every piece of it is declared"

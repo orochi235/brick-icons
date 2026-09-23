@@ -779,18 +779,65 @@ def _seam_points(edge, n=33):
     return np.asarray(out, float)
 
 
-def _drop_tangent_seams(picked, shape, right, up):
+def declared_arcs(out, ax, ay):
+    """(locus, lo, hi) for each PARTIAL arc a primitive declares.
+
+    The whole-circle expansion in authored_loci is an inference; the sector
+    the primitive itself covers is not, and stays drawable wherever it lands.
+    3813 declares an arc right on the sphere/collar tangent junction, and
+    vetoing the junction took 18.5 px of declared edge with it."""
+    arcs = []
+    for prim in out["analytic"]:
+        if prim.kind != "edge" and not prim.rims_declared:
+            continue
+        f = frame(prim)
+        if f is None:
+            continue
+        o, uh, ah, vh, ru, rv, h, _rh, _ph = f
+        sec = sector_rad(prim)
+        for c in ([o] if prim.kind == "edge" else [o, o + ah * h]):
+            loc = _ell_locus(c, uh, vh, float(ru), float(rv), "line", ax, ay)
+            if loc is None:
+                continue
+            ts = np.linspace(0.0, sec, 9)
+            pts = _proj2([c + ru * math.cos(t) * uh + rv * math.sin(t) * vh
+                          for t in ts], ax, ay)
+            cs = (pts - loc[1]) @ loc[2].T
+            th = np.unwrap(np.arctan2(cs[:, 1], cs[:, 0]))
+            arcs.append((loc, float(th.min()), float(th.max())))
+    return arcs
+
+
+def _touches_declared(pts, arcs):
+    """Whether any sample of a fragment lies on a declared arc."""
+    for loc, lo, hi in arcs:
+        cs = (pts - loc[1]) @ loc[2].T
+        hit = np.abs(np.linalg.norm(cs, axis=1) - 1.0) < MATCH_TOL
+        if not hit.any():
+            continue
+        th = np.arctan2(cs[:, 1], cs[:, 0])
+        for k in (-1, 0, 1):
+            s = th + k * 2 * math.pi
+            if np.any(hit & (s >= lo - SEAM_PAD) & (s <= hi + SEAM_PAD)):
+                return True
+    return False
+
+
+def _drop_tangent_seams(picked, shape, right, up, out=None):
     """Fragments an `edge` primitive's whole-circle locus claimed where the
     shape says the two surfaces continue tangentially.
 
     Only an "ell" locus is vetoed: that is the whole-conic expansion this
     guards, and a type-2 line comes through as a "seg", so anything actually
-    declared along a seam still draws."""
+    declared along a seam still draws. A fragment that touches the arc its
+    primitive DECLARES is kept for the same reason (see declared_arcs)."""
     if not any(locus[0] == "ell" for _e, locus in picked):
         return picked
-    sectors = _seam_sectors(tangent_seam_edges(shape), *_screen_axes(right, up))
+    ax, ay = _screen_axes(right, up)
+    sectors = _seam_sectors(tangent_seam_edges(shape), ax, ay)
     if not sectors:
         return picked
+    arcs = declared_arcs(out, ax, ay) if out is not None else []
     kept = []
     for edge, locus in picked:
         if locus[0] == "ell":
@@ -798,7 +845,8 @@ def _drop_tangent_seams(picked, shape, right, up):
                 pts = _seam_points(edge)
             except Exception:
                 pts = None
-            if pts is not None and _on_seam(pts, sectors):
+            if (pts is not None and _on_seam(pts, sectors)
+                    and not _touches_declared(pts, arcs)):
                 continue
         kept.append((edge, locus))
     return kept
@@ -2882,7 +2930,7 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None):
                                        _visible_line_spans(comps.get("lines")))
     else:
         picked += select_authored(comps.get("sharp_hidden"), loci)
-    picked = _drop_tangent_seams(picked, shape, right, up)
+    picked = _drop_tangent_seams(picked, shape, right, up, out)
     ops, fold_idx = [], []
     for edge, locus in picked:
         kind = locus[3]
