@@ -27,6 +27,28 @@ def _hex(rgb):
     return f"#{r:02x}{g:02x}{b:02x}"
 
 
+LAMBERT_WRAP = 0.3
+
+
+def lambert(d):
+    """Lambert brightness in [0, 1] from a raw n . L.
+
+    At WRAP = 0 this is the textbook max(0, n.L), which pins every normal
+    facing away from the light to one floor tone. Looking down a bore you see
+    the half of the tube whose normals sweep a full 180 degrees, so a quarter
+    of the face lands on that floor and the tube reads as a flat disc. A
+    positive wrap moves the terminator to n.L = -WRAP, so the shadowed side
+    falls off instead of collapsing. 0.3 was picked off a ladder against
+    LDView (scripts/lambert-wrap-ab.py): it is the smallest value that draws
+    a bore as a tube while a stud's outer wall keeps its dark quarter, and by
+    0.8 the bore is uniformly light again. Flat faces do not move -- flat3's
+    side tones are stylized constants, not Lambert."""
+    w = LAMBERT_WRAP
+    if w <= 0.0:
+        return max(0.0, float(d))
+    return max(0.0, (float(d) + w) / (1.0 + w))
+
+
 class ShadingStyle:
     def tone(self, nv) -> str:
         raise NotImplementedError
@@ -58,7 +80,7 @@ class Flat3Style(ShadingStyle):
 
     def ramp(self, nv):
         """Continuous grey for a curved-surface normal (gradient stops)."""
-        return self.ramp_b(max(0.0, float(np.dot(np.asarray(nv, float), self.light))))
+        return self.ramp_b(lambert(np.dot(np.asarray(nv, float), self.light)))
 
     def ramp_b(self, b):
         """Grey for a raw Lambert brightness (n . light, already clamped)."""
@@ -381,7 +403,7 @@ def _radial_focal_stops(samples, style, nbins=8, exact=False):
     nvs = [np.asarray(n, float) for _, n in samples]
     L = getattr(style, "light", None)
     if L is not None and len(pts) >= 3:
-        b = np.array([max(0.0, float(n @ np.asarray(L, float))) for n in nvs])
+        b = np.array([lambert(n @ np.asarray(L, float)) for n in nvs])
         A = np.column_stack([np.ones(len(pts)), pts])
         # rcond clamps near-degenerate directions (e.g. samples lying along a
         # line) so the fitted slope stays in the well-determined subspace
@@ -473,7 +495,7 @@ def _axis_binned_stops(samples, style, nbins=8):
 
     def band(ns):
         if Lv is not None:
-            return ramp_b(float(np.mean([max(0.0, float(n @ Lv)) for n in ns])))
+            return ramp_b(float(np.mean([lambert(n @ Lv) for n in ns])))
         n = np.mean(ns, axis=0)
         return style.ramp(n / (np.linalg.norm(n) or 1.0))
 
