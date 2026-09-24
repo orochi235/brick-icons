@@ -750,7 +750,9 @@ Not a missing fill. The bore is drawn as two correctly-split fills that shade co
 
 2026-09-17 review neutral: front wall is better but borehole shading is worse
 
-2026-09-23 review better"""
+2026-09-23 review better
+
+2026-09-24: root cause found and fixed at cccfe19. The bore was never missing a gradient -- shade's max(0, n.L) pinned every normal facing away from the light to one floor tone, and looking down a bore you see exactly the half of the tube whose normals sweep 180 degrees. shade.LAMBERT_WRAP now moves the terminator to n.L = -0.3. Awaiting a redraw to judge on /review."""
 
 [[defect]]
 id = "35480-wall-fill-hairline"
@@ -1955,7 +1957,9 @@ filed = "2026-09-10"
 notes = """
 2026-09-17 review neutral: front wall is better but borehole shading is worse
 
-2026-09-23 review better"""
+2026-09-23 review better
+
+2026-09-24: root cause found and fixed at cccfe19. The bore was never missing a gradient -- shade's max(0, n.L) pinned every normal facing away from the light to one floor tone, and looking down a bore you see exactly the half of the tube whose normals sweep 180 degrees. shade.LAMBERT_WRAP now moves the terminator to n.L = -0.3. Awaiting a redraw to judge on /review."""
 
 [[defect]]
 id = "4531d01-dots-have-white-artifacts-around"
@@ -2771,7 +2775,9 @@ filed = "2026-09-13"
 notes = """
 2026-09-17 review better
 
-2026-09-23 review neutral"""
+2026-09-23 review neutral
+
+2026-09-24: root cause found and fixed at cccfe19. The bore was never missing a gradient -- shade's max(0, n.L) pinned every normal facing away from the light to one floor tone, and looking down a bore you see exactly the half of the tube whose normals sweep 180 degrees. shade.LAMBERT_WRAP now moves the terminator to n.L = -0.3. Awaiting a redraw to judge on /review."""
 
 [[defect]]
 id = "3170-connector-rod-has-extra-outline"
@@ -3239,6 +3245,7 @@ status = "open"
 title = "interior borehole shading problems and several unculled internal shafts"
 checked = { occt = "ff3cd24f9ed87bc90d11d138daa758455f9b2b95beaae65c79a4efd02138b650" }
 filed = "2026-09-23"
+notes = "2026-09-24: root cause found and fixed at cccfe19. The bore was never missing a gradient -- shade's max(0, n.L) pinned every normal facing away from the light to one floor tone, and looking down a bore you see exactly the half of the tube whose normals sweep 180 degrees. shade.LAMBERT_WRAP now moves the terminator to n.L = -0.3. Awaiting a redraw to judge on /review."
 
 [[defect]]
 id = "6542b-one-inner-ring-is-totally"
@@ -3257,6 +3264,7 @@ status = "open"
 title = "inner borehole improperly lit/shaded"
 checked = { occt = "25c1a80f50bc10be1c699f1cd85c64b095a9881d7e128d024e17641e3b99d9d4" }
 filed = "2026-09-23"
+notes = "2026-09-24: root cause found and fixed at cccfe19. The bore was never missing a gradient -- shade's max(0, n.L) pinned every normal facing away from the light to one floor tone, and looking down a bore you see exactly the half of the tube whose normals sweep 180 degrees. shade.LAMBERT_WRAP now moves the terminator to n.L = -0.3. Awaiting a redraw to judge on /review."
 
 [[defect]]
 id = "11477dy8-doing-a-bad-job-projecting"
@@ -3367,4 +3375,6 @@ What is NOT the cause, measured:
 
 So the ramp is built and lost downstream of _span_face -- ordering, clipping or the group-ramp handoff (occt.py around 2137-2170 and 2280-2330 pop grad_axis in favour of a group ramp). Next step: instrument those pops and the visibility sort for the r=4 spans.
 
-Repro: .venv/bin/python -m brick_icons.cli 19121 --engine occt --shading outline --shade-style flat3 --angle iso --format svg"""
+Repro: .venv/bin/python -m brick_icons.cli 19121 --engine occt --shading outline --shade-style flat3 --angle iso --format svg
+
+2026-09-24: root cause found and fixed at cccfe19. The bore was never missing a gradient -- shade's max(0, n.L) pinned every normal facing away from the light to one floor tone, and looking down a bore you see exactly the half of the tube whose normals sweep 180 degrees. shade.LAMBERT_WRAP now moves the terminator to n.L = -0.3. Awaiting a redraw to judge on /review."""
