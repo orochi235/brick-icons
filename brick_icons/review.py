@@ -133,6 +133,8 @@ def fold(lines: list[dict]) -> dict[str, dict]:
                                       ("verdict", "note", "by", "defects", "at")}
         elif eid in entries and kind == "unjudged":
             entries[eid]["judged"] = None
+        elif kind == "dropped":
+            entries.pop(eid, None)
     return entries
 
 
@@ -260,6 +262,22 @@ def record_unjudged(conn: sqlite3.Connection, log: Path | str, eid: str, *,
     conn.execute("UPDATE review SET verdict = NULL, note = NULL, "
                  "judged_at = NULL, judged_by = NULL, judged_defects = NULL "
                  "WHERE id = ?", (eid,))
+    conn.commit()
+    return line
+
+
+def record_dropped(conn: sqlite3.Connection, log: Path | str, eid: str, *,
+                   by: str) -> dict:
+    """Retire an entry nobody is going to judge.
+
+    The log is append-only and `fold` rebuilds the table from it, so deleting
+    the row alone is undone by the next rebuild -- a drop has to be a line of
+    its own. The displaced drawing under `before/` is NOT removed here: a
+    reaper can only know a kept copy is unreferenced by looking at every
+    entry at once, which is `scripts/flush-review.py`'s job."""
+    line = {"kind": "dropped", "id": eid, "at": _now(), "by": by}
+    append(log, line)
+    conn.execute("DELETE FROM review WHERE id = ?", (eid,))
     conn.commit()
     return line
 

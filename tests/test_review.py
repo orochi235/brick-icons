@@ -292,3 +292,23 @@ def test_measure_unmeasured_takes_the_panels_painted_under_old_settings(tmp_path
     # Nothing left to do on a second pass.
     assert review.measure_unmeasured(
         conn, tmp_path, tmp_path / "review.jsonl", tmp_path / "cache") == (0, [])
+
+
+def test_a_dropped_entry_does_not_come_back_when_the_log_is_folded(conn, tmp_path):
+    """The log is append-only and `fold` rebuilds the table from it, so
+    deleting a row alone is undone by the next rebuild. A drop is a line."""
+    log = tmp_path / "review.jsonl"
+    _draw(tmp_path, "out/a", "3001", SVG)
+    _draw(tmp_path, ".", "3001", SVG2)
+    line = review.record_replaced(
+        conn, tmp_path, log, part="3001", source="occt",
+        before={"path": "out/a/renders/occt/3001.svg",
+                "sha256": goldens.sha256(SVG), "made_at": None, "run_id": 1},
+        after={"path": "renders/occt/3001.svg", "sha256": goldens.sha256(SVG2)},
+        run_id=2, by="test")
+    eid = line["id"]
+    assert eid in review.fold(review.load(log))
+    review.record_dropped(conn, log, eid, by="test")
+    assert eid not in review.fold(review.load(log))
+    assert conn.execute("SELECT COUNT(*) n FROM review WHERE id = ?",
+                        (eid,)).fetchone()["n"] == 0

@@ -160,6 +160,21 @@ def test_a_regression_keeps_the_defect_open(lab):
     assert record["notes"].endswith("review regression")
 
 
+def test_a_regression_reopens_a_defect_an_earlier_verdict_closed(lab):
+    """A fix recorded once and undone by a later redraw left the defect
+    `fixed` with a regression noted underneath it, so nothing listed it as
+    live again and only a reader of the notes would ever know."""
+    client, root = lab
+    eid = review.entry_id("occt", "3001", _sha(SVG2))
+    client.post(f"/api/review/{eid}/verdict", json={"verdict": "fixed"})
+    assert defects.load(root / "defects.toml")[0]["status"] == "fixed"
+    item = client.post(f"/api/review/{eid}/verdict",
+                       json={"verdict": "regression"}).json()
+    record = defects.load(root / "defects.toml")[0]
+    assert record["status"] == "open"
+    assert [d["status"] for d in item["defects"]] == ["open"]
+
+
 def test_an_unknown_verdict_is_400(lab):
     client, _root = lab
     eid = review.entry_id("occt", "3001", _sha(SVG2))
@@ -326,3 +341,46 @@ def test_the_entry_points_at_its_reference(lab):
     client, _root = lab
     entry = client.get("/api/review").json()["entries"][0]
     assert entry["urls"]["reference"] == f"/api/review/{entry['id']}/reference"
+
+
+def test_each_side_reports_its_file_size(lab):
+    """Two drawings that look alike can differ enormously in what they are
+    made of, and the diff panel cannot show that."""
+    client, _root = lab
+    item = client.get("/api/review?view=all").json()["entries"][0]
+    for side in ("before", "after"):
+        content = item[side]["content"]
+        assert content["bytes"] > 0
+        assert content["shapes"] is not None
+
+
+def test_content_counts_the_elements_the_engine_draws(tmp_path):
+    """`<path>` and `<line>` are the whole vocabulary of a render; a clipPath
+    is a mask, not ink, and must not be counted as a shape."""
+    from brick_icons.lab import review_api
+    svg = tmp_path / "renders" / "occt" / "3001.svg"
+    svg.parent.mkdir(parents=True)
+    svg.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">'
+        '<defs><linearGradient id="g0"><stop offset="0%" stop-color="#000"/>'
+        '</linearGradient>'
+        '<clipPath id="c"><path d="M 0 0 L 9 9"/></clipPath></defs>'
+        '<path d="M 1 1 L 2 2" fill="url(#g0)"/><path d="M 3 3 L 4 4"/>'
+        '<line x1="0" y1="0" x2="5" y2="5"/><line x1="1" y1="0" x2="5" y2="4"/>'
+        '</svg>')
+    got = review_api._content(tmp_path, "renders/occt/3001.svg")
+    assert got["shapes"] == 2 and got["lines"] == 2 and got["gradients"] == 1
+    assert got["bytes"] == svg.stat().st_size
+
+
+def test_content_of_a_missing_or_unreadable_side_is_empty(tmp_path):
+    """A kept `.svg` can hold a raster -- `keep_before` names the copy after
+    the row's slot, not after what the bytes are -- and a side can be gone."""
+    from brick_icons.lab import review_api
+    png = tmp_path / "renders" / "occt" / "3001.svg"
+    png.parent.mkdir(parents=True)
+    Image.new("RGB", (8, 8), "white").save(png, format="PNG")
+    got = review_api._content(tmp_path, "renders/occt/3001.svg")
+    assert got["bytes"] > 0 and got["shapes"] is None
+    assert review_api._content(tmp_path, "renders/occt/nope.svg") == {
+        "bytes": None, "shapes": None, "lines": None, "gradients": None}

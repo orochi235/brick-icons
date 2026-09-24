@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from xml.etree import ElementTree
 from datetime import date
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from .. import db as corpus_db
+from .. import goldens
 from .. import requests as render_requests
 from .. import review
 from . import cells, defects
@@ -33,6 +35,40 @@ REFERENCE_SOURCE = "reference"
 class Verdict(BaseModel):
     verdict: str
     note: str = ""
+
+
+def _content(root: Path | str, *rels: str | None) -> dict:
+    """Byte size and what the drawing is made OF, for the first of `rels`
+    that resolves to a file inside root.
+
+    Two renders that look alike can differ enormously in their makeup -- the
+    same silhouette as a dozen arcs or as nine hundred facet edges -- and the
+    diff panel cannot show it. Counts come from `goldens.summarize_svg`, the
+    one place that parses a rendered SVG, and are None for a raster slot.
+    """
+    base = Path(root).resolve()
+    path = None
+    for rel in rels:
+        if not rel:
+            continue
+        cand = (base / rel).resolve()
+        if base in cand.parents and cand.is_file():
+            path = cand
+            break
+    if path is None:
+        return {"bytes": None, "shapes": None, "lines": None, "gradients": None}
+    out = {"bytes": path.stat().st_size, "shapes": None, "lines": None,
+           "gradients": None}
+    if path.suffix == ".svg":
+        try:
+            s = goldens.summarize_svg(path.read_text())
+        except (UnicodeDecodeError, ElementTree.ParseError):
+            # a kept `.svg` can hold a raster: `keep_before` names the copy
+            # after the row's slot, not after what the bytes are
+            return out
+        out.update(shapes=s["paths"], lines=s["lines"],
+                   gradients=s["gradients"])
+    return out
 
 
 def _measurement(conn: sqlite3.Connection, run_id: int | None, part: str,
@@ -73,7 +109,7 @@ def linked_request(asked: list[dict], part: str, source: str,
 
 
 def entry(conn: sqlite3.Connection, row: sqlite3.Row, records: list[dict],
-          asked: list[dict]) -> dict:
+          asked: list[dict], root: Path | str = ".") -> dict:
     part, source = row["part_id"], row["source"]
     title = conn.execute("SELECT title FROM parts WHERE id = ?",
                          (part,)).fetchone()
@@ -116,10 +152,13 @@ def entry(conn: sqlite3.Connection, row: sqlite3.Row, records: list[dict],
                    "made_at": row["before_made_at"],
                    "run_id": row["before_run_id"], "kept": row["before_kept"],
                    **_measurement(conn, row["before_run_id"], part, source),
+                   "content": _content(root, row["before_kept"],
+                                       row["before_path"]),
                    "edge": _edge(conn, part, source, row["before_sha"])},
         "after": {"path": row["after_path"], "sha256": row["after_sha"],
                   "made_at": after_made, "run_id": row["run_id"],
                   **_measurement(conn, row["run_id"], part, source),
+                  "content": _content(root, row["after_path"]),
                   "edge": _edge(conn, part, source, row["after_sha"])},
         "diff": diffed,
         "defects": [{"id": r["id"], "title": r["title"], "status": r["status"],
@@ -196,7 +235,7 @@ def install(app: FastAPI, corpus_conn) -> None:
             asked = render_requests.load(app.state.requests_path)
             out, total, hidden = [], 0, 0
             for row in conn.execute("SELECT * FROM review ORDER BY at DESC"):
-                item = entry(conn, row, records, asked)
+                item = entry(conn, row, records, asked, root())
                 if not in_view(item, view, judged):
                     continue
                 if not over_bar(item, min_components):
@@ -258,7 +297,7 @@ def install(app: FastAPI, corpus_conn) -> None:
                 only = [row["id"] for row
                         in conn.execute("SELECT * FROM review "
                                         "ORDER BY at DESC").fetchall()
-                        if in_view(entry(conn, row, records, asked), view,
+                        if in_view(entry(conn, row, records, asked, root()), view,
                                    judged=False)]
             measured, failed = review.measure_unmeasured(
                 conn, root(), log(), cache_dir(), limit, only=only)
@@ -277,7 +316,16 @@ def install(app: FastAPI, corpus_conn) -> None:
             touched, restore = [], {}
             stamp = f"{date.today().isoformat()} review {body.verdict}"
             line = f"{stamp}: {body.note.strip()}" if body.note.strip() else stamp
-            for record in linked_defects(records, row["part_id"], row["source"]):
+            # A defect this same entry already closed is no longer "linked" --
+            # `linked_defects` returns open ones -- so without this a second
+            # verdict on the entry that closed it speaks to nothing, and a
+            # regression could never take the closure back.
+            was = review.last_judged(log(), eid)
+            spoke_to = set(was["defects"]) if was else set()
+            speaking = linked_defects(records, row["part_id"], row["source"])
+            speaking += [r for r in records if r["id"] in spoke_to
+                         and r["id"] not in {d["id"] for d in speaking}]
+            for record in speaking:
                 # What the verdict is about to overwrite, so an undo puts it
                 # back verbatim instead of reconstructing a previous sha it
                 # has no other record of.
@@ -292,6 +340,13 @@ def install(app: FastAPI, corpus_conn) -> None:
                                            line) if p)}
                 if body.verdict == "fixed":
                     changes["status"] = "fixed"
+                elif body.verdict == "regression" and \
+                        record.get("status") == "fixed":
+                    # a fix recorded once and undone by a later redraw left
+                    # the defect closed with the regression noted underneath,
+                    # so nothing listed it as live and only a reader of the
+                    # notes would know
+                    changes["status"] = "open"
                 updated = defects.update(app.state.defects_path, record["id"],
                                          changes)
                 corpus_db.upsert_defect(conn, updated)
@@ -300,7 +355,8 @@ def install(app: FastAPI, corpus_conn) -> None:
                                  by="lab", defects=touched, restore=restore)
             item = entry(conn, row_for(eid, conn),
                          defects.load(app.state.defects_path),
-                         render_requests.load(app.state.requests_path))
+                         render_requests.load(app.state.requests_path),
+                         root())
         finally:
             conn.close()
         return item
@@ -335,7 +391,8 @@ def install(app: FastAPI, corpus_conn) -> None:
             review.record_unjudged(conn, log(), eid, by="lab")
             item = entry(conn, row_for(eid, conn),
                          defects.load(app.state.defects_path),
-                         render_requests.load(app.state.requests_path))
+                         render_requests.load(app.state.requests_path),
+                         root())
             item["restored"] = bool(held) or not row["judged_defects"] or \
                 json.loads(row["judged_defects"]) == []
         finally:
@@ -370,7 +427,8 @@ def install(app: FastAPI, corpus_conn) -> None:
         try:
             item = entry(conn, row_for(eid, conn),
                          defects.load(app.state.defects_path),
-                         render_requests.load(app.state.requests_path))
+                         render_requests.load(app.state.requests_path),
+                         root())
         finally:
             conn.close()
         return item
