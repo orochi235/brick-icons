@@ -15,6 +15,7 @@ corpus, not only the bores it is aimed at. Pass control parts with no recess
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
 import tempfile
@@ -48,6 +49,23 @@ def draw(part: str, argv: list[str], wrap: float, zoom: int) -> Image.Image:
         tmp.rmdir()
 
 
+def _floor_share(im):
+    """Fraction of the drawn part that sat on the shading floor tone.
+
+    The floor is the ONE grey every normal facing away from the light collapses
+    to, so this is the area the wrap has to act on -- a part with none of it is
+    not a terminator-floor defect however bad its shading looks."""
+    import numpy as np
+    from brick_icons import shade
+    floor = shade.Flat3Style().ramp_b(0.0)
+    rgb = tuple(int(floor[k:k + 2], 16) for k in (1, 3, 5))
+    a = np.asarray(im, int)
+    drawn = a.max(axis=2) > 0
+    if not drawn.any():
+        return 0.0
+    return float((np.abs(a - np.array(rgb)).max(axis=2) == 0).sum() / drawn.sum())
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("parts", nargs="+")
@@ -56,22 +74,44 @@ def main() -> int:
     ap.add_argument("--engine", default="occt")
     ap.add_argument("--angle", default="iso")
     ap.add_argument("--zoom", type=int, default=3)
-    ap.add_argument("--sheet", type=Path, required=True)
+    ap.add_argument("--sheet", type=Path)
+    ap.add_argument("--rows", type=Path,
+                    help="append one JSON row per part: diff size and "
+                         "how much of the wrap-0 drawing sat on the floor tone")
+    ap.add_argument("--top", type=int,
+                    help="sheet only the N parts with the largest diff")
     args = ap.parse_args()
 
     argv = ["--engine", args.engine, "--shading", "outline",
             "--shade-style", "flat3", "--angle", args.angle, "--format", "svg"]
     wraps = args.wrap or [0.5]
     jobs = [(p, w) for p in args.parts for w in wraps]
-    rows = []
+    for out in (args.rows, args.sheet):
+        if out:
+            out.parent.mkdir(parents=True, exist_ok=True)
+    rows, stats = [], []
     for i, (part, w) in enumerate(jobs, 1):
         before = draw(part, argv, 0.0, args.zoom)
         after = draw(part, argv, w, args.zoom)
         rows.append((f"{part}\nwrap {w}", before, after))
-        print(f"{i}/{len(jobs)} {part} wrap {w}", flush=True)
-    _sheet.sheet(f"Lambert terminator wrap -- {args.engine} flat3 {args.angle}",
-                 rows, columns=("wrap 0 (HEAD)", "wrapped"), out=args.sheet)
-    print(f"wrote {args.sheet}")
+        mask = _sheet.changed(before, after)
+        px = int(mask.sum())
+        comps = _sheet.components(mask)
+        floor = _floor_share(before)
+        stats.append({"part": part, "wrap": w, "components": comps,
+                      "pixels": px, "floor_share": round(floor, 4)})
+        if args.rows:
+            with args.rows.open("a") as fh:
+                fh.write(json.dumps(stats[-1]) + "\n")
+        print(f"{i}/{len(jobs)} {part:12} {comps:4d} comp {px:8d} px  "
+              f"floor {floor:6.2%}", flush=True)
+    if args.top:
+        order = sorted(range(len(rows)), key=lambda k: -stats[k]["pixels"])
+        rows = [rows[k] for k in order[:args.top]]
+    if args.sheet:
+        _sheet.sheet(f"Lambert terminator wrap -- {args.engine} flat3 {args.angle}",
+                     rows, columns=("wrap 0 (HEAD)", "wrapped"), out=args.sheet)
+        print(f"wrote {args.sheet}")
     return 0
 
 
