@@ -634,7 +634,9 @@ filed = "2026-09-07"
 notes = """
 2026-09-17 review regression
 
-2026-09-23 review regression"""
+2026-09-23 review regression
+
+2026-09-24 terminator-wrap scan (scripts/lambert-wrap-ab.py over 41 open shading defects, rows in out/lambert-scan/rows.jsonl): 0.6% floor, 356 px moved. The dot is not a shading-floor artifact."""
 
 [[defect]]
 id = "96904-top-annulus-missing-other-arc"
@@ -699,7 +701,9 @@ filed = "2026-09-07"
 notes = """
 2026-09-17 review neutral
 
-2026-09-23 review better"""
+2026-09-23 review better
+
+2026-09-24 terminator-wrap scan (scripts/lambert-wrap-ab.py over 41 open shading defects, rows in out/lambert-scan/rows.jsonl): 11.8% floor and 24,787 px released on the large cylinder. Likely improved by cccfe19, though the harsh step at the top of the face survives; judge on a redraw."""
 
 [[defect]]
 id = "4616559cc01-very-messy-decal"
@@ -904,7 +908,10 @@ status = "open"
 title = "too convex; banding in shaded version"
 checked = { occt = "80f6182de2396696144fc37971ba6b0a06153ae1a763716000560e67313e542d", silhouette-occt = "cd70adfa083a677c1832d96ae0fb88b6a2bf53928af493ca0ac3fb51244602a4", white-occt = "9e7e4fd35e903cb1f044ff30c0a97b2aaa32b7b8d2a201adf044b473cbc020df" }
 filed = "2026-09-08"
-notes = "2026-09-17 review regression"
+notes = """
+2026-09-17 review regression
+
+2026-09-24 terminator-wrap scan (scripts/lambert-wrap-ab.py over 41 open shading defects, rows in out/lambert-scan/rows.jsonl): 2.0% floor, 55,766 px moved, banding unchanged. Not a floor defect."""
 
 [[defect]]
 id = "6155286t-silhouette-occt-is-wrong-but"
@@ -2009,7 +2016,10 @@ status = "open"
 title = "has dark tangent band problem that we solved in other curved pieces a few days ago"
 checked = { naive = "66ab21ddf66efe6241f767fc87624c0050aea51841965b29bcdd7122daef7165" }
 filed = "2026-09-11"
-notes = "2026-09-11: looked at HEAD over the reference. Still a hard dark band along the lower flank where the reference is a smooth gradient."
+notes = """
+2026-09-11: looked at HEAD over the reference. Still a hard dark band along the lower flank where the reference is a smooth gradient.
+
+2026-09-24 terminator-wrap scan (scripts/lambert-wrap-ab.py over 41 open shading defects, rows in out/lambert-scan/rows.jsonl): 0.00% floor share -- the only part of the 41 with none at all -- so the dark tangent band is not the shading floor, whatever else it is. 28,764 px still moved under the wrap, which is the ramp shifting, not the band resolving."""
 
 [[defect]]
 id = "22385d01-white-cracks-between-lettering-and"
@@ -2032,7 +2042,9 @@ filed = "2026-09-12"
 notes = """
 2026-09-17 review better
 
-2026-09-23 review neutral"""
+2026-09-23 review neutral
+
+2026-09-24 terminator-wrap scan (scripts/lambert-wrap-ab.py over 41 open shading defects, rows in out/lambert-scan/rows.jsonl): 12.0% floor and 22,229 px released -- the hat's shadowed side wall now ramps instead of sitting on the floor. Likely improved by cccfe19; judge on a redraw."""
 
 [[defect]]
 id = "71711p01-shading-and-studding-issues-on"
@@ -2515,7 +2527,9 @@ filed = "2026-09-13"
 notes = """
 2026-09-17 review better
 
-2026-09-23 review neutral"""
+2026-09-23 review neutral
+
+2026-09-24 terminator-wrap scan (scripts/lambert-wrap-ab.py over 41 open shading defects, rows in out/lambert-scan/rows.jsonl): the wrap moved 72,298 px, the largest of the 41, and the front is still several vertical bands afterwards. Not a floor defect: the bands are adjacent faces each fitting their own ramp."""
 
 [[defect]]
 id = "93091-outlines-are-admittedly-challenging-but"
@@ -2726,7 +2740,9 @@ filed = "2026-09-13"
 notes = """
 2026-09-17 review better
 
-2026-09-23 review neutral"""
+2026-09-23 review neutral
+
+2026-09-24 terminator-wrap scan (scripts/lambert-wrap-ab.py over 41 open shading defects, rows in out/lambert-scan/rows.jsonl): 9.96% floor, 35,672 px moved, and the dome and the band below it are still two fields afterwards. Not a floor defect -- the two surfaces need one group, which is what _merge_turn_gradients does elsewhere."""
 
 [[defect]]
 id = "65304-fill-is-a-hot-mess"
@@ -3150,7 +3166,9 @@ HEAD 161156e.
 
 2026-09-23: diagnosed, not fixed. The wedge is a lighter fill painted OVER the rib front, with a straight diagonal boundary, which is what two interpenetrating faces look like under a painter's algorithm -- the same single-witness decision 2310-crap-on-darkest-face-and comes back to. order_faces settles each overlapping pair at ONE most-interior witness point, so a pair whose depth order REVERSES across the overlap gets one answer for a region that needs two. Measured at iso on the 480 ordered faces: sampling each pair inside its own rasterized overlap (not its bbox), 102 pairs of 9,856 have samples of both signs, so the reversal is common rather than exotic. Caveat on that number: it reads every face through its plane depth function, where order_faces reads an analytic face through its own occluder, so curved faces are over-counted and the planar pairs are the solid part of it. No single witness can order an interpenetrating pair; the classic answer is to split one face along the pair's screen-space intersection line and order the pieces, which is a real piece of work and a decision to take deliberately.
 
-2026-09-23 review neutral"""
+2026-09-23 review neutral
+
+2026-09-24 terminator-wrap scan (scripts/lambert-wrap-ab.py over 41 open shading defects, rows in out/lambert-scan/rows.jsonl): 52.7% of the drawing sits on the shading floor, the highest of the 41, and the wrap released almost none of it -- 3,626 px, all of it stud wall, and the wedge is pixel-identical. That is the floor doing its job on genuinely dark-facing ribs, and it confirms the face-ordering diagnosis above: the wedge is not a lighting artifact."""
 
 [[defect]]
 id = "u768p01c01-occt-hole-rims-lumpy-and-stroke-width-varies"
@@ -3274,6 +3292,7 @@ status = "open"
 title = "doing a bad job projecting halftone print over a curved surface"
 checked = { occt = "6e621b93a20b3485e298c0212518de40853f84f6759b16f85ba29687caeea449" }
 filed = "2026-09-23"
+notes = "2026-09-24 terminator-wrap scan (scripts/lambert-wrap-ab.py over 41 open shading defects, rows in out/lambert-scan/rows.jsonl): 14.9% floor but only 825 px in one component moved, so that floor is beyond the terminator and the halftone projection is untouched."
 
 [[defect]]
 id = "6942-bad-culling"
@@ -3346,6 +3365,7 @@ status = "open"
 title = "face is broken into two gradient regions instead of one smooth one"
 checked = { translucent-naive = "52e5aa463b397b81b0beaf2070fc07351bfa69eca80dd823f6ae3e18b9514e6e" }
 filed = "2026-09-23"
+notes = "2026-09-24 terminator-wrap scan (scripts/lambert-wrap-ab.py over 41 open shading defects, rows in out/lambert-scan/rows.jsonl): 3.1% floor, 40,615 px moved, and the face is still two gradient regions afterwards. Not a floor defect."
 
 [[defect]]
 id = "1686-minor-tessellation-artifacts-in-top"
