@@ -3190,8 +3190,9 @@ part = "27149"
 engines = ["occt"]
 status = "open"
 title = "occt shading is a disaster"
-checked = { occt = "cda72e41cad186d45e7fd9e9275eb037616637e6aaceec62ef3ad6700ca4e1a2" }
+checked = { occt = "cda72e41cad186d45e7fd9e9275eb037616637e6aaceec62ef3ad6700ca4e1a2", white-occt = "e3fd5790cfb9f8b5fc3bf71773185e23ffcde02dada84aba48445fed080e993a" }
 filed = "2026-09-23"
+notes = "2026-09-24 review better"
 
 [[defect]]
 id = "35660-occt-bill-shading-is-bad"
@@ -3199,8 +3200,9 @@ part = "35660"
 engines = ["occt"]
 status = "open"
 title = "occt bill shading is bad in middle"
-checked = { occt = "28d34a556e160494b929cfd62afb23570884690ac0c74d2586b1efc7565419aa" }
+checked = { occt = "28d34a556e160494b929cfd62afb23570884690ac0c74d2586b1efc7565419aa", white-occt = "02cbe643c5ba6fc5d17758a65d664f7c463dccba13a8ec78018611d59b9a879b" }
 filed = "2026-09-23"
+notes = "2026-09-24 review better"
 
 [[defect]]
 id = "30126-shading-bad"
@@ -3208,8 +3210,9 @@ part = "30126"
 engines = ["occt"]
 status = "open"
 title = "shading bad"
-checked = { occt = "71752ffa2b1adeb22986d990e7ec0dda18982b77771866156c1ee93e97d566a4" }
+checked = { occt = "71752ffa2b1adeb22986d990e7ec0dda18982b77771866156c1ee93e97d566a4", white-occt = "1a53d2c4613bad688ac369e8826148c608b7b02d4ce02da356dc57fa4a22c687" }
 filed = "2026-09-23"
+notes = "2026-09-24 review better"
 
 [[defect]]
 id = "u8204-occt-stud-rim-wedges-inked-black"
@@ -3243,8 +3246,9 @@ part = "24308a"
 engines = ["occt"]
 status = "open"
 title = "very messy shadng; the b variant is better"
-checked = { occt = "5398550b12a6e368e1959305e11b972fb9a0b1439d1914f20ddd6af53f43bd79" }
+checked = { occt = "5398550b12a6e368e1959305e11b972fb9a0b1439d1914f20ddd6af53f43bd79", white-occt = "c62cd987f2a1f25c646038540b287b934684c4042505e581fe0efe7198164eb7" }
 filed = "2026-09-23"
+notes = "2026-09-24 review neutral"
 
 [[defect]]
 id = "21019bp0d-occt-shading-on-thighs-is"
@@ -3252,8 +3256,9 @@ part = "21019bp0d"
 engines = ["occt"]
 status = "open"
 title = "occt shading on thighs is too harsh/linear"
-checked = { occt = "a5f5cd3d00bf25a88df5728030592b2d89651d0d1cf69b6bd734723f9a0cc910" }
+checked = { occt = "a5f5cd3d00bf25a88df5728030592b2d89651d0d1cf69b6bd734723f9a0cc910", white-occt = "eca45361780b86e4da6b688e6e185601351cfd32c8d3cc347f0003e0be9c99a9" }
 filed = "2026-09-23"
+notes = "2026-09-24 review neutral: shading between legs is fixed but now there's an extra quad on the side of the front leg"
 
 [[defect]]
 id = "4595-interior-borehole-shading-problems-and"
@@ -3261,9 +3266,14 @@ part = "4595"
 engines = ["occt"]
 status = "open"
 title = "interior borehole shading problems and several unculled internal shafts"
-checked = { occt = "ff3cd24f9ed87bc90d11d138daa758455f9b2b95beaae65c79a4efd02138b650" }
+checked = { occt = "ff3cd24f9ed87bc90d11d138daa758455f9b2b95beaae65c79a4efd02138b650", white-occt = "01d6ee04b3b7b2ae5bd3727c018e8a9d57624fb28a4091fd8c612cea38c55c6d" }
 filed = "2026-09-23"
-notes = "2026-09-24: root cause found and fixed at cccfe19. The bore was never missing a gradient -- shade's max(0, n.L) pinned every normal facing away from the light to one floor tone, and looking down a bore you see exactly the half of the tube whose normals sweep 180 degrees. shade.LAMBERT_WRAP now moves the terminator to n.L = -0.3. Awaiting a redraw to judge on /review."
+notes = """
+2026-09-24: root cause found and fixed at cccfe19. The bore was never missing a gradient -- shade's max(0, n.L) pinned every normal facing away from the light to one floor tone, and looking down a bore you see exactly the half of the tube whose normals sweep 180 degrees. shade.LAMBERT_WRAP now moves the terminator to n.L = -0.3. Awaiting a redraw to judge on /review.
+
+2026-09-24 review regression
+
+2026-09-24 review regression"""
 
 [[defect]]
 id = "6542b-one-inner-ring-is-totally"
@@ -3271,8 +3281,12 @@ part = "6542b"
 engines = ["occt"]
 status = "open"
 title = "one inner ring is totally unshaded"
-checked = { occt = "9b3ef6cac1f7bf4499873086684f78850795ba221d88917648022aa7368f3d10" }
+checked = { occt = "9b3ef6cac1f7bf4499873086684f78850795ba221d88917648022aa7368f3d10", white-occt = "65df0e50f0128013328e480fa7c5b7c0e9a7d69cf432fc02ac119db08d19ba68" }
 filed = "2026-09-23"
+notes = """
+2026-09-24 review better
+
+2026-09-24 review regression"""
 
 [[defect]]
 id = "13670-inner-borehole-improperly-lit-shaded"
@@ -3290,9 +3304,12 @@ part = "11477dy8"
 engines = ["occt"]
 status = "open"
 title = "doing a bad job projecting halftone print over a curved surface"
-checked = { occt = "6e621b93a20b3485e298c0212518de40853f84f6759b16f85ba29687caeea449" }
+checked = { occt = "6e621b93a20b3485e298c0212518de40853f84f6759b16f85ba29687caeea449", white-occt = "b7391f0516eb257c3d0591dc6afe977085d568d5cf46885333e95b2a386617c4" }
 filed = "2026-09-23"
-notes = "2026-09-24 terminator-wrap scan (scripts/lambert-wrap-ab.py over 41 open shading defects, rows in out/lambert-scan/rows.jsonl): 14.9% floor but only 825 px in one component moved, so that floor is beyond the terminator and the halftone projection is untouched."
+notes = """
+2026-09-24 terminator-wrap scan (scripts/lambert-wrap-ab.py over 41 open shading defects, rows in out/lambert-scan/rows.jsonl): 14.9% floor but only 825 px in one component moved, so that floor is beyond the terminator and the halftone projection is untouched.
+
+2026-09-24 review neutral"""
 
 [[defect]]
 id = "6942-bad-culling"
@@ -3300,8 +3317,9 @@ part = "6942"
 engines = ["occt"]
 status = "open"
 title = "bad culling"
-checked = { occt = "92a71c530d783004c45d32dd6cf15ec4ff44fedd80f7384ae5f852b3800bbe11" }
+checked = { occt = "92a71c530d783004c45d32dd6cf15ec4ff44fedd80f7384ae5f852b3800bbe11", white-occt = "4a24bd4435c381c86458db21157c042bce764aec3484acfd8b5b920b4f2c0a88" }
 filed = "2026-09-23"
+notes = "2026-09-24 review regression"
 
 [[defect]]
 id = "6558-faces-are-an-enormous-mess"
@@ -3309,8 +3327,12 @@ part = "6558"
 engines = ["occt"]
 status = "open"
 title = "faces are an enormous mess"
-checked = { occt = "2ee8b8ff8bbc59111d984ee6ef48dc14cdc6ce22a66a5bd5b9826568249f559b" }
+checked = { occt = "2ee8b8ff8bbc59111d984ee6ef48dc14cdc6ce22a66a5bd5b9826568249f559b", white-occt = "b230388125402e8b06f6cb816b7c59481bdec5a626d52e3bc39c370764c921b7" }
 filed = "2026-09-23"
+notes = """
+2026-09-24 review better
+
+2026-09-24 review regression"""
 
 [[defect]]
 id = "6553-messy-shading"
@@ -3318,8 +3340,12 @@ part = "6553"
 engines = ["occt"]
 status = "open"
 title = "messy shading"
-checked = { occt = "e52ee09568b3b26eceba2e2f38ac2067d05f77d527d4d2cc6b122aad485cee1d" }
+checked = { occt = "e52ee09568b3b26eceba2e2f38ac2067d05f77d527d4d2cc6b122aad485cee1d", white-occt = "65b7e08115aaee57b20db224e04d4d140779465f2da5f5281cfec52690f3b11d" }
 filed = "2026-09-23"
+notes = """
+2026-09-24 review regression
+
+2026-09-24 review regression"""
 
 [[defect]]
 id = "6249-messy-peg-wall-shading"
@@ -3327,8 +3353,12 @@ part = "6249"
 engines = ["occt"]
 status = "open"
 title = "messy peg wall shading"
-checked = { occt = "35d3d356737a77bcad2a4b84648800eeca1c63a2a3234b5490bb126f5629a3ba" }
+checked = { occt = "35d3d356737a77bcad2a4b84648800eeca1c63a2a3234b5490bb126f5629a3ba", white-occt = "5e86630a6e1f30c3e62cc23d1533bc9884955d93d313d1d0852718d11e9033b6" }
 filed = "2026-09-23"
+notes = """
+2026-09-24 review regression
+
+2026-09-24 review regression"""
 
 [[defect]]
 id = "4150pf1-top-face-missing-outline-segments"
@@ -3336,8 +3366,9 @@ part = "4150pf1"
 engines = ["occt"]
 status = "open"
 title = "top face missing outline segments; front annulus curve not reducing"
-checked = { occt = "88f2dac309e64cb9ef49f2ce7f87be313caa16a1010c5a25fe975b995692276a" }
+checked = { occt = "88f2dac309e64cb9ef49f2ce7f87be313caa16a1010c5a25fe975b995692276a", white-occt = "e290c9e481847f992211e9b544a75841650e9472a11e8c82446d2a41baaeb36f" }
 filed = "2026-09-23"
+notes = "2026-09-24 review neutral"
 
 [[defect]]
 id = "2528ap39-all-pieces-in-this-family"
@@ -3345,8 +3376,9 @@ part = "2528ap39"
 engines = ["occt"]
 status = "open"
 title = "all pieces in this family have shading problems, particularly around the cylinder"
-checked = { occt = "387c46ad7963bb86a22922dbc281cf450e964db93f1480e5903bb20aba438055" }
+checked = { occt = "387c46ad7963bb86a22922dbc281cf450e964db93f1480e5903bb20aba438055", white-occt = "ec500c32981248d4c77eb79b38f940ded161ef2b8aa94010b94ed6e1a5065ad4" }
 filed = "2026-09-23"
+notes = "2026-09-24 review regression"
 
 [[defect]]
 id = "2528ap38-severe-shading-problems"
@@ -3354,8 +3386,9 @@ part = "2528ap38"
 engines = ["occt"]
 status = "open"
 title = "severe shading problems"
-checked = { occt = "b8eb2b6e529b6a74d6c3ea75f44257848f73e3b0e99bf66054d321c9645737fe" }
+checked = { occt = "b8eb2b6e529b6a74d6c3ea75f44257848f73e3b0e99bf66054d321c9645737fe", white-occt = "10c7668c516d8b53c479a7f9fca22b30d362773c9ccef6761b0d7f9c54ab1857" }
 filed = "2026-09-23"
+notes = "2026-09-24 review regression"
 
 [[defect]]
 id = "1871-face-is-broken-into-two"
@@ -3373,8 +3406,9 @@ part = "1686"
 engines = ["occt"]
 status = "open"
 title = "minor tessellation artifacts in top-left edges"
-checked = { occt = "8ff4e09b79ef76eb588029bfb2879b45b6ade03467a3ba6028b916aad05faf6b" }
+checked = { occt = "8ff4e09b79ef76eb588029bfb2879b45b6ade03467a3ba6028b916aad05faf6b", white-occt = "d58865a8ca068f96dc44e50be90e49f3e8404cc1bfe766140c3cbfb4e6119e69" }
 filed = "2026-09-23"
+notes = "2026-09-24 review better"
 
 [[defect]]
 id = "19121-occt-bore-interior-flat-toned"
