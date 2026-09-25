@@ -1,73 +1,65 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
+import type { ImageFilter } from '@pezlie/wall/src/filter';
 
 const STORAGE_KEY = 'brick-icons.wall.ink';
-/** Every change refilters the sheets, and a 5652px atlas is not free; a drag
- *  across the picker commits when it pauses rather than on every step. */
-const COMMIT_MS = 150;
-const DEFAULT_PICK = '#1f5fbf';
 
-function stored(): string | null {
-  try { return localStorage.getItem(STORAGE_KEY); } catch { return null; }
+function stored(): string {
+  try { return localStorage.getItem(STORAGE_KEY) ?? ''; } catch { return ''; }
 }
 
-function store(ink: string | null) {
+function store(value: string) {
   try {
-    if (ink) localStorage.setItem(STORAGE_KEY, ink);
+    if (value) localStorage.setItem(STORAGE_KEY, value);
     else localStorage.removeItem(STORAGE_KEY);
-  } catch { /* a remembered ink is a convenience */ }
+  } catch { /* a remembered color is a convenience */ }
 }
 
-/** The color the wall's drawings are inked in, or null for as rendered. */
-export function useInk(): [string | null, (ink: string | null) => void] {
-  const [ink, setInk] = useState<string | null>(stored);
-  const set = useCallback((next: string | null) => { store(next); setInk(next); }, []);
-  return [ink, set];
+/** What the wall's color field holds -- a name, a code or hex, as typed. */
+export function useInk(): [string, (value: string | null) => void] {
+  const [value, setValue] = useState(stored);
+  const set = useCallback((next: string | null) => { store(next ?? ''); setValue(next ?? ''); }, []);
+  return [value, set];
 }
 
-function channels(hex: string): [number, number, number] {
+/** `Flat3Style`'s default part color: every face tone is this gray times a
+ *  fixed factor (1.30 top, 0.85 and 0.60 sides, 0.55-1.40 on a curve). */
+const BASE_GRAY = 157;
+/** Chroma, in 0-255 steps, where a pixel stops reading as a gray face and
+ *  starts reading as printing. Between the two it is blended, for the
+ *  antialiased edge where a print meets a face. */
+const CHROMA_FACE = 10;
+const CHROMA_PRINT = 40;
+
+function rgb(hex: string): [number, number, number] {
   const n = parseInt(hex.slice(1), 16);
-  return [(n >> 16) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+  return [n >> 16, (n >> 8) & 255, n & 255];
 }
 
-/** The picker in the wall's header, and the SVG filter that inks the card's
- *  `<img>` thumbnail the same way pezlie's `inkFilter` inks the canvas. */
-export function InkPicker({ ink, onInk }: { ink: string | null;
-                                            onInk: (ink: string | null) => void }) {
-  const [picked, setPicked] = useState(ink ?? DEFAULT_PICK);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => { if (ink) setPicked(ink); }, [ink]);
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
-
-  const pick = (value: string) => {
-    setPicked(value);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => onInk(value), COMMIT_MS);
+/** The drawing as if rendered with `--part-color hex`: each gray becomes
+ *  `hex * gray / BASE_GRAY`. Black outlines stay black, and a pixel with
+ *  color in it -- printing -- is left alone. Gray and white printing is
+ *  indistinguishable from a face in a raster, so it is shaded like one. */
+export function shadeFilter(hex: string): ImageFilter {
+  const [ir, ig, ib] = rgb(hex);
+  return {
+    key: `shade:${hex}`,
+    apply(ctx, src, w, h) {
+      ctx.drawImage(src, 0, 0);
+      const image = ctx.getImageData(0, 0, w, h);
+      const d = image.data;
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i + 3] === 0) continue;
+        const r = d[i]!, g = d[i + 1]!, b = d[i + 2]!;
+        const chroma = Math.max(r, g, b) - Math.min(r, g, b);
+        if (chroma >= CHROMA_PRINT) continue;
+        const t = chroma <= CHROMA_FACE ? 1
+          : (CHROMA_PRINT - chroma) / (CHROMA_PRINT - CHROMA_FACE);
+        const k = (r + g + b) / (3 * BASE_GRAY);
+        d[i] = r + (Math.min(255, ir * k) - r) * t;
+        d[i + 1] = g + (Math.min(255, ig * k) - g) * t;
+        d[i + 2] = b + (Math.min(255, ib * k) - b) * t;
+      }
+      ctx.putImageData(image, 0, 0);
+    },
   };
-  const clear = () => {
-    if (timer.current) clearTimeout(timer.current);
-    onInk(null);
-  };
-
-  const [r, g, b] = channels(ink ?? DEFAULT_PICK);
-  return (
-    <span className={ink ? 'brick-wall-ink brick-wall-ink--on' : 'brick-wall-ink'}>
-      <input type="color" aria-label="ink color" title="ink the drawings in one color"
-             value={picked} onChange={(e) => pick(e.target.value)} />
-      {ink && (
-        <button type="button" className="brick-wall-ink__clear" onClick={clear}
-                aria-label="draw as rendered" title="draw as rendered">×</button>
-      )}
-      {/* Screen with the ink, per channel: v -> ink + (1 - ink) * v. In sRGB,
-          as the canvas blends, not the linearRGB a filter defaults to. */}
-      <svg className="brick-wall-ink__defs" aria-hidden="true" focusable="false">
-        <filter id="brick-wall-ink" colorInterpolationFilters="sRGB">
-          <feComponentTransfer>
-            <feFuncR type="linear" slope={1 - r} intercept={r} />
-            <feFuncG type="linear" slope={1 - g} intercept={g} />
-            <feFuncB type="linear" slope={1 - b} intercept={b} />
-          </feComponentTransfer>
-        </filter>
-      </svg>
-    </span>
-  );
 }

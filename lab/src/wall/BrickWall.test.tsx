@@ -19,6 +19,7 @@ const client = {
   cells: () => Promise.resolve({ cells: [], count: 0, version: 'v1', source: 'occt' }),
   corpusPart: () => new Promise(() => {}),
   searchParts: () => Promise.resolve([]),
+  colors: () => Promise.resolve([]),
 } as any;
 
 beforeEach(() => {

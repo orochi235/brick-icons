@@ -1,4 +1,6 @@
 import { useEffect, useRef } from 'react';
+import type { ImageFilter } from '@pezlie/wall/src/filter';
+import { FilteredImage } from '@lab/shared/FilteredImage';
 import { cellState } from '@lab/corpus/paint';
 import { Lineage, Tags, yearRange } from '@lab/corpus/tags';
 import { cellValue, formatScale, SCALE_LABEL, type TintMode }
@@ -95,7 +97,7 @@ export function PartCard({ cell, source, at, viewport, tint = 'status',
 }
 
 /** The card's contents, for a wall that floats and dismisses the card itself. */
-export function PartCardBody({ cell, source, tint = 'status', onOpen, onPart }: {
+export function PartCardBody({ cell, source, tint = 'status', onOpen, onPart, thumbFilter }: {
   cell: Cell;
   source: string;
   tint?: TintMode;
@@ -103,6 +105,8 @@ export function PartCardBody({ cell, source, tint = 'status', onOpen, onPart }: 
   /** Where a link to another part takes the reader. Without one the ids are
    *  plain text, which is what `/corpus` gets. */
   onPart?: (id: string) => void;
+  /** Drawn through this, so the thumbnail matches a wall drawn through it. */
+  thumbFilter?: ImageFilter | null;
 }) {
   const years = yearRange(cell.year_from, cell.year_to,
                           (cell.tags ?? []).includes('retired'));
@@ -110,7 +114,10 @@ export function PartCardBody({ cell, source, tint = 'status', onOpen, onPart }: 
   return (
     <>
       <div className="corpus-card-head">
-        {cell.sha ? (
+        {cell.sha && thumbFilter ? (
+          <FilteredImage className="corpus-card-thumb" alt={`${cell.id} render`}
+                         src={`/api/thumbs/${source}/128/${cell.id}.webp`} filter={thumbFilter} />
+        ) : cell.sha ? (
           <img className="corpus-card-thumb" alt={`${cell.id} render`}
                src={`/api/thumbs/${source}/128/${cell.id}.webp`} />
         ) : (

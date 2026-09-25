@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { LdrawColor } from '@lab/api/types';
-import { familyLabel, matchColors, swatchFor } from '@lab/config/colorMatch';
+import { familyLabel, matchColors, resolveHex, swatchFor } from '@lab/config/colorMatch';
 
 const PALETTE: LdrawColor[] = [
   { code: 0, name: 'Black', hex: '#1b2a34', alpha: 255, category: 'Solid', legoId: 1 },
@@ -132,5 +132,22 @@ describe('matchColors palette width', () => {
   it('finds an exact code either way', () => {
     const pal = [of(507, 'Obsolete Thing', null, 'Obsolete')];
     expect(matchColors(pal, '507').map((c) => c.code)).toEqual([507]);
+  });
+});
+
+describe('resolveHex', () => {
+  it('takes hex as itself, with or without the hash', () => {
+    expect(resolveHex(PALETTE, '#ABCDEF')).toBe('#abcdef');
+    expect(resolveHex(PALETTE, 'abcdef')).toBe('#abcdef');
+  });
+
+  it('names a palette entry by name or code, without its alpha', () => {
+    expect(resolveHex(PALETTE, 'light bluish gray')).toBe('#969696');
+    expect(resolveHex(PALETTE, '36')).toBe('#c91a09');
+  });
+
+  it('is null while the value names nothing', () => {
+    expect(resolveHex(PALETTE, '')).toBeNull();
+    expect(resolveHex(PALETTE, 'zzz')).toBeNull();
   });
 });

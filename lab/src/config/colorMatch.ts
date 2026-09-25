@@ -71,3 +71,14 @@ export function swatchFor(color: LdrawColor): string {
   if (color.alpha >= 255) return color.hex;
   return `${color.hex}${color.alpha.toString(16).padStart(2, '0')}`;
 }
+
+/** The `#rrggbb` a typed value names -- hex as itself, else the entry
+ *  `matchColors` puts first -- or null while it names nothing yet. Alpha is
+ *  dropped: this is a color to draw in, not a swatch over a checkerboard. */
+export function resolveHex(palette: readonly LdrawColor[], value: string): string | null {
+  const v = value.trim();
+  if (!v) return null;
+  if (/^#[0-9a-f]{6}$/i.test(v)) return v.toLowerCase();
+  if (/^[0-9a-f]{6}$/i.test(v)) return `#${v.toLowerCase()}`;
+  return matchColors(palette, v)[0]?.hex ?? null;
+}
