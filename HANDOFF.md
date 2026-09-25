@@ -5837,6 +5837,8 @@ are rejected by one vectorised GEOS distance before rasterising, and the erosion
 is a taxicab distance transform. 29,284 witness calls -> 15,798 on 76382, 1.28x there,
 1.08x over the eight; byte-identical on all eight and on the 52 goldens with the three
 switches (`ORDER_PLANE_SKIP`, `WITNESS_DT`, `WITNESS_DISTANCE_REJECT`) off and on.
+`d6f23d6` then let the refine pass's STRtree query run `predicate="intersects"` itself
+(`REFINE_TREE_PREDICATE`): 1.11x on 76382, 1.03x over the eight, same gates.
 
 What is left, measured on 76382 under cProfile (12.0s wall, of which):
 
