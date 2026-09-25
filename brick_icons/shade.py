@@ -684,6 +684,24 @@ REFINE_PREFILTER = True
 _TREE_CACHE: tuple[int, object, list] | None = None
 
 
+REFINE_TREE_PREDICATE = True
+
+
+def _tree_hits(tree, lost):
+    """Tree positions whose geometry meets `lost`. With the predicate the
+    tree runs GEOS's prepared intersects over the bbox survivors itself,
+    which is the test geom2d.intersection opens with anyway -- so a
+    position it drops would have come back empty. A query that throws on a
+    bad geometry falls back to the bbox answer, where each pair is tried
+    on its own and a throw is one empty intersection, not a lost face."""
+    if REFINE_TREE_PREDICATE:
+        try:
+            return tree.query(lost, predicate="intersects")
+        except Exception:  # noqa: BLE001
+            pass
+    return tree.query(lost)
+
+
 def _overlap_tree(geoms):
     """(STRtree over `geoms`' values, the key for each tree position).
 
@@ -783,7 +801,7 @@ def _refine_order_clips(ordered, geoms, frags, proj, fit, step=1.2):
         # same prefilter the geometry phase got in 9493b33. Sorted, because
         # the tree hands its hits back in its own order and this list decides
         # what is cut from what.
-        cand = (sorted(int(k) for k in _overlap_tree(geoms)[0].query(lost))
+        cand = (sorted(int(k) for k in _tree_hits(_overlap_tree(geoms)[0], lost))
                 if REFINE_PREFILTER else range(len(geoms)))
         keys = _overlap_tree(geoms)[1]
         near = [j for j in (keys[c] for c in cand)
