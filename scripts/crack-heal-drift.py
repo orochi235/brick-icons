@@ -97,7 +97,7 @@ def main() -> int:
             try:
                 out = occt.flatten_part(part, ldraw)
                 out["fit_arcs"], out["2"] = arcfit.fit_edge_arcs(out["2"], out["5"])
-                occt.heal_face_cracks = lambda s: s
+                occt.heal_face_cracks = lambda s: (s, None)
                 a = segs_of(out, right, up, args.px)
                 occt.heal_face_cracks = real
                 b = segs_of(out, right, up, args.px)

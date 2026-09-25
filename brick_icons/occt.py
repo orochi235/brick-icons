@@ -1096,6 +1096,7 @@ def heal_face_cracks(shape):
 
     Only the cracks go. Genuine holes stay on the face, and the merge itself
     is kept, so nothing pays the face count that rejecting it would cost.
+    Returns the shape and the ReShape that re-made its faces.
     """
     rs, healed = ShapeBuild_ReShape(), 0
     for f in list(_faces_of(shape)):
@@ -1118,9 +1119,9 @@ def heal_face_cracks(shape):
         rs.Replace(f, mk.Face().Oriented(f.Orientation()))
         healed += 1
     if not healed:
-        return shape
+        return shape, rs
     timing.count("faces_healed")
-    return rs.Apply(shape)
+    return rs.Apply(shape), rs
 
 
 @timing.timed("build_shape")
@@ -1143,12 +1144,12 @@ def build_shape(out: dict) -> TopoDS_Shape:
         for edge in _pierce_seams(shape):
             u.KeepShape(edge)
         u.Build()
-        shape = unmerge_invalid_faces(heal_face_cracks(u.Shape()), shape,
-                                      u.History())
+        healed, remade = heal_face_cracks(u.Shape())
+        shape = unmerge_invalid_faces(healed, shape, u.History(), remade)
     return shape
 
 
-def unmerge_invalid_faces(shape, sewn, history):
+def unmerge_invalid_faces(shape, sewn, history, remade=None):
     """Give a merged face BRepCheck rejects back to the faces sewn into it.
 
     UnifySameDomain folded 39789's top into one plane with three axle-hole
@@ -1157,8 +1158,10 @@ def unmerge_invalid_faces(shape, sewn, history):
     nothing: the underside's declared ceiling edge came through the top in
     every span no stud covered. The sewn faces occlude on their own, and
     fill_ops unions same-plane fragments, so the drawing loses nothing to
-    the split. A face the healer re-made has no history to give back and
-    stays as it is.
+    the split. `remade` is the healer's ReShape: a face it re-made is not
+    the one the history names, and 3245cpz5's front -- four duplicate
+    triangles leave it a hole with an island after healing -- stayed
+    invalid and hid nothing until the history was read through it.
     """
     # Only what the merge made is checked: BRepCheck over every face of
     # 30191's 11,589 costs 2s, over the handful unify produced next to none.
@@ -1175,6 +1178,8 @@ def unmerge_invalid_faces(shape, sewn, history):
         elif n == 2:
             images = (images.First(), images.Last())
         for image in images:
+            if remade is not None:
+                image = remade.Value(image)
             sources[merged.Add(image)].append(s)
     rs, unmerged = ShapeBuild_ReShape(), 0
     for i in range(1, merged.Extent() + 1):

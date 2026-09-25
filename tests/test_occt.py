@@ -2157,7 +2157,7 @@ def test_crack_wires_stop_a_merged_face_occluding(part, ldraw_dir):
     cracks, head, healed = CRACKED_BY_THE_MERGE[part]
     right, up = hlr.view_basis(30.0, 45.0)[:2]
     out, merged = _shape_before_healing(part, ldraw_dir)
-    fixed = occt.heal_face_cracks(merged)
+    fixed, _remade = occt.heal_face_cracks(merged)
     assert occt.count_faces(fixed) == occt.count_faces(merged), \
         "healing must keep the merge, not undo it"
     assert _picked(merged, out, right, up) == head
@@ -2176,7 +2176,7 @@ def test_a_genuine_hole_is_not_healed_away(part, ldraw_dir):
     which subtract 2.445, as a hole."""
     right, up = hlr.view_basis(30.0, 45.0)[:2]
     out, merged = _shape_before_healing(part, ldraw_dir)
-    assert occt.heal_face_cracks(merged) is merged, \
+    assert occt.heal_face_cracks(merged)[0] is merged, \
         f"{part} has no crack and must come back untouched"
     assert _picked(merged, out, right, up) == _picked(
         occt.build_shape(out), out, right, up)
@@ -2504,3 +2504,18 @@ def test_a_merged_face_brepcheck_rejects_goes_back_to_its_sewn_faces(ldraw_dir):
     lines = occt._compound([occt._line_edge(ceiling[0], ceiling[1])])
     comps = occt.hlr_edges(shape, right, up, cull=True, lines=lines)
     assert occt._visible_line_spans(comps.get("lines")) == []
+
+
+def test_a_face_the_healer_remade_still_comes_back_when_invalid(ldraw_dir):
+    """3245cpz5 alone in its family draws four triangles twice, and unify
+    makes of its front one face with three crack wires and a triangular
+    island. The healer strips the cracks and re-makes the face, still
+    invalid, and the history names the face unify made, not the healer's:
+    the un-merge found nothing to replace and the interior drew through
+    the front. Reading the history through the healer's ReShape finds it."""
+    from OCP.BRepCheck import BRepCheck_Analyzer
+
+    from brick_icons import occt
+
+    shape = occt.build_shape(occt.flatten_part("3245cpz5", ldraw_dir))
+    assert all(BRepCheck_Analyzer(f).IsValid() for f in occt._faces_of(shape))
