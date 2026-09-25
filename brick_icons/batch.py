@@ -19,6 +19,40 @@ from pathlib import Path
 
 _ARMED = None
 
+# Signals that kill a process outright rather than raising anything Python can
+# catch. OCCT reaches several of them on library parts.
+_FATAL = ("SIGSEGV", "SIGBUS", "SIGILL", "SIGFPE", "SIGABRT")
+
+
+def quiet_fatal_signals() -> None:
+    """Make a fatal signal an exit, so the OS does not report a crash.
+
+    A process that dies on an unhandled SIGSEGV is a crash, and macOS answers a
+    crash with a dialog on whatever screen is attached -- so a run put one up
+    per part OCCT went down on, on the machine somebody was working at. Exiting
+    instead produces no report. The code is 128+signum, the shell's own
+    convention, so `lab.runner._death` still names the signal and nothing
+    downstream loses the diagnosis.
+
+    Returning from a SIGSEGV handler is undefined, so this handler never
+    returns: `os._exit` is async-signal-safe and skips every handler and buffer
+    on the way out, which is what you want from a process whose memory is
+    already suspect. Call it in the CHILD, after the fork.
+    """
+    def leave(signum, _frame):                       # pragma: no cover - child
+        os._exit(128 + signum)
+
+    for name in _FATAL:
+        sig = getattr(signal, name, None)
+        if sig is None:
+            continue
+        try:
+            signal.signal(sig, leave)
+        except (OSError, ValueError):
+            # a signal this platform will not let us take; the default stands
+            pass
+
+
 # Seconds the child keeps after its own cap before the parent kills it, so a
 # part the in-process alarm can still stop reports its own TimeoutError rather
 # than arriving as a bare signal.
@@ -187,6 +221,9 @@ class Runner:
         if pid == 0:
             os.close(read_fd)
             try:
+                # before any work: a segfault is not an exception, so the
+                # `except BaseException` below never sees one
+                quiet_fatal_signals()
                 os.setpgid(0, 0)
                 row = self._here(item, work)
                 try:

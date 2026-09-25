@@ -207,3 +207,33 @@ def test_the_render_store_isolates_and_caps_memory(monkeypatch, tmp_path):
                 "--db", str(tmp_path / "c.db")])
     assert seen["isolate"] is True
     assert seen["mem_gb"] > 0
+
+
+def test_a_fatal_signal_leaves_by_the_door_not_through_the_window():
+    """A child that dies on SIGSEGV is a crash, and macOS reports a crash with
+    a dialog on whoever's screen is attached -- OCCT segfaults on library parts,
+    so a census run put one up per bad part. Exiting 128+signum instead is the
+    same information by the shell's own convention, and no crash report."""
+    import os
+    import signal
+    from brick_icons import batch
+
+    pid = os.fork()
+    if pid == 0:                                     # pragma: no cover - child
+        batch.quiet_fatal_signals()
+        os.kill(os.getpid(), signal.SIGSEGV)
+        os._exit(0)                                  # not reached
+    _, status = os.waitpid(pid, 0)
+    assert os.WIFEXITED(status), "the child still died on the signal"
+    assert os.WEXITSTATUS(status) == 128 + int(signal.SIGSEGV)
+
+
+def test_the_exit_code_still_names_the_signal():
+    """The quiet exit must not cost the diagnosis: 'exited 139' says nothing,
+    'died on SIGSEGV' is what the census rows and the lab card need."""
+    import signal
+    from brick_icons.lab import runner
+
+    assert "SIGSEGV" in runner._death(-int(signal.SIGSEGV))
+    assert "SIGSEGV" in runner._death(128 + int(signal.SIGSEGV))
+    assert runner._death(1) == "the render process exited 1"

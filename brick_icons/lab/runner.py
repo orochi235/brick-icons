@@ -21,7 +21,7 @@ import threading
 import time
 from pathlib import Path
 
-from .. import cli
+from .. import batch, cli
 from . import cache
 
 DEFAULT_WORKERS = 4
@@ -45,11 +45,15 @@ def _command(argv: list[str]) -> str:
 def _death(code: int | None) -> str:
     if code is None:
         return "the render process died"
-    if code < 0:
+    # 128+signum is what `batch.quiet_fatal_signals` leaves behind: the child
+    # exits rather than dying on the signal, so macOS files no crash report,
+    # and the signal is still named here.
+    signum = -code if code < 0 else (code - 128 if 128 < code < 128 + 64 else None)
+    if signum is not None:
         try:
-            name = signal.Signals(-code).name
+            name = signal.Signals(signum).name
         except ValueError:
-            name = f"signal {-code}"
+            name = f"signal {signum}"
         return f"the render process died on {name}"
     return f"the render process exited {code}"
 
@@ -71,6 +75,7 @@ def _render_here(argv: list[str], out_dir: Path) -> dict:
 
 
 def _child(argv: list[str], out_dir: str, conn) -> None:
+    batch.quiet_fatal_signals()
     try:
         conn.send(_render_here(argv, Path(out_dir)))
     finally:
