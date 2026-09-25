@@ -191,6 +191,32 @@ def _angle_in_sector(local_x, local_z, sector):
     return ang <= sector + 1e-6
 
 
+def _in_outline(local_x, local_z, y, outline):
+    """Boolean mask: do local hits fall inside `outline`, a closed polygon in
+    (angle in degrees from local x, height 0..1)?
+
+    Even-odd ray casting, one polygon edge at a time over every hit. The
+    angle is taken modulo 360 and the seam is tried both ways round, so an
+    outline that spans the full turn owns the hits on its seam.
+    """
+    ang = np.degrees(np.arctan2(local_z, local_x)) % 360.0
+    y = np.asarray(y, float)
+    P = np.asarray(outline, float)
+    Q = np.roll(P, -1, axis=0)
+    inside = np.zeros(np.shape(ang), bool)
+    for a in (ang - 360.0, ang, ang + 360.0):
+        hit = np.zeros(np.shape(ang), bool)
+        for (x0, y0), (x1, y1) in zip(P, Q):
+            if y0 == y1:
+                continue
+            cross = (y0 > y) != (y1 > y)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                xa = x0 + (y - y0) * (x1 - x0) / (y1 - y0)
+            hit ^= cross & (a < xa)
+        inside |= hit
+    return inside
+
+
 class CylinderOccluder:
     """Finite cylinder wall (unit radius, height 0..1 in the local frame)
     under transform R, t; optional angular sector.
@@ -203,13 +229,19 @@ class CylinderOccluder:
 
     `depth(O, F)` returns the nearest ray hit parameter lambda (depth along F)
     for each ray origin in O, inf on miss.
+
+    `outline`, when given, is the wall's actual boundary in local (angle in
+    degrees, height 0..1), and a hit counts only inside it: a face trimmed by
+    an oblique cut does not reach the corners of its own (sector, height)
+    box, and the box would answer for surface that was cut away.
     """
 
-    def __init__(self, R, t, sector):
+    def __init__(self, R, t, sector, outline=None):
         self.R = np.asarray(R, float)
         self.t = np.asarray(t, float)
         self.Minv = np.linalg.inv(self.R)
         self.sector = sector
+        self.outline = None if outline is None else np.asarray(outline, float)
 
     def _hits(self, O, F, clamp=True):
         """Both wall intersections per ray as (lam_near, lam_far); invalid
@@ -230,7 +262,11 @@ class CylinderOccluder:
         ok = disc >= 0
         sq = np.sqrt(np.where(ok, disc, 0.0))
         for lam in ((-b - sq) / (2 * a), (-b + sq) / (2 * a)):
-            if clamp:
+            if clamp and self.outline is not None:
+                P_ = o + lam[:, None] * f
+                valid = ok & _in_outline(P_[:, 0], P_[:, 2], P_[:, 1],
+                                         self.outline)
+            elif clamp:
                 P_ = o + lam[:, None] * f
                 y = P_[:, 1]
                 valid = (ok & (y >= -1e-6) & (y <= 1.0 + 1e-6)
@@ -257,12 +293,13 @@ class ConeOccluder:
     returned depths are world units along F, same as the other occluders.
     """
 
-    def __init__(self, R, t, sector, top):
+    def __init__(self, R, t, sector, top, outline=None):
         self.R = np.asarray(R, float)
         self.t = np.asarray(t, float)
         self.Minv = np.linalg.inv(self.R)
         self.sector = sector
         self.top = float(top)
+        self.outline = None if outline is None else np.asarray(outline, float)
 
     def _hits(self, O, F, clamp=True):
         O = np.atleast_2d(O).astype(float)
@@ -287,7 +324,10 @@ class ConeOccluder:
         for lam in roots:
             P_ = o + lam[:, None] * f
             y = P_[:, 1]
-            if clamp:
+            if clamp and self.outline is not None:
+                valid = (ok & np.isfinite(lam)
+                         & _in_outline(P_[:, 0], P_[:, 2], y, self.outline))
+            elif clamp:
                 valid = (ok & np.isfinite(lam) & (y >= -1e-6) & (y <= 1 + 1e-6)
                          & _angle_in_sector(P_[:, 0], P_[:, 2], self.sector))
             else:

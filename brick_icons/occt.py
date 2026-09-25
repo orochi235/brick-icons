@@ -31,7 +31,7 @@ from OCP.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
 from OCP.BRepOffsetAPI import BRepOffsetAPI_ThruSections
 from OCP.HLRBRep import HLRBRep_Algo, HLRBRep_HLRToShape
 from OCP.HLRAlgo import HLRAlgo_Projector
-from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
+from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Curve2d, BRepAdaptor_Surface
 from OCP.GeomAbs import GeomAbs_CurveType, GeomAbs_SurfaceType
 from OCP.GeomLProp import GeomLProp_SLProps
 from OCP.GeomAPI import GeomAPI_ProjectPointOnSurf
@@ -43,6 +43,7 @@ from OCP.BRepGProp import BRepGProp
 from OCP.GProp import GProp_GProps
 from OCP.BRepCheck import BRepCheck_Analyzer
 from OCP.ShapeBuild import ShapeBuild_ReShape
+from OCP.Standard import Standard_Failure
 
 from . import timing
 from . import hlr, primitives
@@ -1806,6 +1807,99 @@ def _wire_points(wire, step_deg=BOUNDARY_STEP_DEG):
     return np.array(loop, float)
 
 
+#: A/B switch: a curved wall's polygon and occluder stop at the face's own
+#: boundary rather than its UV box. Off, both cover the box.
+TRIM_WALLS = True
+
+#: How far the outer wire's area may fall short of the UV box before the face
+#: counts as trimmed. An untrimmed wall reads its box exactly -- its pcurves
+#: are lines along u and v -- so this only has to absorb sampling noise on a
+#: curved pcurve that happens to run the box's edge.
+TRIM_AREA_TOL = 1e-3
+
+
+def _face_uv_outline(face, step_deg=BOUNDARY_STEP_DEG):
+    """The face's outer wire in the surface's own (u, v), or None where the
+    wire IS the UV box and the box says everything.
+
+    UnifySameDomain merges 3039's bottom tube -- a half `2-4cyli` and two
+    `1-4cyls` quarters cut by the slope -- into one r=8 face whose UV box is
+    the full turn by the full height. Built from the box, the wall claimed the
+    part of the cylinder the slope removed, 7 LDU in front of the slope face,
+    and both the witness order and the refine pass believed it: a gray
+    crescent on the plain brick, a stair-stepped blob in 3039pc1's dial.
+
+    Straight pcurves contribute their ends; a curved one is sampled, and the
+    span builder densifies whichever segments it keeps. A face whose edges
+    carry no pcurve is left to the box.
+    """
+    if not TRIM_WALLS:
+        return None
+    u0, u1, v0, v1 = BRepTools.UVBounds_s(face)
+    box = (u1 - u0) * (v1 - v0)
+    if box <= 0:
+        return None
+    ring = []
+    n_curve = int(math.ceil(360.0 / step_deg)) + 1
+    try:
+        ex = BRepTools_WireExplorer(BRepTools.OuterWire_s(face), face)
+        while ex.More():
+            edge = ex.Current()
+            ex.Next()
+            c = BRepAdaptor_Curve2d(edge, face)
+            t0, t1 = c.FirstParameter(), c.LastParameter()
+            ts = (np.array([t0, t1]) if c.GetType() == GeomAbs_CurveType.GeomAbs_Line
+                  else np.linspace(t0, t1, n_curve))
+            if edge.Orientation() == TopAbs_Orientation.TopAbs_REVERSED:
+                ts = ts[::-1]
+            P = [(q.X(), q.Y()) for q in (c.Value(float(t)) for t in ts)]
+            if ring and math.hypot(P[0][0] - ring[-1][0], P[0][1] - ring[-1][1]) < 1e-9:
+                P = P[1:]
+            ring.extend(P)
+    except Standard_Failure:
+        return None
+    if len(ring) > 1 and math.hypot(ring[0][0] - ring[-1][0],
+                                    ring[0][1] - ring[-1][1]) < 1e-9:
+        ring = ring[:-1]
+    if len(ring) < 3:
+        return None
+    P = np.array(ring, float)
+    area = 0.5 * abs(float(np.dot(P[:, 0], np.roll(P[:, 1], -1))
+                           - np.dot(P[:, 1], np.roll(P[:, 0], -1))))
+    if abs(area - box) <= TRIM_AREA_TOL * box:
+        return None
+    return P
+
+
+def _span_uv_rings(outline, ua, ub, step_rad):
+    """The trimmed outline cut down to the span [ua, ub], as closed (u, v)
+    rings with every segment sampled at most `step_rad` apart in u -- the
+    same density the box path gives its arcs, so a run along a circle still
+    reads back as that circle."""
+    from shapely.geometry import Polygon, box as _box
+    from shapely.ops import unary_union
+    # a closed face is cut at its limbs only (_span_edges), so its last span
+    # runs past u1 by up to a turn: the outline a turn either side covers it
+    copies = []
+    for k in (-1, 0, 1):
+        region = Polygon(outline + np.array([k * 2 * math.pi, 0.0]))
+        copies.append(region if region.is_valid else region.buffer(0))
+    vmin, vmax = float(outline[:, 1].min()) - 1.0, float(outline[:, 1].max()) + 1.0
+    clip = unary_union(copies).intersection(_box(ua, vmin, ub, vmax))
+    rings = []
+    for part in getattr(clip, "geoms", [clip]):
+        if part.geom_type != "Polygon" or part.is_empty:
+            continue
+        ring = np.asarray(part.exterior.coords, float)[:-1]
+        out = []
+        for p, q in zip(ring, np.roll(ring, -1, axis=0)):
+            n = max(1, int(math.ceil(abs(q[0] - p[0]) / step_rad)))
+            for k in range(n):
+                out.append(p + (q - p) * (k / n))
+        rings.append(np.array(out, float))
+    return rings
+
+
 def _limb_params(a, b, c, fwd):
     """Parameters where a curved surface turns edge-on to the camera.
 
@@ -2086,23 +2180,33 @@ def _curved_frame(face):
 
 
 def _span_face(point, normal, ua, ub, v0, v1, proj, step_deg=BOUNDARY_STEP_DEG,
-               axis_key=None, surf_key=None):
+               axis_key=None, surf_key=None, uv_ring=None):
     """One limb-to-limb span of a curved face, as a fill_ops face dict.
 
     Boundary order is top arc, limb generator, bottom arc, limb generator --
     the arcs sampled on the true circle, the generators straight because they
     are straight. Same field set as primitives._wall_span_face, which is what
     shade's gradient machinery reads.
+
+    `uv_ring` is the span's boundary in (u, v) where the face does not fill
+    its UV box (see _face_uv_outline); the polygon is then that ring on the
+    surface, and everything else -- gradient axis, samples, the interior
+    flag -- is read off the box exactly as before.
     """
-    n = max(2, int(math.ceil(abs(math.degrees(ub - ua)) / step_deg)) + 1)
-    us = np.linspace(ua, ub, n)
-    top = point(us, v1)
-    bot = point(us, v0)
-    tpx, tpy, tz = proj.to_px(top)
-    bpx, bpy, bz = proj.to_px(bot)
-    poly = np.concatenate([np.stack([tpx, tpy], 1),
-                           np.stack([bpx, bpy], 1)[::-1]], axis=0)
-    zs = np.concatenate([tz, bz])
+    if uv_ring is not None:
+        ppx, ppy, pz = proj.to_px(point(uv_ring[:, 0], uv_ring[:, 1]))
+        poly = np.stack([ppx, ppy], 1)
+        zs = pz
+    else:
+        n = max(2, int(math.ceil(abs(math.degrees(ub - ua)) / step_deg)) + 1)
+        us = np.linspace(ua, ub, n)
+        top = point(us, v1)
+        bot = point(us, v0)
+        tpx, tpy, tz = proj.to_px(top)
+        bpx, bpy, bz = proj.to_px(bot)
+        poly = np.concatenate([np.stack([tpx, tpy], 1),
+                               np.stack([bpx, bpy], 1)[::-1]], axis=0)
+        zs = np.concatenate([tz, bz])
 
     mid = point(np.array([ua, ub]), (v0 + v1) / 2.0)
     mpx, mpy, _ = proj.to_px(mid)
@@ -2448,8 +2552,9 @@ def _face_occluder(face):
         R = np.column_stack([A, (v1 - v0) * D, C])
         if abs(np.linalg.det(R)) < 1e-9:
             return None                  # zero height or radius: occludes nothing
-        return primitives.CylinderOccluder(R, o + v0 * D,
-                                           math.degrees(u1 - u0))
+        return primitives.CylinderOccluder(
+            R, o + v0 * D, math.degrees(u1 - u0),
+            outline=_local_outline(face, u0, v0, v1 - v0))
     if kind not in (GeomAbs_SurfaceType.GeomAbs_Cylinder,
                     GeomAbs_SurfaceType.GeomAbs_Cone):
         return None
@@ -2466,12 +2571,13 @@ def _face_occluder(face):
     sector = math.degrees(u1 - u0)
     h = v1 - v0
 
+    outline = _local_outline(face, u0, v0, h)
     if kind == GeomAbs_SurfaceType.GeomAbs_Cylinder:
         r = g.Radius()
         R = np.column_stack([r * Xs, h * Z, r * Ys])
         if abs(np.linalg.det(R)) < 1e-9:
             return None                  # zero height or radius: occludes nothing
-        return primitives.CylinderOccluder(R, o + v0 * Z, sector)
+        return primitives.CylinderOccluder(R, o + v0 * Z, sector, outline=outline)
 
     semi = g.SemiAngle()
     rb = g.RefRadius() + v0 * math.sin(semi)
@@ -2482,7 +2588,18 @@ def _face_occluder(face):
     scale = rb - rt
     top = rt / scale
     R = np.column_stack([scale * Xs, h * math.cos(semi) * Z, scale * Ys])
-    return primitives.ConeOccluder(R, o + v0 * Z, sector, top)
+    return primitives.ConeOccluder(R, o + v0 * Z, sector, top, outline=outline)
+
+
+def _local_outline(face, u0, v0, h):
+    """_face_uv_outline in the occluder's own frame: angle in degrees from
+    the sector's start, height 0..1 up the face. None for an untrimmed face,
+    which the (sector, height) box already describes."""
+    outline = _face_uv_outline(face)
+    if outline is None or h <= 0:
+        return None
+    return np.column_stack([np.degrees(outline[:, 0] - u0),
+                            (outline[:, 1] - v0) / h])
 
 
 def _shape_faces(shape):
@@ -2521,17 +2638,28 @@ def _faces_for(face, proj, step_deg=BOUNDARY_STEP_DEG):
         return []          # a BSpline nothing here knows how to read
     point, normal, a, b, c = frame
     u0, u1, v0, v1 = BRepTools.UVBounds_s(face)
+    outline = None
     if kind == GeomAbs_SurfaceType.GeomAbs_BSplineSurface:
         u0, u1 = _ruled_u_bounds(face)
+    else:
+        # a ruled surface's `u` is the section's angle, not the surface's, so
+        # its outline would be read in the wrong parameters
+        outline = _face_uv_outline(face, step_deg)
     edges = _span_edges(u0, u1, _limb_params(a, b, c, proj.fwd))
     out = []
     for ua, ub in zip(edges, edges[1:]):
         if ub - ua < 1e-9:
             continue
-        f = _span_face(point, normal, ua, ub, v0, v1, proj, step_deg,
-                       axis_key=_axis_key(face), surf_key=_surface_key(face))
-        if len(f["poly"]) >= 3:
-            out.append(f)
+        rings = ([None] if outline is None
+                 else _span_uv_rings(outline, ua, ub, math.radians(step_deg)))
+        for ring in rings:
+            if ring is not None and len(ring) < 3:
+                continue
+            f = _span_face(point, normal, ua, ub, v0, v1, proj, step_deg,
+                           axis_key=_axis_key(face), surf_key=_surface_key(face),
+                           uv_ring=ring)
+            if len(f["poly"]) >= 3:
+                out.append(f)
     return out
 
 

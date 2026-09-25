@@ -2519,3 +2519,66 @@ def test_a_face_the_healer_remade_still_comes_back_when_invalid(ldraw_dir):
 
     shape = occt.build_shape(occt.flatten_part("3245cpz5", ldraw_dir))
     assert all(BRepCheck_Analyzer(f).IsValid() for f in occt._faces_of(shape))
+
+
+def _tube_wall(shape, radius):
+    return next(f for f in _cylinders(list(occt._shape_faces(shape)))
+                if abs(occt.BRepAdaptor_Surface(f).Cylinder().Radius() - radius) < 1e-6)
+
+
+def test_a_wall_cut_by_the_slope_stops_at_the_cut(ldraw_dir, monkeypatch):
+    """3039's bottom tube is a half `2-4cyli` and two `1-4cyls` quarters cut
+    by the slope, and UnifySameDomain hands them back as ONE r=8 face whose
+    UV box is the full turn by the full height. Built from the box, the wall
+    claimed the part of the cylinder the slope removed -- 7 LDU in front of
+    the slope face, outside the solid -- and _refine_order_clips handed it
+    the pixels: a gray crescent on the plain brick, and on 3039pc1 a
+    stair-stepped blob wherever the print leaves the body showing.
+
+    The slope plane is y + z = -6 (through (4, -10) and (12, -18) in y, z),
+    and the brick lies on the y + z >= -6 side of it.
+    """
+    face = _tube_wall(occt.build_shape(occt.flatten_part("3039", ldraw_dir)), 8.0)
+    u0, u1, v0, v1 = occt.BRepTools.UVBounds_s(face)
+    assert (u1 - u0, v1 - v0) == pytest.approx((2 * math.pi, 20.0)), \
+        "the tube must come back as one full-box face for this to say anything"
+    outline = occt._face_uv_outline(face)
+    assert outline is not None, "the face is trimmed, so the box is not its outline"
+    point, *_ = occt._curved_frame(face)
+    W = point(outline[:, 0], outline[:, 1])
+    assert (W[:, 1] + W[:, 2] >= -6 - 1e-6).all(), "outline reaches past the slope"
+
+    # the ray through 3039pc1's needle: the far hit is the tube's real back
+    # wall inside the brick, the near one the surface the slope cut away
+    O = np.array([[-2.8866566, 10.01780382, -11.06615917]])
+    F = np.array([-0.61237244, 0.5, 0.61237244])
+    occ = occt._face_occluder(face)
+    assert occ.depth(O, F)[0] == pytest.approx(7.169, abs=1e-2)
+    monkeypatch.setattr(occt, "TRIM_WALLS", False)
+    assert occt._face_occluder(face).depth(O, F)[0] == pytest.approx(-10.142, abs=1e-2), \
+        "the box occluder must still answer with the ghost, or the test proves nothing"
+
+
+def test_an_untrimmed_wall_reads_no_outline(ldraw_dir):
+    """A wall that fills its UV box keeps the box path exactly: 3001's studs
+    and 3941's drum draw byte-for-byte the same with the trim on or off."""
+    for part in ("3001", "3941"):
+        shape = occt.build_shape(occt.flatten_part(part, ldraw_dir))
+        walls = _cylinders(list(occt._shape_faces(shape)))
+        assert walls
+        assert all(occt._face_uv_outline(f) is None for f in walls)
+
+
+def test_an_occluder_rejects_a_hit_outside_its_outline():
+    """A unit cylinder whose outline keeps only its lower half: a ray through
+    the upper half misses it, while the unclamped far hit -- the ordering
+    proxy -- still answers."""
+    lower = np.array([[0.0, 0.0], [360.0, 0.0], [360.0, 0.5], [0.0, 0.5]])
+    occ = primitives.CylinderOccluder(np.eye(3), np.zeros(3), 360.0, outline=lower)
+    F = np.array([0.0, 0.0, 1.0])
+    assert occ.depth(np.array([[0.0, 0.25, -5.0]]), F)[0] == pytest.approx(4.0)
+    assert np.isinf(occ.depth(np.array([[0.0, 0.75, -5.0]]), F)[0])
+    assert occ.depth_far(np.array([[0.0, 0.75, -5.0]]), F, clamp=False)[0] == pytest.approx(6.0)
+    cone = primitives.ConeOccluder(np.eye(3), np.zeros(3), 360.0, 0.0, outline=lower)
+    assert np.isfinite(cone.depth(np.array([[0.0, 0.25, -5.0]]), F)[0])
+    assert np.isinf(cone.depth(np.array([[0.0, 0.75, -5.0]]), F)[0])
