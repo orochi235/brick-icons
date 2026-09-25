@@ -501,12 +501,53 @@ TONE_BANDS = True
 #: dome and is drawn as tone bands. Measured: 3960's dish 0.21, 4740 0.20,
 #: 3626cp7d's head 0.20; 3127a's hook 0.35, 15439's moustache 0.31.
 RADIAL_MISFIT = 0.3
+#: A misfit group bands only if its Gauss map also REPEATS: the same normal
+#: direction recurring far apart on screen. Measured (gauss_spread): 3127a's
+#: hook 0.91, 15439 0.85, 53119's swirl 0.79; 3262's dome 0.30, 32062's
+#: fillet 0.28-0.43. The misfit alone would band 3262: the capped focal point
+#: misfits a full hemisphere as badly as a tube.
+GAUSS_SPREAD = 0.6
 #: Brightness levels a banded group is posterized to -- the stop count the
 #: focal ramp bins to, so a band is one stop's worth of tone.
 TONE_LEVELS = 8
 #: A group with fewer samples than this is left alone: 6143's three-facet
 #: groups score 0.41 on noise.
 TONE_MIN_SAMPLES = 16
+
+
+def gauss_spread(samples, deg=20.0):
+    """How far apart on screen one normal direction recurs, over the group's
+    own extent: the sample-weighted RMS radius of each normal bin's
+    positions, divided by the RMS radius of all positions.
+
+    A dome's Gauss map is one to one, so a bin is one compact patch and the
+    figure is small. A bent tube carries every direction on every ring, so a
+    bin runs the length of the spine. Bins are greedy caps of `deg` about the
+    first normal that opened them; a bin with fewer than three samples says
+    nothing about spread and is left out.
+    """
+    pts = np.array([p for p, _ in samples], float)
+    N = np.array([n for _, n in samples], float)
+    N /= np.maximum(np.linalg.norm(N, axis=1, keepdims=True), 1e-12)
+    cos = math.cos(math.radians(deg))
+    centers, bins = [], defaultdict(list)
+    for i, n in enumerate(N):
+        for k, c in enumerate(centers):
+            if n @ c >= cos:
+                bins[k].append(i)
+                break
+        else:
+            centers.append(n)
+            bins[len(centers) - 1].append(i)
+    ext = float(np.sqrt(((pts - pts.mean(axis=0)) ** 2).sum(axis=1).mean())) or 1.0
+    vals, wts = [], []
+    for ids in bins.values():
+        if len(ids) < 3:
+            continue
+        P = pts[ids]
+        vals.append(float(np.sqrt(((P - P.mean(axis=0)) ** 2).sum(axis=1).mean())) / ext)
+        wts.append(len(ids))
+    return float(np.average(vals, weights=wts)) if vals else 0.0
 
 
 def _band_misfit_radials(faces, style):
@@ -518,8 +559,10 @@ def _band_misfit_radials(faces, style):
     the surface rather than the radius: a hand-faceted bent tube (3127a's
     hook, 15439's moustache) has normals wrapping every direction at every
     radius, so its focal ramp averaged every azimuth to nearly one tone. No
-    geometry is inferred -- no spine, no rings -- only the fit is measured,
-    so a dome, whose brightness IS a function of radius, keeps its ramp.
+    geometry is inferred -- no spine, no rings. Two things are measured:
+    that the ramp misfits its samples (radial_misfit), and that the group's
+    Gauss map repeats (gauss_spread), which a dome's never does, so a dome
+    keeps its ramp even where the focal fit is poor (3262).
     """
     L = getattr(style, "light", None)
     if L is None or not TONE_BANDS:
@@ -535,6 +578,8 @@ def _band_misfit_radials(faces, style):
         if len(samples) < TONE_MIN_SAMPLES:
             continue
         if radial_misfit(samples, style) < RADIAL_MISFIT:
+            continue
+        if gauss_spread(samples) < GAUSS_SPREAD:
             continue
         for f in members:
             nv = f.get("normal")
