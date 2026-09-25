@@ -87,12 +87,22 @@ def main(argv=None) -> int:
                        mem_gb=args.mem_gb)
         todo = batch.remaining(ids, retry_errors=args.retry_failed)
         print(f"{source}: {len(todo)} of {len(ids)} to render", flush=True)
+        # onto counts an --each ITEM, and an item here is a whole batch: without
+        # these it learns nothing between the first part and the twelfth, so a
+        # batch of slow parts is indistinguishable from a wedged worker. The
+        # markers are read off this job's own stdout and reach no log.
+        print(f"onto: plan 0/{len(todo)} {source}", flush=True)
+        bad = 0
         for n, part in enumerate(todo, 1):
             row = batch.run(part, lambda p, s=source: render_one(
                 p, s, run_id, conn, args.force, Path(args.store_root)))
             state = row.get("error") or row.get("state")
             print(f"{n}/{len(todo)} {source} {part}: {state} [{row['secs']}s]",
                   flush=True)
+            print(f"onto: progress {n}/{len(todo)} {source}", flush=True)
+            if row.get("error"):
+                bad += 1
+                print(f"onto: failed {bad}/{len(todo)}", flush=True)
 
     db.finish_run(conn, run_id)
     return 0
