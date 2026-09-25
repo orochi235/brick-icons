@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { defaultUrls } from '@pezlie/wall/src/urls';
+import { defaultUrls, type SlotUrls } from '@pezlie/wall/src/urls';
 import { WallView, type WallHeader, type WallViewState } from '@pezlie/wall/src/WallView';
 import type { LabClient } from '@lab/api/client';
 import type { LdrawColor } from '@lab/api/types';
@@ -25,6 +25,17 @@ import { GROUPINGS, SPEC } from '@lab/wall/host';
 import { searchNotice } from '@lab/wall/searchNotice';
 
 const URLS = defaultUrls('/api');
+/** The same routes asking for each item's decoration mask (`?mask=1`). */
+const MASK_URLS: SlotUrls = (() => {
+  const mask = (url: string) => `${url}${url.includes('?') ? '&' : '?'}mask=1`;
+  return {
+    manifest: (slot, level) => mask(URLS.manifest(slot, level)),
+    sheet: (slot, level, version) => mask(URLS.sheet(slot, level, version)),
+    tile: (slot, level, id, version) => mask(URLS.tile(slot, level, id, version)),
+    render: (slot, id, version) => mask(URLS.render(slot, id, version)),
+    ...(URLS.levels ? { levels: (slot: string) => mask(URLS.levels!(slot)) } : {}),
+  };
+})();
 const LINKED = [LINKED_BADGE, REPLACES_BADGE];
 const FACET = { key: 'category', label: 'category', groupOf: familyOf };
 
@@ -103,7 +114,7 @@ export function BrickWall({ client }: { client: LabClient }) {
               storageKey="brick-icons.wall-view.params" groupings={GROUPINGS} facet={FACET}
               initial={initial} onChange={onChange}
               slotPicker={false} header={header}
-              imageFilter={imageFilter}
+              imageFilter={imageFilter} maskUrls={MASK_URLS}
               renderCard={(cell, slot, card) => (
                 <PartCardBody cell={cell} source={slot} tint={card.tint as TintMode}
                               onOpen={card.open} onPart={goToPart} thumbFilter={imageFilter} />

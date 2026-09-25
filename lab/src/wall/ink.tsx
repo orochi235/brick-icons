@@ -36,24 +36,38 @@ function rgb(hex: string): [number, number, number] {
 }
 
 /** The drawing as if rendered with `--part-color hex`: each gray becomes
- *  `hex * gray / BASE_GRAY`. Black outlines stay black, and a pixel with
- *  color in it -- printing -- is left alone. Gray and white printing is
- *  indistinguishable from a face in a raster, so it is shaded like one. */
+ *  `hex * gray / BASE_GRAY`, and black outlines stay black.
+ *
+ *  What counts as decoration comes from the render's own mask where it has
+ *  one -- white where the render marked `class="deco"` -- so gray and white
+ *  printing is kept too. With no mask, a pixel with color in it is taken for
+ *  printing, which gray printing defeats. */
 export function shadeFilter(hex: string): ImageFilter {
   const [ir, ig, ib] = rgb(hex);
   return {
     key: `shade:${hex}`,
-    apply(ctx, src, w, h) {
+    apply(ctx, src, w, h, mask) {
+      let m: Uint8ClampedArray | null = null;
+      if (mask) {
+        ctx.drawImage(mask, 0, 0);
+        m = ctx.getImageData(0, 0, w, h).data;
+        ctx.clearRect(0, 0, w, h);
+      }
       ctx.drawImage(src, 0, 0);
       const image = ctx.getImageData(0, 0, w, h);
       const d = image.data;
       for (let i = 0; i < d.length; i += 4) {
         if (d[i + 3] === 0) continue;
         const r = d[i]!, g = d[i + 1]!, b = d[i + 2]!;
-        const chroma = Math.max(r, g, b) - Math.min(r, g, b);
-        if (chroma >= CHROMA_PRINT) continue;
-        const t = chroma <= CHROMA_FACE ? 1
-          : (CHROMA_PRINT - chroma) / (CHROMA_PRINT - CHROMA_FACE);
+        let t: number;
+        if (m && m[i + 3]! > 0) {
+          t = 1 - m[i]! / 255;
+        } else {
+          const chroma = Math.max(r, g, b) - Math.min(r, g, b);
+          t = chroma <= CHROMA_FACE ? 1 : chroma >= CHROMA_PRINT ? 0
+            : (CHROMA_PRINT - chroma) / (CHROMA_PRINT - CHROMA_FACE);
+        }
+        if (t === 0) continue;
         const k = (r + g + b) / (3 * BASE_GRAY);
         d[i] = r + (Math.min(255, ir * k) - r) * t;
         d[i + 1] = g + (Math.min(255, ig * k) - g) * t;

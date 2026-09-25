@@ -116,7 +116,9 @@ export function PartCardBody({ cell, source, tint = 'status', onOpen, onPart, th
       <div className="corpus-card-head">
         {cell.sha && thumbFilter ? (
           <FilteredImage className="corpus-card-thumb" alt={`${cell.id} render`}
-                         src={`/api/thumbs/${source}/128/${cell.id}.webp`} filter={thumbFilter} />
+                         src={`/api/thumbs/${source}/128/${cell.id}.webp`}
+                         maskSrc={`/api/thumbs/${source}/128/${cell.id}.webp?mask=1`}
+                         filter={thumbFilter} />
         ) : cell.sha ? (
           <img className="corpus-card-thumb" alt={`${cell.id} render`}
                src={`/api/thumbs/${source}/128/${cell.id}.webp`} />
