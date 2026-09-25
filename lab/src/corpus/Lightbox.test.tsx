@@ -1,6 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Lightbox } from '@lab/corpus/Lightbox';
+import { CATALOGS, designNumber } from '@lab/corpus/catalogs';
 
 const detail = {
   part: { id: '3001', title: 'Brick 2 x 4', category: 'Brick', family: null,
@@ -195,6 +196,17 @@ it('links the part out to the public catalogs, each in a new window', async () =
   expect(rebrickable.getAttribute('rel')).toContain('noopener');
   expect(screen.getByRole('link', { name: 'BrickLink' }).getAttribute('href'))
     .toBe('https://www.bricklink.com/v2/catalog/catalogitem.page?P=3001');
+});
+
+it('asks BrickLink and Brickset for the design number a decorated id starts with', () => {
+  expect(designNumber('3840d01')).toBe('3840');
+  expect(designNumber('3068bp00')).toBe('3068');
+  expect(designNumber('u9236c01')).toBe('u9236c01');
+  const url = (name: string, id: string) => CATALOGS.find((c) => c.name === name)!.url(id);
+  expect(url('BrickLink', '3840d01'))
+    .toBe('https://www.bricklink.com/v2/catalog/catalogitem.page?P=3840');
+  expect(url('Brickset', '3840d01')).toBe('https://brickset.com/parts/design-3840');
+  expect(url('Rebrickable', '3840d01')).toBe('https://rebrickable.com/parts/3840d01/');
 });
 
 it('links the part into the lab, in its own tab', async () => {

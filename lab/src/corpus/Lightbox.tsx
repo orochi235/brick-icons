@@ -406,6 +406,8 @@ export function Lightbox({ partId, source, client, onClose,
               <li key={catalog.name}>
                 <a href={catalog.url(detail.part.id)} target="_blank" rel="noopener noreferrer">
                   {catalog.name}
+                  {catalog.key && catalog.key(detail.part.id) !== detail.part.id
+                    && <> {catalog.key(detail.part.id)}</>}
                 </a>
               </li>
             ))}
