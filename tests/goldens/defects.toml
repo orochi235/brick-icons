@@ -573,7 +573,9 @@ naming which primitive owns those centres.
 
 2026-09-17 review better: face is there now but still failing to remove some lines
 
-2026-09-23 review better"""
+2026-09-23 review better
+
+2026-09-25: root cause found and fixed at e7e621c. The extra lines were declared edges of the underside ceiling (y=4) and the axle shafts, visible wherever only the top face covered them: UnifySameDomain merged the top into one plane whose middle axle-hole wire holds two tooth quads as islands, BRepCheck rejects that face and HLR lets an invalid face hide nothing. build_shape now gives a rejected merged face back to the faces sewn into it (5f289c9 reads the history through the healer, for 3245cpz5). Sheet on the wall: 39789-unmerge-sheet, 14 comps all on those lines. Awaiting a redraw to judge on /review."""
 
 [[defect]]
 id = "53119-occt-has-a-bunch-of"
