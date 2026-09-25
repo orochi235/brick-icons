@@ -2476,3 +2476,25 @@ def test_a_wall_inside_a_side_stud_never_paints(ldraw_dir):
     depths = {round(x["depth"], 6) for x in buried}
     leaked = [op for op in ops if round(op["depth"], 6) in depths]
     assert not leaked, f"{len(leaked)} buried wall(s) paint"
+
+
+def test_a_merged_face_brepcheck_rejects_goes_back_to_its_sewn_faces(ldraw_dir):
+    """39789's top comes out of UnifySameDomain as one plane whose middle
+    axle-hole wire holds two tooth quads as islands. A hole with islands in
+    it is no face, and HLR lets an invalid face hide nothing: the underside's
+    declared ceiling edge showed through the top in every span no stud
+    covered. The faces that were sewn into it occlude on their own."""
+    from OCP.BRepCheck import BRepCheck_Analyzer
+
+    from brick_icons import occt
+
+    shape = occt.build_shape(occt.flatten_part("39789", ldraw_dir))
+    assert all(BRepCheck_Analyzer(f).IsValid() for f in occt._faces_of(shape))
+
+    right, up = hlr.view_basis(30.0, 45.0)[:2]
+    z, _ = occt.projector_axes(right, up)
+    ceiling = np.array([[-36.0, 4.0, 16.0], [36.0, 4.0, 16.0]])
+    ceiling += occt.LINE_MASK_NUDGE * np.asarray(z, float) / np.linalg.norm(z)
+    lines = occt._compound([occt._line_edge(ceiling[0], ceiling[1])])
+    comps = occt.hlr_edges(shape, right, up, cull=True, lines=lines)
+    assert occt._visible_line_spans(comps.get("lines")) == []

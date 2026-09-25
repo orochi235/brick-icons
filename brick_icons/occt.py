@@ -41,6 +41,7 @@ from OCP.TopLoc import TopLoc_Location
 from OCP.BRepTools import BRepTools, BRepTools_WireExplorer
 from OCP.BRepGProp import BRepGProp
 from OCP.GProp import GProp_GProps
+from OCP.BRepCheck import BRepCheck_Analyzer
 from OCP.ShapeBuild import ShapeBuild_ReShape
 
 from . import timing
@@ -1142,8 +1143,49 @@ def build_shape(out: dict) -> TopoDS_Shape:
         for edge in _pierce_seams(shape):
             u.KeepShape(edge)
         u.Build()
-        shape = heal_face_cracks(u.Shape())
+        shape = unmerge_invalid_faces(heal_face_cracks(u.Shape()), shape,
+                                      u.History())
     return shape
+
+
+def unmerge_invalid_faces(shape, sewn, history):
+    """Give a merged face BRepCheck rejects back to the faces sewn into it.
+
+    UnifySameDomain folded 39789's top into one plane with three axle-hole
+    wires and, inside the middle one, two tooth quads as islands. A hole
+    with islands in it is no face, and HLR lets an invalid face hide
+    nothing: the underside's declared ceiling edge came through the top in
+    every span no stud covered. The sewn faces occlude on their own, and
+    fill_ops unions same-plane fragments, so the drawing loses nothing to
+    the split. A face the healer re-made has no history to give back and
+    stays as it is.
+    """
+    # Only what the merge made is checked: BRepCheck over every face of
+    # 30191's 11,589 costs 2s, over the handful unify produced next to none.
+    merged, sources = TopTools_IndexedMapOfShape(), defaultdict(list)
+    for s in _faces_of(sewn):
+        images = history.Modified(s)
+        n = images.Size()
+        # Never iterate the empty list a face unify left alone: its
+        # StopIteration unwind costs 3ms, and 30191 has 11,600 such faces.
+        if n == 0:
+            continue
+        if n == 1:
+            images = (images.First(),)
+        elif n == 2:
+            images = (images.First(), images.Last())
+        for image in images:
+            sources[merged.Add(image)].append(s)
+    rs, unmerged = ShapeBuild_ReShape(), 0
+    for i in range(1, merged.Extent() + 1):
+        face = merged.FindKey(i)
+        if not BRepCheck_Analyzer(face).IsValid():
+            rs.Replace(face, _compound(sources[i]))
+            unmerged += 1
+    if not unmerged:
+        return shape
+    timing.count("faces_unmerged")
+    return rs.Apply(shape)
 
 
 def _unify_survives(shape) -> bool:
