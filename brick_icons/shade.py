@@ -441,22 +441,9 @@ def _falling(means, weights):
     return [v / w for v, w, r in zip(vals, wts, runs) for _ in range(r)]
 
 
-def _radial_focal_stops(samples, style, nbins=8, exact=False):
-    """Focal point + binned stops for a dome group's radial gradient.
-
-    For a spherical cap, Lambert brightness is LINEAR in projected position,
-    so a least-squares fit b ~ b0 + beta.(u,v) recovers the true bright-side
-    direction and strength. The focal point goes up the fitted slope (scaled
-    by how much of the group's brightness range the slope explains), which
-    puts the FAR silhouette in the darkest stop. Without this, stops averaged
-    per concentric band mix azimuths: the dome's edge-on fold facets came out
-    too light and their faceted boundary spiked visibly against the dark rim
-    wall (3960).
-
-    Stops are parameterized exactly as SVG samples a focal radial gradient:
-    t at a point q is |q-f| over the distance from f to the unit circle
-    along the ray through q (per-sample quadratic); each stop's tone is the
-    bin's mean brightness through style.ramp_b."""
+def _radial_ts(samples, style):
+    """(t, brightness, focal) per sample: the focal fit `_radial_focal_stops`
+    bins, factored out so the fit can be judged as well as used."""
     pts = np.array([p for p, _ in samples], float)
     nvs = [np.asarray(n, float) for _, n in samples]
     L = getattr(style, "light", None)
@@ -482,6 +469,102 @@ def _radial_focal_stops(samples, style, nbins=8, exact=False):
     with np.errstate(divide="ignore", invalid="ignore"):
         s = np.where(a > 1e-12, (-b2 + np.sqrt(disc)) / (2 * a), np.inf)
         ts = np.clip(np.where(s > 1e-9, 1.0 / s, 0.0), 0.0, 1.0)
+    return ts, b, f
+
+
+def radial_misfit(samples, style, nbins=8):
+    """How much of the samples' brightness the radial model cannot carry:
+    the RMS residual of brightness against its bin's mean, over the range.
+
+    A dome's brightness is a function of radius about the focal point, so
+    its residual is small. A hand-faceted BENT tube's normals wrap every
+    direction at every radius, so no focal point orders them and the
+    residual approaches the spread itself; its binned stops average every
+    azimuth to nearly one tone (3127a's hook, #9a to #8a).
+    """
+    ts, b, _ = _radial_ts(samples, style)
+    rng = float(b.max() - b.min()) if len(b) else 0.0
+    if rng < 1e-9:
+        return 0.0
+    bins = np.minimum((ts * nbins).astype(int), nbins - 1)
+    means = np.zeros(nbins)
+    for bi in range(nbins):
+        hit = bins == bi
+        if hit.any():
+            means[bi] = b[hit].mean()
+    return float(np.sqrt(np.mean((b - means[bins]) ** 2)) / rng)
+
+
+#: Disarm to give every radial group its focal ramp, however badly it fits.
+TONE_BANDS = True
+#: A radial group whose misfit (see radial_misfit) reaches this is not a
+#: dome and is drawn as tone bands. Measured: 3960's dish 0.21, 4740 0.20,
+#: 3626cp7d's head 0.20; 3127a's hook 0.35, 15439's moustache 0.31.
+RADIAL_MISFIT = 0.3
+#: Brightness levels a banded group is posterized to -- the stop count the
+#: focal ramp bins to, so a band is one stop's worth of tone.
+TONE_LEVELS = 8
+#: A group with fewer samples than this is left alone: 6143's three-facet
+#: groups score 0.41 on noise.
+TONE_MIN_SAMPLES = 16
+
+
+def _band_misfit_radials(faces, style):
+    """A radial group the focal ramp cannot describe is drawn as TONE BANDS:
+    each member takes its own Lambert brightness, posterized to TONE_LEVELS,
+    and members sharing a level merge into one flat element.
+
+    This is what the gradient's binned stops would draw if they could follow
+    the surface rather than the radius: a hand-faceted bent tube (3127a's
+    hook, 15439's moustache) has normals wrapping every direction at every
+    radius, so its focal ramp averaged every azimuth to nearly one tone. No
+    geometry is inferred -- no spine, no rings -- only the fit is measured,
+    so a dome, whose brightness IS a function of radius, keeps its ramp.
+    """
+    L = getattr(style, "light", None)
+    if L is None or not TONE_BANDS:
+        return
+    groups = defaultdict(list)
+    for f in faces:
+        if f.get("grad_radial") is not None and not f.get("grad_exact") \
+                and f.get("group") is not None and f.get("color", 16) == 16:
+            groups[f["group"]].append(f)
+    Lv = np.asarray(L, float)
+    for key, members in groups.items():
+        samples = members[0]["grad_samples"]
+        if len(samples) < TONE_MIN_SAMPLES:
+            continue
+        if radial_misfit(samples, style) < RADIAL_MISFIT:
+            continue
+        for f in members:
+            nv = f.get("normal")
+            b = max(0.0, float(np.asarray(nv, float) @ Lv)) if nv is not None else 0.0
+            level = min(int(b * TONE_LEVELS), TONE_LEVELS - 1)
+            f["flat_b"] = (level + 0.5) / TONE_LEVELS
+            f["group"] = (key, "tone", level)
+            f.pop("grad_radial", None)
+            f.pop("grad_samples", None)
+
+
+def _radial_focal_stops(samples, style, nbins=8, exact=False):
+    """Focal point + binned stops for a dome group's radial gradient.
+
+    For a spherical cap, Lambert brightness is LINEAR in projected position,
+    so a least-squares fit b ~ b0 + beta.(u,v) recovers the true bright-side
+    direction and strength. The focal point goes up the fitted slope (scaled
+    by how much of the group's brightness range the slope explains), which
+    puts the FAR silhouette in the darkest stop. Without this, stops averaged
+    per concentric band mix azimuths: the dome's edge-on fold facets came out
+    too light and their faceted boundary spiked visibly against the dark rim
+    wall (3960).
+
+    Stops are parameterized exactly as SVG samples a focal radial gradient:
+    t at a point q is |q-f| over the distance from f to the unit circle
+    along the ray through q (per-sample quadratic); each stop's tone is the
+    bin's mean brightness through style.ramp_b."""
+    nvs = [np.asarray(n, float) for _, n in samples]
+    L = getattr(style, "light", None)
+    ts, b, f = _radial_ts(samples, style)
     ramp_b = getattr(style, "ramp_b", None)
     if exact and ramp_b is not None and L is not None and len(ts) >= 2:
         # Lambert brightness is linear in t (the premise the focal fit already
@@ -1639,6 +1722,8 @@ def face_fill(face, style, ldraw_dir):
         nv = face.get("normal")
         if nv is None:
             return style.ramp_b(1.0)
+        if face.get("flat_b") is not None:      # a tone band, see _band_misfit_radials
+            return style.ramp_b(face["flat_b"])
         # a plane a curved wall runs tangentially into draws no stroke between
         # them, so it has to meet the ramp rather than the palette
         if face.get("tangent_wall"):
@@ -1678,6 +1763,7 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
     which anti-alias stroke wins along shared boundaries.
     Flat faces: {'d','fill','depth'}; gradient faces: {'d','gradient','depth'}
     with gradient {'x1','y1','x2','y2','stops':[(offset,color),...]}."""
+    _band_misfit_radials(faces, style)
     arcs = geom2d.arc_candidates(ellipses)
     if faces and all("order" in f for f in faces):
         ordered = sorted(faces, key=lambda f: f["order"])
