@@ -5790,13 +5790,33 @@ See onto's own HANDOFF for the three failures (a stale-schema node shredding the
 helper unable to lease from a saturated host, memory throttling announced only at kill)
 and two more (kill stranding renders, a job without progress markers looking wedged).
 
-**What still has to happen when it lands.** The drawings arrive under
-`out/ckpt3/<node>/renders/occt/` and do NOT reach the slot by themselves: `--no-watch` was
-passed because `ingest-watch.py` reads census JSONL and this is the store path. Copy each
-node's `renders/occt/*` into `renders/occt/`, then `scripts/index-slot-renders.py
---source occt --force`, which is what records the displacements and fills the review
-board. The earlier rounds' 10,206 drawings in `out/ckpt2/renders/occt/` need the same and
-have not had it.
+**Landing it.** The drawings arrive under `out/ckpt3/<node>/renders/occt/` and do NOT
+reach the slot by themselves: `--no-watch` was passed because `ingest-watch.py` reads
+census JSONL and this is the store path. The route is one command per tree:
+
+    .venv/bin/python scripts/land-store-tree.py out/ckpt3/<node> --source occt
+
+It runs every drawing through `db.store_render`, which keeps the displaced file under
+`store-queue/before/` and logs the displacement for `/review`, and takes the tree's
+`store.jsonl.occt` up as its `attempts` run. Resumable, so it can run over a tree the
+fetch is still filling and again when the job ends. Do NOT copy the files into
+`renders/occt/` and index with `index-slot-renders.py --force` -- that overwrites each
+displaced drawing before anything keeps it, and the board shows no before. `out/ckpt2`
+went in this way on 2026-09-25: 10,198 drawings, 6,847 displacements, 2,040 attempts.
+
+**A timed-out render left its grandchild running, fixed in `49b1ac1`.** Every
+`TimeoutError` row left a process at a full core with parent 1: studio carried ten of
+them 33 minutes into this round, five cores of ten, keiei four, msb-uai two -- all
+killed by hand at 06:10. The lab runner's spawn worker sits in `waitpid` while the
+grandchild it forked for `occt._unify_survives` does the work; the fork child's alarm
+terminates the worker by pid and exits, and nothing is ever sent to the grandchild.
+`Runner._isolated` now kills the child's process group once its row is in, whatever the
+outcome. Reproduced and confirmed locally with a 15s cap on 2975 (`tests/test_batch.py::
+test_isolate_reaps_a_grandchild_the_item_left_behind`). The three nodes' work trees were
+running `e539274`; the fixed `batch.py` was written into them over ssh at 06:22 -- onto
+refuses `run --dir` into a busy tree -- and every later item picks it up, since each is
+a fresh `build-render-store.py` process. Orphans on a node after that would mean the
+patch did not take: `ps -ax -o pid,ppid,command | grep spawn_main | awk '$2==1'`.
 
 **Do not launch this as a census job.** `census-batch.sh` runs
 `compare-silhouette-truth.py`, which draws STROKELESS — the fills carry the silhouette —
@@ -5811,16 +5831,23 @@ face's lost region against every other geometry, 722k calls for one drawing. `e5
 indexes that with an STRtree — 53k calls, 2.87s, 1.20x over eight parts and 1.62x on
 76382, every one byte-identical. `shade.REFINE_PREFILTER` disarms it for an A/B.
 
-What is left, measured and not done:
+`d77cbe4` then took `order_faces` down: same-colour planar pairs whose planes agree
+over their bbox overlap skip the witness, pairs farther apart than two witness pixels
+are rejected by one vectorised GEOS distance before rasterising, and the erosion loop
+is a taxicab distance transform. 29,284 witness calls -> 15,798 on 76382, 1.28x there,
+1.08x over the eight; byte-identical on all eight and on the 52 goldens with the three
+switches (`ORDER_PLANE_SKIP`, `WITNESS_DT`, `WITNESS_DISTANCE_REJECT`) off and on.
 
-- `order_faces` is now the top cost, 3.25s of a 10.1s profile, 29,284 `_overlap_witness`
-  calls at ~91us each. **A tree will not help it.** `_bbox_pairs` already prefilters those
-  pairs with a vectorised numpy bbox test, so the 29k are pairs that genuinely overlap.
-  It needs a cheaper witness, not a cheaper search, and the witness cannot simply shrink
-  its 48x48 grid: the docstring is explicit that thin overlaps must still be found
-  (3626cp7d's bore meets its face in a 3.12 x 0.33 px band).
-- `shapely.prepared.prep()` on each face polygon, reused across its tests, was proposed
-  and never tried. 770k `intersects` calls go through the per-call validation wrapper.
+What is left, measured on 76382 under cProfile (12.0s wall, of which):
+
+- `_overlap_witness` still 1.7s in PIL rasters for the 15.8k pairs that survive. The
+  two 48x48 masks per pair are the cost and cannot shrink -- thin overlaps (3626cp7d's
+  3.12 x 0.33 px band) must still be found.
+- `_refine_order_clips` 3.0s: 33k `shapely.intersection` calls, 0.94s, through
+  `geom2d.intersection`; the STRtree already prefilters them. `union_all` 1,350 calls
+  for 0.75s and `difference` 8.8k for 0.41s are next, callers not yet attributed.
+- `shapely.prepared.prep()` was proposed for the 102k `intersects` calls; they are now
+  0.42s including the wrapper, so it is worth at most that.
 - The corpus is 465.9 core-h over 73,852 measured rows. Concentration is mild: the
   slowest 2,000 rows are 24.3%. Fill dominates the slowest parts whether or not they are
   printed (4110c06 457.6s of 533.9s in fill, 30191 351.4 of 392.0).
