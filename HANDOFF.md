@@ -1,6 +1,7 @@
 ## 2026-09-25: invalid merged faces, sliver loops, and the shading cluster
 
-On `main`, this shared checkout. Commits, all unpushed at handoff: e7e621c (unmerge
+On `main`, this shared checkout. Today's commits, `git log --oneline @{u}..HEAD` for
+what is still unpushed: e7e621c (unmerge
 invalid merged faces), c4d4631 (72632 test), 20bfbcb (catalog links use the design
 number), 3b1e825 (lightbox "Mark fixed" button, `POST /api/corpus/part/{id}/fixed`),
 86d0e6f (`scripts/decal-projection-oracle.py`), 62158e6
@@ -57,6 +58,21 @@ adds mild wobble governed by `unwrap.CORNER_TURN`, and the ROBO oracle
 HLR visibility and a missing rim span respectively, noted on their records.
 
 Demo artifact of the three fixes: https://claude.ai/artifact/MSSdkNqYPfnbtUuFLDNou3
+
+**Next action, and two decisions that are Mike's.** Nothing is pushed; ask before
+pushing. The shading cluster is diagnosed and unbuilt, and both fixes move shading
+across the census, so Mike said he wants a read before they are built: (1) the
+chord-plane test in `occt._absorb_dome_walls` (heads' median band, 14769's octants),
+contained; (2) splitting a hand-faceted bent tube's plane group along its spine and
+ramping each run across (3127, 15439), a design step. Put the two to him as one
+question -- now, ahead of a census round, or after the current queue is judged --
+and build whichever he greenlights, with a before/after/diff sheet per part on the
+wall. The second open question is whether to add `reference-gray` and
+`reference-lines` LDView slots (neutral gray, no edge lines, flat3's light vector;
+and lines only) so shading and linework each have a real oracle; naive is retired as
+one. `tests/goldens/defects.toml` and files under `lab/` carry other sessions'
+uncommitted work: stage explicit paths only, never `git add -A`. The lab server on
+port 8792 predates today's routes; do not restart it, it is another session's.
 
 ## occt refresh at the tail-parity engine, landed -- 2026-09-17
 
