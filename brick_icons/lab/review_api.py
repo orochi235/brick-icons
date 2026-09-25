@@ -109,7 +109,13 @@ def linked_request(asked: list[dict], part: str, source: str,
 
 
 def entry(conn: sqlite3.Connection, row: sqlite3.Row, records: list[dict],
-          asked: list[dict], root: Path | str = ".") -> dict:
+          asked: list[dict], root: Path | str = ".",
+          content: bool = True) -> dict:
+    """`content=False` leaves out the per-side size and element counts, which
+    cost a stat, a read and an XML parse each. The list view builds an entry
+    for every row in the table to count `total` and `hidden`, and then shows a
+    couple of hundred: paying for the other sixteen thousand took the board
+    from instant to unusable."""
     part, source = row["part_id"], row["source"]
     title = conn.execute("SELECT title FROM parts WHERE id = ?",
                          (part,)).fetchone()
@@ -152,13 +158,15 @@ def entry(conn: sqlite3.Connection, row: sqlite3.Row, records: list[dict],
                    "made_at": row["before_made_at"],
                    "run_id": row["before_run_id"], "kept": row["before_kept"],
                    **_measurement(conn, row["before_run_id"], part, source),
-                   "content": _content(root, row["before_kept"],
-                                       row["before_path"]),
+                   **({"content": _content(root, row["before_kept"],
+                                           row["before_path"])}
+                      if content else {}),
                    "edge": _edge(conn, part, source, row["before_sha"])},
         "after": {"path": row["after_path"], "sha256": row["after_sha"],
                   "made_at": after_made, "run_id": row["run_id"],
                   **_measurement(conn, row["run_id"], part, source),
-                  "content": _content(root, row["after_path"]),
+                  **({"content": _content(root, row["after_path"])}
+                     if content else {}),
                   "edge": _edge(conn, part, source, row["after_sha"])},
         "diff": diffed,
         "defects": [{"id": r["id"], "title": r["title"], "status": r["status"],
@@ -235,7 +243,7 @@ def install(app: FastAPI, corpus_conn) -> None:
             asked = render_requests.load(app.state.requests_path)
             out, total, hidden = [], 0, 0
             for row in conn.execute("SELECT * FROM review ORDER BY at DESC"):
-                item = entry(conn, row, records, asked, root())
+                item = entry(conn, row, records, asked, root(), content=False)
                 if not in_view(item, view, judged):
                     continue
                 if not over_bar(item, min_components):
@@ -243,7 +251,7 @@ def install(app: FastAPI, corpus_conn) -> None:
                     continue
                 total += 1
                 if len(out) < limit:
-                    out.append(item)
+                    out.append(entry(conn, row, records, asked, root()))
         finally:
             conn.close()
         return {"entries": out, "total": total, "hidden": hidden,
@@ -297,8 +305,8 @@ def install(app: FastAPI, corpus_conn) -> None:
                 only = [row["id"] for row
                         in conn.execute("SELECT * FROM review "
                                         "ORDER BY at DESC").fetchall()
-                        if in_view(entry(conn, row, records, asked, root()), view,
-                                   judged=False)]
+                        if in_view(entry(conn, row, records, asked, root(),
+                                          content=False), view, judged=False)]
             measured, failed = review.measure_unmeasured(
                 conn, root(), log(), cache_dir(), limit, only=only)
         finally:

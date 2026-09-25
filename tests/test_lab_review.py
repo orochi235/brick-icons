@@ -384,3 +384,25 @@ def test_content_of_a_missing_or_unreadable_side_is_empty(tmp_path):
     assert got["bytes"] > 0 and got["shapes"] is None
     assert review_api._content(tmp_path, "renders/occt/nope.svg") == {
         "bytes": None, "shapes": None, "lines": None, "gradients": None}
+
+
+def test_the_list_does_not_parse_an_svg_for_a_row_it_will_not_show(lab, monkeypatch):
+    """`list_entries` builds an entry for EVERY row, because `total` and
+    `hidden` are counts over all of them -- 16,828 rows the day this was
+    found. Parsing both sides of each one to count its elements took the
+    board from instant to unusable. Content is for the rows that survive.
+    """
+    from brick_icons.lab import review_api
+    client, root = lab
+    # 3002 is linked only by a pending request; drop it so the linked view
+    # really does filter a row out
+    (root / "requests.jsonl").unlink()
+    calls = []
+    real = review_api._content
+    monkeypatch.setattr(review_api, "_content",
+                        lambda *a, **k: (calls.append(a), real(*a, **k))[1])
+    body = client.get("/api/review", params={"view": "linked"}).json()
+    shown = len(body["entries"])
+    assert shown == 1
+    assert body["entries"][0]["after"]["content"]["bytes"] > 0
+    assert len(calls) <= 2 * shown, f"{len(calls)} parses for {shown} shown"
