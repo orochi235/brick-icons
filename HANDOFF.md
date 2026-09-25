@@ -60,9 +60,26 @@ than the spine advances (`MAX_TAPER`; 3960's dish is rings too), rings fit a
 circle. `sweep.SUBSTITUTE` disarms it. Sheets on the wall: `sweep, frustums
 cut to the ring planes` (3127a, 3127b) and `sweep on scan hits (small)`
 (2583's rail corners go smooth). A scan of 4,000 random parts fired on 169
-before the condline gate; the large-hit sheet (519o, 87748, 75652) was
-rendering when this was written -- look before trusting those. 3127a, 3127b
-and 2583 are redrawn into the occt slot (run 120ish, `by: lab`).
+before the condline gate. 3127a, 3127b and 2583 are redrawn into the occt
+slot (run 120ish, `by: lab`).
+
+**The sweep is exact per piece, not an exact tube -- checked 2026-09-25.**
+Each frustum is an exact cone, but the chain is a secant approximation of the
+authored tube: the authored ring vertices sit up to 2-3.3% of r inside it,
+because a frustum around the chord cut by a ring plane tilted 11.25 deg has an
+elliptical section wider than the ring. On a tapered chain (3127a/b) adjacent
+cones cut by one plane give different ellipses, 2.9% of r apart, and OCCT
+sews none of those joints at `TOL` (they sew at 0.2); on constant-radius
+chains the gap is under 0.6%. No ink is drawn at 3127a's unsewn joints.
+Renders at 1600px (wall: `sweep, full parts at 520px`, `sweep, close crops`)
+show what that means on the page: every outline still kinks at every joint
+(each frustum's limb is straight), 3127a's inner limb went from a smooth arc
+to a polyline ending in a barb, and 87748 -- 9 short tubes of 1-4 frustums,
+not one 21-segment ring -- keeps flat facet patches mid-segment, gains a thin
+gray stroke at one joint, and one segment that had a smooth radial highlight
+is now banded. 519o and 75652 barely move. Filed through the lab as
+`3127a-sweep-inner-limb-barb` and `87748-sweep-joint-stroke-and-bands`. The
+numbers come from `scripts/measure-sweep-fit.py`.
 
 **Still banded, not swept:** 15439 (540 triangles, 49 quads: a triangulated
 tube; pairing triangles back into quads is the next step for the detector)

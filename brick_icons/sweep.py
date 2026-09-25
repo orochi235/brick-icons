@@ -11,8 +11,9 @@ tried and failed are recorded on `shade._band_misfit_radials`).
 The sweep is discretized where the author discretized it: one right cone
 frustum per station pair, between the fitted circles of its two rings. The
 engines already build, occlude, silhouette and ramp a cone, and a joint
-between two exact surfaces draws no crease under `occt.TANGENT_DEG`, so the
-chain reads as one smooth tube. `SUBSTITUTE` disarms the pass.
+between two exact surfaces draws no crease under `occt.TANGENT_DEG`. Each
+piece is exact; the chain is not: its outline kinks and its tone steps at
+every joint (scripts/measure-sweep-fit.py). `SUBSTITUTE` disarms the pass.
 """
 from __future__ import annotations
 
@@ -138,7 +139,9 @@ def _frustum(c0, r0, n0, c1, r1, n1, color, body):
     two never sew: the hook drew a free circle at every joint. The wall is
     therefore built LONGER than the chord and cut back to the two ring
     planes (`cut`, applied by `occt.occt_faces`), so consecutive walls share
-    the section in the ring plane and sew into one tube.
+    the section in the ring plane. That holds exactly only when both have
+    one radius: two cones of different taper cut by one plane give
+    different ellipses (3127a's differ by 2.9% of r, too far to sew at TOL).
     """
     c0, c1 = np.asarray(c0, float), np.asarray(c1, float)
     n0, n1 = np.asarray(n0, float), np.asarray(n1, float)
