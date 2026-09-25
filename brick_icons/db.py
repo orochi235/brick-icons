@@ -559,10 +559,11 @@ def _displaced_file(root: Path | str, source: str, part_id: str, held) -> Path:
 
 
 def _same_pixels(before: Path, after: Path) -> bool:
-    """Whether the review queue would draw no change between two SVG renders:
-    same raster size, and no pixel past its threshold. Renders are not
-    byte-stable -- ring start points and equal-depth order vary run to run --
-    so a redraw that changes nothing on screen still changes its sha."""
+    """Whether two SVG renders differ by nothing the review queue could call a
+    change: same raster size, and fewer pixels past its threshold than its
+    smallest component. Renders are not byte-stable -- ring start points and
+    equal-depth order vary run to run, and move a stray antialiased pixel or
+    two -- so a redraw that changes nothing on screen still changes its sha."""
     if before.suffix != ".svg" or after.suffix != ".svg" or not before.is_file():
         return False
     if before.resolve() == after.resolve():
@@ -576,7 +577,7 @@ def _same_pixels(before: Path, after: Path) -> bool:
             b = Image.open(diff.rasterize(after, Path(tmp) / "b.png"))
         except RuntimeError:
             return False
-        return a.size == b.size and diff.panel(a, b)[2] == 0
+        return a.size == b.size and diff.panel(a, b)[2] < diff.PANEL_MIN_PX
 
 
 def record_render(conn: sqlite3.Connection, part_id: str, source: str,

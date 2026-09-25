@@ -336,3 +336,28 @@ def test_a_redraw_that_moves_a_pixel_is_logged(conn, tmp_path):
     db.record_render(conn, "3001", "occt", _draw(tmp_path, "out/b", "3001", moved),
                      root=tmp_path)
     assert [l["kind"] for l in review.load(tmp_path / review.DEFAULT_PATH)] == ["replaced"]
+
+
+def test_a_redraw_that_moves_a_stray_pixel_or_two_logs_nothing(conn, tmp_path):
+    # a speck under a pixel wide, moved: 8 changed pixels at the review's width,
+    # under the 12 its smallest component needs
+    speck = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180">'
+             '<path d="M0 0L200 0L200 150Z" fill="#b40000"/>'
+             '<rect x="{}" y="170" width="0.4" height="0.4" fill="#000"/></svg>')
+    plain, nudged = speck.format(10), speck.format(12)
+    db.record_render(conn, "3001", "occt", _draw(tmp_path, "out/a", "3001", plain),
+                     root=tmp_path)
+    db.record_render(conn, "3001", "occt", _draw(tmp_path, "out/b", "3001", nudged),
+                     root=tmp_path)
+    assert not (tmp_path / review.DEFAULT_PATH).exists()
+
+
+def test_an_outline_that_moves_a_sliver_is_logged_though_it_makes_no_component(conn, tmp_path):
+    plain = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180">'
+             '<path d="M0 0L200 0L200 150Z" fill="#b40000"/></svg>')
+    moved = plain.replace("L200 150Z", "L200.02 150Z")
+    db.record_render(conn, "3001", "occt", _draw(tmp_path, "out/a", "3001", plain),
+                     root=tmp_path)
+    db.record_render(conn, "3001", "occt", _draw(tmp_path, "out/b", "3001", moved),
+                     root=tmp_path)
+    assert [l["kind"] for l in review.load(tmp_path / review.DEFAULT_PATH)] == ["replaced"]
