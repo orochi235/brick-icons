@@ -1,3 +1,51 @@
+## 2026-09-25: invalid merged faces, sliver loops, and the shading cluster
+
+On `main`, this shared checkout. Commits, all unpushed at handoff: e7e621c (unmerge
+invalid merged faces), c4d4631 (72632 test), 20bfbcb (catalog links use the design
+number), 3b1e825 (lightbox "Mark fixed" button, `POST /api/corpus/part/{id}/fixed`),
+86d0e6f (`scripts/decal-projection-oracle.py`), 62158e6
+(`scripts/ldview-decal-reference.py`), 5f289c9 (history read through the healer),
+5538d77 (`trace._drop_sliver_loops`), f5b6da9 and fdb30f4 (defect notes). The review
+queue lists only the newest unjudged entry per part since d3579aa.
+
+**Landed, judged on the wall (zone brick-icons), awaiting /review verdicts:** 39789,
+3245cpz5, 38583, 72632, 4151b, 64179.
+
+**In flight, a subagent's:** curved walls honoring their trim. 3039's tube is cut by
+the slope and `occt._faces_for` / `_face_occluder` build the wall's polygon and depth
+probe from the UV rectangle, so the removed part of the tube claims pixels in front
+of the slope (a gray crescent on plain 3039, blobs inside the prints of 3039pc1/pca).
+The fix samples the face's outer wire in UV instead. Check `git log` for it before
+touching `_faces_for`; if absent, the diagnosis is in this session's transcript only.
+
+**Diagnosed, unbuilt: the shading cluster** (15439, 28925c01, 14769, 3626cpn*, 3262,
+3127). One mechanism: a curved surface reaches the fill as exact spans AND as
+authored facets on the same surface, and the two are shaded by different models. On
+3626cpnf the front quadrant's middle band is an exact 90-degree span with a linear
+binned ramp, while 767 facets at 12.75 from the axis (16-gon chords of the r=13 head)
+take the dome-style radial ramp; `occt._absorb_dome_walls` should hand the span the
+facets' ramp but passes 3 of 419 candidates, because `shade.facet_on_wall` tests
+vertices at 0.002 of the radius and print tessellation on a chord plane sits up to
+0.25 LDU inside the surface. On 14769 the outer wall is exact octants for half the
+turn and 28 chord facets at 19.62 for the rest, ramped separately, and the surviving
+exact tiles are non-adjacent so `_merge_wall_gradients` pools a ramp with a cliff in
+the gap. Proposed: accept a facet whose plane is a chord plane of the wall's cylinder
+(normal ⟂ axis, offset ≈ R cos(π/N)), not only one whose vertices touch it, and pool
+its samples into the wall's ring. Probe scripts were in the session scratchpad and
+are gone; `scripts/_sheet.py` and in-process monkeypatching rebuild them in minutes.
+
+**Rules from Mike today:** never use naive as an oracle (memory `naive-is-not-an-oracle`);
+`edge_truth.py` still takes visibility from naive's z-buffer. He asked whether to
+redo the reference set in a neutral gray / lines-only mode; recommended two new
+slots (`reference-gray`, `reference-lines`), undecided.
+
+**Not defects:** 004462c's decal sloppiness is mostly authored polygons; smoothing
+adds mild wobble governed by `unwrap.CORNER_TURN`, and the ROBO oracle
+(`scripts/decal-projection-oracle.py`) measures it. 3813 and 10830's edge gaps are
+HLR visibility and a missing rim span respectively, noted on their records.
+
+Demo artifact of the three fixes: https://claude.ai/artifact/MSSdkNqYPfnbtUuFLDNou3
+
 ## occt refresh at the tail-parity engine, landed -- 2026-09-17
 
 Two fleet jobs redrew every `occt`-slot part at `143ed40`, the first build
