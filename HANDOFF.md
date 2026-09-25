@@ -77,9 +77,17 @@ show what that means on the page: every outline still kinks at every joint
 to a polyline ending in a barb, and 87748 -- 9 short tubes of 1-4 frustums,
 not one 21-segment ring -- keeps flat facet patches mid-segment, gains a thin
 gray stroke at one joint, and one segment that had a smooth radial highlight
-is now banded. 519o and 75652 barely move. Filed through the lab as
-`3127a-sweep-inner-limb-barb` and `87748-sweep-joint-stroke-and-bands`. The
-numbers come from `scripts/measure-sweep-fit.py`.
+is now banded. 519o and 75652 barely move. Filed through the lab:
+`3127a-` and `3127b-sweep-inner-limb-barb`, `3127a-` and
+`2583-sweep-joint-kinks-and-steps`, `87748-sweep-joint-stroke-and-bands`, and
+`87748-rim-partly-unswept` (not a regression: rings of 13 and 15 vertices fail
+`_fit_ring`, so part of each band stays facets). The numbers come from
+`scripts/measure-sweep-fit.py`.
+
+**Unmeasured: the sweep may double 519o's render.** One run, not interleaved,
+on a loaded box: about 3 min with `sweep.SUBSTITUTE` off, 6 with it on. Its 64
+frustums each run two plane Splitters in `occt._cut_to`. Measure it
+interleaved before a census redraw takes the spring family.
 
 **Still banded, not swept:** 15439 (540 triangles, 49 quads: a triangulated
 tube; pairing triangles back into quads is the next step for the detector)
