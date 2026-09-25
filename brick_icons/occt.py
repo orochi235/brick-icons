@@ -13,7 +13,7 @@ except ImportError as e:                      # pragma: no cover
         "--engine occt needs the OCCT extra: pip install -e '.[occt]'"
     ) from e
 
-from OCP.gp import gp_Pnt, gp_Dir, gp_Vec, gp_Ax2, gp_Circ, gp_Elips
+from OCP.gp import gp_Pnt, gp_Dir, gp_Vec, gp_Ax2, gp_Circ, gp_Elips, gp_Pln
 from OCP.BRepPrimAPI import (BRepPrimAPI_MakeCylinder, BRepPrimAPI_MakeCone,
                              BRepPrimAPI_MakePrism)
 from OCP.BRepBuilderAPI import (BRepBuilderAPI_MakePolygon, BRepBuilderAPI_MakeFace,
@@ -45,7 +45,7 @@ from OCP.BRepCheck import BRepCheck_Analyzer
 from OCP.ShapeBuild import ShapeBuild_ReShape
 from OCP.Standard import Standard_Failure
 
-from . import timing
+from . import timing, sweep
 from . import hlr, primitives
 
 TOL = 1e-4
@@ -367,13 +367,14 @@ def occt_faces(prim):
         # LDraw's cyli/con are open tubes and skirts -- the caps are material
         # the part never had, and they occlude whatever sits inside the tube.
         if k == "cyli":
-            return [BRepPrimAPI_MakeCylinder(ax2(o, zdir, uh), r, h, ang).Face()]
+            return _cut_to(prim, [BRepPrimAPI_MakeCylinder(
+                ax2(o, zdir, uh), r, h, ang).Face()])
         if k == "con":
             # conN: radius N+1 at the base tapering to N at the top, both in
             # primitive units, so the matrix scale r multiplies BOTH.
             r_base, r_top = _cone_radii(r, float(prim.top))
-            return [BRepPrimAPI_MakeCone(ax2(o, zdir, uh),
-                                         r_base, r_top, h, ang).Face()]
+            return _cut_to(prim, [BRepPrimAPI_MakeCone(
+                ax2(o, zdir, uh), r_base, r_top, h, ang).Face()])
         if k == "disc":
             return [annulus_face(o, zdir, uh, 0.0, r, ang)]
         if k == "ring":
@@ -383,6 +384,47 @@ def occt_faces(prim):
     except Exception:
         return []
     return []
+
+
+def _cut_to(prim, faces):
+    """The faces kept between the planes a sweep frustum names (`prim.cut`,
+    see sweep._frustum): each plane's normal points into the kept side.
+
+    Split by the plane and keep the piece on its inside; Common against a
+    half-space built from an unbounded plane face returns nothing at all.
+    """
+    cut = getattr(prim, "cut", None)
+    if not cut:
+        return faces
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Splitter
+    from OCP.BRepGProp import BRepGProp
+    from OCP.GProp import GProp_GProps
+    from OCP.TopTools import TopTools_ListOfShape
+    out = []
+    for face in faces:
+        pieces = [face]
+        for c, n in cut:
+            c, n = np.asarray(c, float), np.asarray(n, float)
+            plane = BRepBuilderAPI_MakeFace(
+                gp_Pln(gp_Pnt(*map(float, c)), gp_Dir(*map(float, n)))).Face()
+            kept = []
+            for piece in pieces:
+                args, tools = TopTools_ListOfShape(), TopTools_ListOfShape()
+                args.Append(piece)
+                tools.Append(plane)
+                sp = BRepAlgoAPI_Splitter()
+                sp.SetArguments(args)
+                sp.SetTools(tools)
+                sp.Build()
+                for part in _shape_faces(sp.Shape()):
+                    props = GProp_GProps()
+                    BRepGProp.SurfaceProperties_s(part, props)
+                    m = props.CentreOfMass()
+                    if float((np.array([m.X(), m.Y(), m.Z()]) - c) @ n) > 0:
+                        kept.append(part)
+            pieces = kept
+        out.extend(pieces)
+    return out
 
 
 def tri_face(p):
@@ -404,6 +446,7 @@ def flatten_part(part: str, ldraw_dir) -> dict:
     path = hlr._resolve_input(part, roots)
     out = {"2": [], "5": [], "tri": [], "tri_meta": [], "analytic": []}
     hlr.flatten(path, np.eye(3), np.zeros(3), out, roots)
+    sweep.substitute(out)
     if out["tri"]:
         from . import repair
         fixed = repair.repaired_tris(np.array(out["tri"]), out["tri_meta"],

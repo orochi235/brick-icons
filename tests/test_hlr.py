@@ -111,8 +111,9 @@ def test_flatten_quad_emits_two_tri_meta_entries(tmp_path):
     hlr.flatten(p, np.eye(3), np.zeros(3), out, [tmp_path])
     assert len(out["tri"]) == 2
     assert len(out["tri_meta"]) == 2
+    # both halves carry the quad's tag, so sweep.substitute can pair them
     assert out["tri_meta"][0] == out["tri_meta"][1] == {
-        "certified": True, "invert": False, "color": 16, "body": 16}
+        "certified": True, "invert": False, "color": 16, "body": 16, "quad": 0}
 
 
 def test_flatten_invertnext_does_not_leak_to_sibling(tmp_path):

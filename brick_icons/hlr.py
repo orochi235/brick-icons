@@ -6,7 +6,7 @@ import numpy as np
 
 from . import timing
 from . import arcfit
-from . import primitives
+from . import primitives, sweep
 from . import repair
 
 # ellipses: projected circles (cx,cy,ux,uy,vx,vy) of the analytic
@@ -162,6 +162,9 @@ def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
                     out["tri"].append(pts)
                     out["tri_meta"].append(dict(meta))
                 else:
+                    # tagged as one quad, so sweep.substitute can read the
+                    # authored rings back off the pair
+                    meta["quad"] = len(out["tri"])
                     out["tri"].append(pts[[0, 1, 2]])
                     out["tri_meta"].append(dict(meta))
                     out["tri"].append(pts[[0, 2, 3]])
@@ -1128,6 +1131,7 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
         # cannot express the roll that a turn about X or Z asks for.
         root = np.eye(3) if pose is None else np.asarray(pose, float)
         flatten(path, root, np.zeros(3), out, roots)
+        sweep.substitute(out)
     if out["tri"]:
         # Repair returns outward-oriented tris as float32 (cache dtype); the
         # ~7 sig-fig precision is ample at icon scale. Keep out["tri"] a LIST
