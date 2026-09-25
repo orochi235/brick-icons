@@ -48,6 +48,29 @@ to 8 levels, one flat element per level. Moves 3127a, 3127b, 15439 and
 byte-identical. `shade.TONE_BANDS` disarms it. 28925c01's hull (174 groups,
 152 singletons) is untouched: a third mode, not started.
 
+**Landed, 2b15c3c: the sweep.** Mike's call after seeing the bands: the tubes
+want analytic "tentacles". `brick_icons/sweep.py` reads rings back off the
+AUTHORED quads (the flattener tags each quad's two triangles with `quad`),
+fits a circle per ring, and replaces each station pair with a cone frustum,
+built long and cut to the two ring planes (`occt._cut_to`, a plane Splitter;
+Common against a half-space returns nothing) so neighbors sew and no joint
+draws. Gates, all declared or measured: every spine edge carries a type-5
+line (a hex nut is rings of quads too), the radius never collapses faster
+than the spine advances (`MAX_TAPER`; 3960's dish is rings too), rings fit a
+circle. `sweep.SUBSTITUTE` disarms it. Sheets on the wall: `sweep, frustums
+cut to the ring planes` (3127a, 3127b) and `sweep on scan hits (small)`
+(2583's rail corners go smooth). A scan of 4,000 random parts fired on 169
+before the condline gate; the large-hit sheet (519o, 87748, 75652) was
+rendering when this was written -- look before trusting those. 3127a, 3127b
+and 2583 are redrawn into the occt slot (run 120ish, `by: lab`).
+
+**Still banded, not swept:** 15439 (540 triangles, 49 quads: a triangulated
+tube; pairing triangles back into quads is the next step for the detector)
+and 53119 (rings are not circles). 28925c01 untouched.
+
+**Flaky, not red:** `test_the_seam_veto_keeps_an_arc_the_part_declares`
+failed once in a batch run and passes alone and in the next full run.
+
 **Redrawn into the occt slot for /review** (run 119): 3626cpnf, 14769, 3127a,
 3127b, 15439, 53119. Defects `15439-enormous-shading-problems` and
 `3127b-tapered-hook-has-shading-problems` carry today's note.
