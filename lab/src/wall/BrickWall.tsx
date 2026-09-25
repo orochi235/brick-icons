@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { inkFilter } from '@pezlie/wall/src/filter';
 import { defaultUrls } from '@pezlie/wall/src/urls';
 import { WallView, type WallHeader, type WallViewState } from '@pezlie/wall/src/WallView';
 import type { LabClient } from '@lab/api/client';
@@ -16,6 +17,7 @@ import { DEFAULT_SOURCE, WALL_LINK_PARAMS } from '@lab/corpus/wallHash';
 import { PAGES } from '@lab/nav/pages';
 import { PartSearch } from '@lab/shared/PartSearch';
 import '@lab/wall/BrickWall.css';
+import { InkPicker, useInk } from '@lab/wall/ink';
 import { openingState, stateHash } from '@lab/wall/hash';
 import { GROUPINGS, SPEC } from '@lab/wall/host';
 import { searchNotice } from '@lab/wall/searchNotice';
@@ -50,6 +52,8 @@ export function BrickWall({ client }: { client: LabClient }) {
     return sources.map(({ source, n }) => ({ slot: source, n }));
   }, [client]);
   const [notice, setNotice] = useState<string | null>(null);
+  const [ink, setInk] = useInk();
+  const imageFilter = useMemo(() => (ink ? inkFilter(ink) : null), [ink]);
   // A slot change makes the last search's notice stale.
   const lastSlot = useRef<string | null>(null);
   const onChange = useCallback((state: WallViewState) => {
@@ -75,9 +79,10 @@ export function BrickWall({ client }: { client: LabClient }) {
                       onOpen={(partId) => setNotice(searchNotice(partId, state.reveal(partId)))} />
           <span className="corpus-search-notice" role="status">{notice ?? ''}</span>
         </span>
+        <InkPicker ink={ink} onInk={setInk} />
       </>
     );
-  }, [client, notice]);
+  }, [client, notice, ink, setInk]);
   const goToPart = useCallback((partId: string) => {
     // No wall to ask is not a part that is missing from it, so it earns no
     // notice of its own.
@@ -91,9 +96,12 @@ export function BrickWall({ client }: { client: LabClient }) {
               storageKey="brick-icons.wall-view.params" groupings={GROUPINGS} facet={FACET}
               initial={initial} onChange={onChange}
               slotPicker={false} header={header}
+              imageFilter={imageFilter}
               renderCard={(cell, slot, card) => (
-                <PartCardBody cell={cell} source={slot} tint={card.tint as TintMode}
-                              onOpen={card.open} onPart={goToPart} />
+                <div className={ink ? 'brick-wall-card brick-wall-card--inked' : 'brick-wall-card'}>
+                  <PartCardBody cell={cell} source={slot} tint={card.tint as TintMode}
+                                onOpen={card.open} onPart={goToPart} />
+                </div>
               )}
               renderDetail={(cell, slot, close) => (
                 <Lightbox partId={cell.id} source={slot} client={client} onClose={close}

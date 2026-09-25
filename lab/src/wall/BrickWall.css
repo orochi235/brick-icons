@@ -19,3 +19,18 @@
 .brick-wall-search .corpus-search-notice:empty {
   padding: 0; background: none; box-shadow: none; border: 0;
 }
+
+.brick-wall-ink { display: inline-flex; align-items: center; gap: 0.25rem; flex: none; }
+.brick-wall-ink input[type="color"] {
+  width: 2rem; height: 1.6rem; padding: 0; border: 1px solid var(--wzl-border);
+  border-radius: 0.3rem; background: none; cursor: pointer;
+}
+.brick-wall-ink:not(.brick-wall-ink--on) input[type="color"] { opacity: 0.55; }
+.brick-wall-ink__clear {
+  border: 0; background: none; padding: 0 0.2rem; cursor: pointer;
+  font: 16px/1 ui-monospace, monospace; color: var(--wzl-fg-muted);
+}
+.brick-wall-ink__defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+.brick-wall-card { display: contents; }
+.brick-wall-card--inked .corpus-card-thumb { filter: url(#brick-wall-ink); }
