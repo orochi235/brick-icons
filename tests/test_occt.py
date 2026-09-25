@@ -1372,18 +1372,24 @@ def test_a_fitted_round_candidate_carries_its_chain_step(ldraw_dir):
         assert 0.0 < e[7] <= 6.0 / res.s
 
 
-def test_a_zero_height_cylinder_face_gets_no_occluder(ldraw_dir):
-    """72632's sensor body carries a cylinder face of zero height. Its local
-    frame is singular, and building an occluder from it raised LinAlgError
-    out of the render (the 72632 family, four census parts)."""
+def test_a_wall_unify_collapses_to_zero_height_comes_back_as_its_halves(ldraw_dir):
+    """72632's sensor body wall is two cylinder faces, y 11..18 and 18..25.
+    UnifySameDomain merged them into one face of zero height and no area:
+    the wall was gone, and its singular frame raised LinAlgError out of
+    `_face_occluder` (the 72632 family, four census parts). BRepCheck
+    rejects that face, so build_shape gives the halves back, and the guard
+    in `_face_occluder` no longer has an input from this part."""
+    from OCP.BRepCheck import BRepCheck_Analyzer
+
     out = occt.flatten_part("72632", ldraw_dir)
     shape = occt.build_shape(out)
-    flat = [f for f in occt._faces_of_type(
-        shape, occt.GeomAbs_SurfaceType.GeomAbs_Cylinder)
-        if abs(occt.BRepTools.UVBounds_s(f)[3]
-               - occt.BRepTools.UVBounds_s(f)[2]) < 1e-9]
-    assert flat, "expected a zero-height cylinder face on 72632"
-    assert all(occt._face_occluder(f) is None for f in flat)
+    cylinders = list(occt._faces_of_type(
+        shape, occt.GeomAbs_SurfaceType.GeomAbs_Cylinder))
+    flat = [f for f in cylinders
+            if abs(occt.BRepTools.UVBounds_s(f)[3]
+                   - occt.BRepTools.UVBounds_s(f)[2]) < 1e-9]
+    assert not flat, "the merged zero-height face is back"
+    assert all(BRepCheck_Analyzer(f).IsValid() for f in cylinders)
     right, up, fwd = hlr.view_basis(30.0, 45.0)
     assert occt.visible_segments(out, right, up, 512, cull=True, fwd=fwd).segs
 
