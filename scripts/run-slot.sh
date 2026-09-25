@@ -12,6 +12,11 @@
 # works. On 2026-09-11 seven jobs held 10,000 files on their nodes with one file
 # delivered each, so the controller-side pull is what actually gets results home.
 # Hence both instruments start by default. `--no-stream` and `--no-watch` opt out.
+#
+# `--sync-from DIR` sends the node DIR's tree -- a clean worktree at HEAD --
+# instead of this checkout's. Several sessions share this checkout, and a dirty
+# one always ships its edits, which may be another session's unfinished engine.
+# The returns still land here, where corpus.db is.
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -21,8 +26,10 @@ watch=1
 # unless told to replace them -- a 7,379-part re-render once landed and indexed
 # as nothing. `--overwrite` here is the watcher's flag, named at the launch.
 watch_flags=(--overwrite-requested)
+SRC=$ROOT
 while [ $# -gt 0 ]; do
   case $1 in
+    --sync-from) SRC=$(cd "$2" && pwd); shift 2 ;;
     --no-stream) stream=0; shift ;;
     --no-watch)  watch=0;  shift ;;
     --overwrite) watch_flags+=(--overwrite); shift ;;
@@ -30,7 +37,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-[ $# -gt 0 ] || { echo "usage: $0 [--no-stream] [--no-watch] [--overwrite] <onto run args...>" >&2; exit 2; }
+[ $# -gt 0 ] || { echo "usage: $0 [--no-stream] [--no-watch] [--overwrite] [--sync-from DIR] <onto run args...>" >&2; exit 2; }
 
 task=""; to=""; detach=0
 args=("$@")
@@ -74,7 +81,7 @@ done
 build_of() {  # node, or empty for this checkout
   local py='import brick_icons; print(brick_icons.build())'
   if [ -z "$1" ]; then
-    (cd "$ROOT" && .venv/bin/python -c "$py")
+    (cd "$SRC" && "$ROOT/.venv/bin/python" -c "$py")
   else
     onto run -in "$tree" "$1" -- .venv/bin/python -c "$py" 2>&1 | grep -E '^[0-9]+\.[0-9a-f]+\+?$' | tail -1 || true
   fi
@@ -90,13 +97,13 @@ for node in "${nodes[@]}"; do
   # a dirty checkout always ships.
   if [ "$have" != "$want" ] || [ "${want%+}" != "$want" ]; then
     echo "run-slot: $node:$tree draws as ${have:-unknown}, this checkout as $want; syncing"
-    onto sync -in "$tree" "$node" || { echo "run-slot: sync to $node refused; not launching" >&2; exit 1; }
+    (cd "$SRC" && onto sync -in "$tree" "$node") || { echo "run-slot: sync to $node refused; not launching" >&2; exit 1; }
     have=$(build_of "$node")
     if [ "$have" != "$want" ]; then
       echo "run-slot: $node still draws as ${have:-unknown} after sync; not launching" >&2
       # A node fetches its base commit from the remote and takes the rest as a
       # patch, so its build names the last pushed commit, never an unpushed one.
-      ahead=$(git -C "$ROOT" rev-list --count '@{upstream}..HEAD' 2>/dev/null || echo 0)
+      ahead=$(git -C "$SRC" rev-list --count '@{upstream}..HEAD' 2>/dev/null || echo 0)
       [ "$ahead" = "0" ] || echo "run-slot: this checkout is $ahead commit(s) ahead of its upstream; push, then launch again" >&2
       exit 1
     fi
