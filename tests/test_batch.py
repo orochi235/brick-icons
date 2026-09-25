@@ -136,6 +136,39 @@ def test_isolate_takes_a_forked_grandchild_with_it(tmp_path):
     raise AssertionError(f"grandchild {grandchild} outlived the kill")
 
 
+def test_isolate_reaps_a_grandchild_the_item_left_behind(tmp_path):
+    """The lab runner answers its own alarm by terminating the worker it
+    spawned and returning a row; the grandchild that worker forked is not
+    its child and is not sent anything. It carried on under init at a full
+    core, one per timed-out part, until the node was mostly orphans."""
+    marker = tmp_path / "grandchild.pid"
+
+    def leaves_one(_):
+        pid = os.fork()
+        if pid == 0:
+            # A spawned worker's fork holds none of the parent's descriptors,
+            # so the row pipe closes when the child exits and the parent does
+            # not sit at its deadline, where the group is killed anyway.
+            os.closerange(3, 1024)
+            marker.write_text(str(os.getpid()))
+            while True:
+                time.sleep(0.05)
+        return {"item": "leaves", "error": "TimeoutError"}   # no waitpid
+
+    runner = batch.Runner(tmp_path / "out.jsonl", timeout=5, isolate=True)
+    assert runner.run("leaves", leaves_one)["error"] == "TimeoutError"
+    grandchild = int(marker.read_text())
+    deadline = time.time() + 2
+    while time.time() < deadline:
+        try:
+            os.kill(grandchild, 0)
+        except OSError:
+            return
+        time.sleep(0.05)
+    os.kill(grandchild, signal.SIGKILL)
+    raise AssertionError(f"grandchild {grandchild} outlived its item")
+
+
 def test_isolate_keeps_the_run_going_when_an_item_kills_its_process(tmp_path):
     """Without isolation this ends the batch and every part after it is absent
     from the census rather than failed in it."""

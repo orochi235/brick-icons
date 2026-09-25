@@ -257,6 +257,16 @@ class Runner:
             if done:
                 break
             time.sleep(0.1)
+        # The row is in, so nothing in the child's group has a caller left.
+        # A child that ends on its own alarm terminates the worker it spawned
+        # and exits, and the grandchild that worker forked for
+        # `occt._unify_survives` runs on under init at a full core -- studio
+        # carried ten of them half an hour into a round. Only the group
+        # reaches it, and the group was made for this.
+        try:
+            os.killpg(pid, signal.SIGKILL)
+        except OSError:
+            pass
         if blob:
             try:
                 return json.loads(blob)
