@@ -425,3 +425,21 @@ def test_the_debug_cycle_never_repeats_a_color_inside_one_render():
     assert nbr >= 25.0, f"neighbors {nbr:.1f} apart"
     # off the page and off the ink: a fill at either end reads as background
     assert all(30.0 <= p[0] <= 85.0 for p in L)
+
+
+def test_two_strokes_closing_a_sub_stroke_loop_both_go():
+    """38583's recess meets the disc closing its arch 0.13 LDU from the
+    arch wall: a declared edge down and the disc's rim arc back up, both
+    visible, both correct, outlining a face thinner than the stroke. They
+    drew as a 6 px tick hanging off the arch."""
+    down = ("line", 10.0, 10.0, 10.0, 16.0, "line")
+    back = ("arc", 60.0, 13.0, -50.0, 0.0, 0.0, 50.0, -3.4, 3.4, "line")
+    beam = ("line", 0.0, 10.0, 40.0, 10.0, "line")
+    kept = _trace._drop_sliver_loops([beam, down, back], width=1.2, max_len=8.0)
+    assert kept == [beam]
+    # a loop wider than the stroke is a real face and stays
+    wide = ("line", 13.0, 10.0, 13.0, 16.0, "line")
+    assert _trace._drop_sliver_loops([down, wide], width=1.2, max_len=8.0) == [down, wide]
+    # a silhouette stroke never goes, even inside a sliver
+    sil = ("line", 10.0, 10.0, 10.0, 16.0, "sil")
+    assert _trace._drop_sliver_loops([sil, back], width=1.2, max_len=8.0) == [sil, back]

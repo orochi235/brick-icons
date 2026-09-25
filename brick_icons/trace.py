@@ -86,6 +86,82 @@ def _arc_to_svg(op):
     return " ".join(cmds)
 
 
+def _op_points(op, n=12):
+    """A stroke op as a short polyline in canvas px."""
+    if op[0] == "line":
+        return [(op[1], op[2]), (op[3], op[4])]
+    _, cx, cy, ux, uy, vx, vy, t0, t1, _ = op
+    return [(cx + math.cos(t) * ux + math.sin(t) * vx,
+             cy + math.cos(t) * uy + math.sin(t) * vy)
+            for t in (math.radians(t0 + (t1 - t0) * i / (n - 1))
+                      for i in range(n))]
+
+
+def _polyline_mid(P):
+    """The point half way along polyline P by length."""
+    total = sum(math.dist(a, b) for a, b in zip(P, P[1:]))
+    walked = 0.0
+    for a, b in zip(P, P[1:]):
+        step = math.dist(a, b)
+        if walked + step >= total / 2.0 and step > 0:
+            t = (total / 2.0 - walked) / step
+            return (a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t)
+        walked += step
+    return P[-1]
+
+
+def _polyline_gap(P, Q):
+    """The farthest any point of polyline P sits from polyline Q."""
+    worst = 0.0
+    for x, y in P:
+        best = float("inf")
+        for (ax, ay), (bx, by) in zip(Q, Q[1:]):
+            dx, dy = bx - ax, by - ay
+            dd = dx * dx + dy * dy
+            t = 0.0 if dd < 1e-18 else max(0.0, min(1.0, ((x - ax) * dx + (y - ay) * dy) / dd))
+            best = min(best, math.hypot(x - (ax + t * dx), y - (ay + t * dy)))
+        worst = max(worst, best)
+    return worst
+
+
+def _drop_sliver_loops(segs, width, max_len):
+    """Two strokes that close a loop no wider than `width` are dropped.
+
+    They outline a face too thin to draw: 38583's recess meets the quarter
+    disc that closes its arch 0.13 LDU from the arch wall, and the declared
+    edge and the disc's rim, both correctly visible, came out as a 6 px tick
+    hanging off the arch. Under a stroke wider than the loop the two only
+    ever paint one blob. Silhouette strokes never go (an outline gap is
+    always worse), and a loop longer than `max_len` is a slot, not a sliver.
+    """
+    ops = [("line",) + tuple(op) if len(op) == 5 else op for op in segs]
+    cand = []
+    for i, op in enumerate(ops):
+        if op[-1] == "sil":
+            continue
+        pts = _op_points(op)
+        L = sum(math.dist(a, b) for a, b in zip(pts, pts[1:]))
+        # a side shorter than the loop is wide is a chord link, not a side:
+        # two of a discretized curve's 0.3 px chords have ends this close
+        if width < L <= max_len:
+            cand.append((i, pts))
+    drop = set()
+    for a in range(len(cand)):
+        i, P = cand[a]
+        for b in range(a + 1, len(cand)):
+            j, Q = cand[b]
+            if i in drop or j in drop:
+                continue
+            ends = (math.dist(P[0], Q[0]) <= width and math.dist(P[-1], Q[-1]) <= width) \
+                or (math.dist(P[0], Q[-1]) <= width and math.dist(P[-1], Q[0]) <= width)
+            if ends and math.dist(_polyline_mid(P), _polyline_mid(Q)) <= width \
+                    and _polyline_gap(P, Q) <= width and _polyline_gap(Q, P) <= width:
+                drop.update((i, j))
+    if not drop:
+        return segs
+    return [op for k, op in enumerate(segs) if k not in drop]
+
+
 def _drop_sliver_noise(ops, min_len, run=3):
     """Ops with the fragments shorter than `min_len` dropped -- one renders as
     a bare round-cap dot (the warts at 6589's crescent tips).
@@ -453,6 +529,7 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
         parts.append(f'<path d="{contour_d}" stroke-width="{sil_px:.2f}" '
                      f'stroke-linejoin="miter" stroke-miterlimit="5"/>')
     line_groups = {}                                  # sw -> [(x1,y1,x2,y2)]
+    segs = _drop_sliver_loops(segs, 0.6 * line_px, 4.0 * line_px)
     for op in segs:
         if len(op) == 5:                              # legacy line tuple
             op = ("line",) + tuple(op)
