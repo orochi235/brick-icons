@@ -5818,6 +5818,12 @@ refuses `run --dir` into a busy tree -- and every later item picks it up, since 
 a fresh `build-render-store.py` process. Orphans on a node after that would mean the
 patch did not take: `ps -ax -o pid,ppid,command | grep spawn_main | awk '$2==1'`.
 
+**What the round will owe when it ends.** Every `TimeoutError` row (21 on studio, 7 on
+msb-uai, 2 on keiei by 06:20) and every `ProcessDied` "killed mid-render; not retried"
+row (10 / 31 / 10, inflight markers from the rounds killed the night before) is a part
+with no drawing. `attempts` holds them once the trees are landed; relaunch those parts
+with `--retry-failed` on the same store roots, then land again.
+
 **Do not launch this as a census job.** `census-batch.sh` runs
 `compare-silhouette-truth.py`, which draws STROKELESS — the fills carry the silhouette —
 and keeps its drawings on the node under `out/census/renders`. Those are measurement
