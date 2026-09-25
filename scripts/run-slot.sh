@@ -112,6 +112,10 @@ for node in "${nodes[@]}"; do
 done
 
 echo "run-slot: launching $task"
+# `--to`, `--out` and the watcher's tree are relative paths, and resolving them
+# against wherever this was called from once delivered a whole job into a
+# worktree that had no corpus.db.
+cd "$ROOT"
 onto run "$@"
 
 if [ $detach -eq 0 ]; then
