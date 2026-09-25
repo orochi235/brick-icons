@@ -44,6 +44,10 @@ DEFAULTS = {
     "opacity": 1.0,          # face-fill opacity in SVG (translucent bricks)
     "wireframe": False,      # outline strokes only, occlusion culling off
     "use_ldview": False,     # draw with the vendored LDView, not our engine
+    "ldview_look": "color",  # color | gray | lines -- what LDView draws: the
+                             # part in its authored colors with edge lines,
+                             # flat3's gray under flat3's light with no
+                             # lines, or the edge lines alone
     "decal": False,          # lift the printed decoration off the part and
                              # lay it flat; no viewpoint, so the view, sizing
                              # and stroke settings do not apply
@@ -92,6 +96,7 @@ class Config:
     opacity: float
     wireframe: bool
     use_ldview: bool
+    ldview_look: str
     decal: bool
     texture_px: int
     weld_corners: bool
@@ -162,6 +167,7 @@ def load_config(toml_path=None, overrides=None, root="."):
         opacity=float(data["opacity"]),
         wireframe=bool(data["wireframe"]),
         use_ldview=bool(data["use_ldview"]),
+        ldview_look=str(data["ldview_look"]),
         decal=bool(data["decal"]),
         texture_px=int(data["texture_px"]),
         weld_corners=bool(data["weld_corners"]),

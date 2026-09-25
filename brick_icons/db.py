@@ -32,6 +32,7 @@ PART_STATUSES = ("unreviewed", "good", "suspect", "broken", "wontfix")
 # the exclusion was hiding a drawn category from every coverage number.
 OUT_OF_SCOPE_CATEGORIES = ("|",)
 SOURCES = ("naive", "occt", "decal", "reference",
+           "reference-gray", "reference-lines",
            "translucent-naive", "translucent-occt",
            "silhouette-naive", "silhouette-occt",
            "white-naive", "white-occt")
@@ -488,6 +489,16 @@ _CANONICAL = {
     # `scripts/shot-sink.py --list <parts> --out renders/reference`; a per-part
     # CLI flag would launch Chrome 24,591 times.
     "reference": ["--reference", "--angle", "iso"],
+    # The two LDView oracles, one per thing our drawing is judged on. naive
+    # is not an oracle for either (memory: naive-is-not-an-oracle), and the
+    # browser reference above carries color, edge lines and its own light, so
+    # neither shading nor linework can be read off it alone. `reference-gray`
+    # is flat3's gray under flat3's light with no lines, so a tone difference
+    # is a shading difference; `reference-lines` is LDView's edge lines with
+    # hidden ones removed and nothing else, so a stroke difference is a
+    # linework difference. WebP, drawn by `scripts/ldview-batch.py`.
+    "reference-gray": ["--ldview", "--ldview-look", "gray", "--angle", "iso"],
+    "reference-lines": ["--ldview", "--ldview-look", "lines", "--angle", "iso"],
     # See-through bricks: the ordinary drawing with its fills let down, so
     # what the far side of a part does is visible against what the near side
     # draws. Opacity is stated rather than inherited -- a translucent LDraw
@@ -1045,7 +1056,10 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
         # The census's renders stay out of git but are indexed all the same,
         # under their own source so they cannot be mistaken for the store's
         # drawing: it renders strokeless, so its fills carry the silhouette.
-        for svg in sorted(census_dir.glob("renders/*/*.svg")):
+        # Every suffix the store indexes, not `.svg`: an LDView slot's tree
+        # holds WebP, and a glob on the census's own format walked past it.
+        for svg in sorted(p for p in census_dir.glob("renders/*/*")
+                          if p.suffix in RENDER_SUFFIXES):
             source = census_source(census_dir, svg.parent.name)
             if source not in SOURCES:
                 continue

@@ -44,11 +44,34 @@ def test_build_argv_has_fidelity_lighting_angle():
     argv = render.build_argv(cfg, Path("/p/3001.dat"), Path("/o/3001.png"))
     assert str(cfg.ldview) in argv
     for flag in ["-SaveSnapshot=/o/3001.png", "-SaveWidth=2048", "-SaveHeight=2048",
-                 "-AutoCrop=1", "-SaveAlpha=1", "-EdgeLines=1",
+                 "-AutoCrop=1", "-SaveAlpha=1", "-ShowHighlightLines=1",
                  "-CurveQuality=12", "-HiResPrimitives=1", "-AllowPrimitiveSubstitution=1",
                  "-Lighting=1", "-UseQualityLighting=1", "-LightVector=-1,1,2",
                  "-DefaultLatLong=30.0,45.0", f"-LDrawDir={cfg.ldraw_dir.resolve()}"]:
         assert flag in argv
+
+
+def test_ldview_looks_are_oracles_for_one_thing_each():
+    """`gray` judges shading: flat3's gray under flat3's light and no edge
+    lines, so a tone that differs is a shading difference. `lines` judges
+    linework: LDView's edge lines with hidden ones removed, no surfaces and
+    no light. `EdgeLines` is not a key LDView reads; `ShowHighlightLines` is
+    the switch."""
+    gray = load_config(root=".", overrides={"ldview_look": "gray",
+                                            "part_color": "0xCC0000"})
+    argv = render.build_argv(gray, Path("/p/x.dat"), Path("/o/x.png"))
+    assert "-ShowHighlightLines=0" in argv and "-Lighting=1" in argv
+    assert f"-LightVector={render.FLAT3_LIGHT}" in argv
+    assert f"-DefaultColor3={render.FLAT3_GRAY}" in argv
+    assert "-DefaultColor3=0xcc0000" not in argv, "a part color would repaint the oracle"
+    lines = load_config(root=".", overrides={"ldview_look": "lines"})
+    argv = render.build_argv(lines, Path("/p/x.dat"), Path("/o/x.png"))
+    assert "-ShowHighlightLines=1" in argv and "-EdgesOnly=1" in argv
+    assert "-Lighting=0" in argv
+    assert not any(a == "-EdgeLines=1" for a in argv)
+    with pytest.raises(ValueError):
+        render.build_argv(load_config(root=".", overrides={"ldview_look": "sepia"}),
+                          Path("/p/x.dat"), Path("/o/x.png"))
 
 
 def test_build_argv_part_color_optional():

@@ -51,8 +51,32 @@ def posed_wrapper(part_file: Path, pose, dest_dir: Path) -> Path:
     return wrapper
 
 
+# flat3's light, (-0.5, 0.6, -0.62) in our (right, up, fwd) view frame, in
+# LDView's: same right and up, and z toward the viewer rather than into the
+# screen. Stated here rather than derived from a style so the reference cannot
+# drift with one.
+FLAT3_LIGHT = "-0.5,0.6,0.62"
+FLAT3_GRAY = "0x9D9D9D"
+
+# LDView keys per `ldview_look`. `ShowHighlightLines` is the edge-line switch;
+# `EdgeLines` is not a key LDView reads, and passed as one it changes nothing.
+# `EdgesOnly` draws the edge lines with the surfaces removed but still
+# occluding, so hidden lines stay hidden.
+LOOKS = {
+    "color": ["-ShowHighlightLines=1", "-Lighting=1", "-UseQualityLighting=1",
+              "-LightVector=-1,1,2"],
+    "gray": ["-ShowHighlightLines=0", "-Lighting=1", "-UseQualityLighting=1",
+             f"-LightVector={FLAT3_LIGHT}", f"-DefaultColor3={FLAT3_GRAY}"],
+    "lines": ["-ShowHighlightLines=1", "-EdgesOnly=1", "-Lighting=0",
+              "-BlackHighlights=1"],
+}
+
+
 def build_argv(cfg: Config, part_file: Path, out_png: Path) -> list[str]:
     lat, long = resolve_latlong(cfg.angle)
+    look = getattr(cfg, "ldview_look", "color") or "color"
+    if look not in LOOKS:
+        raise ValueError(f"ldview_look must be one of {sorted(LOOKS)}, not {look!r}")
     argv = [
         *cfg.ldview_launcher, str(cfg.ldview), str(part_file),
         # absolute: LDView resolves this against its own cwd, and a relative
@@ -61,13 +85,14 @@ def build_argv(cfg: Config, part_file: Path, out_png: Path) -> list[str]:
         f"-LDrawDir={cfg.ldraw_dir.resolve()}",
         f"-SaveSnapshot={out_png}",
         f"-SaveWidth={cfg.render_px}", f"-SaveHeight={cfg.render_px}",
-        "-AutoCrop=1", "-SaveAlpha=1", "-EdgeLines=1",
+        "-AutoCrop=1", "-SaveAlpha=1",
         f"-CurveQuality={cfg.curve_quality}",
         "-HiResPrimitives=1", "-AllowPrimitiveSubstitution=1",
-        "-Lighting=1", "-UseQualityLighting=1", "-LightVector=-1,1,2",
+        *LOOKS[look],
         f"-DefaultLatLong={lat},{long}",
     ]
-    if cfg.part_color:
+    # The gray look states its own color; a part color would repaint it.
+    if cfg.part_color and look == "color":
         argv.append(f"-DefaultColor3={cfg.part_color}")
     return argv
 

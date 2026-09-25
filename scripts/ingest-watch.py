@@ -162,7 +162,9 @@ def _take_renders(conn: sqlite3.Connection, tree: Path, engine: str,
     took = redrew = 0
     touched: set[str] = set()
     for kept, slot in walks:
-      for svg in sorted(kept.glob("*.svg")):
+      # every suffix the store indexes: an LDView slot's tree holds WebP
+      for svg in sorted(p for p in kept.iterdir()
+                        if p.suffix in db.RENDER_SUFFIXES):
         pid = svg.stem
         if pid not in known or (pid in have[slot] and not overwrite
                                 and pid not in asked.get(slot, ())):

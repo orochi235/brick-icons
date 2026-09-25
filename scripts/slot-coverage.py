@@ -93,6 +93,10 @@ def flags_for(slot: str) -> dict:
     """
     parsed = cli.build_parser().parse_args(db.canonical_argv("3001", slot))
     cfg = cli._config_from_args(parsed)
+    if cfg.use_ldview:
+        # LDView draws it, through `scripts/ldview-batch.py`; the engine is
+        # what its measurement rows are filed under.
+        return {"engine": "ldview", "extra": f"--look {cfg.ldview_look}"}
     if cfg.decal:
         # A decal has no viewpoint, no engine and no strokes. Handing the
         # batch the census pass's drawing flags would draw a silhouette into

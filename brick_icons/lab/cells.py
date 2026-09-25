@@ -191,7 +191,14 @@ def engine_for(source: str) -> str:
     in front and can be more than one word -- `white-naive` is the naive
     engine drawing the white facet -- so it is the LAST segment that names the
     engine. A bare slot name carries no hyphen and is returned as it stands.
+
+    A `reference-*` slot is the exception: its qualifier names the LOOK
+    (`gray`, `lines`), and LDView drew every one of them, so their rows are
+    filed under `ldview` and join to each other, not to an engine called
+    `gray`.
     """
+    if source.startswith("reference-"):
+        return "ldview"
     return source.rsplit("-", 1)[-1] if "-" in source else source
 
 

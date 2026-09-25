@@ -65,6 +65,12 @@ def build_parser():
                    default=None,
                    help="draw with the vendored LDView instead of our engine, "
                         "in LDraw's own colors — the reference slot, a PNG")
+    p.add_argument("--ldview-look", dest="ldview_look",
+                   choices=("color", "gray", "lines"),
+                   help="what --ldview draws: authored colors with edge lines "
+                        "(default), flat3's gray under flat3's light with no "
+                        "lines (a shading oracle), or the edge lines alone "
+                        "(a linework oracle)")
     p.add_argument("--decal", action="store_true", default=None,
                    help="draw the part's printed decoration laid flat off the "
                         "surfaces it is printed on, all of them on one sheet — "
@@ -119,6 +125,7 @@ def _config_from_args(args) -> Config:
         "shade_style": args.shade_style, "light": args.light,
         "svg_bg": args.svg_bg, "opacity": args.opacity,
         "wireframe": args.wireframe, "use_ldview": args.use_ldview,
+        "ldview_look": args.ldview_look,
         "decal": args.decal, "texture_px": args.texture_px,
         "weld_corners": args.weld_corners,
         "part_label": args.part_label,

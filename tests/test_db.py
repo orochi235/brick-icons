@@ -439,6 +439,19 @@ def test_every_svg_source_asks_the_cli_for_an_svg(tmp_path):
         assert argv[argv.index("--format") + 1] == "svg"
 
 
+def test_the_ldview_oracles_are_ldview_slots_with_one_look_each():
+    """One slot per thing a drawing is judged on: `reference-gray` for
+    shading, `reference-lines` for linework. Both draw through --ldview, and
+    the look is the only thing that tells their config keys apart."""
+    for source, look in (("reference-gray", "gray"), ("reference-lines", "lines")):
+        argv = db.canonical_argv("3001", source)
+        assert "--ldview" in argv
+        assert argv[argv.index("--ldview-look") + 1] == look
+        assert argv[argv.index("--angle") + 1] == "iso"
+    assert db.canonical_argv("3001", "reference-gray") != \
+        db.canonical_argv("3001", "reference-lines")
+
+
 def test_a_second_writer_waits_instead_of_failing(tmp_path):
     """The store job shards, so several processes write renders at once. A
     default connection raises 'database is locked' on the second writer, and

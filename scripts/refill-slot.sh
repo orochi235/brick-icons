@@ -88,6 +88,19 @@ scp -q "$list" "$node:.config/onto/work/brick-icons/$list"
 # reach -- as a crash, which reads as a different fault entirely.
 hard=$(( cap + 300 ))
 
+# An LDView slot draws through its own batch script: no engine, no truth mask
+# to compare against, and LDView's own per-part timeout instead of the
+# watchdog. EXTRA is `--look <look>` here, from the slot's canonical argv.
+if [ "$engine" = ldview ]; then
+  # shellcheck disable=SC2086
+  exec scripts/run-slot.sh --detach --timeout "$timeout" --in brick-icons \
+    --task "$task" --each "$list" --workers "$workers" --retries 1 \
+    --env PATH=/Users/mike/.local/bin:/opt/homebrew/bin:/usr/bin:/bin \
+    --out "$dir" --to "$dir" \
+    "$node" -- .venv/bin/python scripts/ldview-batch.py --source "$source" \
+      --dir "$dir" --timeout "$cap" $extra {}
+fi
+
 exec scripts/run-slot.sh --detach --timeout "$timeout" --in brick-icons \
   --task "$task" --each "$list" --workers "$workers" --retries 1 \
   --env PATH=/Users/mike/.local/bin:/opt/homebrew/bin:/usr/bin:/bin \

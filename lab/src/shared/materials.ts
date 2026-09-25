@@ -25,6 +25,8 @@ export const MATERIALS: Record<string, Material> = {
   'silhouette-naive':  { color: ORANGE,    finish: 'solid',    opacity: 1,    stroke: null },
   'translucent-naive': { color: '#FF8A00', finish: 'trans',    opacity: 0.7,  stroke: null },
   'reference':         { color: '#DBAC34', finish: 'metallic', opacity: 1,    stroke: '#000000' },
+  'reference-gray':    { color: '#DBAC34', finish: 'metallic', opacity: 1,    stroke: null },
+  'reference-lines':   { color: WHITE,     finish: 'solid',    opacity: 1,    stroke: '#DBAC34' },
   'decal':             { color: '#C870A0', finish: 'print',    opacity: 1,    stroke: '#8E4570' },
 };
 
