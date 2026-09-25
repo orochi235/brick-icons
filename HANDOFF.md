@@ -5775,3 +5775,65 @@ caps, fan-triangulated and chained by the coplanar rule — not the curved
 wall. Anything comparing group counts before and after refinement has to
 separate the two, or it measures the caps and concludes something about the
 round.
+
+## 2026-09-25 overnight: the occt checkpoint round, and where the fill thread stops
+
+**What is running.** Three independent `onto` jobs, one per node, refreshing the `occt`
+slot: `occt-ckpt-studio`, `occt-ckpt-msb-uai`, `occt-ckpt-keiei`. Each has its own slice
+in `out/ckpt3/<node>.txt`, its own `--store-root out/ckpt3/<node>`, its own
+`--db out/ckpt3/<node>/store.db`, and a `onto fetch --stream` following it. Deadline is
+10h from 05:36. `onto jobs` and `onto logs <id>` are the truth; counts here would be stale
+before the sentence ended.
+
+Independent jobs rather than one `--with` spread, deliberately: the spread job starved.
+See onto's own HANDOFF for the three failures (a stale-schema node shredding the queue, a
+helper unable to lease from a saturated host, memory throttling announced only at kill)
+and two more (kill stranding renders, a job without progress markers looking wedged).
+
+**What still has to happen when it lands.** The drawings arrive under
+`out/ckpt3/<node>/renders/occt/` and do NOT reach the slot by themselves: `--no-watch` was
+passed because `ingest-watch.py` reads census JSONL and this is the store path. Copy each
+node's `renders/occt/*` into `renders/occt/`, then `scripts/index-slot-renders.py
+--source occt --force`, which is what records the displacements and fills the review
+board. The earlier rounds' 10,206 drawings in `out/ckpt2/renders/occt/` need the same and
+have not had it.
+
+**Do not launch this as a census job.** `census-batch.sh` runs
+`compare-silhouette-truth.py`, which draws STROKELESS — the fills carry the silhouette —
+and keeps its drawings on the node under `out/census/renders`. Those are measurement
+artifacts, not store drawings; indexing them into a slot is what put 972 strokeless rows
+in `occt` once already. A whole round was launched that way earlier this night and
+thrown away. The store path is `build-render-store.py`.
+
+**The fill thread, as far as it got.** `76382` spends 8.9s of a 16s render in fill, and
+`_refine_order_clips` was 7.0s of that: it asked GEOS for a full intersection of each
+face's lost region against every other geometry, 722k calls for one drawing. `e539274`
+indexes that with an STRtree — 53k calls, 2.87s, 1.20x over eight parts and 1.62x on
+76382, every one byte-identical. `shade.REFINE_PREFILTER` disarms it for an A/B.
+
+What is left, measured and not done:
+
+- `order_faces` is now the top cost, 3.25s of a 10.1s profile, 29,284 `_overlap_witness`
+  calls at ~91us each. **A tree will not help it.** `_bbox_pairs` already prefilters those
+  pairs with a vectorised numpy bbox test, so the 29k are pairs that genuinely overlap.
+  It needs a cheaper witness, not a cheaper search, and the witness cannot simply shrink
+  its 48x48 grid: the docstring is explicit that thin overlaps must still be found
+  (3626cp7d's bore meets its face in a 3.12 x 0.33 px band).
+- `shapely.prepared.prep()` on each face polygon, reused across its tests, was proposed
+  and never tried. 770k `intersects` calls go through the per-call validation wrapper.
+- The corpus is 465.9 core-h over 73,852 measured rows. Concentration is mild: the
+  slowest 2,000 rows are 24.3%. Fill dominates the slowest parts whether or not they are
+  printed (4110c06 457.6s of 533.9s in fill, 30191 351.4 of 392.0).
+
+**Decided against: sharing geometry between a part and its printed variants.** 8,272 of
+the 20,051 parts in the slot are decorated variants of 1,209 bases, which looks like a
+huge saving and is not. A variant's geometry is roughly four times its base's with
+`import` flat, so the decoration is being worked rather than parsed, and the reusable base
+geometry totals 5.3 of 126.7 core-h — **4.2%, as a ceiling, before any correctness work**.
+Their fill alone is 30.6 core-h. Do not re-propose it; look at fill.
+
+**Also open.** `hashes.txt` is blessed for the 16 goldens that moved no pixel (6b547ae);
+11 that move pixels stay red and want a human. Two of those, `outline-flat3__3649` at
+1393px and `__4019` at 662px, are the largest and no commit claims them — they predate
+4bb451a. `3040bp08` at 134px contradicts 4bb451a's own message, which reported a max
+delta of 1.
