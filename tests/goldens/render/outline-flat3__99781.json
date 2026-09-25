@@ -7,20 +7,21 @@
   ],
   "commands": {
     "A": 152,
-    "L": 98,
+    "L": 79,
     "M": 47,
     "Z": 24
   },
   "fills": {
     "#000000": 1,
+    "#565656": 1,
     "#5e5e5e": 1,
     "#858585": 3,
     "#cccccc": 3,
-    "gradient": 7,
+    "gradient": 6,
     "none": 24
   },
-  "gradient_stops": 64,
-  "gradients": 7,
+  "gradient_stops": 54,
+  "gradients": 6,
   "lines": 12,
   "paths": 39,
   "transforms": 0,
