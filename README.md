@@ -456,6 +456,41 @@ extraction [`decal`](#decal-extraction) performs, on a white ground, which is
 the only way to check that decoration bound to the right carrier without
 reading projected output.
 
+#### `--review [MODE]`
+
+Put each render on the [slopboard](https://github.com/orochi235/slopboard) wall
+and read a verdict back, instead of opening sixty files by hand. The sweep goes
+up as one **run** — one card holding a take per render, which the wall opens as
+a carousel — so reviewing it is `←`/`→` and a number key per picture. The
+verdicts are `no change`, `worse`, `neutral`, `better`, `fixed`, with a comment
+box under them, and each is reported as it is given:
+
+```
+$ brick-icons --list parts.txt --shading outline --review
+done: 3001
+done: 3002
+12 on the wall as review-20260925-1552-c065; waiting on verdicts
+[1/12] 3001: better -- corner arcs read now
+[2/12] 3002: worse
+```
+
+`MODE` is `run` when the flag is bare: every render goes up, and the verdicts
+are collected at the end. `one` waits for each verdict before rendering the
+next part, for stopping at the first bad one. `loose` does not wait at all —
+it prints a run id to collect later:
+
+```
+$ brick-icons --list parts.txt --review loose
+$ brick-icons --collect latest
+```
+
+A file the wall does not hold — an SVG, which is most of what the outline path
+writes — is named rather than skipped in silence. `--review-ask` changes the
+question. Nothing is written to `corpus.db`: `brick_icons.slop.review_many`
+hands the verdicts back and a caller decides what they mean, which is
+deliberate while the [review queue](#lab-server) has its own vocabulary for the
+same job (`review.VERDICTS`, where `worse` is `regression`).
+
 ## Golden conformance corpus
 
 The baseline the engine swap is measured against, frozen from the current

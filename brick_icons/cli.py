@@ -10,6 +10,7 @@ import numpy as np
 from PIL import Image
 
 from . import render, process, trace, hlr, library, shade, geom2d, unwrap
+from . import slop
 from .config import load_config, Config
 
 
@@ -99,6 +100,19 @@ def build_parser():
                         "(0,0 = frontal; positive azimuth = from the left; "
                         "default ~37,39 upper-left)")
     p.add_argument("--debug-dir", default=None)
+    p.add_argument("--review", nargs="?", const="run", default=None,
+                   choices=("one", "run", "loose"), metavar="MODE",
+                   help="put each render on the slopboard wall as a run and "
+                        "read a verdict back. `one` waits per render, `run` "
+                        "(the default) sends them all and waits at the end, "
+                        "`loose` does not wait -- collect it later with "
+                        "--collect")
+    p.add_argument("--review-ask", dest="review_ask", metavar="TEXT",
+                   default="how does this read?",
+                   help="the question each take asks on the wall")
+    p.add_argument("--collect", metavar="RUN", default=None,
+                   help="print the verdicts a --review=loose run has been "
+                        "given so far, and exit. `latest` for the last one")
     return p
 
 
@@ -541,15 +555,76 @@ def main(argv=None) -> int:
             tail = "" if c.alpha == 255 else f"  alpha {c.alpha}"
             print(f"{c.code:<4} {c.name:<34} {c.hex}{tail}")
         return 0
+    if args.collect:
+        return _collect_main(args.collect, args.root)
     cfg = _config_from_args(args)
     parts = _gather_parts(args)
     if not parts:
         print("no parts given")
         return 2
     out_dir = Path(args.out)
-    for part in parts:
+    run = slop.run_id() if args.review else None
+    sent = []
+    for i, part in enumerate(parts, 1):
+        before = _listing(out_dir)
         process_one(cfg, part, out_dir, debug_dir=args.debug_dir)
         print(f"done: {part}")
+        if not run:
+            continue
+        # Whatever the render wrote, since `process_one` reports nothing about
+        # it. Only what the wall holds goes up, and the rest is named rather
+        # than dropped: a .svg sent silently would be a review of nothing.
+        made = sorted(_listing(out_dir) - before)
+        shown = [p for p in made if slop.holdable(p)]
+        for path in shown:
+            sent.append(slop.send(path, about=part, run=run,
+                                  question=args.review_ask,
+                                  choices=slop.VERDICTS,
+                                  why="anything to add?",
+                                  of=len(parts) if len(shown) == 1 else None,
+                                  label=f"{len(parts)} parts"))
+        for path in (p for p in made if not slop.holdable(p)):
+            print(f"  not on the wall: {path.name}", flush=True)
+        if args.review == "one" and sent:
+            _report(slop.collect(sent[-1]), 1, 1)
+    if run and sent:
+        slop.write_manifest(run, sent, root=args.root)
+        if args.review == "loose":
+            print(f"{len(sent)} on the wall as {run}; "
+                  f"collect with --collect {run}")
+            return 0
+        if args.review == "run":
+            print(f"{len(sent)} on the wall as {run}; waiting on verdicts",
+                  flush=True)
+            for n, one in enumerate(sent, 1):
+                _report(slop.collect(one), n, len(sent))
+    return 0
+
+
+def _listing(out_dir: Path) -> set[Path]:
+    return set(out_dir.glob("*")) if out_dir.is_dir() else set()
+
+
+def _report(verdict, n: int, total: int) -> None:
+    if verdict is None:
+        print(f"[{n}/{total}] not looked at", flush=True)
+        return
+    said = verdict.choice or verdict.status
+    note = f" -- {verdict.text}" if verdict.text else ""
+    print(f"[{n}/{total}] {verdict.about}: {said}{note}", flush=True)
+
+
+def _collect_main(run: str, root: str = ".") -> int:
+    held = slop.runs(root)
+    if run == "latest":
+        if not held:
+            print("no run has a manifest left; --review=loose writes one")
+            return 2
+        run = held[0]
+    if run not in held:
+        print(f"no manifest for {run}. Held: {', '.join(held) or 'none'}")
+        return 2
+    slop.collect_run(run, root)
     return 0
 
 
