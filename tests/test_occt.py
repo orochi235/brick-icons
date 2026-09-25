@@ -2369,3 +2369,110 @@ def test_the_seam_veto_keeps_an_arc_the_part_declares(ldraw_dir):
     guarded = occt._drop_tangent_seams(picked, shape, right, up, out)
     assert len(blind) < len(picked), "the junction is claimed by a whole circle"
     assert len(guarded) == len(picked), "and every piece of it is declared"
+
+
+def test_a_span_samples_the_side_of_the_wall_the_camera_sees(ldraw_dir):
+    """Looking into a bore you see the tube's INSIDE, whose surface normal is
+    the outward cylinder normal negated. Every span sampled the outward
+    normal, so a bore's far wall was lit as the outside of a tube: the middle
+    of the visible wall, which faces the camera and the light, sat on the
+    shading floor while both limbs were lit (4595's lens and side studs,
+    35480's stud bores, 13670's cross hole). cccfe19's LAMBERT_WRAP, since
+    reverted, was tuned on that misreading. A sample's view normal must never
+    point away from the camera."""
+    for part in ("4595", "4740"):
+        spans = _spans_of(part, ldraw_dir)
+        assert spans
+        for f in spans:
+            for _, nv in f["grad_samples"]:
+                assert nv[2] <= 1e-9, (part, f["span_deg"], nv)
+
+
+def test_coaxial_walls_of_different_radius_keep_their_own_ramp():
+    """4595's side stud: the r6 outer wall's far half and the r4 bore's far
+    half are coaxial over the same 0..4 v-range and shared one 'wall' group,
+    keyed on axis and v-range alone. _merge_wall_gradients then sorted both
+    rings' samples along one axis, and the r6 ring's samples, spread wider,
+    interleaved with the r4 ring's into a zigzag that binned into a
+    straight-edged wedge inside the hole."""
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
+    from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    proj = occt.op_projection(right, up, fwd)
+    groups = {}
+    for r in (4.0, 6.0):
+        face = BRepPrimAPI_MakeCylinder(
+            gp_Ax2(gp_Pnt(10, 10, -10), gp_Dir(1, 0, 0)), r, 4.0).Face()
+        groups[r] = {f["group"] for f in occt._faces_for(face, proj)
+                     if f.get("group") is not None}
+        assert groups[r]
+    assert groups[4.0].isdisjoint(groups[6.0])
+
+
+def test_coaxial_walls_apart_on_the_axis_keep_their_own_ramp():
+    """4595's side studs: the r6 wall on the +x face and the one behind it
+    on the -x face lie on one axis line 24 LDU apart, each 0..4 in its own
+    face-local v, and shared a 'wall' group. The merged ramp's axis, fitted
+    across both rings, ran ALONG the stud instead of across it, and the two
+    rings' samples interleaved into stops that zigzag: the stud read as lit
+    from the wrong angle. The span in the key is measured along the axis in
+    world units, where the two studs do not overlap."""
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
+    from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    proj = occt.op_projection(right, up, fwd)
+    groups = {}
+    for x in (10.0, -14.0):
+        face = BRepPrimAPI_MakeCylinder(
+            gp_Ax2(gp_Pnt(x, 10, -10), gp_Dir(1, 0, 0)), 6.0, 4.0).Face()
+        groups[x] = {f["group"] for f in occt._faces_for(face, proj)
+                     if f.get("group") is not None}
+        assert groups[x]
+    assert groups[10.0].isdisjoint(groups[-14.0])
+
+
+def test_a_wall_inside_a_side_stud_never_paints(ldraw_dir):
+    """4595's side studs, looked into obliquely: past the stud's own r4 hole
+    the sightline runs on into the brick's r4 bore, and that deeper wall's
+    far half is what shows at the near edge of the hole. Two hidden surfaces
+    project over the same lune -- the NEAR half of that bore, a wall inside
+    the brick's material, and the far half of the stud's r6 outer wall, the
+    back of the stud -- and each won the single-witness order over it, so
+    the hole showed a lit crescent of a surface that cannot be seen. The
+    refine pass that exists for such pairs skipped every occt face: its probe
+    read the `prim` key only naive faces carry. With the occluder on the face,
+    and the far hit for an interior span, both impostors are found to miss
+    the ray there and the deep bore keeps the lune.
+
+    On a stud's axis every near half of an r4 wall (the hole's front wall,
+    inside the stud; the bore's, inside the brick) and every far half of an
+    r6 wall (the back of the stud) is buried, so none may reach the drawing.
+    The fill call mirrors the CLI's default fit exactly: at label size the
+    lune is a few px^2, and a call without the strokes and refits the CLI
+    passes trims it as residue before anything can leak into it."""
+    from brick_icons import shade
+    res = hlr.visible_segments("4595", ldraw_dir, engine="occt",
+                               render_px=2048)
+    fit = hlr.fit_segments(res.segs, res.bbox, 256, 170, 6, 1.0)
+    f, ox, oy = hlr.fit_affine(res.bbox, 256, 170, 6, 1.0)
+    faces = shade.apply_affine_faces(res.faces, f, ox, oy)
+    ells = hlr.fit_ellipses(res.ellipses, f, ox, oy)
+    spurs = shade.silhouette_spur_trim(faces, ells, 2.0, strokes=fit)
+    buried = []
+    for x in faces:
+        g = x.get("group")
+        if not isinstance(g, tuple) or g[0] != "wall" \
+                or tuple(g[1][0]) != (1.0, 0.0, 0.0):
+            continue
+        if g[2] == ("cyl", 4.0) and not x.get("interior"):
+            buried.append(x)
+        if g[2] == ("cyl", 6.0) and x.get("interior"):
+            buried.append(x)
+    assert len(buried) == 12, "4 studs x (hole front, bore front, stud back)"
+    ops = shade.fill_ops(faces, shade.Flat3Style(), ellipses=ells,
+                         proj=res.proj, fit=(f, ox, oy), refits=res.refits,
+                         loops=res.loops, strokes=fit, line_px=2.0,
+                         sil_px=2.0, drop=spurs)
+    depths = {round(x["depth"], 6) for x in buried}
+    leaked = [op for op in ops if round(op["depth"], 6) in depths]
+    assert not leaked, f"{len(leaked)} buried wall(s) paint"

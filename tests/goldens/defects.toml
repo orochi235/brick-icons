@@ -703,7 +703,11 @@ notes = """
 
 2026-09-23 review better
 
-2026-09-24 terminator-wrap scan (scripts/lambert-wrap-ab.py over 41 open shading defects, rows in out/lambert-scan/rows.jsonl): 11.8% floor and 24,787 px released on the large cylinder. Likely improved by cccfe19, though the harsh step at the top of the face survives; judge on a redraw."""
+2026-09-24 terminator-wrap scan (scripts/lambert-wrap-ab.py over 41 open shading defects, rows in out/lambert-scan/rows.jsonl): 11.8% floor and 24,787 px released on the large cylinder. Likely improved by cccfe19, though the harsh step at the top of the face survives; judge on a redraw.
+
+2026-09-24 (later): the three occt bore fixes change only the pin's hollow end (6 components, 5,145 px at zoom 3); the large body's ramp, which this defect is about, is untouched and still rests on the wrap.
+
+2026-09-24 (later): LAMBERT_WRAP reverted in the working tree at Mike's call (cccfe19 in full: the constant, shade.lambert, its test and scripts/lambert-wrap-ab.py), so the improvement this note rested on is gone; the drawing is back to textbook max(0, n.L) on curves."""
 
 [[defect]]
 id = "4616559cc01-very-messy-decal"
@@ -756,7 +760,9 @@ Not a missing fill. The bore is drawn as two correctly-split fills that shade co
 
 2026-09-23 review better
 
-2026-09-24: root cause found and fixed at cccfe19. The bore was never missing a gradient -- shade's max(0, n.L) pinned every normal facing away from the light to one floor tone, and looking down a bore you see exactly the half of the tube whose normals sweep 180 degrees. shade.LAMBERT_WRAP now moves the terminator to n.L = -0.3. Awaiting a redraw to judge on /review."""
+2026-09-24: root cause found and fixed at cccfe19. The bore was never missing a gradient -- shade's max(0, n.L) pinned every normal facing away from the light to one floor tone, and looking down a bore you see exactly the half of the tube whose normals sweep 180 degrees. shade.LAMBERT_WRAP now moves the terminator to n.L = -0.3. Awaiting a redraw to judge on /review.
+
+2026-09-24 (later): the cccfe19 diagnosis was wrong -- the bore was never on the shading floor for lack of a wrap. occt's _span_face sampled the cylinder's OUTWARD normal on every span, so a bore's far wall was lit as the outside of a tube: the middle of the visible wall, which faces the camera and the light, read as the terminator. LAMBERT_WRAP was tuned on that misreading. Fixed in the working tree, uncommitted: an away-facing span's samples are negated (occt._span_face); wall ramps are keyed by radius, so a stud's r6 wall and its r4 bore no longer share one zigzag ramp (occt._surface_key); and the refine pass can probe occt walls at last (shade._face_depth_probe read a `prim` key only naive faces carry), so a buried wall no longer paints into a hole. Awaiting a redraw to judge on /review."""
 
 [[defect]]
 id = "35480-wall-fill-hairline"
@@ -1966,7 +1972,9 @@ notes = """
 
 2026-09-23 review better
 
-2026-09-24: root cause found and fixed at cccfe19. The bore was never missing a gradient -- shade's max(0, n.L) pinned every normal facing away from the light to one floor tone, and looking down a bore you see exactly the half of the tube whose normals sweep 180 degrees. shade.LAMBERT_WRAP now moves the terminator to n.L = -0.3. Awaiting a redraw to judge on /review."""
+2026-09-24: root cause found and fixed at cccfe19. The bore was never missing a gradient -- shade's max(0, n.L) pinned every normal facing away from the light to one floor tone, and looking down a bore you see exactly the half of the tube whose normals sweep 180 degrees. shade.LAMBERT_WRAP now moves the terminator to n.L = -0.3. Awaiting a redraw to judge on /review.
+
+2026-09-24 (later): the cccfe19 diagnosis was wrong -- the bore was never on the shading floor for lack of a wrap. occt's _span_face sampled the cylinder's OUTWARD normal on every span, so a bore's far wall was lit as the outside of a tube: the middle of the visible wall, which faces the camera and the light, read as the terminator. LAMBERT_WRAP was tuned on that misreading. Fixed in the working tree, uncommitted: an away-facing span's samples are negated (occt._span_face); wall ramps are keyed by radius, so a stud's r6 wall and its r4 bore no longer share one zigzag ramp (occt._surface_key); and the refine pass can probe occt walls at last (shade._face_depth_probe read a `prim` key only naive faces carry), so a buried wall no longer paints into a hole. Awaiting a redraw to judge on /review."""
 
 [[defect]]
 id = "4531d01-dots-have-white-artifacts-around"
@@ -2044,7 +2052,11 @@ notes = """
 
 2026-09-23 review neutral
 
-2026-09-24 terminator-wrap scan (scripts/lambert-wrap-ab.py over 41 open shading defects, rows in out/lambert-scan/rows.jsonl): 12.0% floor and 22,229 px released -- the hat's shadowed side wall now ramps instead of sitting on the floor. Likely improved by cccfe19; judge on a redraw."""
+2026-09-24 terminator-wrap scan (scripts/lambert-wrap-ab.py over 41 open shading defects, rows in out/lambert-scan/rows.jsonl): 12.0% floor and 22,229 px released -- the hat's shadowed side wall now ramps instead of sitting on the floor. Likely improved by cccfe19; judge on a redraw.
+
+2026-09-24 (later): the three occt bore fixes (lit side of bore walls, wall ramps keyed by radius and world span, refine pass probing walls) leave this drawing byte-identical -- the hat's side wall is an exterior wall, so whatever it gains is the wrap alone.
+
+2026-09-24 (later): LAMBERT_WRAP reverted in the working tree at Mike's call (cccfe19 in full: the constant, shade.lambert, its test and scripts/lambert-wrap-ab.py), so the improvement this note rested on is gone; the drawing is back to textbook max(0, n.L) on curves."""
 
 [[defect]]
 id = "71711p01-shading-and-studding-issues-on"
@@ -2793,7 +2805,9 @@ notes = """
 
 2026-09-23 review neutral
 
-2026-09-24: root cause found and fixed at cccfe19. The bore was never missing a gradient -- shade's max(0, n.L) pinned every normal facing away from the light to one floor tone, and looking down a bore you see exactly the half of the tube whose normals sweep 180 degrees. shade.LAMBERT_WRAP now moves the terminator to n.L = -0.3. Awaiting a redraw to judge on /review."""
+2026-09-24: root cause found and fixed at cccfe19. The bore was never missing a gradient -- shade's max(0, n.L) pinned every normal facing away from the light to one floor tone, and looking down a bore you see exactly the half of the tube whose normals sweep 180 degrees. shade.LAMBERT_WRAP now moves the terminator to n.L = -0.3. Awaiting a redraw to judge on /review.
+
+2026-09-24 (later): the cccfe19 diagnosis was wrong -- the bore was never on the shading floor for lack of a wrap. occt's _span_face sampled the cylinder's OUTWARD normal on every span, so a bore's far wall was lit as the outside of a tube: the middle of the visible wall, which faces the camera and the light, read as the terminator. LAMBERT_WRAP was tuned on that misreading. Fixed in the working tree, uncommitted: an away-facing span's samples are negated (occt._span_face); wall ramps are keyed by radius, so a stud's r6 wall and its r4 bore no longer share one zigzag ramp (occt._surface_key); and the refine pass can probe occt walls at last (shade._face_depth_probe read a `prim` key only naive faces carry), so a buried wall no longer paints into a hole. Awaiting a redraw to judge on /review."""
 
 [[defect]]
 id = "3170-connector-rod-has-extra-outline"
@@ -3273,7 +3287,11 @@ notes = """
 
 2026-09-24 review regression
 
-2026-09-24 review regression"""
+2026-09-24 review regression
+
+2026-09-24 (later): the cccfe19 diagnosis was wrong -- the bore was never on the shading floor for lack of a wrap. occt's _span_face sampled the cylinder's OUTWARD normal on every span, so a bore's far wall was lit as the outside of a tube: the middle of the visible wall, which faces the camera and the light, read as the terminator. LAMBERT_WRAP was tuned on that misreading. Fixed in the working tree, uncommitted: an away-facing span's samples are negated (occt._span_face); wall ramps are keyed by radius, so a stud's r6 wall and its r4 bore no longer share one zigzag ramp (occt._surface_key); and the refine pass can probe occt walls at last (shade._face_depth_probe read a `prim` key only naive faces carry), so a buried wall no longer paints into a hole. Awaiting a redraw to judge on /review. On this part: the lens's r6-r8 shoulder annulus (z=-28) painted a sliver inside the lens bore, and the side studs' holes showed the near half of the brick's bore and the back of the stud's r6 wall as lit crescents; the lune of deeper bore seen at the near edge of each hole is real geometry and stays.
+
+2026-09-24 (later still): the side studs were also lit at the wrong angle -- the wall group key used the face-local v-range, so the +x stud and the -x stud behind it (one axis line, 24 apart, each 0..4 in its own v) merged and the fitted ramp ran ALONG the axis. The key now carries the world axial span (occt._span_face). Redrawn again for /review."""
 
 [[defect]]
 id = "6542b-one-inner-ring-is-totally"
@@ -3286,7 +3304,9 @@ filed = "2026-09-23"
 notes = """
 2026-09-24 review better
 
-2026-09-24 review regression"""
+2026-09-24 review regression
+
+2026-09-24 (later): same three occt bore fixes as 4595 (outward normal sampled on bore walls; wall ramps keyed by radius; refine pass could not probe occt walls). Awaiting a redraw to judge on /review."""
 
 [[defect]]
 id = "13670-inner-borehole-improperly-lit-shaded"
@@ -3296,7 +3316,10 @@ status = "open"
 title = "inner borehole improperly lit/shaded"
 checked = { occt = "25c1a80f50bc10be1c699f1cd85c64b095a9881d7e128d024e17641e3b99d9d4" }
 filed = "2026-09-23"
-notes = "2026-09-24: root cause found and fixed at cccfe19. The bore was never missing a gradient -- shade's max(0, n.L) pinned every normal facing away from the light to one floor tone, and looking down a bore you see exactly the half of the tube whose normals sweep 180 degrees. shade.LAMBERT_WRAP now moves the terminator to n.L = -0.3. Awaiting a redraw to judge on /review."
+notes = """
+2026-09-24: root cause found and fixed at cccfe19. The bore was never missing a gradient -- shade's max(0, n.L) pinned every normal facing away from the light to one floor tone, and looking down a bore you see exactly the half of the tube whose normals sweep 180 degrees. shade.LAMBERT_WRAP now moves the terminator to n.L = -0.3. Awaiting a redraw to judge on /review.
+
+2026-09-24 (later): the cccfe19 diagnosis was wrong -- the bore was never on the shading floor for lack of a wrap. occt's _span_face sampled the cylinder's OUTWARD normal on every span, so a bore's far wall was lit as the outside of a tube: the middle of the visible wall, which faces the camera and the light, read as the terminator. LAMBERT_WRAP was tuned on that misreading. Fixed in the working tree, uncommitted: an away-facing span's samples are negated (occt._span_face); wall ramps are keyed by radius, so a stud's r6 wall and its r4 bore no longer share one zigzag ramp (occt._surface_key); and the refine pass can probe occt walls at last (shade._face_depth_probe read a `prim` key only naive faces carry), so a buried wall no longer paints into a hole. Awaiting a redraw to judge on /review."""
 
 [[defect]]
 id = "11477dy8-doing-a-bad-job-projecting"
@@ -3431,4 +3454,6 @@ So the ramp is built and lost downstream of _span_face -- ordering, clipping or 
 
 Repro: .venv/bin/python -m brick_icons.cli 19121 --engine occt --shading outline --shade-style flat3 --angle iso --format svg
 
-2026-09-24: root cause found and fixed at cccfe19. The bore was never missing a gradient -- shade's max(0, n.L) pinned every normal facing away from the light to one floor tone, and looking down a bore you see exactly the half of the tube whose normals sweep 180 degrees. shade.LAMBERT_WRAP now moves the terminator to n.L = -0.3. Awaiting a redraw to judge on /review."""
+2026-09-24: root cause found and fixed at cccfe19. The bore was never missing a gradient -- shade's max(0, n.L) pinned every normal facing away from the light to one floor tone, and looking down a bore you see exactly the half of the tube whose normals sweep 180 degrees. shade.LAMBERT_WRAP now moves the terminator to n.L = -0.3. Awaiting a redraw to judge on /review.
+
+2026-09-24 (later): the cccfe19 diagnosis was wrong -- the bore was never on the shading floor for lack of a wrap. occt's _span_face sampled the cylinder's OUTWARD normal on every span, so a bore's far wall was lit as the outside of a tube: the middle of the visible wall, which faces the camera and the light, read as the terminator. LAMBERT_WRAP was tuned on that misreading. Fixed in the working tree, uncommitted: an away-facing span's samples are negated (occt._span_face); wall ramps are keyed by radius, so a stud's r6 wall and its r4 bore no longer share one zigzag ramp (occt._surface_key); and the refine pass can probe occt walls at last (shade._face_depth_probe read a `prim` key only naive faces carry), so a buried wall no longer paints into a hole. Awaiting a redraw to judge on /review."""

@@ -2039,7 +2039,7 @@ def _curved_frame(face):
 
 
 def _span_face(point, normal, ua, ub, v0, v1, proj, step_deg=BOUNDARY_STEP_DEG,
-               axis_key=None):
+               axis_key=None, surf_key=None):
     """One limb-to-limb span of a curved face, as a fill_ops face dict.
 
     Boundary order is top arc, limb generator, bottom arc, limb generator --
@@ -2063,11 +2063,20 @@ def _span_face(point, normal, ua, ub, v0, v1, proj, step_deg=BOUNDARY_STEP_DEG,
     p1 = (float(mpx[1]), float(mpy[1]))
     axis = np.array([p1[0] - p0[0], p1[1] - p0[1]])
     L2 = float(axis @ axis) or 1.0
+    mid_n = normal((ua + ub) / 2.0)
+    mid_n = mid_n / np.linalg.norm(mid_n)
+    # a span never crosses a limb, so the whole of it faces one way: away
+    # means the camera sees the wall's OTHER side -- a bore's inside -- and
+    # that is the side the light falls on. Decided per face, not per sample:
+    # a limb sample's n.fwd is 0 up to rounding, and its sign is noise.
+    away = bool(mid_n @ proj.fwd > 0)
     ring = []
     for th in np.linspace(ua, ub, 9):
         nw = normal(th)
         nw = nw / np.linalg.norm(nw)
         nv = np.array([nw @ proj.right, nw @ proj.up, nw @ proj.fwd])
+        if away:
+            nv = -nv
         p = point(np.array([th]), (v0 + v1) / 2.0)
         ppx, ppy, _ = proj.to_px(p)
         ring.append((float(ppx[0]), float(ppy[0]), nv))
@@ -2075,15 +2084,12 @@ def _span_face(point, normal, ua, ub, v0, v1, proj, step_deg=BOUNDARY_STEP_DEG,
                                + (y - p0[1]) * axis[1]) / L2, 0.0, 1.0)), nv)
                for x, y, nv in ring]
 
-    mid_n = normal((ua + ub) / 2.0)
-    mid_n = mid_n / np.linalg.norm(mid_n)
     # A span covering the whole turn never turned edge-on, so it has no near
     # and far half to choose between; it is marked interior because that is
     # the branch whose probe falls back to the UNCLAMPED surface hit. The
     # other branch falls back to an affine plane through a curved sheet, and
     # on 4740 that mis-sorts the dish into a dark crescent over its own top.
     full_turn = abs(ub - ua) > 2 * math.pi - 1e-6
-    away = bool(mid_n @ proj.fwd > 0)
     f = {"poly": poly, "zs": zs, "depth": float(np.mean(zs)),
          "kind": "occt-wall", "color": 16,
          "normal": np.array([mid_n @ proj.right, mid_n @ proj.up,
@@ -2110,7 +2116,18 @@ def _span_face(point, normal, ua, ub, v0, v1, proj, step_deg=BOUNDARY_STEP_DEG,
             # over its own arc, so the barrel came out as two pasted areas
             # meeting along a tone step. _merge_wall_gradients gives the tiles
             # one ramp and fill_ops unions them into one element.
-            f["group"] = ("wall", axis_key, round(v0, 3), round(v1, 3), away)
+            # surf_key carries the radius: a stud's r6 wall and its r4 bore
+            # share the axis AND the v-range, and one ramp across both rings
+            # zigzags (4595's side studs). The span is measured along the
+            # axis in WORLD units, not the face's own v: 4595's two side
+            # studs sit on one axis line 24 LDU apart, each 0..4 in its own
+            # v, and one ramp across both ran ALONG the axis instead of
+            # across it, its rings' samples interleaved.
+            Z = np.asarray(axis_key[0], float)
+            lo, hi = sorted((float(point(np.array([ua]), v0)[0] @ Z),
+                             float(point(np.array([ua]), v1)[0] @ Z)))
+            f["group"] = ("wall", axis_key, surf_key, round(lo, 3),
+                          round(hi, 3), away)
     return f
 
 
@@ -2465,10 +2482,24 @@ def _faces_for(face, proj, step_deg=BOUNDARY_STEP_DEG):
         if ub - ua < 1e-9:
             continue
         f = _span_face(point, normal, ua, ub, v0, v1, proj, step_deg,
-                       axis_key=_axis_key(face))
+                       axis_key=_axis_key(face), surf_key=_surface_key(face))
         if len(f["poly"]) >= 3:
             out.append(f)
     return out
+
+
+def _surface_key(face):
+    """What tells two coaxial surfaces apart: a cylinder's radius, a cone's
+    reference radius and half-angle. Two faces of ONE surface (a wall HLR
+    split at u) agree on it; a stud's wall and its bore do not."""
+    s = BRepAdaptor_Surface(face)
+    kind = s.GetType()
+    if kind == GeomAbs_SurfaceType.GeomAbs_Cylinder:
+        return ("cyl", round(s.Cylinder().Radius(), 4))
+    if kind == GeomAbs_SurfaceType.GeomAbs_Cone:
+        c = s.Cone()
+        return ("cone", round(c.RefRadius(), 4), round(c.SemiAngle(), 6))
+    return None
 
 
 def _axis_key(face):

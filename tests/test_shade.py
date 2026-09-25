@@ -1936,20 +1936,3 @@ def test_the_raise_moves_the_region_and_not_only_its_bookkeeping(monkeypatch):
     assert abs(_decal_region(10.3, proj=proj)["depth"] - authored) < 0.05
     monkeypatch.setattr(shade.unwrap, "standoff", lambda pts, carrier: 0.0)
     assert abs(_decal_region(10.3, proj=proj)["depth"] - authored) > 0.2
-
-
-def test_shadowed_side_of_a_curve_falls_off_instead_of_flooring():
-    """A bore seen down its own axis shows the half of the tube whose normals
-    sweep a full 180 degrees, so a textbook max(0, n.L) pins a quarter of the
-    face to one tone and the tube reads as a flat disc (19121, 35480, 3176,
-    13670, 4595). The wrap moves the terminator off n.L = 0."""
-    from brick_icons import shade
-    style = shade.Flat3Style(part_color=(157, 157, 157))
-    # 35480 face 29's eight measured n.L bins, looking down a stud
-    bins = (-0.44, -0.19, 0.03, 0.24, 0.41, 0.52, 0.53)
-    tones = [style.ramp_b(shade.lambert(d)) for d in bins]
-    assert tones[0] != tones[1], tones      # the two that used to tie
-    assert len(set(tones)) >= len(bins) - 1, tones
-    # and the lit side keeps its order and its top end
-    assert shade.lambert(1.0) == 1.0
-    assert shade.lambert(0.5) > shade.lambert(0.2) > shade.lambert(0.0)

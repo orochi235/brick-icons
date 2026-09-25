@@ -27,28 +27,6 @@ def _hex(rgb):
     return f"#{r:02x}{g:02x}{b:02x}"
 
 
-LAMBERT_WRAP = 0.3
-
-
-def lambert(d):
-    """Lambert brightness in [0, 1] from a raw n . L.
-
-    At WRAP = 0 this is the textbook max(0, n.L), which pins every normal
-    facing away from the light to one floor tone. Looking down a bore you see
-    the half of the tube whose normals sweep a full 180 degrees, so a quarter
-    of the face lands on that floor and the tube reads as a flat disc. A
-    positive wrap moves the terminator to n.L = -WRAP, so the shadowed side
-    falls off instead of collapsing. 0.3 was picked off a ladder against
-    LDView (scripts/lambert-wrap-ab.py): it is the smallest value that draws
-    a bore as a tube while a stud's outer wall keeps its dark quarter, and by
-    0.8 the bore is uniformly light again. Flat faces do not move -- flat3's
-    side tones are stylized constants, not Lambert."""
-    w = LAMBERT_WRAP
-    if w <= 0.0:
-        return max(0.0, float(d))
-    return max(0.0, (float(d) + w) / (1.0 + w))
-
-
 class ShadingStyle:
     def tone(self, nv) -> str:
         raise NotImplementedError
@@ -80,7 +58,7 @@ class Flat3Style(ShadingStyle):
 
     def ramp(self, nv):
         """Continuous grey for a curved-surface normal (gradient stops)."""
-        return self.ramp_b(lambert(np.dot(np.asarray(nv, float), self.light)))
+        return self.ramp_b(max(0.0, float(np.dot(np.asarray(nv, float), self.light))))
 
     def ramp_b(self, b):
         """Grey for a raw Lambert brightness (n . light, already clamped)."""
@@ -279,6 +257,9 @@ def order_faces(faces, proj=None, eps=1e-6, own_occ=None):
     n = len(faces)
     dfs = [_plane_depth_fn(f) for f in faces]
     own_occ = own_occ or {}
+    for f in faces:          # fill_ops' refine probes the same surface later
+        if id(f) in own_occ:
+            f["occ"] = own_occ[id(f)]
 
     def depth_at(i, x, y):
         f = faces[i]
@@ -403,7 +384,7 @@ def _radial_focal_stops(samples, style, nbins=8, exact=False):
     nvs = [np.asarray(n, float) for _, n in samples]
     L = getattr(style, "light", None)
     if L is not None and len(pts) >= 3:
-        b = np.array([lambert(n @ np.asarray(L, float)) for n in nvs])
+        b = np.array([max(0.0, float(n @ np.asarray(L, float))) for n in nvs])
         A = np.column_stack([np.ones(len(pts)), pts])
         # rcond clamps near-degenerate directions (e.g. samples lying along a
         # line) so the fitted slope stays in the well-determined subspace
@@ -495,7 +476,7 @@ def _axis_binned_stops(samples, style, nbins=8):
 
     def band(ns):
         if Lv is not None:
-            return ramp_b(float(np.mean([lambert(n @ Lv) for n in ns])))
+            return ramp_b(float(np.mean([max(0.0, float(n @ Lv)) for n in ns])))
         n = np.mean(ns, axis=0)
         return style.ramp(n / (np.linalg.norm(n) or 1.0))
 
@@ -551,21 +532,28 @@ def _face_depth_probe(face, proj, fit):
         try:
             coef, *_ = np.linalg.lstsq(A, zs, rcond=None)
         except np.linalg.LinAlgError:
-            return None
-        resid = np.abs(A @ coef - zs)
-        if resid.max() > 1e-3 * (abs(zs).max() + 1.0):
-            return None                       # not actually planar: bail out
-        return lambda pts: pts @ coef[:2] + coef[2]
-    prim = face.get("prim")
-    occ = prim.occluder() if prim is not None else None
+            coef = None
+        if coef is not None \
+                and np.abs(A @ coef - zs).max() <= 1e-3 * (abs(zs).max() + 1.0):
+            return lambda pts: pts @ coef[:2] + coef[2]
+        # not planar: an occt wall carries a normal too, and falls through
+        # to its surface
+    occ = face.get("occ")
+    if occ is None and face.get("prim") is not None:
+        occ = face["prim"].occluder()
     if occ is None or proj is None or fit is None:
         return None
     f, ox, oy = fit
+    # the far half of a wall is the FAR hit, as order_faces reads it: the
+    # near hit is the front wall, which would put a bore's inside in front
+    # of the step it sits behind
+    far = bool(face.get("interior")) and hasattr(occ, "depth_far")
 
     def probe(pts):
         xs = (pts[:, 0] - ox) / f
         ys = (pts[:, 1] - oy) / f
-        return occ.depth(proj.ray_origin(xs, ys), proj.fwd)
+        O = proj.ray_origin(xs, ys)
+        return occ.depth_far(O, proj.fwd) if far else occ.depth(O, proj.fwd)
     return probe
 
 
@@ -649,6 +637,14 @@ def _refine_order_clips(ordered, geoms, frags, proj, fit, step=1.2):
         return coefs[idx]
 
     def apply(idx, take, cut_from):
+        if take is None or take.is_empty:
+            return
+        # only what an impostor PAINTS is a loss to hand back: a sliver no
+        # face paints -- a chord-vs-arc gap at a limb -- is not the loser's
+        # either, and the cell buffer would grow it past the area floor
+        held = [frags[j] for j in cut_from if j in frags]
+        take = geom2d.intersection(take, geom2d.union_all(held)) if held \
+            else None
         if take is None or take.is_empty \
                 or geom2d.area(take) < 4 * MIN_FRAG_AREA:
             return
@@ -664,7 +660,16 @@ def _refine_order_clips(ordered, geoms, frags, proj, fit, step=1.2):
 
     import shapely as _sh
     from shapely.geometry import box
+    def is_print(k):
+        return ordered[k].get("color", 16) != 16
+
     for idx in sorted(geoms):
+        # print is ink on its carrier, placed by order_faces and its standoff:
+        # it neither loses area here nor gives any up. Probed, a print on a
+        # dish sits within eps of the dish at the limb and the grid flip-flops
+        # cell by cell into a dashed seam (4740p03's outer ring).
+        if is_print(idx):
+            continue
         g = geoms[idx]
         lost = geom2d.difference(g, frags[idx]) if idx in frags else g
         if geom2d.area(lost) < 4 * MIN_FRAG_AREA or probe(idx) is None:
@@ -672,7 +677,12 @@ def _refine_order_clips(ordered, geoms, frags, proj, fit, step=1.2):
         near = [j for j in sorted(geoms)
                 if j != idx and geom2d.area(geom2d.intersection(lost, geoms[j]))
                 >= MIN_FRAG_AREA]
-        curved = [geoms[j] for j in near if coef(j) is None]
+        # a curved loser has no exact answer against ANY impostor, a plane
+        # included: 4595's lens shoulder, an annulus behind the bore, won its
+        # witness over the far bore wall and painted a sliver inside the
+        # hole. Only a plane losing to planes is settled without the grid.
+        curved = [geoms[j] for j in near
+                  if coef(j) is None or coef(idx) is None]
         cov = geom2d.union_all(curved) if curved else None
 
         exact = None
@@ -727,10 +737,18 @@ def _refine_order_clips(ordered, geoms, frags, proj, fit, step=1.2):
             if geom2d.area(inter) < MIN_FRAG_AREA:
                 continue
             sel = _sh.contains_xy(inter, pts[:, 0], pts[:, 1])
-            pj = probe(j)
+            pj = None if is_print(j) else probe(j)
             if pj is None:                            # can't verify: trust order
                 exposed &= ~sel
                 continue
+            if coef(j) is None:
+                # a curved coverer answers from its SURFACE up to a cell past
+                # its sampled polygon: that closes the chord-vs-arc crack the
+                # polygon leaves along a rim (4740p03's dome far slope), and
+                # no further -- a half-span's occluder is the whole tube, and
+                # only its polygon says which half it is (4595's stud-hole
+                # front wall answered with the far wall's depth and took it)
+                sel = _sh.contains_xy(inter.buffer(step), pts[:, 0], pts[:, 1])
             if not sel.any():
                 continue
             dj = np.full(len(pts), np.inf)
@@ -738,14 +756,29 @@ def _refine_order_clips(ordered, geoms, frags, proj, fit, step=1.2):
             exposed &= ~(sel & np.isfinite(dj) & (dj <= di + eps))
         take = exact
         if exposed.any():
+            # a region is cells with neighbors; a lone cell is the lattice
+            # landing in a chord-vs-arc crack between two polygons of one
+            # circle, where the only face under it is one buried behind
+            # (4740p03's far rim: 31 such cells, handed to the rim's inside)
+            key = {(round(p[0] / step), round(p[1] / step)) for p in pts[exposed]}
+            keep = np.array([any((i + di_, j + dj_) in key for di_, dj_ in
+                                 ((1, 0), (-1, 0), (0, 1), (0, -1)))
+                             for i, j in (
+                                 (round(p[0] / step), round(p[1] / step))
+                                 for p in pts[exposed])], bool)
+            exposed[np.flatnonzero(exposed)[~keep]] = False
+        if exposed.any():
             cells = [box(p[0] - step / 2, p[1] - step / 2,
                          p[0] + step / 2, p[1] + step / 2)
                      for p in pts[exposed]]
             # buffer past the cell lattice so no impostor frame survives along
             # the region boundary; bleed into a true front face is harmless —
-            # it paints later and overpaints the overshoot exactly
+            # it paints later and overpaints the overshoot exactly. Mitred: a
+            # round join tessellates each corner into ~0.2 px segments, and
+            # that run is what reaches the path (4589's stud hole)
             grid = geom2d.intersection(
-                geom2d.union_all(cells).buffer(step * 0.75), lost)
+                geom2d.union_all(cells).buffer(step * 0.75, join_style="mitre"),
+                lost)
             take = grid if take is None else geom2d.union(take, grid)
         apply(idx, take, near)
 
