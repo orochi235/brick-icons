@@ -6,6 +6,7 @@ from collections import Counter, defaultdict
 
 import numpy as np
 from PIL import Image, ImageDraw
+from scipy import ndimage
 
 from . import timing
 from . import colors, geom2d, primitives, unwrap
@@ -76,7 +77,7 @@ def _plane_depth_fn(f):
     poly, zs = f["poly"], f.get("zs")
     d0 = float(f["depth"])
     if zs is None or len(zs) != len(poly):
-        return lambda x, y: d0
+        return _plane_fn(0.0, 0.0, d0)
     p0 = poly[0]
     i1 = int(np.argmax(np.hypot(poly[:, 0] - p0[0], poly[:, 1] - p0[1])))
     v01 = poly[i1] - p0
@@ -86,9 +87,23 @@ def _plane_depth_fn(f):
                   [poly[i1, 0], poly[i1, 1], 1.0],
                   [poly[i2, 0], poly[i2, 1], 1.0]])
     if abs(np.linalg.det(M)) < 1e-6:
-        return lambda x, y: d0
+        return _plane_fn(0.0, 0.0, d0)
     a_, b_, c_ = np.linalg.solve(M, np.array([zs[0], zs[i1], zs[i2]], float))
-    return lambda x, y: a_ * x + b_ * y + c_
+    return _plane_fn(float(a_), float(b_), float(c_))
+
+
+def _plane_fn(a, b, c):
+    fn = lambda x, y: a * x + b * y + c  # noqa: E731
+    fn.plane = (a, b, c)
+    return fn
+
+
+#: A/B switches for order_faces' two skips. Neither changes a drawing: the
+#: plane skip fires only where the witness could not have added a constraint,
+#: and the distance transform is the erosion loop's closed form.
+ORDER_PLANE_SKIP = True
+WITNESS_DT = True
+WITNESS_DISTANCE_REJECT = True
 
 
 def _overlap_witness(pa, pb, ha=(), hb=(), grid=48):
@@ -131,15 +146,22 @@ def _overlap_witness(pa, pb, ha=(), hb=(), grid=48):
     m = mask(pa, ha) & mask(pb, hb)
     if not m.any():
         return None
-    while True:                                  # erode to the interior
-        # Sliced rather than padded: the four np.pad copies per pass were the
-        # single most-run allocation in the whole render.
-        er = np.zeros_like(m)
-        er[1:-1, 1:-1] = (m[1:-1, 1:-1] & m[:-2, 1:-1] & m[2:, 1:-1]
-                          & m[1:-1, :-2] & m[1:-1, 2:])
-        if not er.any():
-            break
-        m = er
+    if WITNESS_DT:
+        # Eroding by the 4-neighbour cross until nothing is left keeps the
+        # pixels farthest from the background in taxicab distance, with the
+        # grid's own edge counting as background -- which is the distance
+        # transform of the zero-padded mask, in one pass instead of up to 24.
+        d = ndimage.distance_transform_cdt(np.pad(m, 1), metric="taxicab")
+        d = d[1:-1, 1:-1]
+        m = d == d.max()
+    else:
+        while True:                              # erode to the interior
+            er = np.zeros_like(m)
+            er[1:-1, 1:-1] = (m[1:-1, 1:-1] & m[:-2, 1:-1] & m[2:, 1:-1]
+                              & m[1:-1, :-2] & m[1:-1, 2:])
+            if not er.any():
+                break
+            m = er
     ys, xs = np.nonzero(m)
     j = len(xs) // 2
     return (x0 + xs[j] / sx, y0 + ys[j] / sy)
@@ -241,6 +263,52 @@ def _bbox_pairs(polys, gap=1e-9, chunk=256):
     return np.concatenate(out) if out else np.zeros((0, 2), int)
 
 
+def _pairs_within_reach(polys, boxes, pairs, grid=48):
+    """The pairs _overlap_witness could rasterize as overlapping: those
+    closer than two of its pixels. A set pixel lies within one pixel of its
+    polygon, so two polygons sharing one are within two pixel diagonals of
+    each other -- measured in each pair's own grid, which is scaled to its
+    bbox overlap. Everything farther would come back None after paying for
+    two rasters, and on a part with many faces that is two calls in five.
+    One vectorised GEOS distance over every pair replaces them."""
+    if len(pairs) == 0:
+        return pairs
+    import shapely
+    from shapely.geometry import Polygon
+    geoms = np.array([Polygon(p) if len(p) >= 3 else Polygon() for p in polys],
+                     dtype=object)
+    bb = np.asarray(boxes, float)
+    ii, jj = pairs[:, 0], pairs[:, 1]
+    px = (np.minimum(bb[ii, 2], bb[jj, 2]) - np.maximum(bb[ii, 0], bb[jj, 0])) / (grid - 1)
+    py = (np.minimum(bb[ii, 3], bb[jj, 3]) - np.maximum(bb[ii, 1], bb[jj, 1])) / (grid - 1)
+    reach = 3.0 * np.hypot(px, py)
+    dist = shapely.distance(geoms[ii], geoms[jj])
+    return pairs[~(dist > reach)]
+
+
+def _planes_tie(faces, planes, boxes, i, j, own_occ, eps):
+    """True when the pair could not constrain the order whatever the witness
+    said: both depths come from screen planes, both faces carry one colour,
+    and the planes agree within eps at every point of the bbox overlap -- a
+    found witness is then a same-colour tie and a missing one is nothing,
+    and order_faces drops both. The gap is affine, so its extreme over the
+    overlap box is at a corner."""
+    fi, fj = faces[i], faces[j]
+    if fi.get("color", 16) != fj.get("color", 16):
+        return False
+    if id(fi) in own_occ or id(fj) in own_occ:
+        return False
+    pi, pj = planes[i], planes[j]
+    if pi is None or pj is None:
+        return False
+    da, db, dc = pi[0] - pj[0], pi[1] - pj[1], pi[2] - pj[2]
+    bi, bj = boxes[i], boxes[j]
+    x0, y0 = max(bi[0], bj[0]), max(bi[1], bj[1])
+    x1, y1 = min(bi[2], bj[2]), min(bi[3], bj[3])
+    return max(abs(da * x + db * y + dc)
+               for x in (x0, x1) for y in (y0, y1)) <= eps / 2
+
+
 def order_faces(faces, proj=None, eps=1e-6, own_occ=None):
     """Witness-depth (Newell-style) paint ordering, replacing the mean-depth
     painter sort AND the occlusion cull: for every screen-overlapping pair,
@@ -288,7 +356,16 @@ def order_faces(faces, proj=None, eps=1e-6, own_occ=None):
     tied = defaultdict(set)
     indeg = [0] * n
     polys = [np.asarray(f["poly"], float) for f in faces]
-    for i, j in _bbox_pairs(polys):
+    planes = [getattr(d, "plane", None) for d in dfs]
+    boxes = [(p[:, 0].min(), p[:, 1].min(), p[:, 0].max(), p[:, 1].max())
+             for p in polys]
+    pairs = _bbox_pairs(polys)
+    if WITNESS_DISTANCE_REJECT:
+        pairs = _pairs_within_reach(polys, boxes, pairs)
+    for i, j in pairs:
+        if ORDER_PLANE_SKIP and _planes_tie(faces, planes, boxes, i, j,
+                                            own_occ, eps):
+            continue
         w = _overlap_witness(polys[i], polys[j],
                              ha=faces[i].get("holes") or (),
                              hb=faces[j].get("holes") or ())
