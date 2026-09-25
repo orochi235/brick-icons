@@ -1,3 +1,35 @@
+## 2026-09-25: the wall's color picker, and decoration masks for it
+
+The wall's header takes a LEGO color (the `--part-color` field) and redraws every
+part as if it were molded in that color, keeping outlines and printing. Printing is
+known exactly where a render marks it: fills that are not the part's own color
+carry `class="deco"` (root `data-marks="deco"`), bake-thumbs writes a mask beside
+each thumbnail under `out/thumbs/<slot>/mask/`, and the routes serve it with
+`?mask=1`. Where a part has no mask the wall falls back to guessing printing from
+color, which gets gray and white printing wrong. Code: `lab/src/wall/ink.tsx`,
+pezlie's `imageFilter` / `maskUrls`, `trace.deco_mask_svg`, `thumbs.MASK_DIR`.
+
+**In flight: `slot-occt-deco`, job a226a42b on msb-uai,** redrawing the 12,276
+decorated parts of `occt` so they carry marks (~4h from 15:05). It closes itself:
+`out/ingest-watch-slot-occt-deco.log` ingests and bakes each pass and stops after
+the job ends. Check with `onto logs a226a42b | grep progress | tail -1`.
+
+**After it lands:** onto delivers to `.claude/worktrees/clean-launch/out/slot-occt-deco`,
+which is a symlink to `out/slot-occt-deco` -- the job was launched from that
+worktree by mistake. Only once `onto jobs` stops listing the task, run
+`git worktree remove --force .claude/worktrees/clean-launch && git branch -D clean-launch`.
+
+- Only `occt` has masks. Every other slot falls back to the color guess until it is
+  next redrawn, which now marks decoration by itself.
+- About 1 in 10 redraws lands on `/review` as a real change: the engine has moved
+  since those parts were drawn. A redraw that changes fewer than 12 pixels no longer
+  queues (0e5319f). About 15 one- and two-pixel entries went in before that fix and
+  can be judged neutral.
+- The lab API on :8792 was restarted to pick up the mask routes. An API older than
+  802f54f answers `?mask=1` with the drawing, and a colored wall misshades.
+- `out/node-rescue/msb-uai/corpus.db.stale-schema-20260925` (18 MB) is a node-only
+  file copied off before a forced sync. Delete it once nobody wants it.
+
 ## 2026-09-25: invalid merged faces, sliver loops, and the shading cluster
 
 On `main`, this shared checkout. Today's commits, `git log --oneline @{u}..HEAD` for
