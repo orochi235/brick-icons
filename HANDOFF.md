@@ -34,6 +34,16 @@ the gap. Proposed: accept a facet whose plane is a chord plane of the wall's cyl
 its samples into the wall's ring. Probe scripts were in the session scratchpad and
 are gone; `scripts/_sheet.py` and in-process monkeypatching rebuild them in minutes.
 
+A second, bigger fault in the same cluster: a hand-faceted BENT TUBE (3127a's hook,
+768 facets in one group; 15439's moustache, 506 in one group) is one plane group
+whose normals wrap the whole sphere, and `attach_group_gradients` gives it one 2-D
+radial ramp, whose binned stops average every azimuth to nearly one tone (3127a: #9a
+to #8a). An exact cylinder span gets a ramp ACROSS the tube; the facet tube needs the
+same, which means splitting the group along its spine into nearly-straight runs and
+ramping each across, the way `_relax_facet_cylinders` already does for a closed
+facet cylinder. That is a design step. 28925c01's hull is a third mode: 396 planes
+in 174 groups, 152 of them singletons, so the hull's condlines are not grouping it.
+
 **Rules from Mike today:** never use naive as an oracle (memory `naive-is-not-an-oracle`);
 `edge_truth.py` still takes visibility from naive's z-buffer. He asked whether to
 redo the reference set in a neutral gray / lines-only mode; recommended two new
