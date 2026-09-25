@@ -600,6 +600,30 @@ def _half_plane(a, b, c, bounds, pad=8.0):
                (px + vx * L + ux * L, py + vy * L + uy * L)])
 
 
+#: The bounding-box prefilter in `_refine_order_clips`. A constant so an A/B
+#: can disarm it in one process rather than measuring two runs of the box.
+REFINE_PREFILTER = True
+
+_TREE_CACHE: tuple[int, object, list] | None = None
+
+
+def _overlap_tree(geoms):
+    """(STRtree over `geoms`' values, the key for each tree position).
+
+    Cached on the dict's identity and length: `_refine_order_clips` queries it
+    once per face and `frags` changes under it, but `geoms` itself does not.
+    """
+    global _TREE_CACHE
+    keys = sorted(geoms)
+    if _TREE_CACHE is not None and _TREE_CACHE[0] == id(geoms) \
+            and _TREE_CACHE[2] == keys:
+        return _TREE_CACHE[1], _TREE_CACHE[2]
+    from shapely import STRtree
+    tree = STRtree([geoms[k] for k in keys])
+    _TREE_CACHE = (id(geoms), tree, keys)
+    return tree, keys
+
+
 def _refine_order_clips(ordered, geoms, frags, proj, fit, step=1.2):
     """Fix clips the scalar paint order got wrong.
 
@@ -674,7 +698,18 @@ def _refine_order_clips(ordered, geoms, frags, proj, fit, step=1.2):
         lost = geom2d.difference(g, frags[idx]) if idx in frags else g
         if geom2d.area(lost) < 4 * MIN_FRAG_AREA or probe(idx) is None:
             continue
-        near = [j for j in sorted(geoms)
+        # Which other faces does `lost` actually meet? Asking GEOS for a full
+        # intersection against every one of them is quadratic, and on a part
+        # with many faces it is where this pass spends its time -- 76382 made
+        # 722k of these calls for one drawing. The tree answers the bounding
+        # box question in log n and only the survivors are intersected; the
+        # same prefilter the geometry phase got in 9493b33. Sorted, because
+        # the tree hands its hits back in its own order and this list decides
+        # what is cut from what.
+        cand = (sorted(int(k) for k in _overlap_tree(geoms)[0].query(lost))
+                if REFINE_PREFILTER else range(len(geoms)))
+        keys = _overlap_tree(geoms)[1]
+        near = [j for j in (keys[c] for c in cand)
                 if j != idx and geom2d.area(geom2d.intersection(lost, geoms[j]))
                 >= MIN_FRAG_AREA]
         # a curved loser has no exact answer against ANY impostor, a plane
