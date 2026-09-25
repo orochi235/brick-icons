@@ -100,6 +100,14 @@ export function createClient({ base = '', fetchImpl = fetch }: ClientOptions = {
       });
     },
 
+    /** Close every defect against the part as fixed and clear its status, in
+     *  one call. Answers with the detail `corpusPart` would now send, plus
+     *  which defects it closed. */
+    async markFixed(part: string): Promise<PartDetail & { changed: string[] }> {
+      return json(fetchImpl, at(`/api/corpus/part/${encodeURIComponent(part)}/fixed`),
+                  post('', {}));
+    },
+
     /** Ask for a part to be drawn again in one slot. A cheap slot draws now,
      *  as a job; anything slower is queued for the slot's next fleet round. */
     async redraw(part: string, source: string) {

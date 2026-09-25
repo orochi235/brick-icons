@@ -123,3 +123,21 @@ def update(path: Path | str, defect_id: str, changes: dict) -> dict:
             save(path, records)
             return record
     raise KeyError(f"no defect {defect_id!r}")
+
+
+def mark_part_fixed(path: Path | str, part_id: str, line: str) -> list[dict]:
+    """Close every defect against `part_id` that is not already fixed, each
+    with `line` appended to its notes, in one write. Returns the records it
+    changed."""
+    records = load(path)
+    changed = []
+    for record in records:
+        if record["part"] != part_id or record.get("status") == "fixed":
+            continue
+        record["status"] = "fixed"
+        record["notes"] = "\n\n".join(
+            p for p in ((record.get("notes") or "").rstrip(), line) if p)
+        changed.append(record)
+    if changed:
+        save(path, records)
+    return changed

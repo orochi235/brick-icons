@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import re
 import time
+from datetime import date
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
@@ -551,6 +552,28 @@ def create_app(root: Path | str = ".",
                 "slots": slots, "features": built,
                 "defects": [d for d in defects.load(app.state.defects_path)
                             if d["part"] == part_id]}
+
+    @app.post("/api/corpus/part/{part_id}/fixed")
+    def post_part_fixed(part_id: str):
+        """Every defect against the part closed as fixed, and the part's own
+        status cleared, in one call. Answers with the detail as `GET` would
+        now send it, plus which defects it closed."""
+        conn = corpus_conn()
+        try:
+            if conn.execute("SELECT 1 FROM parts WHERE id = ?",
+                            (part_id,)).fetchone() is None:
+                raise HTTPException(404, "no such part")
+            line = f"{date.today().isoformat()} lightbox: marked fixed"
+            changed = defects.mark_part_fixed(app.state.defects_path,
+                                              part_id, line)
+            for record in changed:
+                corpus_db_module.upsert_defect(conn, record)
+            corpus_db_module.clear_status(conn, part_id)
+        finally:
+            conn.close()
+        detail = get_corpus_part(part_id)
+        detail["changed"] = [r["id"] for r in changed]
+        return detail
 
     @app.post("/api/corpus/redraw")
     def post_redraw(req: RedrawRequest):

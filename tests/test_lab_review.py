@@ -1,6 +1,7 @@
 """The review queue's routes: what is listed, what is served, what a verdict
 does to the defect it speaks to."""
 import json
+from datetime import date
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
@@ -423,3 +424,43 @@ def test_the_list_does_not_parse_an_svg_for_a_row_it_will_not_show(lab, monkeypa
     assert shown == 1
     assert body["entries"][0]["after"]["content"]["bytes"] > 0
     assert len(calls) <= 2 * shown, f"{len(calls)} parses for {shown} shown"
+
+
+# --- the lightbox's mark-fixed button ---------------------------------------
+
+def test_marking_a_part_fixed_closes_its_defects_and_clears_its_status(lab):
+    client, root = lab
+    conn = db.connect(root / "corpus.db")
+    db.set_status(conn, "3001", "suspect", note="stud row looks thin")
+    conn.close()
+    defects.add(root / "defects.toml",
+                {**DEFECT, "id": "3001-occt-done", "status": "fixed",
+                 "notes": "already"})
+    defects.add(root / "defects.toml",
+                {**DEFECT, "id": "3002-occt-other", "part": "3002"})
+    r = client.post("/api/corpus/part/3001/fixed")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["changed"] == [DEFECT["id"]]
+    assert body["part"]["status"] == "unreviewed"
+    assert body["part"]["status_note"] is None
+    assert {d["id"]: d["status"] for d in body["defects"]} == {
+        DEFECT["id"]: "fixed", "3001-occt-done": "fixed"}
+    by_id = {d["id"]: d for d in defects.load(root / "defects.toml")}
+    assert by_id[DEFECT["id"]]["notes"] == (
+        f"first look\n\n{date.today().isoformat()} lightbox: marked fixed")
+    assert by_id["3001-occt-done"]["notes"] == "already"
+    assert by_id["3002-occt-other"]["status"] == "open"
+    conn = db.connect(root / "corpus.db")
+    row = conn.execute("SELECT status, status_note, status_at FROM parts "
+                       "WHERE id = '3001'").fetchone()
+    assert tuple(row) == ("unreviewed", None, None)
+    mirrored = conn.execute("SELECT status FROM defects WHERE id = ?",
+                            (DEFECT["id"],)).fetchone()
+    conn.close()
+    assert mirrored["status"] == "fixed"
+
+
+def test_marking_an_unknown_part_fixed_is_404(lab):
+    client, _root = lab
+    assert client.post("/api/corpus/part/9999/fixed").status_code == 404

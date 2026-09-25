@@ -126,6 +126,10 @@ export function Lightbox({ partId, source, client, onClose,
   const [outlineTranslucent, setOutlineTranslucent] = useState(false);
   const [title, setTitle] = useState('');
   const [flagError, setFlagError] = useState<string | null>(null);
+  // Armed by one click and fired by the next: the button closes every
+  // defect on the part at once, which is too much to hand to a slip.
+  const [fixing, setFixing] = useState<'idle' | 'armed' | 'busy'>('idle');
+  const [fixError, setFixError] = useState<string | null>(null);
   const [redraw, setRedraw] = useState<{ drawing: true } | { error: string } | null>(null);
   const [zoomedSlot, setZoomedSlot] = useState<Slot | null>(null);
   const gone = useRef(new AbortController());
@@ -222,6 +226,23 @@ export function Lightbox({ partId, source, client, onClose,
     }
   };
   const drawing = redraw !== null && 'drawing' in redraw;
+
+  const unfixed = (detail?.defects ?? []).filter((d) => d.status !== 'fixed').length;
+  const flagged = detail !== null && detail.part.status !== 'unreviewed';
+  const markFixed = async () => {
+    if (fixing === 'idle') { setFixing('armed'); return; }
+    setFixing('busy');
+    setFixError(null);
+    try {
+      setDetail(await client.markFixed(partId));
+    } catch (e) {
+      setFixError(e instanceof Error ? e.message : String(e));
+    }
+    setFixing('idle');
+  };
+  const fixLabel = fixing === 'busy' ? 'Marking…'
+    : fixing === 'armed' ? (unfixed > 0 ? `Close ${unfixed} as fixed` : 'Clear status')
+    : 'Mark fixed';
   const queuedAt = slots.find((slot) => slot.source === shown)?.requested_at;
 
   /** Close a defect out, or send it back round. Either way the render in
@@ -380,7 +401,18 @@ export function Lightbox({ partId, source, client, onClose,
                     onClick={() => setFlagging((was) => !was)}>
               {flagging ? 'Cancel' : 'Flag a problem'}
             </button>
+            {/* Disarms on blur: an armed button left behind would fire on a
+                click meant for something else the next time it had focus. */}
+            <button type="button" className="corpus-action"
+                    disabled={fixing === 'busy' || (unfixed === 0 && !flagged)}
+                    onClick={() => void markFixed()}
+                    onBlur={() => { if (fixing === 'armed') setFixing('idle'); }}>
+              {fixLabel}
+            </button>
           </div>
+          {fixError && (
+            <p className="corpus-flag-error" role="alert">Mark fixed failed: {fixError}</p>
+          )}
           {queuedAt && (
             <p className="corpus-queued">
               Queued for the next {shown} round · asked {queuedAt.slice(0, 10)}

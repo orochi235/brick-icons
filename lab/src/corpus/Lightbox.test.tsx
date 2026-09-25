@@ -349,6 +349,70 @@ it('stamps a freshly filed defect with the render it was filed against', async (
   expect(filed.checked).toEqual({ naive: 'deadbeef0000' });
 });
 
+// --- marking the whole part fixed --------------------------------------------
+
+const withMarkFixed = (d = detail) => {
+  const markFixed = vi.fn(async (_part: string) => ({
+    ...d,
+    part: { ...d.part, status: 'unreviewed', status_note: null },
+    defects: d.defects.map((x) => ({ ...x, status: 'fixed' })),
+    changed: d.defects.map((x) => x.id),
+  }));
+  return {
+    markFixed,
+    client: { corpusPart: () => Promise.resolve(d), addDefect, markFixed } as any,
+  };
+};
+
+it('marks the part fixed on a second click, not the first, and shows the answer', async () => {
+  const { client: c, markFixed } = withMarkFixed();
+  render(box({ client: c }));
+  await waitFor(() => screen.getByText('rim nubs'));
+  const button = screen.getByRole('button', { name: 'Mark fixed' });
+  fireEvent.click(button);
+  expect(markFixed).not.toHaveBeenCalled();
+  expect(button.textContent).toBe('Close 1 as fixed');
+  fireEvent.click(button);
+  await waitFor(() => expect(markFixed).toHaveBeenCalledWith('3001'));
+  await waitFor(() => expect(
+    (screen.getByLabelText('status of rim nubs') as HTMLSelectElement).value).toBe('fixed'));
+  expect(document.querySelector('.corpus-sub')?.textContent).toContain('unreviewed');
+  expect(button.textContent).toBe('Mark fixed');
+});
+
+it('disarms the mark-fixed button when focus leaves it', async () => {
+  const { client: c, markFixed } = withMarkFixed();
+  render(box({ client: c }));
+  await waitFor(() => screen.getByText('rim nubs'));
+  const button = screen.getByRole('button', { name: 'Mark fixed' });
+  fireEvent.click(button);
+  fireEvent.blur(button);
+  expect(button.textContent).toBe('Mark fixed');
+  fireEvent.click(button);
+  expect(markFixed).not.toHaveBeenCalled();
+});
+
+it('has nothing to mark fixed on a clean, unreviewed part', async () => {
+  const clean = { ...detail, part: { ...detail.part, status: 'unreviewed' }, defects: [] };
+  const { client: c } = withMarkFixed(clean);
+  render(box({ client: c }));
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  expect((screen.getByRole('button', { name: 'Mark fixed' }) as HTMLButtonElement).disabled)
+    .toBe(true);
+});
+
+it('says why marking fixed failed', async () => {
+  const { client: c, markFixed } = withMarkFixed();
+  markFixed.mockRejectedValueOnce(new Error('no corpus database'));
+  render(box({ client: c }));
+  await waitFor(() => screen.getByText('rim nubs'));
+  const button = screen.getByRole('button', { name: 'Mark fixed' });
+  fireEvent.click(button);
+  fireEvent.click(button);
+  await waitFor(() => screen.getByRole('alert'));
+  expect(screen.getByRole('alert').textContent).toContain('no corpus database');
+});
+
 // --- a slot that never drew ------------------------------------------------
 
 const failedDetail = {

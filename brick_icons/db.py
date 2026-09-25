@@ -700,6 +700,14 @@ def set_status(conn: sqlite3.Connection, part_id: str, status: str,
     conn.commit()
 
 
+def clear_status(conn: sqlite3.Connection, part_id: str) -> None:
+    """Back to the row's defaults: a part nobody has said anything about."""
+    conn.execute(
+        "UPDATE parts SET status='unreviewed', status_note=NULL, "
+        "status_at=NULL WHERE id=?", (part_id,))
+    conn.commit()
+
+
 def import_part_successors(conn: sqlite3.Connection, path: Path | str) -> int:
     """Load `scripts/fetch-part-years.py`'s successor CSV into
     `part_successors`."""
