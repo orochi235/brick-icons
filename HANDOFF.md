@@ -11,12 +11,14 @@ queue lists only the newest unjudged entry per part since d3579aa.
 **Landed, judged on the wall (zone brick-icons), awaiting /review verdicts:** 39789,
 3245cpz5, 38583, 72632, 4151b, 64179.
 
-**In flight, a subagent's:** curved walls honoring their trim. 3039's tube is cut by
-the slope and `occt._faces_for` / `_face_occluder` build the wall's polygon and depth
-probe from the UV rectangle, so the removed part of the tube claims pixels in front
-of the slope (a gray crescent on plain 3039, blobs inside the prints of 3039pc1/pca).
-The fix samples the face's outer wire in UV instead. Check `git log` for it before
-touching `_faces_for`; if absent, the diagnosis is in this session's transcript only.
+**Landed, 375f8cd: curved walls honor their trim.** 3039's tube is cut by the slope
+and `occt._faces_for` / the occluders built the wall's polygon and depth probe from
+the UV rectangle, so the removed part of the tube claimed pixels in front of the
+slope (a gray crescent on plain 3039, blobs inside 3039pc1/pca's prints). The wall
+now stops at the face's outer wire (`_face_uv_outline`, `primitives._in_outline`);
+`occt.TRIM_WALLS` disarms it. Untrimmed walls are byte-identical. Any slope brick
+with a tube or stud cut by the slope (3037, 3038, 3040, 3665) moves; the plain-3039
+crescent is the cheapest regression check.
 
 **Diagnosed, unbuilt: the shading cluster** (15439, 28925c01, 14769, 3626cpn*, 3262,
 3127). One mechanism: a curved surface reaches the fill as exact spans AND as
