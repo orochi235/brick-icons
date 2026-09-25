@@ -597,7 +597,7 @@ def record_render(conn: sqlite3.Connection, part_id: str, source: str,
 
 def store_render(conn: sqlite3.Connection, part_id: str, source: str,
                  made: Path | str, root: Path | str = ".",
-                 run_id: int | None = None) -> Path:
+                 run_id: int | None = None, by: str = "lab") -> Path:
     """Copy a freshly rendered artifact into the store and index it.
 
     The extension follows what was made rather than being assumed:
@@ -616,7 +616,7 @@ def store_render(conn: sqlite3.Connection, part_id: str, source: str,
         review.keep_before(root, source, part_id, held["path"], held["sha256"])
     dest.write_bytes(made.read_bytes())
     record_render(conn, part_id, source, dest, root=root, run_id=run_id,
-                  by="lab")
+                  by=by)
     return dest
 
 
