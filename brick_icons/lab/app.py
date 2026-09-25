@@ -23,6 +23,7 @@ from .. import colors as ldraw_colors
 from .. import requests as render_requests
 from .. import features
 from .. import tags
+from .. import thumbs, trace
 from ..config import load_config
 from . import (cache, cells, corpus, decal, defects, diff, findings,
                goldens_status, ingest, jobs, partindex, reference, review_api,
@@ -346,9 +347,12 @@ def create_app(root: Path | str = ".",
         if source not in corpus_db_module.SOURCES:
             raise HTTPException(400, f"no such slot: {source}")
 
-    def _slot(source: str) -> Path:
+    def _slot(source: str, mask: bool = False) -> Path:
+        """`mask` is the slot's decoration masks, baked beside its drawings
+        with the same layout (see `thumbs.MASK_DIR`)."""
         _check_source(source)
-        return Path(app.state.thumbs_root) / source
+        slot = Path(app.state.thumbs_root) / source
+        return slot / thumbs.MASK_DIR if mask else slot
 
     @app.get("/api/corpus/cells")
     def get_cells(source: str = "silhouette-naive", since: str | None = None):
@@ -629,9 +633,10 @@ def create_app(root: Path | str = ".",
         return None
 
     @app.get("/api/thumbs/{source}/sheet-{level}.{ext}")
-    def get_sheet(source: str, level: int, ext: str):
+    def get_sheet(source: str, level: int, ext: str, mask: bool = Query(False)):
+        slot = _slot(source, mask)
         if ext == "json":
-            path = _slot(source) / f"sheet-{level}.json"
+            path = slot / f"sheet-{level}.json"
             if not path.is_file():
                 raise HTTPException(404, "no such sheet manifest")
             # The image is rewritten by every bake at a URL the client would
@@ -639,27 +644,27 @@ def create_app(root: Path | str = ".",
             # against this manifest and read every tile at the wrong offset.
             # Its mtime is the version, and it costs no re-bake to publish.
             manifest = json.loads(path.read_text())
-            image = _thumb_file(_slot(source), f"sheet-{level}")
+            image = _thumb_file(slot, f"sheet-{level}")
             if image is not None:
                 manifest["version"] = str(int(image.stat().st_mtime))
             return JSONResponse(manifest)
-        path = _thumb_file(_slot(source), f"sheet-{level}")
+        path = _thumb_file(slot, f"sheet-{level}")
         if path is None:
             raise HTTPException(404, "no such sheet; run scripts/bake-thumbs.py")
         return FileResponse(path)
 
     @app.get("/api/thumbs/{source}/{level}/{name}")
-    def get_thumb(source: str, level: int, name: str):
+    def get_thumb(source: str, level: int, name: str, mask: bool = Query(False)):
         if "/" in name or ".." in name or not name.endswith((".png", ".webp")):
             raise HTTPException(400, "bad thumbnail path")
-        path = _thumb_file(_slot(source) / str(level), Path(name).stem)
+        path = _thumb_file(_slot(source, mask) / str(level), Path(name).stem)
         if path is None:
             raise HTTPException(404, "no such thumbnail")
         return FileResponse(path)
 
     @app.get("/api/corpus/render/{source}/{part_id}.svg")
     def get_corpus_render(source: str, part_id: str,
-                           outline: bool = Query(False)):
+                           outline: bool = Query(False), mask: bool = Query(False)):
         """A part's rendered SVG for a slot, for the wall's vector rung.
 
         The path a caller could smuggle in is never trusted -- only `source`
@@ -669,6 +674,9 @@ def create_app(root: Path | str = ".",
         `?outline=1` is for a translucent slot, whose edges are already drawn
         but at zero width; it widens only those, and is a no-op on any other
         render (nothing there is zero-width already).
+
+        `?mask=1` is the render's decoration mask (`trace.deco_mask_svg`), or
+        404 for a render that does not mark its decoration.
         """
         _check_source(source)
         conn = corpus_conn()
@@ -686,6 +694,11 @@ def create_app(root: Path | str = ".",
             raise HTTPException(404, "no such render")
         media_type = RENDER_MEDIA_TYPES.get(path.suffix,
                                              "application/octet-stream")
+        if mask:
+            masked = trace.deco_mask_svg(path.read_text()) if path.suffix == ".svg" else None
+            if masked is None:
+                raise HTTPException(404, "this render marks no decoration")
+            return Response(content=masked, media_type=media_type)
         if outline and path.suffix == ".svg":
             svg = _with_outline_hairlines(path.read_text())
             return Response(content=svg, media_type=media_type)

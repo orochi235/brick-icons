@@ -429,6 +429,25 @@ THIN_ARCS = True
 STROKE_PER_RADIUS = 0.5
 
 
+#: On the root of every SVG whose decoration carries `class="deco"`. Without
+#: it a file with no marks could be a plain part or a render from before the
+#: marks existed, and only the first says "none of this is printing".
+DECO_MARKED = 'data-marks="deco"'
+_MASK_STYLE = ('<style>path[fill]{fill:#000;stroke:#000}'
+               'path.deco{fill:#fff;stroke:#fff}</style>')
+_SVG_OPEN = re.compile(r"<svg\b[^>]*>")
+
+
+def deco_mask_svg(text: str) -> str | None:
+    """The render with decoration white and every other fill black, strokes
+    untouched, or None for a render that does not mark its decoration.
+    Rasterized like the drawing, it lines up with it pixel for pixel."""
+    m = _SVG_OPEN.search(text)
+    if m is None or DECO_MARKED not in m.group(0):
+        return None
+    return text[:m.end()] + _MASK_STYLE + text[m.end():]
+
+
 def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
                     physical=None, s=None, line_mm=0.2, sil_mm=0.2,
                     fills=None, bg: str = "none", opacity: float = 1.0,
@@ -439,12 +458,13 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
         w_mm, h_mm = physical
         root = (f'<svg xmlns="http://www.w3.org/2000/svg" '
                 f'width="{w_mm:.2f}mm" height="{h_mm:.2f}mm" '
-                f'viewBox="0 0 {w} {h}" preserveAspectRatio="xMidYMid meet">')
+                f'viewBox="0 0 {w} {h}" preserveAspectRatio="xMidYMid meet" '
+                f'{DECO_MARKED}>')
         line_px = line_mm / 0.4 * s
         sil_px = sil_mm / 0.4 * s
     else:
         root = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" '
-                f'preserveAspectRatio="xMidYMid meet">')
+                f'preserveAspectRatio="xMidYMid meet" {DECO_MARKED}>')
     parts = [root]
     if bg != "none":
         parts.append(f'<rect width="100%" height="100%" fill="{bg}"/>')
@@ -499,7 +519,10 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
             # concentric ghost rings on a dish's stacked bands (4740)
             seam = (f' stroke="{paint}" stroke-width="0.8"'
                     if opacity >= 1.0 else "")
-            body.append(f'<path d="{fo["d"]}" fill="{paint}" '
+            # class="deco" marks paint that is not the part's own color, so a
+            # viewer can recolor the part without touching its printing
+            deco = ' class="deco"' if fo.get("deco") else ""
+            body.append(f'<path d="{fo["d"]}"{deco} fill="{paint}" '
                         f'fill-rule="evenodd"{seam}{face_op}/>')
         body.append("</g>")
         if defs:

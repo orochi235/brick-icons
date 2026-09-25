@@ -550,6 +550,35 @@ def canonical_argv(part_id: str, source: str) -> list[str]:
 RENDER_SUFFIXES = (".svg", ".png", ".webp")
 
 
+def _displaced_file(root: Path | str, source: str, part_id: str, held) -> Path:
+    """The held drawing as it was: the copy kept aside when `store_render`
+    overwrote it in place, else the file the row names."""
+    kept = (Path(root) / review.BEFORE_DIR / source
+            / f"{part_id}.{held['sha256'][:8]}{Path(held['path']).suffix}")
+    return kept if kept.is_file() else Path(root) / held["path"]
+
+
+def _same_pixels(before: Path, after: Path) -> bool:
+    """Whether the review queue would draw no change between two SVG renders:
+    same raster size, and no pixel past its threshold. Renders are not
+    byte-stable -- ring start points and equal-depth order vary run to run --
+    so a redraw that changes nothing on screen still changes its sha."""
+    if before.suffix != ".svg" or after.suffix != ".svg" or not before.is_file():
+        return False
+    if before.resolve() == after.resolve():
+        return False
+    import tempfile
+    from PIL import Image
+    from .lab import diff
+    with tempfile.TemporaryDirectory() as tmp:
+        try:
+            a = Image.open(diff.rasterize(before, Path(tmp) / "a.png"))
+            b = Image.open(diff.rasterize(after, Path(tmp) / "b.png"))
+        except RuntimeError:
+            return False
+        return a.size == b.size and diff.panel(a, b)[2] == 0
+
+
 def record_render(conn: sqlite3.Connection, part_id: str, source: str,
                   path: Path | str, root: Path | str = ".",
                   run_id: int | None = None,
@@ -589,7 +618,8 @@ def record_render(conn: sqlite3.Connection, part_id: str, source: str,
             pass
     sha = goldens.sha256(raw)
     where = str(path.resolve().relative_to(Path(root).resolve()))
-    if held is not None and held["sha256"] != sha and review_log is not None:
+    if (held is not None and held["sha256"] != sha and review_log is not None
+            and not _same_pixels(_displaced_file(root, source, part_id, held), path)):
         log = Path(review_log)
         review.record_replaced(
             conn, root, log if log.is_absolute() else Path(root) / log,

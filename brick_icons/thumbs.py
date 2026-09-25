@@ -14,6 +14,8 @@ from pathlib import Path
 
 from PIL import Image
 
+from . import trace
+
 SHEET_LEVELS = (8, 32)
 LOOSE_LEVEL = 128
 # The mip chain stops at the coarsest level, so it cannot bleed and needs no
@@ -21,6 +23,9 @@ LOOSE_LEVEL = 128
 GUTTER = 2
 LEVELS = (*SHEET_LEVELS, LOOSE_LEVEL)
 BAKED = "baked.json"
+#: The decoration masks, beside the drawings with the same layout, so a
+#: mask tile and sheet line up with the drawing's cell for cell.
+MASK_DIR = "mask"
 
 #: Transparent: a bake carries ink and nothing else, and the wall paints the
 #: ground under it. Baking a ground made the three zoom rungs disagree about
@@ -97,6 +102,27 @@ def _write_baked(out: Path, shas: dict[str, str]) -> None:
     _write_json(out / BAKED, shas)
 
 
+def _rasterized(part_id: str, svg: Path, out: Path) -> Image.Image:
+    wide = out / f".{part_id}.wide.png"
+    proc = subprocess.run(
+        ["resvg", "--width", str(LOOSE_LEVEL), str(svg), str(wide)],
+        capture_output=True, text=True)
+    if proc.returncode != 0 or not wide.is_file():
+        raise RuntimeError(f"resvg failed on {part_id}: "
+                           f"{(proc.stderr or proc.stdout).strip()[:200]}")
+    try:
+        with Image.open(wide) as img:
+            return img.convert("RGBA")
+    finally:
+        wide.unlink(missing_ok=True)
+
+
+def _mask_text(render: Path) -> str | None:
+    if render.suffix.lower() != ".svg":
+        return None
+    return trace.deco_mask_svg(render.read_text())
+
+
 def _drawn(part_id: str, render: Path, out: Path) -> Image.Image:
     """The render at `LOOSE_LEVEL` wide, as RGBA.
 
@@ -112,18 +138,7 @@ def _drawn(part_id: str, render: Path, out: Path) -> Image.Image:
     if render.suffix.lower() != ".svg":
         with Image.open(render) as img:
             return img.convert("RGBA")
-    wide = out / f".{part_id}.wide.png"
-    proc = subprocess.run(
-        ["resvg", "--width", str(LOOSE_LEVEL), str(render), str(wide)],
-        capture_output=True, text=True)
-    if proc.returncode != 0 or not wide.is_file():
-        raise RuntimeError(f"resvg failed on {part_id}: "
-                           f"{(proc.stderr or proc.stdout).strip()[:200]}")
-    try:
-        with Image.open(wide) as img:
-            return img.convert("RGBA")
-    finally:
-        wide.unlink(missing_ok=True)
+    return _rasterized(part_id, render, out)
 
 
 #: Thumbnails and sheets are WebP q90, as the raster render slots are: sheet-32
@@ -139,23 +154,48 @@ def bake_part(part_id: str, svg: Path | str, out: Path | str,
     An unchanged sha writes nothing: this runs after every batch of renders,
     and the corpus it has already baked is the overwhelming majority of it.
     """
-    out = Path(out)
+    out, svg = Path(out), Path(svg)
     shas = baked_shas(out)
+    mask_text = _mask_text(svg)
+    masks = out / MASK_DIR
     # The sha covers the render, not the encoding, so the tiles have to be
     # there in the format being written now -- otherwise changing THUMB_EXT
     # skips every part and composes a sheet out of tiles that do not exist.
-    if shas.get(part_id) == sha and all(
-            (out / str(level) / f"{part_id}.{THUMB_EXT}").is_file()
-            for level in LEVELS):
+    if shas.get(part_id) == sha and _tiles_exist(out, part_id) and (
+            mask_text is None or baked_shas(masks).get(part_id) == sha
+            and _tiles_exist(masks, part_id)):
         return []
     out.mkdir(parents=True, exist_ok=True)
-    drawn = _drawn(part_id, Path(svg), out)
+    _write_tiles(out, part_id, _drawn(part_id, svg, out))
+    _write_baked(out, {**shas, part_id: sha})
+    mask_shas = baked_shas(masks)
+    if mask_text is not None:
+        masks.mkdir(parents=True, exist_ok=True)
+        tmp = masks / f".{part_id}.mask.svg"
+        tmp.write_text(mask_text)
+        try:
+            _write_tiles(masks, part_id, _rasterized(part_id, tmp, masks))
+        finally:
+            tmp.unlink(missing_ok=True)
+        _write_baked(masks, {**mask_shas, part_id: sha})
+    elif part_id in mask_shas:
+        # Redrawn without marks: its old mask would describe another drawing.
+        for level in LEVELS:
+            (masks / str(level) / f"{part_id}.{THUMB_EXT}").unlink(missing_ok=True)
+        _write_baked(masks, {k: v for k, v in mask_shas.items() if k != part_id})
+    return list(LEVELS)
+
+
+def _tiles_exist(out: Path, part_id: str) -> bool:
+    return all((out / str(level) / f"{part_id}.{THUMB_EXT}").is_file()
+               for level in LEVELS)
+
+
+def _write_tiles(out: Path, part_id: str, drawn: Image.Image) -> None:
     for level in LEVELS:
         path = out / str(level) / f"{part_id}.{THUMB_EXT}"
         path.parent.mkdir(parents=True, exist_ok=True)
         _square(drawn, level).save(path, **THUMB_SAVE)
-    _write_baked(out, {**shas, part_id: sha})
-    return list(LEVELS)
 
 
 def compose(out: Path | str, order: list[str]) -> list[Path]:

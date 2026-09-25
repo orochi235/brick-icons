@@ -1893,8 +1893,10 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
                             "gradient": {"x1": p0[0], "y1": p0[1],
                                          "x2": p1[0], "y2": p1[1], "stops": stops}})
         else:
-            ops.append({"d": d, "fill": face_fill(f, style, ldraw_dir),
-                        "depth": f["depth"]})
+            op = {"d": d, "fill": face_fill(f, style, ldraw_dir), "depth": f["depth"]}
+            if deco:
+                op["deco"] = True
+            ops.append(op)
     # junction-lens pockets paint LAST (over every surface fill, under the
     # strokes): solid ink where converging strokes trap a sliver of tone
     for g in pockets:

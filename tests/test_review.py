@@ -8,7 +8,7 @@ import pytest
 from brick_icons import db, goldens, review
 
 SVG = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180">'
-       '<path d="M0 0h10"/></svg>')
+       '<path d="M0 0h10" stroke="black" stroke-width="4"/></svg>')
 SVG2 = SVG.replace("h10", "h20")
 
 
@@ -312,3 +312,27 @@ def test_a_dropped_entry_does_not_come_back_when_the_log_is_folded(conn, tmp_pat
     assert eid not in review.fold(review.load(log))
     assert conn.execute("SELECT COUNT(*) n FROM review WHERE id = ?",
                         (eid,)).fetchone()["n"] == 0
+
+
+def test_a_redraw_with_the_same_pixels_logs_nothing(conn, tmp_path):
+    plain = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">'
+             '<path d="M0 0L8 0L8 8Z" fill="#b40000"/></svg>')
+    marked = plain.replace('<path d="M0 0L8 0L8 8Z"', '<path d="M0 0L8 0L8 8Z" class="deco"')
+    db.record_render(conn, "3001", "occt", _draw(tmp_path, "out/a", "3001", plain),
+                     root=tmp_path)
+    db.record_render(conn, "3001", "occt", _draw(tmp_path, "out/b", "3001", marked),
+                     root=tmp_path)
+    assert not (tmp_path / review.DEFAULT_PATH).exists()
+    row = conn.execute("SELECT path FROM renders WHERE part_id = '3001'").fetchone()
+    assert row["path"] == "out/b/renders/occt/3001.svg"
+
+
+def test_a_redraw_that_moves_a_pixel_is_logged(conn, tmp_path):
+    plain = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">'
+             '<path d="M0 0L8 0L8 8Z" fill="#b40000"/></svg>')
+    moved = plain.replace("L8 8Z", "L4 8Z")
+    db.record_render(conn, "3001", "occt", _draw(tmp_path, "out/a", "3001", plain),
+                     root=tmp_path)
+    db.record_render(conn, "3001", "occt", _draw(tmp_path, "out/b", "3001", moved),
+                     root=tmp_path)
+    assert [l["kind"] for l in review.load(tmp_path / review.DEFAULT_PATH)] == ["replaced"]

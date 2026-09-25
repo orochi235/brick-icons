@@ -866,3 +866,21 @@ def test_a_redraw_of_an_unknown_part_is_404(tmp_path):
     assert _redraw_client(tmp_path).post(
         "/api/corpus/redraw",
         json={"part": "9999", "source": "occt"}).status_code == 404
+
+
+_MARKED_SVG = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 170" '
+               'data-marks="deco"><path d="M0 0L9 9Z" class="deco" fill="#b40000"/></svg>')
+
+
+def test_render_route_serves_the_decoration_mask_of_a_marked_render(tmp_path):
+    render_path = "out/census/renders/naive/3001.svg"
+    client = _render_client(tmp_path, render_path=render_path)
+    (tmp_path / render_path).write_text(_MARKED_SVG)
+    r = client.get("/api/corpus/render/naive/3001.svg?mask=1")
+    assert r.status_code == 200
+    assert "path.deco{fill:#fff" in r.text
+
+
+def test_render_route_404s_the_mask_of_an_unmarked_render(tmp_path):
+    assert _render_client(tmp_path).get(
+        "/api/corpus/render/naive/3001.svg?mask=1").status_code == 404

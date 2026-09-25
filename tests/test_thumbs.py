@@ -232,3 +232,53 @@ def test_a_format_change_rebakes_rather_than_composing_missing_tiles(tmp_path,
     assert thumbs.bake_part("3001", svg, out, sha="abc") == list(thumbs.LEVELS)
     for level in thumbs.LEVELS:
         assert (out / str(level) / "3001.png").is_file()
+
+
+MARKED = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 170" '
+          'data-marks="deco"><g stroke-linejoin="round">'
+          '<path d="M0 0H128V170H0Z" fill="#858585"/>'
+          '<path d="M128 0H256V170H128Z" class="deco" fill="#b40000"/></g></svg>')
+
+
+def test_a_marked_render_bakes_a_mask_beside_its_drawing(tmp_path):
+    svg = tmp_path / "3001p01.svg"
+    svg.write_text(MARKED)
+    out = tmp_path / "thumbs"
+    thumbs.bake_part("3001p01", svg, out, sha="s1")
+    masks = out / thumbs.MASK_DIR
+    assert thumbs.baked_shas(masks) == {"3001p01": "s1"}
+    with Image.open(masks / "128" / f"3001p01.{thumbs.THUMB_EXT}") as img:
+        rgba = img.convert("RGBA")
+    # the 256x170 render sits centered in the 128 square: left half body, right half print
+    y = 64
+    assert rgba.getpixel((20, y))[:3] < (30, 30, 30)
+    assert rgba.getpixel((108, y))[:3] > (225, 225, 225)
+
+
+def test_an_unmarked_render_bakes_no_mask(tmp_path):
+    svg = tmp_path / "3001.svg"
+    svg.write_text(SVG)
+    out = tmp_path / "thumbs"
+    thumbs.bake_part("3001", svg, out, sha="s1")
+    assert thumbs.baked_shas(out / thumbs.MASK_DIR) == {}
+
+
+def test_a_marked_part_missing_its_mask_is_rebaked(tmp_path):
+    svg = tmp_path / "3001p01.svg"
+    svg.write_text(MARKED)
+    out = tmp_path / "thumbs"
+    thumbs.bake_part("3001p01", svg, out, sha="s1")
+    (out / thumbs.MASK_DIR / "32" / f"3001p01.{thumbs.THUMB_EXT}").unlink()
+    assert thumbs.bake_part("3001p01", svg, out, sha="s1") == [8, 32, 128]
+
+
+def test_a_redraw_without_marks_drops_the_old_mask(tmp_path):
+    svg = tmp_path / "3001p01.svg"
+    svg.write_text(MARKED)
+    out = tmp_path / "thumbs"
+    thumbs.bake_part("3001p01", svg, out, sha="s1")
+    svg.write_text(SVG)
+    thumbs.bake_part("3001p01", svg, out, sha="s2")
+    masks = out / thumbs.MASK_DIR
+    assert thumbs.baked_shas(masks) == {}
+    assert not (masks / "128" / f"3001p01.{thumbs.THUMB_EXT}").exists()

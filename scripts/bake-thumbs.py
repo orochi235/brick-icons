@@ -51,6 +51,9 @@ def bake_source(conn, source: str, root: Path, out: Path,
               f"{'baked' if made else 'fresh'}", flush=True)
     for path in thumbs.compose(slot, order):
         print(f"  wrote {path}", flush=True)
+    if (slot / thumbs.MASK_DIR).is_dir():
+        for path in thumbs.compose(slot / thumbs.MASK_DIR, order):
+            print(f"  wrote {path}", flush=True)
     return baked, total
 
 
