@@ -188,11 +188,28 @@ def test_a_redrawn_slot_supersedes_the_entry(lab):
     db.record_render(conn, "3001", "occt", _draw(root, "out/c", "3001", SVG3),
                      root=root)
     conn.close()
-    entries = {e["id"]: e for e in client.get("/api/review").json()["entries"]}
-    first = entries[review.entry_id("occt", "3001", _sha(SVG2))]
+    body = client.get("/api/review").json()
+    entries = {e["id"]: e for e in body["entries"]}
+    first = review.entry_id("occt", "3001", _sha(SVG2))
     third = review.entry_id("occt", "3001", _sha(SVG3))
-    assert first["superseded_by"] == third
-    assert entries[third]["superseded_by"] is None
+    # Only the newest hop is a queue item; the one it displaced is reachable
+    # by id and says what displaced it.
+    assert first not in entries and entries[third]["superseded_by"] is None
+    assert body["superseded"] == 1
+    assert client.get(f"/api/review/{first}").json()["superseded_by"] == third
+
+
+def test_a_judged_entry_stays_listed_once_the_slot_moves_on(lab):
+    client, root = lab
+    eid = review.entry_id("occt", "3001", _sha(SVG2))
+    client.post(f"/api/review/{eid}/verdict", json={"verdict": "neutral"})
+    conn = db.connect(root / "corpus.db")
+    db.record_render(conn, "3001", "occt", _draw(root, "out/c", "3001", SVG3),
+                     root=root)
+    conn.close()
+    body = client.get("/api/review?judged=1").json()
+    assert eid in {e["id"] for e in body["entries"]}
+    assert body["superseded"] == 0
 
 
 def test_measure_fills_in_every_unmeasured_entry(lab):

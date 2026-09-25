@@ -81,6 +81,9 @@ All under `/api/review`, in `brick_icons/lab/review_api.py` registered from
   `extra_d99`, `missing_px`, `error` and `edge_scores` row by sha, the diff,
   the linked defects with their `checked` sha for the slot, the request, the
   verdict, and `superseded_by` when the slot no longer holds the after sha.
+  An unjudged entry that has been superseded is left out of the list and
+  counted in `superseded`: a part redrawn again before its last
+  displacement was judged is one queue item, the newest hop, not a chain.
 - `GET /api/review/{id}/before`, `/after`, `/diff.png`. By id only: the row
   names the paths, and no path from the request reaches the filesystem. Before
   serves the kept copy, falling back to the displaced path. After serves the

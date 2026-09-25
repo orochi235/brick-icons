@@ -241,10 +241,16 @@ def install(app: FastAPI, corpus_conn) -> None:
             review.ensure_schema(conn)
             records = defects.load(app.state.defects_path)
             asked = render_requests.load(app.state.requests_path)
-            out, total, hidden = [], 0, 0
+            out, total, hidden, superseded = [], 0, 0, 0
             for row in conn.execute("SELECT * FROM review ORDER BY at DESC"):
                 item = entry(conn, row, records, asked, root(), content=False)
                 if not in_view(item, view, judged):
+                    continue
+                # A slot redrawn again before its last displacement was judged
+                # holds a chain of entries for one part; only the newest is a
+                # queue item. A judged one stays: it is a record, not a task.
+                if item["superseded_by"] and item["judged"] is None:
+                    superseded += 1
                     continue
                 if not over_bar(item, min_components):
                     hidden += 1
@@ -255,7 +261,8 @@ def install(app: FastAPI, corpus_conn) -> None:
         finally:
             conn.close()
         return {"entries": out, "total": total, "hidden": hidden,
-                "view": view, "verdicts": list(review.VERDICTS)}
+                "superseded": superseded, "view": view,
+                "verdicts": list(review.VERDICTS)}
 
     @app.get("/api/review/{eid:path}/before")
     def get_before(eid: str):

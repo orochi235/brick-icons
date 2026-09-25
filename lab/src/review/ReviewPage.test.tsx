@@ -30,7 +30,7 @@ const entry = (over: Partial<ReviewEntry> = {}): ReviewEntry => ({
 });
 
 const list = (entries: ReviewEntry[], over: Partial<ReviewList> = {}): ReviewList => ({
-  entries, total: entries.length, hidden: 0, view: 'linked',
+  entries, total: entries.length, hidden: 0, superseded: 0, view: 'linked',
   verdicts: ['fixed', 'better', 'neutral', 'regression'], ...over,
 });
 
@@ -190,4 +190,12 @@ it('measures the linked entries the screen cannot weigh yet', async () => {
   await screen.findByText('Brick 2 x 4');
   fireEvent.click(screen.getByRole('button', { name: /measure 1 of 1 unmeasured/ }));
   await waitFor(() => expect(measureReview).toHaveBeenCalledWith(50, 'linked'));
+});
+
+it('says how many earlier hops of a redrawn part the queue hid', async () => {
+  const c = client([entry()]);
+  c.review.mockResolvedValue(list([entry()], { superseded: 3 }));
+  render(<ReviewPage client={c.client} />);
+  await screen.findByText('Brick 2 x 4');
+  expect(screen.getByText(/3 redrawn since, hidden/)).toBeTruthy();
 });

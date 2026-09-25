@@ -58,6 +58,9 @@ export interface ReviewList {
   /** Entries this view is about that fell under the component bar: a redraw
    *  that displaced a render without changing what it draws. */
   hidden: number;
+  /** Unjudged entries the slot has drawn past: the queue shows only the
+   *  newest entry for a part, and these are its earlier hops. */
+  superseded: number;
   view: ReviewView;
   verdicts: Verdict[];
 }

@@ -335,6 +335,7 @@ export function ReviewPage({ client }: { client: LabClient }) {
           <p className="review-count">
             {entries.length.toLocaleString()} of {list.total.toLocaleString()} shown
             {list.hidden > 0 && <> · {list.hidden.toLocaleString()} unchanged, hidden</>}
+            {list.superseded > 0 && <> · {list.superseded.toLocaleString()} redrawn since, hidden</>}
             {judgedHere > 0 && <> · {judgedHere.toLocaleString()} judged</>}
           </p>
         )}
