@@ -1,3 +1,72 @@
+## 2026-09-25 (later): reference slots on the fleet, the shading cluster built
+
+On `main`, this shared checkout. Nothing is pushed; ask before pushing. A peer
+session holds uncommitted edits in `brick_icons/db.py`, `tests/test_review.py`
+and `tests/goldens/defects.toml`; stage explicit paths only. The lab server on
+port 8792 is another session's and predates every route and module below.
+
+**Landed, ee9a49c: `reference-gray` and `reference-lines` LDView slots.**
+`--ldview-look color|gray|lines` (`render.LOOKS`); gray is flat3's gray under
+flat3's light with no edge lines, lines is `-EdgesOnly=1` with hidden lines
+removed. The `-EdgeLines=1` the argv carried was never a key LDView reads;
+`-ShowHighlightLines` is the switch. `scripts/ldview-batch.py --look --source
+--dir` fills a slot's tree in the census layout (SOURCE marker, one JSONL per
+batch with a measurement row per part, `renders/ldview/<part>.webp`), and
+`ingest-watch.py` / `db.rebuild` now index WebP under a census tree.
+`cells.engine_for` files every `reference-*` slot under `ldview`.
+`refill-slot.sh` branches to it when the slot's engine is `ldview`.
+
+**Running: `slot-reference-gray` on studio (87f1edb4) and `slot-reference-lines`
+on keiei (4c9fab48)**, 20,597 parts each, launched 14:47 with `onto sync` +
+`onto run` directly (run-slot.sh refuses a checkout ahead of its upstream).
+Fetch streams and `ingest-watch.py --until <task>` are running from the
+session that launched them; when both tasks leave `onto jobs`, confirm
+`renders`/`measurements` rows for both slots match the file counts, and run
+`scripts/index-slot-renders.py --source reference-gray` (and `-lines`) if the
+watcher died first. Zero errors through 20,000 parts.
+
+**Landed, 48b2e00: chord facets.** `occt._chord_facet` identifies a facet by
+its PLANE (perpendicular to the axis, at cos(pi/N) of the radius, vertices on
+or inside the circle); `_absorb_dome_walls` accepts it (3626cpnf's front band
+takes the head's ramp) and `_pool_chord_facets` joins a chord-facet group to
+the exact span's ring (14769's octants and its 28 facets, one ramp).
+`occt.CHORD_FACETS` disarms both. 3626cp7d, 4595, 3001 byte-identical.
+
+**Landed, fe906c3 + 48a9fcc: tone bands for the bent tubes.** Two things
+tried and failed before it, both inferring rings from the tessellation:
+region-growing facets under a planar-normals tolerance (greedy growth walks
+along the spine as readily as around it; a shallow dish passes any tolerance
+because its normals are all near one direction, so 3960 shattered) and
+cutting adjacency at the small mode of the dihedral (the tubes are
+triangulated, so quad diagonals share that mode). What landed measures the
+FIT: `shade.radial_misfit` (domes 0.18-0.21, tubes 0.31-0.35) and
+`shade.gauss_spread` (does one normal direction recur far apart on screen:
+tubes 0.79-0.91, 3262's dome 0.30, 32062's fillet 0.28-0.43). Past both
+gates a radial group's members take their own Lambert brightness posterized
+to 8 levels, one flat element per level. Moves 3127a, 3127b, 15439 and
+53119's swirl; every dome, dish, head and fillet on the sheet is
+byte-identical. `shade.TONE_BANDS` disarms it. 28925c01's hull (174 groups,
+152 singletons) is untouched: a third mode, not started.
+
+**Redrawn into the occt slot for /review** (run 119): 3626cpnf, 14769, 3127a,
+3127b, 15439, 53119. Defects `15439-enormous-shading-problems` and
+`3127b-tapered-hook-has-shading-problems` carry today's note.
+
+**Landed, 9d789a2: the wall offers no Legacy family** (naive slots stay in
+the lightbox only, per Mike). `lab/src/shared/materials.ts` knows the two new
+slots.
+
+**Pre-existing red at HEAD:** `tests/test_occt.py::
+test_a_sticker_is_not_clipped_by_the_slope_it_is_stuck_to` fails with every
+constant above disarmed, so it predates this work (likely 375f8cd's trimmed
+walls or the peer's uncommitted edits); not chased.
+
+**Next:** verdicts on /review for the six redraws plus the six from the
+morning; then a census round under occt, since chord facets and tone bands
+move shading across the library. Sheets on the wall (zone brick-icons) are
+the evidence: `chord facets`, `tone bands, gated on misfit >= 0.3 AND gauss
+spread >= 0.6`, and `pairs of after | reference-gray`.
+
 ## 2026-09-25: the wall's color picker, and decoration masks for it
 
 The wall's header takes a LEGO color (the `--part-color` field) and redraws every
