@@ -42,7 +42,7 @@ export function familyInk(material: Material): string {
 }
 
 export const CHART_ORDER = [
-  'occt', 'naive', 'reference',
+  'occt', 'naive', 'reference', 'reference-gray', 'reference-lines',
   'translucent-occt', 'translucent-naive',
   'silhouette-occt', 'silhouette-naive',
   'white-occt', 'white-naive',

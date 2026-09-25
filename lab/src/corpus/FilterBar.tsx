@@ -12,7 +12,11 @@ export function FilterBar({ sources, source, onSource }: {
   // pieces of state for one choice go out of step the moment a slot arrives
   // from the hash or from the sources poll.
   const family = familyOf(source);
-  const families = familiesIn(sources);
+  // naive is retired as an oracle and its thumbnails are wanted in the
+  // lightbox only, so the wall does not offer the Legacy family -- unless the
+  // shown slot IS one (a hash or a link named it), when hiding the segment
+  // would leave the toggle with nothing checked and no way back.
+  const families = familiesIn(sources).filter((f) => f !== 'legacy' || f === family);
   const inFamily = sources.filter((s) => familyOf(s.source) === family);
 
   const pickFamily = (next: Family | null) => {

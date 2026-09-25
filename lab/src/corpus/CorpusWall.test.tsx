@@ -613,21 +613,21 @@ it('says the pictures belong to the old slot while the new one loads', async () 
   // Only the slot switched TO stays out, so the wall has something drawn and
   // nothing to replace it with.
   const cells = vi.fn((source: string) =>
-    (source === 'silhouette-naive'
+    (source === 'reference'
       ? new Promise(() => {})
       : Promise.resolve(body(source))));
   const two = { ...client, cells, corpusSources: () => Promise.resolve({
-    sources: [{ source: 'occt', n: 2 }, { source: 'silhouette-naive', n: 2 }],
+    sources: [{ source: 'occt', n: 2 }, { source: 'reference', n: 2 }],
   }) } as any;
 
   const { container } = render(<CorpusWall client={two} />);
   await findCanvas(container);
   expect(document.querySelector('.corpus-stale')).toBeNull();
 
-  fireEvent.click(screen.getByRole('radio', { name: 'Legacy' }));
+  fireEvent.click(screen.getByRole('radio', { name: 'Reference' }));
   const said = await screen.findByText(/still showing/);
   expect(said.textContent).toContain('occt');
-  expect(said.textContent).toContain('silhouette-naive');
+  expect(said.textContent).toContain('reference');
 });
 
 it('comes back from a reload with its camera, selection and caret', async () => {

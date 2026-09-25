@@ -30,6 +30,14 @@ it('reports a slot change', () => {
   expect(onSource).toHaveBeenCalledWith('naive');
 });
 
+// naive's slots are for the lightbox only: the wall offers no Legacy segment
+// unless the shown slot is already one of them.
+it('hides the Legacy family unless the shown slot is in it', () => {
+  render(bar({ source: 'occt' }));
+  expect(screen.getAllByRole('radio').map((b) => b.textContent))
+    .toEqual(['Engine', 'Decal']);
+});
+
 // Single-mode ToggleBar is a radiogroup, so the segments are radios.
 it('offers a segment per family something has been drawn in', () => {
   render(bar());
