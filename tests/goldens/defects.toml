@@ -849,7 +849,9 @@ Two symptoms on the top face, against naive at the same pose. The front-centre s
 
 2026-09-17 review better: still has borehole problems around frontmost stud
 
-2026-09-23 review better"""
+2026-09-23 review better
+
+2026-09-25: at HEAD d3579aa (slot render 62642e62, in the /review queue unjudged) the occt drawing has the front-centre stud's top ellipse and the four-armed brace filled with its walls toned; naive at the same pose differs only by two body-tone slivers on that stud's top disc, which are naive's. Pair on the wall (brick-icons), 2026-09-25. Awaiting the verdict on /review."""
 
 [[defect]]
 id = "49612-extra-vertical-line-extending-down"
@@ -2223,7 +2225,9 @@ notes = """
 
 2026-09-17 review better
 
-2026-09-23 review neutral"""
+2026-09-23 review neutral
+
+2026-09-25: still 1 gap, 25.0 of 1410.0 px at HEAD d3579aa; not the tail. Disarming cull_orphan_runs in-process leaves it at 25.0. Probed occt.visible_segments before dedupe: the sphere limb arrives as pieces, (110.5,54.5)-(118.2,62.0) and (129.3,81.1)-(132.1,91.7) in canvas px, and the piece between them -- exactly the run where the limb passes the collar's near rim -- is absent from the raw output. The fill draws the sphere over the collar there (the tone boundary follows the declared line), so the limb is visible and HLR classed that one span hidden: same class as 4070's dropped ledge edge. Evidence on the wall (brick-icons): gaps-zoom sheet, 2026-09-25."""
 
 [[defect]]
 id = "10830-missing-outline-segments"
@@ -2238,7 +2242,9 @@ notes = """
 
 2026-09-17 review better
 
-2026-09-23 review neutral"""
+2026-09-23 review neutral
+
+2026-09-25: still 1 gap, 10.5 px at HEAD d3579aa. Not an HLR visibility call: with occlusion culling off the span (130.7,38.2)-(139.9,50.3) canvas px is still absent from occt's ops, while the notch corner lines beside it and the ring's substituted inner-rim arc ending at (128.0,34.2) are all there. The declared edge is a straight type-2 chord below the notch and the ring's inner rim resumes as an arc past (139.9,50.3); the run between the notch corner and that arc has no op at all. Disarming cull_orphan_runs moves it 10.5 -> 8.0 only. Suspect the rim substitution's angular coverage next to the notch (cf. 76aeed5), not the tail. Evidence on the wall (brick-icons): gaps-zoom sheet, 2026-09-25."""
 
 [[defect]]
 id = "31561-occt-exposes-inner-shaft-segment"
