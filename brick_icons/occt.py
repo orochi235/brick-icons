@@ -2282,6 +2282,54 @@ def _span_face(point, normal, ua, ub, v0, v1, proj, step_deg=BOUNDARY_STEP_DEG,
     return f
 
 
+#: Disarm to draw as before: chord facets neither hand an exact span the
+#: dome's ramp nor pool into the wall's ring.
+CHORD_FACETS = True
+
+#: The coarsest polygon a chord facet is accepted from: an 8-gon's chord plane
+#: sits at cos(pi/8) = 0.924 of the radius, a 16-gon's at 0.981, a 48-gon's at
+#: 0.998. Anything closer to the axis is a feature face, not a facet.
+CHORD_MIN_OFFSET = math.cos(math.pi / 8) - 0.01
+
+
+def _chord_facet(prim, verts, n_world, tol=2e-3, span_deg=25.0):
+    """Do `verts` lie on a CHORD PLANE of `prim`'s cylinder?
+
+    `shade.facet_on_wall` asks whether the vertices touch the surface, and a
+    hand-authored 16-gon's own facets do. A print tessellated onto that facet
+    does not: its polygons lie in the facet's plane, up to the sagitta --
+    0.25 LDU at r=13 -- inside the surface, so every one of 3626cpnf's 744
+    face-band polygons failed the radius test and the band under them ramped
+    on its own. The plane is what identifies the facet: perpendicular to the
+    axis and at cos(pi/N) of the radius from it, with every vertex on or
+    inside the circle and the facet no wider than one polygon side.
+    """
+    if hasattr(prim, "radius_at") and abs(prim.radius_at(0.0) - prim.radius_at(1.0)) > 1e-9:
+        return False                       # a cone has no chord plane
+    Minv = np.linalg.inv(prim.R)
+    local = (Minv @ (np.asarray(verts, float) - prim.t).T).T
+    lvl = local[:, 1]
+    if lvl.min() < -0.02 or lvl.max() > 1.02:
+        return False
+    rr = np.hypot(local[:, 0], local[:, 2])
+    if rr.max() > 1.0 + tol:
+        return False
+    # a world normal is covariant: it maps by R^-T, not R^-1
+    nl = np.linalg.solve(prim.R.T, np.asarray(n_world, float))
+    ln = np.linalg.norm(nl)
+    if ln <= 1e-12 or abs(nl[1]) / ln > 0.05:
+        return False                       # tilted off the axis: not a chord
+    c = local.mean(axis=0)
+    off = abs(float(nl[0] * c[0] + nl[2] * c[2])) / ln
+    if not (CHORD_MIN_OFFSET <= off <= 1.0 + tol):
+        return False
+    if rr.min() < off - tol:
+        return False                       # a vertex behind the chord plane
+    aa = np.arctan2(local[:, 2], local[:, 0])
+    rel = (aa - aa[0] + math.pi) % (2 * math.pi) - math.pi
+    return bool(rel.max() - rel.min() <= math.radians(span_deg))
+
+
 def _absorb_dome_walls(faces, own_occ):
     """An exact wall takes the radial ramp of the facet dome sitting on its
     own surface.
@@ -2323,7 +2371,8 @@ def _absorb_dome_walls(faces, own_occ):
         for i in near:
             pf = radial[int(i)]
             W, n = pf["_plane3"]
-            if not shade.facet_on_wall(prim, W, n, oriented=False):
+            if not shade.facet_on_wall(prim, W, n, oriented=False) and not (
+                    CHORD_FACETS and _chord_facet(prim, W, n)):
                 continue
             if not _inside_ramp(wf["poly"], pf["grad_radial"]):
                 continue
@@ -2373,6 +2422,43 @@ def _relax_facet_cylinders(faces, proj, planar_tol=0.05):
             [f["poly"].mean(axis=0) for f in seen], [f["normal"] for f in seen])
         for f in members:
             f.pop("grad_radial", None)
+
+
+def _pool_chord_facets(faces, own_occ):
+    """A group of chord facets tiling the same cylinder as an exact span joins
+    that span's group, so _merge_wall_gradients fits ONE ramp over both.
+
+    14769's outer wall reaches HLR as exact octants over half the turn and 28
+    authored chord facets over the rest. Each facet group ramped itself over
+    its own few facets, and the surviving exact tiles are non-adjacent, so
+    the wall's ramp was pooled over a ring with a gap where the facets sat
+    -- a cliff in the tone right where the two met. Every member has to be a
+    chord facet of the one wall; a facet on some other surface keeps its
+    group. Each facet contributes its centroid and normal as one ring sample.
+    """
+    walls = [f for f in faces if "_span_ring" in f and f.get("group") is not None
+             and own_occ.get(id(f))]
+    if not walls:
+        return
+    groups = defaultdict(list)
+    for f in faces:
+        if "grad_axis" in f and "_plane3" in f and "grad_radial" not in f \
+                and f.get("group") is not None and f["kind"] == "occt-plane":
+            groups[f["group"]].append(f)
+    for members in groups.values():
+        cents = np.array([f["poly"].mean(axis=0) for f in members])
+        home = None
+        for wf in sorted(walls, key=lambda w: float(np.hypot(
+                *(w["poly"].mean(axis=0) - cents.mean(axis=0))))):
+            prim = own_occ[id(wf)]
+            if all(_chord_facet(prim, *f["_plane3"]) for f in members):
+                home = wf
+                break
+        if home is None:
+            continue
+        for f, c in zip(members, cents):
+            f["group"] = home["group"]
+            f["_span_ring"] = [(float(c[0]), float(c[1]), f["normal"])]
 
 
 def _inside_ramp(poly, spec):
@@ -2881,6 +2967,8 @@ def ordered_faces(shape, proj, out=None, ellipses_out=None):
         shade.attach_group_gradients(faces)
         _relax_facet_cylinders(faces, proj)
         _absorb_dome_walls(faces, own_occ)
+        if CHORD_FACETS:
+            _pool_chord_facets(faces, own_occ)
     for f in faces:
         f.pop("_plane3", None)
     _merge_turn_gradients(faces)
