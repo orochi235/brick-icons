@@ -160,6 +160,12 @@ def owed(conn, slot: str, scope: list[str]) -> dict:
         # A part that ever completed is not an "errored" one, whatever a
         # later run recorded: the run it completed in proves it can be drawn.
         tried[r["part_id"]] = tried.get(r["part_id"], False) or r["error"] is None
+    # A store pass (the `decal` fill) records attempts, never measurements.
+    for r in conn.execute(
+            "SELECT part_id, error FROM attempts WHERE source = ? "
+            "ORDER BY run_id", (slot,)):
+        latest.setdefault(r["part_id"], r["error"])
+        tried.setdefault(r["part_id"], False)
 
     engine = slot.rsplit("-", 1)[-1]
     borrowed = False

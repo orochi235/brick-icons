@@ -137,3 +137,27 @@ def test_a_drawn_part_is_owed_nothing_however_it_was_measured(conn):
     o = _owed(conn)
     assert o["drawn"] == ["3001"]
     assert o["never"] == [] and o["errored"] == []
+
+
+def _attempt(conn, pid, source, state=None, error=None):
+    global _run
+    _run += 1
+    conn.execute("INSERT INTO runs (id, kind, started, commit_sha, args) VALUES "
+                 "(?, 'store', '2026-09-05T09:00:00+00:00', 'abc', '{}')", (_run,))
+    conn.execute("INSERT INTO attempts (run_id, part_id, source, state, secs, "
+                 "error) VALUES (?, ?, ?, ?, 1.0, ?)",
+                 (_run, pid, source, state, error))
+
+
+def test_a_store_pass_attempt_counts_as_tried(conn):
+    """`decal` is filled by build-render-store.py, which records attempts and
+    no measurements. Read only measurements, and a part that answered `none`
+    stays `never` and is re-sent every round."""
+    _part(conn, "3001")
+    _part(conn, "3002")
+    _attempt(conn, "3001", SLOT, state="none")
+    _attempt(conn, "3002", SLOT, error="TimeoutError")
+    conn.commit()
+    o = _owed(conn)
+    assert o["never"] == []
+    assert o["errored"] == ["3001", "3002"]
