@@ -211,3 +211,56 @@ def test_an_unknown_fleet_does_not_close_the_watch(quiet_tree, monkeypatch):
     monkeypatch.setattr(watch_mod, "_fetch", lambda t: True)
     assert watch_mod.watch([quiet_tree], every=0, once=False, bake=False,
                            until=["store-restale-occt"]) == 0
+
+
+def _measure(conn, run_id, pid, error=None, secs=3.0):
+    conn.execute("INSERT INTO measurements (run_id, part_id, engine, source, "
+                 "build, secs, error, detail) VALUES (?, ?, 'occt', 'occt', "
+                 "'1.abc', ?, ?, ?)", (run_id, pid, secs, error,
+                                       error and "exceeded 300s"))
+
+
+def test_health_names_a_part_that_drew_before_and_fails_now(tree):
+    root, conn = tree
+    conn.execute("INSERT INTO parts (id, title, printed, obsolete) "
+                 "VALUES ('3005', 'Brick', 0, 0)")
+    old = db.start_run(conn, "census", {"dir": "old"}, "abc")
+    new = db.start_run(conn, "census", {"dir": "new"}, "def")
+    _measure(conn, old, "3001")
+    _measure(conn, old, "3004", "TimeoutError")
+    _measure(conn, new, "3001", "TimeoutError")
+    _measure(conn, new, "3004")
+    _measure(conn, new, "3005", "MemoryError")
+    h = watch_mod._health(conn, new, "occt")
+    assert (h["rows"], h["failed"], h["recovered"]) == (3, 2, 1)
+    assert [r[0] for r in h["regressed"]] == ["3001"]
+
+
+def test_health_ignores_the_later_run_and_other_slots(tree):
+    root, conn = tree
+    old = db.start_run(conn, "census", {"dir": "old"}, "abc")
+    side = db.start_run(conn, "census", {"dir": "white"}, "abc")
+    new = db.start_run(conn, "census", {"dir": "new"}, "def")
+    later = db.start_run(conn, "census", {"dir": "later"}, "ghi")
+    _measure(conn, old, "3001", "TimeoutError")
+    conn.execute("INSERT INTO measurements (run_id, part_id, engine, source) "
+                 "VALUES (?, '3001', 'occt', 'white-occt')", (side,))
+    _measure(conn, new, "3001", "TimeoutError")
+    _measure(conn, later, "3001")
+    assert watch_mod._health(conn, new, "occt")["regressed"] == []
+
+
+def test_a_regression_is_named_once_and_listed_in_full(tree, capsys):
+    root, _conn = tree
+    h = {"rows": 30, "failed": 25, "recovered": 0,
+         "regressed": [(f"p{i:02d}", "TimeoutError", "exceeded", 3.0, "1.abc")
+                       for i in range(25)]}
+    told: set[str] = set()
+    watch_mod._report_health(root / "out" / "slot-occt", h, told)
+    first = capsys.readouterr().out
+    assert first.count("REGRESSED") == 20 and "5 more" in first
+    assert "onto: count 25 regressed" in first
+    listing = root / "out" / "regressions-slot-occt.tsv"
+    assert len(listing.read_text().splitlines()) == 26
+    watch_mod._report_health(root / "out" / "slot-occt", h, told)
+    assert "REGRESSED" not in capsys.readouterr().out

@@ -191,6 +191,65 @@ def _take_renders(conn: sqlite3.Connection, tree: Path, engine: str,
     return took, redrew, touched
 
 
+def _health(conn: sqlite3.Connection, run_id: int, source: str) -> dict:
+    """This run's failures, and which of them the slot had drawn before.
+
+    The rate alone hides a regression: the occt redraw at 3c9e936 cut it from
+    3.5% to 1.9% while 105 parts that had drawn in seconds began timing out.
+    """
+    rows = conn.execute("""
+        WITH cur AS (SELECT part_id, error, detail FROM measurements
+                     WHERE run_id = ? AND source = ?),
+        prior AS (SELECT m.part_id, m.error, m.secs, m.build,
+                         ROW_NUMBER() OVER (PARTITION BY m.part_id
+                                            ORDER BY m.run_id DESC) AS rn
+                  FROM measurements m JOIN cur USING (part_id)
+                  WHERE m.source = ? AND m.run_id < ?)
+        SELECT cur.part_id, cur.error, cur.detail,
+               prior.part_id IS NOT NULL, prior.error, prior.secs, prior.build
+        FROM cur LEFT JOIN prior
+          ON prior.part_id = cur.part_id AND prior.rn = 1""",
+        (run_id, source, source, run_id)).fetchall()
+    regressed, recovered, failed = [], 0, 0
+    for pid, err, detail, had, was, secs, build in rows:
+        if err:
+            failed += 1
+            if had and not was:
+                regressed.append((pid, err, detail, secs, build))
+        elif had and was:
+            recovered += 1
+    return {"rows": len(rows), "failed": failed, "recovered": recovered,
+            # fastest-before first: a part that drew in seconds is the tell
+            "regressed": sorted(regressed, key=lambda r: (r[3] is None,
+                                                          r[3] or 0, r[0]))}
+
+
+def _report_health(tree: Path, h: dict, told: set[str]) -> None:
+    """Print the pass's failure line, and name each regression once."""
+    n, failed, reg = h["rows"], h["failed"], h["regressed"]
+    if not n:
+        return
+    print(f"  {failed} failed of {n} ({100 * failed / n:4.1f}%); "
+          f"{len(reg)} drew before and fail now, {h['recovered']} "
+          f"failed before and draw now", flush=True)
+    print(f"onto: count {len(reg)} regressed", flush=True)
+    fresh = [r for r in reg if r[0] not in told]
+    for pid, err, detail, secs, build in fresh[:20]:
+        was = f"{secs:.1f}s" if secs is not None else "drawn"
+        print(f"  REGRESSED {pid}: {err} ({(detail or '')[:60]}); "
+              f"was {was} at {build or '?'}", flush=True)
+    listing = ROOT / "out" / f"regressions-{tree.name}.tsv"
+    if len(fresh) > 20:
+        print(f"  ... and {len(fresh) - 20} more in {listing}", flush=True)
+    told.update(r[0] for r in fresh)
+    if reg:
+        listing.parent.mkdir(parents=True, exist_ok=True)
+        listing.write_text("part\terror\tdetail\tprior_secs\tprior_build\n" + "".join(
+            f"{p}\t{e}\t{(d or '').replace(chr(9), ' ')[:200]}\t"
+            f"{'' if s is None else f'{s:.1f}'}\t{b or ''}\n"
+            for p, e, d, s, b in reg))
+
+
 def _tasks_running(tasks: Sequence[str]) -> bool | None:
     """Whether onto still lists any of these tasks. None means it could not say.
 
@@ -246,6 +305,7 @@ def watch(trees: list[Path], every: int, once: bool, bake: bool,
           measure: bool = False) -> int:
     seen: dict[Path, tuple[int, float]] = {}
     drawings: dict[Path, tuple[int, float]] = {}
+    told: dict[Path, set[str]] = {}
     closing = False
     # A bake or a fetch that fails stays failed; the per-icon parse error in
     # _take_renders does not, because a half-written SVG is taken whole on the
@@ -273,12 +333,14 @@ def watch(trees: list[Path], every: int, once: bool, bake: bool,
                 total = conn.execute(
                     "SELECT count(*) FROM renders WHERE source = ?",
                     (source,)).fetchone()[0]
+                health = _health(conn, run_id, source)
             finally:
                 conn.close()
             touched |= slots
             print(f"{time.strftime('%H:%M:%S')} {tree.name} -> {source}: "
                   f"+{drawn} drawn, {redrew} redrawn, +{scores} scored, "
                   f"{total} in the slot", flush=True)
+            _report_health(tree, health, told.setdefault(tree, set()))
             # onto has no total for a watcher, so it draws these as figures.
             # Cumulative, because it re-reads a window of the log.
             print(f"onto: count {total} in {source}", flush=True)
