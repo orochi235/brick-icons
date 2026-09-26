@@ -1,3 +1,32 @@
+## 2026-09-25 (night): occt retries, a decal fill, and a full occt redraw in flight
+
+Pushed through 330fd4a. Launched 23:33 from this checkout; do not relaunch any
+of these -- `onto jobs` names them.
+
+| task | node | parts | what |
+|---|---|---:|---|
+| `slot-white-occt-0925` | studio | 884 | errored-part retry |
+| `slot-silhouette-occt-0925` | keiei | 633 | errored-part retry |
+| `slot-translucent-occt-0925` | msb-uai | 122 | errored-part retry |
+| `slot-decal-0925` | msb-uai | 636 | never-tried decal fill, after translucent |
+| `slot-occt-0925` | msb-uai + studio,keiei | 20,597 | whole occt slot redrawn at HEAD (`--overwrite`), after the rest |
+
+The last two are launched by a local chain script (log `out/chain-0925.log`)
+that waits for the earlier tasks to leave `onto jobs`. If this Mac restarts
+before the chain logs "chain done", launch whatever it had not reached by hand
+with the commands in that log's script (session scratchpad; the flags match
+the render-corpus-batch skill, plus `--overwrite` on the redraw).
+
+**The decal fill is not ingested by anything.** `build-render-store.py` writes
+its renders rows into the node's own corpus.db, which never comes home, so
+`--no-watch`. Its tree lands at `out/store/decal-0925` (logs +
+`renders/decal/*.svg`); once it is home, `db.ingest_store` takes the attempts,
+and each SVG needs copying into `renders/decal/` and filing with
+`db.store_render(..., root=ROOT)`.
+
+The occt redraw will queue a large batch on /review: every drawing it
+displaces by 12 px or more.
+
 ## 2026-09-25 (later): reference slots on the fleet, the shading cluster built
 
 On `main`, this shared checkout. Nothing is pushed; ask before pushing. A peer
