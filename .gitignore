@@ -39,3 +39,6 @@ renders/**/*.fit.json
 # ingest and a copy per displaced render, hundreds of megabytes per round.
 store-queue/*.jsonl
 store-queue/before/
+
+# vite dep cache, created when the lab is run from the repo root
+/node_modules/

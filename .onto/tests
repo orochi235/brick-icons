@@ -1,0 +1,12 @@
+# How `onto test` runs this repository's suite on another node.
+run: .venv/bin/python -m pytest tests
+setup: uv sync --extra occt --extra census --extra lab
+use: uv
+
+# vendor/ldraw is not what `setup:` makes -- it is this checkout's own LDraw
+# snapshot, copied node to node by `scripts/provision-node.sh` because the
+# public complete.zip only ever serves the latest and draws different
+# pictures. `onto test --setup` cannot supply it; if a node lacks it, run
+# provision-node.sh against that node first.
+needs: vendor/ldraw
+needs: .venv
