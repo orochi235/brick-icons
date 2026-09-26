@@ -8,7 +8,7 @@ of these -- `onto jobs` names them.
 | `slot-white-occt-0925` | studio | 884 | errored-part retry |
 | `slot-silhouette-occt-0925` | keiei | 633 | errored-part retry |
 | `slot-translucent-occt-0925` | msb-uai | 122 | errored-part retry |
-| `slot-decal-0925` | msb-uai | 636 | never-tried decal fill, after translucent |
+| `slot-decal-0925` | msb-uai | 636 | never-tried decal fill -- done, filed |
 | `slot-occt-0925` | msb-uai + studio,keiei | 20,597 | whole occt slot redrawn at HEAD (`--overwrite`), after the rest |
 
 The last two are launched by a local chain script (log `out/chain-0925.log`)
@@ -17,12 +17,10 @@ before the chain logs "chain done", launch whatever it had not reached by hand
 with the commands in that log's script (session scratchpad; the flags match
 the render-corpus-batch skill, plus `--overwrite` on the redraw).
 
-**The decal fill is not ingested by anything.** `build-render-store.py` writes
-its renders rows into the node's own corpus.db, which never comes home, so
-`--no-watch`. Its tree lands at `out/store/decal-0925` (logs +
-`renders/decal/*.svg`); once it is home, `db.ingest_store` takes the attempts,
-and each SVG needs copying into `renders/decal/` and filing with
-`db.store_render(..., root=ROOT)`.
+**The decal fill is done and filed** (00:40): 7 drawn, 622 `none`, 7
+timeouts. Its attempts are in corpus.db via `db.ingest_store`, the 7 drawings
+under `renders/decal/`. 235695b makes `slot-coverage.py` read store attempts,
+so those 629 now count as tried rather than never.
 
 The occt redraw will queue a large batch on /review: every drawing it
 displaces by 12 px or more.
