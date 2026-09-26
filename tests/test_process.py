@@ -117,3 +117,14 @@ def test_draw_segments_contour_fills_corner_notch():
                                 contour_rings=[ring], contour_px=6)
     assert no.getpixel((50, 82)) > 200          # notch below the apex
     assert yes.getpixel((50, 82)) < 100         # sealed by the contour
+
+
+def test_a_small_arc_draws_thinner_than_its_radius_in_the_png():
+    # the SVG writer caps an arc's stroke at half its radius so a stud field
+    # reads as studs; the PNG outputs (gray and mono, the label) must too, or
+    # 3811's 1024 studs at 1024 px draw as one black diamond
+    small = [("arc", 20.0, 20.0, 1.6, 0.0, 0.0, 1.6, 0.0, 360.0, "line")]
+    ink = lambda img: int((np.asarray(img) < 128).sum())
+    capped = ink(process.draw_segments(small, 40, 40, line_px=2))
+    uncapped = ink(process.draw_segments(small, 40, 40, line_px=0.8))
+    assert capped <= uncapped + 1, (capped, uncapped)

@@ -50,6 +50,20 @@ def _silhouette_mask(rgba: Image.Image, thr: int = 16) -> Image.Image:
     return rgba.convert("RGBA").split()[-1].point(lambda p: 255 if p > thr else 0)
 
 
+# An arc's stroke is capped at this fraction of its mean radius in output px.
+# At full width 309p03's 3.25 px studs merged into black; a 2x2 brick's 18 px
+# rims are nowhere near the cap. Lines keep full width: thinning them as well
+# barely changed a stud field and emptied near-zero stubs on ordinary parts.
+# Here rather than in trace so the SVG and the PNG outputs share one rule.
+THIN_ARCS = True
+STROKE_PER_RADIUS = 0.5
+
+
+def arc_stroke(width, radius):
+    """An arc's stroke width in output px: `width`, capped by its radius."""
+    return min(width, STROKE_PER_RADIUS * radius) if THIN_ARCS else width
+
+
 def draw_segments(segs, w, h, line_px=2, sil_px=2, supersample=3,
                   contour_rings=None, contour_px=None):
     """Anti-aliased black line-art on white. Accepts line ops and arc ops;
@@ -75,6 +89,8 @@ def draw_segments(segs, w, h, line_px=2, sil_px=2, supersample=3,
             dr.line([(x1 * ss, y1 * ss), (x2 * ss, y2 * ss)], fill=0, width=wpx)
         else:
             _, cx, cy, ux, uy, vx, vy, t0, t1, _ = op
+            r = (math.hypot(ux, uy) + math.hypot(vx, vy)) / 2.0
+            wpx = max(1, round(arc_stroke(sil_px if kind == "sil" else line_px, r) * ss))
             n = max(2, int(abs(t1 - t0) / 2) + 2)
             pts = []
             for k in range(n):

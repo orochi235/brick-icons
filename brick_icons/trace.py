@@ -421,13 +421,6 @@ def _colorize(parts, start, mode="cycle"):
     return n
 
 
-# An arc's stroke is capped at this fraction of its mean radius in output px.
-# At full width 309p03's 3.25 px studs merged into black; a 2x2 brick's 18 px
-# rims are nowhere near the cap. Lines keep full width: thinning them as well
-# barely changed a stud field and emptied near-zero stubs on ordinary parts.
-THIN_ARCS = True
-STROKE_PER_RADIUS = 0.5
-
 
 #: On the root of every SVG whose decoration carries `class="deco"`. Without
 #: it a file with no marks could be a plain part or a render from before the
@@ -563,8 +556,7 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
                 (round(x1, 2), round(y1, 2), round(x2, 2), round(y2, 2)))
         else:
             r = (math.hypot(op[3], op[4]) + math.hypot(op[5], op[6])) / 2.0
-            if THIN_ARCS:
-                sw = min(sw, STROKE_PER_RADIUS * r)
+            sw = process.arc_stroke(sw, r)
             if r * math.radians(abs(op[8] - op[7])) < 0.6 * sw:
                 continue
             parts.append(f'<path d="{_arc_to_svg(op)}" stroke-width="{sw:.2f}"/>')
