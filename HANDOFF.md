@@ -5,11 +5,11 @@ of these -- `onto jobs` names them.
 
 | task | node | parts | what |
 |---|---|---:|---|
-| `slot-white-occt-0925` | studio | 884 | errored-part retry |
-| `slot-silhouette-occt-0925` | keiei | 633 | errored-part retry |
-| `slot-translucent-occt-0925` | msb-uai | 122 | errored-part retry |
+| `slot-white-occt-0925` | studio | 884 | errored-part retry -- done, 324 recovered |
+| `slot-silhouette-occt-0925` | keiei | 633 | errored-part retry -- done, 76 recovered |
+| `slot-translucent-occt-0925` | msb-uai | 122 | errored-part retry -- done, 30 recovered |
 | `slot-decal-0925` | msb-uai | 636 | never-tried decal fill -- done, filed |
-| `slot-occt-0925` | msb-uai + studio,keiei | 20,597 | whole occt slot redrawn at HEAD (`--overwrite`), after the rest |
+| `slot-occt-0925` | msb-uai a9e8e321 + studio 0834b78e, keiei 3d8cf41f | 20,597 | whole occt slot redrawn at 3c9e936 (`--overwrite`); launched 03:36, 10 workers each, deadline 15:36 |
 
 The last two are launched by a local chain script (log `out/chain-0925.log`)
 that waits for the earlier tasks to leave `onto jobs`. If this Mac restarts
