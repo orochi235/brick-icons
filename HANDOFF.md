@@ -17,8 +17,12 @@ Fixed (not yet on the fleet):
 | `hlr._snap_rim_crossings` | every arc against every arc and line | vectorized pretests implied by the loop's own tests |
 
 Every prefilter is exact (a ray, facet or face outside the box cannot
-qualify), and `scripts/head-ab.py` came back 0 px different against HEAD's own
-functions on 14 parts under naive and 12 under occt. Timed on this Mac:
+qualify). Checked with `scripts/head-ab.py` against f5b21ec's own functions on
+the filled SVG, 20 parts across both engines: 15 are identical and 4 differ by
+antialias noise only (1-32 px, nothing above the lab's diff threshold). 3649
+under naive loses a 7 px gray fleck in a dark recess, which the old clip drew
+and the new one does not. (The first check read the PNG outputs, which carry no
+fills, so it could not see the fill change at all.) Timed on this Mac:
 
 | part | naive | occt | census before |
 |---|---:|---:|---|
@@ -31,9 +35,14 @@ functions on 14 parts under naive and 12 under occt. Timed on this Mac:
 The pre-existing red `test_a_sticker_is_not_clipped_by_the_slope_it_is_stuck_to`
 reads 5.12% both ways; it is not this.
 
-**3811 at the default 1024 px is solid black**: 32 studs across leave ~11 px
-per stud and the default strokes fill it. At 2048 px with 1 px lines every stud
-draws. A legibility question for the largest plates, not a render bug.
+**3811's PNG was solid black because the PNG path had no arc cap** -- fixed in
+7bc3fa2. 9885879 capped an arc's stroke at half its radius only in the SVG
+writer; the gray and mono PNGs (the label) drew studs at full width.
+`scripts/png-arc-cap-sheet.py` shows it at 256 px.
+
+`shade._seam_edge_mask` and `attach_group_gradients` were the next quadratic
+pair (e05c278): 0 px on 9 parts, 60474 288 s -> 135 s and 3960 44 s -> 20 s
+with refinement on, where they dominated.
 
 **Next:** a census round over the parts that time out, to measure
 what moved. 10a and 3811 are still slow; their profiles point at
@@ -5997,131 +6006,33 @@ agree to within noise on every part (0901 0.95 vs 0.79, 32172 1.57 vs 1.56,
 44937 3.09 vs 3.04) — and the two 0901 figures were never in conflict: the
 bench's 0.95s is a *head* number, next to ab2's head 0.74s. Only ab2 measured
 base.
-## In flight: mesh refinement, branch `smooth-subdivide` — UNBUILT
+## Mesh refinement: tried, decided against -- 2026-09-26
 
-Local, unmerged, cut from `bf4ae83`; `git log --oneline bf4ae83..smooth-subdivide`
-for what is on it.
+The idea: a round the library authored as flat facets but declared smooth
+(conditional lines across the facet seams) is rebuilt as a curved
+point-normal (PN) triangle patch, so its outline and shading come out round
+instead of as chords. Branch `smooth-subdivide`, tip `d656dc2`. **Mike ended
+it: on the wall it made things worse.** Do not re-propose it without an answer
+to the crack problem below.
 
-The premise, which decides every design call here: a round the library
-authored as flat triangles carries no curve for any rule to find, so
-**fix the mesh, not the drawing.** Both engines then see one surface, and
-strokes and fills come off the same geometry instead of being kept in step by
-hand. The declaration to key on is the conditional line: a type-5 across a
-facet boundary says the two faces are meant to read as one smooth surface,
-and it holds across the cracks that make a dihedral-angle rule wrong here.
+Measured after rebasing onto `main` at `e658f41`:
 
-`repair.smooth_subdivide` unions facets into declared-smooth patches, takes
-corner normals from the patch around each corner, and replaces each facet
-with `level**2` triangles on its curved point-normal (PN) patch. A boundary
-that is not declared smooth stays on its straight chord, so a refined patch
-still meets a flat neighbor along the same line.
+| what | result |
+|---|---|
+| `parts.txt`, 48 parts | 45 byte-identical; 2654a one tone patch; 60474 1 px for 12x the time |
+| 4592 | outline round; its dome split into two gradients until patches joined across coplanar facets, then clean |
+| 28621 | outline round, but a 38 px break where the shoulder meets a crack |
+| 300-part census sample (killed early) | 8 of the first 9 parts it touched gained outline breaks |
 
-**What split a round into N strips was our own quad diagonal, not a missing
-declaration.** A type-4 becomes two triangles across the 0-2 diagonal, and no
-type-5 line describes that diagonal because the library never had an edge
-there — so union-find over declared edges could not cross it, and a quad grid
-whose sides are all declared smooth still fell into diagonal staircase
-chains. On 28621, 128 of its edges were shared between two "strips" and
-carried no condline; there are exactly 128 quads. `flatten` now stamps both
-halves of a quad with its id and the refiner joins them: 28621's shoulder
-goes from 32 patches of 8 facets to 2 of 128, 3960's dish from 72 of 14 to
-424 + 384.
+The crack problem: a declared-smooth edge with one facet (a crack) has to
+stay on its chord, or bulging one lip widens the crack. The refined facets
+beside it still bulge toward the camera, hide the library's straight outline
+chord, and no new sub-edge declares an outline across that stretch. Two fixes
+failed: evaluating shared edges canonically (refinement makes no rounding
+tears; the near-miss edges are the library's own cracks), and keeping facets
+with a straight edge flat inside (the break stays, and more appear).
 
-Where the four specimens stand, rendered against `2cedb47`. 4592 draws a
-round silhouette and keeps its radial dome gradient — clean. 32062 comes out
-byte-identical to an unrefined render, which is what the gate is for. 28621
-loses its swirl of overlapping tone fragments and its shoulder silhouette
-becomes a true curve instead of a chord chain, but see below. 3960 is worse
-than unrefined.
-
-Two conditions gate refinement, both asking only what the library declared. A
-patch is refined when it **surrounds a vertex** — one whose every incident
-edge is declared smooth — and its edges leave their chords only where the
-mesh **pairs** them. The first replaces a triangle-count gate that was a
-proxy for it: only at a surrounded vertex is a corner normal the patch's
-rather than one chord's, and a patch that is all boundary hands PN a single
-facet plane at every corner, so it invents the curve — 32062's axle bevel
-pushed past the drawn strokes and left a crescent the fill inked as a
-25-vertex sampled boundary. The pairing condition is because bulging one lip
-of a crack widens it. The gate is per PATCH and must stay that way: refining
-part of one leaves the rest on its chords and cuts it in two for the fill
-merge. Over `parts.txt` the surrounded-vertex gate refines every triangle the
-count gate did and more (60474 2428 → 2672, 3960 736 → 808), and 32062 none.
-
-**The blocker is un-inked fragments floating on a refined surface**, and it
-is one defect on two parts, not a 3960 problem. 28621 carries a single dark
-sliver on the shoulder below the stud, with faint pale ghost edges at the
-stud base. 3960 carries four dark wedges and a spike on the dome, the same
-ghost around the stud, and a sawtooth dark band along the far rim — the band
-this repo has fixed once already, so refinement re-triggers a known HLR
-failure rather than a new one. Both are unrefined-clean. Scale is the obvious
-suspect and the wrong place to start: 28621 refines 256 triangles into 2304
-and shows one sliver, 3960 refines 808 into 7272 and shows six.
-
-Rendering against `b0c5d85` (ring/disc axis from its own two columns) and
-`2cedb47` (degenerate-ring window, binned gradient stops) changes neither
-part's artifacts — checked, not assumed, on all four specimens.
-
-After that: a contact sheet over `parts.txt` against `main`, then the full
-suite. Four parts have been looked at (28621, 4592, 3960, 32062).
-
-⚠️ `occt.flatten_part` does its own flatten and does NOT refine, so any test
-comparing it against `hlr.visible_segments` compares an unrefined mesh
-against a refined one. `test_occt_segments_go_through_the_orphan_cull` broke
-exactly that way while an intermediate gate refined 30162. Aligning the two
-paths changes the input of 32 occt tests, so it has not been done.
-
-`render.pose_for` is on this branch too and is unrelated to any of the above:
-a sticker modelled as a flat sheet (thinnest extent under 1 LDU) is posed
-square onto its face rather than at iso. It does not make stickers render —
-003238a is still at the wrong scale under naive and raises "no edges" under
-occt, both pre-existing.
-
-**Dead ends, measured, do not re-propose:**
-
-- *`shade._seam_edge_mask`'s partial-lie matching.* It matches a mesh edge
-  lying anywhere ON a conditional line, where the refiner requires the
-  condline to match a facet edge end to end. On 28621 the two tests select
-  the SAME 288 mesh edges — zero partial-lie-only ones — and all 320 of its
-  condlines land exactly on a mesh edge; 4592 likewise. Only 3960 has any (16
-  edges, merging 12 patches). The difference is not what let occt see a
-  surface the refiner split.
-- *Rejecting a patch that has a face attached to it by a single seam.* Kills
-  60474 and 3960 outright, and refines nothing anywhere else in `parts.txt`.
-- *Fitting an analytic surface to the patch.* 4592's two big patches fit a
-  sphere to 2.44px and everything else worse (plane 45, cone 22, cylinder
-  35). No quadric is that surface, and PN triangles do not need one — they
-  only need to know which edges are smooth, which the file declares.
-- *LDView's `-CurveQuality`.* It only re-tessellates primitive references,
-  and this engine already substitutes those with exact analytic surfaces,
-  which beats any tessellation. 4592's dome is inline triangles: LDView
-  would export the same 180 of them at any quality. There is no
-  tessellation knob on our own path — `--curve-quality` feeds LDView alone.
-- *Fitting the drawn chords to an ellipse* (`arcfit.fit_silhouette_arcs`,
-  landed as `6f042c0`). 4592's one candidate run has no ellipse near it, and
-  the gate that makes the pass safe elsewhere only accepts runs that were
-  already smooth. It fires on 5 of 74 census parts for a sub-pixel change.
-- *Gating on `primitives.from_ref`.* The earlier handoff said to skip
-  refinement wherever an exact surface was already substituted. `from_ref`
-  substitutes NOTHING on 32062 — `out["analytic"]` is empty — so that gate
-  is a no-op on the part it was written for.
-- *Carrying the patch id from the refiner into `occt._group_planes`.* Tagging
-  each refined triangle with its patch and unioning faces by it took 4592
-  from 29 groups to 21, and the drawing was pixel-indistinguishable. It costs
-  a face-to-triangle mapping and a field on every plane face. The patches
-  have to get coarser before any of that pays.
-- *Blaming the cracks, `UnifySameDomain`, or vertex welding.* 28621's 64
-  unpaired condline edges are real boundaries, not cracks — the nearest
-  same-length edge is over 3 LDU away, and they carry one ancestor face with
-  refinement on and off alike. Disabling `UnifySameDomain` leaves the group
-  count at 15. Welding vertices at 2e-3 changes no patch on 28621, 4592 or
-  3960.
-
-The 128-face fill groups in an unrefined render are the **flat rings** — the
-caps, fan-triangulated and chained by the coplanar rule — not the curved
-wall. Anything comparing group counts before and after refinement has to
-separate the two, or it measures the caps and concludes something about the
-round.
+The two `shade` speedups found along the way are on `main` (`e05c278`).
 
 ## 2026-09-25 overnight: the occt checkpoint round, and where the fill thread stops
 
