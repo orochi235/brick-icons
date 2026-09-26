@@ -1837,7 +1837,6 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
 
     def clip_pass(trims=None):
         frags, geoms, garea = {}, {}, {}
-        cover = None
         for idx in range(len(ordered) - 1, -1, -1):    # nearest first
             f = ordered[idx]
             # coarse facet rings (16-gon hole/stud surrounds) snap onto their
@@ -1857,11 +1856,19 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
                 continue
             geoms[idx] = g
             garea[idx] = geom2d.area(g)
-            frag = g if (cover is None or not clip) else geom2d.difference(g, cover)
+        # each fragment is its face minus every NEARER face (higher index)
+        # that overlaps it; a union of all nearer faces, grown one face at a
+        # time, was quadratic in face count and timed out on baseplates
+        tree, keys = _overlap_tree(geoms) if clip and geoms else (None, None)
+        for idx in sorted(geoms, reverse=True):
+            g = geoms[idx]
+            frag = g
+            if tree is not None:
+                nearer = [geoms[keys[h]] for h in tree.query(g) if keys[h] > idx]
+                if nearer:
+                    frag = geom2d.difference(g, geom2d.union_all(nearer))
             if geom2d.area(frag) >= MIN_FRAG_AREA:
                 frags[idx] = frag
-            if clip:
-                cover = g if cover is None else geom2d.union(cover, g)
         if clip:
             _refine_order_clips(ordered, geoms, frags, proj, fit)
         return frags, garea, geoms
@@ -2316,6 +2323,7 @@ def cull_occluded_faces(faces, occluders, proj, eps,
     kept = []
     kinds = set(kinds)
     own_occ = own_occ or {}
+    index = primitives.OccluderIndex(occluders, proj.fwd)
     for f in faces:
         if f.get("kind") not in kinds:
             kept.append(f)
@@ -2326,11 +2334,8 @@ def cull_occluded_faces(faces, occluders, proj, eps,
         if mine is not None:
             d_own = np.asarray(mine.depth(O, proj.fwd), float)
             self_d = np.where(np.isfinite(d_own), d_own, self_d)
-        nearest = np.full(len(pts), np.inf)
-        for occ in occluders:
-            if occ is mine:
-                continue                          # don't let a face occlude itself
-            nearest = np.minimum(nearest, occ.depth(O, proj.fwd))
+        # a face does not occlude itself
+        nearest = index.nearest(O, skip=mine)
         if not bool(np.all(nearest < self_d - eps)):
             kept.append(f)
     return kept
@@ -2610,7 +2615,7 @@ def facet_on_wall(prim, verts, n_world, tol=2e-3, oriented=True):
     """
     local = (np.linalg.inv(prim.R) @ (np.asarray(verts, float) - prim.t).T).T
     lvl = local[:, 1]
-    if lvl.min() < -0.02 or lvl.max() > 1.02:
+    if lvl.min() < _WALL_LEVELS[0] or lvl.max() > _WALL_LEVELS[1]:
         return False
     r_exp = prim.radius_at(lvl) if hasattr(prim, "radius_at") else 1.0
     if np.max(np.abs(np.hypot(local[:, 0], local[:, 2]) - r_exp)) > tol:
@@ -2627,6 +2632,21 @@ def facet_on_wall(prim, verts, n_world, tol=2e-3, oriented=True):
         return False
     cos = float(nl @ rdir) / rn
     return cos > 0.7 if oriented else abs(cos) > 0.7
+
+
+_WALL_LEVELS = (-0.02, 1.02)
+
+
+def wall_box(prim, tol=2e-3):
+    """World AABB holding every point `facet_on_wall` could accept for `prim`,
+    so a facet outside it is rejected without the local-frame test."""
+    lo, hi = _WALL_LEVELS
+    radius_at = getattr(prim, "radius_at", None)
+    r = max(abs(radius_at(lo)), abs(radius_at(hi))) if radius_at else 1.0
+    r += tol
+    loc = np.array([[x, y, z] for x in (-r, r) for y in (lo, hi) for z in (-r, r)])
+    world = loc @ np.asarray(prim.R, float).T + np.asarray(prim.t, float)
+    return world.min(axis=0), world.max(axis=0)
 
 
 def absorb_wall_facets(tri_faces, an_faces, tol=2e-3, abut_px=3.0):
@@ -2666,6 +2686,17 @@ def absorb_wall_facets(tri_faces, an_faces, tol=2e-3, abut_px=3.0):
             continue                    # already smooth-shaded, or no coords
         by_group[tf.get("group", id(tf))].append(tf)
     prims = {id(f["prim"]): f["prim"] for f in walls}
+    pids = list(prims)
+    boxes = [wall_box(prims[pid], tol) for pid in pids]
+    blo = np.array([b[0] for b in boxes]).reshape(-1, 3)
+    bhi = np.array([b[1] for b in boxes]).reshape(-1, 3)
+
+    def reachable(v):
+        """Indices of the walls whose box holds every vertex of `v`."""
+        v = np.asarray(v, float)
+        return np.nonzero(np.all(blo <= v.min(axis=0), axis=1)
+                          & np.all(bhi >= v.max(axis=0), axis=1))[0]
+
     for members in by_group.values():
         cands = None
         for tf in members:
@@ -2675,8 +2706,8 @@ def absorb_wall_facets(tri_faces, an_faces, tol=2e-3, abut_px=3.0):
             if ln < 1e-9:
                 cands = set()
                 break
-            mine = {pid for pid, prim in prims.items()
-                    if on_wall(prim, v, n / ln)}
+            mine = {pids[i] for i in reachable(v)
+                    if on_wall(prims[pids[i]], v, n / ln)}
             cands = mine if cands is None else cands & mine
             if not cands:
                 break
@@ -2708,8 +2739,11 @@ def absorb_wall_facets(tri_faces, an_faces, tol=2e-3, abut_px=3.0):
     radial = [tf for tf in tri_faces
               if "grad_radial" in tf and tf.get("_verts") is not None]
     for wf in walls:
+        lo, hi = wall_box(wf["prim"], tol)
         for tf in radial:
             v = tf["_verts"]
+            if (np.min(v, axis=0) < lo).any() or (np.max(v, axis=0) > hi).any():
+                continue
             n = np.cross(v[1] - v[0], v[2] - v[0])
             ln = np.linalg.norm(n)
             if ln < 1e-9 or not on_wall(wf["prim"], v, n / ln):

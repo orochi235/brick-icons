@@ -283,6 +283,21 @@ class CylinderOccluder:
     def depth_far(self, O, F, clamp=True):
         return self._hits(O, F, clamp=clamp)[1]
 
+    def _bound_radius(self, y0, y1):
+        return 1.0
+
+    def world_corners(self):
+        """Corners of a local box that contains the wall, in world coords.
+        `OccluderIndex` projects them to prune rays that cannot hit it."""
+        y0, y1 = 0.0, 1.0
+        if self.outline is not None and len(self.outline):
+            y0 = min(y0, float(self.outline[:, 1].min()))
+            y1 = max(y1, float(self.outline[:, 1].max()))
+        r = self._bound_radius(y0, y1)
+        loc = np.array([[x, y, z] for x in (-r, r) for y in (y0, y1)
+                        for z in (-r, r)])
+        return loc @ self.R.T + self.t
+
 
 class ConeOccluder:
     """Truncated cone: local radius (top+1) at y=0 tapering to `top` at y=1,
@@ -342,6 +357,12 @@ class ConeOccluder:
     def depth_far(self, O, F, clamp=True):
         return self._hits(O, F, clamp=clamp)[1]
 
+    def _bound_radius(self, y0, y1):
+        rb = self.top + 1.0
+        return max(abs(rb - y0), abs(rb - y1))
+
+    world_corners = CylinderOccluder.world_corners
+
 
 class DiscOccluder:
     """Planar disc / annulus spanned by the local X/Z columns (U, V).
@@ -379,6 +400,29 @@ class DiscOccluder:
         valid = ((rad >= self.inner - 1e-6) & (rad <= self.outer + 1e-6)
                  & _angle_in_sector(lx, lz, self.sector))
         return np.where(valid, lam, out)
+
+    def world_corners(self):
+        r = self.outer
+        return np.array([self.C + a * r * self.U + b * r * self.V
+                         for a in (-1, 1) for b in (-1, 1)])
+
+
+def screen_boxes(corners, u, v, rel_pad):
+    """Per-shape 2-D bounds in the plane normal to the view ray, from corners
+    of shape (M, K, 3). Every ray runs along F, so a ray outside a shape's box
+    misses the shape -- exact, not a heuristic. Padded by `rel_pad` of the
+    diagonal for the slack the shapes' own inside tests allow."""
+    su, sv = corners @ u, corners @ v
+    lo = np.stack([su.min(1), sv.min(1)], 1)
+    hi = np.stack([su.max(1), sv.max(1)], 1)
+    pad = rel_pad * np.linalg.norm(hi - lo, axis=1)[:, None]
+    return lo - pad, hi + pad
+
+
+def boxes_reached(lo, hi, ru, rv):
+    """Indices of the boxes the ray bundle (ru, rv) can reach."""
+    return np.nonzero((lo[:, 0] <= ru.max()) & (hi[:, 0] >= ru.min())
+                      & (lo[:, 1] <= rv.max()) & (hi[:, 1] >= rv.min()))[0]
 
 
 def _plane_basis(F):
@@ -443,15 +487,12 @@ class TriangleOccluder:
         # along F, so a ray misses a triangle whose 2-D box it lies outside
         # of -- any basis spanning the plane normal to F gives the same
         # answer. Padded by the barycentric slack the inside test allows.
-        u, v = _plane_basis(F)
-        self._u, self._v = u, v
+        self._u, self._v = _plane_basis(F)
         corners = np.stack([self.v0, self.v0 + self.e0, self.v0 + self.e1], 1)
-        su, sv = corners @ u, corners @ v
-        self.blo = np.stack([su.min(1), sv.min(1)], 1)
-        self.bhi = np.stack([su.max(1), sv.max(1)], 1)
-        pad = 1e-5 * np.linalg.norm(self.bhi - self.blo, axis=1)[:, None]
-        self.blo -= pad
-        self.bhi += pad
+        self.blo, self.bhi = screen_boxes(corners, self._u, self._v, 1e-5)
+
+    def world_corners(self):
+        return self.tris.reshape(-1, 3)
 
     def depth(self, O, F):
         O = np.atleast_2d(O).astype(float)
@@ -466,8 +507,7 @@ class TriangleOccluder:
         for lo in range(0, O.shape[0], step):
             Oc = O[lo:lo + step]
             cu, cv = ou[lo:lo + step], ov[lo:lo + step]
-            near = np.nonzero((self.blo[:, 0] <= cu.max()) & (self.bhi[:, 0] >= cu.min())
-                              & (self.blo[:, 1] <= cv.max()) & (self.bhi[:, 1] >= cv.min()))[0]
+            near = boxes_reached(self.blo, self.bhi, cu, cv)
             if not len(near):
                 continue
             n, denom = self.n[near], self.denom[near]
@@ -1438,6 +1478,43 @@ def _runs(mask):
     return runs
 
 
+class OccluderIndex:
+    """The nearest occluder depth along F, testing only the occluders whose
+    `screen_boxes` a ray reaches. Without it every drawn op was tested against
+    every occluder, quadratic in stud count, and the large baseplates timed
+    out on it."""
+
+    def __init__(self, occluders, F):
+        self.occluders = list(occluders)
+        self.F = np.asarray(F, float)
+        self.u, self.v = _plane_basis(self.F)
+        n = len(self.occluders)
+        self.lo = np.full((n, 2), -np.inf)
+        self.hi = np.full((n, 2), np.inf)
+        for i, occ in enumerate(self.occluders):
+            corners = getattr(occ, "world_corners", None)
+            if corners is None:
+                continue                        # unknown shape: always tested
+            P = np.asarray(corners(), float)
+            if not len(P):
+                self.lo[i], self.hi[i] = np.inf, -np.inf    # empty: never
+                continue
+            lo, hi = screen_boxes(P[None], self.u, self.v, 1e-5)
+            self.lo[i], self.hi[i] = lo[0], hi[0]
+
+    def nearest(self, O, skip=None):
+        O = np.atleast_2d(O).astype(float)
+        field = np.full(O.shape[0], np.inf)
+        if not self.occluders or not O.shape[0]:
+            return field
+        for i in boxes_reached(self.lo, self.hi, O @ self.u, O @ self.v):
+            occ = self.occluders[i]
+            if occ is skip:
+                continue
+            field = np.minimum(field, occ.depth(O, self.F))
+        return field
+
+
 def visible_subops(op_specs, occluders, ray_origin, fwd, eps, n=200):
     """Split each (op, depth_fn) into visible sub-ops against the occluders.
 
@@ -1450,6 +1527,7 @@ def visible_subops(op_specs, occluders, ray_origin, fwd, eps, n=200):
     chord path, which lies on the mesh) while the emitted op stays the arc.
     """
     result = []
+    index = OccluderIndex(occluders, fwd)
     for spec in op_specs:
         op, depth_fn = spec[0], spec[1]
         exclude = spec[2] if len(spec) > 2 else None
@@ -1460,12 +1538,7 @@ def visible_subops(op_specs, occluders, ray_origin, fwd, eps, n=200):
             sd = np.asarray(sd, float)
         else:
             sd = np.asarray(depth_fn(params), float)
-        O = ray_origin(xs, ys)
-        field = np.full(xs.shape, np.inf)
-        for occ in occluders:
-            if occ is exclude:
-                continue
-            field = np.minimum(field, occ.depth(O, fwd))
+        field = index.nearest(ray_origin(xs, ys), skip=exclude)
         vis = sd <= field + eps
         for (i, j) in _runs(vis):
             if i == j:

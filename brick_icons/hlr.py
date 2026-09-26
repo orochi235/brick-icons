@@ -631,6 +631,17 @@ def _snap_rim_crossings(segs, max_snap=4.0, vertex_tol=0.25):
 
     lines = [op for op in segs if op[0] == "line"]
 
+    # Pass 1 pairs every arc with every arc and line. These vectorized
+    # pretests are each implied by a test inside the loops, slightly widened
+    # so float noise cannot drop a pair the loop would keep, and the loops
+    # then visit only the pairs that can yield a candidate.
+    arc_c = np.array([op[1:3] for _, op in arcs], float).reshape(-1, 2)
+    arc_r = np.array([radius(op) for _, op in arcs], float)
+    lx = np.array([(L[1], L[3]) for L in lines], float).reshape(-1, 2)
+    ly = np.array([(L[2], L[4]) for L in lines], float).reshape(-1, 2)
+    line_lo = np.stack([lx.min(1), ly.min(1)], 1) if len(lines) else np.zeros((0, 2))
+    line_hi = np.stack([lx.max(1), ly.max(1)], 1) if len(lines) else np.zeros((0, 2))
+
     # pass 1: snap partial-arc ends onto analytic junctions with adjoining
     # geometry — crossings with larger circles, crossings with drawn lines,
     # and on-carrier line endpoints (vertices)
@@ -639,12 +650,24 @@ def _snap_rim_crossings(segs, max_snap=4.0, vertex_tol=0.25):
             continue
         ra = radius(a)
         ca = np.array(a[1:3])
+        sep_all = np.hypot(arc_c[:, 0] - ca[0], arc_c[:, 1] - ca[1])
+        near_arcs = [arcs[k] for k in np.nonzero(
+            (arc_r >= ra - 1e-6) & (sep_all > 1e-6 * (1 - 1e-6))
+            & (sep_all < 0.6 * arc_r * (1 + 1e-6)))[0]]
+        # a line crossing the carrier, or ending within vertex_tol of it,
+        # lies partly inside the carrier's box grown by that tolerance
+        grow = 1.0 + vertex_tol / ra + 1e-6 if ra > 0 else 1.0
+        half = np.array([math.hypot(a[3], a[5]), math.hypot(a[4], a[6])]) * grow
+        half += 1e-6 * (half.sum() + 1.0)
+        near_lines = [lines[k] for k in np.nonzero(
+            np.all(line_lo <= ca + half, axis=1)
+            & np.all(line_hi >= ca - half, axis=1))[0]]
         try:
             Mainv = np.linalg.inv(np.array([[a[3], a[5]], [a[4], a[6]]], float))
         except np.linalg.LinAlgError:
             continue
         cands = []  # junction angles in a's param, degrees
-        for j, b in arcs:
+        for j, b in near_arcs:
             rb = radius(b)
             sep = math.hypot(a[1] - b[1], a[2] - b[2])
             if j == i or rb < ra - 1e-9 or not 1e-6 < sep < 0.6 * rb:
@@ -664,7 +687,7 @@ def _snap_rim_crossings(segs, max_snap=4.0, vertex_tol=0.25):
             phi = math.atan2(d[1], d[0])
             dth = math.acos(max(-1.0, min(1.0, C_ / hyp)))
             cands += [math.degrees(phi + dth), math.degrees(phi - dth)]
-        for L in lines:
+        for L in near_lines:
             # exact, in a's own unit space: the line maps to a line, the
             # carrier to the unit circle
             q1 = Mainv @ (np.array(L[1:3]) - ca)
@@ -809,6 +832,31 @@ def _refit_candidates(refits, px=1.0):
     return cands
 
 
+def _nearest_chain_ends(chains):
+    """(dist, i, j, flip_i, flip_j) of the closest end pair. Row i holds the
+    self-pair, then for each j four pairings -- tail/head, tail/tail,
+    head/head, head/tail -- and argmin takes the first minimum in that order,
+    so ties break as the nested loop this replaced did."""
+    H = np.array([c[0][0] for c in chains], float)
+    T = np.array([c[0][-1] for c in chains], float)
+    n = len(chains)
+
+    def dist(A, B):
+        D = A[:, None, :] - B[None, :, :]
+        return np.sqrt(D[..., 0] ** 2 + D[..., 1] ** 2)
+
+    pair = np.stack([dist(T, H), dist(T, T), dist(H, H), dist(H, T)], axis=2)
+    pair[~np.triu(np.ones((n, n), bool), 1)] = np.inf
+    own = np.sqrt(((H - T) ** 2).sum(axis=1))
+    cand = np.concatenate([own[:, None], pair.reshape(n, 4 * n)], axis=1)
+    k = int(np.argmin(cand))
+    i, slot = divmod(k, 4 * n + 1)
+    if slot == 0:
+        return float(cand[i, 0]), i, i, False, False
+    j, combo = divmod(slot - 1, 4)
+    return float(cand[i, slot]), i, j, combo >= 2, combo in (1, 3)
+
+
 def _fold_arc_loops(segs, fold_ells, bridge_frac=0.4, step=2.0):
     """Closed loops of drawn fitted-arc (arcfit) spans: the stylized outline
     of a sub-region, e.g. 3941's axle-cross post. Spans chain by coincident
@@ -836,21 +884,7 @@ def _fold_arc_loops(segs, fold_ells, bridge_frac=0.4, step=2.0):
     while chains:
         # nearest end pair over all chains, self-pairs included: exact
         # junctions (d ~ 0) always join ahead of any bridge
-        best = None                      # (dist, i, j, flip_i, flip_j)
-        for i, ci in enumerate(chains):
-            d = float(np.linalg.norm(ci[0][0] - ci[0][-1]))
-            if best is None or d < best[0]:
-                best = (d, i, i, False, False)
-            for j in range(i + 1, len(chains)):
-                cj = chains[j]
-                for fi in (False, True):       # flip i so its tail joins
-                    pi = ci[0][0] if fi else ci[0][-1]
-                    for fj in (False, True):   # flip j so its head joins
-                        pj = cj[0][-1] if fj else cj[0][0]
-                        d = float(np.linalg.norm(pi - pj))
-                        if d < best[0]:
-                            best = (d, i, j, fi, fj)
-        d, i, j, fi, fj = best
+        d, i, j, fi, fj = _nearest_chain_ends(chains)
         if i == j:                       # close the chain into a loop
             pts, drawn, bridged = chains.pop(i)
             bridged += d

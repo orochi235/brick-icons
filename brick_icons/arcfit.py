@@ -342,32 +342,39 @@ def _params(P, C, U, V):
 
 def _sil_chains(sil, tol):
     """Silhouette line ops chained end to end into point runs, each with the
-    ops it consumed."""
-    ends = [(np.array(o[1:3], float), np.array(o[3:5], float)) for o in sil]
-    lens = [float(np.linalg.norm(b - a)) for a, b in ends]
-    used, out = set(), []
+    ops it consumed. Each step takes the lowest-numbered free op that joins
+    either end, trying it forward then reversed, tail before head."""
+    EA = np.array([o[1:3] for o in sil], float).reshape(-1, 2)
+    EB = np.array([o[3:5] for o in sil], float).reshape(-1, 2)
+    lens = np.sqrt(((EB - EA) ** 2).sum(axis=1))
+    free = lens >= tol
+
+    def near(p, Q):
+        return np.sqrt(((Q - p) ** 2).sum(axis=1)) <= tol
+
+    out = []
     for i in range(len(sil)):
-        if i in used or lens[i] < tol:
+        if not free[i]:
             continue
-        used.add(i)
-        P, own = [ends[i][0], ends[i][1]], [i]
-        grew = True
-        while grew:
-            grew = False
-            for j in range(len(sil)):
-                if j in used or lens[j] < tol:
-                    continue
-                for a, b in (ends[j], ends[j][::-1]):
-                    if np.linalg.norm(P[-1] - a) <= tol:
-                        P.append(b); own.append(j)
-                    elif np.linalg.norm(P[0] - b) <= tol:
-                        P.insert(0, a); own.insert(0, j)
-                    else:
-                        continue
-                    used.add(j); grew = True
-                    break
-                if grew:
-                    break
+        free[i] = False
+        P, own = [EA[i], EB[i]], [i]
+        while True:
+            # per op: forward onto the tail, forward onto the head, then the
+            # same two reversed
+            hits = np.stack([near(P[-1], EA), near(P[0], EB),
+                             near(P[-1], EB), near(P[0], EA)], axis=1)
+            hits &= free[:, None]
+            js = np.nonzero(hits.any(axis=1))[0]
+            if not len(js):
+                break
+            j = int(js[0])
+            k = int(np.argmax(hits[j]))
+            a, b = (EA[j], EB[j]) if k < 2 else (EB[j], EA[j])
+            if k % 2 == 0:
+                P.append(b); own.append(j)
+            else:
+                P.insert(0, a); own.insert(0, j)
+            free[j] = False
         out.append((np.array(P), own))
     return out
 
