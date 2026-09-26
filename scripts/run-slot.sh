@@ -116,7 +116,8 @@ echo "run-slot: launching $task"
 # against wherever this was called from once delivered a whole job into a
 # worktree that had no corpus.db.
 cd "$ROOT"
-onto run "$@"
+# First, so a caller's own --kind or --icon still wins: the last one given does.
+onto run --kind render --icon cube "$@"
 
 if [ $detach -eq 0 ]; then
   echo "run-slot: not --detach, so the job already ran to completion; nothing to stream"
