@@ -1,3 +1,51 @@
+## 2026-09-26: big parts timed out on quadratic loops, not geometry
+
+Baseplates, big plates and 644 died on the census as timeouts and
+`ProcessDied`, never as errors, under both engines. The cause was Python
+loops that test every drawn thing against every other: in a baseplate's
+profile, 146 of 150 s went to testing each stroke against every stud wall.
+OCCT's own HLR takes 0.2 s on these parts; occt's 196 s went to our fill.
+
+Fixed (not yet on the fleet):
+
+| where | was | now |
+|---|---|---|
+| `primitives.visible_subops`, `shade.cull_occluded_faces` | every occluder per ray | `OccluderIndex`: screen-box prefilter, shared with `TriangleOccluder` via `screen_boxes` |
+| `shade.absorb_wall_facets` | every wall per facet group | `wall_box` 3-D prefilter |
+| `shade.fill_ops` clip | subtract a growing union of every nearer face | subtract the nearer faces the STRtree says overlap |
+| `hlr._fold_arc_loops`, `arcfit._sil_chains` | pure-Python pair scans | vectorized, first-match order kept |
+| `hlr._snap_rim_crossings` | every arc against every arc and line | vectorized pretests implied by the loop's own tests |
+
+Every prefilter is exact (a ray, facet or face outside the box cannot
+qualify), and `scripts/head-ab.py` came back 0 px different against HEAD's own
+functions on 14 parts under naive and 12 under occt. Timed on this Mac:
+
+| part | naive | occt | census before |
+|---|---:|---:|---|
+| 15623 | 21 s | 28 s | timed out, every slot |
+| 644 | 16 s | -- | naive died; white-naive 580 s |
+| 10a | 80 s | -- | timed out / died, every slot |
+| 2552 | 12 s | 11 s | occt 134 s |
+| 3811 | 131 s | -- | -- |
+
+The pre-existing red `test_a_sticker_is_not_clipped_by_the_slope_it_is_stuck_to`
+reads 5.12% both ways; it is not this.
+
+**3811 at the default 1024 px is solid black**: 32 studs across leave ~11 px
+per stud and the default strokes fill it. At 2048 px with 1 px lines every stud
+draws. A legibility question for the largest plates, not a render bug.
+
+**Next:** a census round over the parts that time out, to measure
+what moved. 10a and 3811 are still slow; their profiles point at
+`hlr.cull_orphan_runs` (`nearest` is linear per call, 4,800 calls),
+`geom2d.arc_regions`/`_chord_on` (a buffer per arc) and `shade.order_faces`.
+
+**Other slow classes Mike named, not started:** ribbed hoses and tire treads
+(one segment repeated -- draw it once and stamp it?); 4510086c, a sticker on a
+large tile, whose cost is probably the decal; 11091, 80503, 92738 and 3847
+are not regressions -- they timed out only in run 126, the SIGSEGV-handler
+hang, and drew again in run 127.
+
 ## 2026-09-25 (night): occt retries, a decal fill, and a full occt redraw in flight
 
 Pushed through 330fd4a. Launched 23:33 from this checkout; do not relaunch any
