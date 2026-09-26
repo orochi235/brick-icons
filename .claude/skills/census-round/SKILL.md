@@ -109,6 +109,12 @@ Batch the list (a dozen parts a line — `import cadquery` is 6.2s against a
   batch appends to that pass's file — and `--skip-done` reads its old timeout
   rows as done and skips exactly the parts being retried. `db.rebuild` rglobs,
   so a subdirectory is still indexed.
+- **Get the last round home before relaunching on the same nodes.** The
+  relaunch's `onto sync` appears to take earlier jobs' `out/` trees with it:
+  on 2026-09-26 the killed `slot-occt-0925`'s tree was gone from studio a
+  minute after `slot-occt-0926` synced, and its stream then retried "no such
+  path" forever. Compare the tree's rows and drawings here against what the
+  job wrote before launching; kill that stream and its watch afterward.
 - **Pass `--workers` explicitly.** onto sizes a pool by dividing free memory by
   the task's recorded peak, which for this job is the whole run's figure, not
   one part's — it hands out one worker. 8 on studio, 10 on msb-uai, at ~2.3G
