@@ -22,6 +22,16 @@ timeouts. Its attempts are in corpus.db via `db.ingest_store`, the 7 drawings
 under `renders/decal/`. 235695b makes `slot-coverage.py` read store attempts,
 so those 629 now count as tried rather than never.
 
+**The redraw's failures are partly a regression, fixed in 71388a2, and want a
+retry once the redraw ends -- not yet launched, ask first.** 4f4e452's Python
+SIGSEGV handler spun forever on a fault inside C, so every crashing
+`_unify_survives` probe and every segfaulting render ran to the 300 s timeout:
+roughly 58 parts that drew in 3-100 s, and most of the 74 that were
+ProcessDied before. 43 more regressions are parts that already took 144-390 s,
+timed out inside OCCT itself -- load or a real slowdown, unmeasured. The full
+list is `out/regressions-slot-occt-0925.tsv` once a watch at a63593a has run
+over the tree (the live watch predates it).
+
 The occt redraw will queue a large batch on /review: every drawing it
 displaces by 12 px or more.
 
