@@ -4,7 +4,8 @@
 # shape here — the census is one workload on one tree — so this is what an onto
 # job runs:
 #
-#     onto run --detach --timeout 10h --in brick-icons --env PATH=... <node> \
+#     onto run --detach --timeout 10h --kind render --icon cube --in brick-icons \
+#       --env PATH=... <node> \
 #       -- <tree>/scripts/census-run.sh 120
 #
 # A progress line joins the shards' own output every 5 minutes, so `onto logs

@@ -4,7 +4,7 @@
 # so whatever launched this owns the log. Run it as an onto job beside the
 # shards:
 #
-#     onto run --detach --timeout 10h --in brick-icons <node> \
+#     onto run --detach --timeout 10h --kind watch --icon waveform --in brick-icons <node> \
 #       -- <tree>/scripts/census-heartbeat.sh 300
 #
 # A census runs for hours and its own logs are eight interleaved streams, so

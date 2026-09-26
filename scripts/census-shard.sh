@@ -11,7 +11,8 @@
 # that flags a part cannot be looked at without paying the render again.
 # scripts/census-reshard.py writes those list files. Launch one job per shard:
 #
-#     onto run --detach --timeout 10h --in brick-icons --env PATH=... <node> \
+#     onto run --detach --timeout 10h --kind render --icon cube --in brick-icons \
+#       --env PATH=... <node> \
 #       -- <tree>/scripts/census-shard.sh occt r0 120
 #
 # occt segfaults inside OCCT on some parts and takes the shard down with it.

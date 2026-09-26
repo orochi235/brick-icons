@@ -2,7 +2,7 @@
 # Measure one batch of parts in one process. Called once per line of a batch
 # list by onto's item dispatch:
 #
-#     onto run --detach --in brick-icons --each out/census/<list>.txt \
+#     onto run --detach --kind render --icon cube --in brick-icons --each out/census/<list>.txt \
 #       <node> -- scripts/census-batch.sh occt 120 out/census/backfill {}
 #
 # A batch rather than a part because `import cadquery` costs 6.2s against a

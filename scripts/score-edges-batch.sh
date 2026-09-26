@@ -2,7 +2,7 @@
 # Score one chunk of stored drawings against the edges their parts declare.
 # Called once per line of a chunk index by onto's item dispatch:
 #
-#     onto run --detach --in brick-icons --each out/edges/chunks/naive.idx \
+#     onto run --detach --kind score --icon checkmark.seal --in brick-icons --each out/edges/chunks/naive.idx \
 #       --task edge-score-naive studio -- \
 #       scripts/score-edges-batch.sh naive {} out/edges/jsonl
 #

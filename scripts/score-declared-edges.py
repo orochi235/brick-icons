@@ -2,7 +2,7 @@
 """Score stored drawings against the edges their part files declare.
 
     scripts/score-declared-edges.py --emit-list --source white-occt > edges.txt
-    onto run ... -- .venv/bin/python scripts/score-declared-edges.py \
+    onto run --kind score --icon checkmark.seal ... -- .venv/bin/python scripts/score-declared-edges.py \
         --source white-occt --list edges.txt --jsonl out/edges/white-occt.jsonl
     scripts/score-declared-edges.py --ingest out/edges/white-occt.jsonl
 
