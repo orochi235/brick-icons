@@ -45,10 +45,7 @@ def _command(argv: list[str]) -> str:
 def _death(code: int | None) -> str:
     if code is None:
         return "the render process died"
-    # 128+signum is what `batch.quiet_fatal_signals` leaves behind: the child
-    # exits rather than dying on the signal, so macOS files no crash report,
-    # and the signal is still named here.
-    signum = -code if code < 0 else (code - 128 if 128 < code < 128 + 64 else None)
+    signum = batch.fatal_signal_of(code)
     if signum is not None:
         try:
             name = signal.Signals(signum).name

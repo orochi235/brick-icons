@@ -246,7 +246,7 @@ def test_a_fatal_signal_leaves_by_the_door_not_through_the_window():
     """A child that dies on SIGSEGV is a crash, and macOS reports a crash with
     a dialog on whoever's screen is attached -- OCCT segfaults on library parts,
     so a census run put one up per bad part. Exiting 128+signum instead is the
-    same information by the shell's own convention, and no crash report."""
+    same information, and no crash report."""
     import os
     import signal
     from brick_icons import batch
@@ -258,7 +258,40 @@ def test_a_fatal_signal_leaves_by_the_door_not_through_the_window():
         os._exit(0)                                  # not reached
     _, status = os.waitpid(pid, 0)
     assert os.WIFEXITED(status), "the child still died on the signal"
-    assert os.WEXITSTATUS(status) == 128 + int(signal.SIGSEGV)
+    assert os.WEXITSTATUS(status) == int(signal.SIGSEGV)
+
+
+def test_a_real_fault_inside_c_code_exits_instead_of_spinning():
+    """A Python-level handler never runs for a fault inside a C call: the
+    interpreter's C handler sets a flag and returns to the faulting
+    instruction, which faults again forever. Every part OCCT segfaulted on --
+    and every `_unify_survives` probe that crashed -- then ran to the census
+    timeout at a full core instead of dying. `os.kill` cannot catch this; only
+    a real fault can."""
+    import ctypes
+    import os
+    import signal
+    import time
+    from brick_icons import batch
+    from brick_icons.lab import runner
+
+    pid = os.fork()
+    if pid == 0:                                     # pragma: no cover - child
+        batch.quiet_fatal_signals()
+        ctypes.string_at(0)
+        os._exit(0)                                  # not reached
+    for _ in range(100):
+        done, status = os.waitpid(pid, os.WNOHANG)
+        if done:
+            break
+        time.sleep(0.05)
+    else:
+        os.kill(pid, signal.SIGKILL)
+        os.waitpid(pid, 0)
+        raise AssertionError("the child spun on the fault instead of exiting")
+    assert os.WIFEXITED(status), "the child still died on the signal"
+    assert "SIGSEGV" in runner._death(os.WEXITSTATUS(status)) or \
+        "SIGBUS" in runner._death(os.WEXITSTATUS(status))
 
 
 def test_the_exit_code_still_names_the_signal():
@@ -268,5 +301,5 @@ def test_the_exit_code_still_names_the_signal():
     from brick_icons.lab import runner
 
     assert "SIGSEGV" in runner._death(-int(signal.SIGSEGV))
-    assert "SIGSEGV" in runner._death(128 + int(signal.SIGSEGV))
+    assert "SIGSEGV" in runner._death(int(signal.SIGSEGV))
     assert runner._death(1) == "the render process exited 1"

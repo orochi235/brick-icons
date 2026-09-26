@@ -30,27 +30,35 @@ def quiet_fatal_signals() -> None:
     A process that dies on an unhandled SIGSEGV is a crash, and macOS answers a
     crash with a dialog on whatever screen is attached -- so a run put one up
     per part OCCT went down on, on the machine somebody was working at. Exiting
-    instead produces no report. The code is 128+signum, the shell's own
-    convention, so `lab.runner._death` still names the signal and nothing
-    downstream loses the diagnosis.
+    instead produces no report. The exit code is the signal number, which
+    `fatal_signal_of` reads back, so nothing downstream loses the diagnosis.
 
-    Returning from a SIGSEGV handler is undefined, so this handler never
-    returns: `os._exit` is async-signal-safe and skips every handler and buffer
-    on the way out, which is what you want from a process whose memory is
-    already suspect. Call it in the CHILD, after the fork.
+    The handler is libc's own `_exit`, installed at the C level. A Python
+    handler cannot do this job: the interpreter's C handler only sets a flag
+    and returns to the faulting instruction, which faults again forever, so a
+    part that segfaulted inside OCCT spun at a full core until the census
+    timeout. `_exit` is async-signal-safe, takes the signal number as its
+    status, and never returns. Call it in the CHILD, after the fork.
     """
-    def leave(signum, _frame):                       # pragma: no cover - child
-        os._exit(128 + signum)
+    libc = ctypes.CDLL(None)
+    libc.signal.argtypes = (ctypes.c_int, ctypes.c_void_p)
+    libc.signal.restype = ctypes.c_void_p
+    leave = ctypes.cast(libc._exit, ctypes.c_void_p)
+    for sig in _fatal_signums():
+        libc.signal(sig, leave)
 
-    for name in _FATAL:
-        sig = getattr(signal, name, None)
-        if sig is None:
-            continue
-        try:
-            signal.signal(sig, leave)
-        except (OSError, ValueError):
-            # a signal this platform will not let us take; the default stands
-            pass
+
+def _fatal_signums() -> set[int]:
+    return {int(getattr(signal, n)) for n in _FATAL if hasattr(signal, n)}
+
+
+def fatal_signal_of(code: int | None) -> int | None:
+    """The fatal signal a child's exit code or `Popen.returncode` stands for."""
+    if code is None:
+        return None
+    if code < 0:
+        return -code
+    return code if code in _fatal_signums() else None
 
 
 # Seconds the child keeps after its own cap before the parent kills it, so a
@@ -280,7 +288,8 @@ class Runner:
             return {self.key: item, "error": "MemoryError",
                     "detail": f"render process group passed {self.mem_kb >> 20}GB "
                               "resident and was killed"}
-        signalled = os.WIFSIGNALED(status) and os.WTERMSIG(status)
+        signalled = (os.WTERMSIG(status) if os.WIFSIGNALED(status) else
+                     os.WIFEXITED(status) and fatal_signal_of(os.WEXITSTATUS(status)))
         return {self.key: item, "error": "ProcessDied",
                 "detail": f"render process died on signal {signalled}"
                           if signalled else
