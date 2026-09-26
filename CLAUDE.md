@@ -110,8 +110,8 @@ it is the only machine whose slowness anyone feels; the fleet exists so it does
 not also grind through renders. `onto status` names a node with free cores, or
 `--any` picks one.
 
-    onto run --detach --timeout 4h --task thumb-bake --in brick-icons \
-      --env PATH=/opt/homebrew/bin:/usr/bin:/bin \
+    onto run --detach --timeout 4h --task thumb-bake --kind render --icon photo \
+      --in brick-icons --env PATH=/opt/homebrew/bin:/usr/bin:/bin \
       --out out/thumbs --to out/thumbs \
       msb-uai -- .venv/bin/python scripts/bake-thumbs.py
 
@@ -128,6 +128,10 @@ working directory and cannot see each other's background processes; two once ran
 `bake-thumbs.py` at the same time, writing the same thumbnails and racing on the
 same `sheet-*.png`. Relaunching under a task name continues that task instead of
 forking a rival, and `onto jobs` answers "is this already running?" for everyone.
+
+`--kind` (render, score, ingest, bake) and `--icon` (an SF Symbols name) are what
+onto's listings and app show beside it. `scripts/run-slot.sh` fills in `render`
+and `cube` for a slot.
 
 **Run every `onto` command with the Bash sandbox disabled.** Sandboxed, its
 connections to the other nodes fail and it reports every one of them `offline`
