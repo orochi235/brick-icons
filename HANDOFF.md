@@ -9,7 +9,7 @@ of these -- `onto jobs` names them.
 | `slot-silhouette-occt-0925` | keiei | 633 | errored-part retry -- done, 76 recovered |
 | `slot-translucent-occt-0925` | msb-uai | 122 | errored-part retry -- done, 30 recovered |
 | `slot-decal-0925` | msb-uai | 636 | never-tried decal fill -- done, filed |
-| `slot-occt-0925` | msb-uai a9e8e321 + studio 0834b78e, keiei 3d8cf41f | 20,597 | whole occt slot redrawn at 3c9e936 (`--overwrite`); launched 03:36, 10 workers each, deadline 15:36 |
+| `slot-occt-0925` | msb-uai a9e8e321 + studio 0834b78e, keiei 3d8cf41f | 20,597 | whole occt slot redrawn at 3c9e936 (`--overwrite`) -- killed 09:30 at 20,534 rows; remainder in `slot-occt-0926` |
 
 The last two are launched by a local chain script (log `out/chain-0925.log`)
 that waits for the earlier tasks to leave `onto jobs`. If this Mac restarts
@@ -22,15 +22,14 @@ timeouts. Its attempts are in corpus.db via `db.ingest_store`, the 7 drawings
 under `renders/decal/`. 235695b makes `slot-coverage.py` read store attempts,
 so those 629 now count as tried rather than never.
 
-**The redraw's failures are partly a regression, fixed in 71388a2, and want a
-retry once the redraw ends -- not yet launched, ask first.** 4f4e452's Python
-SIGSEGV handler spun forever on a fault inside C, so every crashing
-`_unify_survives` probe and every segfaulting render ran to the 300 s timeout:
-roughly 58 parts that drew in 3-100 s, and most of the 74 that were
-ProcessDied before. 43 more regressions are parts that already took 144-390 s,
-timed out inside OCCT itself -- load or a real slowdown, unmeasured. The full
-list is `out/regressions-slot-occt-0925.tsv` once a watch at a63593a has run
-over the tree (the live watch predates it).
+**The redraw was stopped at 09:30 and its failures relaunched as
+`slot-occt-0926`** (msb-uai 1ca52cad + studio, keiei; at ab40a9b; 392 parts;
+deadline 13:36). 4f4e452's Python SIGSEGV handler spun forever on a fault
+inside C, so every crashing `_unify_survives` probe and every segfaulting
+render ran to the 300 s timeout; 71388a2 fixes it. The list
+(`out/slot-occt-0926/todo.txt`) is the 63 parts the redraw never finished plus
+every failure that could be the hang; the 176 that failed exactly as before
+were left out. Its own run-slot stream and watch are ingesting it.
 
 The occt redraw will queue a large batch on /review: every drawing it
 displaces by 12 px or more.
