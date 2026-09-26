@@ -118,7 +118,7 @@ status = "open"
 title = "this is weird"
 mark = { x = 0.3369, y = 0.4772, w = 0.0463, h = 0.0215 }
 seen = { angle = "iso", shading = "outline", shade_style = "flat3" }
-checked = { occt = "fd77c9ff07f3517949347cca6567f9bca9eca61cc3aae2205413ad29680342af", silhouette-occt = "2812981ad4b5fed7982c9db5ea74f2894347a8066e25cf20ef5dec5a65690e93", white-occt = "b43d6c4eb8fef991157071b33be951ea8d7e7fe53738fbea65b6124b3758ad47" }
+checked = { occt = "1a9ab3a0c0736904f9fb292100827f7dbdf6d12520efc999dd32f581c605a980", silhouette-occt = "2812981ad4b5fed7982c9db5ea74f2894347a8066e25cf20ef5dec5a65690e93", white-occt = "b43d6c4eb8fef991157071b33be951ea8d7e7fe53738fbea65b6124b3758ad47" }
 filed = "2026-09-03"
 notes = """
 2026-09-16: the occt drawing on the wall changed under this row today, and it was my refresh round that shipped it -- corpus.db's occt render for 6589 is now out/slot-occt-refresh, drawn at 161156e, replacing the 2026-09-08 store. The change is 3 components against that store, the large one 1,970 px over x34-51% y61-80%: the inner annulus lost a lighter band at its lower left.
@@ -142,7 +142,9 @@ black.
 
 2026-09-17 review regression
 
-2026-09-23 review regression"""
+2026-09-23 review regression
+
+2026-09-25 review better"""
 
 [[defect]]
 id = "4524-ring-whole-circle"
@@ -369,7 +371,7 @@ engines = ["occt"]
 status = "open"
 title = "occt handle missing arcs; extra garbage below R hook hand on both engines"
 classes = ["arc-loss", "stray-ink"]
-checked = { occt = "45184bd5e6e2e8e4a75af60abfbf765de5538c5a36380e09af7221cd18e5b728", silhouette-occt = "667012f91a4260397ada168e911f25ffca08133dd274829000efd15e0e73ba78", translucent-occt = "dd33821c0f70a45e498486e5b03372d652bb76978ca4490b31138d51ca340602", white-occt = "aeceb1b2f10ff68e6d7b70f6ed3c09e1ebd6e6d0324f309c8c378eb9f6174e84" }
+checked = { occt = "fd4903447899ffa7dfd7260c0ec2b1dcc6893427f718abef407ed43b76933f9e", silhouette-occt = "667012f91a4260397ada168e911f25ffca08133dd274829000efd15e0e73ba78", translucent-occt = "dd33821c0f70a45e498486e5b03372d652bb76978ca4490b31138d51ca340602", white-occt = "aeceb1b2f10ff68e6d7b70f6ed3c09e1ebd6e6d0324f309c8c378eb9f6174e84" }
 filed = "2026-09-06"
 notes = """
 2026-09-16: the missing-arcs half is nearly gone at HEAD 161156e -- 1 gap, 17.0 px of 816.0 px of declared edge. The extra-garbage half is untested: the oracle scores declared linework and is blind to ink nothing declared. Evidence: out/edge-overlays3/3484-occt-edges.png.
@@ -380,7 +382,9 @@ no diagnosis.
 
 2026-09-17 review better
 
-2026-09-23 review better"""
+2026-09-23 review better
+
+2026-09-25 review better"""
 
 [[defect]]
 id = "3820-c-grip-fills-solid"
@@ -504,9 +508,12 @@ engines = ["occt"]
 status = "open"
 title = "curved lower face in occt is culled"
 classes = ["over-cull"]
-checked = { silhouette-occt = "eb016875e13389b7cbe45b5bf9391dca144968cabab7cb5bb10930f067d856bd", translucent-occt = "5278ab07b0fd3c58119ad79fd099617290e931a6957792f2834752649a40845d", white-occt = "6e941623ab2495a44d7bffc67b0bdaf64447d5f63b4abcd8703f76a99b793245" }
+checked = { silhouette-occt = "eb016875e13389b7cbe45b5bf9391dca144968cabab7cb5bb10930f067d856bd", translucent-occt = "5278ab07b0fd3c58119ad79fd099617290e931a6957792f2834752649a40845d", white-occt = "6e941623ab2495a44d7bffc67b0bdaf64447d5f63b4abcd8703f76a99b793245", occt = "5d93762eb7f80ea14b8971b7852ca698581dd78fc773169efbd72ae6ee6745bd" }
 filed = "2026-09-07"
-notes = "2026-09-16: not settled at HEAD 161156e, and the drawing has moved in a way that needs a person. The lower body now draws as a shaded cylinder rather than being culled, so the row's own claim looks answered -- but the browser reference draws that body with a flat front face, and occt draws it round. Either the reference is wrong about the mould or occt has smoothed away a flat, and this pass cannot tell which. The other row on this part, 11090-hand-at-top-is-missing, is measured: 1 gap, 19.5 px of 1200.0 declared. Evidence: out/sheets/surface-1.png."
+notes = """
+2026-09-16: not settled at HEAD 161156e, and the drawing has moved in a way that needs a person. The lower body now draws as a shaded cylinder rather than being culled, so the row's own claim looks answered -- but the browser reference draws that body with a flat front face, and occt draws it round. Either the reference is wrong about the mould or occt has smoothed away a flat, and this pass cannot tell which. The other row on this part, 11090-hand-at-top-is-missing, is measured: 1 gap, 19.5 px of 1200.0 declared. Evidence: out/sheets/surface-1.png.
+
+2026-09-25 review better"""
 
 [[defect]]
 id = "11090-hand-at-top-is-missing"
@@ -515,18 +522,21 @@ engines = ["occt"]
 status = "open"
 title = "hand at top is missing a curve too"
 classes = ["arc-loss"]
-checked = { silhouette-occt = "eb016875e13389b7cbe45b5bf9391dca144968cabab7cb5bb10930f067d856bd", translucent-occt = "5278ab07b0fd3c58119ad79fd099617290e931a6957792f2834752649a40845d", white-occt = "6e941623ab2495a44d7bffc67b0bdaf64447d5f63b4abcd8703f76a99b793245" }
+checked = { silhouette-occt = "eb016875e13389b7cbe45b5bf9391dca144968cabab7cb5bb10930f067d856bd", translucent-occt = "5278ab07b0fd3c58119ad79fd099617290e931a6957792f2834752649a40845d", white-occt = "6e941623ab2495a44d7bffc67b0bdaf64447d5f63b4abcd8703f76a99b793245", occt = "5d93762eb7f80ea14b8971b7852ca698581dd78fc773169efbd72ae6ee6745bd" }
 filed = "2026-09-07"
-notes = "2026-09-16: one curve, and the oracle agrees with the title. 1 gap, 19.5 px of 1200.0 px of declared edge at HEAD 161156e. Measured with 11090-curved-lower-face-in-occt, whose culled-face claim the oracle cannot see. Evidence: out/edge-overlays3/11090-occt-edges.png."
+notes = """
+2026-09-16: one curve, and the oracle agrees with the title. 1 gap, 19.5 px of 1200.0 px of declared edge at HEAD 161156e. Measured with 11090-curved-lower-face-in-occt, whose culled-face claim the oracle cannot see. Evidence: out/edge-overlays3/11090-occt-edges.png.
+
+2026-09-25 review better"""
 
 [[defect]]
 id = "2310-crap-on-darkest-face-and"
 part = "2310"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "crap on darkest face and inside hollow stud"
 classes = ["stray-ink"]
-checked = { occt = "7f837752236461cf90238b87380cdb37fb4a27d6161f26ff95e356762c32e013", silhouette-occt = "ae019ee739cd5714535ad8f9ac2e38de3a1fc015f1d99a481ed8168d1c7166ca", translucent-occt = "0d8e4bb0d3e2aac11d4a0ead28df0dc1ecba082d852b29225de8d5bcd7991858", white-occt = "1e8d5670a2351d76a0b65adebcd3b9e6d1c544f98b21533482513654da75ee04" }
+checked = { occt = "edf0b146d9e03f6684e8daa81568617b5f4329efe5e67c71934207f50e8b72b9", silhouette-occt = "ae019ee739cd5714535ad8f9ac2e38de3a1fc015f1d99a481ed8168d1c7166ca", translucent-occt = "0d8e4bb0d3e2aac11d4a0ead28df0dc1ecba082d852b29225de8d5bcd7991858", white-occt = "1e8d5670a2351d76a0b65adebcd3b9e6d1c544f98b21533482513654da75ee04" }
 filed = "2026-09-07"
 notes = """
 Paint order, not geometry. Rendered per face
@@ -538,7 +548,9 @@ single-bit decision the pierce-seam rows come back to. Nothing is dropped here
 
 2026-09-17 review neutral
 
-2026-09-23 review neutral"""
+2026-09-23 review neutral
+
+2026-09-25 review fixed"""
 
 [[defect]]
 id = "38317-left-stud-shading-is-very"
@@ -750,10 +762,10 @@ Re-rendered at iso against LDView: the elbow reads as one wall now."""
 id = "35480-bore-reads-flat"
 part = "35480"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "looking down a stud the tube has no depth, where LDView shows a lit far wall"
 classes = ["shading"]
-checked = { occt = "41fde82a78162f7d8aaf965e490ead482747912c24699c76a6d1bda9cdc557a5", silhouette-occt = "51f19071ce2808715c584c704edec3146097de03b51488d0cc7b596fd6d64feb", translucent-occt = "65c7a96055d5944b98b724c86510370b6fa55f1ccf60017f7daf4197e83135a3", white-occt = "36c21fa1babca9b72ac90bdd0d86f91377ea3f77fe9a0c43880f68bbf0435d36" }
+checked = { occt = "cf648025af5982760b76b0132a02816deae509419e7852a9facdb2ce852b91e9", silhouette-occt = "51f19071ce2808715c584c704edec3146097de03b51488d0cc7b596fd6d64feb", translucent-occt = "65c7a96055d5944b98b724c86510370b6fa55f1ccf60017f7daf4197e83135a3", white-occt = "36c21fa1babca9b72ac90bdd0d86f91377ea3f77fe9a0c43880f68bbf0435d36" }
 filed = "2026-09-07"
 notes = """
 Not a missing fill. The bore is drawn as two correctly-split fills that shade consistently across the seam f832da6 keeps. What flattens it is the max(0.0, n . L) clamp in shade._axis_binned_stops (also shade.ramp, and the b array above it). Looking down a bore you see the half of the tube whose normals sweep a full 180 degrees, so the terminator lands mid-span: face 29's eight raw n.L bins run -0.44 -0.19 +0.03 +0.24 - +0.41 +0.52 +0.53 and the first two floor to the same value. The SVG shows it -- g9's stops at 0%, 6.2% and 18.8% are all #565656, and a quarter of the face's area sits pinned at that floor. An exterior wall does not show it because its visible half is mostly lit and the terminator sits near a limb. LDView gives the shadowed side ambient falloff instead of a floor. THE FIX IS A LIGHTING-MODEL CHANGE AND MOVES EVERY RENDER IN THE CORPUS, so it is Mike's call, like the constant stroke width. Before scoping it, check a Technic pin hole: any deep recess seen down its own axis should show the same thing. Measured by brick-icons-e4.
@@ -764,23 +776,27 @@ Not a missing fill. The bore is drawn as two correctly-split fills that shade co
 
 2026-09-24: root cause found and fixed at cccfe19. The bore was never missing a gradient -- shade's max(0, n.L) pinned every normal facing away from the light to one floor tone, and looking down a bore you see exactly the half of the tube whose normals sweep 180 degrees. shade.LAMBERT_WRAP now moves the terminator to n.L = -0.3. Awaiting a redraw to judge on /review.
 
-2026-09-24 (later): the cccfe19 diagnosis was wrong -- the bore was never on the shading floor for lack of a wrap. occt's _span_face sampled the cylinder's OUTWARD normal on every span, so a bore's far wall was lit as the outside of a tube: the middle of the visible wall, which faces the camera and the light, read as the terminator. LAMBERT_WRAP was tuned on that misreading. Fixed in the working tree, uncommitted: an away-facing span's samples are negated (occt._span_face); wall ramps are keyed by radius, so a stud's r6 wall and its r4 bore no longer share one zigzag ramp (occt._surface_key); and the refine pass can probe occt walls at last (shade._face_depth_probe read a `prim` key only naive faces carry), so a buried wall no longer paints into a hole. Awaiting a redraw to judge on /review."""
+2026-09-24 (later): the cccfe19 diagnosis was wrong -- the bore was never on the shading floor for lack of a wrap. occt's _span_face sampled the cylinder's OUTWARD normal on every span, so a bore's far wall was lit as the outside of a tube: the middle of the visible wall, which faces the camera and the light, read as the terminator. LAMBERT_WRAP was tuned on that misreading. Fixed in the working tree, uncommitted: an away-facing span's samples are negated (occt._span_face); wall ramps are keyed by radius, so a stud's r6 wall and its r4 bore no longer share one zigzag ramp (occt._surface_key); and the refine pass can probe occt walls at last (shade._face_depth_probe read a `prim` key only naive faces carry), so a buried wall no longer paints into a hole. Awaiting a redraw to judge on /review.
+
+2026-09-25 review fixed"""
 
 [[defect]]
 id = "35480-wall-fill-hairline"
 part = "35480"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "the plate's outer wall shows a hairline where two fill fragments meet"
 classes = ["seam"]
-checked = { occt = "41fde82a78162f7d8aaf965e490ead482747912c24699c76a6d1bda9cdc557a5", silhouette-occt = "51f19071ce2808715c584c704edec3146097de03b51488d0cc7b596fd6d64feb", translucent-occt = "65c7a96055d5944b98b724c86510370b6fa55f1ccf60017f7daf4197e83135a3", white-occt = "36c21fa1babca9b72ac90bdd0d86f91377ea3f77fe9a0c43880f68bbf0435d36" }
+checked = { occt = "cf648025af5982760b76b0132a02816deae509419e7852a9facdb2ce852b91e9", silhouette-occt = "51f19071ce2808715c584c704edec3146097de03b51488d0cc7b596fd6d64feb", translucent-occt = "65c7a96055d5944b98b724c86510370b6fa55f1ccf60017f7daf4197e83135a3", white-occt = "36c21fa1babca9b72ac90bdd0d86f91377ea3f77fe9a0c43880f68bbf0435d36" }
 filed = "2026-09-07"
 notes = """
 A one-pixel tone step down the plate's front wall where its fill splits, visible at 8x. It is not new -- f832da6 only moved it, the transition column going from x=204 at value 146 to x=205 at 137 in a 410px frame -- but that is the point: an unrelated change to face topology renumbers what follows and the boundary re-rounds, so the seam drifts under changes that should not touch it. Worth a row because it is the visible half of the fill-fragment seam class and it makes byte-level A/Bs of unrelated fixes noisier than they should be.
 
 2026-09-17 review neutral: front wall is better but borehole shading is worse
 
-2026-09-23 review better"""
+2026-09-23 review better
+
+2026-09-25 review fixed"""
 
 [[defect]]
 id = "3626bpsk-tab-under-neck-stud"
@@ -813,7 +829,7 @@ engines = ["occt"]
 status = "open"
 title = "a square notch is cut through the steering wheel's hub wall"
 classes = ["hidden-leak"]
-checked = { occt = "560e5123944315fd13c321395ec7cb8a981e823f4c1348e2e4b2baf144764a4a", silhouette-occt = "fe0eb61bdec1c38bb610253a8fe8a6ed52e5961f49a89caf2edb94edaebbeb17", white-occt = "d0aefc03c01365e23f40581c118b5608f7bb8dc6059e64b06d7a4dec1d416494" }
+checked = { occt = "a969ebf928832d445241413c03ef9e076df52170e22995e8d4034696f9f12594", silhouette-occt = "fe0eb61bdec1c38bb610253a8fe8a6ed52e5961f49a89caf2edb94edaebbeb17", white-occt = "d0aefc03c01365e23f40581c118b5608f7bb8dc6059e64b06d7a4dec1d416494" }
 filed = "2026-09-07"
 notes = """
 No single seam owns it: over the 17 kept seams, dropping ANY one moves at
@@ -824,7 +840,9 @@ alone draws the tab. Same disproven narrowings as that row.
 
 2026-09-17 review better
 
-2026-09-23 review neutral"""
+2026-09-23 review neutral
+
+2026-09-25 review neutral"""
 
 [[defect]]
 id = "3941p01-decal-under-its-own-wall"
@@ -842,7 +860,7 @@ engines = ["occt"]
 status = "open"
 title = "centre stud has no top ellipse and the brace between the studs is unfilled"
 classes = ["over-cull", "arc-loss"]
-checked = { occt = "a6bc6a64dd6d6a19f7d9703132ff3f69659012ed468ed5d68c8b11c529876977", silhouette-occt = "f7ef240eaef5f85396e8121958a7ec645aedaeb107d1bb5760e99b69dd5b665d", translucent-occt = "dab44897869ec37829f198984e72a11bc8119c1d55d14dc2ea48209627a4ef87", white-occt = "670e0bdd44185320a2995fd4541c6717d14cfd2de85a848798d23ba1a7d6e5b0" }
+checked = { occt = "62642e626dfb820162545d93ec3019fa21b1156e2a17b79a28a39b3bcf8094c9", silhouette-occt = "f7ef240eaef5f85396e8121958a7ec645aedaeb107d1bb5760e99b69dd5b665d", translucent-occt = "dab44897869ec37829f198984e72a11bc8119c1d55d14dc2ea48209627a4ef87", white-occt = "670e0bdd44185320a2995fd4541c6717d14cfd2de85a848798d23ba1a7d6e5b0" }
 filed = "2026-09-07"
 notes = """
 Reopened 2026-09-14: a check at 718d9e4 closed this as drawing right at HEAD; it does not draw right.
@@ -853,7 +871,9 @@ Two symptoms on the top face, against naive at the same pose. The front-centre s
 
 2026-09-23 review better
 
-2026-09-25: at HEAD d3579aa (slot render 62642e62, in the /review queue unjudged) the occt drawing has the front-centre stud's top ellipse and the four-armed brace filled with its walls toned; naive at the same pose differs only by two body-tone slivers on that stud's top disc, which are naive's. Pair on the wall (brick-icons), 2026-09-25. Awaiting the verdict on /review."""
+2026-09-25: at HEAD d3579aa (slot render 62642e62, in the /review queue unjudged) the occt drawing has the front-centre stud's top ellipse and the four-armed brace filled with its walls toned; naive at the same pose differs only by two body-tone slivers on that stud's top disc, which are naive's. Pair on the wall (brick-icons), 2026-09-25. Awaiting the verdict on /review.
+
+2026-09-25 review better"""
 
 [[defect]]
 id = "49612-extra-vertical-line-extending-down"
@@ -1055,12 +1075,14 @@ engines = ["naive", "occt"]
 status = "open"
 title = "a wedge of body tone shows through the middle of the lips"
 classes = ["decal"]
-checked = { white-occt = "04024bbb1255d6cadf04e0753e7a464b7bc0343408aaebc177c046e000550d64" }
+checked = { white-occt = "04024bbb1255d6cadf04e0753e7a464b7bc0343408aaebc177c046e000550d64", occt = "061bc396b5476de6a676c3de625c5666000e28e3c9175f4351ddabf7dbc2431f" }
 filed = "2026-09-08"
 notes = """
 The lower lip has a wedge of body gray through it; LDView draws it as one contiguous red. BOTH engines show it identically, so this is the decoration itself and not hidden-surface removal. It is a HOLE, not an over-paint: nothing gray is drawn after the lips at that location -- the region's five painted elements are four #b40000 paths and one #1b2a34 mouth line, and the head fill is the first element in the file. Counts: 37 source triangles of LDraw color 4 reach flatten, 5 color-4 faces reach fill_ops, and 4 red paths reach the SVG, so one merged region is clipped to nothing on the way out. Start at that fifth face rather than at the extraction.
 
-2026-09-23 review better"""
+2026-09-23 review better
+
+2026-09-25 review better"""
 
 [[defect]]
 id = "92692-knuckle-gradient-crescents"
@@ -1364,12 +1386,14 @@ part = "20546p03"
 engines = ["occt"]
 status = "open"
 title = "band loops are either missing or rotated 90° in a bizarre direction"
-checked = { white-occt = "a89be0c78b864f24bee13f77560e21ecf340e8aafe0b607187ae5224165162ad" }
+checked = { white-occt = "a89be0c78b864f24bee13f77560e21ecf340e8aafe0b607187ae5224165162ad", occt = "b33f5072d453c583c3fb960a00f8b45cee2a737d2a7dceeda809a8190a8f2edc" }
 filed = "2026-09-09"
 notes = """
 2026-09-16: measurably missing rather than rotated, at least in part: 4 gaps, 82.0 px of 1042.5 px of declared edge at HEAD 161156e -- 8% uncovered, the worst fraction measured in this pass. Evidence: out/edge-overlays3/20546p03-occt-edges.png.
 
-2026-09-23 review regression"""
+2026-09-23 review regression
+
+2026-09-25 review neutral"""
 
 [[defect]]
 id = "25269p00-missing-surface-layer"
@@ -1417,14 +1441,16 @@ part = "38583"
 engines = ["occt"]
 status = "open"
 title = "missing arch contours"
-checked = { white-occt = "0c84f08264185b06f692f14acb38a72c9279907a0b3b133bf8bc2ce5e2e408f8", occt = "84c8a4d520b7ec643e376885e9ee43f944536c9a52d323a07218c7f0d8a5d732" }
+checked = { white-occt = "0c84f08264185b06f692f14acb38a72c9279907a0b3b133bf8bc2ce5e2e408f8", occt = "bc2b2d14c3057203521c0be1249442a3ae848fe10d7b43e54c536ab2b0591409" }
 filed = "2026-09-09"
 notes = """
 2026-09-16: nearly gone at HEAD 161156e, and what is left is one segment. scripts/score-declared-edges.py finds a single gap of 22.0 px in 1336.5 px of declared edge, and the overlay boxes it at the arch's inner corner where the curve meets the notch at bottom right -- every other arch contour is drawn. Evidence: out/sheets/edge-gaps.png, out/edge-overlays/38583-occt-edges.png.
 
 2026-09-17 review neutral: outline is fixed but under-arch shading is worse
 
-2026-09-23 review neutral"""
+2026-09-23 review neutral
+
+2026-09-25 review better"""
 
 [[defect]]
 id = "30136-missing-front-surface"
@@ -1482,12 +1508,14 @@ part = "93273dy4"
 engines = ["occt"]
 status = "open"
 title = "decal is misaligned and half-missing, as are most sibling pieces'"
-checked = { occt = "5720a4586d52d343d5e7a743b7c92c807e7b412e1f98ce29d181316b0d725c91", white-occt = "2030018f6c4487d295a4962469add8053f0266e0cc8d123a45db1b8351d1d6f0" }
+checked = { occt = "a020c3fe694897da4d6f51617dbd08063994b58375a1558a57f567d15238d753", white-occt = "2030018f6c4487d295a4962469add8053f0266e0cc8d123a45db1b8351d1d6f0" }
 filed = "2026-09-10"
 notes = """
 2026-09-16: not settled at HEAD 161156e, because the browser reference cannot settle it. occt draws a full glazing band with a centred star and grille lines along the curve; LDView draws the same face as a plain dark strip with no logo at all, so the reference has LESS content than the engine and cannot say whether the engine's placement is right. This row needs a photograph of the part or the sticker sheet, not another render. Evidence: out/sheets/decal-align.png.
 
-2026-09-23 review better"""
+2026-09-23 review better
+
+2026-09-25 review better"""
 
 [[defect]]
 id = "51270-white-has-collar-stud-issues"
@@ -1824,12 +1852,14 @@ part = "3626bp8j"
 engines = ["occt"]
 status = "open"
 title = "decal sized wrong and upside-down; has black mark on temple like many minifig heads"
-checked = { white-occt = "a7e904dc589e3a6b9e1ca754a006f83d41f5e254a5dee67926202b37c836ea80" }
+checked = { white-occt = "a7e904dc589e3a6b9e1ca754a006f83d41f5e254a5dee67926202b37c836ea80", occt = "b4f06e26b1a8b72f88d6b0ea539d17e790820b6d9c6671dca5e752b38f276d12" }
 filed = "2026-09-10"
 notes = """
 2026-09-16: half of this is gone at HEAD 161156e. The face decal is the right way up and the right size -- glasses, eyes and mouth sit where the browser reference puts them. The black mark on the temple is still drawn, above and right of the glasses, and the reference has nothing there. Identical at 44aeaf1, so the mark is not a recent regression. What is left of this row is the temple mark alone. Evidence: out/sheets/upside-ab.png, reference / 44aeaf1 / HEAD, occt iso outline/flat3, 512 wide.
 
-2026-09-23 review better"""
+2026-09-23 review better
+
+2026-09-25 review better"""
 
 [[defect]]
 id = "3070bd05-decal-is-messy"
@@ -1883,9 +1913,12 @@ part = "36756p01"
 engines = ["occt"]
 status = "open"
 title = "back stripe makes it looks like a badger"
-checked = { white-occt = "5d1d2d2ded0f08a1724cb6f307737fed2f6e2674a9ff09c1b2230f97e2d95d10" }
+checked = { white-occt = "5d1d2d2ded0f08a1724cb6f307737fed2f6e2674a9ff09c1b2230f97e2d95d10", occt = "d738f81052daae3241e9891b0c33c3c4dc241db44186ed766ee6176f1140fcae" }
 filed = "2026-09-10"
-notes = "2026-09-23 review better"
+notes = """
+2026-09-23 review better
+
+2026-09-25 review neutral"""
 
 [[defect]]
 id = "64452p01-seam-bisecting-animal-along-spine"
@@ -1893,9 +1926,12 @@ part = "64452p01"
 engines = ["occt"]
 status = "open"
 title = "seam bisecting animal along spine"
-checked = { white-occt = "bfac1162bc30391d101eef401e1c2596f1209c7e38380d2f8296e46d2475e2bc" }
+checked = { white-occt = "bfac1162bc30391d101eef401e1c2596f1209c7e38380d2f8296e46d2475e2bc", occt = "a67ee0005fe032705db71e98271dbbe37c804858f5a82b713448af3a9eafa393" }
 filed = "2026-09-10"
-notes = "2026-09-23 review better"
+notes = """
+2026-09-23 review better
+
+2026-09-25 review better"""
 
 [[defect]]
 id = "92253p05-entire-torso-notch-outline-is"
@@ -1913,12 +1949,14 @@ part = "93273pz3"
 engines = ["occt"]
 status = "open"
 title = "misaligned decal"
-checked = { white-occt = "24b77a1203478617012c4d278914d62cf50facd4940c2fa3d9d09359451d78af" }
+checked = { white-occt = "24b77a1203478617012c4d278914d62cf50facd4940c2fa3d9d09359451d78af", occt = "3898c1ff317144c26354d60b70ab278dda5ac2abe3e47552dc941721268edab7" }
 filed = "2026-09-10"
 notes = """
 2026-09-16: still reproduces at HEAD 161156e, with a second symptom the title does not name. The logo sits off the curve's centre, and it is drawn on an opaque white patch -- a rectangle of decal background laid over the slope -- where the browser reference shows the logo directly on the body. The backing is the more obvious of the two. Evidence: out/sheets/decal-align.png.
 
-2026-09-23 review better"""
+2026-09-23 review better
+
+2026-09-25 review better"""
 
 [[defect]]
 id = "003605b-decal-contents-mirrored"
@@ -1967,9 +2005,9 @@ notes = "2026-09-23 review neutral"
 id = "35480-stud-interior-gradient-is-wrong"
 part = "35480"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "Stud interior gradient is wrong"
-checked = { occt = "41fde82a78162f7d8aaf965e490ead482747912c24699c76a6d1bda9cdc557a5", white-occt = "36c21fa1babca9b72ac90bdd0d86f91377ea3f77fe9a0c43880f68bbf0435d36" }
+checked = { occt = "cf648025af5982760b76b0132a02816deae509419e7852a9facdb2ce852b91e9", white-occt = "36c21fa1babca9b72ac90bdd0d86f91377ea3f77fe9a0c43880f68bbf0435d36" }
 filed = "2026-09-10"
 notes = """
 2026-09-17 review neutral: front wall is better but borehole shading is worse
@@ -1978,7 +2016,9 @@ notes = """
 
 2026-09-24: root cause found and fixed at cccfe19. The bore was never missing a gradient -- shade's max(0, n.L) pinned every normal facing away from the light to one floor tone, and looking down a bore you see exactly the half of the tube whose normals sweep 180 degrees. shade.LAMBERT_WRAP now moves the terminator to n.L = -0.3. Awaiting a redraw to judge on /review.
 
-2026-09-24 (later): the cccfe19 diagnosis was wrong -- the bore was never on the shading floor for lack of a wrap. occt's _span_face sampled the cylinder's OUTWARD normal on every span, so a bore's far wall was lit as the outside of a tube: the middle of the visible wall, which faces the camera and the light, read as the terminator. LAMBERT_WRAP was tuned on that misreading. Fixed in the working tree, uncommitted: an away-facing span's samples are negated (occt._span_face); wall ramps are keyed by radius, so a stud's r6 wall and its r4 bore no longer share one zigzag ramp (occt._surface_key); and the refine pass can probe occt walls at last (shade._face_depth_probe read a `prim` key only naive faces carry), so a buried wall no longer paints into a hole. Awaiting a redraw to judge on /review."""
+2026-09-24 (later): the cccfe19 diagnosis was wrong -- the bore was never on the shading floor for lack of a wrap. occt's _span_face sampled the cylinder's OUTWARD normal on every span, so a bore's far wall was lit as the outside of a tube: the middle of the visible wall, which faces the camera and the light, read as the terminator. LAMBERT_WRAP was tuned on that misreading. Fixed in the working tree, uncommitted: an away-facing span's samples are negated (occt._span_face); wall ramps are keyed by radius, so a stud's r6 wall and its r4 bore no longer share one zigzag ramp (occt._surface_key); and the refine pass can probe occt walls at last (shade._face_depth_probe read a `prim` key only naive faces carry), so a buried wall no longer paints into a hole. Awaiting a redraw to judge on /review.
+
+2026-09-25 review fixed"""
 
 [[defect]]
 id = "4531d01-dots-have-white-artifacts-around"
@@ -2109,9 +2149,12 @@ part = "6170752h"
 engines = ["occt"]
 status = "open"
 title = "yellow color is wrong; squares have issues at rounded corners"
-checked = { white-occt = "1ded6c8843dd14b9dbed6e1427f4c43ae0152f36180771d1bf45ff19dc630088" }
+checked = { white-occt = "1ded6c8843dd14b9dbed6e1427f4c43ae0152f36180771d1bf45ff19dc630088", occt = "6dc579f23cbed641e7437b2c13d764c8773d0c3b6a7da191fb12164d59beb8ee" }
 filed = "2026-09-12"
-notes = "2026-09-23 review better"
+notes = """
+2026-09-23 review better
+
+2026-09-25 review regression"""
 
 [[defect]]
 id = "6177970g-decal-renders-correctly-but-then"
@@ -2196,12 +2239,14 @@ part = "3069bd0j"
 engines = ["occt"]
 status = "open"
 title = "decal glyphs are a bit sloppy"
-checked = { white-occt = "b58d5d6bf21b58525c7b6ee0da1286c2e4c895c8fd827d05d7b99991a80fbd1d" }
+checked = { white-occt = "b58d5d6bf21b58525c7b6ee0da1286c2e4c895c8fd827d05d7b99991a80fbd1d", occt = "c837e39114ae7c0aa3f2d3a984a91d907f6f5dfc14e6b39529814b1cc04a272d" }
 filed = "2026-09-12"
 notes = """
 2026-09-16: still reproduces at HEAD 161156e, and it is the small type that is sloppy, not the large. "M31 OD4" draws clean and even; the "CALIFORNIA" caption above it collapses into a row of marks where the browser reference has it legible. Evidence: out/sheets/decal-align.png.
 
-2026-09-23 review better"""
+2026-09-23 review better
+
+2026-09-25 review neutral"""
 
 [[defect]]
 id = "5651-naive-dashes-on-underside"
@@ -2237,7 +2282,7 @@ part = "10830"
 engines = ["occt"]
 status = "open"
 title = "missing outline segments"
-checked = { occt = "50e1ca21796fe92b1c7b505c42efe7dec2fca3348eb08c22d0c74afddc14e7ad", white-occt = "ebdf358c6a2ad6ec7de8c7bb6c74d410fa37eec6f05436b47d55256e19c75a5f" }
+checked = { occt = "1568c343469ffff0b340c33261e3d13e53d5af0fa270adfa6582538fd8e73e1d", white-occt = "ebdf358c6a2ad6ec7de8c7bb6c74d410fa37eec6f05436b47d55256e19c75a5f" }
 filed = "2026-09-12"
 notes = """
 2026-09-16: one segment, not several, at HEAD 161156e. scripts/score-declared-edges.py finds a single gap of 10.5 px in 1139.5 px of declared edge. Evidence: out/edge-overlays2/10830-occt-edges.png.
@@ -2246,20 +2291,24 @@ notes = """
 
 2026-09-23 review neutral
 
-2026-09-25: still 1 gap, 10.5 px at HEAD d3579aa. Not an HLR visibility call: with occlusion culling off the span (130.7,38.2)-(139.9,50.3) canvas px is still absent from occt's ops, while the notch corner lines beside it and the ring's substituted inner-rim arc ending at (128.0,34.2) are all there. The declared edge is a straight type-2 chord below the notch and the ring's inner rim resumes as an arc past (139.9,50.3); the run between the notch corner and that arc has no op at all. Disarming cull_orphan_runs moves it 10.5 -> 8.0 only. Suspect the rim substitution's angular coverage next to the notch (cf. 76aeed5), not the tail. Evidence on the wall (brick-icons): gaps-zoom sheet, 2026-09-25."""
+2026-09-25: still 1 gap, 10.5 px at HEAD d3579aa. Not an HLR visibility call: with occlusion culling off the span (130.7,38.2)-(139.9,50.3) canvas px is still absent from occt's ops, while the notch corner lines beside it and the ring's substituted inner-rim arc ending at (128.0,34.2) are all there. The declared edge is a straight type-2 chord below the notch and the ring's inner rim resumes as an arc past (139.9,50.3); the run between the notch corner and that arc has no op at all. Disarming cull_orphan_runs moves it 10.5 -> 8.0 only. Suspect the rim substitution's angular coverage next to the notch (cf. 76aeed5), not the tail. Evidence on the wall (brick-icons): gaps-zoom sheet, 2026-09-25.
+
+2026-09-25 review better"""
 
 [[defect]]
 id = "31561-occt-exposes-inner-shaft-segment"
 part = "31561"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "occt exposes inner shaft segment in middle"
-checked = { occt = "c73088c8db77e1fae2a872002b2074e55c4075b21a8e96e5bb90b868b1b2e16e" }
+checked = { occt = "48192fa36e5a98abb9dae6477aad27384cad418a6bee136936d4e4cdac9a3e23" }
 filed = "2026-09-12"
 notes = """
 2026-09-16: still reproduces at HEAD 161156e. The stud's wall is broken by a horizontal step partway up, with the two sides shaded differently, where the browser reference draws that wall as one unbroken cylinder. Evidence: out/sheets/surface-1.png.
 
-2026-09-17 review better: still drawing hidden borehole shaft"""
+2026-09-17 review better: still drawing hidden borehole shaft
+
+2026-09-25 review fixed"""
 
 [[defect]]
 id = "32533p447-rim-shading-has-wrong-gradients"
@@ -2770,12 +2819,14 @@ part = "65304"
 engines = ["occt"]
 status = "open"
 title = "fill is a hot mess"
-checked = { occt = "3cae8835f1e6c70c5a22ef4804d898308337a822b3471929191f3efb671af860", white-occt = "84693b868ce68000f30518128c90ad92789821325ce891aa0f88accf4ccaaab6" }
+checked = { occt = "a5b72f029af2b9e140c7512823a98b45174f859f9defecda18a5687375587800", white-occt = "84693b868ce68000f30518128c90ad92789821325ce891aa0f88accf4ccaaab6" }
 filed = "2026-09-13"
 notes = """
 2026-09-17 review regression
 
-2026-09-23 review better"""
+2026-09-23 review better
+
+2026-09-25 review better"""
 
 [[defect]]
 id = "77844-occt-render-has-a-weird"
@@ -2806,7 +2857,7 @@ part = "3176"
 engines = ["occt"]
 status = "open"
 title = "borehole shading is wrong"
-checked = { occt = "d31951a74babb71399eb16eb3ad0975e469514b1464fbccf1059b23ed68941aa", white-occt = "c3a15de8dfd8e4185d90edeab0f057693d3945a5d8efecdb60a032bfd989f5cb" }
+checked = { occt = "61cfccd512c637c6c63d697459a22f470801dadbc253b1fd96eb4e951145db71", white-occt = "c3a15de8dfd8e4185d90edeab0f057693d3945a5d8efecdb60a032bfd989f5cb" }
 filed = "2026-09-13"
 notes = """
 2026-09-17 review better
@@ -2815,7 +2866,9 @@ notes = """
 
 2026-09-24: root cause found and fixed at cccfe19. The bore was never missing a gradient -- shade's max(0, n.L) pinned every normal facing away from the light to one floor tone, and looking down a bore you see exactly the half of the tube whose normals sweep 180 degrees. shade.LAMBERT_WRAP now moves the terminator to n.L = -0.3. Awaiting a redraw to judge on /review.
 
-2026-09-24 (later): the cccfe19 diagnosis was wrong -- the bore was never on the shading floor for lack of a wrap. occt's _span_face sampled the cylinder's OUTWARD normal on every span, so a bore's far wall was lit as the outside of a tube: the middle of the visible wall, which faces the camera and the light, read as the terminator. LAMBERT_WRAP was tuned on that misreading. Fixed in the working tree, uncommitted: an away-facing span's samples are negated (occt._span_face); wall ramps are keyed by radius, so a stud's r6 wall and its r4 bore no longer share one zigzag ramp (occt._surface_key); and the refine pass can probe occt walls at last (shade._face_depth_probe read a `prim` key only naive faces carry), so a buried wall no longer paints into a hole. Awaiting a redraw to judge on /review."""
+2026-09-24 (later): the cccfe19 diagnosis was wrong -- the bore was never on the shading floor for lack of a wrap. occt's _span_face sampled the cylinder's OUTWARD normal on every span, so a bore's far wall was lit as the outside of a tube: the middle of the visible wall, which faces the camera and the light, read as the terminator. LAMBERT_WRAP was tuned on that misreading. Fixed in the working tree, uncommitted: an away-facing span's samples are negated (occt._span_face); wall ramps are keyed by radius, so a stud's r6 wall and its r4 bore no longer share one zigzag ramp (occt._surface_key); and the refine pass can probe occt walls at last (shade._face_depth_probe read a `prim` key only naive faces carry), so a buried wall no longer paints into a hole. Awaiting a redraw to judge on /review.
+
+2026-09-25 review better"""
 
 [[defect]]
 id = "3170-connector-rod-has-extra-outline"
@@ -2823,14 +2876,16 @@ part = "3170"
 engines = ["occt"]
 status = "open"
 title = "connector rod has extra outline tail; sphere shading is very poor"
-checked = { occt = "ab699aa577a920d2f09caffbaca7c3d28da87ce833f7732d78df50a77803df56", white-occt = "2cf714cef41a6b4838695f7ef660121d0a9a1238a6e06016e6c554943d556af2" }
+checked = { occt = "d52880dc51a06ffe3c41b44be2350174adcc2787bf6e27ed624cec54c9a733d8", white-occt = "2cf714cef41a6b4838695f7ef660121d0a9a1238a6e06016e6c554943d556af2" }
 filed = "2026-09-13"
 notes = """
 2026-09-16: the oracle finds 2 gaps, 16.5 px of 1973.0 px of declared edge at HEAD 161156e, which is not what this row is about -- both of its claims, the extra outline tail and the sphere shading, are things a declared-edge score cannot see. Recorded so nobody re-measures it expecting an answer. Evidence: out/edge-overlays3/3170-occt-edges.png.
 
 2026-09-17 review regression
 
-2026-09-23 review neutral"""
+2026-09-23 review neutral
+
+2026-09-25 review better"""
 
 [[defect]]
 id = "58123p01-decal-shatters-to-mesh"
@@ -3098,12 +3153,14 @@ part = "93168"
 engines = ["occt"]
 status = "open"
 title = "severe shading issues; missing edges"
-checked = { occt = "100039e3ae716c9a7978fb3d4106d08c14fae15157f5a5b21e6f014d2578d9c4", white-occt = "f4c84eaac1864acd88c17d00a6faaaade58ca58c418f113a18a79b0557e86596" }
+checked = { occt = "a8eed070933b88a43e563e21c3cd91bea1a56e5bd6714dd3afe8281af009a99f", white-occt = "f4c84eaac1864acd88c17d00a6faaaade58ca58c418f113a18a79b0557e86596" }
 filed = "2026-09-15"
 notes = """
 2026-09-17 review better
 
-2026-09-23 review neutral"""
+2026-09-23 review neutral
+
+2026-09-25 review better"""
 
 [[defect]]
 id = "71861-tube-segments-have-disjoint-shading"
@@ -3172,7 +3229,7 @@ engines = ["occt"]
 status = "open"
 title = "a light wedge cuts across the front of the second and third ribs"
 classes = ["shading"]
-checked = { occt = "9dae68f127d73ecb7db978802014963bebe14c04f8a2967b579544407f050e61", white-occt = "70c8b69fada8d1b3fbf424d3b9d07c78af3b288b0cfda0361d401d027c34c98e" }
+checked = { occt = "cfb94faf257d40d4053c0a918107a6d6c0af74474b1a68eb6c071dfb2224a36d", white-occt = "70c8b69fada8d1b3fbf424d3b9d07c78af3b288b0cfda0361d401d027c34c98e" }
 filed = "2026-09-16"
 notes = """
 Found while checking 30137-missing-front, which this replaces as the live
@@ -3190,7 +3247,9 @@ HEAD 161156e.
 
 2026-09-23 review neutral
 
-2026-09-24 terminator-wrap scan (scripts/lambert-wrap-ab.py over 41 open shading defects, rows in out/lambert-scan/rows.jsonl): 52.7% of the drawing sits on the shading floor, the highest of the 41, and the wrap released almost none of it -- 3,626 px, all of it stud wall, and the wedge is pixel-identical. That is the floor doing its job on genuinely dark-facing ribs, and it confirms the face-ordering diagnosis above: the wedge is not a lighting artifact."""
+2026-09-24 terminator-wrap scan (scripts/lambert-wrap-ab.py over 41 open shading defects, rows in out/lambert-scan/rows.jsonl): 52.7% of the drawing sits on the shading floor, the highest of the 41, and the wrap released almost none of it -- 3,626 px, all of it stud wall, and the wedge is pixel-identical. That is the floor doing its job on genuinely dark-facing ribs, and it confirms the face-ordering diagnosis above: the wedge is not a lighting artifact.
+
+2026-09-25 review better: top front edge missing contours"""
 
 [[defect]]
 id = "u768p01c01-occt-hole-rims-lumpy-and-stroke-width-varies"
@@ -3259,8 +3318,9 @@ part = "30130"
 engines = ["occt"]
 status = "open"
 title = "contours are ugly and our current algo might just not work for this piece"
-checked = { occt = "0465f5353b9ca2093858003d393017ab1f6189d1a0fb43875561df2341558846" }
+checked = { occt = "d86bad43ee06f5593a290e173244e8550e565146d132a93ffc7fb8dfca1d5de6" }
 filed = "2026-09-23"
+notes = "2026-09-25 review better"
 
 [[defect]]
 id = "24308a-very-messy-shadng-the-b"
@@ -3288,7 +3348,7 @@ part = "4595"
 engines = ["occt"]
 status = "open"
 title = "interior borehole shading problems and several unculled internal shafts"
-checked = { occt = "ff3cd24f9ed87bc90d11d138daa758455f9b2b95beaae65c79a4efd02138b650", white-occt = "01d6ee04b3b7b2ae5bd3727c018e8a9d57624fb28a4091fd8c612cea38c55c6d" }
+checked = { occt = "5371963620049729886757ff95045ac6e8027524f96773d855d28f16b27d810d", white-occt = "01d6ee04b3b7b2ae5bd3727c018e8a9d57624fb28a4091fd8c612cea38c55c6d" }
 filed = "2026-09-23"
 notes = """
 2026-09-24: root cause found and fixed at cccfe19. The bore was never missing a gradient -- shade's max(0, n.L) pinned every normal facing away from the light to one floor tone, and looking down a bore you see exactly the half of the tube whose normals sweep 180 degrees. shade.LAMBERT_WRAP now moves the terminator to n.L = -0.3. Awaiting a redraw to judge on /review.
@@ -3299,7 +3359,13 @@ notes = """
 
 2026-09-24 (later): the cccfe19 diagnosis was wrong -- the bore was never on the shading floor for lack of a wrap. occt's _span_face sampled the cylinder's OUTWARD normal on every span, so a bore's far wall was lit as the outside of a tube: the middle of the visible wall, which faces the camera and the light, read as the terminator. LAMBERT_WRAP was tuned on that misreading. Fixed in the working tree, uncommitted: an away-facing span's samples are negated (occt._span_face); wall ramps are keyed by radius, so a stud's r6 wall and its r4 bore no longer share one zigzag ramp (occt._surface_key); and the refine pass can probe occt walls at last (shade._face_depth_probe read a `prim` key only naive faces carry), so a buried wall no longer paints into a hole. Awaiting a redraw to judge on /review. On this part: the lens's r6-r8 shoulder annulus (z=-28) painted a sliver inside the lens bore, and the side studs' holes showed the near half of the brick's bore and the back of the stud's r6 wall as lit crescents; the lune of deeper bore seen at the near edge of each hole is real geometry and stays.
 
-2026-09-24 (later still): the side studs were also lit at the wrong angle -- the wall group key used the face-local v-range, so the +x stud and the -x stud behind it (one axis line, 24 apart, each 0..4 in its own v) merged and the fitted ramp ran ALONG the axis. The key now carries the world axial span (occt._span_face). Redrawn again for /review."""
+2026-09-24 (later still): the side studs were also lit at the wrong angle -- the wall group key used the face-local v-range, so the +x stud and the -x stud behind it (one axis line, 24 apart, each 0..4 in its own v) merged and the fitted ramp ran ALONG the axis. The key now carries the world axial span (occt._span_face). Redrawn again for /review.
+
+2026-09-25 review better
+
+2026-09-25 review better
+
+2026-09-25 review better"""
 
 [[defect]]
 id = "6542b-one-inner-ring-is-totally"
@@ -3335,12 +3401,14 @@ part = "11477dy8"
 engines = ["occt"]
 status = "open"
 title = "doing a bad job projecting halftone print over a curved surface"
-checked = { occt = "6e621b93a20b3485e298c0212518de40853f84f6759b16f85ba29687caeea449", white-occt = "b7391f0516eb257c3d0591dc6afe977085d568d5cf46885333e95b2a386617c4" }
+checked = { occt = "26ee53578aa02bfbe360866e178c2a30d6da7378476170b7046a6e251b09501d", white-occt = "b7391f0516eb257c3d0591dc6afe977085d568d5cf46885333e95b2a386617c4" }
 filed = "2026-09-23"
 notes = """
 2026-09-24 terminator-wrap scan (scripts/lambert-wrap-ab.py over 41 open shading defects, rows in out/lambert-scan/rows.jsonl): 14.9% floor but only 825 px in one component moved, so that floor is beyond the terminator and the halftone projection is untouched.
 
-2026-09-24 review neutral"""
+2026-09-24 review neutral
+
+2026-09-25 review better"""
 
 [[defect]]
 id = "6942-bad-culling"
@@ -3348,9 +3416,12 @@ part = "6942"
 engines = ["occt"]
 status = "open"
 title = "bad culling"
-checked = { occt = "92a71c530d783004c45d32dd6cf15ec4ff44fedd80f7384ae5f852b3800bbe11", white-occt = "4a24bd4435c381c86458db21157c042bce764aec3484acfd8b5b920b4f2c0a88" }
+checked = { occt = "ee1628d2155014de7bb96eeac0ffe38427f94400944e80fef64ed2db840ad728", white-occt = "4a24bd4435c381c86458db21157c042bce764aec3484acfd8b5b920b4f2c0a88" }
 filed = "2026-09-23"
-notes = "2026-09-24 review regression"
+notes = """
+2026-09-24 review regression
+
+2026-09-25 review better"""
 
 [[defect]]
 id = "6558-faces-are-an-enormous-mess"
@@ -3358,12 +3429,14 @@ part = "6558"
 engines = ["occt"]
 status = "open"
 title = "faces are an enormous mess"
-checked = { occt = "2ee8b8ff8bbc59111d984ee6ef48dc14cdc6ce22a66a5bd5b9826568249f559b", white-occt = "b230388125402e8b06f6cb816b7c59481bdec5a626d52e3bc39c370764c921b7" }
+checked = { occt = "6802f1cd5733fe6f39fb622763f1386cdba52064018af1bf3a9bdcd35be9dcf6", white-occt = "b230388125402e8b06f6cb816b7c59481bdec5a626d52e3bc39c370764c921b7" }
 filed = "2026-09-23"
 notes = """
 2026-09-24 review better
 
-2026-09-24 review regression"""
+2026-09-24 review regression
+
+2026-09-25 review better"""
 
 [[defect]]
 id = "6553-messy-shading"
@@ -3384,12 +3457,14 @@ part = "6249"
 engines = ["occt"]
 status = "open"
 title = "messy peg wall shading"
-checked = { occt = "35d3d356737a77bcad2a4b84648800eeca1c63a2a3234b5490bb126f5629a3ba", white-occt = "5e86630a6e1f30c3e62cc23d1533bc9884955d93d313d1d0852718d11e9033b6" }
+checked = { occt = "52a8d7459032cca627ce42bb4cbd88b128eabeaab9a74681159148fc9291ced9", white-occt = "5e86630a6e1f30c3e62cc23d1533bc9884955d93d313d1d0852718d11e9033b6" }
 filed = "2026-09-23"
 notes = """
 2026-09-24 review regression
 
-2026-09-24 review regression"""
+2026-09-24 review regression
+
+2026-09-25 review better"""
 
 [[defect]]
 id = "4150pf1-top-face-missing-outline-segments"
@@ -3407,9 +3482,12 @@ part = "2528ap39"
 engines = ["occt"]
 status = "open"
 title = "all pieces in this family have shading problems, particularly around the cylinder"
-checked = { occt = "387c46ad7963bb86a22922dbc281cf450e964db93f1480e5903bb20aba438055", white-occt = "ec500c32981248d4c77eb79b38f940ded161ef2b8aa94010b94ed6e1a5065ad4" }
+checked = { occt = "eab1c6f7a8126102b4c6c2cb68c6921be47e692e72b4a1d630398d548a312607", white-occt = "ec500c32981248d4c77eb79b38f940ded161ef2b8aa94010b94ed6e1a5065ad4" }
 filed = "2026-09-23"
-notes = "2026-09-24 review regression"
+notes = """
+2026-09-24 review regression
+
+2026-09-25 review better"""
 
 [[defect]]
 id = "2528ap38-severe-shading-problems"
@@ -3437,9 +3515,12 @@ part = "1686"
 engines = ["occt"]
 status = "open"
 title = "minor tessellation artifacts in top-left edges"
-checked = { occt = "8ff4e09b79ef76eb588029bfb2879b45b6ade03467a3ba6028b916aad05faf6b", white-occt = "d58865a8ca068f96dc44e50be90e49f3e8404cc1bfe766140c3cbfb4e6119e69" }
+checked = { occt = "60e2e7b37ecee7546638a9523347c9928551a8ba0a2dc4d9b3fee0ced5e1173a", white-occt = "d58865a8ca068f96dc44e50be90e49f3e8404cc1bfe766140c3cbfb4e6119e69" }
 filed = "2026-09-23"
-notes = "2026-09-24 review better"
+notes = """
+2026-09-24 review better
+
+2026-09-25 review better"""
 
 [[defect]]
 id = "19121-occt-bore-interior-flat-toned"
@@ -3465,3 +3546,338 @@ Repro: .venv/bin/python -m brick_icons.cli 19121 --engine occt --shading outline
 2026-09-24: root cause found and fixed at cccfe19. The bore was never missing a gradient -- shade's max(0, n.L) pinned every normal facing away from the light to one floor tone, and looking down a bore you see exactly the half of the tube whose normals sweep 180 degrees. shade.LAMBERT_WRAP now moves the terminator to n.L = -0.3. Awaiting a redraw to judge on /review.
 
 2026-09-24 (later): the cccfe19 diagnosis was wrong -- the bore was never on the shading floor for lack of a wrap. occt's _span_face sampled the cylinder's OUTWARD normal on every span, so a bore's far wall was lit as the outside of a tube: the middle of the visible wall, which faces the camera and the light, read as the terminator. LAMBERT_WRAP was tuned on that misreading. Fixed in the working tree, uncommitted: an away-facing span's samples are negated (occt._span_face); wall ramps are keyed by radius, so a stud's r6 wall and its r4 bore no longer share one zigzag ramp (occt._surface_key); and the refine pass can probe occt walls at last (shade._face_depth_probe read a `prim` key only naive faces carry), so a buried wall no longer paints into a hole. Awaiting a redraw to judge on /review."""
+
+[[defect]]
+id = "004462c-decal-outlines-are-sloppy-af"
+part = "004462c"
+engines = ["decal"]
+status = "open"
+title = "decal outlines are sloppy af"
+checked = { decal = "4be14fa3a5458d921d7e8351dd00346cda2d9fbb3ca1e6dda8b5be6c364c724f" }
+filed = "2026-09-25"
+
+[[defect]]
+id = "15068d0k-blue-decal-missing-quad"
+part = "15068d0k"
+engines = ["occt"]
+status = "open"
+title = "blue decal missing quad"
+checked = { occt = "3ae33f95d93867908b927c44b23738d3de5e77d07c28b4f6baeb96d5a7849994" }
+filed = "2026-09-25"
+
+[[defect]]
+id = "11055d0d-projection-has-bad-outlines-around"
+part = "11055d0d"
+engines = ["occt"]
+status = "open"
+title = "projection has bad outlines around 9"
+checked = { occt = "cf9d75049a89287d124a23a173fba3631ebeb1701c2d29a80427b31c0bcf7fbd" }
+filed = "2026-09-25"
+
+[[defect]]
+id = "15068p0e-decal-not-composited-properly"
+part = "15068p0e"
+engines = ["decal"]
+status = "open"
+title = "decal not composited properly"
+checked = { decal = "88f46bd221c323c527dccaeaeff2de5e4aea556a75733afe7721a5f933961b23" }
+filed = "2026-09-25"
+
+[[defect]]
+id = "6135b-tessellated-bands-around-outside-surface"
+part = "6135b"
+engines = ["occt"]
+status = "open"
+title = "tessellated bands around outside surface that should be smootgh"
+checked = { occt = "2ac875310e3ccb7b28de1cc2a12414493e48775325a5bb79a2863615e9cd8063" }
+filed = "2026-09-25"
+
+[[defect]]
+id = "6140-major-shading-and-minor-tessellation"
+part = "6140"
+engines = ["occt"]
+status = "open"
+title = "major shading and minor tessellation issues"
+checked = { occt = "f406991922cbb81cdf7c323d133742c0b6517d6256af90c5226a382fec872645" }
+filed = "2026-09-25"
+
+[[defect]]
+id = "14769d04-rear-half-of-decal-outline"
+part = "14769d04"
+engines = ["occt"]
+status = "open"
+title = "rear half of decal outline missing"
+checked = { occt = "19215a9b731f23302dd808930bd51ca3b8eb48c373c74051b614e9523b648c1e" }
+filed = "2026-09-25"
+
+[[defect]]
+id = "6552-largest-surface-has-shading-problems"
+part = "6552"
+engines = ["occt"]
+status = "open"
+title = "largest surface has shading problems"
+checked = { occt = "4f57cadf31c036675a2c8ca06da17dc0e5c72b78364aae55be1f3c1d13d55cd2" }
+filed = "2026-09-25"
+
+[[defect]]
+id = "15439-enormous-shading-problems"
+part = "15439"
+engines = ["occt"]
+status = "open"
+title = "enormous shading problems"
+checked = { occt = "b14f93c06f0e5e0e01622416adaf7bddc7f8f0754c2135731ce5ffec780fcf89" }
+filed = "2026-09-25"
+notes = "2026-09-25: the tube is one plane group whose normals wrap the sphere, so the dome ramp averaged every azimuth to one tone. Landed 48a9fcc: a radial group whose focal ramp misfits its samples AND whose Gauss map repeats is drawn as 8 Lambert tone bands (shade.TONE_BANDS). Redrawn into the occt slot; judge on /review."
+
+[[defect]]
+id = "20695-severe-shading-face-issues"
+part = "20695"
+engines = ["occt"]
+status = "open"
+title = "severe shading/face issues"
+checked = { occt = "a8936bfff8ee8272132bab2283e271954daf42b979550b804904aa8a97191b4e" }
+filed = "2026-09-25"
+
+[[defect]]
+id = "24204-shading-could-be-better"
+part = "24204"
+engines = ["occt"]
+status = "open"
+title = "shading could be better"
+checked = { occt = "10c1ee71f1305f39e56e11aeb957623d71e7485d8af6fe205c29e7c568bd13d0" }
+filed = "2026-09-25"
+
+[[defect]]
+id = "20606p05-cap-brim-shading-is-too"
+part = "20606p05"
+engines = ["occt"]
+status = "open"
+title = "cap/brim shading is too flat"
+checked = { occt = "e6d9be32db6b0e4b3415c9aae81476d8eaf867cb9a913e960c907a425de9e5fa" }
+filed = "2026-09-25"
+
+[[defect]]
+id = "22392-large-surface-has-poor-shading"
+part = "22392"
+engines = ["occt"]
+status = "open"
+title = "large surface has poor shading"
+checked = { occt = "adfe8e094991b812202295e51040f5a7428a75d0df29faffb820d17a795334c2" }
+filed = "2026-09-25"
+
+[[defect]]
+id = "19917-major-shading-issues"
+part = "19917"
+engines = ["occt"]
+status = "open"
+title = "major shading issues"
+checked = { occt = "a356c66074b3088c354a4c3829d875ee7c23ab07809fcc3becdf425a926bbe43" }
+filed = "2026-09-25"
+
+[[defect]]
+id = "30194-lots-of-outline-problems-especially"
+part = "30194"
+engines = ["occt"]
+status = "open"
+title = "lots of outline problems, especially handle ridges"
+checked = { occt = "ea47606c586568e1b491bebbf06e333ee0cb4169f1c9966528349e4fa84575a6" }
+filed = "2026-09-25"
+
+[[defect]]
+id = "4197-minor-shading-garbage-on-concave"
+part = "4197"
+engines = ["occt"]
+status = "open"
+title = "minor shading garbage on concave surface"
+checked = { occt = "e595b5eb6c14285ea97d34db7dc29a690ce1483b4dedfdc3c1d0a5889f8f94cf" }
+filed = "2026-09-25"
+
+[[defect]]
+id = "4079-back-of-chair-has-a"
+part = "4079"
+engines = ["occt"]
+status = "open"
+title = "back of chair has a single large tri with bad/no shading"
+checked = { occt = "cf8c7af55b4a1044b77a310b7d5a79618149f50d971590db3c299cee14891a50" }
+filed = "2026-09-25"
+
+[[defect]]
+id = "4070d01-missing-several-edge-outlines"
+part = "4070d01"
+engines = ["occt"]
+status = "open"
+title = "missing several edge outlines"
+checked = { occt = "bb4ac3a188b8a5fa753dcd2a1e3a0a4b5afbb6675e1e85ca57cc331ac9fdb146" }
+filed = "2026-09-25"
+
+[[defect]]
+id = "4070-missing-one-edge-outline-below"
+part = "4070"
+engines = ["occt"]
+status = "open"
+title = "missing one edge outline below the SNOT stud"
+checked = { occt = "c15fa8ce5f00a3074b419228db48a046d04d9e8be5744931379b009cebc566e2" }
+filed = "2026-09-25"
+
+[[defect]]
+id = "3039pc3-missing-quad-in-yellow-spaceship"
+part = "3039pc3"
+engines = ["decal"]
+status = "open"
+title = "missing quad in yellow spaceship outline"
+checked = { decal = "4b3d01badaca8837c07a5df6f8b545fe5a87dd976c6cbe4f21819f0810e2d51e" }
+filed = "2026-09-25"
+
+[[defect]]
+id = "3039pc0-right-half-of-projected-decal"
+part = "3039pc0"
+engines = ["occt"]
+status = "open"
+title = "right half of projected decal missing starburst rays"
+checked = { occt = "903ca49d6de6321100e59b75634bd60ec0ce172a04caceb7a2b86d1c0afe013c" }
+filed = "2026-09-25"
+
+[[defect]]
+id = "3069bp54-top-face-missing"
+part = "3069bp54"
+engines = ["occt"]
+status = "open"
+title = "top face missing"
+checked = { occt = "136cfcd113559a7d4041ec4cc642ffb0ea29537ef200c190e5ff0957293ed229" }
+filed = "2026-09-25"
+
+[[defect]]
+id = "3069bp49-messy-projection-around-robo-outlines"
+part = "3069bp49"
+engines = ["occt"]
+status = "open"
+title = "messy projection around ROBO outlines--would be a good oracle to tune"
+checked = { occt = "d882f4965487359f94917f6d3263217729113ce054e5bc774c7092d9b6d39b1f" }
+filed = "2026-09-25"
+
+[[defect]]
+id = "3586-outline-strokes-seem-much-too"
+part = "3586"
+engines = ["occt"]
+status = "open"
+title = "outline strokes seem much too thick"
+checked = { occt = "a0266a549db1c348b64ad74b2549f7163b304fc4e2d585a2b5ef00d2e24db540" }
+filed = "2026-09-25"
+
+[[defect]]
+id = "3245cpz5-front-face-missing"
+part = "3245cpz5"
+engines = ["occt"]
+status = "open"
+title = "front face missing"
+checked = { occt = "c24d2b2e3d211b23c3583f2b92c6904bd3a986fd4624219f13b295b282ae07ae" }
+filed = "2026-09-25"
+
+[[defect]]
+id = "3404ec01-lots-of-problems-incl-extra"
+part = "3404ec01"
+engines = ["occt"]
+status = "open"
+title = "lots of problems, incl. extra outline around outer wall, borehole clipping, wall tessellation"
+checked = { occt = "d21579cda07b1a3c84b750a461e057af422e89a6fa697c3c6cf31552dfe61dca" }
+filed = "2026-09-25"
+
+[[defect]]
+id = "3127b-tapered-hook-has-shading-problems"
+part = "3127b"
+engines = ["occt"]
+status = "open"
+title = "tapered hook has shading problems"
+checked = { occt = "078657181d705ad8b22882f2028374e2fcab4de52af1433b225d83d95a1057e4" }
+filed = "2026-09-25"
+notes = "2026-09-25: the tube is one plane group whose normals wrap the sphere, so the dome ramp averaged every azimuth to one tone. Landed 48a9fcc (tone bands), then 2b15c3c: the hook is a declared ring-quad tube and brick_icons/sweep.py replaces it with a chain of cone frustums cut to the ring planes. Checked at 1600px the same day: the shading is smooth within each frustum but steps at every joint, and neighboring tapered sections are 2.9% of r apart, too far to sew. Still open; the outline barb is 3127b-sweep-inner-limb-barb."
+
+[[defect]]
+id = "3816cpcr6-bad-upper-cylinder-shading"
+part = "3816cpcr6"
+engines = ["occt"]
+status = "open"
+title = "bad upper cylinder shading"
+checked = { occt = "ed46d5ca694a24b9f486ee7ef1db032563fc01fae3b74a0515136112a05ed23f" }
+filed = "2026-09-25"
+
+[[defect]]
+id = "3640-front-mechanism-missing-outlines"
+part = "3640"
+engines = ["occt"]
+status = "open"
+title = "front mechanism missing outlines"
+checked = { occt = "955ab0747eb8873d8ba86eeb5fbfcf0a527c4044f282d708d0d6385c12f6f8c4" }
+filed = "2026-09-25"
+
+[[defect]]
+id = "3127a-sweep-inner-limb-barb"
+part = "3127a"
+engines = ["occt"]
+status = "open"
+title = "swept hook's inner limb is a polyline ending in a barb"
+classes = ["arc-loss", "stray-ink"]
+mark = { x = 0.83, y = 0.7, w = 0.06, h = 0.08 }
+seen = { angle = "iso", shading = "outline", shade_style = "flat3" }
+filed = "2026-09-25"
+notes = "Regression from 2b15c3c (sweep.SUBSTITUTE). With the sweep off the hook's inner limb is a smooth arc; on, it is a chain of straight frustum limbs with a small barb where it meets the hook's far side, and the outer outline kinks at every joint. Tapered joints do not sew in OCCT at TOL (adjacent cones cut by one ring plane differ by 2.9% of r; scripts/measure-sweep-fit.py). Wall: 'sweep, close crops'."
+
+[[defect]]
+id = "87748-sweep-joint-stroke-and-bands"
+part = "87748"
+engines = ["occt"]
+status = "open"
+title = "swept ring draws a gray stroke at a joint and bands a formerly smooth segment"
+classes = ["stray-ink", "banding"]
+mark = { x = 0.06, y = 0.54, w = 0.13, h = 0.1 }
+seen = { angle = "iso", shading = "outline", shade_style = "flat3" }
+filed = "2026-09-25"
+notes = "Regression from 2b15c3c (sweep.SUBSTITUTE). The rim is 9 short swept tubes (1-4 frustums each) between authored grip sleeves. With the sweep on, the lower-left segment loses its smooth radial highlight to per-frustum tone steps and gains a thin gray stroke at one joint. The flat patches mid-segment are a separate fault: 87748-rim-partly-unswept. Wall: 'sweep, close crops' and 'sweep, full parts at 520px'. 185b376: the rim's bends are torus sections now; the gray joint stroke and the banded segment are gone at 1600px. Redrawn into the occt slot (run 121); judge on /review. The flat patches are 87748-rim-partly-unswept, still open."
+
+[[defect]]
+id = "3127a-sweep-joint-kinks-and-steps"
+part = "3127a"
+engines = ["occt"]
+status = "open"
+title = "swept hook's outline kinks and its tone steps at every joint"
+classes = ["arc-loss", "banding"]
+mark = { x = 0.7, y = 0.45, w = 0.28, h = 0.48 }
+seen = { angle = "iso", shading = "outline", shade_style = "flat3" }
+filed = "2026-09-25"
+notes = "Each frustum of the sweep (2b15c3c) has a straight silhouette and its own tone ramp, so the outline turns a corner and the shading steps at every joint, 22.5 deg apart. Present with the sweep off too (the facet outline was polygonal); the sweep did not fix it. Measured: the chain sits up to 3.3% of r off the authored ring vertices (scripts/measure-sweep-fit.py). Wall: 'sweep, full parts at 520px', 'sweep, close crops'."
+
+[[defect]]
+id = "3127b-sweep-inner-limb-barb"
+part = "3127b"
+engines = ["occt"]
+status = "open"
+title = "swept hook's inner limb is a polyline ending in a barb"
+classes = ["arc-loss", "stray-ink"]
+mark = { x = 0.86, y = 0.65, w = 0.06, h = 0.07 }
+seen = { angle = "iso", shading = "outline", shade_style = "flat3" }
+filed = "2026-09-25"
+notes = "Same as 3127a-sweep-inner-limb-barb: with 2b15c3c's sweep on, the inner limb is a chain of straight frustum limbs ending in a small barb where it passes behind the hook. Tapered joints do not sew in OCCT at TOL (neighboring sections 2.9% of r apart; scripts/measure-sweep-fit.py)."
+
+[[defect]]
+id = "2583-sweep-joint-kinks-and-steps"
+part = "2583"
+engines = ["occt"]
+status = "open"
+title = "swept rail corners kink and step in tone at every joint"
+classes = ["arc-loss", "banding"]
+mark = { x = 0.7, y = 0.33, w = 0.13, h = 0.52 }
+seen = { angle = "iso", shading = "outline", shade_style = "flat3" }
+filed = "2026-09-25"
+notes = "Each frustum of the sweep (2b15c3c) has a straight silhouette and its own tone ramp, so the outline turns a corner and the shading steps at every joint, 22.5 deg apart. Present with the sweep off too (the facet outline was polygonal); the sweep did not fix it. Measured: the chain sits up to 1.9% of r off the authored ring vertices (scripts/measure-sweep-fit.py). Wall: 'sweep, full parts at 520px', 'sweep, close crops' (2583 rail corner). 185b376: each rail corner is now one exact torus section in occt, so the outline is a curve and the shading is smooth; redrawn into the occt slot (run 121). Judge on /review."
+
+[[defect]]
+id = "87748-rim-partly-unswept"
+part = "87748"
+engines = ["occt"]
+status = "open"
+title = "rim keeps flat facet patches: only part of each band is swept"
+classes = ["shading"]
+mark = { x = 0.55, y = 0.73, w = 0.14, h = 0.12 }
+seen = { angle = "iso", shading = "outline", shade_style = "flat3" }
+filed = "2026-09-25"
+notes = "Not a regression: the patches are there with the sweep off too. The rim is 6 copies of s/87748s02 ('Two Band Halves', 96 quads each); sweep.tubes finds 9 tubes (21 frustums, 336 quads) and 345 quads stay facets. Measured by instrumenting sweep.tubes: 30 rings fit, while 9 rings of 13 vertices and 3 of 15 are rejected by _fit_ring, so those chains stay flat. Wall: 'sweep, close crops' (87748 bottom)."
