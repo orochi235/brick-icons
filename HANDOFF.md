@@ -9,7 +9,8 @@ of these -- `onto jobs` names them.
 | `slot-silhouette-occt-0925` | keiei | 633 | errored-part retry -- done, 76 recovered |
 | `slot-translucent-occt-0925` | msb-uai | 122 | errored-part retry -- done, 30 recovered |
 | `slot-decal-0925` | msb-uai | 636 | never-tried decal fill -- done, filed |
-| `slot-occt-0925` | msb-uai a9e8e321 + studio 0834b78e, keiei 3d8cf41f | 20,597 | whole occt slot redrawn at 3c9e936 (`--overwrite`) -- killed 09:30 at 20,534 rows; remainder in `slot-occt-0926` |
+| `slot-occt-0925` | msb-uai a9e8e321 + studio 0834b78e, keiei 3d8cf41f | 20,597 | whole occt slot redrawn at 3c9e936 (`--overwrite`) -- killed 09:30 at 20,534 rows |
+| `slot-occt-0926` | msb-uai 1ca52cad + studio, keiei | 392 | the redraw's failures at 71388a2 -- killed 10:05, ingested |
 
 The last two are launched by a local chain script (log `out/chain-0925.log`)
 that waits for the earlier tasks to leave `onto jobs`. If this Mac restarts
@@ -22,14 +23,30 @@ timeouts. Its attempts are in corpus.db via `db.ingest_store`, the 7 drawings
 under `renders/decal/`. 235695b makes `slot-coverage.py` read store attempts,
 so those 629 now count as tried rather than never.
 
-**The redraw was stopped at 09:30 and its failures relaunched as
-`slot-occt-0926`** (msb-uai 1ca52cad + studio, keiei; at ab40a9b; 392 parts;
-deadline 13:36). 4f4e452's Python SIGSEGV handler spun forever on a fault
-inside C, so every crashing `_unify_survives` probe and every segfaulting
-render ran to the 300 s timeout; 71388a2 fixes it. The list
-(`out/slot-occt-0926/todo.txt`) is the 63 parts the redraw never finished plus
-every failure that could be the hang; the 176 that failed exactly as before
-were left out. Its own run-slot stream and watch are ingesting it.
+**Nothing is running. Next: after the occt optimizations land, rerun every
+occt part that is failing or slow.** The redraw (`slot-occt-0925`) was killed
+at 09:30; 4f4e452's Python SIGSEGV handler had made every crashing
+`_unify_survives` probe spin to the 300 s timeout, fixed in 71388a2. Its
+relaunch (`slot-occt-0926`) confirmed the fix -- every regression that drew in
+under 100 s before draws again -- and was killed at 10:05 to wait for the
+optimizations. Everything both returned is ingested.
+
+A peer session will say when. At that point, not before, build the list and
+launch it (occt slot only):
+
+    .venv/bin/python scripts/slow-or-failing.py --out out/slot-occt-<date>
+    # 10:10 today: 635 drew in >= 120 s, 459 failing, 1094 parts
+    for h in studio keiei uai; do ssh $h mkdir -p .config/onto/work/brick-icons/out/slot-occt-<date>
+      scp out/slot-occt-<date>/batches.txt $h:.config/onto/work/brick-icons/out/slot-occt-<date>/; done
+    d=out/slot-occt-<date>; P=/Users/mike/.local/bin:/opt/homebrew/bin:/usr/bin:/bin
+    scripts/run-slot.sh --overwrite --detach --timeout 8h --in brick-icons \
+      --task slot-occt-<date> --each $d/batches.txt --workers 10 --retries 1 \
+      --with studio,keiei --env PATH=$P --env SOURCE=occt --env KEEP=$d/renders \
+      --env EXTRA='--shade-style flat3 --line-width 2 --silhouette-width 2' \
+      --out $d --to $d msb-uai -- scripts/census-batch.sh occt 300 $d {}
+
+Push first -- run-slot.sh launches only a pushed HEAD. Copying the list before
+run-slot.sh's sync is fine: slot-occt-0926's list survived one.
 
 The occt redraw will queue a large batch on /review: every drawing it
 displaces by 12 px or more.
