@@ -89,6 +89,22 @@ on a loaded box: about 3 min with `sweep.SUBSTITUTE` off, 6 with it on. Its 64
 frustums each run two plane Splitters in `occt._cut_to`. Measure it
 interleaved before a census redraw takes the spring family.
 
+**Landed, 185b376: circular bends are exact torus sections.** Where a run
+of a swept tube's station pairs lies on one circular bend at one radius,
+`sweep._bend` / `_merge_bends` hand OCCT one torus face (`occt.torus_face`)
+instead of frustums. That covers every bend of 2583, 75652, 87748, the
+Fabuland handlebars u9203/u9207 and the minifig 98397 -- the last three are
+LDraw's own `t??q` torus primitives, which reach the detector as ring quads.
+The fill slices each torus along the bend (`_torus_faces`, `_torus_cuts`),
+and `fill_ops` judges a slice by its whole `surface` in the residue and
+crumb passes, or thin slices vanish as white stripes. Sheets on the wall:
+`swept bends rebuilt as exact torus sections` and its close crops. Redrawn
+into the occt slot (run 121) for /review. `sweep.BENDS` disarms it.
+**Next:** the tapered hooks (3127a/b) need a canal surface -- a circle swept
+along the spine with a radius law (`BRepOffsetAPI_MakePipeShell`) -- and
+the minifig handlebars 30031/51723 are built from `1-8cyli` pieces, not ring
+quads, so neither sweep path reaches them yet.
+
 **Still banded, not swept:** 15439 (540 triangles, 49 quads: a triangulated
 tube; pairing triangles back into quads is the next step for the detector)
 and 53119 (rings are not circles). 28925c01 untouched.
