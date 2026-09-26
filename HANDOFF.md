@@ -71,16 +71,16 @@ timeouts. Its attempts are in corpus.db via `db.ingest_store`, the 7 drawings
 under `renders/decal/`. 235695b makes `slot-coverage.py` read store attempts,
 so those 629 now count as tried rather than never.
 
-**Nothing is running. Next: after the occt optimizations land, rerun every
-occt part that is failing or slow.** The redraw (`slot-occt-0925`) was killed
-at 09:30; 4f4e452's Python SIGSEGV handler had made every crashing
-`_unify_survives` probe spin to the 300 s timeout, fixed in 71388a2. Its
-relaunch (`slot-occt-0926`) confirmed the fix -- every regression that drew in
-under 100 s before draws again -- and was killed at 10:05 to wait for the
-optimizations. Everything both returned is ingested.
+**Nothing is running. The slow-or-failing occt round is on hold while onto
+is looked at.** It launched at 14:33 as `slot-occt-0926b` (e658f41, 1,094
+parts) and was killed minutes in: `--workers 10` applies to every node, and
+keiei (8 cores, 24 GB) was oversubscribed, which inflates exactly the
+timeouts this round measures. onto has no per-node width. The kill left ten
+`died on signal 15` ProcessDied rows in `out/slot-occt-0926b` and corpus.db;
+delete that tree and its run's rows before relaunching (asked, not done).
+Relaunch as a new task at `--workers 8` once onto is settled.
 
-A peer session will say when. At that point, not before, build the list and
-launch it (occt slot only):
+Build the list at launch, not before (occt slot only):
 
     .venv/bin/python scripts/slow-or-failing.py --out out/slot-occt-<date>
     # 10:10 today: 635 drew in >= 120 s, 459 failing, 1094 parts
