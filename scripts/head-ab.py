@@ -7,8 +7,9 @@
 Draws each part twice in one process: once as the working tree has it, once
 with each `--swap`ped function replaced by HEAD's (or `--ref`'s) own source
 for it, read with `git show`. It compares the filled SVG, rasterized: the PNG
-outputs are line art with no fills, so a fill change cannot show in them. A change that is meant to be a pure speedup must come back with 0
-changed pixels; anything else is the finding. Nothing is stashed or checked
+outputs are line art with no fills, so a fill change cannot show in them. A
+change that is meant to be a pure speedup must come back with 0 changed
+pixels; anything else is the finding. Nothing is stashed or checked
 out, so it is safe in a shared checkout.
 
 Reports one line per part as it goes.
