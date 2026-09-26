@@ -2765,24 +2765,36 @@ def _seam_edge_mask(A, B, cond_edges, tol=2e-3):
     segment? Exact endpoint matching fails in practice — part files subdivide
     facet edges (a tri edge is often HALF of the authored cond line) and mix
     coordinate precision — so match geometrically: both endpoints within tol
-    of the cond segment."""
-    E = len(A)
-    mask = np.zeros(E, bool)
+    of the cond segment.
+
+    Only edges with both ends inside the ball round a segment's midpoint can
+    qualify, so a KD-tree picks the candidates and the exact test runs on
+    those alone; testing every edge against every segment was quadratic, and
+    a refined mesh has nine times of each."""
+    from scipy.spatial import cKDTree
+    A = np.asarray(A, float); B = np.asarray(B, float)
+    mask = np.zeros(len(A), bool)
+    if not len(A):
+        return mask
+    ta, tb = cKDTree(A), cKDTree(B)
     for e in cond_edges:
         p = np.asarray(e[0], float); q = np.asarray(e[1], float)
         d = q - p
         L2 = float(d @ d)
         if L2 < 1e-12:
             continue
-        todo = ~mask
-        if not todo.any():
-            break
-        for P in (A, B):
+        mid, r = (p + q) / 2.0, math.sqrt(L2) / 2.0 + tol
+        cand = np.intersect1d(np.asarray(ta.query_ball_point(mid, r), np.intp),
+                              np.asarray(tb.query_ball_point(mid, r), np.intp))
+        cand = cand[~mask[cand]]
+        if not len(cand):
+            continue
+        ok = np.ones(len(cand), bool)
+        for P in (A[cand], B[cand]):
             t = np.clip(((P - p) @ d) / L2, 0.0, 1.0)
             close = P - (p + t[:, None] * d)
-            near = np.einsum("ij,ij->i", close, close) < tol * tol
-            todo = todo & near
-        mask |= todo
+            ok &= np.einsum("ij,ij->i", close, close) < tol * tol
+        mask[cand[ok]] = True
     return mask
 
 
@@ -2896,7 +2908,8 @@ def attach_group_gradients(faces, min_spread=0.002):
             continue
         nvs = [faces[k]["normal"] for k in front]
         cs = [faces[k]["poly"].mean(axis=0) for k in front]
-        spread = max((1.0 - float(a @ b) for a in nvs for b in nvs), default=0.0)
+        N = np.asarray(nvs, float)
+        spread = float(1.0 - (N @ N.T).min())
         if spread < min_spread:
             continue                    # effectively flat: keep flat tones
         # LINEAR gradients only fit groups whose normals vary along ONE
