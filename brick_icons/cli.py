@@ -290,7 +290,9 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
         cull = cfg.opacity >= 1.0 and not cfg.wireframe
         res = hlr.visible_segments(part, cfg.ldraw_dir, lat=lat, long=long,
                                    render_px=cfg.render_px, cull=cull,
-                                   engine=cfg.engine, pose=pose)
+                                   engine=cfg.engine, pose=pose,
+                                   canvas_px=None if cfg.scale_mode == "physical"
+                                   else max(cfg.width, cfg.height))
         segs, bbox, s = res.segs, res.bbox, res.s
         if debug_dir:
             _emit_unwrap(debug_dir, name, res, cfg)

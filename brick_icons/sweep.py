@@ -13,10 +13,18 @@ frustum per station pair, between the fitted circles of its two rings. The
 engines already build, occlude, silhouette and ramp a cone, and a joint
 between two exact surfaces draws no crease under `occt.TANGENT_DEG`. Each
 piece is exact; the chain is not: its outline kinks and its tone steps at
-every joint (scripts/measure-sweep-fit.py). `SUBSTITUTE` disarms the pass.
+every joint (scripts/measure-sweep-fit.py).
+
+Where a run of pairs lies on one circular bend at one radius -- every bend
+of a rail or a handlebar, and LDraw's own torus primitives, which reach here
+as ring quads -- occt builds the torus section instead (`_bend`, carried on
+the frustum as `bend`), so the tube is one smooth exact surface and its
+outline is a curve. Tapered chains (3127a's hook) stay frustums. `BENDS`
+disarms the torus; `SUBSTITUTE` disarms the pass.
 """
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 
 import numpy as np
@@ -44,6 +52,20 @@ MAX_TAPER = 0.5
 #: Keep the authored conditional lines that run ROUND a ring (the ones along
 #: the tube always go: the frustums silhouette themselves).
 KEEP_RING_CONDLINES = True
+#: Rebuild a bent station pair as the torus section its rings lie on,
+#: rather than a frustum across its chord. Disarm to draw every pair as a
+#: frustum. Only occt builds the torus; the frustum stays on the primitive
+#: for everything else that reads it.
+BENDS = True
+#: How far the second ring may sit off the arc the first ring's center and
+#: plane define, as a fraction of the bend radius. Authored rings on a
+#: circular bend land on it to file precision.
+BEND_TOL = 0.01
+#: A pair bent less than this is straight: its frustum is already exact.
+MIN_BEND_DEG = 0.5
+#: The bend radius must clear the tube radius by this factor, or the inside
+#: of the bend folds through itself (75652's tightest is 1.08).
+MIN_BEND_RATIO = 1.02
 #: Vertex keys are world coordinates rounded to this many decimals: shared
 #: vertices come through one matrix and agree exactly, so this only guards
 #: against the last bit.
@@ -188,6 +210,86 @@ def _frustum(c0, r0, n0, c1, r1, n1, color, body):
     return prim
 
 
+def _bend(c0, r0, n0, c1, r1, n1):
+    """The torus section two rings lie on, or None when they do not share one.
+
+    A ring's plane is square to the spine, so its normal is the spine's
+    direction at that station. A circular arc from c0 leaving along n0 is
+    fixed by c1 alone; the pair is one torus section when that arc also
+    arrives along n1 and both rings have one radius. Returns (center, axis,
+    start direction, bend radius, tube radius, angle): the torus sweeps
+    from `center + bend radius * start` about `axis`, counterclockwise.
+    """
+    c0, c1 = np.asarray(c0, float), np.asarray(c1, float)
+    d = c1 - c0
+    L = float(np.linalg.norm(d))
+    if L <= 1e-9 or abs(r1 - r0) > 1e-3 * max(r0, r1):
+        return None
+    n0 = np.asarray(n0, float) * (1.0 if float(np.asarray(n0) @ d) > 0 else -1.0)
+    n1 = np.asarray(n1, float) * (1.0 if float(np.asarray(n1) @ d) > 0 else -1.0)
+    theta = math.acos(float(np.clip(n0 @ n1, -1.0, 1.0)))
+    if math.degrees(theta) < MIN_BEND_DEG:
+        return None
+    m = n1 - (n1 @ n0) * n0                      # toward the inside of the bend
+    m /= np.linalg.norm(m)
+    Rb = L / (2.0 * math.sin(theta / 2.0))
+    O = c0 + Rb * m
+    # the arc from c0 along n0 through the bend angle must land on c1 with
+    # tangent n1; anything else is a biarc or a twist, and stays a frustum
+    end = O + Rb * (math.cos(theta) * -m + math.sin(theta) * n0)
+    if np.linalg.norm(end - c1) > BEND_TOL * Rb:
+        return None
+    r = 0.5 * (r0 + r1)
+    if Rb < MIN_BEND_RATIO * r:
+        return None
+    start = -m
+    axis = np.cross(start, n0)
+    axis /= np.linalg.norm(axis)
+    return O, axis, start, Rb, r, theta
+
+
+def _same_torus(a, b):
+    Oa, ka, _sa, Ra, ra, _ta = a
+    Ob, kb, _sb, Rb, rb, _tb = b
+    return (np.linalg.norm(Oa - Ob) <= BEND_TOL * Ra and float(ka @ kb) > 0.9998
+            and abs(Ra - Rb) <= BEND_TOL * Ra and abs(ra - rb) <= 1e-3 * ra)
+
+
+def _merge_bends(chain):
+    """Give each run of pairs on one torus a single section, on the first
+    pair of the run; the rest carry `()`, meaning covered. Each pair's own
+    fit differs from its neighbor's in the last authored digit (2583's bend
+    radius reads 9.999 and 10.001), which is past OCCT's sewing tolerance, so
+    per-pair sections would never sew into one tube."""
+    i = 0
+    while i < len(chain):
+        b = chain[i].bend
+        j = i + 1
+        while b and j < len(chain) and chain[j].bend and _same_torus(b, chain[j].bend):
+            j += 1
+        if b and j - i > 1:
+            run = [p.bend for p in chain[i:j]]
+            O = np.mean([x[0] for x in run], axis=0)
+            k = np.mean([x[1] for x in run], axis=0)
+            k /= np.linalg.norm(k)
+            Rb = float(np.mean([x[3] for x in run]))
+            r = float(np.mean([x[4] for x in run]))
+            first, last = run[0], run[-1]
+            p0 = first[0] + first[3] * first[2]
+            q = last[0] + last[3] * (math.cos(last[5]) * last[2]
+                                     + math.sin(last[5]) * np.cross(last[1], last[2]))
+            start = p0 - O
+            start -= (start @ k) * k
+            start /= np.linalg.norm(start)
+            e = q - O
+            e -= (e @ k) * k
+            angle = math.atan2(float(np.cross(start, e) @ k), float(start @ e)) % (2 * math.pi)
+            chain[i].bend = (O, k, start, Rb, r, angle)
+            for p in chain[i + 1:j]:
+                p.bend = ()
+        i = j
+
+
 def _declared_smooth(edges, out):
     """Does the part declare every one of these edges a smooth seam (a type-5
     line lies on it)? A hexagonal nut is rings of quads too, and its vertices
@@ -311,11 +413,15 @@ def substitute(out) -> int:
             for k in vs:
                 on_ring[k] = (id(rings), i)
         meta = quads[qis[0]][3]
+        chain = []
         for (c0, r0, n0, _v0), (c1, r1, n1, _v1) in zip(rings, rings[1:]):
             prim = _frustum(c0, r0, n0, c1, r1, n1, meta["color"],
                             meta.get("body", 16))
             if prim is not None:
+                prim.bend = _bend(c0, r0, n0, c1, r1, n1) if BENDS else None
                 out["analytic"].append(prim)
+                chain.append(prim)
+        _merge_bends(chain)
     out["tri"] = [t for i, t in enumerate(out["tri"]) if i not in drop_tris]
     out["tri_meta"] = [m for i, m in enumerate(out["tri_meta"]) if i not in drop_tris]
     # The authored conditional lines ALONG the tube marked its facet

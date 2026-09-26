@@ -1277,7 +1277,7 @@ def _residue_trims(ordered, frags, garea, geoms=None, sil=None,
     min_a = RESIDUE_MIN_AREA
     members, _ = _merge_members(ordered, frags)
     trims = {}
-    for ks in members.values():
+    for ks in _surface_members(members, ordered):
         # Decoration is authored ink, not an overlap leftover: a glyph stroke
         # at label scale is honestly thinner than the erosion radius, so this
         # gate ate the print (4162p0z's "Louvre" came out gnawed at 256 px).
@@ -1313,6 +1313,24 @@ def _residue_trims(ordered, frags, garea, geoms=None, sil=None,
             if not t.is_empty and t.area > 0.0:
                 trims[j] = t
     return trims
+
+
+def _surface_members(members, ordered):
+    """The merged elements, with those whose faces name one `surface` taken
+    together: a torus fills as slices a pixel or two wide, each its own
+    element for its own ramp, and alone every one of them is residue."""
+    out, by_surface = [], {}
+    for ks in members.values():
+        key = next((ordered[j]["surface"] for j in ks
+                    if ordered[j].get("surface") is not None), None)
+        if key is None:
+            out.append(list(ks))
+        elif key in by_surface:
+            by_surface[key].extend(ks)
+        else:
+            by_surface[key] = list(ks)
+            out.append(by_surface[key])
+    return out
 
 
 def _loop_cut_merged(merged, loops):
@@ -1955,6 +1973,15 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
             if best is not None:
                 merged[best] = geom2d.union(merged[best], p)
 
+    surface_core, by_surface = {}, defaultdict(list)
+    for r, g in merged.items():
+        key = next((ordered[j]["surface"] for j in members[r]
+                    if ordered[j].get("surface") is not None), None)
+        if key is not None:
+            by_surface[key].append(g)
+    for key, gs in by_surface.items():
+        surface_core[key] = geom2d.union_all(gs).buffer(-RESIDUE_CRUMB)
+
     ops, emitted = [], set()
     for idx in sorted(frags):                          # farthest-first
         if idx in emitted:
@@ -1977,9 +2004,17 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
             # small enough to read as a label.
             from shapely.geometry import Polygon as _Poly
             er = RESIDUE_CRUMB
+            core = surface_core.get(f.get("surface"))
             pieces = []
             for p in getattr(geom, "geoms", [geom]):
-                if p.geom_type != "Polygon" or p.buffer(-er).is_empty:
+                if p.geom_type != "Polygon":
+                    continue
+                # a slice of a sliced surface is judged by the surface: each
+                # is a pixel or two wide, and clipped by a nearer fill every
+                # one of them is a crumb on its own (98397's bend lost a
+                # crescent that way)
+                if p.buffer(-er).is_empty and (
+                        core is None or not p.buffer(er + 0.05).intersects(core)):
                     continue
                 # hole counterpart of the crumb cull: a hole thinner than
                 # the 0.8px self-stroke can never render as a hole, but its

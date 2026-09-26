@@ -114,3 +114,79 @@ def test_library_parts(part, tubes):
     out = {"2": [], "5": [], "tri": [], "tri_meta": [], "analytic": []}
     hlr.flatten(hlr._resolve_input(part, roots), np.eye(3), np.zeros(3), out, roots)
     assert sweep.substitute(out) == tubes
+
+
+def _quarter(tmp_path, radius=4.0):
+    rings = []
+    for k in range(9):
+        t = math.radians(90 * k / 8)
+        c = np.array([40 * math.cos(t), 40 * math.sin(t), 0.0])
+        tangent = np.array([-math.sin(t), math.cos(t), 0.0])
+        rings.append(_ring(c, radius, tangent, 16))
+    p = tmp_path / "tube.dat"
+    _write(p, rings)
+    return _flatten(p)
+
+
+def test_a_circular_bend_is_one_torus_section(tmp_path):
+    """Eight pairs on one quarter circle rebuild as ONE torus section, on the
+    first pair; the rest are marked covered, so the section sews."""
+    out = _quarter(tmp_path)
+    sweep.substitute(out)
+    bends = [q.bend for q in out["analytic"] if getattr(q, "sweep", False)]
+    assert bends[0] and all(b == () for b in bends[1:])
+    center, axis, start, bend_r, tube_r, angle = bends[0]
+    assert np.allclose(center, 0, atol=1e-3)
+    assert bend_r == pytest.approx(40, rel=1e-3)
+    assert tube_r == pytest.approx(4, rel=1e-3)
+    assert math.degrees(angle) == pytest.approx(90, abs=0.05)
+    # the section starts at the first ring and turns toward the second
+    assert np.allclose(center + bend_r * start, [40, 0, 0], atol=1e-2)
+    assert np.cross(axis, start) @ np.array([0, 1, 0]) > 0.99
+
+
+def test_a_tapered_or_disarmed_tube_keeps_its_frustums(tmp_path):
+    rings = [_ring([0, 0, 20 * k], 6.0 - 0.5 * k, [0, 0, 1], 12) for k in range(4)]
+    p = tmp_path / "taper.dat"
+    _write(p, rings)
+    out = _flatten(p)
+    sweep.substitute(out)
+    assert all(q.bend is None for q in out["analytic"])
+    out = _quarter(tmp_path)
+    sweep.BENDS = False
+    try:
+        sweep.substitute(out)
+    finally:
+        sweep.BENDS = True
+    assert all(getattr(q, "bend", None) is None for q in out["analytic"])
+
+
+def test_a_bend_tighter_than_the_tube_stays_frustums(tmp_path):
+    """Bend radius 40 under a tube of radius 41 would fold through itself."""
+    out = _quarter(tmp_path, radius=41.0)
+    sweep.MAX_TAPER, keep = 10.0, sweep.MAX_TAPER
+    try:
+        sweep.substitute(out)
+    finally:
+        sweep.MAX_TAPER = keep
+    assert all(getattr(q, "bend", None) is None for q in out["analytic"])
+
+
+def test_a_bend_builds_one_torus_face_that_fills(tmp_path):
+    """In OCCT the bend is one exact torus face, filled as bend slices that
+    each carry an occluder for ordering."""
+    pytest.importorskip("OCP")
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    from OCP.GeomAbs import GeomAbs_SurfaceType
+    from brick_icons import occt
+    out = _quarter(tmp_path)
+    sweep.substitute(out)
+    faces = [f for q in out["analytic"] for f in occt.occt_faces(q)]
+    assert len(faces) == 1
+    assert BRepAdaptor_Surface(faces[0]).GetType() == GeomAbs_SurfaceType.GeomAbs_Torus
+    right, up = np.array([1.0, 0, -1]) / math.sqrt(2), np.array([-1.0, 2, -1]) / math.sqrt(6)
+    proj = occt.op_projection(right, up, np.cross(up, right))
+    fills = occt._faces_for(faces[0], proj)
+    slices = math.ceil(90 / occt.TORUS_SLICE_DEG)
+    assert len(fills) == slices, "the front half of every slice"
+    assert all(f["kind"] == "occt-wall" and f.get("_occ") is not None for f in fills)

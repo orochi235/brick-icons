@@ -15,6 +15,7 @@ except ImportError as e:                      # pragma: no cover
 
 from OCP.gp import gp_Pnt, gp_Dir, gp_Vec, gp_Ax2, gp_Circ, gp_Elips, gp_Pln
 from OCP.BRepPrimAPI import (BRepPrimAPI_MakeCylinder, BRepPrimAPI_MakeCone,
+                             BRepPrimAPI_MakeTorus,
                              BRepPrimAPI_MakePrism)
 from OCP.BRepBuilderAPI import (BRepBuilderAPI_MakePolygon, BRepBuilderAPI_MakeFace,
                                 BRepBuilderAPI_MakeVertex,
@@ -323,6 +324,10 @@ def occt_faces(prim):
     k = prim.kind
     if k == "edge":
         return []                      # stroke-only, contributes no surface
+    bend = getattr(prim, "bend", None)
+    if bend is not None:
+        # () is a pair whose run's one torus another primitive already built
+        return [torus_face(*bend)] if bend else []
     f = frame(prim)
     oblique = False
     if f is None and k in ("cyli", "con"):
@@ -384,6 +389,13 @@ def occt_faces(prim):
     except Exception:
         return []
     return []
+
+
+def torus_face(center, axis, start, bend_r, tube_r, angle):
+    """The section of a torus a swept tube's bend lies on (sweep._bend)."""
+    ax = gp_Ax2(gp_Pnt(*map(float, center)), gp_Dir(*map(float, axis)),
+                gp_Dir(*map(float, start)))
+    return BRepPrimAPI_MakeTorus(ax, float(bend_r), float(tube_r), float(angle)).Face()
 
 
 def _cut_to(prim, faces):
@@ -2753,13 +2765,186 @@ def _span_edges(u0, u1, limbs):
                               if u0 + 1e-9 < u < u1 - 1e-9})
 
 
-def _faces_for(face, proj, step_deg=BOUNDARY_STEP_DEG):
+#: A torus section fills as slices this many degrees of bend wide, each
+#: ramping on its own: its limb moves along the bend, so no single span has
+#: one. The ink comes from the torus itself, so this sets only how fine the
+#: tone steps are.
+TORUS_SLICE_DEG = 2.8125
+#: How far a torus section's end slices run past it, under its neighbors.
+TORUS_OVERLAP_DEG = 0.5
+#: The narrowest a slice may land on the canvas: fill_ops' crumb cull
+#: erodes by 0.4 px, so anything under 0.8 vanishes.
+TORUS_SLICE_MIN_PX = 1.5
+
+
+def _torus_cuts(point, Z, radial, b0, b1, proj, px):
+    """Bend angles to slice a torus section at: TORUS_SLICE_DEG apart, but
+    never narrower on the canvas than TORUS_SLICE_MIN_PX, or fill_ops culls
+    the slice as a crumb and the tube shows a white stripe (98397's tight
+    bend sliced to 0.4 px). Without a canvas scale, slices are even."""
+    n = max(1, int(math.ceil(math.degrees(b1 - b0) / TORUS_SLICE_DEG - 1e-9)))
+    if px is None:
+        return np.linspace(b0, b1, n + 1)
+    fine = np.linspace(b0, b1, 16 * n + 1)
+    ts = np.linspace(0.0, 2 * math.pi, 24, endpoint=False)
+    xy = []
+    for b in fine:
+        facing = np.array([(math.cos(t) * radial(b)[0] + math.sin(t) * Z) @ proj.fwd
+                           for t in ts]) <= 0
+        x, y, _ = proj.to_px(point(ts[facing] if facing.any() else ts, b))
+        xy.append(np.column_stack([x, y]))
+    step = math.radians(TORUS_SLICE_DEG)
+    cuts, acc_w = [b0], 0.0
+    for i in range(1, len(fine)):
+        a, c = xy[i - 1], xy[i]
+        k = min(len(a), len(c))
+        acc_w += px * float(np.linalg.norm(c[:k] - a[:k], axis=1).max())
+        if fine[i] - cuts[-1] >= step - 1e-9 and acc_w >= TORUS_SLICE_MIN_PX:
+            cuts.append(fine[i])
+            acc_w = 0.0
+    if cuts[-1] < b1 - 1e-9:
+        if len(cuts) > 1 and acc_w < TORUS_SLICE_MIN_PX:
+            cuts[-1] = b1                  # too thin alone: fold into the last
+        else:
+            cuts.append(b1)
+    return np.array(cuts)
+
+
+def _torus_faces(face, proj, step_deg=BOUNDARY_STEP_DEG, px=None):
+    """A torus section's fill faces: the front half of each bend slice,
+    carrying (`_occ`) a cylinder occluder around its chord for ordering."""
+    g = BRepAdaptor_Surface(face).Torus()
+    pos = g.Position()
+    O = np.array([pos.Location().X(), pos.Location().Y(), pos.Location().Z()])
+    X = np.array([pos.XDirection().X(), pos.XDirection().Y(), pos.XDirection().Z()])
+    Y = np.array([pos.YDirection().X(), pos.YDirection().Y(), pos.YDirection().Z()])
+    Z = np.array([pos.Direction().X(), pos.Direction().Y(), pos.Direction().Z()])
+    Rb, r = g.MajorRadius(), g.MinorRadius()
+    b0, b1, t0, t1 = BRepTools.UVBounds_s(face)       # bend, then tube angle
+
+    def radial(b):
+        b = np.asarray(b, float).reshape(-1, 1)
+        return np.cos(b) * X + np.sin(b) * Y
+
+    def point(t, b):
+        t = np.atleast_1d(np.asarray(t, float))
+        return (O + (Rb + r * np.cos(t))[:, None] * radial(b)
+                + (r * np.sin(t))[:, None] * Z)
+
+    cuts = _torus_cuts(point, Z, radial, b0, b1, proj, px)
+    # one key for every face of one torus, 98397's bend being two primitives
+    surface = ("torus", tuple(np.round(O, 3)), tuple(np.round(np.abs(Z), 4)),
+               round(Rb, 3), round(r, 3))
+    # the end slices run on under whatever the tube joins, so the two fills
+    # overlap instead of abutting: abutting, the background shows through
+    # their shared antialiased edge as a light dashed ring
+    cuts[0] -= math.radians(TORUS_OVERLAP_DEG)
+    cuts[-1] += math.radians(TORUS_OVERLAP_DEG)
+    out = []
+    for ba, bb in zip(cuts[:-1], cuts[1:]):
+        a = radial(0.5 * (ba + bb))[0]
+        c = np.zeros(3)
+
+        def normal(t, a=a):
+            return math.cos(t) * a + math.sin(t) * Z
+
+        ca, cb = O + Rb * radial(ba)[0], O + Rb * radial(bb)[0]
+        h = float(np.linalg.norm(cb - ca))
+        occ = None
+        if h > 1e-9:
+            ax = (cb - ca) / h
+            u = np.cross(ax, Z)
+            u /= np.linalg.norm(u)
+            # fill_ops probes every pixel of the slice through this, and a
+            # ray that misses reads as infinitely far and loses the pixel: the
+            # slice's ends are tilted past the chord's and its limb sits a
+            # hair outside the chord cylinder, so both are grown to cover it
+            ext = 2.0 * (Rb + r) * math.tan(0.5 * (bb - ba)) + 1e-3 * r
+            rr = r * (1.0 + 4.0 * (1.0 - math.cos(0.5 * (bb - ba))) * (Rb + r) / r + 1e-3)
+            occ = primitives.CylinderOccluder(
+                np.column_stack([rr * u, (h + 2 * ext) * ax, rr * np.cross(u, ax)]),
+                ca - ext * ax, 360.0)
+        edges = _span_edges(t0, t1, _limb_params(a, Z, c, proj.fwd))
+        # the limb moves along the bend, so each end of the slice is cut at
+        # its OWN limb: cut at the middle's, the far half pokes out past the
+        # near one at both ends as a chip inside the outline
+        ends = [list(zip(e, e[1:])) for e in
+                (_span_edges(t0, t1, _limb_params(radial(b)[0], Z, c, proj.fwd))
+                 for b in (ba, bb))]
+        for ta, tb in zip(edges, edges[1:]):
+            if tb - ta < 1e-9:
+                continue
+            ring = _torus_span_ring(ta, tb, ends, ba, bb, math.radians(step_deg))
+            f = _span_face(point, normal, ta, tb, ba, bb, proj, step_deg,
+                           uv_ring=ring)
+            # the back half of a tube is behind its front half wherever the
+            # tube runs on into more tube; drawn, it chips out past the front
+            # half along the silhouette
+            if f["interior"]:
+                continue
+            if len(f["poly"]) >= 3:
+                f["grad_samples"] = _dense_samples(point, normal, ta, tb,
+                                                   0.5 * (ba + bb), f["grad_axis"], proj)
+                f["surface"] = surface
+                f["_occ"] = occ
+                out.append(f)
+    return out
+
+
+#: Ramp samples across one torus slice. _span_face's nine leave some of
+#: shade's eight bands empty, and which ones depends on where a boundary
+#: sample falls, so neighboring slices ramped differently and the bend read
+#: as streaks.
+TORUS_RAMP_SAMPLES = 65
+
+
+def _dense_samples(point, normal, ta, tb, bm, axis, proj):
+    (x0, y0), (x1, y1) = axis
+    dx, dy = x1 - x0, y1 - y0
+    L2 = dx * dx + dy * dy or 1.0
+    ths = np.linspace(ta, tb, TORUS_RAMP_SAMPLES)
+    px, py, _ = proj.to_px(point(ths, bm))
+    out = []
+    for th, x, y in zip(ths, px, py):
+        nw = normal(th)
+        nw = nw / np.linalg.norm(nw)
+        nv = np.array([nw @ proj.right, nw @ proj.up, nw @ proj.fwd])
+        off = float(np.clip(((x - x0) * dx + (y - y0) * dy) / L2, 0.0, 1.0))
+        out.append((off, nv))
+    return out
+
+
+def _torus_span_ring(ta, tb, ends, ba, bb, step):
+    """(tube angle, bend angle) boundary of the span (ta, tb) of a bend
+    slice, its arcs running between each end's own limbs; None when an end
+    has no span matching this one (the slice turns edge-on part way)."""
+    mid = 0.5 * (ta + tb)
+    arcs = []
+    for spans, b in zip(ends, (ba, bb)):
+        best = None
+        for sa, sb in spans:
+            shift = 2 * math.pi * round((mid - 0.5 * (sa + sb)) / (2 * math.pi))
+            d = abs(0.5 * (sa + sb) + shift - mid)
+            if best is None or d < best[0]:
+                best = (d, sa + shift, sb + shift)
+        if best is None or best[0] > 0.25 * (tb - ta):
+            return None
+        n = max(2, int(math.ceil((best[2] - best[1]) / step)) + 1)
+        arcs.append(np.column_stack([np.linspace(best[1], best[2], n),
+                                     np.full(n, b)]))
+    return np.vstack([arcs[1], arcs[0][::-1]])
+
+
+def _faces_for(face, proj, step_deg=BOUNDARY_STEP_DEG, px=None):
     """Every fill face one OCCT face contributes: one for a plane, one per
-    limb-cut span for a cylinder or cone."""
+    limb-cut span for a cylinder or cone. `px` is canvas pixels per op unit,
+    where the caller knows it."""
     kind = BRepAdaptor_Surface(face).GetType()
     if kind == GeomAbs_SurfaceType.GeomAbs_Plane:
         f = _plane_face(face, proj, step_deg)
         return [f] if len(f["poly"]) >= 3 else []
+    if kind == GeomAbs_SurfaceType.GeomAbs_Torus:
+        return _torus_faces(face, proj, step_deg, px)
     if kind not in CURVED_SURFACES:
         return []
     frame = _curved_frame(face)
@@ -2973,7 +3158,7 @@ def _group_planes(shape, out, plane_by_idx):
 
 
 @timing.timed("faces")
-def ordered_faces(shape, proj, out=None, ellipses_out=None):
+def ordered_faces(shape, proj, out=None, ellipses_out=None, px=None):
     """Every fill face of `shape`, in paint order, each curved one depth-probed
     against its own exact surface.
 
@@ -2989,14 +3174,15 @@ def ordered_faces(shape, proj, out=None, ellipses_out=None):
     wall_by_idx = defaultdict(list)
     for face in _shape_faces(shape):
         occ = _face_occluder(face)
-        for f in _faces_for(face, proj):
+        for f in _faces_for(face, proj, px=px):
             faces.append(f)
             if f["kind"] == "occt-plane":
                 plane_by_idx[fmap.FindIndex(face)] = f
             elif f["kind"] == "occt-wall":
                 wall_by_idx[fmap.FindIndex(face)].append(f)
-            if occ is not None:
-                own_occ[id(f)] = occ
+            o = f.pop("_occ", occ)
+            if o is not None:
+                own_occ[id(f)] = o
     if not faces:
         return []
     tangent = []
@@ -3250,7 +3436,10 @@ def _undeclared_ops(comps):
 
 
 @timing.timed("engine")
-def visible_segments(out, right, up, render_px, cull=True, fwd=None):
+def visible_segments(out, right, up, render_px, cull=True, fwd=None, canvas_px=None):
+    """`canvas_px` is the long side of the drawing the faces will be fitted
+    to, where it is not `render_px`; it sizes what must survive at that
+    scale (see _torus_cuts)."""
     from .hlr import VisResult, _ops_bbox
     if fwd is None:
         z, _ = projector_axes(right, up)
@@ -3343,7 +3532,8 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None):
             seen.add(k)
             ells.append(tuple(op[1:7]) + (RIM_STEP_DEG,))
     decal_ells = []
-    faces = ordered_faces(shape, proj, out, ellipses_out=decal_ells)
+    faces = ordered_faces(shape, proj, out, ellipses_out=decal_ells,
+                          px=canvas_px / span if canvas_px else s)
     for cand in _boundary_conics(shape, proj):
         k = tuple(round(v, 4) for v in cand)
         if k not in seen:

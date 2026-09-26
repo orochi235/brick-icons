@@ -1112,7 +1112,7 @@ def _is_printed(path) -> bool:
 
 @timing.timed("geometry")
 def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
-                     cull=True, engine="naive", pose=None):
+                     cull=True, engine="naive", pose=None, canvas_px=None):
     if engine not in VALID_ENGINES:
         raise ValueError(
             f"unrecognized engine {engine!r}; must be one of {VALID_ENGINES}")
@@ -1153,7 +1153,7 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
         with timing.phase("import"):
             from . import occt
         res = occt.visible_segments(out, right, up, render_px, cull=cull,
-                                    fwd=fwd)
+                                    fwd=fwd, canvas_px=canvas_px)
         # A circle reaches here as contiguous spans -- 4740's outer rim as
         # 225-360 plus 180-225 -- drawn as two strokes meeting at a seam that
         # composites its antialiasing twice. Over 36 parts this drops 2,202

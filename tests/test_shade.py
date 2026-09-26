@@ -1936,3 +1936,24 @@ def test_the_raise_moves_the_region_and_not_only_its_bookkeeping(monkeypatch):
     assert abs(_decal_region(10.3, proj=proj)["depth"] - authored) < 0.05
     monkeypatch.setattr(shade.unwrap, "standoff", lambda pts, carrier: 0.0)
     assert abs(_decal_region(10.3, proj=proj)["depth"] - authored) > 0.2
+
+
+def test_a_sliced_surface_keeps_its_thin_slices():
+    """A torus fills as slices a pixel or two wide, one element each. Alone
+    a 0.6 px slice is a crumb and the crumb cull drops it; named as a piece
+    of the same `surface` as its wide neighbors it stays, and an untagged
+    strip of the same width still goes."""
+    from brick_icons import shade
+
+    def strip(x0, x1, depth, **extra):
+        return {"poly": np.array([[x0, 0], [x1, 0], [x1, 20], [x0, 20]], float),
+                "normal": np.array([0, 1, -1.0]), "depth": depth, "kind": "tri",
+                "color": 16, **extra}
+
+    def emitted(faces):
+        return len(shade.fill_ops(faces, shade.Flat3Style()))
+
+    tube = ("torus", 1)
+    assert emitted([strip(0, 10, 3.0, surface=tube), strip(10, 10.6, 2.0, surface=tube),
+                    strip(10.6, 20, 1.0, surface=tube)]) == 3
+    assert emitted([strip(0, 10, 3.0), strip(10, 10.6, 2.0), strip(10.6, 20, 1.0)]) == 2
