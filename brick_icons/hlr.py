@@ -162,6 +162,15 @@ def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
                         if stud is None and is_stud(sub):
                             out["studs"] = out.get("studs", 0) + 1
                             sub_stud = out["studs"]
+                            # what instancing needs to draw this stud again
+                            # on its own: its file and the placement flatten
+                            # hands it, winding included
+                            out.setdefault("stud_refs", {})[sub_stud] = {
+                                "path": sub, "R": Rsub, "t": tsub,
+                                "color": cur,
+                                "body": body if own_body is None else own_body,
+                                "invert": bool(base_invert ^ invert_next
+                                               ^ m_reflect)}
                         else:
                             sub_stud = stud
                         flatten(sub, Rsub, tsub, out, roots, depth + 1,
@@ -173,13 +182,17 @@ def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
         elif typ in ("2", "5") and len(tok) >= 8:
             pts = np.array(list(map(float, tok[2:])), float).reshape(-1, 3)
             out[typ].append(pts @ R.T + t)
+            # the stud each line came from, parallel to out[typ] only until
+            # something rewrites that list (sweep.substitute, arcfit):
+            # visible_segments consumes and drops it before either runs
+            out.setdefault(typ + "_stud", []).append(stud)
         elif typ in ("3", "4"):
             n = 3 if typ == "3" else 4
             if len(tok) >= 2 + 3 * n:
                 pts = np.array(list(map(float, tok[2:2 + 3 * n])), float).reshape(n, 3) @ R.T + t
                 tri_invert = base_invert ^ local_cw
                 meta = {"certified": certified, "invert": tri_invert,
-                        "color": cur, "body": body}
+                        "color": cur, "body": body, "stud": stud}
                 if n == 3:
                     out["tri"].append(pts)
                     out["tri_meta"].append(dict(meta))

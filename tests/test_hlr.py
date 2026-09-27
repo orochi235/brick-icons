@@ -60,7 +60,7 @@ def test_flatten_populates_tri_meta_parallel_to_tri(tmp_path):
     assert len(out["tri"]) == 1
     assert len(out["tri_meta"]) == 1
     assert out["tri_meta"][0] == {"certified": True, "invert": False,
-                                  "color": 16, "body": 16}
+                                  "color": 16, "body": 16, "stud": None}
 
 
 def test_flatten_uncertified_marks_meta(tmp_path):
@@ -113,7 +113,8 @@ def test_flatten_quad_emits_two_tri_meta_entries(tmp_path):
     assert len(out["tri_meta"]) == 2
     # both halves carry the quad's tag, so sweep.substitute can pair them
     assert out["tri_meta"][0] == out["tri_meta"][1] == {
-        "certified": True, "invert": False, "color": 16, "body": 16, "quad": 0}
+        "certified": True, "invert": False, "color": 16, "body": 16,
+        "stud": None, "quad": 0}
 
 
 def test_flatten_invertnext_does_not_leak_to_sibling(tmp_path):
@@ -1152,3 +1153,29 @@ def test_studs_are_what_the_part_declared():
     right, up, fwd = hlr.view_basis(30, 45)
     zone = hlr.stud_footprints(res.analytic, right, up, fwd, 1.0, 0.0, 0.0, 0.0)
     assert len(zone.geoms) == 8                       # eight separate studs
+
+
+def test_flatten_tags_every_line_and_triangle_under_a_stud(tmp_path):
+    (tmp_path / "p").mkdir()
+    (tmp_path / "p" / "stud.dat").write_text(
+        "0 Stud\n"
+        "2 24 6 0 0 6 -4 0\n"
+        "5 24 6 0 0 6 -4 0 5 0 1 5 0 -1\n"
+        "3 16 0 -4 0 6 -4 0 0 -4 6\n"
+        "1 16 0 -4 0 6 0 0 0 1 0 0 0 6 4-4disc.dat\n")
+    part = tmp_path / "thing.dat"
+    part.write_text(
+        "2 24 0 0 0 10 0 0\n"
+        "3 16 0 0 0 10 0 0 0 0 10\n"
+        "1 16 5 0 5 1 0 0 0 1 0 0 0 1 p\\stud.dat\n")
+    roots = hlr.default_roots(tmp_path)
+    out = {"2": [], "5": [], "tri": [], "tri_meta": [], "analytic": []}
+    hlr.flatten(part, np.eye(3), np.zeros(3), out, roots)
+    assert out["2_stud"] == [None, 1]
+    assert out["5_stud"] == [1]
+    assert [m["stud"] for m in out["tri_meta"]] == [None, 1]
+    assert [p.stud for p in out["analytic"]] == [1]
+    ref = out["stud_refs"][1]
+    assert ref["path"].name == "stud.dat"
+    assert np.allclose(ref["t"], [5, 0, 5]) and np.allclose(ref["R"], np.eye(3))
+    assert ref["color"] == 16 and ref["body"] == 16 and ref["invert"] is False
