@@ -1,10 +1,10 @@
-"""Put renders on the slopboard wall and read a verdict back.
+"""Put renders on the transom wall and read a verdict back.
 
 A sweep of sixty parts is sixty questions, and sixty cards on the wall would
 bury every other zone on it. So a review goes up as a **run**: one card holding
 a take per render, which the wall opens as a carousel with the verdicts as chips
-under each picture. `slop --run <id>` is the whole of that protocol; see
-slopboard's `DESIGN.md` under "Runs: many pictures, one card".
+under each picture. `transom --run <id>` is the whole of that protocol; see
+transom's `DESIGN.md` under "Runs: many pictures, one card".
 
 Nothing here writes a verdict anywhere. `review` hands back what the wall was
 told and the caller decides -- deliberately, because this repo already has a
@@ -38,30 +38,30 @@ FIRST_LOOK = ("keep", "redo")
 
 #: What the wall holds. A `.svg` is not on it, so a run of traced outlines has
 #: nothing to show -- which the caller is told rather than left to wonder about.
-#: slopboard's `server/kind.ts` is the list this mirrors.
+#: transom's `server/kind.ts` is the list this mirrors.
 HELD = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif", ".tiff",
         ".mp4", ".m4v", ".mov", ".webm", ".glb", ".stl", ".html", ".htm"}
 
 #: Where a run's takes are written down, so a verdict collected an hour later
 #: still knows which part it is about. Bounded by `_prune`: the manifests are a
 #: convenience, and an unbounded directory of them is a slow leak.
-RUNS_DIR = Path(".cache") / "slop-runs"
+RUNS_DIR = Path(".cache") / "transom-runs"
 RUNS_KEPT = 10
 
 
-def slop_bin() -> Path:
-    """The `slop` to shell. `SLOP_BIN` first so a test can stand in for it."""
-    env = os.environ.get("SLOP_BIN")
+def transom_bin() -> Path:
+    """The `transom` to shell. `TRANSOM_BIN` first so a test can stand in for it."""
+    env = os.environ.get("TRANSOM_BIN")
     if env:
         return Path(env)
-    found = shutil.which("slop")
+    found = shutil.which("transom")
     if found:
         return Path(found)
-    return Path.home() / "src" / "slopboard" / "bin" / "slop"
+    return Path.home() / "src" / "transom" / "bin" / "transom"
 
 
 def answers_dir() -> Path:
-    return Path(os.environ.get("SLOP_ROOT", Path.home() / "slop")) / "answers"
+    return Path(os.environ.get("TRANSOM_ROOT", Path.home() / "transom")) / "answers"
 
 
 def run_id(prefix: str = "review") -> str:
@@ -109,12 +109,16 @@ def send(path: Path | str, *, about: str | None = None, run: str | None = None,
 
     `why` is the placeholder for the comment box beside the chips; None offers
     no box. `apps` are `"Name"` or `"Name=path"` and `links` are `"url"` or
-    `"label=url"`, both as `bin/slop` takes them.
+    `"label=url"`, both as `bin/transom` takes them.
     """
     path = Path(path)
     if not holdable(path):
         raise ValueError(f"the wall does not hold {path.suffix}: {path}")
-    argv: list[str] = [str(slop_bin())]
+    argv: list[str] = [str(transom_bin())]
+    if question:
+        argv += ["ask", question]
+    else:
+        argv += ["post"]
     if zone:
         argv += ["--zone", zone]
     if run:
@@ -128,7 +132,6 @@ def send(path: Path | str, *, about: str | None = None, run: str | None = None,
     if attention:
         argv += ["--attention", attention]
     if question:
-        argv += ["--ask", question]
         for choice in choices or ():
             argv += ["--choice", choice]
         if why is not None:
@@ -145,7 +148,7 @@ def send(path: Path | str, *, about: str | None = None, run: str | None = None,
     out = subprocess.run(argv, capture_output=True, text=True, check=True)
     dest = out.stdout.strip().splitlines()
     if not dest:
-        raise RuntimeError(f"slop said nothing about {path}: {out.stderr}")
+        raise RuntimeError(f"transom said nothing about {path}: {out.stderr}")
     return Sent(path=path, dest=Path(dest[-1]), about=about or path.stem)
 
 
