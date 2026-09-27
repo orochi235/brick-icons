@@ -1221,3 +1221,16 @@ def test_draw_flattened_is_visible_segments_after_the_flatten():
     got = hlr.draw_flattened(out, right, up, fwd, 600, engine="naive")
     want = hlr.visible_segments("3005", LIB, render_px=600, engine="naive")
     assert got.segs == want.segs and got.bbox == want.bbox
+
+
+def test_orphan_cull_keeps_a_run_whose_free_tip_lies_in_the_anchors():
+    # a part edge ending where a placed stud hides it: the stud draws no op,
+    # so the tip is free in the graph, but the stud's region anchors it
+    from shapely.geometry import box
+    outline = ("line", 0.0, 0.0, 0.0, 200.0, "sil")
+    edge = ("line", 0.0, 100.0, 20.0, 100.0, "edge")
+    assert hlr.cull_orphan_runs([outline, edge]) == [outline]
+    stud = box(20.3, 90.0, 40.0, 110.0)
+    assert hlr.cull_orphan_runs([outline, edge], anchors=stud) == [outline, edge]
+    far = box(30.0, 90.0, 40.0, 110.0)
+    assert hlr.cull_orphan_runs([outline, edge], anchors=far) == [outline]

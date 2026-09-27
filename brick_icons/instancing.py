@@ -421,19 +421,26 @@ def limb_points(prim, fwd):
     return out
 
 
+def shown_ops(plan, proj):
+    """The union of what every placed stud shows, in op space (`proj`'s fit
+    of world A/B; None leaves A/B as it is)."""
+    g = shapely.union_all([s for s in (v.shown() for v in plan.placed())
+                           if s is not None and not s.is_empty])
+    if proj is None:
+        return g
+    return shapely.transform(g, lambda P: (P - (proj.cx, proj.cy)) * proj.s
+                             + proj.half)
+
+
 def grow_bbox(bbox, plan, proj):
     """`bbox` (op space) grown over what every placed stud shows: a withheld
     stud draws no op, and a naive bbox is its ops'."""
     if proj is None:
         return bbox
+    g = shown_ops(plan, proj)
+    if g.is_empty:
+        return bbox
     x0, y0, x1, y1 = bbox
-    for v in plan.placed():
-        g = v.shown()
-        if g is None or g.is_empty:
-            continue
-        a0, b0, a1, b1 = g.bounds
-        x0 = min(x0, (a0 - proj.cx) * proj.s + proj.half)
-        y0 = min(y0, (b0 - proj.cy) * proj.s + proj.half)
-        x1 = max(x1, (a1 - proj.cx) * proj.s + proj.half)
-        y1 = max(y1, (b1 - proj.cy) * proj.s + proj.half)
-    return (float(x0), float(y0), float(x1), float(y1))
+    a0, b0, a1, b1 = g.bounds
+    return (float(min(x0, a0)), float(min(y0, b0)),
+            float(max(x1, a1)), float(max(y1, b1)))

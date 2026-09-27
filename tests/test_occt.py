@@ -2591,5 +2591,13 @@ def test_instanced_studs_leave_the_occt_drawing_but_not_the_shape(ldraw_dir):
     assert on.studs.counts()["clear"] == 8
     assert len(off.faces) - len(on.faces) >= 16      # top disc + wall spans
     assert len(off.segs) - len(on.segs) >= 16        # rims and limbs
-    # the part's own top edges are still drawn, still hidden behind the studs
-    assert len(on.segs) > 0
+    # the part's own top edges are still drawn, ending where a stud hides
+    # them: the placed studs anchor those ends against the orphan cull
+    assert len(on.segs) >= 15
+    from shapely.geometry import Point
+    from brick_icons import instancing
+    region = instancing.shown_ops(on.studs, on.proj)
+    px = 1.0 / on.s
+    assert any(op[0] == "line" and any(region.distance(Point(p)) <= px
+                                       for p in (op[1:3], op[3:5]))
+               for op in on.segs)

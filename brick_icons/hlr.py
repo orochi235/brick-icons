@@ -941,7 +941,8 @@ def _fold_arc_loops(segs, fold_ells, bridge_frac=0.4, step=2.0):
     return loops
 
 
-def cull_orphan_runs(segs, cap=None, tol=None, join_tol=0.75, protect=()):
+def cull_orphan_runs(segs, cap=None, tol=None, join_tol=0.75, protect=(),
+                     anchors=None):
     """Stylization-level orphan cull (2654a inner-rim fraying): drop short
     stroke runs with a free end. Every such run is CORRECT HLR of authored
     micro-geometry — a blend edge or trough-circle fragment whose 3D
@@ -978,9 +979,18 @@ def cull_orphan_runs(segs, cap=None, tol=None, join_tol=0.75, protect=()):
     merge TANGENTIALLY into adjoining strokes (a graze, which fitting can
     leave slightly off) and whose removal exposes the fill seams that
     follow them (3941/4032a stud-flank hooks). They never peel and they
-    stop a cascade."""
+    stop a cascade.
+
+    `anchors` is a shapely geometry in the ops' own space: a tip as near it
+    as the anchor tolerance is never free. Placed studs draw no op here, so a part
+    edge ending where one hides it would otherwise read as fray."""
     if not segs:
         return segs
+    if anchors is not None and not anchors.is_empty:
+        import shapely
+        shapely.prepare(anchors)
+    else:
+        anchors = None
     ops = [("line",) + tuple(op) if len(op) == 5 else op for op in segs]
     x0, y0, x1, y1 = _ops_bbox(segs)
     dim = max(x1 - x0, y1 - y0)
@@ -1045,8 +1055,12 @@ def cull_orphan_runs(segs, cap=None, tol=None, join_tol=0.75, protect=()):
         return float(dist[k]), int(owner[k])
 
     def anchored(i, P):
+        near = max(tol, lens[i] / 63.0)
+        if anchors is not None and shapely.dwithin(
+                anchors, shapely.Point(P), near):
+            return True
         d, _ = nearest(i, P, {i})
-        return d <= max(tol, lens[i] / 63.0)
+        return d <= near
 
     # peel dangling branches: a leaf op whose tip node holds no other
     # living op and whose tip is unanchored is fray — remove it and carry
@@ -1241,7 +1255,7 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
             out.pop(key, None)
         sweep.substitute(out)
     res = draw_flattened(out, right, up, fwd, render_px, cull=cull,
-                         engine=engine, canvas_px=canvas_px)
+                         engine=engine, canvas_px=canvas_px, studs=plan)
     if plan is not None:
         res = res._replace(studs=plan, bbox=instancing.grow_bbox(
             res.bbox, plan, res.proj))
@@ -1249,11 +1263,12 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
 
 
 def draw_flattened(out, right, up, fwd, render_px=900, cull=True,
-                   engine="naive", canvas_px=None):
+                   engine="naive", canvas_px=None, studs=None):
     """Everything visible_segments does after the flatten -- repair, arcfit,
     the engine and the stylization tail -- on a flattened part that
     sweep.substitute has already run over. Split out so a stud drawn on its
-    own (instancing.Instancer) takes exactly the part's path."""
+    own (instancing.Instancer) takes exactly the part's path. `studs` is the
+    instancing.Plan whose placed studs anchor the orphan cull."""
     if out["tri"]:
         # Repair returns outward-oriented tris as float32 (cache dtype); the
         # ~7 sig-fig precision is ample at icon scale. Keep out["tri"] a LIST
@@ -1284,7 +1299,7 @@ def draw_flattened(out, right, up, fwd, render_px=900, cull=True,
         px = 1.0 / (res.s or 1.0)
         with timing.phase("dedupe"):
             segs = dedupe_segments(res.segs, eps=0.05 * px, keep_order=True)
-        return _stylize(res, segs, cull, px)
+        return _stylize(res, segs, cull, px, _stud_anchors(studs, res.proj))
     if engine == "cadquery":
         from . import cqsvg
         return cqsvg.visible_segments(out, right, up, render_px, cull=cull)
@@ -1298,11 +1313,20 @@ def draw_flattened(out, right, up, fwd, render_px=900, cull=True,
                                             cull=cull)
     with timing.phase("dedupe"):
         segs = dedupe_segments(res.segs)
-    res = _stylize(res, segs, cull, px=1.0)
+    res = _stylize(res, segs, cull, px=1.0,
+                   anchors=_stud_anchors(studs, res.proj))
     return res._replace(tri=out["tri"], tri_colors=out.get("tri_colors", ()))
 
 
-def _stylize(res, segs, cull, px):
+def _stud_anchors(studs, proj):
+    """What every placed stud shows, op space, or None when none is placed."""
+    if studs is None or not studs.placed():
+        return None
+    from . import instancing
+    return instancing.shown_ops(studs, proj)
+
+
+def _stylize(res, segs, cull, px, anchors=None):
     """The stylization tail every engine's deduped ops go through.
 
     One function on purpose: the tail ran only on the naive branch once, and
@@ -1320,7 +1344,8 @@ def _stylize(res, segs, cull, px):
     fold = set(res.fold_ells or ())
     if cull:
         with timing.phase("cull"):
-            segs = cull_orphan_runs(segs, join_tol=0.75 * px, protect=fold)
+            segs = cull_orphan_runs(segs, join_tol=0.75 * px, protect=fold,
+                                    anchors=anchors)
     if refits:
         # refit separators are arc-recovery candidates too, so the moved
         # fill seam emits as a true arc (25 deg step, like the rim ones)

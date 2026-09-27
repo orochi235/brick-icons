@@ -181,3 +181,23 @@ def test_every_stud_of_a_2x4_brick_is_clear_and_leaves_the_naive_drawing():
     assert on.bbox[1] <= off.bbox[1] + 1.0          # the studs stay in frame
     with pytest.raises(ValueError):
         hlr.visible_segments("3001", LIB, engine="naive", stud_instancing="some")
+
+
+def _ends_under_studs(res):
+    """Line ops with an end inside what a placed stud shows, op space."""
+    region = instancing.shown_ops(res.studs, res.proj)
+    return [op for op in res.segs if op[0] == "line"
+            and any(region.distance(Point(p)) <= 1.0
+                    for p in (op[1:3], op[3:5]))]
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_a_part_edge_ending_under_a_placed_stud_survives_the_orphan_cull():
+    off = hlr.visible_segments("3001", LIB, render_px=600, engine="naive")
+    on = hlr.visible_segments("3001", LIB, render_px=600, engine="naive",
+                              stud_instancing="all")
+    # 3001's back top edges run between the studs and end where one hides them
+    assert len(on.segs) >= 15
+    assert _ends_under_studs(on)
+    again = hlr.visible_segments("3001", LIB, render_px=600, engine="naive")
+    assert again.segs == off.segs
