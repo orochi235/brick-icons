@@ -18,10 +18,12 @@ from . import repair
 # marks which drawn arcs are stylized fold arcs.
 # loops: closed point loops of chained drawn fold-arc spans (op space) —
 # stylized sub-region outlines for shade.fill_ops(loops=...).
+# studs: the instancing.Plan when the render was drawn with stud instancing,
+# else None.
 VisResult = namedtuple("VisResult",
                        "segs bbox s faces analytic ellipses proj refits "
-                       "fold_ells loops tri tri_colors sil_polys",
-                       defaults=[(), None, (), (), (), (), (), ()])
+                       "fold_ells loops tri tri_colors sil_polys studs",
+                       defaults=[(), None, (), (), (), (), (), (), None])
 
 _text_cache: dict[Path, list[str]] = {}
 
@@ -1179,12 +1181,36 @@ def _is_printed(path) -> bool:
     return "pattern" in desc or "sticker" in desc
 
 
+def kept_tris(out):
+    """(triangles, colors) an engine may draw faces from: all of out's, less
+    those under a stud instancing places (tri_meta "withheld", set by
+    instancing.withhold). Out's own lists when none is withheld, so a render
+    without instancing passes through untouched. `colors` is None where out
+    carries none."""
+    tris = out.get("tri") or []
+    colors = out.get("tri_colors")
+    meta = out.get("tri_meta") or []
+    if not any(m.get("withheld") for m in meta):
+        return tris, colors
+    keep = [i for i, m in enumerate(meta) if not m.get("withheld")]
+    return ([tris[i] for i in keep],
+            None if colors is None else [colors[i] for i in keep])
+
+
 @timing.timed("geometry")
 def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
-                     cull=True, engine="naive", pose=None, canvas_px=None):
+                     cull=True, engine="naive", pose=None, canvas_px=None,
+                     stud_instancing="off"):
+    """`stud_instancing="all"` classifies every declared stud before the
+    engine runs and withholds the drawing of each one instancing will place
+    (instancing.withhold); the result carries that plan as `studs`. Only the
+    naive and occt engines honor the withholding, so only they take it."""
     if engine not in VALID_ENGINES:
         raise ValueError(
             f"unrecognized engine {engine!r}; must be one of {VALID_ENGINES}")
+    if stud_instancing not in ("off", "all"):
+        raise ValueError(f"stud_instancing must be 'off' or 'all', "
+                         f"not {stud_instancing!r}")
     roots = default_roots(ldraw_dir)
     path = _resolve_input(part, roots)
     out = {"2": [], "5": [], "tri": [], "tri_meta": [], "analytic": []}
@@ -1194,13 +1220,37 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
     # through the unwrap for nothing. The description line is the signal
     # -- see partindex, which classifies the corpus the same way.
     out["printed"] = _is_printed(path)
+    right, up, fwd = view_basis(lat, long)
+    plan = None
     with timing.phase("flatten"):
         # The turn goes in as the root basis rather than into the camera:
         # `view_basis` derives its up vector from world Y, so a lat/long pair
         # cannot express the roll that a turn about X or Z asks for.
         root = np.eye(3) if pose is None else np.asarray(pose, float)
         flatten(path, root, np.zeros(3), out, roots)
+        if stud_instancing == "all" and engine in ("naive", "occt"):
+            from . import instancing
+            with timing.phase("studs"):
+                plan = instancing.withhold(out, right, up, fwd)
+        # the per-line stud tags are parallel to out["2"]/out["5"] only until
+        # the passes below rewrite those lists; nothing after here reads them
+        for key in ("2_stud", "5_stud"):
+            out.pop(key, None)
         sweep.substitute(out)
+    res = draw_flattened(out, right, up, fwd, render_px, cull=cull,
+                         engine=engine, canvas_px=canvas_px)
+    if plan is not None:
+        res = res._replace(studs=plan, bbox=instancing.grow_bbox(
+            res.bbox, plan, res.proj))
+    return res
+
+
+def draw_flattened(out, right, up, fwd, render_px=900, cull=True,
+                   engine="naive", canvas_px=None):
+    """Everything visible_segments does after the flatten -- repair, arcfit,
+    the engine and the stylization tail -- on a flattened part that
+    sweep.substitute has already run over. Split out so a stud drawn on its
+    own (instancing.Instancer) takes exactly the part's path."""
     if out["tri"]:
         # Repair returns outward-oriented tris as float32 (cache dtype); the
         # ~7 sig-fig precision is ample at icon scale. Keep out["tri"] a LIST
@@ -1214,7 +1264,6 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
     # any part that gains one needs the analytic pipeline to draw it
     with timing.phase("arcfit"):
         out["fit_arcs"], out["2"] = arcfit.fit_edge_arcs(out["2"], out["5"])
-    right, up, fwd = view_basis(lat, long)
     if engine == "occt":
         # Its own phase: OCP is a 0.65s import, paid once per process by
         # whichever part a worker happens to draw first. Left unnamed it
@@ -1493,8 +1542,9 @@ def canvas_affine(res, f, ox, oy):
             (p.half - p.cy * p.s) * f + oy)
 
 
-def fit_segments(segs, bbox, W, H, margin=6, scale=1.0):
-    f, ox, oy = fit_affine(bbox, W, H, margin, scale)
+def affine_segments(segs, f, ox, oy):
+    """Ops mapped through a uniform scale `f` and offset (ox, oy) -- the fit
+    fit_affine computes, or any other (instancing.origin_fit)."""
     out = []
     for op in segs:
         if len(op) == 5:                               # legacy line tuple
@@ -1507,3 +1557,7 @@ def fit_segments(segs, bbox, W, H, margin=6, scale=1.0):
             out.append(("arc", cx * f + ox, cy * f + oy,
                         ux * f, uy * f, vx * f, vy * f, t0, t1, k))
     return out
+
+
+def fit_segments(segs, bbox, W, H, margin=6, scale=1.0):
+    return affine_segments(segs, *fit_affine(bbox, W, H, margin, scale))

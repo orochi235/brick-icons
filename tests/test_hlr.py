@@ -3,7 +3,7 @@ import shutil
 import numpy as np
 import pytest
 from pathlib import Path
-from brick_icons import arcfit, hlr, primitives
+from brick_icons import arcfit, hlr, primitives, sweep
 
 LIB = Path("vendor/ldraw")
 HAVE_LIB = LIB.exists()
@@ -1179,3 +1179,45 @@ def test_flatten_tags_every_line_and_triangle_under_a_stud(tmp_path):
     assert ref["path"].name == "stud.dat"
     assert np.allclose(ref["t"], [5, 0, 5]) and np.allclose(ref["R"], np.eye(3))
     assert ref["color"] == 16 and ref["body"] == 16 and ref["invert"] is False
+
+
+def test_affine_segments_maps_lines_and_arcs_and_fit_segments_uses_it():
+    ops = [("line", 1.0, 2.0, 3.0, 4.0, "edge"),
+           ("arc", 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 90.0, "sil")]
+    assert hlr.affine_segments(ops, 2.0, 10.0, 20.0) == [
+        ("line", 12.0, 24.0, 16.0, 28.0, "edge"),
+        ("arc", 10.0, 20.0, 2.0, 0.0, 0.0, 2.0, 0.0, 90.0, "sil")]
+    bbox = (0.0, 0.0, 4.0, 4.0)
+    assert hlr.fit_segments(ops, bbox, 100, 80) == hlr.affine_segments(
+        ops, *hlr.fit_affine(bbox, 100, 80))
+
+
+def test_vis_result_carries_no_stud_plan_by_default():
+    assert hlr.VisResult([], (0, 0, 1, 1), 1.0, [], []).studs is None
+
+
+def test_kept_tris_passes_out_s_own_lists_through_when_nothing_is_withheld():
+    tris = [np.zeros((3, 3)), np.ones((3, 3))]
+    out = {"tri": tris, "tri_colors": [16, 4],
+           "tri_meta": [{"stud": None}, {"stud": 1}]}
+    got, colors = hlr.kept_tris(out)
+    assert got is tris and colors is out["tri_colors"]
+    out["tri_meta"][1]["withheld"] = True
+    got, colors = hlr.kept_tris(out)
+    assert len(got) == 1 and got[0] is tris[0] and colors == [16]
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_draw_flattened_is_visible_segments_after_the_flatten():
+    roots = hlr.default_roots(LIB)
+    out = {"2": [], "5": [], "tri": [], "tri_meta": [], "analytic": [],
+           "printed": False}
+    hlr.flatten(hlr._resolve_input("3005", roots), np.eye(3), np.zeros(3),
+                out, roots)
+    for key in ("2_stud", "5_stud"):
+        out.pop(key, None)
+    sweep.substitute(out)
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    got = hlr.draw_flattened(out, right, up, fwd, 600, engine="naive")
+    want = hlr.visible_segments("3005", LIB, render_px=600, engine="naive")
+    assert got.segs == want.segs and got.bbox == want.bbox
