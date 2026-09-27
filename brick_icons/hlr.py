@@ -471,8 +471,9 @@ def _visible_segments_faceted(out, right, up, fwd, render_px, cull=True):
     xs = [c for sg in segs for c in (sg[0], sg[2])] or [0, 1]
     ys = [c for sg in segs for c in (sg[1], sg[3])] or [0, 1]
     from . import shade
-    faces = shade.faces_from_tris(tri, proj, cond_edges=out["5"],
-                                  colors=out.get("tri_colors")) if len(tri) else []
+    kept, kept_colors = kept_tris(out)
+    faces = shade.faces_from_tris(np.array(kept), proj, cond_edges=out["5"],
+                                  colors=kept_colors) if len(kept) else []
     faces = shade.unwrap_decoration(faces, [], proj)
     faces = shade.order_faces(faces, eps=EDGE_BIAS * zrange)
     return VisResult(segs, (min(xs), min(ys), max(xs), max(ys)), s, faces, [],
@@ -521,8 +522,8 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
     from . import shade
     ink = shade.ink_prims(analytic, out.get("tri"), out.get("tri_colors"))
     for prim in analytic:
-        if id(prim) in ink:
-            continue                    # print, not relief: no crease to draw
+        if id(prim) in ink or prim.withheld:
+            continue                    # print, or a stud instancing draws
         own = prim.occluder()
         for op, dfn in prim.drawn_with_depth(proj, skip_rims=shared_rims):
             specs.append((op, dfn, own if op[-1] == "sil" else None))
@@ -583,10 +584,12 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
     else:
         segs = [spec[0] for spec in specs]
     from . import shade
-    tri_faces = shade.faces_from_tris(np.array(out["tri"]), proj,
+    tris, tri_colors = kept_tris(out)
+    tri_faces = shade.faces_from_tris(np.array(tris), proj,
                                       cond_edges=out["5"],
-                                      colors=out.get("tri_colors")) if out["tri"] else []
-    an_faces = shade.faces_from_analytic(analytic, proj)
+                                      colors=tri_colors) if tris else []
+    an_faces = shade.faces_from_analytic(
+        [p for p in analytic if not p.withheld], proj)
     # before absorb_wall_facets, which is color-blind: a decal that binds is
     # already its own region and must not be swallowed into the wall it sits on
     decal_ells = []

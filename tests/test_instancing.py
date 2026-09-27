@@ -162,3 +162,22 @@ def test_the_bbox_grows_over_every_placed_stud():
     assert instancing.grow_bbox((0.0, 0.0, 1.0, 1.0), plan, ident) == (-6.0, -6.0, 6.0, 6.0)
     px = primitives.Projection(RIGHT, UP, FWD, s=2.0, cx=1.0, cy=1.0, half=100.0)
     assert instancing.grow_bbox((90.0, 90.0, 95.0, 95.0), plan, px) == (86.0, 86.0, 110.0, 110.0)
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_every_stud_of_a_2x4_brick_is_clear_and_leaves_the_naive_drawing():
+    timing.reset()
+    off = hlr.visible_segments("3001", LIB, render_px=600, engine="naive")
+    on = hlr.visible_segments("3001", LIB, render_px=600, engine="naive",
+                              stud_instancing="all")
+    assert off.studs is None
+    assert on.studs.counts() == {"clear": 8, "cut": 0, "hidden": 0, "fallback": 0}
+    assert {k: v for k, v in timing.counts().items() if k.startswith("studs_")} \
+        == {"studs_clear": 8, "studs_cut": 0, "studs_hidden": 0, "studs_fallback": 0}
+    assert len(off.segs) - len(on.segs) >= 16
+    assert len(off.faces) - len(on.faces) >= 16
+    assert not any(f.get("prim") is not None and f["prim"].stud is not None
+                   for f in on.faces)
+    assert on.bbox[1] <= off.bbox[1] + 1.0          # the studs stay in frame
+    with pytest.raises(ValueError):
+        hlr.visible_segments("3001", LIB, engine="naive", stud_instancing="some")
