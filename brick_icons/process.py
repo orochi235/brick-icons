@@ -127,45 +127,64 @@ def stroke_width(op, line_px, sil_px, studs=None):
     return sil_px if op[-1] == "sil" else line_px
 
 
+def _draw_op(dr, op, wpx, ss):
+    """One line or arc op onto a supersampled canvas."""
+    if op[0] == "line":
+        _, x1, y1, x2, y2, _ = op
+        dr.line([(x1 * ss, y1 * ss), (x2 * ss, y2 * ss)], fill=0, width=wpx)
+        return
+    _, cx, cy, ux, uy, vx, vy, t0, t1, _ = op
+    n = max(2, int(abs(t1 - t0) / 2) + 2)
+    pts = []
+    for k in range(n):
+        ang = math.radians(t0 + (t1 - t0) * k / (n - 1))
+        c, s = math.cos(ang), math.sin(ang)
+        pts.append(((cx + c * ux + s * vx) * ss, (cy + c * uy + s * vy) * ss))
+    dr.line(pts, fill=0, width=wpx, joint="curve")
+
+
 def draw_segments(segs, w, h, line_px=2, sil_px=2, supersample=3,
-                  contour_rings=None, contour_px=None, studs=None):
+                  contour_rings=None, contour_px=None, studs=None,
+                  stud_ops=(), stud_px=None, contour_open=()):
     """Anti-aliased black line-art on white. Accepts line ops and arc ops;
     'sil' segments use sil_px width. Arc ops are sampled into polylines.
     contour_rings (closed silhouette rings, px) draw first with round
     joints: PIL strokes are butt-capped, so outline corners are otherwise
-    left with unfilled outer wedges (notched corners)."""
+    left with unfilled outer wedges (notched corners). contour_open (open
+    contour runs, px) draw the same way but without the closing segment --
+    instancing.cut_rings cuts a ring open where a placed stud hides it.
+    stud_ops (instancing.Instancer.png_ops) are placed studs' strokes,
+    drawn last at stud_px (default line_px)."""
     ss = max(1, supersample)
     img = Image.new("L", (w * ss, h * ss), 255)
     dr = ImageDraw.Draw(img)
+    cpx = max(1, round((contour_px if contour_px is not None else sil_px) * ss))
     for ring in contour_rings or []:
-        wpx = max(1, round((contour_px if contour_px is not None else sil_px) * ss))
         pts = [(x * ss, y * ss) for x, y in ring]
         # re-append the first two points so the seam vertex gets a joint too
-        dr.line(pts + pts[:2], fill=0, width=wpx, joint="curve")
+        dr.line(pts + pts[:2], fill=0, width=cpx, joint="curve")
+    for run in contour_open or ():
+        dr.line([(x * ss, y * ss) for x, y in run], fill=0, width=cpx,
+                joint="curve")
     for op in segs:
         if len(op) == 5:                               # legacy line tuple
             op = ("line",) + tuple(op)
         wpx = max(1, round(stroke_width(op, line_px, sil_px, studs) * ss))
-        if op[0] == "line":
-            _, x1, y1, x2, y2, _ = op
-            dr.line([(x1 * ss, y1 * ss), (x2 * ss, y2 * ss)], fill=0, width=wpx)
-        else:
-            _, cx, cy, ux, uy, vx, vy, t0, t1, _ = op
-            n = max(2, int(abs(t1 - t0) / 2) + 2)
-            pts = []
-            for k in range(n):
-                ang = math.radians(t0 + (t1 - t0) * k / (n - 1))
-                c, s = math.cos(ang), math.sin(ang)
-                pts.append(((cx + c * ux + s * vx) * ss, (cy + c * uy + s * vy) * ss))
-            dr.line(pts, fill=0, width=wpx, joint="curve")
+        _draw_op(dr, op, wpx, ss)
+    if stud_ops:
+        wpx = max(1, round((line_px if stud_px is None else stud_px) * ss))
+        for op in stud_ops:
+            _draw_op(dr, op, wpx, ss)
     return img.resize((w, h), Image.LANCZOS)
 
 
 def segments_mono(segs, w, h, line_px=2, sil_px=2, threshold=160,
-                  contour_rings=None, contour_px=None, studs=None):
+                  contour_rings=None, contour_px=None, studs=None,
+                  stud_ops=(), stud_px=None, contour_open=()):
     g = draw_segments(segs, w, h, line_px, sil_px,
                       contour_rings=contour_rings, contour_px=contour_px,
-                      studs=studs)
+                      studs=studs, stud_ops=stud_ops, stud_px=stud_px,
+                      contour_open=contour_open)
     return g.point(lambda p: 255 if p >= threshold else 0).convert("1")
 
 

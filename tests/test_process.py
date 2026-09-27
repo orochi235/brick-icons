@@ -129,3 +129,20 @@ def test_a_stud_draws_at_the_stud_tier_in_the_png():
     stud = ink(process.draw_segments(ring(20.0), 80, 40, line_px=3, studs=studs))
     other = ink(process.draw_segments(ring(60.0), 80, 40, line_px=3, studs=studs))
     assert stud < 0.5 * other, (stud, other)
+
+
+def test_stud_ops_draw_at_their_own_width_after_the_segments():
+    blank = np.asarray(process.draw_segments([], 20, 20))
+    assert blank.min() == 255
+    img = np.asarray(process.draw_segments(
+        [], 20, 20, stud_ops=[("line", 2.0, 10.0, 18.0, 10.0, "edge")],
+        stud_px=2))
+    assert img[10, 10] < 128 and img[3, 10] == 255
+
+
+def test_an_open_contour_run_draws_without_closing():
+    img = np.asarray(process.draw_segments(
+        [], 30, 30, contour_open=[[(2.0, 2.0), (28.0, 2.0), (28.0, 28.0)]],
+        sil_px=2))
+    assert img[2, 15] < 128 and img[15, 28] < 128
+    assert img[15, 15] == 255                     # no closing diagonal
