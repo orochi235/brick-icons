@@ -7,10 +7,11 @@ old half-radius arc cap is gone. Baseplates (51542, 35011, 3811) lost their
 heavy frames. Every knob is a CLI flag on purpose: which values are best is
 not settled.
 
-The `occt-svelte` slot is `occt` at a 1.5 px line weight. Its first fill went
-out 2026-09-27 as three jobs, `slot-occt-svelte-{studio,msb-uai,keiei}`, each
-with its own `out/slot-occt-svelte-<node>` tree and watcher. Every other slot
-now predates the stroke change and draws stale.
+The `occt-svelte` slot is `occt` at a 1.5 px line weight. It holds nothing
+yet: its first fill was canceled on purpose to wait for stud instancing
+(`docs/superpowers/specs/2026-09-27-stud-instancing-design.md`), which changes
+how every studded part draws. Fill it after that lands. Every other slot now
+predates the stroke change and draws stale.
 
 **Not built: a lab page for designing and running render commands.** Asked
 for 2026-09-27, because the flag set has grown past what anyone types from
@@ -4328,7 +4329,7 @@ else's -- keep them out of your commits.
 ## Finished, badly: the naive retry passes, and two slots that do not exist yet
 
 **Both naive retry passes are over and neither is worth re-reading.**
-`census-white-naive-r3` was cancelled and pruned; `-r4` timed out after 2h12m
+`census-white-naive-r3` was canceled and pruned; `-r4` timed out after 2h12m
 of CPU with its batch counter still at `0/134` -- every logged item reads
 `FAILED TimeoutError: exceeded 300.0s`. msb-uai is idle, carrying one stale
 record (`475fecdf`, "the supervisor is gone and wrote no result") from a pass
