@@ -461,6 +461,10 @@ def test_two_strokes_closing_a_sub_stroke_loop_both_go():
 
 def test_stud_weight_floors_and_never_outweighs_the_line():
     from brick_icons import process
-    assert process.stud_weight(2.0, 0.5, 0.5) == 1.0      # a brick: half
-    assert process.stud_weight(0.75, 0.5, 0.5) == 0.5     # a baseplate: floor
-    assert process.stud_weight(0.4, 0.5, 0.5) == 0.4      # never above line
+    # (line, line before its floor, fraction, floor)
+    assert process.stud_weight(2.0, 2.0, 0.5, 0.2) == 1.0      # a brick: half
+    assert process.stud_weight(1.4, 1.4, 0.5, 0.2) == 0.7      # a 1x10
+    # a baseplate: its line sits on the 0.75 floor, but its studs halve the
+    # unfloored 0.22 px and so land on their own floor, not at 0.375
+    assert process.stud_weight(0.75, 0.22, 0.5, 0.2) == 0.2
+    assert process.stud_weight(0.4, 2.0, 0.5, 0.2) == 0.4      # never above line

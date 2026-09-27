@@ -165,11 +165,12 @@ def _stage(debug_dir, stage, name) -> Path:
     return d / f"{name}.png"
 
 
-def _stroke_tiers(cfg, res, basis, fit, line_px, sil_px, ratio=1.0):
+def _stroke_tiers(cfg, res, basis, fit, line_px, sil_px, stud_base, ratio=1.0):
     """(line, sil, studs) for a drawing fitted by `fit` = (f, ox, oy).
 
-    `line_px`/`sil_px` are the icon's weights at its own canvas; a drawing
-    `ratio` times that size (the gray PNG) scales them. The stud tier
+    `line_px`/`sil_px` are the icon's weights at its own canvas and
+    `stud_base` the line weight before its floor; a drawing `ratio` times
+    that size (the gray PNG) scales them. The stud tier
     (process.stud_weight) covers the footprints of the studs the part
     declared."""
     line, sil = line_px * ratio, sil_px * ratio
@@ -177,7 +178,8 @@ def _stroke_tiers(cfg, res, basis, fit, line_px, sil_px, ratio=1.0):
     zone = hlr.stud_footprints(res.analytic or (), *basis, k, kx, ky,
                                pad=0.5 * ratio)
     studs = (process.StudTier(zone, process.stud_weight(
-                 line, cfg.stud_stroke, cfg.stud_floor * ratio))
+                 line, stud_base * ratio, cfg.stud_stroke,
+                 cfg.stud_floor * ratio))
              if zone is not None and cfg.stud_stroke > 0 else None)
     return line, sil, studs
 
@@ -332,6 +334,8 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                                      cfg.stroke_ldu, cfg.stroke_floor)
         sil_w = process.icon_weight(cfg.silhouette_width, px_per_ldu,
                                     cfg.stroke_ldu, cfg.stroke_floor)
+        stud_base = process.icon_weight(cfg.line_width, px_per_ldu,
+                                        cfg.stroke_ldu, 0.0)
         style = None
         if cfg.shade_style != "none" and not cfg.wireframe:
             style = shade.make_style(cfg.shade_style,
@@ -351,7 +355,8 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                 ells = hlr.fit_ellipses(res.ellipses, f, ox, oy)
                 _l, _s, studs = _stroke_tiers(cfg, res, basis, (f, ox, oy),
                                               cfg.line_mm / 0.4 * s,
-                                              cfg.silhouette_mm / 0.4 * s)
+                                              cfg.silhouette_mm / 0.4 * s,
+                                              cfg.line_mm / 0.4 * s)
                 spurs = shade.silhouette_spur_trim(
                     faces, ells, cfg.silhouette_mm / 0.4 * s,
                     strokes=shifted) if faces else None
@@ -393,7 +398,7 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                 faces = shade.apply_affine_faces(res.faces, f, ox, oy)
                 ells = hlr.fit_ellipses(res.ellipses, f, ox, oy)
                 line_px, sil_px, studs = _stroke_tiers(cfg, res, basis, icon_fit,
-                                                       line_w, sil_w)
+                                                       line_w, sil_w, stud_base)
                 spurs = shade.silhouette_spur_trim(
                     faces, ells, sil_px,
                     strokes=fit) if faces else None
@@ -445,7 +450,7 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                 gl, gs, gstuds = _stroke_tiers(
                     cfg, res, basis,
                     hlr.fit_affine(bbox, gpx, gpx, cfg.margin, cfg.scale),
-                    line_w, sil_w, ratio)
+                    line_w, sil_w, stud_base, ratio)
                 g = process.draw_segments(gfit, gpx, gpx, line_px=gl, sil_px=gs,
                                           contour_rings=sil_rings(gpx, gpx, gfit, gs),
                                           studs=gstuds)
@@ -455,7 +460,7 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
             if cfg.mode in ("mono", "both"):
                 mfit = hlr.fit_segments(segs, bbox, cfg.width, cfg.height, cfg.margin, cfg.scale)
                 ml, ms, mstuds = _stroke_tiers(cfg, res, basis, icon_fit,
-                                               line_w, sil_w)
+                                               line_w, sil_w, stud_base)
                 m = process.segments_mono(mfit, cfg.width, cfg.height,
                                           line_px=ml, sil_px=ms,
                                           contour_rings=sil_rings(

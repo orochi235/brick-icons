@@ -61,10 +61,13 @@ def icon_weight(width, px_per_ldu, cap_ldu, floor):
     return min(width, max(floor, cap_ldu * px_per_ldu))
 
 
-def stud_weight(line_px, fraction, floor):
-    """A declared stud's stroke: `fraction` of the icon's line weight, never
-    thinner than `floor` and never heavier than the line itself."""
-    return min(line_px, max(floor, fraction * line_px))
+def stud_weight(line_px, base_px, fraction, floor):
+    """A declared stud's stroke: `fraction` of `base_px`, the line weight
+    before its floor, never thinner than `floor` and never heavier than the
+    line itself. Taken from the floored weight instead, every part below
+    the line floor drew its studs at one fixed width however small it was,
+    and on the smallest (51542) that closed the stud walls up."""
+    return min(line_px, max(floor, fraction * base_px))
 
 
 def op_points(op, n=12):
