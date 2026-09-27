@@ -103,8 +103,8 @@ def flags_for(slot: str) -> dict:
         # the decal slot, which is a wrong picture rather than an error.
         return {"engine": cfg.engine, "extra": "--decal"}
     extra = ["--shade-style", cfg.shade_style,
-             "--line-width", str(cfg.line_width),
-             "--silhouette-width", str(cfg.silhouette_width)]
+             "--line-width", f"{cfg.line_width:g}",
+             "--silhouette-width", f"{cfg.silhouette_width:g}"]
     if cfg.opacity is not None and cfg.opacity != 1.0:
         extra += ["--opacity", str(cfg.opacity)]
     return {"engine": cfg.engine, "extra": " ".join(extra)}

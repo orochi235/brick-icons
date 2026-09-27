@@ -1137,3 +1137,18 @@ def test_a_counterbore_separator_still_refits(ldraw_dir):
     assert refits, "32527 should still refit its counterbore separator"
     for old, new, _bore in refits:
         assert 0.8 < _radius(new) / _radius(old) < 0.9
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_studs_are_what_the_part_declared():
+    # a top stud is tagged by the primitive it came from; the tubes under a
+    # brick are "Stud Tube" primitives and are not
+    p = Path(LIB) / "p"
+    assert hlr.is_stud(p / "stud.dat") and hlr.is_stud(p / "stud10.dat")
+    assert not hlr.is_stud(p / "stud4.dat") and not hlr.is_stud(p / "stud3.dat")
+    res = hlr.visible_segments("3001", LIB, render_px=600, engine="naive")
+    studs = {pr.stud for pr in res.analytic if pr.stud is not None}
+    assert len(studs) == 8
+    right, up, fwd = hlr.view_basis(30, 45)
+    zone = hlr.stud_footprints(res.analytic, right, up, fwd, 1.0, 0.0, 0.0, 0.0)
+    assert len(zone.geoms) == 8                       # eight separate studs

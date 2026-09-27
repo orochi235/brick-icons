@@ -561,6 +561,8 @@ class Primitive:
 
     kind = None          # class attribute, overridden per subclass
     rims_declared = False    # set per instance by from_ref; see declares_rims
+    stud = None              # set per instance by hlr.flatten: which stud
+                             # this came from, or None
 
     def __post_init__(self):
         self.R = np.asarray(self.R, float)

@@ -65,16 +65,30 @@ def test_segments_to_svg_emits_arc_path(tmp_path):
     assert "<path" in txt and " A " in txt          # elliptical-arc command
 
 
-def test_a_small_arc_strokes_thinner_than_its_radius(tmp_path):
-    # 309p03's studs are 3.25 px across at icon size; a full-width stroke on
-    # every rim merged the stud field into solid black
+def test_only_a_declared_stud_strokes_lighter(tmp_path):
+    # the stud tier follows what the part declared, not a circle's size: an
+    # arc inside a stud's footprint draws at the stud weight, an equally
+    # small arc elsewhere and a line crossing the footprint stay full weight
+    from shapely.geometry import Point
+    from brick_icons import process
+    studs = process.StudTier(Point(20, 20).buffer(3), 1.0)
     ops = [("arc", 20.0, 20.0, 1.6, 0.0, 0.0, 1.6, 0.0, 360.0, "line"),
-           ("arc", 60.0, 60.0, 18.0, 0.0, 0.0, 18.0, 0.0, 360.0, "line"),
-           ("line", 5.0, 90.0, 6.0, 90.0, "line")]
-    txt = _trace.segments_to_svg(ops, 100, 100, tmp_path / "t.svg", line_px=2).read_text()
-    widths = set(re.findall(r'stroke-width="([0-9.]+)"', txt))
-    assert "0.80" in widths, widths          # the stud-sized rim
-    assert "2.00" in widths, widths          # the brick-sized rim and the line
+           ("arc", 60.0, 60.0, 1.6, 0.0, 0.0, 1.6, 0.0, 360.0, "line"),
+           ("line", 5.0, 20.0, 40.0, 20.0, "line")]
+    txt = _trace.segments_to_svg(ops, 100, 100, tmp_path / "t.svg", line_px=2,
+                                 studs=studs).read_text()
+    widths = re.findall(r'stroke-width="([0-9.]+)"', txt)
+    assert widths.count("1.00") == 1, widths
+    assert widths.count("2.00") == 2, widths
+
+
+def test_icon_weight_caps_at_ldu_and_floors():
+    from brick_icons import process
+    assert process.icon_weight(2.0, 7.5, 1.0, 0.75) == 2.0      # a 1x1 plate
+    assert process.icon_weight(2.0, 1.4, 1.0, 0.75) == 1.4      # a 1x10
+    assert process.icon_weight(2.0, 0.16, 1.0, 0.75) == 0.75    # a baseplate
+    assert process.icon_weight(2.0, 0.16, 0.0, 0.75) == 2.0     # scaling off
+    assert process.icon_weight(0.0, 0.16, 1.0, 0.75) == 0.0     # no strokes
 
 
 def test_full_ellipse_arc_splits_into_quarter_segments(tmp_path):

@@ -33,6 +33,12 @@ DEFAULTS = {
                              # folds), output px — match line_width so limb
                              # lines don't read heavier than the rim arcs
                              # and box edges they abut
+    "stroke_ldu": 1.0,       # fit mode: no stroke wider than this many LDU of
+                             # the part as drawn, so a part shrunk to fit keeps
+                             # its detail (51542); 0 = fixed width
+    "stroke_floor": 0.75,    # ...and none thinner than this, output px
+    "stud_stroke": 0.5,      # a declared stud's strokes, as a fraction of the
+                             # icon's line weight
     "part_color": None,      # "0xRRGGBB" or None
     "scale": 1.0,            # part fill fraction of label (0-1)
     "scale_mode": "fit",     # fit | physical  (physical: SVG sized in mm)
@@ -83,8 +89,11 @@ class Config:
     shading: str
     engine: str
     cel_levels: int
-    line_width: int
-    silhouette_width: int
+    line_width: float
+    silhouette_width: float
+    stroke_ldu: float
+    stroke_floor: float
+    stud_stroke: float
     part_color: str | None
     scale: float
     scale_mode: str
@@ -154,8 +163,11 @@ def load_config(toml_path=None, overrides=None, root="."):
         shading=str(data["shading"]),
         engine=str(data["engine"]),
         cel_levels=int(data["cel_levels"]),
-        line_width=int(data["line_width"]),
-        silhouette_width=int(data["silhouette_width"]),
+        line_width=float(data["line_width"]),
+        silhouette_width=float(data["silhouette_width"]),
+        stroke_ldu=float(data["stroke_ldu"]),
+        stroke_floor=float(data["stroke_floor"]),
+        stud_stroke=float(data["stud_stroke"]),
         part_color=(str(data["part_color"]) if data["part_color"] else None),
         scale=float(data["scale"]),
         scale_mode=str(data["scale_mode"]),

@@ -83,10 +83,25 @@ def _component_body(sub: Path, color: int) -> int | None:
     return None if first[1:].strip().lower().startswith("sticker") else color
 
 
+def is_stud(path: Path) -> bool:
+    """Is this file a top stud primitive (`p/stud*.dat`, any resolution)?
+
+    Its own title decides, not the name: `stud3`, `stud4*` and a dozen more
+    are the tubes under a brick ("Stud Tube ...", "... Underside ..."), and
+    those are not what the stud stroke is for."""
+    if not path.name.lower().startswith("stud"):
+        return False
+    if "p" not in (path.parent.name.lower(), path.parent.parent.name.lower()):
+        return False
+    lines = _lines(path)
+    title = lines[0][1:].strip().lower() if lines else ""
+    return not (title.startswith("stud tube") or "underside" in title)
+
+
 def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
             roots: list[Path], depth: int = 0,
             inherited_invert: bool = False, color: int = 16,
-            body: int = 16) -> None:
+            body: int = 16, stud: int | None = None) -> None:
     if depth > 30:
         return
     out.setdefault("tri_meta", [])
@@ -137,16 +152,23 @@ def flatten(path: Path, R: np.ndarray, t: np.ndarray, out: dict,
                 if prim is not None and "analytic" in out:
                     prim.color = cur
                     prim.body = body
+                    prim.stud = stud
                     out["analytic"].append(prim)
                 else:
                     sub = resolve(ref, roots)
                     if sub is not None:
                         m_reflect = bool(np.linalg.det(M) < 0)
                         own_body = _component_body(sub, cur)
+                        if stud is None and is_stud(sub):
+                            out["studs"] = out.get("studs", 0) + 1
+                            sub_stud = out["studs"]
+                        else:
+                            sub_stud = stud
                         flatten(sub, Rsub, tsub, out, roots, depth + 1,
                                 inherited_invert=base_invert ^ invert_next
                                 ^ m_reflect, color=cur,
-                                body=body if own_body is None else own_body)
+                                body=body if own_body is None else own_body,
+                                stud=sub_stud)
             invert_next = False
         elif typ in ("2", "5") and len(tok) >= 8:
             pts = np.array(list(map(float, tok[2:])), float).reshape(-1, 3)
@@ -1404,6 +1426,42 @@ def fit_affine(bbox, W, H, margin=6, scale=1.0):
     ox = (W - bw * f) / 2 - bx0 * f
     oy = (H - bh * f) / 2 - by0 * f
     return f, ox, oy
+
+
+def stud_footprints(prims, right, up, fwd, k, kx, ky, pad):
+    """The canvas region each declared stud covers, grown by `pad` px, as
+    one geometry (None when the part has no studs). A stud's footprint is
+    the hull of its primitives' circles, over each one's own sector, so a
+    truncated stud (stud10) does not claim the plate edge it was cut by."""
+    from shapely import MultiPoint, union_all
+    groups = {}
+    for p in prims:
+        if getattr(p, "stud", None) is not None:
+            groups.setdefault(p.stud, []).append(p)
+    hulls = []
+    for members in groups.values():
+        pts = []
+        for p in members:
+            th = np.radians(np.linspace(0.0, p.sector, 25))
+            if p.kind == "ring":
+                rings = [(0.0, p.inner + 1.0)]
+            elif p.kind == "cyli":
+                rings = [(0.0, 1.0), (1.0, 1.0)]
+            elif p.kind == "con":
+                rings = [(0.0, p.top + 1.0), (1.0, p.top)]
+            else:
+                rings = [(0.0, 1.0)]
+            for y, r in rings:
+                local = np.stack([r * np.cos(th), np.full_like(th, y),
+                                  r * np.sin(th)], axis=1)
+                if p.sector < 360.0 - 1e-9:
+                    local = np.vstack([local, [0.0, y, 0.0]])
+                pts.append(local @ p.R.T + p.t)
+        P = np.vstack(pts)
+        a, b, _ = project(P, right, up, fwd)
+        hulls.append(MultiPoint(np.stack([a * k + kx, b * k + ky], axis=1))
+                     .convex_hull.buffer(pad))
+    return union_all(hulls) if hulls else None
 
 
 def canvas_affine(res, f, ox, oy):

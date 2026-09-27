@@ -86,17 +86,6 @@ def _arc_to_svg(op):
     return " ".join(cmds)
 
 
-def _op_points(op, n=12):
-    """A stroke op as a short polyline in canvas px."""
-    if op[0] == "line":
-        return [(op[1], op[2]), (op[3], op[4])]
-    _, cx, cy, ux, uy, vx, vy, t0, t1, _ = op
-    return [(cx + math.cos(t) * ux + math.sin(t) * vx,
-             cy + math.cos(t) * uy + math.sin(t) * vy)
-            for t in (math.radians(t0 + (t1 - t0) * i / (n - 1))
-                      for i in range(n))]
-
-
 def _polyline_mid(P):
     """The point half way along polyline P by length."""
     total = sum(math.dist(a, b) for a, b in zip(P, P[1:]))
@@ -139,7 +128,7 @@ def _drop_sliver_loops(segs, width, max_len):
     for i, op in enumerate(ops):
         if op[-1] == "sil":
             continue
-        pts = _op_points(op)
+        pts = process.op_points(op)
         L = sum(math.dist(a, b) for a, b in zip(pts, pts[1:]))
         # a side shorter than the loop is wide is a chord link, not a side:
         # two of a discretized curve's 0.3 px chords have ends this close
@@ -446,7 +435,7 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
                     fills=None, bg: str = "none", opacity: float = 1.0,
                     clip_geom=None, contour_d: str | None = None,
                     label: str | None = None,
-                    debug_colors: bool = False) -> Path:
+                    debug_colors: bool = False, studs=None) -> Path:
     if physical is not None:
         w_mm, h_mm = physical
         root = (f'<svg xmlns="http://www.w3.org/2000/svg" '
@@ -549,14 +538,13 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
     for op in segs:
         if len(op) == 5:                              # legacy line tuple
             op = ("line",) + tuple(op)
-        sw = sil_px if op[-1] == "sil" else line_px
+        sw = process.stroke_width(op, line_px, sil_px, studs)
         if op[0] == "line":
             _, x1, y1, x2, y2, kind = op
             line_groups.setdefault(round(sw, 2), []).append(
                 (round(x1, 2), round(y1, 2), round(x2, 2), round(y2, 2)))
         else:
             r = (math.hypot(op[3], op[4]) + math.hypot(op[5], op[6])) / 2.0
-            sw = process.arc_stroke(sw, r)
             if r * math.radians(abs(op[8] - op[7])) < 0.6 * sw:
                 continue
             parts.append(f'<path d="{_arc_to_svg(op)}" stroke-width="{sw:.2f}"/>')

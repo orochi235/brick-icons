@@ -50,22 +50,63 @@ def _silhouette_mask(rgba: Image.Image, thr: int = 16) -> Image.Image:
     return rgba.convert("RGBA").split()[-1].point(lambda p: 255 if p > thr else 0)
 
 
-# An arc's stroke is capped at this fraction of its mean radius in output px.
-# At full width 309p03's 3.25 px studs merged into black; a 2x2 brick's 18 px
-# rims are nowhere near the cap. Lines keep full width: thinning them as well
-# barely changed a stud field and emptied near-zero stubs on ordinary parts.
-# Here rather than in trace so the SVG and the PNG outputs share one rule.
-THIN_ARCS = True
-STROKE_PER_RADIUS = 0.5
+def icon_weight(width, px_per_ldu, cap_ldu, floor):
+    """One stroke weight for a whole icon, in its output px: `width`, but
+    never wider than `cap_ldu` LDU of the part as drawn and never thinner
+    than `floor`. A part shrunk hard to fit its canvas keeps its detail
+    instead of drowning in a fixed-width stroke (35011, 51542, 65068).
+    `cap_ldu` <= 0 turns the scaling off."""
+    if cap_ldu <= 0:
+        return width
+    return min(width, max(floor, cap_ldu * px_per_ldu))
 
 
-def arc_stroke(width, radius):
-    """An arc's stroke width in output px: `width`, capped by its radius."""
-    return min(width, STROKE_PER_RADIUS * radius) if THIN_ARCS else width
+def op_points(op, n=12):
+    """A stroke op as a short polyline in its own space."""
+    if len(op) == 5:                                   # legacy line tuple
+        op = ("line",) + tuple(op)
+    if op[0] == "line":
+        return [(op[1], op[2]), (op[3], op[4])]
+    _, cx, cy, ux, uy, vx, vy, t0, t1, _ = op
+    return [(cx + math.cos(t) * ux + math.sin(t) * vx,
+             cy + math.cos(t) * uy + math.sin(t) * vy)
+            for t in (math.radians(t0 + (t1 - t0) * i / (n - 1))
+                      for i in range(n))]
+
+
+class StudTier:
+    """The lighter stroke studs draw at: `px` wide, for every op lying wholly
+    inside `zone`, the union of the studs' projected footprints (same space
+    as the ops). A stud is what the part DECLARED as one -- geometry under a
+    `p/stud*.dat` reference -- never a circle of the right size."""
+
+    def __init__(self, zone, px):
+        import shapely
+        self.zone, self.px = zone, px
+        shapely.prepare(zone)
+
+    def covers(self, op):
+        import shapely
+        xy = np.asarray(op_points(op, 5), float)
+        return bool(shapely.contains_xy(self.zone, xy[:, 0], xy[:, 1]).all())
+
+    def scaled(self, k):
+        from shapely import affinity
+        return StudTier(affinity.scale(self.zone, k, k, origin=(0, 0)),
+                        self.px * k)
+
+
+def stroke_width(op, line_px, sil_px, studs=None):
+    """The width an op draws at: the stud tier inside a stud, else `sil_px`
+    for a silhouette and `line_px` for everything else. Every writer and
+    every fill rule that sizes a stroke asks here."""
+    if studs is not None and studs.covers(op):
+        return studs.px
+    return sil_px if op[-1] == "sil" else line_px
 
 
 def draw_segments(segs, w, h, line_px=2, sil_px=2, supersample=3,
-                  contour_rings=None, contour_px=None):
+                  contour_rings=None, contour_px=None, studs=None):
     """Anti-aliased black line-art on white. Accepts line ops and arc ops;
     'sil' segments use sil_px width. Arc ops are sampled into polylines.
     contour_rings (closed silhouette rings, px) draw first with round
@@ -82,15 +123,12 @@ def draw_segments(segs, w, h, line_px=2, sil_px=2, supersample=3,
     for op in segs:
         if len(op) == 5:                               # legacy line tuple
             op = ("line",) + tuple(op)
-        kind = op[-1]
-        wpx = max(1, round((sil_px if kind == "sil" else line_px) * ss))
+        wpx = max(1, round(stroke_width(op, line_px, sil_px, studs) * ss))
         if op[0] == "line":
             _, x1, y1, x2, y2, _ = op
             dr.line([(x1 * ss, y1 * ss), (x2 * ss, y2 * ss)], fill=0, width=wpx)
         else:
             _, cx, cy, ux, uy, vx, vy, t0, t1, _ = op
-            r = (math.hypot(ux, uy) + math.hypot(vx, vy)) / 2.0
-            wpx = max(1, round(arc_stroke(sil_px if kind == "sil" else line_px, r) * ss))
             n = max(2, int(abs(t1 - t0) / 2) + 2)
             pts = []
             for k in range(n):
@@ -102,9 +140,10 @@ def draw_segments(segs, w, h, line_px=2, sil_px=2, supersample=3,
 
 
 def segments_mono(segs, w, h, line_px=2, sil_px=2, threshold=160,
-                  contour_rings=None, contour_px=None):
+                  contour_rings=None, contour_px=None, studs=None):
     g = draw_segments(segs, w, h, line_px, sil_px,
-                      contour_rings=contour_rings, contour_px=contour_px)
+                      contour_rings=contour_rings, contour_px=contour_px,
+                      studs=studs)
     return g.point(lambda p: 255 if p >= threshold else 0).convert("1")
 
 

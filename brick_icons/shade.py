@@ -9,7 +9,7 @@ from PIL import Image, ImageDraw
 from scipy import ndimage
 
 from . import timing
-from . import colors, geom2d, primitives, unwrap
+from . import colors, geom2d, primitives, process, unwrap
 
 
 def faces_from_analytic(analytic, proj):
@@ -1375,7 +1375,7 @@ def _loop_cut_merged(merged, loops):
                 merged[best] = geom2d.union(merged[best], piece)
 
 
-def _stroke_band(strokes, sil, line_px, sil_px):
+def _stroke_band(strokes, sil, line_px, sil_px, studs=None):
     """The region the drawn strokes cover (canvas space): every emitted
     line/arc op buffered to its width, plus the silhouette contour at
     sil width. Mirrors trace.segments_to_svg: ops shorter than 0.6x their
@@ -1385,7 +1385,7 @@ def _stroke_band(strokes, sil, line_px, sil_px):
     for op in strokes:
         if len(op) == 5:                               # legacy line tuple
             op = ("line",) + tuple(op)
-        sw = sil_px if op[-1] == "sil" else line_px
+        sw = process.stroke_width(op, line_px, sil_px, studs)
         if op[0] == "line":
             _, x1, y1, x2, y2, _k = op
             if math.hypot(x2 - x1, y2 - y1) < 0.6 * sw:
@@ -1416,7 +1416,8 @@ def _stroke_band(strokes, sil, line_px, sil_px):
     return safe, ink
 
 
-def _donate_escaped_spurs(merged, order, strokes, sil, line_px, sil_px):
+def _donate_escaped_spurs(merged, order, strokes, sil, line_px, sil_px,
+                          studs=None):
     """Reassign fill spurs whose seam escapes the drawn strokes.
 
     Every seam between emitted elements is meant to lie under a drawn
@@ -1439,7 +1440,7 @@ def _donate_escaped_spurs(merged, order, strokes, sil, line_px, sil_px):
     moves the seam under the stroke band; the area cap keeps legitimate
     thin strips (a barrel lens, a rim band) with their true surface."""
     import shapely as _sh
-    band, ink = _stroke_band(strokes, sil, line_px, sil_px)
+    band, ink = _stroke_band(strokes, sil, line_px, sil_px, studs)
     if band is None:
         return
     sil_b = sil.boundary.buffer(0.5) \
@@ -1550,7 +1551,7 @@ def _donate_escaped_spurs(merged, order, strokes, sil, line_px, sil_px):
             break
 
 
-def _ink_lens_pockets(base, vis, strokes, sil, line_px, sil_px):
+def _ink_lens_pockets(base, vis, strokes, sil, line_px, sil_px, studs=None):
     """Uncovered pockets trapped between converging drawn strokes, to be
     painted out as ink. Where stylized strokes cross or graze at a shallow
     angle they leave a thin lens neither covers; whatever tone shows in it
@@ -1565,7 +1566,7 @@ def _ink_lens_pockets(base, vis, strokes, sil, line_px, sil_px):
     regardless of the ink fraction. Wide or large openings are legitimate
     visible surface (a barrel lens, a rim band) and stay."""
     import shapely as _sh
-    band, ink = _stroke_band(strokes, sil, line_px, sil_px)
+    band, ink = _stroke_band(strokes, sil, line_px, sil_px, studs)
     if ink is None or ink.is_empty or base is None or base.is_empty:
         return [], []              # no drawn ink (e.g. zero-width strokes):
                                    # nothing for a pocket to hide inside
@@ -1650,7 +1651,8 @@ def _arrival_deg(landed, at, stub):
     return math.degrees(math.acos(min(1.0, abs(float((u / nu) @ (v / nv))))))
 
 
-def _weld_junction_notches(strokes, base, line_px, sil_px, broad=False):
+def _weld_junction_notches(strokes, base, line_px, sil_px, broad=False,
+                           studs=None):
     """Thin uncovered notches at a multi-stroke T-graze junction, welded
     solid as ink. Where a drawn stroke terminates on the INTERIOR of
     another stroke's band (a cap graze: 30137's rear-scallop arcs and
@@ -1689,7 +1691,7 @@ def _weld_junction_notches(strokes, base, line_px, sil_px, broad=False):
     for op in strokes:
         if len(op) == 5:                               # legacy line tuple
             op = ("line",) + tuple(op)
-        sw = sil_px if op[-1] == "sil" else line_px
+        sw = process.stroke_width(op, line_px, sil_px, studs)
         if op[0] == "line":
             pts = np.array([[op[1], op[2]], [op[3], op[4]]])
             length = math.hypot(pts[1, 0] - pts[0, 0], pts[1, 1] - pts[0, 1])
@@ -1799,7 +1801,8 @@ def face_fill(face, style, ldraw_dir):
 @timing.timed("fill")
 def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
              refits=None, loops=None, strokes=None, line_px=2.0,
-             sil_px=2.0, drop=None, weld_corners=False, ldraw_dir="vendor/ldraw"):
+             sil_px=2.0, drop=None, weld_corners=False, ldraw_dir="vendor/ldraw",
+             studs=None):
     """Fill ops with exact visible-fragment clipping and per-surface merging.
 
     clip=False keeps every face whole (no occlusion subtraction) for
@@ -1885,7 +1888,7 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
         # drawn-op ink only (no contour term: the contour of already-
         # trimmed geometry would count as phantom cover exactly over a
         # laundered strip) — decides whether a candidate trim SHOWS
-        _, ops_ink = _stroke_band(strokes, None, line_px, sil_px) \
+        _, ops_ink = _stroke_band(strokes, None, line_px, sil_px, studs) \
             if strokes else (None, None)
         for _ in range(3):
             sil = _contour_region(geoms, arcs) if geoms else None
@@ -1930,7 +1933,8 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
     if clip and strokes and merged:
         order = {r: min(ks) for r, ks in members.items() if r in merged}
         silR = _contour_region(geoms, arcs) if geoms else None
-        _donate_escaped_spurs(merged, order, strokes, silR, line_px, sil_px)
+        _donate_escaped_spurs(merged, order, strokes, silR, line_px, sil_px,
+                              studs)
         vis = geom2d.union_all(list(merged.values()))
         base = silR if silR is not None and not silR.is_empty else vis
         # include drawn-arc bulge regions: a stylized arc bows past the
@@ -1945,12 +1949,12 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
         # DRAWN contour absorbs, and its boundary would count as phantom
         # ink exactly over the white slit
         pockets, whites = _ink_lens_pockets(base, vis, strokes, base,
-                                            line_px, sil_px)
+                                            line_px, sil_px, studs)
         # T-graze junctions (stroke dying on another stroke's band) weld
         # solid: their notch leaks into the open face region, so the
         # enclosed-pocket gates above never see it
         pockets += _weld_junction_notches(strokes, base, line_px, sil_px,
-                                          broad=weld_corners)
+                                          broad=weld_corners, studs=studs)
         # every point of `base` (the arc-grown drawn-silhouette region) is
         # part surface: background may show only OUTSIDE the drawn contour.
         # Thin unpainted needles inside it — residue the trim rounds
@@ -1960,7 +1964,7 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
         # detection above — are absorbed like the enclosed whites. Wide or
         # large pieces are left alone: those are deliberate drops
         # (silhouette overhangs) or a bug better seen than papered over.
-        _, inkR = _stroke_band(strokes, base, line_px, sil_px)
+        _, inkR = _stroke_band(strokes, base, line_px, sil_px, studs)
         bare = geom2d.difference(
             base, vis if inkR is None else geom2d.union(vis, inkR))
         for p in getattr(bare, "geoms", [bare]):

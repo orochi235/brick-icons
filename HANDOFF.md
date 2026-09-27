@@ -38,7 +38,8 @@ reads 5.12% both ways; it is not this.
 **3811's PNG was solid black because the PNG path had no arc cap** -- fixed in
 7bc3fa2. 9885879 capped an arc's stroke at half its radius only in the SVG
 writer; the gray and mono PNGs (the label) drew studs at full width.
-`scripts/png-arc-cap-sheet.py` shows it at 256 px.
+The radius cap is gone since: studs draw at their own tier
+(`process.StudTier`) and every other stroke at one per-icon weight.
 
 `shade._seam_edge_mask` and `attach_group_gradients` were the next quadratic
 pair (e05c278): 0 px on 9 parts, 60474 288 s -> 135 s and 3960 44 s -> 20 s
