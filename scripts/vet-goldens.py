@@ -4,6 +4,7 @@
     .venv/bin/python scripts/vet-goldens.py --base origin/main --expect 6589,3941
     .venv/bin/python scripts/vet-goldens.py --here --only outline__30   # this Mac
     .venv/bin/python scripts/vet-goldens.py --parts batch.txt --source occt
+    .venv/bin/python scripts/vet-goldens.py --parts batch.txt --base HEAD --after-args='--stud-instancing all'
 
 Renders every case in tests/goldens/manifest.toml twice under one engine:
 `before` from a throwaway worktree at --base, `after` from this tree as it
@@ -24,6 +25,7 @@ import argparse
 import importlib.util
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -70,7 +72,7 @@ def make_base_tree(rev: str, where: Path) -> Path:
 
 
 def render(case, tree: Path, engine: str, dest: Path, width: int,
-           timeout: float | None = None):
+           timeout: float | None = None, extra=()):
     """(png or None, error or None, seconds). `-m` puts cwd first on sys.path,
     so running from `tree` is what makes it import that tree's engine."""
     t0 = time.time()
@@ -81,7 +83,7 @@ def render(case, tree: Path, engine: str, dest: Path, width: int,
     try:
         proc = subprocess.run(
             [sys.executable, "-m", "brick_icons.cli", case["part"],
-             "--engine", engine, *case["args"], "--out", str(work)],
+             "--engine", engine, *case["args"], *extra, "--out", str(work)],
             cwd=tree, env=env, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
         shutil.rmtree(work, ignore_errors=True)
@@ -163,6 +165,9 @@ def run_here(a) -> int:
     (out / "after").mkdir(parents=True)
     dirty = git("status", "--porcelain", "--", "brick_icons")
     after_name = git("rev-parse", "--short", "HEAD") + ("+dirty" if dirty else "")
+    after_extra = shlex.split(a.after_args or "")
+    if after_extra:
+        after_name += f" [{a.after_args}]"
     print(f"{len(cases)} cases, engine {a.engine}, "
           f"before {a.base} ({base_sha}), after {after_name}", flush=True)
     if dirty:
@@ -174,7 +179,8 @@ def run_here(a) -> int:
         def one(case):
             b = render(case, base_tree, a.engine, out / "before", width,
                        a.timeout)
-            f = render(case, ROOT, a.engine, out / "after", width, a.timeout)
+            f = render(case, ROOT, a.engine, out / "after", width, a.timeout,
+                       after_extra)
             return case, b, f
 
         with ThreadPoolExecutor(a.workers) as ex:
@@ -228,6 +234,7 @@ def run_here(a) -> int:
               out=out / "sheet.png")
     unexpected = [r for r in rows if r["unexpected"]]
     report = {"base": a.base, "base_sha": base_sha, "after": after_name,
+              "after_args": a.after_args,
               "engine": a.engine, "expect": sorted(expect),
               "verdict": "review" if unexpected else "pass", "cases": rows}
     (out / "report.json").write_text(json.dumps(report, indent=2) + "\n")
@@ -262,6 +269,8 @@ def run_fleet(a) -> int:
                 "--source", a.source]
     if a.timeout:
         cmd += ["--timeout", f"{a.timeout:g}"]
+    if a.after_args:
+        cmd += [f"--after-args={a.after_args}"]
     if a.expect:
         cmd += ["--expect", a.expect]
     if a.only:
@@ -276,7 +285,7 @@ def run_fleet(a) -> int:
             "--out", rel, "--to", str(ROOT / rel)]
     if a.node:
         onto += ["--node", a.node]
-    print(" ".join(onto + ["--", *cmd]), flush=True)
+    print(shlex.join(onto + ["--", *cmd]), flush=True)
     rc = subprocess.run([*onto, "--", *cmd], cwd=ROOT).returncode
     report = ROOT / rel / "report.json"
     if report.exists():
@@ -285,7 +294,7 @@ def run_fleet(a) -> int:
         return 0
     # An agent upgrading mid-run drops `onto do` while the job carries on.
     print(f"no report yet; once `onto jobs` shows vet-{a.label} done:\n"
-          f"  onto fetch <node>:brick-icons/{rel} {rel}", file=sys.stderr)
+          f"  onto fetch <node>:{ROOT.name}/{rel} {rel}", file=sys.stderr)
     return rc or 1
 
 
@@ -307,6 +316,10 @@ def main(argv=None) -> int:
                     help="render slot whose flags --parts draws with")
     ap.add_argument("--timeout", type=float,
                     help="give up on one render after this many seconds")
+    ap.add_argument("--after-args", dest="after_args",
+                    help="flags added to every `after` render only; with "
+                         "--base HEAD this compares two flag sets at one "
+                         "revision (pass as --after-args='--flag value')")
     a = ap.parse_args(argv)
     a.label = a.label or (f"{git('rev-parse', '--short', a.base)}"
                           f"..{git('rev-parse', '--short', 'HEAD')}-{a.engine}")
