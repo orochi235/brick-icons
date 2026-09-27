@@ -1473,7 +1473,9 @@ def _donate_escaped_spurs(merged, order, strokes, sil, line_px, sil_px,
             core = geom2d.opened(outside, 0.5 * line_px)
             thin = geom2d.difference(outside, core)
             pieces = [p for p in getattr(thin, "geoms", [thin])
-                      if p.geom_type == "Polygon" and p.area > 0.05]
+                      if p.geom_type == "Polygon" and p.area > 0.05
+                      and geom2d.opened(
+                          p, 0.5 * process.local_px(p, line_px, studs)).is_empty]
             if not pieces:
                 continue
             # a sub-0.04 px spike sliver buffers its own boundary into a
@@ -1575,7 +1577,8 @@ def _ink_lens_pockets(base, vis, strokes, sil, line_px, sil_px, studs=None):
     for p in getattr(open_r, "geoms", [open_r]):
         if p.geom_type != "Polygon" or not 0.02 < p.area <= SPUR_MAX_AREA:
             continue
-        if not geom2d.opened(p, 0.5 * line_px).is_empty:
+        if not geom2d.opened(
+                p, 0.5 * process.local_px(p, line_px, studs)).is_empty:
             continue
         x0, y0, x1, y1 = p.bounds
         inkp = geom2d.window(ink, x0 - 1, y0 - 1, x1 + 1, y1 + 1)
@@ -1618,7 +1621,8 @@ def _ink_lens_pockets(base, vis, strokes, sil, line_px, sil_px, studs=None):
             void = geom2d.intersection(p.buffer(0.2), comp)
             if not 0.02 < geom2d.area(void) <= 8 * SPUR_MAX_AREA:
                 continue
-            if not geom2d.opened(void, 0.5 * line_px).is_empty:
+            if not geom2d.opened(
+                    void, 0.5 * process.local_px(void, line_px, studs)).is_empty:
                 continue
             if outU is not None and void.within(outU.buffer(0.05)):
                 continue
@@ -1766,7 +1770,8 @@ def _weld_junction_notches(strokes, base, line_px, sil_px, broad=False,
     for p in getattr(gaps, "geoms", [gaps]):
         if p.geom_type != "Polygon" or not 0.02 < p.area <= SPUR_MAX_AREA:
             continue
-        if not geom2d.opened(p, 0.5 * line_px).is_empty:
+        if not geom2d.opened(
+                p, 0.5 * process.local_px(p, line_px, studs)).is_empty:
             continue
         if not any(pt.distance(p) <= reach for pt in joins):
             continue
@@ -1971,7 +1976,8 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
             if (p.geom_type != "Polygon"
                     or not 0.02 < p.area <= 8 * SPUR_MAX_AREA):
                 continue
-            if not geom2d.opened(p, 0.5 * line_px).is_empty:
+            if not geom2d.opened(
+                    p, 0.5 * process.local_px(p, line_px, studs)).is_empty:
                 continue
             whites.append(p)
         for p in whites:

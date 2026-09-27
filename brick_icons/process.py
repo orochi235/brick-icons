@@ -90,10 +90,23 @@ class StudTier:
         xy = np.asarray(op_points(op, 5), float)
         return bool(shapely.contains_xy(self.zone, xy[:, 0], xy[:, 1]).all())
 
+    def px_at(self, geom, default):
+        """The stroke width drawn around `geom`: the stud tier when it lies
+        in a stud, else `default`. A thinness test measured against the
+        wrong one reads a stud's own wall as a sliver and inks it (3811)."""
+        import shapely
+        p = geom.representative_point()
+        return self.px if shapely.contains_xy(self.zone, p.x, p.y) else default
+
     def scaled(self, k):
         from shapely import affinity
         return StudTier(affinity.scale(self.zone, k, k, origin=(0, 0)),
                         self.px * k)
+
+
+def local_px(geom, line_px, studs=None):
+    """The line weight a region sits among -- see StudTier.px_at."""
+    return line_px if studs is None else studs.px_at(geom, line_px)
 
 
 def stroke_width(op, line_px, sil_px, studs=None):

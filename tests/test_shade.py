@@ -1957,3 +1957,26 @@ def test_a_sliced_surface_keeps_its_thin_slices():
     assert emitted([strip(0, 10, 3.0, surface=tube), strip(10, 10.6, 2.0, surface=tube),
                     strip(10.6, 20, 1.0, surface=tube)]) == 3
     assert emitted([strip(0, 10, 3.0), strip(10, 10.6, 2.0), strip(10.6, 20, 1.0)]) == 2
+
+
+def test_a_stud_wall_between_its_own_thin_strokes_is_not_inked():
+    # 3811 at 0.27 px/LDU: each stud's side wall is ~0.7 px between two stud
+    # strokes 0.38 px wide. Measured against the 0.75 px line weight it read
+    # as a sliver and every stud was inked solid black; measured against the
+    # strokes actually around it, it is surface.
+    from shapely.geometry import box
+    from brick_icons import geom2d, process
+    base = geom2d.to_geom(np.array([(0, 0), (10, 0), (10, 1), (0, 1)], float))
+    strokes = [("line", -1.0, 0.0, 11.0, 0.0, "edge"),
+               ("line", -1.0, 1.0, 11.0, 1.0, "edge"),
+               ("line", 0.0, -1.0, 0.0, 2.0, "edge"),
+               ("line", 10.0, -1.0, 10.0, 2.0, "edge")]
+    studs = process.StudTier(box(-2, -2, 12, 3), 0.3)
+    inked, _ = shade._ink_lens_pockets(base, base, strokes, None, 0.75, 0.75,
+                                       studs)
+    assert inked == []
+    # outside any stud the strokes are 0.75 wide and leave a 0.25 px slit,
+    # which is a sliver at the line weight and inked as it always was
+    bare, _ = shade._ink_lens_pockets(base, base, strokes, None, 0.75, 0.75,
+                                      process.StudTier(box(50, 50, 51, 51), 0.3))
+    assert len(bare) == 1
