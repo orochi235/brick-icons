@@ -139,8 +139,13 @@ forking a rival, and `onto jobs` answers "is this already running?" for everyone
 
 **Every launch names a `--kind`** (render, score, ingest, bake) and an `--icon`
 (an SF Symbols name): they are what onto's listings and app show beside it, and
-a job without them is a bare command line in a list of twenty. `scripts/run-slot.sh` fills in `render`
-and `photo.on.rectangle.angled`, the symbol for a render that makes images, for a slot.
+a job without them is a bare command line in a list of twenty. Use the same
+icon for every job of one kind:
+
+| kind | icon |
+|---|---|
+| `render` | `photo.on.rectangle.angled` (`scripts/run-slot.sh` fills it in for a slot) |
+| `score` | `chart.line.text.clipboard` |
 
 **Run every `onto` command with the Bash sandbox disabled.** Sandboxed, its
 connections to the other nodes fail and it reports every one of them `offline`
