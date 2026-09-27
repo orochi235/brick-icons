@@ -6,23 +6,24 @@
     162.93
   ],
   "commands": {
-    "A": 159,
-    "L": 1629,
-    "M": 133,
-    "Z": 64
+    "A": 151,
+    "L": 965,
+    "M": 116,
+    "Z": 50
   },
   "fills": {
-    "#000000": 16,
+    "#000000": 6,
+    "#565656": 6,
     "#5e5e5e": 5,
-    "#858585": 4,
+    "#858585": 3,
     "#cccccc": 4,
-    "gradient": 21,
-    "none": 70
+    "gradient": 15,
+    "none": 67
   },
-  "gradient_stops": 115,
-  "gradients": 21,
-  "lines": 15,
-  "paths": 120,
+  "gradient_stops": 87,
+  "gradients": 15,
+  "lines": 14,
+  "paths": 106,
   "transforms": 0,
   "viewBox": "0 0 256 170"
 }

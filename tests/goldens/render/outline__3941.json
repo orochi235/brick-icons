@@ -7,7 +7,7 @@
   ],
   "commands": {
     "A": 56,
-    "L": 33,
+    "L": 31,
     "M": 35,
     "Z": 1
   },
@@ -16,7 +16,7 @@
   },
   "gradient_stops": 0,
   "gradients": 0,
-  "lines": 14,
+  "lines": 16,
   "paths": 35,
   "transforms": 0,
   "viewBox": "0 0 256 170"

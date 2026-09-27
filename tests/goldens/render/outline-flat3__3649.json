@@ -6,23 +6,24 @@
     164.0
   ],
   "commands": {
-    "A": 944,
-    "L": 12026,
-    "M": 746,
-    "Z": 397
+    "A": 830,
+    "L": 4101,
+    "M": 616,
+    "Z": 268
   },
   "fills": {
-    "#000000": 195,
-    "#5e5e5e": 29,
-    "#858585": 18,
+    "#000000": 57,
+    "#565656": 20,
+    "#5e5e5e": 30,
+    "#858585": 17,
     "#cccccc": 17,
-    "gradient": 88,
-    "none": 351
+    "gradient": 65,
+    "none": 350
   },
-  "gradient_stops": 612,
-  "gradients": 88,
-  "lines": 98,
-  "paths": 698,
+  "gradient_stops": 463,
+  "gradients": 65,
+  "lines": 99,
+  "paths": 556,
   "transforms": 0,
   "viewBox": "0 0 256 170"
 }

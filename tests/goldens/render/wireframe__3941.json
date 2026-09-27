@@ -7,17 +7,17 @@
   ],
   "commands": {
     "A": 102,
-    "L": 105,
-    "M": 85,
+    "L": 97,
+    "M": 83,
     "Z": 1
   },
   "fills": {
-    "none": 85
+    "none": 83
   },
   "gradient_stops": 0,
   "gradients": 0,
-  "lines": 18,
-  "paths": 85,
+  "lines": 22,
+  "paths": 83,
   "transforms": 0,
   "viewBox": "0 0 256 170"
 }

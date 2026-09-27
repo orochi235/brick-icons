@@ -31,7 +31,7 @@ PART_STATUSES = ("unreviewed", "good", "suspect", "broken", "wontfix")
 # Stickers were here and are not any more: occt draws 2,695 of the 2,701, so
 # the exclusion was hiding a drawn category from every coverage number.
 OUT_OF_SCOPE_CATEGORIES = ("|",)
-SOURCES = ("naive", "occt", "decal", "reference",
+SOURCES = ("naive", "occt", "occt-svelte", "decal", "reference",
            "reference-gray", "reference-lines",
            "translucent-naive", "translucent-occt",
            "silhouette-naive", "silhouette-occt",
@@ -477,6 +477,12 @@ _CANONICAL = {
               "--shade-style", "flat3", "--angle", "iso", "--format", "svg"],
     "occt": ["--engine", "occt", "--shading", "outline",
              "--shade-style", "flat3", "--angle", "iso", "--format", "svg"],
+    # occt drawn lighter: the same stroke tiers under a 1.5 px line weight.
+    # Named engine-first, so its trees need the SOURCE marker to file here.
+    "occt-svelte": ["--engine", "occt", "--shading", "outline",
+                    "--shade-style", "flat3", "--angle", "iso",
+                    "--format", "svg", "--line-width", "1.5",
+                    "--silhouette-width", "1.5"],
     "decal": ["--decal", "--angle", "iso", "--format", "svg"],
     # The reference that is mathematically compatible with the library:
     # orthographic, and three.js's LDrawLoader substitutes no primitives, so
