@@ -2374,7 +2374,7 @@ and in `one`: `f = render(case, ROOT, a.engine, out / "after", width, a.timeout,
 ```
 
 Extend the module docstring with one usage line:
-`.venv/bin/python scripts/vet-goldens.py --parts batch.txt --base HEAD --after-args='--stud-instancing all'`
+`.venv/bin/python scripts/vet-goldens.py --parts batch.txt --after-args='--stud-instancing all'`
 
 - [ ] **Step 4: Run it** — same command. Expected: PASS.
 
@@ -2603,7 +2603,7 @@ Expected: `197 out/stroke-batch.txt`. If the scratchpad copy is gone, stop and a
 
 ```bash
 .venv/bin/python scripts/vet-goldens.py --parts out/stroke-batch.txt --source occt \
-  --engine occt --base HEAD --after-args='--stud-instancing all' \
+  --engine occt --after-args='--stud-instancing all' \
   --label stud-inst-occt --timeout 1200
 ```
 
@@ -2611,7 +2611,7 @@ Expected: `197 out/stroke-batch.txt`. If the scratchpad copy is gone, stop and a
 
 ```bash
 .venv/bin/python scripts/vet-goldens.py --parts out/stroke-batch.txt --source naive \
-  --engine naive --base HEAD --after-args='--stud-instancing all' \
+  --engine naive --after-args='--stud-instancing all' \
   --label stud-inst-naive --timeout 1200
 ```
 

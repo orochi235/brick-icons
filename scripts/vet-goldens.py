@@ -4,12 +4,14 @@
     .venv/bin/python scripts/vet-goldens.py --base origin/main --expect 6589,3941
     .venv/bin/python scripts/vet-goldens.py --here --only outline__30   # this Mac
     .venv/bin/python scripts/vet-goldens.py --parts batch.txt --source occt
-    .venv/bin/python scripts/vet-goldens.py --parts batch.txt --base HEAD --after-args='--stud-instancing all'
+    .venv/bin/python scripts/vet-goldens.py --parts batch.txt --after-args='--stud-instancing all'
 
 Renders every case in tests/goldens/manifest.toml twice under one engine:
 `before` from a throwaway worktree at --base, `after` from this tree as it
 stands, uncommitted edits included. Each pair is component-counted with the
 lab's own diff panel, so a count here means what it means on /review.
+With --after-args and no --base, both sides are drawn from this tree and
+differ only by those flags.
 
 A case whose part is not in --expect and moved is UNEXPECTED; those are what
 go to a person. `--parts` draws a part list instead of the goldens (a file of
@@ -158,22 +160,23 @@ def run_here(a) -> int:
     expect = {p for p in (a.expect or "").split(",") if p}
     if a.parts and not a.expect:
         expect = {c["part"] for c in cases}   # a person reviews every page
-    base_sha = git("rev-parse", "--short", a.base)
     out = VET_DIR / a.label
     shutil.rmtree(out, ignore_errors=True)
     (out / "before").mkdir(parents=True)
     (out / "after").mkdir(parents=True)
     dirty = git("status", "--porcelain", "--", "brick_icons")
     after_name = git("rev-parse", "--short", "HEAD") + ("+dirty" if dirty else "")
+    before_name = (f"{a.base} ({git('rev-parse', '--short', a.base)})"
+                   if a.base else after_name)
     after_extra = shlex.split(a.after_args or "")
     if after_extra:
         after_name += f" [{a.after_args}]"
     print(f"{len(cases)} cases, engine {a.engine}, "
-          f"before {a.base} ({base_sha}), after {after_name}", flush=True)
+          f"before {before_name}, after {after_name}", flush=True)
     if dirty:
         print("after includes uncommitted engine edits:\n" + dirty, flush=True)
 
-    base_tree = make_base_tree(a.base, out / "base-tree")
+    base_tree = make_base_tree(a.base, out / "base-tree") if a.base else ROOT
     rows = []
     try:
         def one(case):
@@ -206,9 +209,10 @@ def run_here(a) -> int:
                 print(f"{i:3d}/{len(cases)} {case['id']:28s} {note}"
                       f"  {b[2]:5.1f}s/{f[2]:5.1f}s{flag}", flush=True)
     finally:
-        subprocess.run(["git", "worktree", "remove", "--force", str(base_tree)],
-                       cwd=ROOT, capture_output=True)
-        shutil.rmtree(base_tree, ignore_errors=True)
+        if base_tree != ROOT:
+            subprocess.run(["git", "worktree", "remove", "--force",
+                            str(base_tree)], cwd=ROOT, capture_output=True)
+            shutil.rmtree(base_tree, ignore_errors=True)
 
     moved = [r for r in rows if r["state"] == "moved"]
     if a.parts:
@@ -217,7 +221,7 @@ def run_here(a) -> int:
         moved.sort(key=lambda r: order[r["case"]])
         pages = [moved[i:i + PAGE_ROWS] for i in range(0, len(moved), PAGE_ROWS)]
         for n, page in enumerate(pages, 1):
-            sheet(f"{a.source} under {a.engine}: {a.base} ({base_sha}) -> "
+            sheet(f"{a.source} under {a.engine}: {before_name} -> "
                   f"{after_name}   page {n}/{len(pages)}   magenta = changed",
                   [(r["case"] + "\n" + label[r["case"]].replace(", ", "\n"),
                     flat(out / "before" / f"{r['case']}.png"),
@@ -225,7 +229,7 @@ def run_here(a) -> int:
                   out=out / f"sheet-{n:02d}.png")
     elif moved:
         moved.sort(key=lambda r: (not r["unexpected"], -r["px"]))
-        sheet(f"goldens under {a.engine}: {a.base} ({base_sha}) -> {after_name}"
+        sheet(f"goldens under {a.engine}: {before_name} -> {after_name}"
               f"   magenta = changed",
               [(("UNEXPECTED\n" if r["unexpected"] else "expected\n")
                 + r["case"].replace("__", "\n"),
@@ -233,7 +237,7 @@ def run_here(a) -> int:
                 flat(out / "after" / f"{r['case']}.png")) for r in moved],
               out=out / "sheet.png")
     unexpected = [r for r in rows if r["unexpected"]]
-    report = {"base": a.base, "base_sha": base_sha, "after": after_name,
+    report = {"base": a.base, "before": before_name, "after": after_name,
               "after_args": a.after_args,
               "engine": a.engine, "expect": sorted(expect),
               "verdict": "review" if unexpected else "pass", "cases": rows}
@@ -258,8 +262,10 @@ def run_fleet(a) -> int:
     """Re-invoke this script with --here on a node; `onto do` syncs this
     checkout (dirty edits and all) and brings out/vet/<label> home."""
     cmd = [".venv/bin/python", "scripts/vet-goldens.py", "--here",
-           "--base", a.base, "--engine", a.engine, "--label", a.label,
+           "--engine", a.engine, "--label", a.label,
            "--workers", str(a.workers)]
+    if a.base:
+        cmd += ["--base", a.base]
     if a.parts:
         # the list and its labels travel on the command line: a file here
         # is not a file the node was sent
@@ -280,7 +286,7 @@ def run_fleet(a) -> int:
             "--task", f"vet-{a.label}", "--timeout", "6h" if a.parts else "1h",
             # a branch with no upstream has no merge-base for onto to sync
             # from; `before`'s revision is one the node can fetch
-            "--ref", a.base,
+            "--ref", a.base or "origin/main",
             "--env", "PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
             "--out", rel, "--to", str(ROOT / rel)]
     if a.node:
@@ -300,8 +306,9 @@ def run_fleet(a) -> int:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--base", default="origin/main",
-                    help="revision to draw `before` at (default origin/main)")
+    ap.add_argument("--base",
+                    help="revision to draw `before` at (default origin/main, "
+                         "or this tree when --after-args is given)")
     ap.add_argument("--engine", default="occt")
     ap.add_argument("--expect", help="comma-separated parts predicted to move")
     ap.add_argument("--only", help="substring filter on the case id")
@@ -317,11 +324,13 @@ def main(argv=None) -> int:
     ap.add_argument("--timeout", type=float,
                     help="give up on one render after this many seconds")
     ap.add_argument("--after-args", dest="after_args",
-                    help="flags added to every `after` render only; with "
-                         "--base HEAD this compares two flag sets at one "
-                         "revision (pass as --after-args='--flag value')")
+                    help="flags added to every `after` render only; "
+                         "without --base this compares two flag sets in "
+                         "this tree (pass as --after-args='--flag value')")
     a = ap.parse_args(argv)
-    a.label = a.label or (f"{git('rev-parse', '--short', a.base)}"
+    if not a.base and not a.after_args:
+        a.base = "origin/main"
+    a.label = a.label or (f"{git('rev-parse', '--short', a.base or 'HEAD')}"
                           f"..{git('rev-parse', '--short', 'HEAD')}-{a.engine}")
     return run_here(a) if a.here else run_fleet(a)
 
