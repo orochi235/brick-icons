@@ -100,6 +100,16 @@ share it (stop if any gets worse), then the goldens (anything that moved and
 was not predicted goes to a person). Fixes may be batched until one fails. The
 `vet-fix` skill is the procedure.
 
+## Special handling for one part is a CLI flag, never engine code
+
+A part that needs treating differently gets it through arguments on its
+render command -- a stroke weight, a pose, a switch -- and the engine stays
+free of part ids. A rule the engine applies has to be one it can state about
+geometry it was given, not about which file it came from; a part's exception
+belongs where the next person can see and change it without reading engine
+code. `brick_icons/` holds no part ids today, so the first case to need one is
+the case for a new flag.
+
 ## The lab must not fork the CLI
 
 `brick_icons/lab/` derives its config schema from `cli.build_parser()` and runs
