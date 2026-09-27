@@ -108,7 +108,7 @@ def main(argv=None) -> int:
         print(f"\nwrote {a.out}")
     if a.sheet:
         draw_sheet(moved[:a.sheet_rows], before, after, a.sheet,
-                   a.before.name, a.after.name)
+                   str(a.before), str(a.after))
         print(f"wrote {a.sheet}")
     return 0
 
@@ -126,10 +126,9 @@ def draw_sheet(rows, before, after, out: Path, left: str, right: str) -> None:
     sheet = Image.new("RGB", (label_w + 2 * (panel + pad) + pad,
                               head + len(rows) * (panel + 2 * pad)), "white")
     d = ImageDraw.Draw(sheet)
-    d.text((pad, 10), "the occt drawings the refresh changed most",
+    d.text((pad, 10), "the drawings that changed most",
            fill="black", font=font(21))
-    d.text((pad, 36), f"left {left} (stored 2026-09-08) - right {right} "
-                      f"(redrawn 2026-09-16, 18 drawing commits later)",
+    d.text((pad, 36), f"before {left}  -  after {right}",
            fill="#555", font=font(12))
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
