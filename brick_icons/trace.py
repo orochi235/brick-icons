@@ -430,109 +430,75 @@ def deco_mask_svg(text: str) -> str | None:
     return text[:m.end()] + _MASK_STYLE + text[m.end():]
 
 
-def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
-                    physical=None, s=None, line_mm=0.2, sil_mm=0.2,
-                    fills=None, bg: str = "none", opacity: float = 1.0,
-                    clip_geom=None, contour_d: str | None = None,
-                    label: str | None = None,
-                    debug_colors: bool = False, studs=None) -> Path:
-    if physical is not None:
-        w_mm, h_mm = physical
-        root = (f'<svg xmlns="http://www.w3.org/2000/svg" '
-                f'width="{w_mm:.2f}mm" height="{h_mm:.2f}mm" '
-                f'viewBox="0 0 {w} {h}" preserveAspectRatio="xMidYMid meet" '
-                f'{DECO_MARKED}>')
-        line_px = line_mm / 0.4 * s
-        sil_px = sil_mm / 0.4 * s
-    else:
-        root = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" '
-                f'preserveAspectRatio="xMidYMid meet" {DECO_MARKED}>')
-    parts = [root]
-    if bg != "none":
-        parts.append(f'<rect width="100%" height="100%" fill="{bg}"/>')
-    if fills:
-        # Each fill is stroked in its own paint (~0.8px) so antialiasing seams
-        # between abutting coplanar faces don't show; gradient fills (cylinder
-        # walls) carry a <linearGradient> def instead of a flat color.
-        # Opacity is per-face: translucent renders skip occlusion clipping,
-        # so faces overlap and each must blend individually (nearer over
-        # deeper). The `opacity` attribute composites a path's own fill +
-        # seam stroke together first, so a face never double-paints itself.
-        face_op = f' opacity="{opacity:g}"' if opacity < 1.0 else ""
-        defs, body = [], ['<g stroke-linejoin="round">']
-        # Smooth-group facets share one gradient object; dedupe defs by
-        # content so a 50-facet curve emits one <linearGradient>, not 50.
-        def_ids = {}
-        for i, fo in enumerate(fills):
-            if "gradient" in fo:
-                g = fo["gradient"]
-                stops = "".join(
-                    f'<stop offset="{o * 100:.1f}%" stop-color="{c}"/>' for o, c in g["stops"])
-                if g.get("type") == "radial":
-                    # unit-circle gradient space mapped onto the group's
-                    # bounding ellipse; fx/fy shift the bright spot lightward
-                    tf = (f'matrix({g["r"]:.2f} 0 0 {g["r"] * g["ratio"]:.2f} '
-                          f'{g["cx"]:.2f} {g["cy"]:.2f})')
-                    key = ("radial", tf, f'{g["fx"]:.3f},{g["fy"]:.3f}', stops)
-                    gid = def_ids.get(key)
-                    if gid is None:
-                        gid = f"g{i}"
-                        def_ids[key] = gid
-                        defs.append(
-                            f'<radialGradient id="{gid}" gradientUnits="userSpaceOnUse" '
-                            f'cx="0" cy="0" r="1" fx="{g["fx"]:.3f}" fy="{g["fy"]:.3f}" '
-                            f'gradientTransform="{tf}">{stops}</radialGradient>')
-                else:
-                    key = (f'{g["x1"]:.2f},{g["y1"]:.2f},{g["x2"]:.2f},{g["y2"]:.2f}', stops)
-                    gid = def_ids.get(key)
-                    if gid is None:
-                        gid = f"g{i}"
-                        def_ids[key] = gid
-                        defs.append(
-                            f'<linearGradient id="{gid}" gradientUnits="userSpaceOnUse" '
-                            f'x1="{g["x1"]:.2f}" y1="{g["y1"]:.2f}" '
-                            f'x2="{g["x2"]:.2f}" y2="{g["y2"]:.2f}">{stops}</linearGradient>')
-                paint = f"url(#{gid})"
+def fill_elements(fills, opacity=1.0, gid_prefix="g"):
+    """(defs, body) for fill ops: the gradients they paint with, and the
+    self-stroked paths inside one round-joined group. `gid_prefix` names the
+    gradients; a second drawing in the same file (a stud definition, see
+    instancing.Instancer) takes its own so the ids cannot collide."""
+    # Each fill is stroked in its own paint (~0.8px) so antialiasing seams
+    # between abutting coplanar faces don't show; gradient fills (cylinder
+    # walls) carry a <linearGradient> def instead of a flat color.
+    # Opacity is per-face: translucent renders skip occlusion clipping,
+    # so faces overlap and each must blend individually (nearer over
+    # deeper). The `opacity` attribute composites a path's own fill +
+    # seam stroke together first, so a face never double-paints itself.
+    face_op = f' opacity="{opacity:g}"' if opacity < 1.0 else ""
+    defs, body = [], ['<g stroke-linejoin="round">']
+    # Smooth-group facets share one gradient object; dedupe defs by
+    # content so a 50-facet curve emits one <linearGradient>, not 50.
+    def_ids = {}
+    for i, fo in enumerate(fills):
+        if "gradient" in fo:
+            g = fo["gradient"]
+            stops = "".join(
+                f'<stop offset="{o * 100:.1f}%" stop-color="{c}"/>' for o, c in g["stops"])
+            if g.get("type") == "radial":
+                # unit-circle gradient space mapped onto the group's
+                # bounding ellipse; fx/fy shift the bright spot lightward
+                tf = (f'matrix({g["r"]:.2f} 0 0 {g["r"] * g["ratio"]:.2f} '
+                      f'{g["cx"]:.2f} {g["cy"]:.2f})')
+                key = ("radial", tf, f'{g["fx"]:.3f},{g["fy"]:.3f}', stops)
+                gid = def_ids.get(key)
+                if gid is None:
+                    gid = f"{gid_prefix}{i}"
+                    def_ids[key] = gid
+                    defs.append(
+                        f'<radialGradient id="{gid}" gradientUnits="userSpaceOnUse" '
+                        f'cx="0" cy="0" r="1" fx="{g["fx"]:.3f}" fy="{g["fy"]:.3f}" '
+                        f'gradientTransform="{tf}">{stops}</radialGradient>')
             else:
-                paint = fo["fill"]
-            # translucent fills paint fill-only: the self-stroke that closes
-            # AA seams between abutting opaque fills double-paints its 0.4px
-            # overhang onto neighbors when composited at opacity < 1 —
-            # concentric ghost rings on a dish's stacked bands (4740)
-            seam = (f' stroke="{paint}" stroke-width="0.8"'
-                    if opacity >= 1.0 else "")
-            # class="deco" marks paint that is not the part's own color, so a
-            # viewer can recolor the part without touching its printing
-            deco = ' class="deco"' if fo.get("deco") else ""
-            body.append(f'<path d="{fo["d"]}"{deco} fill="{paint}" '
-                        f'fill-rule="evenodd"{seam}{face_op}/>')
-        body.append("</g>")
-        if defs:
-            parts.append("<defs>" + "".join(defs) + "</defs>")
-        parts += body
-    # Clip the stroke layer to the silhouette buffered outward by half the
-    # widest stroke (mitered): round end caps otherwise poke half a width
-    # past outline corners into the background ("frayed" corners).
-    clip_attr = ""
-    if clip_geom is not None:
-        from . import geom2d
-        # grow by drawn-arc bulge regions so the clip never flattens an arc
-        clip = geom2d.union_all([clip_geom]
-                                + geom2d.arc_regions(segs, clip_geom))
-        cd = geom2d.buffer_d(clip, max(line_px, sil_px) / 2.0)
-        if cd:
-            parts.append(f'<defs><clipPath id="sclip">'
-                         f'<path d="{cd}" clip-rule="evenodd"/></clipPath></defs>')
-            clip_attr = ' clip-path="url(#sclip)"'
-    stroke_g = len(parts)
-    parts.append(f'<g stroke="black" fill="none" stroke-linecap="round"{clip_attr}>')
-    if contour_d:
-        # closed silhouette contour under the per-edge strokes: a closed path
-        # has JOINS everywhere and no caps, so mitering it renders outline
-        # corners sharp — the per-edge strokes' round vertex caps alone leave
-        # them blunted
-        parts.append(f'<path d="{contour_d}" stroke-width="{sil_px:.2f}" '
-                     f'stroke-linejoin="miter" stroke-miterlimit="5"/>')
+                key = (f'{g["x1"]:.2f},{g["y1"]:.2f},{g["x2"]:.2f},{g["y2"]:.2f}', stops)
+                gid = def_ids.get(key)
+                if gid is None:
+                    gid = f"{gid_prefix}{i}"
+                    def_ids[key] = gid
+                    defs.append(
+                        f'<linearGradient id="{gid}" gradientUnits="userSpaceOnUse" '
+                        f'x1="{g["x1"]:.2f}" y1="{g["y1"]:.2f}" '
+                        f'x2="{g["x2"]:.2f}" y2="{g["y2"]:.2f}">{stops}</linearGradient>')
+            paint = f"url(#{gid})"
+        else:
+            paint = fo["fill"]
+        # translucent fills paint fill-only: the self-stroke that closes
+        # AA seams between abutting opaque fills double-paints its 0.4px
+        # overhang onto neighbors when composited at opacity < 1 —
+        # concentric ghost rings on a dish's stacked bands (4740)
+        seam = (f' stroke="{paint}" stroke-width="0.8"'
+                if opacity >= 1.0 else "")
+        # class="deco" marks paint that is not the part's own color, so a
+        # viewer can recolor the part without touching its printing
+        deco = ' class="deco"' if fo.get("deco") else ""
+        body.append(f'<path d="{fo["d"]}"{deco} fill="{paint}" '
+                    f'fill-rule="evenodd"{seam}{face_op}/>')
+    body.append("</g>")
+    return defs, body
+
+
+def stroke_elements(segs, line_px, sil_px, studs=None):
+    """SVG elements for stroke ops at their widths (process.stroke_width):
+    arcs as paths, straight strokes chained into mitered polylines with
+    elbow joins. The caller wraps them in the stroke group."""
+    parts = []
     line_groups = {}                                  # sw -> [(x1,y1,x2,y2)]
     segs = _drop_sliver_loops(segs, 0.6 * line_px, 4.0 * line_px)
     for op in segs:
@@ -569,6 +535,75 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
         for (ax, ay), (vx, vy), (bx, by) in elbows:
             parts.append(f'<path d="M {ax:.2f} {ay:.2f} L {vx:.2f} {vy:.2f} '
                          f'L {bx:.2f} {by:.2f}" stroke-width="{sw:.2f}"{joinery}/>')
+    return parts
+
+
+def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
+                    physical=None, s=None, line_mm=0.2, sil_mm=0.2,
+                    fills=None, bg: str = "none", opacity: float = 1.0,
+                    clip_geom=None, contour_d: str | None = None,
+                    label: str | None = None,
+                    debug_colors: bool = False, studs=None,
+                    between=None, contour_hide=None) -> Path:
+    if physical is not None:
+        w_mm, h_mm = physical
+        root = (f'<svg xmlns="http://www.w3.org/2000/svg" '
+                f'width="{w_mm:.2f}mm" height="{h_mm:.2f}mm" '
+                f'viewBox="0 0 {w} {h}" preserveAspectRatio="xMidYMid meet" '
+                f'{DECO_MARKED}>')
+        line_px = line_mm / 0.4 * s
+        sil_px = sil_mm / 0.4 * s
+    else:
+        root = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" '
+                f'preserveAspectRatio="xMidYMid meet" {DECO_MARKED}>')
+    parts = [root]
+    if bg != "none":
+        parts.append(f'<rect width="100%" height="100%" fill="{bg}"/>')
+    if fills:
+        defs, body = fill_elements(fills, opacity)
+        if defs:
+            parts.append("<defs>" + "".join(defs) + "</defs>")
+        parts += body
+    if between:
+        # placed drawings (instancing's studs): over the part's fills,
+        # under its strokes
+        parts += between
+    # Clip the stroke layer to the silhouette buffered outward by half the
+    # widest stroke (mitered): round end caps otherwise poke half a width
+    # past outline corners into the background ("frayed" corners).
+    clip_attr = ""
+    if clip_geom is not None:
+        from . import geom2d
+        # grow by drawn-arc bulge regions so the clip never flattens an arc
+        clip = geom2d.union_all([clip_geom]
+                                + geom2d.arc_regions(segs, clip_geom))
+        cd = geom2d.buffer_d(clip, max(line_px, sil_px) / 2.0)
+        if cd:
+            parts.append(f'<defs><clipPath id="sclip">'
+                         f'<path d="{cd}" clip-rule="evenodd"/></clipPath></defs>')
+            clip_attr = ' clip-path="url(#sclip)"'
+    contour_attr = ""
+    if contour_d and contour_hide is not None and not contour_hide.is_empty:
+        # the contour is the outline of the part's faces, not an engine
+        # edge, so nothing hid it where a placed stud stands in front of it
+        from . import geom2d
+        from shapely.geometry import box
+        keep = geom2d.path_d(geom2d.difference(box(-1, -1, w + 1, h + 1),
+                                               contour_hide))
+        if keep:
+            parts.append(f'<defs><clipPath id="cclip"><path d="{keep}" '
+                         f'clip-rule="evenodd"/></clipPath></defs>')
+            contour_attr = ' clip-path="url(#cclip)"'
+    stroke_g = len(parts)
+    parts.append(f'<g stroke="black" fill="none" stroke-linecap="round"{clip_attr}>')
+    if contour_d:
+        # closed silhouette contour under the per-edge strokes: a closed path
+        # has JOINS everywhere and no caps, so mitering it renders outline
+        # corners sharp — the per-edge strokes' round vertex caps alone leave
+        # them blunted
+        parts.append(f'<path d="{contour_d}"{contour_attr} stroke-width="{sil_px:.2f}" '
+                     f'stroke-linejoin="miter" stroke-miterlimit="5"/>')
+    parts += stroke_elements(segs, line_px, sil_px, studs)
     if debug_colors:
         _colorize(parts, stroke_g,
                   debug_colors if isinstance(debug_colors, str) else "cycle")

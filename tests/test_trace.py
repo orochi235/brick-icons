@@ -468,3 +468,39 @@ def test_stud_weight_floors_and_never_outweighs_the_line():
     # unfloored 0.22 px and so land on their own floor, not at 0.375
     assert process.stud_weight(0.75, 0.22, 0.5, 0.2) == 0.2
     assert process.stud_weight(0.4, 2.0, 0.5, 0.2) == 0.4      # never above line
+
+
+def test_between_paints_over_the_fills_and_under_the_strokes(tmp_path):
+    segs = [("line", 0.0, 0.0, 10.0, 0.0, "edge")]
+    fills = [{"d": "M 0 0 L 10 0 L 0 10 Z", "fill": "#cccccc", "depth": 1.0}]
+    txt = _trace.segments_to_svg(segs, 20, 20, tmp_path / "b.svg", fills=fills,
+                                 between=['<g class="studs"/>']).read_text()
+    assert (txt.index('fill="#cccccc"') < txt.index('<g class="studs"/>')
+            < txt.index('<g stroke="black"'))
+
+
+def test_a_second_drawing_names_its_own_gradients():
+    fills = [{"d": "M 0 0 L 10 0 L 10 10 Z", "depth": 1.0,
+              "gradient": {"x1": 0.0, "y1": 0.0, "x2": 10.0, "y2": 0.0,
+                           "stops": [(0.0, "#333333"), (1.0, "#cccccc")]}}]
+    defs, body = _trace.fill_elements(fills, gid_prefix="sd0g")
+    assert 'id="sd0g0"' in defs[0] and "url(#sd0g0)" in body[1]
+    assert body[0] == '<g stroke-linejoin="round">' and body[-1] == "</g>"
+
+
+def test_stroke_elements_are_the_strokes_segments_to_svg_writes(tmp_path):
+    segs = [("line", 0.0, 0.0, 10.0, 0.0, "edge"),
+            ("arc", 5.0, 5.0, 3.0, 0.0, 0.0, 3.0, 0.0, 180.0, "edge")]
+    txt = _trace.segments_to_svg(segs, 20, 20, tmp_path / "s.svg").read_text()
+    for el in _trace.stroke_elements(segs, 2, 2):
+        assert el in txt
+
+
+def test_contour_hide_clips_the_contour_only(tmp_path):
+    from shapely.geometry import box
+    txt = _trace.segments_to_svg(
+        [("line", 0.0, 0.0, 10.0, 0.0, "edge")], 20, 20, tmp_path / "c.svg",
+        contour_d="M 1 1 L 19 1 L 19 19 Z",
+        contour_hide=box(4, 0, 8, 3)).read_text()
+    assert '<clipPath id="cclip">' in txt
+    assert 'clip-path="url(#cclip)" stroke-width' in txt
