@@ -372,7 +372,8 @@ def _corpus_client(tmp_path):
     return TestClient(lab_app.create_app(
         cache_root=tmp_path / "cache",
         corpus_db=tmp_path / "corpus.db",
-        thumbs_root=thumbs))
+        thumbs_root=thumbs,
+        defects_path=tmp_path / "defects.toml"))
 
 
 def test_cells_route_returns_every_part(tmp_path):
