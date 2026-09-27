@@ -46,6 +46,7 @@ DEFAULTS = {
     "stud_instancing": "off",  # off | all -- draw each declared stud once and
                                # place it wherever it shows (all), or every
                                # stud through the engine (off)
+    "contour": "on",         # on | off -- draw the silhouette contour
     "part_color": None,      # "0xRRGGBB" or None
     "scale": 1.0,            # part fill fraction of label (0-1)
     "scale_mode": "fit",     # fit | physical  (physical: SVG sized in mm)
@@ -104,6 +105,7 @@ class Config:
     stud_floor: float
     crumb_ldu: float
     stud_instancing: str
+    contour: str
     part_color: str | None
     scale: float
     scale_mode: str
@@ -181,6 +183,7 @@ def load_config(toml_path=None, overrides=None, root="."):
         stud_floor=float(data["stud_floor"]),
         crumb_ldu=float(data["crumb_ldu"]),
         stud_instancing=str(data["stud_instancing"]),
+        contour=str(data["contour"]),
         part_color=(str(data["part_color"]) if data["part_color"] else None),
         scale=float(data["scale"]),
         scale_mode=str(data["scale_mode"]),

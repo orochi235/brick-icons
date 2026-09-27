@@ -449,3 +449,25 @@ def test_render_tag_stamps_stud_instancing_when_it_is_on():
     assert "studs=all" in cli.render_tag(cfg, "3001")
     cfg = cli._config_from_args(cli.build_parser().parse_args(["3001"]))
     assert "studs=" not in cli.render_tag(cfg, "3001")
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_contour_off_drops_the_contour_from_svg_and_png(tmp_path):
+    def run(sub, *extra):
+        cli.main(["3005", "--shading", "outline", "--format", "both",
+                  "--mode", "gray", "--out", str(tmp_path / sub), *extra])
+        svg = (tmp_path / sub / "3005.svg").read_text()
+        ink = int((np.asarray(Image.open(tmp_path / sub / "3005.gray.png"))
+                   < 128).sum())
+        return svg, ink
+    on_svg, on_ink = run("on")
+    off_svg, off_ink = run("off", "--contour", "off")
+    assert 'stroke-miterlimit="5"' in on_svg          # the contour path
+    assert 'stroke-miterlimit="5"' not in off_svg
+    assert off_ink < on_ink
+
+
+def test_render_tag_stamps_contour_off():
+    cfg = cli._config_from_args(cli.build_parser().parse_args(
+        ["3001", "--contour", "off"]))
+    assert "contour=off" in cli.render_tag(cfg, "3001")

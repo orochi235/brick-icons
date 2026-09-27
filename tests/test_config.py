@@ -110,3 +110,8 @@ def test_stud_instancing_defaults_off_and_takes_an_override():
     assert load_config(root="/proj").stud_instancing == "off"
     assert load_config(root="/proj",
                        overrides={"stud_instancing": "all"}).stud_instancing == "all"
+
+
+def test_contour_defaults_on_and_takes_an_override():
+    assert load_config(root="/proj").contour == "on"
+    assert load_config(root="/proj", overrides={"contour": "off"}).contour == "off"

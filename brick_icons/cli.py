@@ -48,6 +48,9 @@ def build_parser():
                         "it is clear or cut only by planes (all), or draw "
                         "every stud through the engine (off, the default); "
                         "translucent and wireframe renders are always off")
+    p.add_argument("--contour", choices=["on", "off"],
+                   help="draw the silhouette contour, the outline around the "
+                        "whole part (on, the default), or leave it out (off)")
     p.add_argument("--scale-mode", dest="scale_mode", choices=["fit", "physical"])
     p.add_argument("--line-mm", dest="line_mm", type=float)
     p.add_argument("--silhouette-mm", dest="silhouette_mm", type=float)
@@ -149,6 +152,7 @@ def _config_from_args(args) -> Config:
         "stud_stroke": args.stud_stroke, "stud_floor": args.stud_floor,
         "crumb_ldu": args.crumb_ldu,
         "stud_instancing": args.stud_instancing,
+        "contour": args.contour,
         "dither": args.dither, "angle": args.angle, "pose": args.pose,
         "part_color": args.part_color,
         "curve_quality": args.curve_quality, "render_px": args.render_px,
@@ -281,6 +285,8 @@ def render_tag(cfg: Config, name: str, posed: bool = False) -> str:
         bits.append(f"opacity={cfg.opacity:g}")
     if cfg.stud_instancing != "off":
         bits.append(f"studs={cfg.stud_instancing}")
+    if cfg.contour == "off":
+        bits.append("contour=off")
     return "  ".join(bits)
 
 
@@ -411,7 +417,7 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                                      + geom2d.arc_regions(shifted, sil_geom)),
                     geom2d.arc_candidates(ells),
                     stroke=cfg.silhouette_mm / 0.4 * s) \
-                    if sil_geom is not None else None
+                    if sil_geom is not None and cfg.contour == "on" else None
                 w_mm = vb_w / s * 0.4
                 h_mm = vb_h / s * 0.4
                 trace.segments_to_svg(
@@ -458,7 +464,7 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                                      + geom2d.arc_regions(fit, sil_geom)),
                     geom2d.arc_candidates(ells),
                     stroke=sil_px) \
-                    if sil_geom is not None else None
+                    if sil_geom is not None and cfg.contour == "on" else None
                 trace.segments_to_svg(fit, cfg.width, cfg.height, out_dir / f"{name}.svg",
                                       line_px=line_px, sil_px=sil_px, studs=studs,
                                       fills=fills, bg=cfg.svg_bg,
@@ -477,6 +483,8 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                           f, ox, oy, cfg.width, cfg.height, style)
         if cfg.fmt in ("png", "both"):
             def sil_rings(W, H, fit_segs, stroke):
+                if cfg.contour == "off":
+                    return None
                 f, ox, oy = hlr.fit_affine(bbox, W, H, cfg.margin, cfg.scale)
                 faces = (shade.apply_affine_faces(res.faces, f, ox, oy)
                          or _sil_faces(res, f, ox, oy))
