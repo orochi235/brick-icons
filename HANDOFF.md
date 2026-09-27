@@ -1,3 +1,62 @@
+## 2026-09-27: stud instancing mid-build (branch `stud-instancing`, unmerged)
+
+**Where:** worktree `~/src/brick-icons-studs`, branch `stud-instancing`, not
+pushed (`git log --oneline main..stud-instancing`). Spec
+`docs/superpowers/specs/2026-09-27-stud-instancing-design.md`; plan
+`docs/superpowers/plans/2026-09-27-stud-instancing.md`, executed one subagent
+per task with a review after each.
+
+**Done:** plan Tasks 0-11, plus three the plan missed:
+
+| task | what | where |
+|---|---|---|
+| 7b | edges ending under a placed stud survive the orphan cull | `cull_orphan_runs(anchors=)`, `instancing.shown_ops` |
+| 11b | `--contour on\|off`; contour aligned by its inner edge; part strokes clipped outside placed studs | `process.contour_band`, `Instancer.hide_region`, `instancing.cut_ops` |
+| 11c | with instancing off, studs are still classified and part strokes clip at clear studs (cap nubs) | `VisResult.unplaced`, `instancing.unplaced_hide` |
+
+**Next:** plan Tasks 12-18 (census counts, `vet-goldens --after-args`, timing
+script, off proof, the batch vet, timing A/B, spec status + this file). Before
+the vet, merge `main` into the branch: main gained the transom port of the
+wall helper after the branch was cut. The batch list is
+`out/stroke-batch.txt` in the worktree (197 parts). Goldens are NOT
+re-frozen: 11b changed every SVG's structure (all 52 hashes), with pixel
+movement only in `outline-flat3__*` at stud rims; re-freeze after the vet
+sheets are reviewed.
+
+**Decided in conversation, not in code:**
+- Every stud is placed and clipped; only studs whose occlusion can't be
+  decided cleanly (hit by a curved surface) fall back to the engine.
+- Stroke alignment rule: where strokes of different widths share an edge,
+  align them by the side facing the surface they bound; extra width goes
+  outward. Today only the contour is affected.
+- `--stud-instancing` stays `off` by default until the vet; then Mike
+  decides whether `all` becomes the default. `--contour` defaults on.
+- A stud definition is two `<defs>` groups, fills and strokes, so a stud's
+  shading can someday differ without redrawing its lines.
+- `occt-svelte` (occt at 1.5 px, registered on main, empty) is filled only
+  after instancing lands, with instancing on.
+- Not started, each its own design: one engine result per part shared by all
+  the occt slots; printed parts reusing their base part's drawing. Also
+  unbuilt: the lab page for composing render commands.
+
+**Traps:**
+- Fleet: keiei holds a `brick-icons-studs` tree with APFS clones of `.venv`
+  and `vendor/ldraw`; run heavy tests there with
+  `onto do --node keiei --in brick-icons-studs --ref origin/main ...`
+  (sandbox off). Never run the census-size renders on this Mac.
+- In a worktree, `python scripts/x.py` imports the MAIN checkout; use
+  `.venv/bin/python -m ...` or `-c "import runpy; runpy.run_path(...)"` from
+  the worktree root.
+- Failing on main already: `test_lab_review::...redraw_that_changed_nothing`,
+  `test_occt::test_a_sticker_is_not_clipped_by_the_slope_it_is_stuck_to`.
+- The wedge on 3001's back stud with instancing on is real geometry: the
+  brick's back corner shows 1.5 px above the stud top (3024 always showed it).
+- PNG outputs keep small cap nubs at stud edges in both modes: PIL cannot
+  clip part of a stroke's width. Loose end, unfiled.
+- The wall command is `transom post <file>` (slopboard was renamed).
+
+Explainer page with diagrams: https://claude.ai/artifact/9UU5vt9kg3cigqyJjqqNM1
+
 ## 2026-09-27: stroke tiers landed; occt-svelte rendering; command-builder page unbuilt
 
 Strokes now draw at one weight per icon, capped at `--stroke-ldu` (1 LDU of
