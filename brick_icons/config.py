@@ -39,7 +39,8 @@ DEFAULTS = {
     "stroke_floor": 0.75,    # ...and none thinner than this, output px
     "stud_stroke": 0.5,      # a declared stud's strokes, as a fraction of the
                              # icon's line weight
-    "stud_floor": 0.5,       # ...and none thinner than this, output px
+    "stud_floor": 0.4,       # ...and none thinner than this, output px; above
+                             # ~0.4 a baseplate's stud walls close up (3811)
     "part_color": None,      # "0xRRGGBB" or None
     "scale": 1.0,            # part fill fraction of label (0-1)
     "scale_mode": "fit",     # fit | physical  (physical: SVG sized in mm)
