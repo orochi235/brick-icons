@@ -190,3 +190,20 @@ def test_a_bend_builds_one_torus_face_that_fills(tmp_path):
     slices = math.ceil(90 / occt.TORUS_SLICE_DEG)
     assert len(fills) == slices, "the front half of every slice"
     assert all(f["kind"] == "occt-wall" and f.get("_occ") is not None for f in fills)
+
+
+def test_a_tube_under_a_withheld_stud_stays_withheld_as_frustums(tmp_path):
+    rings = []
+    for k in range(9):
+        t = math.radians(90 * k / 8)
+        c = np.array([40 * math.cos(t), 40 * math.sin(t), 0.0])
+        tangent = np.array([-math.sin(t), math.cos(t), 0.0])
+        rings.append(_ring(c, 4.0, tangent, 16))
+    p = tmp_path / "tube.dat"
+    _write(p, rings)
+    out = _flatten(p)
+    for m in out["tri_meta"]:
+        m["withheld"] = True
+    assert sweep.substitute(out) == 1
+    frustums = [q for q in out["analytic"] if getattr(q, "sweep", False)]
+    assert frustums and all(q.withheld for q in frustums)

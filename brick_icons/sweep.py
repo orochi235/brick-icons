@@ -419,6 +419,9 @@ def substitute(out) -> int:
                             meta.get("body", 16))
             if prim is not None:
                 prim.bend = _bend(c0, r0, n0, c1, r1, n1) if BENDS else None
+                # a tube authored under a stud instancing places is that
+                # stud's, and stays out of the drawing with it
+                prim.withheld = bool(meta.get("withheld", False))
                 out["analytic"].append(prim)
                 chain.append(prim)
         _merge_bends(chain)

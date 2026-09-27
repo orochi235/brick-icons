@@ -17,6 +17,7 @@ Spec: docs/superpowers/specs/2026-09-27-stud-instancing-design.md
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -24,7 +25,7 @@ import numpy as np
 import shapely
 from shapely.geometry import MultiPoint, Polygon
 
-from . import hlr, primitives
+from . import hlr, primitives, timing
 
 #: Angles sampled round each circle of a stud when classifying it.
 SAMPLES = 24
@@ -310,3 +311,129 @@ def classify(out, right, up, fwd):
                              prim_of, hull, right, up)
         verdicts.append(Verdict(ref, role, hull=hull, cover=cover, **at))
     return verdicts
+
+
+#: Slack, in the stud's local units, of the envelope `Envelopes` tests.
+ENVELOPE_TOL = 0.02
+
+
+class Envelopes:
+    """The space each withheld stud occupies: a cylinder about the stud's
+    own local Y axis, as wide and as tall as its declared geometry. The sewn
+    shape occt draws from carries no stud tag, so occt asks here whether a
+    face or crease lies wholly inside one."""
+
+    def __init__(self, items):
+        self._env, lo, hi = [], [], []
+        for ref, P in items:
+            P = np.asarray(P, float)
+            if not len(P):
+                continue
+            Minv = np.linalg.inv(ref.R)
+            L = (P - ref.t) @ Minv.T
+            self._env.append((Minv, ref.t,
+                              float(np.hypot(L[:, 0], L[:, 2]).max()),
+                              float(L[:, 1].min()), float(L[:, 1].max())))
+            # the samples are inscribed in the true circles: pad the box
+            pad = 0.05 * float((P.max(0) - P.min(0)).max()) + ENVELOPE_TOL
+            lo.append(P.min(0) - pad)
+            hi.append(P.max(0) + pad)
+        self._lo = np.array(lo, float).reshape(-1, 3)
+        self._hi = np.array(hi, float).reshape(-1, 3)
+
+    def __len__(self):
+        return len(self._env)
+
+    def holds(self, P):
+        P = np.atleast_2d(np.asarray(P, float))
+        if not len(P) or not self._env:
+            return False
+        pmin, pmax = P.min(0), P.max(0)
+        for i in np.nonzero(np.all(self._lo <= pmin, 1)
+                            & np.all(self._hi >= pmax, 1))[0]:
+            Minv, t, r, y0, y1 = self._env[i]
+            L = (P - t) @ Minv.T
+            if (np.hypot(L[:, 0], L[:, 2]).max() <= r + ENVELOPE_TOL
+                    and L[:, 1].min() >= y0 - ENVELOPE_TOL
+                    and L[:, 1].max() <= y1 + ENVELOPE_TOL):
+                return True
+        return False
+
+
+def withhold(out, right, up, fwd):
+    """Classify every stud and take each one instancing will place (every
+    role but fallback) out of the drawing: its primitives and triangles are
+    marked `withheld` -- still occluders, never drawn -- and its type-2 and
+    type-5 lines leave out["2"] and out["5"]. Runs on `out` as flatten left
+    it, before sweep.substitute and arcfit rewrite those lists. Records the
+    four role counts for the census."""
+    verdicts = classify(out, right, up, fwd)
+    gone = {v.ref.id for v in verdicts if v.role != "fallback"}
+    if gone:
+        for p in out.get("analytic", ()):
+            if p.stud in gone:
+                p.withheld = True
+        for m in out.get("tri_meta", ()):
+            if m.get("stud") in gone:
+                m["withheld"] = True
+        for typ in ("2", "5"):
+            lines = out.get(typ, [])
+            tags = out.get(typ + "_stud") or [None] * len(lines)
+            out[typ] = [e for e, s in zip(lines, tags) if s not in gone]
+            out[typ + "_stud"] = [s for s in tags if s not in gone]
+        prims, tris = members(out)
+        out["stud_held"] = Envelopes(
+            [(v.ref, stud_points(prims.get(v.ref.id, []),
+                                 tris.get(v.ref.id, [])))
+             for v in verdicts if v.ref.id in gone])
+    plan = Plan(verdicts, (right, up, fwd), printed=bool(out.get("printed")))
+    for role, n in plan.counts().items():
+        timing.count(f"studs_{role}", n)
+    return plan
+
+
+def limb_points(prim, fwd):
+    """World (base, top) of each limb generator of a cylinder or cone
+    primitive seen along `fwd` -- the lines Cylinder/Cone.drawn_with_depth
+    draw as its silhouette. [] for other kinds, or a cone with no limb."""
+    fwd = np.asarray(fwd, float)
+    g = np.linalg.inv(prim.R) @ fwd
+    if prim.kind == "cyli":
+        th0 = math.atan2(-float(g[0]), float(g[2]))
+        thetas, rb, rt = (th0, th0 + math.pi), 1.0, 1.0
+    elif prim.kind == "con":
+        a_, b_, c_ = float(g[0]), float(g[2]), float(-g[1])
+        hyp = math.hypot(a_, b_)
+        if hyp < 1e-12 or abs(c_) > hyp:
+            return []
+        phi0 = math.atan2(b_, a_)
+        d = math.acos(max(-1.0, min(1.0, c_ / hyp)))
+        thetas, rb, rt = (phi0 + d, phi0 - d), prim.top + 1.0, float(prim.top)
+    else:
+        return []
+    out = []
+    for th in thetas:
+        if not prim.is_full and math.degrees(th) % 360.0 > prim.sector + 1e-6:
+            continue
+        base = prim.ring_pts(np.array([th]), 0.0, radius=rb)[0]
+        top = prim.ring_pts(np.array([th]), 1.0, radius=rt)[0]
+        out.append((base, top))
+    return out
+
+
+def grow_bbox(bbox, plan, proj):
+    """`bbox` (op space) grown over what every placed stud shows: a withheld
+    stud draws no op, and a naive bbox is its ops'."""
+    if proj is None:
+        return bbox
+    x0, y0, x1, y1 = bbox
+    for v in plan.placed():
+        g = v.shown()
+        if g is None or g.is_empty:
+            continue
+        a0, b0, a1, b1 = g.bounds
+        x0 = min(x0, (a0 - proj.cx) * proj.s + proj.half)
+        y0 = min(y0, (b0 - proj.cy) * proj.s + proj.half)
+        x1 = max(x1, (a1 - proj.cx) * proj.s + proj.half)
+        y1 = max(y1, (b1 - proj.cy) * proj.s + proj.half)
+    return (float(x0), float(y0), float(x1), float(y1))
