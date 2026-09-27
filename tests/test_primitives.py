@@ -777,3 +777,23 @@ def test_a_kind_that_cannot_express_a_raise_keeps_its_own_surface():
     a raise, rather than raising a surface it has not moved."""
     disc = P.Disc(R=np.eye(3), t=np.zeros(3), sector=360.0)
     assert disc.raised(0.3) is disc
+
+
+def test_occluder_index_names_the_nearest_occluder_each_ray_hits():
+    F = np.array([0.0, 1.0, 0.0])
+    near = P.DiscOccluder(np.diag([5.0, 1.0, 5.0]), np.array([0.0, 2.0, 0.0]),
+                          360.0, 0.0, 1.0)
+    far = P.DiscOccluder(np.diag([30.0, 1.0, 30.0]), np.array([0.0, 5.0, 0.0]),
+                         360.0, 0.0, 1.0)
+    index = P.OccluderIndex([near, far], F)
+    O = np.array([[0.0, 0.0, 0.0], [20.0, 0.0, 0.0], [100.0, 0.0, 0.0]])
+    depth, which = index.nearest_hit(O)
+    assert which.tolist() == [0, 1, -1]
+    assert depth[:2].tolist() == [2.0, 5.0] and np.isinf(depth[2])
+    depth, which = index.nearest_hit(O, skip=[near])
+    assert which.tolist() == [1, 1, -1]
+
+
+def test_a_primitive_is_not_withheld_until_instancing_says_so():
+    prim = P.Disc(R=np.eye(3), t=np.zeros(3))
+    assert prim.withheld is False

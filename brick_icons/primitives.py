@@ -563,6 +563,9 @@ class Primitive:
     rims_declared = False    # set per instance by from_ref; see declares_rims
     stud = None              # set per instance by hlr.flatten: which stud
                              # this came from, or None
+    withheld = False         # set per instance by instancing.withhold: a
+                             # stud instancing draws, so the engine must not
+                             # (it still occludes)
 
     def __post_init__(self):
         self.R = np.asarray(self.R, float)
@@ -1515,6 +1518,27 @@ class OccluderIndex:
                 continue
             field = np.minimum(field, occ.depth(O, self.F))
         return field
+
+    def nearest_hit(self, O, skip=()):
+        """(depth, index) of the nearest occluder along F per ray: `index`
+        into `self.occluders`, -1 on a miss. `skip` is a collection of
+        occluders never tested -- a stud's own surfaces, when the question
+        is what ELSE hides it (instancing.classify)."""
+        O = np.atleast_2d(O).astype(float)
+        field = np.full(O.shape[0], np.inf)
+        which = np.full(O.shape[0], -1, dtype=int)
+        if not self.occluders or not O.shape[0]:
+            return field, which
+        skip_ids = {id(o) for o in skip}
+        for i in boxes_reached(self.lo, self.hi, O @ self.u, O @ self.v):
+            occ = self.occluders[i]
+            if id(occ) in skip_ids:
+                continue
+            d = occ.depth(O, self.F)
+            closer = d < field
+            field = np.where(closer, d, field)
+            which = np.where(closer, int(i), which)
+        return field, which
 
 
 def visible_subops(op_specs, occluders, ray_origin, fwd, eps, n=200):
