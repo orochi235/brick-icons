@@ -37,6 +37,8 @@ def build_parser():
                    help="thinnest the --stroke-ldu cap may make a stroke (output px)")
     p.add_argument("--stud-stroke", dest="stud_stroke", type=float,
                    help="stud strokes as a fraction of the line weight")
+    p.add_argument("--stud-floor", dest="stud_floor", type=float,
+                   help="thinnest a stud stroke may be (output px)")
     p.add_argument("--scale-mode", dest="scale_mode", choices=["fit", "physical"])
     p.add_argument("--line-mm", dest="line_mm", type=float)
     p.add_argument("--silhouette-mm", dest="silhouette_mm", type=float)
@@ -135,7 +137,7 @@ def _config_from_args(args) -> Config:
         "cel_levels": args.cel_levels,
         "line_width": args.line_width, "silhouette_width": args.silhouette_width,
         "stroke_ldu": args.stroke_ldu, "stroke_floor": args.stroke_floor,
-        "stud_stroke": args.stud_stroke,
+        "stud_stroke": args.stud_stroke, "stud_floor": args.stud_floor,
         "dither": args.dither, "angle": args.angle, "pose": args.pose,
         "part_color": args.part_color,
         "curve_quality": args.curve_quality, "render_px": args.render_px,
@@ -167,14 +169,15 @@ def _stroke_tiers(cfg, res, basis, fit, line_px, sil_px, ratio=1.0):
     """(line, sil, studs) for a drawing fitted by `fit` = (f, ox, oy).
 
     `line_px`/`sil_px` are the icon's weights at its own canvas; a drawing
-    `ratio` times that size (the gray PNG) scales them. The stud tier is
-    `cfg.stud_stroke` of the line weight, over the footprints of the studs
-    the part declared."""
+    `ratio` times that size (the gray PNG) scales them. The stud tier
+    (process.stud_weight) covers the footprints of the studs the part
+    declared."""
     line, sil = line_px * ratio, sil_px * ratio
     k, kx, ky = hlr.canvas_affine(res, *fit)
     zone = hlr.stud_footprints(res.analytic or (), *basis, k, kx, ky,
                                pad=0.5 * ratio)
-    studs = (process.StudTier(zone, line * cfg.stud_stroke)
+    studs = (process.StudTier(zone, process.stud_weight(
+                 line, cfg.stud_stroke, cfg.stud_floor * ratio))
              if zone is not None and cfg.stud_stroke > 0 else None)
     return line, sil, studs
 

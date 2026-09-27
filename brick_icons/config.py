@@ -39,6 +39,7 @@ DEFAULTS = {
     "stroke_floor": 0.75,    # ...and none thinner than this, output px
     "stud_stroke": 0.5,      # a declared stud's strokes, as a fraction of the
                              # icon's line weight
+    "stud_floor": 0.5,       # ...and none thinner than this, output px
     "part_color": None,      # "0xRRGGBB" or None
     "scale": 1.0,            # part fill fraction of label (0-1)
     "scale_mode": "fit",     # fit | physical  (physical: SVG sized in mm)
@@ -94,6 +95,7 @@ class Config:
     stroke_ldu: float
     stroke_floor: float
     stud_stroke: float
+    stud_floor: float
     part_color: str | None
     scale: float
     scale_mode: str
@@ -168,6 +170,7 @@ def load_config(toml_path=None, overrides=None, root="."):
         stroke_ldu=float(data["stroke_ldu"]),
         stroke_floor=float(data["stroke_floor"]),
         stud_stroke=float(data["stud_stroke"]),
+        stud_floor=float(data["stud_floor"]),
         part_color=(str(data["part_color"]) if data["part_color"] else None),
         scale=float(data["scale"]),
         scale_mode=str(data["scale_mode"]),

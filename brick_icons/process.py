@@ -61,6 +61,12 @@ def icon_weight(width, px_per_ldu, cap_ldu, floor):
     return min(width, max(floor, cap_ldu * px_per_ldu))
 
 
+def stud_weight(line_px, fraction, floor):
+    """A declared stud's stroke: `fraction` of the icon's line weight, never
+    thinner than `floor` and never heavier than the line itself."""
+    return min(line_px, max(floor, fraction * line_px))
+
+
 def op_points(op, n=12):
     """A stroke op as a short polyline in its own space."""
     if len(op) == 5:                                   # legacy line tuple

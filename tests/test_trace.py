@@ -457,3 +457,10 @@ def test_two_strokes_closing_a_sub_stroke_loop_both_go():
     # a silhouette stroke never goes, even inside a sliver
     sil = ("line", 10.0, 10.0, 10.0, 16.0, "sil")
     assert _trace._drop_sliver_loops([sil, back], width=1.2, max_len=8.0) == [sil, back]
+
+
+def test_stud_weight_floors_and_never_outweighs_the_line():
+    from brick_icons import process
+    assert process.stud_weight(2.0, 0.5, 0.5) == 1.0      # a brick: half
+    assert process.stud_weight(0.75, 0.5, 0.5) == 0.5     # a baseplate: floor
+    assert process.stud_weight(0.4, 0.5, 0.5) == 0.4      # never above line
