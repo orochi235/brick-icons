@@ -1109,6 +1109,17 @@ RESIDUE_MIN_AREA = 0.8
 # matter how thin — the radius is half that. A wide-bodied thin-tipped
 # piece (counterbore crescent) survives whole: a per-piece TEST, not a trim.
 RESIDUE_CRUMB = 0.4
+
+
+def crumb_radius(px_per_ldu, crumb_ldu):
+    """The crumb cull's radius for one render: RESIDUE_CRUMB, but never more
+    than `crumb_ldu` LDU of the part as drawn. A part shrunk past ~0.4 px/LDU
+    has real surfaces thinner than 0.8 px -- 51542's stud walls, 3.46 LDU at
+    their widest -- and a fixed radius culled every one. This scales with the
+    part on the canvas, not with render_px (see above). 0 = fixed."""
+    if crumb_ldu <= 0:
+        return RESIDUE_CRUMB
+    return min(RESIDUE_CRUMB, crumb_ldu * px_per_ldu)
 # SPUR: max VISIBLE area (outside the drawn ink) of an escaped-seam spur
 # that donation may hand across the seam (see _donate_escaped_spurs).
 # Nub-class artifacts are a few px^2; bigger sub-stroke-thin regions are
@@ -1417,7 +1428,7 @@ def _stroke_band(strokes, sil, line_px, sil_px, studs=None):
 
 
 def _donate_escaped_spurs(merged, order, strokes, sil, line_px, sil_px,
-                          studs=None):
+                          studs=None, crumb=RESIDUE_CRUMB):
     """Reassign fill spurs whose seam escapes the drawn strokes.
 
     Every seam between emitted elements is meant to lie under a drawn
@@ -1509,7 +1520,7 @@ def _donate_escaped_spurs(merged, order, strokes, sil, line_px, sil_px,
                 # spur used to paint. Wide-enough pieces survive on their
                 # own, so any near receiver is safe.
                 pb = p.buffer(0.05)
-                need_touch = p.buffer(-RESIDUE_CRUMB).is_empty
+                need_touch = p.buffer(-crumb).is_empty
                 qx0, qy0, qx1, qy1 = probe.bounds
                 best, contact = None, 0.0
                 for r2, g2 in merged.items():
@@ -1807,7 +1818,7 @@ def face_fill(face, style, ldraw_dir):
 def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
              refits=None, loops=None, strokes=None, line_px=2.0,
              sil_px=2.0, drop=None, weld_corners=False, ldraw_dir="vendor/ldraw",
-             studs=None):
+             studs=None, crumb=RESIDUE_CRUMB):
     """Fill ops with exact visible-fragment clipping and per-surface merging.
 
     clip=False keeps every face whole (no occlusion subtraction) for
@@ -1904,7 +1915,7 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
             # cull. Hairline-only rounds (most parts) stop here: emission
             # drops those pieces and the sub-AA slits left behind are
             # invisible, at a third of the render cost.
-            if not any(not p.buffer(-RESIDUE_CRUMB).is_empty
+            if not any(not p.buffer(-crumb).is_empty
                        for t in new.values()
                        for p in getattr(t, "geoms", [t])
                        if p.geom_type == "Polygon"):
@@ -1939,7 +1950,7 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
         order = {r: min(ks) for r, ks in members.items() if r in merged}
         silR = _contour_region(geoms, arcs) if geoms else None
         _donate_escaped_spurs(merged, order, strokes, silR, line_px, sil_px,
-                              studs)
+                              studs, crumb)
         vis = geom2d.union_all(list(merged.values()))
         base = silR if silR is not None and not silR.is_empty else vis
         # include drawn-arc bulge regions: a stylized arc bows past the
@@ -1997,7 +2008,7 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
         if key is not None:
             by_surface[key].append(g)
     for key, gs in by_surface.items():
-        surface_core[key] = geom2d.union_all(gs).buffer(-RESIDUE_CRUMB)
+        surface_core[key] = geom2d.union_all(gs).buffer(-crumb)
 
     ops, emitted = [], set()
     for idx in sorted(frags):                          # farthest-first
@@ -2020,7 +2031,7 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
             # glyph counter being thinner than the self-stroke on any tile
             # small enough to read as a label.
             from shapely.geometry import Polygon as _Poly
-            er = RESIDUE_CRUMB
+            er = crumb
             core = surface_core.get(f.get("surface"))
             pieces = []
             for p in getattr(geom, "geoms", [geom]):

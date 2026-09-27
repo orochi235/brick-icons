@@ -39,6 +39,9 @@ def build_parser():
                    help="stud strokes as a fraction of the line weight")
     p.add_argument("--stud-floor", dest="stud_floor", type=float,
                    help="thinnest a stud stroke may be (output px)")
+    p.add_argument("--crumb-ldu", dest="crumb_ldu", type=float,
+                   help="fill cleanup: never cull a piece wider than twice "
+                        "this many LDU of the part as drawn (0 = fixed)")
     p.add_argument("--scale-mode", dest="scale_mode", choices=["fit", "physical"])
     p.add_argument("--line-mm", dest="line_mm", type=float)
     p.add_argument("--silhouette-mm", dest="silhouette_mm", type=float)
@@ -138,6 +141,7 @@ def _config_from_args(args) -> Config:
         "line_width": args.line_width, "silhouette_width": args.silhouette_width,
         "stroke_ldu": args.stroke_ldu, "stroke_floor": args.stroke_floor,
         "stud_stroke": args.stud_stroke, "stud_floor": args.stud_floor,
+        "crumb_ldu": args.crumb_ldu,
         "dither": args.dither, "angle": args.angle, "pose": args.pose,
         "part_color": args.part_color,
         "curve_quality": args.curve_quality, "render_px": args.render_px,
@@ -353,6 +357,8 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                 f, ox, oy = hlr.fit_affine(pbbox, round(vb_w), round(vb_h), margin=0, scale=1.0)
                 faces = shade.apply_affine_faces(res.faces, f, ox, oy)
                 ells = hlr.fit_ellipses(res.ellipses, f, ox, oy)
+                crumb = shade.crumb_radius(
+                    hlr.canvas_affine(res, f, ox, oy)[0], cfg.crumb_ldu)
                 _l, _s, studs = _stroke_tiers(cfg, res, basis, (f, ox, oy),
                                               cfg.line_mm / 0.4 * s,
                                               cfg.silhouette_mm / 0.4 * s,
@@ -369,7 +375,7 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                                        drop=spurs,
                                        weld_corners=cfg.weld_corners,
                                        ldraw_dir=cfg.ldraw_dir,
-                                       studs=studs) \
+                                       studs=studs, crumb=crumb) \
                     if style is not None else None
                 sil_geom = shade.silhouette_geom(
                     faces or _sil_faces(res, f, ox, oy)) or None
@@ -397,6 +403,7 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                 f, ox, oy = icon_fit
                 faces = shade.apply_affine_faces(res.faces, f, ox, oy)
                 ells = hlr.fit_ellipses(res.ellipses, f, ox, oy)
+                crumb = shade.crumb_radius(px_per_ldu, cfg.crumb_ldu)
                 line_px, sil_px, studs = _stroke_tiers(cfg, res, basis, icon_fit,
                                                        line_w, sil_w, stud_base)
                 spurs = shade.silhouette_spur_trim(
@@ -410,7 +417,7 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                                        drop=spurs,
                                        weld_corners=cfg.weld_corners,
                                        ldraw_dir=cfg.ldraw_dir,
-                                       studs=studs) \
+                                       studs=studs, crumb=crumb) \
                     if style is not None else None
                 sil_geom = shade.silhouette_geom(
                     faces or _sil_faces(res, f, ox, oy)) or None

@@ -41,6 +41,8 @@ DEFAULTS = {
                              # icon's line weight
     "stud_floor": 0.2,       # ...and none thinner than this, output px; at
                              # 0.4 a baseplate's stud walls close up (51542)
+    "crumb_ldu": 1.0,        # fill cleanup never culls a piece wider than 2x
+                             # this many LDU as drawn (51542's stud walls)
     "part_color": None,      # "0xRRGGBB" or None
     "scale": 1.0,            # part fill fraction of label (0-1)
     "scale_mode": "fit",     # fit | physical  (physical: SVG sized in mm)
@@ -97,6 +99,7 @@ class Config:
     stroke_floor: float
     stud_stroke: float
     stud_floor: float
+    crumb_ldu: float
     part_color: str | None
     scale: float
     scale_mode: str
@@ -172,6 +175,7 @@ def load_config(toml_path=None, overrides=None, root="."):
         stroke_floor=float(data["stroke_floor"]),
         stud_stroke=float(data["stud_stroke"]),
         stud_floor=float(data["stud_floor"]),
+        crumb_ldu=float(data["crumb_ldu"]),
         part_color=(str(data["part_color"]) if data["part_color"] else None),
         scale=float(data["scale"]),
         scale_mode=str(data["scale_mode"]),

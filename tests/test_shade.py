@@ -1980,3 +1980,12 @@ def test_a_stud_wall_between_its_own_thin_strokes_is_not_inked():
     bare, _ = shade._ink_lens_pockets(base, base, strokes, None, 0.75, 0.75,
                                       process.StudTier(box(50, 50, 51, 51), 0.3))
     assert len(bare) == 1
+
+
+def test_crumb_radius_scales_only_parts_shrunk_below_it():
+    # 51542 at 0.216 px/LDU: stud walls ~0.75 px wide, culled at the fixed
+    # 0.4 radius; at 1 LDU the radius is 0.216 and they survive. Parts drawn
+    # at 0.4 px/LDU or larger keep the fixed radius.
+    assert shade.crumb_radius(0.216, 1.0) == pytest.approx(0.216)
+    assert shade.crumb_radius(2.0, 1.0) == shade.RESIDUE_CRUMB
+    assert shade.crumb_radius(0.216, 0.0) == shade.RESIDUE_CRUMB

@@ -3881,3 +3881,46 @@ mark = { x = 0.55, y = 0.73, w = 0.14, h = 0.12 }
 seen = { angle = "iso", shading = "outline", shade_style = "flat3" }
 filed = "2026-09-25"
 notes = "Not a regression: the patches are there with the sweep off too. The rim is 6 copies of s/87748s02 ('Two Band Halves', 96 quads each); sweep.tubes finds 9 tubes (21 frustums, 336 quads) and 345 quads stay facets. Measured by instrumenting sweep.tubes: 30 rings fit, while 9 rings of 13 vertices and 3 of 15 are rejected by _fit_ring, so those chains stay flat. Wall: 'sweep, close crops' (87748 bottom)."
+
+[[defect]]
+id = "51542-outline-drowns-detail"
+part = "51542"
+engines = ["occt"]
+status = "open"
+title = "outline and edge strokes absurdly thick against the studs"
+classes = ["stroke-scale"]
+filed = "2026-09-27"
+notes = "Same class as 3832-doubled-stud-ellipses, on straight edges instead of studs. Every straight stroke is 2.00 output px; stud arcs are thinned by the arc cap (9885879, width = min(2, 0.5*r)) to ~0.5 px, so on a part fit-shrunk this far the edges read as a heavy black frame around hairline studs. On 51542 the chamfered corner posts pack ~20 real 2px creases into ~10px and ink solid black. Rewriting the stored SVG's 2.00 widths to 0.75 resolves both (preview only, not a re-render). Parked on a stroke-weight policy decision: uniform weight, at most two tiers."
+
+[[defect]]
+id = "35011-outline-drowns-detail"
+part = "35011"
+engines = ["occt"]
+status = "open"
+title = "outline and edge strokes absurdly thick against the studs"
+classes = ["stroke-scale"]
+filed = "2026-09-27"
+notes = "Same class as 3832-doubled-stud-ellipses, on straight edges instead of studs. Every straight stroke is 2.00 output px; stud arcs are thinned by the arc cap (9885879, width = min(2, 0.5*r)) to ~0.5 px, so on a part fit-shrunk this far the edges read as a heavy black frame around hairline studs. On 51542 the chamfered corner posts pack ~20 real 2px creases into ~10px and ink solid black. Rewriting the stored SVG's 2.00 widths to 0.75 resolves both (preview only, not a re-render). Parked on a stroke-weight policy decision: uniform weight, at most two tiers."
+
+[[defect]]
+id = "3001-contour-studs-at-line-weight"
+part = "3001"
+engines = ["occt", "naive"]
+status = "open"
+title = "studs on the outline keep the heavy line weight"
+classes = ["stroke-scale"]
+filed = "2026-09-27"
+notes = "On branch stroke-tiers, studs draw at --stud-stroke of the icon weight -- except where a stud is part of the silhouette (3001 back row, 3024 stud top). The outline is one closed contour path drawn at the silhouette weight (trace.segments_to_svg contour_d), so its stud stretches cannot take the stud tier without splitting the contour. Known, left for a decision once the stud tier lands."
+
+[[defect]]
+id = "51542-stud-walls-unfilled"
+part = "51542"
+engines = ["occt"]
+status = "open"
+title = "stud walls get no fill; studs draw as bare rings"
+classes = ["fill-hole"]
+filed = "2026-09-27"
+notes = """
+Cause (measured on keiei at d2d40cd): the crumb cull in shade.fill_ops (shade.py ~2033) drops any color-16 piece that erodes to nothing under RESIDUE_CRUMB = 0.4 px, i.e. is narrower than 0.8 px, unless it overlaps its surface's merged core -- and that core exists only for faces stamped `surface`, which occt stamps only on _span_face slices (occt.py ~2888). A stud wall's visible crescent is 4*cos30 = 3.46 LDU at its widest, so it falls under 0.8 px below 0.231 px/LDU. 51542 at 0.216: 635 wall fragments, median widest 0.748 px, all culled, 8 zone fills emitted. Same part at 330 px wide (0.278): 0 culled, 642 fills. 3811 at 256 (0.271) keeps 1025; at 200 px (0.212) keeps 1. Earlier stages are clean.
+
+A rule that survives this judges a piece against its own face rather than an absolute width (keep a piece holding most of its face's clipped area), or occt stamps `surface` on every wall face so the existing core rescue applies. Moving or scaling 0.4 only moves the cliff. Stud instancing (docs/superpowers/specs/2026-09-27-stud-instancing-design.md) takes studs out of this path, but any other thin declared wall at small scale is still exposed."""
