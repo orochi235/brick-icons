@@ -3,6 +3,7 @@
 
     .venv/bin/python scripts/vet-goldens.py --base origin/main --expect 6589,3941
     .venv/bin/python scripts/vet-goldens.py --here --only outline__30   # this Mac
+    .venv/bin/python scripts/vet-goldens.py --parts batch.txt --source occt
 
 Renders every case in tests/goldens/manifest.toml twice under one engine:
 `before` from a throwaway worktree at --base, `after` from this tree as it
@@ -10,7 +11,11 @@ stands, uncommitted edits included. Each pair is component-counted with the
 lab's own diff panel, so a count here means what it means on /review.
 
 A case whose part is not in --expect and moved is UNEXPECTED; those are what
-go to a person. Without --here the run goes to the fleet through `onto do`,
+go to a person. `--parts` draws a part list instead of the goldens (a file of
+`part[<TAB>label]` lines, or ids joined by commas) under a render slot's own
+flags, for a change expected to move many parts; its sheet comes in pages,
+each row labeled with its line's label. Without --here the run goes to the
+fleet through `onto do`,
 and the report and sheet come back under out/vet/<label>/.
 """
 from __future__ import annotations
@@ -37,6 +42,7 @@ from brick_icons.lab import diff as _diff  # noqa: E402
 
 VET_DIR = ROOT / "out" / "vet"
 KEEP_RUNS = 10
+PAGE_ROWS = 20
 
 
 def _freeze():
@@ -63,7 +69,8 @@ def make_base_tree(rev: str, where: Path) -> Path:
     return where
 
 
-def render(case, tree: Path, engine: str, dest: Path, width: int):
+def render(case, tree: Path, engine: str, dest: Path, width: int,
+           timeout: float | None = None):
     """(png or None, error or None, seconds). `-m` puts cwd first on sys.path,
     so running from `tree` is what makes it import that tree's engine."""
     t0 = time.time()
@@ -71,10 +78,14 @@ def render(case, tree: Path, engine: str, dest: Path, width: int):
     shutil.rmtree(work, ignore_errors=True)
     work.mkdir(parents=True)
     env = {**os.environ, "PYTHONPATH": str(tree)}
-    proc = subprocess.run(
-        [sys.executable, "-m", "brick_icons.cli", case["part"],
-         "--engine", engine, *case["args"], "--out", str(work)],
-        cwd=tree, env=env, capture_output=True, text=True)
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-m", "brick_icons.cli", case["part"],
+             "--engine", engine, *case["args"], "--out", str(work)],
+            cwd=tree, env=env, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        shutil.rmtree(work, ignore_errors=True)
+        return None, f"timeout {timeout:g}s", time.time() - t0
     svgs = sorted(work.glob("*.svg"))
     if proc.returncode != 0 or not svgs:
         tail = (proc.stderr or proc.stdout).strip().splitlines()
@@ -105,17 +116,46 @@ def prune_runs(keep: int = KEEP_RUNS) -> None:
         shutil.rmtree(old, ignore_errors=True)
 
 
+def read_parts(spec: str) -> list[tuple[str, str]]:
+    """(part, label) from a file of `part[<TAB>label]` lines, or from ids
+    joined by commas."""
+    path = Path(spec)
+    if path.is_file():
+        rows = [ln.split("\t", 1) for ln in path.read_text().splitlines()
+                if ln.strip() and not ln.startswith("#")]
+        return [(r[0].strip(), r[1].strip() if len(r) > 1 else "") for r in rows]
+    return [(p, "") for p in spec.split(",") if p]
+
+
+def part_cases(parts: list[tuple[str, str]], source: str):
+    """One case per part, drawn with `source`'s own flags minus its engine
+    (--engine decides that, as it does for the goldens)."""
+    from brick_icons import db
+    argv = db.canonical_argv("PART", source)[1:]
+    keep = [x for i, x in enumerate(argv)
+            if x != "--engine" and (i == 0 or argv[i - 1] != "--engine")]
+    return [{"id": p, "part": p, "args": keep, "label": label}
+            for p, label in parts]
+
+
 def run_here(a) -> int:
     # provision-node.sh installs resvg and potrace here, off the agent's PATH.
     os.environ["PATH"] = f"{Path.home() / '.local' / 'bin'}:{os.environ['PATH']}"
-    freeze = _freeze()
-    cases, width = freeze.load_cases(freeze.MANIFEST)
+    if a.parts:
+        labels = json.loads(a.labels) if a.labels else {}
+        parts = [(p, labels.get(p, lb)) for p, lb in read_parts(a.parts)]
+        cases, width = part_cases(parts, a.source), 512
+    else:
+        freeze = _freeze()
+        cases, width = freeze.load_cases(freeze.MANIFEST)
     if a.only:
         cases = [c for c in cases if a.only in c["id"]]
     if not shutil.which("resvg"):
         print("resvg not on PATH", file=sys.stderr)
         return 2
     expect = {p for p in (a.expect or "").split(",") if p}
+    if a.parts and not a.expect:
+        expect = {c["part"] for c in cases}   # a person reviews every page
     base_sha = git("rev-parse", "--short", a.base)
     out = VET_DIR / a.label
     shutil.rmtree(out, ignore_errors=True)
@@ -132,8 +172,9 @@ def run_here(a) -> int:
     rows = []
     try:
         def one(case):
-            b = render(case, base_tree, a.engine, out / "before", width)
-            f = render(case, ROOT, a.engine, out / "after", width)
+            b = render(case, base_tree, a.engine, out / "before", width,
+                       a.timeout)
+            f = render(case, ROOT, a.engine, out / "after", width, a.timeout)
             return case, b, f
 
         with ThreadPoolExecutor(a.workers) as ex:
@@ -164,8 +205,20 @@ def run_here(a) -> int:
         shutil.rmtree(base_tree, ignore_errors=True)
 
     moved = [r for r in rows if r["state"] == "moved"]
-    moved.sort(key=lambda r: (not r["unexpected"], -r["px"]))
-    if moved:
+    if a.parts:
+        label = {c["id"]: c["label"] for c in cases}
+        order = {c["id"]: i for i, c in enumerate(cases)}
+        moved.sort(key=lambda r: order[r["case"]])
+        pages = [moved[i:i + PAGE_ROWS] for i in range(0, len(moved), PAGE_ROWS)]
+        for n, page in enumerate(pages, 1):
+            sheet(f"{a.source} under {a.engine}: {a.base} ({base_sha}) -> "
+                  f"{after_name}   page {n}/{len(pages)}   magenta = changed",
+                  [(r["case"] + "\n" + label[r["case"]].replace(", ", "\n"),
+                    flat(out / "before" / f"{r['case']}.png"),
+                    flat(out / "after" / f"{r['case']}.png")) for r in page],
+                  out=out / f"sheet-{n:02d}.png")
+    elif moved:
+        moved.sort(key=lambda r: (not r["unexpected"], -r["px"]))
         sheet(f"goldens under {a.engine}: {a.base} ({base_sha}) -> {after_name}"
               f"   magenta = changed",
               [(("UNEXPECTED\n" if r["unexpected"] else "expected\n")
@@ -200,13 +253,22 @@ def run_fleet(a) -> int:
     cmd = [".venv/bin/python", "scripts/vet-goldens.py", "--here",
            "--base", a.base, "--engine", a.engine, "--label", a.label,
            "--workers", str(a.workers)]
+    if a.parts:
+        # the list and its labels travel on the command line: a file here
+        # is not a file the node was sent
+        parts = read_parts(a.parts)
+        cmd += ["--parts", ",".join(p for p, _lb in parts),
+                "--labels", json.dumps({p: lb for p, lb in parts if lb}),
+                "--source", a.source]
+    if a.timeout:
+        cmd += ["--timeout", f"{a.timeout:g}"]
     if a.expect:
         cmd += ["--expect", a.expect]
     if a.only:
         cmd += ["--only", a.only]
     rel = f"out/vet/{a.label}"
     onto = ["onto", "do", "--kind", "score", "--icon", "chart.line.text.clipboard",
-            "--task", f"vet-{a.label}", "--timeout", "1h",
+            "--task", f"vet-{a.label}", "--timeout", "6h" if a.parts else "1h",
             "--env", "PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
             "--out", rel, "--to", str(ROOT / rel)]
     if a.node:
@@ -236,6 +298,12 @@ def main(argv=None) -> int:
     ap.add_argument("--here", action="store_true",
                     help="render in this tree instead of on the fleet")
     ap.add_argument("--node", help="fleet node to use (default: onto chooses)")
+    ap.add_argument("--parts", help="draw this part list instead of the goldens")
+    ap.add_argument("--labels", help=argparse.SUPPRESS)   # JSON, from run_fleet
+    ap.add_argument("--source", default="occt",
+                    help="render slot whose flags --parts draws with")
+    ap.add_argument("--timeout", type=float,
+                    help="give up on one render after this many seconds")
     a = ap.parse_args(argv)
     a.label = a.label or (f"{git('rev-parse', '--short', a.base)}"
                           f"..{git('rev-parse', '--short', 'HEAD')}-{a.engine}")
