@@ -120,7 +120,7 @@ def read_parts(spec: str) -> list[tuple[str, str]]:
     """(part, label) from a file of `part[<TAB>label]` lines, or from ids
     joined by commas."""
     path = Path(spec)
-    if path.is_file():
+    if "," not in spec and path.is_file():
         rows = [ln.split("\t", 1) for ln in path.read_text().splitlines()
                 if ln.strip() and not ln.startswith("#")]
         return [(r[0].strip(), r[1].strip() if len(r) > 1 else "") for r in rows]
