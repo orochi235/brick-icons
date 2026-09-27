@@ -23,9 +23,10 @@ from pathlib import Path
 
 import numpy as np
 import shapely
-from shapely.geometry import MultiPoint, Polygon
+from shapely import affinity
+from shapely.geometry import LineString, MultiPoint, Polygon
 
-from . import hlr, primitives, timing
+from . import geom2d, hlr, primitives, process, shade, sweep, timing, trace
 
 #: Angles sampled round each circle of a stud when classifying it.
 SAMPLES = 24
@@ -444,3 +445,223 @@ def grow_bbox(bbox, plan, proj):
     a0, b0, a1, b1 = g.bounds
     return (float(min(x0, a0)), float(min(y0, b0)),
             float(max(x1, a1)), float(max(y1, b1)))
+
+
+def canvas_geom(g, k, kx, ky):
+    """A world-A/B geometry in canvas px."""
+    return affinity.affine_transform(g, [k, 0.0, 0.0, k, kx, ky])
+
+
+def origin_fit(res, k):
+    """The (f, ox, oy) under which canvas_affine(res, ...) is (k, 0, 0): a
+    lone stud's own drawing, its reference origin on canvas (0, 0)."""
+    p = res.proj
+    if p is None:
+        return (k, 0.0, 0.0)
+    f = k / p.s
+    return (f, -(p.half - p.cx * p.s) * f, -(p.half - p.cy * p.s) * f)
+
+
+def translate_op(op, dx, dy):
+    if op[0] == "line":
+        _, x1, y1, x2, y2, kind = op
+        return ("line", x1 + dx, y1 + dy, x2 + dx, y2 + dy, kind)
+    _, cx, cy, ux, uy, vx, vy, t0, t1, kind = op
+    return ("arc", cx + dx, cy + dy, ux, uy, vx, vy, t0, t1, kind)
+
+
+def clip_ops(ops, region, n=24):
+    """Stroke ops cut to `region`, as line ops: what a PNG draws of a cut
+    stud. An arc comes back as the chords of its sampled polyline, the way
+    process.draw_segments samples one anyway."""
+    shapely.prepare(region)
+    out = []
+    for op in ops:
+        piece = LineString(process.op_points(op, n)).intersection(region)
+        for g in getattr(piece, "geoms", [piece]):
+            if g.geom_type != "LineString" or g.is_empty:
+                continue
+            c = list(g.coords)
+            out += [("line", x1, y1, x2, y2, op[-1])
+                    for (x1, y1), (x2, y2) in zip(c, c[1:])]
+    return out
+
+
+def cut_rings(rings, hide):
+    """The silhouette contour a PNG draws, less where a placed stud hides
+    it: (rings untouched, open runs left of the cut ones), canvas px."""
+    if hide is None or hide.is_empty:
+        return list(rings), []
+    shapely.prepare(hide)
+    closed, runs = [], []
+    for ring in rings:
+        pts = [tuple(map(float, p)) for p in ring]
+        line = LineString(pts + pts[:1])
+        if not shapely.intersects(line, hide):
+            closed.append(ring)
+            continue
+        left = shapely.line_merge(line.difference(hide))
+        for g in getattr(left, "geoms", [left]):
+            if g.geom_type == "LineString" and not g.is_empty:
+                runs.append(list(g.coords))
+    return closed, runs
+
+
+def _span(out, right, up, fwd):
+    """The larger projected extent (LDU) of a flattened drawing."""
+    pts = ([np.asarray(out["tri"], float).reshape(-1, 3)]
+           if out["tri"] else [])
+    pts += [np.asarray(e, float) for e in out["2"]]
+    pts += [p.fit_pts() for p in out["analytic"]]
+    if not pts:
+        return 1.0
+    a, b, _ = hlr.project(np.vstack(pts), right, up, fwd)
+    return float(max(a.max() - a.min(), b.max() - b.min())) or 1.0
+
+
+class Instancer:
+    """Draws each distinct stud of a plan once and places it.
+
+    `res` is the part's VisResult with `studs` set. A definition is the stud
+    alone, run through `engine` -- the part's own pipeline, at the part's
+    render scale -- cached by StudRef.key; its strokes and fills are fitted
+    with origin_fit so the stud's reference origin is canvas (0, 0) at `k`
+    px per LDU. Both writers place those same ops: `svg_parts` as `<use>`,
+    `png_ops` translated and cut to shape."""
+
+    def __init__(self, res, engine, ldraw_dir):
+        self.res = res
+        self.plan = res.studs
+        self.engine = engine
+        self.ldraw_dir = ldraw_dir
+        self.roots = hlr.default_roots(ldraw_dir)
+        self._lone, self._strokes = {}, {}
+
+    def lone(self, ref):
+        got = self._lone.get(ref.key)
+        if got is not None:
+            return got
+        right, up, fwd = self.plan.basis
+        out = {"2": [], "5": [], "tri": [], "tri_meta": [], "analytic": [],
+               "printed": self.plan.printed}
+        hlr.flatten(ref.path, ref.R, np.zeros(3), out, self.roots, depth=1,
+                    inherited_invert=ref.invert, color=ref.color,
+                    body=ref.body)
+        for key in ("2_stud", "5_stud", "stud_refs", "studs"):
+            out.pop(key, None)
+        sweep.substitute(out)
+        # the part's render px per LDU, so every pixel-sized tolerance in the
+        # engine and its tail means what it meant for the part
+        render_px = max(64, int(round(self.res.s * _span(out, right, up, fwd)))
+                        + 20)
+        with timing.phase("studs"):
+            got = hlr.draw_flattened(out, right, up, fwd, render_px,
+                                     cull=True, engine=self.engine)
+        self._lone[ref.key] = got
+        return got
+
+    def strokes(self, ref, k):
+        key = (ref.key, round(float(k), 9))
+        if key not in self._strokes:
+            lone = self.lone(ref)
+            self._strokes[key] = hlr.affine_segments(lone.segs,
+                                                     *origin_fit(lone, k))
+        return self._strokes[key]
+
+    def fills(self, ref, k, style, stud_px, crumb, weld_corners):
+        if style is None:
+            return []
+        lone = self.lone(ref)
+        if not lone.faces:
+            return []
+        fit = origin_fit(lone, k)
+        with timing.phase("studs"):
+            return shade.fill_ops(
+                shade.apply_affine_faces(lone.faces, *fit), style, clip=True,
+                ellipses=hlr.fit_ellipses(lone.ellipses, *fit),
+                proj=lone.proj, fit=fit, refits=lone.refits, loops=lone.loops,
+                strokes=self.strokes(ref, k), line_px=stud_px, sil_px=stud_px,
+                weld_corners=weld_corners, ldraw_dir=self.ldraw_dir,
+                crumb=crumb)
+
+    def clip(self, v, k, kx, ky, pad):
+        """A cut stud's clip, canvas px: its footprint grown by `pad` (its
+        strokes' reach), less the planes in front of it."""
+        return geom2d.difference(canvas_geom(v.hull, k, kx, ky).buffer(pad),
+                                 canvas_geom(v.cover, k, kx, ky))
+
+    def svg_parts(self, fit, stud_px, style=None, crumb=None,
+                  weld_corners=False):
+        """Elements for trace.segments_to_svg(between=...): one `<defs>`
+        with each distinct stud's fill group (`sd<n>f`), stroke group
+        (`sd<n>s`) and every cut stud's clip, then `<g class="studs">` of
+        `<use>` pairs far to near -- fills then strokes, so a nearer stud
+        covers a farther one's lines as the engine would. [] when nothing is
+        placed."""
+        placed = self.plan.placed()
+        if not placed:
+            return []
+        k, kx, ky = hlr.canvas_affine(self.res, *fit)
+        crumb = shade.RESIDUE_CRUMB if crumb is None else crumb
+        defs, uses, ids, has_fill, clips = [], ['<g class="studs">'], {}, {}, 0
+        for v in placed:
+            if v.ref.key not in ids:
+                n = ids[v.ref.key] = len(ids)
+                fills = self.fills(v.ref, k, style, stud_px, crumb,
+                                   weld_corners)
+                has_fill[n] = bool(fills)
+                if fills:
+                    gdefs, body = trace.fill_elements(fills,
+                                                      gid_prefix=f"sd{n}g")
+                    defs += gdefs
+                    defs.append(f'<g id="sd{n}f">' + "".join(body) + "</g>")
+                defs.append(f'<g id="sd{n}s" stroke="black" fill="none" '
+                            f'stroke-linecap="round">'
+                            + "".join(trace.stroke_elements(
+                                self.strokes(v.ref, k), stud_px, stud_px))
+                            + "</g>")
+            n = ids[v.ref.key]
+            x, y = v.a * k + kx, v.b * k + ky
+            pair = "".join(f'<use href="#sd{n}{layer}" x="{x:.2f}" y="{y:.2f}"/>'
+                           for layer in (("f", "s") if has_fill[n] else ("s",)))
+            if v.role == "cut":
+                d = geom2d.path_d(self.clip(v, k, kx, ky, stud_px))
+                if not d:
+                    continue
+                defs.append(f'<clipPath id="sc{clips}"><path d="{d}" '
+                            f'clip-rule="evenodd"/></clipPath>')
+                uses.append(f'<g clip-path="url(#sc{clips})">{pair}</g>')
+                clips += 1
+            else:
+                uses.append(pair)
+        return ["<defs>" + "".join(defs) + "</defs>"] + uses + ["</g>"]
+
+    def png_ops(self, fit, stud_px):
+        """The same strokes for a PNG under `fit`: translated to every placed
+        stud, a cut one cut to its clip."""
+        placed = self.plan.placed()
+        if not placed:
+            return []
+        k, kx, ky = hlr.canvas_affine(self.res, *fit)
+        ops = []
+        for v in placed:
+            moved = [translate_op(op, v.a * k + kx, v.b * k + ky)
+                     for op in self.strokes(v.ref, k)]
+            ops += (clip_ops(moved, self.clip(v, k, kx, ky, stud_px))
+                    if v.role == "cut" else moved)
+        return ops
+
+    def hide_region(self, fit, sil_px):
+        """Where the part's silhouette contour must not draw: behind a placed
+        stud. A clear stud hides its whole footprint; a cut one what it shows,
+        less half the contour's width, so the occluder's outline along the
+        cut survives. None when nothing is placed."""
+        k, kx, ky = hlr.canvas_affine(self.res, *fit)
+        parts = []
+        for v in self.plan.placed():
+            g = canvas_geom(v.shown(), k, kx, ky)
+            if v.role == "cut":
+                g = g.buffer(-0.5 * sil_px)
+            if not g.is_empty:
+                parts.append(g)
+        return geom2d.union_all(parts) if parts else None

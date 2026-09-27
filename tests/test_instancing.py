@@ -201,3 +201,78 @@ def test_a_part_edge_ending_under_a_placed_stud_survives_the_orphan_cull():
     assert _ends_under_studs(on)
     again = hlr.visible_segments("3001", LIB, render_px=600, engine="naive")
     assert again.segs == off.segs
+
+
+IDENT = primitives.Projection(RIGHT, UP, FWD, s=1.0, cx=0.0, cy=0.0, half=0.0)
+
+
+def _inst(verdicts, monkeypatch, segs):
+    plan = instancing.Plan(verdicts, (RIGHT, UP, FWD))
+    res = hlr.VisResult([], (0.0, 0.0, 1.0, 1.0), 1.0, [], [], proj=IDENT,
+                        studs=plan)
+    inst = instancing.Instancer(res, "naive", LIB)
+    lone = hlr.VisResult(segs, (0.0, 0.0, 1.0, 1.0), 1.0, [], [], proj=IDENT)
+    monkeypatch.setattr(inst, "lone", lambda ref: lone)
+    return inst
+
+
+def _ref():
+    return instancing.StudRef(1, Path("p/stud.dat"), np.eye(3), np.zeros(3),
+                              16, 16, False)
+
+
+def test_origin_fit_puts_the_reference_origin_on_canvas_zero():
+    res = hlr.VisResult([], (0, 0, 1, 1), 4.0, [], [], proj=primitives.Projection(
+        RIGHT, UP, FWD, s=4.0, cx=1.0, cy=2.0, half=50.0))
+    k, kx, ky = hlr.canvas_affine(res, *instancing.origin_fit(res, 8.0))
+    assert k == pytest.approx(8.0) and kx == pytest.approx(0.0) \
+        and ky == pytest.approx(0.0)
+
+
+def test_svg_and_png_place_the_same_stroke_ops(monkeypatch):
+    v = instancing.Verdict(_ref(), "clear", hull=box(-6, -6, 6, 6), a=3.0, b=4.0)
+    inst = _inst([v], monkeypatch, [("line", 0.0, 0.0, 1.0, 0.0, "edge")])
+    svg = "".join(inst.svg_parts((2.0, 10.0, 20.0), 1.0))
+    assert '<use href="#sd0s" x="16.00" y="28.00"/>' in svg
+    assert '<line x1="0.00" y1="0.00" x2="2.00" y2="0.00" stroke-width="1.00"/>' in svg
+    assert "sd0f" not in svg                              # no style, no fills
+    assert inst.png_ops((2.0, 10.0, 20.0), 1.0) == [
+        ("line", 16.0, 28.0, 18.0, 28.0, "edge")]
+
+
+def test_a_cut_stud_is_clipped_alike_in_both_writers(monkeypatch):
+    v = instancing.Verdict(_ref(), "cut", hull=box(-6, -6, 6, 6),
+                           cover=box(0, -10, 10, 10))
+    inst = _inst([v], monkeypatch, [("line", -4.0, 0.0, 4.0, 0.0, "edge")])
+    svg = "".join(inst.svg_parts((1.0, 0.0, 0.0), 1.0))
+    assert '<clipPath id="sc0">' in svg and '<g clip-path="url(#sc0)">' in svg
+    [(kind, x1, y1, x2, y2, tag)] = inst.png_ops((1.0, 0.0, 0.0), 1.0)
+    assert sorted([x1, x2]) == pytest.approx([-4.0, 0.0]) and y1 == y2 == 0.0
+
+
+def test_the_contour_hides_behind_placed_studs(monkeypatch):
+    clear = instancing.Verdict(_ref(), "clear", hull=box(-6, -6, 6, 6))
+    inst = _inst([clear], monkeypatch, [])
+    assert inst.hide_region((1.0, 0.0, 0.0), 2.0).area == pytest.approx(144.0)
+    cut = instancing.Verdict(_ref(), "cut", hull=box(-6, -6, 6, 6),
+                             cover=box(0, -10, 10, 10))
+    inst = _inst([cut], monkeypatch, [])
+    assert inst.hide_region((1.0, 0.0, 0.0), 2.0).area == pytest.approx(40.0)
+
+
+def test_a_contour_ring_behind_a_stud_opens_into_one_run():
+    ring = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]
+    closed, runs = instancing.cut_rings([ring], box(4, -1, 6, 1))
+    assert closed == [] and len(runs) == 1
+    assert {tuple(runs[0][0]), tuple(runs[0][-1])} == {(4.0, 0.0), (6.0, 0.0)}
+    closed, runs = instancing.cut_rings([ring], box(40, 40, 41, 41))
+    assert closed == [ring] and runs == []
+
+
+def test_clip_ops_cuts_arcs_and_lines_to_a_region():
+    ops = [("line", -4.0, 0.0, 4.0, 0.0, "edge"),
+           ("arc", 0.0, 0.0, 3.0, 0.0, 0.0, 3.0, 0.0, 360.0, "sil")]
+    got = instancing.clip_ops(ops, box(-10, -10, 0, 10))
+    assert got[0][0] == "line" and got[0][-1] == "edge"
+    assert all(max(op[1], op[3]) <= 1e-9 for op in got)
+    assert any(op[-1] == "sil" for op in got)
