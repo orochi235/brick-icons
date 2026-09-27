@@ -1,3 +1,23 @@
+## 2026-09-27: stroke tiers landed; occt-svelte rendering; command-builder page unbuilt
+
+Strokes now draw at one weight per icon, capped at `--stroke-ldu` (1 LDU of
+the part as drawn) and floored at `--stroke-floor` (0.75 px); declared studs
+draw at `--stud-stroke` (0.5) of it, floored at `--stud-floor` (0.5 px). The
+old half-radius arc cap is gone. Baseplates (51542, 35011, 3811) lost their
+heavy frames. Every knob is a CLI flag on purpose: which values are best is
+not settled.
+
+The `occt-svelte` slot is `occt` at a 1.5 px line weight. Its first fill went
+out 2026-09-27 as three jobs, `slot-occt-svelte-{studio,msb-uai,keiei}`, each
+with its own `out/slot-occt-svelte-<node>` tree and watcher. Every other slot
+now predates the stroke change and draws stale.
+
+**Not built: a lab page for designing and running render commands.** Asked
+for 2026-09-27, because the flag set has grown past what anyone types from
+memory. The lab already derives its schema from `cli.build_parser()`, so the
+page composes flags from that schema and launches through the existing
+render path -- never a second parameter table.
+
 ## 2026-09-26: big parts timed out on quadratic loops, not geometry
 
 Baseplates, big plates and 644 died on the census as timeouts and
