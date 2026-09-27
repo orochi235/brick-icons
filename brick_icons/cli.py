@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from . import render, process, trace, hlr, library, shade, geom2d, unwrap
+from . import render, process, trace, hlr, library, shade, geom2d, unwrap, instancing
 from . import slop
 from .config import load_config, Config
 
@@ -42,6 +42,12 @@ def build_parser():
     p.add_argument("--crumb-ldu", dest="crumb_ldu", type=float,
                    help="fill cleanup: never cull a piece wider than twice "
                         "this many LDU of the part as drawn (0 = fixed)")
+    p.add_argument("--stud-instancing", dest="stud_instancing",
+                   choices=["off", "all"],
+                   help="draw each declared stud once and place it wherever "
+                        "it is clear or cut only by planes (all), or draw "
+                        "every stud through the engine (off, the default); "
+                        "translucent and wireframe renders are always off")
     p.add_argument("--scale-mode", dest="scale_mode", choices=["fit", "physical"])
     p.add_argument("--line-mm", dest="line_mm", type=float)
     p.add_argument("--silhouette-mm", dest="silhouette_mm", type=float)
@@ -142,6 +148,7 @@ def _config_from_args(args) -> Config:
         "stroke_ldu": args.stroke_ldu, "stroke_floor": args.stroke_floor,
         "stud_stroke": args.stud_stroke, "stud_floor": args.stud_floor,
         "crumb_ldu": args.crumb_ldu,
+        "stud_instancing": args.stud_instancing,
         "dither": args.dither, "angle": args.angle, "pose": args.pose,
         "part_color": args.part_color,
         "curve_quality": args.curve_quality, "render_px": args.render_px,
@@ -247,6 +254,15 @@ def _sil_faces(res, f, ox, oy):
         [{"poly": np.asarray(q, float)} for q in (res.sil_polys or ())],
         f, ox, oy)
 
+
+def _png_contour(inst, fit, sil_px, rings):
+    """(closed rings, open runs) of the silhouette contour a PNG draws: the
+    rings as they are, or cut open where a placed stud stands in front."""
+    if inst is None or not rings:
+        return rings, ()
+    return instancing.cut_rings(rings, inst.hide_region(fit, sil_px))
+
+
 def render_tag(cfg: Config, name: str, posed: bool = False) -> str:
     """The part id plus the settings that change what the drawing shows.
 
@@ -263,6 +279,8 @@ def render_tag(cfg: Config, name: str, posed: bool = False) -> str:
                     else f"{cfg.shading}/{cfg.shade_style}")
     if cfg.opacity < 1.0:
         bits.append(f"opacity={cfg.opacity:g}")
+    if cfg.stud_instancing != "off":
+        bits.append(f"studs={cfg.stud_instancing}")
     return "  ".join(bits)
 
 
@@ -326,8 +344,15 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                                    render_px=cfg.render_px, cull=cull,
                                    engine=cfg.engine, pose=pose,
                                    canvas_px=None if cfg.scale_mode == "physical"
-                                   else max(cfg.width, cfg.height))
+                                   else max(cfg.width, cfg.height),
+                                   # a placed stud hides what is behind it,
+                                   # so a render that draws hidden geometry
+                                   # on purpose draws every stud itself
+                                   stud_instancing=cfg.stud_instancing
+                                   if cull else "off")
         segs, bbox, s = res.segs, res.bbox, res.s
+        inst = (instancing.Instancer(res, cfg.engine, cfg.ldraw_dir)
+                if res.studs is not None else None)
         if debug_dir:
             _emit_unwrap(debug_dir, name, res, cfg)
         basis = hlr.view_basis(lat, long)
@@ -395,7 +420,12 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                     line_mm=cfg.line_mm, sil_mm=cfg.silhouette_mm, fills=fills,
                     bg=cfg.svg_bg, opacity=cfg.opacity,
                     clip_geom=sil_geom, contour_d=contour, label=label,
-                    debug_colors=cfg.debug_colors, studs=studs)
+                    debug_colors=cfg.debug_colors, studs=studs,
+                    between=inst.svg_parts(
+                        (f, ox, oy), studs.px if studs else cfg.line_mm / 0.4 * s,
+                        style, crumb, cfg.weld_corners) if inst else None,
+                    contour_hide=inst.hide_region(
+                        (f, ox, oy), cfg.silhouette_mm / 0.4 * s) if inst else None)
                 _emit_fit(out_dir, name, res, *hlr.view_basis(lat, long),
                           f, ox, oy, round(vb_w), round(vb_h), style)
             else:
@@ -435,7 +465,14 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                                       opacity=cfg.opacity,
                                       clip_geom=sil_geom, contour_d=contour,
                                       label=label,
-                                      debug_colors=cfg.debug_colors)
+                                      debug_colors=cfg.debug_colors,
+                                      between=inst.svg_parts(
+                                          icon_fit,
+                                          studs.px if studs else line_px,
+                                          style, crumb, cfg.weld_corners)
+                                      if inst else None,
+                                      contour_hide=inst.hide_region(icon_fit, sil_px)
+                                      if inst else None)
                 _emit_fit(out_dir, name, res, *hlr.view_basis(lat, long),
                           f, ox, oy, cfg.width, cfg.height, style)
         if cfg.fmt in ("png", "both"):
@@ -454,13 +491,17 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                 gpx = max(cfg.width, cfg.height, cfg.render_px // 2)
                 gfit = hlr.fit_segments(segs, bbox, gpx, gpx, cfg.margin, cfg.scale)
                 ratio = gpx / max(cfg.width, cfg.height)
-                gl, gs, gstuds = _stroke_tiers(
-                    cfg, res, basis,
-                    hlr.fit_affine(bbox, gpx, gpx, cfg.margin, cfg.scale),
-                    line_w, sil_w, stud_base, ratio)
+                gaff = hlr.fit_affine(bbox, gpx, gpx, cfg.margin, cfg.scale)
+                gl, gs, gstuds = _stroke_tiers(cfg, res, basis, gaff,
+                                               line_w, sil_w, stud_base, ratio)
+                gsp = gstuds.px if gstuds else gl
+                rings, runs = _png_contour(inst, gaff, gs,
+                                           sil_rings(gpx, gpx, gfit, gs))
                 g = process.draw_segments(gfit, gpx, gpx, line_px=gl, sil_px=gs,
-                                          contour_rings=sil_rings(gpx, gpx, gfit, gs),
-                                          studs=gstuds)
+                                          contour_rings=rings, contour_open=runs,
+                                          studs=gstuds,
+                                          stud_ops=inst.png_ops(gaff, gsp)
+                                          if inst else (), stud_px=gsp)
                 if label:
                     process.stamp_label(g, label)
                 g.save(out_dir / f"{name}.gray.png")
@@ -468,11 +509,15 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                 mfit = hlr.fit_segments(segs, bbox, cfg.width, cfg.height, cfg.margin, cfg.scale)
                 ml, ms, mstuds = _stroke_tiers(cfg, res, basis, icon_fit,
                                                line_w, sil_w, stud_base)
+                msp = mstuds.px if mstuds else ml
+                rings, runs = _png_contour(inst, icon_fit, ms, sil_rings(
+                    cfg.width, cfg.height, mfit, ms))
                 m = process.segments_mono(mfit, cfg.width, cfg.height,
                                           line_px=ml, sil_px=ms,
-                                          contour_rings=sil_rings(
-                                              cfg.width, cfg.height, mfit, ms),
-                                          studs=mstuds)
+                                          contour_rings=rings, contour_open=runs,
+                                          studs=mstuds,
+                                          stud_ops=inst.png_ops(icon_fit, msp)
+                                          if inst else (), stud_px=msp)
                 if label:
                     process.stamp_label(m, label)
                 m.save(out_dir / f"{name}.mono.png")

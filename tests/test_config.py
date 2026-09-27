@@ -104,3 +104,9 @@ def test_engine_defaults_to_occt():
 
 def test_engine_override():
     assert load_config(root=".", overrides={"engine": "naive"}).engine == "naive"
+
+
+def test_stud_instancing_defaults_off_and_takes_an_override():
+    assert load_config(root="/proj").stud_instancing == "off"
+    assert load_config(root="/proj",
+                       overrides={"stud_instancing": "all"}).stud_instancing == "all"

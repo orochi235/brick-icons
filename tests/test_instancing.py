@@ -276,3 +276,56 @@ def test_clip_ops_cuts_arcs_and_lines_to_a_region():
     assert got[0][0] == "line" and got[0][-1] == "edge"
     assert all(max(op[1], op[3]) <= 1e-9 for op in got)
     assert any(op[-1] == "sil" for op in got)
+
+
+SVG = ["--engine", "naive", "--format", "svg", "--shading", "outline",
+       "--shade-style", "flat3"]
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_off_never_reaches_instancing_and_draws_as_the_default(tmp_path, monkeypatch):
+    def boom(*a, **k):
+        raise AssertionError("--stud-instancing off reached brick_icons.instancing")
+    monkeypatch.setattr(instancing, "withhold", boom)
+    monkeypatch.setattr(instancing, "Instancer", boom)
+    argv = ["3001", "--engine", "naive", "--format", "both", "--shading",
+            "outline", "--shade-style", "flat3"]
+    assert cli.main(argv + ["--out", str(tmp_path / "default")]) == 0
+    assert cli.main(argv + ["--stud-instancing", "off",
+                            "--out", str(tmp_path / "off")]) == 0
+    for name in ("3001.svg", "3001.gray.png", "3001.mono.png"):
+        assert (tmp_path / "default" / name).read_bytes() \
+            == (tmp_path / "off" / name).read_bytes(), name
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_all_places_every_clear_stud_between_fills_and_strokes(tmp_path):
+    assert cli.main(["3001", *SVG, "--stud-instancing", "all",
+                     "--out", str(tmp_path)]) == 0
+    svg = (tmp_path / "3001.svg").read_text()
+    assert svg.count('<use href="#sd0s"') == 8 and svg.count('<use href="#sd0f"') == 8
+    assert (svg.index('<g stroke-linejoin="round">') < svg.index('<g class="studs">')
+            < svg.index('<g stroke="black"'))
+    assert 'clip-path="url(#cclip)"' in svg          # contour hidden behind studs
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_translucent_and_wireframe_renders_draw_studs_through_the_engine(tmp_path):
+    assert cli.main(["3001", *SVG, "--stud-instancing", "all", "--opacity", "0.5",
+                     "--out", str(tmp_path / "t")]) == 0
+    assert cli.main(["3001", "--engine", "naive", "--format", "svg", "--wireframe",
+                     "--stud-instancing", "all", "--out", str(tmp_path / "w")]) == 0
+    for d in ("t", "w"):
+        assert "<use" not in (tmp_path / d / "3001.svg").read_text()
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_the_pngs_and_the_physical_svg_place_studs_too(tmp_path):
+    assert cli.main(["3001", "--engine", "naive", "--shading", "outline",
+                     "--format", "png", "--mode", "both", "--stud-instancing", "all",
+                     "--out", str(tmp_path / "p")]) == 0
+    mono = np.asarray(Image.open(tmp_path / "p" / "3001.mono.png"))
+    assert (mono == 0).any()
+    assert cli.main(["3001", *SVG, "--scale-mode", "physical", "--stud-instancing",
+                     "all", "--out", str(tmp_path / "m")]) == 0
+    assert '<use href="#sd0s"' in (tmp_path / "m" / "3001.svg").read_text()

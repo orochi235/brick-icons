@@ -441,3 +441,11 @@ def test_a_translucent_edge_at_half_coverage_is_not_ink():
     cst = _cst()
     assert not cst.ink_mask(_alpha(64), 0.5).any()
     assert cst.ink_mask(_alpha(65), 0.5).all()
+
+
+def test_render_tag_stamps_stud_instancing_when_it_is_on():
+    cfg = cli._config_from_args(cli.build_parser().parse_args(
+        ["3001", "--stud-instancing", "all"]))
+    assert "studs=all" in cli.render_tag(cfg, "3001")
+    cfg = cli._config_from_args(cli.build_parser().parse_args(["3001"]))
+    assert "studs=" not in cli.render_tag(cfg, "3001")

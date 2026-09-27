@@ -43,6 +43,9 @@ DEFAULTS = {
                              # 0.4 a baseplate's stud walls close up (51542)
     "crumb_ldu": 1.0,        # fill cleanup never culls a piece wider than 2x
                              # this many LDU as drawn (51542's stud walls)
+    "stud_instancing": "off",  # off | all -- draw each declared stud once and
+                               # place it wherever it shows (all), or every
+                               # stud through the engine (off)
     "part_color": None,      # "0xRRGGBB" or None
     "scale": 1.0,            # part fill fraction of label (0-1)
     "scale_mode": "fit",     # fit | physical  (physical: SVG sized in mm)
@@ -100,6 +103,7 @@ class Config:
     stud_stroke: float
     stud_floor: float
     crumb_ldu: float
+    stud_instancing: str
     part_color: str | None
     scale: float
     scale_mode: str
@@ -176,6 +180,7 @@ def load_config(toml_path=None, overrides=None, root="."):
         stud_stroke=float(data["stud_stroke"]),
         stud_floor=float(data["stud_floor"]),
         crumb_ldu=float(data["crumb_ldu"]),
+        stud_instancing=str(data["stud_instancing"]),
         part_color=(str(data["part_color"]) if data["part_color"] else None),
         scale=float(data["scale"]),
         scale_mode=str(data["scale_mode"]),
