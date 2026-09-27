@@ -124,6 +124,8 @@ def drawn_as(args) -> dict:
               "strokes": [args.line_width, args.silhouette_width]}
     if args.opacity is not None:
         fields["opacity"] = args.opacity
+    if getattr(args, "stud_instancing", "off") != "off":
+        fields["stud_instancing"] = args.stud_instancing
     return fields
 
 
@@ -140,6 +142,7 @@ def one(part: str, args, tmp: Path) -> dict:
             "--engine", args.engine, "--line-width", str(args.line_width),
             "--silhouette-width", str(args.silhouette_width),
             *(["--opacity", str(args.opacity)] if args.opacity is not None else []),
+            "--stud-instancing", args.stud_instancing,
             "--out", str(tmp)]
     parsed = cli.build_parser().parse_args(argv)
     cfg = cli._config_from_args(parsed)
@@ -229,6 +232,10 @@ def main() -> int:
                          "translucency")
     ap.add_argument("--silhouette-width", dest="silhouette_width", type=int,
                     default=0, help="contour stroke, output px")
+    ap.add_argument("--stud-instancing", dest="stud_instancing",
+                    choices=["off", "all"], default="off",
+                    help="render with stud instancing; the row's counts then "
+                         "carry studs_clear/cut/hidden/fallback")
     ap.add_argument("--zoom", type=int, default=8, help="raster px per canvas px")
     ap.add_argument("--floor", type=int, default=200,
                     help="smallest diff component to report, in raster px")

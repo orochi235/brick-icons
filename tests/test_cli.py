@@ -471,3 +471,14 @@ def test_render_tag_stamps_contour_off():
     cfg = cli._config_from_args(cli.build_parser().parse_args(
         ["3001", "--contour", "off"]))
     assert "contour=off" in cli.render_tag(cfg, "3001")
+
+
+def test_the_census_names_stud_instancing_only_when_it_is_on():
+    import argparse
+    cst = _cst()
+    base = dict(shade_style="flat3", line_width=0, silhouette_width=0,
+                opacity=None)
+    assert "stud_instancing" not in cst.drawn_as(
+        argparse.Namespace(**base, stud_instancing="off"))
+    assert cst.drawn_as(argparse.Namespace(
+        **base, stud_instancing="all"))["stud_instancing"] == "all"
