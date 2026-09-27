@@ -73,7 +73,11 @@ extra=$(printf '%s\n' "$survey" | sed -n "s/^  EXTRA='\(.*\)'$/\1/p" | head -1)
   echo "slot-coverage printed no ENGINE/SOURCE; nothing launched" >&2; exit 1; }
 [ -s "$list" ] || { echo "$slot has nothing left to draw" >&2; exit 1; }
 
-parts=$(tr ',' '\n' < "$list" | grep -c .)
+# One part a line: onto cuts the batches as it hands them out (--batch), each at
+# most an even share of what is left, so the last batches of a round are a part
+# or two rather than a dozen that strand one worker while the fleet sits idle.
+tr ',' '\n' < "$list" | grep . > "$list.tmp" && mv "$list.tmp" "$list"
+parts=$(grep -c . "$list")
 echo "launching $parts parts of $slot on $node as $task, ${cap}s cap"
 
 # `--each` reads the list in the node's own tree and out/ is gitignored, so it
@@ -94,7 +98,7 @@ hard=$(( cap + 300 ))
 if [ "$engine" = ldview ]; then
   # shellcheck disable=SC2086
   exec scripts/run-slot.sh --detach --timeout "$timeout" --in brick-icons \
-    --task "$task" --each "$list" --workers "$workers" --retries 1 \
+    --task "$task" --each "$list" --batch 12 --join , --workers "$workers" --retries 1 \
     --env PATH=/Users/mike/.local/bin:/opt/homebrew/bin:/usr/bin:/bin \
     --out "$dir" --to "$dir" \
     "$node" -- .venv/bin/python scripts/ldview-batch.py --source "$source" \
@@ -102,7 +106,7 @@ if [ "$engine" = ldview ]; then
 fi
 
 exec scripts/run-slot.sh --detach --timeout "$timeout" --in brick-icons \
-  --task "$task" --each "$list" --workers "$workers" --retries 1 \
+  --task "$task" --each "$list" --batch 12 --join , --workers "$workers" --retries 1 \
   --env PATH=/Users/mike/.local/bin:/opt/homebrew/bin:/usr/bin:/bin \
   --env "SOURCE=$source" --env "KEEP=$dir/renders" --env "EXTRA=$extra" \
   --env "HARD=$hard" \

@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -327,6 +328,12 @@ def main() -> int:
                 # it was told" for a full run and a pruned one alike -- this
                 # line is the only place the difference survives.
                 print(f"pruned at {n}/{len(ids)} parts", flush=True)
+                break
+            # onto release: hand the parts this batch has not started back to
+            # the queue, for whichever worker on the fleet is free first.
+            flag = os.environ.get("ONTO_RELEASE")
+            if flag and n < len(ids) and os.path.exists(flag):
+                print(f"onto: release {','.join(ids[n:])}", flush=True)
                 break
     if args.out:
         Path(args.out).write_text(json.dumps(rows, indent=1))
