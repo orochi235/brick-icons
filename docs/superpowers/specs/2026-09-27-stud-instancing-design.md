@@ -60,8 +60,11 @@ the stud stroke tier (`process.stud_weight`) as its line weight. The result is
 strokes and fills about the stud's projected origin -- one set of ops that both
 writers consume:
 
-- SVG: emitted once under `<defs>`, placed with `<use x= y=>`, a cut stud
-  with a `clip-path`.
+- SVG: emitted once under `<defs>` as two groups, the stud's fills and its
+  strokes, each placed with `<use x= y=>` (a cut stud's pair shares one
+  `clip-path`). Kept apart so a stud whose shading must differ -- nothing
+  varies per stud today, but a cast shadow would -- can keep its lines and
+  swap only its fill.
 - PNG (gray, mono): the definition's strokes translated to each position and
   clipped by the same polygon. No second drawing of a stud exists.
 
