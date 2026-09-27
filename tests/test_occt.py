@@ -2582,3 +2582,14 @@ def test_an_occluder_rejects_a_hit_outside_its_outline():
     cone = primitives.ConeOccluder(np.eye(3), np.zeros(3), 360.0, 0.0, outline=lower)
     assert np.isfinite(cone.depth(np.array([[0.0, 0.25, -5.0]]), F)[0])
     assert np.isinf(cone.depth(np.array([[0.0, 0.75, -5.0]]), F)[0])
+
+
+def test_instanced_studs_leave_the_occt_drawing_but_not_the_shape(ldraw_dir):
+    off = hlr.visible_segments("3001", ldraw_dir, render_px=512, engine="occt")
+    on = hlr.visible_segments("3001", ldraw_dir, render_px=512, engine="occt",
+                              stud_instancing="all")
+    assert on.studs.counts()["clear"] == 8
+    assert len(off.faces) - len(on.faces) >= 16      # top disc + wall spans
+    assert len(off.segs) - len(on.segs) >= 16        # rims and limbs
+    # the part's own top edges are still drawn, still hidden behind the studs
+    assert len(on.segs) > 0

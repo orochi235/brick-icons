@@ -1451,7 +1451,7 @@ def _by_offset(items, tol=1e-9):
 
 
 @timing.timed("loci")
-def authored_loci(shape, out, right, up):
+def authored_loci(shape, out, right, up, held=None):
     """2D loci every drawable edge must lie on: type-2 lines (including the
     chains arcfit claimed), `edge` primitives, analytic creases, and condlines
     that read as a silhouette.
@@ -1463,6 +1463,11 @@ def authored_loci(shape, out, right, up):
     which took the stud rims off 9359, 80400 and 6141p01. Naive needs the
     rule because a substituted primitive there draws its own rim; nothing on
     this side draws one, so there is no hoop to suppress.
+
+    `held` (instancing.Envelopes) holds every stud instancing places: its
+    primitives are skipped by their `withheld` tag, and an analytic crease
+    lying wholly inside one -- a stud's top meeting its wall -- is skipped
+    by where it is, because the sewn shape carries no tag.
     """
     ax, ay = _screen_axes(right, up)
     loci = []
@@ -1486,6 +1491,8 @@ def authored_loci(shape, out, right, up):
             if np.linalg.norm(p - q) > 1e-7:
                 loci.append(_seg_locus(p, q, "line", ax, ay, ell))
     for prim in out["analytic"]:
+        if prim.withheld:
+            continue
         if prim.kind != "edge" and not prim.rims_declared:
             continue
         f = frame(prim)
@@ -1513,6 +1520,12 @@ def authored_loci(shape, out, right, up):
                           pos.YDirection().Z()])
         except Exception:
             continue
+        if held is not None:
+            th = np.linspace(0.0, 2 * math.pi, 8, endpoint=False)
+            ring = o + g.Radius() * (np.cos(th)[:, None] * u
+                                     + np.sin(th)[:, None] * v)
+            if held.holds(ring):
+                continue
         loc = _ell_locus(o, u, v, g.Radius(), g.Radius(), "line", ax, ay)
         if loc is not None:
             loci.append(loc)
@@ -1650,6 +1663,52 @@ def _drop_lines_hlr_hides(picked, spans):
         if _on_a_visible_line(pts, spans):
             keep.append((edge, locus))
     return keep
+
+
+def _withheld_limb_loci(out, right, up, fwd):
+    """Seg loci, in HLR's 2-D frame, of every withheld stud wall's limbs:
+    HLR's outline compound draws them and cannot say whose they are."""
+    from . import instancing
+    ax, ay = _screen_axes(right, up)
+    return [_seg_locus(a, b, "sil", ax, ay)
+            for prim in out.get("analytic", ()) if prim.withheld
+            for a, b in instancing.limb_points(prim, fwd)]
+
+
+def _off_loci(edges, loci):
+    """The edges lying on none of `loci`, in order (select_authored's test,
+    inverted)."""
+    if not loci:
+        return list(edges)
+    lb = _locus_bboxes(loci)
+    kept = []
+    for e in edges:
+        try:
+            pts = _fragment_points(e)
+        except Exception:
+            kept.append(e)
+            continue
+        lo, hi = pts.min(axis=0), pts.max(axis=0)
+        near = np.nonzero((lo[0] >= lb[:, 0]) & (hi[0] <= lb[:, 2])
+                          & (lo[1] >= lb[:, 1]) & (hi[1] <= lb[:, 3]))[0]
+        if not any(_on_locus(pts, loci[k]) for k in near):
+            kept.append(e)
+    return kept
+
+
+def _held_face(held):
+    """A predicate for ordered_faces: does this sewn face lie wholly inside
+    a withheld stud? None when no stud is withheld."""
+    if held is None:
+        return None
+
+    def skip(face):
+        try:
+            W = _wire_points(BRepTools.OuterWire_s(face))
+        except Exception:
+            return False
+        return len(W) > 0 and held.holds(W)
+    return skip
 
 
 def select_authored(comp, loci):
@@ -3158,7 +3217,8 @@ def _group_planes(shape, out, plane_by_idx):
 
 
 @timing.timed("faces")
-def ordered_faces(shape, proj, out=None, ellipses_out=None, px=None):
+def ordered_faces(shape, proj, out=None, ellipses_out=None, px=None,
+                  skip_face=None):
     """Every fill face of `shape`, in paint order, each curved one depth-probed
     against its own exact surface.
 
@@ -3173,6 +3233,8 @@ def ordered_faces(shape, proj, out=None, ellipses_out=None, px=None):
     faces, own_occ, plane_by_idx = [], {}, {}
     wall_by_idx = defaultdict(list)
     for face in _shape_faces(shape):
+        if skip_face is not None and skip_face(face):
+            continue                     # a stud instancing draws
         occ = _face_occluder(face)
         for f in _faces_for(face, proj, px=px):
             faces.append(f)
@@ -3238,13 +3300,14 @@ def _with_decoration(faces, out, proj, own_occ=None, ellipses_out=None):
         return faces
     from . import shade
     deco = []
-    if out.get("tri") and out.get("tri_colors"):
+    tris, colors = hlr.kept_tris(out)
+    if tris and colors:
         deco += [f for f in shade.faces_from_tris(
-                     np.array(out["tri"]), proj, cond_edges=out.get("5"),
-                     colors=out.get("tri_colors"))
+                     np.array(tris), proj, cond_edges=out.get("5"),
+                     colors=colors)
                  if f.get("color", 16) != 16]
     prims = [p for p in out.get("analytic", ())
-             if getattr(p, "color", 16) != 16]
+             if getattr(p, "color", 16) != 16 and not p.withheld]
     for f in shade.faces_from_analytic(prims, proj):
         deco.append(f)
         occ = f["prim"].occluder() if f.get("prim") is not None else None
@@ -3444,12 +3507,15 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None, canvas_px=N
     if fwd is None:
         z, _ = projector_axes(right, up)
         fwd = -z / np.linalg.norm(z)
+    # a stud instancing places stays in the shape, to hide what is behind
+    # it, and out of the drawing (instancing.withhold)
+    held = out.get("stud_held") or None
     shape = build_shape(out)
     lines, _cond = _straight_lines(out, right, up) if cull else (None, None)
     crescents = chord_crescents(shape, out.get("tri", ()))
     comps = hlr_edges(shape, right, up, cull=cull, lines=lines,
                       occluders=_compound(crescents) if crescents else None)
-    loci = authored_loci(shape, out, right, up)
+    loci = authored_loci(shape, out, right, up, held=held)
     picked = select_authored(comps.get("sharp"), loci)
     if cull:
         picked = _drop_lines_hlr_hides(picked,
@@ -3467,11 +3533,12 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None, canvas_px=N
             # fold_ells) -- protected from the orphan cull, chained into loops
             fold_idx.append(len(ops))
         ops += [arc] if arc is not None else _edge_ops(edge, kind)
+    limbs = _withheld_limb_loci(out, right, up, fwd)
     for name in ("outline", "outline_hidden"):
         comp = comps.get(name)
         if comp is None:
             continue
-        for edge in _edges_of(comp):
+        for edge in _off_loci(_edges_of(comp), limbs):
             ops += _edge_ops(edge, "sil")
     if not ops and not _declares_smooth_seams(out):
         if FALLBACK_CREASES_ONLY:
@@ -3533,7 +3600,8 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None, canvas_px=N
             ells.append(tuple(op[1:7]) + (RIM_STEP_DEG,))
     decal_ells = []
     faces = ordered_faces(shape, proj, out, ellipses_out=decal_ells,
-                          px=canvas_px / span if canvas_px else s)
+                          px=canvas_px / span if canvas_px else s,
+                          skip_face=_held_face(held))
     for cand in _boundary_conics(shape, proj):
         k = tuple(round(v, 4) for v in cand)
         if k not in seen:
