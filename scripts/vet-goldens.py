@@ -269,6 +269,9 @@ def run_fleet(a) -> int:
     rel = f"out/vet/{a.label}"
     onto = ["onto", "do", "--kind", "score", "--icon", "chart.line.text.clipboard",
             "--task", f"vet-{a.label}", "--timeout", "6h" if a.parts else "1h",
+            # a branch with no upstream has no merge-base for onto to sync
+            # from; `before`'s revision is one the node can fetch
+            "--ref", a.base,
             "--env", "PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
             "--out", rel, "--to", str(ROOT / rel)]
     if a.node:
