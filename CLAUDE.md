@@ -93,6 +93,13 @@ LEGO made — third-party electronics and wheels that fit LEGO.
   side is the new one, and a guess about panel order turns a regression report
   into a maybe.
 
+## A fix reaches main through three gates
+
+The defect's own part first (stop if nothing moves), then 5–10 parts likely to
+share it (stop if any gets worse), then the goldens (anything that moved and
+was not predicted goes to a person). Fixes may be batched until one fails. The
+`vet-fix` skill is the procedure.
+
 ## The lab must not fork the CLI
 
 `brick_icons/lab/` derives its config schema from `cli.build_parser()` and runs
