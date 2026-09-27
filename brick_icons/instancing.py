@@ -470,6 +470,17 @@ def translate_op(op, dx, dy):
     return ("arc", cx + dx, cy + dy, ux, uy, vx, vy, t0, t1, kind)
 
 
+def _line_ops(piece, kind):
+    out = []
+    for g in getattr(piece, "geoms", [piece]):
+        if g.geom_type != "LineString" or g.is_empty:
+            continue
+        c = list(g.coords)
+        out += [("line", x1, y1, x2, y2, kind)
+                for (x1, y1), (x2, y2) in zip(c, c[1:])]
+    return out
+
+
 def clip_ops(ops, region, n=24):
     """Stroke ops cut to `region`, as line ops: what a PNG draws of a cut
     stud. An arc comes back as the chords of its sampled polyline, the way
@@ -477,34 +488,28 @@ def clip_ops(ops, region, n=24):
     shapely.prepare(region)
     out = []
     for op in ops:
-        piece = LineString(process.op_points(op, n)).intersection(region)
-        for g in getattr(piece, "geoms", [piece]):
-            if g.geom_type != "LineString" or g.is_empty:
-                continue
-            c = list(g.coords)
-            out += [("line", x1, y1, x2, y2, op[-1])
-                    for (x1, y1), (x2, y2) in zip(c, c[1:])]
+        out += _line_ops(LineString(process.op_points(op, n))
+                         .intersection(region), op[-1])
     return out
 
 
-def cut_rings(rings, hide):
-    """The silhouette contour a PNG draws, less where a placed stud hides
-    it: (rings untouched, open runs left of the cut ones), canvas px."""
+def cut_ops(ops, hide, n=24):
+    """Stroke ops less where they cross `hide`: the part's strokes a PNG
+    draws around placed studs (Instancer.hide_region). An op that misses
+    `hide` comes back as it was; one that crosses it, as line ops."""
     if hide is None or hide.is_empty:
-        return list(rings), []
+        return list(ops)
     shapely.prepare(hide)
-    closed, runs = [], []
-    for ring in rings:
-        pts = [tuple(map(float, p)) for p in ring]
-        line = LineString(pts + pts[:1])
+    out = []
+    for op in ops:
+        if len(op) == 5:                               # legacy line tuple
+            op = ("line",) + tuple(op)
+        line = LineString(process.op_points(op, n))
         if not shapely.intersects(line, hide):
-            closed.append(ring)
+            out.append(op)
             continue
-        left = shapely.line_merge(line.difference(hide))
-        for g in getattr(left, "geoms", [left]):
-            if g.geom_type == "LineString" and not g.is_empty:
-                runs.append(list(g.coords))
-    return closed, runs
+        out += _line_ops(line.difference(hide), op[-1])
+    return out
 
 
 def _span(out, right, up, fwd):
@@ -651,17 +656,21 @@ class Instancer:
                     if v.role == "cut" else moved)
         return ops
 
-    def hide_region(self, fit, sil_px):
-        """Where the part's silhouette contour must not draw: behind a placed
-        stud. A clear stud hides its whole footprint; a cut one what it shows,
-        less half the contour's width, so the occluder's outline along the
-        cut survives. None when nothing is placed."""
+    def hide_region(self, fit, stroke_px):
+        """Where neither the part's strokes nor its silhouette contour draw:
+        what the placed studs show, canvas px. A clear stud has nothing in
+        front of it, so a part stroke inside it can only be a round cap
+        overhanging from an edge behind it, or the contour of a face it
+        stands in front of. A cut one hides what it shows less half of
+        `stroke_px`, the widest part stroke, so the occluder's own edge
+        along the cut keeps both halves of its width. None when nothing is
+        placed."""
         k, kx, ky = hlr.canvas_affine(self.res, *fit)
         parts = []
         for v in self.plan.placed():
             g = canvas_geom(v.shown(), k, kx, ky)
             if v.role == "cut":
-                g = g.buffer(-0.5 * sil_px)
+                g = g.buffer(-0.5 * stroke_px)
             if not g.is_empty:
                 parts.append(g)
         return geom2d.union_all(parts) if parts else None

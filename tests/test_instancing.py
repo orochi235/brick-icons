@@ -260,13 +260,14 @@ def test_the_contour_hides_behind_placed_studs(monkeypatch):
     assert inst.hide_region((1.0, 0.0, 0.0), 2.0).area == pytest.approx(40.0)
 
 
-def test_a_contour_ring_behind_a_stud_opens_into_one_run():
-    ring = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]
-    closed, runs = instancing.cut_rings([ring], box(4, -1, 6, 1))
-    assert closed == [] and len(runs) == 1
-    assert {tuple(runs[0][0]), tuple(runs[0][-1])} == {(4.0, 0.0), (6.0, 0.0)}
-    closed, runs = instancing.cut_rings([ring], box(40, 40, 41, 41))
-    assert closed == [ring] and runs == []
+def test_part_strokes_give_way_to_a_placed_stud():
+    arc = ("arc", 50.0, 50.0, 3.0, 0.0, 0.0, 3.0, 0.0, 360.0, "edge")
+    ops = [("line", 0.0, 0.0, 10.0, 0.0, "edge"), arc]
+    got = instancing.cut_ops(ops, box(4, -1, 20, 1))
+    assert got[-1] == arc                       # untouched: kept as it was
+    [(_k, x1, _y1, x2, _y2, tag)] = got[:-1]
+    assert sorted([x1, x2]) == pytest.approx([0.0, 4.0]) and tag == "edge"
+    assert instancing.cut_ops(ops, None) == ops
 
 
 def test_clip_ops_cuts_arcs_and_lines_to_a_region():

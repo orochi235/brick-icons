@@ -541,10 +541,16 @@ def stroke_elements(segs, line_px, sil_px, studs=None):
 def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
                     physical=None, s=None, line_mm=0.2, sil_mm=0.2,
                     fills=None, bg: str = "none", opacity: float = 1.0,
-                    clip_geom=None, contour_d: str | None = None,
+                    clip_geom=None, contour=None, contour_arcs=None,
                     label: str | None = None,
                     debug_colors: bool = False, studs=None,
-                    between=None, contour_hide=None) -> Path:
+                    between=None, hide=None) -> Path:
+    """The SVG drawing: fills, then `between` (instancing's placed studs),
+    then the silhouette contour, then the strokes. `contour` is the region
+    the contour outlines (geom2d.contour_region), drawn as a path with arcs
+    recovered from `contour_arcs` and clipped to process.contour_band.
+    `hide` (Instancer.hide_region) is where neither the contour nor the
+    strokes draw."""
     if physical is not None:
         w_mm, h_mm = physical
         root = (f'<svg xmlns="http://www.w3.org/2000/svg" '
@@ -568,41 +574,50 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
         # placed drawings (instancing's studs): over the part's fills,
         # under its strokes
         parts += between
+    from . import geom2d
+    from shapely.geometry import box
+    hidden = hide is not None and not hide.is_empty
     # Clip the stroke layer to the silhouette buffered outward by half the
     # widest stroke (mitered): round end caps otherwise poke half a width
     # past outline corners into the background ("frayed" corners).
-    clip_attr = ""
+    keep = None
     if clip_geom is not None:
-        from . import geom2d
         # grow by drawn-arc bulge regions so the clip never flattens an arc
-        clip = geom2d.union_all([clip_geom]
-                                + geom2d.arc_regions(segs, clip_geom))
-        cd = geom2d.buffer_d(clip, max(line_px, sil_px) / 2.0)
-        if cd:
-            parts.append(f'<defs><clipPath id="sclip">'
-                         f'<path d="{cd}" clip-rule="evenodd"/></clipPath></defs>')
-            clip_attr = ' clip-path="url(#sclip)"'
-    contour_attr = ""
-    if contour_d and contour_hide is not None and not contour_hide.is_empty:
-        # the contour is the outline of the part's faces, not an engine
-        # edge, so nothing hid it where a placed stud stands in front of it
-        from . import geom2d
-        from shapely.geometry import box
-        keep = geom2d.path_d(geom2d.difference(box(-1, -1, w + 1, h + 1),
-                                               contour_hide))
-        if keep:
-            parts.append(f'<defs><clipPath id="cclip"><path d="{keep}" '
-                         f'clip-rule="evenodd"/></clipPath></defs>')
-            contour_attr = ' clip-path="url(#cclip)"'
+        keep = geom2d.grow(geom2d.union_all([clip_geom]
+                                            + geom2d.arc_regions(segs, clip_geom)),
+                           max(line_px, sil_px) / 2.0)
+    if hidden:
+        keep = geom2d.difference(box(-1, -1, w + 1, h + 1)
+                                 if keep is None else keep, hide)
+    clip_attr = ""
+    cd = geom2d.path_d(keep) if keep is not None else ""
+    if cd:
+        parts.append(f'<defs><clipPath id="sclip">'
+                     f'<path d="{cd}" clip-rule="evenodd"/></clipPath></defs>')
+        clip_attr = ' clip-path="url(#sclip)"'
     stroke_g = len(parts)
-    parts.append(f'<g stroke="black" fill="none" stroke-linecap="round"{clip_attr}>')
+    contour_d = geom2d.path_d(contour, contour_arcs, wide=True) \
+        if contour is not None else ""
     if contour_d:
-        # closed silhouette contour under the per-edge strokes: a closed path
-        # has JOINS everywhere and no caps, so mitering it renders outline
-        # corners sharp — the per-edge strokes' round vertex caps alone leave
-        # them blunted
-        parts.append(f'<path d="{contour_d}"{contour_attr} stroke-width="{sil_px:.2f}" '
-                     f'stroke-linejoin="miter" stroke-miterlimit="5"/>')
+        # One side of a path cannot be stroked, so the contour strokes wide
+        # enough to reach its band on both sides and the band clips it (see
+        # process.contour_band). A closed path has JOINS everywhere and no
+        # caps, so mitering it renders outline corners sharp -- the per-edge
+        # strokes' round vertex caps alone leave them blunted.
+        band = process.contour_band(contour, line_px, sil_px, studs)
+        if hidden:
+            band = geom2d.difference(band, hide)
+        bd = geom2d.path_d(band)
+        if bd:
+            reach = process.contour_reach(line_px, sil_px, studs)
+            parts.append(f'<defs><clipPath id="cclip"><path d="{bd}" '
+                         f'clip-rule="evenodd"/></clipPath></defs>')
+            parts.append('<g stroke="black" fill="none" '
+                         'clip-path="url(#cclip)">')
+            parts.append(f'<path d="{contour_d}" stroke-width="{2 * reach:.2f}" '
+                         f'stroke-linejoin="miter" stroke-miterlimit="5"/>')
+            parts.append("</g>")
+    parts.append(f'<g stroke="black" fill="none" stroke-linecap="round"{clip_attr}>')
     parts += stroke_elements(segs, line_px, sil_px, studs)
     if debug_colors:
         _colorize(parts, stroke_g,

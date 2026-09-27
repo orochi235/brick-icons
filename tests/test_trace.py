@@ -301,15 +301,20 @@ def test_stroke_clip_covers_arc_bulge(tmp_path):
 
 def test_contour_path_drawn_with_miter(tmp_path):
     # the closed silhouette contour draws under the strokes with mitered
-    # joins: corners become sharp (a closed path has joins, never caps)
+    # joins: corners become sharp (a closed path has joins, never caps).
+    # It strokes wide enough to reach its band -- 3 px out for a 4 px
+    # contour over a 2 px line -- and the band clips it.
+    from shapely.geometry import Polygon
     segs = [(10.0, 10.0, 90.0, 10.0, "sil")]
     out = tmp_path / "m.svg"
     _trace.segments_to_svg(segs, 100, 100, out, line_px=2, sil_px=4,
-                           contour_d="M 10 10 L 90 10 L 50 80 Z")
+                           contour=Polygon([(10, 10), (90, 10), (50, 80)]))
     txt = out.read_text()
-    m = re.search(r'<g stroke="black"[^>]*>\s*<path d="M 10 10 L 90 10 L 50 80 Z"[^>]*/>', txt)
+    m = re.search(r'<g stroke="black" fill="none" clip-path="url\(#cclip\)">'
+                  r'\s*<path d="M [^"]+"[^>]*/>', txt)
     assert m and 'stroke-linejoin="miter"' in m.group(0)
-    assert 'stroke-width="4.00"' in m.group(0)
+    assert 'stroke-width="6.00"' in m.group(0)
+    assert txt.index("cclip") < txt.index('stroke-linecap="round"')
 
 
 def test_no_contour_by_default(tmp_path):
@@ -496,11 +501,27 @@ def test_stroke_elements_are_the_strokes_segments_to_svg_writes(tmp_path):
         assert el in txt
 
 
-def test_contour_hide_clips_the_contour_only(tmp_path):
-    from shapely.geometry import box
+def test_hide_clips_the_contour_and_the_strokes(tmp_path):
+    from shapely.geometry import LineString, Point, Polygon, box
     txt = _trace.segments_to_svg(
         [("line", 0.0, 0.0, 10.0, 0.0, "edge")], 20, 20, tmp_path / "c.svg",
-        contour_d="M 1 1 L 19 1 L 19 19 Z",
-        contour_hide=box(4, 0, 8, 3)).read_text()
-    assert '<clipPath id="cclip">' in txt
-    assert 'clip-path="url(#cclip)" stroke-width' in txt
+        contour=Polygon([(1, 1), (19, 1), (19, 19)]),
+        hide=box(4, 0, 8, 3)).read_text()
+    clips = dict(re.findall(r'<clipPath id="(\w+)"><path d="([^"]+)"', txt))
+    assert set(clips) == {"sclip", "cclip"}
+    assert 'clip-path="url(#sclip)"' in txt
+
+    def inside(d, x, y):                        # evenodd, as the clip reads
+        ray = LineString([(x, y), (x + 100, y + 0.123)])
+        n = 0
+        for sub in d.split("M ")[1:]:
+            pts = [tuple(map(float, xy.split()))
+                   for xy in sub.strip().rstrip(" Z").split(" L ")]
+            ring = LineString(pts + pts[:1])
+            hit = ray.intersection(ring)
+            n += len(getattr(hit, "geoms", [hit])) if not hit.is_empty else 0
+        return n % 2 == 1
+    for d in clips.values():                    # neither draws inside hide
+        assert not inside(d, 6, 1.5)
+    assert inside(clips["sclip"], 12, 1.5)
+    assert inside(clips["cclip"], 12, 1.5)

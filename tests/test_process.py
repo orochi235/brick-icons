@@ -109,14 +109,38 @@ def test_draw_segments_renders_arc_nonblank():
 
 def test_draw_segments_contour_fills_corner_notch():
     # butt-capped strokes meeting at a corner leave the outer wedge unfilled;
-    # the closed silhouette contour ring (round joints) fills it
+    # the contour's band, filled, seals it
+    from shapely.geometry import Polygon
     segs = [(50.0, 80.0, 10.0, 10.0, "sil"), (50.0, 80.0, 90.0, 10.0, "sil")]
-    ring = np.array([(10, 10), (90, 10), (50, 80)], float)
+    band = process.contour_band(Polygon([(10, 10), (90, 10), (50, 80)]),
+                                6, 6)
     no = process.draw_segments(segs, 100, 100, sil_px=6)
-    yes = process.draw_segments(segs, 100, 100, sil_px=6,
-                                contour_rings=[ring], contour_px=6)
+    yes = process.draw_segments(segs, 100, 100, sil_px=6, contour_band=band)
     assert no.getpixel((50, 82)) > 200          # notch below the apex
     assert yes.getpixel((50, 82)) < 100         # sealed by the contour
+
+
+def test_contour_band_sits_flush_with_the_stroke_inside():
+    # inner edge at half the line weight in, all the rest outward
+    from shapely.geometry import Point, box
+    band = process.contour_band(box(0, 0, 100, 100), line_px=2, sil_px=4)
+    assert band.area == pytest.approx(4 * 100 * 4, rel=0.03)
+    assert band.contains(Point(50, 1.1)) is False    # past w/2 inside
+    assert band.contains(Point(50, 0.9))
+    assert band.contains(Point(50, -2.9))            # sil - w/2 outside
+    assert not band.contains(Point(50, -3.1))
+
+
+def test_contour_band_takes_the_stud_tier_along_a_stud():
+    from shapely.geometry import Point, box
+    studs = process.StudTier(box(40, -5, 60, 5), 1.0)
+    band = process.contour_band(box(0, 0, 100, 100), 2, 4, studs)
+    assert not band.contains(Point(50, 0.6))         # stud: 0.5 in
+    assert band.contains(Point(50, -3.4))            # ...and 3.5 out
+    assert band.contains(Point(20, 0.9))             # edge: 1 in
+    assert not band.contains(Point(20, -3.2))        # ...and 3 out
+    assert not band.contains(Point(38, -3.2))        # steps where it leaves
+    assert process.contour_reach(2, 4, studs) == pytest.approx(3.5)
 
 
 def test_a_stud_draws_at_the_stud_tier_in_the_png():
@@ -140,9 +164,9 @@ def test_stud_ops_draw_at_their_own_width_after_the_segments():
     assert img[10, 10] < 128 and img[3, 10] == 255
 
 
-def test_an_open_contour_run_draws_without_closing():
-    img = np.asarray(process.draw_segments(
-        [], 30, 30, contour_open=[[(2.0, 2.0), (28.0, 2.0), (28.0, 28.0)]],
-        sil_px=2))
-    assert img[2, 15] < 128 and img[15, 28] < 128
-    assert img[15, 15] == 255                     # no closing diagonal
+def test_a_contour_band_with_a_hole_draws_it_open():
+    from shapely.geometry import box
+    band = box(2, 2, 28, 28).difference(box(6, 6, 24, 24))
+    img = np.asarray(process.draw_segments([], 30, 30, contour_band=band))
+    assert img[3, 15] < 128 and img[15, 3] < 128
+    assert img[15, 15] == 255

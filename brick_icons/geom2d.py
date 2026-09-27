@@ -609,12 +609,27 @@ def contour_d(g, arcs=None, min_ring_area=0.5, stroke=0.0):
     `stroke` is the width this path will be drawn at, and is what decides
     which rings are slivers — see drop_thin. Left at 0 the width is unknown
     and only the area gate applies."""
-    g = close_slivers(g)
-    g = drop_thin(g, stroke)
+    return path_d(contour_region(g, stroke, min_ring_area), arcs, wide=True)
+
+
+def contour_region(g, stroke=0.0, min_area=0.5):
+    """The region whose boundary the silhouette contour strokes: `g` with
+    hairline seams closed, rings a `stroke`-wide line would fill solid
+    dropped (drop_thin), and components and holes under `min_area` px^2
+    dropped. What contour_d draws, and what every writer sizes the
+    contour's ink from (process.contour_band)."""
+    g = drop_thin(close_slivers(g), stroke)
     if g is None or g.is_empty:
-        return ""
-    return path_d(g, arcs, min_area=min_ring_area,
-                  min_ring_area=min_ring_area, wide=True)
+        return _EMPTY
+    keep = []
+    for p in getattr(g, "geoms", [g]):
+        if p.geom_type != "Polygon" or p.is_empty or p.area < min_area:
+            continue
+        keep.append(Polygon(p.exterior, [r for r in p.interiors
+                                         if Polygon(r).area >= min_area]))
+    if not keep:
+        return _EMPTY
+    return keep[0] if len(keep) == 1 else shapely.MultiPolygon(keep)
 
 
 def rings(g, min_area=0.0):
@@ -639,13 +654,19 @@ def buffer_d(g, dist, mitre_limit=5.0):
     boundary runs exactly along the outer edge of an outline stroke, so
     round end caps get cut flush instead of poking past silhouette corners.
     Pair with clip-rule="evenodd" so holes stay open."""
+    return path_d(grow(g, dist, mitre_limit))
+
+
+def grow(g, dist, mitre_limit=5.0):
+    """`g` buffered by `dist` with mitered corners, as geometry (empty on
+    a GEOS failure) -- what buffer_d draws."""
     if g is None or g.is_empty:
-        return ""
+        return _EMPTY
     try:
-        b = g.buffer(dist, join_style="mitre", mitre_limit=mitre_limit)
+        return _only_area(g.buffer(dist, join_style="mitre",
+                                   mitre_limit=mitre_limit))
     except Exception:
-        return ""
-    return path_d(_only_area(b))
+        return _EMPTY
 
 
 def path_d(g, arcs=None, tol=ARC_TOL, min_area=0.0, min_ring_area=0.0,

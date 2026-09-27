@@ -1388,9 +1388,10 @@ def _loop_cut_merged(merged, loops):
 
 def _stroke_band(strokes, sil, line_px, sil_px, studs=None):
     """The region the drawn strokes cover (canvas space): every emitted
-    line/arc op buffered to its width, plus the silhouette contour at
-    sil width. Mirrors trace.segments_to_svg: ops shorter than 0.6x their
-    stroke are skipped there (bare cap dots) and so provide no cover."""
+    line/arc op buffered to its width, plus the silhouette contour's band
+    (process.contour_band). Mirrors trace.segments_to_svg: ops shorter than
+    0.6x their stroke are skipped there (bare cap dots) and so provide no
+    cover."""
     from shapely.geometry import LineString
     parts = []
     for op in strokes:
@@ -1409,7 +1410,7 @@ def _stroke_band(strokes, sil, line_px, sil_px, studs=None):
             parts.append(
                 LineString(_ell_pts(op, op[7], op[8])).buffer(sw / 2.0))
     if sil is not None and not sil.is_empty:
-        parts.append(sil.boundary.buffer(sil_px / 2.0))
+        parts.append(process.contour_band(sil, line_px, sil_px, studs))
     if not parts:
         return None, None
     import shapely as _sh

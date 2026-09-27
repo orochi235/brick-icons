@@ -127,6 +127,50 @@ def stroke_width(op, line_px, sil_px, studs=None):
     return sil_px if op[-1] == "sil" else line_px
 
 
+def _contour_ring(sil, w, sil_px):
+    from . import geom2d
+    return geom2d.difference(geom2d.grow(sil, sil_px - w / 2.0),
+                             geom2d.grow(sil, -w / 2.0))
+
+
+def contour_band(sil, line_px, sil_px, studs=None):
+    """The ink the silhouette contour lays down around `sil`: `sil_px`
+    thick, its inner edge flush with the inner edge of the stroke it runs
+    over -- half the line weight inside the silhouette, half the stud tier
+    where the outline is a stud's -- and the rest of its width outward.
+    Centered on the boundary, a contour heavier than the stroke under it
+    thickened inward, and stepped wherever the stroke under it changed tier.
+    The SVG clips its contour to this, the PNG fills it, and fill cleanup
+    reads it as the contour's cover."""
+    if sil is None or sil.is_empty:
+        return sil
+    band = _contour_ring(sil, line_px, sil_px)
+    if studs is None or studs.px >= line_px:
+        return band
+    from . import geom2d
+    # inside the silhouette a stud's footprint says which tier is under
+    # the contour; outside it, the stretch of boundary it runs along does,
+    # cut square where that stretch leaves the stud so the tier steps
+    # there and not a band-width early
+    inner = geom2d.intersection(sil, studs.zone)
+    reach = sil_px - studs.px / 2.0
+    parts = [geom2d.difference(band, inner),
+             geom2d.intersection(_contour_ring(sil, studs.px, sil_px), inner)]
+    rim = sil.boundary.intersection(studs.zone)
+    if reach > 0 and not rim.is_empty:
+        parts.append(geom2d.difference(
+            rim.buffer(reach, cap_style="flat", join_style="mitre",
+                       mitre_limit=5.0), sil))
+    return geom2d.union_all(parts)
+
+
+def contour_reach(line_px, sil_px, studs=None):
+    """The farthest contour_band reaches from the silhouette boundary, to
+    either side: half the width a stroke must have to cover it."""
+    thin = min(line_px, studs.px) if studs is not None else line_px
+    return max(sil_px - thin / 2.0, line_px / 2.0)
+
+
 def _draw_op(dr, op, wpx, ss):
     """One line or arc op onto a supersampled canvas."""
     if op[0] == "line":
@@ -143,29 +187,35 @@ def _draw_op(dr, op, wpx, ss):
     dr.line(pts, fill=0, width=wpx, joint="curve")
 
 
+def _fill_region(img, g, ss):
+    """Paint polygonal `g` (px) black onto a supersampled canvas, holes
+    open. Each polygon goes through its own mask, so a hole never erases a
+    polygon lying inside it."""
+    for p in getattr(g, "geoms", [g]):
+        if p.geom_type != "Polygon" or p.is_empty:
+            continue
+        mask = Image.new("L", img.size, 0)
+        md = ImageDraw.Draw(mask)
+        md.polygon([(x * ss, y * ss) for x, y in p.exterior.coords], fill=255)
+        for r in p.interiors:
+            md.polygon([(x * ss, y * ss) for x, y in r.coords], fill=0)
+        img.paste(0, mask=mask)
+
+
 def draw_segments(segs, w, h, line_px=2, sil_px=2, supersample=3,
-                  contour_rings=None, contour_px=None, studs=None,
-                  stud_ops=(), stud_px=None, contour_open=()):
+                  contour_band=None, studs=None, stud_ops=(), stud_px=None):
     """Anti-aliased black line-art on white. Accepts line ops and arc ops;
     'sil' segments use sil_px width. Arc ops are sampled into polylines.
-    contour_rings (closed silhouette rings, px) draw first with round
-    joints: PIL strokes are butt-capped, so outline corners are otherwise
-    left with unfilled outer wedges (notched corners). contour_open (open
-    contour runs, px) draw the same way but without the closing segment --
-    instancing.cut_rings cuts a ring open where a placed stud hides it.
-    stud_ops (instancing.Instancer.png_ops) are placed studs' strokes,
-    drawn last at stud_px (default line_px)."""
+    contour_band (px; the silhouette contour's ink, see contour_band) is
+    filled first: a filled region keeps the outline's corners sharp, where
+    PIL's butt-capped strokes would notch them. stud_ops
+    (instancing.Instancer.png_ops) are placed studs' strokes, drawn last at
+    stud_px (default line_px)."""
     ss = max(1, supersample)
     img = Image.new("L", (w * ss, h * ss), 255)
     dr = ImageDraw.Draw(img)
-    cpx = max(1, round((contour_px if contour_px is not None else sil_px) * ss))
-    for ring in contour_rings or []:
-        pts = [(x * ss, y * ss) for x, y in ring]
-        # re-append the first two points so the seam vertex gets a joint too
-        dr.line(pts + pts[:2], fill=0, width=cpx, joint="curve")
-    for run in contour_open or ():
-        dr.line([(x * ss, y * ss) for x, y in run], fill=0, width=cpx,
-                joint="curve")
+    if contour_band is not None and not contour_band.is_empty:
+        _fill_region(img, contour_band, ss)
     for op in segs:
         if len(op) == 5:                               # legacy line tuple
             op = ("line",) + tuple(op)
@@ -179,12 +229,9 @@ def draw_segments(segs, w, h, line_px=2, sil_px=2, supersample=3,
 
 
 def segments_mono(segs, w, h, line_px=2, sil_px=2, threshold=160,
-                  contour_rings=None, contour_px=None, studs=None,
-                  stud_ops=(), stud_px=None, contour_open=()):
-    g = draw_segments(segs, w, h, line_px, sil_px,
-                      contour_rings=contour_rings, contour_px=contour_px,
-                      studs=studs, stud_ops=stud_ops, stud_px=stud_px,
-                      contour_open=contour_open)
+                  contour_band=None, studs=None, stud_ops=(), stud_px=None):
+    g = draw_segments(segs, w, h, line_px, sil_px, contour_band=contour_band,
+                      studs=studs, stud_ops=stud_ops, stud_px=stud_px)
     return g.point(lambda p: 255 if p >= threshold else 0).convert("1")
 
 

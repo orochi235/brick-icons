@@ -8,6 +8,7 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
+from shapely.geometry import Polygon
 
 from . import render, process, trace, hlr, library, shade, geom2d, unwrap, instancing
 from . import slop
@@ -187,11 +188,18 @@ def _stroke_tiers(cfg, res, basis, fit, line_px, sil_px, stud_base, ratio=1.0):
     `stud_base` the line weight before its floor; a drawing `ratio` times
     that size (the gray PNG) scales them. The stud tier
     (process.stud_weight) covers the footprints of the studs the part
-    declared."""
+    declared and the engine draws: a stud instancing places draws its own
+    strokes at the tier, so no part stroke or contour takes it from its
+    footprint (the zone is then empty, and the tier's width stands)."""
     line, sil = line_px * ratio, sil_px * ratio
     k, kx, ky = hlr.canvas_affine(res, *fit)
-    zone = hlr.stud_footprints(res.analytic or (), *basis, k, kx, ky,
-                               pad=0.5 * ratio)
+    prims = res.analytic or ()
+    zone = hlr.stud_footprints(
+        [p for p in prims if not getattr(p, "withheld", False)],
+        *basis, k, kx, ky, pad=0.5 * ratio)
+    if zone is None and any(getattr(p, "stud", None) is not None
+                            for p in prims):
+        zone = Polygon()
     studs = (process.StudTier(zone, process.stud_weight(
                  line, stud_base * ratio, cfg.stud_stroke,
                  cfg.stud_floor * ratio))
@@ -259,12 +267,10 @@ def _sil_faces(res, f, ox, oy):
         f, ox, oy)
 
 
-def _png_contour(inst, fit, sil_px, rings):
-    """(closed rings, open runs) of the silhouette contour a PNG draws: the
-    rings as they are, or cut open where a placed stud stands in front."""
-    if inst is None or not rings:
-        return rings, ()
-    return instancing.cut_rings(rings, inst.hide_region(fit, sil_px))
+def _hide(inst, fit, line_px, sil_px):
+    """Where the part's strokes and contour give way to placed studs
+    (Instancer.hide_region), or None."""
+    return inst.hide_region(fit, max(line_px, sil_px)) if inst else None
 
 
 def render_tag(cfg: Config, name: str, posed: bool = False) -> str:
@@ -412,10 +418,9 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                     faces or _sil_faces(res, f, ox, oy)) or None
                 if sil_geom is not None and spurs is not None:
                     sil_geom = geom2d.difference(sil_geom, spurs)
-                contour = geom2d.contour_d(
+                contour = geom2d.contour_region(
                     geom2d.union_all([sil_geom]
                                      + geom2d.arc_regions(shifted, sil_geom)),
-                    geom2d.arc_candidates(ells),
                     stroke=cfg.silhouette_mm / 0.4 * s) \
                     if sil_geom is not None and cfg.contour == "on" else None
                 w_mm = vb_w / s * 0.4
@@ -425,13 +430,14 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                     physical=(w_mm, h_mm), s=s,
                     line_mm=cfg.line_mm, sil_mm=cfg.silhouette_mm, fills=fills,
                     bg=cfg.svg_bg, opacity=cfg.opacity,
-                    clip_geom=sil_geom, contour_d=contour, label=label,
+                    clip_geom=sil_geom, contour=contour,
+                    contour_arcs=geom2d.arc_candidates(ells), label=label,
                     debug_colors=cfg.debug_colors, studs=studs,
                     between=inst.svg_parts(
                         (f, ox, oy), studs.px if studs else cfg.line_mm / 0.4 * s,
                         style, crumb, cfg.weld_corners) if inst else None,
-                    contour_hide=inst.hide_region(
-                        (f, ox, oy), cfg.silhouette_mm / 0.4 * s) if inst else None)
+                    hide=_hide(inst, (f, ox, oy), cfg.line_mm / 0.4 * s,
+                               cfg.silhouette_mm / 0.4 * s))
                 _emit_fit(out_dir, name, res, *hlr.view_basis(lat, long),
                           f, ox, oy, round(vb_w), round(vb_h), style)
             else:
@@ -459,17 +465,17 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                     faces or _sil_faces(res, f, ox, oy)) or None
                 if sil_geom is not None and spurs is not None:
                     sil_geom = geom2d.difference(sil_geom, spurs)
-                contour = geom2d.contour_d(
+                contour = geom2d.contour_region(
                     geom2d.union_all([sil_geom]
                                      + geom2d.arc_regions(fit, sil_geom)),
-                    geom2d.arc_candidates(ells),
                     stroke=sil_px) \
                     if sil_geom is not None and cfg.contour == "on" else None
                 trace.segments_to_svg(fit, cfg.width, cfg.height, out_dir / f"{name}.svg",
                                       line_px=line_px, sil_px=sil_px, studs=studs,
                                       fills=fills, bg=cfg.svg_bg,
                                       opacity=cfg.opacity,
-                                      clip_geom=sil_geom, contour_d=contour,
+                                      clip_geom=sil_geom, contour=contour,
+                                      contour_arcs=geom2d.arc_candidates(ells),
                                       label=label,
                                       debug_colors=cfg.debug_colors,
                                       between=inst.svg_parts(
@@ -477,24 +483,35 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                                           studs.px if studs else line_px,
                                           style, crumb, cfg.weld_corners)
                                       if inst else None,
-                                      contour_hide=inst.hide_region(icon_fit, sil_px)
-                                      if inst else None)
+                                      hide=_hide(inst, icon_fit, line_px, sil_px))
                 _emit_fit(out_dir, name, res, *hlr.view_basis(lat, long),
                           f, ox, oy, cfg.width, cfg.height, style)
         if cfg.fmt in ("png", "both"):
-            def sil_rings(W, H, fit_segs, stroke):
+            def ink(W, H, fit_segs, line, sil, studs):
+                """(part stroke ops, contour band) a PNG draws, both less
+                what placed studs show (the SVG's `hide`)."""
+                aff = hlr.fit_affine(bbox, W, H, cfg.margin, cfg.scale)
+                hide = _hide(inst, aff, line, sil)
+                # PIL cannot cut half a stroke's width, as the SVG's clip
+                # does to a part edge running along a stud's outline; cut
+                # a hair inside instead, or that edge breaks into dashes
+                ops = instancing.cut_ops(
+                    fit_segs, hide.buffer(-line / 4.0) if hide is not None
+                    else None)
                 if cfg.contour == "off":
-                    return None
-                f, ox, oy = hlr.fit_affine(bbox, W, H, cfg.margin, cfg.scale)
-                faces = (shade.apply_affine_faces(res.faces, f, ox, oy)
-                         or _sil_faces(res, f, ox, oy))
+                    return ops, None
+                faces = (shade.apply_affine_faces(res.faces, *aff)
+                         or _sil_faces(res, *aff))
                 if not faces:
-                    return None
-                sil = shade.silhouette_geom(faces)
-                g = geom2d.close_slivers(
-                    geom2d.union_all([sil]
-                                     + geom2d.arc_regions(fit_segs, sil)))
-                return geom2d.rings(geom2d.drop_thin(g, stroke), min_area=0.5)
+                    return ops, None
+                sil_g = shade.silhouette_geom(faces)
+                region = geom2d.contour_region(
+                    geom2d.union_all([sil_g]
+                                     + geom2d.arc_regions(fit_segs, sil_g)),
+                    stroke=sil)
+                band = process.contour_band(region, line, sil, studs)
+                return ops, (geom2d.difference(band, hide)
+                             if hide is not None and band is not None else band)
             if cfg.mode in ("gray", "both"):
                 gpx = max(cfg.width, cfg.height, cfg.render_px // 2)
                 gfit = hlr.fit_segments(segs, bbox, gpx, gpx, cfg.margin, cfg.scale)
@@ -503,11 +520,9 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                 gl, gs, gstuds = _stroke_tiers(cfg, res, basis, gaff,
                                                line_w, sil_w, stud_base, ratio)
                 gsp = gstuds.px if gstuds else gl
-                rings, runs = _png_contour(inst, gaff, gs,
-                                           sil_rings(gpx, gpx, gfit, gs))
-                g = process.draw_segments(gfit, gpx, gpx, line_px=gl, sil_px=gs,
-                                          contour_rings=rings, contour_open=runs,
-                                          studs=gstuds,
+                gops, band = ink(gpx, gpx, gfit, gl, gs, gstuds)
+                g = process.draw_segments(gops, gpx, gpx, line_px=gl, sil_px=gs,
+                                          contour_band=band, studs=gstuds,
                                           stud_ops=inst.png_ops(gaff, gsp)
                                           if inst else (), stud_px=gsp)
                 if label:
@@ -518,12 +533,10 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                 ml, ms, mstuds = _stroke_tiers(cfg, res, basis, icon_fit,
                                                line_w, sil_w, stud_base)
                 msp = mstuds.px if mstuds else ml
-                rings, runs = _png_contour(inst, icon_fit, ms, sil_rings(
-                    cfg.width, cfg.height, mfit, ms))
-                m = process.segments_mono(mfit, cfg.width, cfg.height,
+                mops, band = ink(cfg.width, cfg.height, mfit, ml, ms, mstuds)
+                m = process.segments_mono(mops, cfg.width, cfg.height,
                                           line_px=ml, sil_px=ms,
-                                          contour_rings=rings, contour_open=runs,
-                                          studs=mstuds,
+                                          contour_band=band, studs=mstuds,
                                           stud_ops=inst.png_ops(icon_fit, msp)
                                           if inst else (), stud_px=msp)
                 if label:
