@@ -11,7 +11,7 @@ from PIL import Image
 from shapely.geometry import Polygon
 
 from . import render, process, trace, hlr, library, shade, geom2d, unwrap, instancing
-from . import slop
+from . import transom
 from .config import load_config, Config
 
 
@@ -124,7 +124,7 @@ def build_parser():
     p.add_argument("--debug-dir", default=None)
     p.add_argument("--review", nargs="?", const="run", default=None,
                    choices=("one", "run", "loose"), metavar="MODE",
-                   help="put each render on the slopboard wall as a run and "
+                   help="put each render on the transom wall as a run and "
                         "read a verdict back. `one` waits per render, `run` "
                         "(the default) sends them all and waits at the end, "
                         "`loose` does not wait -- collect it later with "
@@ -705,7 +705,7 @@ def main(argv=None) -> int:
         print("no parts given")
         return 2
     out_dir = Path(args.out)
-    run = slop.run_id() if args.review else None
+    run = transom.run_id() if args.review else None
     sent = []
     for i, part in enumerate(parts, 1):
         before = _listing(out_dir)
@@ -717,20 +717,20 @@ def main(argv=None) -> int:
         # it. Only what the wall holds goes up, and the rest is named rather
         # than dropped: a .svg sent silently would be a review of nothing.
         made = sorted(_listing(out_dir) - before)
-        shown = [p for p in made if slop.holdable(p)]
+        shown = [p for p in made if transom.holdable(p)]
         for path in shown:
-            sent.append(slop.send(path, about=part, run=run,
+            sent.append(transom.send(path, about=part, run=run,
                                   question=args.review_ask,
-                                  choices=slop.VERDICTS,
+                                  choices=transom.VERDICTS,
                                   why="anything to add?",
                                   of=len(parts) if len(shown) == 1 else None,
                                   label=f"{len(parts)} parts"))
-        for path in (p for p in made if not slop.holdable(p)):
+        for path in (p for p in made if not transom.holdable(p)):
             print(f"  not on the wall: {path.name}", flush=True)
         if args.review == "one" and sent:
-            _report(slop.collect(sent[-1]), 1, 1)
+            _report(transom.collect(sent[-1]), 1, 1)
     if run and sent:
-        slop.write_manifest(run, sent, root=args.root)
+        transom.write_manifest(run, sent, root=args.root)
         if args.review == "loose":
             print(f"{len(sent)} on the wall as {run}; "
                   f"collect with --collect {run}")
@@ -739,7 +739,7 @@ def main(argv=None) -> int:
             print(f"{len(sent)} on the wall as {run}; waiting on verdicts",
                   flush=True)
             for n, one in enumerate(sent, 1):
-                _report(slop.collect(one), n, len(sent))
+                _report(transom.collect(one), n, len(sent))
     return 0
 
 
@@ -757,7 +757,7 @@ def _report(verdict, n: int, total: int) -> None:
 
 
 def _collect_main(run: str, root: str = ".") -> int:
-    held = slop.runs(root)
+    held = transom.runs(root)
     if run == "latest":
         if not held:
             print("no run has a manifest left; --review=loose writes one")
@@ -766,7 +766,7 @@ def _collect_main(run: str, root: str = ".") -> int:
     if run not in held:
         print(f"no manifest for {run}. Held: {', '.join(held) or 'none'}")
         return 2
-    slop.collect_run(run, root)
+    transom.collect_run(run, root)
     return 0
 
 

@@ -458,7 +458,7 @@ reading projected output.
 
 #### `--review [MODE]`
 
-Put each render on the [slopboard](https://github.com/orochi235/slopboard) wall
+Put each render on the [transom](https://github.com/orochi235/transom) wall
 and read a verdict back, instead of opening sixty files by hand. The sweep goes
 up as one **run** — one card holding a take per render, which the wall opens as
 a carousel — so reviewing it is `←`/`→` and a number key per picture. The
@@ -486,7 +486,7 @@ $ brick-icons --collect latest
 
 A file the wall does not hold — an SVG, which is most of what the outline path
 writes — is named rather than skipped in silence. `--review-ask` changes the
-question. Nothing is written to `corpus.db`: `brick_icons.slop.review_many`
+question. Nothing is written to `corpus.db`: `brick_icons.transom.review_many`
 hands the verdicts back and a caller decides what they mean, which is
 deliberate while the [review queue](#lab-server) has its own vocabulary for the
 same job (`review.VERDICTS`, where `worse` is `regression`).
