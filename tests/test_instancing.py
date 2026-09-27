@@ -260,6 +260,45 @@ def test_the_contour_hides_behind_placed_studs(monkeypatch):
     assert inst.hide_region((1.0, 0.0, 0.0), 2.0).area == pytest.approx(40.0)
 
 
+def test_with_instancing_off_only_clear_studs_hide_part_strokes():
+    clear = instancing.Verdict(_ref(), "clear", hull=box(-6, -6, 6, 6))
+    cut = instancing.Verdict(_ref(), "cut", hull=box(20, -6, 32, 6),
+                             cover=box(26, -10, 40, 10))
+    hidden = instancing.Verdict(_ref(), "hidden", hull=box(40, -6, 52, 6))
+    plan = instancing.Plan([clear, cut, hidden], (RIGHT, UP, FWD))
+    res = hlr.VisResult([], (0.0, 0.0, 1.0, 1.0), 1.0, [], [], proj=IDENT,
+                        unplaced=plan)
+    g = instancing.hide_region(res, plan, (1.0, 0.0, 0.0), 2.0,
+                               roles=("clear",))
+    assert g.area == pytest.approx(144.0)
+    assert not g.intersects(box(20, -6, 32, 6))     # the cut stud's region
+
+
+def test_a_clear_stud_spares_its_own_strokes_and_the_outline_they_leave_bare():
+    clear = instancing.Verdict(_ref(), "clear", hull=box(-6, -6, 6, 6))
+    plan = instancing.Plan([clear], (RIGHT, UP, FWD))
+    res = hlr.VisResult([], (0.0, 0.0, 1.0, 1.0), 1.0, [], [], proj=IDENT,
+                        unplaced=plan)
+    top = ("line", -6.0, -6.0, 6.0, -6.0, "edge")        # the stud draws it
+    rim = ("line", -9.0, 6.0, 9.0, 6.0, "edge")          # a part edge on it
+    nub = ("line", 0.0, -20.0, 0.0, -6.0, "edge")        # ends at its edge
+    hide, spare = instancing.unplaced_hide(res, plan, (1.0, 0.0, 0.0),
+                                           [top, rim, nub], 2.0, 1.0)
+    assert spare(top) and not spare(rim) and not spare(nub)
+    assert hide.contains(Point(0.0, -5.5))        # the cap onto the top goes
+    assert not hide.intersects(Point(0.0, 5.5))   # the part edge keeps its width
+
+
+def test_cut_ops_passes_what_keep_claims_through_untouched():
+    rim = ("arc", 0.0, 0.0, 3.0, 0.0, 0.0, 3.0, 0.0, 360.0, "sil")
+    edge = ("line", -10.0, 0.0, 0.0, 0.0, "edge")
+    got = instancing.cut_ops([rim, edge], box(-4, -4, 4, 4),
+                             keep=lambda op: op is rim)
+    assert got[0] == rim
+    [(_k, x1, _y1, x2, _y2, _t)] = got[1:]
+    assert sorted([x1, x2]) == pytest.approx([-10.0, -4.0])
+
+
 def test_part_strokes_give_way_to_a_placed_stud():
     arc = ("arc", 50.0, 50.0, 3.0, 0.0, 0.0, 3.0, 0.0, 360.0, "edge")
     ops = [("line", 0.0, 0.0, 10.0, 0.0, "edge"), arc]
@@ -284,9 +323,9 @@ SVG = ["--engine", "naive", "--format", "svg", "--shading", "outline",
 
 
 @pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
-def test_off_never_reaches_instancing_and_draws_as_the_default(tmp_path, monkeypatch):
+def test_off_never_places_studs_and_draws_as_the_default(tmp_path, monkeypatch):
     def boom(*a, **k):
-        raise AssertionError("--stud-instancing off reached brick_icons.instancing")
+        raise AssertionError("--stud-instancing off placed studs")
     monkeypatch.setattr(instancing, "withhold", boom)
     monkeypatch.setattr(instancing, "Instancer", boom)
     argv = ["3001", "--engine", "naive", "--format", "both", "--shading",
@@ -297,6 +336,47 @@ def test_off_never_reaches_instancing_and_draws_as_the_default(tmp_path, monkeyp
     for name in ("3001.svg", "3001.gray.png", "3001.mono.png"):
         assert (tmp_path / "default" / name).read_bytes() \
             == (tmp_path / "off" / name).read_bytes(), name
+
+
+def _evenodd(d):
+    """An M/L/Z path 'd' as the region evenodd fills."""
+    from shapely.geometry import Polygon
+    g = Polygon()
+    for sub in d.split("M ")[1:]:
+        pts = [tuple(map(float, xy.split()))
+               for xy in sub.strip().rstrip(" Z").split(" L ")]
+        g = g.symmetric_difference(Polygon(pts).buffer(0))
+    return g
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_off_clips_part_strokes_at_clear_studs_but_not_their_own(tmp_path,
+                                                                monkeypatch):
+    """3001's back top edges end where a stud hides them; with instancing
+    off their round caps stopped half a width onto the stud top."""
+    import re
+    got = {}
+    real = instancing.hide_region
+
+    def spy(*a, **k):
+        got["hide"] = g = real(*a, **k)
+        return g
+    monkeypatch.setattr(instancing, "hide_region", spy)
+    assert cli.main(["3001", *SVG[2:], "--engine", "occt",
+                     "--out", str(tmp_path)]) == 0
+    svg = (tmp_path / "3001.svg").read_text()
+    clips = dict(re.findall(r'<clipPath id="(\w+)"><path d="([^"]+)"', svg))
+    part, own = _evenodd(clips["sclip"]), _evenodd(clips["oclip"])
+    studs = list(getattr(got["hide"], "geoms", [got["hide"]]))
+    assert len(studs) == 8                          # every stud of 3001 is clear
+    for g in studs:
+        p = g.representative_point()
+        assert not part.contains(p) and own.contains(p)
+    groups = svg.split('<g stroke="black" fill="none" stroke-linecap="round"')
+    assert 'clip-path="url(#sclip)"' in groups[-2]
+    assert groups[-1].startswith(' clip-path="url(#oclip)"')
+    # each stud's own strokes: a top ellipse, two limbs and a base arc
+    assert groups[-1].count("<path") + groups[-1].count("<line") >= 8 * 3
 
 
 @pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")

@@ -544,13 +544,14 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
                     clip_geom=None, contour=None, contour_arcs=None,
                     label: str | None = None,
                     debug_colors: bool = False, studs=None,
-                    between=None, hide=None) -> Path:
+                    between=None, hide=None, spare=None) -> Path:
     """The SVG drawing: fills, then `between` (instancing's placed studs),
     then the silhouette contour, then the strokes. `contour` is the region
     the contour outlines (geom2d.contour_region), drawn as a path with arcs
     recovered from `contour_arcs` and clipped to process.contour_band.
-    `hide` (Instancer.hide_region) is where neither the contour nor the
-    strokes draw."""
+    `hide` (instancing.hide_region) is where neither the contour nor the
+    strokes draw, save the ops `spare` claims (instancing.unplaced_hide),
+    drawn in a group of their own."""
     if physical is not None:
         w_mm, h_mm = physical
         root = (f'<svg xmlns="http://www.w3.org/2000/svg" '
@@ -586,6 +587,18 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
         keep = geom2d.grow(geom2d.union_all([clip_geom]
                                             + geom2d.arc_regions(segs, clip_geom)),
                            max(line_px, sil_px) / 2.0)
+    # what `spare` claims -- a stud the engine drew, its own strokes lying on
+    # and inside its footprint, which `hide` may be -- draws whole
+    own = [op for op in segs if spare(op)] \
+        if hidden and spare is not None else []
+    if own:
+        segs = [op for op in segs if not spare(op)]
+    own_attr = ""
+    od = geom2d.path_d(keep) if own and keep is not None else ""
+    if od:
+        parts.append(f'<defs><clipPath id="oclip">'
+                     f'<path d="{od}" clip-rule="evenodd"/></clipPath></defs>')
+        own_attr = ' clip-path="url(#oclip)"'
     if hidden:
         keep = geom2d.difference(box(-1, -1, w + 1, h + 1)
                                  if keep is None else keep, hide)
@@ -619,6 +632,11 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
             parts.append("</g>")
     parts.append(f'<g stroke="black" fill="none" stroke-linecap="round"{clip_attr}>')
     parts += stroke_elements(segs, line_px, sil_px, studs)
+    if own:
+        parts.append("</g>")
+        parts.append(f'<g stroke="black" fill="none" stroke-linecap="round"'
+                     f'{own_attr}>')
+        parts += stroke_elements(own, line_px, sil_px, studs)
     if debug_colors:
         _colorize(parts, stroke_g,
                   debug_colors if isinstance(debug_colors, str) else "cycle")

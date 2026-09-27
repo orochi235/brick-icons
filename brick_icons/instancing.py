@@ -103,10 +103,10 @@ class Plan:
             c[v.role] += 1
         return c
 
-    def placed(self):
-        """The studs instancing draws -- clear and cut -- far to near, so a
-        nearer stud paints over a farther one."""
-        return sorted((v for v in self.verdicts if v.role in PLACED),
+    def placed(self, roles=PLACED):
+        """The studs instancing draws -- clear and cut, or `roles` -- far to
+        near, so a nearer stud paints over a farther one."""
+        return sorted((v for v in self.verdicts if v.role in roles),
                       key=lambda v: -v.depth)
 
 
@@ -493,10 +493,11 @@ def clip_ops(ops, region, n=24):
     return out
 
 
-def cut_ops(ops, hide, n=24):
+def cut_ops(ops, hide, n=24, keep=None):
     """Stroke ops less where they cross `hide`: the part's strokes a PNG
-    draws around placed studs (Instancer.hide_region). An op that misses
-    `hide` comes back as it was; one that crosses it, as line ops."""
+    draws around studs (hide_region). An op that misses `hide`, or that
+    `keep` claims (a stud's own stroke), comes back as it was; one that
+    crosses it, as line ops."""
     if hide is None or hide.is_empty:
         return list(ops)
     shapely.prepare(hide)
@@ -504,6 +505,9 @@ def cut_ops(ops, hide, n=24):
     for op in ops:
         if len(op) == 5:                               # legacy line tuple
             op = ("line",) + tuple(op)
+        if keep is not None and keep(op):
+            out.append(op)
+            continue
         line = LineString(process.op_points(op, n))
         if not shapely.intersects(line, hide):
             out.append(op)
@@ -657,20 +661,75 @@ class Instancer:
         return ops
 
     def hide_region(self, fit, stroke_px):
-        """Where neither the part's strokes nor its silhouette contour draw:
-        what the placed studs show, canvas px. A clear stud has nothing in
-        front of it, so a part stroke inside it can only be a round cap
-        overhanging from an edge behind it, or the contour of a face it
-        stands in front of. A cut one hides what it shows less half of
-        `stroke_px`, the widest part stroke, so the occluder's own edge
-        along the cut keeps both halves of its width. None when nothing is
-        placed."""
-        k, kx, ky = hlr.canvas_affine(self.res, *fit)
-        parts = []
-        for v in self.plan.placed():
-            g = canvas_geom(v.shown(), k, kx, ky)
-            if v.role == "cut":
-                g = g.buffer(-0.5 * stroke_px)
-            if not g.is_empty:
-                parts.append(g)
-        return geom2d.union_all(parts) if parts else None
+        """hide_region over this plan's placed studs."""
+        return hide_region(self.res, self.plan, fit, stroke_px)
+
+
+def stroke_ink(ops, px, n=24):
+    """What stroke ops `px` wide cover, same space as the ops."""
+    lines = [LineString(process.op_points(op if len(op) != 5
+                                          else ("line",) + tuple(op), n))
+             for op in ops]
+    return shapely.union_all([ln.buffer(0.5 * px) for ln in lines]) \
+        if lines else Polygon()
+
+
+def within(region, tol, n=5):
+    """A predicate: does a stroke op lie wholly inside `region` grown by
+    `tol`?"""
+    grown = region.buffer(tol)
+    shapely.prepare(grown)
+
+    def inside(op):
+        xy = np.asarray(process.op_points(
+            op if len(op) != 5 else ("line",) + tuple(op), n), float)
+        return bool(shapely.contains_xy(grown, xy[:, 0], xy[:, 1]).all())
+    return inside
+
+
+def unplaced_hide(res, plan, fit, segs, stroke_px, stud_px):
+    """(hide, spare) for a render whose studs the engine drew (res.unplaced):
+    hide_region over the clear studs, and the predicate that spares the ops
+    lying wholly inside one -- a clear stud has nothing in front of it, so
+    those are its own drawing, whether the stud tier knows them or not (a
+    round part's studs truncated at its wall, 3941). Everything else stops at
+    the stud's edge instead of capping onto its top. (None, None) when no
+    stud is clear."""
+    k, kx, ky = hlr.canvas_affine(res, *fit)
+    feet = [canvas_geom(v.hull, k, kx, ky)
+            for v in plan.placed(("clear",)) if v.hull is not None]
+    if not feet:
+        return None, None
+    spare = within(geom2d.union_all(feet), 0.5 * stroke_px)
+    drawn = stroke_ink([op for op in segs if spare(op)], stud_px)
+    return (hide_region(res, plan, fit, stroke_px, roles=("clear",),
+                        drawn=drawn), spare)
+
+
+def hide_region(res, plan, fit, stroke_px, roles=PLACED, drawn=None):
+    """Where neither the part's strokes nor its silhouette contour draw:
+    what the studs of `roles` show, canvas px under `fit` of `res`. A clear
+    stud has nothing in front of it, so a part stroke inside it can only be
+    a round cap overhanging from an edge behind it, or the contour of a face
+    it stands in front of. A cut one hides what it shows less half of
+    `stroke_px`, the widest part stroke, so the occluder's own edge along
+    the cut keeps both halves of its width. With instancing off the engine
+    draws every stud, and only the clear ones hide (unplaced_hide); `drawn`
+    is what the studs' own strokes ink (stroke_ink). Where a clear
+    stud's outline is not drawn by them -- the engine gave it to a part
+    edge or the contour running along it (3941's rim studs) -- the stud
+    gives way half of `stroke_px` inside it, so that stroke keeps its width.
+    None when no stud of `roles` shows."""
+    k, kx, ky = hlr.canvas_affine(res, *fit)
+    parts = []
+    for v in plan.placed(roles):
+        g = canvas_geom(v.shown(), k, kx, ky)
+        if v.role == "cut":
+            g = g.buffer(-0.5 * stroke_px)
+        elif drawn is not None and not g.is_empty:
+            bare = shapely.difference(g.boundary, drawn)  # geom2d.difference keeps areas only
+            if not bare.is_empty:
+                g = geom2d.difference(g, bare.buffer(0.5 * stroke_px))
+        if not g.is_empty:
+            parts.append(g)
+    return geom2d.union_all(parts) if parts else None

@@ -267,10 +267,24 @@ def _sil_faces(res, f, ox, oy):
         f, ox, oy)
 
 
-def _hide(inst, fit, line_px, sil_px):
-    """Where the part's strokes and contour give way to placed studs
-    (Instancer.hide_region), or None."""
-    return inst.hide_region(fit, max(line_px, sil_px)) if inst else None
+def _hide(res, inst, studs, fit, segs, line_px, sil_px):
+    """(hide, spare): where the part's strokes and contour give way to studs,
+    and the ops that draw whole there anyway -- what placed studs show
+    (Instancer.hide_region), or with instancing off the clear studs the
+    engine drew (instancing.unplaced_hide, among `segs` fitted by `fit`).
+    (None, None) when neither applies."""
+    wide = max(line_px, sil_px)
+    if inst:
+        return inst.hide_region(fit, wide), None
+    if res.unplaced is None:
+        return None, None
+    return instancing.unplaced_hide(res, res.unplaced, fit, segs, wide,
+                                    studs.px if studs else line_px)
+
+
+def _hide_kw(*a):
+    """_hide as segments_to_svg's `hide` and `spare`."""
+    return dict(zip(("hide", "spare"), _hide(*a)))
 
 
 def render_tag(cfg: Config, name: str, posed: bool = False) -> str:
@@ -436,7 +450,8 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                     between=inst.svg_parts(
                         (f, ox, oy), studs.px if studs else cfg.line_mm / 0.4 * s,
                         style, crumb, cfg.weld_corners) if inst else None,
-                    hide=_hide(inst, (f, ox, oy), cfg.line_mm / 0.4 * s,
+                    **_hide_kw(res, inst, studs, (f, ox, oy), shifted,
+                               cfg.line_mm / 0.4 * s,
                                cfg.silhouette_mm / 0.4 * s))
                 _emit_fit(out_dir, name, res, *hlr.view_basis(lat, long),
                           f, ox, oy, round(vb_w), round(vb_h), style)
@@ -483,21 +498,23 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                                           studs.px if studs else line_px,
                                           style, crumb, cfg.weld_corners)
                                       if inst else None,
-                                      hide=_hide(inst, icon_fit, line_px, sil_px))
+                                      **_hide_kw(res, inst, studs, icon_fit,
+                                                  fit, line_px, sil_px))
                 _emit_fit(out_dir, name, res, *hlr.view_basis(lat, long),
                           f, ox, oy, cfg.width, cfg.height, style)
         if cfg.fmt in ("png", "both"):
             def ink(W, H, fit_segs, line, sil, studs):
                 """(part stroke ops, contour band) a PNG draws, both less
-                what placed studs show (the SVG's `hide`)."""
+                the SVG's `hide`; a stud's own strokes are spared."""
                 aff = hlr.fit_affine(bbox, W, H, cfg.margin, cfg.scale)
-                hide = _hide(inst, aff, line, sil)
+                hide, spare = _hide(res, inst, studs, aff, fit_segs, line,
+                                    sil)
                 # PIL cannot cut half a stroke's width, as the SVG's clip
                 # does to a part edge running along a stud's outline; cut
                 # a hair inside instead, or that edge breaks into dashes
                 ops = instancing.cut_ops(
                     fit_segs, hide.buffer(-line / 4.0) if hide is not None
-                    else None)
+                    else None, keep=spare)
                 if cfg.contour == "off":
                     return ops, None
                 faces = (shade.apply_affine_faces(res.faces, *aff)

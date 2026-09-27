@@ -20,10 +20,14 @@ from . import repair
 # stylized sub-region outlines for shade.fill_ops(loops=...).
 # studs: the instancing.Plan when the render was drawn with stud instancing,
 # else None.
+# unplaced: the instancing.Plan of a culled render drawn WITHOUT instancing --
+# every stud classified, none withheld -- so the writers can stop part strokes
+# at the clear ones; else None.
 VisResult = namedtuple("VisResult",
                        "segs bbox s faces analytic ellipses proj refits "
-                       "fold_ells loops tri tri_colors sil_polys studs",
-                       defaults=[(), None, (), (), (), (), (), (), None])
+                       "fold_ells loops tri tri_colors sil_polys studs "
+                       "unplaced",
+                       defaults=[(), None, (), (), (), (), (), (), None, None])
 
 _text_cache: dict[Path, list[str]] = {}
 
@@ -1221,7 +1225,9 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
     """`stud_instancing="all"` classifies every declared stud before the
     engine runs and withholds the drawing of each one instancing will place
     (instancing.withhold); the result carries that plan as `studs`. Only the
-    naive and occt engines honor the withholding, so only they take it."""
+    naive and occt engines honor the withholding, so only they take it.
+    With "off" and `cull`, those engines still classify the studs, withholding
+    nothing, and the result carries the plan as `unplaced`."""
     if engine not in VALID_ENGINES:
         raise ValueError(
             f"unrecognized engine {engine!r}; must be one of {VALID_ENGINES}")
@@ -1245,10 +1251,16 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
         # cannot express the roll that a turn about X or Z asks for.
         root = np.eye(3) if pose is None else np.asarray(pose, float)
         flatten(path, root, np.zeros(3), out, roots)
-        if stud_instancing == "all" and engine in ("naive", "occt"):
+        unplaced = None
+        if engine in ("naive", "occt"):
             from . import instancing
             with timing.phase("studs"):
-                plan = instancing.withhold(out, right, up, fwd)
+                if stud_instancing == "all":
+                    plan = instancing.withhold(out, right, up, fwd)
+                elif cull:
+                    unplaced = instancing.Plan(
+                        instancing.classify(out, right, up, fwd),
+                        (right, up, fwd), printed=bool(out.get("printed")))
         # the per-line stud tags are parallel to out["2"]/out["5"] only until
         # the passes below rewrite those lists; nothing after here reads them
         for key in ("2_stud", "5_stud"):
@@ -1259,6 +1271,8 @@ def visible_segments(part: str, ldraw_dir, lat=30.0, long=45.0, render_px=900,
     if plan is not None:
         res = res._replace(studs=plan, bbox=instancing.grow_bbox(
             res.bbox, plan, res.proj))
+    if unplaced is not None and unplaced.verdicts:
+        res = res._replace(unplaced=unplaced)
     return res
 
 
