@@ -135,6 +135,20 @@ def test_overlap_witness_ignores_a_degenerate_hole():
         assert shade._overlap_witness(outer, other, ha=(bad,)) == plain
 
 
+def test_overlap_witness_lands_on_a_thin_diagonal_sliver():
+    """30225bp1's back wall projects to a sliver 3.5 units tall along a
+    447-unit diagonal, under a cell of the bbox-scaled grid. The rastered
+    witness fell above it, where the wall's plane runs in front of the top
+    face, and the wall painted over the top as a gray band."""
+    wall = np.array([(449.72, -1.41), (2.83, -224.86), (2.83, -221.4),
+                     (449.72, 2.05)], float)
+    top = np.array([(0.0, -225.45), (450.89, 0.0), (0.0, 225.45),
+                    (-450.89, 0.0)], float)
+    w = shade._overlap_witness(wall, top)
+    assert w is not None
+    assert shade._inside(wall, (), *w) and shade._inside(top, (), *w)
+
+
 def test_apply_affine_remaps_holes():
     f = {"poly": np.array([(0, 0), (4, 0), (4, 4)], float),
          "holes": [np.array([(1, 1), (2, 1), (2, 2)], float)],

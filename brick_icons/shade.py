@@ -104,6 +104,9 @@ def _plane_fn(a, b, c):
 ORDER_PLANE_SKIP = True
 WITNESS_DT = True
 WITNESS_DISTANCE_REJECT = True
+#: Check the rastered witness against the exact polygons, and fall back to
+#: the exact overlap when it misses. This one does change drawings.
+WITNESS_EXACT = True
 
 
 def _overlap_witness(pa, pb, ha=(), hb=(), grid=48):
@@ -164,7 +167,41 @@ def _overlap_witness(pa, pb, ha=(), hb=(), grid=48):
             m = er
     ys, xs = np.nonzero(m)
     j = len(xs) // 2
-    return (x0 + xs[j] / sx, y0 + ys[j] / sy)
+    w = (x0 + xs[j] / sx, y0 + ys[j] / sy)
+    if not WITNESS_EXACT or (_inside(pa, ha, *w) and _inside(pb, hb, *w)):
+        return w
+    # The grid is scaled to the bbox, so a DIAGONAL sliver thinner than a
+    # cell rasterizes off itself: 30225bp1's back wall, 0.84 px of a 120 px
+    # edge, got a witness above the wall where its plane runs in front of the
+    # top face, and painted over it as a gray band. With no exact overlap the
+    # pair only abuts, and the rastered point on the shared edge stays: it is
+    # a coplanar tie that orders print after the surface beside it.
+    ov = geom2d.to_geom(pa, ha).intersection(geom2d.to_geom(pb, hb))
+    ov = geom2d._only_area(ov)
+    if ov.is_empty:
+        return w
+    if ov.geom_type == "MultiPolygon":
+        ov = max(ov.geoms, key=lambda g: g.area)
+    from shapely.ops import polylabel
+    p = polylabel(ov, tolerance=max(math.sqrt(ov.area) * 1e-3, 1e-6))
+    return (p.x, p.y)
+
+
+def _inside(ring, holes, x, y):
+    """Even-odd point test against `ring` minus `holes` (rings of under three
+    points bound nothing, as in _overlap_witness's raster)."""
+    n = 0
+    for r in (ring, *holes):
+        r = np.asarray(r, float)
+        if len(r) < 3:
+            continue
+        xa, ya = r[:, 0], r[:, 1]
+        xb, yb = np.roll(xa, -1), np.roll(ya, -1)
+        cross = (ya > y) != (yb > y)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            xi = xa + (y - ya) * (xb - xa) / (yb - ya)
+        n += int(np.count_nonzero(cross & (x < xi)))
+    return n % 2 == 1
 
 
 def _stall_release(remaining, succ, faces, tied=None):
