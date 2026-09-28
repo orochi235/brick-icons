@@ -43,6 +43,7 @@ def test_the_check_ignores_the_id_onto_echoes():
     {"svg": "<svg/>"},
     {**sp.reply(build="b", state="drawn"), "svg": None},
     {**sp.reply(build="b", state="sideways")},
+    {**sp.reply(build="b", state="none"), "svg": "<svg/>"},
 ])
 def test_a_malformed_reply_is_refused(bad):
     with pytest.raises(ValueError):
@@ -66,3 +67,9 @@ def test_a_reply_echoes_its_id_on_one_line():
     out = io.StringIO()
     sp.write(out, "onto-7", sp.pong("b"))
     assert out.getvalue() == '{"id": "onto-7", "pong": true, "build": "b"}\n'
+
+
+def test_write_refuses_a_nan_rather_than_emit_bad_json():
+    out = io.StringIO()
+    with pytest.raises(ValueError):
+        sp.write(out, "onto-7", sp.reply(secs=float("nan"), build="b"))

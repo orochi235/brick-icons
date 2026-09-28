@@ -52,6 +52,8 @@ def check_reply(obj) -> dict:
         raise ValueError(f"a reply with no error has state {obj['state']!r}")
     if obj["state"] == "drawn" and not isinstance(obj["svg"], str):
         raise ValueError("a drawn reply carries no SVG")
+    if obj["state"] == "none" and obj["svg"] is not None:
+        raise ValueError("a none reply carries an SVG")
     return obj
 
 
@@ -75,5 +77,7 @@ def read(stream: IO[str]) -> Iterator[tuple[str | None, dict | None]]:
 
 
 def write(stream: IO[str], rid: str | None, body: dict) -> None:
-    stream.write(json.dumps({"id": rid, **body}) + "\n")
+    """A NaN or Infinity in `body` is a bug upstream, so it propagates as a
+    ValueError rather than reach the wire as invalid JSON."""
+    stream.write(json.dumps({"id": rid, **body}, allow_nan=False) + "\n")
     stream.flush()
