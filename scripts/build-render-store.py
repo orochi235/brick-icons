@@ -3,7 +3,7 @@
 per source.
 
     .venv/bin/python scripts/build-render-store.py --list out/census/parts.txt \
-        --sources naive,occt --timeout 180 --log out/store/run.jsonl
+        --sources naive,occt --log out/store/run.jsonl
 
 Detach it: a foreground call dies at its caller's timeout no matter what the
 process is doing. Resumable -- a part already in the log is skipped, and one
@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from brick_icons import db  # noqa: E402
-from brick_icons.batch import Runner  # noqa: E402
+from brick_icons.batch import RENDER_TIMEOUT_S, Runner  # noqa: E402
 from brick_icons.lab import cache  # noqa: E402
 from brick_icons.lab import store  # noqa: E402
 
@@ -38,7 +38,9 @@ def main(argv=None) -> int:
     ap.add_argument("parts", nargs="*")
     ap.add_argument("--list")
     ap.add_argument("--sources", default="naive,occt")
-    ap.add_argument("--timeout", type=float, default=180)
+    ap.add_argument("--timeout", type=float, default=RENDER_TIMEOUT_S,
+                    help="per-part cap in seconds (default "
+                         f"{RENDER_TIMEOUT_S}, batch.RENDER_TIMEOUT_S)")
     ap.add_argument("--mem-gb", dest="mem_gb", type=float, default=8,
                     help="kill a render that grows past this, from outside it")
     ap.add_argument("--no-isolate", dest="isolate", action="store_false",

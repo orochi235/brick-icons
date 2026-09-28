@@ -66,9 +66,13 @@ restarted.
     .venv/bin/python scripts/census-coverage.py --facet white --out out/census-white/todo
 
 Buckets are `drawn`, `redraw` (measured, render not kept), `fails` (every
-attempt errored) and `unmeasured` (never attempted). `fails` + `unmeasured` is
-"the ones we have not got to yet"; each is written as a plain list, which is
-what `--list` and `--each` take.
+attempt errored), `outlasted` (failed, and the latest attempt timed out after
+at least `--cap` seconds) and `unmeasured` (never attempted). `fails` +
+`unmeasured` is "the ones we have not got to yet"; each is written as a plain
+list, which is what `--list` and `--each` take. `outlasted` gets its own list
+and stays out of the default round: at the same or a shorter cap it can only
+time out again. Launch that list by hand after an engine change that should
+make those parts faster; this script does not check builds.
 
 **Read a facet by `source`, never by `engine`.** Two facets of one engine are
 both "naive", so counting by engine reports a part the oracle drew as one this
@@ -91,7 +95,10 @@ Batch the list (a dozen parts a line — `import cadquery` is 6.2s against a
       --each <list> --workers 10 --retries 1 \
       --env PATH=/Users/mike/.local/bin:/opt/homebrew/bin:/usr/bin:/bin \
       --out out/<dir> --to out/<dir> \
-      <node> -- scripts/census-batch.sh <engine> 300 out/<dir> {}
+      <node> -- scripts/census-batch.sh <engine> 150 out/<dir> {}
+
+`150` is `batch.RENDER_TIMEOUT_S`, the per-part cap; census-coverage's `--cap`
+defaults to it too, so the lists it wrote match the round they feed.
 
 - **`run-slot.sh` is `onto run` with the returns wired home** -- a
   `onto fetch --stream <task>` and an `ingest-watch.py` on the tree, both

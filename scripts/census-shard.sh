@@ -5,6 +5,8 @@
 #
 #     scripts/census-shard.sh <engine> <tag> [per_part_timeout_s]
 #
+# The timeout defaults to batch.RENDER_TIMEOUT_S.
+#
 # Reads out/census/<engine>-<tag>.txt, appends to out/census/<engine>-<tag>.jsonl,
 # and keeps every render under out/census/renders/<engine>/ (KEEP= to move it).
 # Without --keep the census measures a drawing and then deletes it, so a row
@@ -13,7 +15,7 @@
 #
 #     onto run --detach --timeout 10h --kind render --icon cube --in brick-icons \
 #       --env PATH=... <node> \
-#       -- <tree>/scripts/census-shard.sh occt r0 120
+#       -- <tree>/scripts/census-shard.sh occt r0 150
 #
 # occt segfaults inside OCCT on some parts and takes the shard down with it.
 # Restarting is safe and makes progress: the shard resumes from its JSONL with
@@ -31,7 +33,7 @@ set -eu
 cd "$(dirname "$0")/.."
 engine=${1:?engine}
 tag=${2:?shard tag}
-TIMEOUT=${3:-120}
+TIMEOUT=${3:-$(.venv/bin/python -c 'from brick_icons.batch import RENDER_TIMEOUT_S as t; print(t)')}
 DIR=out/census
 KEEP=${KEEP:-out/census/renders}
 MAX_RESTARTS=${MAX_RESTARTS:-300}

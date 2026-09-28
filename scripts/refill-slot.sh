@@ -29,14 +29,14 @@ budget=6
 workers=8
 timeout=12h
 only=all
-cap=300
+cap_flag=()
 while [ $# -gt 0 ]; do
   case $1 in
     --budget)  budget=$2; shift 2 ;;
     --workers) workers=$2; shift 2 ;;
     --timeout) timeout=$2; shift 2 ;;
     --only)    only=$2; shift 2 ;;
-    --cap)     cap=$2; shift 2 ;;
+    --cap)     cap_flag=(--cap "$2"); shift 2 ;;
     *) echo "unknown option $1" >&2; exit 2 ;;
   esac
 done
@@ -52,7 +52,8 @@ mkdir -p "$dir"
 rm -f "$list"
 survey_rc=0
 survey=$(.venv/bin/python scripts/slot-coverage.py --slot "$slot" \
-    --budget "$budget" --workers "$workers" --only "$only" --out "$list") \
+    --budget "$budget" --workers "$workers" --only "$only" \
+    ${cap_flag[@]+"${cap_flag[@]}"} --out "$list") \
   || survey_rc=$?
 echo "$survey"
 
@@ -69,8 +70,10 @@ $asked"
 engine=$(printf '%s\n' "$survey" | sed -n 's/^  ENGINE=//p' | head -1)
 source=$(printf '%s\n' "$survey" | sed -n 's/^  SOURCE=//p' | head -1)
 extra=$(printf '%s\n' "$survey" | sed -n "s/^  EXTRA='\(.*\)'$/\1/p" | head -1)
-[ -n "$engine" ] && [ -n "$source" ] || {
-  echo "slot-coverage printed no ENGINE/SOURCE; nothing launched" >&2; exit 1; }
+# The per-part cap: `--cap` if given, else batch.RENDER_TIMEOUT_S.
+cap=$(printf '%s\n' "$survey" | sed -n 's/^  CAP=//p' | head -1)
+[ -n "$engine" ] && [ -n "$source" ] && [ -n "$cap" ] || {
+  echo "slot-coverage printed no ENGINE/SOURCE/CAP; nothing launched" >&2; exit 1; }
 [ -s "$list" ] || { echo "$slot has nothing left to draw" >&2; exit 1; }
 
 # One part a line: onto cuts the batches as it hands them out (--batch), each at

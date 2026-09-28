@@ -28,6 +28,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from brick_icons import cli, db  # noqa: E402
+from brick_icons.batch import RENDER_TIMEOUT_S, outlasted  # noqa: E402
 
 DEGENERATE = ROOT / "tests" / "goldens" / "degenerate-parts.toml"
 
@@ -127,7 +128,8 @@ def _newest(builds) -> str | None:
     return max(ranked, key=lambda pair: pair[1])[0] if ranked else None
 
 
-def owed(conn, slot: str, scope: list[str]) -> dict:
+def owed(conn, slot: str, scope: list[str],
+         cap: float = RENDER_TIMEOUT_S) -> dict:
     """The slot's parts split by how much is known about each.
 
     The per-part figure is the MEAN, not the median. Render cost is savagely
@@ -139,6 +141,10 @@ def owed(conn, slot: str, scope: list[str]) -> dict:
     `never` before `errored`, which is the order a run cut short by its
     deadline should spend its time in: a part that timed out costs its whole
     cap and yields nothing.
+
+    `outlasted` is the errored parts whose latest attempt, at the slot's
+    newest build, timed out after at least `cap` seconds. No pool retries
+    them; an engine change makes them `stale` and lets them back in.
     """
     drawn = {r["part_id"] for r in conn.execute(
         "SELECT part_id FROM renders WHERE source = ?", (slot,))}
@@ -150,22 +156,26 @@ def owed(conn, slot: str, scope: list[str]) -> dict:
         "SELECT part_id, build FROM measurements WHERE source = ? AND build "
         "IS NOT NULL ORDER BY run_id", (slot,))}
     newest = _newest(seen.values())
-    tried, latest, cost = {}, {}, []
+    tried, latest, latest_secs, stored, cost = {}, {}, {}, {}, []
     for r in conn.execute(
             "SELECT part_id, error, secs FROM measurements WHERE source = ? "
             "ORDER BY run_id", (slot,)):
         if r["error"] is None and r["secs"]:
             cost.append(r["secs"])
         latest[r["part_id"]] = r["error"]
+        latest_secs[r["part_id"]] = r["secs"]
         # A part that ever completed is not an "errored" one, whatever a
         # later run recorded: the run it completed in proves it can be drawn.
         tried[r["part_id"]] = tried.get(r["part_id"], False) or r["error"] is None
     # A store pass (the `decal` fill) records attempts, never measurements.
     for r in conn.execute(
-            "SELECT part_id, error FROM attempts WHERE source = ? "
+            "SELECT part_id, error, secs FROM attempts WHERE source = ? "
             "ORDER BY run_id", (slot,)):
-        latest.setdefault(r["part_id"], r["error"])
+        stored[r["part_id"]] = (r["error"], r["secs"])
         tried.setdefault(r["part_id"], False)
+    for pid, (error, secs) in stored.items():
+        if pid not in latest:
+            latest[pid], latest_secs[pid] = error, secs
 
     engine = slot.rsplit("-", 1)[-1]
     borrowed = False
@@ -182,7 +192,8 @@ def owed(conn, slot: str, scope: list[str]) -> dict:
         borrowed = "engine" if peers else "fallback"
 
     out = {"drawn": [], "never": [], "errored": [], "stale": [], "crashed": [],
-           "median": median, "borrowed": borrowed, "secs": {}, "build": newest}
+           "outlasted": [], "median": median, "borrowed": borrowed, "secs": {},
+           "build": newest, "cap": cap}
     for pid in scope:
         if pid in drawn:
             out["drawn"].append(pid)
@@ -194,10 +205,17 @@ def owed(conn, slot: str, scope: list[str]) -> dict:
                 out["crashed"].append(pid)
             if newest and seen.get(pid) != newest:
                 out["stale"].append(pid)
+            elif outlasted(latest.get(pid), latest_secs.get(pid), cap):
+                out["outlasted"].append(pid)
     for r in conn.execute(
             "SELECT part_id, MAX(secs) s FROM measurements WHERE source = ? "
             "AND error IS NULL GROUP BY part_id", (slot,)):
         out["secs"][r["part_id"]] = r["s"]
+    # A retried timeout runs to the cap again or near it, whatever an earlier
+    # clean run took.
+    for pid in out["errored"]:
+        if latest.get(pid) == "TimeoutError":
+            out["secs"][pid] = cap
     return out
 
 
@@ -209,9 +227,11 @@ def batch(owed_: dict, budget_secs: float, only: str = "all") -> list[str]:
     retry is worth launching only against an engine change -- silhouette-occt
     spent 43 core-hours re-crashing 1,020 parts for 52 recoveries.
     """
-    pool = {"all": owed_["never"] + owed_["errored"],
+    hopeless = set(owed_["outlasted"])
+    retry = [p for p in owed_["errored"] if p not in hopeless]
+    pool = {"all": owed_["never"] + retry,
             "never": owed_["never"],
-            "errored": owed_["errored"],
+            "errored": retry,
             "stale": owed_["stale"],
             "crashed": owed_["crashed"]}[only]
     picked, spent = [], 0.0
@@ -243,6 +263,11 @@ def main() -> int:
                          "`crashed`, the errored ones whose latest attempt "
                          "was ProcessDied (default: never first, then "
                          "errored)")
+    ap.add_argument("--cap", type=float, default=RENDER_TIMEOUT_S,
+                    help="per-part render timeout the round will run at; a "
+                         "part that last timed out at this build after at "
+                         "least this long is left out (default "
+                         f"{RENDER_TIMEOUT_S}, batch.RENDER_TIMEOUT_S)")
     ap.add_argument("--out", help="write the batch lines here")
     args = ap.parse_args()
 
@@ -275,7 +300,7 @@ def main() -> int:
         ap.error(f"{args.slot} cannot be filled from here: "
                  f"{UNFILLABLE[args.slot]}")
 
-    o = owed(conn, args.slot, corpus(conn, args.slot))
+    o = owed(conn, args.slot, corpus(conn, args.slot), args.cap)
     flags = flags_for(args.slot)
     picked = batch(o, args.budget * args.workers * 3600, args.only)
     spent = sum(o["secs"].get(p) or o["median"] for p in picked)
@@ -289,7 +314,9 @@ def main() -> int:
     if o["build"]:
         print(f"  stale      {len(o['stale']):6}  errored, and last seen "
               f"before {o['build']}", flush=True)
-    origin = {"engine": f"borrowed from every {flags['engine']} row",
+    print(f"  outlasted  {len(o['outlasted']):6}  errored, and last timed out "
+          f"after >= {args.cap:g}s at this build; not retried", flush=True)
+    origin ={"engine": f"borrowed from every {flags['engine']} row",
               "fallback": f"nothing measured yet; the {FALLBACK_SECS:.0f}s "
                           f"default"}.get(o["borrowed"], "this slot's own rows")
     print(f"  mean       {o['median']:6.1f}s per part  ({origin})", flush=True)
@@ -316,6 +343,7 @@ def main() -> int:
         print(f"\n  ENGINE={flags['engine']}", flush=True)
         print(f"  SOURCE={args.slot}", flush=True)
         print(f"  EXTRA='{flags['extra']}'", flush=True)
+        print(f"  CAP={args.cap:g}", flush=True)
     return 0
 
 

@@ -3,7 +3,10 @@
 # list by onto's item dispatch:
 #
 #     onto run --detach --kind render --icon cube --in brick-icons --each out/census/<list>.txt \
-#       <node> -- scripts/census-batch.sh occt 120 out/census/backfill {}
+#       <node> -- scripts/census-batch.sh occt 150 out/census/backfill {}
+#
+# The per-part timeout is batch.RENDER_TIMEOUT_S unless a round has a reason
+# to differ; slot-coverage.py prints it as CAP, and refill-slot.sh passes it.
 #
 # A batch rather than a part because `import cadquery` costs 6.2s against a
 # 21.6s median part: one process per part would spend 8.1 hours starting

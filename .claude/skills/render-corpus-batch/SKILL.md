@@ -52,8 +52,10 @@ still fails stickers.
         --workers 10 --out out/slot-occt/batches.txt
 
 `--budget` is wall-clock hours on `--workers` workers, and the part count
-follows from the slot's own recorded seconds. It prints `ENGINE`, `SOURCE` and
-`EXTRA` for the launch — copy them, do not retype them. **`EXTRA` is derived
+follows from the slot's own recorded seconds. It prints `ENGINE`, `SOURCE`,
+`EXTRA` and `CAP` for the launch — copy them, do not retype them. `CAP` is the
+per-part timeout, `batch.RENDER_TIMEOUT_S` unless `--cap` says otherwise.
+**`EXTRA` is derived
 from `db._CANONICAL` through the CLI's own parser**, so it is the slot's
 canonical drawing and not one slot's flags spelled from memory: `occt` states
 no stroke width and inherits 2 from the config, where the census pass would
@@ -61,7 +63,10 @@ default it to 0 and silently draw `silhouette-occt` instead.
 
 Never-tried parts come before previously-errored ones. A part that times out
 costs its whole cap and yields nothing, so a run cut short by its deadline
-should spend the time on parts that might succeed.
+should spend the time on parts that might succeed. A part whose latest attempt
+at the slot's current build timed out after at least `CAP` seconds is
+`outlasted` and no pool takes it: the same engine can only time out again. An
+engine change makes it `stale` and lets it back in.
 
 **`--only never` fills nothing but untried parts, and `--only errored` nothing
 but repeats.** Read the `never` and `errored` split before picking: a slot can
@@ -137,7 +142,7 @@ same reason: a node it cannot name is a revision it cannot check. A sync that
 refuses because the node holds uncollected files stops the launch; copy those
 files off before reaching for `--force`.
 
-Then, with the three values step 2 printed:
+Then, with the four values step 2 printed (`CAP` is the `150` here):
 
     scripts/run-slot.sh --detach --timeout 12h --in brick-icons --task slot-occt \
       --each out/slot-occt/batches.txt --workers 10 --retries 1 \
@@ -145,7 +150,7 @@ Then, with the three values step 2 printed:
       --env SOURCE=occt --env KEEP=out/slot-occt/renders \
       --env EXTRA='--shade-style flat3 --line-width 2 --silhouette-width 2' \
       --out out/slot-occt --to out/slot-occt \
-      <node> -- scripts/census-batch.sh occt 300 out/slot-occt {}
+      <node> -- scripts/census-batch.sh occt 150 out/slot-occt {}
 
 - **`SOURCE` is what files the drawings under the right slot, and what makes
   the tree visible at all.** Without it the tree's name decides the slot, and a

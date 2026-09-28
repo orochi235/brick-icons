@@ -17,7 +17,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 SHARDS=${1:-8}
-TIMEOUT=${2:-180}
+TIMEOUT=${2:-$(.venv/bin/python -c 'from brick_icons.batch import RENDER_TIMEOUT_S as t; print(t)')}
 SOURCES=${3:-naive}
 RETRY=${RETRY:-}          # RETRY=1 also takes what a previous pass timed out on
 DIR=out/store

@@ -6,8 +6,8 @@
 
 BEFORE is the `render` phase of each part's newest row for --source, AFTER the
 same phase in the run's JSONL, so the two columns are one quantity. A part
-whose newest row is an error (a timeout, mostly) shows its cap as `>300` and
-its ratio as a floor. FILL is how much of AFTER the fill step took.
+whose newest row is an error (a timeout, mostly) shows the seconds that row ran
+as `>N` -- the cap it hit, for a timeout -- and its ratio as a floor. FILL is how much of AFTER the fill step took.
 
 Read the ratios and not the digits: the two sides were drawn on different
 nodes under different load, and at different builds.
@@ -19,7 +19,6 @@ import json
 import sqlite3
 from pathlib import Path
 
-CAP = 300.0
 ROLES = ("clear", "cut", "hidden", "fallback")
 
 
@@ -35,7 +34,7 @@ def after_rows(rows: Path) -> dict[str, dict]:
 
 def before_row(db: sqlite3.Connection, source: str, part: str):
     return db.execute(
-        "select json_extract(phases, '$.render'), error from measurements "
+        "select json_extract(phases, '$.render'), error, secs from measurements "
         "where source = ? and part_id = ? order by run_id desc limit 1",
         (source, part)).fetchone()
 
@@ -52,7 +51,7 @@ def main() -> None:
     for part, row in after_rows(args.rows).items():
         b = before_row(db, args.source, part)
         capped = b is None or b[1] is not None or b[0] is None
-        before = CAP if capped else b[0]
+        before = 0.0 if b is None else (b[2] or 0.0) if capped else b[0]
         after = (row.get("phase") or {}).get("render")
         table.append((part, b is not None, capped, before, after, row))
     table.sort(key=lambda t: -(t[3] / t[4]) if t[4] else 0)
@@ -62,7 +61,7 @@ def main() -> None:
     for part, known, capped, before, after, row in table:
         counts = row.get("counts") or {}
         roles = [counts.get(f"studs_{r}", 0) for r in ROLES]
-        b = "-" if not known else f">{CAP:.0f}" if capped else f"{before:.1f}"
+        b = "-" if not known else f">{before:.0f}" if capped else f"{before:.1f}"
         if after is None:
             print(f"{part:<10} {b:>7} {'-':>7} {'-':>8} {'-':>7} "
                   f"{sum(roles):5d} {roles[3]:4d}  {row.get('error', 'no render phase')}")

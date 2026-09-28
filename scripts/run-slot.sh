@@ -3,7 +3,7 @@
 #
 #     scripts/run-slot.sh --detach --timeout 12h --in brick-icons \
 #       --task slot-occt-r7 --out out/slot-occt-r7 --to out/slot-occt-r7 \
-#       --env PATH=... studio -- scripts/census-batch.sh occt 300 out/slot-occt-r7 {}
+#       --env PATH=... studio -- scripts/census-batch.sh occt 150 out/slot-occt-r7 {}
 #
 # Everything after the wrapper's own flags is passed to `onto run` untouched, so
 # this forks no launch interface: a flag onto grows works here the day it lands.

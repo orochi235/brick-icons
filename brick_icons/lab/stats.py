@@ -13,6 +13,7 @@ import json
 import sqlite3
 
 from brick_icons import tags as part_tags
+from brick_icons.batch import RENDER_TIMEOUT_S
 from brick_icons.db import MOVED_PREFIX, OUT_OF_SCOPE_CATEGORIES
 from brick_icons.lab import tally
 from brick_icons.lab.cells import (COVERAGE_ORDER, coverage_of, degenerate,
@@ -26,10 +27,10 @@ from brick_icons.lab.cells import (COVERAGE_ORDER, coverage_of, degenerate,
 # scale they would take four times the width of everything before them. The
 # tail's buckets are one width, narrow, and stood off from the rest so the
 # axis reads as broken rather than continuous.
-SECS_STEPS = ((60.0, 0.5), (300.0, 10.0))
+SECS_STEPS = ((60.0, 0.5), (float(RENDER_TIMEOUT_S), 10.0))
 SECS_BREAK = 60.0
-# 300s is the census render cap, so the open bucket is "ran past the cap"
-# rather than an arbitrary edge. 309 of 165,751 measurements are out there.
+# The top is the render cap, so the open bucket is "ran past the cap" rather
+# than an arbitrary edge.
 SECS_TOP = SECS_STEPS[-1][0]
 
 

@@ -35,14 +35,14 @@ def _part(conn, pid):
 _run = 0
 
 
-def _measure(conn, pid, source, error=None, secs=10.0):
+def _measure(conn, pid, source, error=None, secs=10.0, build=None):
     global _run
     _run += 1
     conn.execute("INSERT INTO runs (id, kind, started, commit_sha, args) VALUES "
                  "(?, 'census', '2026-09-05T09:00:00+00:00', 'abc', '{}')", (_run,))
     conn.execute("INSERT INTO measurements (run_id, part_id, engine, source, "
-                 "error, secs) VALUES (?, ?, 'occt', ?, ?, ?)",
-                 (_run, pid, source, error, secs))
+                 "error, secs, build) VALUES (?, ?, 'occt', ?, ?, ?, ?)",
+                 (_run, pid, source, error, secs, build))
 
 
 def _render(conn, pid, source):
@@ -161,3 +161,40 @@ def test_a_store_pass_attempt_counts_as_tried(conn):
     o = _owed(conn)
     assert o["never"] == []
     assert o["errored"] == ["3001", "3002"]
+
+
+def test_a_part_that_timed_out_past_the_cap_is_not_retried(conn):
+    """A part that ran 300s and timed out at this build can only time out
+    again under a 150s cap; one that gave up at 120s might still finish."""
+    for pid in ("3001", "3002", "3003"):
+        _part(conn, pid)
+    _measure(conn, "3001", SLOT, error="TimeoutError", secs=301.0, build="10.a")
+    _measure(conn, "3002", SLOT, error="TimeoutError", secs=121.0, build="10.a")
+    _measure(conn, "3003", SLOT, error="ProcessDied", secs=40.0, build="10.a")
+    conn.commit()
+    o = sc.owed(conn, SLOT, sc.corpus(conn, SLOT), cap=150)
+    assert o["outlasted"] == ["3001"]
+    assert sc.batch(o, 10 * 3600.0, "all") == ["3002", "3003"]
+    assert sc.batch(o, 10 * 3600.0, "errored") == ["3002", "3003"]
+
+
+def test_an_engine_change_lets_an_outlasted_part_back_in(conn):
+    """Timed out under an older build: the engine has changed since, and may
+    be fast enough now."""
+    _part(conn, "3001")
+    _part(conn, "3002")
+    _measure(conn, "3001", SLOT, error="TimeoutError", secs=301.0, build="9.a")
+    _measure(conn, "3002", SLOT, error=None, secs=5.0, build="10.b")
+    conn.commit()
+    o = sc.owed(conn, SLOT, sc.corpus(conn, SLOT), cap=150)
+    assert o["outlasted"] == []
+    assert o["stale"] == ["3001"]
+    assert "3001" in sc.batch(o, 10 * 3600.0, "all")
+
+
+def test_a_retried_timeout_is_budgeted_at_the_cap(conn):
+    _part(conn, "3001")
+    _measure(conn, "3001", SLOT, error="TimeoutError", secs=121.0)
+    conn.commit()
+    o = sc.owed(conn, SLOT, sc.corpus(conn, SLOT), cap=150)
+    assert o["secs"]["3001"] == 150
