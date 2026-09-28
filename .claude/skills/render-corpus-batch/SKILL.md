@@ -57,9 +57,9 @@ follows from the slot's own recorded seconds. It prints `ENGINE`, `SOURCE`,
 per-part timeout, `batch.RENDER_TIMEOUT_S` unless `--cap` says otherwise.
 **`EXTRA` is derived
 from `db._CANONICAL` through the CLI's own parser**, so it is the slot's
-canonical drawing and not one slot's flags spelled from memory: `occt` states
-no stroke width and inherits 2 from the config, where the census pass would
-default it to 0 and silently draw `silhouette-occt` instead.
+canonical drawing and not one slot's flags spelled from memory: leave the
+stroke widths out and the census pass defaults them to 0, silently drawing
+`silhouette-occt` instead.
 
 Never-tried parts come before previously-errored ones. A part that times out
 costs its whole cap and yields nothing, so a run cut short by its deadline
