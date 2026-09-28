@@ -52,8 +52,34 @@ read the ratios and not the digits:
 | 76543b | 111.0 | 180.8 |
 
 The 108 studded parts took 1.21 h off and 0.81 h all; 13 at least halved and
-two got slower by more than 10% (76543b, 1749). Why 76543b is slower is not
-looked at.
+two got slower by more than 10% (76543b, 1749).
+
+**A second draw of `all`, against the census, does not repeat that slowdown.**
+24 stud-heavy parts drawn once on keiei with 4 workers at 608df6f, compared
+with the `render` phase of each part's newest `occt` row in `corpus.db`
+(builds 1494-1520, other nodes). `scripts/census-timing-diff.py <rows dir>`
+prints the table. Seconds; `>300` is a part that hit the cap:
+
+| part | | studs | before | after | of which fill |
+|---|---|---:|---:|---:|---:|
+| 3857 | baseplate 16 x 32 | 512 | 144.3 | 2.5 | 0.2 |
+| 3811 | baseplate 32 x 32 | 1024 | >300 | 5.9 | 0.3 |
+| 3867 | baseplate 16 x 16 | 256 | 77.1 | 1.6 | 0.1 |
+| 4186 | baseplate 48 x 48 | 2304 | >300 | 9.6 | 0.1 |
+| 51542 | raised baseplate | 820 | 182.6 | 6.4 | 0.6 |
+| 35011 | box lid 44 x 32 | 1408 | 205.2 | 8.0 | 0.2 |
+| 3703 | technic brick 1 x 16 | 16 | >300 | 24.5 | 20.3 |
+| 30072 | brick 12 x 24 | 288 | 233.7 | 49.1 | 31.2 |
+| 91405 | plate 16 x 16, ribbed | 256 | 288.2 | 127.8 | 116.1 |
+| 89519 | grille, 24 studs fall back | 48 | 77.0 | 37.0 | 18.6 |
+| 76543b | air pump | 8 | 146.1 | 124.0 | 99.4 |
+| 1749 | support | 2 | 6.5 | 7.4 | 5.2 |
+
+The other 12 drew 1.8 to 8.4 times faster and none was slower. The two sides
+differ in build, node and load as well as in the flag, so a ratio under about
+5 is not evidence of instancing; the baseplates and the three capped parts
+are. What is left on the slow parts is `shade.fill_ops`, not studs: 91405 has
+the same 256 clear studs as 3867 and takes 80 times as long.
 
 **With instancing off the branch still moves 44 of the 52 goldens under occt**
 (`out/vet/stud-off-goldens-occt/`): the contour sits 0.07-0.26 px further out,
@@ -101,9 +127,6 @@ and the goldens are re-frozen at the new contour (all 52 naive hashes).
   brick's back corner shows 1.5 px above the stud top.
 - PNG outputs keep small cap nubs at stud edges in both modes: PIL cannot
   clip part of a stroke's width. Unfiled.
-- The main checkout carries an uncommitted edit to `tests/goldens/defects.toml`
-  closing `51542-stud-walls-unfilled` against 60c74d6. It is another
-  session's and was left uncommitted through the merge.
 
 Explainer page with diagrams: https://claude.ai/artifact/9UU5vt9kg3cigqyJjqqNM1
 
