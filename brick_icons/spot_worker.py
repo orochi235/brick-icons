@@ -9,10 +9,15 @@ Python starting up.
 """
 from __future__ import annotations
 
+import multiprocessing
 import os
 import shutil
+import sys
 import tempfile
+import threading
+from concurrent.futures import Executor, Future, ProcessPoolExecutor, wait
 from pathlib import Path
+from typing import IO, Callable
 
 from . import batch, build, spot_protocol
 from .lab import runner as lab_runner
@@ -61,3 +66,52 @@ def render(req: dict, timeout: float = batch.RENDER_TIMEOUT_S) -> dict:
         svg=None if failed else row.get("svg"), secs=row["secs"],
         build=build(), state=None if failed else row["state"],
         error=row.get("error"), detail=row.get("detail"))
+
+
+def _failed(exc: BaseException) -> dict:
+    return spot_protocol.reply(build=build(), error=type(exc).__name__,
+                               detail=str(exc)[:300])
+
+
+def serve(inp: IO[str], out: IO[str], pool: Executor,
+          answer: Callable[[dict], dict]) -> None:
+    """Answer every request on `inp` until it closes. A ping is answered
+    here; a render goes to `pool`, so two draw at once with the default
+    pool, and each reply is written as it finishes."""
+    lock = threading.Lock()
+    running: set[Future] = set()
+
+    def send(rid, body: dict) -> None:
+        with lock:
+            spot_protocol.write(out, rid, body)
+
+    def done(rid, fut: Future) -> None:
+        exc = fut.exception()
+        send(rid, _failed(exc) if exc is not None else fut.result())
+
+    for rid, req in spot_protocol.read(inp):
+        if req is None:
+            send(rid, spot_protocol.reply(build=build(), error="BadRequest",
+                                          detail="not a JSON object"))
+        elif spot_protocol.is_ping(req):
+            send(rid, spot_protocol.pong(build()))
+        else:
+            fut = pool.submit(answer, req)
+            running.add(fut)
+            fut.add_done_callback(lambda f, rid=rid: done(rid, f))
+    wait(running)
+
+
+def main() -> int:
+    # stdout is the framing. Anything the engine prints would share it, so
+    # fd 1 goes to stderr for this process and every one it starts.
+    out = os.fdopen(os.dup(1), "w", buffering=1)
+    os.dup2(2, 1)
+    ctx = multiprocessing.get_context("spawn")
+    with ProcessPoolExecutor(POOL, mp_context=ctx, initializer=warm) as pool:
+        serve(sys.stdin, out, pool, render)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
