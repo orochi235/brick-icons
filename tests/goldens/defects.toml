@@ -3966,3 +3966,33 @@ title = "the fill around a placed stud's base follows a sampled boundary, not an
 classes = ["arc-loss"]
 filed = "2026-09-28"
 notes = "With stud instancing on (the default since 2026-09-28) two of 4589's part fills carry runs of 23 sub-quarter-pixel L segments (106 of 226), along y 40.5-41, x 97-159 of a 256x170 canvas: the base of the stud placed at (128, 38.7). With --stud-instancing off the same render has no run over 4. Nothing visible changes; the path carries line commands no arc absorbed. Inferred, not measured: the withheld stud's rim is no longer among the arc candidates the fill refit uses, so the hole it leaves in the cone top stays a polyline. test_occt::test_a_fill_boundary_carries_no_sampled_boundary[4589] is xfail on this row."
+
+[[defect]]
+id = "612p01-stud-wall-band-too-wide"
+part = "612p01"
+engines = ["occt"]
+status = "open"
+title = "a band of wall tone shows outside every stud's outline"
+classes = ["seam"]
+filed = "2026-09-28"
+notes = "Every fill paints a self-stroke 0.8 px wide in its own color to close antialias seams, so it overhangs its edge by 0.4 px. Stroke tiers (2026-09-27) put a small part's studs at the 0.2 px stud floor, whose half-width covers only 0.1 px of that: a 0.30 px band of wall gray around each stud (measured on 612p01, rasterized at 64x). Not caused by instancing: --stud-instancing off draws the same band, the same scan to the pixel. The band tracks the stud stroke and not --line-width: 0.31 px at --stud-floor 0.2, 0.16 at 0.5, 0.03 at 0.8, unchanged at --line-width 4. Fix: process.seam_px caps a fill's self-stroke at the stroke drawn around it (process.local_px; SEAM_PX when nothing is stroked). Gate 1: 612p01's band 0.31 -> 0.00 px. Gate 2 (occt flat3, studs=all): 3811, 3867, 3857, 4186, 51542, 35011 lose the band, none worse; 3001, 3941, 4740, 3460 byte-identical. Gate 3: 0 of 52 occt goldens moved (predicted 0), naive subset green. At the 0.75 px line floor the part's own seam also drops 0.8 -> 0.75, a 0.025 px change."
+
+[[defect]]
+id = "3811p04-colored-studs-instanced-wrong"
+part = "3811p04"
+engines = ["occt"]
+status = "open"
+title = "colored studs spill a ring of their print color onto the print around them"
+classes = ["seam"]
+filed = "2026-09-28"
+notes = "Same cause as 612p01-stud-wall-band-too-wide, and most visible here because the ring is a print color on a different print (tan studs on blue and green): a colored stud's fills paint the 0.8 px self-stroke past a 0.2 px stud stroke. The definitions themselves are right: one per color (16, 9, 18, 10), placed 371/96/105/452 times, which matches the .dat's stud and stug references, and every definition fills in its own print color. Colored studs draw flat, with no wall ramp, in both --stud-instancing off and all: decoration takes no shading ramp by design (shade.fill_ops). PNGs carry no fills and are unaffected. Disarming process.seam_px reproduces the stored slot render byte-for-byte. Gate 1: 3811p04 loses the rings, 122 regions. Gate 2 (colored-stud baseplates 3811p03, 3867p01, 3867p02, 3857p01, 3857p02; 3811p02 as a printed part with plain studs): rings gone, none worse; 3811p02's white stud-top dots (studp01) grow back toward their true size, which the old seam had eaten. Gate 3: shared with 612p01, 0 of 52 goldens moved. Left over and filed apart: 3811p04-print-boundary-off-by-seam."
+
+[[defect]]
+id = "3811p04-print-boundary-off-by-seam"
+part = "3811p04"
+engines = ["occt"]
+status = "open"
+title = "a boundary between two print colors sits 0.4 px off where the part puts it"
+classes = ["decal"]
+filed = "2026-09-28"
+notes = "Measured against the .dat's own tan (18) / green (10) polygons projected with the render's fit: where the columns are clear of studs the drawn boundary is 0.37-0.43 px below the true edge with --stud-instancing off and 0.39-0.42 px above it with all. That is the fill self-stroke's 0.4 px overhang, won by whichever print fill paints later; the two modes paint them in opposite orders. No stroke is drawn along a print boundary, so process.seam_px has nothing to cap it at. Not fixed."

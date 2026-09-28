@@ -6,7 +6,7 @@ import pytest
 from PIL import Image
 from shapely.geometry import Point, box
 
-from brick_icons import cli, hlr, instancing, primitives, timing
+from brick_icons import cli, hlr, instancing, primitives, process, timing
 
 LIB = Path("vendor/ldraw")
 HAVE_LIB = LIB.exists()
@@ -434,3 +434,61 @@ def test_debug_colors_reach_a_placed_stud_s_strokes(tmp_path):
     groups = re.findall(r'<g id="sd\d+s"[^>]*>(.*?)</g>', svg, re.S)
     els = [e for g in groups for e in re.findall(r"<(?:path|line)\b[^>]*/>", g)]
     assert els and all('stroke="#' in e for e in els)
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_a_stud_s_fill_seam_stays_inside_its_thin_outline(tmp_path):
+    """A fill's self-stroke overhangs its edge by half its width; past a stud
+    stroke thinner than it, that showed as a band of wall tone around every
+    stud (612p01, at the 0.2 px stud floor)."""
+    import re
+    assert cli.main(["3001", *SVG, "--stud-stroke", "0.1", "--stud-floor", "0.2",
+                     "--out", str(tmp_path)]) == 0
+    svg = (tmp_path / "3001.svg").read_text()
+    fills = re.search(r'<g id="sd0f">(.*?)</g></g>', svg, re.S).group(1)
+    strokes = re.search(r'<g id="sd0s"[^>]*>(.*?)</g>', svg, re.S).group(1)
+    stud = max(map(float, re.findall(r'stroke-width="([0-9.]+)"', strokes)))
+    seams = list(map(float, re.findall(r'stroke-width="([0-9.]+)"', fills)))
+    assert stud < process.SEAM_PX and seams
+    assert max(seams) <= stud + 0.005
+
+
+def test_a_fill_seam_is_no_wider_than_the_stroke_around_it():
+    tier = process.StudTier(box(0, 0, 10, 10), 0.2)
+    assert process.seam_px(box(1, 1, 2, 2), 2.0, tier) == pytest.approx(0.2)
+    assert process.seam_px(box(20, 1, 22, 2), 2.0, tier) == process.SEAM_PX
+    assert process.seam_px(box(20, 1, 22, 2), 0.5) == pytest.approx(0.5)
+    # a strokeless drawing has nothing to hide the seam under, and keeps it
+    assert process.seam_px(box(1, 1, 2, 2), 0.0) == process.SEAM_PX
+
+
+PRINTED_PLATE = """0 Plate 2 x 2 with Test Pattern
+0 BFC CERTIFY CCW
+1 16 0 4 0 20 0 0 0 4 0 0 0 20 box.dat
+1 10 -10 0 -10 1 0 0 0 1 0 0 0 1 stud.dat
+1 16 10 0 -10 1 0 0 0 1 0 0 0 1 stud.dat
+1 10 -10 0 10 1 0 0 0 1 0 0 0 1 stud.dat
+1 16 10 0 10 1 0 0 0 1 0 0 0 1 stud.dat
+"""
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_a_colored_stud_keeps_its_print_color_inside_its_outline(tmp_path):
+    """A printed part's colored studs get a definition of their own, painted
+    in the print color -- and, like the plain one, their seam stays under the
+    stud stroke, or a ring of that color spills onto the print beside it
+    (3811p04's tan studs on blue)."""
+    import re
+    dat = tmp_path / "tcs.dat"
+    dat.write_text(PRINTED_PLATE)
+    assert cli.main([str(dat), *SVG, "--engine", "occt", "--stud-stroke", "0.1",
+                     "--stud-floor", "0.2", "--out", str(tmp_path)]) == 0
+    svg = (tmp_path / "tcs.svg").read_text()
+    defs = dict(re.findall(r'<g id="(sd\d+)f">(.*?)</g></g>', svg, re.S))
+    colored = [g for g in defs.values() if 'class="deco"' in g]
+    assert len(defs) == 2 and len(colored) == 1
+    assert svg.count('<use href="#sd') == 8
+    strokes = re.search(r'<g id="sd0s"[^>]*>(.*?)</g>', svg, re.S).group(1)
+    stud = max(map(float, re.findall(r'stroke-width="([0-9.]+)"', strokes)))
+    seams = list(map(float, re.findall(r'stroke-width="([0-9.]+)"', colored[0])))
+    assert seams and max(seams) <= stud + 0.005

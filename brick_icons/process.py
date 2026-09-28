@@ -118,6 +118,20 @@ def local_px(geom, line_px, studs=None):
     return line_px if studs is None else studs.px_at(geom, line_px)
 
 
+#: A fill's self-stroke, closing antialias seams between abutting fills.
+SEAM_PX = 0.8
+
+
+def seam_px(geom, line_px, studs=None):
+    """The self-stroke a fill of `geom` paints: SEAM_PX, but no wider than
+    the stroke drawn along its edge (local_px), whose half-width must cover
+    the seam's overhang -- past a 0.2 px stud stroke it showed as a band of
+    wall tone around every stud (612p01). A drawing with no strokes has
+    nothing to cover the overhang, and keeps SEAM_PX."""
+    w = local_px(geom, line_px, studs)
+    return min(SEAM_PX, w) if w > 0 else SEAM_PX
+
+
 def stroke_width(op, line_px, sil_px, studs=None):
     """The width an op draws at: the stud tier inside a stud, else `sil_px`
     for a silhouette and `line_px` for everything else. Every writer and

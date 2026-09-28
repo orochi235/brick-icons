@@ -459,7 +459,8 @@ def fill_elements(fills, opacity=1.0, gid_prefix="g", solid_deco=False):
     `solid_deco` paints decoration as an opaque fill whatever `opacity` is:
     in painter's order it then hides everything behind it, and a nearer
     translucent face still blends over it."""
-    # Each fill is stroked in its own paint (~0.8px) so antialiasing seams
+    # Each fill is stroked in its own paint (its "seam", process.seam_px;
+    # SEAM_PX when the op carries none) so antialiasing seams
     # between abutting coplanar faces don't show; gradient fills (cylinder
     # walls) carry a <linearGradient> def instead of a flat color.
     # Opacity is per-face: translucent renders skip occlusion clipping,
@@ -508,7 +509,8 @@ def fill_elements(fills, opacity=1.0, gid_prefix="g", solid_deco=False):
         # overhang onto neighbors when composited at opacity < 1 —
         # concentric ghost rings on a dish's stacked bands (4740)
         solid = opacity >= 1.0 or (solid_deco and fo.get("deco"))
-        seam = f' stroke="{paint}" stroke-width="0.8"' if solid else ""
+        sw = round(fo.get("seam", process.SEAM_PX), 2)
+        seam = f' stroke="{paint}" stroke-width="{sw:g}"' if solid else ""
         # class="deco" marks paint that is not the part's own color, so a
         # viewer can recolor the part without touching its printing
         deco = ' class="deco"' if fo.get("deco") else ""
