@@ -694,3 +694,30 @@ it('returns focus to the tile that opened the zoomed viewer, on close', async ()
   fireEvent.keyDown(window, { key: 'Escape' });
   expect(document.activeElement).toBe(radio);
 });
+
+// --- the age tag -------------------------------------------------------------
+
+const withReference = {
+  ...detail,
+  slots: [
+    { source: 'occt', sha256: 'feedbeef0000', made_at: '2026-09-05T10:00:00+00:00',
+      reference: false, build: '101.abc1234' },
+    { source: 'reference-gray', sha256: 'c0ffee000000',
+      made_at: '2026-09-05T10:00:00+00:00', reference: true, build: null },
+    { source: 'white-occt', sha256: null, made_at: null, reference: false },
+  ],
+};
+
+it('tags every drawn slot with its age, and no reference slot', async () => {
+  render(box({ client: {
+    corpusPart: () => Promise.resolve(withReference), addDefect } }));
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  const tagged = (source: string) => document
+    .querySelector(`.corpus-slot[data-source="${source}"] .corpus-age`);
+  const tag = tagged('occt');
+  expect(tag?.textContent).toMatch(/^(now|\d+[mhdwy])$/);
+  expect(tag?.getAttribute('title')).toMatch(/^drawn .* · build 101\.abc1234$/);
+  expect(tagged('reference-gray')).toBeNull();
+  // Nothing drawn, so nothing to date.
+  expect(tagged('white-occt')).toBeNull();
+});

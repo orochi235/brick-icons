@@ -731,6 +731,31 @@ def test_part_route_lists_its_slots_in_the_module_s_own_order(tmp_path):
     assert [s["source"] for s in body["slots"]] == ["occt", "reference", "white-occt"]
 
 
+def test_part_slots_say_which_are_references_and_what_build_drew_them(tmp_path):
+    from brick_icons import db
+    client = _corpus_client(tmp_path)
+    conn = db.connect(tmp_path / "corpus.db")
+    for source in ("occt", "reference-gray"):
+        conn.execute("INSERT INTO renders (part_id, source, config_key, "
+                     "made_at, path, sha256) VALUES ('3001', ?, 'k', "
+                     "'2026-09-05T00:00:00+00:00', ?, 'abc')",
+                     (source, f"renders/{source}/3001.svg"))
+    run = db.start_run(conn, "census", {"dir": "out/x"}, "abc")
+    conn.execute("INSERT INTO measurements (run_id, part_id, engine, source, "
+                 "build) VALUES (?, '3001', 'occt', 'occt', '101.abc1234')",
+                 (run,))
+    conn.commit()
+    conn.close()
+
+    slots = {s["source"]: s for s in
+             client.get("/api/corpus/part/3001").json()["slots"]}
+    assert slots["occt"]["reference"] is False
+    assert slots["occt"]["build"] == "101.abc1234"
+    assert slots["occt"]["made_at"] == "2026-09-05T00:00:00+00:00"
+    assert slots["reference-gray"]["reference"] is True
+    assert slots["reference-gray"]["build"] is None
+
+
 def test_ingest_runs_route_lists_the_ingests(tmp_path):
     from brick_icons import db
     conn = db.connect(tmp_path / "corpus.db")

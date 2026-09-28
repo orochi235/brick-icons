@@ -38,6 +38,26 @@
   background: var(--corpus-thumb-ground, #ffffff);
 }
 
+/* The drawn slot's box, owning the render and the age tag pinned to it. The
+ * render stays a block so no baseline gap opens under it. */
+.corpus-big-box { position: relative; display: block; }
+.corpus-big-box .corpus-big { display: block; }
+
+/* Dark pill with a faint light ring: legible on a white ground, a state's
+ * colored ground and a dark drawing alike. */
+.corpus-age {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  padding: 0 0.45em;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 35%);
+  background: rgb(0 0 0 / 62%);
+  color: #ffffff;
+  font: 11px/1.6 var(--wzl-font-ui);
+  font-variant-numeric: tabular-nums;
+}
+
 /* A decal is a cut-out: its own shape is the drawing, and everything around it
  * is transparent. A flat ground hides that -- a white sticker on white reads as
  * a full square -- so this slot alone gets the checkerboard, and the state's

@@ -17,6 +17,7 @@ import { ZoomView } from '@lab/corpus/ZoomView';
 import { STATUSES, type DefectStatus } from '@lab/defects/useDefects';
 import { STATUS_BADGES } from '@lab/defects/statusBadges';
 import { CHIP, MaterialBar } from '@lab/shared/MaterialBar';
+import { age } from '@lab/shared/age';
 import { chartRank, materialOf } from '@lab/shared/materials';
 import '@lab/corpus/Lightbox.css';
 
@@ -40,6 +41,22 @@ function renderSrc(partId: string, slot: Slot, outlineTranslucent: boolean) {
 function whyNothing(slot: Slot): string[] {
   if (!slot.error) return ['not drawn'];
   return slot.secs != null ? [slot.error, `${slot.secs}s`] : [slot.error];
+}
+
+/** How old a drawing is, in the corner of its thumbnail. None on a reference:
+ *  it is ground truth, and its age says nothing about the engine. */
+function AgeTag({ slot }: { slot: Slot }) {
+  if (slot.reference || !slot.made_at) return null;
+  const shown = age(slot.made_at);
+  if (shown === null) return null;
+  const drawn = new Date(slot.made_at).toLocaleString(undefined, {
+    dateStyle: 'medium', timeStyle: 'short' });
+  return (
+    <span className="corpus-age"
+          title={`drawn ${drawn}${slot.build ? ` · build ${slot.build}` : ''}`}>
+      {shown}
+    </span>
+  );
 }
 
 /** The state the wall would color this slot's cell. An API older than the
@@ -359,8 +376,11 @@ export function Lightbox({ partId, source, client, onClose,
                          className="corpus-slot-radio" checked={slot.source === shown}
                          onChange={() => setShown(slot.source)} />
                   {slot.sha256 ? (
-                    <img className="corpus-big" alt={`${detail.part.id} drawn by ${slot.source}`}
-                         src={renderSrc(detail.part.id, slot, outlineTranslucent)} />
+                    <span className="corpus-big-box">
+                      <img className="corpus-big" alt={`${detail.part.id} drawn by ${slot.source}`}
+                           src={renderSrc(detail.part.id, slot, outlineTranslucent)} />
+                      <AgeTag slot={slot} />
+                    </span>
                   ) : (
                     <span className="corpus-big corpus-slot-empty">
                       {whyNothing(slot).map((line) => <span key={line}>{line}</span>)}

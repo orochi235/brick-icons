@@ -519,8 +519,17 @@ def create_app(root: Path | str = ".",
                 "SELECT source, sha256, made_at FROM renders WHERE part_id = ?",
                 (part_id,))}
             tried = cells.slot_attempts(conn, part_id)
+            # The engine revision of the slot's newest clean measurement: a
+            # census file is rewritten by every success, so that is the one
+            # on disk. Null for a slot that files no measurements.
+            builds = {r["source"]: r["build"] for r in conn.execute(
+                "SELECT source, build FROM measurements WHERE part_id = ? "
+                "AND source IS NOT NULL AND error IS NULL "
+                "AND build IS NOT NULL ORDER BY run_id", (part_id,))}
             slots = [{"source": source, "sha256": None, "made_at": None,
                       **made.get(source, {}),
+                      "build": builds.get(source),
+                      "reference": corpus_db_module.is_reference_slot(source),
                       "secs": tried.get(source, {}).get("secs")}
                      for source in cells.live_sources(conn)]
             states = cells.slot_states(conn, part_id,
