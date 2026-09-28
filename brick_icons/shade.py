@@ -2092,12 +2092,14 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
             if deco:
                 op["deco"] = True
             ops.append(op)
+        ops[-1]["seam"] = process.seam_px(geom, line_px, studs)
     # junction-lens pockets paint LAST (over every surface fill, under the
     # strokes): solid ink where converging strokes trap a sliver of tone
     for g in pockets:
         d = geom2d.path_d(g, arcs)
         if d:
-            ops.append({"d": d, "fill": "#000000", "depth": 0.0})
+            ops.append({"d": d, "fill": "#000000", "depth": 0.0,
+                        "seam": process.seam_px(g, line_px, studs)})
     return ops
 
 

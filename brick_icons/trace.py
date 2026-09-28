@@ -456,7 +456,8 @@ def fill_elements(fills, opacity=1.0, gid_prefix="g"):
     self-stroked paths inside one round-joined group. `gid_prefix` names the
     gradients; a second drawing in the same file (a stud definition, see
     instancing.Instancer) takes its own so the ids cannot collide."""
-    # Each fill is stroked in its own paint (~0.8px) so antialiasing seams
+    # Each fill is stroked in its own paint (its "seam", process.seam_px;
+    # SEAM_PX when the op carries none) so antialiasing seams
     # between abutting coplanar faces don't show; gradient fills (cylinder
     # walls) carry a <linearGradient> def instead of a flat color.
     # Opacity is per-face: translucent renders skip occlusion clipping,
@@ -504,7 +505,8 @@ def fill_elements(fills, opacity=1.0, gid_prefix="g"):
         # AA seams between abutting opaque fills double-paints its 0.4px
         # overhang onto neighbors when composited at opacity < 1 —
         # concentric ghost rings on a dish's stacked bands (4740)
-        seam = (f' stroke="{paint}" stroke-width="0.8"'
+        sw = round(fo.get("seam", process.SEAM_PX), 2)
+        seam = (f' stroke="{paint}" stroke-width="{sw:g}"'
                 if opacity >= 1.0 else "")
         # class="deco" marks paint that is not the part's own color, so a
         # viewer can recolor the part without touching its printing

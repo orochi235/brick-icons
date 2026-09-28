@@ -3966,3 +3966,13 @@ title = "the fill around a placed stud's base follows a sampled boundary, not an
 classes = ["arc-loss"]
 filed = "2026-09-28"
 notes = "With stud instancing on (the default since 2026-09-28) two of 4589's part fills carry runs of 23 sub-quarter-pixel L segments (106 of 226), along y 40.5-41, x 97-159 of a 256x170 canvas: the base of the stud placed at (128, 38.7). With --stud-instancing off the same render has no run over 4. Nothing visible changes; the path carries line commands no arc absorbed. Inferred, not measured: the withheld stud's rim is no longer among the arc candidates the fill refit uses, so the hole it leaves in the cone top stays a polyline. test_occt::test_a_fill_boundary_carries_no_sampled_boundary[4589] is xfail on this row."
+
+[[defect]]
+id = "612p01-stud-wall-band-too-wide"
+part = "612p01"
+engines = ["occt"]
+status = "open"
+title = "a band of wall tone shows outside every stud's outline"
+classes = ["seam"]
+filed = "2026-09-28"
+notes = "Every fill paints a self-stroke 0.8 px wide in its own color to close antialias seams, so it overhangs its edge by 0.4 px. Stroke tiers (2026-09-27) put a small part's studs at the 0.2 px stud floor, whose half-width covers only 0.1 px of that: a 0.30 px band of wall gray around each stud (measured on 612p01, rasterized at 64x). Not caused by instancing: --stud-instancing off draws the same band, the same scan to the pixel. The band tracks the stud stroke and not --line-width: 0.31 px at --stud-floor 0.2, 0.16 at 0.5, 0.03 at 0.8, unchanged at --line-width 4. Fix: process.seam_px caps a fill's self-stroke at the stroke drawn around it (process.local_px; SEAM_PX when nothing is stroked). Gate 1: 612p01's band 0.31 -> 0.00 px. Gate 2 (occt flat3, studs=all): 3811, 3867, 3857, 4186, 51542, 35011 lose the band, none worse; 3001, 3941, 4740, 3460 byte-identical. Gate 3: 0 of 52 occt goldens moved (predicted 0), naive subset green. At the 0.75 px line floor the part's own seam also drops 0.8 -> 0.75, a 0.025 px change."
