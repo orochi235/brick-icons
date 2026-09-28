@@ -3910,7 +3910,7 @@ status = "open"
 title = "studs on the outline keep the heavy line weight"
 classes = ["stroke-scale"]
 filed = "2026-09-27"
-notes = "On branch stroke-tiers, studs draw at --stud-stroke of the icon weight -- except where a stud is part of the silhouette (3001 back row, 3024 stud top). The outline is one closed contour path drawn at the silhouette weight (trace.segments_to_svg contour_d), so its stud stretches cannot take the stud tier without splitting the contour. Known, left for a decision once the stud tier lands."
+notes = "On branch stroke-tiers, studs draw at --stud-stroke of the icon weight -- except where a stud is part of the silhouette (3001 back row, 3024 stud top). The outline is one closed contour path drawn at the silhouette weight (trace.segments_to_svg contour_d), so its stud stretches cannot take the stud tier without splitting the contour. Known, left for a decision once the stud tier lands. Vetted 2026-09-27 on branch stud-instancing at 1bc29e5: with --stud-instancing all a stud on the outline draws its own outline at the stud weight (3001, 3024, 4740, 35390 and the back rows of every plate in out/vet/stud-inst-occt, 104 of 197 parts moved). The flag defaults to off, so this stays open until the default changes."
 
 [[defect]]
 id = "51542-stud-walls-unfilled"
@@ -3924,3 +3924,33 @@ notes = """
 Cause (measured on keiei at d2d40cd): the crumb cull in shade.fill_ops (shade.py ~2033) drops any color-16 piece that erodes to nothing under RESIDUE_CRUMB = 0.4 px, i.e. is narrower than 0.8 px, unless it overlaps its surface's merged core -- and that core exists only for faces stamped `surface`, which occt stamps only on _span_face slices (occt.py ~2888). A stud wall's visible crescent is 4*cos30 = 3.46 LDU at its widest, so it falls under 0.8 px below 0.231 px/LDU. 51542 at 0.216: 635 wall fragments, median widest 0.748 px, all culled, 8 zone fills emitted. Same part at 330 px wide (0.278): 0 culled, 642 fills. 3811 at 256 (0.271) keeps 1025; at 200 px (0.212) keeps 1. Earlier stages are clean.
 
 A rule that survives this judges a piece against its own face rather than an absolute width (keep a piece holding most of its face's clipped area), or occt stamps `surface` on every wall face so the existing core rescue applies. Moving or scaling 0.4 only moves the cliff. Stud instancing (docs/superpowers/specs/2026-09-27-stud-instancing-design.md) takes studs out of this path, but any other thin declared wall at small scale is still exposed."""
+
+[[defect]]
+id = "51542-wall-edges-dropped-beside-studs"
+part = "51542"
+engines = ["occt"]
+status = "open"
+title = "edges of a raised wall are not drawn where it stands in a stud field"
+classes = ["over-cull"]
+filed = "2026-09-27"
+notes = "The left box's wall and the walls of both pits draw with no edge strokes: main at 8c87e8c (out/vet/crumb-small) and branch stud-instancing with instancing off agree. With --stud-instancing all the edges draw (out/vet/stud-inst-occt, 51542). Cause not measured; an edge ending under a placed stud is kept from the orphan cull only when instancing is on (hlr.cull_orphan_runs anchors), which is the first place to look."
+
+[[defect]]
+id = "3404ec01-ring-around-center-stud"
+part = "3404ec01"
+engines = ["occt"]
+status = "open"
+title = "a heavy ring is drawn around the center stud"
+classes = ["stray-ink"]
+filed = "2026-09-27"
+notes = "The stud in front of the center hole draws inside a wide dark ring with a pale patch on its top; the LDView reference shows a plain stud. With --stud-instancing all the ring is gone and the stud draws like its neighbors (out/vet/stud-inst-occt, 3404ec01). Cause not measured."
+
+[[defect]]
+id = "52639-petal-top-shaded-dark"
+part = "52639"
+engines = ["occt"]
+status = "open"
+title = "one petal's top face is shaded as dark as a wall"
+classes = ["shading"]
+filed = "2026-09-27"
+notes = "The back-left petal's top fills mid-gray where the other three fill light; the LDView reference shows all four alike. With --stud-instancing all the petal fills like the others (out/vet/stud-inst-occt, 52639). Cause not measured; the part has two studs, one a fallback."

@@ -1,8 +1,12 @@
 # Stud instancing
 
-**Status: designed 2026-09-27, not built.** This describes work that does not
-exist in the code yet; check `--stud-instancing` in `cli.build_parser()` before
-quoting any of it as fact.
+**Status: built behind `--stud-instancing` (default `off`) -- see
+`brick_icons/instancing.py`.** Two differences from the text below. A cut
+stud's clip is taken from the occluding primitive's outline or the coplanar
+triangles the samples hit, before the engine runs, not from the engine's
+fitted face polygons -- classification has to precede the engine. And a stud
+hit by a triangle with a type-5 line on an edge falls back: those are facets
+of a curved surface.
 
 For whoever implements or reviews the change: how a render stops drawing each
 stud through the engine and places one pre-drawn stud per position instead.

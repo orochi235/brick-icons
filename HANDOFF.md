@@ -1,59 +1,110 @@
-## 2026-09-27: stud instancing mid-build (branch `stud-instancing`, unmerged)
+## 2026-09-27: stud instancing built behind `--stud-instancing` (off); vetted under occt, not merged
 
 **Where:** worktree `~/src/brick-icons-studs`, branch `stud-instancing`, not
-pushed (`git log --oneline main..stud-instancing`). Spec
-`docs/superpowers/specs/2026-09-27-stud-instancing-design.md`; plan
-`docs/superpowers/plans/2026-09-27-stud-instancing.md`, executed one subagent
-per task with a review after each.
+pushed; `main` is merged in (d71b62b). Spec:
+`docs/superpowers/specs/2026-09-27-stud-instancing-design.md`. The plan it was
+built from is deleted; everything in it is in the code or here.
 
-**Done:** plan Tasks 0-11, plus three the plan missed:
+`--stud-instancing all` classifies every declared stud before the engine runs
+(clear / cut / hidden / fallback, counted as `studs_*`), keeps each placed stud
+as an occluder, draws one definition per (file, basis, color, body, winding)
+through the part's own engine and places it: `<use>` in the SVG, translated
+strokes in the PNGs. Translucent and wireframe renders are always off. The
+part contour is hidden behind placed studs, so a stud on the outline draws its
+own outline at the stud weight.
 
-| task | what | where |
-|---|---|---|
-| 7b | edges ending under a placed stud survive the orphan cull | `cull_orphan_runs(anchors=)`, `instancing.shown_ops` |
-| 11b | `--contour on\|off`; contour aligned by its inner edge; part strokes clipped outside placed studs | `process.contour_band`, `Instancer.hide_region`, `instancing.cut_ops` |
-| 11c | with instancing off, studs are still classified and part strokes clip at clear studs (cap nubs) | `VisResult.unplaced`, `instancing.unplaced_hide` |
+**Vetted under occt on the 197-part batch** (`out/stroke-batch.txt`), `off`
+against `all` from one tree, sheets in `out/vet/stud-inst-occt/`:
 
-**Next:** plan Tasks 12-18 (census counts, `vet-goldens --after-args`, timing
-script, off proof, the batch vet, timing A/B, spec status + this file). Before
-the vet, merge `main` into the branch: main gained the transom port of the
-wall helper after the branch was cut. The batch list is
-`out/stroke-batch.txt` in the worktree (197 parts). Goldens are NOT
-re-frozen: 11b changed every SVG's structure (all 52 hashes), with pixel
-movement only in `outline-flat3__*` at stud rims; re-freeze after the vet
-sheets are reviewed.
+| | parts |
+|---|---:|
+| moved | 104 |
+| pixel-identical | 92 |
+| errored alike on both sides (`30361dps6`, a GEOS TopologyException) | 1 |
+
+Of the batch's 5,757 studs, 5,392 are clear, 208 hidden, 91 cut and 66
+(1.1%) fall back. `89519` has 24 of 48 fall back and `47846` 10 of 32.
+
+What moved, from reading every page:
+
+- Studs on the outline draw at the stud weight: the fix for
+  `3001-contour-studs-at-line-weight`.
+- Three drawings that are wrong on main come out right with `all`, each filed
+  open: `51542-wall-edges-dropped-beside-studs`,
+  `3404ec01-ring-around-center-stud`, `52639-petal-top-shaded-dark`. The last
+  two were checked against the LDView reference.
+- One regression, fixed in 08af415: a stud hit only by triangles was cut by
+  their outline even when those triangles were the facets of a curved surface
+  (3741ac03's pin, standing inside a hollow stud). A triangle with a type-5
+  line on an edge now sends the stud back to the engine. Seven batch parts
+  change verdict; all seven were redrawn and none got worse.
+- Tonal, for Mike to judge: a placed stud's wall gradient differs from the
+  in-part one by up to about 20 gray levels on some studs (3001, 819, 3460),
+  and 4746's cone highlight moves.
+
+Seconds per part in that run, one draw each way on keiei with 4 workers, so
+read the ratios and not the digits:
+
+| part | off (s) | all (s) |
+|---|---:|---:|
+| 51542 | 208.8 | 8.9 |
+| 35011 | 286.0 | 8.8 |
+| 3811 | 238.7 | 5.6 |
+| 76543b | 111.0 | 180.8 |
+
+The 108 studded parts took 1.21 h off and 0.81 h all; 13 at least halved and
+two got slower by more than 10% (76543b, 1749). Why 76543b is slower is not
+looked at.
+
+**With instancing off the branch still moves 44 of the 52 goldens under occt**
+(`out/vet/stud-off-goldens-occt/`): the contour sits 0.07-0.26 px further out,
+from aligning it by its inner edge. 4070 and `outline-flat3__3649` also change
+a few pixels away from the outline. The goldens are NOT re-frozen.
+
+**Mike's to decide:** whether `all` becomes the default; when the branch
+merges; whether the goldens are re-frozen at the new contour.
+
+**Rules Mike set while this ran:**
+- Never draw with instancing off to have a baseline. "The baseline is
+  infinity." A vet of `all` compares against renders that exist or the LDView
+  reference. `scripts/stud-ab-timing.py` was removed for this reason.
+- naive is retired: nothing is rendered under it. The naive vet was killed at
+  1 of 197 and naive is unvetted with `all`.
+- Estimate a render job's cost before scheduling it, and send a part list as
+  one item per part, not one call.
 
 **Decided in conversation, not in code:**
 - Every stud is placed and clipped; only studs whose occlusion can't be
-  decided cleanly (hit by a curved surface) fall back to the engine.
+  decided cleanly fall back to the engine.
 - Stroke alignment rule: where strokes of different widths share an edge,
   align them by the side facing the surface they bound; extra width goes
   outward. Today only the contour is affected.
-- `--stud-instancing` stays `off` by default until the vet; then Mike
-  decides whether `all` becomes the default. `--contour` defaults on.
 - A stud definition is two `<defs>` groups, fills and strokes, so a stud's
   shading can someday differ without redrawing its lines.
 - `occt-svelte` (occt at 1.5 px, registered on main, empty) is filled only
   after instancing lands, with instancing on.
 - Not started, each its own design: one engine result per part shared by all
-  the occt slots; printed parts reusing their base part's drawing. Also
-  unbuilt: the lab page for composing render commands.
+  the occt slots; printed parts reusing their base part's drawing; the lab
+  page for composing render commands.
 
 **Traps:**
-- Fleet: keiei holds a `brick-icons-studs` tree with APFS clones of `.venv`
-  and `vendor/ldraw`; run heavy tests there with
-  `onto do --node keiei --in brick-icons-studs --ref origin/main ...`
-  (sandbox off). Never run the census-size renders on this Mac.
+- `vet-goldens.py --after-args=...` with no `--base` draws both sides from
+  this tree, so it runs on the fleet from an unpushed branch. It draws BOTH
+  sides: do not use it where one side is the slow path.
+- keiei holds a `brick-icons-studs` tree with `.venv` and `vendor/ldraw`;
+  `onto do --node keiei --in brick-icons-studs --ref origin/main ...`.
 - In a worktree, `python scripts/x.py` imports the MAIN checkout; use
-  `.venv/bin/python -m ...` or `-c "import runpy; runpy.run_path(...)"` from
-  the worktree root.
+  `.venv/bin/python -m ...` from the worktree root.
 - Failing on main already: `test_lab_review::...redraw_that_changed_nothing`,
-  `test_occt::test_a_sticker_is_not_clipped_by_the_slope_it_is_stuck_to`.
+  `test_occt::test_a_sticker_is_not_clipped_by_the_slope_it_is_stuck_to`
+  (5.12% on both).
 - The wedge on 3001's back stud with instancing on is real geometry: the
-  brick's back corner shows 1.5 px above the stud top (3024 always showed it).
+  brick's back corner shows 1.5 px above the stud top.
 - PNG outputs keep small cap nubs at stud edges in both modes: PIL cannot
-  clip part of a stroke's width. Loose end, unfiled.
-- The wall command is `transom post <file>` (slopboard was renamed).
+  clip part of a stroke's width. Unfiled.
+- The main checkout carries an uncommitted edit to `tests/goldens/defects.toml`
+  closing `51542-stud-walls-unfilled` against 60c74d6. It is not this
+  branch's; the branch still lists that defect open.
 
 Explainer page with diagrams: https://claude.ai/artifact/9UU5vt9kg3cigqyJjqqNM1
 
