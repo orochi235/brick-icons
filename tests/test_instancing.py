@@ -79,6 +79,16 @@ def test_a_stud_half_behind_a_plane_is_cut_by_its_outline():
     assert not shown.contains(Point(a[0] + 3, b[0]))
 
 
+def test_a_stud_behind_facets_declared_smooth_falls_back_to_the_engine():
+    quad = _screen_quad(0, 30, -30, 30, -20.0)
+    out = _ground(_stud_out(), quad)
+    a, b = quad[0][0], quad[0][2]          # the edge the two facets share
+    out["5"].append(np.array([a, b, a + UP, b + UP]))
+    out["5_stud"].append(None)
+    [v] = instancing.classify(out, RIGHT, UP, FWD)
+    assert v.role == "fallback"
+
+
 def test_a_stud_half_behind_a_cylinder_falls_back_to_the_engine():
     out = _stud_out()
     out["analytic"].append(_bar())

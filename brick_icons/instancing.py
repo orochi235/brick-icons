@@ -215,10 +215,22 @@ def _in_tri2(q, x, y, slack=1e-6):
     return l0 >= -slack and l1 >= -slack and 1.0 - l0 - l1 >= -slack
 
 
-def _tri_cover(tris, hits, hull, right, up, fwd):
+def smooth_tris(tris, cond):
+    """Boolean per triangle: is it a facet of a surface the part declared
+    curved -- does a type-5 line lie on one of its edges?"""
+    T = np.asarray(tris, float).reshape(-1, 3, 3)
+    if not len(T) or not len(cond):
+        return np.zeros(len(T), bool)
+    A = T.reshape(-1, 3)
+    B = T[:, [1, 2, 0]].reshape(-1, 3)
+    return shade._seam_edge_mask(A, B, cond).reshape(-1, 3).any(axis=1)
+
+
+def _tri_cover(tris, hits, hull, right, up, fwd, smooth=None):
     """The projected outline (world A/B) of the planes the `hits` landed on:
     every triangle lying in one of those planes and reaching the stud's
-    hull."""
+    hull. None when a hit landed on a triangle `smooth` marks (smooth_tris):
+    a facet's outline is the tessellation's, not the surface's."""
     T = np.asarray(tris, float)
     n, d, keys = _plane_keys(T)
     q = _ab(T.reshape(-1, 3), right, up, fwd).reshape(-1, 3, 2)
@@ -227,6 +239,8 @@ def _tri_cover(tris, hits, hull, right, up, fwd):
     for H, (x, y) in zip(hits, h2):
         for i in np.nonzero(np.abs(n @ H - d) < PLANE_TOL)[0]:
             if keys[i] is not None and _in_tri2(q[i], x, y):
+                if smooth is not None and smooth[i]:
+                    return None
                 planes.add(keys[i])
     if not planes:
         return Polygon()
@@ -240,7 +254,7 @@ def _tri_cover(tris, hits, hull, right, up, fwd):
 
 
 def _judge(hidden, which, depth, O, fwd, a, b, index, prim_of, hull,
-           right, up):
+           right, up, smooth_of=None):
     if not hidden.any():
         return "clear", None
     if hidden.all():
@@ -253,7 +267,11 @@ def _judge(hidden, which, depth, O, fwd, a, b, index, prim_of, hull,
         elif isinstance(occ, primitives.TriangleOccluder):
             m = hidden & (which == i)
             hits = O[m] + depth[m][:, None] * fwd[None, :]
-            regions.append(_tri_cover(occ.tris, hits, hull, right, up, fwd))
+            cover = _tri_cover(occ.tris, hits, hull, right, up, fwd,
+                               smooth_of(occ) if smooth_of else None)
+            if cover is None:
+                return "fallback", None
+            regions.append(cover)
         else:
             return "fallback", None     # curved, or nothing here can outline it
     cover = shapely.union_all(regions)
@@ -291,6 +309,13 @@ def classify(out, right, up, fwd):
         occluders.append(own_tris[sid])
     index = primitives.OccluderIndex(occluders, fwd)
     eps = DEPTH_EPS * _depth_range(out, fwd)
+    smooth = {}
+
+    def smooth_of(occ):
+        if id(occ) not in smooth:
+            smooth[id(occ)] = smooth_tris(occ.tris, out.get("5") or [])
+        return smooth[id(occ)]
+
     verdicts = []
     for ref in refs:
         a0, b0, z0 = hlr.project(ref.t[None, :], right, up, fwd)
@@ -309,7 +334,7 @@ def classify(out, right, up, fwd):
         depth, which = index.nearest_hit(O, skip=own)
         hidden = z > depth + eps
         role, cover = _judge(hidden, which, depth, O, fwd, a, b, index,
-                             prim_of, hull, right, up)
+                             prim_of, hull, right, up, smooth_of)
         verdicts.append(Verdict(ref, role, hull=hull, cover=cover, **at))
     return verdicts
 
