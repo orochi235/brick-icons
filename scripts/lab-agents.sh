@@ -69,11 +69,6 @@ write() {
     exit 1
   }
   nodedir=$(dirname -- "$node")
-  # Without it launchd exits 78 with an empty log, forever.
-  [ -x "$repo/lab/node_modules/.bin/vite" ] || {
-    echo "brick-lab: $repo/lab has no node_modules; run npm ci there first" >&2
-    exit 1
-  }
   mkdir -p "$state" "$agents"
   plist "$base.lab-api" "$repo" "		<string>$repo/.venv/bin/python</string>
 		<string>-m</string>
@@ -126,6 +121,11 @@ case "${1:-stat}" in
       echo "brick-lab: $repo is a linked worktree; install from the main checkout, or the agents die with the worktree" >&2
       exit 1
     fi
+    # Without it launchd exits 78 with an empty log, forever.
+    [ -x "$repo/lab/node_modules/.bin/vite" ] || {
+      echo "brick-lab: $repo/lab has no node_modules; run npm ci there first" >&2
+      exit 1
+    }
     write
     mkdir -p "$bin"
     ln -sf "$repo/scripts/lab-agents.sh" "$bin/brick-lab"

@@ -90,6 +90,19 @@ def test_install_refuses_a_linked_worktree(home):
     assert not (tmp_path / "agents").exists()
 
 
+def test_install_refuses_a_checkout_without_node_modules(home):
+    tmp_path, env = home
+    main = tmp_path / "main"
+    (main / "scripts").mkdir(parents=True)
+    shutil.copy(SCRIPT, main / "scripts" / "lab-agents.sh")
+    subprocess.run(["git", "init", "-b", "main", str(main)],
+                   check=True, capture_output=True)
+    got = run(main / "scripts" / "lab-agents.sh", "install", env)
+    assert got.returncode == 1
+    assert "npm ci" in got.stderr
+    assert not (tmp_path / "agents").exists()
+
+
 def test_an_unknown_verb_is_an_error(home):
     _tmp_path, env = home
     got = run(SCRIPT, "frobnicate", env)
