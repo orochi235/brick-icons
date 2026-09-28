@@ -549,6 +549,18 @@ def canonical_argv(part_id: str, source: str) -> list[str]:
     return [part_id, *_CANONICAL[source]]
 
 
+#: What marks a slot as drawn by an outside renderer -- LDView, or the browser
+#: for `reference` -- in its canonical argv.
+_REFERENCE_MARKS = ("--ldview", "--reference")
+
+
+def is_reference_slot(source: str) -> bool:
+    """Whether a slot is ground truth rather than our drawing. Its redraws
+    are replaced in place and never queued for review: there is no engine
+    change for a verdict to judge."""
+    return any(m in _CANONICAL.get(source, ()) for m in _REFERENCE_MARKS)
+
+
 #: What the rebuild will index. A slot's artifact is whatever its renderer
 #: emits, and a format missing here is silently invisible: re-encoding a
 #: raster slot to WebP once dropped all 3,896 of its rows and took the slot

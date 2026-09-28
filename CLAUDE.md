@@ -177,7 +177,8 @@ reinstall reverts that.
 ## A redraw that displaced a render is judged on `/review`, not by hand
 
 `record_render` logs every displacement to `store-queue/review.jsonl` and keeps
-the displaced file under `store-queue/before/`; the lab's Review page shows
+the displaced file under `store-queue/before/` -- except in a reference slot
+(`db.is_reference_slot`), which is replaced in place unreviewed; the lab's Review page shows
 before, after and the diff and takes fixed / better / neutral / regression,
 stamping the linked defect's `checked` and closing it on fixed. Editing
 `checked` in `defects.toml` by hand does the same job without the record.
