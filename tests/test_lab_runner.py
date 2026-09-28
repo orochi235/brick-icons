@@ -81,6 +81,17 @@ def test_cancelling_kills_the_render_process():
     assert not proc.is_alive()
 
 
+def test_draw_is_the_cli_path_and_writes_the_drawing(tmp_path, ldraw_dir):
+    runner.draw(["3005", "--format", "svg", "--shading", "outline"], tmp_path)
+    assert (tmp_path / "3005.svg").is_file()
+
+
+def test_draw_raises_what_the_render_raised(tmp_path):
+    import pytest
+    with pytest.raises(ValueError, match="no part given"):
+        runner.draw(["--format", "svg"], tmp_path)
+
+
 def _child_process(target, args):
     """A child holding the write end. The caller keeps `send` alive: dropping
     it makes the read end report EOF, which is a death the child has not had."""

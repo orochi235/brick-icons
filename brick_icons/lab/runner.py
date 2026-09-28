@@ -55,16 +55,21 @@ def _death(code: int | None) -> str:
     return f"the render process exited {code}"
 
 
+def draw(argv: list[str], out_dir: Path) -> None:
+    """One part drawn by the CLI's own path: its parser, its Config,
+    `process_one`. Raises whatever the render raises."""
+    args, _ = cli.build_parser().parse_known_args(argv)
+    cfg = cli._config_from_args(args)
+    parts = cli._gather_parts(args)
+    if not parts:
+        raise ValueError("no part given")
+    cli.process_one(cfg, parts[0], out_dir)
+
+
 def _render_here(argv: list[str], out_dir: Path) -> dict:
     """The render itself, in whatever process is running it."""
-    started = time.perf_counter()
     try:
-        args, _ = cli.build_parser().parse_known_args(argv)
-        cfg = cli._config_from_args(args)
-        parts = cli._gather_parts(args)
-        if not parts:
-            raise ValueError("no part given")
-        cli.process_one(cfg, parts[0], out_dir)
+        draw(argv, out_dir)
     except Exception as e:                              # noqa: BLE001
         return {"ok": False, "error": f"{type(e).__name__}: {e}",
                 "cancelled": False}
