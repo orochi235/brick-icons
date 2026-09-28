@@ -1060,3 +1060,57 @@ def test_a_database_without_the_preview_column_gains_it(tmp_path):
     conn = db.connect(path)
     have = {r["name"] for r in conn.execute("PRAGMA table_info(parts)")}
     assert "preview" in have
+
+
+def test_a_spot_redraw_is_an_attempt_in_its_own_run(tmp_path):
+    conn = db.connect(tmp_path / "corpus.db")
+    first = db.spot_run(conn, "7.abc1234", "3001", "occt")
+    db.record_attempt(conn, first, {"part": "3001", "source": "occt",
+                                    "state": None, "secs": 150.2,
+                                    "error": "TimeoutError", "detail": "cap"})
+    second = db.spot_run(conn, "7.abc1234", "3001", "occt")
+    db.record_attempt(conn, second, {"part": "3001", "source": "occt",
+                                     "state": "stored", "secs": 4.1})
+    assert second > first
+    run = conn.execute("SELECT kind, commit_sha, args FROM runs WHERE id = ?",
+                       (second,)).fetchone()
+    assert run["kind"] == "store"
+    assert run["commit_sha"] == "7.abc1234"
+    assert json.loads(run["args"])["dir"] == db.SPOT_TREE
+    rows = conn.execute("SELECT run_id, state, secs, error FROM attempts "
+                        "ORDER BY run_id").fetchall()
+    assert [tuple(r) for r in rows] == [
+        (first, None, 150.2, "TimeoutError"), (second, "stored", 4.1, None)]
+
+
+def test_a_rebuild_keeps_the_newest_spot_attempt(tmp_path):
+    out = tmp_path / "corpus.db"
+    lib = _library(tmp_path)
+    db.rebuild(out, lib, root=tmp_path, census_dirs=[])
+    conn = db.connect(out)
+    for state, error in ((None, "TimeoutError"), ("stored", None)):
+        run_id = db.spot_run(conn, "7.abc1234", "3001", "occt")
+        db.record_attempt(conn, run_id, {"part": "3001", "source": "occt",
+                                         "state": state, "error": error,
+                                         "secs": 3.0})
+    conn.close()
+
+    db.rebuild(out, lib, root=tmp_path, census_dirs=[])
+    conn = db.connect(out)
+    row = conn.execute("SELECT state, error FROM attempts "
+                       "WHERE part_id = '3001'").fetchone()
+    assert (row["state"], row["error"]) == ("stored", None)
+
+
+def test_touching_a_render_moves_only_its_stamp(tmp_path):
+    conn = db.connect(tmp_path / "corpus.db")
+    conn.execute("INSERT INTO parts (id, title, printed, obsolete) "
+                 "VALUES ('3001', 'Brick', 0, 0)")
+    conn.execute("INSERT INTO renders (part_id, source, config_key, made_at, "
+                 "path, sha256) VALUES ('3001', 'occt', 'k', "
+                 "'2020-01-01T00:00:00+00:00', 'renders/occt/3001.svg', 'x')")
+    conn.commit()
+    db.touch_render(conn, "3001", "occt")
+    row = conn.execute("SELECT made_at, sha256 FROM renders").fetchone()
+    assert row["made_at"] > "2020-01-01T00:00:00+00:00"
+    assert row["sha256"] == "x"

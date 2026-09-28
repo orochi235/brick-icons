@@ -500,6 +500,20 @@ def record_edge_scores(conn: sqlite3.Connection, rows: list[dict]) -> int:
     return len(out)
 
 
+_ATTEMPT_UPSERT = (
+    "INSERT OR REPLACE INTO attempts (run_id, part_id, source, state, "
+    "secs, error, detail) VALUES (?, ?, ?, ?, ?, ?, ?)")
+
+#: The store tree every spot redraw's run names. No log is ever written
+#: there; the name is what `rebuild` groups the carried attempts under.
+SPOT_TREE = "out/store/spot"
+
+
+def _attempt_row(run_id: int, r: dict) -> tuple:
+    return (run_id, r["part"], r["source"], r.get("state"), r.get("secs"),
+            r.get("error"), r.get("detail"))
+
+
 def import_store_jsonl(conn: sqlite3.Connection, run_id: int,
                        path: Path | str) -> int:
     """One row per part a render-store run attempted, drawn or not.
@@ -510,18 +524,36 @@ def import_store_jsonl(conn: sqlite3.Connection, run_id: int,
     d99 was. A part logged twice in one run keeps its last row, so a retry
     settles the failure before it -- what `Runner.remaining` already assumes.
     """
-    rows = []
-    for line in Path(path).read_text().splitlines():
-        if not line.strip():
-            continue
-        r = json.loads(line)
-        rows.append((run_id, r["part"], r["source"], r.get("state"),
-                     r.get("secs"), r.get("error"), r.get("detail")))
-    conn.executemany(
-        "INSERT OR REPLACE INTO attempts (run_id, part_id, source, state, "
-        "secs, error, detail) VALUES (?, ?, ?, ?, ?, ?, ?)", rows)
+    rows = [_attempt_row(run_id, json.loads(line))
+            for line in Path(path).read_text().splitlines() if line.strip()]
+    conn.executemany(_ATTEMPT_UPSERT, rows)
     conn.commit()
     return len(rows)
+
+
+def record_attempt(conn: sqlite3.Connection, run_id: int, row: dict) -> None:
+    """One attempt, as a store log line would carry it: `part`, `source`,
+    and any of `state`, `secs`, `error`, `detail`."""
+    conn.execute(_ATTEMPT_UPSERT, _attempt_row(run_id, row))
+    conn.commit()
+
+
+def spot_run(conn: sqlite3.Connection, build: str, part: str,
+             source: str) -> int:
+    """A run for one spot redraw, stamped with the build the worker drew at.
+
+    One per redraw, so the newest redraw holds the highest run id and reads as
+    the part's latest attempt."""
+    return start_run(conn, "store", {"dir": SPOT_TREE, "via": "spot",
+                                     "part": part, "source": source}, build)
+
+
+def touch_render(conn: sqlite3.Connection, part_id: str, source: str) -> None:
+    """Restamp a slot's render as made now, for a redraw that drew the same
+    bytes: the drawing is current, and nothing else about it changed."""
+    conn.execute("UPDATE renders SET made_at = ? WHERE part_id = ? "
+                 "AND source = ?", (now(), part_id, source))
+    conn.commit()
 
 
 # The one config each source's stored render is drawn at. A second config is a
@@ -1063,7 +1095,8 @@ def _stored_attempts(path: Path) -> list[tuple[str, list[tuple]]]:
             rows = [tuple(r) for r in conn.execute(
                 "SELECT a.part_id, a.source, a.state, a.secs, a.error, a.detail "
                 "FROM attempts a JOIN runs r ON r.id = a.run_id "
-                "WHERE r.kind = 'store' AND json_extract(r.args, '$.dir') = ?",
+                "WHERE r.kind = 'store' AND json_extract(r.args, '$.dir') = ? "
+                "ORDER BY a.run_id",
                 (where,))]
             if rows:
                 out.append((where, rows))
@@ -1215,10 +1248,7 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
     # first, so a log still on disk wins.
     for where, rows in carried:
         run_id = _run_for_tree(conn, where, commit_sha, create=True)
-        conn.executemany(
-            "INSERT OR REPLACE INTO attempts (run_id, part_id, source, state, "
-            "secs, error, detail) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [(run_id, *r) for r in rows])
+        conn.executemany(_ATTEMPT_UPSERT, [(run_id, *r) for r in rows])
         progress(f"{where}: {len(rows)} attempts carried across")
     conn.commit()
     ingest_store(conn, root, commit_sha, progress)
