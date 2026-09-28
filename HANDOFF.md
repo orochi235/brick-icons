@@ -120,9 +120,17 @@ and the goldens are re-frozen at the new contour (all 52 naive hashes).
   `onto do --node keiei --in brick-icons-studs --ref origin/main ...`.
 - In a worktree, `python scripts/x.py` imports the MAIN checkout; use
   `.venv/bin/python -m ...` from the worktree root.
-- Failing on main already: `test_lab_review::...redraw_that_changed_nothing`,
+- Failing on main already, and the only two failures in the full suite at
+  24d95cd (1612 passed):
   `test_occt::test_a_sticker_is_not_clipped_by_the_slope_it_is_stuck_to`
-  (5.12% on both).
+  (5.12% painted over against a 5% limit), and
+  `test_lab_review::...redraw_that_changed_nothing`.
+- The second is a bug in the review queue, not a stale test. Since 802f54f a
+  redraw that changes no pixels is not logged as a displacement, but it still
+  moves the slot's sha. The part's unjudged entry then no longer matches the
+  slot, so `/api/review` counts it as superseded and drops it from the queue,
+  with `superseded_by` naming an entry that does not exist. Re-rendering a
+  slot removes its pending reviews. Unfixed.
 - The wedge on 3001's back stud with instancing on is real geometry: the
   brick's back corner shows 1.5 px above the stud top.
 - PNG outputs keep small cap nubs at stud edges in both modes: PIL cannot
