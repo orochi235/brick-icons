@@ -21,10 +21,11 @@ Two traps this exists to avoid:
     analytically when `out` carries an "analytic" key; without one it recurses
     into the primitive file and tessellates. The reference needs the second,
     or it is full of holes where every curved surface should be.
-  - LDView is NOT usable as the reference here. Its `-DefaultLatLong`
-    latitude does not agree with `view_basis`'s -- at "30,65" it returns a
-    silhouette of aspect 1.08 against our 0.91 -- so an overlay compares two
-    different poses and invents disagreements everywhere.
+  - LDView's silhouette once disagreed with `view_basis`'s at the same
+    `-DefaultLatLong` (aspect 1.08 against our 0.91 at "30,65"). That was its
+    45-degree perspective, not the pose: under `render.ORTHO_FOV` 3001 at
+    "30,65" measures 0.9346 against occt's 0.9352. It still substitutes
+    primitives, so it is not the authored tessellation this compares against.
 """
 from __future__ import annotations
 

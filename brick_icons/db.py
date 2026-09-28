@@ -487,8 +487,8 @@ _CANONICAL = {
     # The reference that is mathematically compatible with the library:
     # orthographic, and three.js's LDrawLoader substitutes no primitives, so
     # what it draws is the authored tessellation our own engine reads. LDView
-    # is neither -- it renders perspective, and `-AllowPrimitiveSubstitution`
-    # redraws a `4-4cyli` at whatever curve quality it likes.
+    # is not: `-AllowPrimitiveSubstitution` redraws a `4-4cyli` at whatever
+    # curve quality it likes.
     #
     # This argv is a config KEY and nothing runs it: the renderer is a browser,
     # and one page draws a whole list in one WebGL context. Bake the slot with
@@ -547,6 +547,18 @@ def canonical_argv(part_id: str, source: str) -> list[str]:
     if source not in SOURCES:
         raise ValueError(f"source must be one of {SOURCES}, not {source!r}")
     return [part_id, *_CANONICAL[source]]
+
+
+#: What marks a slot as drawn by an outside renderer -- LDView, or the browser
+#: for `reference` -- in its canonical argv.
+_REFERENCE_MARKS = ("--ldview", "--reference")
+
+
+def is_reference_slot(source: str) -> bool:
+    """Whether a slot is ground truth rather than our drawing. Its redraws
+    are replaced in place and never queued for review: there is no engine
+    change for a verdict to judge."""
+    return any(m in _CANONICAL.get(source, ()) for m in _REFERENCE_MARKS)
 
 
 #: What the rebuild will index. A slot's artifact is whatever its renderer

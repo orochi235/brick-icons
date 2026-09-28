@@ -51,6 +51,16 @@ def test_build_argv_has_fidelity_lighting_angle():
         assert flag in argv
 
 
+@pytest.mark.parametrize("look", sorted(render.LOOKS))
+def test_build_argv_is_orthographic(look):
+    """LDView's default 45-degree FOV drew the reference slots in perspective;
+    0.1, its floor, is its orthographic stand-in. Literal, so loosening the
+    constant fails here too."""
+    cfg = load_config(root=".", overrides={"ldview_look": look})
+    argv = render.build_argv(cfg, Path("/p/x.dat"), Path("/o/x.png"))
+    assert [a for a in argv if a.startswith("-FOV=")] == ["-FOV=0.1"]
+
+
 def test_ldview_looks_are_oracles_for_one_thing_each():
     """`gray` judges shading: flat3's gray under flat3's light and no edge
     lines, so a tone that differs is a shading difference. `lines` judges

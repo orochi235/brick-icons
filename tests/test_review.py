@@ -127,6 +127,37 @@ def test_an_in_place_overwrite_still_has_its_before(conn, tmp_path):
     assert (tmp_path / "renders" / "occt" / "3001.svg").read_text() == SVG2
 
 
+def test_the_reference_slots_are_the_ones_an_outside_renderer_draws():
+    assert {s for s in db.SOURCES if db.is_reference_slot(s)} == {
+        "reference", "reference-gray", "reference-lines"}
+
+
+@pytest.mark.parametrize("source, logged", [("reference-gray", False),
+                                            ("occt", True)])
+def test_a_reference_slot_redraw_is_replaced_without_review(conn, tmp_path,
+                                                            source, logged):
+    """A reference slot is ground truth: its redraw has no engine change for a
+    verdict to judge, so it replaces the row with no line and no before."""
+    def draw(tree, data):
+        f = tmp_path / tree / "renders" / "ldview" / "3001.webp"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_bytes(data)
+        return f
+    db.record_render(conn, "3001", source, draw("out/a", b"one"), root=tmp_path)
+    after = draw("out/b", b"two")
+    db.record_render(conn, "3001", source, after, root=tmp_path)
+    made = tmp_path / "made.webp"
+    made.write_bytes(b"three")
+    db.store_render(conn, "3001", source, made, root=tmp_path)
+
+    assert (tmp_path / review.DEFAULT_PATH).exists() is logged
+    assert (tmp_path / review.BEFORE_DIR).exists() is logged
+    assert (conn.execute("SELECT count(*) FROM review").fetchone()[0] > 0) is logged
+    held = conn.execute("SELECT path FROM renders WHERE part_id = '3001' AND "
+                        "source = ?", (source,)).fetchone()["path"]
+    assert held == f"renders/{source}/3001.webp"
+
+
 def test_replay_folds_the_log_into_a_fresh_table(conn, tmp_path):
     db.record_render(conn, "3001", "occt",
                      _draw(tmp_path, "out/a", "3001", SVG), root=tmp_path)

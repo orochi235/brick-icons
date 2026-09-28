@@ -170,10 +170,19 @@ def replay(conn: sqlite3.Connection, path: Path | str) -> int:
     return len(entries)
 
 
+def _unreviewed(source: str) -> bool:
+    # Imported here: `db` imports this module and reads SCHEMA at load.
+    from . import db
+    return db.is_reference_slot(source)
+
+
 def keep_before(root: Path | str, source: str, part: str, path: Path | str,
                 sha: str) -> str | None:
     """Copy the displaced file to its sha-named place; the path relative to
-    root, or None when the file is already gone."""
+    root, or None when the file is already gone or the slot is a reference
+    one, which keeps no befores."""
+    if _unreviewed(source):
+        return None
     src = Path(root) / path
     if not src.is_file():
         return None
@@ -191,7 +200,10 @@ def record_replaced(conn: sqlite3.Connection, root: Path | str,
     """One displacement. `before` is the row being replaced (`path`,
     `sha256`, `made_at`, `run_id`), `after` the new file's `path` and
     `sha256`, both relative to root. Nothing is written when the id is
-    already in the table: the watcher re-reads a tree every pass."""
+    already in the table: the watcher re-reads a tree every pass, nor for
+    a reference slot."""
+    if _unreviewed(source):
+        return None
     eid = entry_id(source, part, after["sha256"])
     ensure_schema(conn)
     if conn.execute("SELECT 1 FROM review WHERE id = ?", (eid,)).fetchone():

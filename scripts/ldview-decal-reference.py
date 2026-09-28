@@ -43,7 +43,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import _sheet  # noqa: E402
-from brick_icons import hlr, unwrap  # noqa: E402
+from brick_icons import hlr, render, unwrap  # noqa: E402
 from brick_icons.config import load_config  # noqa: E402
 
 STRIP_DEG = 60.0        # widest arc one head-on view is asked to cover
@@ -196,7 +196,7 @@ def snapshot(cfg, ldr, png, px, center, size):
         "-ShowHighlightLines=0", "-BFC=0", "-Seams=0", "-Texmaps=1",
         f"-CurveQuality={cfg.curve_quality}", "-HiResPrimitives=1",
         "-AllowPrimitiveSubstitution=1",
-        "-DefaultLatLong=0,0", "-FOV=0.1",
+        "-DefaultLatLong=0,0", render.ORTHO_FOV,
         f"-ModelCenter={center[0]:.4f},{center[1]:.4f},{center[2]:.4f}",
         f"-ModelSize={size:.4f}",
     ]

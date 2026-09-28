@@ -72,6 +72,12 @@ LOOKS = {
 }
 
 
+# LDView has no orthographic mode; its FOV floor, 0.1 degrees, is its own
+# documented stand-in. At 2048 px a 32x32 baseplate's near and far edges then
+# measure within 1 px of each other; at the default 45 they differ by 12%.
+ORTHO_FOV = "-FOV=0.1"
+
+
 def build_argv(cfg: Config, part_file: Path, out_png: Path) -> list[str]:
     lat, long = resolve_latlong(cfg.angle)
     look = getattr(cfg, "ldview_look", "color") or "color"
@@ -89,7 +95,7 @@ def build_argv(cfg: Config, part_file: Path, out_png: Path) -> list[str]:
         f"-CurveQuality={cfg.curve_quality}",
         "-HiResPrimitives=1", "-AllowPrimitiveSubstitution=1",
         *LOOKS[look],
-        f"-DefaultLatLong={lat},{long}",
+        f"-DefaultLatLong={lat},{long}", ORTHO_FOV,
     ]
     # The gray look states its own color; a part color would repaint it.
     if cfg.part_color and look == "color":

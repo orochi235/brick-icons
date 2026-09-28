@@ -51,7 +51,9 @@ this off, and `rebuild` passes it: a rebuild walks every tree in order and
 would otherwise log thousands of displacements that never happened in time.
 The watcher and `store_render` take the default, `store-queue/review.jsonl`
 under root. A slot's first render, a re-take of the same sha, and an older
-file refused by the mtime rule write nothing.
+file refused by the mtime rule write nothing. Neither does a reference slot
+(`db.is_reference_slot`: LDView's and the browser's): its row is replaced in
+place with no line and no kept before.
 
 The watcher's `--diff` flag measures the diff of each entry it creates as it
 creates it, with `lab.diff` at 900 px through resvg, so a round's entries
