@@ -7,7 +7,10 @@ import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
+
+import pytest
 
 from brick_icons import cli, db, spot_protocol, spot_worker
 
@@ -111,6 +114,37 @@ def test_a_render_that_raises_in_the_pool_is_a_reply():
         spot_worker.serve(_lines({"id": "onto-1", **_req()}), out, pool, die)
     reply = json.loads(out.getvalue())
     assert (reply["error"], reply["detail"]) == ("RuntimeError", "pool gone")
+
+
+def test_a_reply_that_cannot_be_written_still_answers_once_with_an_error():
+    def answer(req):
+        return spot_protocol.reply(svg="<svg/>", secs=float("nan"), build="b",
+                                   state="drawn")
+    out = io.StringIO()
+    with ThreadPoolExecutor(1) as pool:
+        spot_worker.serve(_lines({"id": "onto-1", **_req()}), out, pool, answer)
+    lines = out.getvalue().splitlines()
+    assert len(lines) == 1
+    got = json.loads(lines[0])
+    assert got["id"] == "onto-1"
+    assert got["error"] is not None
+
+
+class _DeadPool:
+    """A pool whose `submit` fails the way a `ProcessPoolExecutor` does once
+    a worker process has died."""
+
+    def submit(self, fn, req):
+        raise BrokenProcessPool("a worker process died")
+
+
+def test_a_broken_pool_answers_the_request_and_signals_serve_stops():
+    out = io.StringIO()
+    with pytest.raises(BrokenProcessPool):
+        spot_worker.serve(_lines({"id": "onto-1", **_req()}), out, _DeadPool(),
+                          spot_worker.render)
+    reply = json.loads(out.getvalue())
+    assert (reply["id"], reply["error"]) == ("onto-1", "BrokenProcessPool")
 
 
 def test_the_module_answers_a_ping_on_a_clean_stdout():

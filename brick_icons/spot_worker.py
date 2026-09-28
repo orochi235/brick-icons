@@ -16,6 +16,7 @@ import sys
 import tempfile
 import threading
 from concurrent.futures import Executor, Future, ProcessPoolExecutor, wait
+from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
 from typing import IO, Callable
 
@@ -82,8 +83,19 @@ def serve(inp: IO[str], out: IO[str], pool: Executor,
     running: set[Future] = set()
 
     def send(rid, body: dict) -> None:
+        # A future's done-callback runs where concurrent.futures calls it,
+        # which swallows any exception it raises -- so a reply that fails to
+        # write (e.g. a NaN `write` refuses) would otherwise leave that id
+        # unanswered until onto's own timeout, rather than naming the fault.
         with lock:
-            spot_protocol.write(out, rid, body)
+            try:
+                spot_protocol.write(out, rid, body)
+            except Exception as exc:
+                try:
+                    spot_protocol.write(out, rid, _failed(exc))
+                except Exception as exc2:
+                    print(f"spot_worker: could not answer {rid!r}: {exc2}",
+                          file=sys.stderr)
 
     def done(rid, fut: Future) -> None:
         exc = fut.exception()
@@ -96,7 +108,15 @@ def serve(inp: IO[str], out: IO[str], pool: Executor,
         elif spot_protocol.is_ping(req):
             send(rid, spot_protocol.pong(build()))
         else:
-            fut = pool.submit(answer, req)
+            try:
+                fut = pool.submit(answer, req)
+            except BrokenProcessPool as exc:
+                # The pool died between requests: this submit is the first
+                # one to see it, synchronously, so answer it here and stop --
+                # main() exits nonzero so onto restarts the service.
+                send(rid, _failed(exc))
+                wait(running)
+                raise
             running.add(fut)
             fut.add_done_callback(lambda f, rid=rid: done(rid, f))
     wait(running)
@@ -108,8 +128,11 @@ def main() -> int:
     out = os.fdopen(os.dup(1), "w", buffering=1)
     os.dup2(2, 1)
     ctx = multiprocessing.get_context("spawn")
-    with ProcessPoolExecutor(POOL, mp_context=ctx, initializer=warm) as pool:
-        serve(sys.stdin, out, pool, render)
+    try:
+        with ProcessPoolExecutor(POOL, mp_context=ctx, initializer=warm) as pool:
+            serve(sys.stdin, out, pool, render)
+    except BrokenProcessPool:
+        return 70
     return 0
 
 
