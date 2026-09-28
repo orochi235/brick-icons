@@ -3916,11 +3916,13 @@ notes = "On branch stroke-tiers, studs draw at --stud-stroke of the icon weight 
 id = "51542-stud-walls-unfilled"
 part = "51542"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "stud walls get no fill; studs draw as bare rings"
 classes = ["fill-hole"]
 filed = "2026-09-27"
 notes = """
+Fixed by 60c74d6: the crumb radius is min(0.4 px, --crumb-ldu x px/LDU), default 1 LDU, so a stud wall (1.73 LDU half-width) is never culled; parts at 0.4 px/LDU or larger are unchanged. Before/after over 24 parts below 0.4 px/LDU (out/vet/crumb-small, base 8c87e8c): 51542, 6261 and 35011 regain shaded stud walls, 6092 moves 48 px, the other 20 do not move.
+
 Cause (measured on keiei at d2d40cd): the crumb cull in shade.fill_ops (shade.py ~2033) drops any color-16 piece that erodes to nothing under RESIDUE_CRUMB = 0.4 px, i.e. is narrower than 0.8 px, unless it overlaps its surface's merged core -- and that core exists only for faces stamped `surface`, which occt stamps only on _span_face slices (occt.py ~2888). A stud wall's visible crescent is 4*cos30 = 3.46 LDU at its widest, so it falls under 0.8 px below 0.231 px/LDU. 51542 at 0.216: 635 wall fragments, median widest 0.748 px, all culled, 8 zone fills emitted. Same part at 330 px wide (0.278): 0 culled, 642 fills. 3811 at 256 (0.271) keeps 1025; at 200 px (0.212) keeps 1. Earlier stages are clean.
 
 A rule that survives this judges a piece against its own face rather than an absolute width (keep a piece holding most of its face's clipped area), or occt stamps `surface` on every wall face so the existing core rescue applies. Moving or scaling 0.4 only moves the cliff. Stud instancing (docs/superpowers/specs/2026-09-27-stud-instancing-design.md) takes studs out of this path, but any other thin declared wall at small scale is still exposed."""
