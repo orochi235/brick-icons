@@ -14,7 +14,7 @@ vi.mock('@lab/shared/PartSearch', () => ({
 const client = {
   corpusSources: () => Promise.resolve({
     sources: [{ source: 'occt', n: 0 }, { source: 'silhouette-occt', n: 0 },
-              { source: 'naive', n: 0 }],
+              { source: 'naive', n: 0 }, { source: 'reference', n: 0 }],
   }),
   cells: () => Promise.resolve({ cells: [], count: 0, version: 'v1', source: 'occt' }),
   corpusPart: () => new Promise(() => {}),
@@ -51,7 +51,9 @@ it('puts the engine toggle where pezlie drew its slot select', async () => {
   render(<BrickWall client={client} />);
   const group = await screen.findByRole('radiogroup', { name: 'Engine' });
   expect(within(group).getByRole('radio', { name: 'Engine' })).toBeTruthy();
-  expect(within(group).getByRole('radio', { name: 'Legacy' })).toBeTruthy();
+  expect(within(group).getByRole('radio', { name: 'Reference' })).toBeTruthy();
+  // naive's slots are for the lightbox only (9d789a2), so no Legacy segment.
+  expect(within(group).queryByRole('radio', { name: 'Legacy' })).toBeNull();
   expect(document.querySelector('.wall-slot')).toBeNull();
 });
 
@@ -68,6 +70,6 @@ it('clears a stale notice when the engine changes', async () => {
   await waitFor(() => expect(notice()?.textContent).toBe('nope is not drawn in this slot'));
 
   const group = await screen.findByRole('radiogroup', { name: 'Engine' });
-  fireEvent.click(within(group).getByRole('radio', { name: 'Legacy' }));
+  fireEvent.click(within(group).getByRole('radio', { name: 'Reference' }));
   await waitFor(() => expect(notice()?.textContent).toBe(''));
 });
