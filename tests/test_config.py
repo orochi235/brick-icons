@@ -115,3 +115,11 @@ def test_stud_instancing_defaults_all_and_takes_an_override():
 def test_contour_defaults_on_and_takes_an_override():
     assert load_config(root="/proj").contour == "on"
     assert load_config(root="/proj", overrides={"contour": "off"}).contour == "off"
+
+
+def test_solid_deco_is_off_unless_asked(tmp_path):
+    from brick_icons import cli
+    off = cli._config_from_args(cli._parse_args(["3001", "--root", str(tmp_path)]))
+    on = cli._config_from_args(cli._parse_args(
+        ["3001", "--root", str(tmp_path), "--solid-deco"]))
+    assert off.solid_deco is False and on.solid_deco is True

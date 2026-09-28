@@ -105,6 +105,11 @@ def build_parser():
     p.add_argument("--opacity", type=float,
                    help="face-fill opacity 0-1 for SVG output "
                         "(translucent bricks; default 1)")
+    p.add_argument("--solid-deco", dest="solid_deco", action="store_true",
+                   default=None,
+                   help="under --opacity below 1, paint the part's printing "
+                        "and stickers at full opacity, hiding what is behind "
+                        "them, while the body stays see-through")
     p.add_argument("--debug-colors", dest="debug_colors", nargs="?",
                    const="cycle", default=None, type=_debug_mode,
                    metavar="cycle|ramp|ramp=N",
@@ -166,6 +171,7 @@ def _config_from_args(args) -> Config:
         "levels": tuple(args.levels) if args.levels else None,
         "shade_style": args.shade_style, "light": args.light,
         "svg_bg": args.svg_bg, "opacity": args.opacity,
+        "solid_deco": args.solid_deco,
         "wireframe": args.wireframe, "use_ldview": args.use_ldview,
         "ldview_look": args.ldview_look,
         "decal": args.decal, "texture_px": args.texture_px,
@@ -304,6 +310,8 @@ def render_tag(cfg: Config, name: str, posed: bool = False) -> str:
                     else f"{cfg.shading}/{cfg.shade_style}")
     if cfg.opacity < 1.0:
         bits.append(f"opacity={cfg.opacity:g}")
+        if cfg.solid_deco:
+            bits.append("solid-deco")
     if cfg.stud_instancing != DEFAULTS["stud_instancing"]:
         bits.append(f"studs={cfg.stud_instancing}")
     if cfg.contour == "off":
@@ -445,6 +453,7 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                     physical=(w_mm, h_mm), s=s,
                     line_mm=cfg.line_mm, sil_mm=cfg.silhouette_mm, fills=fills,
                     bg=cfg.svg_bg, opacity=cfg.opacity,
+                    solid_deco=cfg.solid_deco,
                     clip_geom=sil_geom, contour=contour,
                     contour_arcs=geom2d.arc_candidates(ells), label=label,
                     debug_colors=cfg.debug_colors, studs=studs,
@@ -490,6 +499,7 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                                       line_px=line_px, sil_px=sil_px, studs=studs,
                                       fills=fills, bg=cfg.svg_bg,
                                       opacity=cfg.opacity,
+                                      solid_deco=cfg.solid_deco,
                                       clip_geom=sil_geom, contour=contour,
                                       contour_arcs=geom2d.arc_candidates(ells),
                                       label=label,
