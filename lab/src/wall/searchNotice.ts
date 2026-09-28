@@ -1,4 +1,4 @@
-import type { RevealResult } from '@pezlie/wall/src/WallView';
+import type { RevealResult } from 'pezlie';
 
 /** `/corpus`'s wording, so the two pages say the same thing. */
 export function searchNotice(partId: string, result: RevealResult): string | null {

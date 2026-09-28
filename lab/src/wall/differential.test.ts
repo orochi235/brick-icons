@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { paintCommands, tally } from '@pezlie/wall/src/paint';
-import { applySelection } from '@pezlie/wall/src/select';
+import { applySelection, paintCommands, tally } from 'pezlie';
 import { CLASS_SPECS, FILTER_SPECS, SORT_SPECS } from '@lab/corpus/criteria';
 import { decadeOf, yearOf } from '@lab/corpus/facts';
 import { bandedLayout } from '@lab/corpus/grouped';

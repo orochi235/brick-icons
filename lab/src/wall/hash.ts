@@ -1,5 +1,4 @@
-import type { SidebarSelection } from '@pezlie/wall/src/Sidebar';
-import type { WallViewState } from '@pezlie/wall/src/WallView';
+import type { SidebarSelection, WallViewState } from 'pezlie';
 import { DEFAULT_SHOWN, type Filter, type Sort } from '@lab/corpus/criteria';
 import type { Grouping } from '@lab/corpus/facts';
 import type { RampName, TintMode } from '@lab/corpus/tint';

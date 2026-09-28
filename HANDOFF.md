@@ -5282,8 +5282,9 @@ fast; it would cost roughly 600MB per slot.
 design for pulling the wall out into two domain-free packages, with this corpus
 as the first host -- `docs/superpowers/specs/2026-09-07-abstract-wall-design.md`.
 The earlier `wall/README.md` it superseded survives only at `a1fffd0`. The lab's
-`/wall` page draws the corpus with its `WallView`, installed as a git dependency
-pinned by sha in `lab/package.json`; `/corpus` still runs on this repo's copy.
+`/wall` page draws the corpus with its `WallView`, installed from npm as
+`pezlie` (`PEZLIE=~/src/pezlie` swaps in a checkout's source); the spec it draws
+from is `lab/src/wall/spec.ts`. `/corpus` still runs on this repo's copy.
 
 **Grouping is on the wall.** `corpus-grouping-v2` merged, giving the sidebar
 four groupings -- nothing, coverage, category, release year -- an order and a

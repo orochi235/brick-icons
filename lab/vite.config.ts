@@ -30,14 +30,13 @@ function extensionlessPages(): Plugin {
 // `brick-icons-lab` listens on with no arguments.
 const API = process.env.LAB_API ?? 'http://127.0.0.1:8792';
 
-/** pezlie's `wall`, as TypeScript source from the
- *  git dependency package.json pins by sha. `PEZLIE=~/src/pezlie`
- *  reads a checkout instead, for trying unpinned pezlie work on `/wall`. */
-const PEZLIE = process.env.PEZLIE
-  ?? fileURLToPath(new URL('./node_modules/pezlie', import.meta.url));
-const pezlieAlias = [
-  { find: /^@pezlie\/wall\/(.*)$/, replacement: `${PEZLIE}/wall/$1` },
-];
+/** `PEZLIE=~/src/pezlie npm run dev` draws `pezlie` from a checkout's `wall`
+ *  source instead of the installed build, for trying unpublished pezlie work
+ *  on `/wall`. Unset by default. */
+const PEZLIE = process.env.PEZLIE;
+const pezlieAlias = PEZLIE
+  ? [{ find: /^pezlie$/, replacement: `${PEZLIE}/wall/src/index.ts` }]
+  : [];
 
 /** `WEASEL_SRC=~/src/weasel npm run dev` draws `@weasel-js/core`,
  *  `@weasel-js/labkit` and `@weasel-js/ui` from a weasel checkout instead of
@@ -127,8 +126,8 @@ export default defineConfig({
    * does; `node_modules/.vite/deps/_metadata.json` lists what was optimized,
    * and anything in it that is not reachable from an entry belongs here. */
   optimizeDeps: {
-    // Served as source: pre-bundled, a module WallView also imports relatively
-    // would load twice.
+    // Not pre-bundled: its build imports its own CSS, and under `PEZLIE` it is
+    // source that a pre-bundled copy would load twice.
     exclude: ['pezlie'],
     include: [
       '@react-three/fiber', '@react-three/drei', 'three',
@@ -144,7 +143,7 @@ export default defineConfig({
     // `localhost` resolves to first and 127.0.0.1:5178 refuses.
     host: '::',
     port: 5178,
-    fs: { allow: [searchForWorkspaceRoot(process.cwd()), PEZLIE] },
+    fs: { allow: [searchForWorkspaceRoot(process.cwd()), ...(PEZLIE ? [PEZLIE] : [])] },
     proxy: { '/api': API, '/ldraw': API },
   },
   build: {
@@ -172,7 +171,7 @@ export default defineConfig({
     // The 3D pane needs a WebGL context jsdom does not have. Everything about
     // it that can be tested without one lives in panes/orbit.ts.
     exclude: ['**/node_modules/**', '**/ThreePane*'],
-    // Source, not a build: left external, Node would load its .ts itself.
+    // Left external, Node would load the `.css` its build imports itself.
     server: { deps: { inline: [/pezlie/] } },
   },
 });

@@ -1,8 +1,6 @@
-import { projectColumn, type Facts } from '@pezlie/wall/src/derive';
-import { bandedLayout, blockLayout, type GroupKey } from '@pezlie/wall/src/grouped';
-import type { Layout } from '@pezlie/wall/src/layout';
-import type { CorpusSpec } from '@pezlie/wall/src/schema';
-import type { WallGrouping } from '@pezlie/wall/src/WallView';
+import {
+  bandedLayout, blockLayout, type CorpusSpec, type Facts, type GroupKey, type Layout, projectColumn, type WallGrouping
+} from 'pezlie';
 import {
   categoryOf, COVERAGE_ORDER, coverageOf, decadeOf, rollUpCounts, yearOf,
 } from '@lab/corpus/facts';

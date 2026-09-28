@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compile } from '@pezlie/wall/src/cel';
-import { derive } from '@pezlie/wall/src/derive';
-import type { Laid, Layout } from '@pezlie/wall/src/layout';
+import { compile, derive, type Laid, type Layout } from 'pezlie';
 import { COVERAGE_ORDER } from '@lab/corpus/facts';
 import type { Cell } from '@lab/corpus/types';
 import { byCategory, GROUPINGS, SPEC } from '@lab/wall/host';

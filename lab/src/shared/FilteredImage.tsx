@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { applyFilter, type ImageFilter } from '@pezlie/wall/src/filter';
+import { applyFilter, type ImageFilter } from 'pezlie';
 
 function load(src: string): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {

@@ -1,7 +1,7 @@
 import { ALL_BADGES } from '@lab/corpus/paint';
 import type { SheetManifest } from '@lab/corpus/types';
 import type { Cell } from '@lab/corpus/types';
-import { naturalCompare } from '@pezlie/wall/src/natural';
+import { naturalCompare } from 'pezlie';
 
 /** mulberry32: small, seedable, and the same on every machine. */
 export function rng(seed: number): () => number {

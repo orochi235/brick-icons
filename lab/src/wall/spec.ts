@@ -1,6 +1,4 @@
-import type {
-  BadgeDef, CorpusSpec, StateDef, TintDef, VariantDef,
-} from '@pezlie/wall/src/schema';
+import type { BadgeDef, CorpusSpec, StateDef, TintDef, VariantDef } from 'pezlie';
 import { CLASS_SPECS, FILTER_SPECS, SORT_SPECS } from '@lab/corpus/criteria';
 import { categoryOf } from '@lab/corpus/facts';
 import {

@@ -1,7 +1,6 @@
-import { compile } from '@pezlie/wall/src/cel';
-import { derive, type Facts } from '@pezlie/wall/src/derive';
-import { DEFAULT_APPEARANCE, type PaintInput } from '@pezlie/wall/src/paint';
-import type { Palette } from '@pezlie/wall/src/palette';
+import {
+  compile, DEFAULT_APPEARANCE, derive, type Facts, type PaintInput, type Palette
+} from 'pezlie';
 import type { PaintInput as LegacyInput } from '@lab/corpus/paint';
 import type { Cell } from '@lab/corpus/types';
 import { BRICK_ICONS } from './spec';

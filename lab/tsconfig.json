@@ -11,8 +11,7 @@
     "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "@lab/*": ["src/*"],
-      "@pezlie/wall/*": ["node_modules/pezlie/wall/*"]
+      "@lab/*": ["src/*"]
     }
   },
   "include": ["src"]
