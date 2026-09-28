@@ -719,7 +719,7 @@ def create_app(root: Path | str = ".",
             return Response(content=svg, media_type=media_type)
         return FileResponse(path, media_type=media_type)
 
-    review_api.install(app, corpus_conn)
+    review_api.install(app, corpus_conn, shared_query)
 
     ldraw = app.state.ldraw_dir
     if Path(ldraw).is_dir():

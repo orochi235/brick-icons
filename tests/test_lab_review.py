@@ -464,3 +464,34 @@ def test_marking_a_part_fixed_closes_its_defects_and_clears_its_status(lab):
 def test_marking_an_unknown_part_fixed_is_404(lab):
     client, _root = lab
     assert client.post("/api/corpus/part/9999/fixed").status_code == 404
+
+
+def test_concurrent_askers_share_one_list(lab, concurrently, slow_counted):
+    from brick_icons.lab import review_api
+    client, _root = lab
+    calls = slow_counted(review_api.render_requests, "load")
+    got = concurrently(8, lambda: client.get("/api/review").json())
+    assert len(calls) == 1
+    assert all(g == got[0] for g in got)
+
+
+def test_a_list_asked_after_a_verdict_never_joins_one_begun_before_it(
+        lab, slow_counted):
+    import threading
+    import time
+    from brick_icons.lab import review_api
+    client, _root = lab
+    asked = {"view": "all", "judged": True}
+    eid = client.get("/api/review", params=asked).json()["entries"][0]["id"]
+    # Only the list calls it, once per entry, so the early list is still
+    # reading while the verdict lands.
+    slow_counted(review_api, "in_view")
+    early = threading.Thread(
+        target=lambda: client.get("/api/review", params=asked))
+    early.start()
+    time.sleep(0.1)
+    client.post(f"/api/review/{eid}/verdict", json={"verdict": "neutral"})
+    listed = {e["id"]: e for e in client.get(
+        "/api/review", params=asked).json()["entries"]}
+    early.join()
+    assert listed[eid]["judged"] is not None

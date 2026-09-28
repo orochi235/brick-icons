@@ -901,61 +901,32 @@ def test_render_route_404s_the_mask_of_an_unmarked_render(tmp_path):
         "/api/corpus/render/naive/3001.svg?mask=1").status_code == 404
 
 
-def _concurrently(n, call):
-    """`call()` from `n` threads released together, so every one of them
-    asks while the first is still computing."""
-    import threading
-    gate = threading.Barrier(n)
-    out = [None] * n
-
-    def one(i):
-        gate.wait()
-        out[i] = call()
-    threads = [threading.Thread(target=one, args=(i,)) for i in range(n)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
-    return out
-
-
-def _counting(monkeypatch, module, name):
-    """Replace `module.name` with a slow copy that counts its calls."""
-    real = getattr(module, name)
-    calls = []
-
-    def slow(*args, **kwargs):
-        calls.append(1)
-        time.sleep(0.5)
-        return real(*args, **kwargs)
-    monkeypatch.setattr(module, name, slow)
-    return calls
-
-
-def test_concurrent_askers_share_one_stats_computation(tmp_path, monkeypatch):
+def test_concurrent_askers_share_one_stats_computation(
+        tmp_path, concurrently, slow_counted):
     from brick_icons.lab import stats
-    calls = _counting(monkeypatch, stats, "stats")
+    calls = slow_counted(stats, "stats")
     client = _corpus_client(tmp_path)
-    got = _concurrently(8, lambda: client.get("/api/corpus/stats").json())
+    got = concurrently(8, lambda: client.get("/api/corpus/stats").json())
     assert len(calls) == 1
     assert len({g["as_of"] for g in got}) == 1
 
 
-def test_concurrent_askers_share_one_cells_computation(tmp_path, monkeypatch):
+def test_concurrent_askers_share_one_cells_computation(
+        tmp_path, concurrently, slow_counted):
     from brick_icons.lab import cells
-    calls = _counting(monkeypatch, cells, "cells")
+    calls = slow_counted(cells, "cells")
     client = _corpus_client(tmp_path)
-    got = _concurrently(8, lambda: client.get(
+    got = concurrently(8, lambda: client.get(
         "/api/corpus/cells", params={"source": "occt"}).json())
     assert len(calls) == 1
     assert all(g["count"] == 1 for g in got)
 
 
 def test_the_part_index_is_built_once_under_concurrent_searches(
-        client, monkeypatch):
+        client, concurrently, slow_counted):
     from brick_icons.lab import partindex
-    calls = _counting(monkeypatch, partindex, "build")
-    got = _concurrently(8, lambda: client.get(
+    calls = slow_counted(partindex, "build")
+    got = concurrently(8, lambda: client.get(
         "/api/parts", params={"q": "3941"}).json())
     assert len(calls) == 1
     assert all(g["results"][0]["id"] == "3941" for g in got)

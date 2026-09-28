@@ -1,3 +1,5 @@
+import threading
+import time
 from pathlib import Path
 
 import numpy as np
@@ -12,6 +14,43 @@ def ldraw_dir():
     if not path.exists():
         pytest.skip("vendor/ldraw not present")
     return path
+
+
+@pytest.fixture
+def concurrently():
+    """`run(n, call)`: `call()` from `n` threads released together, so every
+    one of them asks while the first is still computing."""
+    def run(n, call):
+        gate = threading.Barrier(n)
+        out = [None] * n
+
+        def one(i):
+            gate.wait()
+            out[i] = call()
+        threads = [threading.Thread(target=one, args=(i,)) for i in range(n)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        return out
+    return run
+
+
+@pytest.fixture
+def slow_counted(monkeypatch):
+    """`slow_counted(module, name)` replaces `module.name` with a copy that
+    takes half a second longer and records each call in the list returned."""
+    def patch(module, name):
+        real = getattr(module, name)
+        calls = []
+
+        def slow(*args, **kwargs):
+            calls.append(1)
+            time.sleep(0.5)
+            return real(*args, **kwargs)
+        monkeypatch.setattr(module, name, slow)
+        return calls
+    return patch
 
 
 @pytest.fixture

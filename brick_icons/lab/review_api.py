@@ -199,7 +199,14 @@ def over_bar(item: dict, min_components: int) -> bool:
     return d is None or d["components"] >= min_components
 
 
-def install(app: FastAPI, corpus_conn) -> None:
+def _mtime(path: Path | str) -> int | None:
+    try:
+        return Path(path).stat().st_mtime_ns
+    except OSError:
+        return None
+
+
+def install(app: FastAPI, corpus_conn, shared_query) -> None:
     def root() -> Path:
         return Path(app.state.root)
 
@@ -236,8 +243,8 @@ def install(app: FastAPI, corpus_conn) -> None:
                      judged: bool = False, limit: int = Query(200, le=2000)):
         if view not in VIEWS:
             raise HTTPException(400, f"view must be one of {VIEWS}")
-        conn = corpus_conn()
-        try:
+
+        def compute(conn):
             review.ensure_schema(conn)
             records = defects.load(app.state.defects_path)
             asked = render_requests.load(app.state.requests_path)
@@ -258,11 +265,15 @@ def install(app: FastAPI, corpus_conn) -> None:
                 total += 1
                 if len(out) < limit:
                     out.append(entry(conn, row, records, asked, root()))
-        finally:
-            conn.close()
-        return {"entries": out, "total": total, "hidden": hidden,
-                "superseded": superseded, "view": view,
-                "verdicts": list(review.VERDICTS)}
+            return {"entries": out, "total": total, "hidden": hidden,
+                    "superseded": superseded, "view": view,
+                    "verdicts": list(review.VERDICTS)}
+        # Every write to the review table is a line in the log, so a caller
+        # who has just judged an entry never joins a list begun before it.
+        written = tuple(_mtime(p) for p in (log(), app.state.defects_path,
+                                            app.state.requests_path))
+        return shared_query(("review", view, min_components, judged, limit,
+                             written), compute)
 
     @app.get("/api/review/{eid:path}/before")
     def get_before(eid: str):
