@@ -16,6 +16,11 @@ those 30 of 52 naive hashes moved; the 8 wireframe cases and the 14 studless
 cases are byte-identical. `6143`'s flat3 case also changes a band of wall
 shading away from its studs (8,841 px, the largest diff); unjudged.
 
+**One occt test regressed and is xfail:**
+`test_a_fill_boundary_carries_no_sampled_boundary[4589]`, filed as defect
+`4589-sampled-fill-boundary-at-placed-stud`. The fill around the placed stud's
+base keeps a polyline where it had an arc; nothing visible changes.
+
 **Consequences:** every render slot now predates the default, so each redraw
 lands on `/review`. `occt-svelte`'s first fill, held for instancing, is
 unblocked.

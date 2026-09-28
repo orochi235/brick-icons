@@ -3956,3 +3956,13 @@ title = "one petal's top face is shaded as dark as a wall"
 classes = ["shading"]
 filed = "2026-09-27"
 notes = "The back-left petal's top fills mid-gray where the other three fill light; the LDView reference shows all four alike. With --stud-instancing all the petal fills like the others (out/vet/stud-inst-occt, 52639). Cause not measured; the part has two studs, one a fallback."
+
+[[defect]]
+id = "4589-sampled-fill-boundary-at-placed-stud"
+part = "4589"
+engines = ["occt"]
+status = "open"
+title = "the fill around a placed stud's base follows a sampled boundary, not an arc"
+classes = ["arc-loss"]
+filed = "2026-09-28"
+notes = "With stud instancing on (the default since 2026-09-28) two of 4589's part fills carry runs of 23 sub-quarter-pixel L segments (106 of 226), along y 40.5-41, x 97-159 of a 256x170 canvas: the base of the stud placed at (128, 38.7). With --stud-instancing off the same render has no run over 4. Nothing visible changes; the path carries line commands no arc absorbed. Inferred, not measured: the withheld stud's rim is no longer among the arc candidates the fill refit uses, so the hole it leaves in the cone top stays a polyline. test_occt::test_a_fill_boundary_carries_no_sampled_boundary[4589] is xfail on this row."

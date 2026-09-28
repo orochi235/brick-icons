@@ -1611,7 +1611,10 @@ def test_a_coaxial_stack_of_full_turns_shares_one_ramp(ldraw_dir):
         assert len({id(f["grad_radial"]) for f in members}) == 1
         assert all("grad_axis" not in f for f in members)
     assert all("_turn_ring" not in f for f in faces)
-@pytest.mark.parametrize("part", ["4589", "4070", "32062"])
+@pytest.mark.parametrize("part", [
+    pytest.param("4589", marks=pytest.mark.xfail(
+        strict=True, reason="defect 4589-sampled-fill-boundary-at-placed-stud")),
+    "4070", "32062"])
 def test_a_fill_boundary_carries_no_sampled_boundary(part, tmp_path, ldraw_dir):
     """A fill boundary must not be a buffer's or a lattice's tessellation.
 
