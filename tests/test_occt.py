@@ -860,6 +860,37 @@ def test_50950_wall_draws_as_one_arc(ldraw_dir):
     assert sum(1 for op in res.segs if op[0] == "arc") == 2
 
 
+def _op_space(p3, right, up):
+    ax, ay = occt._screen_axes(right, up)
+    return np.array([p3 @ ax, -(p3 @ ay)])
+
+
+def _arc_points(op, n=33):
+    cx, cy, ux, uy, vx, vy, d0, d1 = op[1:9]
+    th = np.radians(np.linspace(d0, d1, n))
+    return np.stack([cx + ux * np.cos(th) + vx * np.sin(th),
+                     cy + uy * np.cos(th) + vy * np.sin(th)], 1)
+
+
+def test_30137_front_rims_of_the_logs_are_drawn(ldraw_dir):
+    """HLR hands a projected ellipse back as a degree-1 BSpline whose knots lie
+    on the curve. Sampled uniformly, its points land mid-chord, and over a
+    90-degree log rim that sagitta (1.6e-3) beat MATCH_TOL: every front rim
+    where 30137's top meets a log went undrawn while the back ones, shorter
+    behind their studs, matched."""
+    right, up = hlr.view_basis(30.0, 45.0)[:2]
+    res = _occt_render("30137", ldraw_dir)
+    arcs = [_arc_points(o, 2000) for o in res.segs if o[0] == "arc"]
+    t = np.radians(np.linspace(5, 85, 9))
+    for c in (-30.0, -10.0, 10.0, 30.0):
+        rim = [_op_space(np.array([c + 10.001 * (np.cos(a) - np.sin(a)), 0.0,
+                                   -7.071 * (np.cos(a) + np.sin(a))]), right, up)
+               for a in t]
+        covered = [any(np.min(np.hypot(*(pts - q).T)) < 0.05 for pts in arcs)
+                   for q in rim]
+        assert all(covered), f"front rim of the log at x={c}: {covered}"
+
+
 def test_silhouette_polys_cover_the_drawn_ink(ldraw_dir):
     """The stroke layer's closed contour comes from these, and it is the only
     thing mitering an outline corner sharp -- without it the per-edge round

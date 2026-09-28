@@ -1316,6 +1316,8 @@ def projector_axes(right, up):
 
 
 MATCH_TOL = 1e-3       # 2D LDU; a fragment lies exactly on its own curve
+# A degree-1 BSpline fragment is tested at its knots, not 5 uniform samples
+FRAGMENT_KNOTS = True
 # LDU the line mask's loose copies move toward the eye, so a face the line
 # lies on cannot win HLR's tie. 0.02 and 0.1 draw 4739b/49612 identically.
 LINE_MASK_NUDGE = 0.05
@@ -1544,6 +1546,13 @@ def _fragment_points(edge):
     c = BRepAdaptor_Curve(edge)
     t0, t1 = c.FirstParameter(), c.LastParameter()
     ts = np.linspace(t0, t1, 5)
+    if (FRAGMENT_KNOTS and c.GetType() == GeomAbs_CurveType.GeomAbs_BSplineCurve
+            and c.Degree() == 1):
+        # HLR's projected ellipse is a polyline whose knots lie ON the curve;
+        # uniform samples land mid-chord, off it by the sagitta (30137's rims)
+        bs = c.BSpline()
+        ks = [bs.Knot(i) for i in range(1, bs.NbKnots() + 1)]
+        ts = np.array([t0, *(k for k in ks if t0 < k < t1), t1])
     out = []
     for t in ts:
         p = c.Value(float(t))
