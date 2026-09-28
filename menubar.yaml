@@ -1,0 +1,114 @@
+# yaml-language-server: $schema=./menubar.schema.json
+#
+# The lab's menu bar widget. `perch install` from this directory builds it and
+# hands it to launchd; `perch run` puts it in the foreground to look at.
+#
+# It says whether the lab is up, opens its pages, and starts and stops it. An
+# action is a subprocess perch waits on, so it cannot hold a server open:
+# `brick-lab` hands both processes to launchd and returns. It is on PATH
+# because `scripts/lab-agents.sh install` links it into ~/.local/bin.
+
+app:
+  name: brick-icons
+  id: tech.michaelbaker.brick-icons.menubar
+  icon: batteryblock.stack
+  interval: 5s
+  sign: perch local signing
+
+watch:
+  # launchd's side: whether each agent is installed and loaded. Answering HTTP
+  # is a different question, and the gap between the two is `wedged`.
+  api:
+    launchagent: tech.michaelbaker.brick-icons.lab-api
+  front:
+    launchagent: tech.michaelbaker.brick-icons.lab-front
+  # 127.0.0.1 and not localhost: the API binds IPv4 only, and localhost
+  # resolves to ::1 first here.
+  health:
+    http: http://127.0.0.1:8792/api/health
+    json: true
+    shape:
+      ok: bool
+      build: string
+  page:
+    http: http://localhost:5178/
+
+# Ordered, so each state excludes the ones above it.
+state:
+  - uninstalled: "!api.installed"
+  - stopped: "!api.loaded"
+  - wedged: "!health.ok"
+  - up:
+
+status:
+  - when: "uninstalled || stopped || wedged"
+    icon: exclamationmark.triangle
+  - when: "!page.ok"
+    dim: true
+
+menu:
+  - text: "lab up at {{health.data.build}}"
+    icon: checkmark.circle
+    when: up
+  - text: "API loaded, not answering"
+    icon: exclamationmark.triangle
+    when: wedged
+  - text: "lab not loaded"
+    icon: pause.circle
+    when: stopped
+  - text: "not installed: run scripts/lab-agents.sh install"
+    icon: shippingbox
+    when: uninstalled
+  - text: "front end not answering"
+    icon: display.trianglebadge.exclamationmark
+    when: "!page.ok && !uninstalled && !stopped"
+  - separator
+  - text: Open the lab
+    icon: macwindow
+    when: "page.ok"
+    open: http://localhost:5178/
+  - text: Review
+    icon: checklist
+    when: "page.ok"
+    open: http://localhost:5178/review
+  - text: Wall
+    icon: square.grid.3x3
+    when: "page.ok"
+    open: http://localhost:5178/wall
+  - text: Corpus
+    icon: tray.full
+    when: "page.ok"
+    open: http://localhost:5178/corpus
+  - text: Stats
+    icon: chart.bar
+    when: "page.ok"
+    open: http://localhost:5178/stats
+  - text: Ingest
+    icon: tray.and.arrow.down
+    when: "page.ok"
+    open: http://localhost:5178/ingest
+  - separator
+  - text: Restart the API
+    icon: arrow.clockwise
+    when: "!uninstalled"
+    agent: api.restart
+  - text: Cycle the lab
+    icon: arrow.triangle.2.circlepath
+    when: "up || wedged"
+    run: [brick-lab, cycle]
+  - text: Start the lab
+    icon: play
+    when: stopped
+    run: [brick-lab, up]
+  - text: Stop the lab
+    icon: stop
+    when: "up || wedged"
+    run: [brick-lab, down]
+  # A command rather than a path, so no home directory is committed here and
+  # the log can be reached while the API is not answering.
+  - text: Open the log
+    icon: doc.text
+    when: "!uninstalled"
+    run: [brick-lab, log]
+  - separator
+  - {text: Quit, icon: power, quit: true}
