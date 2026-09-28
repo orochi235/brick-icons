@@ -57,15 +57,7 @@ survey=$(.venv/bin/python scripts/slot-coverage.py --slot "$slot" \
   || survey_rc=$?
 echo "$survey"
 
-# Redraws somebody asked for go first, whatever the gap selection picked, and
-# a round still launches when the gap itself is empty.
-asked=$(.venv/bin/python scripts/render-requests.py pending --slot "$slot" \
-    --into "$list")
-requested=$(printf '%s\n' "$asked" | tail -1)
-echo "requested redraws: $requested"
-[ "$survey_rc" -eq 0 ] || [ "$requested" -gt 0 ] || exit "$survey_rc"
-survey="$survey
-$asked"
+[ "$survey_rc" -eq 0 ] || exit "$survey_rc"
 
 engine=$(printf '%s\n' "$survey" | sed -n 's/^  ENGINE=//p' | head -1)
 source=$(printf '%s\n' "$survey" | sed -n 's/^  SOURCE=//p' | head -1)

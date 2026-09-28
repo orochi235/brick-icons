@@ -51,7 +51,6 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from brick_icons import db  # noqa: E402
-from brick_icons import requests as render_requests  # noqa: E402
 from brick_icons import review  # noqa: E402
 from brick_icons.lab import tally  # noqa: E402
 
@@ -124,8 +123,8 @@ def _take_scores(conn: sqlite3.Connection, tree: Path, run_id: int,
 
 def _take_renders(conn: sqlite3.Connection, tree: Path, engine: str,
                   source: str, run_id: int, overwrite: bool = False,
-                  seen: dict[Path, tuple[int, float]] | None = None,
-                  requested: bool = False) -> tuple[int, int]:
+                  seen: dict[Path, tuple[int, float]] | None = None
+                  ) -> tuple[int, int]:
     """Index the drawings this tree holds, as (new, replaced, slots touched).
 
     The job is still writing, so a half-written SVG is expected traffic:
@@ -154,11 +153,6 @@ def _take_renders(conn: sqlite3.Connection, tree: Path, engine: str,
     have = {slot: {r[0] for r in conn.execute(
         "SELECT part_id FROM renders WHERE source = ?", (slot,))}
         for _d, slot in walks}
-    # A redraw somebody asked for replaces the drawn part it names, and no
-    # other drawn part a fill round happens to hold.
-    asked = ({slot: set(render_requests.pending(
-        conn, slot, ROOT / render_requests.DEFAULT_PATH))
-        for _d, slot in walks} if requested else {})
     stated = db.stated_times(tree)
     took = redrew = 0
     touched: set[str] = set()
@@ -167,8 +161,7 @@ def _take_renders(conn: sqlite3.Connection, tree: Path, engine: str,
       for svg in sorted(p for p in kept.iterdir()
                         if p.suffix in db.RENDER_SUFFIXES):
         pid = svg.stem
-        if pid not in known or (pid in have[slot] and not overwrite
-                                and pid not in asked.get(slot, ())):
+        if pid not in known or (pid in have[slot] and not overwrite):
             continue
         try:
             st = svg.stat()
@@ -303,8 +296,7 @@ def _bake(source: str) -> bool:
 
 def watch(trees: list[Path], every: int, once: bool, bake: bool,
           overwrite: bool = False, until: Sequence[str] = (),
-          fetch: bool = True, overwrite_requested: bool = False,
-          measure: bool = False) -> int:
+          fetch: bool = True, measure: bool = False) -> int:
     seen: dict[Path, tuple[int, float]] = {}
     drawings: dict[Path, tuple[int, float]] = {}
     told: dict[Path, set[str]] = {}
@@ -330,8 +322,7 @@ def watch(trees: list[Path], every: int, once: bool, bake: bool,
                 run_id = _watch_run(conn, tree)
                 scores = _take_scores(conn, tree, run_id, seen)
                 drawn, redrew, slots = _take_renders(
-                    conn, tree, engine, source, run_id, overwrite, drawings,
-                    requested=overwrite_requested)
+                    conn, tree, engine, source, run_id, overwrite, drawings)
                 total = conn.execute(
                     "SELECT count(*) FROM renders WHERE source = ?",
                     (source,)).fetchone()[0]
@@ -412,9 +403,6 @@ def main() -> int:
     ap.add_argument("--overwrite", action="store_true",
                     help="replace a part's row rather than skipping it, for a "
                          "re-render of a slot that already holds every part")
-    ap.add_argument("--overwrite-requested", action="store_true",
-                    help="replace a drawn part's row only when a redraw of it "
-                         "is pending in store-queue/requests.jsonl")
     ap.add_argument("--until", default="",
                     help="comma-separated onto task names; watch until none "
                          "of them is running, then fetch and close")
@@ -434,8 +422,7 @@ def main() -> int:
                  "finished tree for good.")
     until = [t for t in a.until.split(",") if t]
     return watch([Path(t) for t in a.trees], a.every, a.once, a.bake,
-                 a.overwrite, until, a.fetch, a.overwrite_requested,
-                 a.measure)
+                 a.overwrite, until, a.fetch, a.measure)
 
 
 if __name__ == "__main__":

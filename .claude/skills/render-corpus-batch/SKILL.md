@@ -235,8 +235,7 @@ a refresh: on 2026-09-16 a 7,379-part occt re-render at a newer engine fetched
 every drawing home and left `renders` untouched, and nothing said so -- the
 watcher logged its passes, the tree filled up, and the slot's build stamps did
 not move. Add `--overwrite` at launch when the batch list came from parts that
-are already drawn, or file the parts as redraw requests and use
-`--overwrite-requested`.
+are already drawn.
 
 Started by hand -- a job someone else launched, or a stream restarted after a
 gap -- it is:
