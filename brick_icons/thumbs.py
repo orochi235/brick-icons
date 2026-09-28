@@ -311,7 +311,10 @@ def patch_cell(out: Path | str, part_id: str, index: int,
     out = Path(out)
     versions = {}
     with _sheets_locked(out):
-        shas = baked_shas(out)
+        # Every level is checked before any is touched: catching a mismatch
+        # on a later level after an earlier one has already published would
+        # leave "refused" meaning some levels changed and some didn't.
+        manifests = {}
         for level in SHEET_LEVELS:
             manifest = _read_json(out / f"sheet-{level}.json")
             if manifest.get("count") != count:
@@ -321,7 +324,11 @@ def patch_cell(out: Path | str, part_id: str, index: int,
             master = out / MASTER.format(level=level)
             if not master.is_file():
                 raise FileNotFoundError(f"{master} is missing; rebake the slot")
-            with Image.open(master) as img:
+            manifests[level] = manifest
+        shas = baked_shas(out)
+        for level in SHEET_LEVELS:
+            manifest = manifests[level]
+            with Image.open(out / MASTER.format(level=level)) as img:
                 sheet = img.convert("RGBA")
             _paste_cell(sheet, geometry(count, level), index,
                         _tile(out, level, part_id))

@@ -376,6 +376,24 @@ def test_a_patch_refuses_a_slot_with_no_master(tmp_path):
         thumbs.patch_cell(out, "c", 2, len(ORDER))
 
 
+def test_a_patch_checks_every_level_before_patching_any(tmp_path):
+    out = _baked_slot(tmp_path)
+    manifest = json.loads((out / "sheet-32.json").read_text())
+    manifest["count"] = manifest["count"] + 1
+    (out / "sheet-32.json").write_text(json.dumps(manifest))
+    before_master = (out / "sheet-8.master.png").read_bytes()
+    before_webp = (out / f"sheet-8.{thumbs.THUMB_EXT}").read_bytes()
+    before_version = json.loads((out / "sheet-8.json").read_text())["version"]
+    _redraw_c(tmp_path, out)
+
+    with pytest.raises(ValueError, match="rebake"):
+        thumbs.patch_cell(out, "c", 2, len(ORDER))
+
+    assert (out / "sheet-8.master.png").read_bytes() == before_master
+    assert (out / f"sheet-8.{thumbs.THUMB_EXT}").read_bytes() == before_webp
+    assert json.loads((out / "sheet-8.json").read_text())["version"] == before_version
+
+
 def test_a_cell_with_no_tile_is_cleared(tmp_path):
     out = _baked_slot(tmp_path)
     for lvl in thumbs.LEVELS:
