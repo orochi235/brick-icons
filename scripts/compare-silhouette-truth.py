@@ -223,14 +223,14 @@ def main() -> int:
     ap.add_argument("--shade-style", dest="shade_style", default="flat3",
                     help="fill treatment; 'white' draws every body surface "
                          "one opaque white, so the strokes carry the drawing")
-    ap.add_argument("--line-width", dest="line_width", type=int, default=0,
+    ap.add_argument("--line-width", dest="line_width", type=float, default=0,
                     help="interior stroke, output px (0 = strokeless oracle)")
     ap.add_argument("--opacity", type=float,
                     help="face-fill opacity for the translucent slots. The "
                          "far side draws INSIDE the silhouette, so it adds no "
                          "EXTRA: the row scores the outline, not the "
                          "translucency")
-    ap.add_argument("--silhouette-width", dest="silhouette_width", type=int,
+    ap.add_argument("--silhouette-width", dest="silhouette_width", type=float,
                     default=0, help="contour stroke, output px")
     ap.add_argument("--stud-instancing", dest="stud_instancing",
                     choices=["off", "all"],
