@@ -263,8 +263,8 @@ it("raises the lightbox from the card's Open button", async () => {
   fireEvent.click(canvas, { clientX: 10, clientY: 10 });
   await screen.findByRole('dialog', { name: /Part a/ });
   fireEvent.click(screen.getByRole('button', { name: /open/i }));
-  expect(await waitFor(() => container.querySelector('.corpus-lightbox')))
-    .toBeTruthy();
+  await waitFor(() =>
+    expect(container.querySelector('.corpus-lightbox')).not.toBeNull());
   expect(container.querySelector('.corpus-card')).toBeNull();
 });
 
@@ -272,8 +272,8 @@ it('opens the lightbox on a double click with no card flash', async () => {
   const { container } = render(<CorpusWall client={client} />);
   const canvas = await findCanvas(container);
   fireEvent.doubleClick(canvas, { clientX: 10, clientY: 10 });
-  expect(await waitFor(() => container.querySelector('.corpus-lightbox')))
-    .toBeTruthy();
+  await waitFor(() =>
+    expect(container.querySelector('.corpus-lightbox')).not.toBeNull());
   expect(container.querySelector('.corpus-card')).toBeNull();
 });
 
