@@ -487,8 +487,8 @@ _CANONICAL = {
     # The reference that is mathematically compatible with the library:
     # orthographic, and three.js's LDrawLoader substitutes no primitives, so
     # what it draws is the authored tessellation our own engine reads. LDView
-    # is neither -- it renders perspective, and `-AllowPrimitiveSubstitution`
-    # redraws a `4-4cyli` at whatever curve quality it likes.
+    # is not: `-AllowPrimitiveSubstitution` redraws a `4-4cyli` at whatever
+    # curve quality it likes.
     #
     # This argv is a config KEY and nothing runs it: the renderer is a browser,
     # and one page draws a whole list in one WebGL context. Bake the slot with
