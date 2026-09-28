@@ -6,18 +6,18 @@
     163.68
   ],
   "commands": {
-    "A": 50,
-    "L": 29,
-    "M": 24,
+    "A": 8,
+    "L": 26,
+    "M": 12,
     "Z": 1
   },
   "fills": {
-    "none": 24
+    "none": 12
   },
   "gradient_stops": 0,
   "gradients": 0,
-  "lines": 12,
-  "paths": 24,
+  "lines": 4,
+  "paths": 12,
   "transforms": 0,
   "viewBox": "0 0 256 170"
 }

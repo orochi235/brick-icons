@@ -1,23 +1,23 @@
 {
   "bbox": [
-    77.78,
-    5.97,
-    178.22,
+    77.77,
+    23.54,
+    178.23,
     164.05
   ],
   "commands": {
-    "A": 23,
-    "L": 6,
-    "M": 6,
+    "A": 15,
+    "L": 4,
+    "M": 4,
     "Z": 1
   },
   "fills": {
-    "none": 6
+    "none": 4
   },
   "gradient_stops": 0,
   "gradients": 0,
-  "lines": 6,
-  "paths": 6,
+  "lines": 4,
+  "paths": 4,
   "transforms": 0,
   "viewBox": "0 0 256 170"
 }

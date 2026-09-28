@@ -1,6 +1,7 @@
 # Stud instancing
 
-**Status: built behind `--stud-instancing` (default `off`) -- see
+**Status: built, and the default since 2026-09-28 (`--stud-instancing
+all`; `off` draws every stud through the engine) -- see
 `brick_icons/instancing.py`.** Two differences from the text below. A cut
 stud's clip is taken from the occluding primitive's outline or the coplanar
 triangles the samples hit, before the engine runs, not from the engine's
@@ -24,7 +25,7 @@ through the fill step separately.
 
 ## What changes
 
-`--stud-instancing off|all`, default `off` until vetted.
+`--stud-instancing off|all`, default `off` until vetted (now `all`).
 
 ### 1. Studs stay occluders, stop being drawn
 

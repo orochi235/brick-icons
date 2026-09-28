@@ -1,4 +1,26 @@
-## 2026-09-27: stud instancing built behind `--stud-instancing` (off); vetted under occt, on main
+## 2026-09-28: stud instancing is the default (`--stud-instancing all`)
+
+Decided 2026-09-28: every render places studs unless it passes
+`--stud-instancing off`. The default lives only in `config.DEFAULTS`; the CLI,
+the lab schema and `compare-silhouette-truth.py` inherit it, and the census
+script stamps `stud_instancing` on each row from the resolved value, so a row
+with no such field was drawn with it off. `render_tag` now stamps `studs=off`
+instead of `studs=all`. `--debug-colors` also colors a placed stud's strokes.
+`hlr.visible_segments` keeps its own `stud_instancing="off"`: at that layer
+`all` only withholds studs, and nothing draws them without the CLI's
+`Instancer`.
+
+**Goldens re-frozen.** Predicted before rendering: every `outline-flat3` and
+`outline` case of a part that declares a stud moves, nothing else. Exactly
+those 30 of 52 naive hashes moved; the 8 wireframe cases and the 14 studless
+cases are byte-identical. `6143`'s flat3 case also changes a band of wall
+shading away from its studs (8,841 px, the largest diff); unjudged.
+
+**Consequences:** every render slot now predates the default, so each redraw
+lands on `/review`. `occt-svelte`'s first fill, held for instancing, is
+unblocked.
+
+## 2026-09-27: stud instancing built behind `--stud-instancing`; vetted under occt, on main
 
 **Where:** on `main`, merged from branch `stud-instancing`. Spec:
 `docs/superpowers/specs/2026-09-27-stud-instancing-design.md`. The plan it was
@@ -86,8 +108,6 @@ the same 256 clear studs as 3867 and takes 80 times as long.
 from aligning it by its inner edge. 4070 and `outline-flat3__3649` also change
 a few pixels away from the outline. Mike read both sheets and approved them,
 and the goldens are re-frozen at the new contour (all 52 naive hashes).
-
-**Mike's to decide:** whether `all` becomes the default.
 
 **Rules Mike set while this ran:**
 - Never draw with instancing off to have a baseline. "The baseline is
