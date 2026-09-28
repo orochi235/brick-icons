@@ -4014,3 +4014,13 @@ title = "a boundary between two print colors sits 0.4 px off where the part puts
 classes = ["decal"]
 filed = "2026-09-28"
 notes = "Measured against the .dat's own tan (18) / green (10) polygons projected with the render's fit: where the columns are clear of studs the drawn boundary is 0.37-0.43 px below the true edge with --stud-instancing off and 0.39-0.42 px above it with all. That is the fill self-stroke's 0.4 px overhang, won by whichever print fill paints later; the two modes paint them in opposite orders. No stroke is drawn along a print boundary, so process.seam_px has nothing to cap it at. Not fixed."
+
+[[defect]]
+id = "4070-sampled-fill-boundary-at-1.4px"
+part = "4070"
+engines = ["occt"]
+status = "open"
+title = "at the 1.4 px default stroke a fill carries a sampled boundary"
+classes = ["arc-loss"]
+filed = "2026-09-28"
+notes = "Lowering the default stroke from 2 to 1.4 px (branch line-weight-1.2) turns test_occt::test_a_fill_boundary_carries_no_sampled_boundary[4070] red: a run of 22 sub-quarter-pixel L segments in a part fill (88 of 135). The same test passes at origin/main 7c270b4, drawn at 2 px. Run on studio, not located on the canvas yet. Per the test's docstring such a run costs line commands and draws nothing; not checked on this render."
