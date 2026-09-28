@@ -637,6 +637,12 @@ def record_render(conn: sqlite3.Connection, part_id: str, source: str,
             pass
     sha = goldens.sha256(raw)
     where = str(path.resolve().relative_to(Path(root).resolve()))
+    # The file the row already names, re-read: `ingest-watch --overwrite`
+    # does this to a whole finished tree. Restamping `made_at` and `run_id`
+    # made the slot look redrawn with no review line, and answers any redraw
+    # request filed since (`requests._unanswered`).
+    if held is not None and held["path"] == where and held["sha256"] == sha:
+        return key
     if (held is not None and held["sha256"] != sha and review_log is not None
             and not _same_pixels(_displaced_file(root, source, part_id, held), path)):
         log = Path(review_log)

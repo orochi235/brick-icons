@@ -416,3 +416,22 @@ def test_the_reaper_spares_a_kept_copy_an_entry_shows_as_its_after(conn, tmp_pat
     kept.parent.mkdir(parents=True, exist_ok=True)
     kept.write_text(SVG2)
     assert _flush_review().unreferenced(conn, tmp_path) == []
+
+
+def test_re_reading_the_file_a_slot_holds_changes_nothing(conn, tmp_path):
+    """A watch relaunched with --overwrite over a finished tree re-records
+    every file in it. The row keeps its stamp and its run, so the slot does
+    not read as redrawn and a redraw request filed since stays pending."""
+    from brick_icons import requests as render_requests
+    run1 = db.start_run(conn, "census", {"dir": "out/a"}, "aaa")
+    svg = _draw(tmp_path, "out/a", "3001", SVG)
+    db.record_render(conn, "3001", "occt", svg, root=tmp_path, run_id=run1)
+    conn.execute("UPDATE renders SET made_at = '2026-01-01T00:00:00+00:00'")
+    conn.commit()
+    asked = tmp_path / "requests.jsonl"
+    render_requests.add(asked, "3001", "occt", at="2026-01-02T00:00:00+00:00")
+    run2 = db.start_run(conn, "census", {"dir": "out/a", "watch": True}, "bbb")
+    db.record_render(conn, "3001", "occt", svg, root=tmp_path, run_id=run2)
+    row = conn.execute("SELECT made_at, run_id FROM renders").fetchone()
+    assert (row["made_at"], row["run_id"]) == ("2026-01-01T00:00:00+00:00", run1)
+    assert render_requests.pending(conn, "occt", asked) == ["3001"]
