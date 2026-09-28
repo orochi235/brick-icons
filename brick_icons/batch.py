@@ -133,11 +133,12 @@ class Runner:
     requires a field finds it on the rows no work function produced.
     """
 
-    def __init__(self, log: Path | str, timeout: float = 0, key: str = "item",
-                 extra: dict | None = None, isolate: bool = False,
-                 mem_gb: float = 0):
-        self.log = Path(log)
-        self.inflight = Path(f"{self.log}.inflight")
+    def __init__(self, log: Path | str | None, timeout: float = 0,
+                 key: str = "item", extra: dict | None = None,
+                 isolate: bool = False, mem_gb: float = 0):
+        # None is a runner for `call` alone, which keeps no record.
+        self.log = Path(log) if log is not None else None
+        self.inflight = Path(f"{self.log}.inflight") if log is not None else None
         self.timeout = timeout
         self.key = key
         self.extra = dict(extra or {})
@@ -195,6 +196,14 @@ class Runner:
         with self.log.open("a") as fh:
             fh.write(json.dumps({**self.extra, **row, "at": stamp()}) + "\n")
 
+    def call(self, item: str, work) -> dict:
+        """`work(item)` under the cap, as `run` does it, with no log and no
+        inflight marker: for a caller that keeps its own record."""
+        started = time.time()
+        row = self._isolated(item, work) if self.isolate else self._here(item, work)
+        row["secs"] = round(time.time() - started, 1)
+        return row
+
     def run(self, item: str, work) -> dict:
         """`work(item)` under the cap. Its dict is returned and logged; a
         failure becomes a row naming the exception.
@@ -208,10 +217,7 @@ class Runner:
         # the one it started with. Consumed, not forwarded: it never reaches
         # the job log. Capped at 48 runes by onto.
         print(f"onto: item {item[:48]}", flush=True)
-        started = time.time()
-        row = self._isolated(item, work) if self.isolate else self._here(item, work)
-        row = {**self.extra, **row}
-        row["secs"] = round(time.time() - started, 1)
+        row = {**self.extra, **self.call(item, work)}
         self.write(row)
         self.inflight.unlink(missing_ok=True)
         return row

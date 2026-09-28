@@ -314,3 +314,18 @@ def test_the_exit_code_still_names_the_signal():
     assert "SIGSEGV" in runner._death(-int(signal.SIGSEGV))
     assert "SIGSEGV" in runner._death(int(signal.SIGSEGV))
     assert runner._death(1) == "the render process exited 1"
+
+
+def test_a_call_returns_the_row_and_writes_no_log(tmp_path):
+    runner = batch.Runner(None, timeout=5, isolate=True, key="part")
+    row = runner.call("3001", lambda part: {"part": part, "svg": "<svg/>"})
+    assert row["svg"] == "<svg/>"
+    assert row["secs"] >= 0
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_a_call_past_the_cap_is_a_timeout_row():
+    runner = batch.Runner(None, timeout=0.3, isolate=True, key="part")
+    row = runner.call("3001", _spin)
+    assert row["error"] == "TimeoutError"
+    assert row["part"] == "3001"
