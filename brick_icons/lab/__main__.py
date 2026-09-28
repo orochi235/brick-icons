@@ -32,6 +32,8 @@ def main(argv=None) -> int:
     # and several sessions share this checkout.
     p.add_argument("--reload", action="store_true",
                    help="restart when brick_icons/ changes")
+    p.add_argument("--quiet", action="store_true",
+                   help="leave requests out of the log")
     args = p.parse_args(argv)
     print(f"lab on http://{args.host}:{args.port}"
           f"{' (reloading)' if args.reload else ''}", flush=True)
@@ -45,9 +47,11 @@ def main(argv=None) -> int:
         # good. Past this, the old worker drops what it still holds.
         uvicorn.run("brick_icons.lab.__main__:_factory", factory=True, reload=True,
                     reload_dirs=["brick_icons"], host=args.host, port=args.port,
+                    access_log=not args.quiet,
                     timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_S)
     else:
         uvicorn.run(create_app(root=args.root), host=args.host, port=args.port,
+                    access_log=not args.quiet,
                     timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_S)
     return 0
 
