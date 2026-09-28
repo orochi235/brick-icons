@@ -144,6 +144,19 @@ it('draws a canvas once the cells arrive', async () => {
   await waitFor(() => expect(container.querySelector('canvas')).toBeTruthy());
 });
 
+it('raises the loupe while Alt is held over the wall', async () => {
+  const { container } = render(<CorpusWall client={client} />);
+  const canvas = await findCanvas(container);
+  const lens = () => container.querySelector('.lk-loupe__canvas');
+  act(() => {
+    canvas.dispatchEvent(new PointerEvent('pointermove', { clientX: 10, clientY: 10, bubbles: true }));
+  });
+  act(() => { fireEvent.keyDown(window, { key: 'Alt', altKey: true }); });
+  await waitFor(() => expect(lens()).toBeTruthy());
+  act(() => { fireEvent.keyUp(window, { key: 'Alt' }); });
+  await waitFor(() => expect(lens()).toBeNull());
+});
+
 it('reports how much of the corpus the filter is showing', async () => {
   render(<CorpusWall client={client} />);
   await waitFor(() => screen.getByText('2 of 2'));
