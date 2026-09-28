@@ -14,7 +14,8 @@ instead of `studs=all`. `--debug-colors` also colors a placed stud's strokes.
 `outline` case of a part that declares a stud moves, nothing else. Exactly
 those 30 of 52 naive hashes moved; the 8 wireframe cases and the 14 studless
 cases are byte-identical. `6143`'s flat3 case also changes a band of wall
-shading away from its studs (8,841 px, the largest diff); unjudged.
+shading away from its studs (8,841 px, the largest diff); reviewed and
+accepted.
 
 **One occt test regressed and is xfail:**
 `test_a_fill_boundary_carries_no_sampled_boundary[4589]`, filed as defect
