@@ -6,10 +6,10 @@
     156.33
   ],
   "commands": {
-    "A": 96,
-    "L": 4825,
-    "M": 268,
-    "Z": 265
+    "A": 204,
+    "L": 25620,
+    "M": 497,
+    "Z": 494
   },
   "fills": {
     "#565656": 1,
@@ -17,13 +17,13 @@
     "#cccccc": 4,
     "#cda4de": 118,
     "#f4f4f4": 57,
-    "gradient": 8,
+    "gradient": 234,
     "none": 4
   },
-  "gradient_stops": 91,
-  "gradients": 10,
+  "gradient_stops": 110,
+  "gradients": 12,
   "lines": 2,
-  "paths": 249,
+  "paths": 475,
   "transforms": 0,
   "viewBox": "0 0 256 170"
 }

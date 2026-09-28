@@ -787,12 +787,9 @@ def test_light_vector_conventions():
 
 def test_flat3_default_light_and_tones_unchanged():
     st = shade.Flat3Style()
-    assert st.tone(np.array([0.0, 1.0, 0.0])) == st.top
-    assert st.tone(np.array([-0.7, 0.0, -0.7])) == st.left
-    assert st.tone(np.array([0.7, 0.0, -0.7])) == st.right
-    assert st.top == shade._hex([157 * 1.30] * 3)
-    assert st.left == shade._hex([157 * 0.85] * 3)          # left brighter
-    assert st.right == shade._hex([157 * 0.60] * 3)
+    assert st.tone(np.array([0.0, 1.0, 0.0])) == shade._hex([157 * 1.30] * 3)
+    assert st.tone(np.array([-0.7, 0.0, -0.7])) == shade._hex([157 * 0.85] * 3)
+    assert st.tone(np.array([0.7, 0.0, -0.7])) == shade._hex([157 * 0.60] * 3)
     assert st.light[0] < 0                                  # upper-LEFT default
 
 

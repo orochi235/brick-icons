@@ -41,6 +41,50 @@ def test_without_solid_deco_decoration_is_as_translucent_as_the_body(tmp_path):
     assert 'opacity="0.5"' in _path(svg, "M2 2L4 2L4 4Z")
 
 
+_SHADED = [{"d": "M2 2L4 2L4 4Z", "fill": "#b40000", "deco": True,
+            "shade": {"gradient": {"x1": 0, "y1": 0, "x2": 9, "y2": 0,
+                                   "stops": [(0.0, 0.0), (1.0, 0.4)]}}},
+           {"d": "M5 5L7 5L7 7Z", "fill": "#b40000", "deco": True,
+            "shade": {"alpha": 0.35, "d_seamed": "M4 4L8 4L8 8Z"}}]
+
+
+def test_an_opaque_shaded_print_s_layer_covers_its_seam(tmp_path):
+    svg = trace.segments_to_svg([], 20, 20, tmp_path / "p.svg",
+                                fills=_SHADED).read_text()
+    assert '<path d="M4 4L8 4L8 8Z" class="deco shade"' in svg
+    see = trace.segments_to_svg([], 20, 20, tmp_path / "t.svg", fills=_SHADED,
+                                opacity=0.5).read_text()
+    # a translucent print draws no seam, so its layer is the bare region
+    assert '<path d="M5 5L7 5L7 7Z" class="deco shade"' in see
+
+
+def test_a_shaded_print_is_its_color_then_its_region_again_in_black(tmp_path):
+    svg = trace.segments_to_svg([], 20, 20, tmp_path / "p.svg",
+                                fills=_SHADED).read_text()
+    lines = [ln for ln in svg.splitlines() if 'd="M2 2L4 2L4 4Z"' in ln]
+    assert len(lines) == 2 and 'fill="#b40000"' in lines[0]
+    layer = lines[1]
+    assert 'class="deco shade"' in layer and "stroke" not in layer
+    gid = layer.split('fill="url(#', 1)[1].split(")", 1)[0]
+    grad = svg.split(f'id="{gid}"', 1)[1].split("</linearGradient>", 1)[0]
+    assert 'stop-color="#000000" stop-opacity="0.4"' in grad
+    flat = _path(svg, "M4 4L8 4L8 8Z\" class=\"deco shade")
+    assert 'fill="#000000" fill-opacity="0.35"' in flat
+    # the decoration mask whites the layer out with the print it shades
+    assert "path.deco{" in trace.deco_mask_svg(svg)
+
+
+def test_a_translucent_shaded_print_composites_with_its_layer_first(tmp_path):
+    svg = trace.segments_to_svg([], 20, 20, tmp_path / "p.svg", fills=_SHADED,
+                                opacity=0.5).read_text()
+    assert '<g opacity="0.5"><path d="M2 2L4 2L4 4Z" class="deco" ' \
+           'fill="#b40000" fill-rule="evenodd"/><path d="M2 2L4 2L4 4Z" ' \
+           'class="deco shade"' in svg.replace("\n", "")
+    solid = trace.segments_to_svg([], 20, 20, tmp_path / "s.svg", fills=_SHADED,
+                                  opacity=0.5, solid_deco=True).read_text()
+    assert '<g opacity' not in solid and 'stroke="#b40000"' in solid
+
+
 def test_solid_deco_changes_nothing_on_an_opaque_render(tmp_path):
     a = trace.segments_to_svg([], 20, 20, tmp_path / "a.svg", fills=_FILLS).read_text()
     b = trace.segments_to_svg([], 20, 20, tmp_path / "b.svg", fills=_FILLS,

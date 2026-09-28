@@ -492,3 +492,21 @@ def test_a_colored_stud_keeps_its_print_color_inside_its_outline(tmp_path):
     stud = max(map(float, re.findall(r'stroke-width="([0-9.]+)"', strokes)))
     seams = list(map(float, re.findall(r'stroke-width="([0-9.]+)"', colored[0])))
     assert seams and max(seams) <= stud + 0.005
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_a_colored_stud_s_definition_shades_its_wall(tmp_path):
+    """The shade layer lives in the colored stud's definition, so every placed
+    copy of it shades (2552p01's blue studs): its wall carries a gradient
+    layer, and its top -- a top face -- none."""
+    import re
+    dat = tmp_path / "tcs.dat"
+    dat.write_text(PRINTED_PLATE)
+    assert cli.main([str(dat), *SVG, "--engine", "occt",
+                     "--out", str(tmp_path)]) == 0
+    svg = (tmp_path / "tcs.svg").read_text()
+    defs = dict(re.findall(r'<g id="(sd\d+)f">(.*?)</g></g>', svg, re.S))
+    colored = next(g for g in defs.values() if 'class="deco"' in g)
+    layers = re.findall(r'<path [^>]*class="deco shade"[^>]*>', colored)
+    assert len(layers) == 1 and 'fill="url(#' in layers[0]
+    assert colored.count('class="deco"') == 2

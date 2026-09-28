@@ -6,24 +6,24 @@
     164.0
   ],
   "commands": {
-    "A": 173,
-    "L": 796,
-    "M": 59,
-    "Z": 42
+    "A": 174,
+    "L": 1696,
+    "M": 68,
+    "Z": 51
   },
   "fills": {
     "#1b2a34": 1,
     "#565656": 2,
-    "#5e5e5e": 10,
-    "#858585": 5,
+    "#5e5e5e": 2,
+    "#858585": 13,
     "#cccccc": 1,
-    "gradient": 8,
+    "gradient": 9,
     "none": 18
   },
-  "gradient_stops": 110,
-  "gradients": 13,
+  "gradient_stops": 120,
+  "gradients": 14,
   "lines": 7,
-  "paths": 45,
+  "paths": 46,
   "transforms": 0,
   "viewBox": "0 0 256 170"
 }

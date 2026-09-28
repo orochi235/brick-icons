@@ -602,7 +602,8 @@ class Instancer:
                                                      *origin_fit(lone, k))
         return self._strokes[key]
 
-    def fills(self, ref, k, style, stud_px, crumb, weld_corners):
+    def fills(self, ref, k, style, stud_px, crumb, weld_corners,
+              deco_shade=True):
         if style is None:
             return []
         lone = self.lone(ref)
@@ -616,7 +617,7 @@ class Instancer:
                 proj=lone.proj, fit=fit, refits=lone.refits, loops=lone.loops,
                 strokes=self.strokes(ref, k), line_px=stud_px, sil_px=stud_px,
                 weld_corners=weld_corners, ldraw_dir=self.ldraw_dir,
-                crumb=crumb)
+                crumb=crumb, deco_shade=deco_shade)
 
     def clip(self, v, k, kx, ky, pad):
         """A cut stud's clip, canvas px: its footprint grown by `pad` (its
@@ -625,7 +626,7 @@ class Instancer:
                                  canvas_geom(v.cover, k, kx, ky))
 
     def svg_parts(self, fit, stud_px, style=None, crumb=None,
-                  weld_corners=False):
+                  weld_corners=False, deco_shade=True):
         """Elements for trace.segments_to_svg(between=...): one `<defs>`
         with each distinct stud's fill group (`sd<n>f`), stroke group
         (`sd<n>s`) and every cut stud's clip, then `<g class="studs">` of
@@ -642,7 +643,7 @@ class Instancer:
             if v.ref.key not in ids:
                 n = ids[v.ref.key] = len(ids)
                 fills = self.fills(v.ref, k, style, stud_px, crumb,
-                                   weld_corners)
+                                   weld_corners, deco_shade)
                 has_fill[n] = bool(fills)
                 if fills:
                     gdefs, body = trace.fill_elements(fills,
