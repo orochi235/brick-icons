@@ -8,6 +8,35 @@ from pathlib import Path
 __version__ = "0.1.0"
 
 
+_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _git(*args: str) -> str:
+    return subprocess.run(("git", "-C", str(_ROOT)) + args, check=True,
+                          capture_output=True, text=True).stdout.strip()
+
+
+def build_of(rev: str) -> str:
+    """`build()`'s `<count>.<short sha>` for any revision, or "unknown".
+
+    Never suffixed `+`: only a working tree can be dirty, and this names a
+    commit. The lab asks it of origin/main, the build it tells the spot worker
+    to draw at.
+    """
+    try:
+        return f"{_git('rev-list', '--count', rev)}.{_git('rev-parse', '--short', rev)}"
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
+
+
+def commit_of(rev: str) -> str | None:
+    """The full sha `rev` names, or None where git cannot say."""
+    try:
+        return _git("rev-parse", "--verify", f"{rev}^{{commit}}")
+    except (OSError, subprocess.CalledProcessError):
+        return None
+
+
 @cache
 def build() -> str:
     """The engine revision that drew something, as `<count>.<short sha>`.
@@ -18,13 +47,11 @@ def build() -> str:
     fact. Suffixed `+` when the tree is dirty -- an uncommitted engine is
     not the commit it sits on.
     """
-    root = Path(__file__).resolve().parent.parent
+    made = build_of("HEAD")
+    if made == "unknown":
+        return made
     try:
-        def git(*a):
-            return subprocess.run(("git", "-C", str(root)) + a, check=True,
-                                  capture_output=True, text=True).stdout.strip()
-        n, sha = git("rev-list", "--count", "HEAD"), git("rev-parse", "--short", "HEAD")
-        dirty = git("status", "--porcelain", "--", "brick_icons")
-        return f"{n}.{sha}" + ("+" if dirty else "")
+        dirty = _git("status", "--porcelain", "--", "brick_icons")
     except (OSError, subprocess.CalledProcessError):
         return "unknown"
+    return made + ("+" if dirty else "")

@@ -601,6 +601,26 @@ def test_the_build_names_a_revision_and_flags_an_uncommitted_engine():
     assert b == "unknown" or re.fullmatch(r"\d+\.[0-9a-f]{7,}\+?", b), b
 
 
+def test_a_named_revision_has_the_build_form_without_a_dirty_mark():
+    import brick_icons
+    head = brick_icons.build()
+    if head == "unknown":
+        pytest.skip("no git here")
+    assert brick_icons.build_of("HEAD") == head.rstrip("+")
+
+
+def test_a_revision_git_cannot_find_is_unknown():
+    import brick_icons
+    assert brick_icons.build_of("no-such-rev-anywhere") == "unknown"
+    assert brick_icons.commit_of("no-such-rev-anywhere") is None
+
+
+def test_a_commit_is_named_in_full():
+    import brick_icons
+    sha = brick_icons.commit_of("HEAD")
+    assert sha is None or re.fullmatch(r"[0-9a-f]{40}", sha), sha
+
+
 def test_census_source_repeats_no_engine_it_is_already_named_with():
     assert db.census_source("out/census", "naive") == "silhouette-naive"
     assert db.census_source("out/census-naive", "naive") == "silhouette-naive"
