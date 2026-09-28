@@ -59,7 +59,12 @@ looked at.
 **With instancing off the branch still moves 44 of the 52 goldens under occt**
 (`out/vet/stud-off-goldens-occt/`): the contour sits 0.07-0.26 px further out,
 from aligning it by its inner edge. 4070 and `outline-flat3__3649` also change
-a few pixels away from the outline. The goldens are NOT re-frozen.
+a few pixels away from the outline. The goldens are NOT re-frozen, and until
+they are the default suite carries one more red test than main:
+`test_lab_app::test_goldens_check_starts_a_job_over_the_parts_cases` reports
+3005's three cases `moved` (full suite at dba1078 on keiei: 3 failed, 1611
+passed; the other two are the ones listed under Traps). The frozen hashes are
+naive SVGs, so re-freezing means drawing the 52 cases under naive.
 
 **Mike's to decide:** whether `all` becomes the default; when the branch
 merges; whether the goldens are re-frozen at the new contour.
