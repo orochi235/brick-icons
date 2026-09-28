@@ -28,8 +28,8 @@
 /* On the ground the wall draws thumbnails on -- see `thumbGround()` in
  * paint.ts. A render is ink on transparency and this panel is dark. */
 .corpus-big {
-  width: 256px;
-  height: 256px;
+  width: 100%;
+  aspect-ratio: 1;
   /* A slot's render is not square and no two slots agree: the drawings are
    * 256x170, and LDView frames its shot to the part, from 936x2048 up. `fill`
    * -- the default -- squashes each to this box, so the same part reads as a
@@ -79,10 +79,14 @@
 }
 .corpus-slot:not([data-ground]) .corpus-slot-empty { color: #6a6a6a; }
 
+/* As many columns as keep a thumbnail at 15rem or wider, and never more than
+ * four: the second argument of max() is a quarter of the row. */
 .corpus-slots {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
+  --slot-gap: 1rem;
+  display: grid;
+  grid-template-columns:
+    repeat(auto-fill, minmax(max(15rem, (100% - 3 * var(--slot-gap)) / 4), 1fr));
+  gap: var(--slot-gap);
   padding: 0;
   list-style: none;
 }
