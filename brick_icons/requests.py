@@ -20,7 +20,9 @@ DEFAULT_PATH = Path("store-queue") / "requests.jsonl"
 LOCAL_MAX_SECS = 20.0
 
 #: Slots drawn by LDView or a browser, which nothing in this repository runs.
-DRAWN_ELSEWHERE = ("reference", "ldview")
+#: `db.is_reference_slot` decides which those are, so a new reference slot
+#: is refused without a second list to remember.
+DRAWN_ELSEWHERE = tuple(s for s in db.SOURCES if db.is_reference_slot(s))
 
 
 def draws_here(source: str, secs: float | None) -> bool:
@@ -31,8 +33,11 @@ def draws_here(source: str, secs: float | None) -> bool:
 
 
 def add(path: Path | str, part: str, source: str, by: str = "lab",
-        at: str | None = None) -> dict:
+        at: str | None = None, build: str | None = None) -> dict:
+    """`build` is the one the redraw asked the worker to draw at."""
     record = {"part": part, "source": source, "at": at or db.now(), "by": by}
+    if build is not None:
+        record["build"] = build
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a") as fh:

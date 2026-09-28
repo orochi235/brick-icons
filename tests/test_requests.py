@@ -80,3 +80,15 @@ def test_requested_parts_go_first_and_only_once():
     lines = ["a,b,c", "d,e"]
     assert requests.front_load(lines, ["d", "x"], per_batch=3) == [
         "d,x", "a,b,c", "e"]
+
+
+def test_a_request_records_the_build_it_asked_for(tmp_path):
+    log = tmp_path / "requests.jsonl"
+    requests.add(log, "3001", "occt", build="9.ccccccc")
+    (record,) = requests.load(log)
+    assert record["build"] == "9.ccccccc"
+
+
+def test_every_reference_slot_is_drawn_elsewhere():
+    assert set(requests.DRAWN_ELSEWHERE) == {
+        "reference", "reference-gray", "reference-lines"}
