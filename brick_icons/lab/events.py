@@ -1,8 +1,8 @@
 """Things that happened in the lab, told to every open page.
 
-Published from route threads, streamed as server-sent events. Only `changed`
-for now -- a stored redraw -- which a page acts on at once instead of waiting
-for its next poll.
+Published from route threads, streamed as server-sent events, which a page
+acts on at once instead of waiting for its next poll: `changed` when a redraw
+is stored, and `sheets` when its slot's sheets have been patched to match.
 """
 from __future__ import annotations
 

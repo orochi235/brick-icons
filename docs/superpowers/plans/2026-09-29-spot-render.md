@@ -2313,6 +2313,15 @@ git commit -m "record a redraw's build, and refuse all 3 reference slots"
 
 ### Task 14: Redraw on the spot worker
 
+**Built differently from the steps below; `brick_icons/lab/redraw.py` and
+`tests/test_lab_redraw.py` are the record.** Decided after this plan was
+written: `changed` goes out as soon as the drawing is stored and its attempt
+recorded, carrying `{part, source, sha, build}` and no sheet versions. The
+sheet patch (`bake_part` + `patch_cell`, about 4.5 s) runs afterwards on the
+app's `SheetPatches` executor, one worker per slot, and publishes
+`sheets {part, source, versions}` when it lands. The redraw answer carries no
+`sheet_version`.
+
 The route checks the ask, then runs one redraw under single-flight.
 `brick_icons/lab/redraw.py` holds the redraw itself, so `app.py` stays routes
 only. Every outcome is a `state` in a 200 body; only a refused ask is an HTTP
@@ -2320,13 +2329,13 @@ error.
 
 | outcome | `state` | attempts row | render row | sheets | event |
 |---|---|---|---|---|---|
-| drew a new drawing | `stored` | `stored`, secs | replaced | baked and patched | `changed` |
+| drew a new drawing | `stored` | `stored`, secs | replaced | baked and patched in the background | `changed`, then `sheets` |
 | drew the same bytes | `unchanged` | `stored`, secs | `made_at` refreshed | untouched | none |
 | engine raised or timed out | `failed` | error, detail, secs | untouched | untouched | none |
 | a decal with nothing to draw | `none` | `none`, secs | untouched | untouched | none |
 | service down | `down` | none | untouched | untouched | none |
 | roll failed, call timed out, died twice | `failed` (`RollFailed`, `TimeoutError`, `ProcessDied`) | none | untouched | untouched | none |
-| sheet patch failed | `stored`, `sheet_version: null` | `stored` | replaced | a warning in the log | `changed` |
+| sheet patch failed | `stored` | `stored` | replaced | a warning in the log | `changed` only |
 
 A spot redraw files no measurement, so the part detail's `build` for a slot
 (which the lightbox's age tag shows) comes from the spot run when the slot's
@@ -3136,7 +3145,7 @@ Append inside the `describe('createClient', ...)` block of `lab/src/api/client.t
     const heard: unknown[] = [];
     const stop = api.onChanged((e) => heard.push(e));
     expect(made[0]!.url).toBe('/api/events');
-    const event = { part: '3001', source: 'occt', sha: 'ab', sheet_version: null };
+    const event = { part: '3001', source: 'occt', sha: 'ab', build: '9.c' };
     made[0]!.listeners.changed!({ data: JSON.stringify(event) } as MessageEvent);
     expect(heard).toEqual([event]);
     stop();
@@ -3156,7 +3165,7 @@ import { CHANGED_BATCH_MS, useChanged } from '@lab/api/useChanged';
 afterEach(() => vi.useRealTimers());
 
 const event = (part: string): ChangedEvent =>
-  ({ part, source: 'occt', sha: `${part}-sha`, sheet_version: null });
+  ({ part, source: 'occt', sha: `${part}-sha`, build: '9.c' });
 
 function source() {
   let tell: (e: ChangedEvent) => void = () => {};
@@ -3230,7 +3239,6 @@ export interface RedrawAnswer {
   /** Why it failed, as a type name: `TimeoutError`, `RollFailed`, ... */
   error?: string | null;
   detail?: string | null;
-  sheet_version?: Record<string, string> | null;
 }
 
 /** The spot worker as the lab API sees it. `stale` is up but on another
@@ -3242,12 +3250,20 @@ export interface SpotStatus {
   detail: string | null;
 }
 
-/** A redraw stored, published on `/api/events`. */
+/** A redraw stored, published on `/api/events`. Its slot's sheets are
+ *  patched afterwards, announced by a `SheetsEvent`. */
 export interface ChangedEvent {
   part: string;
   source: string;
   sha: string;
-  sheet_version: Record<string, string> | null;
+  build: string;
+}
+
+/** A slot's sheets patched with a redrawn cell: each level's new version. */
+export interface SheetsEvent {
+  part: string;
+  source: string;
+  versions: Record<string, string>;
 }
 ```
 
@@ -3481,10 +3497,10 @@ it('follows a redraw of this part made anywhere', async () => {
     <Lightbox partId="3001" source="naive" onClose={() => {}}
               client={{ corpusPart, onChanged } as any} />);
   await waitFor(() => screen.getByText('Brick 2 x 4'));
-  tell({ part: '9999', source: 'naive', sha: 'x', sheet_version: null });
+  tell({ part: '9999', source: 'naive', sha: 'x', build: '9.c' });
   await new Promise((resolve) => setTimeout(resolve, 300));
   expect(corpusPart).toHaveBeenCalledTimes(1);
-  tell({ part: '3001', source: 'naive', sha: 'feedface0000', sheet_version: null });
+  tell({ part: '3001', source: 'naive', sha: 'feedface0000', build: '9.c' });
   await waitFor(() => expect(naiveSrc()).toContain('v=feedface'));
   unmount();
   expect(stop).toHaveBeenCalled();
@@ -3692,10 +3708,10 @@ it('asks for the delta at once when a redraw lands in the slot on screen', async
   // Let the opening fetches settle, so the count below is only the poll's.
   await new Promise((resolve) => setTimeout(resolve, 300));
   const asked = cells.mock.calls.length;
-  tell({ part: '3001', source: 'reference', sha: 'x', sheet_version: null });
+  tell({ part: '3001', source: 'reference', sha: 'x', build: '9.c' });
   await new Promise((resolve) => setTimeout(resolve, 300));
   expect(cells.mock.calls.length).toBe(asked);
-  tell({ part: '3001', source: 'occt', sha: 'x', sheet_version: null });
+  tell({ part: '3001', source: 'occt', sha: 'x', build: '9.c' });
   await waitFor(() => expect(cells.mock.calls.length).toBe(asked + 1));
 });
 ```
@@ -3989,13 +4005,15 @@ git commit -m "key the vector-thumb cache on the render's sha"
 
 The `/corpus` wall reads its own `useSheets`, fetched once per slot. After a
 redraw its 8 and 32 px levels would show the old drawing until a reload,
-while the Wall page shows the new one. A batch of `changed` events for its
-slot bumps an epoch that refetches both sheets; `patch_cell` has already
-bumped their versions, so the image URLs change.
+while the Wall page shows the new one. The sheets are patched in the
+background after `changed` goes out, so `changed` is too early; a `sheets`
+event for its slot, sent once `patch_cell` has bumped their versions, bumps an
+epoch that refetches both sheets, and the image URLs change.
 
 **Files:**
 - Modify: `lab/src/corpus/useSheets.ts`
 - Modify: `lab/src/corpus/CorpusWall.tsx` (the `useSheets` call at ~102)
+- Modify: `lab/src/api/client.ts` (`onSheets`)
 - Test: `lab/src/corpus/useSheets.test.ts` (create)
 
 - [ ] **Step 1: Write the failing test**
@@ -4059,16 +4077,31 @@ during a session, so nothing here evicts." to "Each is one texture, fetched
 again only when `epoch` moves -- after a redraw patched a cell into it --
 so nothing here evicts."
 
-In `lab/src/corpus/CorpusWall.tsx`, add `import { useChanged } from '@lab/api/useChanged';`
-and replace `const loaded = useSheets(client, source);` with:
+In `lab/src/api/client.ts`, beside `onChanged`, add `onSheets`, the same
+listener on the `sheets` event (import `SheetsEvent`):
+
+```ts
+    /** Every sheet patch a redraw set off, as it lands. Returns the unsubscribe. */
+    onSheets(listener: (event: SheetsEvent) => void): () => void {
+      if (typeof EventSource === 'undefined') return () => {};
+      const events = new EventSource(at('/api/events'));
+      events.addEventListener('sheets', (e) => {
+        listener(JSON.parse((e as MessageEvent<string>).data) as SheetsEvent);
+      });
+      return () => events.close();
+    },
+```
+
+In `lab/src/corpus/CorpusWall.tsx`, replace
+`const loaded = useSheets(client, source);` with:
 
 ```tsx
-  // A redraw patched a cell into this slot's sheets; fetch them again, once
-  // per batch of redraws.
+  // A redraw's cell was patched into this slot's sheets; fetch them again.
+  // Patches in one slot are serialized, and each refetch is two images.
   const [sheetEpoch, setSheetEpoch] = useState(0);
-  useChanged(client, (events) => {
-    if (events.some((event) => event.source === source)) setSheetEpoch((n) => n + 1);
-  });
+  useEffect(() => client.onSheets?.((event) => {
+    if (event.source === source) setSheetEpoch((n) => n + 1);
+  }), [client, source]);
   const loaded = useSheets(client, source, sheetEpoch);
 ```
 
@@ -4083,7 +4116,7 @@ Use `prepare-js-commit`, then:
 
 ```bash
 git add lab/src/corpus/useSheets.ts lab/src/corpus/useSheets.test.ts \
-  lab/src/corpus/CorpusWall.tsx
+  lab/src/corpus/CorpusWall.tsx lab/src/api/client.ts
 git commit -m "refetch the /corpus wall's sheets after a redraw"
 ```
 
