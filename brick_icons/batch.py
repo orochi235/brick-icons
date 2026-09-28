@@ -211,6 +211,8 @@ class Runner:
         Without `isolate` this is best effort: the alarm lands between Python
         bytecodes, so an item stuck inside a C call runs past it.
         """
+        if self.log is None:
+            raise ValueError("a Runner without a log has only call")
         self.inflight.write_text(item)
         # onto reads this off the item's own stdout pipe and shows it as the
         # worker's label, so a batched item names the part in hand rather than

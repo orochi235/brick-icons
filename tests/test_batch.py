@@ -4,6 +4,8 @@ import signal
 import time
 from pathlib import Path
 
+import pytest
+
 from brick_icons import batch
 
 
@@ -316,12 +318,19 @@ def test_the_exit_code_still_names_the_signal():
     assert runner._death(1) == "the render process exited 1"
 
 
-def test_a_call_returns_the_row_and_writes_no_log(tmp_path):
+def test_a_call_returns_the_row_and_writes_no_log(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
     runner = batch.Runner(None, timeout=5, isolate=True, key="part")
     row = runner.call("3001", lambda part: {"part": part, "svg": "<svg/>"})
     assert row["svg"] == "<svg/>"
     assert row["secs"] >= 0
     assert list(tmp_path.iterdir()) == []
+
+
+def test_a_log_less_runner_refuses_run():
+    runner = batch.Runner(None, timeout=5, key="part")
+    with pytest.raises(ValueError, match="a Runner without a log has only call"):
+        runner.run("3001", lambda part: {"part": part})
 
 
 def test_a_call_past_the_cap_is_a_timeout_row():
