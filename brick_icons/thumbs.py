@@ -177,7 +177,6 @@ def bake_part(part_id: str, svg: Path | str, out: Path | str,
         return []
     out.mkdir(parents=True, exist_ok=True)
     _write_tiles(out, part_id, _drawn(part_id, svg, out))
-    _write_baked(out, {**shas, part_id: sha})
     mask_shas = baked_shas(masks)
     if mask_text is not None:
         masks.mkdir(parents=True, exist_ok=True)
@@ -187,12 +186,21 @@ def bake_part(part_id: str, svg: Path | str, out: Path | str,
             _write_tiles(masks, part_id, _rasterized(part_id, tmp, masks))
         finally:
             tmp.unlink(missing_ok=True)
-        _write_baked(masks, {**mask_shas, part_id: sha})
     elif part_id in mask_shas:
         # Redrawn without marks: its old mask would describe another drawing.
         for level in LEVELS:
             (masks / str(level) / f"{part_id}.{THUMB_EXT}").unlink(missing_ok=True)
-        _write_baked(masks, {k: v for k, v in mask_shas.items() if k != part_id})
+    # A lab redraw and bake-thumbs.py's watcher can land on the same slot at
+    # once: baked.json is the only state two bakes of different parts share,
+    # so its read-modify-write is locked and re-read fresh here rather than
+    # merged into the snapshot taken before this part's tiles were written.
+    with _sheets_locked(out):
+        _write_baked(out, {**baked_shas(out), part_id: sha})
+        if mask_text is not None:
+            _write_baked(masks, {**baked_shas(masks), part_id: sha})
+        elif part_id in mask_shas:
+            _write_baked(masks, {k: v for k, v in baked_shas(masks).items()
+                                 if k != part_id})
     return list(LEVELS)
 
 

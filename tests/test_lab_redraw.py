@@ -100,6 +100,21 @@ def test_a_new_drawing_is_stored_timed_and_announced(lab, stub_spot, tmp_path):
     assert manifest["baked"]["3001"] == sha
 
 
+def test_a_store_exception_leaves_no_stored_attempt(lab, stub_spot, monkeypatch,
+                                                     tmp_path):
+    def boom(*args, **kwargs):
+        raise OSError("disk full")
+    monkeypatch.setattr(db, "store_render", boom)
+    client, heard = lab(stub_spot(_drawn()))
+    with pytest.raises(OSError):
+        client.post("/api/corpus/redraw", json={"part": "3001", "source": "occt"})
+    assert tuple(_one(tmp_path, "SELECT state, error FROM attempts")) == \
+        (None, "OSError")
+    assert _one(tmp_path, "SELECT sha256 FROM renders WHERE part_id = '3001' "
+                          "AND source = 'occt'")[0] == goldens.sha256(OLD.encode())
+    assert heard == []
+
+
 def test_the_change_is_announced_before_the_sheets_are_patched(
         lab, stub_spot, monkeypatch):
     release, patching = threading.Event(), threading.Event()
@@ -205,6 +220,7 @@ def test_a_down_service_is_said_and_tries_nothing(lab, stub_spot, tmp_path):
     body = _redraw(client)
     assert (body["state"], body["detail"]) == ("down", "no such service")
     assert _one(tmp_path, "SELECT count(*) FROM attempts")[0] == 0
+    assert not (tmp_path / "requests.jsonl").exists()
     assert heard == []
 
 
@@ -215,6 +231,7 @@ def test_a_failed_roll_is_a_failure_in_onto_s_words(lab, stub_spot, tmp_path):
     assert (body["state"], body["error"], body["detail"]) == \
         ("failed", "RollFailed", "checkout cccc: uv sync failed")
     assert _one(tmp_path, "SELECT count(*) FROM attempts")[0] == 0
+    assert not (tmp_path / "requests.jsonl").exists()
 
 
 def test_a_sheet_that_cannot_be_patched_still_stores_the_drawing(

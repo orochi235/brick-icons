@@ -285,6 +285,7 @@ def test_a_redraw_without_marks_drops_the_old_mask(tmp_path):
 
 
 import shutil
+import threading
 import time
 
 import numpy as np
@@ -407,3 +408,24 @@ def test_a_cell_with_no_tile_is_cleared(tmp_path):
 def test_has_sheets_says_whether_a_slot_was_composed(tmp_path):
     assert not thumbs.has_sheets(tmp_path / "slot")
     assert thumbs.has_sheets(_baked_slot(tmp_path))
+
+
+def test_two_interleaved_bakes_keep_both_entries(tmp_path, slow_counted):
+    # A lab redraw and the watcher's bake-thumbs.py are separate processes on
+    # the same slot; slowing tile-writing forces both to read baked.json
+    # before either has written its own entry.
+    svg = tmp_path / "rect.svg"
+    svg.write_text(SVG)
+    out = tmp_path / "slot"
+    slow_counted(thumbs, "_write_tiles")
+    gate = threading.Barrier(2)
+
+    def one(part_id):
+        gate.wait()
+        thumbs.bake_part(part_id, svg, out, sha=f"sha-{part_id}")
+    threads = [threading.Thread(target=one, args=(p,)) for p in ("a", "b")]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert thumbs.baked_shas(out) == {"a": "sha-a", "b": "sha-b"}

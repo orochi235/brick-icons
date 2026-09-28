@@ -64,7 +64,6 @@ class SheetPatches:
 def redraw(part: str, source: str, spot, events: Broker, where: Where,
            patches: SheetPatches) -> dict:
     commit, want = spot.expected()
-    render_requests.add(where.requests_path, part, source, build=want)
     request = spot_protocol.request(part, source, db.canonical_argv(part, source),
                                     build=want)
     try:
@@ -73,6 +72,9 @@ def redraw(part: str, source: str, spot, events: Broker, where: Where,
         return {"state": "down", "detail": str(e)}
     except SpotError as e:
         return {"state": "failed", "error": e.error, "detail": str(e)}
+    # Recorded only now the worker has actually replied: a down service or a
+    # failed roll tried nothing, so nothing was asked for.
+    render_requests.add(where.requests_path, part, source, build=want)
     conn = db.connect(where.corpus_db)
     try:
         run_id = db.spot_run(conn, reply["build"], part, source)
@@ -107,18 +109,25 @@ def _take(conn, run_id: int, part: str, source: str, reply: dict,
     sha = goldens.sha256(data)
     held = conn.execute("SELECT sha256 FROM renders WHERE part_id = ? "
                         "AND source = ?", (part, source)).fetchone()
-    db.record_attempt(conn, run_id, {**tried, "state": "stored"})
     if held is not None and held["sha256"] == sha:
+        db.record_attempt(conn, run_id, {**tried, "state": "stored"})
         db.touch_render(conn, part, source)
         return {"state": "unchanged", "sha": sha, **said}, None
     where.scratch.mkdir(parents=True, exist_ok=True)
     made = where.scratch / f"{part}.{source}.svg"
     made.write_bytes(data)
     try:
-        dest = db.store_render(conn, part, source, made, root=where.root,
-                               run_id=run_id)
+        try:
+            dest = db.store_render(conn, part, source, made, root=where.root,
+                                   run_id=run_id)
+        except Exception as e:
+            db.record_attempt(conn, run_id,
+                              {**tried, "state": None,
+                               "error": type(e).__name__})
+            raise
     finally:
         made.unlink(missing_ok=True)
+    db.record_attempt(conn, run_id, {**tried, "state": "stored"})
     return {"state": "stored", "sha": sha, **said}, dest
 
 
