@@ -166,6 +166,8 @@ def test_isolate_reaps_a_grandchild_the_item_left_behind(tmp_path):
             marker.write_text(str(os.getpid()))
             while True:
                 time.sleep(0.05)
+        while not marker.exists():
+            time.sleep(0.01)
         return {"item": "leaves", "error": "TimeoutError"}   # no waitpid
 
     runner = batch.Runner(tmp_path / "out.jsonl", timeout=5, isolate=True)
