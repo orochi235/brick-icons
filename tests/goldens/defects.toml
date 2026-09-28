@@ -3968,6 +3968,24 @@ filed = "2026-09-28"
 notes = "With stud instancing on (the default since 2026-09-28) two of 4589's part fills carry runs of 23 sub-quarter-pixel L segments (106 of 226), along y 40.5-41, x 97-159 of a 256x170 canvas: the base of the stud placed at (128, 38.7). With --stud-instancing off the same render has no run over 4. Nothing visible changes; the path carries line commands no arc absorbed. Inferred, not measured: the withheld stud's rim is no longer among the arc candidates the fill refit uses, so the hole it leaves in the cone top stays a polyline. test_occt::test_a_fill_boundary_carries_no_sampled_boundary[4589] is xfail on this row."
 
 [[defect]]
+id = "2507pa2-decal-projection-is-useless"
+part = "2507pa2"
+engines = ["decal"]
+status = "open"
+title = "decal projection is useless"
+checked = { decal = "89457ec33a47a9ecfc4f9b5b36fdd5c24661df64c39d0df1ba8bfd4d0ab93162" }
+filed = "2026-09-28"
+
+[[defect]]
+id = "3004pt5-decal-lines-are-erratic-in"
+part = "3004pt5"
+engines = ["decal"]
+status = "open"
+title = "decal lines are erratic in width"
+checked = { decal = "a81987fb1b2d8d5b031dd5b0fb28aef2b7beda6b70c680aa3bc841e051008a56" }
+filed = "2026-09-28"
+
+[[defect]]
 id = "612p01-stud-wall-band-too-wide"
 part = "612p01"
 engines = ["occt"]
