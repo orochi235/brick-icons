@@ -40,6 +40,20 @@ def test_unknown_route_is_404(client):
     assert client.get("/api/nope").status_code == 404
 
 
+def test_health_names_the_build_the_server_loaded(client):
+    import brick_icons
+    assert client.get("/api/health").json() == {
+        "ok": True, "build": brick_icons.build()}
+
+
+def test_health_answers_without_a_corpus_database(tmp_path):
+    absent = tmp_path / "absent.db"
+    client = TestClient(lab_app.create_app(cache_root=tmp_path,
+                                           corpus_db=absent))
+    assert client.get("/api/health").status_code == 200
+    assert not absent.exists()
+
+
 import time
 
 

@@ -128,6 +128,10 @@ def create_app(root: Path | str = ".",
             app.state.index = partindex.build(app.state.ldraw_dir)
         return app.state.index
 
+    @app.get("/api/health")
+    def get_health():
+        return {"ok": True, "build": build()}
+
     @app.get("/api/schema")
     def get_schema():
         return {"fields": schema.config_schema(root=root)}
