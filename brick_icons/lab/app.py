@@ -11,9 +11,10 @@ import time
 from datetime import date
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import (FileResponse, JSONResponse, Response,
+                                StreamingResponse)
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from pydantic import BaseModel
@@ -25,9 +26,9 @@ from .. import features
 from .. import tags
 from .. import thumbs, trace
 from ..config import load_config
-from . import (cache, cells, corpus, decal, defects, diff, findings, flight,
-               goldens_status, ingest, jobs, partindex, reference, review_api,
-               runner, schema, sizes, stats, store)
+from . import (cache, cells, corpus, decal, defects, diff, events, findings,
+               flight, goldens_status, ingest, jobs, partindex, reference,
+               review_api, runner, schema, sizes, stats, store)
 from .. import db as corpus_db_module
 from .. import review
 
@@ -111,6 +112,7 @@ def create_app(root: Path | str = ".",
     app.state.stats_cache = {}
     app.state.jobs = jobs.Registry()
     app.state.flights = flight.Flights()
+    app.state.events = events.Broker()
     app.state.defects_path = Path(defects_path) if defects_path else (
         root / defects.DEFAULT_PATH)
     app.state.reference_root = Path(cache_root) / "reference"
@@ -138,6 +140,13 @@ def create_app(root: Path | str = ".",
     @app.get("/api/health")
     def get_health():
         return {"ok": True, "build": build()}
+
+    @app.get("/api/events")
+    async def get_events(request: Request):
+        return StreamingResponse(
+            events.stream(app.state.events, request.is_disconnected),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache"})
 
     @app.get("/api/schema")
     def get_schema():
