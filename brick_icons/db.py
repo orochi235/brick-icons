@@ -267,7 +267,8 @@ def now() -> str:
 
 def drawn_at(path: Path | str, stated: str | None = None) -> str:
     """When a drawing was made: the one answer every writer of
-    `renders.made_at` uses.
+    `renders.made_at` uses -- except `touch_render`, which restamps a slot
+    deliberately, with no new file for this to date.
 
     `stated` is the time its renderer logged beside it (`stated_times`), and
     wins. Without one, the file's mtime -- exact for a drawing made on this
