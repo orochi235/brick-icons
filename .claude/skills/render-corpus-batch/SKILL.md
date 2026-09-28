@@ -148,7 +148,7 @@ Then, with the four values step 2 printed (`CAP` is the `150` here):
       --each out/slot-occt/batches.txt --workers 10 --retries 1 \
       --env PATH=/Users/mike/.local/bin:/opt/homebrew/bin:/usr/bin:/bin \
       --env SOURCE=occt --env KEEP=out/slot-occt/renders \
-      --env EXTRA='--shade-style flat3 --line-width 2 --silhouette-width 2' \
+      --env EXTRA='--shade-style flat3 --line-width 1.4 --silhouette-width 1.4' \
       --out out/slot-occt --to out/slot-occt \
       <node> -- scripts/census-batch.sh occt 150 out/slot-occt {}
 

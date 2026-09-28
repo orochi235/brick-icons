@@ -92,6 +92,24 @@ def test_a_displacement_is_logged_and_the_before_kept(conn, tmp_path):
     assert row["verdict"] is None and row["diff_components"] is None
 
 
+def test_a_redraw_under_a_changed_slot_config_replaces_the_old_row(
+        conn, tmp_path, monkeypatch):
+    """A slot's key is its canonical argv, so changing a stroke width leaves
+    every held row under the old key; the redraw must still displace it."""
+    first = _draw(tmp_path, "out/slot-occt-a", "3001", SVG)
+    old_key = db.record_render(conn, "3001", "occt", first, root=tmp_path)
+    monkeypatch.setitem(db._CANONICAL, "occt",
+                        [*db._CANONICAL["occt"], "--opacity", "0.9"])
+    second = _draw(tmp_path, "out/slot-occt-b", "3001", SVG2)
+    new_key = db.record_render(conn, "3001", "occt", second, root=tmp_path)
+
+    assert new_key != old_key
+    rows = conn.execute("SELECT config_key FROM renders").fetchall()
+    assert [r["config_key"] for r in rows] == [new_key]
+    lines = review.load(tmp_path / review.DEFAULT_PATH)
+    assert [l["kind"] for l in lines] == ["replaced"]
+
+
 def test_a_first_render_and_a_retake_of_the_same_sha_log_nothing(conn, tmp_path):
     svg = _draw(tmp_path, "out/slot-occt-a", "3001", SVG)
     db.record_render(conn, "3001", "occt", svg, root=tmp_path)

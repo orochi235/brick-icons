@@ -527,16 +527,21 @@ def import_store_jsonl(conn: sqlite3.Connection, run_id: int,
 # The one config each source's stored render is drawn at. A second config is a
 # different drawing and belongs in out/lab's cache, not in the store.
 _CANONICAL = {
+    # Drawing slots state their stroke widths: the key is this argv, so an
+    # inherited default that moved would leave the key and its lab cache at
+    # the old weight. naive is retired and frozen at the 2 px it was drawn at.
     "naive": ["--engine", "naive", "--shading", "outline",
-              "--shade-style", "flat3", "--angle", "iso", "--format", "svg"],
+              "--shade-style", "flat3", "--angle", "iso", "--format", "svg",
+              "--line-width", "2", "--silhouette-width", "2"],
     "occt": ["--engine", "occt", "--shading", "outline",
-             "--shade-style", "flat3", "--angle", "iso", "--format", "svg"],
-    # occt drawn lighter: the same stroke tiers under a 1.5 px line weight.
+             "--shade-style", "flat3", "--angle", "iso", "--format", "svg",
+             "--line-width", "1.4", "--silhouette-width", "1.4"],
+    # occt drawn lighter: the same stroke tiers under a 1.0 px line weight.
     # Named engine-first, so its trees need the SOURCE marker to file here.
     "occt-svelte": ["--engine", "occt", "--shading", "outline",
                     "--shade-style", "flat3", "--angle", "iso",
-                    "--format", "svg", "--line-width", "1.5",
-                    "--silhouette-width", "1.5"],
+                    "--format", "svg", "--line-width", "1.0",
+                    "--silhouette-width", "1.0"],
     "decal": ["--decal", "--angle", "iso", "--format", "svg"],
     # The reference that is mathematically compatible with the library:
     # orthographic, and three.js's LDrawLoader substitutes no primitives, so
@@ -566,10 +571,12 @@ _CANONICAL = {
     # some parts and solid for others.
     "translucent-naive": ["--engine", "naive", "--shading", "outline",
                           "--shade-style", "flat3", "--angle", "iso",
-                          "--format", "svg", "--opacity", "0.5"],
+                          "--format", "svg", "--opacity", "0.5",
+                          "--line-width", "2", "--silhouette-width", "2"],
     "translucent-occt": ["--engine", "occt", "--shading", "outline",
                          "--shade-style", "flat3", "--angle", "iso",
-                         "--format", "svg", "--opacity", "0.5"],
+                         "--format", "svg", "--opacity", "0.5",
+                         "--line-width", "1.4", "--silhouette-width", "1.4"],
     # The census's oracle drawing, not the store's: strokeless, so the fills
     # carry the silhouette and no stroke overhang has to be subtracted from
     # the comparison. One source per engine because the census writes
@@ -592,8 +599,8 @@ _CANONICAL = {
                     "--silhouette-width", "2"],
     "white-occt": ["--format", "svg", "--shading", "outline",
                    "--shade-style", "white", "--angle", "iso",
-                   "--engine", "occt", "--line-width", "2",
-                   "--silhouette-width", "2"],
+                   "--engine", "occt", "--line-width", "1.4",
+                   "--silhouette-width", "1.4"],
 }
 
 
@@ -683,9 +690,11 @@ def record_render(conn: sqlite3.Connection, part_id: str, source: str,
     # indexing it would walk the slot backwards with nothing in the row to say
     # so. Not when the row names this very file -- `store_render` has already
     # written over it, and the row must follow what is on disk.
+    # Any key: a slot whose canonical argv changed holds its drawings under
+    # the old one, and every reader takes one row per (part, source).
     held = conn.execute(
         "SELECT path, sha256, made_at, run_id FROM renders WHERE part_id = ? "
-        "AND source = ? AND config_key = ?", (part_id, source, key)).fetchone()
+        "AND source = ? ORDER BY made_at DESC", (part_id, source)).fetchone()
     if held is not None and held["path"] != where and held["made_at"] > made:
         return key
     sha = goldens.sha256(raw)
@@ -704,6 +713,9 @@ def record_render(conn: sqlite3.Connection, part_id: str, source: str,
         "made_at, path, sha256, width, height, indexed_at) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (part_id, source, key, run_id, made, where, sha, width, height, now()))
+    conn.execute(
+        "DELETE FROM renders WHERE part_id = ? AND source = ? "
+        "AND config_key != ?", (part_id, source, key))
     conn.commit()
     return key
 

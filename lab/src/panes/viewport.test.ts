@@ -202,7 +202,7 @@ describe('threeStyle', () => {
 
   it('falls back for a flag left unset, which the lab carries as null', () => {
     expect(threeStyle({ opacity: null, line_width: null }))
-      .toEqual({ opacity: 1, lineWidth: 2, background: null });
+      .toEqual({ opacity: 1, lineWidth: 1.4, background: null });
   });
 
   it('clamps an opacity the settings panel let through', () => {

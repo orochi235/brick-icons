@@ -19,15 +19,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from brick_icons import cli, geom2d  # noqa: E402
+from brick_icons import cli, db, geom2d  # noqa: E402
 
 FONT = "/System/Library/Fonts/Helvetica.ttc"
 
 
 def render(part: str, out: Path, engine: str) -> Path:
-    argv = [part, "--format", "svg", "--shading", "outline",
-            "--shade-style", "white", "--angle", "iso", "--engine", engine,
-            "--line-width", "2", "--silhouette-width", "2", "--out", str(out)]
+    argv = [*db.canonical_argv(part, f"white-{engine}"), "--out", str(out)]
     args = cli.build_parser().parse_args(argv)
     cli.process_one(cli._config_from_args(args), part, out)
     return out / f"{part}.svg"
