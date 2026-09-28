@@ -72,6 +72,7 @@ the pipeline, the layout, the lab, the census and the test gates.
 ## Setup (macOS)
 
     python3 -m venv .venv && .venv/bin/pip install -e .
+    source .venv/bin/activate        # puts `brick-icons` on PATH
     ./scripts/setup-ldview.sh        # vendor/LDView.app + vendor/ldraw + potrace
 
 LDView 4.7 is a universal binary, so it runs native on both Apple Silicon and
@@ -87,28 +88,28 @@ prefix for LDView, empty by default — set it if your platform needs a wrapper.
 ## Usage
 
     # both PNG outputs, normal shading
-    .venv/bin/python -m brick_icons.cli 3001 --mode both --out out
+    brick-icons 3001 --mode both --out out
 
     # cel-shaded, 1-bit Atkinson dither, batch from a list, 360 dpi
-    .venv/bin/python -m brick_icons.cli --list bins.txt --shading cel \
+    brick-icons --list bins.txt --shading cel \
         --mode mono --dither atkinson --dpi 360 --out out
 
     # vector outline SVG, top-down
-    .venv/bin/python -m brick_icons.cli 3001 --format svg --shading outline \
+    brick-icons 3001 --format svg --shading outline \
         --angle top --out out
 
     # size by physical tape
-    .venv/bin/python -m brick_icons.cli 3001 --label-mm 24 12 --mode mono
+    brick-icons 3001 --label-mm 24 12 --mode mono
 
 A curated starter parts list spanning bricks/plates/tiles/slopes/round/technic
 ships as `parts.txt`:
 
-    .venv/bin/python -m brick_icons.cli --list parts.txt --format both \
+    brick-icons --list parts.txt --format both \
         --shading outline --mode both --out out
 
 Printed parts can also have their decoration lifted off as a flat texture:
 
-    .venv/bin/python -m brick_icons.cli 3941p01 --decal --out out
+    brick-icons 3941p01 --decal --out out
 
 ## Lab server
 
