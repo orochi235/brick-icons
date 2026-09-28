@@ -105,6 +105,11 @@ def build_parser():
     p.add_argument("--opacity", type=float,
                    help="face-fill opacity 0-1 for SVG output "
                         "(translucent bricks; default 1)")
+    p.add_argument("--solid-deco", dest="solid_deco", action="store_true",
+                   default=None,
+                   help="under --opacity below 1, paint the part's printing "
+                        "and stickers at full opacity, hiding what is behind "
+                        "them, while the body stays see-through")
     p.add_argument("--debug-colors", dest="debug_colors", nargs="?",
                    const="cycle", default=None, type=_debug_mode,
                    metavar="cycle|ramp|ramp=N",
@@ -166,6 +171,7 @@ def _config_from_args(args) -> Config:
         "levels": tuple(args.levels) if args.levels else None,
         "shade_style": args.shade_style, "light": args.light,
         "svg_bg": args.svg_bg, "opacity": args.opacity,
+        "solid_deco": args.solid_deco,
         "wireframe": args.wireframe, "use_ldview": args.use_ldview,
         "ldview_look": args.ldview_look,
         "decal": args.decal, "texture_px": args.texture_px,
@@ -288,6 +294,17 @@ def _hide_kw(*a):
     return dict(zip(("hide", "spare"), _hide(*a)))
 
 
+def _print_cut(cfg: Config, faces, ops, line_px):
+    """`ops` less what lies behind opaque print (shade.print_cover): with
+    --solid-deco on a translucent render, the print hides the edges behind
+    it that the see-through body shows. The margin is half a line stroke,
+    so an edge on the print's own outline keeps its whole width."""
+    if not (cfg.opacity < 1.0 and cfg.solid_deco) or cfg.wireframe or not faces:
+        return ops
+    return geom2d.ops_outside(ops, shade.print_cover(faces, line_px / 2.0,
+                                                     close=line_px))
+
+
 def render_tag(cfg: Config, name: str, posed: bool = False) -> str:
     """The part id plus the settings that change what the drawing shows.
 
@@ -304,6 +321,8 @@ def render_tag(cfg: Config, name: str, posed: bool = False) -> str:
                     else f"{cfg.shading}/{cfg.shade_style}")
     if cfg.opacity < 1.0:
         bits.append(f"opacity={cfg.opacity:g}")
+        if cfg.solid_deco:
+            bits.append("solid-deco")
     if cfg.stud_instancing != DEFAULTS["stud_instancing"]:
         bits.append(f"studs={cfg.stud_instancing}")
     if cfg.contour == "off":
@@ -441,10 +460,12 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                 w_mm = vb_w / s * 0.4
                 h_mm = vb_h / s * 0.4
                 trace.segments_to_svg(
-                    shifted, round(vb_w), round(vb_h), out_dir / f"{name}.svg",
+                    _print_cut(cfg, faces, shifted, cfg.line_mm / 0.4 * s),
+                    round(vb_w), round(vb_h), out_dir / f"{name}.svg",
                     physical=(w_mm, h_mm), s=s,
                     line_mm=cfg.line_mm, sil_mm=cfg.silhouette_mm, fills=fills,
                     bg=cfg.svg_bg, opacity=cfg.opacity,
+                    solid_deco=cfg.solid_deco,
                     clip_geom=sil_geom, contour=contour,
                     contour_arcs=geom2d.arc_candidates(ells), label=label,
                     debug_colors=cfg.debug_colors, studs=studs,
@@ -486,10 +507,13 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                                      + geom2d.arc_regions(fit, sil_geom)),
                     stroke=sil_px) \
                     if sil_geom is not None and cfg.contour == "on" else None
-                trace.segments_to_svg(fit, cfg.width, cfg.height, out_dir / f"{name}.svg",
+                trace.segments_to_svg(_print_cut(cfg, faces, fit, line_px),
+                                      cfg.width, cfg.height,
+                                      out_dir / f"{name}.svg",
                                       line_px=line_px, sil_px=sil_px, studs=studs,
                                       fills=fills, bg=cfg.svg_bg,
                                       opacity=cfg.opacity,
+                                      solid_deco=cfg.solid_deco,
                                       clip_geom=sil_geom, contour=contour,
                                       contour_arcs=geom2d.arc_candidates(ells),
                                       label=label,
@@ -516,10 +540,11 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                 ops = instancing.cut_ops(
                     fit_segs, hide.buffer(-line / 4.0) if hide is not None
                     else None, keep=spare)
+                faces = shade.apply_affine_faces(res.faces, *aff)
+                ops = _print_cut(cfg, faces, ops, line)
                 if cfg.contour == "off":
                     return ops, None
-                faces = (shade.apply_affine_faces(res.faces, *aff)
-                         or _sil_faces(res, *aff))
+                faces = faces or _sil_faces(res, *aff)
                 if not faces:
                     return ops, None
                 sil_g = shade.silhouette_geom(faces)

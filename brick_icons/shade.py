@@ -2101,6 +2101,61 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
     return ops
 
 
+def _print_sheet(face, i):
+    """Which surface a print face lies on: a curved carrier by identity, a
+    flat one by its normal -- a region bound to the plane and a colored disc
+    primitive the unwrap left alone are one sheet when they share it."""
+    carrier = face.get("carrier")
+    if carrier is not None and not isinstance(carrier, unwrap.Plane):
+        return ("carrier", id(carrier))
+    n = face.get("normal")
+    if n is None:
+        return ("face", i)
+    return ("plane",) + tuple(round(float(v), 2) + 0.0 for v in n)
+
+
+def print_cover(faces, margin, close=0.0):
+    """Where printing is the nearest thing drawn, less `margin` px: the
+    region no stroke shows through when print is opaque. `faces` are in
+    paint order (order_faces / occt.ordered_faces), so a face painted after
+    a print region is nearer than it and cuts its cover -- a stud standing on
+    a printed baseplate, or a translucent body's near wall. Print is what
+    fill_ops paints as decoration: any color but 16. Print lying on one
+    surface is one sheet, so a boundary between two of its colors cuts
+    nothing, while the margin keeps a stroke on the sheet's own outline, on
+    a nearer face's outline or on a crease the print runs over. Gaps in a
+    sheet narrower than 2 * `close` count as print."""
+    geoms = [geom2d.to_geom(f["poly"], f.get("holes")) for f in faces]
+    sheet = [_print_sheet(f, i) if f.get("color", 16) != 16 else None
+             for i, f in enumerate(faces)]
+    if not any(s is not None for s in sheet):
+        return None
+    import shapely
+    from shapely.strtree import STRtree
+    tree = STRtree(geoms)
+    sheets, nearer = defaultdict(list), defaultdict(set)
+    for i, s in enumerate(sheet):
+        if s is None or geoms[i].is_empty:
+            continue
+        sheets[s].append(geoms[i])
+        nearer[s].update(j for j in tree.query(geoms[i])
+                         if j > i and sheet[j] != s and not geoms[j].is_empty)
+    cover = []
+    for s, gs in sheets.items():
+        # a gap in the print narrower than a stroke shows no edge through
+        # it, only a dash of one -- 3068bp01's hairline stripes
+        g = shapely.set_precision(
+            geom2d.union_all(gs).buffer(close).buffer(-close), geom2d.GRID)
+        if nearer[s]:
+            g = geom2d.difference(g, geom2d.union_all(
+                [geoms[j] for j in nearer[s]]))
+        g = g.buffer(-margin)
+        if not g.is_empty:
+            cover.append(g)
+    cover = geom2d.union_all(cover)
+    return None if cover.is_empty else shapely.set_precision(cover, geom2d.GRID)
+
+
 def silhouette_geom(faces):
     """Union of every face polygon: the part's exact projected silhouette
     (canvas px). Feeds the stroke-layer clip (see geom2d.buffer_d)."""

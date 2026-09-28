@@ -700,3 +700,57 @@ def path_d(g, arcs=None, tol=ARC_TOL, min_area=0.0, min_ring_area=0.0,
                 cmds.append("M " + " L ".join(f"{x:.2f} {y:.2f}" for x, y in pts)
                             + " Z")
     return " ".join(cmds)
+
+
+def ops_outside(ops, region, step=0.25):
+    """Stroke ops less the parts inside `region`, each piece still the kind
+    of op it came from: a line stays a line, an arc a sub-arc of the same
+    ellipse. Sampled every `step` px, so a cut lands within step/2 of the
+    region's boundary. An op that misses `region` comes back as it was."""
+    if region is None or region.is_empty:
+        return list(ops)
+    shapely.prepare(region)
+    x0, y0, x1, y1 = region.bounds
+    out = []
+    for op in ops:
+        if len(op) == 5:                               # legacy line tuple
+            op = ("line",) + tuple(op)
+        if op[0] == "line":
+            _, ax, ay, bx, by, kind = op
+            n = max(2, int(math.hypot(bx - ax, by - ay) / step) + 1)
+            ts = np.linspace(0.0, 1.0, n)
+            xs, ys = ax + (bx - ax) * ts, ay + (by - ay) * ts
+        else:
+            _, cx, cy, ux, uy, vx, vy, t0, t1, kind = op
+            r = max(math.hypot(ux, uy), math.hypot(vx, vy))
+            n = max(2, int(r * math.radians(abs(t1 - t0)) / step) + 1)
+            ts = np.linspace(t0, t1, n)
+            a = np.radians(ts)
+            xs = cx + np.cos(a) * ux + np.sin(a) * vx
+            ys = cy + np.cos(a) * uy + np.sin(a) * vy
+        if xs.max() < x0 or xs.min() > x1 or ys.max() < y0 or ys.min() > y1:
+            out.append(op)
+            continue
+        inside = shapely.contains_xy(region, xs, ys)
+        if not inside.any():
+            out.append(op)
+            continue
+        # runs of outside samples, each end moved halfway to its inside
+        # neighbor so the cut sits on the boundary, not a sample short of it
+        i = 0
+        while i < n:
+            if inside[i]:
+                i += 1
+                continue
+            j = i
+            while j + 1 < n and not inside[j + 1]:
+                j += 1
+            s = ts[i] if i == 0 else (ts[i - 1] + ts[i]) / 2
+            e = ts[j] if j == n - 1 else (ts[j] + ts[j + 1]) / 2
+            if op[0] == "line":
+                out.append(("line", ax + (bx - ax) * s, ay + (by - ay) * s,
+                            ax + (bx - ax) * e, ay + (by - ay) * e, kind))
+            else:
+                out.append(op[:7] + (float(s), float(e), kind))
+            i = j + 1
+    return out

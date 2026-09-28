@@ -451,11 +451,14 @@ def deco_mask_svg(text: str) -> str | None:
     return text[:m.end()] + _MASK_STYLE + text[m.end():]
 
 
-def fill_elements(fills, opacity=1.0, gid_prefix="g"):
+def fill_elements(fills, opacity=1.0, gid_prefix="g", solid_deco=False):
     """(defs, body) for fill ops: the gradients they paint with, and the
     self-stroked paths inside one round-joined group. `gid_prefix` names the
     gradients; a second drawing in the same file (a stud definition, see
-    instancing.Instancer) takes its own so the ids cannot collide."""
+    instancing.Instancer) takes its own so the ids cannot collide.
+    `solid_deco` paints decoration as an opaque fill whatever `opacity` is:
+    in painter's order it then hides everything behind it, and a nearer
+    translucent face still blends over it."""
     # Each fill is stroked in its own paint (~0.8px) so antialiasing seams
     # between abutting coplanar faces don't show; gradient fills (cylinder
     # walls) carry a <linearGradient> def instead of a flat color.
@@ -504,13 +507,13 @@ def fill_elements(fills, opacity=1.0, gid_prefix="g"):
         # AA seams between abutting opaque fills double-paints its 0.4px
         # overhang onto neighbors when composited at opacity < 1 —
         # concentric ghost rings on a dish's stacked bands (4740)
-        seam = (f' stroke="{paint}" stroke-width="0.8"'
-                if opacity >= 1.0 else "")
+        solid = opacity >= 1.0 or (solid_deco and fo.get("deco"))
+        seam = f' stroke="{paint}" stroke-width="0.8"' if solid else ""
         # class="deco" marks paint that is not the part's own color, so a
         # viewer can recolor the part without touching its printing
         deco = ' class="deco"' if fo.get("deco") else ""
         body.append(f'<path d="{fo["d"]}"{deco} fill="{paint}" '
-                    f'fill-rule="evenodd"{seam}{face_op}/>')
+                    f'fill-rule="evenodd"{seam}{"" if solid else face_op}/>')
     body.append("</g>")
     return defs, body
 
@@ -562,7 +565,7 @@ def stroke_elements(segs, line_px, sil_px, studs=None):
 def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
                     physical=None, s=None, line_mm=0.2, sil_mm=0.2,
                     fills=None, bg: str = "none", opacity: float = 1.0,
-                    clip_geom=None, contour=None, contour_arcs=None,
+                    solid_deco: bool = False, clip_geom=None, contour=None, contour_arcs=None,
                     label: str | None = None,
                     debug_colors: bool = False, studs=None,
                     between=None, hide=None, spare=None) -> Path:
@@ -588,7 +591,7 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
     if bg != "none":
         parts.append(f'<rect width="100%" height="100%" fill="{bg}"/>')
     if fills:
-        defs, body = fill_elements(fills, opacity)
+        defs, body = fill_elements(fills, opacity, solid_deco=solid_deco)
         if defs:
             parts.append("<defs>" + "".join(defs) + "</defs>")
         parts += body
