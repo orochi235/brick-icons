@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import type { AnnotationKind } from '@weasel-js/labkit';
 import type { LabClient } from '@lab/api/client';
 import { defectId } from '@lab/defects/identity';
 import { POSITION_DEPENDS_ON } from '@lab/defects/targets';
@@ -8,7 +9,8 @@ export type DefectStatus = 'open' | 'fixed' | 'wontfix' | 'notabug';
 /** Beside the type, so a new status cannot reach one dropdown and not the other. */
 export const STATUSES: DefectStatus[] = ['open', 'fixed', 'wontfix', 'notabug'];
 
-export type MarkKind = 'rect' | 'line' | 'arrow' | 'ellipse' | 'stroke' | 'text';
+/** A defect stores whatever kind of mark the kit drew it with. */
+export type MarkKind = AnnotationKind;
 
 /** A rectangle in fractions of the pane box it was drawn on. */
 export interface Mark { x: number; y: number; w: number; h: number; }

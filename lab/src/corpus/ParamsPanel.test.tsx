@@ -27,7 +27,7 @@ it('writes a color change through setParam', () => {
     <ParamsPanel params={DEFAULT_PARAMS} setParam={setParam} reset={vi.fn()} />,
   );
   const swatch = container.querySelector('input[type="color"]')!;
-  fireEvent.change(swatch, { target: { value: '#123456' } });
+  fireEvent.input(swatch, { target: { value: '#123456' } });
   expect(setParam).toHaveBeenCalledWith(expect.any(String), '#123456');
 });
 

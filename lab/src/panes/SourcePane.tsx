@@ -1,5 +1,5 @@
 import { type ReactNode, type RefObject, useEffect, useRef, useState } from 'react';
-import { usePinchGesture } from '@weasel-js/core';
+import { pinchPair } from 'pezlie';
 import { type Camera, panBy, zoomAt } from '@lab/panes/camera';
 import { PaneStage, type PaneState } from '@lab/panes/PaneStage';
 import { bubbleDiameter, loupeCamera, loupeCameraForImage, stageOffset,
@@ -58,7 +58,7 @@ export function SourcePane({ source, state, camera, onCamera, note, busy,
   // touch pointer, so the pane would not pan at all on iOS.
   const dragPointer = useRef<number | null>(null);
   const last = useRef({ x: 0, y: 0 });
-  const down = useRef(new Set<number>());
+  const down = useRef(new Map<number, Point>());
   const pinchAt = useRef<Point | null>(null);
   const body = useRef<HTMLDivElement | null>(null);
   // The callback goes through a ref so the effect does not re-subscribe when
@@ -85,7 +85,7 @@ export function SourcePane({ source, state, camera, onCamera, note, busy,
 
   // Two fingers zoom about their midpoint and pan by where it travels, the
   // gesture the wheel handler below has no touch equivalent for.
-  usePinchGesture(body, (clientAnchor, factor) => {
+  const pinch = (clientAnchor: Point, factor: number) => {
     const el = body.current;
     if (!el) return;
     const box = el.getBoundingClientRect();
@@ -94,7 +94,7 @@ export function SourcePane({ source, state, camera, onCamera, note, busy,
     const zoomed = zoomAt(camera, factor, from.x, from.y);
     onCamera(panBy(zoomed, at.x - from.x, at.y - from.y));
     pinchAt.current = at;
-  });
+  };
 
   const diameter = bubbleDiameter(size);
   const offset = loupe ? stageOffset(loupe.at, diameter) : null;
@@ -114,7 +114,7 @@ export function SourcePane({ source, state, camera, onCamera, note, busy,
           if (bodyRef) bodyRef.current = el;
         }}
         onPointerDown={(e) => {
-          down.current.add(e.pointerId);
+          down.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
           // A second finger is a pinch, and the one-finger pan would fight it
           // for the same camera.
           if (down.current.size > 1) { dragPointer.current = null; return; }
@@ -136,6 +136,13 @@ export function SourcePane({ source, state, camera, onCamera, note, busy,
           if (e.pointerId === dragPointer.current) dragPointer.current = null;
         }}
         onPointerMove={(e) => {
+          const held = down.current;
+          if (held.has(e.pointerId)) {
+            const before = pinchPair(held);
+            held.set(e.pointerId, { x: e.clientX, y: e.clientY });
+            const after = pinchPair(held);
+            if (before && after && before.spread > 0) pinch(after.midpoint, after.spread / before.spread);
+          }
           if (e.pointerId === dragPointer.current) {
             onCamera(panBy(camera, e.clientX - last.current.x, e.clientY - last.current.y));
             last.current = { x: e.clientX, y: e.clientY };

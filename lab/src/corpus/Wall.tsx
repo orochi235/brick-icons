@@ -3,11 +3,12 @@ import {
   type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent,
 } from 'react';
 import {
-  clientToCanvas, viewToTransform, worldToScreen, useDecayLoop, usePinchGesture,
-  viewportDragPanAction, zoomAt, openPointerSession,
+  clientToCanvas, viewToTransform, worldToScreen, useDecayLoop,
+  viewportDragPanAction, zoomAt, openPointerSession, WeaselProvider,
   type InvocationCtx, type OngoingHandle, type PointerSession, type View,
 } from '@weasel-js/core';
-import { LoupeBubble, resolveLoupe, useLoupe } from '@weasel-js/labkit/loupe';
+import { LoupeBubble, LoupeGestures, resolveLoupe, useLoupe } from '@weasel-js/labkit/loupe';
+import { pinchPair } from 'pezlie';
 import { adjacent, impliedCaret, type Direction } from '@lab/corpus/caret';
 import type { Band, Rect } from '@lab/corpus/layout';
 import { linkedPart, LINKED_BADGE, paintCommands, REPLACES_BADGE,
@@ -16,7 +17,7 @@ import { cornerBadgesAt, drawPaintCommand } from '@lab/corpus/draw2d';
 import { scenePainter, type SceneWallPainter } from '@lab/corpus/drawScene';
 import { DEFAULT_PALETTE, readPalette, type CellState, type Palette } from '@lab/corpus/palette';
 import { DEFAULT_PARAMS } from '@lab/corpus/params';
-import { pinchStep } from '@lab/corpus/pinch';
+import { pinchStep, type Midpoint } from '@lab/corpus/pinch';
 import { centerReveal, panToReveal } from '@lab/corpus/reveal';
 import type { RampName, TintMode } from '@lab/corpus/tint';
 import type { Cell, SheetManifest } from '@lab/corpus/types';
@@ -108,9 +109,9 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
   const draggedRef = useRef(false);
   const suppressClickRef = useRef(false);
   const startRef = useRef({ x: 0, y: 0 });
-  // Which pointers are on the glass -- a touch canvas gets more than one, and
-  // only the first of them pans, through `sessionRef`.
-  const downRef = useRef(new Set<number>());
+  // Which pointers are on the glass and where -- a touch canvas gets more than
+  // one; only the first of them pans, through `sessionRef`, and two pinch.
+  const downRef = useRef(new Map<number, Midpoint>());
   const sessionRef = useRef<PointerSession | null>(null);
   const pinchAtRef = useRef<{ x: number; y: number } | null>(null);
 
@@ -319,8 +320,8 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
     ({ x: e.clientX - startRef.current.x, y: e.clientY - startRef.current.y });
 
   const onPointerDown = (e: ReactPointerEvent<HTMLCanvasElement>) => {
-    downRef.current.add(e.pointerId);
-    // A second finger turns the gesture into a pinch, which `usePinchGesture`
+    downRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    // A second finger turns the gesture into a pinch, which `onPointerMove`
     // drives -- and a one-finger pan that carried on underneath it would
     // fight the zoom for the same camera.
     if (downRef.current.size > 1) { endDrag({ x: 0, y: 0 }, 'cancel'); return; }
@@ -367,10 +368,20 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
 
   useEffect(() => () => sessionRef.current?.cancel(), []);
 
-  // Two-finger zoom, anchored where the fingers are so the cell under them
-  // stays under them. The midpoint travels too, which is the same gesture's
-  // pan -- see `pinchStep`.
-  usePinchGesture(ref, (clientAnchor, factor) => {
+  // Two-finger zoom from the first two pointers held, each move scaled by how
+  // far their spread changed since the last one.
+  const onPointerMove = (e: ReactPointerEvent<HTMLCanvasElement>) => {
+    const held = downRef.current;
+    if (!held.has(e.pointerId)) return;
+    const before = pinchPair(held);
+    held.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const after = pinchPair(held);
+    if (before && after && before.spread > 0) pinch(after.midpoint, after.spread / before.spread);
+  };
+
+  // Anchored where the fingers are so the cell under them stays under them.
+  // The midpoint travels too, which is the same gesture's pan -- see `pinchStep`.
+  const pinch = (clientAnchor: Midpoint, factor: number) => {
     const canvas = ref.current;
     if (!canvas) return;
     const [x, y] = clientToCanvas(canvas, clientAnchor.x, clientAnchor.y);
@@ -379,7 +390,7 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
     onPan(pinchStep(camRef.current, { x, y }, pinchAtRef.current, factor));
     pinchAtRef.current = { x, y };
     suppressClickRef.current = true;
-  });
+  };
 
   // The trio WCAG actually asks for -- role, name, keyboard operability --
   // rather than a focusable DOM node per cell, which 24,591 of them rules
@@ -425,6 +436,7 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
         tabIndex={0}
         onKeyDown={onKeyDown}
         onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
         onPointerUp={onPointerRelease}
         onPointerCancel={onPointerRelease}
         onClick={(e) => {
@@ -444,6 +456,11 @@ export function Wall({ cells, rects, cam, sheet, manifest, loose, vector, width,
         }}
       />
       </div>
+      {/* The peek key and the lens' wheel route through a dispatcher, which
+          needs a registry; nothing above this wall provides one. */}
+      <WeaselProvider>
+        <LoupeGestures hostRef={ref} input={loupe.input} peekKey={loupeCapability.peekKey} />
+      </WeaselProvider>
       {loupe.visible && (
         <LoupeBubble aim={loupe.aim} diameter={loupeCapability.diameter}>
           <canvas ref={lensRef} className="lk-loupe__canvas" />

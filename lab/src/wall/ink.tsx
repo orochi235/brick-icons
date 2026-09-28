@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import type { ImageFilter } from '@pezlie/wall/src/filter';
+import type { ImageFilter } from 'pezlie';
 
 const STORAGE_KEY = 'brick-icons.wall.ink';
 

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { defaultUrls, type SlotUrls } from '@pezlie/wall/src/urls';
-import { WallView, type WallHeader, type WallViewState } from '@pezlie/wall/src/WallView';
+import { defaultUrls, type SlotUrls, type WallHeader, WallView, type WallViewState } from 'pezlie';
 import type { LabClient } from '@lab/api/client';
 import type { LdrawColor } from '@lab/api/types';
 import { ColorField, loadColors } from '@lab/config/ColorRow';

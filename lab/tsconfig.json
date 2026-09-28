@@ -11,9 +11,7 @@
     "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "@lab/*": ["src/*"],
-      "@pezlie/wall/*": ["node_modules/pezlie/wall/*"],
-      "@pezlie/host-brick-icons/*": ["node_modules/pezlie/hosts/brick-icons/*"]
+      "@lab/*": ["src/*"]
     }
   },
   "include": ["src"]

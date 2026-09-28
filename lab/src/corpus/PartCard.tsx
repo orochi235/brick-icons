@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import type { ImageFilter } from '@pezlie/wall/src/filter';
+import type { ImageFilter } from 'pezlie';
 import { FilteredImage } from '@lab/shared/FilteredImage';
 import { cellState } from '@lab/corpus/paint';
 import { Lineage, Tags, yearRange } from '@lab/corpus/tags';

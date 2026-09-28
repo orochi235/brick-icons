@@ -1,14 +1,12 @@
-import { projectColumn, type Facts } from '@pezlie/wall/src/derive';
-import { bandedLayout, blockLayout, type GroupKey } from '@pezlie/wall/src/grouped';
-import type { Layout } from '@pezlie/wall/src/layout';
-import type { CorpusSpec } from '@pezlie/wall/src/schema';
-import type { WallGrouping } from '@pezlie/wall/src/WallView';
-import { BRICK_ICONS } from '@pezlie/host-brick-icons/src/spec';
+import {
+  bandedLayout, blockLayout, type CorpusSpec, type Facts, type GroupKey, type Layout, projectColumn, type WallGrouping
+} from 'pezlie';
 import {
   categoryOf, COVERAGE_ORDER, coverageOf, decadeOf, rollUpCounts, yearOf,
 } from '@lab/corpus/facts';
 import { MARK_SHAPES } from '@lab/corpus/markShapes';
 import type { Cell } from '@lab/corpus/types';
+import { BRICK_ICONS } from './spec';
 
 export const SPEC: CorpusSpec<Cell> = { ...BRICK_ICONS, marks: MARK_SHAPES };
 
