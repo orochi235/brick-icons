@@ -460,3 +460,35 @@ def test_a_fill_seam_is_no_wider_than_the_stroke_around_it():
     assert process.seam_px(box(20, 1, 22, 2), 0.5) == pytest.approx(0.5)
     # a strokeless drawing has nothing to hide the seam under, and keeps it
     assert process.seam_px(box(1, 1, 2, 2), 0.0) == process.SEAM_PX
+
+
+PRINTED_PLATE = """0 Plate 2 x 2 with Test Pattern
+0 BFC CERTIFY CCW
+1 16 0 4 0 20 0 0 0 4 0 0 0 20 box.dat
+1 10 -10 0 -10 1 0 0 0 1 0 0 0 1 stud.dat
+1 16 10 0 -10 1 0 0 0 1 0 0 0 1 stud.dat
+1 10 -10 0 10 1 0 0 0 1 0 0 0 1 stud.dat
+1 16 10 0 10 1 0 0 0 1 0 0 0 1 stud.dat
+"""
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_a_colored_stud_keeps_its_print_color_inside_its_outline(tmp_path):
+    """A printed part's colored studs get a definition of their own, painted
+    in the print color -- and, like the plain one, their seam stays under the
+    stud stroke, or a ring of that color spills onto the print beside it
+    (3811p04's tan studs on blue)."""
+    import re
+    dat = tmp_path / "tcs.dat"
+    dat.write_text(PRINTED_PLATE)
+    assert cli.main([str(dat), *SVG, "--engine", "occt", "--stud-stroke", "0.1",
+                     "--stud-floor", "0.2", "--out", str(tmp_path)]) == 0
+    svg = (tmp_path / "tcs.svg").read_text()
+    defs = dict(re.findall(r'<g id="(sd\d+)f">(.*?)</g></g>', svg, re.S))
+    colored = [g for g in defs.values() if 'class="deco"' in g]
+    assert len(defs) == 2 and len(colored) == 1
+    assert svg.count('<use href="#sd') == 8
+    strokes = re.search(r'<g id="sd0s"[^>]*>(.*?)</g>', svg, re.S).group(1)
+    stud = max(map(float, re.findall(r'stroke-width="([0-9.]+)"', strokes)))
+    seams = list(map(float, re.findall(r'stroke-width="([0-9.]+)"', colored[0])))
+    assert seams and max(seams) <= stud + 0.005
