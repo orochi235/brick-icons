@@ -68,6 +68,15 @@ type Client = Parameters<typeof StatsPage>[0]['client'];
 const clientWith = (corpusStats: (q: URLSearchParams) => Promise<Stats>) =>
   ({ corpusStats, corpusSizes: async () => EMPTY_FOOTPRINT } as unknown as Client);
 
+/** Waits until `selector` matches. `waitFor` retries only a callback that
+ *  throws, so handing it a bare `querySelector` accepted the first null. */
+const shown = (root: ParentNode, selector: string) =>
+  waitFor(() => {
+    const el = root.querySelector(selector);
+    if (!el) throw new Error(`nothing matches ${selector} yet`);
+    return el;
+  });
+
 const COST = {
   build: '1099.d500ca9+', base: 'occt', n: 1587, total: 1000,
   slots: [
@@ -106,7 +115,7 @@ describe('StatsPage', () => {
   it('puts the tiles above the coverage bars', async () => {
     const { container } = render(
       <StatsPage client={clientWith(async () => body())} />);
-    await waitFor(() => container.querySelector('.stats-tiles'));
+    await shown(container, '.stats-tiles');
     const headings = [...container.querySelectorAll('h2')].map((h) => h.textContent);
     const tiles = container.querySelector('.stats-tiles')!;
     const coverage = [...container.querySelectorAll('h2')]
@@ -119,7 +128,7 @@ describe('StatsPage', () => {
   it('leads the strip with what occt and decal cannot draw, corpus-wide', async () => {
     const { container } = render(
       <StatsPage client={clientWith(async () => body())} />);
-    await waitFor(() => container.querySelector('.stats-tile-wide'));
+    await shown(container, '.stats-tile-wide');
     const wide = [...container.querySelectorAll('.stats-tile-wide')];
     expect(wide.length).toBe(2);
     expect(wide[0]!.textContent).toContain('5');
@@ -134,7 +143,7 @@ describe('StatsPage', () => {
   it('draws one failure line per slot, each keeping its own hue', async () => {
     const { container } = render(
       <StatsPage client={clientWith(async () => body())} />);
-    await waitFor(() => container.querySelector('.stats-failure-line'));
+    await shown(container, '.stats-failure-line');
     const slots = [...container.querySelectorAll('.stats-failures')][0]!
       .querySelectorAll('.stats-failure-line');
     expect([...slots].map((el) => el.getAttribute('data-slot')))
@@ -168,7 +177,7 @@ describe('StatsPage', () => {
   it('counts on the left and shares on the right, not both in percent', async () => {
     const { container } = render(
       <StatsPage client={clientWith(async () => body())} />);
-    await waitFor(() => container.querySelector('.stats-failures'));
+    await shown(container, '.stats-failures');
     const figures = container.querySelectorAll('.stats-failures');
     // Count and coverage; the third panel plotted the first as a share and
     // moved with the second.
@@ -186,7 +195,7 @@ describe('StatsPage', () => {
         size: 24, owed: 12, clean: 9, failed: 3, timeout: 0, bad: 3 },
     ];
     const { container } = render(<StatsPage client={clientWith(async () => some)} />);
-    await waitFor(() => container.querySelector('.stats-pair'));
+    await shown(container, '.stats-pair');
     const figs = [...container.querySelectorAll('.stats-pair .stats-failures')];
     // Both panels span the same dates, so they read left-to-right together.
     for (const f of figs) {
@@ -198,7 +207,7 @@ describe('StatsPage', () => {
   it('puts both tally charts on one calendar axis', async () => {
     const { container } = render(
       <StatsPage client={clientWith(async () => body())} />);
-    await waitFor(() => container.querySelector('.stats-pair'));
+    await shown(container, '.stats-pair');
     const figures = container.querySelectorAll('.stats-pair .stats-failures');
     expect(figures.length).toBe(2);
     // A date, not `run N`: the axis labels come off `at`.
@@ -218,7 +227,7 @@ describe('StatsPage', () => {
         size: 24, owed: 12, clean: 6, failed: 0, timeout: 0, bad: 0 },
     ];
     const { container } = render(<StatsPage client={clientWith(async () => some)} />);
-    await waitFor(() => container.querySelector('.stats-pair'));
+    await shown(container, '.stats-pair');
     const dot = container.querySelectorAll('.stats-pair .stats-failures')[1]!
       .querySelector('.stats-failure-dot title')!;
     expect(dot.textContent).toContain('6 of 12, 50.0%');
@@ -248,7 +257,7 @@ describe('StatsPage', () => {
     some.coverage[0]!.counts.untried = 0;
     some.coverage[0]!.owed = 12;
     const { container } = render(<StatsPage client={clientWith(async () => some)} />);
-    await waitFor(() => container.querySelector('.stats-bar-value'));
+    await shown(container, '.stats-bar-value');
     expect(container.querySelector('.stats-bar-value')!.textContent)
       .toContain('8 / 12');
     const seg = [...container.querySelectorAll('.stats-bars .stats-seg')]
@@ -260,7 +269,7 @@ describe('StatsPage', () => {
     const old = body();
     delete old.coverage[0]!.owed;
     const { container } = render(<StatsPage client={clientWith(async () => old)} />);
-    await waitFor(() => container.querySelector('.stats-bar-value'));
+    await shown(container, '.stats-bar-value');
     expect(container.querySelector('.stats-bar-value')!.textContent)
       .toContain('8 / 20');
   });
@@ -277,7 +286,7 @@ describe('StatsPage', () => {
   it('stacks the phases per engine in the order a census row runs them',
      async () => {
     const { container } = render(<StatsPage client={clientWith(async () => body())} />);
-    await waitFor(() => container.querySelector('.stats-phases'));
+    await shown(container, '.stats-phases');
     const phases = [...container.querySelectorAll('.stats-phases .stats-bar')[0]!
       .querySelectorAll('.stats-seg')].map((el) => el.getAttribute('data-phase'));
     expect(phases).toEqual(['render', 'rasterize', 'truth_mask', 'compare']);
@@ -296,7 +305,7 @@ describe('StatsPage', () => {
   it('divides the render band into the stages the engine named', async () => {
     const { container } = render(
       <StatsPage client={clientWith(async () => addingUp())} />);
-    await waitFor(() => container.querySelector('.stats-phases'));
+    await shown(container, '.stats-phases');
     const segs = [...container.querySelectorAll('.stats-phases .stats-bar')[0]!
       .querySelectorAll('.stats-seg')] as HTMLElement[];
     expect(segs.map((el) => el.title.split(' —')[0]))
@@ -310,7 +319,7 @@ describe('StatsPage', () => {
      async () => {
     const { container } = render(
       <StatsPage client={clientWith(async () => addingUp())} />);
-    await waitFor(() => container.querySelector('.stats-phase-legend'));
+    await shown(container, '.stats-phase-legend');
     expect([...container.querySelectorAll('.stats-phase-legend li')]
       .map((el) => el.textContent))
       .toEqual(['geometry', 'fill', 'render, unnamed',
@@ -322,7 +331,7 @@ describe('StatsPage', () => {
     // Drawing those stages as slices of this band would read as a whole they
     // are not.
     const { container } = render(<StatsPage client={clientWith(async () => body())} />);
-    await waitFor(() => container.querySelector('.stats-phases'));
+    await shown(container, '.stats-phases');
     const segs = [...container.querySelectorAll('.stats-phases .stats-bar')[0]!
       .querySelectorAll('.stats-seg')] as HTMLElement[];
     expect(segs.map((el) => el.title.split(' —')[0])[0]).toBe('render');
@@ -337,7 +346,7 @@ describe('StatsPage', () => {
         bins: [{ from: 0, to: 1, n: 20 }, { from: 1, to: null, n: 5 }] },
     ];
     const { container } = render(<StatsPage client={clientWith(async () => two)} />);
-    await waitFor(() => container.querySelector('.stats-bin-fill'));
+    await shown(container, '.stats-bin-fill');
     const heights = [...container.querySelectorAll('.stats-bin-fill')]
       .map((el) => [(el as HTMLElement).dataset.engine, (el as HTMLElement).style.height]);
     // 20 is the tallest bar anywhere, so it is the 100% both engines divide by.
@@ -357,7 +366,7 @@ describe('StatsPage', () => {
                       { from: i * 2, to: i * 2 + 2, n: 3 })),
                            { from: 20, to: null, n: 0 }] }];
     const { container } = render(<StatsPage client={clientWith(async () => many)} />);
-    await waitFor(() => container.querySelector('.stats-bin-fill'));
+    await shown(container, '.stats-bin-fill');
     expect([...container.querySelectorAll('.stats-histogram .stats-bin-label')]
       .map((el) => el.textContent)).toEqual(['0s', '10s', '20s+']);
   });
@@ -369,7 +378,7 @@ describe('StatsPage', () => {
                    bins: [{ from: 0, to: 2, n: 5 }, { from: 2, to: 4, n: 0 },
                           { from: 4, to: null, n: 0 }] }];
     const { container } = render(<StatsPage client={clientWith(async () => gap)} />);
-    await waitFor(() => container.querySelector('.stats-bin-fill'));
+    await shown(container, '.stats-bin-fill');
     // A bar carries `min-height: 1px`, so an empty bucket that still renders
     // one draws a tick mark the reader reads as a part that took that long.
     expect(container.querySelectorAll('.stats-histogram .stats-bin-fill').length)
@@ -386,7 +395,7 @@ describe('StatsPage', () => {
         bins: [{ from: 0, to: 1, n: 20 }, { from: 1, to: null, n: 5 }] },
     ];
     const { container } = render(<StatsPage client={clientWith(async () => two)} />);
-    await waitFor(() => container.querySelector('.stats-overlay-key'));
+    await shown(container, '.stats-overlay-key');
     // Scoped to the histogram: the slowest-parts plot is an overlay too, and
     // carries a key per engine of its own.
     expect([...container.querySelectorAll(
@@ -404,7 +413,7 @@ describe('StatsPage', () => {
 
   it('sends a bar into the wall showing the same slot', async () => {
     const { container } = render(<StatsPage client={clientWith(async () => body())} />);
-    await waitFor(() => container.querySelector('a.stats-seg'));
+    await shown(container, 'a.stats-seg');
     const href = container.querySelector('a.stats-seg')?.getAttribute('href') ?? '';
     expect(href.startsWith('/wall?')).toBe(true);
     expect(new URLSearchParams(href.slice(href.indexOf('?'))).get('source'))
@@ -452,7 +461,7 @@ describe('StatsPage', () => {
   it('draws one cost bar per slot, with its share and its ratio', async () => {
     const { container } = render(
       <StatsPage client={clientWith(async () => body({ cost: COST }))} />);
-    await waitFor(() => container.querySelector('.stats-cost'));
+    await shown(container, '.stats-cost');
     const rows = [...container.querySelectorAll('.stats-cost-row')]
       .filter((r) => !r.classList.contains('stats-cost-head'));
     expect(rows.map((r) => r.querySelector('.stats-bar-name')!.textContent))
@@ -465,7 +474,7 @@ describe('StatsPage', () => {
   it('names the revision the comparison was taken at', async () => {
     const { container } = render(
       <StatsPage client={clientWith(async () => body({ cost: COST }))} />);
-    await waitFor(() => container.querySelector('.stats-cost'));
+    await shown(container, '.stats-cost');
     expect([...container.querySelectorAll('.stats-note')]
       .some((n) => n.textContent?.includes('1099.d500ca9+'))).toBe(true);
   });
@@ -473,7 +482,7 @@ describe('StatsPage', () => {
   it('gives every row the parts it was measured over', async () => {
     const { container } = render(
       <StatsPage client={clientWith(async () => body({ cost: COST }))} />);
-    await waitFor(() => container.querySelector('.stats-cost'));
+    await shown(container, '.stats-cost');
     const rows = [...container.querySelectorAll('.stats-cost-row')]
       .filter((r) => !r.classList.contains('stats-cost-head'));
     // The rows are NOT over one set of parts: a share read without its own
@@ -490,7 +499,7 @@ describe('StatsPage', () => {
      async () => {
     const { container } = render(
       <StatsPage client={clientWith(async () => body())} />);
-    await waitFor(() => container.querySelector('.stats-bars'));
+    await shown(container, '.stats-bars');
     const before = container.querySelectorAll('.stats-seg[data-label="drawn"]');
     expect(before.length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: /drawn/ }));
@@ -505,7 +514,7 @@ describe('StatsPage', () => {
   it('says in the entry itself that a band is off', async () => {
     const { container } = render(
       <StatsPage client={clientWith(async () => body())} />);
-    await waitFor(() => container.querySelector('.stats-bars'));
+    await shown(container, '.stats-bars');
     const entry = screen.getByRole('button', { name: /drawn/ });
     expect(entry.getAttribute('aria-pressed')).toBe('true');
     fireEvent.click(entry);
@@ -518,7 +527,7 @@ describe('StatsPage', () => {
     // dropped the first of two clicks in one tick.
     const { container } = render(
       <StatsPage client={clientWith(async () => body())} />);
-    await waitFor(() => container.querySelector('.stats-bars'));
+    await shown(container, '.stats-bars');
     fireEvent.click(screen.getByRole('button', { name: /drawn/ }));
     fireEvent.click(screen.getByRole('button', { name: /timed out/ }));
     expect(container.querySelectorAll('.stats-seg[data-label="drawn"]').length)
@@ -530,7 +539,7 @@ describe('StatsPage', () => {
   it('puts a band back when its entry is clicked again', async () => {
     const { container } = render(
       <StatsPage client={clientWith(async () => body())} />);
-    await waitFor(() => container.querySelector('.stats-bars'));
+    await shown(container, '.stats-bars');
     const entry = screen.getByRole('button', { name: /drawn/ });
     fireEvent.click(entry);
     fireEvent.click(entry);
@@ -542,7 +551,7 @@ describe('StatsPage', () => {
      async () => {
     const { container } = render(
       <StatsPage client={clientWith(async () => body())} />);
-    await waitFor(() => container.querySelector('.stats-bars'));
+    await shown(container, '.stats-bars');
     for (const item of container.querySelectorAll('.stats-legend-item')) {
       expect(item.querySelector('button')).toBeNull();
     }
@@ -552,7 +561,7 @@ describe('StatsPage', () => {
      async () => {
     const first = render(
       <StatsPage client={clientWith(async () => body())} />);
-    await waitFor(() => first.container.querySelector('.stats-bars'));
+    await shown(first.container, '.stats-bars');
     fireEvent.click(screen.getByRole('button', { name: /drawn/ }));
     expect(window.location.hash).toContain('hide=drawn');
     first.unmount();
@@ -560,7 +569,7 @@ describe('StatsPage', () => {
     // Same address, fresh page: the band is still off.
     const again = render(
       <StatsPage client={clientWith(async () => body())} />);
-    await waitFor(() => again.container.querySelector('.stats-bars'));
+    await shown(again.container, '.stats-bars');
     expect(again.container
       .querySelectorAll('.stats-seg[data-label="drawn"]').length).toBe(0);
   });
@@ -569,7 +578,7 @@ describe('StatsPage', () => {
     window.history.replaceState(null, '', '/?kind=printed');
     const { container } = render(
       <StatsPage client={clientWith(async () => body())} />);
-    await waitFor(() => container.querySelector('.stats-bars'));
+    await shown(container, '.stats-bars');
     fireEvent.click(screen.getByRole('button', { name: /drawn/ }));
     expect(window.location.search).toContain('kind=printed');
     expect(window.location.hash).toContain('hide=drawn');
@@ -578,7 +587,7 @@ describe('StatsPage', () => {
   it('marks a slot whose seconds came from another revision', async () => {
     const { container } = render(
       <StatsPage client={clientWith(async () => body({ cost: COST_ELSEWHERE }))} />);
-    await waitFor(() => container.querySelector('.stats-cost'));
+    await shown(container, '.stats-cost');
     const names = [...container.querySelectorAll('.stats-bar-name')]
       .map((el) => el.textContent!.trim());
     expect(names).toContain('decal †');
@@ -589,7 +598,7 @@ describe('StatsPage', () => {
   it('marks a slot pooling more than one revision', async () => {
     const { container } = render(
       <StatsPage client={clientWith(async () => body({ cost: COST_POOLED }))} />);
-    await waitFor(() => container.querySelector('.stats-cost'));
+    await shown(container, '.stats-cost');
     expect([...container.querySelectorAll('.stats-bar-name')]
       .map((el) => el.textContent!.trim())).toContain('silhouette-naive †');
     expect([...container.querySelectorAll('.stats-note')]
@@ -600,7 +609,7 @@ describe('StatsPage', () => {
      async () => {
     const { container } = render(
       <StatsPage client={clientWith(async () => body({ cost: COST }))} />);
-    await waitFor(() => container.querySelector('.stats-cost'));
+    await shown(container, '.stats-cost');
     expect(container.querySelector('.stats-cost')!.textContent)
       .not.toContain('†');
   });
@@ -608,7 +617,7 @@ describe('StatsPage', () => {
   it('says what running every slot costs against one base pass', async () => {
     const { container } = render(
       <StatsPage client={clientWith(async () => body({ cost: COST }))} />);
-    await waitFor(() => container.querySelector('.stats-cost'));
+    await shown(container, '.stats-cost');
     const note = [...container.querySelectorAll('.stats-note')]
       .find((n) => n.textContent?.includes('1099.d500ca9+'))!;
     // The ratios are 1, 1 and 0.5, so the three passes cost 2.5 of one.
@@ -619,7 +628,7 @@ describe('StatsPage', () => {
      async () => {
     const { container } = render(
       <StatsPage client={clientWith(async () => body({ cost: null }))} />);
-    await waitFor(() => container.querySelector('.stats-cost, .stats-empty'));
+    await screen.findByText(/no two slots have drawn the same parts/);
     expect(container.querySelector('.stats-cost')).toBeNull();
     expect(container.textContent)
       .toContain('no two slots have drawn the same parts');
@@ -628,7 +637,7 @@ describe('StatsPage', () => {
   it('draws the rest of the page when a stale API sends no cost', async () => {
     const { container } = render(
       <StatsPage client={clientWith(async () => body())} />);
-    await waitFor(() => container.querySelector('.stats-tiles'));
+    await shown(container, '.stats-tiles');
     expect(container.querySelector('.stats-cost')).toBeNull();
     expect([...container.querySelectorAll('h2')].map((h) => h.textContent))
       .toContain('Coverage');
@@ -649,7 +658,7 @@ const EDGES = {
 it('stacks a slot by gaps per drawing and reads out the share with gaps', async () => {
   const { container } = render(
     <StatsPage client={clientWith(async () => body({ edges: EDGES }))} />);
-  await waitFor(() => container.querySelector('.stats-edges'));
+  await shown(container, '.stats-edges');
   const segs = [...container.querySelectorAll('.stats-edges .stats-seg')];
   // An empty bin draws nothing, and nothing declared stacks last.
   expect(segs.map((s) => s.getAttribute('data-bin'))).toEqual(['0', '1-2', '3-5', 'none']);
@@ -660,7 +669,7 @@ it('stacks a slot by gaps per drawing and reads out the share with gaps', async 
 it('sends a drawing with the most gaps into the wall on that part and slot', async () => {
   const { container } = render(
     <StatsPage client={clientWith(async () => body({ edges: EDGES }))} />);
-  await waitFor(() => container.querySelector('.stats-edges-worst'));
+  await shown(container, '.stats-edges-worst');
   const link = container.querySelector('.stats-edges-worst a')!;
   expect(link.getAttribute('href'))
     .toBe(`/corpus${wallHashString({ source: 'white-occt', part: '99143' })}`);
