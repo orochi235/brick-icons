@@ -3,12 +3,12 @@ import { bandedLayout, blockLayout, type GroupKey } from '@pezlie/wall/src/group
 import type { Layout } from '@pezlie/wall/src/layout';
 import type { CorpusSpec } from '@pezlie/wall/src/schema';
 import type { WallGrouping } from '@pezlie/wall/src/WallView';
-import { BRICK_ICONS } from '@pezlie/host-brick-icons/src/spec';
 import {
   categoryOf, COVERAGE_ORDER, coverageOf, decadeOf, rollUpCounts, yearOf,
 } from '@lab/corpus/facts';
 import { MARK_SHAPES } from '@lab/corpus/markShapes';
 import type { Cell } from '@lab/corpus/types';
+import { BRICK_ICONS } from './spec';
 
 export const SPEC: CorpusSpec<Cell> = { ...BRICK_ICONS, marks: MARK_SHAPES };
 

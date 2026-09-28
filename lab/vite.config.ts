@@ -30,15 +30,13 @@ function extensionlessPages(): Plugin {
 // `brick-icons-lab` listens on with no arguments.
 const API = process.env.LAB_API ?? 'http://127.0.0.1:8792';
 
-/** pezlie's `wall` and brick-icons spec, as TypeScript source from the
+/** pezlie's `wall`, as TypeScript source from the
  *  git dependency package.json pins by sha. `PEZLIE=~/src/pezlie`
  *  reads a checkout instead, for trying unpinned pezlie work on `/wall`. */
 const PEZLIE = process.env.PEZLIE
   ?? fileURLToPath(new URL('./node_modules/pezlie', import.meta.url));
 const pezlieAlias = [
   { find: /^@pezlie\/wall\/(.*)$/, replacement: `${PEZLIE}/wall/$1` },
-  { find: /^@pezlie\/host-brick-icons\/(.*)$/,
-    replacement: `${PEZLIE}/hosts/brick-icons/$1` },
 ];
 
 /** `WEASEL_SRC=~/src/weasel npm run dev` draws `@weasel-js/core`,
