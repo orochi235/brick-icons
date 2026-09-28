@@ -25,7 +25,7 @@ from .. import features
 from .. import tags
 from .. import thumbs, trace
 from ..config import load_config
-from . import (cache, cells, corpus, decal, defects, diff, findings,
+from . import (cache, cells, corpus, decal, defects, diff, findings, flight,
                goldens_status, ingest, jobs, partindex, reference, review_api,
                runner, schema, sizes, stats, store)
 from .. import db as corpus_db_module
@@ -110,6 +110,7 @@ def create_app(root: Path | str = ".",
     app.state.sizes = None
     app.state.stats_cache = {}
     app.state.jobs = jobs.Registry()
+    app.state.flights = flight.Flights()
     app.state.defects_path = Path(defects_path) if defects_path else (
         root / defects.DEFAULT_PATH)
     app.state.reference_root = Path(cache_root) / "reference"
@@ -124,8 +125,14 @@ def create_app(root: Path | str = ".",
         root / review.DEFAULT_PATH)
 
     def index() -> dict:
+        def build_once() -> dict:
+            # Checked again inside the flight: a caller arriving just after
+            # one landed finds the index here rather than building another.
+            if app.state.index is None:
+                app.state.index = partindex.build(app.state.ldraw_dir)
+            return app.state.index
         if app.state.index is None:
-            app.state.index = partindex.build(app.state.ldraw_dir)
+            return app.state.flights.run("index", build_once)
         return app.state.index
 
     @app.get("/api/health")
@@ -347,6 +354,17 @@ def create_app(root: Path | str = ".",
                                      "scripts/build-corpus-db.py")
         return corpus_db_module.connect(app.state.corpus_db)
 
+    def shared_query(key, compute):
+        """`compute(conn)` run once for every concurrent caller asking `key`,
+        on one connection rather than one each."""
+        def run():
+            conn = corpus_conn()
+            try:
+                return compute(conn)
+            finally:
+                conn.close()
+        return app.state.flights.run(key, run)
+
     def _check_source(source: str) -> None:
         if source not in corpus_db_module.SOURCES:
             raise HTTPException(400, f"no such slot: {source}")
@@ -360,22 +378,17 @@ def create_app(root: Path | str = ".",
 
     @app.get("/api/corpus/cells")
     def get_cells(source: str = "silhouette-naive", since: str | None = None):
-        conn = corpus_conn()
-        try:
-            return cells.cells(conn, source=source, since=since)
-        finally:
-            conn.close()
+        return shared_query(("cells", source, since),
+                            lambda conn: cells.cells(conn, source=source,
+                                                     since=since))
 
     @app.get("/api/corpus/sources")
     def get_sources():
         """The slots that have renders, most-populated first."""
-        conn = corpus_conn()
-        try:
-            return {"sources": [dict(r) for r in conn.execute(
+        return shared_query("sources", lambda conn: {"sources": [
+            dict(r) for r in conn.execute(
                 "SELECT source, count(*) AS n FROM renders "
-                "GROUP BY source ORDER BY n DESC")]}
-        finally:
-            conn.close()
+                "GROUP BY source ORDER BY n DESC")]})
 
     @app.get("/api/ingest/runs")
     def get_ingest_runs():
@@ -398,11 +411,7 @@ def create_app(root: Path | str = ".",
 
     @app.get("/api/corpus/summary")
     def get_corpus_summary():
-        conn = corpus_conn()
-        try:
-            return findings.summary(conn)
-        finally:
-            conn.close()
+        return shared_query("summary", findings.summary)
 
     @app.get("/api/corpus/stats")
     def get_corpus_stats(kind: str = "all",
@@ -428,19 +437,23 @@ def create_app(root: Path | str = ".",
             shown = stats.shown_classes(asked_classes)
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
+        # 1.3 seconds of work over 20,000 parts, against 5 ms to ask
+        # whether any of it would come out different. The key is the
+        # corpus, not a clock: a held answer is served only while every
+        # count it was computed from still holds, so an ingest landing
+        # mid-look invalidates it rather than being waited out.
+        asked = (kind, tuple(shown.items()),
+                 tuple(excluded), tuple(badges))
         conn = corpus_conn()
         try:
-            # 1.3 seconds of work over 20,000 parts, against 5 ms to ask
-            # whether any of it would come out different. The key is the
-            # corpus, not a clock: a held answer is served only while every
-            # count it was computed from still holds, so an ingest landing
-            # mid-look invalidates it rather than being waited out.
-            asked = (kind, tuple(shown.items()),
-                     tuple(excluded), tuple(badges))
             now = stats.freshness(conn)
-            held = app.state.stats_cache.get(asked)
-            if held is not None and held[0] == now:
-                return held[1]
+        finally:
+            conn.close()
+        held = app.state.stats_cache.get(asked)
+        if held is not None and held[0] == now:
+            return held[1]
+
+        def compute(conn):
             answer = stats.stats(conn, kind=kind, shown=shown,
                                  excluded=tuple(excluded), badges=tuple(badges))
             # The controls are a handful of toggles, so the set of questions
@@ -451,8 +464,7 @@ def create_app(root: Path | str = ".",
                                      if v[0] == now}
             app.state.stats_cache[asked] = (now, answer)
             return answer
-        finally:
-            conn.close()
+        return shared_query(("stats", asked, now), compute)
 
     @app.get("/api/corpus/sizes")
     def get_corpus_sizes(refresh: bool = False):
@@ -467,13 +479,12 @@ def create_app(root: Path | str = ".",
         if held is not None and not refresh and \
                 time.monotonic() - held[0] < SIZES_TTL:
             return held[1]
-        conn = corpus_conn()
-        try:
+
+        def compute(conn):
             answer = sizes.footprint(conn, root, app.state.ldraw_dir)
-        finally:
-            conn.close()
-        app.state.sizes = (time.monotonic(), answer)
-        return answer
+            app.state.sizes = (time.monotonic(), answer)
+            return answer
+        return shared_query("sizes", compute)
 
     @app.get("/api/corpus/part/{part_id}")
     def get_corpus_part(part_id: str):
