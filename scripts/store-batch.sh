@@ -3,7 +3,7 @@
 # once per line of a batch list by onto's item dispatch:
 #
 #     onto run --detach --kind render --icon cube --in brick-icons --each out/census/batches.txt \
-#       <node> -- scripts/store-batch.sh occt 120 out/store/r0 {}
+#       <node> -- scripts/store-batch.sh occt 150 out/store/r0 {}
 #
 # A batch rather than a part for the reason census-batch.sh gives: the engine
 # import costs seconds and one process per part would spend hours starting

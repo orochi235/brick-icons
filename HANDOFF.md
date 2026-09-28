@@ -293,7 +293,7 @@ Build the list at launch, not before (occt slot only):
       --task slot-occt-<date> --each $d/batches.txt --workers 10 --retries 1 \
       --with studio,keiei --env PATH=$P --env SOURCE=occt --env KEEP=$d/renders \
       --env EXTRA='--shade-style flat3 --line-width 2 --silhouette-width 2' \
-      --out $d --to $d msb-uai -- scripts/census-batch.sh occt 300 $d {}
+      --out $d --to $d msb-uai -- scripts/census-batch.sh occt 150 $d {}
 
 Push first -- run-slot.sh launches only a pushed HEAD. Copying the list before
 run-slot.sh's sync is fine: slot-occt-0926's list survived one.

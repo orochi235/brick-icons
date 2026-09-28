@@ -19,6 +19,16 @@ from pathlib import Path
 
 _ARMED = None
 
+#: The per-part render cap, in seconds; every launcher's default comes from here.
+RENDER_TIMEOUT_S = 150
+
+
+def outlasted(error: str | None, secs: float | None,
+              cap: float = RENDER_TIMEOUT_S) -> bool:
+    """A part whose attempt timed out after running at least `cap` seconds.
+    The same engine under the same or a shorter cap can only time out again."""
+    return error == "TimeoutError" and (secs or 0.0) >= cap
+
 # Signals that kill a process outright rather than raising anything Python can
 # catch. OCCT reaches several of them on library parts.
 _FATAL = ("SIGSEGV", "SIGBUS", "SIGILL", "SIGFPE", "SIGABRT")

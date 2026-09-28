@@ -6,13 +6,15 @@
 #
 #     onto run --detach --timeout 10h --kind render --icon cube --in brick-icons \
 #       --env PATH=... <node> \
-#       -- <tree>/scripts/census-run.sh 120
+#       -- <tree>/scripts/census-run.sh 150
+#
+# The per-part timeout defaults to batch.RENDER_TIMEOUT_S.
 #
 # A progress line joins the shards' own output every 5 minutes, so `onto logs
 # -f` answers "is it still moving" without reading eight interleaved streams.
 set -eu
 cd "$(dirname "$0")/.."
-TIMEOUT=${1:-120}
+TIMEOUT=${1:-$(.venv/bin/python -c 'from brick_icons.batch import RENDER_TIMEOUT_S as t; print(t)')}
 HEARTBEAT=${2:-300}
 DIR=out/census
 

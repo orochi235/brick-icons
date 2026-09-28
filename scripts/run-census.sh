@@ -9,7 +9,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 SHARDS=${1:-4}
-TIMEOUT=${2:-120}
+TIMEOUT=${2:-$(.venv/bin/python -c 'from brick_icons.batch import RENDER_TIMEOUT_S as t; print(t)')}
 DIR=out/census
 mkdir -p "$DIR/logs"
 

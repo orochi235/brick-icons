@@ -11,6 +11,10 @@ Three buckets, and they are three different jobs:
              the part's own recorded timing
   fails      every recorded attempt errored -- an engine fix or a longer cap,
              and nothing says how long these take because none finished
+  outlasted  failed, and the latest attempt timed out after at least --cap
+             seconds: a round at that cap cannot draw them, so they are kept
+             out of `fails`. No build check -- after an engine change that
+             should speed them up, launch this list by hand
 
 `--out` writes each bucket as a plain list, which is what `--list` takes.
 """
@@ -25,6 +29,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from brick_icons import db  # noqa: E402
+from brick_icons.batch import RENDER_TIMEOUT_S, outlasted  # noqa: E402
 
 ENGINES = ("naive", "occt")
 # What HEAD gains over the code that recorded these timings. occt's is banded
@@ -44,8 +49,8 @@ def speedup(secs: float, engine: str) -> float:
     return next(f for cap, f in OCCT_BANDS if secs < cap)
 
 
-def coverage(conn, corpus: list[str], engine: str,
-             facet: str | None = None) -> dict[str, list[str]]:
+def coverage(conn, corpus: list[str], engine: str, facet: str | None = None,
+             cap: float = RENDER_TIMEOUT_S) -> dict[str, list[str]]:
     """`facet` names a declared census facet (`white`) instead of the oracle.
 
     A facet is its own drawing at its own config, so its rows are read by
@@ -56,25 +61,28 @@ def coverage(conn, corpus: list[str], engine: str,
     source = f"{facet}-{engine}" if facet else f"silhouette-{engine}"
     drawn = {r["part_id"] for r in conn.execute(
         "SELECT part_id FROM renders WHERE source = ?", (source,))}
-    ok, seen = {}, set()
+    ok, seen, last = {}, set(), {}
     where, params = ("engine = ?", (engine,)) if not facet else \
         ("source = ?", (source,))
     for r in conn.execute(
-            f"SELECT part_id, error, secs FROM measurements WHERE {where}",
-            params):
+            f"SELECT part_id, error, secs FROM measurements WHERE {where} "
+            f"ORDER BY run_id", params):
         seen.add(r["part_id"])
+        last[r["part_id"]] = (r["error"], r["secs"])
         # A part measured in any run can be drawn; only one that has never
         # completed is a failure. The archive's rows count for this.
         if r["error"] is None:
             ok[r["part_id"]] = max(ok.get(r["part_id"], 0.0), r["secs"] or 0.0)
 
-    buckets: dict[str, list[str]] = {"drawn": [], "redraw": [],
-                                     "fails": [], "unmeasured": []}
+    buckets: dict[str, list[str]] = {"drawn": [], "redraw": [], "fails": [],
+                                     "outlasted": [], "unmeasured": []}
     for pid in corpus:
         if pid in drawn:
             buckets["drawn"].append(pid)
         elif pid in ok:
             buckets["redraw"].append(pid)
+        elif pid in seen and outlasted(*last[pid], cap):
+            buckets["outlasted"].append(pid)
         elif pid in seen:
             buckets["fails"].append(pid)
         else:
@@ -89,6 +97,9 @@ def main() -> int:
     ap.add_argument("--out", help="directory to write <engine>-<bucket>.txt into")
     ap.add_argument("--facet", help="a declared facet (e.g. white) instead of "
                                     "the oracle census")
+    ap.add_argument("--cap", type=float, default=RENDER_TIMEOUT_S,
+                    help="per-part timeout the next round runs at (default "
+                         f"{RENDER_TIMEOUT_S}, batch.RENDER_TIMEOUT_S)")
     args = ap.parse_args()
 
     corpus = [p for p in Path(args.corpus).read_text().split() if p]
@@ -96,11 +107,11 @@ def main() -> int:
     print(f"corpus: {len(corpus)} parts\n")
     try:
         for engine in ENGINES:
-            buckets, ok = coverage(conn, corpus, engine, args.facet)
+            buckets, ok = coverage(conn, corpus, engine, args.facet, args.cap)
             print(f"{engine}")
-            for name in ("drawn", "redraw", "fails", "unmeasured"):
+            for name in ("drawn", "redraw", "fails", "outlasted", "unmeasured"):
                 n = len(buckets[name])
-                if not n and name == "unmeasured":
+                if not n and name in ("outlasted", "unmeasured"):
                     continue
                 print(f"  {name:<11} {n:>6}  {n / len(corpus) * 100:4.1f}%")
 
@@ -111,7 +122,7 @@ def main() -> int:
             # One error per part, from its latest attempt -- a part that failed
             # in several runs has a row in each, and counting rows reports more
             # failures than there are parts.
-            failing = set(buckets["fails"])
+            failing = set(buckets["fails"]) | set(buckets["outlasted"])
             latest = {}
             for r in conn.execute(
                     "SELECT part_id, error FROM measurements WHERE engine = ? "
@@ -126,7 +137,7 @@ def main() -> int:
             if args.out:
                 out = Path(args.out)
                 out.mkdir(parents=True, exist_ok=True)
-                for name in ("redraw", "fails", "unmeasured"):
+                for name in ("redraw", "fails", "outlasted", "unmeasured"):
                     if not buckets[name]:
                         continue
                     path = out / f"{engine}-{name}.txt"

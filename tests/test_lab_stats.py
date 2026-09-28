@@ -388,7 +388,8 @@ def test_the_tail_is_flagged_so_the_chart_can_break_its_axis(conn):
     conn.commit()
     bins = {r["engine"]: r for r in stats.stats(conn)["speed"]}["occt"]["bins"]
     assert {b["from"] for b in bins if b["tail"]} == {
-        *(60.0 + 10.0 * i for i in range(24)), stats.SECS_TOP}
+        *(60.0 + 10.0 * i for i in range(int((stats.SECS_TOP - 60.0) / 10.0))),
+        stats.SECS_TOP}
     assert max(b["from"] for b in bins if not b["tail"]) == 59.5
 
 
