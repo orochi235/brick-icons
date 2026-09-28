@@ -605,7 +605,7 @@ def test_a_named_revision_has_the_build_form_without_a_dirty_mark():
     import brick_icons
     head = brick_icons.build()
     if head == "unknown":
-        pytest.skip("no git here")
+        pytest.skip("no build here")
     assert brick_icons.build_of("HEAD") == head.rstrip("+")
 
 
@@ -619,6 +619,18 @@ def test_a_commit_is_named_in_full():
     import brick_icons
     sha = brick_icons.commit_of("HEAD")
     assert sha is None or re.fullmatch(r"[0-9a-f]{40}", sha), sha
+
+
+def test_a_shallow_repository_is_unknown_not_undercounted(monkeypatch):
+    import brick_icons
+
+    def fake_git(*args):
+        if args[:2] == ("rev-parse", "--is-shallow-repository"):
+            return "true"
+        raise AssertionError(f"should not be called in a shallow repo: {args}")
+
+    monkeypatch.setattr(brick_icons, "_git", fake_git)
+    assert brick_icons.build_of("HEAD") == "unknown"
 
 
 def test_census_source_repeats_no_engine_it_is_already_named_with():
