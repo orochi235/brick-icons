@@ -1,8 +1,7 @@
 # A menu bar item that runs the lab
 
-**Status: built on branch `lab-menubar`, not installed.** Nothing runs under
-launchd yet; `docs/superpowers/plans/2026-09-27-lab-menubar.md` holds the
-install steps, which need the main checkout.
+**Status: built and installed.** `scripts/lab-agents.sh`, `menubar.yaml`, and
+`/api/health` in `brick_icons/lab/app.py`.
 
 For whoever implements or reviews the change: how the lab comes to run under
 launchd, and what the menu bar item shows and does.

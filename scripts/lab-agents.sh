@@ -69,6 +69,11 @@ write() {
     exit 1
   }
   nodedir=$(dirname -- "$node")
+  # Without it launchd exits 78 with an empty log, forever.
+  [ -x "$repo/lab/node_modules/.bin/vite" ] || {
+    echo "brick-lab: $repo/lab has no node_modules; run npm ci there first" >&2
+    exit 1
+  }
   mkdir -p "$state" "$agents"
   plist "$base.lab-api" "$repo" "		<string>$repo/.venv/bin/python</string>
 		<string>-m</string>
