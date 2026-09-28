@@ -7,9 +7,9 @@
   ],
   "commands": {
     "A": 298,
-    "L": 1451,
-    "M": 109,
-    "Z": 73
+    "L": 1452,
+    "M": 106,
+    "Z": 72
   },
   "fills": {
     "#000000": 2,
@@ -19,12 +19,12 @@
     "#858585": 8,
     "#cccccc": 6,
     "gradient": 13,
-    "none": 37
+    "none": 35
   },
   "gradient_stops": 110,
   "gradients": 13,
-  "lines": 17,
-  "paths": 83,
+  "lines": 21,
+  "paths": 81,
   "transforms": 0,
   "viewBox": "0 0 256 170"
 }

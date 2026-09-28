@@ -1,7 +1,6 @@
-## 2026-09-27: stud instancing built behind `--stud-instancing` (off); vetted under occt, not merged
+## 2026-09-27: stud instancing built behind `--stud-instancing` (off); vetted under occt, on main
 
-**Where:** worktree `~/src/brick-icons-studs`, branch `stud-instancing`, not
-pushed; `main` is merged in (d71b62b). Spec:
+**Where:** on `main`, merged from branch `stud-instancing`. Spec:
 `docs/superpowers/specs/2026-09-27-stud-instancing-design.md`. The plan it was
 built from is deleted; everything in it is in the code or here.
 
@@ -59,15 +58,10 @@ looked at.
 **With instancing off the branch still moves 44 of the 52 goldens under occt**
 (`out/vet/stud-off-goldens-occt/`): the contour sits 0.07-0.26 px further out,
 from aligning it by its inner edge. 4070 and `outline-flat3__3649` also change
-a few pixels away from the outline. The goldens are NOT re-frozen, and until
-they are the default suite carries one more red test than main:
-`test_lab_app::test_goldens_check_starts_a_job_over_the_parts_cases` reports
-3005's three cases `moved` (full suite at dba1078 on keiei: 3 failed, 1611
-passed; the other two are the ones listed under Traps). The frozen hashes are
-naive SVGs, so re-freezing means drawing the 52 cases under naive.
+a few pixels away from the outline. Mike read both sheets and approved them,
+and the goldens are re-frozen at the new contour (all 52 naive hashes).
 
-**Mike's to decide:** whether `all` becomes the default; when the branch
-merges; whether the goldens are re-frozen at the new contour.
+**Mike's to decide:** whether `all` becomes the default.
 
 **Rules Mike set while this ran:**
 - Never draw with instancing off to have a baseline. "The baseline is
@@ -108,8 +102,8 @@ merges; whether the goldens are re-frozen at the new contour.
 - PNG outputs keep small cap nubs at stud edges in both modes: PIL cannot
   clip part of a stroke's width. Unfiled.
 - The main checkout carries an uncommitted edit to `tests/goldens/defects.toml`
-  closing `51542-stud-walls-unfilled` against 60c74d6. It is not this
-  branch's; the branch still lists that defect open.
+  closing `51542-stud-walls-unfilled` against 60c74d6. It is another
+  session's and was left uncommitted through the merge.
 
 Explainer page with diagrams: https://claude.ai/artifact/9UU5vt9kg3cigqyJjqqNM1
 
