@@ -67,6 +67,18 @@ The front end proxies `/api` and `/ldraw` to it:
 
     cd lab && npm run dev          # :5178
 
+Or hand both to launchd, which keeps them up and restarts the API when
+`brick_icons/` changes:
+
+    scripts/lab-agents.sh install     # from the main checkout, once
+    brick-lab stat | up | down | cycle | log
+
+`perch install` adds the menu bar item that drives the same verbs, from
+`menubar.yaml`. Logs are in `~/.local/state/brick-icons/` and are emptied on
+every `up`, `cycle` and `install`. A lab started by hand on 8792 or 5178 is
+stopped by `install`; a worktree that wants its own lab still starts one by
+hand on another port.
+
 **The lab must not fork the CLI.** It derives its config schema from
 `cli.build_parser()` and renders through `_config_from_args` + `process_one`. A
 parameter the lab knows and the CLI does not is a bug by construction, and
