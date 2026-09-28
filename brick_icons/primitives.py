@@ -723,6 +723,12 @@ class Primitive:
         px, py, z = proj.to_px(w)
         n = self.R[:, 1]
         n = n / np.linalg.norm(n)
+        # the face spans the images of local x and z; under a shear (3040bp08's
+        # dots, discs squashed onto a slope) the image of y leans off it
+        c = np.cross(self.R[:, 0], self.R[:, 2])
+        c = c / np.linalg.norm(c)
+        if abs(float(c @ n)) < 1.0 - 1e-9:
+            n = c
         nv = np.array([n @ proj.right, n @ proj.up, n @ proj.fwd])
         if nv[2] > 0:
             nv = -nv

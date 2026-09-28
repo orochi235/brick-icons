@@ -797,3 +797,18 @@ def test_occluder_index_names_the_nearest_occluder_each_ray_hits():
 def test_a_primitive_is_not_withheld_until_instancing_says_so():
     prim = P.Disc(R=np.eye(3), t=np.zeros(3))
     assert prim.withheld is False
+
+
+def test_a_sheared_disc_faces_along_its_plane_not_its_y_axis():
+    """3040bp08's dots are discs sheared onto a slope: the image of local y
+    leans off the face, and shading by it toned the dots as a top face while
+    the slope they sit on is a side."""
+    right, up, fwd = (np.array([1.0, 0, 0]), np.array([0, 1.0, 0]),
+                      np.array([0, 0, -1.0]))
+    proj = P.Projection(right, up, fwd, s=1.0, cx=0.0, cy=0.0, half=0.0)
+    R = np.array([[4.0, 0.0, 0.0], [0.0, 1.0, 4.0], [0.0, 0.0, 4.0]])
+    (face,) = P.Disc(R=R, t=np.zeros(3)).faces(proj)
+    n = np.cross(R[:, 0], R[:, 2])
+    n /= np.linalg.norm(n)
+    nv = np.array([n @ right, n @ up, n @ fwd])
+    assert abs(float(face["normal"] @ nv)) == pytest.approx(1.0)
