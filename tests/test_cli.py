@@ -172,9 +172,9 @@ def test_outline_uses_hlr_not_ldview(tmp_path, monkeypatch):
                    "--mode", "both", "--out", str(tmp_path)])
     assert rc == 0 and called["n"] == 0
     svg = (tmp_path / "3701.svg").read_text()
-    # lines + analytic arc paths (threshold loose: declutter passes may
-    # legitimately drop sub-stroke fragments and converging arc spans)
-    assert svg.count("<line") + svg.count("<path") > 40
+    # lines + analytic arc paths + placed studs (threshold loose: declutter
+    # passes may legitimately drop sub-stroke fragments and converging arcs)
+    assert svg.count("<line") + svg.count("<path") + svg.count("<use") > 30
     assert Image.open(tmp_path / "3701.mono.png").mode == "1"
     assert (tmp_path / "3701.gray.png").exists()
 
@@ -443,10 +443,10 @@ def test_a_translucent_edge_at_half_coverage_is_not_ink():
     assert cst.ink_mask(_alpha(65), 0.5).all()
 
 
-def test_render_tag_stamps_stud_instancing_when_it_is_on():
+def test_render_tag_stamps_stud_instancing_only_when_it_is_off():
     cfg = cli._config_from_args(cli.build_parser().parse_args(
-        ["3001", "--stud-instancing", "all"]))
-    assert "studs=all" in cli.render_tag(cfg, "3001")
+        ["3001", "--stud-instancing", "off"]))
+    assert "studs=off" in cli.render_tag(cfg, "3001")
     cfg = cli._config_from_args(cli.build_parser().parse_args(["3001"]))
     assert "studs=" not in cli.render_tag(cfg, "3001")
 

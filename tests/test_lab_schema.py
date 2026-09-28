@@ -83,7 +83,8 @@ def test_every_field_carries_the_config_s_effective_default():
     cfg = load_config(root=".")
     fields = {f["key"]: f for f in schema.config_schema(root=".")}
     for key in ("fmt", "mode", "shading", "engine", "shade_style", "render_px",
-                "curve_quality", "angle", "line_width", "opacity", "dither"):
+                "curve_quality", "angle", "line_width", "opacity", "dither",
+                "stud_instancing"):
         assert fields[key]["effective"] == getattr(cfg, key), key
 
 

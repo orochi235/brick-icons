@@ -106,10 +106,10 @@ def test_engine_override():
     assert load_config(root=".", overrides={"engine": "naive"}).engine == "naive"
 
 
-def test_stud_instancing_defaults_off_and_takes_an_override():
-    assert load_config(root="/proj").stud_instancing == "off"
+def test_stud_instancing_defaults_all_and_takes_an_override():
+    assert load_config(root="/proj").stud_instancing == "all"
     assert load_config(root="/proj",
-                       overrides={"stud_instancing": "all"}).stud_instancing == "all"
+                       overrides={"stud_instancing": "off"}).stud_instancing == "off"
 
 
 def test_contour_defaults_on_and_takes_an_override():

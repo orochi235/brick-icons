@@ -43,7 +43,7 @@ DEFAULTS = {
                              # 0.4 a baseplate's stud walls close up (51542)
     "crumb_ldu": 1.0,        # fill cleanup never culls a piece wider than 2x
                              # this many LDU as drawn (51542's stud walls)
-    "stud_instancing": "off",  # off | all -- draw each declared stud once and
+    "stud_instancing": "all",  # all | off -- draw each declared stud once and
                                # place it wherever it shows (all), or every
                                # stud through the engine (off)
     "contour": "on",         # on | off -- draw the silhouette contour

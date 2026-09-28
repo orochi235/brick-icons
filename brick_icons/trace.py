@@ -394,19 +394,40 @@ def debug_color(n, mode):
     return DEBUG_PALETTE[n % len(DEBUG_PALETTE)]
 
 
-def _colorize(parts, start, mode="cycle"):
-    """Give every drawn element after `start` its own color, in emission
-    order. Answers "which element owns this vertex", which one black outline
-    cannot. `mode` is "cycle" (12 distinct hues), "ramp", or "ramp=N" for a
-    run of N elements per hue (see ramp_color)."""
-    n = 0
-    for i in range(start + 1, len(parts)):
+def _colorize(parts, start, mode="cycle", n=0, stop=None):
+    """Give every drawn element in parts[start + 1:stop] its own color, in
+    emission order, counting on from `n`. Answers "which element owns this
+    vertex", which one black outline cannot. `mode` is "cycle" (12 distinct
+    hues), "ramp", or "ramp=N" for a run of N elements per hue (see
+    ramp_color)."""
+    for i in range(start + 1, len(parts) if stop is None else stop):
         el = parts[i]
         if not (el.startswith("<path") or el.startswith("<line")):
             continue
         color = debug_color(n, mode)
         parts[i] = el.replace("/>", f' stroke="{color}"/>', 1)
         n += 1
+    return n
+
+
+_STUD_STROKES = re.compile(r'(<g id="sd\d+s"[^>]*>)(.*?)(</g>)', re.S)
+_ELEMENT = re.compile(r"<(?:path|line)\b[^>]*/>")
+
+
+def _colorize_studs(parts, lo, hi, mode, n):
+    """_colorize for the stroke definitions a placed stud draws from
+    (instancing.Instancer.svg_parts), which sit inside one `<defs>`: each
+    element is one color at every stud that uses it."""
+    def element(m):
+        nonlocal n
+        el = [m.group(0)]
+        n = _colorize(el, -1, mode, n)
+        return el[0]
+
+    def group(m):
+        return m.group(1) + _ELEMENT.sub(element, m.group(2)) + m.group(3)
+    for i in range(lo, hi):
+        parts[i] = _STUD_STROKES.sub(group, parts[i])
     return n
 
 
@@ -571,6 +592,7 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
         if defs:
             parts.append("<defs>" + "".join(defs) + "</defs>")
         parts += body
+    placed = (len(parts), len(parts) + len(between or ()))
     if between:
         # placed drawings (instancing's studs): over the part's fills,
         # under its strokes
@@ -638,8 +660,9 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
                      f'{own_attr}>')
         parts += stroke_elements(own, line_px, sil_px, studs)
     if debug_colors:
-        _colorize(parts, stroke_g,
-                  debug_colors if isinstance(debug_colors, str) else "cycle")
+        mode = debug_colors if isinstance(debug_colors, str) else "cycle"
+        _colorize_studs(parts, *placed, mode,
+                        _colorize(parts, stroke_g, mode))
     parts.append("</g>")
     if label:
         # render tag in fixed small print, tucked into the bottom-left corner:

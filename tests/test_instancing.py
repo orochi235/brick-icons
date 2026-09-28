@@ -333,19 +333,22 @@ SVG = ["--engine", "naive", "--format", "svg", "--shading", "outline",
 
 
 @pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
-def test_off_never_places_studs_and_draws_as_the_default(tmp_path, monkeypatch):
+def test_all_is_the_default_and_off_never_places_studs(tmp_path, monkeypatch):
+    argv = ["3001", "--engine", "naive", "--format", "both", "--shading",
+            "outline", "--shade-style", "flat3"]
+    assert cli.main(argv + ["--out", str(tmp_path / "default")]) == 0
+    assert cli.main(argv + ["--stud-instancing", "all",
+                            "--out", str(tmp_path / "all")]) == 0
+    for name in ("3001.svg", "3001.gray.png", "3001.mono.png"):
+        assert (tmp_path / "default" / name).read_bytes() \
+            == (tmp_path / "all" / name).read_bytes(), name
+
     def boom(*a, **k):
         raise AssertionError("--stud-instancing off placed studs")
     monkeypatch.setattr(instancing, "withhold", boom)
     monkeypatch.setattr(instancing, "Instancer", boom)
-    argv = ["3001", "--engine", "naive", "--format", "both", "--shading",
-            "outline", "--shade-style", "flat3"]
-    assert cli.main(argv + ["--out", str(tmp_path / "default")]) == 0
     assert cli.main(argv + ["--stud-instancing", "off",
                             "--out", str(tmp_path / "off")]) == 0
-    for name in ("3001.svg", "3001.gray.png", "3001.mono.png"):
-        assert (tmp_path / "default" / name).read_bytes() \
-            == (tmp_path / "off" / name).read_bytes(), name
 
 
 def _evenodd(d):
@@ -373,7 +376,7 @@ def test_off_clips_part_strokes_at_clear_studs_but_not_their_own(tmp_path,
         return g
     monkeypatch.setattr(instancing, "hide_region", spy)
     assert cli.main(["3001", *SVG[2:], "--engine", "occt",
-                     "--out", str(tmp_path)]) == 0
+                     "--stud-instancing", "off", "--out", str(tmp_path)]) == 0
     svg = (tmp_path / "3001.svg").read_text()
     clips = dict(re.findall(r'<clipPath id="(\w+)"><path d="([^"]+)"', svg))
     part, own = _evenodd(clips["sclip"]), _evenodd(clips["oclip"])
@@ -420,3 +423,14 @@ def test_the_pngs_and_the_physical_svg_place_studs_too(tmp_path):
     assert cli.main(["3001", *SVG, "--scale-mode", "physical", "--stud-instancing",
                      "all", "--out", str(tmp_path / "m")]) == 0
     assert '<use href="#sd0s"' in (tmp_path / "m" / "3001.svg").read_text()
+
+
+@pytest.mark.skipif(not HAVE_LIB, reason="LDraw library absent")
+def test_debug_colors_reach_a_placed_stud_s_strokes(tmp_path):
+    import re
+    assert cli.main(["3001", *SVG, "--debug-colors",
+                     "--out", str(tmp_path)]) == 0
+    svg = (tmp_path / "3001.svg").read_text()
+    groups = re.findall(r'<g id="sd\d+s"[^>]*>(.*?)</g>', svg, re.S)
+    els = [e for g in groups for e in re.findall(r"<(?:path|line)\b[^>]*/>", g)]
+    assert els and all('stroke="#' in e for e in els)

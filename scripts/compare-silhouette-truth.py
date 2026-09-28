@@ -124,7 +124,7 @@ def drawn_as(args) -> dict:
               "strokes": [args.line_width, args.silhouette_width]}
     if args.opacity is not None:
         fields["opacity"] = args.opacity
-    if getattr(args, "stud_instancing", "off") != "off":
+    if args.stud_instancing != "off":
         fields["stud_instancing"] = args.stud_instancing
     return fields
 
@@ -233,9 +233,10 @@ def main() -> int:
     ap.add_argument("--silhouette-width", dest="silhouette_width", type=int,
                     default=0, help="contour stroke, output px")
     ap.add_argument("--stud-instancing", dest="stud_instancing",
-                    choices=["off", "all"], default="off",
-                    help="render with stud instancing; the row's counts then "
-                         "carry studs_clear/cut/hidden/fallback")
+                    choices=["off", "all"],
+                    help="stud instancing, as the CLI's flag (default: the "
+                         "CLI's); with it on, the row's counts carry "
+                         "studs_clear/cut/hidden/fallback")
     ap.add_argument("--zoom", type=int, default=8, help="raster px per canvas px")
     ap.add_argument("--floor", type=int, default=200,
                     help="smallest diff component to report, in raster px")
@@ -259,6 +260,10 @@ def main() -> int:
                     help="with --jsonl, record whatever the last run left "
                          "in-flight as ProcessDied and exit, rendering nothing")
     args = ap.parse_args()
+    if args.stud_instancing is None:
+        # Resolved here so every row names what it was drawn with.
+        args.stud_instancing = cli._config_from_args(
+            cli.build_parser().parse_args([])).stud_instancing
 
     # `build` names the engine revision that drew the row. A census tree is
     # merged from many passes on several machines, and the ingest can only

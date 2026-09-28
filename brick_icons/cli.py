@@ -12,7 +12,7 @@ from shapely.geometry import Polygon
 
 from . import render, process, trace, hlr, library, shade, geom2d, unwrap, instancing
 from . import transom
-from .config import load_config, Config
+from .config import load_config, Config, DEFAULTS
 
 
 def build_parser():
@@ -46,8 +46,9 @@ def build_parser():
     p.add_argument("--stud-instancing", dest="stud_instancing",
                    choices=["off", "all"],
                    help="draw each declared stud once and place it wherever "
-                        "it is clear or cut only by planes (all), or draw "
-                        "every stud through the engine (off, the default); "
+                        "it is clear or cut only by planes (all, the "
+                        "default), or draw every stud through the engine "
+                        "(off); "
                         "translucent and wireframe renders are always off")
     p.add_argument("--contour", choices=["on", "off"],
                    help="draw the silhouette contour, the outline around the "
@@ -303,7 +304,7 @@ def render_tag(cfg: Config, name: str, posed: bool = False) -> str:
                     else f"{cfg.shading}/{cfg.shade_style}")
     if cfg.opacity < 1.0:
         bits.append(f"opacity={cfg.opacity:g}")
-    if cfg.stud_instancing != "off":
+    if cfg.stud_instancing != DEFAULTS["stud_instancing"]:
         bits.append(f"studs={cfg.stud_instancing}")
     if cfg.contour == "off":
         bits.append("contour=off")
