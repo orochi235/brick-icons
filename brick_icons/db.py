@@ -571,8 +571,8 @@ RENDER_SUFFIXES = (".svg", ".png", ".webp")
 def _displaced_file(root: Path | str, source: str, part_id: str, held) -> Path:
     """The held drawing as it was: the copy kept aside when `store_render`
     overwrote it in place, else the file the row names."""
-    kept = (Path(root) / review.BEFORE_DIR / source
-            / f"{part_id}.{held['sha256'][:8]}{Path(held['path']).suffix}")
+    kept = Path(root) / review.kept_path(source, part_id, held["sha256"],
+                                         Path(held["path"]).suffix)
     return kept if kept.is_file() else Path(root) / held["path"]
 
 

@@ -232,17 +232,40 @@ def _displace(root, part, text, source="occt"):
     conn.close()
 
 
-def test_the_linked_view_screens_out_a_redraw_that_changed_nothing(lab):
+def test_a_redraw_that_changed_nothing_leaves_the_earlier_entry_listed(lab):
+    """A same-pixels redraw is indexed with no line of its own, so it cannot
+    supersede the genuinely changed entry before it."""
     client, root = lab
     _displace(root, "3002", SVG2_SPECK)
-    assert client.post("/api/review/measure").json()["measured"] == 3
-    speck = review.entry_id("occt", "3002", _sha(SVG2_SPECK))
+    assert client.post("/api/review/measure").json()["measured"] == 2
+    changed = review.entry_id("occt", "3002", _sha(SVG2))
     body = client.get("/api/review").json()
-    assert {e["id"] for e in body["entries"]}.isdisjoint({speck})
-    assert body["hidden"] == 1
-    shown = client.get("/api/review", params={"min_components": 0}).json()
-    assert speck in {e["id"] for e in shown["entries"]}
-    assert shown["hidden"] == 0
+    assert changed in {e["id"] for e in body["entries"]}
+    assert body["superseded"] == 0
+    assert client.get(f"/api/review/{changed}").json()["superseded_by"] is None
+
+
+def test_a_linked_entry_outlives_a_same_pixels_redraw_of_its_slot(lab):
+    """The slot's sha moves and no entry records it: the defect-linked entry
+    stays queued, and still shows the drawing it was logged with."""
+    client, root = lab
+    svg3_speck = SVG3.replace('</svg>', SPECK + '</svg>')
+    conn = db.connect(root / "corpus.db")
+    # A lab redraw writes the store file in place, so the entry's after path
+    # is the file the same-pixels redraw then writes over.
+    db.store_render(conn, "3001", "occt", _draw(root, "out/c", "3001", SVG3),
+                    root=root)
+    db.store_render(conn, "3001", "occt",
+                    _draw(root, "out/d", "3001", svg3_speck), root=root)
+    held = conn.execute("SELECT sha256 FROM renders WHERE part_id = '3001' "
+                        "AND source = 'occt'").fetchone()["sha256"]
+    conn.close()
+    eid = review.entry_id("occt", "3001", _sha(SVG3))
+    assert held == _sha(svg3_speck)
+    assert [l["id"] for l in review.load(root / review.DEFAULT_PATH)
+            if l["kind"] == "replaced" and l["part"] == "3001"][-1] == eid
+    assert eid in {e["id"] for e in client.get("/api/review").json()["entries"]}
+    assert client.get(f"/api/review/{eid}/after").text == SVG3
 
 
 def test_an_unmeasured_linked_entry_is_kept_because_no_diff_screens_it(lab):
