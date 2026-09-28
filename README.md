@@ -143,18 +143,41 @@ else, a printed part's extracted decal, and a pixel diff. Drag on a pane with
 `python scripts/defects-to-handoff.py` regenerates the handoff's list from the
 store, so the two cannot disagree.
 
-The corpus wall's lightbox shows a part as every slot drew it, and "Turn it
-around" mounts the same 3D view there — dragged with the plain left button,
-since there is no shared camera to protect, and captioned with the `LAT,LONG`
-the drag left behind so a pose worth keeping can be typed into `--angle`.
-Loaded on demand: three.js and the LDraw loader are most of a megabyte, and
-the wall must not fetch them to draw a thumbnail.
-
 The contact-sheet instrument renders a whole corpus list and opens any cell as
 a trial; `scripts/render-contact-sheet.sh` remains the headless equivalent.
 "check goldens" re-renders a part once per combo it appears in and compares
 each SVG's sha256 against `tests/goldens/hashes.txt` — the same comparison the
 pytest gate makes.
+
+### The corpus wall
+
+<img src="docs/screenshots/wall.webp" width="100%"
+  alt="The corpus wall: a grid of part thumbnails, some cells filled blue, red, pink or amber for their render state, beside a sidebar of Group, Order, Color and Show menus and category checkboxes">
+
+The lab's Wall page, at http://localhost:5178/wall, puts every part in the
+LDraw library on one grid of thumbnails. Scroll to zoom and drag to pan. A
+cell's color says how that part's last render went — `timed out`,
+`render error`, `open defect` and the rest; **Legend** in the title bar lists
+them. [DEVELOPING.md](DEVELOPING.md#the-lab) covers keeping the lab running.
+
+- **Engine / Reference / Decal** choose whose drawings fill the cells: this
+  project's `occt` engine, LDView as reference, or extracted decals. The menu
+  beside them picks a slot — one set of renders, such as `flat3` — within
+  that choice.
+- **part id or description** finds a part and moves the wall to it.
+- In the sidebar, **Group** bands the grid by coverage, category or release
+  year; **Order** sorts within a band; **Color** recolors every cell by render
+  time, year, set count or color count instead of render state; **Show**
+  narrows to rendered, unrendered, errors, printed, obsolete or base parts.
+  The category and class checkboxes below hide whole families.
+- Click a cell for a summary card; double-click to open its lightbox.
+
+The lightbox shows a part as every slot drew it, and "Turn it around" mounts
+the same 3D view there — dragged with the plain left button, since there is no
+shared camera to protect, and captioned with the `LAT,LONG` the drag left
+behind so a pose worth keeping can be typed into `--angle`. Loaded on demand:
+three.js and the LDraw loader are most of a megabyte, and the wall must not
+fetch them to draw a thumbnail.
 
 ## Decal extraction
 
