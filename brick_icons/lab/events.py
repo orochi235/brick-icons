@@ -18,7 +18,25 @@ log = logging.getLogger(__name__)
 #: the page and the lab does not close it for silence.
 KEEPALIVE_S = 15.0
 
+#: Events held per subscriber while unread. A stalled client would otherwise
+#: grow its queue forever; the page's own 10s cell poll recovers a dropped
+#: event, so dropping the oldest is safe.
+SUBSCRIBER_QUEUE_CAP = 256
+
 Listener = Callable[[str, dict], None]
+
+
+def _offer(queue: asyncio.Queue, item: tuple[str, dict]) -> None:
+    """Queue `item`, dropping the oldest waiting event if `queue` is full."""
+    while True:
+        try:
+            queue.put_nowait(item)
+            return
+        except asyncio.QueueFull:
+            try:
+                queue.get_nowait()
+            except asyncio.QueueEmpty:
+                pass
 
 
 class Broker:
@@ -57,9 +75,9 @@ def frame(kind: str, data: dict) -> str:
 async def stream(broker: Broker,
                  disconnected: Callable[[], Awaitable[bool]]) -> AsyncIterator[str]:
     loop = asyncio.get_running_loop()
-    queue: asyncio.Queue[tuple[str, dict]] = asyncio.Queue()
+    queue: asyncio.Queue[tuple[str, dict]] = asyncio.Queue(maxsize=SUBSCRIBER_QUEUE_CAP)
     stop = broker.subscribe(
-        lambda kind, data: loop.call_soon_threadsafe(queue.put_nowait, (kind, data)))
+        lambda kind, data: loop.call_soon_threadsafe(_offer, queue, (kind, data)))
     try:
         yield ": connected\n\n"
         while not await disconnected():

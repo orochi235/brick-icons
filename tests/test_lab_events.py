@@ -47,6 +47,20 @@ def test_the_stream_says_hello_then_carries_a_publish():
     assert second == events.frame("changed", {"part": "3001"})
 
 
+def test_a_stalled_subscriber_s_queue_stays_at_the_cap_keeping_the_newest():
+    async def run():
+        broker = events.Broker()
+        queue: asyncio.Queue = asyncio.Queue(maxsize=events.SUBSCRIBER_QUEUE_CAP)
+        broker.subscribe(lambda kind, data: events._offer(queue, (kind, data)))
+        for i in range(events.SUBSCRIBER_QUEUE_CAP + 10):
+            broker.publish("changed", {"part": str(i)})
+        assert queue.qsize() == events.SUBSCRIBER_QUEUE_CAP
+        return await queue.get()
+
+    first = asyncio.run(run())
+    assert first == ("changed", {"part": "10"})
+
+
 def test_a_closed_stream_stops_listening():
     broker = events.Broker()
 
