@@ -66,18 +66,19 @@ def test_a_rebuild_keeps_each_render_s_original_time(tmp_path):
     assert _made(out) == want
 
 
-def test_a_request_stays_pending_across_a_rebuild(tmp_path):
+def test_a_request_s_record_survives_a_rebuild(tmp_path):
+    # ASKED is after DRAWN, so nothing in the tree answers this request --
+    # a rebuild must not touch the log or the made_at it would be checked
+    # against.
     lib, tree = _corpus(tmp_path)
     out = tmp_path / "corpus.db"
     log = tmp_path / "requests.jsonl"
     requests.add(log, "3001", "occt", at=ASKED)
     for _ in range(2):
         db.rebuild(out, lib, root=tmp_path, census_dirs=[tree])
-        conn = db.connect(out)
-        try:
-            assert requests.pending(conn, "occt", log) == ["3001"]
-        finally:
-            conn.close()
+        assert requests.load(log) == [{"part": "3001", "source": "occt",
+                                       "at": ASKED, "by": "lab"}]
+        assert _made(out)[("3001", "occt")] == DRAWN
 
 
 def test_storing_a_drawing_keeps_its_time_for_the_next_rebuild(tmp_path):
