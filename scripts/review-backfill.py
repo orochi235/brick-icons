@@ -11,14 +11,13 @@ round writes its own `out/<task>/` tree and the store lives in `renders/` --
 and this walks that tree: every part whose current row is drawn elsewhere
 with a different sha gets a `replaced` line, before being the file here.
 
-The before's made-at is the file's mtime and its run is unknown; both are
-honest about what a backfill can know.
+The before's made-at is `db.drawn_at` of the file, with no log row to state
+one, and its run is unknown; both are honest about what a backfill can know.
 """
 from __future__ import annotations
 
 import argparse
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -61,7 +60,7 @@ def main() -> int:
             if sha == row["sha256"]:
                 continue
             moved += 1
-            made = datetime.fromtimestamp(old.stat().st_mtime, timezone.utc)
+            made = db.drawn_at(old)
             print(f"{moved} {row['part_id']}: {old.relative_to(root)} -> "
                   f"{row['path']}", flush=True)
             if a.dry_run:
@@ -69,7 +68,7 @@ def main() -> int:
             review.record_replaced(
                 conn, root, log, part=row["part_id"], source=a.slot,
                 before={"path": str(old.relative_to(root)), "sha256": sha,
-                        "made_at": made.isoformat(timespec="seconds"),
+                        "made_at": made,
                         "run_id": None},
                 after={"path": row["path"], "sha256": row["sha256"]},
                 run_id=row["run_id"], by=review.by_from_path(row["path"]))

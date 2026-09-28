@@ -135,6 +135,22 @@ def test_since_returns_only_what_was_rendered_after_it(conn):
     assert body["count"] == 2  # the corpus size, not the delta's
 
 
+def test_a_drawing_made_before_the_version_but_indexed_after_it_is_sent(conn):
+    # A fleet drawing is dated when it was made and arrives when it is
+    # fetched; the wall has to hear about it when it arrives.
+    _part(conn, "3001")
+    _part(conn, "3004")
+    _render(conn, "3001", "a", "2026-09-05T11:00:00+00:00")
+    conn.commit()
+    before = cells.cells(conn)["version"]
+    conn.execute("INSERT INTO renders (part_id, source, config_key, made_at, "
+                 "path, sha256, indexed_at) VALUES ('3004', 'silhouette-naive', "
+                 "'k', '2026-09-05T10:00:00+00:00', 'p.svg', 'b', "
+                 "'2026-09-05T12:00:00+00:00')")
+    conn.commit()
+    assert [c["id"] for c in cells.cells(conn, since=before)["cells"]] == ["3004"]
+
+
 def test_a_delta_cell_keeps_the_index_it_has_on_the_wall(conn):
     for pid in ("3001", "3004", "3005"):
         _part(conn, pid)

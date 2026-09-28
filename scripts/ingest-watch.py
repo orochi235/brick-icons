@@ -159,6 +159,7 @@ def _take_renders(conn: sqlite3.Connection, tree: Path, engine: str,
     asked = ({slot: set(render_requests.pending(
         conn, slot, ROOT / render_requests.DEFAULT_PATH))
         for _d, slot in walks} if requested else {})
+    stated = db.stated_times(tree)
     took = redrew = 0
     touched: set[str] = set()
     for kept, slot in walks:
@@ -176,7 +177,8 @@ def _take_renders(conn: sqlite3.Connection, tree: Path, engine: str,
         if seen.get(svg) == (st.st_size, st.st_mtime):
             continue
         try:
-            db.record_render(conn, pid, slot, svg, root=ROOT, run_id=run_id)
+            db.record_render(conn, pid, slot, svg, root=ROOT, run_id=run_id,
+                             made_at=stated.get((kept.name, pid)))
         except Exception as e:  # noqa: BLE001
             print(f"  {pid}: {type(e).__name__} {e}", flush=True)
             continue

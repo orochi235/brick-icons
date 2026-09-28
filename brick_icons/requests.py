@@ -68,8 +68,9 @@ def _latest(path, source=None, part=None) -> dict[tuple[str, str], str]:
 
 
 def _unanswered(conn: sqlite3.Connection, asked: dict) -> dict:
-    # made_at and a request's `at` are both db.now() strings, which order as
-    # text.
+    # made_at and a request's `at` are both `batch.stamp` strings, which order
+    # as text. made_at is when the drawing was made (`db.drawn_at`), so a
+    # rebuild cannot answer a request by re-reading an older drawing.
     return {key: at for key, at in asked.items()
             if conn.execute(
                 "SELECT 1 FROM renders WHERE part_id = ? AND source = ? "

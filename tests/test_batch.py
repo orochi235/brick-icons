@@ -31,8 +31,19 @@ def test_resume_skips_what_is_done_and_buries_what_crashed(tmp_path):
     runner = batch.Runner(log, timeout=0)
     assert runner.remaining(["a", "b", "c"]) == ["c"]
     rows = [json.loads(l) for l in log.read_text().splitlines()]
+    assert rows[-1].pop("at")
     assert rows[-1] == {"item": "b", "error": "ProcessDied",
                         "detail": "killed mid-render; not retried"}
+
+
+def test_every_row_says_when_it_was_written(tmp_path):
+    """A drawing's row is the only record of when it was made that survives
+    the trip home: a fetch stamps the file itself with the fetch time."""
+    log = tmp_path / "out.jsonl"
+    before = batch.stamp()
+    batch.Runner(log).run("a", lambda item: {"drawn": item})
+    at = json.loads(log.read_text())["at"]
+    assert before <= at <= batch.stamp()
 
 
 def test_every_row_carries_the_run_wide_fields(tmp_path):

@@ -3,9 +3,9 @@
 Two series, because neither alone answers "is this getting better".
 
 `take` writes a row per slot whenever a count moves, which is the only clock
-the database has: `rebuild` drops the file and re-stamps every `runs.started`
-and `renders.made_at` with the ingest time, so nothing else in here says when
-a part failed.
+the database has for failures: `rebuild` drops the file and re-stamps every
+`runs.started` with the ingest time, and `renders.made_at` dates only what
+drew.
 
 `by_build` reads the other way, off `measurements.build` -- the engine
 revision the rendering machine stamped, which survives a rebuild because it

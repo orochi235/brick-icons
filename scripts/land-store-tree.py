@@ -48,6 +48,7 @@ def land(conn, tree: Path, source: str, root: Path, commit_sha: str,
         "SELECT part_id, path, sha256 FROM renders WHERE source = ?",
         (source,))}
     files = sorted(p for p in made.iterdir() if p.suffix in db.RENDER_SUFFIXES)
+    stated = db.stated_times(tree)
     if limit:
         files = files[:limit]
     progress(f"onto: plan 0/{len(files)}")
@@ -64,7 +65,7 @@ def land(conn, tree: Path, source: str, root: Path, commit_sha: str,
             continue
         try:
             db.store_render(conn, pid, source, path, root=root, run_id=run_id,
-                            by=by)
+                            by=by, made_at=stated.get((source, pid)))
         except Exception as e:  # noqa: BLE001
             counts["failed"] += 1
             progress(f"  {i}/{len(files)} {pid}: {type(e).__name__} {e}")

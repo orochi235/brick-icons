@@ -15,12 +15,22 @@ import subprocess
 import sys
 import time
 import traceback
+from datetime import datetime, timezone
 from pathlib import Path
 
 _ARMED = None
 
 #: The per-part render cap, in seconds; every launcher's default comes from here.
 RENDER_TIMEOUT_S = 150
+
+
+def stamp(epoch: float | None = None) -> str:
+    """A UTC instant to the second, as every timestamp in this project is
+    written: ISO strings in one format order as text, and `made_at` against a
+    request's `at` is compared exactly that way."""
+    when = (datetime.now(timezone.utc) if epoch is None
+            else datetime.fromtimestamp(epoch, timezone.utc))
+    return when.isoformat(timespec="seconds")
 
 
 def outlasted(error: str | None, secs: float | None,
@@ -179,8 +189,11 @@ class Runner:
         return bool(marker) and Path(marker).exists()
 
     def write(self, row: dict) -> None:
+        """Every row carries `at`, when it was written -- for a drawn item,
+        when its drawing was made. The row travels with the tree and the file's
+        mtime does not: `onto fetch` writes each file at fetch time."""
         with self.log.open("a") as fh:
-            fh.write(json.dumps({**self.extra, **row}) + "\n")
+            fh.write(json.dumps({**self.extra, **row, "at": stamp()}) + "\n")
 
     def run(self, item: str, work) -> dict:
         """`work(item)` under the cap. Its dict is returned and logged; a

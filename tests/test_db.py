@@ -180,8 +180,7 @@ def test_a_second_render_of_the_same_config_replaces_the_row(tmp_path):
 
 
 def test_an_older_drawing_does_not_displace_a_newer_one(tmp_path):
-    """`made_at` is stamped at ingest and cannot order two drawings, so a
-    census tree fetched late would otherwise walk a slot backwards."""
+    """A census tree fetched late would otherwise walk a slot backwards."""
     conn = db.connect(tmp_path / "corpus.db")
     new = tmp_path / "renders" / "naive" / "3001.svg"
     new.parent.mkdir(parents=True)
