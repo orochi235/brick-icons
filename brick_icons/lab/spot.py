@@ -80,6 +80,8 @@ class OntoSpot:
                                   timeout=timeout + self.slack_s)
         except FileNotFoundError:
             raise SpotDown(f"no onto at {onto}") from None
+        except PermissionError:
+            raise SpotDown(f"onto at {onto} is not executable") from None
         except subprocess.TimeoutExpired:
             raise SpotError(f"no reply in {int(timeout)}s",
                             "TimeoutError") from None

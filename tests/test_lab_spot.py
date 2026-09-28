@@ -63,6 +63,34 @@ def test_no_onto_at_all_is_spot_down(tmp_path):
         client.draw(REQ, commit=None)
 
 
+def test_find_onto_falls_back_to_the_local_bin_when_which_finds_none(
+        tmp_path, monkeypatch):
+    monkeypatch.setattr(spot.shutil, "which", lambda name: None)
+    fallback = tmp_path / "onto"
+    fallback.write_text("")
+    monkeypatch.setattr(spot, "ONTO_FALLBACK", str(fallback))
+    assert spot._find_onto() == str(fallback)
+
+
+def test_find_onto_is_down_when_neither_the_path_nor_the_fallback_has_it(
+        tmp_path, monkeypatch):
+    monkeypatch.setattr(spot.shutil, "which", lambda name: None)
+    monkeypatch.setattr(spot, "ONTO_FALLBACK", str(tmp_path / "absent"))
+    assert spot._find_onto() is None
+    client = spot.OntoSpot(onto=None, expected=lambda: EXPECTED)
+    with pytest.raises(spot.SpotDown, match="not on the lab's PATH"):
+        client.draw(REQ, commit=None)
+
+
+def test_onto_found_but_not_executable_is_spot_down(tmp_path):
+    script = tmp_path / "onto"
+    script.write_text("#!/bin/sh\necho hi\n")
+    script.chmod(0o644)
+    client = spot.OntoSpot(onto=str(script), expected=lambda: EXPECTED)
+    with pytest.raises(spot.SpotDown, match="not executable"):
+        client.draw(REQ, commit=None)
+
+
 @pytest.mark.parametrize("code, error", [
     (spot.ROLL_FAILED_EXIT, "RollFailed"),
     (spot.TIMEOUT_EXIT, "TimeoutError"),
