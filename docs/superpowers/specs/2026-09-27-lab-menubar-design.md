@@ -1,8 +1,8 @@
 # A menu bar item that runs the lab
 
-**Status: not built.** `menubar.yaml` is drafted at the repo root and compiles
-under `perch build`. The agents script, the health route and the emitted Swift
-do not exist yet.
+**Status: built on branch `lab-menubar`, not installed.** Nothing runs under
+launchd yet; `docs/superpowers/plans/2026-09-27-lab-menubar.md` holds the
+install steps, which need the main checkout.
 
 For whoever implements or reviews the change: how the lab comes to run under
 launchd, and what the menu bar item shows and does.
