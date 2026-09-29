@@ -1,33 +1,51 @@
-## 2026-09-29: branches waiting to merge, and the decisions behind them
+## 2026-09-29: the nine waiting branches merged (branch `merge-0929`)
 
-Spot rendering is merged and the `brick-spot-render` worker is up on studio
-(see the spot entry below for the post-pull steps: `git pull`,
-`(cd lab && npm ci)`, `brick-lab install` (not `cycle`, since the agents' PATH
-changed), `brick-lab stat`, then `scripts/bake-thumbs.py` per slot to write
-the sheet masters, estimated at half a core-hour with inputs only on this
-Mac).
+`merge-0929` holds readme-cli, part-years, render-caption, review-orphans,
+line-weight-1.2, edge-stud-band, thin-wall-shade, deco-shading and
+sphere-shading, merged in that order onto main e3f836b. It is pushed so the
+fleet can fetch it; main is not moved until the full suite passes.
 
-Local branches, each finished and reviewed, NOT merged. List any with
-`git branch --no-merged origin/main`.
+Conflicts, resolved: HANDOFF and defects.toml kept both sides. db.record_render
+keeps review-orphans' same-file early return, and its test no longer checks a
+render request (spot rendering removed `pending`). shade.fill_ops takes both
+`sil_walls` and `deco_shade`; a thin wall is painted before the decoration
+branch, and the sphere flag moved into `_gradient`. `Flat3Style.top` is kept
+beside the tone factors, since the thin-wall rule reads it. `_sheet.sheet`
+takes caption Shots and the extra reference panel.
 
-| branch | what | open before merging |
-|---|---|---|
-| `review-orphans` | /review no longer hides entries superseded by a nonexistent entry; a re-read of the held file changes nothing | its new test in tests/test_review.py calls `render_requests.pending`, which spot rendering deleted; adapt it at merge |
-| `readme-cli` | README examples use `brick-icons` | none |
-| `line-weight-1.2` | default line and silhouette weight 1.4 (occt, white-occt, translucent-occt), occt-svelte 1.0, goldens re-frozen; `record_render` replaces a part's row across a changed config key (added without being asked; revert that hunk of af1fd58 to undo) | `test_a_fill_boundary_carries_no_sampled_boundary[4070]` fails at 1.4 (filed `4070-sampled-fill-boundary-at-1.4px`): xfail or fix is undecided. At 1.0 the stud ceiling (0.5 px) sits below the 0.75 line floor, so look at svelte's stud rings before filling it |
-| `edge-stud-band` | 30225bp1's back-wall band: paint-order witness now checked against the exact polygons | goldens moved that nobody predicted and need a verdict (3649 better, 3941p01 slightly worse, 6589 unclear, 3942bp01 neutral, plus naive 3942bp01/3941p01/3673); sheets on the wall. A pair the raster misses entirely still gets no ordering (not filed) |
-| `thin-wall-shade` | rule D: a thin wall along the silhouette takes the top tone, with its crease at the stud weight | none; shares the 10a/3857 back-wall sliver with edge-stud-band |
-| `deco-shade` | printed surfaces shade via a black-opacity layer (`--deco-shade on`, default) | textual conflict with edge-stud-band in shade.fill_ops |
-| `sphere-shading` | declared-smooth regions fit a cone/cylinder, sphere or ellipsoid; 51283 is one radial gradient with an arc outline; `scripts/count-smooth-regions.py` | conflicts in shade.py with deco-shade, thin-wall-shade and edge-stud-band. Undecided: build freeform tone bands for the regions no quadric fits (the count found freeform regions in most hair, animals and figures) |
-| `part-years` | fig-only parts dated via inventory_minifigs; `c\d\d` assemblies fall back to their base | undecided: `BORROWED_YEAR_ROUTES` in brick_icons/lab/cells.py hides every design-route year, including 29272's; hide it only for printed parts? After merging, run `.venv/bin/python scripts/fetch-part-years.py` |
-| `render-caption` | review images carry "part · size · time" in a strip; production is byte-identical | about 14 one-off A/B scripts still post bare panels (listed in that branch's HANDOFF) |
+Golden gate for the shade group, against the line-weight merge 9775e67
+(predicted 3649, 6589, 3941p01, 3942bp01, 3673, 3040bp08, 4740p03, 3960):
+naive passes, all 7 movers predicted. occt verdict `review`: 7 predicted
+movers plus **32062, unpredicted** (1 region, 17 px), sheet on the wall. The
+goldens are NOT re-frozen yet; that waits on a verdict for 32062 and on the
+edge-stud-band verdicts below.
 
-Merge order suggestion: readme-cli, part-years, render-caption, review-orphans
-(adapt the test), line-weight-1.2, then the shade.py group (edge-stud-band,
-thin-wall-shade, deco-shade, sphere-shading), resolving conflicts by reading
-both sides, then the full suite on the fleet, then ONE combined redraw of the
-occt slots (the line-weight estimate was a floor of about 250 core-hours;
-re-price it from post-merge timings first).
+Still open:
+- `test_a_fill_boundary_carries_no_sampled_boundary[4070]` fails at 1.4 px.
+  `scripts/probe-sampled-runs.py` measured it on studio: widths 2.0 and 1.0 are clean, 1.4 has four runs of
+  22 segments of 0.03-0.04 px, 0.78 px long in all -- about 64 deg of a circle
+  of radius 0.7 px, half the stroke, so a buffered round join reaching the
+  fill. Raising the threshold would pass exactly what the test is for; the
+  call is Mike's.
+- edge-stud-band's unpredicted goldens still want a verdict (3649 better,
+  3941p01 slightly worse, 6589 unclear, 3942bp01 neutral; naive 3942bp01,
+  3941p01, 3673).
+- part-years: whether `BORROWED_YEAR_ROUTES` should hide design-route years
+  only for printed parts (137 of 728 design matches are printed). After the
+  merge, `.venv/bin/python scripts/fetch-part-years.py`.
+- render-caption: about 14 one-off A/B scripts still post bare panels.
+- Then the full suite on the fleet, fast-forward main, and ONE combined
+  redraw of the occt slots, re-priced from post-merge timings.
+
+**Parked: freeform tone bands** (branch `sphere-tone-bands`, 7f73eae, off by
+default via `shade.FREEFORM_BANDS`). Smooth-region facets that no quadric
+fits are shaded from averaged vertex normals cut into 8 bands. Mike judged the
+trial sheet an improvement but too hacky to merge; do not merge it as is.
+
+Spot rendering: lab reloaded (`npm ci`, `brick-lab install`), worker at
+1666.1e04b70. The sheet masters are baked for every slot (36 masters, on
+keiei from shipped inputs, 13 slots, about 17 min) and installed in
+`out/thumbs`.
 
 Decisions made in conversation, not recorded in code:
 - The per-part render cap is 150s. Printed or large baseplates time out at it
