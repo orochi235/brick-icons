@@ -7,16 +7,18 @@ them.
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import sqlite3
 import tomllib
+import xml.etree.ElementTree as ET
 from collections.abc import Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 
 from brick_icons import goldens
 from brick_icons.lab import cache, partindex
-from brick_icons import features, review
+from brick_icons import features, review, svgstats
 from brick_icons.lab import defects as defects_toml
 
 DEFAULT_PATH = Path("corpus.db")
@@ -100,6 +102,10 @@ CREATE TABLE IF NOT EXISTS measurements (
   -- seconds either way.
   counts TEXT,
   error TEXT, detail TEXT,
+  -- The drawing this row measured, from `svgstats.render_stats`: its size,
+  -- its painted objects (null for a raster) and when it was written. Null
+  -- where the file was gone or had been redrawn by the time it was read.
+  bytes INTEGER, objects INTEGER, drawn_at TEXT,
   PRIMARY KEY (run_id, part_id, engine)
 );
 
@@ -267,6 +273,9 @@ def now() -> str:
 _ADDED_COLUMNS = (("defects", "classes", "TEXT"),
                   ("defects", "checked", "TEXT"),
                   ("measurements", "counts", "TEXT"),
+                  ("measurements", "bytes", "INTEGER"),
+                  ("measurements", "objects", "INTEGER"),
+                  ("measurements", "drawn_at", "TEXT"),
                   ("parts", "preview", "TEXT"),
                   ("tallies", "slot_failed", "INTEGER NOT NULL DEFAULT 0"),
                   ("tallies", "slot_timeout", "INTEGER NOT NULL DEFAULT 0"),
@@ -392,18 +401,48 @@ def finish_run(conn: sqlite3.Connection, run_id: int,
     conn.commit()
 
 
+def drawing_stats(census_dir: Path | str, row: dict,
+                  logged_at: float) -> tuple:
+    """(bytes, objects, drawn_at) of the drawing a census row measured, or
+    three Nones when the tree no longer holds it. The file is the row's when
+    its sha is the one the row recorded, or -- for a row older than that
+    field -- when it was written no later than the shard that logged the row
+    (`logged_at`, a timestamp): a re-run into the same tree leaves a newer file.
+    """
+    want = (row.get("edges") or {}).get("sha256")
+    for suffix in RENDER_SUFFIXES:
+        path = Path(census_dir) / "renders" / row["engine"] / f"{row['part']}{suffix}"
+        if not path.is_file():
+            continue
+        if want:
+            if hashlib.sha256(path.read_bytes()).hexdigest() != want:
+                return (None, None, None)
+        elif path.stat().st_mtime > logged_at + 1:
+            return (None, None, None)
+        try:
+            got = svgstats.render_stats(path)
+        except ET.ParseError:
+            # A census still running leaves half-written files behind it.
+            return (None, None, None)
+        return (got["bytes"], got["objects"], got["drawn_at"])
+    return (None, None, None)
+
+
 def import_census_jsonl(conn: sqlite3.Connection, run_id: int,
                         path: Path | str,
                         census_dir: Path | str | None = None) -> int:
     """`census_dir` names the facet: without it a row's source is left null and
     a reader can only fall back to the engine, which does not distinguish."""
     rows = []
+    logged_at = Path(path).stat().st_mtime
     for line in Path(path).read_text().splitlines():
         if not line.strip():
             continue
         r = json.loads(line)
         dist = r.get("extra_dist_px") or {}
         source = census_source(census_dir, r["engine"]) if census_dir else None
+        drawn = (drawing_stats(census_dir, r, logged_at)
+                 if census_dir and not r.get("error") else (None, None, None))
         rows.append((run_id, r["part"], r["engine"], source, r.get("build"),
                      r.get("missing_px"), r.get("extra_px"),
                      len(r["missing"]) if "missing" in r else None,
@@ -411,12 +450,12 @@ def import_census_jsonl(conn: sqlite3.Connection, run_id: int,
                      r.get("secs"),
                      json.dumps(r["phase"]) if r.get("phase") else None,
                      json.dumps(r["counts"]) if r.get("counts") else None,
-                     r.get("error"), r.get("detail")))
+                     r.get("error"), r.get("detail"), *drawn))
     conn.executemany(
         "INSERT OR REPLACE INTO measurements (run_id, part_id, engine, source, "
         "build, missing_px, extra_px, missing_comps, extra_d99, extra_d100, "
-        "secs, phases, counts, error, detail) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+        "secs, phases, counts, error, detail, bytes, objects, drawn_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
     conn.commit()
     # Without a tree there is no slot to file a drawing's score under.
     if census_dir:
