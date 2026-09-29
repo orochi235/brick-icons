@@ -1,4 +1,5 @@
 import os
+import threading
 from datetime import date
 from pathlib import Path
 
@@ -130,3 +131,26 @@ def test_a_defect_with_no_kind_still_loads(tmp_path):
                        "seen": {}, "filed": "2026-09-03", "notes": ""})
     [back] = defects.load(path)
     assert "kind" not in back
+
+
+def test_two_threads_adding_at_once_both_land(tmp_path):
+    path = tmp_path / "defects.toml"
+    defects.save(path, [ONE])
+    barrier = threading.Barrier(2)
+
+    def add(record):
+        barrier.wait()
+        defects.add(path, record)
+
+    second = {**ONE, "id": "4070-occt-ledge", "part": "4070"}
+    third = {**ONE, "id": "6143-flat3-band", "part": "6143"}
+    threads = [threading.Thread(target=add, args=(second,)),
+               threading.Thread(target=add, args=(third,))]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    ids = {d["id"] for d in defects.load(path)}
+    assert ids == {ONE["id"], second["id"], third["id"]}
+    assert [p for p in tmp_path.iterdir() if p.suffix == ".tmp"] == []
