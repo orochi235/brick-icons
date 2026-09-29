@@ -215,7 +215,7 @@ def _write_tiles(out: Path, part_id: str, drawn: Image.Image) -> None:
     for level in LEVELS:
         path = out / str(level) / f"{part_id}.{THUMB_EXT}"
         path.parent.mkdir(parents=True, exist_ok=True)
-        _square(drawn, level).save(path, **THUMB_SAVE)
+        _save_atomic(_square(drawn, level), path, **THUMB_SAVE)
 
 
 @contextmanager

@@ -1,5 +1,6 @@
 """Thumbnail baking: geometry, freshness, sheets."""
 import json
+import os
 import re
 from pathlib import Path
 
@@ -211,6 +212,36 @@ def test_a_sidecar_is_written_whole_or_not_at_all(tmp_path):
     assert json.loads((tmp_path / "x.json").read_text()) == {"a": "1"}
     # nothing left behind to be mistaken for a slot's own file
     assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_a_tile_write_goes_through_a_temp_file_then_replace(tmp_path, monkeypatch):
+    """A background patch_cell can read a tile while bake_part writes it; the
+    write must land as temp-file-then-replace, like every other sheet write
+    in this module, or that reader can see a half-written file."""
+    svg = tmp_path / "3001.svg"
+    svg.write_text(SVG)
+    out = tmp_path / "thumbs"
+
+    replaced = []
+    real_replace = os.replace
+
+    def spy(src, dst):
+        assert Path(src).name.endswith(".tmp"), src
+        assert Path(src).is_file()
+        replaced.append(Path(dst))
+        real_replace(src, dst)
+
+    monkeypatch.setattr(thumbs.os, "replace", spy)
+    thumbs.bake_part("3001", svg, out, sha="abc123")
+
+    tile_paths = {out / str(level) / f"3001.{thumbs.THUMB_EXT}"
+                  for level in thumbs.LEVELS}
+    assert tile_paths <= set(replaced)
+    for level in thumbs.LEVELS:
+        assert not list((out / str(level)).glob(".*.tmp")), level
+    with Image.open(out / "128" / f"3001.{thumbs.THUMB_EXT}") as img:
+        assert img.size == (128, 128)
+        assert img.convert("RGBA").getpixel((64, 64))[3] == 255  # ink survives
 
 
 def test_a_format_change_rebakes_rather_than_composing_missing_tiles(tmp_path,
