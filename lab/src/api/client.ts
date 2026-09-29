@@ -32,6 +32,14 @@ export function createClient({ base = '', fetchImpl = fetch }: ClientOptions = {
     body: JSON.stringify(body),
   });
 
+  // A lazily opened, reference-counted EventSource: the lightbox watching one
+  // part and the wall watching every redraw are two subscribers to the same
+  // stream, not two sockets. It opens on the first `onChanged` and closes
+  // when the last unsubscribes, so a page with nobody watching holds nothing
+  // open.
+  let changedSource: EventSource | null = null;
+  const changedListeners = new Set<(event: ChangedEvent) => void>();
+
   return {
     async schema(): Promise<SchemaField[]> {
       return (await json<{ fields: SchemaField[] }>(fetchImpl, at('/api/schema'))).fields;
@@ -119,14 +127,24 @@ export function createClient({ base = '', fetchImpl = fetch }: ClientOptions = {
     },
 
     /** Every stored redraw, as it lands. Returns the unsubscribe. Prefer
-     *  `useChanged`, which batches them. */
+     *  `useChanged`, which batches them. Subscribers share one EventSource. */
     onChanged(listener: (event: ChangedEvent) => void): () => void {
       if (typeof EventSource === 'undefined') return () => {};
-      const events = new EventSource(at('/api/events'));
-      events.addEventListener('changed', (e) => {
-        listener(JSON.parse((e as MessageEvent<string>).data) as ChangedEvent);
-      });
-      return () => events.close();
+      if (changedListeners.size === 0) {
+        changedSource = new EventSource(at('/api/events'));
+        changedSource.addEventListener('changed', (e) => {
+          const event = JSON.parse((e as MessageEvent<string>).data) as ChangedEvent;
+          for (const held of changedListeners) held(event);
+        });
+      }
+      changedListeners.add(listener);
+      return () => {
+        changedListeners.delete(listener);
+        if (changedListeners.size === 0) {
+          changedSource?.close();
+          changedSource = null;
+        }
+      };
     },
 
     async reference(part: string, angle: string, partColor?: string) {

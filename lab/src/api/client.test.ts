@@ -95,4 +95,31 @@ describe('createClient', () => {
     expect(made[0]!.closed).toBe(true);
     vi.unstubAllGlobals();
   });
+
+  it('shares one EventSource across subscribers, closing when the last leaves', () => {
+    const made: FakeEvents[] = [];
+    class FakeEvents {
+      listeners: Record<string, (e: MessageEvent) => void> = {};
+      closed = false;
+      constructor(public url: string) { made.push(this); }
+      addEventListener(kind: string, f: (e: MessageEvent) => void) { this.listeners[kind] = f; }
+      close() { this.closed = true; }
+    }
+    vi.stubGlobal('EventSource', FakeEvents);
+    const api = createClient({ fetchImpl: stub({}) as unknown as typeof fetch });
+    const heardA: unknown[] = [];
+    const heardB: unknown[] = [];
+    const stopA = api.onChanged((e) => heardA.push(e));
+    const stopB = api.onChanged((e) => heardB.push(e));
+    expect(made.length).toBe(1);
+    const event = { part: '3001', source: 'occt', sha: 'ab', build: '9.c' };
+    made[0]!.listeners.changed!({ data: JSON.stringify(event) } as MessageEvent);
+    expect(heardA).toEqual([event]);
+    expect(heardB).toEqual([event]);
+    stopA();
+    expect(made[0]!.closed).toBe(false);
+    stopB();
+    expect(made[0]!.closed).toBe(true);
+    vi.unstubAllGlobals();
+  });
 });
