@@ -53,6 +53,18 @@ it('places a raster slot where a drawing of the part would sit', async () => {
   expect(img.style.getPropertyValue('--place-height')).toBe(`${(158 / 256) * 100}%`);
 });
 
+it('lays the tiles out from the slots alone while the detail is still coming', async () => {
+  const slow = {
+    corpusPart: () => new Promise(() => {}),
+    corpusPartSlots: () => Promise.resolve({ slots: detail.slots }),
+    addDefect,
+  };
+  render(box({ client: slow }));
+  await waitFor(() => screen.getAllByRole('img', { name: /3001/ }));
+  expect(screen.getAllByRole('img', { name: /3001/ })).toHaveLength(2);
+  expect(screen.queryByText('Brick 2 x 4')).toBeNull();
+});
+
 it('puts the close button on the title row', async () => {
   render(box());
   expect(screen.getByRole('button', { name: 'Close' })

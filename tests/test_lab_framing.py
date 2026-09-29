@@ -63,3 +63,8 @@ def test_part_route_places_raster_slots_and_leaves_svg_alone(tmp_path):
     assert round(slots["reference-gray"]["placement"]["h"], 9) == 158
     assert "placement" not in slots["occt"]
     assert "path" not in slots["reference-gray"]
+    # The lightbox's early tiles are the same slots, before any state.
+    early = client.get("/api/corpus/part/3001/slots").json()["slots"]
+    assert [s["source"] for s in early] == list(slots)
+    assert early[[s["source"] for s in early].index("reference-gray")][
+        "placement"] == slots["reference-gray"]["placement"]

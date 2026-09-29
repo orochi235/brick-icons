@@ -176,6 +176,12 @@ export function createClient({ base = '', fetchImpl = fetch }: ClientOptions = {
       return json(fetchImpl, at(`/api/corpus/part/${encodeURIComponent(id)}`));
     },
 
+    /** Just the part's slot tiles -- `corpusPart`'s `slots` without their
+     *  defect and error states, in a fraction of its time. */
+    async corpusPartSlots(id: string): Promise<{ slots: PartDetail['slots'] }> {
+      return json(fetchImpl, at(`/api/corpus/part/${encodeURIComponent(id)}/slots`));
+    },
+
     /** Every ingest, newest first. */
     async ingestRuns(): Promise<IngestRun[]> {
       return (await json<{ runs: IngestRun[] }>(fetchImpl, at('/api/ingest/runs'))).runs;

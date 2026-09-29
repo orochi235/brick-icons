@@ -55,9 +55,9 @@ function whyNothing(slot: Slot): string[] {
 /** The state the wall would color this slot's cell. An API older than the
  *  state fields sends none, and the honest answer for a slot that says
  *  nothing is the ground a clean one gets. */
-function slotState(slot: Slot, part: PartDetail['part']): CellState {
+function slotState(slot: Slot, part?: PartDetail['part']): CellState {
   return cellState({
-    out_of_scope: part.out_of_scope ?? false,
+    out_of_scope: part?.out_of_scope ?? false,
     open_defects: slot.open_defects ?? 0,
     review_defects: slot.review_defects ?? 0,
     error: slot.error ?? null,
@@ -123,6 +123,9 @@ export function Lightbox({ partId, source, client, onClose,
   onPart?: (id: string) => void;
 }) {
   const [detail, setDetail] = useState<PartDetail | null>(null);
+  // The tiles alone, which answer long before the rest of the detail does:
+  // the panel opens at its full height and the renders load while it fills.
+  const [early, setEarly] = useState<Slot[] | null>(null);
   // The slot this view is *about* -- which render is marked, and which engine
   // a flag names. Seeded from the wall and free to differ from it, so a
   // comparison can be made here without disturbing the wall behind.
@@ -150,6 +153,8 @@ export function Lightbox({ partId, source, client, onClose,
 
   useEffect(() => {
     let live = true;
+    setEarly(null);
+    void client.corpusPartSlots?.(partId).then((d) => { if (live) setEarly(d.slots); });
     void client.corpusPart(partId).then((d) => { if (live) setDetail(d); });
     return () => { live = false; };
   }, [partId, client]);
@@ -187,7 +192,7 @@ export function Lightbox({ partId, source, client, onClose,
   //
   // The slot you arrived on survives the filter: opening a plain brick from
   // the decal wall and finding no decal slot disagrees with the wall behind.
-  const slots = (detail?.slots ?? [])
+  const slots = (detail?.slots ?? early ?? [])
     .filter((slot) => !slot.not_applicable || slot.source === shown)
     .sort((a, b) => chartRank(a.source) - chartRank(b.source));
 
@@ -329,73 +334,80 @@ export function Lightbox({ partId, source, client, onClose,
           {pose && (
             <p className="corpus-pose">LDraw poses this part: {pose}</p>
           )}
-          {/* A radio group rather than a hand-built control: it carries the
-              role, the name and the arrow-key roving for free, and the `<li>`
-              stays a list item with neither a role nor a handler on it. */}
-          <ul className="corpus-slots" role="radiogroup" aria-label="Slot shown">
-            {slots.map((slot) => (
-              <li key={slot.source} className="corpus-slot"
-                  data-source={slot.source}
-                  data-current={slot.source === shown}
-                  data-state={slotState(slot, detail.part)}
-                  data-ground={groundVar(slotState(slot, detail.part)) ? '' : undefined}
-                  ref={(el) => {
-                    const ground = groundVar(slotState(slot, detail.part));
-                    if (ground) el?.style.setProperty('--slot-ground', ground);
-                  }}
-                  data-retired={(detail.part.tags ?? []).includes('retired')}>
-                {/* Capture, and stopped there: React derives a radio's onChange
-                    from the same click, so a bubble-phase handler cannot keep
-                    the shift-click from also picking the slot. */}
-                <label className="corpus-slot-pick"
-                       title={slot.sha256
-                         ? 'Shift-click to open this render in a new tab' : undefined}
-                       onClickCapture={(e) => {
-                         if (!e.shiftKey || !slot.sha256) return;
-                         e.preventDefault();
-                         e.stopPropagation();
-                         window.open(renderSrc(detail.part.id, slot, outlineTranslucent),
-                                     '_blank', 'noopener');
-                       }}
-                       onDoubleClick={(e) => {
-                         // The two clicks a dblclick follows already picked the
-                         // slot; shift-click's own handler above sent it to a
-                         // new tab instead, and this must stay out of its way.
-                         if (e.shiftKey || !slot.sha256) return;
-                         zoomOpenerRef.current = e.currentTarget.querySelector('input');
-                         setZoomedSlot(slot);
-                       }}>
-                  <input type="radio" name="corpus-slot-shown" aria-label={slot.source}
-                         className="corpus-slot-radio" checked={slot.source === shown}
-                         onChange={() => setShown(slot.source)} />
-                  {slot.sha256 && slot.placement ? (
-                    <span className="corpus-big corpus-big-placed">
-                      <img alt={`${detail.part.id} drawn by ${slot.source}`}
-                           src={renderSrc(detail.part.id, slot, outlineTranslucent)}
-                           ref={(el) => {
-                             if (!el || !slot.placement) return;
-                             for (const [k, v] of Object.entries(placementBox(slot.placement))) {
-                               el.style.setProperty(`--place-${k}`, v);
-                             }
-                           }} />
-                    </span>
-                  ) : slot.sha256 ? (
-                    <img className="corpus-big" alt={`${detail.part.id} drawn by ${slot.source}`}
-                         src={renderSrc(detail.part.id, slot, outlineTranslucent)} />
-                  ) : (
-                    <span className="corpus-big corpus-slot-empty">
-                      {whyNothing(slot).map((line) => <span key={line}>{line}</span>)}
-                    </span>
-                  )}
-                  <span className="corpus-slot-name material-chip-label">
-                    <MaterialBar source={slot.source} {...CHIP} />
-                    {slot.source}
+        </>
+      )}
+      {!detail && <p className="corpus-sub">&nbsp;</p>}
+      {/* A radio group rather than a hand-built control: it carries the
+          role, the name and the arrow-key roving for free, and the `<li>`
+          stays a list item with neither a role nor a handler on it. */}
+      {(detail || early) && (
+        <ul className="corpus-slots" role="radiogroup" aria-label="Slot shown">
+          {slots.map((slot) => (
+            <li key={slot.source} className="corpus-slot"
+                data-source={slot.source}
+                data-current={slot.source === shown}
+                data-state={slotState(slot, detail?.part)}
+                data-ground={groundVar(slotState(slot, detail?.part)) ? '' : undefined}
+                ref={(el) => {
+                  const ground = groundVar(slotState(slot, detail?.part));
+                  if (ground) el?.style.setProperty('--slot-ground', ground);
+                }}
+                data-retired={(detail?.part.tags ?? []).includes('retired')}>
+              {/* Capture, and stopped there: React derives a radio's onChange
+                  from the same click, so a bubble-phase handler cannot keep
+                  the shift-click from also picking the slot. */}
+              <label className="corpus-slot-pick"
+                     title={slot.sha256
+                       ? 'Shift-click to open this render in a new tab' : undefined}
+                     onClickCapture={(e) => {
+                       if (!e.shiftKey || !slot.sha256) return;
+                       e.preventDefault();
+                       e.stopPropagation();
+                       window.open(renderSrc(partId, slot, outlineTranslucent),
+                                   '_blank', 'noopener');
+                     }}
+                     onDoubleClick={(e) => {
+                       // The two clicks a dblclick follows already picked the
+                       // slot; shift-click's own handler above sent it to a
+                       // new tab instead, and this must stay out of its way.
+                       if (e.shiftKey || !slot.sha256) return;
+                       zoomOpenerRef.current = e.currentTarget.querySelector('input');
+                       setZoomedSlot(slot);
+                     }}>
+                <input type="radio" name="corpus-slot-shown" aria-label={slot.source}
+                       className="corpus-slot-radio" checked={slot.source === shown}
+                       onChange={() => setShown(slot.source)} />
+                {slot.sha256 && slot.placement ? (
+                  <span className="corpus-big corpus-big-placed">
+                    <img alt={`${partId} drawn by ${slot.source}`}
+                         src={renderSrc(partId, slot, outlineTranslucent)}
+                         ref={(el) => {
+                           if (!el || !slot.placement) return;
+                           for (const [k, v] of Object.entries(placementBox(slot.placement))) {
+                             el.style.setProperty(`--place-${k}`, v);
+                           }
+                         }} />
                   </span>
-                </label>
-              </li>
-            ))}
-            {slots.length === 0 && <li>no slot has drawn this part</li>}
-          </ul>
+                ) : slot.sha256 ? (
+                  <img className="corpus-big" alt={`${partId} drawn by ${slot.source}`}
+                       src={renderSrc(partId, slot, outlineTranslucent)} />
+                ) : (
+                  <span className="corpus-big corpus-slot-empty">
+                    {whyNothing(slot).map((line) => <span key={line}>{line}</span>)}
+                  </span>
+                )}
+                <span className="corpus-slot-name material-chip-label">
+                  <MaterialBar source={slot.source} {...CHIP} />
+                  {slot.source}
+                </span>
+              </label>
+            </li>
+          ))}
+          {slots.length === 0 && detail && <li>no slot has drawn this part</li>}
+        </ul>
+      )}
+      {detail && (
+        <>
           {turning && (
             <Suspense fallback={<p className="corpus-orbit-loading">loading the model…</p>}>
               <PartOrbit part={detail.part.id} />

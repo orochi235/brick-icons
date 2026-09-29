@@ -486,6 +486,47 @@ def create_app(root: Path | str = ".",
             return answer
         return shared_query("sizes", compute)
 
+    def part_slots(conn, part) -> list[dict]:
+        """Every live slot's render for one part, placed and marked
+        applicable -- what the lightbox lays its tiles out from, cheap enough
+        to answer before the rest of the detail is worked out."""
+        # Every live slot, not only the ones that drew: a slot that timed
+        # out leaves no render, and its absence read as a part nobody had
+        # asked that engine about.
+        made = {r["source"]: dict(r) for r in conn.execute(
+            "SELECT source, sha256, made_at, path FROM renders "
+            "WHERE part_id = ?", (part["id"],))}
+        tried = cells.slot_attempts(conn, part["id"])
+        cfg = load_config(root=str(app.state.root))
+        slots = []
+        for source in cells.live_sources(conn):
+            slot = {"source": source, "sha256": None, "made_at": None,
+                    **made.get(source, {}),
+                    "secs": tried.get(source, {}).get("secs")}
+            path = slot.pop("path", None)
+            slot["not_applicable"] = cells.not_applicable(
+                source, bool(part["printed"]), path is not None,
+                bool(part["obsolete"]))
+            if path and Path(path).suffix != ".svg":
+                file = Path(app.state.root) / path
+                if file.is_file():
+                    slot["placement"] = framing.placement(
+                        file, slot["sha256"], cfg.width, cfg.height, cfg.margin)
+            slots.append(slot)
+        return slots
+
+    @app.get("/api/corpus/part/{part_id}/slots")
+    def get_corpus_part_slots(part_id: str):
+        conn = corpus_conn()
+        try:
+            row = conn.execute("SELECT * FROM parts WHERE id = ?",
+                               (part_id,)).fetchone()
+            if row is None:
+                raise HTTPException(404, "no such part")
+            return {"slots": part_slots(conn, row)}
+        finally:
+            conn.close()
+
     @app.get("/api/corpus/part/{part_id}")
     def get_corpus_part(part_id: str):
         conn = corpus_conn()
@@ -494,11 +535,7 @@ def create_app(root: Path | str = ".",
                                (part_id,)).fetchone()
             if row is None:
                 raise HTTPException(404, "no such part")
-            # `findings` matches `part` with LIKE, so 3001 would drag in
-            # 3001a. The detail view is about one part.
-            found = [f for f in findings.findings(conn, part=part_id,
-                                                  limit=50)["rows"]
-                     if f["part_id"] == part_id]
+            found = findings.findings(conn, part_id=part_id, limit=50)["rows"]
             # Only the score of the drawing each slot shows now.
             edges = [dict(r) for r in conn.execute(
                 "SELECT e.source, e.declared_len, e.missing_len, "
@@ -515,14 +552,7 @@ def create_app(root: Path | str = ".",
             # Every live slot, not only the ones that drew: a slot that timed
             # out leaves no render, and its absence read as a part nobody had
             # asked that engine about.
-            made = {r["source"]: dict(r) for r in conn.execute(
-                "SELECT source, sha256, made_at, path FROM renders "
-                "WHERE part_id = ?", (part_id,))}
-            tried = cells.slot_attempts(conn, part_id)
-            slots = [{"source": source, "sha256": None, "made_at": None,
-                      **made.get(source, {}),
-                      "secs": tried.get(source, {}).get("secs")}
-                     for source in cells.live_sources(conn)]
+            slots = part_slots(conn, row)
             states = cells.slot_states(conn, part_id,
                                        [s["source"] for s in slots])
             # `matched` comes with the row because the numbers are only this
@@ -564,16 +594,9 @@ def create_app(root: Path | str = ".",
                                      successor=part["successor"],
                                      predecessors=replaced)
         part["out_of_scope"] = part["category"] in cells.OUT_OF_SCOPE_CATEGORIES
-        cfg = load_config(root=str(app.state.root))
         for slot in slots:
             slot.update(states[slot["source"]])
             slot["requested_at"] = asked.get(slot["source"])
-            path = slot.pop("path", None)
-            if path and Path(path).suffix != ".svg":
-                file = Path(app.state.root) / path
-                if file.is_file():
-                    slot["placement"] = framing.placement(
-                        file, slot["sha256"], cfg.width, cfg.height, cfg.margin)
         return {"part": part, "findings": found, "edges": edges, "runs": runs,
                 "slots": slots, "features": built,
                 "defects": [d for d in defects.load(app.state.defects_path)
