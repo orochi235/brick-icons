@@ -472,36 +472,34 @@ def fill_elements(fills, opacity=1.0, gid_prefix="g", solid_deco=False):
     # Smooth-group facets share one gradient object; dedupe defs by
     # content so a 50-facet curve emits one <linearGradient>, not 50.
     def_ids = {}
+
+    def gradient(g, gid):
+        """The id of the def painting gradient `g`, emitting it under `gid`
+        unless an identical one exists."""
+        stops = "".join(f'<stop offset="{o * 100:.1f}%" {_stop_paint(c)}/>'
+                        for o, c in g["stops"])
+        if g.get("type") == "radial":
+            # unit-circle gradient space mapped onto the group's
+            # bounding ellipse; fx/fy shift the bright spot lightward
+            tf = (f'matrix({g["r"]:.2f} 0 0 {g["r"] * g["ratio"]:.2f} '
+                  f'{g["cx"]:.2f} {g["cy"]:.2f})')
+            key = ("radial", tf, f'{g["fx"]:.3f},{g["fy"]:.3f}', stops)
+            el = (f'<radialGradient id="{gid}" gradientUnits="userSpaceOnUse" '
+                  f'cx="0" cy="0" r="1" fx="{g["fx"]:.3f}" fy="{g["fy"]:.3f}" '
+                  f'gradientTransform="{tf}">{stops}</radialGradient>')
+        else:
+            key = (f'{g["x1"]:.2f},{g["y1"]:.2f},{g["x2"]:.2f},{g["y2"]:.2f}', stops)
+            el = (f'<linearGradient id="{gid}" gradientUnits="userSpaceOnUse" '
+                  f'x1="{g["x1"]:.2f}" y1="{g["y1"]:.2f}" '
+                  f'x2="{g["x2"]:.2f}" y2="{g["y2"]:.2f}">{stops}</linearGradient>')
+        if key not in def_ids:
+            def_ids[key] = gid
+            defs.append(el)
+        return def_ids[key]
+
     for i, fo in enumerate(fills):
         if "gradient" in fo:
-            g = fo["gradient"]
-            stops = "".join(
-                f'<stop offset="{o * 100:.1f}%" stop-color="{c}"/>' for o, c in g["stops"])
-            if g.get("type") == "radial":
-                # unit-circle gradient space mapped onto the group's
-                # bounding ellipse; fx/fy shift the bright spot lightward
-                tf = (f'matrix({g["r"]:.2f} 0 0 {g["r"] * g["ratio"]:.2f} '
-                      f'{g["cx"]:.2f} {g["cy"]:.2f})')
-                key = ("radial", tf, f'{g["fx"]:.3f},{g["fy"]:.3f}', stops)
-                gid = def_ids.get(key)
-                if gid is None:
-                    gid = f"{gid_prefix}{i}"
-                    def_ids[key] = gid
-                    defs.append(
-                        f'<radialGradient id="{gid}" gradientUnits="userSpaceOnUse" '
-                        f'cx="0" cy="0" r="1" fx="{g["fx"]:.3f}" fy="{g["fy"]:.3f}" '
-                        f'gradientTransform="{tf}">{stops}</radialGradient>')
-            else:
-                key = (f'{g["x1"]:.2f},{g["y1"]:.2f},{g["x2"]:.2f},{g["y2"]:.2f}', stops)
-                gid = def_ids.get(key)
-                if gid is None:
-                    gid = f"{gid_prefix}{i}"
-                    def_ids[key] = gid
-                    defs.append(
-                        f'<linearGradient id="{gid}" gradientUnits="userSpaceOnUse" '
-                        f'x1="{g["x1"]:.2f}" y1="{g["y1"]:.2f}" '
-                        f'x2="{g["x2"]:.2f}" y2="{g["y2"]:.2f}">{stops}</linearGradient>')
-            paint = f"url(#{gid})"
+            paint = f'url(#{gradient(fo["gradient"], f"{gid_prefix}{i}")})'
         else:
             paint = fo["fill"]
         # translucent fills paint fill-only: the self-stroke that closes
@@ -514,10 +512,37 @@ def fill_elements(fills, opacity=1.0, gid_prefix="g", solid_deco=False):
         # class="deco" marks paint that is not the part's own color, so a
         # viewer can recolor the part without touching its printing
         deco = ' class="deco"' if fo.get("deco") else ""
-        body.append(f'<path d="{fo["d"]}"{deco} fill="{paint}" '
-                    f'fill-rule="evenodd"{seam}{"" if solid else face_op}/>')
+        sh = fo.get("shade")
+        if sh is None:
+            body.append(f'<path d="{fo["d"]}"{deco} fill="{paint}" '
+                        f'fill-rule="evenodd"{seam}{"" if solid else face_op}/>')
+            continue
+        # the print's shading: the same region again in translucent black
+        # (shade._deco_shade), grown to cover the print's seam stroke where it
+        # has one. Unstroked -- a stroke would lay a second coat of alpha over
+        # its own fill -- and still class "deco", so a recolor or a
+        # decoration mask treats it as the print it shades. A translucent
+        # print composites with its shade first, as one layer.
+        if "gradient" in sh:
+            shade_paint = f'fill="url(#{gradient(sh["gradient"], f"{gid_prefix}s{i}")})"'
+        else:
+            shade_paint = f'fill="#000000" fill-opacity="{sh["alpha"]:g}"'
+        shade_d = sh.get("d_seamed", fo["d"]) if solid else fo["d"]
+        pair = [f'<path d="{fo["d"]}"{deco} fill="{paint}" '
+                f'fill-rule="evenodd"{seam}/>',
+                f'<path d="{shade_d}" class="deco shade" {shade_paint} '
+                f'fill-rule="evenodd"/>']
+        body += pair if solid else [f"<g{face_op}>", *pair, "</g>"]
     body.append("</g>")
     return defs, body
+
+
+def _stop_paint(c):
+    """A gradient stop's paint: a color, or a shade layer's alpha over
+    black (shade._deco_shade)."""
+    if isinstance(c, str):
+        return f'stop-color="{c}"'
+    return f'stop-color="#000000" stop-opacity="{c:g}"'
 
 
 def stroke_elements(segs, line_px, sil_px, studs=None):

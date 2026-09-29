@@ -39,31 +39,68 @@ class Flat3Style(ShadingStyle):
     ramp via `ramp`. `light` is a VIEW-space unit vector (see light_vector);
     the default is upper-left, toward the viewer. The flat side tones are
     stylized constants — the light picks WHICH side is the lit one and
-    drives the curved ramps; it does not re-derive the palette."""
+    drives the curved ramps; it does not re-derive the palette.
+
+    Every tone is the part color times a factor; `relief` exposes the
+    factors themselves, which is how decoration shades (see _deco_shade)."""
+    TOP, BRIGHT, DARK = 1.30, 0.85, 0.60
+
     def __init__(self, part_color=(157, 157, 157), light=None):
         self.part_color = tuple(part_color)
-        self.top = _hex([c * 1.30 for c in part_color])
-        bright = _hex([c * 0.85 for c in part_color])
-        dark = _hex([c * 0.60 for c in part_color])
         if light is None:
             light = np.array([-0.5, 0.6, -0.62])
         L = np.asarray(light, float); self.light = L / np.linalg.norm(L)
+        self._tones = {k: _hex([c * k for c in part_color])
+                       for k in (self.TOP, self.BRIGHT, self.DARK)}
+        self.top = self._tones[self.TOP]
+
+    def tone_k(self, nv):
+        """The factor on the part color for a flat face with view normal nv."""
+        if nv[1] > 0.5:
+            return self.TOP
         lit_left = self.light[0] <= 0
-        self.left = bright if lit_left else dark
-        self.right = dark if lit_left else bright
+        return self.BRIGHT if (nv[0] < 0) == lit_left else self.DARK
+
+    def ramp_k(self, b):
+        """The factor for a raw Lambert brightness (n . light, clamped)."""
+        return 0.55 + 0.85 * float(b)
 
     def tone(self, nv):
-        if nv[1] > 0.5:
-            return self.top
-        return self.left if nv[0] < 0 else self.right
+        return self._tones[self.tone_k(nv)]
 
     def ramp(self, nv):
-        """Continuous grey for a curved-surface normal (gradient stops)."""
+        """Continuous gray for a curved-surface normal (gradient stops)."""
         return self.ramp_b(max(0.0, float(np.dot(np.asarray(nv, float), self.light))))
 
     def ramp_b(self, b):
-        """Grey for a raw Lambert brightness (n . light, already clamped)."""
-        return _hex([c * (0.55 + 0.85 * float(b)) for c in self.part_color])
+        """Gray for a raw Lambert brightness (n . light, already clamped)."""
+        return _hex([c * self.ramp_k(b) for c in self.part_color])
+
+    def relief(self):
+        return Relief(self)
+
+
+class Relief:
+    """A style's shading with the part color taken out: the same tone, ramp
+    and ramp_b decisions, answering each with how much darker than a top face
+    the surface is -- 1.0 on a top face, less on a side or a shaded curve.
+
+    Relative to the top because printing is authored as it looks lit from
+    above: a print on a top face keeps its color exactly, and one on a wall
+    darkens as the wall does. Curves brighter than a top clamp to 1, since
+    darkening is all a translucent black layer can do to a print's color."""
+    def __init__(self, style):
+        self._style = style
+        self.light = style.light
+
+    def tone(self, nv):
+        return min(1.0, self._style.tone_k(nv) / self._style.TOP)
+
+    def ramp(self, nv):
+        return self.ramp_b(max(0.0, float(np.dot(np.asarray(nv, float), self.light))))
+
+    def ramp_b(self, b):
+        return min(1.0, self._style.ramp_k(b) / self._style.TOP)
 
 
 def _plane_depth_fn(f):
@@ -1919,33 +1956,140 @@ def face_fill(face, style, ldraw_dir):
     it and it reads as engraving, which is the bug this fixes."""
     code = face.get("color", 16)
     if code == 16:
-        # A curved face carries no view normal -- it only ever reached the
-        # gradient branch, which a flat style skips.
-        nv = face.get("normal")
-        if nv is None:
-            return style.ramp_b(1.0)
-        if face.get("flat_b") is not None:      # a tone band, see _band_misfit_radials
-            return style.ramp_b(face["flat_b"])
-        # a plane a curved wall runs tangentially into draws no stroke between
-        # them, so it has to meet the ramp rather than the palette
-        if face.get("tangent_wall"):
-            return style.ramp(nv)
-        return style.tone(nv)
+        return _flat_shade(face, style)
+    return deco_color(code, ldraw_dir)
+
+
+def deco_color(code, ldraw_dir):
     hex_str, _ = colors.resolve(str(code), ldraw_dir)
     return "#" + hex_str[2:]
+
+
+def _flat_shade(face, style):
+    """What `style` answers for a face painted without a gradient."""
+    # A curved face carries no view normal -- it only ever reached the
+    # gradient branch, which a flat style skips.
+    nv = face.get("normal")
+    if nv is None:
+        return style.ramp_b(1.0)
+    if face.get("flat_b") is not None:      # a tone band, see _band_misfit_radials
+        return style.ramp_b(face["flat_b"])
+    # a plane a curved wall runs tangentially into draws no stroke between
+    # them, so it has to meet the ramp rather than the palette
+    if face.get("tangent_wall"):
+        return style.ramp(nv)
+    return style.tone(nv)
+
+
+def _gradient(f, style):
+    """(kind, spec) for how fill_ops paints face `f` under `style`: "radial"
+    or "linear" with a gradient spec, or "flat" with one paint. Paint values
+    are whatever `style` answers -- hex tones from a style, top-relative
+    factors from its Relief."""
+    if "grad_radial" in f:
+        g = f["grad_radial"]
+        stops, (fx, fy) = _radial_focal_stops(
+            f["grad_samples"], style, exact=f.get("grad_exact", False))
+        one = _one_color(stops)
+        if one is not None:
+            return "flat", one
+        return "radial", {"type": "radial", "cx": g["cx"], "cy": g["cy"],
+                          "r": g["r"], "ratio": g["ratio"],
+                          "fx": fx, "fy": fy, "stops": stops}
+    if "grad_axis" in f:
+        p0, p1 = f["grad_axis"]
+        stops = _axis_binned_stops(f["grad_samples"], style)
+        one = _one_color(stops)
+        if one is not None:
+            return "flat", one
+        return "linear", {"x1": p0[0], "y1": p0[1],
+                          "x2": p1[0], "y2": p1[1], "stops": stops}
+    return "flat", _flat_shade(f, style)
+
+
+def _print_bodies(ordered, geoms):
+    """{index of a print on a flat carrier: index of the body face it is
+    printed on}. The carrier is a plane derived from body faces
+    (_body_planes), so the body faces on that plane are the surface; of
+    those, the one overlapping the print most. A dish's facets all carry
+    their group's gradient, so any of them paints the print as the dish
+    paints -- where the print's own facet plane would take one flat tone."""
+    body = [(j, f["plane"]) for j, f in enumerate(ordered)
+            if f.get("color", 16) == 16 and isinstance(f.get("plane"), tuple)
+            and len(f["plane"]) == 4
+            and all(isinstance(v, (int, float)) for v in f["plane"])]
+    if not body:
+        return {}
+    keys = np.array([k for _, k in body], float)
+    kn = keys[:, :3] / np.linalg.norm(keys[:, :3], axis=1, keepdims=True)
+    out = {}
+    for i, f in enumerate(ordered):
+        c = f.get("carrier")
+        if f.get("color", 16) == 16 or not isinstance(c, unwrap.Plane):
+            continue
+        n = np.asarray(c.normal, float)
+        n = n / np.linalg.norm(n)
+        cos = kn @ n
+        sgn = np.sign(cos)
+        hit = np.nonzero((np.abs(cos) > unwrap.PLANE_COS)
+                         & (np.abs(keys[:, 3] * sgn - c.offset)
+                            <= unwrap.PLANE_OFF))[0]
+        if not len(hit):
+            continue
+        g = geoms.get(i)
+        best = max(hit, key=lambda h: 0.0 if g is None or body[h][0] not in geoms
+                   else geom2d.area(geom2d.intersection(g, geoms[body[h][0]])))
+        out[i] = body[best][0]
+    return out
+
+
+#: Below this a shade layer's alpha is under half an 8-bit step everywhere,
+#: so it would paint nothing.
+SHADE_ALPHA_MIN = 0.5 / 255
+
+
+def _deco_shade(f, style, under=None):
+    """The shading a print on face `f` takes, as a black layer to lay over
+    its flat color: {"alpha": a} for one flat layer, {"gradient": spec} with
+    stops of alpha, or None where it would paint nothing (a top face, or a
+    style with no relief). Same surface decisions as a body fill -- it is
+    _gradient asked through the style's Relief -- so a printed stud wall
+    shades exactly where a plain one does.
+
+    The surface asked is the body face `under` the print when there is one
+    (_print_bodies), since that is what the print must match; else a curved
+    region's own facets (deco_grad), else the print's own geometry."""
+    relief = getattr(style, "relief", None)
+    if relief is None or getattr(style, "flat", False):
+        return None
+    src = under if under is not None else (
+        {**f, **f["deco_grad"]} if f.get("deco_grad") else f)
+    kind, spec = _gradient(src, relief())
+    if kind == "flat":
+        a = round(1.0 - spec, 3)
+        return {"alpha": a} if a >= SHADE_ALPHA_MIN else None
+    stops = [(o, round(1.0 - k, 3)) for o, k in spec["stops"]]
+    if max(a for _, a in stops) < SHADE_ALPHA_MIN:
+        return None
+    one = _one_color(stops)
+    if one is not None:
+        return {"alpha": one}
+    return {"gradient": dict(spec, stops=stops)}
 
 
 @timing.timed("fill")
 def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
              refits=None, loops=None, strokes=None, line_px=2.0,
              sil_px=2.0, drop=None, weld_corners=False, ldraw_dir="vendor/ldraw",
-             studs=None, crumb=RESIDUE_CRUMB, sil_walls=True):
+             studs=None, crumb=RESIDUE_CRUMB, sil_walls=True, deco_shade=True):
     """Fill ops with exact visible-fragment clipping and per-surface merging.
 
     sil_walls: whether this drawing's own silhouette is the part's, so a thin
     side wall along it takes the top's tone (THIN_WALL_WEIGHTS). A lone
     instanced stud's outline is not.
 
+    `deco_shade` gives each decoration op the shading its surface takes, as
+    op["shade"] (see _deco_shade); False paints printing flat.
     clip=False keeps every face whole (no occlusion subtraction) for
     translucent rendering; paint order is still farthest-first so nearer
     faces blend over deeper ones.
@@ -2143,6 +2287,8 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
     for key, gs in by_surface.items():
         surface_core[key] = geom2d.union_all(gs).buffer(-crumb)
 
+    under = _print_bodies(ordered, g_cache) \
+        if deco_shade and not getattr(style, "flat", False) else {}
     ops, emitted = [], set()
     for idx in sorted(frags):                          # farthest-first
         if idx in emitted:
@@ -2195,42 +2341,39 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
             d = geom2d.path_d(geom, arcs, min_area=MIN_FRAG_AREA)
             if not d:
                 continue
-            # decoration is ink on a surface, not relief, so it takes no shading
-            # ramp — and the gradient branches never consulted the LDraw color,
-            # which is why a printed cylinder or cone painted in body tone
+            # decoration paints its own LDraw color, flat -- the gradients are
+            # body tone, which is why a printed cylinder or cone once painted with
+            # no print on it -- and takes the surface's shading as a translucent
+            # black layer over that color (_deco_shade), so it keeps its hue
             deco = f.get("color", 16) != 16
             flat = getattr(style, "flat", False)
             if key in thin:
                 ops.append({"d": d, "fill": style.top, "depth": f["depth"],
                             "thin_wall": True})
-            elif "grad_radial" in f and not deco and not flat:
-                g = f["grad_radial"]
-                stops, (fx, fy) = _radial_focal_stops(
-                    f["grad_samples"], style, exact=f.get("grad_exact", False))
-                flat_color = _one_color(stops)
-                if flat_color is not None:
-                    ops.append({"d": d, "fill": flat_color, "depth": f["depth"]})
-                else:
-                    ops.append({"d": d, "depth": f["depth"],
-                                "gradient": {"type": "radial", "cx": g["cx"], "cy": g["cy"],
-                                             "r": g["r"], "ratio": g["ratio"],
-                                             "fx": fx, "fy": fy, "stops": stops}})
-            elif "grad_axis" in f and not deco and not flat:
-                p0, p1 = f["grad_axis"]
-                stops = _axis_binned_stops(f["grad_samples"], style)
-                flat_color = _one_color(stops)
-                if flat_color is not None:
-                    ops.append({"d": d, "fill": flat_color, "depth": f["depth"]})
-                else:
-                    ops.append({"d": d, "depth": f["depth"],
-                                "gradient": {"x1": p0[0], "y1": p0[1],
-                                             "x2": p1[0], "y2": p1[1], "stops": stops}})
-            else:
-                op = {"d": d, "fill": face_fill(f, style, ldraw_dir), "depth": f["depth"]}
-                if deco:
-                    op["deco"] = True
+            elif deco:
+                op = {"d": d, "fill": deco_color(f["color"], ldraw_dir),
+                      "depth": f["depth"], "deco": True}
+                sh = _deco_shade(f, style, ordered[under[idx]]
+                                 if idx in under else None) if deco_shade else None
+                if sh is not None:
+                    op["shade"] = sh
                 ops.append(op)
+            elif flat:
+                ops.append({"d": d, "fill": _flat_shade(f, style),
+                            "depth": f["depth"]})
+            else:
+                kind, spec = _gradient(f, style)
+                ops.append({"d": d, "fill": spec, "depth": f["depth"]}
+                           if kind == "flat" else
+                           {"d": d, "depth": f["depth"], "gradient": spec})
             ops[-1]["seam"] = process.seam_px(geom, line_px, studs)
+            if "shade" in ops[-1]:
+                # the print's seam stroke overhangs its edge by half a seam; an
+                # unstroked layer on the bare region leaves that rim unshaded,
+                # a bright outline around every shaded print (2552p01's cliffs)
+                ops[-1]["shade"]["d_seamed"] = geom2d.path_d(
+                    geom.buffer(0.5 * ops[-1]["seam"]), arcs,
+                    min_area=MIN_FRAG_AREA) or d
     # junction-lens pockets paint LAST (over every surface fill, under the
     # strokes): solid ink where converging strokes trap a sliver of tone
     for g in pockets:
@@ -2426,6 +2569,10 @@ def apply_affine_faces(faces, f, ox, oy):
             g = face["grad_radial"]
             nf["grad_radial"] = {**g, "cx": g["cx"] * f + ox,
                                  "cy": g["cy"] * f + oy, "r": g["r"] * f}
+        if "deco_grad" in face:
+            (a0, a1) = face["deco_grad"]["grad_axis"]
+            nf["deco_grad"] = {**face["deco_grad"], "grad_axis": (
+                (a0[0] * f + ox, a0[1] * f + oy), (a1[0] * f + ox, a1[1] * f + oy))}
         out.append(nf)
     return out
 
@@ -2807,9 +2954,55 @@ def _region_face(part, carrier, theta0, members, proj, step, tag,
          "holes": [px_ring(h)[0] for h in part.interiors],
          "depth": float(np.mean(zs)), "group": ("uv",) + tag,
          "plane": ("uv",) + tag, "carrier": carrier, "standoff": standoff}
-    for k in ("_verts", "grad_axis", "grad_radial", "grad_samples", "backfill"):
+    for k in ("_verts", "grad_axis", "grad_radial", "grad_samples", "backfill",
+              "deco_grad"):
         f.pop(k, None)
+    if not flat:
+        g = _member_gradient(members, poly)
+        if g is not None:
+            f["deco_grad"] = g
     return f
+
+
+def _member_gradient(members, poly):
+    """How a region on a curved carrier shades, from the facets it was merged
+    out of: a linear gradient across `poly` (canvas px) along the screen
+    direction its facets' view normals turn fastest, with each facet's
+    normal as a sample -- the grad_axis form fill_ops already bins. None when
+    the facets barely turn. Kept apart from the body's grad_* keys, which
+    decoration must never paint with (see _deco_shade)."""
+    pts, nvs = [], []
+    for m in members:
+        nv, mp = m.get("normal"), m.get("poly")
+        if nv is None or mp is None or len(mp) < 3:
+            continue
+        pts.append(np.mean(np.asarray(mp, float), axis=0))
+        nvs.append(np.asarray(nv, float))
+    if len(pts) < 3:
+        return None
+    P, N = np.array(pts), np.array(nvs)
+    region = geom2d.to_geom(poly).buffer(2.0)
+    from shapely.geometry import Point
+    near = [i for i, p in enumerate(P) if region.contains(Point(p))]
+    if len(near) >= 3:
+        P, N = P[near], N[near]
+    Pc = P - P.mean(axis=0)
+    G, *_ = np.linalg.lstsq(Pc, N - N.mean(axis=0), rcond=None)
+    u, s, _ = np.linalg.svd(G)
+    if s[0] < 1e-6:
+        return None
+    d = u[:, 0]
+    t = np.asarray(poly, float) @ d
+    t0, t1 = float(t.min()), float(t.max())
+    if t1 - t0 < 1e-6:
+        return None
+    base = np.asarray(poly, float).mean(axis=0)
+    p0 = base + (t0 - base @ d) * d
+    p1 = base + (t1 - base @ d) * d
+    samples = [(float(np.clip((p @ d - t0) / (t1 - t0), 0.0, 1.0)), n)
+               for p, n in zip(P, N)]
+    return {"grad_axis": (tuple(map(float, p0)), tuple(map(float, p1))),
+            "grad_samples": samples}
 
 
 def facet_on_wall(prim, verts, n_world, tol=2e-3, oriented=True):

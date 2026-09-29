@@ -111,6 +111,11 @@ def build_parser():
                    help="under --opacity below 1, paint the part's printing "
                         "and stickers at full opacity, hiding what is behind "
                         "them, while the body stays see-through")
+    p.add_argument("--deco-shade", dest="deco_shade", choices=["on", "off"],
+                   help="shade the part's printing and stickers the way the "
+                        "surface under them shades, darkening the print's "
+                        "own color (on, the default), or paint them flat "
+                        "(off); a print on a top face is unchanged either way")
     p.add_argument("--debug-colors", dest="debug_colors", nargs="?",
                    const="cycle", default=None, type=_debug_mode,
                    metavar="cycle|ramp|ramp=N",
@@ -175,6 +180,7 @@ def _config_from_args(args) -> Config:
         "shade_style": args.shade_style, "light": args.light,
         "svg_bg": args.svg_bg, "opacity": args.opacity,
         "solid_deco": args.solid_deco,
+        "deco_shade": args.deco_shade,
         "wireframe": args.wireframe, "use_ldview": args.use_ldview,
         "ldview_look": args.ldview_look,
         "decal": args.decal, "texture_px": args.texture_px,
@@ -330,6 +336,8 @@ def render_tag(cfg: Config, name: str, posed: bool = False) -> str:
         bits.append(f"studs={cfg.stud_instancing}")
     if cfg.contour == "off":
         bits.append("contour=off")
+    if cfg.deco_shade == "off":
+        bits.append("deco-shade=off")
     return "  ".join(bits)
 
 
@@ -472,7 +480,8 @@ def _draw_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                                        drop=spurs,
                                        weld_corners=cfg.weld_corners,
                                        ldraw_dir=cfg.ldraw_dir,
-                                       studs=studs, crumb=crumb) \
+                                       studs=studs, crumb=crumb,
+                                       deco_shade=cfg.deco_shade == "on") \
                     if style is not None else None
                 sil_geom = shade.silhouette_geom(
                     faces or _sil_faces(res, f, ox, oy)) or None
@@ -497,7 +506,8 @@ def _draw_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                     debug_colors=cfg.debug_colors, studs=studs,
                     between=inst.svg_parts(
                         (f, ox, oy), studs.px if studs else cfg.line_mm / 0.4 * s,
-                        style, crumb, cfg.weld_corners) if inst else None,
+                        style, crumb, cfg.weld_corners,
+                        cfg.deco_shade == "on") if inst else None,
                     **_hide_kw(res, inst, studs, (f, ox, oy), shifted,
                                cfg.line_mm / 0.4 * s,
                                cfg.silhouette_mm / 0.4 * s))
@@ -522,7 +532,8 @@ def _draw_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                                        drop=spurs,
                                        weld_corners=cfg.weld_corners,
                                        ldraw_dir=cfg.ldraw_dir,
-                                       studs=studs, crumb=crumb) \
+                                       studs=studs, crumb=crumb,
+                                       deco_shade=cfg.deco_shade == "on") \
                     if style is not None else None
                 sil_geom = shade.silhouette_geom(
                     faces or _sil_faces(res, f, ox, oy)) or None
@@ -546,7 +557,8 @@ def _draw_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                                       between=inst.svg_parts(
                                           icon_fit,
                                           studs.px if studs else line_px,
-                                          style, crumb, cfg.weld_corners)
+                                          style, crumb, cfg.weld_corners,
+                                          cfg.deco_shade == "on")
                                       if inst else None,
                                       **_hide_kw(res, inst, studs, icon_fit,
                                                   fit, line_px, sil_px))

@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from brick_icons import shade
 
@@ -144,3 +145,93 @@ def test_a_gradient_whose_stops_are_one_color_paints_flat():
     assert ops
     assert "gradient" not in ops[0], "one-color stops should collapse to a flat fill"
     assert ops[0]["fill"] == style.ramp(n)
+
+
+_SQUARE = np.array([[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]])
+_WALL_SAMPLES = [(0.0, np.array([-1.0, 0.0, 0.0])),
+                 (0.5, np.array([0.0, 0.0, -1.0])),
+                 (1.0, np.array([1.0, 0.0, 0.0]))]
+
+
+def _wall(color):
+    return {"poly": _SQUARE, "normal": np.array([0.0, 0.0, -1.0]),
+            "depth": 1.0, "color": color, "grad_axis": ((0.0, 0.0), (10.0, 0.0)),
+            "grad_samples": _WALL_SAMPLES}
+
+
+def test_decoration_on_a_curved_wall_takes_the_wall_s_shading_as_a_layer():
+    """A printed stud wall (2552p01's blue studs) keeps its print color and
+    gains the gradient a plain wall draws, as black stops whose alpha is how
+    far each plain stop falls below a top face."""
+    style = shade.Flat3Style(part_color=(157, 157, 157))
+    body = shade.fill_ops([_wall(16)], style, clip=False)[0]
+    deco = shade.fill_ops([_wall(1)], style, clip=False)[0]
+    assert deco["fill"].lower() == "#1e5aa8" and "gradient" not in deco
+    layer = deco["shade"]["gradient"]
+    for key in ("x1", "y1", "x2", "y2"):
+        assert layer[key] == body["gradient"][key]
+    top = int(style.tone(np.array([0.0, 1.0, 0.0]))[1:3], 16)
+    for (o, a), (ob, c) in zip(layer["stops"], body["gradient"]["stops"]):
+        assert o == ob
+        assert a == pytest.approx(1 - min(1.0, int(c[1:3], 16) / top), abs=0.01)
+
+
+def test_a_print_on_a_top_face_stays_flat_and_one_on_a_side_darkens():
+    """Printing is authored as it looks lit from above, so a top face's print
+    keeps its exact color and one on a shadowed side darkens as the side does."""
+    style = shade.Flat3Style(part_color=(157, 157, 157))
+    top = {"poly": _SQUARE, "normal": np.array([0.0, 1.0, 0.0]),
+           "depth": 1.0, "color": 4}
+    side = dict(top, normal=np.array([0.7, 0.0, -0.7]))
+    ops = shade.fill_ops([top], style, clip=False) \
+        + shade.fill_ops([side], style, clip=False)
+    assert "shade" not in ops[0]
+    assert ops[1]["shade"]["alpha"] == pytest.approx(
+        1 - style.DARK / style.TOP, abs=1e-3)
+    # the layer reaches over the print's seam stroke, or that rim stays bright
+    assert ops[1]["shade"]["d_seamed"] != ops[1]["d"]
+
+
+def test_the_white_style_and_the_flag_leave_printing_flat():
+    white = shade.fill_ops([_wall(1)], shade.WhiteStyle(), clip=False)[0]
+    off = shade.fill_ops([_wall(1)], shade.Flat3Style(), clip=False,
+                         deco_shade=False)[0]
+    assert "shade" not in white and "shade" not in off
+    assert shade.fill_ops([_wall(1)], shade.Flat3Style(), clip=False)[0]["shade"]
+
+
+def test_a_print_on_a_facet_plane_shades_as_the_body_face_on_that_plane():
+    """4740p03's print binds to the dish's facet planes. Toned by its own
+    facet it came out one flat tone per facet -- a dark patch where a facet
+    crossed the side threshold -- while the dish under it is one gradient."""
+    from brick_icons import unwrap
+    style = shade.Flat3Style()
+    body = dict(_wall(16), normal=np.array([0.0, 1.0, 0.0]),
+                plane=(0.0, -1.0, 0.0, 4.0))
+    printed = {"poly": _SQUARE * 0.5 + 2.0, "normal": np.array([0.0, 1.0, 0.0]),
+               "depth": 0.5, "color": 4,
+               "carrier": unwrap.Plane(normal=np.array([0.0, -1.0, 0.0]),
+                                       offset=4.0)}
+    ops = shade.fill_ops([body, printed], style, clip=False)
+    deco = next(op for op in ops if op.get("deco"))
+    assert "gradient" in deco["shade"]
+    assert deco["shade"]["gradient"]["x1"] == body["grad_axis"][0][0]
+
+
+def test_a_region_on_a_curved_carrier_shades_across_its_facets():
+    """3941p01's panel is one region merged from facets around a cylinder;
+    it shades along the direction those facets' normals turn, not by the
+    first facet's tone."""
+    members = []
+    for i, th in enumerate(np.linspace(-1.2, 1.2, 9)):
+        x = 10.0 * i
+        members.append({"poly": np.array([[x, 0.0], [x + 10, 0.0],
+                                          [x + 10, 30.0], [x, 30.0]]),
+                        "normal": np.array([np.sin(th), 0.0, -np.cos(th)])})
+    poly = np.array([[0.0, 0.0], [90.0, 0.0], [90.0, 30.0], [0.0, 30.0]])
+    g = shade._member_gradient(members, poly)
+    (x0, y0), (x1, y1) = g["grad_axis"]
+    assert abs(x1 - x0) == pytest.approx(90.0) and abs(y1 - y0) < 1e-6
+    f = {"poly": poly, "normal": members[0]["normal"], "depth": 1.0,
+         "color": 4, "deco_grad": g}
+    assert "gradient" in shade._deco_shade(f, shade.Flat3Style())
