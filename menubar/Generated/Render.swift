@@ -136,9 +136,6 @@ func renderMenu(_ results: Results) -> [MenuNode] {
         menu.append(.item("Wall", .open("http://localhost:5178/wall"), icon: MenuIcon.symbol("square.grid.3x3")))
     }
     if results.page.ok {
-        menu.append(.item("Corpus", .open("http://localhost:5178/corpus"), icon: MenuIcon.symbol("tray.full")))
-    }
-    if results.page.ok {
         menu.append(.item("Stats", .open("http://localhost:5178/stats"), icon: MenuIcon.symbol("chart.bar")))
     }
     if results.page.ok {
