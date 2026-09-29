@@ -1989,3 +1989,78 @@ def test_crumb_radius_scales_only_parts_shrunk_below_it():
     assert shade.crumb_radius(0.216, 1.0) == pytest.approx(0.216)
     assert shade.crumb_radius(2.0, 1.0) == shade.RESIDUE_CRUMB
     assert shade.crumb_radius(0.216, 0.0) == shade.RESIDUE_CRUMB
+
+
+def _wall_case(height):
+    """A top face over a front wall `height` px tall whose lower edge is the
+    silhouette, with the crease and silhouette strokes a render would draw."""
+    top = _flat_face(0, 0, 40, 10, order=0, depth=5.0, normal=(0, 1, -0.5))
+    wall = _flat_face(0, 10, 40, 10 + height, order=1, depth=4.0,
+                      normal=(0.3, 0, -1))
+    strokes = [("line", 0, 10, 40, 10, "crease"),
+               ("line", 0, 10 + height, 40, 10 + height, "sil")]
+    return [top, wall], strokes
+
+
+def _wall_fills(faces, strokes):
+    ops = shade.fill_ops(faces, shade.Flat3Style(), strokes=strokes,
+                         line_px=0.75, sil_px=0.75)
+    return {o["fill"] for o in ops}
+
+
+@pytest.mark.parametrize("height, thin", [(1.0, True), (6.0, False)])
+def test_thin_side_wall_along_silhouette_takes_top_tone(height, thin):
+    style = shade.Flat3Style()
+    faces, strokes = _wall_case(height)
+    side = style.tone(faces[1]["normal"])
+    assert side != style.top
+    # under 2 line weights no side tone is left; a wider wall keeps it
+    assert _wall_fills(faces, strokes) == (
+        {style.top} if thin else {style.top, side})
+
+
+@pytest.mark.parametrize("height, thin", [(1.0, True), (6.0, False)])
+def test_thin_side_wall_crease_drops_to_stud_tier(height, thin):
+    from shapely.geometry import Polygon
+    from brick_icons import process
+    faces, strokes = _wall_case(height)
+    studs = process.StudTier(Polygon(), 0.2)
+    shade.fill_ops(faces, shade.Flat3Style(), strokes=strokes, line_px=0.75,
+                   sil_px=0.75, studs=studs)
+    crease, sil = strokes
+    assert process.stroke_width(crease, 0.75, 0.75, studs) == (
+        0.2 if thin else 0.75)
+    assert process.stroke_width(sil, 0.75, 0.75, studs) == 0.75
+
+
+def test_thin_side_wall_rule_disarmed_keeps_side_tone(monkeypatch):
+    monkeypatch.setattr(shade, "THIN_WALL_WEIGHTS", 0)
+    faces, strokes = _wall_case(1.0)
+    assert shade.Flat3Style().tone(faces[1]["normal"]) in \
+        _wall_fills(faces, strokes)
+
+
+def test_short_piece_of_a_wide_wall_keeps_side_tone():
+    # a 2 px tall wall split into runs and a 2 px long corner element between
+    # them (3867's front corner): the corner alone measures 2*A/P = 1.0, but
+    # the wall it belongs to is wide
+    top = _flat_face(0, 0, 40, 10, order=0, depth=5.0, normal=(0, 1, -0.5))
+    runs = [_flat_face(x0, 10, x1, 12, order=i + 1, depth=4.0,
+                       normal=(0.3, 0, -1), group=i)
+            for i, (x0, x1) in enumerate([(0, 19), (19, 21), (21, 40)])]
+    strokes = [("line", 0, 10, 40, 10, "crease"),
+               ("line", 0, 12, 40, 12, "sil")]
+    style = shade.Flat3Style()
+    ops = shade.fill_ops([top] + runs, style, strokes=strokes, line_px=0.75,
+                         sil_px=0.75)
+    assert sum(o["fill"] == style.top for o in ops) == 1
+
+
+def test_thin_wall_away_from_silhouette_keeps_side_tone():
+    # a face below the same 1 px wall: its lower edge is no longer the
+    # silhouette, so it is a step, not a plate's edge
+    faces, strokes = _wall_case(1.0)
+    faces.append(_flat_face(0, 11, 40, 30, order=2, depth=3.0,
+                            normal=(0, 1, -0.5)))
+    assert shade.Flat3Style().tone(faces[1]["normal"]) in \
+        _wall_fills(faces, strokes)

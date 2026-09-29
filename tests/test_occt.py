@@ -305,6 +305,50 @@ def test_orientation_is_verified_against_a_chiral_part(ldraw_dir, tmp_path):
     assert rmse_direct < rmse_tb
 
 
+def _slot_svg(part, out, monkeypatch, armed):
+    from brick_icons import cli, db, shade
+    monkeypatch.setattr(shade, "THIN_WALL_WEIGHTS",
+                        2.0 if armed else 0)
+    args = cli._parse_args(db.canonical_argv(part, "occt"))
+    process_one(cli._config_from_args(args), part, out)
+    return (out / f"{part}.svg").read_text()
+
+
+def _fill_lines(svg):
+    return [ln for ln in svg.splitlines()
+            if re.search(r' fill="(#|url\(#g)', ln)]
+
+
+def test_baseplate_edge_takes_top_tone_and_keeps_its_strokes(
+        tmp_path, monkeypatch, ldraw_dir):
+    """3811's 4 LDU front walls are under a line weight tall in the occt
+    slot: with the rule they lose their side tone (the corner gradients),
+    their creases drop to the stud tier, and no other stroke moves."""
+    off = _slot_svg("3811", tmp_path / "off", monkeypatch, False)
+    on = _slot_svg("3811", tmp_path / "on", monkeypatch, True)
+    assert re.search(r'fill="url\(#g\d', off)
+    assert not re.search(r'fill="url\(#g\d', on)
+    rest = lambda s: [ln for ln in s.splitlines()  # noqa: E731
+                      if ln not in set(_fill_lines(s)) and "Gradient" not in ln
+                      and "<stop" not in ln]
+    width = re.compile(r' stroke-width="([\d.]+)"')
+    a, b = rest(off), rest(on)
+    assert len(a) == len(b)
+    moved = [(x, y) for x, y in zip(a, b) if x != y]
+    assert moved
+    tier = min(float(w) for w in width.findall(on))
+    for x, y in moved:
+        assert width.sub("", x) == width.sub("", y)       # only the width
+        assert float(width.search(y).group(1)) == tier
+
+
+@pytest.mark.parametrize("part", ["3020", "3024"])
+def test_wide_plate_walls_unchanged_by_thin_wall_rule(
+        part, tmp_path, monkeypatch, ldraw_dir):
+    assert _slot_svg(part, tmp_path / "off", monkeypatch, False) == \
+        _slot_svg(part, tmp_path / "on", monkeypatch, True)
+
+
 def test_3001_renders_through_the_occt_engine(tmp_path):
     cfg = load_config(toml_path="labels.toml", root=".",
                       overrides={"fmt": "svg", "shading": "outline",
