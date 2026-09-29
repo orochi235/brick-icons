@@ -69,24 +69,17 @@ def test_overwrite_replaces_the_row_with_the_refresh(tree):
     assert after["sha256"] != before
 
 
-def test_a_requested_redraw_replaces_only_the_part_asked_for(tree):
-    from brick_icons import requests as render_requests
-    root, conn = tree
-    render_requests.add(root / render_requests.DEFAULT_PATH, "3001", "occt")
-    took, redrew, *_ = watch_mod._take_renders(
-        conn, root / "out" / "store-restale-occt", "occt", "occt", 1,
-        requested=True)
-    assert (took, redrew) == (1, 1)
-    assert _row(conn, "3001")["path"].endswith(
-        "out/store-restale-occt/renders/occt/3001.svg")
-
-
-def test_no_request_leaves_a_drawn_part_alone(tree):
+def test_a_drawn_part_is_left_alone_without_overwrite(tree):
     root, conn = tree
     took, redrew, *_ = watch_mod._take_renders(
-        conn, root / "out" / "store-restale-occt", "occt", "occt", 1,
-        requested=True)
+        conn, root / "out" / "store-restale-occt", "occt", "occt", 1)
     assert (took, redrew) == (1, 0)
+
+
+def test_the_watch_takes_no_requested_flag():
+    import inspect
+    assert "requested" not in inspect.signature(watch_mod._take_renders).parameters
+    assert "overwrite_requested" not in inspect.signature(watch_mod.watch).parameters
 
 
 def test_overwrite_keeps_one_row_per_part(tree):

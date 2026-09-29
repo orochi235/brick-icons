@@ -107,7 +107,9 @@ Two things, and the second is why it is worth a column rather than a query.
 
 **The wall's delta.** `cells.cells` sends only what changed since the client's
 last `version`, and today that version is two values joined by a pipe: the
-newest render's `made_at`, and a sha over every judged part. It is two because
+newest render's `indexed_at` (when its row was written; `made_at` is when it
+was drawn, which a late fetch can put behind the client), and a sha over every
+judged part. It is two because
 a render dates itself and a defect does not — filing one used to update the
 lightbox and leave the cell behind it stale, because the delta was built from
 renders and no render had happened. The fingerprint is a stopgap for a missing

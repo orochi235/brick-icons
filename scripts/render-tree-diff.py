@@ -29,6 +29,9 @@ import numpy as np
 from PIL import Image
 from scipy import ndimage
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from brick_icons import caption, db  # noqa: E402
+
 #: Pixels a diff component must reach to count as a change, not a fringe.
 MIN_PX = 12
 WIDTH = 384
@@ -123,8 +126,10 @@ def draw_sheet(rows, before, after, out: Path, left: str, right: str) -> None:
     def font(n):
         return ImageFont.truetype(
             "/System/Library/Fonts/Supplemental/Arial.ttf", n)
+    strip = caption.strip_height(caption.glyph_px(panel))
     sheet = Image.new("RGB", (label_w + 2 * (panel + pad) + pad,
-                              head + len(rows) * (panel + 2 * pad)), "white")
+                              head + len(rows) * (panel + strip + 2 * pad)),
+                      "white")
     d = ImageDraw.Draw(sheet)
     d.text((pad, 10), "the drawings that changed most",
            fill="black", font=font(21))
@@ -133,7 +138,7 @@ def draw_sheet(rows, before, after, out: Path, left: str, right: str) -> None:
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         for i, r in enumerate(rows):
-            y = head + i * (panel + 2 * pad)
+            y = head + i * (panel + strip + 2 * pad)
             d.text((pad, y + pad), r["part"], fill="black", font=font(15))
             d.text((pad, y + pad + 22),
                    f"{r['comps']} components, {r['px']:,} px",
@@ -148,7 +153,8 @@ def draw_sheet(rows, before, after, out: Path, left: str, right: str) -> None:
                     box.paste(im, ((panel - im.width) // 2,
                                    (panel - im.height) // 2))
                 x = label_w + k * (panel + pad)
-                sheet.paste(box, (x, y + pad))
+                sheet.paste(caption.pad(box, _caption(r["part"], svg)),
+                            (x, y + pad))
                 d.rectangle([x, y + pad, x + panel, y + pad + panel],
                             outline="#ccc")
                 d.text((x + 4, y + pad + panel - 15), name, fill="#333",
@@ -156,6 +162,16 @@ def draw_sheet(rows, before, after, out: Path, left: str, right: str) -> None:
             d.line([(0, y), (sheet.width, y)], fill="#ddd")
     out.parent.mkdir(parents=True, exist_ok=True)
     sheet.save(out)
+
+
+def _caption(part: str, svg) -> str:
+    """Size off the file; seconds only when corpus.db stored this very file
+    for the slot its directory names -- a tree of fresh output has no row."""
+    svg = Path(svg)
+    source = svg.parent.name
+    secs = (caption.stored_secs(part, source, svg, db.DEFAULT_PATH)
+            if source in db.SOURCES else None)
+    return caption.line(part, svg.stat().st_size, secs)
 
 
 if __name__ == "__main__":

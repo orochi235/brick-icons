@@ -15,12 +15,22 @@ import subprocess
 import sys
 import time
 import traceback
+from datetime import datetime, timezone
 from pathlib import Path
 
 _ARMED = None
 
 #: The per-part render cap, in seconds; every launcher's default comes from here.
 RENDER_TIMEOUT_S = 150
+
+
+def stamp(epoch: float | None = None) -> str:
+    """A UTC instant to the second, as every timestamp in this project is
+    written: ISO strings in one format order as text, and `made_at` against a
+    request's `at` is compared exactly that way."""
+    when = (datetime.now(timezone.utc) if epoch is None
+            else datetime.fromtimestamp(epoch, timezone.utc))
+    return when.isoformat(timespec="seconds")
 
 
 def outlasted(error: str | None, secs: float | None,
@@ -123,11 +133,12 @@ class Runner:
     requires a field finds it on the rows no work function produced.
     """
 
-    def __init__(self, log: Path | str, timeout: float = 0, key: str = "item",
-                 extra: dict | None = None, isolate: bool = False,
-                 mem_gb: float = 0):
-        self.log = Path(log)
-        self.inflight = Path(f"{self.log}.inflight")
+    def __init__(self, log: Path | str | None, timeout: float = 0,
+                 key: str = "item", extra: dict | None = None,
+                 isolate: bool = False, mem_gb: float = 0):
+        # None is a runner for `call` alone, which keeps no record.
+        self.log = Path(log) if log is not None else None
+        self.inflight = Path(f"{self.log}.inflight") if log is not None else None
         self.timeout = timeout
         self.key = key
         self.extra = dict(extra or {})
@@ -179,8 +190,19 @@ class Runner:
         return bool(marker) and Path(marker).exists()
 
     def write(self, row: dict) -> None:
+        """Every row carries `at`, when it was written -- for a drawn item,
+        when its drawing was made. The row travels with the tree and the file's
+        mtime does not: `onto fetch` writes each file at fetch time."""
         with self.log.open("a") as fh:
-            fh.write(json.dumps({**self.extra, **row}) + "\n")
+            fh.write(json.dumps({**self.extra, **row, "at": stamp()}) + "\n")
+
+    def call(self, item: str, work) -> dict:
+        """`work(item)` under the cap, as `run` does it, with no log and no
+        inflight marker: for a caller that keeps its own record."""
+        started = time.time()
+        row = self._isolated(item, work) if self.isolate else self._here(item, work)
+        row["secs"] = round(time.time() - started, 1)
+        return row
 
     def run(self, item: str, work) -> dict:
         """`work(item)` under the cap. Its dict is returned and logged; a
@@ -189,16 +211,15 @@ class Runner:
         Without `isolate` this is best effort: the alarm lands between Python
         bytecodes, so an item stuck inside a C call runs past it.
         """
+        if self.log is None:
+            raise ValueError("a Runner without a log has only call")
         self.inflight.write_text(item)
         # onto reads this off the item's own stdout pipe and shows it as the
         # worker's label, so a batched item names the part in hand rather than
         # the one it started with. Consumed, not forwarded: it never reaches
         # the job log. Capped at 48 runes by onto.
         print(f"onto: item {item[:48]}", flush=True)
-        started = time.time()
-        row = self._isolated(item, work) if self.isolate else self._here(item, work)
-        row = {**self.extra, **row}
-        row["secs"] = round(time.time() - started, 1)
+        row = {**self.extra, **self.call(item, work)}
         self.write(row)
         self.inflight.unlink(missing_ok=True)
         return row

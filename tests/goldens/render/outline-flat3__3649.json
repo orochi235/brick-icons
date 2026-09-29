@@ -6,22 +6,22 @@
     164.0
   ],
   "commands": {
-    "A": 832,
-    "L": 4106,
+    "A": 825,
+    "L": 4161,
     "M": 620,
-    "Z": 272
+    "Z": 268
   },
   "fills": {
     "#000000": 61,
-    "#565656": 21,
+    "#565656": 19,
     "#5e5e5e": 30,
     "#858585": 17,
     "#cccccc": 17,
-    "gradient": 65,
-    "none": 350
+    "gradient": 63,
+    "none": 354
   },
-  "gradient_stops": 463,
-  "gradients": 65,
+  "gradient_stops": 457,
+  "gradients": 63,
   "lines": 99,
   "paths": 561,
   "transforms": 0,

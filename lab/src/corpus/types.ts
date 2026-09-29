@@ -110,7 +110,15 @@ export interface PartDetail {
    *  has run it. The state fields are optional for the same reason `slots`
    *  itself is. */
   slots: {
-    source: string; sha256: string | null; made_at: string | null;
+    source: string; sha256: string | null;
+    /** When the drawing was made (`db.drawn_at`), not when it was indexed. */
+    made_at: string | null;
+    /** Ground truth drawn by an outside renderer (`db.is_reference_slot`).
+     *  Absent from an API older than the field. */
+    reference?: boolean;
+    /** The engine revision of the slot's newest clean measurement; null for
+     *  a slot that files none. Absent from an API older than the field. */
+    build?: string | null;
     /** How long the last run of this slot took, from its attempt row. */
     secs?: number | null;
     error?: string | null;
@@ -121,8 +129,6 @@ export interface PartDetail {
     /** This slot has nothing to draw for this part -- a plain brick on the
      *  decal slot. `cells.not_applicable` is the server's rule. */
     not_applicable?: boolean;
-    /** When a redraw of this slot was asked for and has not landed yet. */
-    requested_at?: string | null;
     /** Where a raster render sits on the canvas the drawings are fitted to,
      *  in that canvas's px (`framing.placement`). Absent for an SVG. */
     placement?: { canvas: [number, number]; x: number; y: number;

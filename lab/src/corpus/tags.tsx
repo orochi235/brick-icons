@@ -49,7 +49,7 @@ export function Tags({ tags }: { tags?: string[] }) {
  *  showed only that one.
  *
  *  An id is a link where the view it is in can go to a part, and plain text
- *  where it cannot -- `/corpus` gives no handler. */
+ *  where it cannot. */
 export function Lineage({ successor, predecessors, onPart }: {
   successor?: string | null;
   predecessors?: string[];

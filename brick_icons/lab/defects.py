@@ -6,10 +6,16 @@ the library.
 """
 from __future__ import annotations
 
+import fcntl
+import os
+import tempfile
 import tomllib
+from contextlib import contextmanager
+from datetime import date
 from pathlib import Path
 
 DEFAULT_PATH = Path("tests/goldens/defects.toml")
+_LOCK = ".defects.lock"
 STATUSES = ("open", "fixed", "wontfix", "notabug")
 
 #: Symptom families, in the order they read best: what is drawn that should
@@ -64,7 +70,36 @@ def load(path: Path | str = DEFAULT_PATH) -> list[dict]:
     return list(tomllib.loads(path.read_text()).get("defect", []))
 
 
+@contextmanager
+def _locked(path: Path):
+    """One writer of `path` at a time, across threads and processes.
+
+    `add`/`update`/`mark_part_fixed` are load-modify-save: two overlapping
+    ones, from two threads of the same lab process or two separate agents,
+    would otherwise each save from a snapshot that missed the other's
+    change, and one edit is lost. `thumbs._sheets_locked` is the same
+    pattern for a slot's sheets.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path.parent / _LOCK, "w") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
+
+
 def save(path: Path | str, records: list[dict]) -> None:
+    """Write `records` to `path`, atomically.
+
+    The lab and several agents write this file concurrently; a bare
+    `write_text` would let one writer's readers see a half-written file, or
+    a crash mid-write leave a truncated one. A temp file in the same
+    directory plus `os.replace` makes the write land whole or not at all.
+    `mkstemp` names it, rather than the pid, so two threads of the same
+    process saving at once get two different temp files instead of one
+    clobbering the other's.
+    """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     chunks = [_HEADER]
@@ -76,7 +111,14 @@ def save(path: Path | str, records: list[dict]) -> None:
         for field in sorted(set(record) - set(_ORDER)):
             lines.append(f"{field} = {dump_value(record[field])}")
         chunks.append("\n".join(lines) + "\n")
-    path.write_text("\n".join(chunks))
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as fh:
+            fh.write("\n".join(chunks))
+        os.replace(tmp, path)
+    except BaseException:
+        os.unlink(tmp)
+        raise
 
 
 def wants_review(record: dict, source: str, sha: str | None) -> bool:
@@ -100,28 +142,34 @@ def check_classes(classes) -> None:
 
 
 def add(path: Path | str, record: dict) -> dict:
-    records = load(path)
-    if any(r["id"] == record["id"] for r in records):
-        raise ValueError(f"defect {record['id']!r} already exists")
+    path = Path(path)
     if record.get("status", "open") not in STATUSES:
         raise ValueError(f"status must be one of {STATUSES}")
     check_classes(record.get("classes"))
-    records.append(record)
-    save(path, records)
+    if not record.get("filed"):
+        record = {**record, "filed": date.today().isoformat()}
+    with _locked(path):
+        records = load(path)
+        if any(r["id"] == record["id"] for r in records):
+            raise ValueError(f"defect {record['id']!r} already exists")
+        records.append(record)
+        save(path, records)
     return record
 
 
 def update(path: Path | str, defect_id: str, changes: dict) -> dict:
+    path = Path(path)
     if "status" in changes and changes["status"] not in STATUSES:
         raise ValueError(f"status must be one of {STATUSES}")
     if "classes" in changes:
         check_classes(changes["classes"])
-    records = load(path)
-    for record in records:
-        if record["id"] == defect_id:
-            record.update(changes)
-            save(path, records)
-            return record
+    with _locked(path):
+        records = load(path)
+        for record in records:
+            if record["id"] == defect_id:
+                record.update(changes)
+                save(path, records)
+                return record
     raise KeyError(f"no defect {defect_id!r}")
 
 
@@ -129,15 +177,17 @@ def mark_part_fixed(path: Path | str, part_id: str, line: str) -> list[dict]:
     """Close every defect against `part_id` that is not already fixed, each
     with `line` appended to its notes, in one write. Returns the records it
     changed."""
-    records = load(path)
-    changed = []
-    for record in records:
-        if record["part"] != part_id or record.get("status") == "fixed":
-            continue
-        record["status"] = "fixed"
-        record["notes"] = "\n\n".join(
-            p for p in ((record.get("notes") or "").rstrip(), line) if p)
-        changed.append(record)
-    if changed:
-        save(path, records)
+    path = Path(path)
+    with _locked(path):
+        records = load(path)
+        changed = []
+        for record in records:
+            if record["part"] != part_id or record.get("status") == "fixed":
+                continue
+            record["status"] = "fixed"
+            record["notes"] = "\n\n".join(
+                p for p in ((record.get("notes") or "").rstrip(), line) if p)
+            changed.append(record)
+        if changed:
+            save(path, records)
     return changed

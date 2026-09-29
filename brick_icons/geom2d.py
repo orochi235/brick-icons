@@ -472,18 +472,24 @@ def arc_regions(segs, inside=None):
     for op in segs:
         if len(op) == 5 or op[0] == "line":
             continue
-        _, cx, cy, ux, uy, vx, vy, t0, t1, _ = op
+        _, cx, cy, ux, uy, vx, vy, t0, t1, kind = op
         ts = np.radians(np.linspace(t0, t1, max(8, int(abs(t1 - t0) / 5) + 2)))
         ring = np.stack([cx + np.cos(ts) * ux + np.sin(ts) * vx,
                          cy + np.cos(ts) * uy + np.sin(ts) * vy], 1)
         if inside is not None and not inside.is_empty \
-                and not _chord_on(ring, inside):
+                and not _chord_on(ring, inside,
+                                  SIL_END_PAD if kind == "sil" else 1.0):
             continue
         out.append(to_geom(ring))
     return out
 
 
-def _chord_on(ring, inside):
+#: How much farther than the interior a "sil" arc's chord ENDS may sit off
+#: the silhouette (see _chord_on).
+SIL_END_PAD = 4.0
+
+
+def _chord_on(ring, inside, end_pad=1.0):
     """Does the closing chord of this arc run along `inside` for its whole
     length? Sampled rather than tested as a line, and against `inside` grown
     by a hair, because an endpoint may sit a snap off the boundary.
@@ -492,15 +498,23 @@ def _chord_on(ring, inside):
     the silhouette over only a third of its length, and the sliver it grew was
     as wrong as 5843's whole wedge. Measured over the arches and the golden
     parts, a legitimate bulge scores 9 of 9 and nothing scores between.
+
+    `end_pad` loosens the two ENDS only, for a fitted limb: its ends are
+    where the limb leaves the facet polygon, which sits inside it by the
+    facets' sagitta -- 1.1 px on 51283 -- while the interior samples still
+    decide whether the chord runs along the silhouette or across a hollow.
     """
     x0, y0, x1, y1 = inside.bounds
     pad = max(1.0, 0.002 * max(x1 - x0, y1 - y0))
     try:
         grown = inside.buffer(pad)
+        ends = inside.buffer(pad * end_pad) if end_pad > 1 else grown
     except Exception:
         return True
     chord = np.linspace(ring[0], ring[-1], 9)
-    return bool(shapely.contains_xy(grown, chord[:, 0], chord[:, 1]).all())
+    return bool(shapely.contains_xy(grown, chord[1:-1, 0], chord[1:-1, 1]).all()
+                and shapely.contains_xy(ends, chord[[0, -1], 0],
+                                        chord[[0, -1], 1]).all())
 
 
 def densify_on_arcs(pts, cands, max_step=6.0):

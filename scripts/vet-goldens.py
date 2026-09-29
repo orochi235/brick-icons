@@ -42,6 +42,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from PIL import Image  # noqa: E402
 
 from _sheet import sheet  # noqa: E402
+from brick_icons.caption import Shot  # noqa: E402
 from brick_icons.lab import diff as _diff  # noqa: E402
 
 VET_DIR = ROOT / "out" / "vet"
@@ -104,6 +105,14 @@ def render(case, tree: Path, engine: str, dest: Path, width: int,
     if r.returncode != 0:
         return None, "resvg: " + (r.stderr.strip() or "failed"), time.time() - t0
     return png, None, time.time() - t0
+
+
+def shot(out: Path, side: str, row) -> Shot:
+    """A sheet panel captioned with the SVG's size and that side's seconds
+    (the whole CLI invocation, interpreter start included)."""
+    png = out / side / f"{row['case']}.png"
+    return Shot.of(flat(png), row["part"], png.with_suffix(".svg"),
+                   row["secs"][side == "after"])
 
 
 def flat(png: Path) -> Image.Image:
@@ -189,7 +198,8 @@ def run_here(a) -> int:
         with ThreadPoolExecutor(a.workers) as ex:
             for i, (case, b, f) in enumerate(ex.map(one, cases), 1):
                 row = {"case": case["id"], "part": case["part"],
-                       "expected": case["part"] in expect}
+                       "expected": case["part"] in expect,
+                       "secs": [round(b[2], 2), round(f[2], 2)]}
                 if b[1] or f[1]:
                     row.update(state="error", before_error=b[1], after_error=f[1])
                     if b[1] and f[1]:
@@ -224,8 +234,8 @@ def run_here(a) -> int:
             sheet(f"{a.source} under {a.engine}: {before_name} -> "
                   f"{after_name}   page {n}/{len(pages)}   magenta = changed",
                   [(r["case"] + "\n" + label[r["case"]].replace(", ", "\n"),
-                    flat(out / "before" / f"{r['case']}.png"),
-                    flat(out / "after" / f"{r['case']}.png")) for r in page],
+                    shot(out, "before", r), shot(out, "after", r))
+                   for r in page],
                   out=out / f"sheet-{n:02d}.png")
     elif moved:
         moved.sort(key=lambda r: (not r["unexpected"], -r["px"]))
@@ -233,8 +243,7 @@ def run_here(a) -> int:
               f"   magenta = changed",
               [(("UNEXPECTED\n" if r["unexpected"] else "expected\n")
                 + r["case"].replace("__", "\n"),
-                flat(out / "before" / f"{r['case']}.png"),
-                flat(out / "after" / f"{r['case']}.png")) for r in moved],
+                shot(out, "before", r), shot(out, "after", r)) for r in moved],
               out=out / "sheet.png")
     unexpected = [r for r in rows if r["unexpected"]]
     report = {"base": a.base, "before": before_name, "after": after_name,

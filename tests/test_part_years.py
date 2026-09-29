@@ -4,6 +4,7 @@ The routes are ranked, and the ranking is the whole content of `match`: a print
 that falls through to its base part inherits the plain mould's span, set count
 and colors, which is wrong in all three columns.
 """
+import gzip
 import importlib
 import sys
 from pathlib import Path
@@ -265,6 +266,55 @@ def test_theme_rows_keeps_a_named_hit_that_is_not_the_base_mould(tmp_path):
     assert years.theme_rows(["004695a"], parts, facts, sets_with, {},
                             set_theme, tree, frozenset({"4695"})) == [
         ("004695a", "Town", "1.00", 2)]
+
+
+def _dump(cache: Path, name: str, header: str, *lines: str) -> None:
+    with gzip.open(cache / f"{name}.csv.gz", "wt") as fh:
+        fh.write("\n".join([header, *lines]) + "\n")
+
+
+def test_a_part_only_in_a_minifig_takes_the_years_of_the_sets_that_ship_it(tmp_path):
+    """29272pr0001 is inventoried only inside `fig-` pseudo-sets, which
+    sets.csv does not have. The fig ships in sets from 2017 and 2019, so the
+    part does too. A part some set lists directly keeps its own years: 3001's
+    fig adds nothing to them."""
+    _dump(tmp_path, "sets", "set_num,year",
+          "100-1,2017", "200-1,2019", "300-1,1980")
+    _dump(tmp_path, "inventories", "id,version,set_num",
+          "1,1,100-1", "2,1,200-1", "3,1,300-1", "9,1,fig-000009",
+          "10,2,100-1")
+    _dump(tmp_path, "inventory_minifigs", "inventory_id,fig_num,quantity",
+          "1,fig-000009,1", "2,fig-000009,1",
+          "10,fig-000009,1")        # a second version adds no set
+    _dump(tmp_path, "inventory_parts", "inventory_id,part_num,color_id",
+          "9,29272pr0001,0", "9,3001,4", "3,3001,4")
+
+    facts, sets_with = years.part_facts(tmp_path)
+
+    assert facts["29272pr0001"] == (2017, 2019, 2, 1)
+    assert sets_with["29272pr0001"] == {"100-1", "200-1"}
+    assert facts["3001"] == (1980, 1980, 1, 1)
+
+
+def test_an_assembly_nothing_else_matches_falls_back_to_its_base_part():
+    facts = {"22253": (1998, 2000, 5, 1), "73590c01": (1990, 2026, 50, 3)}
+    assert years.match("22253c01", facts, {}) == ({"22253"}, "base")
+    # Rebrickable's own number for the assembly still comes first.
+    assert years.match("73590c01", facts, {}) == ({"73590c01"}, "exact")
+    assert years.match("75542c01-f2", {"75542": (1991, 1996, 9, 1)}, {}) == (
+        {"75542"}, "base")
+
+
+def test_a_print_code_is_not_an_assembly():
+    """`3816bpc67` is leg 3816b with print pc67, not assembly c67 of 3816bp."""
+    assert years.match("3816bpc67", {"3816": (1980, 2026, 900, 20)}, {}) is None
+
+
+def test_an_assembly_base_is_not_read_through_a_design_id():
+    """LDraw's 25866 (a palm tree) is Rebrickable design id 25866 of lipstick
+    93094; 25866c01 must not inherit a lipstick's years."""
+    assert years.match("25866c01", {"93094": (2012, 2026, 300, 20)},
+                       {"25866": {"93094"}}) is None
 
 
 def test_theme_rows_drops_a_named_hit_for_a_composite_print(tmp_path):

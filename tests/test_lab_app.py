@@ -211,6 +211,30 @@ def test_a_bad_status_is_a_400(defect_client):
     assert r.status_code == 400
 
 
+def test_a_defect_with_no_filed_date_still_saves(tmp_path):
+    """mirror_defect's db upsert needs `filed`; a record posted without one
+    must be dated before either write, not 500 after the TOML already has
+    it (the failure this reproduces without the fix)."""
+    from datetime import date
+
+    from brick_icons import db
+    from brick_icons.lab import defects
+
+    db.connect(tmp_path / "corpus.db").close()
+    client = TestClient(lab_app.create_app(
+        cache_root=tmp_path / "cache", corpus_db=tmp_path / "corpus.db",
+        defects_path=tmp_path / "defects.toml"))
+    record = {k: v for k, v in DEFECT.items() if k != "filed"}
+
+    r = client.post("/api/defects", json=record)
+
+    assert r.status_code == 200
+    today = date.today().isoformat()
+    assert r.json()["filed"] == today
+    [saved] = defects.load(tmp_path / "defects.toml")
+    assert saved["filed"] == today
+
+
 def test_batch_starts_one_job_for_the_list(client, ldraw_dir):
     body = client.post("/api/batch", json={
         "parts": ["3005", "3024"],
@@ -731,6 +755,31 @@ def test_part_route_lists_its_slots_in_the_module_s_own_order(tmp_path):
     assert [s["source"] for s in body["slots"]] == ["occt", "reference", "white-occt"]
 
 
+def test_part_slots_say_which_are_references_and_what_build_drew_them(tmp_path):
+    from brick_icons import db
+    client = _corpus_client(tmp_path)
+    conn = db.connect(tmp_path / "corpus.db")
+    for source in ("occt", "reference-gray"):
+        conn.execute("INSERT INTO renders (part_id, source, config_key, "
+                     "made_at, path, sha256) VALUES ('3001', ?, 'k', "
+                     "'2026-09-05T00:00:00+00:00', ?, 'abc')",
+                     (source, f"renders/{source}/3001.svg"))
+    run = db.start_run(conn, "census", {"dir": "out/x"}, "abc")
+    conn.execute("INSERT INTO measurements (run_id, part_id, engine, source, "
+                 "build) VALUES (?, '3001', 'occt', 'occt', '101.abc1234')",
+                 (run,))
+    conn.commit()
+    conn.close()
+
+    slots = {s["source"]: s for s in
+             client.get("/api/corpus/part/3001").json()["slots"]}
+    assert slots["occt"]["reference"] is False
+    assert slots["occt"]["build"] == "101.abc1234"
+    assert slots["occt"]["made_at"] == "2026-09-05T00:00:00+00:00"
+    assert slots["reference-gray"]["reference"] is True
+    assert slots["reference-gray"]["build"] is None
+
+
 def test_ingest_runs_route_lists_the_ingests(tmp_path):
     from brick_icons import db
     conn = db.connect(tmp_path / "corpus.db")
@@ -823,64 +872,6 @@ def test_each_question_is_held_separately(tmp_path):
                           params={"kind": "obsolete"}).json()
     assert obsolete["set"]["kind"] == "obsolete"
     assert client.get("/api/corpus/stats").json()["as_of"] == all_parts["as_of"]
-
-
-def _redraw_client(tmp_path, secs=None):
-    from brick_icons import db
-    conn = db.connect(tmp_path / "corpus.db")
-    conn.execute("INSERT INTO parts (id, title, category, printed, obsolete, "
-                 "status) VALUES ('3001', 'Brick 2 x 4', 'Brick', 0, 0, 'good')")
-    conn.execute("INSERT INTO renders (part_id, source, config_key, made_at, "
-                 "path, sha256) VALUES ('3001', 'occt', 'k', "
-                 "'2020-01-01T00:00:00+00:00', 'renders/occt/3001.svg', 'x')")
-    if secs is not None:
-        conn.execute("INSERT INTO attempts (run_id, part_id, source, state, "
-                     "secs) VALUES (1, '3001', 'occt', 'stored', ?)", (secs,))
-    conn.commit()
-    conn.close()
-    return TestClient(lab_app.create_app(
-        root=tmp_path, cache_root=tmp_path / "cache",
-        corpus_db=tmp_path / "corpus.db",
-        requests_path=tmp_path / "requests.jsonl"))
-
-
-def test_a_cheap_redraw_draws_now_rather_than_queueing(tmp_path, monkeypatch):
-    drawn = []
-
-    def fake(part, source, run_id, conn, force, store_root, lab_root):
-        drawn.append((part, source, force))
-        return {"part": part, "source": source, "state": "stored"}
-
-    monkeypatch.setattr(lab_app.store, "render_into_store", fake)
-    client = _redraw_client(tmp_path, secs=3.0)
-    body = client.post("/api/corpus/redraw",
-                       json={"part": "3001", "source": "occt"}).json()
-    assert body["local"] is True
-    assert _finish(client, body["job"])["done"] == 1
-    assert drawn == [("3001", "occt", True)]
-    assert not (tmp_path / "requests.jsonl").exists()
-
-
-def test_a_slow_redraw_is_queued_and_the_part_says_so(tmp_path):
-    client = _redraw_client(tmp_path, secs=300.0)
-    body = client.post("/api/corpus/redraw",
-                       json={"part": "3001", "source": "occt"}).json()
-    assert body["local"] is False
-    slots = client.get("/api/corpus/part/3001").json()["slots"]
-    occt = next(s for s in slots if s["source"] == "occt")
-    assert occt["requested_at"] == body["requested_at"]
-
-
-def test_a_slot_drawn_elsewhere_refuses_a_redraw(tmp_path):
-    assert _redraw_client(tmp_path).post(
-        "/api/corpus/redraw",
-        json={"part": "3001", "source": "reference"}).status_code == 400
-
-
-def test_a_redraw_of_an_unknown_part_is_404(tmp_path):
-    assert _redraw_client(tmp_path).post(
-        "/api/corpus/redraw",
-        json={"part": "9999", "source": "occt"}).status_code == 404
 
 
 _MARKED_SVG = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 170" '

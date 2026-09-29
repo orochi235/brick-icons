@@ -42,3 +42,6 @@ store-queue/before/
 
 # vite dep cache, created when the lab is run from the repo root
 /node_modules/
+
+# defects.py's lock file, written beside defects.toml
+.defects.lock

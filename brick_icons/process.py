@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 
 import numpy as np
-from PIL import Image, ImageOps, ImageDraw, ImageFont
+from PIL import Image, ImageOps, ImageDraw
 
 
 def flatten_rgb(rgba: Image.Image) -> Image.Image:
@@ -87,17 +87,25 @@ class StudTier:
     """The lighter stroke studs draw at: `px` wide, for every op lying wholly
     inside `zone`, the union of the studs' projected footprints (same space
     as the ops). A stud is what the part DECLARED as one -- geometry under a
-    `p/stud*.dat` reference -- never a circle of the right size."""
+    `p/stud*.dat` reference -- never a circle of the right size.
+
+    `creases` is a second region the tier covers for non-silhouette ops only:
+    the creases along thin side walls, set by shade.fill_ops when it finds
+    them (see shade.THIN_WALL_WEIGHTS). It never counts as a stud footprint."""
 
     def __init__(self, zone, px):
         import shapely
         self.zone, self.px = zone, px
+        self.creases = None
         shapely.prepare(zone)
 
     def covers(self, op):
         import shapely
         xy = np.asarray(op_points(op, 5), float)
-        return bool(shapely.contains_xy(self.zone, xy[:, 0], xy[:, 1]).all())
+        if shapely.contains_xy(self.zone, xy[:, 0], xy[:, 1]).all():
+            return True
+        return (self.creases is not None and op[-1] != "sil" and
+                bool(shapely.contains_xy(self.creases, xy[:, 0], xy[:, 1]).all()))
 
     def px_at(self, geom, default):
         """The stroke width drawn around `geom`: the stud tier when it lies
@@ -109,8 +117,16 @@ class StudTier:
 
     def scaled(self, k):
         from shapely import affinity
-        return StudTier(affinity.scale(self.zone, k, k, origin=(0, 0)),
-                        self.px * k)
+        t = StudTier(affinity.scale(self.zone, k, k, origin=(0, 0)),
+                     self.px * k)
+        if self.creases is not None:
+            t.set_creases(affinity.scale(self.creases, k, k, origin=(0, 0)))
+        return t
+
+    def set_creases(self, region):
+        import shapely
+        self.creases = region
+        shapely.prepare(region)
 
 
 def local_px(geom, line_px, studs=None):
@@ -247,16 +263,6 @@ def segments_mono(segs, w, h, line_px=2, sil_px=2, threshold=160,
     g = draw_segments(segs, w, h, line_px, sil_px, contour_band=contour_band,
                       studs=studs, stud_ops=stud_ops, stud_px=stud_px)
     return g.point(lambda p: 255 if p >= threshold else 0).convert("1")
-
-
-def stamp_label(img: Image.Image, text: str) -> Image.Image:
-    """Render tag in fixed small print, tucked into the bottom-left corner.
-    Absolute size, deliberately NOT scaled to the part — an identification aid
-    for review renders. In place."""
-    d = ImageDraw.Draw(img)
-    font = ImageFont.load_default(size=7)
-    d.text((2, img.height - 9), text, fill="black", font=font)
-    return img
 
 
 _BAYER4 = np.array([[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]],

@@ -305,6 +305,52 @@ def test_orientation_is_verified_against_a_chiral_part(ldraw_dir, tmp_path):
     assert rmse_direct < rmse_tb
 
 
+def _slot_svg(part, out, monkeypatch, armed):
+    from brick_icons import cli, db, shade
+    monkeypatch.setattr(shade, "THIN_WALL_WEIGHTS",
+                        2.0 if armed else 0)
+    args = cli._parse_args(db.canonical_argv(part, "occt"))
+    process_one(cli._config_from_args(args), part, out)
+    return (out / f"{part}.svg").read_text()
+
+
+def _fill_lines(svg):
+    return [ln for ln in svg.splitlines()
+            if re.search(r' fill="(#|url\(#g)', ln)]
+
+
+def test_baseplate_edge_takes_top_tone_and_keeps_its_strokes(
+        tmp_path, monkeypatch, ldraw_dir):
+    """3811's 4 LDU front walls are under a line weight tall in the occt
+    slot: with the rule they lose their side tone (the corner gradients),
+    their creases drop to the stud tier, and no other stroke moves."""
+    off = _slot_svg("3811", tmp_path / "off", monkeypatch, False)
+    on = _slot_svg("3811", tmp_path / "on", monkeypatch, True)
+    assert re.search(r'fill="url\(#g\d', off)
+    assert not re.search(r'fill="url\(#g\d', on)
+    rest = lambda s: [ln for ln in s.splitlines()  # noqa: E731
+                      if ln not in set(_fill_lines(s)) and "Gradient" not in ln
+                      and "<stop" not in ln]
+    width = re.compile(r' stroke-width="([\d.]+)"')
+    # paired by geometry, not position: the paint-order witness may reorder
+    # strokes once the wall's fill changes
+    a, b = rest(off), rest(on)
+    assert sorted(map(lambda s: width.sub("", s), a)) == \
+        sorted(map(lambda s: width.sub("", s), b))      # only widths change
+    moved = sorted(set(b) - set(a))
+    assert moved
+    tier = min(float(w) for w in width.findall(on))
+    for y in moved:
+        assert float(width.search(y).group(1)) == tier
+
+
+@pytest.mark.parametrize("part", ["3020", "3024"])
+def test_wide_plate_walls_unchanged_by_thin_wall_rule(
+        part, tmp_path, monkeypatch, ldraw_dir):
+    assert _slot_svg(part, tmp_path / "off", monkeypatch, False) == \
+        _slot_svg(part, tmp_path / "on", monkeypatch, True)
+
+
 def test_3001_renders_through_the_occt_engine(tmp_path):
     cfg = load_config(toml_path="labels.toml", root=".",
                       overrides={"fmt": "svg", "shading": "outline",
@@ -858,6 +904,37 @@ def test_50950_wall_draws_as_one_arc(ldraw_dir):
     """
     res = _occt_render("50950", ldraw_dir)
     assert sum(1 for op in res.segs if op[0] == "arc") == 2
+
+
+def _op_space(p3, right, up):
+    ax, ay = occt._screen_axes(right, up)
+    return np.array([p3 @ ax, -(p3 @ ay)])
+
+
+def _arc_points(op, n=33):
+    cx, cy, ux, uy, vx, vy, d0, d1 = op[1:9]
+    th = np.radians(np.linspace(d0, d1, n))
+    return np.stack([cx + ux * np.cos(th) + vx * np.sin(th),
+                     cy + uy * np.cos(th) + vy * np.sin(th)], 1)
+
+
+def test_30137_front_rims_of_the_logs_are_drawn(ldraw_dir):
+    """HLR hands a projected ellipse back as a degree-1 BSpline whose knots lie
+    on the curve. Sampled uniformly, its points land mid-chord, and over a
+    90-degree log rim that sagitta (1.6e-3) beat MATCH_TOL: every front rim
+    where 30137's top meets a log went undrawn while the back ones, shorter
+    behind their studs, matched."""
+    right, up = hlr.view_basis(30.0, 45.0)[:2]
+    res = _occt_render("30137", ldraw_dir)
+    arcs = [_arc_points(o, 2000) for o in res.segs if o[0] == "arc"]
+    t = np.radians(np.linspace(5, 85, 9))
+    for c in (-30.0, -10.0, 10.0, 30.0):
+        rim = [_op_space(np.array([c + 10.001 * (np.cos(a) - np.sin(a)), 0.0,
+                                   -7.071 * (np.cos(a) + np.sin(a))]), right, up)
+               for a in t]
+        covered = [any(np.min(np.hypot(*(pts - q).T)) < 0.05 for pts in arcs)
+                   for q in rim]
+        assert all(covered), f"front rim of the log at x={c}: {covered}"
 
 
 def test_silhouette_polys_cover_the_drawn_ink(ldraw_dir):

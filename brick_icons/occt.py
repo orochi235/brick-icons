@@ -47,7 +47,7 @@ from OCP.ShapeBuild import ShapeBuild_ReShape
 from OCP.Standard import Standard_Failure
 
 from . import timing, sweep
-from . import hlr, primitives
+from . import hlr, primitives, quadric
 
 TOL = 1e-4
 # A rotation written to three decimals -- which is all a .dat carries -- is
@@ -1316,6 +1316,8 @@ def projector_axes(right, up):
 
 
 MATCH_TOL = 1e-3       # 2D LDU; a fragment lies exactly on its own curve
+# A degree-1 BSpline fragment is tested at its knots, not 5 uniform samples
+FRAGMENT_KNOTS = True
 # LDU the line mask's loose copies move toward the eye, so a face the line
 # lies on cannot win HLR's tie. 0.02 and 0.1 draw 4739b/49612 identically.
 LINE_MASK_NUDGE = 0.05
@@ -1529,6 +1531,17 @@ def authored_loci(shape, out, right, up, held=None):
         loc = _ell_locus(o, u, v, g.Radius(), g.Radius(), "line", ax, ay)
         if loc is not None:
             loci.append(loc)
+    # a fitted region's silhouette chords are matched as chords and re-read
+    # against its limb, the way a fitted round's chords are above
+    regions = out.get("fit_quadrics") or ()
+    limbs = {}
+    if regions:
+        z, _ = projector_axes(right, up)
+        fwd = -np.asarray(z, float) / np.linalg.norm(z)
+        for r in regions:
+            C, U, V = quadric.limb(r["fit"], fwd)
+            ru, rv = float(np.linalg.norm(U)), float(np.linalg.norm(V))
+            limbs[id(r)] = _ell_locus(C, U / ru, V / rv, ru, rv, "sil", ax, ay)
     for q in out.get("5", ()):
         pts = np.asarray(q, float)
         sx, sy, _ = hlr.project(pts, right, up, np.zeros(3))
@@ -1536,7 +1549,9 @@ def authored_loci(shape, out, right, up, held=None):
                              np.array([sx[2], sy[2]]), np.array([sx[3], sy[3]])):
             continue
         if np.linalg.norm(pts[0] - pts[1]) > 1e-7:
-            loci.append(_seg_locus(pts[0], pts[1], "sil", ax, ay))
+            r = quadric.region_of_condline(pts, regions) if regions else None
+            loci.append(_seg_locus(pts[0], pts[1], "sil", ax, ay,
+                                   limbs.get(id(r)) if r is not None else None))
     return _merge_collinear([l for l in loci if l is not None])
 
 
@@ -1544,6 +1559,13 @@ def _fragment_points(edge):
     c = BRepAdaptor_Curve(edge)
     t0, t1 = c.FirstParameter(), c.LastParameter()
     ts = np.linspace(t0, t1, 5)
+    if (FRAGMENT_KNOTS and c.GetType() == GeomAbs_CurveType.GeomAbs_BSplineCurve
+            and c.Degree() == 1):
+        # HLR's projected ellipse is a polyline whose knots lie ON the curve;
+        # uniform samples land mid-chord, off it by the sagitta (30137's rims)
+        bs = c.BSpline()
+        ks = [bs.Knot(i) for i in range(1, bs.NbKnots() + 1)]
+        ts = np.array([t0, *(k for k in ks if t0 < k < t1), t1])
     out = []
     for t in ts:
         p = c.Value(float(t))
@@ -3254,14 +3276,17 @@ def ordered_faces(shape, proj, out=None, ellipses_out=None, px=None,
             f["tangent_wall"] = True
             tangent.append((f, wall_by_idx.get(fmap.FindIndex(curved), ())))
     if out is not None and plane_by_idx:
+        for f in plane_by_idx.values():
+            f["_facing"] = float(f["_plane3"][1] @ proj.fwd) < 0
         _group_planes(shape, out, plane_by_idx)
-        shade.attach_group_gradients(faces)
+        shade.attach_group_gradients(faces, proj=proj)
         _relax_facet_cylinders(faces, proj)
         _absorb_dome_walls(faces, own_occ)
         if CHORD_FACETS:
             _pool_chord_facets(faces, own_occ)
     for f in faces:
         f.pop("_plane3", None)
+        f.pop("_facing", None)
     _merge_turn_gradients(faces)
     _merge_wall_gradients(faces)
     _absorb_tangent_planes(tangent)
@@ -3527,10 +3552,11 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None, canvas_px=N
     for edge, locus in picked:
         kind = locus[3]
         arc = locus_arc(edge, locus, kind)
-        if arc is not None and locus[0] == "seg":
-            # a chord re-read against its conic: the only seg loci that carry
-            # one are arcfit's, so this arc is a stylized fold span (naive's
-            # fold_ells) -- protected from the orphan cull, chained into loops
+        if arc is not None and locus[0] == "seg" and kind != "sil":
+            # a chord re-read against its conic: arcfit's are stylized fold
+            # spans (naive's fold_ells) -- protected from the orphan cull,
+            # chained into loops. A fitted limb's ("sil") is an outline, and
+            # a loop of it bridged across a truncated zone cut 51283's fill.
             fold_idx.append(len(ops))
         ops += [arc] if arc is not None else _edge_ops(edge, kind)
     limbs = _withheld_limb_loci(out, right, up, fwd)
@@ -3591,6 +3617,12 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None, canvas_px=N
     for cand in _fit_arc_candidates(out.get("fit_arcs", ()), proj, 1.0 / s):
         seen.add(tuple(round(v, 4) for v in cand[:6]))
         ells.append(cand)
+    for r in out.get("fit_quadrics", ()):
+        cand = quadric.limb_candidate(r, *quadric.limb(r["fit"], fwd),
+                                      proj.to_px, 1.0 / s)
+        if cand is not None:
+            seen.add(tuple(round(v, 4) for v in cand[:6]))
+            ells.append(cand)
     for op in ops:
         if op[0] != "arc":
             continue

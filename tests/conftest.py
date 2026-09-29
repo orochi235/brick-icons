@@ -81,3 +81,41 @@ def disc_rgba():
     arr[mask, :3] = 110
     arr[mask, 3] = 255
     return Image.fromarray(arr, "RGBA")
+
+
+class StubSpot:
+    """The spot worker as the lab sees it, answering from a script instead
+    of through onto: `reply` is what a draw returns, `down` or `error` (with
+    `error_kind`) make it raise instead, and `gate` holds a draw until set."""
+
+    def __init__(self, reply=None, *, down=None, error=None,
+                 error_kind="SpotError", status=None, want="9.ccccccc",
+                 gate=None):
+        self.reply, self.down, self.error = reply, down, error
+        self.error_kind, self.want, self.gate = error_kind, want, gate
+        self._status = status or {"state": "up", "build": want, "want": want,
+                                  "detail": None}
+        self.calls = []
+
+    def expected(self):
+        return ("c" * 40, self.want)
+
+    def draw(self, request, commit):
+        from brick_icons.lab import spot
+        self.calls.append((request, commit))
+        if self.gate is not None:
+            self.gate.wait(5)
+        if self.down:
+            raise spot.SpotDown(self.down)
+        if self.error:
+            raise spot.SpotError(self.error, self.error_kind)
+        return self.reply
+
+    def status(self):
+        return self._status
+
+
+@pytest.fixture
+def stub_spot():
+    """The `StubSpot` class, to build one per test."""
+    return StubSpot

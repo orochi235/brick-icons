@@ -28,8 +28,8 @@ DEFAULTS = {
     "engine": "occt",        # occt | naive | cadquery (each needs its extra);
                              # occt needs the `[occt]` extra to draw at all
     "cel_levels": 4,         # bands for cel shading
-    "line_width": 2,         # outline edge stroke, output px
-    "silhouette_width": 2,   # smooth-silhouette stroke (cylinder limbs,
+    "line_width": 1.4,       # outline edge stroke, output px
+    "silhouette_width": 1.4, # smooth-silhouette stroke (cylinder limbs,
                              # folds), output px — match line_width so limb
                              # lines don't read heavier than the rim arcs
                              # and box edges they abut
@@ -58,6 +58,9 @@ DEFAULTS = {
     "opacity": 1.0,          # face-fill opacity in SVG (translucent bricks)
     "solid_deco": False,     # under opacity < 1, paint printing and stickers
                              # at full opacity; the body stays see-through
+    "deco_shade": "on",      # on | off -- printing takes its surface's
+                             # shading as a darkening layer (on), or paints
+                             # flat in its own color (off)
     "wireframe": False,      # outline strokes only, occlusion culling off
     "use_ldview": False,     # draw with the vendored LDView, not our engine
     "ldview_look": "color",  # color | gray | lines -- what LDView draws: the
@@ -71,7 +74,7 @@ DEFAULTS = {
     "weld_corners": False,   # broad junction weld: ink the notch at EVERY
                              # stroke T-graze, not just stub-bridged
                              # junctions (restyles stud/limb corners)
-    "part_label": False,     # stamp the part id in small print (test renders)
+    "part_label": False,     # caption review renders (brick_icons.caption)
     "debug_colors": False,   # False | "cycle" | "ramp" | "ramp=N" -- one
                              # color per drawn element, in emission order
     "fmt": "png",            # png | svg | both
@@ -118,6 +121,7 @@ class Config:
     svg_bg: str
     opacity: float
     solid_deco: bool
+    deco_shade: str
     wireframe: bool
     use_ldview: bool
     ldview_look: str
@@ -197,6 +201,7 @@ def load_config(toml_path=None, overrides=None, root="."):
         svg_bg=str(data["svg_bg"]),
         opacity=float(data["opacity"]),
         solid_deco=bool(data["solid_deco"]),
+        deco_shade=str(data["deco_shade"]),
         wireframe=bool(data["wireframe"]),
         use_ldview=bool(data["use_ldview"]),
         ldview_look=str(data["ldview_look"]),

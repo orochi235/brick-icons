@@ -4,7 +4,7 @@ import {
 } from '@lab/corpus/params';
 import { STATES, paramKeys } from '@lab/corpus/states';
 
-// The values every one of these fields replaced -- CELL/GAP in
+// The values every one of these fields replaced -- CELL/GAP in the retired
 // CorpusWall.tsx, the six-state palette in palette.ts/corpus.css, the border
 // and dim constants in paint.ts, DRAG_THRESHOLD_PX in Wall.tsx, the 1.5/0.67
 // hysteresis factors in levels.ts, and POLL_MS in useCells.ts. A panel that

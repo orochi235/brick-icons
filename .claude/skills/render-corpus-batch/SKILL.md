@@ -57,9 +57,9 @@ follows from the slot's own recorded seconds. It prints `ENGINE`, `SOURCE`,
 per-part timeout, `batch.RENDER_TIMEOUT_S` unless `--cap` says otherwise.
 **`EXTRA` is derived
 from `db._CANONICAL` through the CLI's own parser**, so it is the slot's
-canonical drawing and not one slot's flags spelled from memory: `occt` states
-no stroke width and inherits 2 from the config, where the census pass would
-default it to 0 and silently draw `silhouette-occt` instead.
+canonical drawing and not one slot's flags spelled from memory: leave the
+stroke widths out and the census pass defaults them to 0, silently drawing
+`silhouette-occt` instead.
 
 Never-tried parts come before previously-errored ones. A part that times out
 costs its whole cap and yields nothing, so a run cut short by its deadline
@@ -148,7 +148,7 @@ Then, with the four values step 2 printed (`CAP` is the `150` here):
       --each out/slot-occt/batches.txt --workers 10 --retries 1 \
       --env PATH=/Users/mike/.local/bin:/opt/homebrew/bin:/usr/bin:/bin \
       --env SOURCE=occt --env KEEP=out/slot-occt/renders \
-      --env EXTRA='--shade-style flat3 --line-width 2 --silhouette-width 2' \
+      --env EXTRA='--shade-style flat3 --line-width 1.4 --silhouette-width 1.4' \
       --out out/slot-occt --to out/slot-occt \
       <node> -- scripts/census-batch.sh occt 150 out/slot-occt {}
 
@@ -235,8 +235,7 @@ a refresh: on 2026-09-16 a 7,379-part occt re-render at a newer engine fetched
 every drawing home and left `renders` untouched, and nothing said so -- the
 watcher logged its passes, the tree filled up, and the slot's build stamps did
 not move. Add `--overwrite` at launch when the batch list came from parts that
-are already drawn, or file the parts as redraw requests and use
-`--overwrite-requested`.
+are already drawn.
 
 Started by hand -- a job someone else launched, or a stream restarted after a
 gap -- it is:

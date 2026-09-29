@@ -65,3 +65,34 @@ export interface JobState {
 }
 
 export type LabConfig = Record<string, unknown>;
+
+/** How a redraw ended. Every outcome is one of these in a 200 body; only an
+ *  ask the server refuses outright is an HTTP error. */
+export type RedrawState = 'stored' | 'unchanged' | 'none' | 'failed' | 'down';
+
+export interface RedrawAnswer {
+  state: RedrawState;
+  sha?: string;
+  secs?: number | null;
+  build?: string | null;
+  /** Why it failed, as a type name: `TimeoutError`, `RollFailed`, ... */
+  error?: string | null;
+  detail?: string | null;
+}
+
+/** The spot worker as the lab API sees it. `stale` is up but on another
+ *  build than origin/main, so the next redraw rolls it first. */
+export interface SpotStatus {
+  state: 'up' | 'stale' | 'down';
+  build: string | null;
+  want: string;
+  detail: string | null;
+}
+
+/** A redraw stored, published on `/api/events` once its tiles are baked. */
+export interface ChangedEvent {
+  part: string;
+  source: string;
+  sha: string;
+  build: string;
+}

@@ -24,6 +24,7 @@ import argparse
 import json
 import re
 import sys
+import time
 from pathlib import Path
 from unittest import mock
 
@@ -35,6 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from brick_icons import cli, colors, config, geom2d, hlr, unwrap  # noqa: E402
+from brick_icons.caption import Shot  # noqa: E402
 from brick_icons.lab import diff  # noqa: E402
 from _sheet import diff_panel, sheet  # noqa: E402
 
@@ -45,12 +47,15 @@ INK = diff.PANEL_THRESHOLD      # a channel this far off white is ink
 SHIFT_SEARCH = 6                # px each way when fitting an offset
 
 
-def draw(part: str, out_dir: Path) -> tuple[Path, Path, dict]:
-    """The two CLI drawings, in-process, and the occt one's camera."""
+def draw(part: str, out_dir: Path) -> tuple[Path, Path, dict, float]:
+    """The two CLI drawings, in-process, the occt one's camera, and the
+    seconds the occt one took."""
     cli.main([part, *DECAL_ARGS, "--out", str(out_dir)])
+    t0 = time.perf_counter()
     cli.main([part, *OCCT_ARGS, "--out", str(out_dir)])
+    secs = time.perf_counter() - t0
     fit = json.loads((out_dir / f"{part}.fit.json").read_text())
-    return out_dir / f"{part}.decal.svg", out_dir / f"{part}.svg", fit
+    return out_dir / f"{part}.decal.svg", out_dir / f"{part}.svg", fit, secs
 
 
 def sheet_panels(part: str, ldraw_dir: str, px: int):
@@ -208,7 +213,7 @@ def raster(svg_text: str, path: Path, width: int) -> Image.Image:
 def run_part(part: str, out: Path, cfg, zoom: int, i: int, n: int) -> Path:
     d = out / part
     d.mkdir(parents=True, exist_ok=True)
-    sheet_path, occt_path, fit = draw(part, d)
+    sheet_path, occt_path, fit, occt_secs = draw(part, d)
     panels, codes = sheet_panels(part, cfg.ldraw_dir, cfg.texture_px or 900)
     hexes = {"#" + colors.resolve(str(c), cfg.ldraw_dir)[0][2:].lower()
              for c in codes}
@@ -223,9 +228,13 @@ def run_part(part: str, out: Path, cfg, zoom: int, i: int, n: int) -> Path:
     occt = raster(occt_print_svg(occt_svg, hexes, fit), d / f"{part}.occt-print.svg", width)
     stroked = raster(occt_print_svg(occt_svg, hexes, fit, keep_stroke=True),
                      d / f"{part}.occt-print-stroked.svg", width)
-    smooth = raster(mapped_svg(panels, fit, cfg.ldraw_dir), d / f"{part}.mapped.svg", width)
-    chords = raster(mapped_svg(panels, fit, cfg.ldraw_dir, smooth=False),
-                    d / f"{part}.mapped-chords.svg", width)
+    mapped = {}
+    for label, smooth_d in (("smooth", True), ("chords", False)):
+        t0 = time.perf_counter()
+        svg = mapped_svg(panels, fit, cfg.ldraw_dir, smooth=smooth_d)
+        mapped[label] = (svg, time.perf_counter() - t0)
+    smooth = raster(mapped["smooth"][0], d / f"{part}.mapped.svg", width)
+    chords = raster(mapped["chords"][0], d / f"{part}.mapped-chords.svg", width)
 
     print(f"[{i}/{n}] {part}: {len(panels)} panel(s), print colors "
           f"{sorted(hexes)}, sheet paths {'match' if ok else 'DIFFER FROM'} the CLI's, "
@@ -243,7 +252,10 @@ def run_part(part: str, out: Path, cfg, zoom: int, i: int, n: int) -> Path:
                  f" | bbox scale ({g['bbox_scale_xy'][0]:.4f},{g['bbox_scale_xy'][1]:.4f})"
                  f" | best shift {g['shift_px']} xor {g['xor_px']} -> {g['xor_after_shift_px']}"
                  if "shift_px" in g else ""))
-        rows.append((f"{part}\n{label}", im, occt))
+        svg, secs = mapped[label]
+        rows.append((f"{part}\n{label}",
+                     Shot(im, part, len(svg.encode()), secs),
+                     Shot.of(occt, part, occt_path, occt_secs)))
     _p, comps, pixels = diff_panel(occt, stroked)
     print(f"    stroke alone (occt stripped vs as drawn): {comps} comp, {pixels} px")
     sheet_png = out / f"{part}.oracle.png"

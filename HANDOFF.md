@@ -1,13 +1,129 @@
-## 2026-09-28: lightbox render stats; one review test failing on main
+## 2026-09-29: the nine waiting branches merged to main (f24c1fe)
+
+readme-cli, part-years, render-caption, review-orphans, line-weight-1.2,
+edge-stud-band, thin-wall-shade, deco-shading and sphere-shading, merged in
+that order via branch `merge-0929` (deleted, as are the nine branches and
+their worktrees). Post-merge fleet suite: 1831 passed, 2 failed (4070 and the
+known sticker-on-slope test, both below).
+
+Conflicts, resolved: HANDOFF and defects.toml kept both sides. db.record_render
+keeps review-orphans' same-file early return, and its test no longer checks a
+render request (spot rendering removed `pending`). shade.fill_ops takes both
+`sil_walls` and `deco_shade`; a thin wall is painted before the decoration
+branch, and the sphere flag moved into `_gradient`. `Flat3Style.top` is kept
+beside the tone factors, since the thin-wall rule reads it. `_sheet.sheet`
+takes caption Shots and the extra reference panel.
+
+Golden gate for the shade group, against the line-weight merge 9775e67
+(predicted 3649, 6589, 3941p01, 3942bp01, 3673, 3040bp08, 4740p03, 3960):
+naive passes, all 7 movers predicted. occt verdict `review`: 7 predicted
+movers plus **32062, unpredicted** (1 region, 17 px), sheet on the wall. The
+goldens are NOT re-frozen yet; that waits on a verdict for 32062 and on the
+edge-stud-band verdicts below.
+
+Still open:
+- `test_a_fill_boundary_carries_no_sampled_boundary[4070]` fails at 1.4 px.
+  `scripts/probe-sampled-runs.py` measured it on studio: widths 2.0 and 1.0 are clean, 1.4 has four runs of
+  22 segments of 0.03-0.04 px, 0.78 px long in all -- about 64 deg of a circle
+  of radius 0.7 px, half the stroke, so a buffered round join reaching the
+  fill. Raising the threshold would pass exactly what the test is for; the
+  call is Mike's.
+- edge-stud-band's unpredicted goldens still want a verdict (3649 better,
+  3941p01 slightly worse, 6589 unclear, 3942bp01 neutral; naive 3942bp01,
+  3941p01, 3673).
+- part-years: whether `BORROWED_YEAR_ROUTES` should hide design-route years
+  only for printed parts (137 of 728 design matches are printed). After the
+  merge, `.venv/bin/python scripts/fetch-part-years.py`.
+- render-caption: about 14 one-off A/B scripts still post bare panels.
+- Known failure: `test_a_sticker_is_not_clipped_by_the_slope_it_is_stuck_to`.
+- Once the verdicts are in: re-freeze the goldens, then ONE combined redraw
+  of the occt slots, re-priced from post-merge timings.
+
+**Parked: freeform tone bands** (branch `sphere-tone-bands`, 7f73eae, off by
+default via `shade.FREEFORM_BANDS`). Smooth-region facets that no quadric
+fits are shaded from averaged vertex normals cut into 8 bands. Mike judged the
+trial sheet an improvement but too hacky to merge; do not merge it as is.
+
+Decisions made in conversation, not recorded in code:
+- The per-part render cap is 150s. Printed or large baseplates time out at it
+  in every occt slot (2359p03, 2552p01–p06, 309p02, 3811p02, 3811p05,
+  4186p01, 51542dq0, 6024p02, 6136p01); four of them drew under the old 300s
+  in 121–231s. Undecided: raise the cap for these slots, or profile why
+  instancing doesn't speed printed baseplates.
+- /corpus is retired; /wall is the wall.
+- The reference slots are orthographic (-FOV=0.1) and stay out of the review
+  queue.
+- Pezlie is taken from npm (^0.4.0); weasel is pinned exactly at 1.7.0.
+- Any repeated, loaded or long run goes to the fleet, never this Mac: that
+  includes subagents' verification (briefs must name the node).
+
+Also open: `3811p04-print-boundary-off-by-seam`,
+`3811-front-wall-takes-corner-gradient`,
+`20401-limb-barbs-at-region-join`, `10p01-dot-stud-black-ring-instancing-off`.
+
+## 2026-09-29: spot rendering done end to end
+
+The lab's **Redraw** draws on a warm worker on the fleet
+(`brick_icons.spot_worker`, onto service `brick-spot-render`, on studio).
+Design: `docs/superpowers/specs/2026-09-29-spot-render-design.md`; launch
+recipe: DEVELOPING.md, "Spot rendering". Every slot has its sheet masters.
+Checked 2026-09-29 headless on `/wall`: redrawing 3001 occt (drawn 09-26)
+swapped the lightbox image 4 s after the click and fetched the new 8 and
+32 px tiles, with no reload, and patched `sheet-32` and its master; the
+labeled sheet is on the wall. 612p01 came back `unchanged`, already current.
+
+## 2026-09-28: `/corpus` retired; `/wall` is the wall now
+
+`76efbc6` deleted the lab's `/corpus` page (`CorpusWall`) and its
+exclusive modules -- `/wall` (pezlie's `WallView`) replaced it, and commit
+`897e91b` had already taken `/corpus` off the lab menu. Everything else in
+`lab/src/corpus/` (paint, types, criteria, facts, tint, wallHash, draw2d,
+the Lightbox, PartCard, FilterBar, and the rest) is shared code `/wall`
+still uses and stays. The spot-render plan's Task 23, which would have
+made `/corpus` refetch its sheets after a redraw, is dropped for the same
+reason.
+
+## 2026-09-28: review renders carry a caption; a dozen one-off scripts do not yet
+
+`brick_icons/caption.py` stamps `part · size · seconds` in a strip below a
+review render. `--part-label` (implied by `--review`), `scripts/_sheet.py` and
+its callers, `defect-sheet.py`, `render-tree-diff.py` and `compare-engines.py`
+use it; production output never does. **Owed:** the one-off A/B and probe
+scripts that compose sheets with their own drawing code still post bare
+panels -- `engine-overlay`, `overlay-reference`, `dome-projection-options`,
+`proof-decals`, `head-ab`, `snap-render-ab`, `refit-ink-ab`,
+`thin-contour-pair`, `thin-contour-drift`, `show-decal-shards`,
+`demo-sphere-unwrap`, `unwrap-decal-mesh`, `probe-drawn-classes`,
+`probe-position-sensitivity`. Each needs its renders timed and its panels
+passed through `caption.pad` (or moved onto `_sheet.sheet` with
+`caption.Shot`s); none could be run to check the change under the session's
+CPU limit.
+
+## 2026-09-28: default stroke 1.4 px, occt-svelte 1.0 px (branch `line-weight-1.2`)
+
+Decided 2026-09-28: `--line-width` and `--silhouette-width` default to 1.4
+(was 2), and `occt-svelte` draws at 1.0 (was 1.5). Every drawing slot now
+states its widths in `db._CANONICAL`, because the config key and the lab
+cache key are the argv: `occt`, `translucent-occt` and `white-occt` at 1.4;
+the retired `naive`, `translucent-naive` and `white-naive` pinned at 2;
+silhouette slots stay at 0. `record_render` now replaces a part's row in a
+slot whatever key it was filed under, so a redraw after a key change
+displaces the old row and lands on `/review` instead of sitting beside it.
+
+Goldens re-frozen: all 52 moved under both naive and occt, as predicted
+(every golden part draws above 1.4 px per LDU, so none sat on the 0.75 floor).
+
+**Owed, not launched:** redraws of `occt`, `white-occt` and `occt-svelte`.
+`slot-coverage.py` lists only a slot's gap, so the list for the two drawn
+slots has to come from their drawn parts, launched with `--overwrite`.
+
+## 2026-09-28: lightbox render stats
 
 `measurements` now carries `bytes`, `objects` and `drawn_at` per drawing,
-filled at ingest and backfilled by `scripts/backfill-render-stats.py`; the
-lightbox shows them and charts the shown slot's history.
-
-**Failing on main, cause not looked into:**
-`tests/test_lab_review.py::test_the_linked_view_screens_out_a_redraw_that_changed_nothing`
--- `POST /api/review/measure` measures 2 entries where the test expects 3.
-It fails the same at e3f836b without this branch.
+filled at ingest; the lightbox shows them and charts the shown slot's history.
+`scripts/backfill-render-stats.py` has been run against corpus.db: 356,467 of
+426,418 clean rows filled. The rest had their drawing redrawn by a later run
+into the same tree, and stay null by design.
 
 ## 2026-09-28: stud instancing is the default (`--stud-instancing all`)
 
@@ -303,7 +419,7 @@ Build the list at launch, not before (occt slot only):
     scripts/run-slot.sh --overwrite --detach --timeout 8h --in brick-icons \
       --task slot-occt-<date> --each $d/batches.txt --workers 10 --retries 1 \
       --with studio,keiei --env PATH=$P --env SOURCE=occt --env KEEP=$d/renders \
-      --env EXTRA='--shade-style flat3 --line-width 2 --silhouette-width 2' \
+      --env EXTRA='--shade-style flat3 --line-width 1.4 --silhouette-width 1.4' \
       --out $d --to $d msb-uai -- scripts/census-batch.sh occt 150 $d {}
 
 Push first -- run-slot.sh launches only a pushed HEAD. Copying the list before
@@ -6077,6 +6193,12 @@ A hand edit between the markers is overwritten — edit the store instead.
 
 ## Traps
 
+- **`tests/test_lab_tally.py` reads git**, so it fails in any tree that is not
+  a real repository: a `git archive` extraction scores 5 failures. Never gate
+  on it from a materialized tree.
+- **`tests/goldens/part-years.csv` is not reproducible**: a tie on the `design`
+  route flipped row `6567` between runs of `scripts/fetch-part-years.py`
+  (seen 2026-09-15, not rechecked since).
 - **A dome's highlight comes from the light, not from a fit.** Two ways of
   placing it were measured against LDView on `4740` and are worse: the
   brightest SAMPLE's own position puts it at radius 0.37 against a true 1.18,

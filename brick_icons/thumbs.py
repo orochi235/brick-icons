@@ -5,10 +5,13 @@ landing later writes one cell rather than renumbering the sheet.
 """
 from __future__ import annotations
 
+import fcntl
 import json
 import math
 import os
 import subprocess
+import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -146,6 +149,13 @@ def _drawn(part_id: str, render: Path, out: Path) -> Image.Image:
 THUMB_EXT = "webp"
 THUMB_SAVE = {"format": "WEBP", "quality": 90, "method": 4}
 
+#: The lossless copy of each sheet that a patch edits. Re-encoding the WebP
+#: itself is generational: one pass over the occt slot's sheet-32 changed 8.7M
+#: of its 32M pixels. One per sheet, overwritten in place.
+MASTER = "sheet-{level}.master.png"
+MASTER_SAVE = {"format": "PNG", "compress_level": 1}
+_LOCK = ".sheets.lock"
+
 
 def bake_part(part_id: str, svg: Path | str, out: Path | str,
               sha: str) -> list[int]:
@@ -167,7 +177,6 @@ def bake_part(part_id: str, svg: Path | str, out: Path | str,
         return []
     out.mkdir(parents=True, exist_ok=True)
     _write_tiles(out, part_id, _drawn(part_id, svg, out))
-    _write_baked(out, {**shas, part_id: sha})
     mask_shas = baked_shas(masks)
     if mask_text is not None:
         masks.mkdir(parents=True, exist_ok=True)
@@ -177,12 +186,23 @@ def bake_part(part_id: str, svg: Path | str, out: Path | str,
             _write_tiles(masks, part_id, _rasterized(part_id, tmp, masks))
         finally:
             tmp.unlink(missing_ok=True)
-        _write_baked(masks, {**mask_shas, part_id: sha})
     elif part_id in mask_shas:
         # Redrawn without marks: its old mask would describe another drawing.
         for level in LEVELS:
             (masks / str(level) / f"{part_id}.{THUMB_EXT}").unlink(missing_ok=True)
-        _write_baked(masks, {k: v for k, v in mask_shas.items() if k != part_id})
+    # A lab redraw and bake-thumbs.py's watcher can land on the same slot at
+    # once: baked.json is the only state two bakes of different parts share,
+    # so its read-modify-write is locked and re-read fresh here rather than
+    # merged into the snapshot taken before this part's tiles were written.
+    with _sheets_locked(out):
+        _write_baked(out, {**baked_shas(out), part_id: sha})
+    if mask_text is not None:
+        with _sheets_locked(masks):
+            _write_baked(masks, {**baked_shas(masks), part_id: sha})
+    elif part_id in mask_shas:
+        with _sheets_locked(masks):
+            _write_baked(masks, {k: v for k, v in baked_shas(masks).items()
+                                 if k != part_id})
     return list(LEVELS)
 
 
@@ -195,7 +215,73 @@ def _write_tiles(out: Path, part_id: str, drawn: Image.Image) -> None:
     for level in LEVELS:
         path = out / str(level) / f"{part_id}.{THUMB_EXT}"
         path.parent.mkdir(parents=True, exist_ok=True)
-        _square(drawn, level).save(path, **THUMB_SAVE)
+        _save_atomic(_square(drawn, level), path, **THUMB_SAVE)
+
+
+@contextmanager
+def _sheets_locked(out: Path):
+    """One writer of a slot's sheets at a time: a bake composing while a
+    redraw patches would otherwise publish a sheet without the patch."""
+    out.mkdir(parents=True, exist_ok=True)
+    with open(out / _LOCK, "w") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
+
+
+def _save_atomic(img: Image.Image, path: Path, **save) -> None:
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    img.save(tmp, **save)
+    os.replace(tmp, path)
+
+
+def _next_version(previous) -> str:
+    """Later than the last one, and never a number a browser may have cached
+    from a slot since wiped: seconds since the epoch, or one past the last."""
+    try:
+        last = int(previous)
+    except (TypeError, ValueError):
+        last = 0
+    return str(max(last + 1, int(time.time())))
+
+
+def _tile(out: Path, level: int, part_id: str) -> Image.Image | None:
+    path = out / str(level) / f"{part_id}.{THUMB_EXT}"
+    if not path.is_file():
+        return None
+    with Image.open(path) as img:
+        return img.convert("RGBA")
+
+
+def _paste_cell(sheet: Image.Image, g: Geometry, index: int,
+                cell: Image.Image | None) -> None:
+    """The cell and its gutter, drawn from `cell`, or cleared without one."""
+    x0, y0, x1, y1 = g.cell_box(index)
+    if cell is None:
+        sheet.paste((0, 0, 0, 0), (x0 - g.gutter, y0 - g.gutter,
+                                   x1 + g.gutter, y1 + g.gutter))
+        return
+    sheet.paste(cell, (x0, y0))
+    if g.gutter:
+        _replicate_edges(sheet, cell, x0, y0, g.gutter)
+
+
+def _publish(out: Path, level: int, sheet: Image.Image, manifest: dict) -> str:
+    """Master, WebP, then manifest, each whole or not at all. The manifest
+    goes last: it names the version a reader fetches the image under."""
+    path = out / f"sheet-{level}.json"
+    version = _next_version(_read_json(path).get("version"))
+    _save_atomic(sheet, out / MASTER.format(level=level), **MASTER_SAVE)
+    _save_atomic(sheet, out / f"sheet-{level}.{THUMB_EXT}", **THUMB_SAVE)
+    _write_json(path, {**manifest, "version": version})
+    return version
+
+
+def has_sheets(out: Path | str) -> bool:
+    return all((Path(out) / f"sheet-{level}.json").is_file()
+               for level in SHEET_LEVELS)
 
 
 def compose(out: Path | str, order: list[str]) -> list[Path]:
@@ -205,30 +291,64 @@ def compose(out: Path | str, order: list[str]) -> list[Path]:
     the corpus, so a part gaining a render later fills the cell it already had.
     """
     out = Path(out)
-    shas = baked_shas(out)
     written = []
-    for level in SHEET_LEVELS:
-        g = geometry(len(order), level)
-        sheet = Image.new("RGBA", (g.size, g.size), (0, 0, 0, 0))
-        for index, part_id in enumerate(order):
-            tile = out / str(level) / f"{part_id}.{THUMB_EXT}"
-            if not tile.is_file():
-                continue
-            with Image.open(tile) as img:
-                cell = img.convert("RGBA")
-            x0, y0, _, _ = g.cell_box(index)
-            sheet.paste(cell, (x0, y0))
-            if g.gutter:
-                _replicate_edges(sheet, cell, x0, y0, g.gutter)
-        path = out / f"sheet-{level}.{THUMB_EXT}"
-        sheet.save(path, **THUMB_SAVE)
-        (out / f"sheet-{level}.json").write_text(json.dumps({
-            "level": level, "gutter": g.gutter, "pitch": g.pitch,
-            "cols": g.cols, "rows": g.rows, "count": len(order),
-            "size": g.size, "baked": shas,
-        }, sort_keys=True))
-        written.append(path)
+    with _sheets_locked(out):
+        shas = baked_shas(out)
+        for level in SHEET_LEVELS:
+            g = geometry(len(order), level)
+            sheet = Image.new("RGBA", (g.size, g.size), (0, 0, 0, 0))
+            for index, part_id in enumerate(order):
+                cell = _tile(out, level, part_id)
+                if cell is not None:
+                    _paste_cell(sheet, g, index, cell)
+            _publish(out, level, sheet, {
+                "level": level, "gutter": g.gutter, "pitch": g.pitch,
+                "cols": g.cols, "rows": g.rows, "count": len(order),
+                "size": g.size, "baked": shas})
+            written.append(out / f"sheet-{level}.{THUMB_EXT}")
     return written
+
+
+def patch_cell(out: Path | str, part_id: str, index: int,
+               count: int) -> dict[int, str]:
+    """Redraw one part's cell on every sheet from its baked tiles, as
+    `compose` would draw it, and nothing else. Returns each level's new
+    version.
+
+    `count` is the corpus size now. A sheet baked for another count has every
+    index after the change shifted, so it is refused rather than patched.
+    """
+    out = Path(out)
+    versions = {}
+    with _sheets_locked(out):
+        # Every level is checked before any is touched: catching a mismatch
+        # on a later level after an earlier one has already published would
+        # leave "refused" meaning some levels changed and some didn't.
+        manifests = {}
+        for level in SHEET_LEVELS:
+            manifest = _read_json(out / f"sheet-{level}.json")
+            if manifest.get("count") != count:
+                raise ValueError(
+                    f"{out}/sheet-{level} holds {manifest.get('count')} cells "
+                    f"and the corpus {count}; rebake the slot")
+            master = out / MASTER.format(level=level)
+            if not master.is_file():
+                raise FileNotFoundError(f"{master} is missing; rebake the slot")
+            manifests[level] = manifest
+        shas = baked_shas(out)
+        for level in SHEET_LEVELS:
+            manifest = manifests[level]
+            with Image.open(out / MASTER.format(level=level)) as img:
+                sheet = img.convert("RGBA")
+            _paste_cell(sheet, geometry(count, level), index,
+                        _tile(out, level, part_id))
+            baked = {k: v for k, v in manifest.get("baked", {}).items()
+                     if k != part_id}
+            if part_id in shas:
+                baked[part_id] = shas[part_id]
+            versions[level] = _publish(out, level, sheet,
+                                       {**manifest, "baked": baked})
+    return versions
 
 
 def _replicate_edges(sheet: Image.Image, cell: Image.Image,

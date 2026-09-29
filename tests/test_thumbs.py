@@ -1,5 +1,6 @@
 """Thumbnail baking: geometry, freshness, sheets."""
 import json
+import os
 import re
 from pathlib import Path
 
@@ -213,6 +214,36 @@ def test_a_sidecar_is_written_whole_or_not_at_all(tmp_path):
     assert not list(tmp_path.glob("*.tmp"))
 
 
+def test_a_tile_write_goes_through_a_temp_file_then_replace(tmp_path, monkeypatch):
+    """A background patch_cell can read a tile while bake_part writes it; the
+    write must land as temp-file-then-replace, like every other sheet write
+    in this module, or that reader can see a half-written file."""
+    svg = tmp_path / "3001.svg"
+    svg.write_text(SVG)
+    out = tmp_path / "thumbs"
+
+    replaced = []
+    real_replace = os.replace
+
+    def spy(src, dst):
+        assert Path(src).name.endswith(".tmp"), src
+        assert Path(src).is_file()
+        replaced.append(Path(dst))
+        real_replace(src, dst)
+
+    monkeypatch.setattr(thumbs.os, "replace", spy)
+    thumbs.bake_part("3001", svg, out, sha="abc123")
+
+    tile_paths = {out / str(level) / f"3001.{thumbs.THUMB_EXT}"
+                  for level in thumbs.LEVELS}
+    assert tile_paths <= set(replaced)
+    for level in thumbs.LEVELS:
+        assert not list((out / str(level)).glob(".*.tmp")), level
+    with Image.open(out / "128" / f"3001.{thumbs.THUMB_EXT}") as img:
+        assert img.size == (128, 128)
+        assert img.convert("RGBA").getpixel((64, 64))[3] == 255  # ink survives
+
+
 def test_a_format_change_rebakes_rather_than_composing_missing_tiles(tmp_path,
                                                                     monkeypatch):
     """An unchanged sha must not skip a part whose tiles are in the old format.
@@ -282,3 +313,150 @@ def test_a_redraw_without_marks_drops_the_old_mask(tmp_path):
     masks = out / thumbs.MASK_DIR
     assert thumbs.baked_shas(masks) == {}
     assert not (masks / "128" / f"3001p01.{thumbs.THUMB_EXT}").exists()
+
+
+import shutil
+import threading
+import time
+
+import numpy as np
+
+DISC = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 170">'
+        '<circle cx="128" cy="85" r="60" fill="black"/></svg>')
+ORDER = ["a", "b", "c", "d", "e"]
+
+
+def _baked_slot(tmp_path):
+    out = tmp_path / "slot"
+    svg = tmp_path / "rect.svg"
+    svg.write_text(SVG)
+    for pid in ORDER:
+        thumbs.bake_part(pid, svg, out, sha=f"old-{pid}")
+    thumbs.compose(out, ORDER)
+    return out
+
+
+def _master(out, level):
+    with Image.open(out / f"sheet-{level}.master.png") as img:
+        return np.asarray(img.convert("RGBA"))
+
+
+def _redraw_c(tmp_path, out):
+    disc = tmp_path / "disc.svg"
+    disc.write_text(DISC)
+    thumbs.bake_part("c", disc, out, sha="new-c")
+
+
+def test_a_patched_cell_is_what_a_full_compose_would_draw(tmp_path):
+    out = _baked_slot(tmp_path)
+    before = {lvl: _master(out, lvl) for lvl in thumbs.SHEET_LEVELS}
+    _redraw_c(tmp_path, out)
+
+    thumbs.patch_cell(out, "c", ORDER.index("c"), len(ORDER))
+
+    oracle = tmp_path / "oracle"
+    shutil.copytree(out, oracle)
+    thumbs.compose(oracle, ORDER)
+    for lvl in thumbs.SHEET_LEVELS:
+        after = _master(out, lvl)
+        assert np.array_equal(after, _master(oracle, lvl)), lvl
+        g = thumbs.geometry(len(ORDER), lvl)
+        x0, y0, x1, y1 = g.cell_box(ORDER.index("c"))
+        ys, xs = np.nonzero((after != before[lvl]).any(axis=2))
+        assert len(xs) > 0, lvl
+        assert xs.min() >= x0 - g.gutter and xs.max() < x1 + g.gutter, lvl
+        assert ys.min() >= y0 - g.gutter and ys.max() < y1 + g.gutter, lvl
+
+
+def test_a_patch_records_the_new_sha_and_a_new_version(tmp_path):
+    out = _baked_slot(tmp_path)
+    was = json.loads((out / "sheet-32.json").read_text())
+    _redraw_c(tmp_path, out)
+    versions = thumbs.patch_cell(out, "c", 2, len(ORDER))
+    now = json.loads((out / "sheet-32.json").read_text())
+    assert now["baked"]["c"] == "new-c"
+    assert now["baked"]["a"] == "old-a"
+    assert int(now["version"]) > int(was["version"])
+    assert versions == {8: json.loads((out / "sheet-8.json").read_text())["version"],
+                        32: now["version"]}
+
+
+def test_two_writes_in_one_second_get_two_versions(tmp_path):
+    out = _baked_slot(tmp_path)
+    first = json.loads((out / "sheet-8.json").read_text())["version"]
+    thumbs.compose(out, ORDER)
+    second = json.loads((out / "sheet-8.json").read_text())["version"]
+    assert int(second) > int(first)
+
+
+def test_a_fresh_slot_starts_its_version_at_the_clock(tmp_path):
+    before = int(time.time())
+    out = _baked_slot(tmp_path)
+    assert int(json.loads((out / "sheet-8.json").read_text())["version"]) >= before
+
+
+def test_a_patch_refuses_a_sheet_baked_for_another_part_count(tmp_path):
+    out = _baked_slot(tmp_path)
+    with pytest.raises(ValueError, match="rebake"):
+        thumbs.patch_cell(out, "c", 2, len(ORDER) + 1)
+
+
+def test_a_patch_refuses_a_slot_with_no_master(tmp_path):
+    out = _baked_slot(tmp_path)
+    (out / "sheet-32.master.png").unlink()
+    with pytest.raises(FileNotFoundError, match="rebake"):
+        thumbs.patch_cell(out, "c", 2, len(ORDER))
+
+
+def test_a_patch_checks_every_level_before_patching_any(tmp_path):
+    out = _baked_slot(tmp_path)
+    manifest = json.loads((out / "sheet-32.json").read_text())
+    manifest["count"] = manifest["count"] + 1
+    (out / "sheet-32.json").write_text(json.dumps(manifest))
+    before_master = (out / "sheet-8.master.png").read_bytes()
+    before_webp = (out / f"sheet-8.{thumbs.THUMB_EXT}").read_bytes()
+    before_version = json.loads((out / "sheet-8.json").read_text())["version"]
+    _redraw_c(tmp_path, out)
+
+    with pytest.raises(ValueError, match="rebake"):
+        thumbs.patch_cell(out, "c", 2, len(ORDER))
+
+    assert (out / "sheet-8.master.png").read_bytes() == before_master
+    assert (out / f"sheet-8.{thumbs.THUMB_EXT}").read_bytes() == before_webp
+    assert json.loads((out / "sheet-8.json").read_text())["version"] == before_version
+
+
+def test_a_cell_with_no_tile_is_cleared(tmp_path):
+    out = _baked_slot(tmp_path)
+    for lvl in thumbs.LEVELS:
+        (out / str(lvl) / f"c.{thumbs.THUMB_EXT}").unlink()
+    thumbs.patch_cell(out, "c", 2, len(ORDER))
+    g = thumbs.geometry(len(ORDER), 32)
+    x0, y0, x1, y1 = g.cell_box(2)
+    assert not _master(out, 32)[y0:y1, x0:x1].any()
+
+
+def test_has_sheets_says_whether_a_slot_was_composed(tmp_path):
+    assert not thumbs.has_sheets(tmp_path / "slot")
+    assert thumbs.has_sheets(_baked_slot(tmp_path))
+
+
+def test_two_interleaved_bakes_keep_both_entries(tmp_path, slow_counted):
+    # A lab redraw and the watcher's bake-thumbs.py are separate processes on
+    # the same slot; slowing tile-writing forces both to read baked.json
+    # before either has written its own entry.
+    svg = tmp_path / "rect.svg"
+    svg.write_text(SVG)
+    out = tmp_path / "slot"
+    slow_counted(thumbs, "_write_tiles")
+    gate = threading.Barrier(2)
+
+    def one(part_id):
+        gate.wait()
+        thumbs.bake_part(part_id, svg, out, sha=f"sha-{part_id}")
+    threads = [threading.Thread(target=one, args=(p,)) for p in ("a", "b")]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert thumbs.baked_shas(out) == {"a": "sha-a", "b": "sha-b"}

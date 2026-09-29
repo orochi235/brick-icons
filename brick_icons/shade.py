@@ -9,7 +9,7 @@ from PIL import Image, ImageDraw
 from scipy import ndimage
 
 from . import timing
-from . import colors, geom2d, primitives, process, unwrap
+from . import colors, geom2d, primitives, process, quadric, unwrap
 
 
 def faces_from_analytic(analytic, proj):
@@ -39,31 +39,68 @@ class Flat3Style(ShadingStyle):
     ramp via `ramp`. `light` is a VIEW-space unit vector (see light_vector);
     the default is upper-left, toward the viewer. The flat side tones are
     stylized constants — the light picks WHICH side is the lit one and
-    drives the curved ramps; it does not re-derive the palette."""
+    drives the curved ramps; it does not re-derive the palette.
+
+    Every tone is the part color times a factor; `relief` exposes the
+    factors themselves, which is how decoration shades (see _deco_shade)."""
+    TOP, BRIGHT, DARK = 1.30, 0.85, 0.60
+
     def __init__(self, part_color=(157, 157, 157), light=None):
         self.part_color = tuple(part_color)
-        self.top = _hex([c * 1.30 for c in part_color])
-        bright = _hex([c * 0.85 for c in part_color])
-        dark = _hex([c * 0.60 for c in part_color])
         if light is None:
             light = np.array([-0.5, 0.6, -0.62])
         L = np.asarray(light, float); self.light = L / np.linalg.norm(L)
+        self._tones = {k: _hex([c * k for c in part_color])
+                       for k in (self.TOP, self.BRIGHT, self.DARK)}
+        self.top = self._tones[self.TOP]
+
+    def tone_k(self, nv):
+        """The factor on the part color for a flat face with view normal nv."""
+        if nv[1] > 0.5:
+            return self.TOP
         lit_left = self.light[0] <= 0
-        self.left = bright if lit_left else dark
-        self.right = dark if lit_left else bright
+        return self.BRIGHT if (nv[0] < 0) == lit_left else self.DARK
+
+    def ramp_k(self, b):
+        """The factor for a raw Lambert brightness (n . light, clamped)."""
+        return 0.55 + 0.85 * float(b)
 
     def tone(self, nv):
-        if nv[1] > 0.5:
-            return self.top
-        return self.left if nv[0] < 0 else self.right
+        return self._tones[self.tone_k(nv)]
 
     def ramp(self, nv):
-        """Continuous grey for a curved-surface normal (gradient stops)."""
+        """Continuous gray for a curved-surface normal (gradient stops)."""
         return self.ramp_b(max(0.0, float(np.dot(np.asarray(nv, float), self.light))))
 
     def ramp_b(self, b):
-        """Grey for a raw Lambert brightness (n . light, already clamped)."""
-        return _hex([c * (0.55 + 0.85 * float(b)) for c in self.part_color])
+        """Gray for a raw Lambert brightness (n . light, already clamped)."""
+        return _hex([c * self.ramp_k(b) for c in self.part_color])
+
+    def relief(self):
+        return Relief(self)
+
+
+class Relief:
+    """A style's shading with the part color taken out: the same tone, ramp
+    and ramp_b decisions, answering each with how much darker than a top face
+    the surface is -- 1.0 on a top face, less on a side or a shaded curve.
+
+    Relative to the top because printing is authored as it looks lit from
+    above: a print on a top face keeps its color exactly, and one on a wall
+    darkens as the wall does. Curves brighter than a top clamp to 1, since
+    darkening is all a translucent black layer can do to a print's color."""
+    def __init__(self, style):
+        self._style = style
+        self.light = style.light
+
+    def tone(self, nv):
+        return min(1.0, self._style.tone_k(nv) / self._style.TOP)
+
+    def ramp(self, nv):
+        return self.ramp_b(max(0.0, float(np.dot(np.asarray(nv, float), self.light))))
+
+    def ramp_b(self, b):
+        return min(1.0, self._style.ramp_k(b) / self._style.TOP)
 
 
 def _plane_depth_fn(f):
@@ -104,6 +141,9 @@ def _plane_fn(a, b, c):
 ORDER_PLANE_SKIP = True
 WITNESS_DT = True
 WITNESS_DISTANCE_REJECT = True
+#: Check the rastered witness against the exact polygons, and fall back to
+#: the exact overlap when it misses. This one does change drawings.
+WITNESS_EXACT = True
 
 
 def _overlap_witness(pa, pb, ha=(), hb=(), grid=48):
@@ -164,7 +204,41 @@ def _overlap_witness(pa, pb, ha=(), hb=(), grid=48):
             m = er
     ys, xs = np.nonzero(m)
     j = len(xs) // 2
-    return (x0 + xs[j] / sx, y0 + ys[j] / sy)
+    w = (x0 + xs[j] / sx, y0 + ys[j] / sy)
+    if not WITNESS_EXACT or (_inside(pa, ha, *w) and _inside(pb, hb, *w)):
+        return w
+    # The grid is scaled to the bbox, so a DIAGONAL sliver thinner than a
+    # cell rasterizes off itself: 30225bp1's back wall, 0.84 px of a 120 px
+    # edge, got a witness above the wall where its plane runs in front of the
+    # top face, and painted over it as a gray band. With no exact overlap the
+    # pair only abuts, and the rastered point on the shared edge stays: it is
+    # a coplanar tie that orders print after the surface beside it.
+    ov = geom2d.to_geom(pa, ha).intersection(geom2d.to_geom(pb, hb))
+    ov = geom2d._only_area(ov)
+    if ov.is_empty:
+        return w
+    if ov.geom_type == "MultiPolygon":
+        ov = max(ov.geoms, key=lambda g: g.area)
+    from shapely.ops import polylabel
+    p = polylabel(ov, tolerance=max(math.sqrt(ov.area) * 1e-3, 1e-6))
+    return (p.x, p.y)
+
+
+def _inside(ring, holes, x, y):
+    """Even-odd point test against `ring` minus `holes` (rings of under three
+    points bound nothing, as in _overlap_witness's raster)."""
+    n = 0
+    for r in (ring, *holes):
+        r = np.asarray(r, float)
+        if len(r) < 3:
+            continue
+        xa, ya = r[:, 0], r[:, 1]
+        xb, yb = np.roll(xa, -1), np.roll(ya, -1)
+        cross = (ya > y) != (yb > y)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            xi = xa + (y - ya) * (xb - xa) / (yb - ya)
+        n += int(np.count_nonzero(cross & (x < xi)))
+    return n % 2 == 1
 
 
 def _stall_release(remaining, succ, faces, tied=None):
@@ -461,6 +535,13 @@ def _radial_ts(samples, style):
     else:
         b = np.zeros(len(pts))
         f = np.zeros(2)
+    return _focal_ts(pts, f), b, f
+
+
+def _focal_ts(pts, f):
+    """The offset SVG gives each unit-disc point under a radial gradient
+    focused at `f`: its distance from f over f's distance to the unit circle
+    along the same ray."""
     d = pts - f
     a = np.einsum("ij,ij->i", d, d)
     b2 = 2.0 * (d @ f)
@@ -468,8 +549,7 @@ def _radial_ts(samples, style):
     disc = np.maximum(b2 * b2 - 4 * a * c, 0.0)
     with np.errstate(divide="ignore", invalid="ignore"):
         s = np.where(a > 1e-12, (-b2 + np.sqrt(disc)) / (2 * a), np.inf)
-        ts = np.clip(np.where(s > 1e-9, 1.0 / s, 0.0), 0.0, 1.0)
-    return ts, b, f
+        return np.clip(np.where(s > 1e-9, 1.0 / s, 0.0), 0.0, 1.0)
 
 
 def radial_misfit(samples, style, nbins=8):
@@ -574,6 +654,8 @@ def _band_misfit_radials(faces, style):
             groups[f["group"]].append(f)
     Lv = np.asarray(L, float)
     for key, members in groups.items():
+        if any(f.get("grad_fit") for f in members):
+            continue                     # a fitted quadric is not freeform
         samples = members[0]["grad_samples"]
         if len(samples) < TONE_MIN_SAMPLES:
             continue
@@ -591,7 +673,47 @@ def _band_misfit_radials(faces, style):
             f.pop("grad_samples", None)
 
 
-def _radial_focal_stops(samples, style, nbins=8, exact=False):
+#: Stops a fitted sphere's ramp carries: its tone is computed, not binned,
+#: so more stops only add rings.
+SPHERE_STOPS = 6
+
+
+def _sphere_stops(samples, style, n=SPHERE_STOPS, concave=False):
+    """Focal point and stops for a SPHERE's disc, from the sphere itself.
+
+    In the disc's unit coordinates (y down) the surface point at (u, v) has
+    view normal (u, -v, -sqrt(1 - u^2 - v^2)), so its Lambert tone is known
+    exactly and no facet's normal is consulted. The focal point is the
+    highlight, where that normal is the light. The region's own samples say
+    WHERE on the disc the surface is: each takes the sphere's tone at its
+    position and its offset from the focal point, and a stop is the mean over
+    one of `n` equal offset bins. Averaging whole rings instead drew 3960's
+    shallow cap with the falloff of a full ball it is only the top of. The
+    ramp is made non-increasing (_falling), so it reads as one falloff from
+    the highlight outward; SVG pads past the first and last stop.
+
+    `concave`: the disc shows the sphere's inside (a dish), whose visible
+    point at (u, v) is on the far side and faces back, (-u, v, -w)."""
+    Lv = np.asarray(style.light, float)
+    L = Lv / (np.linalg.norm(Lv) or 1.0)
+    sg = -1.0 if concave else 1.0
+    f = np.array([sg * L[0], -sg * L[1]])
+    if L[2] > 0 or np.hypot(*f) > 0.98:
+        f = f / (np.hypot(*f) or 1.0) * 0.98   # highlight on or past the limb
+    q = np.array([p for p, _ in samples], float)
+    q = q / np.maximum(1.0, np.hypot(q[:, 0], q[:, 1]))[:, None]
+    w = np.sqrt(np.maximum(0.0, 1.0 - (q * q).sum(axis=1)))
+    b = np.maximum(0.0, np.stack([sg * q[:, 0], -sg * q[:, 1], -w], 1) @ L)
+    ts = _focal_ts(q, f)
+    k = np.minimum((ts * n).astype(int), n - 1)
+    bins = [bi for bi in range(n) if (k == bi).any()]
+    means = _falling([float(b[k == bi].mean()) for bi in bins],
+                     [int((k == bi).sum()) for bi in bins])
+    return ([((bi + 0.5) / n, style.ramp_b(m)) for bi, m in zip(bins, means)],
+            (float(f[0]), float(f[1])))
+
+
+def _radial_focal_stops(samples, style, nbins=8, exact=False, sphere=False):
     """Focal point + binned stops for a dome group's radial gradient.
 
     For a spherical cap, Lambert brightness is LINEAR in projected position,
@@ -607,6 +729,9 @@ def _radial_focal_stops(samples, style, nbins=8, exact=False):
     t at a point q is |q-f| over the distance from f to the unit circle
     along the ray through q (per-sample quadratic); each stop's tone is the
     bin's mean brightness through style.ramp_b."""
+    if sphere and getattr(style, "light", None) is not None \
+            and getattr(style, "ramp_b", None) is not None:
+        return _sphere_stops(samples, style, concave=sphere == "concave")
     nvs = [np.asarray(n, float) for _, n in samples]
     L = getattr(style, "light", None)
     ts, b, f = _radial_ts(samples, style)
@@ -1138,6 +1263,89 @@ SPUR_COVER_MARGIN = 0.5
 # orders of magnitude coarser, so simplifying it this far cannot change what
 # it covers.
 DECISION_SIMPLIFY = 0.05
+
+
+# A side wall narrower than this many line weights that runs along the
+# silhouette sits between its crease stroke and the silhouette stroke with
+# almost no fill showing, and its side tone only thickens that pair into one
+# heavy line (a baseplate's 4 LDU edge at label scale). Such a wall takes the
+# top's tone instead, and its crease drops to the stud tier (the StudTier
+# fill_ops was given; a part with no tier keeps its crease at full weight),
+# or the crease alone still reads as the heavy line. Width is
+# 2*area/perimeter -- a strip's height. 0 = off.
+THIN_WALL_WEIGHTS = 2.0
+THIN_WALL_CREASE = True
+# pieces this close are one band: abutting fills share an edge exactly
+BAND_JOIN = 0.05
+
+
+def _side_toned(f, style):
+    """Whether a face paints a side tone: body color, and a sideways plane
+    or a curved wall (axial ramp, tone band) rather than the top."""
+    if f.get("color", 16) != 16 or "grad_radial" in f:
+        return False
+    if "grad_axis" in f or f.get("flat_b") is not None:
+        return True
+    nv = f.get("normal")
+    return nv is not None and style.tone(nv) != style.top
+
+
+def _thin_side_walls(merged, members, ordered, sil, line_px, studs, style):
+    """Split each side-toned surface's thin pieces along the silhouette (see
+    THIN_WALL_WEIGHTS) into their own element keyed ("thin", root). Returns
+    the new keys; fill_ops paints them in the top's tone.
+
+    Thinness is judged on the whole band of side-toned pieces a piece
+    belongs to, not on the piece: a wall is often several elements (flat
+    runs and the rounded corners between them), and a short corner piece
+    reads thin by 2*area/perimeter on its own however tall the wall is."""
+    thin = []
+    if (THIN_WALL_WEIGHTS <= 0 or getattr(style, "top", None) is None
+            or sil is None or sil.is_empty):
+        return thin
+    # the outline only: a hole in the region can be a gap in the faces, and a
+    # print's holes showing body through it are not an edge (3941p01's dots)
+    from shapely.geometry import MultiLineString
+    edge = MultiLineString([p.exterior for p in getattr(sil, "geoms", [sil])
+                            if p.geom_type == "Polygon"])
+    cands, pieces = [], {}                      # (root, piece, line weight)
+    for r in list(merged):
+        if not all(_side_toned(ordered[j], style) for j in members[r]):
+            continue
+        g = merged[r]
+        pieces[r] = list(getattr(g, "geoms", [g]))
+        for p in pieces[r]:
+            if p.geom_type != "Polygon" or p.length == 0:
+                continue
+            lp = process.local_px(p, line_px, studs)
+            if p.distance(edge) < 0.5 * lp:
+                cands.append((r, p, lp))
+    if not cands:
+        return thin
+    bands = geom2d.union_all([p.buffer(BAND_JOIN) for _r, p, _lp in cands])
+    take = defaultdict(list)
+    for band in getattr(bands, "geoms", [bands]):
+        ins = [(r, p, lp) for r, p, lp in cands if band.intersects(p)]
+        u = geom2d.union_all([p for _r, p, _lp in ins])
+        lp = min(w for _r, _p, w in ins)
+        # along the silhouette, not merely touching it: a strip's long side
+        # is about half its perimeter, and a groove wall meets it at an end
+        if (2 * u.area / u.length < THIN_WALL_WEIGHTS * lp
+                and u.boundary.intersection(edge.buffer(0.5 * lp)).length
+                >= 0.25 * u.length):
+            for r, p, _lp in ins:
+                take[r].append(p)
+    for r in [r for r in merged if r in take]:
+        keep = [p for p in pieces[r] if not any(p is t for t in take[r])]
+        k = ("thin", r)
+        merged[k] = geom2d.union_all(take[r])
+        members[k] = members[r]
+        if keep:
+            merged[r] = geom2d.union_all(keep)
+        else:
+            del merged[r]
+        thin.append(k)
+    return thin
 
 
 def _merge_members(ordered, frags):
@@ -1799,29 +2007,141 @@ def face_fill(face, style, ldraw_dir):
     it and it reads as engraving, which is the bug this fixes."""
     code = face.get("color", 16)
     if code == 16:
-        # A curved face carries no view normal -- it only ever reached the
-        # gradient branch, which a flat style skips.
-        nv = face.get("normal")
-        if nv is None:
-            return style.ramp_b(1.0)
-        if face.get("flat_b") is not None:      # a tone band, see _band_misfit_radials
-            return style.ramp_b(face["flat_b"])
-        # a plane a curved wall runs tangentially into draws no stroke between
-        # them, so it has to meet the ramp rather than the palette
-        if face.get("tangent_wall"):
-            return style.ramp(nv)
-        return style.tone(nv)
+        return _flat_shade(face, style)
+    return deco_color(code, ldraw_dir)
+
+
+def deco_color(code, ldraw_dir):
     hex_str, _ = colors.resolve(str(code), ldraw_dir)
     return "#" + hex_str[2:]
+
+
+def _flat_shade(face, style):
+    """What `style` answers for a face painted without a gradient."""
+    # A curved face carries no view normal -- it only ever reached the
+    # gradient branch, which a flat style skips.
+    nv = face.get("normal")
+    if nv is None:
+        return style.ramp_b(1.0)
+    if face.get("flat_b") is not None:      # a tone band, see _band_misfit_radials
+        return style.ramp_b(face["flat_b"])
+    # a plane a curved wall runs tangentially into draws no stroke between
+    # them, so it has to meet the ramp rather than the palette
+    if face.get("tangent_wall"):
+        return style.ramp(nv)
+    return style.tone(nv)
+
+
+def _gradient(f, style):
+    """(kind, spec) for how fill_ops paints face `f` under `style`: "radial"
+    or "linear" with a gradient spec, or "flat" with one paint. Paint values
+    are whatever `style` answers -- hex tones from a style, top-relative
+    factors from its Relief."""
+    if "grad_radial" in f:
+        g = f["grad_radial"]
+        stops, (fx, fy) = _radial_focal_stops(
+            f["grad_samples"], style, exact=f.get("grad_exact", False),
+            sphere=g.get("sphere", False))
+        one = _one_color(stops)
+        if one is not None:
+            return "flat", one
+        return "radial", {"type": "radial", "cx": g["cx"], "cy": g["cy"],
+                          "r": g["r"], "ratio": g["ratio"],
+                          "fx": fx, "fy": fy, "stops": stops}
+    if "grad_axis" in f:
+        p0, p1 = f["grad_axis"]
+        stops = _axis_binned_stops(f["grad_samples"], style)
+        one = _one_color(stops)
+        if one is not None:
+            return "flat", one
+        return "linear", {"x1": p0[0], "y1": p0[1],
+                          "x2": p1[0], "y2": p1[1], "stops": stops}
+    return "flat", _flat_shade(f, style)
+
+
+def _print_bodies(ordered, geoms):
+    """{index of a print on a flat carrier: index of the body face it is
+    printed on}. The carrier is a plane derived from body faces
+    (_body_planes), so the body faces on that plane are the surface; of
+    those, the one overlapping the print most. A dish's facets all carry
+    their group's gradient, so any of them paints the print as the dish
+    paints -- where the print's own facet plane would take one flat tone."""
+    body = [(j, f["plane"]) for j, f in enumerate(ordered)
+            if f.get("color", 16) == 16 and isinstance(f.get("plane"), tuple)
+            and len(f["plane"]) == 4
+            and all(isinstance(v, (int, float)) for v in f["plane"])]
+    if not body:
+        return {}
+    keys = np.array([k for _, k in body], float)
+    kn = keys[:, :3] / np.linalg.norm(keys[:, :3], axis=1, keepdims=True)
+    out = {}
+    for i, f in enumerate(ordered):
+        c = f.get("carrier")
+        if f.get("color", 16) == 16 or not isinstance(c, unwrap.Plane):
+            continue
+        n = np.asarray(c.normal, float)
+        n = n / np.linalg.norm(n)
+        cos = kn @ n
+        sgn = np.sign(cos)
+        hit = np.nonzero((np.abs(cos) > unwrap.PLANE_COS)
+                         & (np.abs(keys[:, 3] * sgn - c.offset)
+                            <= unwrap.PLANE_OFF))[0]
+        if not len(hit):
+            continue
+        g = geoms.get(i)
+        best = max(hit, key=lambda h: 0.0 if g is None or body[h][0] not in geoms
+                   else geom2d.area(geom2d.intersection(g, geoms[body[h][0]])))
+        out[i] = body[best][0]
+    return out
+
+
+#: Below this a shade layer's alpha is under half an 8-bit step everywhere,
+#: so it would paint nothing.
+SHADE_ALPHA_MIN = 0.5 / 255
+
+
+def _deco_shade(f, style, under=None):
+    """The shading a print on face `f` takes, as a black layer to lay over
+    its flat color: {"alpha": a} for one flat layer, {"gradient": spec} with
+    stops of alpha, or None where it would paint nothing (a top face, or a
+    style with no relief). Same surface decisions as a body fill -- it is
+    _gradient asked through the style's Relief -- so a printed stud wall
+    shades exactly where a plain one does.
+
+    The surface asked is the body face `under` the print when there is one
+    (_print_bodies), since that is what the print must match; else a curved
+    region's own facets (deco_grad), else the print's own geometry."""
+    relief = getattr(style, "relief", None)
+    if relief is None or getattr(style, "flat", False):
+        return None
+    src = under if under is not None else (
+        {**f, **f["deco_grad"]} if f.get("deco_grad") else f)
+    kind, spec = _gradient(src, relief())
+    if kind == "flat":
+        a = round(1.0 - spec, 3)
+        return {"alpha": a} if a >= SHADE_ALPHA_MIN else None
+    stops = [(o, round(1.0 - k, 3)) for o, k in spec["stops"]]
+    if max(a for _, a in stops) < SHADE_ALPHA_MIN:
+        return None
+    one = _one_color(stops)
+    if one is not None:
+        return {"alpha": one}
+    return {"gradient": dict(spec, stops=stops)}
 
 
 @timing.timed("fill")
 def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
              refits=None, loops=None, strokes=None, line_px=2.0,
              sil_px=2.0, drop=None, weld_corners=False, ldraw_dir="vendor/ldraw",
-             studs=None, crumb=RESIDUE_CRUMB):
+             studs=None, crumb=RESIDUE_CRUMB, sil_walls=True, deco_shade=True):
     """Fill ops with exact visible-fragment clipping and per-surface merging.
 
+    sil_walls: whether this drawing's own silhouette is the part's, so a thin
+    side wall along it takes the top's tone (THIN_WALL_WEIGHTS). A lone
+    instanced stud's outline is not.
+
+    `deco_shade` gives each decoration op the shading its surface takes, as
+    op["shade"] (see _deco_shade); False paints printing flat.
     clip=False keeps every face whole (no occlusion subtraction) for
     translucent rendering; paint order is still farthest-first so nearer
     faces blend over deeper ones.
@@ -1941,6 +2261,15 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
             ks = members[r]
             merged[r] = frags[ks[0]] if len(ks) == 1 else \
                 geom2d.union_all([frags[j] for j in ks])
+    silR = _contour_region(geoms, arcs) if clip and geoms else None
+    # before cleanup: donation and absorption then see the thin wall as the
+    # element it paints as, and the band its crease's new weight. A list, not
+    # a set: its keys hold strings, and set order follows the hash seed.
+    thin = _thin_side_walls(merged, members, ordered, silR, line_px, studs,
+                            style) if clip and sil_walls and strokes else []
+    if thin and studs is not None and THIN_WALL_CREASE:
+        studs.set_creases(geom2d.union_all(
+            [merged[k].buffer(0.5 * line_px) for k in thin]))
     if clip and loops is not None and len(loops):
         f_, ox_, oy_ = fit if fit is not None else (1.0, 0.0, 0.0)
         _loop_cut_merged(merged, [np.stack([p[:, 0] * f_ + ox_,
@@ -1949,7 +2278,6 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
     pockets = []
     if clip and strokes and merged:
         order = {r: min(ks) for r, ks in members.items() if r in merged}
-        silR = _contour_region(geoms, arcs) if geoms else None
         _donate_escaped_spurs(merged, order, strokes, silR, line_px, sil_px,
                               studs, crumb)
         vis = geom2d.union_all(list(merged.values()))
@@ -2011,6 +2339,8 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
     for key, gs in by_surface.items():
         surface_core[key] = geom2d.union_all(gs).buffer(-crumb)
 
+    under = _print_bodies(ordered, g_cache) \
+        if deco_shade and not getattr(style, "flat", False) else {}
     ops, emitted = [], set()
     for idx in sorted(frags):                          # farthest-first
         if idx in emitted:
@@ -2018,81 +2348,84 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
         f = ordered[idx]
         ks = members[roots[idx]]
         emitted.update(ks)
-        geom = merged[roots[idx]]
-        if drop is not None:
-            # silhouette spur trim: fills follow the trimmed outline so no
-            # unstroked tone pokes past it (see silhouette_spur_trim)
-            geom = geom2d.difference(geom, drop)
-            if geom.is_empty:
+        for key in (roots[idx], ("thin", roots[idx])):
+            if key not in merged:
                 continue
-        if clip and f.get("color", 16) == 16:
-            # crumb cull (see RESIDUE_CRUMB): per-piece, so thin TIPS of a
-            # wide-bodied piece are untouched. Decoration is exempt for the
-            # reason given in _residue_trims — and its holes doubly so, a
-            # glyph counter being thinner than the self-stroke on any tile
-            # small enough to read as a label.
-            from shapely.geometry import Polygon as _Poly
-            er = crumb
-            core = surface_core.get(f.get("surface"))
-            pieces = []
-            for p in getattr(geom, "geoms", [geom]):
-                if p.geom_type != "Polygon":
+            geom = merged[key]
+            if drop is not None:
+                # silhouette spur trim: fills follow the trimmed outline so no
+                # unstroked tone pokes past it (see silhouette_spur_trim)
+                geom = geom2d.difference(geom, drop)
+                if geom.is_empty:
                     continue
-                # a slice of a sliced surface is judged by the surface: each
-                # is a pixel or two wide, and clipped by a nearer fill every
-                # one of them is a crumb on its own (98397's bend lost a
-                # crescent that way)
-                if p.buffer(-er).is_empty and (
-                        core is None or not p.buffer(er + 0.05).intersects(core)):
+            if clip and f.get("color", 16) == 16:
+                # crumb cull (see RESIDUE_CRUMB): per-piece, so thin TIPS of a
+                # wide-bodied piece are untouched. Decoration is exempt for the
+                # reason given in _residue_trims — and its holes doubly so, a
+                # glyph counter being thinner than the self-stroke on any tile
+                # small enough to read as a label.
+                from shapely.geometry import Polygon as _Poly
+                er = crumb
+                core = surface_core.get(f.get("surface"))
+                pieces = []
+                for p in getattr(geom, "geoms", [geom]):
+                    if p.geom_type != "Polygon":
+                        continue
+                    # a slice of a sliced surface is judged by the surface: each
+                    # is a pixel or two wide, and clipped by a nearer fill every
+                    # one of them is a crumb on its own (98397's bend lost a
+                    # crescent that way)
+                    if p.buffer(-er).is_empty and (
+                            core is None or not p.buffer(er + 0.05).intersects(core)):
+                        continue
+                    # hole counterpart of the crumb cull: a hole thinner than
+                    # the 0.8px self-stroke can never render as a hole, but its
+                    # ring's self-stroke paints a hairline of this fill's tone
+                    # across the ink (3941's axle-cross bowties) — dissolve it
+                    holes = [h for h in p.interiors
+                             if not _Poly(h).buffer(-er).is_empty]
+                    if len(holes) != len(p.interiors):
+                        p = _Poly(p.exterior, holes)
+                    pieces.append(p)
+                if not pieces:
                     continue
-                # hole counterpart of the crumb cull: a hole thinner than
-                # the 0.8px self-stroke can never render as a hole, but its
-                # ring's self-stroke paints a hairline of this fill's tone
-                # across the ink (3941's axle-cross bowties) — dissolve it
-                holes = [h for h in p.interiors
-                         if not _Poly(h).buffer(-er).is_empty]
-                if len(holes) != len(p.interiors):
-                    p = _Poly(p.exterior, holes)
-                pieces.append(p)
-            if not pieces:
+                geom = pieces[0] if len(pieces) == 1 else geom2d.union_all(pieces)
+            d = geom2d.path_d(geom, arcs, min_area=MIN_FRAG_AREA)
+            if not d:
                 continue
-            geom = pieces[0] if len(pieces) == 1 else geom2d.union_all(pieces)
-        d = geom2d.path_d(geom, arcs, min_area=MIN_FRAG_AREA)
-        if not d:
-            continue
-        # decoration is ink on a surface, not relief, so it takes no shading
-        # ramp — and the gradient branches never consulted the LDraw color,
-        # which is why a printed cylinder or cone painted in body tone
-        deco = f.get("color", 16) != 16
-        flat = getattr(style, "flat", False)
-        if "grad_radial" in f and not deco and not flat:
-            g = f["grad_radial"]
-            stops, (fx, fy) = _radial_focal_stops(
-                f["grad_samples"], style, exact=f.get("grad_exact", False))
-            flat_color = _one_color(stops)
-            if flat_color is not None:
-                ops.append({"d": d, "fill": flat_color, "depth": f["depth"]})
+            # decoration paints its own LDraw color, flat -- the gradients are
+            # body tone, which is why a printed cylinder or cone once painted with
+            # no print on it -- and takes the surface's shading as a translucent
+            # black layer over that color (_deco_shade), so it keeps its hue
+            deco = f.get("color", 16) != 16
+            flat = getattr(style, "flat", False)
+            if key in thin:
+                ops.append({"d": d, "fill": style.top, "depth": f["depth"],
+                            "thin_wall": True})
+            elif deco:
+                op = {"d": d, "fill": deco_color(f["color"], ldraw_dir),
+                      "depth": f["depth"], "deco": True}
+                sh = _deco_shade(f, style, ordered[under[idx]]
+                                 if idx in under else None) if deco_shade else None
+                if sh is not None:
+                    op["shade"] = sh
+                ops.append(op)
+            elif flat:
+                ops.append({"d": d, "fill": _flat_shade(f, style),
+                            "depth": f["depth"]})
             else:
-                ops.append({"d": d, "depth": f["depth"],
-                            "gradient": {"type": "radial", "cx": g["cx"], "cy": g["cy"],
-                                         "r": g["r"], "ratio": g["ratio"],
-                                         "fx": fx, "fy": fy, "stops": stops}})
-        elif "grad_axis" in f and not deco and not flat:
-            p0, p1 = f["grad_axis"]
-            stops = _axis_binned_stops(f["grad_samples"], style)
-            flat_color = _one_color(stops)
-            if flat_color is not None:
-                ops.append({"d": d, "fill": flat_color, "depth": f["depth"]})
-            else:
-                ops.append({"d": d, "depth": f["depth"],
-                            "gradient": {"x1": p0[0], "y1": p0[1],
-                                         "x2": p1[0], "y2": p1[1], "stops": stops}})
-        else:
-            op = {"d": d, "fill": face_fill(f, style, ldraw_dir), "depth": f["depth"]}
-            if deco:
-                op["deco"] = True
-            ops.append(op)
-        ops[-1]["seam"] = process.seam_px(geom, line_px, studs)
+                kind, spec = _gradient(f, style)
+                ops.append({"d": d, "fill": spec, "depth": f["depth"]}
+                           if kind == "flat" else
+                           {"d": d, "depth": f["depth"], "gradient": spec})
+            ops[-1]["seam"] = process.seam_px(geom, line_px, studs)
+            if "shade" in ops[-1]:
+                # the print's seam stroke overhangs its edge by half a seam; an
+                # unstroked layer on the bare region leaves that rim unshaded,
+                # a bright outline around every shaded print (2552p01's cliffs)
+                ops[-1]["shade"]["d_seamed"] = geom2d.path_d(
+                    geom.buffer(0.5 * ops[-1]["seam"]), arcs,
+                    min_area=MIN_FRAG_AREA) or d
     # junction-lens pockets paint LAST (over every surface fill, under the
     # strokes): solid ink where converging strokes trap a sliver of tone
     for g in pockets:
@@ -2288,6 +2621,10 @@ def apply_affine_faces(faces, f, ox, oy):
             g = face["grad_radial"]
             nf["grad_radial"] = {**g, "cx": g["cx"] * f + ox,
                                  "cy": g["cy"] * f + oy, "r": g["r"] * f}
+        if "deco_grad" in face:
+            (a0, a1) = face["deco_grad"]["grad_axis"]
+            nf["deco_grad"] = {**face["deco_grad"], "grad_axis": (
+                (a0[0] * f + ox, a0[1] * f + oy), (a1[0] * f + ox, a1[1] * f + oy))}
         out.append(nf)
     return out
 
@@ -2462,7 +2799,7 @@ def faces_from_tris(tri, proj, cond_edges=None, colors=None):
             f["backfill"] = True
         faces.append(f)
     _attach_smooth_gradients(faces, cond_edges if have_seams
-                             else np.zeros((0, 2, 3)))
+                             else np.zeros((0, 2, 3)), proj=proj)
     front_groups = {f["group"] for f in faces if not f.get("backfill")}
     kept = []
     for f in faces:
@@ -2669,9 +3006,55 @@ def _region_face(part, carrier, theta0, members, proj, step, tag,
          "holes": [px_ring(h)[0] for h in part.interiors],
          "depth": float(np.mean(zs)), "group": ("uv",) + tag,
          "plane": ("uv",) + tag, "carrier": carrier, "standoff": standoff}
-    for k in ("_verts", "grad_axis", "grad_radial", "grad_samples", "backfill"):
+    for k in ("_verts", "grad_axis", "grad_radial", "grad_samples", "backfill",
+              "deco_grad"):
         f.pop(k, None)
+    if not flat:
+        g = _member_gradient(members, poly)
+        if g is not None:
+            f["deco_grad"] = g
     return f
+
+
+def _member_gradient(members, poly):
+    """How a region on a curved carrier shades, from the facets it was merged
+    out of: a linear gradient across `poly` (canvas px) along the screen
+    direction its facets' view normals turn fastest, with each facet's
+    normal as a sample -- the grad_axis form fill_ops already bins. None when
+    the facets barely turn. Kept apart from the body's grad_* keys, which
+    decoration must never paint with (see _deco_shade)."""
+    pts, nvs = [], []
+    for m in members:
+        nv, mp = m.get("normal"), m.get("poly")
+        if nv is None or mp is None or len(mp) < 3:
+            continue
+        pts.append(np.mean(np.asarray(mp, float), axis=0))
+        nvs.append(np.asarray(nv, float))
+    if len(pts) < 3:
+        return None
+    P, N = np.array(pts), np.array(nvs)
+    region = geom2d.to_geom(poly).buffer(2.0)
+    from shapely.geometry import Point
+    near = [i for i, p in enumerate(P) if region.contains(Point(p))]
+    if len(near) >= 3:
+        P, N = P[near], N[near]
+    Pc = P - P.mean(axis=0)
+    G, *_ = np.linalg.lstsq(Pc, N - N.mean(axis=0), rcond=None)
+    u, s, _ = np.linalg.svd(G)
+    if s[0] < 1e-6:
+        return None
+    d = u[:, 0]
+    t = np.asarray(poly, float) @ d
+    t0, t1 = float(t.min()), float(t.max())
+    if t1 - t0 < 1e-6:
+        return None
+    base = np.asarray(poly, float).mean(axis=0)
+    p0 = base + (t0 - base @ d) * d
+    p1 = base + (t1 - base @ d) * d
+    samples = [(float(np.clip((p @ d - t0) / (t1 - t0), 0.0, 1.0)), n)
+               for p, n in zip(P, N)]
+    return {"grad_axis": (tuple(map(float, p0)), tuple(map(float, p1))),
+            "grad_samples": samples}
 
 
 def facet_on_wall(prim, verts, n_world, tol=2e-3, oriented=True):
@@ -2877,21 +3260,26 @@ def _seam_edge_mask(A, B, cond_edges, tol=2e-3):
     return mask
 
 
-def _attach_radial_gradient(faces, ks, front, nvs):
+def _attach_radial_gradient(faces, ks, front, nvs, spec=None):
     """Shared radial-gradient spec for a dome-like group: unit-circle gradient
     space mapped to the group's bounding ellipse (center c0, semi-axes r and
     r*ratio). The extent covers ALL members (backfill facets included, so the
     gradient reaches the true fold); samples carry the FRONT members' normals
     at their normalized elliptic radii. All members share one dict, so
-    trace's def-dedup keeps one def."""
-    allv = np.vstack([faces[k]["poly"] for k in ks])
-    c0 = (allv.min(axis=0) + allv.max(axis=0)) / 2.0
-    w = float(allv[:, 0].max() - allv[:, 0].min()) or 1.0
-    h = float(allv[:, 1].max() - allv[:, 1].min()) or 1.0
-    ratio = h / w
-    dx = allv[:, 0] - c0[0]
-    dy = (allv[:, 1] - c0[1]) / ratio
-    r = float(np.hypot(dx, dy).max()) or 1.0
+    trace's def-dedup keeps one def. A caller that knows the surface's own
+    extent passes it as `spec` in place of the members' bounding ellipse."""
+    if spec is not None:
+        c0 = np.array([spec["cx"], spec["cy"]])
+        r, ratio = spec["r"], spec["ratio"]
+    else:
+        allv = np.vstack([faces[k]["poly"] for k in ks])
+        c0 = (allv.min(axis=0) + allv.max(axis=0)) / 2.0
+        w = float(allv[:, 0].max() - allv[:, 0].min()) or 1.0
+        h = float(allv[:, 1].max() - allv[:, 1].min()) or 1.0
+        ratio = h / w
+        dx = allv[:, 0] - c0[0]
+        dy = (allv[:, 1] - c0[1]) / ratio
+        r = float(np.hypot(dx, dy).max()) or 1.0
     # samples carry each member's centroid in UNIT-ellipse coords (affine-
     # invariant under the uniform output fit) plus its normal; fill_ops picks
     # the focal point and stop tones from these with the style's light.
@@ -2901,18 +3289,36 @@ def _attach_radial_gradient(faces, ks, front, nvs):
         u = (c[0] - c0[0]) / r
         v = (c[1] - c0[1]) / (r * ratio)
         samples.append(((float(u), float(v)), nv))
-    spec = {"cx": float(c0[0]), "cy": float(c0[1]), "r": r, "ratio": ratio}
+    if spec is None:
+        spec = {"cx": float(c0[0]), "cy": float(c0[1]), "r": r, "ratio": ratio}
     for k in ks:
         faces[k]["grad_radial"] = spec
         faces[k]["grad_samples"] = samples
 
 
-def _attach_smooth_gradients(faces, cond_edges, min_spread=0.002):
+def _attach_smooth_gradients(faces, cond_edges, min_spread=0.002, proj=None):
     """Union faces across conditional-line seams; give each group one shared
     gradient (same axis + stops for every member — userSpaceOnUse gradients
     make the facets blend seamlessly without polygon union). Groups whose
     normals barely vary (min_spread on 1-cos) stay flat-toned."""
-    parent = list(range(len(faces)))
+    labels = declared_regions([f["_verts"] for f in faces],
+                              [f["normal"] for f in faces],
+                              [f.get("color", 16) for f in faces], cond_edges)
+    for f, g in zip(faces, labels):
+        f["group"] = g                  # merge key for fill_ops union
+    attach_group_gradients(faces, min_spread, proj=proj)
+
+
+def declared_regions(verts, normals, colors, cond_edges):
+    """A region label per triangle: triangles joined across DECLARED seams.
+
+    A shared edge that lies on a type-5 conditional line joins its two
+    triangles; so does one between exactly coplanar triangles (quad halves
+    meet at a diagonal, which is never a conditional line), and one between
+    two triangles of the same decoration color. Nothing else does -- in
+    particular no dihedral angle across tessellation. `normals` may be in any
+    frame, as long as it is one frame for all."""
+    parent = list(range(len(verts)))
 
     def find(i):
         while parent[i] != i:
@@ -2923,8 +3329,7 @@ def _attach_smooth_gradients(faces, cond_edges, min_spread=0.002):
     by_edge = defaultdict(list)
     edge_pts = []
     edge_ids = []
-    for k, f in enumerate(faces):
-        v = f["_verts"]
+    for k, v in enumerate(verts):
         for a, b in ((v[0], v[1]), (v[1], v[2]), (v[2], v[0])):
             ek = _edge_key(a, b)
             by_edge[ek].append(k)
@@ -2941,30 +3346,93 @@ def _attach_smooth_gradients(faces, cond_edges, min_spread=0.002):
         for k in ks[1:]:
             # a decal is coplanar with its carrier and shares its edges;
             # unioning across the color boundary is what erased flat prints
-            if faces[ks[0]].get("color", 16) != faces[k].get("color", 16):
+            if colors[ks[0]] != colors[k]:
                 continue
             # union across a seam always; across an ordinary shared edge only
             # when coplanar (quad halves meet at a diagonal, which is never a
             # conditional line) — coplanar union can't cross a real crease
-            coplanar = float(faces[ks[0]]["normal"] @ faces[k]["normal"]) > 0.9999
+            coplanar = float(np.asarray(normals[ks[0]]) @ np.asarray(normals[k])) > 0.9999
             # ...except decoration, which is ONE printed region however its
             # carrier curves. 3941p01's panel is 36 hand-authored quads around
             # a cylinder: 7.5 deg apart so never coplanar, and the part has no
             # conditional lines to seam them, so it shattered into separately
             # stroked fragments with the buttons splitting it into strips.
-            same_deco = faces[ks[0]].get("color", 16) != 16
+            same_deco = colors[ks[0]] != 16
             if ek not in seam_keys and not coplanar and not same_deco:
                 continue
             ra, rb = find(ks[0]), find(k)
             if ra != rb:
                 parent[rb] = ra
-
-    for k in range(len(faces)):
-        faces[k]["group"] = find(k)     # merge key for fill_ops union
-    attach_group_gradients(faces, min_spread)
+    return [find(k) for k in range(len(verts))]
 
 
-def attach_group_gradients(faces, min_spread=0.002):
+def _facet3(f):
+    """A face's own 3-D vertices (any one frame per engine), or None."""
+    if f.get("_verts") is not None:
+        return np.asarray(f["_verts"], float)
+    if f.get("_plane3") is not None:
+        return np.asarray(f["_plane3"][0], float)
+    return None
+
+
+def _attach_fitted_gradient(faces, ks, proj=None):
+    """Shade a declared-smooth group as the quadric its facets tessellate,
+    if one fits (quadric.classify). Returns whether it did.
+
+    A sphere or ellipsoid takes the radial ramp and a cone or cylinder the
+    linear one, each fitted to the members that FACE THE CAMERA -- the
+    visible surface -- and the group is stamped `grad_fit` so the tone-band
+    pass leaves it one element. That is the difference that mattered: occt
+    flips a plane's view normal toward the camera, so a closed sphere's far
+    half sampled as a mirror of its near half, the radial model misfit it
+    (51283: 0.34 misfit, 0.73 Gauss spread) and it was posterized facet by
+    facet. A group no quadric fits is freeform and falls through to the
+    normal-cloud shading below, unchanged.
+    """
+    if not quadric.ARMED or len(ks) < quadric.MIN_FACETS:
+        return False
+    if faces[ks[0]].get("color", 16) != 16:
+        return False
+    verts = [_facet3(faces[k]) for k in ks]
+    if any(v is None for v in verts):
+        return False
+    normals = []
+    for v in verts:
+        n = np.cross(v[1] - v[0], v[2] - v[0])
+        normals.append(n / (np.linalg.norm(n) or 1.0))
+    fit = quadric.classify(verts, normals)
+    if fit is None:
+        return False
+    front = [k for k in ks if not faces[k].get("backfill")
+             and faces[k].get("_facing", True)]
+    if len(front) < 2:
+        return False
+    nvs = [faces[k]["normal"] for k in front]
+    if fit.kind == "sphere" and proj is not None:
+        # the sphere's own disc, not the members' bounding box: a zone cut
+        # off below (51283's collar) has a box no longer centered on it,
+        # and the analytic stops are only right on the true disc
+        C = np.asarray(fit.center, float)
+        x, y, _ = proj.to_px(np.stack([C, C + float(fit.radii[0]) * proj.right]))
+        # a dish shows the INSIDE of its sphere: normals toward the center
+        B = np.stack([proj.right, proj.up, proj.fwd])
+        out = [float(np.asarray(nv, float) @ (B @ (verts[ks.index(k)].mean(axis=0) - C)))
+               for k, nv in zip(front, nvs)]
+        spec = {"cx": float(x[0]), "cy": float(y[0]),
+                "r": float(np.hypot(x[1] - x[0], y[1] - y[0])), "ratio": 1.0,
+                "sphere": "concave" if np.median(out) < 0 else "convex"}
+        _attach_radial_gradient(faces, ks, front, nvs, spec=spec)
+    elif fit.kind in ("sphere", "ellipsoid"):
+        _attach_radial_gradient(faces, ks, front, nvs)
+    else:
+        attach_axis_gradient(faces, ks, [faces[k]["poly"].mean(axis=0)
+                                         for k in front], nvs)
+    for k in ks:
+        faces[k]["grad_fit"] = fit.kind
+    return fit
+
+
+def attach_group_gradients(faces, min_spread=0.002, proj=None):
     """One shared gradient per face['group'] (same axis + stops for every
     member -- userSpaceOnUse gradients make the facets blend seamlessly
     without polygon union). Groups whose normals barely vary (min_spread on
@@ -2978,7 +3446,13 @@ def attach_group_gradients(faces, min_spread=0.002):
     for k, f in enumerate(faces):
         if f.get("group") is not None:
             groups[f["group"]].append(k)
+    spheres = []
     for ks in groups.values():
+        fit = _attach_fitted_gradient(faces, ks, proj)
+        if fit:
+            if faces[ks[0]].get("grad_radial", {}).get("sphere"):
+                spheres.append((fit, ks))
+            continue
         # gradients are derived from FRONT members only: backfill facets
         # (past the silhouette fold) extend the group's fill area, but their
         # away-facing normals would poison spread, dome detection, and stops
@@ -3003,6 +3477,41 @@ def attach_group_gradients(faces, min_spread=0.002):
             _attach_radial_gradient(faces, ks, front, nvs)
             continue
         attach_axis_gradient(faces, ks, cs, nvs)
+    _share_sphere_ramps(faces, spheres)
+
+
+def _share_sphere_ramps(faces, spheres):
+    """Regions fitted to ONE sphere share one ramp.
+
+    Each region's stops are weighted by where it lies on the disc, so two
+    regions of one ball -- 20401's and 32474's hemispheres, authored apart
+    with no conditional line between them -- got different stops under the
+    same focal point, and the equator drew as a tone step. Pooled, they are
+    one gradient and the step is gone; they stay separate fills."""
+    pools = []
+    for fit, ks in spheres:
+        c, r = np.asarray(fit.center, float), float(fit.radii[0])
+        for pool in pools:
+            f0 = pool[0][0]
+            side = faces[pool[0][1][0]]["grad_radial"]["sphere"]
+            if (faces[ks[0]]["grad_radial"]["sphere"] == side
+                    and np.linalg.norm(c - f0.center) <= 0.01 * r
+                    and abs(r - float(f0.radii[0])) <= 0.01 * r):
+                pool.append((fit, ks))
+                break
+        else:
+            pools.append([(fit, ks)])
+    for pool in pools:
+        if len(pool) < 2:
+            continue
+        head = faces[pool[0][1][0]]
+        spec, samples = head["grad_radial"], []
+        for _fit, ks in pool:
+            samples += faces[ks[0]]["grad_samples"]
+        for _fit, ks in pool:
+            for k in ks:
+                faces[k]["grad_radial"] = spec
+                faces[k]["grad_samples"] = samples
 
 
 def attach_axis_gradient(faces, ks, cs, nvs):

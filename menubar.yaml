@@ -75,10 +75,6 @@ menu:
     icon: square.grid.3x3
     when: "page.ok"
     open: http://localhost:5178/wall
-  - text: Corpus
-    icon: tray.full
-    when: "page.ok"
-    open: http://localhost:5178/corpus
   - text: Stats
     icon: chart.bar
     when: "page.ok"

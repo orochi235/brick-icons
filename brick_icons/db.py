@@ -9,14 +9,15 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import os
 import sqlite3
 import tomllib
 import xml.etree.ElementTree as ET
 from collections.abc import Sequence
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
-from brick_icons import goldens
+from brick_icons import batch, goldens
 from brick_icons.lab import cache, partindex
 from brick_icons import features, review, svgstats
 from brick_icons.lab import defects as defects_toml
@@ -69,10 +70,15 @@ CREATE TABLE IF NOT EXISTS renders (
   source TEXT NOT NULL,
   config_key TEXT NOT NULL,
   run_id INTEGER REFERENCES runs(id),
+  -- When the drawing was made (`drawn_at`), which a rebuild must not move:
+  -- a redraw request is answered by a render made after it.
   made_at TEXT NOT NULL,
   path TEXT NOT NULL,
   sha256 TEXT NOT NULL,
   width REAL, height REAL,
+  -- When this row was written: what the wall's delta asks after, because a
+  -- drawing made yesterday and fetched today is news to it today.
+  indexed_at TEXT,
   PRIMARY KEY (part_id, source, config_key)
 );
 
@@ -214,9 +220,9 @@ CREATE TABLE IF NOT EXISTS part_themes (
 );
 
 CREATE TABLE IF NOT EXISTS tallies (
-  -- When this count was taken. The only honest clock in the database: every
-  -- other timestamp is stamped at ingest, and `rebuild` drops the file, so
-  -- `runs.started` and `renders.made_at` both read as "the last rebuild".
+  -- When this count was taken. `runs.started` is stamped at ingest and
+  -- `rebuild` drops the file, so it reads as "the last rebuild"; a tally is
+  -- the only clock for how a slot stood at a moment.
   taken TEXT NOT NULL,
   source TEXT NOT NULL,
   -- The newest engine revision seen in the slot, for reading a step against
@@ -262,7 +268,55 @@ CREATE INDEX IF NOT EXISTS part_features_by_feature
 
 
 def now() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return batch.stamp()
+
+
+def drawn_at(path: Path | str, stated: str | None = None) -> str:
+    """When a drawing was made: the one answer every writer of
+    `renders.made_at` uses -- except `touch_render`, which restamps a slot
+    deliberately, with no new file for this to date.
+
+    `stated` is the time its renderer logged beside it (`stated_times`), and
+    wins. Without one, the file's mtime -- exact for a drawing made on this
+    machine, but only an upper bound for one fetched: `onto fetch` writes each
+    file at fetch time and keeps no mtime. Either way it is a property of the
+    drawing, so a rebuild reads back the same answer.
+    """
+    return stated or batch.stamp(Path(path).stat().st_mtime)
+
+
+#: A logged row that did not draw the file now on disk: `present` found one
+#: already there, `none` had nothing to draw.
+_DREW_NOTHING = ("present", "none")
+
+
+def stated_times(tree: Path | str) -> dict[tuple[str, str], str]:
+    """{(renders subdirectory, part): when it was drawn} for a census or
+    store tree, from the `at` its log rows carry (`batch.Runner` writes it).
+
+    The latest clean row per part: an error drew nothing, so the file is the
+    last success's. A row is filed under its `source` and its `engine`,
+    whichever the tree's `renders/<dir>` is named for. A row without `at` --
+    anything logged before rows carried one -- states nothing.
+    """
+    tree = Path(tree)
+    out: dict[tuple[str, str], str] = {}
+    logs = sorted(p for p in tree.rglob("*.jsonl*")
+                  if p.is_file() and not p.name.endswith(".inflight"))
+    for log in logs:
+        for line in log.read_text().splitlines():
+            try:
+                r = json.loads(line)
+            except json.JSONDecodeError:
+                continue  # torn by a writer still running
+            at = r.get("at") if isinstance(r, dict) else None
+            if (not at or "part" not in r or r.get("error")
+                    or r.get("state") in _DREW_NOTHING):
+                continue
+            for where in {r.get("source"), r.get("engine")} - {None}:
+                key = (where, r["part"])
+                out[key] = max(out.get(key, ""), at)
+    return out
 
 
 #: Columns added to a table that already existed. `CREATE TABLE IF NOT
@@ -271,6 +325,7 @@ def now() -> str:
 #: additive only: SCHEMA_VERSION is deliberately not bumped for these, because
 #: older code cannot misread a column it never selects.
 _ADDED_COLUMNS = (("defects", "classes", "TEXT"),
+                  ("renders", "indexed_at", "TEXT"),
                   ("defects", "checked", "TEXT"),
                   ("measurements", "counts", "TEXT"),
                   ("measurements", "bytes", "INTEGER"),
@@ -485,6 +540,20 @@ def record_edge_scores(conn: sqlite3.Connection, rows: list[dict]) -> int:
     return len(out)
 
 
+_ATTEMPT_UPSERT = (
+    "INSERT OR REPLACE INTO attempts (run_id, part_id, source, state, "
+    "secs, error, detail) VALUES (?, ?, ?, ?, ?, ?, ?)")
+
+#: The store tree every spot redraw's run names. No log is ever written
+#: there; the name is what `rebuild` groups the carried attempts under.
+SPOT_TREE = "out/store/spot"
+
+
+def _attempt_row(run_id: int, r: dict) -> tuple:
+    return (run_id, r["part"], r["source"], r.get("state"), r.get("secs"),
+            r.get("error"), r.get("detail"))
+
+
 def import_store_jsonl(conn: sqlite3.Connection, run_id: int,
                        path: Path | str) -> int:
     """One row per part a render-store run attempted, drawn or not.
@@ -495,33 +564,56 @@ def import_store_jsonl(conn: sqlite3.Connection, run_id: int,
     d99 was. A part logged twice in one run keeps its last row, so a retry
     settles the failure before it -- what `Runner.remaining` already assumes.
     """
-    rows = []
-    for line in Path(path).read_text().splitlines():
-        if not line.strip():
-            continue
-        r = json.loads(line)
-        rows.append((run_id, r["part"], r["source"], r.get("state"),
-                     r.get("secs"), r.get("error"), r.get("detail")))
-    conn.executemany(
-        "INSERT OR REPLACE INTO attempts (run_id, part_id, source, state, "
-        "secs, error, detail) VALUES (?, ?, ?, ?, ?, ?, ?)", rows)
+    rows = [_attempt_row(run_id, json.loads(line))
+            for line in Path(path).read_text().splitlines() if line.strip()]
+    conn.executemany(_ATTEMPT_UPSERT, rows)
     conn.commit()
     return len(rows)
+
+
+def record_attempt(conn: sqlite3.Connection, run_id: int, row: dict) -> None:
+    """One attempt, as a store log line would carry it: `part`, `source`,
+    and any of `state`, `secs`, `error`, `detail`."""
+    conn.execute(_ATTEMPT_UPSERT, _attempt_row(run_id, row))
+    conn.commit()
+
+
+def spot_run(conn: sqlite3.Connection, build: str, part: str,
+             source: str) -> int:
+    """A run for one spot redraw, stamped with the build the worker drew at.
+
+    One per redraw, so the newest redraw holds the highest run id and reads as
+    the part's latest attempt."""
+    return start_run(conn, "store", {"dir": SPOT_TREE, "via": "spot",
+                                     "part": part, "source": source}, build)
+
+
+def touch_render(conn: sqlite3.Connection, part_id: str, source: str) -> None:
+    """Restamp a slot's render as made now, for a redraw that drew the same
+    bytes: the drawing is current, and nothing else about it changed."""
+    conn.execute("UPDATE renders SET made_at = ? WHERE part_id = ? "
+                 "AND source = ?", (now(), part_id, source))
+    conn.commit()
 
 
 # The one config each source's stored render is drawn at. A second config is a
 # different drawing and belongs in out/lab's cache, not in the store.
 _CANONICAL = {
+    # Drawing slots state their stroke widths: the key is this argv, so an
+    # inherited default that moved would leave the key and its lab cache at
+    # the old weight. naive is retired and frozen at the 2 px it was drawn at.
     "naive": ["--engine", "naive", "--shading", "outline",
-              "--shade-style", "flat3", "--angle", "iso", "--format", "svg"],
+              "--shade-style", "flat3", "--angle", "iso", "--format", "svg",
+              "--line-width", "2", "--silhouette-width", "2"],
     "occt": ["--engine", "occt", "--shading", "outline",
-             "--shade-style", "flat3", "--angle", "iso", "--format", "svg"],
-    # occt drawn lighter: the same stroke tiers under a 1.5 px line weight.
+             "--shade-style", "flat3", "--angle", "iso", "--format", "svg",
+             "--line-width", "1.4", "--silhouette-width", "1.4"],
+    # occt drawn lighter: the same stroke tiers under a 1.0 px line weight.
     # Named engine-first, so its trees need the SOURCE marker to file here.
     "occt-svelte": ["--engine", "occt", "--shading", "outline",
                     "--shade-style", "flat3", "--angle", "iso",
-                    "--format", "svg", "--line-width", "1.5",
-                    "--silhouette-width", "1.5"],
+                    "--format", "svg", "--line-width", "1.0",
+                    "--silhouette-width", "1.0"],
     "decal": ["--decal", "--angle", "iso", "--format", "svg"],
     # The reference that is mathematically compatible with the library:
     # orthographic, and three.js's LDrawLoader substitutes no primitives, so
@@ -551,10 +643,12 @@ _CANONICAL = {
     # some parts and solid for others.
     "translucent-naive": ["--engine", "naive", "--shading", "outline",
                           "--shade-style", "flat3", "--angle", "iso",
-                          "--format", "svg", "--opacity", "0.5"],
+                          "--format", "svg", "--opacity", "0.5",
+                          "--line-width", "2", "--silhouette-width", "2"],
     "translucent-occt": ["--engine", "occt", "--shading", "outline",
                          "--shade-style", "flat3", "--angle", "iso",
-                         "--format", "svg", "--opacity", "0.5"],
+                         "--format", "svg", "--opacity", "0.5",
+                         "--line-width", "1.4", "--silhouette-width", "1.4"],
     # The census's oracle drawing, not the store's: strokeless, so the fills
     # carry the silhouette and no stroke overhang has to be subtracted from
     # the comparison. One source per engine because the census writes
@@ -577,8 +671,8 @@ _CANONICAL = {
                     "--silhouette-width", "2"],
     "white-occt": ["--format", "svg", "--shading", "outline",
                    "--shade-style", "white", "--angle", "iso",
-                   "--engine", "occt", "--line-width", "2",
-                   "--silhouette-width", "2"],
+                   "--engine", "occt", "--line-width", "1.4",
+                   "--silhouette-width", "1.4"],
 }
 
 
@@ -610,8 +704,8 @@ RENDER_SUFFIXES = (".svg", ".png", ".webp")
 def _displaced_file(root: Path | str, source: str, part_id: str, held) -> Path:
     """The held drawing as it was: the copy kept aside when `store_render`
     overwrote it in place, else the file the row names."""
-    kept = (Path(root) / review.BEFORE_DIR / source
-            / f"{part_id}.{held['sha256'][:8]}{Path(held['path']).suffix}")
+    kept = Path(root) / review.kept_path(source, part_id, held["sha256"],
+                                         Path(held["path"]).suffix)
     return kept if kept.is_file() else Path(root) / held["path"]
 
 
@@ -641,8 +735,9 @@ def record_render(conn: sqlite3.Connection, part_id: str, source: str,
                   path: Path | str, root: Path | str = ".",
                   run_id: int | None = None,
                   review_log: Path | str | None = review.DEFAULT_PATH,
-                  by: str | None = None) -> str:
-    """Index one drawing as the slot's current render.
+                  by: str | None = None, made_at: str | None = None) -> str:
+    """Index one drawing as the slot's current render. `made_at` is the time
+    its log stated, if any; `drawn_at` decides.
 
     A row the new file displaces is logged to `review_log` (relative paths
     are under root) with the displaced file kept aside, unless it is None:
@@ -660,22 +755,26 @@ def record_render(conn: sqlite3.Connection, part_id: str, source: str,
         if box:
             _, _, width, height = (float(v) for v in box.split())
     key = cache.key(argv)
-    # Never let an older drawing displace a newer one. `made_at` is stamped at
-    # ingest and cannot order two of them, so the files are asked instead: a
-    # census tree fetched late holds drawings from a build the slot has since
-    # moved past, and indexing it would walk the slot backwards with nothing
-    # in the row to say so.
+    made = drawn_at(path, made_at)
+    where = str(path.resolve().relative_to(Path(root).resolve()))
+    # Never let an older drawing displace a newer one: a census tree fetched
+    # late holds drawings from a build the slot has since moved past, and
+    # indexing it would walk the slot backwards with nothing in the row to say
+    # so. Not when the row names this very file -- `store_render` has already
+    # written over it, and the row must follow what is on disk.
+    # Any key: a slot whose canonical argv changed holds its drawings under
+    # the old one, and every reader takes one row per (part, source).
     held = conn.execute(
         "SELECT path, sha256, made_at, run_id FROM renders WHERE part_id = ? "
-        "AND source = ? AND config_key = ?", (part_id, source, key)).fetchone()
-    if held is not None:
-        try:
-            if (Path(root) / held[0]).stat().st_mtime > path.stat().st_mtime:
-                return key
-        except OSError:
-            pass
+        "AND source = ? ORDER BY made_at DESC", (part_id, source)).fetchone()
+    if held is not None and held["path"] != where and held["made_at"] > made:
+        return key
     sha = goldens.sha256(raw)
-    where = str(path.resolve().relative_to(Path(root).resolve()))
+    # The file the row already names, re-read: `ingest-watch --overwrite`
+    # does this to a whole finished tree. Restamping `made_at` and `run_id`
+    # made the slot look redrawn with no review line.
+    if held is not None and held["path"] == where and held["sha256"] == sha:
+        return key
     if (held is not None and held["sha256"] != sha and review_log is not None
             and not _same_pixels(_displaced_file(root, source, part_id, held), path)):
         log = Path(review_log)
@@ -688,21 +787,30 @@ def record_render(conn: sqlite3.Connection, part_id: str, source: str,
             after={"path": where, "sha256": sha})
     conn.execute(
         "INSERT OR REPLACE INTO renders (part_id, source, config_key, run_id, "
-        "made_at, path, sha256, width, height) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (part_id, source, key, run_id, now(), where, sha, width, height))
+        "made_at, path, sha256, width, height, indexed_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (part_id, source, key, run_id, made, where, sha, width, height, now()))
+    conn.execute(
+        "DELETE FROM renders WHERE part_id = ? AND source = ? "
+        "AND config_key != ?", (part_id, source, key))
     conn.commit()
     return key
 
 
 def store_render(conn: sqlite3.Connection, part_id: str, source: str,
                  made: Path | str, root: Path | str = ".",
-                 run_id: int | None = None, by: str = "lab") -> Path:
+                 run_id: int | None = None, by: str = "lab",
+                 made_at: str | None = None) -> Path:
     """Copy a freshly rendered artifact into the store and index it.
 
     The extension follows what was made rather than being assumed:
     `reference` is a raster slot, and reading a WebP as text corrupts it.
+    The copy is given the drawing's time as its mtime (`made_at` if its log
+    stated one), so a rebuild reading the store reads back when it was drawn
+    rather than when it was copied in.
     """
     made = Path(made)
+    when = drawn_at(made, made_at)
     dest = Path(root) / "renders" / source / f"{part_id}{made.suffix}"
     dest.parent.mkdir(parents=True, exist_ok=True)
     # The displaced drawing is read before it is written over: `record_render`
@@ -714,8 +822,10 @@ def store_render(conn: sqlite3.Connection, part_id: str, source: str,
     if held is not None:
         review.keep_before(root, source, part_id, held["path"], held["sha256"])
     dest.write_bytes(made.read_bytes())
+    epoch = datetime.fromisoformat(when).timestamp()
+    os.utime(dest, (epoch, epoch))
     record_render(conn, part_id, source, dest, root=root, run_id=run_id,
-                  by=by)
+                  by=by, made_at=when)
     return dest
 
 
@@ -1042,7 +1152,8 @@ def _stored_attempts(path: Path) -> list[tuple[str, list[tuple]]]:
             rows = [tuple(r) for r in conn.execute(
                 "SELECT a.part_id, a.source, a.state, a.secs, a.error, a.detail "
                 "FROM attempts a JOIN runs r ON r.id = a.run_id "
-                "WHERE r.kind = 'store' AND json_extract(r.args, '$.dir') = ?",
+                "WHERE r.kind = 'store' AND json_extract(r.args, '$.dir') = ? "
+                "ORDER BY a.run_id",
                 (where,))]
             if rows:
                 out.append((where, rows))
@@ -1146,6 +1257,7 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
         # drawing: it renders strokeless, so its fills carry the silhouette.
         # Every suffix the store indexes, not `.svg`: an LDView slot's tree
         # holds WebP, and a glob on the census's own format walked past it.
+        stated = stated_times(census_dir)
         for svg in sorted(p for p in census_dir.glob("renders/*/*")
                           if p.suffix in RENDER_SUFFIXES):
             source = census_source(census_dir, svg.parent.name)
@@ -1157,7 +1269,8 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
                 progress(f"replaced {source}/{svg.stem}: {first} by {svg}")
             try:
                 record_render(conn, svg.stem, source, svg, root=root,
-                              review_log=None)
+                              review_log=None,
+                              made_at=stated.get((svg.parent.name, svg.stem)))
             except Exception as e:  # noqa: BLE001
                 # A census still running leaves half-written files behind it.
                 counts["skipped"] += 1
@@ -1192,10 +1305,7 @@ def rebuild(path: Path | str, ldraw_dir: Path | str, root: Path | str = ".",
     # first, so a log still on disk wins.
     for where, rows in carried:
         run_id = _run_for_tree(conn, where, commit_sha, create=True)
-        conn.executemany(
-            "INSERT OR REPLACE INTO attempts (run_id, part_id, source, state, "
-            "secs, error, detail) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [(run_id, *r) for r in rows])
+        conn.executemany(_ATTEMPT_UPSERT, [(run_id, *r) for r in rows])
         progress(f"{where}: {len(rows)} attempts carried across")
     conn.commit()
     ingest_store(conn, root, commit_sha, progress)

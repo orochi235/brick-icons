@@ -8,12 +8,16 @@ from __future__ import annotations
 import json
 import re
 import time
+import weakref
+from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+import uvicorn
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import (FileResponse, PlainTextResponse, Response,
+                                StreamingResponse)
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from pydantic import BaseModel
@@ -25,9 +29,11 @@ from .. import features
 from .. import tags
 from .. import thumbs, trace
 from ..config import load_config
-from . import (cache, cells, corpus, decal, defects, diff, findings, flight,
-               framing, goldens_status, history, ingest, jobs, partindex, reference, review_api,
-               runner, schema, sizes, stats, store)
+from . import (cache, cells, corpus, decal, defects, diff, events, findings,
+               flight, framing, goldens_status, history, ingest, jobs,
+               partindex, reference, review_api, runner, schema, sizes, stats)
+from . import redraw as redraw_mod
+from . import spot as spot_client
 from .. import db as corpus_db_module
 from .. import review
 
@@ -91,15 +97,40 @@ class BatchRequest(BaseModel):
     force: bool = False
 
 
+#: The event brokers of every app between its lifespan's start and end.
+_serving: weakref.WeakSet[events.Broker] = weakref.WeakSet()
+
+
+class Server(uvicorn.Server):
+    """Ends the lab's event streams as shutdown begins. uvicorn waits for
+    every open response before it runs the lifespan's exit, and an event
+    stream never finishes, so every reload waited out the grace period."""
+
+    async def shutdown(self, sockets=None) -> None:
+        for broker in list(_serving):
+            broker.close()
+        await super().shutdown(sockets)
+
+
 def create_app(root: Path | str = ".",
                cache_root: Path | str = cache.DEFAULT_ROOT,
                defects_path: Path | str | None = None,
                corpus_db: Path | str | None = None,
                thumbs_root: Path | str | None = None,
                requests_path: Path | str | None = None,
-               review_path: Path | str | None = None) -> FastAPI:
+               review_path: Path | str | None = None,
+               spot=None) -> FastAPI:
     root = Path(root)
-    app = FastAPI(title="brick-icons lab")
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        _serving.add(app.state.events)
+        yield
+        _serving.discard(app.state.events)
+        app.state.events.close()
+        app.state.sheet_patches.shutdown()
+
+    app = FastAPI(title="brick-icons lab", lifespan=lifespan)
     # 24,591 cells is ~6.5MB of JSON and highly repetitive; gzip takes it under
     # a megabyte for the cost of one line.
     app.add_middleware(GZipMiddleware, minimum_size=1024)
@@ -111,6 +142,7 @@ def create_app(root: Path | str = ".",
     app.state.stats_cache = {}
     app.state.jobs = jobs.Registry()
     app.state.flights = flight.Flights()
+    app.state.events = events.Broker()
     app.state.defects_path = Path(defects_path) if defects_path else (
         root / defects.DEFAULT_PATH)
     app.state.reference_root = Path(cache_root) / "reference"
@@ -123,6 +155,8 @@ def create_app(root: Path | str = ".",
         root / render_requests.DEFAULT_PATH)
     app.state.review_path = Path(review_path) if review_path else (
         root / review.DEFAULT_PATH)
+    app.state.spot = spot if spot is not None else spot_client.OntoSpot()
+    app.state.sheet_patches = redraw_mod.SheetPatches()
 
     def index() -> dict:
         def build_once() -> dict:
@@ -138,6 +172,13 @@ def create_app(root: Path | str = ".",
     @app.get("/api/health")
     def get_health():
         return {"ok": True, "build": build()}
+
+    @app.get("/api/events")
+    async def get_events(request: Request):
+        return StreamingResponse(
+            events.stream(app.state.events, request.is_disconnected),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache"})
 
     @app.get("/api/schema")
     def get_schema():
@@ -497,11 +538,26 @@ def create_app(root: Path | str = ".",
             "SELECT source, sha256, made_at, path FROM renders "
             "WHERE part_id = ?", (part["id"],))}
         tried = cells.slot_attempts(conn, part["id"])
+        # The engine revision of the slot's newest clean measurement: a
+        # census file is rewritten by every success, so that is the one
+        # on disk. Null for a slot that files no measurements.
+        builds = {r["source"]: r["build"] for r in conn.execute(
+            "SELECT source, build FROM measurements WHERE part_id = ? "
+            "AND source IS NOT NULL AND error IS NULL "
+            "AND build IS NOT NULL ORDER BY run_id", (part["id"],))}
+        # A spot redraw files no measurement; its run carries the build
+        # the worker drew at, and its render is the newer drawing.
+        builds.update({r["source"]: r["commit_sha"] for r in conn.execute(
+            "SELECT r.source, ru.commit_sha FROM renders r "
+            "JOIN runs ru ON ru.id = r.run_id WHERE r.part_id = ? "
+            "AND json_extract(ru.args, '$.via') = 'spot'", (part["id"],))})
         cfg = load_config(root=str(app.state.root))
         slots = []
         for source in cells.live_sources(conn):
             slot = {"source": source, "sha256": None, "made_at": None,
                     **made.get(source, {}),
+                    "build": builds.get(source),
+                    "reference": corpus_db_module.is_reference_slot(source),
                     "secs": tried.get(source, {}).get("secs")}
             path = slot.pop("path", None)
             slot["not_applicable"] = cells.not_applicable(
@@ -558,9 +614,6 @@ def create_app(root: Path | str = ".",
                 "FROM measurements m JOIN runs r ON r.id = m.run_id "
                 "WHERE m.part_id = ? ORDER BY r.started DESC LIMIT 20",
                 (part_id,))]
-            # Every live slot, not only the ones that drew: a slot that timed
-            # out leaves no render, and its absence read as a part nobody had
-            # asked that engine about.
             slots = part_slots(conn, row)
             states = cells.slot_states(conn, part_id,
                                        [s["source"] for s in slots])
@@ -588,8 +641,6 @@ def create_app(root: Path | str = ".",
             built = {name: held[name]
                      for name in (*features.FLAGS, *features.MEASURES)
                      if name in held}
-            asked = render_requests.pending_for(conn, part_id,
-                                                app.state.requests_path)
         finally:
             conn.close()
         part = dict(row)
@@ -605,7 +656,6 @@ def create_app(root: Path | str = ".",
         part["out_of_scope"] = part["category"] in cells.OUT_OF_SCOPE_CATEGORIES
         for slot in slots:
             slot.update(states[slot["source"]])
-            slot["requested_at"] = asked.get(slot["source"])
         return {"part": part, "findings": found, "edges": edges, "runs": runs,
                 "slots": slots, "features": built,
                 "defects": [d for d in defects.load(app.state.defects_path)
@@ -635,8 +685,8 @@ def create_app(root: Path | str = ".",
 
     @app.post("/api/corpus/redraw")
     def post_redraw(req: RedrawRequest):
-        """Draw a part again in one slot: now, on this machine, when it is
-        cheap; queued for the slot's next fleet round when it is not."""
+        """Draw a part again in one slot on the fleet's spot worker. A second
+        ask for the same part and slot while one is out joins it."""
         _check_source(req.source)
         if req.source in render_requests.DRAWN_ELSEWHERE:
             raise HTTPException(400, f"{req.source} is not drawn by this "
@@ -646,34 +696,29 @@ def create_app(root: Path | str = ".",
             if conn.execute("SELECT 1 FROM parts WHERE id = ?",
                             (req.part,)).fetchone() is None:
                 raise HTTPException(404, "no such part")
-            secs = render_requests.cost(conn, req.part, req.source)
         finally:
             conn.close()
-        if not render_requests.draws_here(req.source, secs):
-            asked = render_requests.add(app.state.requests_path, req.part,
-                                        req.source)
-            return {"local": False, "requested_at": asked["at"], "secs": secs}
+        where = redraw_mod.Where(
+            corpus_db=Path(app.state.corpus_db), root=Path(app.state.root),
+            thumbs_root=Path(app.state.thumbs_root),
+            requests_path=Path(app.state.requests_path),
+            scratch=Path(app.state.cache_root) / "spot")
+        return app.state.flights.run(
+            ("redraw", req.part, req.source),
+            lambda: redraw_mod.redraw(req.part, req.source, app.state.spot,
+                                      app.state.events, where,
+                                      app.state.sheet_patches))
 
-        def work(item, emit, cancel):
-            conn = corpus_db_module.connect(app.state.corpus_db)
-            try:
-                run_id = corpus_db_module.start_run(
-                    conn, "render", {"sources": [req.source], "via": "lab"},
-                    build())
-                try:
-                    result = store.render_into_store(
-                        item, req.source, run_id, conn, force=True,
-                        store_root=app.state.root,
-                        lab_root=app.state.cache_root)
-                finally:
-                    corpus_db_module.finish_run(conn, run_id)
-            finally:
-                conn.close()
-            emit(f"{item}: {result['state']}")
-            return result
+    @app.get("/api/spot")
+    def get_spot():
+        """The spot worker: up at origin/main's build, up at another (the
+        next redraw rolls it), or down."""
+        return app.state.spot.status()
 
-        return {"local": True, "secs": secs,
-                "job": app.state.jobs.start("redraw", [req.part], work)}
+    @app.get("/api/spot/status.txt", response_class=PlainTextResponse)
+    def get_spot_line():
+        """The same, as the one line `brick-lab stat` prints."""
+        return spot_client.status_line(app.state.spot.status())
 
     def _thumb_file(slot: Path, stem: str) -> Path | None:
         """The baked file for `stem`, whatever it was encoded as.
@@ -693,15 +738,9 @@ def create_app(root: Path | str = ".",
             path = slot / f"sheet-{level}.json"
             if not path.is_file():
                 raise HTTPException(404, "no such sheet manifest")
-            # The image is rewritten by every bake at a URL the client would
-            # otherwise never vary, so a browser can hold last week's atlas
-            # against this manifest and read every tile at the wrong offset.
-            # Its mtime is the version, and it costs no re-bake to publish.
-            manifest = json.loads(path.read_text())
-            image = _thumb_file(slot, f"sheet-{level}")
-            if image is not None:
-                manifest["version"] = str(int(image.stat().st_mtime))
-            return JSONResponse(manifest)
+            # The manifest carries its own version, bumped with every write of
+            # the image, so a browser holding an older atlas refetches it.
+            return FileResponse(path, media_type="application/json")
         path = _thumb_file(slot, f"sheet-{level}")
         if path is None:
             raise HTTPException(404, "no such sheet; run scripts/bake-thumbs.py")

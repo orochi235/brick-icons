@@ -589,51 +589,143 @@ it('says nothing about a pose for a part that declares none', async () => {
   expect(screen.queryByText(/turn about/)).toBeNull();
 });
 
-const settled = (overrides: Record<string, unknown> = {}) => ({
-  id: 'j1', kind: 'redraw', state: 'done', total: 1, done: 1, failed: 0,
-  events: [], results: [], ...overrides,
+const up = { state: 'up', build: '9.c', want: '9.c', detail: null };
+const redrawn = { ...detail, slots: [detail.slots[0],
+                                     { ...detail.slots[1], sha256: 'feedface0000' }] };
+const naiveSrc = () =>
+  screen.getByRole('img', { name: '3001 drawn by naive' }).getAttribute('src');
+const answering = (answer: unknown, status: unknown = up) => ({
+  corpusPart: async () => detail,
+  redraw: async () => answer,
+  spotStatus: async () => status,
 });
 
-it('redraws a cheap slot on the spot and shows what it drew', async () => {
-  const redrawn = { ...detail, slots: [detail.slots[0],
-                                       { ...detail.slots[1], sha256: 'feedface0000' }] };
+it('redraws the slot and shows what it drew', async () => {
   const corpusPart = vi.fn().mockResolvedValueOnce(detail).mockResolvedValue(redrawn);
-  const redraw = vi.fn(async () => ({ local: true, job: 'j1', secs: 2 }));
-  const job = vi.fn(async () => settled());
+  const redraw = vi.fn(async () => ({ state: 'stored', sha: 'feedface0000' }));
   render(<Lightbox partId="3001" source="naive" onClose={() => {}}
-                   client={{ corpusPart, redraw, job } as any} />);
+                   client={{ corpusPart, redraw, spotStatus: async () => up } as any} />);
   await waitFor(() => screen.getByText('Brick 2 x 4'));
   fireEvent.click(screen.getByText('Redraw naive'));
-  await waitFor(() => expect(
-    screen.getByRole('img', { name: '3001 drawn by naive' }).getAttribute('src'))
-    .toContain('v=feedface'));
+  await waitFor(() => expect(naiveSrc()).toContain('v=feedface'));
   expect(redraw).toHaveBeenCalledWith('3001', 'naive');
+  expect(screen.getByText('Redraw naive')).toBeTruthy();
 });
 
-it('says a slow slot is queued for its next round', async () => {
-  const asked = '2026-09-13T12:00:00+00:00';
-  const queued = { ...detail, slots: [detail.slots[0],
-                                      { ...detail.slots[1], requested_at: asked }] };
-  const corpusPart = vi.fn().mockResolvedValueOnce(detail).mockResolvedValue(queued);
-  const redraw = vi.fn(async () => ({ local: false, requested_at: asked, secs: 300 }));
+it('says the worker is down without asking for a redraw', async () => {
+  const redraw = vi.fn();
+  const down = { state: 'down', build: null, want: '9.c', detail: 'offline' };
   render(<Lightbox partId="3001" source="naive" onClose={() => {}}
-                   client={{ corpusPart, redraw } as any} />);
+                   client={{ corpusPart: async () => detail, redraw,
+                             spotStatus: async () => down } as any} />);
   await waitFor(() => screen.getByText('Brick 2 x 4'));
   fireEvent.click(screen.getByText('Redraw naive'));
-  await waitFor(() => screen.getByText('Queued for the next naive round · asked 2026-09-13'));
+  await waitFor(() => screen.getByText('spot render is down'));
+  expect(redraw).not.toHaveBeenCalled();
 });
 
-it('says why a redraw failed', async () => {
-  const corpusPart = vi.fn().mockResolvedValue(detail);
-  const redraw = vi.fn(async () => ({ local: true, job: 'j1', secs: 2 }));
-  const job = vi.fn(async () => settled({
-    done: 0, failed: 1,
-    events: [{ index: 1, total: 1, message: 'RuntimeError: boom', ok: false }] }));
+it('says the worker is down when it goes away mid-click', async () => {
   render(<Lightbox partId="3001" source="naive" onClose={() => {}}
-                   client={{ corpusPart, redraw, job } as any} />);
+                   client={answering({ state: 'down', detail: 'gone' }) as any} />);
   await waitFor(() => screen.getByText('Brick 2 x 4'));
   fireEvent.click(screen.getByText('Redraw naive'));
-  await waitFor(() => screen.getByText('Redraw failed: RuntimeError: boom'));
+  await waitFor(() => screen.getByText('spot render is down'));
+});
+
+it('says the worker is updating while a redraw waits on a roll', async () => {
+  let land: (v: unknown) => void = () => {};
+  const stale = { state: 'stale', build: '8.b', want: '9.c', detail: null };
+  render(<Lightbox partId="3001" source="naive" onClose={() => {}}
+                   client={{ corpusPart: async () => detail,
+                             redraw: () => new Promise((resolve) => { land = resolve; }),
+                             spotStatus: async () => stale } as any} />);
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  fireEvent.click(screen.getByText('Redraw naive'));
+  await waitFor(() => screen.getByText('updating worker…'));
+  expect((screen.getByText('updating worker…') as HTMLButtonElement).disabled).toBe(true);
+  land({ state: 'unchanged', sha: 'deadbeef0000' });
+  await waitFor(() => screen.getByText('unchanged'));
+});
+
+it('says Drawing while a redraw is out', async () => {
+  render(<Lightbox partId="3001" source="naive" onClose={() => {}}
+                   client={{ corpusPart: async () => detail,
+                             redraw: () => new Promise(() => {}),
+                             spotStatus: async () => up } as any} />);
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  fireEvent.click(screen.getByText('Redraw naive'));
+  await waitFor(() => screen.getByText('Drawing…'));
+});
+
+it('says a timeout in words', async () => {
+  render(<Lightbox partId="3001" source="naive" onClose={() => {}}
+                   client={answering({ state: 'failed', error: 'TimeoutError',
+                                       detail: 'exceeded 150s' }) as any} />);
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  fireEvent.click(screen.getByText('Redraw naive'));
+  await waitFor(() => screen.getByText('Redraw failed: timed out'));
+});
+
+it('says a failed roll in onto\'s words', async () => {
+  render(<Lightbox partId="3001" source="naive" onClose={() => {}}
+                   client={answering({ state: 'failed', error: 'RollFailed',
+                                       detail: 'uv sync failed' }) as any} />);
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  fireEvent.click(screen.getByText('Redraw naive'));
+  await waitFor(() => screen.getByText('Redraw failed: updating worker failed: uv sync failed'));
+});
+
+it('says why any other redraw failed', async () => {
+  render(<Lightbox partId="3001" source="naive" onClose={() => {}}
+                   client={answering({ state: 'failed', error: 'ValueError',
+                                       detail: 'boom' }) as any} />);
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  fireEvent.click(screen.getByText('Redraw naive'));
+  await waitFor(() => screen.getByText('Redraw failed: ValueError: boom'));
+});
+
+it('keeps a redraw that lands after a switch off the part now shown', async () => {
+  let land: (v: unknown) => void = () => {};
+  const plate = { ...detail, part: { ...detail.part, id: '3023', title: 'Plate 1 x 2' } };
+  const corpusPart = vi.fn(async (id: string) => (id === '3023' ? plate : redrawn));
+  const client = { corpusPart, spotStatus: async () => up,
+                   redraw: () => new Promise((resolve) => { land = resolve; }) } as any;
+  const { rerender } = render(<Lightbox partId="3001" source="naive"
+                                        onClose={() => {}} client={client} />);
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  fireEvent.click(screen.getByText('Redraw naive'));
+  await waitFor(() => screen.getByText('Drawing…'));
+  rerender(<Lightbox partId="3023" source="naive" onClose={() => {}} client={client} />);
+  await waitFor(() => screen.getByText('Plate 1 x 2'));
+  land({ state: 'stored', sha: 'feedface0000' });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(screen.getByText('Plate 1 x 2')).toBeTruthy();
+  expect(screen.queryByText('Brick 2 x 4')).toBeNull();
+  expect(screen.getByText('Redraw naive')).toBeTruthy();
+});
+
+it('follows a redraw of this part made anywhere', async () => {
+  let tell: (e: unknown) => void = () => {};
+  const stop = vi.fn();
+  const onChanged = vi.fn((listener: (e: unknown) => void) => { tell = listener; return stop; });
+  const corpusPart = vi.fn().mockResolvedValueOnce(detail).mockResolvedValue(redrawn);
+  const { unmount } = render(
+    <Lightbox partId="3001" source="naive" onClose={() => {}}
+              client={{ corpusPart, onChanged } as any} />);
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  tell({ part: '9999', source: 'naive', sha: 'x', build: '9.c' });
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  expect(corpusPart).toHaveBeenCalledTimes(1);
+  tell({ part: '3001', source: 'naive', sha: 'feedface0000', build: '9.c' });
+  await waitFor(() => expect(naiveSrc()).toContain('v=feedface'));
+  unmount();
+  expect(stop).toHaveBeenCalled();
+});
+
+it('shows no queued note, since nothing is queued any more', async () => {
+  render(box());
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  expect(document.querySelector('.corpus-queued')).toBeNull();
 });
 
 // --- outlines in translucent views -----------------------------------------
@@ -727,4 +819,31 @@ it('returns focus to the tile that opened the zoomed viewer, on close', async ()
   await screen.findByRole('dialog', { name: /silhouette-occt/ });
   fireEvent.keyDown(window, { key: 'Escape' });
   expect(document.activeElement).toBe(radio);
+});
+
+// --- the age tag -------------------------------------------------------------
+
+const withReference = {
+  ...detail,
+  slots: [
+    { source: 'occt', sha256: 'feedbeef0000', made_at: '2026-09-05T10:00:00+00:00',
+      reference: false, build: '101.abc1234' },
+    { source: 'reference-gray', sha256: 'c0ffee000000',
+      made_at: '2026-09-05T10:00:00+00:00', reference: true, build: null },
+    { source: 'white-occt', sha256: null, made_at: null, reference: false },
+  ],
+};
+
+it('tags every drawn slot with its age, and no reference slot', async () => {
+  render(box({ client: {
+    corpusPart: () => Promise.resolve(withReference), addDefect } }));
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  const tagged = (source: string) => document
+    .querySelector(`.corpus-slot[data-source="${source}"] .corpus-age`);
+  const tag = tagged('occt');
+  expect(tag?.textContent).toMatch(/^(now|\d+[mhdwy])$/);
+  expect(tag?.getAttribute('title')).toMatch(/^drawn .* · build 101\.abc1234$/);
+  expect(tagged('reference-gray')).toBeNull();
+  // Nothing drawn, so nothing to date.
+  expect(tagged('white-occt')).toBeNull();
 });

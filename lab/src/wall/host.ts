@@ -19,8 +19,8 @@ const BY_CATEGORY: GroupKey<Cell> = { reads: ['category'], of: categoryOf };
 // fresh key on every layout would add a column each time the wall re-sorts.
 const rolledKeys = new WeakMap<Facts<Cell>, Map<string, GroupKey<Cell>>>();
 
-/** Rolled up over what is on the wall, as `CorpusWall` does. A grouping key
- *  sees one item at a time, so the names are counted across the rows first. */
+/** Rolled up over what is on the wall. A grouping key sees one item at a
+ *  time, so the names are counted across the rows first. */
 export const byCategory: Layout<Cell> = (input, opts) => {
   if (!input.facts) throw new Error('a grouped layout needs the facts');
   const column = projectColumn(input.facts, BY_CATEGORY, BY_CATEGORY.reads,

@@ -351,8 +351,11 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
     order = [r["id"] for r in conn.execute("SELECT id FROM parts ORDER BY id")]
     index = {pid: i for i, pid in enumerate(order)}
 
+    # `landed` and not `made_at` for the delta: a drawing made before the
+    # client's version and fetched after it is still news to that client.
     renders = {r["part_id"]: r for r in conn.execute(
-        "SELECT part_id, sha256, made_at FROM renders WHERE source = ?",
+        "SELECT part_id, sha256, made_at, "
+        "COALESCE(indexed_at, made_at) AS landed FROM renders WHERE source = ?",
         (source,))}
     engine = engine_for(source)
     measures = {r["part_id"]: r for r in conn.execute(
@@ -382,14 +385,14 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
     # resent whenever that fingerprint moves. Without the second half, filing
     # a defect updated the lightbox and left the cell behind it stale until a
     # reload -- the delta is built from renders, and no render had happened.
-    drawn = max((r["made_at"] for r in renders.values()), default="")
+    drawn = max((r["landed"] for r in renders.values()), default="")
     said_about, stamp = judged(conn)
     version = f"{drawn}|{stamp}"
     wanted = order
     if since is not None:
         was_drawn, _, was_stamp = since.partition("|")
         wanted = {pid for pid, r in renders.items()
-                  if r["made_at"] > was_drawn}
+                  if r["landed"] > was_drawn}
         if was_stamp != stamp:
             wanted |= said_about
         wanted = sorted(wanted)

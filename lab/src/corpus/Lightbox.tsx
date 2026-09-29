@@ -1,7 +1,8 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { LabClient } from '@lab/api/client';
-import { settledJob } from '@lab/api/jobPoll';
+import type { RedrawAnswer } from '@lab/api/types';
+import { useChanged } from '@lab/api/useChanged';
 import { BadgeSwatch } from '@lab/corpus/BadgeSwatch';
 import { CATALOGS } from '@lab/corpus/catalogs';
 import { Fingerprint } from '@lab/corpus/Fingerprint';
@@ -18,6 +19,7 @@ import { ZoomView } from '@lab/corpus/ZoomView';
 import { STATUSES, type DefectStatus } from '@lab/defects/useDefects';
 import { STATUS_BADGES } from '@lab/defects/statusBadges';
 import { CHIP, MaterialBar } from '@lab/shared/MaterialBar';
+import { age } from '@lab/shared/age';
 import { chartRank, materialOf } from '@lab/shared/materials';
 import '@lab/corpus/Lightbox.css';
 
@@ -51,6 +53,41 @@ function placementBox(p: NonNullable<Slot['placement']>) {
 function whyNothing(slot: Slot): string[] {
   if (!slot.error) return ['not drawn'];
   return slot.secs != null ? [slot.error, `${slot.secs}s`] : [slot.error];
+}
+
+/** What the Redraw button is doing, or last had to say. */
+type RedrawUi =
+  | { busy: 'drawing' | 'updating' }
+  | { said: 'down' | 'unchanged' }
+  | { error: string }
+  | null;
+
+const BUSY_LABEL = { drawing: 'Drawing…', updating: 'updating worker…' } as const;
+const SAID_LABEL = { down: 'spot render is down', unchanged: 'unchanged' } as const;
+
+/** A failed redraw in words. A timeout is the one met most, and its bare
+ *  class name reads as a crash; a failed roll is onto's to explain. */
+function failure(answer: RedrawAnswer): string {
+  if (answer.error === 'TimeoutError') return 'timed out';
+  if (answer.error === 'RollFailed') return `updating worker failed: ${answer.detail ?? ''}`;
+  if (answer.error && answer.detail) return `${answer.error}: ${answer.detail}`;
+  return answer.error ?? answer.detail ?? 'unknown error';
+}
+
+/** How old a drawing is, in the corner of its thumbnail. None on a reference:
+ *  it is ground truth, and its age says nothing about the engine. */
+function AgeTag({ slot }: { slot: Slot }) {
+  if (slot.reference || !slot.made_at) return null;
+  const shown = age(slot.made_at);
+  if (shown === null) return null;
+  const drawn = new Date(slot.made_at).toLocaleString(undefined, {
+    dateStyle: 'medium', timeStyle: 'short' });
+  return (
+    <span className="corpus-age"
+          title={`drawn ${drawn}${slot.build ? ` · build ${slot.build}` : ''}`}>
+      {shown}
+    </span>
+  );
 }
 
 /** The state the wall would color this slot's cell. An API older than the
@@ -144,13 +181,15 @@ export function Lightbox({ partId, source, client, onClose,
   // defect on the part at once, which is too much to hand to a slip.
   const [fixing, setFixing] = useState<'idle' | 'armed' | 'busy'>('idle');
   const [fixError, setFixError] = useState<string | null>(null);
-  const [redraw, setRedraw] = useState<{ drawing: true } | { error: string } | null>(null);
+  const [redraw, setRedraw] = useState<RedrawUi>(null);
   const [zoomedSlot, setZoomedSlot] = useState<Slot | null>(null);
-  const gone = useRef(new AbortController());
   const closeRef = useRef<HTMLButtonElement>(null);
   // The radio a double-click opened the zoomed view from, so closing it can
   // hand focus back rather than dropping it to the document body.
   const zoomOpenerRef = useRef<HTMLElement | null>(null);
+  // The part on screen now, for an answer that arrives after a switch.
+  const partRef = useRef(partId);
+  partRef.current = partId;
 
   useEffect(() => {
     let live = true;
@@ -161,6 +200,15 @@ export function Lightbox({ partId, source, client, onClose,
   }, [partId, client]);
 
   useEffect(() => { setShown(source); }, [source]);
+  useEffect(() => { setRedraw(null); }, [shown, partId]);
+
+  // A redraw of this part from anywhere -- this lightbox, another tab, a
+  // script -- lands here at once rather than on the next open.
+  useChanged(client, (events) => {
+    if (events.some((event) => event.part === partId)) {
+      void client.corpusPart(partId).then(setDetail);
+    }
+  });
 
   // One listener deciding both cases, rather than a second one on the zoomed
   // view racing it: closing the zoom first, when it is open, cannot depend on
@@ -182,11 +230,6 @@ export function Lightbox({ partId, source, client, onClose,
   useEffect(() => {
     if (zoomedSlot === null) zoomOpenerRef.current?.focus();
   }, [zoomedSlot]);
-
-  useEffect(() => {
-    const ctl = gone.current;
-    return () => ctl.abort();
-  }, []);
 
   // An API older than this component sends no slots -- the lab's server is a
   // long-lived process and outlives a reload of the page in front of it.
@@ -221,27 +264,38 @@ export function Lightbox({ partId, source, client, onClose,
   const shaOf = (source: string) =>
     slots.find((slot) => slot.source === source)?.sha256;
 
-  /** Draw the slot on screen again. The server decides whether that happens
-   *  now or in the slot's next fleet round; either way the detail is reloaded,
-   *  so the new drawing or the queued note is what shows. */
+  /** Draw the slot on screen again, on the fleet's spot worker. Asking the
+   *  worker's state first is what lets the button say a roll is coming, and
+   *  a down worker is said without a request that would only fail. */
   const redrawShown = async () => {
-    setRedraw({ drawing: true });
+    const asked = partId;
+    const still = () => partRef.current === asked;
     try {
-      const answer = await client.redraw(partId, shown);
-      if (answer.local && answer.job) {
-        const job = await settledJob(client, answer.job, { signal: gone.current.signal });
-        if (!job) return;
-        const failure = job.events.find((event) => !event.ok);
-        setRedraw(failure ? { error: failure.message } : null);
-      } else {
+      const spot = await client.spotStatus();
+      if (!still()) return;
+      if (spot.state === 'down') { setRedraw({ said: 'down' }); return; }
+      setRedraw({ busy: spot.state === 'stale' ? 'updating' : 'drawing' });
+      const answer = await client.redraw(asked, shown);
+      if (!still()) return;
+      if (answer.state === 'stored') {
         setRedraw(null);
+        const drawn = await client.corpusPart(asked);
+        if (still()) setDetail(drawn);
+      } else if (answer.state === 'down' || answer.state === 'unchanged') {
+        setRedraw({ said: answer.state });
+      } else if (answer.state === 'none') {
+        setRedraw({ error: 'nothing to draw in this slot' });
+      } else {
+        setRedraw({ error: failure(answer) });
       }
-      setDetail(await client.corpusPart(partId));
     } catch (e) {
-      setRedraw({ error: e instanceof Error ? e.message : String(e) });
+      if (still()) setRedraw({ error: e instanceof Error ? e.message : String(e) });
     }
   };
-  const drawing = redraw !== null && 'drawing' in redraw;
+  const busy = redraw !== null && 'busy' in redraw;
+  const redrawLabel = redraw !== null && 'busy' in redraw ? BUSY_LABEL[redraw.busy]
+    : redraw !== null && 'said' in redraw ? SAID_LABEL[redraw.said]
+    : `Redraw ${shown}`;
 
   const unfixed = (detail?.defects ?? []).filter((d) => d.status !== 'fixed').length;
   const flagged = detail !== null && detail.part.status !== 'unreviewed';
@@ -259,8 +313,6 @@ export function Lightbox({ partId, source, client, onClose,
   const fixLabel = fixing === 'busy' ? 'Marking…'
     : fixing === 'armed' ? (unfixed > 0 ? `Close ${unfixed} as fixed` : 'Clear status')
     : 'Mark fixed';
-  const queuedAt = slots.find((slot) => slot.source === shown)?.requested_at;
-
   /** Close a defect out, or send it back round. Either way the render in
    *  front of you is stamped as judged, so a defect left open stops asking
    *  until the slot draws something else again -- without that, one look at a
@@ -378,20 +430,25 @@ export function Lightbox({ partId, source, client, onClose,
                 <input type="radio" name="corpus-slot-shown" aria-label={slot.source}
                        className="corpus-slot-radio" checked={slot.source === shown}
                        onChange={() => setShown(slot.source)} />
-                {slot.sha256 && slot.placement ? (
-                  <span className="corpus-big corpus-big-placed">
-                    <img alt={`${partId} drawn by ${slot.source}`}
-                         src={renderSrc(partId, slot, outlineTranslucent)}
-                         ref={(el) => {
-                           if (!el || !slot.placement) return;
-                           for (const [k, v] of Object.entries(placementBox(slot.placement))) {
-                             el.style.setProperty(`--place-${k}`, v);
-                           }
-                         }} />
+                {slot.sha256 ? (
+                  <span className="corpus-big-box">
+                    {slot.placement ? (
+                      <span className="corpus-big corpus-big-placed">
+                        <img alt={`${partId} drawn by ${slot.source}`}
+                             src={renderSrc(partId, slot, outlineTranslucent)}
+                             ref={(el) => {
+                               if (!el || !slot.placement) return;
+                               for (const [k, v] of Object.entries(placementBox(slot.placement))) {
+                                 el.style.setProperty(`--place-${k}`, v);
+                               }
+                             }} />
+                      </span>
+                    ) : (
+                      <img className="corpus-big" alt={`${partId} drawn by ${slot.source}`}
+                           src={renderSrc(partId, slot, outlineTranslucent)} />
+                    )}
+                    <AgeTag slot={slot} />
                   </span>
-                ) : slot.sha256 ? (
-                  <img className="corpus-big" alt={`${partId} drawn by ${slot.source}`}
-                       src={renderSrc(partId, slot, outlineTranslucent)} />
                 ) : (
                   <span className="corpus-big corpus-slot-empty">
                     {whyNothing(slot).map((line) => <span key={line}>{line}</span>)}
@@ -421,9 +478,9 @@ export function Lightbox({ partId, source, client, onClose,
                     onClick={() => setTurning((was) => !was)}>
               {turning ? 'Hide 3D' : 'Turn it around'}
             </button>
-            <button type="button" className="corpus-action" disabled={drawing}
+            <button type="button" className="corpus-action" disabled={busy}
                     onClick={() => void redrawShown()}>
-              {drawing ? 'Drawing…' : `Redraw ${shown}`}
+              {redrawLabel}
             </button>
             <label className="corpus-action-toggle">
               <input type="checkbox" checked={outlineTranslucent}
@@ -446,11 +503,6 @@ export function Lightbox({ partId, source, client, onClose,
           </div>
           {fixError && (
             <p className="corpus-flag-error" role="alert">Mark fixed failed: {fixError}</p>
-          )}
-          {queuedAt && (
-            <p className="corpus-queued">
-              Queued for the next {shown} round · asked {queuedAt.slice(0, 10)}
-            </p>
           )}
           {redraw !== null && 'error' in redraw && (
             <p className="corpus-flag-error" role="alert">Redraw failed: {redraw.error}</p>

@@ -180,8 +180,7 @@ def test_a_second_render_of_the_same_config_replaces_the_row(tmp_path):
 
 
 def test_an_older_drawing_does_not_displace_a_newer_one(tmp_path):
-    """`made_at` is stamped at ingest and cannot order two drawings, so a
-    census tree fetched late would otherwise walk a slot backwards."""
+    """A census tree fetched late would otherwise walk a slot backwards."""
     conn = db.connect(tmp_path / "corpus.db")
     new = tmp_path / "renders" / "naive" / "3001.svg"
     new.parent.mkdir(parents=True)
@@ -197,6 +196,15 @@ def test_an_older_drawing_does_not_displace_a_newer_one(tmp_path):
     row = conn.execute("SELECT * FROM renders").fetchone()
     assert row["width"] == 300.0
     assert row["path"] == "renders/naive/3001.svg"
+
+
+def test_every_drawing_slot_states_its_stroke_widths():
+    """The key is the argv, so a slot inheriting the default would keep its
+    key -- and its lab cache -- when the default moved."""
+    for source in db.SOURCES:
+        argv = db.canonical_argv("3001", source)
+        if "--engine" in argv:
+            assert "--line-width" in argv and "--silhouette-width" in argv, source
 
 
 def test_an_unknown_source_is_refused(tmp_path):
@@ -600,6 +608,38 @@ def test_the_build_names_a_revision_and_flags_an_uncommitted_engine():
     import brick_icons
     b = brick_icons.build()
     assert b == "unknown" or re.fullmatch(r"\d+\.[0-9a-f]{7,}\+?", b), b
+
+
+def test_a_named_revision_has_the_build_form_without_a_dirty_mark():
+    import brick_icons
+    head = brick_icons.build()
+    if head == "unknown":
+        pytest.skip("no build here")
+    assert brick_icons.build_of("HEAD") == head.rstrip("+")
+
+
+def test_a_revision_git_cannot_find_is_unknown():
+    import brick_icons
+    assert brick_icons.build_of("no-such-rev-anywhere") == "unknown"
+    assert brick_icons.commit_of("no-such-rev-anywhere") is None
+
+
+def test_a_commit_is_named_in_full():
+    import brick_icons
+    sha = brick_icons.commit_of("HEAD")
+    assert sha is None or re.fullmatch(r"[0-9a-f]{40}", sha), sha
+
+
+def test_a_shallow_repository_is_unknown_not_undercounted(monkeypatch):
+    import brick_icons
+
+    def fake_git(*args):
+        if args[:2] == ("rev-parse", "--is-shallow-repository"):
+            return "true"
+        raise AssertionError(f"should not be called in a shallow repo: {args}")
+
+    monkeypatch.setattr(brick_icons, "_git", fake_git)
+    assert brick_icons.build_of("HEAD") == "unknown"
 
 
 def test_census_source_repeats_no_engine_it_is_already_named_with():
@@ -1029,3 +1069,57 @@ def test_a_database_without_the_preview_column_gains_it(tmp_path):
     conn = db.connect(path)
     have = {r["name"] for r in conn.execute("PRAGMA table_info(parts)")}
     assert "preview" in have
+
+
+def test_a_spot_redraw_is_an_attempt_in_its_own_run(tmp_path):
+    conn = db.connect(tmp_path / "corpus.db")
+    first = db.spot_run(conn, "7.abc1234", "3001", "occt")
+    db.record_attempt(conn, first, {"part": "3001", "source": "occt",
+                                    "state": None, "secs": 150.2,
+                                    "error": "TimeoutError", "detail": "cap"})
+    second = db.spot_run(conn, "7.abc1234", "3001", "occt")
+    db.record_attempt(conn, second, {"part": "3001", "source": "occt",
+                                     "state": "stored", "secs": 4.1})
+    assert second > first
+    run = conn.execute("SELECT kind, commit_sha, args FROM runs WHERE id = ?",
+                       (second,)).fetchone()
+    assert run["kind"] == "store"
+    assert run["commit_sha"] == "7.abc1234"
+    assert json.loads(run["args"])["dir"] == db.SPOT_TREE
+    rows = conn.execute("SELECT run_id, state, secs, error FROM attempts "
+                        "ORDER BY run_id").fetchall()
+    assert [tuple(r) for r in rows] == [
+        (first, None, 150.2, "TimeoutError"), (second, "stored", 4.1, None)]
+
+
+def test_a_rebuild_keeps_the_newest_spot_attempt(tmp_path):
+    out = tmp_path / "corpus.db"
+    lib = _library(tmp_path)
+    db.rebuild(out, lib, root=tmp_path, census_dirs=[])
+    conn = db.connect(out)
+    for state, error in ((None, "TimeoutError"), ("stored", None)):
+        run_id = db.spot_run(conn, "7.abc1234", "3001", "occt")
+        db.record_attempt(conn, run_id, {"part": "3001", "source": "occt",
+                                         "state": state, "error": error,
+                                         "secs": 3.0})
+    conn.close()
+
+    db.rebuild(out, lib, root=tmp_path, census_dirs=[])
+    conn = db.connect(out)
+    row = conn.execute("SELECT state, error FROM attempts "
+                       "WHERE part_id = '3001'").fetchone()
+    assert (row["state"], row["error"]) == ("stored", None)
+
+
+def test_touching_a_render_moves_only_its_stamp(tmp_path):
+    conn = db.connect(tmp_path / "corpus.db")
+    conn.execute("INSERT INTO parts (id, title, printed, obsolete) "
+                 "VALUES ('3001', 'Brick', 0, 0)")
+    conn.execute("INSERT INTO renders (part_id, source, config_key, made_at, "
+                 "path, sha256) VALUES ('3001', 'occt', 'k', "
+                 "'2020-01-01T00:00:00+00:00', 'renders/occt/3001.svg', 'x')")
+    conn.commit()
+    db.touch_render(conn, "3001", "occt")
+    row = conn.execute("SELECT made_at, sha256 FROM renders").fetchone()
+    assert row["made_at"] > "2020-01-01T00:00:00+00:00"
+    assert row["sha256"] == "x"

@@ -38,6 +38,7 @@ def index(conn: sqlite3.Connection, root: Path | str = ".",
     known = {r["id"] for r in conn.execute("SELECT id FROM parts")}
     have = {r["part_id"] for r in conn.execute(
         "SELECT part_id FROM renders WHERE source = ?", (SOURCE,))}
+    stated = db.stated_times(root / "out" / TREE)
     recorded = 0
     for svg in sorted(kept.glob("*.svg")):
         if recorded >= limit:
@@ -46,7 +47,8 @@ def index(conn: sqlite3.Connection, root: Path | str = ".",
         if pid not in known or pid in have:
             continue
         try:
-            db.record_render(conn, pid, SOURCE, svg, root=root)
+            db.record_render(conn, pid, SOURCE, svg, root=root,
+                             made_at=stated.get((ENGINE, pid)))
         except Exception as e:  # noqa: BLE001
             # The census is still running and kills shards mid-write, so a
             # truncated SVG is expected traffic, not a reason to stop.

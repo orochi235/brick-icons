@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 
 from . import timing
-from . import arcfit
+from . import arcfit, quadric
 from . import primitives, sweep
 from . import repair
 
@@ -484,6 +484,40 @@ def _visible_segments_faceted(out, right, up, fwd, render_px, cull=True):
                      (), proj)
 
 
+def _limb_ellipses(out, proj, fwd, half):
+    """{id(region): (Ellipse, arc candidate)} for every fitted region's limb,
+    in render px."""
+    got = {}
+    for r in out.get("fit_quadrics", ()):
+        C, U, V = quadric.limb(r["fit"], fwd)
+        ell = primitives.project_circle_uv(C, U, V, proj.to_AB, proj.s,
+                                           proj.cx, proj.cy, half)
+        got[id(r)] = (ell, quadric.limb_candidate(r, C, U, V, proj.to_px))
+    return got
+
+
+def _limb_chord_spec(ell, px, py, z):
+    """A silhouette chord of a fitted region, drawn as the span of the limb
+    it cuts across and occlusion-tested along the chord itself -- the chord
+    lies on the facets, so the arc inherits exactly their visibility (see
+    arcfit's chord proxy)."""
+    M = np.array([[ell.u[0], ell.v[0]], [ell.u[1], ell.v[1]]])
+    m = np.linalg.solve(M, np.array([px[:2] - ell.center[0],
+                                     py[:2] - ell.center[1]]))
+    t0, t1 = np.degrees(np.arctan2(m[1], m[0]))
+    t1 = t0 + (t1 - t0 + 180.0) % 360.0 - 180.0      # the short way round
+    tv = np.array([t0, t1])
+    xs, ys, zs = (np.array([a[0], a[1]], float) for a in (px, py, z))
+    if t1 < t0:
+        tv, xs, ys, zs = tv[::-1], xs[::-1], ys[::-1], zs[::-1]
+
+    def chord_proxy(degs, tv=tv, xs=xs, ys=ys, zs=zs):
+        d = np.asarray(degs, float)
+        return np.interp(d, tv, xs), np.interp(d, tv, ys), np.interp(d, tv, zs)
+    return (primitives._arc_op(ell, float(t0), float(t1), "sil"),
+            primitives._arc_depth_fn(ell), None, chord_proxy)
+
+
 def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
     """Exact pipeline: analytic occlusion oracle + true arc/line drawn ops.
     cull=False emits every drawn op whole (translucent rendering)."""
@@ -572,15 +606,21 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
         specs.append((("line", float(px[0]), float(py[0]),
                        float(px[1]), float(py[1]), "edge"),
                       primitives._line_depth_fn(float(z[0]), float(z[1]))))
+    limbs = _limb_ellipses(out, proj, fwd, half)
     for q in out["5"]:
         px, py, z = proj.to_px(q)
         p1 = np.array([px[0], py[0]]); p2 = np.array([px[1], py[1]])
         if math.hypot(*(p2 - p1)) < 0.5:
             continue
         if same_side(p1, p2, np.array([px[2], py[2]]), np.array([px[3], py[3]])):
+            region = quadric.region_of_condline(q, out.get("fit_quadrics", ()))
+            if region is not None:
+                specs.append(_limb_chord_spec(limbs[id(region)][0], px, py, z))
+                continue
             specs.append((("line", float(px[0]), float(py[0]),
                            float(px[1]), float(py[1]), "sil"),
                           primitives._line_depth_fn(float(z[0]), float(z[1]))))
+    limb_ells = [cand for _ell, cand in limbs.values() if cand is not None]
 
     if cull:
         segs = primitives.visible_subops(specs, occluders, proj.ray_origin, fwd,
@@ -617,7 +657,7 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
     # cuts across thin slivers (a counterbore crescent's tips).
     # a printed disc's boundary is a polygon in UV and projects to one:
     # recovered here so it reads as smoothly as the analytic rim beside it
-    ells, seen = list(fit_ells) + decal_ells, set()
+    ells, seen = list(fit_ells) + limb_ells + decal_ells, set()
     for prim in analytic:
         for op, *_ in prim.drawn_with_depth(proj):
             if op[0] == "arc":
@@ -1296,6 +1336,10 @@ def draw_flattened(out, right, up, fwd, render_px=900, cull=True,
     # any part that gains one needs the analytic pipeline to draw it
     with timing.phase("arcfit"):
         out["fit_arcs"], out["2"] = arcfit.fit_edge_arcs(out["2"], out["5"])
+    # declared-smooth regions a sphere or ellipsoid fits: both engines draw
+    # their outline on the fitted limb rather than on the facet polygon
+    with timing.phase("quadric"):
+        out["fit_quadrics"] = quadric.fitted_regions(out)
     if engine == "occt":
         # Its own phase: OCP is a 0.65s import, paid once per process by
         # whichever part a worker happens to draw first. Left unnamed it
@@ -1317,7 +1361,7 @@ def draw_flattened(out, right, up, fwd, render_px=900, cull=True,
     if engine == "cadquery":
         from . import cqsvg
         return cqsvg.visible_segments(out, right, up, render_px, cull=cull)
-    if out["analytic"] or out["fit_arcs"]:
+    if out["analytic"] or out["fit_arcs"] or out["fit_quadrics"]:
         with timing.phase("engine"):
             res = _visible_segments_analytic(out, right, up, fwd, render_px,
                                              cull=cull)

@@ -23,12 +23,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 FONT = "/System/Library/Fonts/Helvetica.ttc"
 
-SLOT_ARGS = {
-    "white-occt": ["--engine", "occt", "--shade-style", "white"],
-    "white-naive": ["--engine", "naive", "--shade-style", "white"],
-    "occt": ["--engine", "occt", "--shade-style", "flat3"],
-    "naive": ["--engine", "naive", "--shade-style", "flat3"],
-}
+from brick_icons import db  # noqa: E402
+
+SLOTS = ("white-occt", "white-naive", "occt", "naive")
 
 
 def run(*cmd) -> None:
@@ -39,10 +36,8 @@ def run(*cmd) -> None:
 def render(part: str, slot: str, out: Path) -> Path:
     svg = out / f"{part}.svg"
     if not svg.exists():
-        run(sys.executable, "-m", "brick_icons.cli", part,
-            "--format", "svg", "--shading", "outline", "--angle", "iso",
-            "--line-width", "2", "--silhouette-width", "2",
-            *SLOT_ARGS[slot], "--out", out)
+        run(sys.executable, "-m", "brick_icons.cli",
+            *db.canonical_argv(part, slot), "--out", out)
     return svg
 
 
@@ -65,7 +60,7 @@ def overlay(part: str, svg: Path, reference: Path, out: Path,
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("parts", nargs="+")
-    ap.add_argument("--slot", default="white-occt", choices=sorted(SLOT_ARGS))
+    ap.add_argument("--slot", default="white-occt", choices=sorted(SLOTS))
     ap.add_argument("--out", default="out/overlays")
     ap.add_argument("--reference-dir", default="renders/reference")
     ap.add_argument("--width", type=int, default=440)

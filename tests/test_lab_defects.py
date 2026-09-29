@@ -1,3 +1,8 @@
+import os
+import threading
+from datetime import date
+from pathlib import Path
+
 import pytest
 
 from brick_icons.lab import defects
@@ -23,6 +28,25 @@ def test_a_defect_round_trips(tmp_path):
     path = tmp_path / "defects.toml"
     defects.save(path, [ONE])
     assert defects.load(path) == [ONE]
+
+
+def test_save_writes_through_a_temp_file_and_leaves_none_behind(tmp_path, monkeypatch):
+    path = tmp_path / "defects.toml"
+    calls = []
+    real_replace = os.replace
+
+    def spy(src, dst):
+        calls.append(Path(src))
+        real_replace(src, dst)
+    monkeypatch.setattr(os, "replace", spy)
+
+    defects.save(path, [ONE])
+
+    assert calls, "save did not land its write through os.replace"
+    assert calls[0].parent == tmp_path
+    assert calls[0] != path
+    assert defects.load(path) == [ONE]
+    assert list(tmp_path.iterdir()) == [path]
 
 
 def test_multiline_notes_survive(tmp_path):
@@ -90,6 +114,15 @@ def test_a_line_defect_round_trips(tmp_path):
     assert back["points"] == record["points"]
 
 
+def test_adding_with_no_filed_date_defaults_to_today(tmp_path):
+    path = tmp_path / "defects.toml"
+    record = {k: v for k, v in ONE.items() if k != "filed"}
+    added = defects.add(path, record)
+    today = date.today().isoformat()
+    assert added["filed"] == today
+    assert defects.load(path)[0]["filed"] == today
+
+
 def test_a_defect_with_no_kind_still_loads(tmp_path):
     path = tmp_path / "defects.toml"
     defects.add(path, {"id": "3001-naive-blob", "part": "3001",
@@ -98,3 +131,26 @@ def test_a_defect_with_no_kind_still_loads(tmp_path):
                        "seen": {}, "filed": "2026-09-03", "notes": ""})
     [back] = defects.load(path)
     assert "kind" not in back
+
+
+def test_two_threads_adding_at_once_both_land(tmp_path):
+    path = tmp_path / "defects.toml"
+    defects.save(path, [ONE])
+    barrier = threading.Barrier(2)
+
+    def add(record):
+        barrier.wait()
+        defects.add(path, record)
+
+    second = {**ONE, "id": "4070-occt-ledge", "part": "4070"}
+    third = {**ONE, "id": "6143-flat3-band", "part": "6143"}
+    threads = [threading.Thread(target=add, args=(second,)),
+               threading.Thread(target=add, args=(third,))]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    ids = {d["id"] for d in defects.load(path)}
+    assert ids == {ONE["id"], second["id"], third["id"]}
+    assert [p for p in tmp_path.iterdir() if p.suffix == ".tmp"] == []

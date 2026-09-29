@@ -130,7 +130,7 @@ export interface ThreeStyle {
   background: string | null;
 }
 
-const DEFAULT_STYLE: ThreeStyle = { opacity: 1, lineWidth: 2, background: null };
+const DEFAULT_STYLE: ThreeStyle = { opacity: 1, lineWidth: 1.4, background: null };
 
 export function threeStyle(config: Record<string, unknown>): ThreeStyle {
   const num = (key: string, fallback: number) => {

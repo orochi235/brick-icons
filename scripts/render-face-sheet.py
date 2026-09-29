@@ -4,7 +4,7 @@ element, strokes dropped.
 
     python scripts/render-face-sheet.py --engine occt --list specimens.txt
 
-The ordinary sheet draws a 2px stroke over every seam, which is exactly where
+The ordinary sheet draws a stroke over every seam, which is exactly where
 fill defects hide: a staircased boundary, a sliver on the wrong surface, a
 fragment that should have merged into its neighbour. 4070's ledge seam was a
 1.2px staircase that only showed because the stroke that would have covered

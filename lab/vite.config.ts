@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react';
 import { searchForWorkspaceRoot } from 'vite';
 import { defineConfig, type Plugin } from 'vitest/config';
 
-/** Serves `/corpus` from `corpus.html`, so a lab URL carries no extension.
+/** Serves `/wall` from `wall.html`, so a lab URL carries no extension.
  *  Dev only: the build still emits the files under their own names, and
  *  `scripts/shot-sink.py` serves `shot.html` out of `dist` by that name. */
 function extensionlessPages(): Plugin {
@@ -151,7 +151,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: fileURLToPath(new URL('./index.html', import.meta.url)),
-        corpus: fileURLToPath(new URL('./corpus.html', import.meta.url)),
         wall: fileURLToPath(new URL('./wall.html', import.meta.url)),
         badges: fileURLToPath(new URL('./badges.html', import.meta.url)),
         stats: fileURLToPath(new URL('./stats.html', import.meta.url)),

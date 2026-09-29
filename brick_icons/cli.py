@@ -4,6 +4,7 @@ import argparse
 import json
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 import numpy as np
@@ -11,7 +12,7 @@ from PIL import Image
 from shapely.geometry import Polygon
 
 from . import render, process, trace, hlr, library, shade, geom2d, unwrap, instancing
-from . import transom
+from . import caption, transom
 from .config import load_config, Config, DEFAULTS
 
 
@@ -110,6 +111,11 @@ def build_parser():
                    help="under --opacity below 1, paint the part's printing "
                         "and stickers at full opacity, hiding what is behind "
                         "them, while the body stays see-through")
+    p.add_argument("--deco-shade", dest="deco_shade", choices=["on", "off"],
+                   help="shade the part's printing and stickers the way the "
+                        "surface under them shades, darkening the print's "
+                        "own color (on, the default), or paint them flat "
+                        "(off); a print on a top face is unchanged either way")
     p.add_argument("--debug-colors", dest="debug_colors", nargs="?",
                    const="cycle", default=None, type=_debug_mode,
                    metavar="cycle|ramp|ramp=N",
@@ -118,8 +124,10 @@ def build_parser():
                         "the hue every 6 elements, 'ramp=N' every N")
     p.add_argument("--part-label", dest="part_label", action="store_true",
                    default=None,
-                   help="stamp the part id in fixed small print in the "
-                        "bottom-left corner (contact sheets / test renders)")
+                   help="caption each image in a strip below the drawing: "
+                        "the part id and the settings that change it, the "
+                        "file's size and the render's seconds (contact "
+                        "sheets, review renders; implied by --review)")
     p.add_argument("--svg-bg", dest="svg_bg", metavar="PAINT",
                    help='SVG background: a color ("white", "#rrggbb") or '
                         '"none" for transparent (default none)')
@@ -172,6 +180,7 @@ def _config_from_args(args) -> Config:
         "shade_style": args.shade_style, "light": args.light,
         "svg_bg": args.svg_bg, "opacity": args.opacity,
         "solid_deco": args.solid_deco,
+        "deco_shade": args.deco_shade,
         "wireframe": args.wireframe, "use_ldview": args.use_ldview,
         "ldview_look": args.ldview_look,
         "decal": args.decal, "texture_px": args.texture_px,
@@ -327,6 +336,8 @@ def render_tag(cfg: Config, name: str, posed: bool = False) -> str:
         bits.append(f"studs={cfg.stud_instancing}")
     if cfg.contour == "off":
         bits.append("contour=off")
+    if cfg.deco_shade == "off":
+        bits.append("deco-shade=off")
     return "  ".join(bits)
 
 
@@ -347,10 +358,33 @@ def part_pose(cfg: Config, part: str):
 
 def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                 timeout: float | None = None) -> None:
+    """Draw one part into `out_dir`. Under `part_label` every image it wrote
+    is then captioned with the render tag, its own size and the seconds the
+    whole render took (brick_icons.caption); otherwise nothing is added."""
+    t0, since = time.perf_counter(), time.time_ns()
+    _draw_one(cfg, part, out_dir, debug_dir, timeout)
+    if not cfg.part_label:
+        return
+    secs = time.perf_counter() - t0
+    name = Path(part).stem if Path(part).suffix else part
+    tag = render_tag(cfg, name, part_pose(cfg, part) is not None)
+    for path in _written(out_dir, name, since):
+        caption.stamp_file(path, tag, secs)
+
+
+def _written(out_dir: Path, name: str, since_ns: int) -> list[Path]:
+    """The images this render wrote: `<name>.*` with a stampable suffix,
+    modified since it started (a rerun overwrites the same names)."""
+    return sorted(p for p in out_dir.glob(f"{name}.*")
+                  if p.suffix in caption.STAMPED
+                  and p.stat().st_mtime_ns >= since_ns)
+
+
+def _draw_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
+              timeout: float | None = None) -> None:
     name = Path(part).stem if Path(part).suffix else part
     out_dir.mkdir(parents=True, exist_ok=True)
     pose = part_pose(cfg, part)
-    label = render_tag(cfg, name, pose is not None) if cfg.part_label else None
 
     if cfg.decal:
         # Before the engines, and returning rather than falling through: a
@@ -446,7 +480,8 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                                        drop=spurs,
                                        weld_corners=cfg.weld_corners,
                                        ldraw_dir=cfg.ldraw_dir,
-                                       studs=studs, crumb=crumb) \
+                                       studs=studs, crumb=crumb,
+                                       deco_shade=cfg.deco_shade == "on") \
                     if style is not None else None
                 sil_geom = shade.silhouette_geom(
                     faces or _sil_faces(res, f, ox, oy)) or None
@@ -467,11 +502,12 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                     bg=cfg.svg_bg, opacity=cfg.opacity,
                     solid_deco=cfg.solid_deco,
                     clip_geom=sil_geom, contour=contour,
-                    contour_arcs=geom2d.arc_candidates(ells), label=label,
+                    contour_arcs=geom2d.arc_candidates(ells),
                     debug_colors=cfg.debug_colors, studs=studs,
                     between=inst.svg_parts(
                         (f, ox, oy), studs.px if studs else cfg.line_mm / 0.4 * s,
-                        style, crumb, cfg.weld_corners) if inst else None,
+                        style, crumb, cfg.weld_corners,
+                        cfg.deco_shade == "on") if inst else None,
                     **_hide_kw(res, inst, studs, (f, ox, oy), shifted,
                                cfg.line_mm / 0.4 * s,
                                cfg.silhouette_mm / 0.4 * s))
@@ -496,7 +532,8 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                                        drop=spurs,
                                        weld_corners=cfg.weld_corners,
                                        ldraw_dir=cfg.ldraw_dir,
-                                       studs=studs, crumb=crumb) \
+                                       studs=studs, crumb=crumb,
+                                       deco_shade=cfg.deco_shade == "on") \
                     if style is not None else None
                 sil_geom = shade.silhouette_geom(
                     faces or _sil_faces(res, f, ox, oy)) or None
@@ -516,12 +553,12 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                                       solid_deco=cfg.solid_deco,
                                       clip_geom=sil_geom, contour=contour,
                                       contour_arcs=geom2d.arc_candidates(ells),
-                                      label=label,
                                       debug_colors=cfg.debug_colors,
                                       between=inst.svg_parts(
                                           icon_fit,
                                           studs.px if studs else line_px,
-                                          style, crumb, cfg.weld_corners)
+                                          style, crumb, cfg.weld_corners,
+                                          cfg.deco_shade == "on")
                                       if inst else None,
                                       **_hide_kw(res, inst, studs, icon_fit,
                                                   fit, line_px, sil_px))
@@ -568,8 +605,6 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                                           contour_band=band, studs=gstuds,
                                           stud_ops=inst.png_ops(gaff, gsp)
                                           if inst else (), stud_px=gsp)
-                if label:
-                    process.stamp_label(g, label)
                 g.save(out_dir / f"{name}.gray.png")
             if cfg.mode in ("mono", "both"):
                 mfit = hlr.fit_segments(segs, bbox, cfg.width, cfg.height, cfg.margin, cfg.scale)
@@ -582,8 +617,6 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
                                           contour_band=band, studs=mstuds,
                                           stud_ops=inst.png_ops(icon_fit, msp)
                                           if inst else (), stud_px=msp)
-                if label:
-                    process.stamp_label(m, label)
                 m.save(out_dir / f"{name}.mono.png")
         return
 
@@ -606,20 +639,14 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
             tone.save(_stage(debug_dir, "tone", name))
         if cfg.mode == "color":
             color = process.flatten_rgb(rgba)
-            if label:
-                process.stamp_label(color, label)
             color.save(out_dir / f"{name}.color.png")
         if cfg.mode in ("gray", "both"):
-            if label:
-                tone = process.stamp_label(tone.copy(), label)
             tone.save(out_dir / f"{name}.gray.png")
         if cfg.mode in ("mono", "both"):
             fitted = process.fit_contain(tone, cfg.width, cfg.height, cfg.margin, cfg.scale)
             mono = process.dither(fitted, cfg.dither, cfg.threshold)
             if debug_dir:
                 mono.save(_stage(debug_dir, "mono", name))
-            if label:
-                process.stamp_label(mono, label)
             mono.save(out_dir / f"{name}.mono.png")
 
     if not debug_dir and render_png.exists():
@@ -725,6 +752,8 @@ def main(argv=None) -> int:
         return 0
     if args.collect:
         return _collect_main(args.collect, args.root)
+    if args.review:
+        args.part_label = True      # what goes on the wall carries a caption
     cfg = _config_from_args(args)
     parts = _gather_parts(args)
     if not parts:

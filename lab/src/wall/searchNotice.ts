@@ -1,6 +1,6 @@
 import type { RevealResult } from 'pezlie';
 
-/** `/corpus`'s wording, so the two pages say the same thing. */
+/** The wall's copy for a part a search found but can't show. */
 export function searchNotice(partId: string, result: RevealResult): string | null {
   switch (result) {
     case 'filtered': return `${partId} is hidden by the current filter`;

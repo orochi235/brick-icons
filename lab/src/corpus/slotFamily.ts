@@ -24,7 +24,7 @@ export const FAMILY_LABEL: Record<Family, string> = {
 };
 
 /** The bare slot's facet. `naive` and `occt` carry no qualifier because they
- *  are the canonical drawing -- flat3 shading with 2px strokes. */
+ *  are the canonical drawing -- flat3 shading at the default stroke weight. */
 export const BARE_FACET = 'flat3';
 
 export function familyOf(source: string): Family {

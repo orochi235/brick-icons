@@ -1,5 +1,5 @@
-import type { Artifact, JobState, LabConfig, LdrawColor, PartHit, RenderResult,
-  SchemaField } from '@lab/api/types';
+import type { Artifact, ChangedEvent, JobState, LabConfig, LdrawColor, PartHit,
+  RedrawAnswer, RenderResult, SchemaField, SpotStatus } from '@lab/api/types';
 import type { Footprint, Stats } from '@lab/stats/types';
 import type { CellsBody, PartDetail, PartHistory, SheetManifest } from '@lab/corpus/types';
 import type { IngestAttempts, IngestRun } from '@lab/ingest/types';
@@ -31,6 +31,14 @@ export function createClient({ base = '', fetchImpl = fetch }: ClientOptions = {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
+
+  // A lazily opened, reference-counted EventSource: the lightbox watching one
+  // part and the wall watching every redraw are two subscribers to the same
+  // stream, not two sockets. It opens on the first `onChanged` and closes
+  // when the last unsubscribes, so a page with nobody watching holds nothing
+  // open.
+  let changedSource: EventSource | null = null;
+  const changedListeners = new Set<(event: ChangedEvent) => void>();
 
   return {
     async schema(): Promise<SchemaField[]> {
@@ -108,12 +116,43 @@ export function createClient({ base = '', fetchImpl = fetch }: ClientOptions = {
                   post('', {}));
     },
 
-    /** Ask for a part to be drawn again in one slot. A cheap slot draws now,
-     *  as a job; anything slower is queued for the slot's next fleet round. */
-    async redraw(part: string, source: string) {
-      return json<{ local: boolean; job?: string; requested_at?: string;
-                    secs: number | null }>(
+    /** Draw a part again in one slot, on the fleet's spot worker. */
+    async redraw(part: string, source: string): Promise<RedrawAnswer> {
+      return json<RedrawAnswer>(
         fetchImpl, at('/api/corpus/redraw'), post('/api/corpus/redraw', { part, source }));
+    },
+
+    async spotStatus(): Promise<SpotStatus> {
+      return json<SpotStatus>(fetchImpl, at('/api/spot'));
+    },
+
+    /** Every stored redraw, as it lands. Returns the unsubscribe. Prefer
+     *  `useChanged`, which batches them. Subscribers share one EventSource. */
+    onChanged(listener: (event: ChangedEvent) => void): () => void {
+      if (typeof EventSource === 'undefined') return () => {};
+      if (changedListeners.size === 0) {
+        changedSource = new EventSource(at('/api/events'));
+        changedSource.addEventListener('changed', (e) => {
+          const event = JSON.parse((e as MessageEvent<string>).data) as ChangedEvent;
+          // A snapshot, so a listener added mid-dispatch waits for the next
+          // event, and one listener throwing does not starve the rest.
+          for (const held of [...changedListeners]) {
+            try {
+              held(event);
+            } catch (err) {
+              console.error('onChanged listener threw', err);
+            }
+          }
+        });
+      }
+      changedListeners.add(listener);
+      return () => {
+        changedListeners.delete(listener);
+        if (changedListeners.size === 0) {
+          changedSource?.close();
+          changedSource = null;
+        }
+      };
     },
 
     async reference(part: string, angle: string, partColor?: string) {

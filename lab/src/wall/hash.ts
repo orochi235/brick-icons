@@ -4,15 +4,16 @@ import type { Grouping } from '@lab/corpus/facts';
 import type { RampName, TintMode } from '@lab/corpus/tint';
 import { readWallHash, readWallLink, wallHashString } from '@lab/corpus/wallHash';
 
-/** The facet `CorpusWall`'s `excluded` list belongs to. */
+/** The facet the hash's `excluded` list belongs to. */
 const CATEGORY = 'category';
 
 function defined<T extends object>(fields: T): Partial<T> {
   return Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined)) as Partial<T>;
 }
 
-/** `WallView`'s opening state from `CorpusWall`'s hash and hand-off link, so
- *  either wall's URL opens the other. A link outranks the hash field by field.
+/** `WallView`'s opening state from the page's hash and hand-off link, in
+ *  `wallHash`'s format, which the retired `/corpus` page wrote too, so its old
+ *  links still open. A link outranks the hash field by field.
  *  The camera and caret are dropped: `WallView` takes neither. */
 export function openingState(hash: string, search: string) {
   const h = readWallHash(hash);

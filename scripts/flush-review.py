@@ -41,9 +41,13 @@ def unreferenced(conn, root: Path, excluding: set[str] = frozenset()) -> list[Pa
     `excluding` is the ids a dry run is about to drop but has not: without it
     the one mode whose job is to report the cost reports none of it.
     """
-    named = {r["before_kept"] for r in conn.execute(
-        "SELECT id, before_kept FROM review WHERE before_kept IS NOT NULL")
-        if r["id"] not in excluding}
+    rows = [r for r in conn.execute(
+        "SELECT id, part_id, source, before_kept, after_path, after_sha "
+        "FROM review") if r["id"] not in excluding]
+    # An entry's after side can be a kept copy too, once its store file has
+    # been written over; `review.side_files` serves it from there.
+    named = ({r["before_kept"] for r in rows if r["before_kept"]}
+             | {review.kept_after(r) for r in rows})
     live = {(root / rel).resolve() for rel in named}
     out = []
     for slot in sorted((root / review.BEFORE_DIR).glob("*")):

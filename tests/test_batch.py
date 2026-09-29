@@ -4,6 +4,8 @@ import signal
 import time
 from pathlib import Path
 
+import pytest
+
 from brick_icons import batch
 
 
@@ -31,8 +33,19 @@ def test_resume_skips_what_is_done_and_buries_what_crashed(tmp_path):
     runner = batch.Runner(log, timeout=0)
     assert runner.remaining(["a", "b", "c"]) == ["c"]
     rows = [json.loads(l) for l in log.read_text().splitlines()]
+    assert rows[-1].pop("at")
     assert rows[-1] == {"item": "b", "error": "ProcessDied",
                         "detail": "killed mid-render; not retried"}
+
+
+def test_every_row_says_when_it_was_written(tmp_path):
+    """A drawing's row is the only record of when it was made that survives
+    the trip home: a fetch stamps the file itself with the fetch time."""
+    log = tmp_path / "out.jsonl"
+    before = batch.stamp()
+    batch.Runner(log).run("a", lambda item: {"drawn": item})
+    at = json.loads(log.read_text())["at"]
+    assert before <= at <= batch.stamp()
 
 
 def test_every_row_carries_the_run_wide_fields(tmp_path):
@@ -153,6 +166,8 @@ def test_isolate_reaps_a_grandchild_the_item_left_behind(tmp_path):
             marker.write_text(str(os.getpid()))
             while True:
                 time.sleep(0.05)
+        while not marker.exists():
+            time.sleep(0.01)
         return {"item": "leaves", "error": "TimeoutError"}   # no waitpid
 
     runner = batch.Runner(tmp_path / "out.jsonl", timeout=5, isolate=True)
@@ -303,3 +318,25 @@ def test_the_exit_code_still_names_the_signal():
     assert "SIGSEGV" in runner._death(-int(signal.SIGSEGV))
     assert "SIGSEGV" in runner._death(int(signal.SIGSEGV))
     assert runner._death(1) == "the render process exited 1"
+
+
+def test_a_call_returns_the_row_and_writes_no_log(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = batch.Runner(None, timeout=5, isolate=True, key="part")
+    row = runner.call("3001", lambda part: {"part": part, "svg": "<svg/>"})
+    assert row["svg"] == "<svg/>"
+    assert row["secs"] >= 0
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_a_log_less_runner_refuses_run():
+    runner = batch.Runner(None, timeout=5, key="part")
+    with pytest.raises(ValueError, match="a Runner without a log has only call"):
+        runner.run("3001", lambda part: {"part": part})
+
+
+def test_a_call_past_the_cap_is_a_timeout_row():
+    runner = batch.Runner(None, timeout=0.3, isolate=True, key="part")
+    row = runner.call("3001", _spin)
+    assert row["error"] == "TimeoutError"
+    assert row["part"] == "3001"
