@@ -6,6 +6,7 @@ the library.
 """
 from __future__ import annotations
 
+import os
 import tomllib
 from datetime import date
 from pathlib import Path
@@ -66,6 +67,13 @@ def load(path: Path | str = DEFAULT_PATH) -> list[dict]:
 
 
 def save(path: Path | str, records: list[dict]) -> None:
+    """Write `records` to `path`, atomically.
+
+    The lab and several agents write this file concurrently; a bare
+    `write_text` would let one writer's readers see a half-written file, or
+    a crash mid-write leave a truncated one. A temp file in the same
+    directory plus `os.replace` makes the write land whole or not at all.
+    """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     chunks = [_HEADER]
@@ -77,7 +85,9 @@ def save(path: Path | str, records: list[dict]) -> None:
         for field in sorted(set(record) - set(_ORDER)):
             lines.append(f"{field} = {dump_value(record[field])}")
         chunks.append("\n".join(lines) + "\n")
-    path.write_text("\n".join(chunks))
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    tmp.write_text("\n".join(chunks))
+    os.replace(tmp, path)
 
 
 def wants_review(record: dict, source: str, sha: str | None) -> bool:

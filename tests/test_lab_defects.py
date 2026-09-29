@@ -1,4 +1,6 @@
+import os
 from datetime import date
+from pathlib import Path
 
 import pytest
 
@@ -25,6 +27,25 @@ def test_a_defect_round_trips(tmp_path):
     path = tmp_path / "defects.toml"
     defects.save(path, [ONE])
     assert defects.load(path) == [ONE]
+
+
+def test_save_writes_through_a_temp_file_and_leaves_none_behind(tmp_path, monkeypatch):
+    path = tmp_path / "defects.toml"
+    calls = []
+    real_replace = os.replace
+
+    def spy(src, dst):
+        calls.append(Path(src))
+        real_replace(src, dst)
+    monkeypatch.setattr(os, "replace", spy)
+
+    defects.save(path, [ONE])
+
+    assert calls, "save did not land its write through os.replace"
+    assert calls[0].parent == tmp_path
+    assert calls[0] != path
+    assert defects.load(path) == [ONE]
+    assert list(tmp_path.iterdir()) == [path]
 
 
 def test_multiline_notes_survive(tmp_path):
