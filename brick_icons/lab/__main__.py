@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 
 import uvicorn
+from uvicorn.main import STARTUP_FAILURE
 from uvicorn.supervisors import ChangeReload
 
 from .app import Server, create_app
@@ -32,6 +34,8 @@ def _serve(app, **kwargs) -> None:
             server.run()
     except KeyboardInterrupt:
         pass
+    if not server.started and not config.should_reload:
+        sys.exit(STARTUP_FAILURE)
 
 
 def main(argv=None) -> int:
