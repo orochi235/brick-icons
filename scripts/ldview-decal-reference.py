@@ -33,6 +33,7 @@ import math
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 import numpy as np
@@ -44,6 +45,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 import _sheet  # noqa: E402
 from brick_icons import hlr, render, unwrap  # noqa: E402
+from brick_icons.caption import Shot  # noqa: E402
 from brick_icons.config import load_config  # noqa: E402
 
 STRIP_DEG = 60.0        # widest arc one head-on view is asked to cover
@@ -295,14 +297,18 @@ def main() -> int:
                     print(f"[{i}/{len(args.parts)}] {tag}: mesh carrier, skipped",
                           flush=True)
                     continue
-                ours = rasterize(unwrap.texture_svg(ext, regions, px=args.px,
-                                                    ldraw_dir=cfg.ldraw_dir, face=face),
-                                 out / f"{tag}.ours.png")
+                t0 = time.perf_counter()
+                ours_svg = unwrap.texture_svg(ext, regions, px=args.px,
+                                              ldraw_dir=cfg.ldraw_dir, face=face)
+                ours_secs = time.perf_counter() - t0
+                ours = rasterize(ours_svg, out / f"{tag}.ours.png")
                 # the body stands in for the face our sheet fills gray; a
                 # panel with no face is drawn on white, so the body is too
                 body = WHITE if face is None or face.is_empty else FACE_GRAY
+                t0 = time.perf_counter()
                 ldv, headon = reference(cfg, part_file, carrier, theta0, ext,
                                         ours.width, ours.height, td, tag, body)
+                ldv_secs = time.perf_counter() - t0
                 ldv.save(out / f"{tag}.ldview.png")
                 if headon is not None:
                     headon.save(out / f"{tag}.headon.png")
@@ -312,7 +318,9 @@ def main() -> int:
                     span = f" {math.degrees(arc):.0f} deg"
                 n = len(strips(carrier, theta0, ext))
                 rows.append((f"{tag}\n{kind}{span}\n{n} view{'s' if n > 1 else ''}",
-                             ours, ldv))
+                             Shot(ours, part, len(ours_svg.encode()), ours_secs),
+                             Shot.of(ldv, part, out / f"{tag}.ldview.png",
+                                     ldv_secs)))
                 print(f"[{i}/{len(args.parts)}] {tag}: {kind}{span}, {n} LDView view(s)",
                       flush=True)
             if rows:

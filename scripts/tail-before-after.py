@@ -15,6 +15,7 @@ import argparse
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -22,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from PIL import Image
 
 from brick_icons import arcfit, cli, db, hlr, occt
+from brick_icons.caption import Shot
 from _sheet import sheet
 
 W = 420
@@ -43,13 +45,15 @@ def render(part, slot, out_dir, before):
             occt._fit_arc_candidates = lambda *a: []
     try:
         args = cli._parse_args(db.canonical_argv(part, slot))
+        t0 = time.perf_counter()
         cli.process_one(cli._config_from_args(args), part, out_dir)
+        secs = time.perf_counter() - t0
     finally:
         hlr._stylize, occt._fit_arc_candidates, hlr.PINCH_ON_F_TOL = saved
     svg = out_dir / f"{part}.svg"
     png = out_dir / f"{part}.png"
     subprocess.run(["resvg", "-w", str(W), str(svg), str(png)], check=True)
-    return Image.open(png).convert("RGB")
+    return Shot.of(Image.open(png).convert("RGB"), part, svg, secs)
 
 
 def main():

@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 
 import numpy as np
-from PIL import Image, ImageOps, ImageDraw, ImageFont
+from PIL import Image, ImageOps, ImageDraw
 
 
 def flatten_rgb(rgba: Image.Image) -> Image.Image:
@@ -247,16 +247,6 @@ def segments_mono(segs, w, h, line_px=2, sil_px=2, threshold=160,
     g = draw_segments(segs, w, h, line_px, sil_px, contour_band=contour_band,
                       studs=studs, stud_ops=stud_ops, stud_px=stud_px)
     return g.point(lambda p: 255 if p >= threshold else 0).convert("1")
-
-
-def stamp_label(img: Image.Image, text: str) -> Image.Image:
-    """Render tag in fixed small print, tucked into the bottom-left corner.
-    Absolute size, deliberately NOT scaled to the part — an identification aid
-    for review renders. In place."""
-    d = ImageDraw.Draw(img)
-    font = ImageFont.load_default(size=7)
-    d.text((2, img.height - 9), text, fill="black", font=font)
-    return img
 
 
 _BAYER4 = np.array([[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]],
