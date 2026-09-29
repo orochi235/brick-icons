@@ -133,7 +133,10 @@ export interface PartDetail {
               source?: string | null;
               extra_d99: number | null;
               missing_px: number | null; missing_comps?: number | null;
-              secs: number | null; error: string | null }[];
+              secs: number | null; error: string | null;
+              /** The measured drawing's size and painted objects; absent from
+               *  an API older than the fields, null where it was not read. */
+              bytes?: number | null; objects?: number | null }[];
   /** Absent from an API older than the field. */
   edges?: { source: string; declared_len: number | null;
             missing_len: number | null; missing_comps: number | null;
@@ -150,4 +153,15 @@ export interface PartDetail {
    *  part carries, a number is a measure every part has. Absent from an API
    *  older than the field. */
   features?: Record<string, number | null>;
+}
+
+/** Every measurement of one part, per slot, oldest first
+ *  (`history.part_history`). */
+export interface PartHistory {
+  series: {
+    source: string;
+    points: { at: string; secs: number | null; bytes: number | null;
+              objects: number | null; build: string | null; error: string | null;
+              run_id: number; dated_by: 'drawn' | 'build' }[];
+  }[];
 }

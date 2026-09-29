@@ -6,6 +6,7 @@ import { BadgeSwatch } from '@lab/corpus/BadgeSwatch';
 import { CATALOGS } from '@lab/corpus/catalogs';
 import { Fingerprint } from '@lab/corpus/Fingerprint';
 import { Measurements } from '@lab/corpus/Measurements';
+import { RenderHistory } from '@lab/corpus/RenderHistory';
 import { poseNote } from '@lab/corpus/posed';
 import { Lineage, Tags, TAG_BOX, yearRange } from '@lab/corpus/tags';
 import { defectId, engineFor } from '@lab/corpus/flag';
@@ -481,6 +482,8 @@ export function Lightbox({ partId, source, client, onClose,
           <Fingerprint features={detail.features} />
           <h3>Measurements</h3>
           <Measurements findings={detail.findings} />
+          <h3>History of {shown}</h3>
+          <RenderHistory partId={partId} source={shown} client={client} />
           {detail.edges && detail.edges.length > 0 && (
             <>
               <h3>Declared edges</h3>

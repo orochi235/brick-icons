@@ -1,0 +1,20 @@
+.corpus-history-panels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 1rem;
+}
+.corpus-history-panel { margin: 0; }
+.corpus-history-panel figcaption { color: var(--wzl-fg-muted); font-family: var(--wzl-font-ui); }
+.corpus-history-panel svg { display: block; width: 100%; height: auto; }
+.corpus-history-grid { stroke: var(--wzl-border, #d0d0d4); stroke-width: 1; }
+.corpus-history-axis {
+  fill: var(--wzl-fg-muted, #6a6a72);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.corpus-history-line { fill: none; stroke-width: 2; }
+.corpus-history-dot { stroke-width: 2; }
+.corpus-history-hit { fill: transparent; }
+.corpus-history-point:hover .corpus-history-dot { stroke-width: 3; }
+.corpus-history-note,
+.corpus-history-empty { color: var(--wzl-fg-muted); }

@@ -44,6 +44,8 @@ export function Measurements({ findings }: { findings: Finding[] }) {
         <tr>
           <th />
           {COLUMNS.map((c) => <th key={c.key} className="corpus-measure-num">{c.label}</th>)}
+          <th className="corpus-measure-stat">KB</th>
+          <th className="corpus-measure-stat">objects</th>
           <th>secs</th>
         </tr>
       </thead>
@@ -73,6 +75,12 @@ export function Measurements({ findings }: { findings: Finding[] }) {
                   </td>
                 );
               })}
+              <td className="corpus-measure-stat">
+                {f.bytes == null ? '—' : (f.bytes / 1024).toFixed(1)}
+              </td>
+              <td className="corpus-measure-stat">
+                {f.objects == null ? '—' : String(f.objects)}
+              </td>
               <td>
                 <span className="corpus-measure-bar">
                   {f.secs != null && (

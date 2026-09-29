@@ -499,7 +499,7 @@ interface HistoryPoint { run: number; source: string; bad: number; size: number;
  *  2,532 rounds up to 5,000 and the data uses half the panel. */
 const NICE = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
 
-function ticksFor(max: number): number[] {
+export function ticksFor(max: number): number[] {
   if (max <= 0) return [0];
   const step = Math.pow(10, Math.floor(Math.log10(max)));
   const scaled = max / step;

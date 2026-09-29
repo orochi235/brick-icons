@@ -1,7 +1,7 @@
 import type { Artifact, JobState, LabConfig, LdrawColor, PartHit, RenderResult,
   SchemaField } from '@lab/api/types';
 import type { Footprint, Stats } from '@lab/stats/types';
-import type { CellsBody, PartDetail, SheetManifest } from '@lab/corpus/types';
+import type { CellsBody, PartDetail, PartHistory, SheetManifest } from '@lab/corpus/types';
 import type { IngestAttempts, IngestRun } from '@lab/ingest/types';
 import type { ReviewEntry, ReviewList, ReviewView, Verdict } from '@lab/review/types';
 
@@ -180,6 +180,11 @@ export function createClient({ base = '', fetchImpl = fetch }: ClientOptions = {
      *  defect and error states, in a fraction of its time. */
     async corpusPartSlots(id: string): Promise<{ slots: PartDetail['slots'] }> {
       return json(fetchImpl, at(`/api/corpus/part/${encodeURIComponent(id)}/slots`));
+    },
+
+    /** Every measurement of the part, per slot, over calendar time. */
+    async corpusPartHistory(id: string): Promise<PartHistory> {
+      return json(fetchImpl, at(`/api/corpus/part/${encodeURIComponent(id)}/history`));
     },
 
     /** Every ingest, newest first. */

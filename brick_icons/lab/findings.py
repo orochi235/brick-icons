@@ -84,6 +84,7 @@ def findings(conn: sqlite3.Connection, engine: str | None = None,
         f"""SELECT m.part_id, m.engine, m.source, m.run_id, m.missing_px,
                    m.extra_px,
                    m.missing_comps, m.extra_d99, m.extra_d100, m.secs,
+                   m.bytes, m.objects,
                    m.error, m.detail,
                    p.title, p.status, p.status_note, p.printed,
                    r.path AS render, r.sha256

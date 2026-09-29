@@ -26,7 +26,7 @@ from .. import tags
 from .. import thumbs, trace
 from ..config import load_config
 from . import (cache, cells, corpus, decal, defects, diff, findings, flight,
-               framing, goldens_status, ingest, jobs, partindex, reference, review_api,
+               framing, goldens_status, history, ingest, jobs, partindex, reference, review_api,
                runner, schema, sizes, stats, store)
 from .. import db as corpus_db_module
 from .. import review
@@ -524,6 +524,15 @@ def create_app(root: Path | str = ".",
             if row is None:
                 raise HTTPException(404, "no such part")
             return {"slots": part_slots(conn, row)}
+        finally:
+            conn.close()
+
+    @app.get("/api/corpus/part/{part_id}/history")
+    def get_corpus_part_history(part_id: str):
+        """Every measurement of the part, per slot, over calendar time."""
+        conn = corpus_conn()
+        try:
+            return history.part_history(conn, part_id, app.state.root)
         finally:
             conn.close()
 

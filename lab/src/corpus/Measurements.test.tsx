@@ -117,7 +117,7 @@ it('clamps a negative secs to the minimum bar width', () => {
 
 it('renders the header with no findings', () => {
   const { container } = render(<Measurements findings={[]} />);
-  expect(container.querySelectorAll('thead th')).toHaveLength(5);
+  expect(container.querySelectorAll('thead th')).toHaveLength(7);
   expect(container.querySelectorAll('tbody tr')).toHaveLength(0);
 });
 

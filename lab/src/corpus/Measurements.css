@@ -17,9 +17,11 @@ table.corpus-measures td {
   line-height: 1.15;
 }
 
-table.corpus-measures .corpus-measure-num {
+table.corpus-measures .corpus-measure-num,
+table.corpus-measures .corpus-measure-stat {
   min-width: 3.2em;
   text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 table.corpus-measures thead .corpus-measure-num { max-width: 4.6em; }
 
