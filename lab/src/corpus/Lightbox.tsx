@@ -173,6 +173,9 @@ export function Lightbox({ partId, source, client, onClose,
   // The radio a double-click opened the zoomed view from, so closing it can
   // hand focus back rather than dropping it to the document body.
   const zoomOpenerRef = useRef<HTMLElement | null>(null);
+  // The part on screen now, for an answer that arrives after a switch.
+  const partRef = useRef(partId);
+  partRef.current = partId;
 
   useEffect(() => {
     let live = true;
@@ -181,7 +184,7 @@ export function Lightbox({ partId, source, client, onClose,
   }, [partId, client]);
 
   useEffect(() => { setShown(source); }, [source]);
-  useEffect(() => { setRedraw(null); }, [shown]);
+  useEffect(() => { setRedraw(null); }, [shown, partId]);
 
   // A redraw of this part from anywhere -- this lightbox, another tab, a
   // script -- lands here at once rather than on the next open.
@@ -249,14 +252,19 @@ export function Lightbox({ partId, source, client, onClose,
    *  worker's state first is what lets the button say a roll is coming, and
    *  a down worker is said without a request that would only fail. */
   const redrawShown = async () => {
+    const asked = partId;
+    const still = () => partRef.current === asked;
     try {
       const spot = await client.spotStatus();
+      if (!still()) return;
       if (spot.state === 'down') { setRedraw({ said: 'down' }); return; }
       setRedraw({ busy: spot.state === 'stale' ? 'updating' : 'drawing' });
-      const answer = await client.redraw(partId, shown);
+      const answer = await client.redraw(asked, shown);
+      if (!still()) return;
       if (answer.state === 'stored') {
         setRedraw(null);
-        setDetail(await client.corpusPart(partId));
+        const drawn = await client.corpusPart(asked);
+        if (still()) setDetail(drawn);
       } else if (answer.state === 'down' || answer.state === 'unchanged') {
         setRedraw({ said: answer.state });
       } else if (answer.state === 'none') {
@@ -265,7 +273,7 @@ export function Lightbox({ partId, source, client, onClose,
         setRedraw({ error: failure(answer) });
       }
     } catch (e) {
-      setRedraw({ error: e instanceof Error ? e.message : String(e) });
+      if (still()) setRedraw({ error: e instanceof Error ? e.message : String(e) });
     }
   };
   const busy = redraw !== null && 'busy' in redraw;

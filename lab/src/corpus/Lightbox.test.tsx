@@ -650,6 +650,26 @@ it('says why any other redraw failed', async () => {
   await waitFor(() => screen.getByText('Redraw failed: ValueError: boom'));
 });
 
+it('keeps a redraw that lands after a switch off the part now shown', async () => {
+  let land: (v: unknown) => void = () => {};
+  const plate = { ...detail, part: { ...detail.part, id: '3023', title: 'Plate 1 x 2' } };
+  const corpusPart = vi.fn(async (id: string) => (id === '3023' ? plate : redrawn));
+  const client = { corpusPart, spotStatus: async () => up,
+                   redraw: () => new Promise((resolve) => { land = resolve; }) } as any;
+  const { rerender } = render(<Lightbox partId="3001" source="naive"
+                                        onClose={() => {}} client={client} />);
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  fireEvent.click(screen.getByText('Redraw naive'));
+  await waitFor(() => screen.getByText('Drawing…'));
+  rerender(<Lightbox partId="3023" source="naive" onClose={() => {}} client={client} />);
+  await waitFor(() => screen.getByText('Plate 1 x 2'));
+  land({ state: 'stored', sha: 'feedface0000' });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(screen.getByText('Plate 1 x 2')).toBeTruthy();
+  expect(screen.queryByText('Brick 2 x 4')).toBeNull();
+  expect(screen.getByText('Redraw naive')).toBeTruthy();
+});
+
 it('follows a redraw of this part made anywhere', async () => {
   let tell: (e: unknown) => void = () => {};
   const stop = vi.fn();
