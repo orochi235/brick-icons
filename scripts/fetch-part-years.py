@@ -42,7 +42,7 @@ from brick_icons import db  # noqa: E402
 
 BASE = "https://cdn.rebrickable.com/media/downloads"
 DUMPS = ("parts", "sets", "themes", "inventories", "inventory_parts",
-         "part_relationships", "elements")
+         "inventory_minifigs", "part_relationships", "elements")
 DEFAULT_CACHE = Path("out") / "rebrickable"
 DEFAULT_OUT = Path("tests") / "goldens" / "part-years.csv"
 DEFAULT_SUCCESSORS = Path("tests") / "goldens" / "part-successors.csv"
@@ -66,6 +66,12 @@ _PRINT_SUFFIX = re.compile(r"^(\d{3,}[a-z]?)(p[0-9a-z]+|pr\d+)$")
 # A sticker's own id is the sheet number plus a letter -- `003238a` is one
 # sticker off sheet `003238`, and the sheet is what Rebrickable inventories.
 _STICKER = re.compile(r"^(\d+)[a-z]+$")
+
+# An assembly (`73590c01`, `3228ac02`, `75542c01-f2`), tried as its base part
+# only once every other route has missed: Rebrickable keeps many assemblies
+# under their own number. Never after a `p`: `3816bpc67` is a print code,
+# not an assembly of `3816bp`.
+_ASSEMBLY = re.compile(r"^(.+?)(?<!p)c\d\d.*$")
 
 # Like `_PRINT_SUFFIX`, but without assuming what precedes the print marker is
 # a plain digit id -- `3677c01p01` strips to the composite `3677c01`, which
@@ -117,16 +123,36 @@ def part_facts(cache: Path) -> tuple[dict[str, tuple[int, int, int, int]],
                      if r["version"] == "1"}
     print(f"  {len(inventory_set):,} first-version inventories", flush=True)
 
+    fig_sets = sets_of_figs(cache, inventory_set, set_year)
+    print(f"  {len(fig_sets):,} minifigs appear in a set", flush=True)
+
     sets_with: dict[str, set[str]] = defaultdict(set)
     colors_of: dict[str, set[str]] = defaultdict(set)
+    fig_sets_with: dict[str, set[str]] = defaultdict(set)
+    fig_colors_of: dict[str, set[str]] = defaultdict(set)
     for i, r in enumerate(rows(cache / "inventory_parts.csv.gz"), 1):
         if i % 500_000 == 0:
             print(f"  inventory_parts: {i:,} rows", flush=True)
         set_num = inventory_set.get(r["inventory_id"])
-        if set_num is not None and set_num in set_year:
+        if set_num is None:
+            continue
+        if set_num in set_year:
             sets_with[r["part_num"]].add(set_num)
             colors_of[r["part_num"]].add(r["color_id"])
+        elif set_num in fig_sets:
+            fig_sets_with[r["part_num"]].update(fig_sets[set_num])
+            fig_colors_of[r["part_num"]].add(r["color_id"])
     print(f"  {len(sets_with):,} parts appear in a set", flush=True)
+
+    # A part Rebrickable only ever inventories inside a minifig -- `fig-`
+    # set numbers, which sets.csv does not have -- is dated by the sets that
+    # minifig ships in. Only where no set lists the part itself: merging the
+    # two would move the span and count of parts that already have one.
+    only_in_figs = fig_sets_with.keys() - sets_with.keys()
+    for part_num in only_in_figs:
+        sets_with[part_num] = fig_sets_with[part_num]
+        colors_of[part_num] = fig_colors_of[part_num]
+    print(f"  {len(only_in_figs):,} more appear only in a minifig", flush=True)
 
     out = {}
     for part_num, in_sets in sets_with.items():
@@ -134,6 +160,21 @@ def part_facts(cache: Path) -> tuple[dict[str, tuple[int, int, int, int]],
         out[part_num] = (min(years), max(years), len(in_sets),
                          len(colors_of[part_num]))
     return out, dict(sets_with)
+
+
+def sets_of_figs(cache: Path, inventory_set: dict[str, str],
+                 set_year: dict[str, int]) -> dict[str, set[str]]:
+    """Minifig number (`fig-000123`) -> the dated sets that ship it.
+
+    `minifigs.csv` carries no year, so a fig's years are its sets':
+    `inventory_minifigs.csv` lists the figs in each set's inventory, read
+    through the same first-version inventories as the parts."""
+    out: dict[str, set[str]] = defaultdict(set)
+    for r in rows(cache / "inventory_minifigs.csv.gz"):
+        set_num = inventory_set.get(r["inventory_id"])
+        if set_num is not None and set_num in set_year:
+            out[r["fig_num"]].add(set_num)
+    return dict(out)
 
 
 def theme_tree(cache: Path) -> dict[str, tuple[str, str | None]]:
@@ -312,6 +353,14 @@ def match(part_id: str, facts: dict[str, tuple[int, int, int, int]],
             hits = {q for q in designs[candidate] if q in facts}
             if hits:
                 return hits, "design"
+    assembly = _ASSEMBLY.match(part_id)
+    if assembly:
+        inner = match(assembly.group(1), facts, designs, moulds=moulds)
+        # Not through a design id: LDraw's number for an assembly's base is
+        # often a Rebrickable design id of something else -- 25866 names a
+        # lipstick, 2683 a windscreen.
+        if inner is not None and inner[1] != "design":
+            return inner[0], "base"
     return None
 
 
