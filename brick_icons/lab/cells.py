@@ -36,7 +36,7 @@ WHERE m.source = ?
 _LATEST_ERRORS = """
 SELECT m.part_id, m.source, m.error, r.finished FROM measurements m
 JOIN (SELECT part_id, source, MAX(run_id) AS run_id FROM measurements
-      GROUP BY part_id, source) latest
+      {only} GROUP BY part_id, source) latest
   ON m.part_id = latest.part_id AND m.source = latest.source
  AND m.run_id = latest.run_id
 JOIN runs r ON r.id = m.run_id
@@ -100,7 +100,8 @@ def not_applicable(source: str, printed: bool, drawn: bool,
     return not covered and not drawn
 
 
-def errors_by_engine(conn: sqlite3.Connection) -> dict[str, dict[str, str]]:
+def errors_by_engine(conn: sqlite3.Connection,
+                     part_id: str | None = None) -> dict[str, dict[str, str]]:
     """Each engine's latest error per part.
 
     An error belongs to an ENGINE, not to the slot that happened to record it.
@@ -112,12 +113,13 @@ def errors_by_engine(conn: sqlite3.Connection) -> dict[str, dict[str, str]]:
     timeout, so one facet giving up on the clock cannot mask another failing
     outright.
     """
-    return _latest_errors(conn)[0]
+    return _latest_errors(conn, part_id)[0]
 
 
 def _latest_errors(
-        conn: sqlite3.Connection) -> tuple[dict[str, dict[str, str]],
-                                           dict[str, dict[str, str]]]:
+        conn: sqlite3.Connection,
+        part_id: str | None = None) -> tuple[dict[str, dict[str, str]],
+                                             dict[str, dict[str, str]]]:
     """Each engine's latest error per part, and when the run recording it
     finished. One query, because the wall wants both and this one is a
     group-by over the whole measurements table.
@@ -128,7 +130,8 @@ def _latest_errors(
     """
     out: dict[str, dict[str, str]] = {}
     at: dict[str, dict[str, str]] = {}
-    for row in conn.execute(_LATEST_ERRORS):
+    sql = _LATEST_ERRORS.format(only="WHERE part_id = ?" if part_id else "")
+    for row in conn.execute(sql, (part_id,) if part_id else ()):
         engine = engine_for(row["source"])
         bucket = out.setdefault(engine, {})
         have = bucket.get(row["part_id"])
@@ -508,11 +511,19 @@ def cells(conn: sqlite3.Connection, source: str = "silhouette-naive",
 Elsewhere = tuple[dict[str, dict[str, str]], dict[str, dict[str, str]], list[dict]]
 
 
-def elsewhere_context(conn: sqlite3.Connection) -> Elsewhere:
+def elsewhere_context(conn: sqlite3.Connection,
+                      part_id: str | None = None) -> Elsewhere:
+    """`part_id` narrows every read to that one part, for a caller that asks
+    about nothing else."""
     shas: dict[str, dict[str, str]] = {}
-    for row in conn.execute("SELECT part_id, source, sha256 FROM renders"):
+    only, args = ("WHERE part_id = ?", (part_id,)) if part_id else ("", ())
+    for row in conn.execute(
+            f"SELECT part_id, source, sha256 FROM renders {only}", args):
         shas.setdefault(row["source"], {})[row["part_id"]] = row["sha256"]
-    return errors_by_engine(conn), shas, live_defects(conn)
+    records = live_defects(conn)
+    if part_id:
+        records = [r for r in records if r["part"] == part_id]
+    return errors_by_engine(conn, part_id), shas, records
 
 
 def other_conditions(conn: sqlite3.Connection, source: str,
@@ -561,7 +572,7 @@ def slot_states(conn: sqlite3.Connection, part_id: str,
     cannot drift from the wall it was opened from. `out_of_scope` is the
     part's and belongs to the caller that already has the row.
     """
-    context = elsewhere_context(conn)
+    context = elsewhere_context(conn, part_id)
     errors, _, records = context
     # A slot that timed out files no measurement, so its own attempt is the
     # only thing that knows -- and it is what a tile with no render shows.

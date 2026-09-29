@@ -24,7 +24,7 @@ ORDERS = {
 _LATEST = """
 SELECT m.* FROM measurements m
 JOIN (SELECT part_id, source, MAX(run_id) AS run_id
-      FROM measurements GROUP BY part_id, source) latest
+      FROM measurements {only} GROUP BY part_id, source) latest
   ON m.part_id = latest.part_id AND m.source = latest.source
  AND m.run_id = latest.run_id
 """
@@ -33,6 +33,7 @@ JOIN (SELECT part_id, source, MAX(run_id) AS run_id
 def findings(conn: sqlite3.Connection, engine: str | None = None,
              source: str | None = None,
              status: str | None = None, part: str | None = None,
+             part_id: str | None = None,
              stored: bool | None = None, errors_only: bool = False,
              order: str = "extra_d99", ascending: bool = False,
              limit: int = 100, offset: int = 0) -> dict:
@@ -40,6 +41,8 @@ def findings(conn: sqlite3.Connection, engine: str | None = None,
 
     `stored` filters on whether the engine's render is already in the store:
     True for what can be shown now, False for what would have to be rendered.
+    `part` matches ids containing it; `part_id` is one part exactly, and is
+    answered from that part's rows instead of the whole table's.
     """
     if order not in ORDERS:
         raise ValueError(f"order must be one of {sorted(ORDERS)}, not {order!r}")
@@ -65,8 +68,11 @@ def findings(conn: sqlite3.Connection, engine: str | None = None,
         where.append("r.path IS NULL")
     clause = f"WHERE {' AND '.join(where)}" if where else ""
 
+    only = "WHERE part_id = ?" if part_id else ""
+    if part_id:
+        args.insert(0, part_id)
     body = f"""
-    FROM ({_LATEST}) m
+    FROM ({_LATEST.format(only=only)}) m
     LEFT JOIN parts p ON p.id = m.part_id
     LEFT JOIN renders r ON r.part_id = m.part_id AND r.source = m.source
     {clause}
