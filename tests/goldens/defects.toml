@@ -4014,3 +4014,90 @@ title = "a boundary between two print colors sits 0.4 px off where the part puts
 classes = ["decal"]
 filed = "2026-09-28"
 notes = "Measured against the .dat's own tan (18) / green (10) polygons projected with the render's fit: where the columns are clear of studs the drawn boundary is 0.37-0.43 px below the true edge with --stud-instancing off and 0.39-0.42 px above it with all. That is the fill self-stroke's 0.4 px overhang, won by whichever print fill paints later; the two modes paint them in opposite orders. No stroke is drawn along a print boundary, so process.seam_px has nothing to cap it at. Not fixed."
+
+[[defect]]
+id = "49308p01-decal-layout-is-wrong"
+part = "49308p01"
+engines = ["decal"]
+status = "open"
+title = "decal layout is wrong"
+checked = { decal = "9cb74b3d4c7cf5a4933fac3dd06ac36f7efa5839f4fabc4362886d671d75e206" }
+filed = "2026-09-28"
+
+[[defect]]
+id = "59826ac01-frontmost-blue-stripe-has-shading"
+part = "59826ac01"
+engines = ["occt"]
+status = "open"
+title = "frontmost blue stripe has shading problems"
+checked = { occt = "a8bd88f3d10837273cfb9b9280c0dd79ae56982a1c98adb76d6d0a6f55f4e2c8" }
+filed = "2026-09-28"
+
+[[defect]]
+id = "30225bp1-back-wall-band-behind-edge-studs"
+part = "30225bp1"
+engines = ["occt", "naive"]
+status = "open"
+title = "a gray band runs along the upper-right edge behind the edge studs"
+classes = ["hidden-leak"]
+seen = { angle = "iso", shading = "outline", shade_style = "flat3" }
+filed = "2026-09-28"
+notes = "Not the seam and not instancing: --stud-instancing off draws the same band, the same profile to the pixel. The back-right side wall (y 0..4, a planar face tangent to the corner cylinder, filled with that cylinder's gradient g2 and clamped to its #9c9c9c end stop) painted AFTER the top face. Measured at 64x on the occt slot config (flat3, lw 2, sw 2): the wall's fill is a 0.84 px strip along the edge, the 1.30 px contour hides the outer part, and 0.44 px of #9c9c9c shows between the contour and the top face; knocking out that one <path fill=url(#g2)> returns the pixel to #cccccc. It shows only in the stud fields because the road print (color 7/15) paints after the wall and covers it there. Cause: shade.order_faces takes each pair's depth at a witness from shade._overlap_witness, which rasterizes both faces on a 48-cell grid scaled to their bbox overlap. The wall is 3.5 units thick along a 447-unit diagonal, under one cell, so the witness landed 2.6 units above the wall, where the wall's plane runs in front of the top face (depth 140.9 vs 147.0), and the wall was ordered in front. The back-left wall got a witness on the other side and ordered correctly, which is why only 1:30 shows it. Fix (edge-stud-band, a93314b): the witness is checked with an even-odd point test against both exact polygons, and a miss falls back to the pole of inaccessibility of their exact overlap; a pair with no exact overlap keeps the rastered edge point (dropping it lost the coplanar tie that orders print after body, and fattened 30225bp1's crosswalk stripes). shade.WITNESS_EXACT disarms it and reproduces origin/main byte for byte. Gate 1: band gone (profile #9c9c9c -> #cccccc), crosswalk unchanged, 1 comp at 700 px. Gate 2 (occt slot, studio): 30225b and 3811p04 lose the same back-wall band (2 and 25 comps); 30225bp1, 3811, 3867, 3857, 612p01, 4186, 3001, 3020, 3024 no components. Gate 3 (predicted 0, verdict review): occt 4 of 52 moved, all outline-flat3: 3649 (a white hole in the hub fills gray, LDView agrees), 6589 (a notch's dark/mid-gray boundary moves), 3941p01 (a pre-existing light sliver beside the print grows), 3942bp01 (a print edge moves under a pixel); naive 3 of 52: print boundaries on 3942bp01 and 3941p01, a sliver on 3673. Awaiting a person's verdict on those. Not addressed: a pair whose true overlap the raster misses entirely still gets no constraint."
+
+[[defect]]
+id = "3811-front-wall-takes-corner-gradient"
+part = "3811"
+engines = ["occt"]
+status = "open"
+title = "flat front walls take the rounded corners' gradients: light on the left, dark on the right"
+classes = ["shading"]
+notes = "Measured in the occt slot (--shade-style flat3, 256x170) at 7c270b4. Each flat front wall is one element with the rounded corner it meets, and it is painted with that corner's linear gradient. The right front wall (x 127.23-249.68) carries the front corner's gradient, whose axis is only 1.54 px long (x 128.77 #565656 to x 127.23 #9c9c9c); SVG pads a gradient past its axis ends, so the whole wall paints #565656. The left front wall (x 6.00-127.23) carries the left corner's gradient (axis x 6.32 to 6.00, #9c9c9c to #999999), so it paints #9c9c9c. flat3's own side tones for the walls' plane normals are #858585 (lit) and #5e5e5e. A flat plane's fill should come from its own normal, not from the curved face it is merged with. Rule D (shade.THIN_WALL_WEIGHTS, branch thin-wall-shade) paints a side wall under 2 line weights along the silhouette in the top's tone, which covers both of 3811's front walls at this canvas: the defect is moot there, and still live wherever the wall is wider (a larger canvas, or a rounded-corner part drawn big)."
+
+[[defect]]
+id = "10p01-dot-stud-black-ring-instancing-off"
+part = "10p01"
+engines = ["occt"]
+status = "open"
+title = "dot studs drawn by the engine (--stud-instancing off) show a black ring between the white dot and the stud rim"
+classes = ["shading"]
+filed = "2026-09-28"
+notes = "Seen at 409de08 plus the deco-shade branch, occt, --shade-style flat3 --line-width 2 --silhouette-width 2 --stud-instancing off. studp01.dat tops are a color-15 4-4disc (r4) inside a color-16 4-4ring2 (r4-6). With instancing off, some of the 30 dot studs paint the r4-6 annulus black. With instancing on (the slot) the placed definition <g id=\"sd1f\"> has no annulus fill at all (only the deco disc and the wall gradient), and the plate top under it shows through in the same #cccccc, so it looks right. Cause not traced; inference only: the annulus is under a pixel wide at baseplate scale, so the engine path inks it as a junction-lens pocket and the instanced definition crumb-culls it. LDView (-FOV=0.1) draws a gray ring."
+
+[[defect]]
+id = "2552p01-printed-studs-draw-flat"
+part = "2552p01"
+engines = ["occt", "naive"]
+status = "open"
+title = "printed studs and printed walls paint flat in the print color, with none of the shading a plain surface gets"
+classes = ["shading"]
+filed = "2026-09-28"
+notes = "Fixed on branch deco-shade (ad65d74, unmerged): every decoration fill gets a translucent black layer carrying the shading of the surface under it; a print on a top face gets none. Gate 1 (2552p01, occt): 198 changed regions, blue stud walls now carry the wall gradient, matching LDView -FOV=0.1. Gate 2 (occt, before = the layer disarmed in-process, same tree): 2552p02 2, p03 14, p04 14, p05 9, p06 14, 3811p04 634 (one per colored stud), 3039p03 1, 3040bp08 7, 4740p03 6, 3941p01 1, 3941p01 translucent-occt 6; identical: 10p01, 30225bp1, 3068bp01, 14769p0a. None worse. Gate 3 (vet-goldens --base 409de08, occt): 4 moved, all predicted (3941p01, 3942bp01, 3040bp08, 4740p03), 0 unexpected; naive hash gate (BRICK_GOLDENS=full) passes after re-freezing those four."
+
+[[defect]]
+id = "3811-thin-front-wall-reads-as-one-heavy-line"
+part = "3811"
+engines = ["occt"]
+status = "open"
+title = "the 4 LDU front wall reads as one heavy black line at label scale"
+classes = ["shading", "stroke-scale"]
+notes = "At the occt slot's 256x170 (0.271 px/LDU) the front wall is 0.94 px tall and carries two 0.75 px strokes, the crease and the silhouette; about 0.1 px of side tone shows between them, so the wall reads as one black line 1.8 px thick. Fix (branch thin-wall-shade, 900362b, unpushed): shade.fill_ops paints a side-toned band narrower than 2 line weights (2*area/perimeter of the whole band) that runs along the part's outer outline in the top tone, and its crease draws at the stud tier (StudTier.creases); the silhouette keeps its weight. THIN_WALL_WEIGHTS = 0 disarms. Measured by a 64x profile down each front wall (scripts/thin-wall-before-after.py): the unbroken dark run up from the silhouette is 1.80 px before, 0.84 px after (silhouette ink, then 0.41 px of top tone, then a 0.22 px crease). At 128 px the crease is sub-pixel and does not show as a separate line; the edge still thins. Gate 1: 3811 and 2552p01 move (dark run 1.80 -> 0.84 on both walls); 3020 and 3024 byte-identical. Gate 2 (occt flat3): 3857, 4186, 10a, 612p01 move the same way (dark run 1.95-3.59 -> 0.84-0.86 px), none worse; 10a and 3857 also lose a gray sliver of back wall along their back-right outline; 3867, 91405, 92438, 3958, 3029, 3070b, 6141, 3068b byte-identical. A first version judged each element alone and lit 3867's short front-corner piece of an otherwise wide wall, and caught 3941p01's print holes via holes in the silhouette region; both fixed before these runs. Gate 3: 0 of 52 occt goldens moved (predicted none), vet label thin-wall-shade-r3; naive golden byte gate and shade/process/trace/instancing/occt tests green on studio except the known test_a_sticker_is_not_clipped_by_the_slope_it_is_stuck_to (5.12%, same value with the rule disarmed)."
+
+[[defect]]
+id = "51283-sphere-shaded-as-facets"
+part = "51283"
+engines = ["occt"]
+status = "open"
+title = "a hand-faceted sphere draws as a disco ball of flat facets"
+classes = ["shading"]
+filed = "2026-09-28"
+notes = "51283's sphere is hand-authored quads (s/51283s01.dat, two mirrored halves, radius 20, cut by a collar at y=24 and a hole at the top), 192 triangles joined by conditional lines into one region. No sphere primitive, so nothing to substitute. occt grouped it correctly but sampled every plane, and a plane's view normal is flipped toward the camera, so the far half read as a mirror of the near: radial misfit 0.34, Gauss spread 0.73, and the tone-band pass posterized it facet by facet. naive (front facets only) scored 0.25/0.21 and drew a smooth dome. Fix on branch sphere-shading (a4ea684, unmerged): a declared-smooth region is fitted by quadric.classify (cone/cylinder, sphere, ellipsoid behind residual gates; 51283 sphere residual 0.0058); a fitted sphere takes a radial ramp computed from the sphere (6 falling stops), and its limb replaces the facet silhouette in both engines. Gate 1: one fill, 6 stops, contour 16 L -> 2 L. Gate 2 (22119, 20401, 30106, 20953, 3960, 24132, 1974, 32474, 2736, 90370; 3262 and 3626cp7d unchanged controls): none worse. Gate 3: 2 of 52 occt goldens moved (3960, 4740p03), both predicted. Left: a ~1 px kink where the limb meets the collar ring (the collar vertices sit at r 19.8 against the fitted 19.93); see 20401-limb-barbs-at-region-join."
+
+[[defect]]
+id = "20401-limb-barbs-at-region-join"
+part = "20401"
+engines = ["occt", "naive"]
+status = "open"
+title = "a fitted limb barbs where two regions of one sphere meet"
+classes = ["arc-split"]
+filed = "2026-09-28"
+notes = "Branch sphere-shading. 20401's ball is two hemispheres with no conditional line between them. Both fit one sphere (quadric._share_spheres gives them one fit and one ramp), but the limb is drawn only along conditional-line silhouette chords, so it stops ~8 deg short of the equator on each side and the contour polygon there barbs as it rejoins the arcs. 51283 shows the same kind of kink where its limb meets the collar ring. Not fixed: bridging needs a visibility test across the gap, or treating the equator as declared by the joint fit, which the declared-only rule does not yet allow."
