@@ -1,10 +1,10 @@
 # On-demand spot rendering
 
-**Status: built on `spot-render`, not yet merged.** Three pieces: onto
-service jobs (onto repo, released in onto be0cf2f), the spot render worker and
-redraw path (brick-icons), and per-cell refresh on the wall (pezlie ^0.4.0,
-and the lab). What is left -- merge, the fleet suite, the service up, the
-end-to-end check -- is `docs/superpowers/plans/2026-09-29-spot-render.md`.
+**Status: built and merged (main a68d64b); the worker is up on studio.**
+Three pieces: onto service jobs (onto repo, released in onto be0cf2f), the
+spot render worker and redraw path (brick-icons), and per-cell refresh on the
+wall (pezlie ^0.4.0, and the lab). What is left -- the sheet masters and the
+end-to-end check in the lab -- is `docs/superpowers/plans/2026-09-29-spot-render.md`.
 The flow below is as built; where the build departed from the design, the
 design text was corrected rather than kept.
 

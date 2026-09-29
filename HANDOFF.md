@@ -1,24 +1,25 @@
-## 2026-09-28: spot rendering built on `spot-render`, not merged
+## 2026-09-28: spot rendering merged (main a68d64b); worker up on studio
 
 The lab's **Redraw** draws on a warm worker on the fleet
 (`brick_icons.spot_worker`, onto service `brick-spot-render`) instead of on
 this Mac or the lazy queue. Design: `docs/superpowers/specs/2026-09-29-spot-render-design.md`;
 launch recipe: DEVELOPING.md, "Spot rendering"; what is left:
-`docs/superpowers/plans/2026-09-29-spot-render.md` (Task 25). After the merge:
+`docs/superpowers/plans/2026-09-29-spot-render.md` (Task 25).
 
-1. **Write the sheet masters.** Run `scripts/bake-thumbs.py` per slot, on the
-   fleet (`onto run --kind bake`, estimated first). Until a slot has its
+Done: fast-forwarded to main, fleet suite green but for the two known
+failures, worker up on studio answering `1664.a68d64b` (3001 occt drawn in
+11 s cold, 0.7 s warm). Left, all in the main checkout:
+
+1. **Pull and reload the lab.** `git pull`, `(cd lab && npm ci)`,
+   `brick-lab install` (rewrites the agents' PATH to reach onto; `cycle`
+   alone keeps the old plists), then `brick-lab stat` reads
+   `spot render  up at <build>`.
+2. **Write the sheet masters.** Run `scripts/bake-thumbs.py` per slot (the
+   plan's Step 3 has the estimate). Until a slot has its
    `sheet-<level>.master.png`, every redraw there logs a warning that its
    sheets were not patched; the drawing and its tiles are stored regardless.
-2. **Start the worker.** `onto sync --in brick-icons-spot studio`, clone
-   `.venv` and `vendor/ldraw` into that tree (DEVELOPING.md has the commands),
-   then `onto service up brick-spot-render --in brick-icons-spot --prefer studio
-   -- scripts/spot-worker.sh`. Sandbox off for every `onto` command.
-3. **Check it.** `onto call brick-spot-render '{"ping": true}'` answers at
-   origin/main's build; `onto service ls` shows it on studio; `brick-lab
-   install` then `brick-lab stat` reads `spot render  up at <build>`. Then one
-   headless redraw on `/wall` whose lightbox image and wall tile both change
-   without a reload, with a labeled before/after on the wall.
+3. **Check it.** One redraw of 612p01 on `/wall` whose lightbox image and wall
+   tile both change without a reload, with a labeled before/after on the wall.
 
 ## 2026-09-28: `/corpus` retired; `/wall` is the wall now
 
