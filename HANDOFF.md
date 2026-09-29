@@ -1,9 +1,10 @@
-## 2026-09-29: the nine waiting branches merged (branch `merge-0929`)
+## 2026-09-29: the nine waiting branches merged to main (f24c1fe)
 
-`merge-0929` holds readme-cli, part-years, render-caption, review-orphans,
-line-weight-1.2, edge-stud-band, thin-wall-shade, deco-shading and
-sphere-shading, merged in that order onto main e3f836b. It is pushed so the
-fleet can fetch it; main is not moved until the full suite passes.
+readme-cli, part-years, render-caption, review-orphans, line-weight-1.2,
+edge-stud-band, thin-wall-shade, deco-shading and sphere-shading, merged in
+that order via branch `merge-0929` (deleted, as are the nine branches and
+their worktrees). Post-merge fleet suite: 1831 passed, 2 failed (4070 and the
+known sticker-on-slope test, both below).
 
 Conflicts, resolved: HANDOFF and defects.toml kept both sides. db.record_render
 keeps review-orphans' same-file early return, and its test no longer checks a
@@ -34,11 +35,9 @@ Still open:
   only for printed parts (137 of 728 design matches are printed). After the
   merge, `.venv/bin/python scripts/fetch-part-years.py`.
 - render-caption: about 14 one-off A/B scripts still post bare panels.
-- Fleet suite on this branch (studio): 1830 passed, 3 failed -- 4070 above,
-  the known `test_a_sticker_is_not_clipped_by_the_slope_it_is_stuck_to`, and
-  a thin-wall test that paired strokes by position (fixed, 4e5b0b5). Once
-  the verdicts are in: re-freeze the goldens, fast-forward main, and ONE
-  combined redraw of the occt slots, re-priced from post-merge timings.
+- Known failure: `test_a_sticker_is_not_clipped_by_the_slope_it_is_stuck_to`.
+- Once the verdicts are in: re-freeze the goldens, then ONE combined redraw
+  of the occt slots, re-priced from post-merge timings.
 
 **Parked: freeform tone bands** (branch `sphere-tone-bands`, 7f73eae, off by
 default via `shade.FREEFORM_BANDS`). Smooth-region facets that no quadric
