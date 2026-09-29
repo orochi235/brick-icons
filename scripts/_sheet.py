@@ -42,22 +42,26 @@ def diff_panel(before, after):
     return _diff.panel(before, after)
 
 
-def sheet(title, rows, columns=("before", "after"), out=None):
-    """rows: [(label, before, after)] -> the sheet image (saved to `out`)."""
+def sheet(title, rows, columns=("before", "after"), out=None, extra=None):
+    """rows: [(label, before, after)] -> the sheet image (saved to `out`).
+
+    With `extra` (a column name), each row is (label, before, after, image)
+    and that image is a fourth panel after the diff -- a reference drawing."""
     font = ImageFont.load_default(size=16)
     small = ImageFont.load_default(size=13)
     panels = []
-    for label, b, a in rows:
+    for label, b, a, *more in rows:
         d, n, px = diff_panel(b, a)
-        panels.append((label, (n, px), [b, a, d]))
+        panels.append((label, (n, px), [b, a, d, *more]))
     W = max(im.width for _l, _n, ims in panels for im in ims)
+    ncol = 3 + (extra is not None)
     gutter, top, left = 12, 56, 130
     heights = [max(im.height for im in ims) for _l, _n, ims in panels]
-    img = Image.new("RGB", (left + 3 * W + 4 * gutter,
+    img = Image.new("RGB", (left + ncol * W + (ncol + 1) * gutter,
                             top + sum(heights) + gutter * len(rows)), "white")
     dr = ImageDraw.Draw(img)
     dr.text((gutter, 8), title, fill="black", font=font)
-    for k, name in enumerate((*columns, "diff")):
+    for k, name in enumerate((*columns, "diff", *([extra] if extra else []))):
         dr.text((left + gutter + k * (W + gutter), 32), name, fill="black", font=font)
     y = top
     for (label, n, ims), h in zip(panels, heights):

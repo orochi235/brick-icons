@@ -2,7 +2,7 @@ import math
 
 import numpy as np
 import pytest
-from brick_icons import shade, hlr, geom2d
+from brick_icons import shade, hlr, geom2d, quadric
 from brick_icons import primitives as P
 
 
@@ -1050,7 +1050,9 @@ def test_smooth_group_gradient_axis_follows_normal_variation():
     assert abs(y1 - y0) > abs(x1 - x0)   # along the curve, not the width
 
 
-def test_dome_group_gets_radial_gradient():
+def test_dome_group_gets_radial_gradient(monkeypatch):
+    # the normals-only path; a fitted sphere takes its own disc (test_quadric)
+    monkeypatch.setattr(quadric, "ARMED", False)
     right, up = np.array([1.0, 0, 0]), np.array([0.0, 1.0, 0])
     fwd = np.array([0.0, 0.0, -1.0])
     tris, seams = _dome_mesh(fwd)

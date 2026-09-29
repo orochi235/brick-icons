@@ -9,7 +9,7 @@ from PIL import Image, ImageDraw
 from scipy import ndimage
 
 from . import timing
-from . import colors, geom2d, primitives, process, unwrap
+from . import colors, geom2d, primitives, process, quadric, unwrap
 
 
 def faces_from_analytic(analytic, proj):
@@ -461,6 +461,13 @@ def _radial_ts(samples, style):
     else:
         b = np.zeros(len(pts))
         f = np.zeros(2)
+    return _focal_ts(pts, f), b, f
+
+
+def _focal_ts(pts, f):
+    """The offset SVG gives each unit-disc point under a radial gradient
+    focused at `f`: its distance from f over f's distance to the unit circle
+    along the same ray."""
     d = pts - f
     a = np.einsum("ij,ij->i", d, d)
     b2 = 2.0 * (d @ f)
@@ -468,8 +475,7 @@ def _radial_ts(samples, style):
     disc = np.maximum(b2 * b2 - 4 * a * c, 0.0)
     with np.errstate(divide="ignore", invalid="ignore"):
         s = np.where(a > 1e-12, (-b2 + np.sqrt(disc)) / (2 * a), np.inf)
-        ts = np.clip(np.where(s > 1e-9, 1.0 / s, 0.0), 0.0, 1.0)
-    return ts, b, f
+        return np.clip(np.where(s > 1e-9, 1.0 / s, 0.0), 0.0, 1.0)
 
 
 def radial_misfit(samples, style, nbins=8):
@@ -574,6 +580,8 @@ def _band_misfit_radials(faces, style):
             groups[f["group"]].append(f)
     Lv = np.asarray(L, float)
     for key, members in groups.items():
+        if any(f.get("grad_fit") for f in members):
+            continue                     # a fitted quadric is not freeform
         samples = members[0]["grad_samples"]
         if len(samples) < TONE_MIN_SAMPLES:
             continue
@@ -591,7 +599,47 @@ def _band_misfit_radials(faces, style):
             f.pop("grad_samples", None)
 
 
-def _radial_focal_stops(samples, style, nbins=8, exact=False):
+#: Stops a fitted sphere's ramp carries: its tone is computed, not binned,
+#: so more stops only add rings.
+SPHERE_STOPS = 6
+
+
+def _sphere_stops(samples, style, n=SPHERE_STOPS, concave=False):
+    """Focal point and stops for a SPHERE's disc, from the sphere itself.
+
+    In the disc's unit coordinates (y down) the surface point at (u, v) has
+    view normal (u, -v, -sqrt(1 - u^2 - v^2)), so its Lambert tone is known
+    exactly and no facet's normal is consulted. The focal point is the
+    highlight, where that normal is the light. The region's own samples say
+    WHERE on the disc the surface is: each takes the sphere's tone at its
+    position and its offset from the focal point, and a stop is the mean over
+    one of `n` equal offset bins. Averaging whole rings instead drew 3960's
+    shallow cap with the falloff of a full ball it is only the top of. The
+    ramp is made non-increasing (_falling), so it reads as one falloff from
+    the highlight outward; SVG pads past the first and last stop.
+
+    `concave`: the disc shows the sphere's inside (a dish), whose visible
+    point at (u, v) is on the far side and faces back, (-u, v, -w)."""
+    Lv = np.asarray(style.light, float)
+    L = Lv / (np.linalg.norm(Lv) or 1.0)
+    sg = -1.0 if concave else 1.0
+    f = np.array([sg * L[0], -sg * L[1]])
+    if L[2] > 0 or np.hypot(*f) > 0.98:
+        f = f / (np.hypot(*f) or 1.0) * 0.98   # highlight on or past the limb
+    q = np.array([p for p, _ in samples], float)
+    q = q / np.maximum(1.0, np.hypot(q[:, 0], q[:, 1]))[:, None]
+    w = np.sqrt(np.maximum(0.0, 1.0 - (q * q).sum(axis=1)))
+    b = np.maximum(0.0, np.stack([sg * q[:, 0], -sg * q[:, 1], -w], 1) @ L)
+    ts = _focal_ts(q, f)
+    k = np.minimum((ts * n).astype(int), n - 1)
+    bins = [bi for bi in range(n) if (k == bi).any()]
+    means = _falling([float(b[k == bi].mean()) for bi in bins],
+                     [int((k == bi).sum()) for bi in bins])
+    return ([((bi + 0.5) / n, style.ramp_b(m)) for bi, m in zip(bins, means)],
+            (float(f[0]), float(f[1])))
+
+
+def _radial_focal_stops(samples, style, nbins=8, exact=False, sphere=False):
     """Focal point + binned stops for a dome group's radial gradient.
 
     For a spherical cap, Lambert brightness is LINEAR in projected position,
@@ -607,6 +655,9 @@ def _radial_focal_stops(samples, style, nbins=8, exact=False):
     t at a point q is |q-f| over the distance from f to the unit circle
     along the ray through q (per-sample quadratic); each stop's tone is the
     bin's mean brightness through style.ramp_b."""
+    if sphere and getattr(style, "light", None) is not None \
+            and getattr(style, "ramp_b", None) is not None:
+        return _sphere_stops(samples, style, concave=sphere == "concave")
     nvs = [np.asarray(n, float) for _, n in samples]
     L = getattr(style, "light", None)
     ts, b, f = _radial_ts(samples, style)
@@ -2068,7 +2119,8 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
         if "grad_radial" in f and not deco and not flat:
             g = f["grad_radial"]
             stops, (fx, fy) = _radial_focal_stops(
-                f["grad_samples"], style, exact=f.get("grad_exact", False))
+                f["grad_samples"], style, exact=f.get("grad_exact", False),
+                sphere=g.get("sphere", False))
             flat_color = _one_color(stops)
             if flat_color is not None:
                 ops.append({"d": d, "fill": flat_color, "depth": f["depth"]})
@@ -2462,7 +2514,7 @@ def faces_from_tris(tri, proj, cond_edges=None, colors=None):
             f["backfill"] = True
         faces.append(f)
     _attach_smooth_gradients(faces, cond_edges if have_seams
-                             else np.zeros((0, 2, 3)))
+                             else np.zeros((0, 2, 3)), proj=proj)
     front_groups = {f["group"] for f in faces if not f.get("backfill")}
     kept = []
     for f in faces:
@@ -2877,21 +2929,26 @@ def _seam_edge_mask(A, B, cond_edges, tol=2e-3):
     return mask
 
 
-def _attach_radial_gradient(faces, ks, front, nvs):
+def _attach_radial_gradient(faces, ks, front, nvs, spec=None):
     """Shared radial-gradient spec for a dome-like group: unit-circle gradient
     space mapped to the group's bounding ellipse (center c0, semi-axes r and
     r*ratio). The extent covers ALL members (backfill facets included, so the
     gradient reaches the true fold); samples carry the FRONT members' normals
     at their normalized elliptic radii. All members share one dict, so
-    trace's def-dedup keeps one def."""
-    allv = np.vstack([faces[k]["poly"] for k in ks])
-    c0 = (allv.min(axis=0) + allv.max(axis=0)) / 2.0
-    w = float(allv[:, 0].max() - allv[:, 0].min()) or 1.0
-    h = float(allv[:, 1].max() - allv[:, 1].min()) or 1.0
-    ratio = h / w
-    dx = allv[:, 0] - c0[0]
-    dy = (allv[:, 1] - c0[1]) / ratio
-    r = float(np.hypot(dx, dy).max()) or 1.0
+    trace's def-dedup keeps one def. A caller that knows the surface's own
+    extent passes it as `spec` in place of the members' bounding ellipse."""
+    if spec is not None:
+        c0 = np.array([spec["cx"], spec["cy"]])
+        r, ratio = spec["r"], spec["ratio"]
+    else:
+        allv = np.vstack([faces[k]["poly"] for k in ks])
+        c0 = (allv.min(axis=0) + allv.max(axis=0)) / 2.0
+        w = float(allv[:, 0].max() - allv[:, 0].min()) or 1.0
+        h = float(allv[:, 1].max() - allv[:, 1].min()) or 1.0
+        ratio = h / w
+        dx = allv[:, 0] - c0[0]
+        dy = (allv[:, 1] - c0[1]) / ratio
+        r = float(np.hypot(dx, dy).max()) or 1.0
     # samples carry each member's centroid in UNIT-ellipse coords (affine-
     # invariant under the uniform output fit) plus its normal; fill_ops picks
     # the focal point and stop tones from these with the style's light.
@@ -2901,18 +2958,36 @@ def _attach_radial_gradient(faces, ks, front, nvs):
         u = (c[0] - c0[0]) / r
         v = (c[1] - c0[1]) / (r * ratio)
         samples.append(((float(u), float(v)), nv))
-    spec = {"cx": float(c0[0]), "cy": float(c0[1]), "r": r, "ratio": ratio}
+    if spec is None:
+        spec = {"cx": float(c0[0]), "cy": float(c0[1]), "r": r, "ratio": ratio}
     for k in ks:
         faces[k]["grad_radial"] = spec
         faces[k]["grad_samples"] = samples
 
 
-def _attach_smooth_gradients(faces, cond_edges, min_spread=0.002):
+def _attach_smooth_gradients(faces, cond_edges, min_spread=0.002, proj=None):
     """Union faces across conditional-line seams; give each group one shared
     gradient (same axis + stops for every member — userSpaceOnUse gradients
     make the facets blend seamlessly without polygon union). Groups whose
     normals barely vary (min_spread on 1-cos) stay flat-toned."""
-    parent = list(range(len(faces)))
+    labels = declared_regions([f["_verts"] for f in faces],
+                              [f["normal"] for f in faces],
+                              [f.get("color", 16) for f in faces], cond_edges)
+    for f, g in zip(faces, labels):
+        f["group"] = g                  # merge key for fill_ops union
+    attach_group_gradients(faces, min_spread, proj=proj)
+
+
+def declared_regions(verts, normals, colors, cond_edges):
+    """A region label per triangle: triangles joined across DECLARED seams.
+
+    A shared edge that lies on a type-5 conditional line joins its two
+    triangles; so does one between exactly coplanar triangles (quad halves
+    meet at a diagonal, which is never a conditional line), and one between
+    two triangles of the same decoration color. Nothing else does -- in
+    particular no dihedral angle across tessellation. `normals` may be in any
+    frame, as long as it is one frame for all."""
+    parent = list(range(len(verts)))
 
     def find(i):
         while parent[i] != i:
@@ -2923,8 +2998,7 @@ def _attach_smooth_gradients(faces, cond_edges, min_spread=0.002):
     by_edge = defaultdict(list)
     edge_pts = []
     edge_ids = []
-    for k, f in enumerate(faces):
-        v = f["_verts"]
+    for k, v in enumerate(verts):
         for a, b in ((v[0], v[1]), (v[1], v[2]), (v[2], v[0])):
             ek = _edge_key(a, b)
             by_edge[ek].append(k)
@@ -2941,30 +3015,93 @@ def _attach_smooth_gradients(faces, cond_edges, min_spread=0.002):
         for k in ks[1:]:
             # a decal is coplanar with its carrier and shares its edges;
             # unioning across the color boundary is what erased flat prints
-            if faces[ks[0]].get("color", 16) != faces[k].get("color", 16):
+            if colors[ks[0]] != colors[k]:
                 continue
             # union across a seam always; across an ordinary shared edge only
             # when coplanar (quad halves meet at a diagonal, which is never a
             # conditional line) — coplanar union can't cross a real crease
-            coplanar = float(faces[ks[0]]["normal"] @ faces[k]["normal"]) > 0.9999
+            coplanar = float(np.asarray(normals[ks[0]]) @ np.asarray(normals[k])) > 0.9999
             # ...except decoration, which is ONE printed region however its
             # carrier curves. 3941p01's panel is 36 hand-authored quads around
             # a cylinder: 7.5 deg apart so never coplanar, and the part has no
             # conditional lines to seam them, so it shattered into separately
             # stroked fragments with the buttons splitting it into strips.
-            same_deco = faces[ks[0]].get("color", 16) != 16
+            same_deco = colors[ks[0]] != 16
             if ek not in seam_keys and not coplanar and not same_deco:
                 continue
             ra, rb = find(ks[0]), find(k)
             if ra != rb:
                 parent[rb] = ra
-
-    for k in range(len(faces)):
-        faces[k]["group"] = find(k)     # merge key for fill_ops union
-    attach_group_gradients(faces, min_spread)
+    return [find(k) for k in range(len(verts))]
 
 
-def attach_group_gradients(faces, min_spread=0.002):
+def _facet3(f):
+    """A face's own 3-D vertices (any one frame per engine), or None."""
+    if f.get("_verts") is not None:
+        return np.asarray(f["_verts"], float)
+    if f.get("_plane3") is not None:
+        return np.asarray(f["_plane3"][0], float)
+    return None
+
+
+def _attach_fitted_gradient(faces, ks, proj=None):
+    """Shade a declared-smooth group as the quadric its facets tessellate,
+    if one fits (quadric.classify). Returns whether it did.
+
+    A sphere or ellipsoid takes the radial ramp and a cone or cylinder the
+    linear one, each fitted to the members that FACE THE CAMERA -- the
+    visible surface -- and the group is stamped `grad_fit` so the tone-band
+    pass leaves it one element. That is the difference that mattered: occt
+    flips a plane's view normal toward the camera, so a closed sphere's far
+    half sampled as a mirror of its near half, the radial model misfit it
+    (51283: 0.34 misfit, 0.73 Gauss spread) and it was posterized facet by
+    facet. A group no quadric fits is freeform and falls through to the
+    normal-cloud shading below, unchanged.
+    """
+    if not quadric.ARMED or len(ks) < quadric.MIN_FACETS:
+        return False
+    if faces[ks[0]].get("color", 16) != 16:
+        return False
+    verts = [_facet3(faces[k]) for k in ks]
+    if any(v is None for v in verts):
+        return False
+    normals = []
+    for v in verts:
+        n = np.cross(v[1] - v[0], v[2] - v[0])
+        normals.append(n / (np.linalg.norm(n) or 1.0))
+    fit = quadric.classify(verts, normals)
+    if fit is None:
+        return False
+    front = [k for k in ks if not faces[k].get("backfill")
+             and faces[k].get("_facing", True)]
+    if len(front) < 2:
+        return False
+    nvs = [faces[k]["normal"] for k in front]
+    if fit.kind == "sphere" and proj is not None:
+        # the sphere's own disc, not the members' bounding box: a zone cut
+        # off below (51283's collar) has a box no longer centered on it,
+        # and the analytic stops are only right on the true disc
+        C = np.asarray(fit.center, float)
+        x, y, _ = proj.to_px(np.stack([C, C + float(fit.radii[0]) * proj.right]))
+        # a dish shows the INSIDE of its sphere: normals toward the center
+        B = np.stack([proj.right, proj.up, proj.fwd])
+        out = [float(np.asarray(nv, float) @ (B @ (verts[ks.index(k)].mean(axis=0) - C)))
+               for k, nv in zip(front, nvs)]
+        spec = {"cx": float(x[0]), "cy": float(y[0]),
+                "r": float(np.hypot(x[1] - x[0], y[1] - y[0])), "ratio": 1.0,
+                "sphere": "concave" if np.median(out) < 0 else "convex"}
+        _attach_radial_gradient(faces, ks, front, nvs, spec=spec)
+    elif fit.kind in ("sphere", "ellipsoid"):
+        _attach_radial_gradient(faces, ks, front, nvs)
+    else:
+        attach_axis_gradient(faces, ks, [faces[k]["poly"].mean(axis=0)
+                                         for k in front], nvs)
+    for k in ks:
+        faces[k]["grad_fit"] = fit.kind
+    return fit
+
+
+def attach_group_gradients(faces, min_spread=0.002, proj=None):
     """One shared gradient per face['group'] (same axis + stops for every
     member -- userSpaceOnUse gradients make the facets blend seamlessly
     without polygon union). Groups whose normals barely vary (min_spread on
@@ -2978,7 +3115,13 @@ def attach_group_gradients(faces, min_spread=0.002):
     for k, f in enumerate(faces):
         if f.get("group") is not None:
             groups[f["group"]].append(k)
+    spheres = []
     for ks in groups.values():
+        fit = _attach_fitted_gradient(faces, ks, proj)
+        if fit:
+            if faces[ks[0]].get("grad_radial", {}).get("sphere"):
+                spheres.append((fit, ks))
+            continue
         # gradients are derived from FRONT members only: backfill facets
         # (past the silhouette fold) extend the group's fill area, but their
         # away-facing normals would poison spread, dome detection, and stops
@@ -3003,6 +3146,41 @@ def attach_group_gradients(faces, min_spread=0.002):
             _attach_radial_gradient(faces, ks, front, nvs)
             continue
         attach_axis_gradient(faces, ks, cs, nvs)
+    _share_sphere_ramps(faces, spheres)
+
+
+def _share_sphere_ramps(faces, spheres):
+    """Regions fitted to ONE sphere share one ramp.
+
+    Each region's stops are weighted by where it lies on the disc, so two
+    regions of one ball -- 20401's and 32474's hemispheres, authored apart
+    with no conditional line between them -- got different stops under the
+    same focal point, and the equator drew as a tone step. Pooled, they are
+    one gradient and the step is gone; they stay separate fills."""
+    pools = []
+    for fit, ks in spheres:
+        c, r = np.asarray(fit.center, float), float(fit.radii[0])
+        for pool in pools:
+            f0 = pool[0][0]
+            side = faces[pool[0][1][0]]["grad_radial"]["sphere"]
+            if (faces[ks[0]]["grad_radial"]["sphere"] == side
+                    and np.linalg.norm(c - f0.center) <= 0.01 * r
+                    and abs(r - float(f0.radii[0])) <= 0.01 * r):
+                pool.append((fit, ks))
+                break
+        else:
+            pools.append([(fit, ks)])
+    for pool in pools:
+        if len(pool) < 2:
+            continue
+        head = faces[pool[0][1][0]]
+        spec, samples = head["grad_radial"], []
+        for _fit, ks in pool:
+            samples += faces[ks[0]]["grad_samples"]
+        for _fit, ks in pool:
+            for k in ks:
+                faces[k]["grad_radial"] = spec
+                faces[k]["grad_samples"] = samples
 
 
 def attach_axis_gradient(faces, ks, cs, nvs):
