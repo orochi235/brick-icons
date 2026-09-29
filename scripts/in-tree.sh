@@ -5,7 +5,7 @@
 #
 #   onto run --in bi-x msb-uai -- sh scripts/in-tree.sh .venv/bin/python -m pytest -q tests/test_occt.py
 set -e
-main="${ONTO_MAIN_TREE:-$HOME/.config/onto/work/brick-icons}"
+main="${ONTO_MAIN_TREE:-${ONTO_WORK:-$HOME/.config/onto/work}/brick-icons}"
 mkdir -p vendor
 [ -e vendor/ldraw ] || ln -sfn "$main/vendor/ldraw" vendor/ldraw
 [ -e .venv ] || ln -sfn "$main/.venv" .venv

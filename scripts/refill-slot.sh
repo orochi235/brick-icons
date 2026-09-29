@@ -78,8 +78,9 @@ echo "launching $parts parts of $slot on $node as $task, ${cap}s cap"
 # `--each` reads the list in the node's own tree and out/ is gitignored, so it
 # has to be copied -- and the directory does not exist there either. Skipping
 # this leaves a job that dies in seconds with an empty log.
-ssh "$node" "mkdir -p ~/.config/onto/work/brick-icons/$dir"
-scp -q "$list" "$node:.config/onto/work/brick-icons/$list"
+tree="$(scripts/node-work.sh "$node")/brick-icons"
+ssh "$node" "mkdir -p '$tree/$dir'"
+scp -q "$list" "$node:$tree/$list"
 
 # The watchdog has to stay above the measurement cap. It kills a part that has
 # been in flight longer than HARD and records it as ProcessDied, so a default

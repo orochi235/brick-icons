@@ -15,7 +15,7 @@ cd "$(dirname "$0")/.."
 
 NODE="${1:-}"
 [ -n "$NODE" ] || { echo "usage: $0 <node>" >&2; exit 2; }
-TREE=".config/onto/work/$(basename "$PWD")"
+TREE="$(scripts/node-work.sh "$NODE")/$(basename "$PWD")"
 REMOTE_BIN='$HOME/.local/bin'
 
 step() { printf '\n== %s\n' "$1"; }
