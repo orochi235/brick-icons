@@ -131,7 +131,7 @@ def _take_renders(conn: sqlite3.Connection, tree: Path, engine: str,
     `record_render` parses it, raises, and the next pass takes it whole.
 
     Under `--overwrite` a part already in the slot is redrawn rather than
-    skipped -- `record_render` replaces on (part, source, config_key), and the
+    skipped -- `record_render` replaces the part's row in the slot, and the
     bake keys on the render's sha, so only the sheets that actually moved are
     redrawn. The size/mtime map is what keeps that from rewriting every row
     every pass.

@@ -362,13 +362,13 @@ SVG background: a color (`white`, `#rrggbb`) or `none` for transparent
 
 #### `--line-width N`
 
-Stroke width of interior edges in output pixels (default 2). Applies to the
+Stroke width of interior edges in output pixels (default 1.4). Applies to the
 outline mono PNG and, scaled, to the SVG.
 
 #### `--silhouette-width N`
 
 Stroke width of smooth-silhouette contours — cylinder limbs, folds — in
-output pixels (default 2). Keep it equal to `--line-width` so limb lines
+output pixels (default 1.4). Keep it equal to `--line-width` so limb lines
 don't read heavier than the rim arcs and box edges they abut.
 
 #### `--line-mm MM` / `--silhouette-mm MM`

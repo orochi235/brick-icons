@@ -28,8 +28,8 @@ DEFAULTS = {
     "engine": "occt",        # occt | naive | cadquery (each needs its extra);
                              # occt needs the `[occt]` extra to draw at all
     "cel_levels": 4,         # bands for cel shading
-    "line_width": 2,         # outline edge stroke, output px
-    "silhouette_width": 2,   # smooth-silhouette stroke (cylinder limbs,
+    "line_width": 1.4,       # outline edge stroke, output px
+    "silhouette_width": 1.4, # smooth-silhouette stroke (cylinder limbs,
                              # folds), output px — match line_width so limb
                              # lines don't read heavier than the rim arcs
                              # and box edges they abut

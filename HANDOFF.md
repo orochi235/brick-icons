@@ -96,6 +96,23 @@ passed through `caption.pad` (or moved onto `_sheet.sheet` with
 `caption.Shot`s); none could be run to check the change under the session's
 CPU limit.
 
+## 2026-09-28: default stroke 1.4 px, occt-svelte 1.0 px (branch `line-weight-1.2`)
+
+Decided 2026-09-28: `--line-width` and `--silhouette-width` default to 1.4
+(was 2), and `occt-svelte` draws at 1.0 (was 1.5). Every drawing slot now
+states its widths in `db._CANONICAL`, because the config key and the lab
+cache key are the argv: `occt`, `translucent-occt` and `white-occt` at 1.4;
+the retired `naive`, `translucent-naive` and `white-naive` pinned at 2;
+silhouette slots stay at 0. `record_render` now replaces a part's row in a
+slot whatever key it was filed under, so a redraw after a key change
+displaces the old row and lands on `/review` instead of sitting beside it.
+
+Goldens re-frozen: all 52 moved under both naive and occt, as predicted
+(every golden part draws above 1.4 px per LDU, so none sat on the 0.75 floor).
+
+**Owed, not launched:** redraws of `occt`, `white-occt` and `occt-svelte`.
+`slot-coverage.py` lists only a slot's gap, so the list for the two drawn
+slots has to come from their drawn parts, launched with `--overwrite`.
 
 ## 2026-09-28: stud instancing is the default (`--stud-instancing all`)
 
@@ -391,7 +408,7 @@ Build the list at launch, not before (occt slot only):
     scripts/run-slot.sh --overwrite --detach --timeout 8h --in brick-icons \
       --task slot-occt-<date> --each $d/batches.txt --workers 10 --retries 1 \
       --with studio,keiei --env PATH=$P --env SOURCE=occt --env KEEP=$d/renders \
-      --env EXTRA='--shade-style flat3 --line-width 2 --silhouette-width 2' \
+      --env EXTRA='--shade-style flat3 --line-width 1.4 --silhouette-width 1.4' \
       --out $d --to $d msb-uai -- scripts/census-batch.sh occt 150 $d {}
 
 Push first -- run-slot.sh launches only a pushed HEAD. Copying the list before

@@ -198,6 +198,15 @@ def test_an_older_drawing_does_not_displace_a_newer_one(tmp_path):
     assert row["path"] == "renders/naive/3001.svg"
 
 
+def test_every_drawing_slot_states_its_stroke_widths():
+    """The key is the argv, so a slot inheriting the default would keep its
+    key -- and its lab cache -- when the default moved."""
+    for source in db.SOURCES:
+        argv = db.canonical_argv("3001", source)
+        if "--engine" in argv:
+            assert "--line-width" in argv and "--silhouette-width" in argv, source
+
+
 def test_an_unknown_source_is_refused(tmp_path):
     conn = db.connect(tmp_path / "corpus.db")
     svg = tmp_path / "x.svg"

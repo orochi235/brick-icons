@@ -88,8 +88,8 @@ def corpus(conn, slot: str | None = None) -> list[str]:
 def flags_for(slot: str) -> dict:
     """The census pass's arguments for this slot, out of its canonical argv.
 
-    Resolved through the parser rather than read off the list: `occt` states
-    no stroke width and inherits 2/2 from the config, where the census pass
+    Resolved through the parser rather than read off the list: a slot that
+    states no stroke width inherits the config's, where the census pass
     would default it to 0 and quietly draw a different slot's picture.
     """
     parsed = cli.build_parser().parse_args(db.canonical_argv("3001", slot))

@@ -4103,3 +4103,13 @@ title = "a fitted limb barbs where two regions of one sphere meet"
 classes = ["arc-split"]
 filed = "2026-09-28"
 notes = "Branch sphere-shading. 20401's ball is two hemispheres with no conditional line between them. Both fit one sphere (quadric._share_spheres gives them one fit and one ramp), but the limb is drawn only along conditional-line silhouette chords, so it stops ~8 deg short of the equator on each side and the contour polygon there barbs as it rejoins the arcs. 51283 shows the same kind of kink where its limb meets the collar ring. Not fixed: bridging needs a visibility test across the gap, or treating the equator as declared by the joint fit, which the declared-only rule does not yet allow."
+
+[[defect]]
+id = "4070-sampled-fill-boundary-at-1.4px"
+part = "4070"
+engines = ["occt"]
+status = "open"
+title = "at the 1.4 px default stroke a fill carries a sampled boundary"
+classes = ["arc-loss"]
+filed = "2026-09-28"
+notes = "Lowering the default stroke from 2 to 1.4 px (branch line-weight-1.2) turns test_occt::test_a_fill_boundary_carries_no_sampled_boundary[4070] red: a run of 22 sub-quarter-pixel L segments in a part fill (88 of 135). The same test passes at origin/main 7c270b4, drawn at 2 px. Run on studio, not located on the canvas yet. Per the test's docstring such a run costs line commands and draws nothing; not checked on this render."
