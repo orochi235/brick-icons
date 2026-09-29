@@ -106,6 +106,11 @@ ignores them.
     ssh studio 'cd .config/onto/work && cp -cR brick-icons/.venv brick-icons-spot/ \
       && mkdir -p brick-icons-spot/vendor && cp -cR brick-icons/vendor/ldraw brick-icons-spot/vendor/'
 
+The cloned `.venv` still imports `brick_icons` from the `brick-icons` tree
+until a `uv sync` in `brick-icons-spot` repoints its editable install;
+`scripts/spot-worker.sh` does that on every start, so run the worker only
+through it.
+
 A node with no provisioned `brick-icons` tree gets one first with
 `scripts/provision-node.sh <node>`.
 
