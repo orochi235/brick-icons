@@ -4122,3 +4122,33 @@ status = "open"
 title = "5.1% of the sticker is painted over by the slope it is stuck to"
 filed = "2026-09-29"
 notes = "test_occt::test_a_sticker_is_not_clipped_by_the_slope_it_is_stuck_to has failed on main since 6caf2ba (unwrap a decal in its carrier's own frame, shear and all): hidden share 5.13% against a 5% bound, from under 5% at its parent. Bisected from d4c2378, where the test was added and passes. Still failing at HEAD f625326: 5.12% on this machine, and red on studio. Cause found: not faceting noise. The covered 5.12% is one triangle of body plane painted over the print's right edge (scripts/sticker-cover.py). order_faces took the sticker out of a cycle 272 -> 196 -> 123 -> 272 (face indices of the ordering input) with _stall_release, which painted it before plane 123 although the sticker is 0.16 LDU nearer there (ray-cast against the solid agrees). Two of the cycle's three edges came from pairs with NO exact overlap (sticker/196 and 196/123): _overlap_witness returns the rastered point off one polygon, and the depth gap read there is a plane extrapolated past its edge. 6caf2ba only changed the sticker's outline enough to close the cycle. Fix (dfc8138): a pair with no exact overlap can only tie (shade.ABUT_TIES_ONLY; False disarms). Hidden share 5.12% -> 0.001%. Gate 1 (occt, keiei): 15068dy6 moves, 1 comp, 1530 px: the light wedge over the print's right edge is gone. Gate 2: 15068d02, 15068dy4, 15068dya 0 comp (1-6 px); 30225bp1, 30225b, 3811p04, 3626cp7d 0 px; 3941p01 5 comp, 264 px at its stud-top rims and one short wall edge. Sheet out/abut/gate12.png. Gate 3 (occt goldens, verdict review, predicted none): 7 of 52 moved, all outline-flat3: 3941, 6143, 3941p01 (stud-top rims, 2-3 comp), 3942bp01 (three red stripe lower edges, 3 comp, 771 px), 4740p03 (print edge near the rim, 3 comp), 3673 (slot edge, 1 comp), 3649 (1 comp, 22 px). Sheet out/vet/abut-ties-only/sheet.png. Reviewed 2026-09-29: the gate 2 and gate 3 moves are different, not worse, including 3941p01; 3649's is a slight regression that repeats a problem the part already shows elsewhere, accepted. Merged to main."
+
+[[defect]]
+id = "3649-light-streak-in-pin-hole-bore"
+part = "3649"
+engines = ["occt"]
+status = "open"
+title = "a light streak runs down the inside of a pin hole's bore"
+classes = ["seam"]
+filed = "2026-09-29"
+notes = "outline-flat3 golden, 512x340. The part already shows this problem in at least one other place (reviewed 2026-09-29; that location is not pinned down here). The abut-ties fix (dfc8138, shade.ABUT_TIES_ONLY) adds a second instance, in the upper-center pin hole: a one-pixel-wide diagonal of lighter tone down the upper right of the bore, px (221-227, 131-143), 1 region, 22 px (vet run abut-plus-donated-cut). Accepted with that fix as a slight regression. Not the far side of the hole: scripts/ray-pixel.py puts the first hit on the bore wall right across the streak, depth continuous (5.43, 5.77, 5.98 LDU at x 222-224) and one normal (+0.751 -0.660 0) either side. The streak lies exactly on the boundary between two runs of the part's triangles, 579x and a 3-4 px diagonal band of 669x/670x, so it is a seam between two primitives of one bore, painted in a lighter tone than the wall it sits on."
+
+[[defect]]
+id = "32062-butt-end-shading-split"
+part = "32062"
+engines = ["occt"]
+status = "open"
+title = "the axle's rounded butt end is shaded in hard-edged pieces"
+classes = ["shading"]
+filed = "2026-09-29"
+notes = "outline-flat3 golden at main a5739e4. The lower-right butt end, a rounded cap behind the cross-section, carries a dark wedge with hard straight edges cutting through an otherwise light gradient, lower right of the cap. Cause not looked at. scripts/ray-pixel.py --line across the wedge tells a real change of surface from a tone split within one."
+
+[[defect]]
+id = "4070-stud-bore-gradient-broken"
+part = "4070"
+engines = ["occt"]
+status = "open"
+title = "the side stud's bore is not one smooth gradient"
+classes = ["banding"]
+filed = "2026-09-29"
+notes = "outline-flat3 golden at main a5739e4. The inside of the SNOT stud's hollow should shade as one smooth gradient round the bore; a lighter diagonal band breaks it partway round. Cause not looked at; 3649-light-streak-in-pin-hole-bore is a lighter streak inside a bore too, measured there as a seam between two primitives of one bore, and may be the same thing."
