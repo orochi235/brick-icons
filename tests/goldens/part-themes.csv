@@ -120,12 +120,47 @@ part_id,theme,share,sets
 004848c,Hobby Sets,1.00,1
 10049p01,The Hobbit and Lord of the Rings,1.00,2
 10051p01,The Hobbit and Lord of the Rings,1.00,2
+10054p01,The Hobbit and Lord of the Rings,1.00,1
+10054p02,The Hobbit and Lord of the Rings,1.00,1
+10055p01,The Hobbit and Lord of the Rings,0.91,11
+10057pm0,The Hobbit and Lord of the Rings,1.00,1
+1006030p04,Friends,1.00,1
+1006334p02,Friends,1.00,2
+10066p01,The Hobbit and Lord of the Rings,1.00,2
+10066p02,The Hobbit and Lord of the Rings,1.00,1
+10066p03,The Hobbit and Lord of the Rings,1.00,1
+100811p01,Friends,1.00,2
+100907p01,Disney,0.86,7
+100937p01,Friends,1.00,1
+100937p02,Friends,1.00,2
+100937p03,Friends,1.00,2
+100937p04,Friends,1.00,4
+100937p05,Friends,1.00,1
+100937p06,Friends,0.80,5
+100937p07,Friends,1.00,1
+100937p08,Friends,1.00,2
 100942p01,Technic,1.00,1
+101117p01,Friends,1.00,8
+101117p03,Friends,1.00,16
+101117p04,Friends,1.00,1
+101117p05,Friends,1.00,7
 101117p07,Friends,1.00,1
+10128p01,Super Heroes Marvel,1.00,1
+10128p02,Super Heroes Marvel,1.00,1
+101347p01,Friends,1.00,1
+101347p02,Friends,1.00,2
+101347p03,Friends,1.00,2
+101347p04,Friends,1.00,4
+101347p05,Friends,1.00,1
+101347p06,Friends,0.80,5
+101347p07,Friends,1.00,1
+101347p08,Friends,1.00,2
+10168p01,Collectible Minifigures,1.00,1
 10169p01,Collectible Minifigures,1.00,1
 10169p02,Collectible Minifigures,1.00,1
 10169p03,Animal Crossing,1.00,1
 10172p01,Collectible Minifigures,1.00,1
+101777p01,Collectible Minifigures,1.00,1
 10178p01,Monster Fighters,1.00,2
 10178p02,Monster Fighters,1.00,2
 10178p03,Monster Fighters,1.00,2
@@ -133,12 +168,18 @@ part_id,theme,share,sets
 10178p05,Monster Fighters,1.00,1
 10178p06,Monster Fighters,1.00,2
 10178p07,Monster Fighters,1.00,2
+10183p01,Collectible Minifigures,1.00,1
 10202p02,Icons,1.00,1
 10202p03,Icons,1.00,1
 10202p04,Modular Buildings,1.00,1
 10202p05,Modular Buildings,1.00,1
 10202p06,Disney,1.00,1
 10202px0,Super Mario,1.00,1
+1021704p03,Friends,1.00,16
+1023000p03,Friends,1.00,2
+1023000p04,Friends,0.89,9
+1023035p02,Friends,1.00,7
+1023035p04,Friends,1.00,1
 102498p01,Harry Potter,0.83,6
 10305p01,Super Heroes Marvel,1.00,1
 10312ps0,Star Wars,1.00,1
@@ -147,10 +188,15 @@ part_id,theme,share,sets
 105162p02,Speed Champions,1.00,5
 105162p03,Speed Champions,1.00,4
 105162p04,Speed Champions,1.00,5
+105196p01,Animal Crossing,1.00,2
 10520,The Hobbit and Lord of the Rings,1.00,2
 10532,Super Heroes Marvel,0.88,16
 105645p01,Icons,1.00,1
 105645p02,Icons,1.00,1
+10679bp01,Monster Fighters,1.00,3
+10908p02,Super Heroes Marvel,1.00,1
+10908p03,Super Heroes Marvel,1.00,1
+10908p04,Super Heroes Marvel,1.00,1
 10p01,Legoland,1.00,2
 10p02,Legoland,1.00,2
 10p03,Legoland,1.00,1
@@ -166,13 +212,29 @@ part_id,theme,share,sets
 110100p03,Speed Champions,1.00,5
 11055p01,LEGO Ideas and CUUSOO,1.00,2
 110638p01,Icons,1.00,1
+111388p01,Friends,1.00,1
+111388p02,Friends,1.00,1
+111388p03,Friends,1.00,1
 11170p01,Duplo,1.00,2
 11203p01,Friends,0.86,7
+11233p01,Legends of Chima,1.00,11
 11241p01,Friends,1.00,1
 11241p02,Friends,1.00,2
 11245p01,Friends,1.00,1
 11245p02,Friends,1.00,3
+11264p01,Collectible Minifigures,1.00,1
 1126pt0,Icons,1.00,1
+11403p01,Friends,1.00,2
+11403p02,Friends,0.83,6
+11403p03,Friends,1.00,3
+11403p05,Friends,1.00,1
+11407p01,Friends,0.83,6
+11407p02,Friends,1.00,1
+11407p04,Elves,1.00,2
+11407p05,Disney,1.00,1
+11408p01,Friends,1.00,2
+11408p02,Friends,1.00,2
+11408p03,Elves,1.00,2
 11439p02,Ninjago,1.00,3
 11459p01,Collectible Minifigures,1.00,1
 11459p02,Collectible Minifigures,1.00,1
@@ -190,6 +252,9 @@ part_id,theme,share,sets
 11477pz0,Brickheadz,1.00,1
 11477pz1,Brickheadz,1.00,1
 11477pz2,Brickheadz,1.00,1
+11538p01,Star Wars,1.00,1
+11538p03,Star Wars,1.00,1
+11538p05,Star Wars,1.00,2
 115551p01,Icons,1.00,1
 11568p01,Elves,1.00,1
 11575p01,Friends,0.86,7
@@ -199,8 +264,19 @@ part_id,theme,share,sets
 11777p02,Harry Potter,1.00,1
 11778p01,The Hobbit and Lord of the Rings,1.00,3
 11778p02,Harry Potter,1.00,1
+11938pde4,Collectible Minifigures,1.00,1
+12607p03,Teenage Mutant Ninja Turtles,1.00,1
+12609p01,Teenage Mutant Ninja Turtles,1.00,11
+12893p03,LEGO Ideas and CUUSOO,1.00,1
+12894p01,Collectible Minifigures,1.00,1
+12895p02,Star Wars,1.00,2
+12895p03,Super Heroes DC,1.00,1
+12895p04,Harry Potter,1.00,1
+12895p05,LEGO Ideas and CUUSOO,1.00,2
+12895p06,Collectible Minifigures,1.00,1
 13392p02,Friends,1.00,1
 13548pz1,Brickheadz,1.00,1
+13565p01,Collectible Minifigures,1.00,1
 13710a,Mindstorms,1.00,1
 13710b,Mindstorms,1.00,1
 13710c,Mindstorms,1.00,1
@@ -215,13 +291,25 @@ part_id,theme,share,sets
 13710l,Mindstorms,1.00,1
 13710m,Mindstorms,1.00,1
 13710n,Mindstorms,1.00,1
+13746p01,The Lone Ranger,1.00,1
+13746p02,Collectible Minifigures,1.00,1
+13766p01,The Hobbit and Lord of the Rings,1.00,1
+13785p01,Collectible Minifigures,1.00,1
 13786p03,Collectible Minifigures,1.00,1
 13786p04,Collectible Minifigures,1.00,1
 13786p05,Other,1.00,1
 13786p06,Disney,1.00,2
 13786p07,Harry Potter,1.00,1
+13787p03,LEGO Brand Store,1.00,1
+13789p01,Collectible Minifigures,1.00,1
 13808p01,Collectible Minifigures,1.00,1
+13809p01,Collectible Minifigures,1.00,1
+13809p02,Legends of Chima,1.00,1
+13809p03,Collectible Minifigures,1.00,1
 1411p01,City,1.00,3
+14397p01c01,Collectible Minifigures,1.00,1
+14397p02c01,Seasonal,1.00,1
+14397p03c01,Seasonal,1.00,1
 14639p08,Duplo,1.00,6
 14718p01,Animal Crossing,1.00,1
 14718px0,Minions,1.00,1
@@ -342,13 +430,26 @@ part_id,theme,share,sets
 15068pz1,Brickheadz,1.00,2
 15210pc0,City,0.92,24
 15210pde7,Collectible Minifigures,1.00,1
+15284p01,Friends,1.00,5
 15336p01,Legends of Chima,1.00,4
 15336p02,Legends of Chima,1.00,2
+15423p01,Jurassic World,0.80,5
+15427p02,Friends,1.00,1
+15429p02,The LEGO Movie,1.00,1
+15429p03,The LEGO Movie,1.00,2
 15429p04,Disney,1.00,1
 15429p05,Unikitty!,1.00,1
 15429p06,Unikitty!,1.00,1
 15429p07,Unikitty!,1.00,1
+15429p08,The LEGO Movie,1.00,2
 15429p09,Unikitty!,1.00,1
+15437p01,The LEGO Movie,1.00,1
+15504pde6,Collectible Minifigures,1.00,1
+15522p01,Other,1.00,1
+15523p01,Other,1.00,1
+15524p01,Other,1.00,1
+15525p02,Collectible Minifigures,1.00,1
+15527p01,Other,1.00,1
 15535p01,LEGO Ideas and CUUSOO,1.00,1
 15535p02,LEGO Ideas and CUUSOO,1.00,1
 15535p06,Icons,1.00,1
@@ -358,7 +459,12 @@ part_id,theme,share,sets
 15535p10,City,1.00,1
 15535p11,City,1.00,1
 15535p12,City,1.00,1
+15553p01,Super Heroes DC,1.00,1
 15557p01,The LEGO Movie,1.00,1
+15673p01,Disney,0.88,17
+15673p02,Disney,1.00,4
+15864p01,The LEGO Movie,1.00,1
+15875p01,Disney,1.00,1
 15926,Mixels,1.00,32
 160205a,Town,1.00,1
 160205b,Town,1.00,1
@@ -411,6 +517,17 @@ part_id,theme,share,sets
 163555i,Town,1.00,1
 163555j,Town,1.00,1
 163555k,Town,1.00,1
+16360p0v,Scooby-Doo,0.80,5
+16360p5l,Animal Crossing,1.00,1
+16360p87,Other,1.00,1
+16360pckc,Collectible Minifigures,1.00,2
+16360pd12,Collectible Minifigures,1.00,1
+16360pd1d,Collectible Minifigures,1.00,1
+16360pd7f,Collectible Minifigures,1.00,1
+16360pdeb,Collectible Minifigures,1.00,1
+16360pdg6,Collectible Minifigures,1.00,1
+16360pxh,Disney,1.00,1
+16360pxi,Disney,1.00,1
 164325a,Promotional,1.00,1
 164325b,Promotional,1.00,1
 164325c,Promotional,1.00,1
@@ -452,6 +569,9 @@ part_id,theme,share,sets
 164795d,Town,1.00,1
 164795e,Town,1.00,1
 164795f,Town,1.00,1
+16497p02,Star Wars,1.00,9
+16497p03,Star Wars,1.00,2
+16530p02,Disney,1.00,1
 165345b,Town,1.00,1
 165345c,Town,1.00,1
 165375a,Town,1.00,1
@@ -488,8 +608,24 @@ part_id,theme,share,sets
 166285b,Technic,1.00,1
 166285c,Technic,1.00,1
 166285d,Technic,1.00,1
+16709p02,Collectible Minifigures,1.00,1
+16709p03,Collectible Minifigures,1.00,1
+16709p05,Trolls: World Tour,1.00,1
+16709p08,Trolls: World Tour,1.00,3
+16709p09,LEGO Brand Store,1.00,1
 16709p0a,Other,1.00,1
+16709p0b,Collectible Minifigures,1.00,1
+16709p0c,Juniors,1.00,1
 16709p0d,Harry Potter,1.00,1
+16709p0e,Collectible Minifigures,1.00,1
+16709p0f,Collectible Minifigures,1.00,1
+16709p0g,Collectible Minifigures,1.00,1
+16709p0h,Collectible Minifigures,1.00,1
+16709p0i,Collectible Minifigures,1.00,1
+16709p0k,Collectible Minifigures,1.00,1
+16709p0l,Collectible Minifigures,1.00,1
+16709p0m,Harry Potter,1.00,1
+16709p0n,Collectible Minifigures,1.00,1
 168055a,Town,1.00,1
 168055b,Town,1.00,1
 168055c,Town,1.00,1
@@ -548,6 +684,11 @@ part_id,theme,share,sets
 168365d,Technic,1.00,1
 168365e,Technic,1.00,1
 168365f,Technic,1.00,1
+16925p01,Friends,0.93,14
+16925p04,Friends,1.00,2
+16925p05,Friends,1.00,2
+16925p06,Friends,1.00,3
+16925p07,Friends,1.00,8
 169575a,Town,1.00,1
 169575b,Town,1.00,1
 169595a,Town,1.00,1
@@ -610,13 +751,16 @@ part_id,theme,share,sets
 170904dc01,Boat,1.00,1
 170904e,Boat,1.00,1
 170909a,Space,0.80,10
+17485p01,The LEGO Movie,1.00,1
 1750p01,Pokémon,1.00,1
+18277p01,Collectible Minifigures,1.00,1
 18277p04,Collectible Minifigures,1.00,1
 18394p03,Disney,1.00,1
 18394p04,Elves,1.00,1
 18396p01,Legends of Chima,1.00,5
 18396p02,Ninjago,1.00,3
 18396p03,Elves,1.00,1
+1849p01,Indiana Jones,1.00,3
 18603c02p01,Dimensions,1.00,6
 18603c02p02,Dimensions,1.00,6
 18603c02p03,Dimensions,1.00,6
@@ -667,6 +811,7 @@ part_id,theme,share,sets
 18675ps8,Star Wars,1.00,1
 1874p01,Speed Champions,1.00,1
 18826p01,Collectible Minifigures,1.00,1
+18835p02,Nexo Knights,1.00,1
 18836p40,Collectible Minifigures,1.00,1
 18836p41,Other,1.00,1
 18836p42,Collectible Minifigures,1.00,1
@@ -819,6 +964,11 @@ part_id,theme,share,sets
 191936c,Train,1.00,1
 191936d,Train,1.00,1
 191936e,Train,1.00,1
+19193p01,Disney,1.00,1
+19193p02,Elves,1.00,1
+19193p03,Disney,1.00,5
+19193p04,Disney,1.00,1
+19193p05,Disney,1.00,2
 191945a,Train,1.00,1
 191945b,Train,1.00,1
 191965a,Train,1.00,1
@@ -826,6 +976,8 @@ part_id,theme,share,sets
 19201p01,Elves,1.00,1
 19204p01,Elves,1.00,1
 19206p01,Elves,1.00,1
+19206p02,Elves,1.00,2
+19206p03,Elves,1.00,2
 19212p01,Creator,1.00,1
 192375a,Town,1.00,1
 192375b,Town,1.00,1
@@ -1008,9 +1160,15 @@ part_id,theme,share,sets
 19727p03,Minecraft,1.00,6
 19727p05,Minecraft,1.00,8
 197295a,Fabuland,1.00,2
+19729p00,Minecraft,0.97,29
 19729p01,Minecraft,1.00,13
+19729p02,Minecraft,1.00,50
 19729p03,Minecraft,1.00,2
+19729p04,Minecraft,1.00,5
 19729p05,Minecraft,1.00,3
+19729p06,Minecraft,0.97,36
+19729p07,Minecraft,1.00,3
+19729p08,Minecraft,1.00,13
 19729p09,Minecraft,1.00,1
 197875a,Boat,1.00,1
 197875b,Boat,1.00,1
@@ -1035,6 +1193,12 @@ part_id,theme,share,sets
 197915e,Model Team,1.00,1
 197915f,Model Team,1.00,1
 197925a,Model Team,1.00,1
+19859p03,Ninjago,1.00,7
+19859p04,Ninjago,1.00,2
+19859p05,Nexo Knights,1.00,1
+19859p07,Ghostbusters,1.00,1
+19859p0a,Ninjago,1.00,6
+19859p0b,VIDIYO,1.00,1
 199013a,Space,1.00,1
 199025a,Town,1.00,1
 199027b,Town,1.00,1
@@ -1044,13 +1208,93 @@ part_id,theme,share,sets
 20308p01,Minecraft,1.00,2
 20308p02,Minecraft,1.00,1
 20308p03,Minecraft,1.00,2
+20379p01,Elves,1.00,3
+20379p02,Disney,1.00,1
+20379p03,Disney,0.80,5
+20379p04,Disney,1.00,1
+20381p01,Elves,1.00,4
+20381p02,Elves,1.00,3
 20398p01,Collectible Minifigures,1.00,1
+20460bp00,The LEGO Movie,1.00,1
+20460bp01,Super Heroes Marvel,0.92,13
 20460bp02,Other,1.00,1
+20460bp03,Disney,0.80,5
+20460bp06,Collectible Minifigures,1.00,1
+20460bp07,LEGO Ideas and CUUSOO,1.00,1
+20460bp08,LEGO Ideas and CUUSOO,1.00,1
+20460bp09,Harry Potter,1.00,2
+20460bp0c,Super Heroes DC,1.00,1
+20460bp0e,Disney,1.00,4
+20460bp0g,Super Heroes Marvel,1.00,3
+20460bpckc,Collectible Minifigures,1.00,2
+20460bpd87,Collectible Minifigures,1.00,1
+20460bpd92,Collectible Minifigures,1.00,1
+20460bpdgb,Collectible Minifigures,1.00,1
+20460bpx0,Dimensions,1.00,1
+20460bpx1,Dimensions,1.00,1
+20461bp00,The LEGO Movie,1.00,1
+20461bp01,Super Heroes Marvel,0.92,13
 20461bp02,Other,1.00,1
+20461bp03,Disney,0.80,5
+20461bp06,Collectible Minifigures,1.00,1
+20461bp07,LEGO Ideas and CUUSOO,1.00,1
+20461bp08,LEGO Ideas and CUUSOO,1.00,1
+20461bp09,Harry Potter,1.00,2
+20461bp0c,Super Heroes DC,1.00,1
+20461bp0e,Disney,1.00,4
+20461bp0g,Super Heroes Marvel,1.00,3
+20461bpckc,Collectible Minifigures,1.00,2
+20461bpd87,Collectible Minifigures,1.00,1
+20461bpd92,Collectible Minifigures,1.00,1
+20461bpdgb,Collectible Minifigures,1.00,1
+20461bpx0,Dimensions,1.00,1
+20461bpx1,Dimensions,1.00,1
 20546p02,Stranger Things,1.00,1
+20551p01,Star Wars,1.00,1
+20551p01c01,Star Wars,1.00,1
+20592p01,Collectible Minifigures,1.00,1
+20592p03,Collectible Minifigures,1.00,1
+20596p01,Collectible Minifigures,1.00,1
+20596p02,Super Heroes DC,1.00,2
+20596p03,The LEGO Movie,1.00,1
+20596p04,Super Heroes DC,1.00,3
+20904ps0,Star Wars,0.80,5
+20904ps1,Star Wars,1.00,1
+20905ps0,Star Wars,1.00,4
+20905ps1,Star Wars,1.00,2
+20952p01,Star Wars,0.91,11
+20952p02,Star Wars,1.00,4
+20953p01,Star Wars,0.94,16
+20953p02,LEGO Ideas and CUUSOO,1.00,1
+21019bp00,Super Heroes Marvel,1.00,2
+21019bp01,Super Heroes Marvel,0.92,13
+21019bp02,Super Heroes DC,1.00,1
+21019bp03,Disney,0.80,5
+21019bp04,Super Heroes Marvel,1.00,1
 21019bp05,Other,1.00,1
 21019bp06,Other,1.00,1
 21019bp07,Other,1.00,1
+21019bp08,LEGO Ideas and CUUSOO,1.00,1
+21019bp09,Collectible Minifigures,1.00,1
+21019bp0b,Collectible Minifigures,1.00,1
+21019bp0c,Collectible Minifigures,1.00,1
+21019bp0d,Super Heroes DC,1.00,1
+21019bp0e,Disney,1.00,4
+21019bpckc,Collectible Minifigures,1.00,2
+21019bpd87,Collectible Minifigures,1.00,1
+21019bpd92,Collectible Minifigures,1.00,1
+21019bpde1,Collectible Minifigures,1.00,1
+21019bpde6,Collectible Minifigures,1.00,1
+21019bpde7,Disney,0.80,5
+21019bpdg3,Collectible Minifigures,1.00,1
+21019bpdg6,Collectible Minifigures,1.00,1
+21019bpdg8,Collectible Minifigures,1.00,1
+21019bpdgb,Collectible Minifigures,1.00,1
+21019bpx0,Dimensions,1.00,1
+21019bpx1,Dimensions,1.00,1
+21019bpx2,Disney,1.00,2
+21019bpx3,Disney,1.00,3
+21019bpx5,Super Heroes DC,0.83,6
 21271p01,Dimensions,1.00,1
 21849ps1,Star Wars,1.00,2
 21849ps2,Star Wars,1.00,1
@@ -1127,10 +1371,20 @@ part_id,theme,share,sets
 22385px0,LEGO Ideas and CUUSOO,1.00,1
 22385px2,Icons,1.00,1
 22385py0,Speed Champions,1.00,1
+2241p01,Friends,1.00,1
+2241p02,Friends,1.00,1
+2241p03,Friends,1.00,2
+2241p04,Friends,0.89,9
 2246p01,Disney,1.00,1
+22472p01,LEGO Ideas and CUUSOO,1.00,1
+22472p02,Nexo Knights,1.00,2
 22587a,Town,1.00,1
 22587b,Town,1.00,1
 22587c,Town,1.00,1
+2268p01,Friends,1.00,12
+2268p02,Friends,1.00,7
+2268p03,Friends,1.00,1
+2268p04,Friends,1.00,1
 2335p01,Town,0.88,8
 2335p04,Pirates,1.00,6
 2335p07,Ninja,1.00,3
@@ -1173,6 +1427,7 @@ part_id,theme,share,sets
 2362ap01,Town,1.00,1
 2362ap53,Space,1.00,5
 2362ap54,Space,1.00,5
+23766p01,Minecraft,1.00,2
 2377p01,Town,1.00,1
 23945p01,Elves,1.00,3
 23999p01,City,1.00,2
@@ -1182,6 +1437,9 @@ part_id,theme,share,sets
 24067p04,Friends,1.00,3
 24067p05,Friends,1.00,2
 24076p01,Other,1.00,1
+24076p02,Collectible Minifigures,1.00,1
+24087p01,Collectible Minifigures,1.00,1
+24087p02,Super Heroes DC,1.00,1
 2408p01,Space,1.00,2
 2408p02,Space,1.00,2
 2408p04,Space,1.00,1
@@ -1197,8 +1455,11 @@ part_id,theme,share,sets
 24118p01,Technic,1.00,1
 24118p02,Technic,1.00,1
 24119p00,Technic,1.00,1
+24133p01,LEGO Ideas and CUUSOO,1.00,1
+24133p02,Nexo Knights,1.00,2
 2418bp60,Space,1.00,1
 24196p01,Elves,1.00,1
+24230p01,Collectible Minifigures,1.00,1
 24246p01,Super Heroes DC,1.00,1
 24246p03,Speed Champions,1.00,1
 24246p04,Speed Champions,1.00,1
@@ -1220,6 +1481,8 @@ part_id,theme,share,sets
 24309p04,LEGO Ideas and CUUSOO,1.00,2
 24309p05,Icons,1.00,1
 24309ps1,Star Wars,1.00,1
+24319pcfd,Collectible Minifigures,1.00,1
+24319pys,Collectible Minifigures,1.00,1
 2431p03,Collectible Minifigures,1.00,1
 2431p06,Town,0.83,6
 2431p08,Town,1.00,1
@@ -1238,6 +1501,8 @@ part_id,theme,share,sets
 2431pc1,Train,0.80,5
 2431pc2,Technic,1.00,1
 2431pc3,Technic,1.00,1
+2431pk0,Cars,1.00,7
+2431pk1,Cars,1.00,7
 2431pm0,Elves,1.00,1
 2431ps0,Star Wars,1.00,1
 2431ps1,Star Wars,1.00,6
@@ -1300,6 +1565,8 @@ part_id,theme,share,sets
 2440p03,Town,1.00,1
 2440p67,Space,1.00,2
 2442p01,Technic,1.00,1
+24496p01,Ninjago,0.89,9
+24496p06,Ninjago,1.00,5
 2454ad01,Train,1.00,1
 2454apa0,Adventurers,1.00,6
 2454aph0,Harry Potter,1.00,2
@@ -1310,10 +1577,15 @@ part_id,theme,share,sets
 2459p02,Technic,1.00,1
 2459p03,Technic,1.00,1
 2459p04,Technic,1.00,1
+24629p01,Disney,0.90,10
+24629p02,Disney,0.90,10
+24629p05,Disney,1.00,1
+24633p02,Disney,0.80,5
 2465p70,Town,1.00,1
 2466p68,Space,1.00,1
 2468p53,Space,1.00,1
 2468p54,Space,1.00,1
+24779pk0,Collectible Minifigures,1.00,1
 2483p50,Space,1.00,3
 2490p40,Castle,1.00,3
 2490p41,Castle,1.00,4
@@ -1327,10 +1599,13 @@ part_id,theme,share,sets
 2507p6u,Space,1.00,1
 2507pa1,Aquazone,1.00,1
 2507pa2,Aquazone,1.00,3
+25128p02,Collectible Minifigures,1.00,1
+25128p04,Star Wars,0.92,13
 2513d03,Town,1.00,1
 2513p03,Town,1.00,1
 2513p04,Town,1.00,2
 2513p05,Town,1.00,3
+2523p01,Collectible Minifigures,1.00,1
 2525p00,Adventurers,1.00,1
 2525p30,Pirates,1.00,3
 2525p31,Pirates,1.00,8
@@ -1346,15 +1621,30 @@ part_id,theme,share,sets
 25269p60,DOTS,1.00,1
 25269p61,DOTS,1.00,1
 2528ap32,Service Packs,1.00,2
+2528ap33,Collectible Minifigures,1.00,1
 2528ap34,The LEGO Movie,1.00,2
+2528ap35,Disney,1.00,1
+2528ap36,Collectible Minifigures,1.00,1
+2528ap37,Ninjago,1.00,1
+2528ap38,Disney,1.00,1
+2528ap39,SpongeBob SquarePants,1.00,1
 2528ap3a,The LEGO Movie,1.00,3
+2528ap3b,Pirates,1.00,1
+2528ap3c,Pirates,1.00,1
 2528ap3d,Promotional,1.00,1
+2545p01,Pirates,0.89,18
 2552p01,Space,1.00,1
 2552p02,Space,1.00,3
 2552p03,Pirates,1.00,2
 2552p04,Pirates,1.00,1
 2552p05,Castle,1.00,1
 2552p06,Castle,1.00,2
+25727p01,Friends,1.00,4
+25727p02,Friends,1.00,4
+25727p03,Friends,1.00,1
+25727p04,Friends,1.00,1
+25727p05,Friends,1.00,3
+2576p01,Collectible Minifigures,1.00,1
 2582p68,Space,1.00,4
 2582p6u,Space,1.00,2
 2582pa0,Aquazone,1.00,3
@@ -1374,12 +1664,29 @@ part_id,theme,share,sets
 2586ph1,Harry Potter,1.00,2
 2586ph2,Harry Potter,1.00,1
 2586ps1,Star Wars,1.00,1
+2587pm0,The Hobbit and Lord of the Rings,1.00,1
+25971p02,Seasonal,1.00,1
+25972p01,Super Heroes Marvel,1.00,1
+25973p01,Collectible Minifigures,1.00,1
+25973p02,Collectible Minifigures,1.00,1
+25977p01,Collectible Minifigures,1.00,1
+25977p02,Collectible Minifigures,1.00,1
 2598ps1,Star Wars,1.00,1
 2598ps2,Star Wars,1.00,1
+26051p01,Dimensions,1.00,1
+26056px0,Dimensions,1.00,1
+26073p01,Collectible Minifigures,1.00,1
 26073p02,Other,1.00,1
+26073p03,Collectible Minifigures,1.00,1
+26073p04,Collectible Minifigures,1.00,1
 26074p02,Super Heroes DC,1.00,1
 26078p01,Collectible Minifigures,1.00,1
 26078p02,Collectible Minifigures,1.00,1
+26490p01,Friends,1.00,4
+26490p02,Friends,1.00,4
+26490p03,Friends,1.00,1
+26490p04,Friends,1.00,1
+26490p05,Friends,1.00,3
 2654bp02,Icons,1.00,1
 2654bp03,Legends of Chima,1.00,1
 2654bp04,LEGO Ideas and CUUSOO,1.00,2
@@ -1405,6 +1712,7 @@ part_id,theme,share,sets
 2694p01,Disney,1.00,1
 2694p02,Disney,1.00,1
 27039p01,Dimensions,1.00,1
+27149p01,Collectible Minifigures,1.00,1
 2723p01,LEGO Ideas and CUUSOO,1.00,1
 2723p02,Icons,1.00,2
 2723p03,Icons,1.00,2
@@ -1414,13 +1722,30 @@ part_id,theme,share,sets
 27925p01,Collectible Minifigures,1.00,1
 27925p02,Collectible Minifigures,1.00,1
 27925ph0,Harry Potter,1.00,1
+27956px1,Dimensions,1.00,1
+28145p02,Super Heroes DC,1.00,6
+28145p03,Dimensions,1.00,1
+28145p04,Collectible Minifigures,1.00,1
+28424p01,City,0.80,5
 28424p02,Other,1.00,1
+28424p03,Friends,1.00,1
+28621p0b,City,0.86,7
+28621p0y,Icons,1.00,1
+28621p11,Icons,1.00,1
+28621p13,LEGO Ideas and CUUSOO,1.00,1
+28621p14,LEGO Ideas and CUUSOO,1.00,1
+28621p15,LEGO Ideas and CUUSOO,1.00,1
+28621p16,LEGO Ideas and CUUSOO,1.00,1
+28621p17,LEGO Ideas and CUUSOO,1.00,1
+28798p03,VIDIYO,1.00,1
 28798p05,Other,1.00,1
 28884,Technic,1.00,1
 28884c01,Technic,1.00,1
 28896,Technic,1.00,1
 28896c01,Technic,1.00,1
+29030p01,Collectible Minifigures,1.00,1
 29096ps0,Star Wars,1.00,1
+29580p01,Collectible Minifigures,1.00,1
 29632p01,Star Wars,1.00,1
 3001p01,LEGO Brand Store,1.00,1
 3001p02,Legoland,1.00,3
@@ -1438,6 +1763,8 @@ part_id,theme,share,sets
 3001p12,Promotional,1.00,1
 3001p17,Promotional,1.00,1
 3001ph0,Harry Potter,1.00,1
+3001pk0,Cars,1.00,1
+3001pk1,Cars,1.00,7
 3001pt0,Universal Building Set,1.00,1
 3001pt2,Universal Building Set,1.00,1
 3002p11,Legoland,1.00,1
@@ -1453,6 +1780,7 @@ part_id,theme,share,sets
 3003pt1,Legoland,1.00,7
 3003pt2,Legoland,1.00,1
 3003px0,Minecraft,1.00,9
+3003px1,Minecraft,1.00,1
 3003px2,LEGO Ideas and CUUSOO,1.00,1
 3004d1f,Speed Champions,1.00,1
 3004d1g,Speed Champions,1.00,1
@@ -1477,6 +1805,7 @@ part_id,theme,share,sets
 3004pf0,Friends,1.00,2
 3004ph1,Harry Potter,1.00,1
 3004ph2,Harry Potter,1.00,1
+3004pk0,Cars,1.00,4
 3004ps1,Star Wars,1.00,1
 3004pt1,Sports,1.00,4
 3004pt2,Town,1.00,1
@@ -1489,6 +1818,7 @@ part_id,theme,share,sets
 3004px5,Super Mario,1.00,3
 3004px6,Super Mario,1.00,8
 3004px7,Minecraft,1.00,1
+3004px8,Minecraft,1.00,2
 3004px9,Minecraft,0.97,29
 3004pz0,Brickheadz,1.00,1
 3004pz1,Brickheadz,1.00,1
@@ -1504,6 +1834,8 @@ part_id,theme,share,sets
 3004pzb,Brickheadz,1.00,1
 3004pzc,Brickheadz,1.00,1
 3005p02,Town,1.00,1
+3005p04,LEGO Ideas and CUUSOO,1.00,1
+3005p05,Minecraft,1.00,1
 3005p06,Jurassic World,0.81,21
 3005p07,Harry Potter,1.00,1
 3005p08,Harry Potter,1.00,1
@@ -1625,6 +1957,9 @@ part_id,theme,share,sets
 3009p27,Legoland,1.00,4
 3009p50,Icons,1.00,1
 3009p70,Town,1.00,1
+3009pk0,Cars,1.00,1
+3009pk1,Cars,1.00,1
+3009pk2,Cars,1.00,1
 3009pt0,Other,1.00,1
 3009pt2,Other,1.00,1
 3009pt3,Other,1.00,1
@@ -1758,7 +2093,10 @@ part_id,theme,share,sets
 3011pt8,Duplo,1.00,2
 30120p01,Service Packs,1.00,1
 30124bp04,Service Packs,1.00,1
+30124bp50,Space,1.00,4
+30124bp51,Space,1.00,5
 30126p02,Collectible Minifigures,1.00,1
+30126p03,Collectible Minifigures,1.00,1
 30138p01,Service Packs,1.00,2
 30144p01,Freestyle,1.00,1
 30145p01,Freestyle,1.00,1
@@ -1805,8 +2143,28 @@ part_id,theme,share,sets
 30350bpx2,Minecraft,1.00,1
 30350bpx3,Minecraft,1.00,1
 30350cp01,LEGO Ideas and CUUSOO,1.00,1
+30361aps1,Star Wars,1.00,9
+30361aps2,Star Wars,1.00,2
 30361aps4,Star Wars,1.00,2
 30361dps1,Star Wars,1.00,1
+30361dps2,Star Wars,1.00,6
+30361dps3,Star Wars,1.00,1
+30361dps4,Star Wars,1.00,1
+30361dps6,Star Wars,1.00,2
+30361dps7,Star Wars,1.00,1
+30361dps8,Star Wars,0.84,31
+30361dps9,Star Wars,1.00,1
+30361dpsa,Seasonal,1.00,1
+30361dpsb,Star Wars,1.00,1
+30361dpsc,Star Wars,1.00,1
+30361dpsd,Star Wars,1.00,1
+30361dpse,Star Wars,1.00,1
+30361dpsf,Star Wars,1.00,1
+30361dpsh,Star Wars,1.00,1
+30361dpsi,Star Wars,1.00,2
+30361dpsj,Star Wars,1.00,2
+30361dpsk,Star Wars,1.00,2
+30361dpsl,Star Wars,1.00,1
 30363p90,The LEGO Movie,1.00,3
 30363ps0,Star Wars,1.00,1
 30363ps1,Star Wars,1.00,1
@@ -1816,15 +2174,35 @@ part_id,theme,share,sets
 30366ps1,Star Wars,1.00,7
 30366ps2,Star Wars,1.00,1
 30367aps1,Star Wars,1.00,4
+30367aps2,Star Wars,1.00,2
 30367bps2,Star Wars,1.00,1
 30367bps3,Star Wars,1.00,1
 30367bps4,Star Wars,1.00,2
+30367bps5,Star Wars,1.00,1
+30367bps7,Star Wars,1.00,1
+30367bps8,Star Wars,1.00,1
+30367cps0,Star Wars,1.00,1
+30367cps1,Star Wars,1.00,1
+30367cps3,Star Wars,1.00,2
 30367cps8,Star Wars,1.00,1
+30367cps9,Star Wars,1.00,2
+30367cpx1,The Powerpuff Girls,1.00,1
 30370ps2,Star Wars,1.00,2
+30370ps4,Star Wars,1.00,2
+30370ps5,Star Wars,1.00,2
 30372p79,Star Wars,1.00,21
 30372ps0,Star Wars,1.00,21
 30372ps1,Star Wars,1.00,1
 30372ps2,Star Wars,1.00,2
+30375ps1,Star Wars,1.00,2
+30375ps2,Star Wars,0.90,10
+30375ps3,Star Wars,1.00,1
+30375ps4,Star Wars,1.00,3
+30375ps5,Star Wars,1.00,2
+30375ps6,Star Wars,1.00,1
+30378ps1,Star Wars,1.00,5
+30378ps2,Star Wars,1.00,3
+30378ps3,Star Wars,1.00,2
 3037p10,Promotional,1.00,1
 3037pc0,Town,1.00,3
 3037ps0,Star Wars,1.00,1
@@ -1833,6 +2211,9 @@ part_id,theme,share,sets
 3037ps4,Star Wars,1.00,1
 3037ps5,Star Wars,1.00,1
 3037pt1,Town,1.00,1
+30380p01,Gear,1.00,1
+30380p02,Star Wars,1.00,1
+30380p03,Star Wars,0.86,7
 30387p01,Town,1.00,2
 30387p03,Town,1.00,2
 3038p01,Star Wars,1.00,1
@@ -1869,6 +2250,8 @@ part_id,theme,share,sets
 3039pz1,Brickheadz,1.00,1
 30401p01,Town,1.00,1
 30402p01,Town,1.00,1
+30408p01,Star Wars,0.90,10
+30408p02,Star Wars,1.00,6
 3040bdy0,Speed Champions,1.00,1
 3040bdy1,Speed Champions,1.00,1
 3040bp08,Icons,1.00,1
@@ -1877,10 +2260,13 @@ part_id,theme,share,sets
 30477p01,Town,1.00,1
 30485p60,Space,1.00,1
 30485ps0,Star Wars,1.00,1
+30529p01,Space,0.88,8
+30529p02,Space,1.00,1
 30562ps1,Star Wars,1.00,1
 3062bp01,Friends,1.00,4
 30639p02,4 Juniors,1.00,1
 3065p06,Classic,1.00,1
+30668p02,LEGO Ideas and CUUSOO,1.00,1
 3066p01,System,1.00,1
 3067ap02,Other,1.00,1
 3067ap03,Other,1.00,1
@@ -2035,6 +2421,7 @@ part_id,theme,share,sets
 3068bpgc,Fabuland,1.00,1
 3068bpgd,Fabuland,1.00,1
 3068bpge,Disney,1.00,1
+3068bpk0,Cars,1.00,1
 3068bpm0,Elves,1.00,7
 3068bpm1,Elves,1.00,5
 3068bpm2,Icons,1.00,1
@@ -2064,6 +2451,7 @@ part_id,theme,share,sets
 3068bpx3,Dimensions,1.00,1
 3068bpx4,Minecraft,1.00,4
 3068bpx5,Dimensions,1.00,1
+3068bpx6,Minecraft,1.00,2
 3068bpx7,Dimensions,1.00,1
 3068bpx8,Dimensions,1.00,1
 3068bpx9,Dimensions,1.00,1
@@ -2148,6 +2536,7 @@ part_id,theme,share,sets
 3069bph0,Harry Potter,1.00,3
 3069bph1,Harry Potter,1.00,4
 3069bpi,Speed Champions,1.00,1
+3069bpk0,Cars,1.00,2
 3069bpk1,Collectible Minifigures,1.00,1
 3069bpm0,Elves,1.00,3
 3069bpn1,Ninjago,1.00,3
@@ -2172,6 +2561,7 @@ part_id,theme,share,sets
 3069bpx2,Minecraft,1.00,2
 3069bpx3,Minecraft,1.00,1
 3069bpx4,Collectible Minifigures,1.00,1
+3069bpx5,Minecraft,1.00,2
 3069bpx6,Minecraft,1.00,2
 3069bpx8,Super Mario,1.00,1
 3069bpx9,Icons,1.00,1
@@ -2255,8 +2645,10 @@ part_id,theme,share,sets
 3070bp1t,Minecraft,1.00,1
 3070bp30,Disney,0.82,11
 3070bp70,Town,1.00,4
+3070bpb0,Super Heroes Marvel,1.00,1
 3070bpb2,Super Heroes DC,1.00,1
 3070bpc1,Collectible Minifigures,1.00,1
+3070bpc3,Collectible Minifigures,1.00,1
 3070bpe1,Nexo Knights,1.00,2
 3070bpe2,Nexo Knights,1.00,2
 3070bpe3,Nexo Knights,1.00,1
@@ -2299,6 +2691,7 @@ part_id,theme,share,sets
 3070bpz4,Wednesday,1.00,1
 3070bpz6,Icons,1.00,1
 3070bpz7,Icons,1.00,1
+30838pk0,Juniors,1.00,1
 309p02,Town,1.00,1
 309p03,Town,1.00,5
 31000p01,Primo,0.86,36
@@ -2338,6 +2731,7 @@ part_id,theme,share,sets
 3245bp03,Educational and Dacta,1.00,2
 3245bp05,Educational and Dacta,1.00,1
 3245bp06,Educational and Dacta,1.00,1
+3245cp00,The LEGO Movie,1.00,1
 3245cp01,Super Heroes Marvel,1.00,1
 3245cp02,Friends,1.00,2
 3245cpz0,Brickheadz,1.00,1
@@ -2358,6 +2752,7 @@ part_id,theme,share,sets
 3245cpzf,Brickheadz,1.00,1
 3245cpzg,Brickheadz,1.00,1
 32474p01,Mixels,1.00,32
+32474p02,The LEGO Movie,1.00,1
 32474px0,Disney,1.00,1
 32523p01,Technic,0.93,15
 32523p02,Technic,1.00,1
@@ -2427,20 +2822,33 @@ part_id,theme,share,sets
 3437pe1,Duplo,0.80,120
 3437pe3,Duplo,1.00,5
 3460py0,Speed Champions,1.00,1
+34777pd7f,Collectible Minifigures,1.00,1
 35154ps1,Star Wars,1.00,1
 35252p01,LEGO Ideas and CUUSOO,1.00,1
 35252p02,City,1.00,2
 35299p01,Architecture,1.00,1
 35394p00,Architecture,1.00,1
+35608p01,Disney,1.00,1
+35608p02,Elves,1.00,1
+35608p03,Disney,1.00,5
+35608p04,Disney,1.00,1
+35608p05,Disney,1.00,2
 35660p02,City,1.00,1
+35660p04,City,0.85,13
 35660p05,Speed Champions,1.00,1
+35660p06,Friends,1.00,1
+35660p07,City,0.85,13
 35700p01,Collectible Minifigures,1.00,1
 35700p02,Collectible Minifigures,1.00,1
 35700ps1,Star Wars,1.00,3
+35714p01,Collectible Minifigures,1.00,1
+35714p02,Wicked,1.00,1
 35757p01,Collectible Minifigures,1.00,1
+35787p01,The LEGO Movie,1.00,1
 35787ps1,Brickheadz,1.00,2
 35787pt01,Modular Buildings,1.00,1
 35787pz1,Brickheadz,1.00,1
+35860p01,Collectible Minifigures,1.00,1
 3587p01,Legoland,1.00,2
 3587p02,Legoland,1.00,1
 3587pa0,Aquazone,1.00,3
@@ -2454,11 +2862,28 @@ part_id,theme,share,sets
 3596p03,Universal Building Set,0.88,8
 3596p04,Castle,1.00,1
 3596p05,Town,1.00,1
+36036p00,Icons,1.00,1
+36036p01,Harry Potter,1.00,1
+36036ph0,Harry Potter,1.00,1
+36036ph1,Collectible Minifigures,1.00,1
+36036pm0,Icons,1.00,1
+36198p01,Friends,0.93,14
+36198p02,Friends,1.00,8
+36198p03,Friends,1.00,8
 3622p01,Belville,1.00,2
 3622p03,Town,1.00,2
+3622p04,The LEGO Movie,1.00,1
+3622p05,Unikitty!,1.00,2
+3622p06,Unikitty!,1.00,1
+3622p07,The LEGO Movie,1.00,1
+3622p08,The LEGO Movie,1.00,2
+3622p09,Dimensions,1.00,1
+3622p0a,The LEGO Movie,1.00,2
 3622p0b,The LEGO Movie,1.00,1
 3622p0c,Minecraft,1.00,1
+3622p0g,The LEGO Movie,1.00,1
 3622p10,Unikitty!,1.00,1
+3622p53,The LEGO Movie,1.00,1
 3622pf1,Fabuland,1.00,5
 3622px1,LEGO Ideas and CUUSOO,1.00,1
 3622px2,LEGO Ideas and CUUSOO,1.00,1
@@ -2467,6 +2892,9 @@ part_id,theme,share,sets
 3622pz0,Brickheadz,1.00,1
 3622pz1,Brickheadz,1.00,1
 3622pz2,Brickheadz,1.00,1
+3623p00,The LEGO Movie,1.00,3
+3623p01,The LEGO Movie,1.00,5
+3623p02,Dimensions,1.00,1
 3623p03,Speed Champions,1.00,1
 3623p05,Unikitty!,1.00,1
 3623pb0,Super Heroes Marvel,1.00,1
@@ -2478,24 +2906,151 @@ part_id,theme,share,sets
 3626bp07,Educational and Dacta,1.00,1
 3626bp09,FIRST LEGO League,1.00,1
 3626bp0b,Creator,1.00,1
+3626bp0c,Town,0.80,20
 3626bp0e,Educational and Dacta,1.00,1
 3626bp0f,Creator,1.00,1
+3626bp0h,Collectible Minifigures,1.00,1
+3626bp0i,City,0.80,10
 3626bp0j,Freestyle,0.88,8
 3626bp0k,Freestyle,1.00,3
+3626bp20,Town,1.00,8
+3626bp3e,Pirates,1.00,4
+3626bp3j,Pirates,1.00,6
+3626bp3k,Pirates,1.00,7
+3626bp3q,Pirates,1.00,3
 3626bp40,Pirates,1.00,2
+3626bp41,Castle,1.00,4
+3626bp43,Pirates,1.00,2
+3626bp46,Pirates,1.00,9
+3626bp47,Pirates,0.91,11
+3626bp48,Pirates,1.00,14
+3626bp49,Pirates,0.81,21
+3626bp4b,Castle,0.86,7
+3626bp4c,Castle,0.89,9
+3626bp4d,Castle,0.88,8
+3626bp4e,Castle,1.00,5
+3626bp4f,Castle,0.83,6
 3626bp4h,Educational and Dacta,1.00,1
+3626bp4i,Castle,0.86,7
 3626bp4j,Games,1.00,1
+3626bp4l,Castle,0.90,10
+3626bp4m,Castle,1.00,16
+3626bp50,Space,1.00,6
+3626bp51,Space,1.00,2
+3626bp52,Space,1.00,2
+3626bp53,Space,1.00,4
+3626bp54,Space,1.00,5
+3626bp55,Space,1.00,2
+3626bp56,Space,1.00,2
+3626bp61,Space,1.00,5
+3626bp63,Space,0.83,6
+3626bp64,Space,1.00,3
+3626bp65,Space,1.00,2
+3626bp66,Space,1.00,9
+3626bp67,Space,1.00,4
+3626bp68,Space,1.00,7
 3626bp6f,Racers,1.00,1
+3626bp6u,Space,1.00,2
+3626bp6v,Space,1.00,7
+3626bp6w,Space,1.00,5
+3626bp6x,Space,1.00,3
+3626bp6y,Space,1.00,5
+3626bp7b,Town,0.92,12
+3626bp7e,Town,1.00,22
+3626bp7f,Town,0.86,7
+3626bp7g,Town,1.00,1
 3626bp84,City,1.00,1
 3626bp87,Educational and Dacta,1.00,1
 3626bp8i,Educational and Dacta,1.00,3
 3626bp8j,Educational and Dacta,1.00,1
 3626bp8k,Educational and Dacta,1.00,1
+3626bpa1,Adventurers,1.00,22
+3626bpa2,Adventurers,1.00,6
+3626bpa5,Adventurers,0.90,10
+3626bpa7,Adventurers,1.00,14
+3626bpa9,Adventurers,1.00,9
+3626bpab,Aquazone,1.00,6
+3626bpad,Aquazone,1.00,5
+3626bpap,Adventurers,0.83,12
+3626bpar,Atlantis,1.00,1
+3626bpb1,Super Heroes DC,0.93,14
+3626bpb3,Super Heroes DC,0.80,5
+3626bpb5,Super Heroes DC,1.00,1
+3626bpb7,Super Heroes DC,1.00,2
+3626bpba,Super Heroes DC,1.00,1
+3626bpc21,Collectible Minifigures,1.00,1
+3626bpc25,Collectible Minifigures,1.00,1
+3626bpc33,Collectible Minifigures,1.00,1
+3626bpc44,Collectible Minifigures,1.00,2
+3626bpc4b,Collectible Minifigures,1.00,1
+3626bpc5e,Collectible Minifigures,1.00,1
+3626bpc6a,Collectible Minifigures,1.00,1
+3626bpc83,Collectible Minifigures,1.00,1
+3626bpc87,Collectible Minifigures,1.00,1
+3626bpc94,Collectible Minifigures,1.00,1
+3626bph1,Harry Potter,1.00,25
+3626bph2,Harry Potter,1.00,9
+3626bph3,Harry Potter,1.00,13
+3626bph4,Harry Potter,1.00,2
+3626bph5,Harry Potter,1.00,2
+3626bph6,Harry Potter,1.00,2
+3626bph8,Harry Potter,1.00,3
+3626bph9,Harry Potter,1.00,1
+3626bpha,Harry Potter,1.00,8
+3626bphb,Harry Potter,1.00,6
+3626bpm0,The Hobbit and Lord of the Rings,1.00,5
+3626bpma,The Hobbit and Lord of the Rings,1.00,5
+3626bpmb,The Hobbit and Lord of the Rings,1.00,1
+3626bpn1,Ninja,1.00,7
+3626bpq0,Pharaoh's Quest,1.00,6
+3626bpq2,Pharaoh's Quest,0.86,7
+3626bpq4,Pharaoh's Quest,1.00,1
+3626bpq5,Disney,1.00,2
+3626bps0,Star Wars,1.00,2
 3626bps1,Star Wars,1.00,1
+3626bps2,Star Wars,0.94,16
+3626bps3,Star Wars,1.00,15
+3626bps4,Star Wars,1.00,3
+3626bps5,Star Wars,0.89,18
+3626bps7,Star Wars,1.00,7
+3626bps9,Star Wars,1.00,5
+3626bpsa,Star Wars,1.00,1
+3626bpsb,Star Wars,1.00,1
+3626bpsc,Star Wars,1.00,1
+3626bpsd,Star Wars,0.80,5
+3626bpse,Star Wars,1.00,4
+3626bpsf,Star Wars,1.00,1
+3626bpsg,Star Wars,1.00,1
+3626bpsh,Star Wars,1.00,1
+3626bpsi,Star Wars,1.00,1
+3626bpsk,Star Wars,1.00,2
+3626bpsm,Star Wars,1.00,1
+3626bpsn,Star Wars,1.00,1
+3626bpso,Star Wars,0.80,5
+3626bpsr,Star Wars,1.00,2
+3626bpst,Star Wars,1.00,1
+3626bpw0,Western,1.00,5
+3626bpw2,Western,1.00,6
+3626bpw3,Western,1.00,4
+3626bpw4,Western,0.83,6
+3626bpw5,Western,0.80,5
+3626bpw6,Western,1.00,4
+3626bpw7,Western,1.00,5
+3626bpw8,Western,1.00,1
+3626bpw9,Pirates,0.88,8
 3626cp02,Mixels,1.00,15
+3626cp03,The LEGO Movie,1.00,3
 3626cp07,Other,1.00,1
+3626cp0a,Icons,1.00,1
+3626cp0o,Super Heroes DC,1.00,2
+3626cp0y,Collectible Minifigures,1.00,1
+3626cp16,Dimensions,1.00,1
+3626cp1k,LEGO Ideas and CUUSOO,1.00,1
+3626cp20,Super Heroes Marvel,1.00,1
 3626cp30,Pirates,1.00,1
+3626cp75,City,1.00,5
 3626cp7f,Educational and Dacta,1.00,1
+3626cp7i,City,0.80,25
 3626cp7j,Educational and Dacta,1.00,1
 3626cp7k,FIRST LEGO League,1.00,1
 3626cp7p,Vikings,1.00,1
@@ -2506,20 +3061,112 @@ part_id,theme,share,sets
 3626cp88,Educational and Dacta,1.00,1
 3626cp89,LEGO Brand Store,1.00,1
 3626cp8a,Other,1.00,1
+3626cp8d,Collectible Minifigures,1.00,1
+3626cp8f,The LEGO Movie,1.00,1
+3626cp8g,The LEGO Movie,1.00,1
+3626cp8j,The LEGO Movie,1.00,3
 3626cp8k,Educational and Dacta,1.00,1
 3626cp8l,FIRST LEGO League,1.00,1
+3626cp8n,The LEGO Movie,0.83,6
+3626cp8o,The LEGO Movie,1.00,1
+3626cp8p,The LEGO Movie,1.00,6
 3626cp8r,FIRST LEGO League,1.00,1
 3626cp8s,FIRST LEGO League,1.00,3
 3626cp8u,Seasonal,1.00,1
+3626cp8v,City,0.80,35
 3626cp8x,FIRST LEGO League,1.00,2
 3626cp8y,FIRST LEGO League,1.00,1
+3626cpap,Legends of Chima,1.00,11
 3626cpb1,Super Heroes DC,1.00,1
 3626cpb2,Super Heroes Marvel,1.00,2
+3626cpb3,Super Heroes Marvel,1.00,1
+3626cpb6,Dimensions,1.00,1
+3626cpbb,Super Heroes Marvel,0.86,14
+3626cpbd,Super Heroes Marvel,1.00,2
+3626cpbh,Super Heroes Marvel,1.00,2
+3626cpbj,Super Heroes Marvel,1.00,1
+3626cpbk,Gear,1.00,1
+3626cpbl,Super Heroes Marvel,1.00,1
+3626cpbm,Super Heroes Marvel,1.00,2
+3626cpbn,Super Heroes DC,1.00,1
+3626cpbx,Super Heroes DC,1.00,1
+3626cpcbe,Collectible Minifigures,1.00,1
+3626cpccg,Collectible Minifigures,1.00,1
+3626cpce7,Collectible Minifigures,1.00,1
+3626cpce8,Collectible Minifigures,1.00,1
+3626cpce9,Collectible Minifigures,1.00,1
+3626cpceb,Collectible Minifigures,1.00,1
+3626cpcf4,Collectible Minifigures,1.00,1
+3626cpcfb,Collectible Minifigures,1.00,1
+3626cpcg1,Collectible Minifigures,1.00,1
+3626cpd2b,Collectible Minifigures,1.00,1
+3626cpd2e,Collectible Minifigures,1.00,1
+3626cpd61,Collectible Minifigures,1.00,1
+3626cpd63,Collectible Minifigures,1.00,1
+3626cpd64,Collectible Minifigures,1.00,1
+3626cpd66,Collectible Minifigures,1.00,1
+3626cpd67,Collectible Minifigures,1.00,1
+3626cpd68,Collectible Minifigures,1.00,1
+3626cpd69,Collectible Minifigures,1.00,1
+3626cpd6a,Collectible Minifigures,1.00,1
+3626cpd6b,Collectible Minifigures,1.00,1
+3626cpd6d,Collectible Minifigures,1.00,1
+3626cpd6e,Collectible Minifigures,1.00,1
+3626cpd6f,Collectible Minifigures,1.00,1
+3626cpd6h,Collectible Minifigures,1.00,1
+3626cpd6i,Collectible Minifigures,1.00,1
+3626cpd6j,Collectible Minifigures,1.00,1
+3626cpd6k,Collectible Minifigures,1.00,1
+3626cpd7i,Collectible Minifigures,1.00,1
+3626cpd81,Collectible Minifigures,1.00,1
+3626cpd85,Collectible Minifigures,1.00,1
+3626cpd89,Collectible Minifigures,1.00,1
+3626cpd8c,Collectible Minifigures,1.00,1
+3626cpd8e,Collectible Minifigures,1.00,1
+3626cpd8f,Collectible Minifigures,1.00,1
+3626cpd8k,Collectible Minifigures,1.00,1
 3626cpdg1,Collectible Minifigures,1.00,1
 3626cpdgb,Collectible Minifigures,1.00,1
+3626cph0,Harry Potter,1.00,2
 3626cph2,Harry Potter,1.00,1
+3626cph3,Dimensions,1.00,1
+3626cph5,Harry Potter,1.00,1
+3626cpm0,The Hobbit and Lord of the Rings,1.00,5
+3626cpm1,The Hobbit and Lord of the Rings,1.00,4
+3626cpm2,The Hobbit and Lord of the Rings,1.00,2
+3626cpm5,The Hobbit and Lord of the Rings,1.00,1
+3626cpm7,The Hobbit and Lord of the Rings,1.00,4
+3626cpm8,The Hobbit and Lord of the Rings,1.00,1
+3626cpm9,Dimensions,1.00,6
+3626cpmc,Icons,1.00,1
+3626cpn2,Ninjago,0.80,5
+3626cpna,Ninjago,0.90,10
+3626cpnb,Ninjago,0.88,93
+3626cpnc,Ninjago,0.85,79
+3626cpnd,Ninjago,0.81,16
+3626cpne,Ninjago,0.93,59
 3626cpnf,Books,1.00,1
+3626cpng,Ninjago,1.00,15
+3626cpnh,Ninjago,1.00,1
+3626cps0,Star Wars,0.86,7
+3626cps2,Gear,0.80,5
+3626cps3,Star Wars,0.87,121
+3626cps4,Star Wars,1.00,5
+3626cps6,Star Wars,0.90,31
+3626cps7,Star Wars,1.00,2
+3626cpsf,Star Wars,1.00,4
+3626cpsh,Star Wars,1.00,3
+3626cpsq,Star Wars,1.00,1
+3626cpx0,LEGO Ideas and CUUSOO,1.00,1
+3626cpx1,LEGO Ideas and CUUSOO,1.00,1
+3626cpx2,LEGO Ideas and CUUSOO,1.00,1
 3626cpx3,LEGO Ideas and CUUSOO,1.00,1
+3626cpx4,Dimensions,1.00,1
+3626cpx5,Dimensions,1.00,1
+3626cpx8,Dimensions,1.00,1
+3626cpxa,Dimensions,1.00,1
+3626cpxc,Dimensions,1.00,1
+3626cpxf,Dimensions,1.00,1
 3629pw1,Service Packs,1.00,2
 3629pw2,Service Packs,1.00,2
 3645p03,Legoland,1.00,2
@@ -2546,11 +3193,26 @@ part_id,theme,share,sets
 3678ad26,Promotional,1.00,1
 3678ad27,Promotional,1.00,1
 3678ad28,Promotional,1.00,1
+3678ap01,Castle,0.83,6
+3678ap4h,Castle,1.00,3
 3678apc0,Town,1.00,1
+3678bp30,Pirates,1.00,1
+3678bp40,Castle,1.00,3
+3678bph1,Harry Potter,1.00,1
+3678bpk0,Cars,1.00,4
 3684ap22,Promotional,1.00,3
+3684cph0,Harry Potter,1.00,1
 3710p01,Super Mario,1.00,1
 3710py0,Speed Champions,1.00,1
 37352p01,Disney,1.00,1
+37364p01,Animal Crossing,1.00,1
+37364p02,Animal Crossing,1.00,1
+37364pdea,Collectible Minifigures,1.00,1
+37364pdg2,Collectible Minifigures,1.00,1
+37364pdg4,Collectible Minifigures,1.00,1
+37364pdg9,Collectible Minifigures,1.00,1
+37365pdg4,Collectible Minifigures,1.00,1
+37366pdg4,Collectible Minifigures,1.00,1
 37383p01,Technic,1.00,1
 374p01,Legoland,1.00,1
 374p02,Legoland,1.00,1
@@ -2561,11 +3223,142 @@ part_id,theme,share,sets
 3755ap01,Town,1.00,1
 3755ap02,Town,1.00,1
 37702p01,Collectible Minifigures,1.00,3
+37777p01,Harry Potter,1.00,6
 3811p01,Train,1.00,1
 3811p02,Pirates,1.00,1
 3811p03,Town,1.00,1
 3811p04,Town,1.00,1
 3811p05,Pirates,1.00,1
+3815bp0r,Star Wars,0.80,10
+3815bp41,Castle,0.88,8
+3815bp72,City,1.00,16
+3815bpdd1,Collectible Minifigures,1.00,1
+3815bpdg4,Collectible Minifigures,1.00,1
+3815bphf,Harry Potter,1.00,1
+3815bps3,Star Wars,1.00,1
+3815bps6,Star Wars,1.00,2
+3815bpw1,Western,0.86,7
+3815bpw2,Western,1.00,4
+3815bpx3,Teenage Mutant Ninja Turtles,1.00,7
+3815bpx7,Teenage Mutant Ninja Turtles,1.00,1
+3815bpy0,Speed Champions,1.00,1
+3816cp0l,Dimensions,1.00,1
+3816cp0r,Star Wars,0.80,10
+3816cp41,Castle,0.88,8
+3816cp4f,Castle,1.00,4
+3816cp60,Space,1.00,6
+3816cp61,Space,1.00,2
+3816cp62,Space,1.00,2
+3816cp63,Space,1.00,5
+3816cp6f,Space,1.00,2
+3816cp6g,The LEGO Movie,1.00,1
+3816cp6u,Space,1.00,2
+3816cp6v,Space,1.00,5
+3816cp6w,Space,1.00,12
+3816cp70,City,1.00,15
+3816cp71,City,0.85,79
+3816cp72,City,1.00,16
+3816cp89,Other,1.00,1
+3816cp8h,The LEGO Movie,0.88,16
+3816cp8i,The LEGO Movie,1.00,1
+3816cpa2,Adventurers,1.00,6
+3816cpa3,Adventurers,0.83,6
+3816cpa9,Indiana Jones,0.88,17
+3816cpaw,Legends of Chima,0.80,10
+3816cpaz,Legends of Chima,1.00,6
+3816cpba,Super Heroes DC,1.00,1
+3816cpbb,Super Heroes Marvel,1.00,2
+3816cpbd,Super Heroes Marvel,1.00,1
+3816cpbe,Super Heroes Marvel,1.00,1
+3816cpbf,Super Heroes Marvel,1.00,2
+3816cpbg,Super Heroes Marvel,1.00,1
+3816cpc44,Collectible Minifigures,1.00,1
+3816cpc4b,Collectible Minifigures,1.00,1
+3816cpc67,Collectible Minifigures,1.00,1
+3816cpc6a,Collectible Minifigures,1.00,1
+3816cpd6e,Collectible Minifigures,1.00,1
+3816cpdd1,Collectible Minifigures,1.00,1
+3816cph0,Dimensions,1.00,1
+3816cphb,Harry Potter,1.00,4
+3816cphf,Harry Potter,1.00,1
+3816cpm0,The Hobbit and Lord of the Rings,1.00,5
+3816cpm1,The Hobbit and Lord of the Rings,1.00,2
+3816cpm2,The Hobbit and Lord of the Rings,1.00,3
+3816cpq0,Pharaoh's Quest,0.86,7
+3816cps0,Star Wars,1.00,4
+3816cps1,Star Wars,1.00,5
+3816cps2,Star Wars,1.00,5
+3816cps3,Star Wars,1.00,1
+3816cps4,Star Wars,0.89,9
+3816cps6,Star Wars,1.00,2
+3816cpsk,Star Wars,1.00,1
+3816cpw1,Western,0.86,7
+3816cpw2,Western,0.83,6
+3816cpw3,Western,1.00,4
+3816cpw4,Western,1.00,4
+3816cpx0,Dimensions,1.00,1
+3816cpx1,Jurassic World,0.83,6
+3816cpx3,Teenage Mutant Ninja Turtles,1.00,7
+3816cpx7,Teenage Mutant Ninja Turtles,1.00,1
+3817cp0l,Dimensions,1.00,1
+3817cp0r,Star Wars,0.80,10
+3817cp41,Castle,0.88,8
+3817cp60,Space,1.00,6
+3817cp61,Space,1.00,2
+3817cp62,Space,1.00,2
+3817cp63,Space,1.00,5
+3817cp6f,Space,1.00,2
+3817cp6u,Space,1.00,2
+3817cp6v,Space,1.00,5
+3817cp6w,Space,1.00,12
+3817cp70,City,1.00,15
+3817cp71,City,0.85,79
+3817cp72,City,1.00,16
+3817cp89,Other,1.00,1
+3817cp8h,The LEGO Movie,0.88,16
+3817cp8i,The LEGO Movie,1.00,1
+3817cpa2,Adventurers,1.00,6
+3817cpa3,Adventurers,0.83,6
+3817cpa9,Indiana Jones,0.88,17
+3817cpaw,Legends of Chima,0.80,10
+3817cpaz,Legends of Chima,1.00,6
+3817cpba,Super Heroes DC,1.00,1
+3817cpbb,Super Heroes Marvel,1.00,2
+3817cpbd,Super Heroes Marvel,1.00,1
+3817cpbe,Super Heroes Marvel,1.00,1
+3817cpbf,Super Heroes Marvel,1.00,2
+3817cpbg,Super Heroes Marvel,1.00,1
+3817cpc44,Collectible Minifigures,1.00,1
+3817cpc4b,Collectible Minifigures,1.00,1
+3817cpc67,Collectible Minifigures,1.00,1
+3817cpc6a,Collectible Minifigures,1.00,1
+3817cpd6e,Collectible Minifigures,1.00,1
+3817cpdd1,Collectible Minifigures,1.00,1
+3817cph0,Dimensions,1.00,1
+3817cphb,Harry Potter,1.00,4
+3817cphf,Harry Potter,1.00,1
+3817cpm0,The Hobbit and Lord of the Rings,1.00,5
+3817cpm1,The Hobbit and Lord of the Rings,1.00,2
+3817cpm2,The Hobbit and Lord of the Rings,1.00,3
+3817cpq0,Pharaoh's Quest,0.86,7
+3817cps0,Star Wars,1.00,4
+3817cps1,Star Wars,1.00,5
+3817cps2,Star Wars,1.00,5
+3817cps3,Star Wars,1.00,1
+3817cps4,Star Wars,0.89,9
+3817cps6,Star Wars,1.00,2
+3817cpsk,Star Wars,1.00,1
+3817cpw1,Western,0.86,7
+3817cpw2,Western,0.83,6
+3817cpw3,Western,1.00,4
+3817cpw4,Western,1.00,4
+3817cpx0,Dimensions,1.00,1
+3817cpx1,Jurassic World,0.83,6
+3817cpx3,Teenage Mutant Ninja Turtles,1.00,7
+3817cpx7,Teenage Mutant Ninja Turtles,1.00,1
+3817cpy0,Speed Champions,1.00,1
+3818pdgb,Collectible Minifigures,1.00,1
+3819pdgb,Collectible Minifigures,1.00,1
 3821d0e,Speed Champions,1.00,1
 3821p01,Town,1.00,1
 3821p03,Town,1.00,2
@@ -2576,6 +3369,9 @@ part_id,theme,share,sets
 3822p03,Town,1.00,2
 3822p60,Town,1.00,5
 3822ps1,Star Wars,1.00,2
+38301p01,The Powerpuff Girls,1.00,1
+38301p01c02,The Powerpuff Girls,1.00,1
+3834p01,Town,1.00,2
 3846p02,Modular Buildings,1.00,1
 3846p46,Castle,1.00,10
 3846p47,Castle,1.00,2
@@ -2591,6 +3387,8 @@ part_id,theme,share,sets
 3846p4y,Icons,1.00,1
 3846p4z,Icons,1.00,1
 3846pm0,Elves,1.00,2
+38541p01,Collectible Minifigures,1.00,1
+38541p02,Harry Potter,1.00,1
 38547p01,Harry Potter,1.00,1
 3857p01,Town,1.00,1
 3857p02,Castle,1.00,1
@@ -2614,6 +3412,10 @@ part_id,theme,share,sets
 3918p03,Sonic The Hedgehog,1.00,4
 3918p04,Sonic The Hedgehog,1.00,2
 3918p05,Friends,1.00,1
+39199p01,Elves,1.00,3
+39199p02,Disney,1.00,1
+39199p03,Disney,0.80,5
+39199p04,Disney,1.00,1
 39266p01,The LEGO Movie,1.00,1
 39266p02,The LEGO Movie,1.00,1
 39266p03,The LEGO Movie,1.00,1
@@ -2877,6 +3679,11 @@ part_id,theme,share,sets
 4182p09,Town,1.00,1
 4186p01,Sports,1.00,1
 4187376a,Hobby Sets,1.00,1
+41879ap02,Collectible Minifigures,1.00,1
+41879ap03,Collectible Minifigures,1.00,1
+41879bp01,Collectible Minifigures,1.00,1
+41879bp02,Collectible Minifigures,1.00,1
+41879bp03,Collectible Minifigures,1.00,2
 4188571c,Train,1.00,2
 4188848a,Sports,1.00,1
 41944p01,Collectible Minifigures,1.00,1
@@ -2981,11 +3788,14 @@ part_id,theme,share,sets
 4346p68,Space,0.86,7
 4346ps1,Star Wars,1.00,4
 4346ps2,Star Wars,1.00,1
+4346ps3,Star Wars,1.00,2
 4346pw01,Western,1.00,5
 4349p01,Collectible Minifigures,1.00,1
+43693p01,Ninjago,1.00,4
 43702p01,Sports,0.85,13
 43722bpy0,Speed Champions,1.00,1
 43723bpy0,Speed Champions,1.00,1
+43745p01,Harry Potter,1.00,1
 43746p01,Harry Potter,1.00,1
 43750p01,Harry Potter,1.00,1
 43755,Harry Potter,1.00,2
@@ -2994,6 +3804,7 @@ part_id,theme,share,sets
 43898p03,LEGO Ideas and CUUSOO,1.00,1
 43898p04,LEGO Ideas and CUUSOO,1.00,1
 43898pa1,Adventurers,1.00,1
+43898pa2,Adventurers,1.00,2
 43898ps1,Star Wars,1.00,2
 43898px1,Scooby-Doo,1.00,1
 43898px2,SpongeBob SquarePants,1.00,1
@@ -3033,11 +3844,15 @@ part_id,theme,share,sets
 4444p06,Pirates,1.00,2
 4444p07,Pirates,1.00,3
 4444p09,Castle,1.00,2
+44553p01,LEGO Ideas and CUUSOO,1.00,1
 4474p61,Space,1.00,1
 4478p01,Town,1.00,3
 4478p02,Town,1.00,1
 4483p01,Town,0.80,5
 4485bp01,Town,1.00,2
+4485bp02,Town,1.00,3
+4485bp03,Town,1.00,1
+4490p90,The LEGO Movie,1.00,1
 4493c03,Castle,0.83,6
 4493pw1c00,Western,0.80,5
 4493pw2c00,Western,1.00,5
@@ -3058,6 +3873,8 @@ part_id,theme,share,sets
 4566038a,Disney,1.00,1
 4568122a,Star Wars,1.00,1
 45706p01,Town,1.00,2
+45755p01,Collectible Minifigures,1.00,1
+45755p02,Collectible Minifigures,1.00,1
 4578235a,City,1.00,1
 4578235b,City,1.00,1
 4578235f,City,1.00,1
@@ -3121,10 +3938,12 @@ part_id,theme,share,sets
 4650854k,Friends,1.00,1
 4650854l,Friends,1.00,1
 4650854n,Friends,1.00,1
+46534pb1,Super Heroes Marvel,1.00,1
 46882p01,Technic,1.00,1
 47261a,Technic,1.00,1
 47408p01,Duplo,0.82,11
 47408p02,Duplo,1.00,1
+4740p06,The LEGO Movie,1.00,1
 4740p07,Speed Champions,1.00,1
 4740ps1,Star Wars,0.86,7
 4740px1,Scooby-Doo,1.00,1
@@ -3151,6 +3970,7 @@ part_id,theme,share,sets
 4744p0r,Universal Building Set,1.00,1
 4744p11,Universal Building Set,1.00,1
 47511p01,Educational and Dacta,1.00,8
+47545p01,Star Wars,1.00,2
 4760p02c01,Town,1.00,1
 4760p03c01,Town,1.00,1
 47753pq1,Pharaoh's Quest,1.00,1
@@ -3204,8 +4024,14 @@ part_id,theme,share,sets
 49098py0,Speed Champions,1.00,2
 49098py1,Speed Champions,1.00,1
 49295p03,Monkie Kid,1.00,1
+49308p01,The LEGO Movie,1.00,1
+49309p01,The LEGO Movie,1.00,1
 49311ps0,Star Wars,1.00,1
 49311ps1,Star Wars,1.00,9
+49588p01,Ninjago,1.00,3
+49588p02,Ninjago,1.00,7
+49588p03,Ninjago,1.00,8
+49588p04,Ninjago,0.92,13
 49656p03,City,1.00,1
 49656p04,Other,1.00,1
 49656p05,Other,1.00,1
@@ -3253,6 +4079,9 @@ part_id,theme,share,sets
 54200p02,Icons,1.00,1
 54200py0,Speed Champions,1.00,1
 54701p01c01,City,1.00,2
+54872p02,SpongeBob SquarePants,1.00,1
+54872p09,SpongeBob SquarePants,1.00,1
+5492p01,Friends,1.00,2
 5492p04,Other,1.00,1
 56074p01,Super Heroes DC,1.00,1
 56711gc01,Super Heroes DC,1.00,1
@@ -3281,10 +4110,14 @@ part_id,theme,share,sets
 59349ph1,Harry Potter,1.00,1
 59349ph2,Harry Potter,1.00,1
 59349pm0,Disney,1.00,2
+59595p01,Disney,1.00,8
+59595p02,Disney,1.00,4
 59718a,City,1.00,1
 59718b,City,1.00,1
 59718c,City,1.00,1
 59718d,City,1.00,1
+59794p01,Disney,1.00,8
+59794p02,Disney,1.00,4
 59826a,City,1.00,1
 59826b,City,1.00,1
 59826c,City,1.00,1
@@ -3293,6 +4126,10 @@ part_id,theme,share,sets
 59826f,City,1.00,1
 59826g,City,1.00,1
 59826h,City,1.00,1
+600880p01,Collectible Minifigures,1.00,1
+600880p01c01,Collectible Minifigures,1.00,1
+600880p02,Collectible Minifigures,1.00,1
+600880p02c01,Collectible Minifigures,1.00,1
 6009254d,Racers,1.00,1
 6011268a,Monster Fighters,1.00,1
 6011268b,Monster Fighters,1.00,1
@@ -3353,6 +4190,7 @@ part_id,theme,share,sets
 6047615b,Star Wars,1.00,1
 60481ady0,Speed Champions,1.00,1
 60481ady1,Speed Champions,1.00,1
+60481ap01,The LEGO Movie,1.00,2
 60483pt1,Technic,1.00,1
 60483pt2,Technic,1.00,1
 6057849a,Friends,1.00,1
@@ -3372,6 +4210,15 @@ part_id,theme,share,sets
 60601p03,LEGO Ideas and CUUSOO,1.00,1
 60601p04,Modular Buildings,1.00,1
 60601p05,Icons,1.00,1
+60671p01,Castle,1.00,3
+60671p02,Castle,1.00,2
+60671p03,Castle,1.00,1
+60672c01,Castle,1.00,3
+60672c02,Castle,1.00,2
+60672c03p01,Castle,1.00,1
+60673c01,Castle,1.00,3
+60673c02,Castle,1.00,2
+60673c03p01,Castle,1.00,1
 6069p01,Model Team,1.00,1
 6069ps1,Star Wars,1.00,2
 6069ps2,Star Wars,1.00,1
@@ -3395,6 +4242,10 @@ part_id,theme,share,sets
 6103027f,Star Wars,1.00,1
 61068p01,Creator,1.00,1
 6112596b,Creator,1.00,1
+61189ps0,Star Wars,0.83,6
+61189ps1,Star Wars,1.00,1
+61189ps2,Star Wars,1.00,2
+61200ps0,Star Wars,1.00,3
 61287p03,Super Heroes DC,1.00,1
 61287p04,Super Heroes DC,1.00,1
 612p01,Town,0.83,6
@@ -3821,6 +4672,9 @@ part_id,theme,share,sets
 6239p03,City,1.00,3
 62537p02,Super Heroes DC,1.00,1
 62537p03,Seasonal,1.00,1
+62537p04,Nexo Knights,1.00,2
+62537p05,Collectible Minifigures,1.00,1
+62537p06,Nexo Knights,1.00,2
 62537p07,Other,1.00,1
 6253811aa,Speed Champions,1.00,1
 6253811z,Speed Champions,1.00,1
@@ -3868,6 +4722,8 @@ part_id,theme,share,sets
 6259665h,Star Wars,1.00,1
 6259665i,Star Wars,1.00,1
 6267107a,Harry Potter,1.00,1
+62699p01,Agents,1.00,3
+62699p02,Agents,1.00,1
 6285381b,Speed Champions,1.00,1
 6285381c,Speed Champions,1.00,1
 6285381cc01,Speed Champions,1.00,1
@@ -3965,6 +4821,7 @@ part_id,theme,share,sets
 63864pc0,Technic,1.00,1
 63864pf0,Friends,1.00,1
 63864px0,LEGO Ideas and CUUSOO,1.00,1
+63864px1,Minecraft,1.00,2
 63864pz0,Brickheadz,1.00,2
 63864pz1,Brickheadz,1.00,1
 63864pz2,Brickheadz,1.00,1
@@ -4018,7 +4875,12 @@ part_id,theme,share,sets
 6522835b,Friends,1.00,1
 65421p01,Technic,1.00,1
 65497p01,Super Mario,1.00,1
+6569p01,Friends,1.00,1
+6569p02,Friends,1.00,1
+6569p03,Friends,1.00,1
+65730p01,Hidden Side,0.89,9
 65730p02,Other,1.00,1
+65730p03,Collectible Minifigures,1.00,1
 6584d01,Train,1.00,1
 6600p01,City,1.00,4
 6636d0h,Speed Champions,1.00,1
@@ -4068,6 +4930,7 @@ part_id,theme,share,sets
 66858p01,Super Mario,1.00,3
 67013p01,Super Mario,1.00,17
 67017p01,Super Mario,1.00,4
+67037p01,Collectible Minifigures,1.00,2
 67040p02,City,1.00,1
 67095p01,Animal Crossing,1.00,1
 67095p05,Friends,1.00,1
@@ -4077,17 +4940,31 @@ part_id,theme,share,sets
 67611p01,Super Mario,1.00,1
 67632p01,Harry Potter,0.90,10
 67632p02,Harry Potter,1.00,1
+67638p01,Harry Potter,1.00,1
+67638p02,Collectible Minifigures,1.00,1
+67644p01,Minions,1.00,6
+67644p03,Minions,1.00,1
+67649p01,Minions,1.00,1
+67649p02,Minions,1.00,1
+67649p03,Minions,1.00,1
+67649p04,Minions,1.00,1
+67650p02,Minions,1.00,1
+67887p01,Monkie Kid,1.00,16
+67902p01,Minions,1.00,5
+67906p01,Minions,1.00,2
 67931p01,Super Mario,1.00,14
 67950p01,Star Wars,1.00,1
 68495p02,Harry Potter,1.00,2
 68495p04,Seasonal,1.00,1
 68495p06,Star Wars,1.00,1
+68508p01,Collectible Minifigures,1.00,1
 68881p01,Disney,1.00,1
 68881p02,Disney,1.00,1
 69729p00,LEGO Ideas and CUUSOO,1.00,1
 69729p01,Icons,1.00,1
 69729p07,Icons,1.00,1
 69729pt0,LEGO Art,1.00,1
+69938p01,Friends,1.00,1
 69944p01,Collectible Minifigures,1.00,1
 71396p01c01,Western,1.00,1
 71682pt0,Technic,1.00,1
@@ -4110,6 +4987,107 @@ part_id,theme,share,sets
 72824p01,Sports,0.96,48
 72824pf0,Friends,1.00,2
 73125p01,Star Wars,1.00,4
+73141p01,Friends,0.93,14
+73141p04,Friends,1.00,1
+73152p01,Friends,1.00,1
+73152p02,Friends,1.00,1
+73152p03,Friends,1.00,1
+73152p04,Friends,1.00,1
+73152p05,Friends,1.00,1
+73161p01,Friends,1.00,3
+73161p02,Friends,1.00,2
+73200bp01,Disney,1.00,1
+73200bp02,Disney,1.00,1
+73200bp04,Dimensions,1.00,1
+73200bp0d,LEGO Ideas and CUUSOO,1.00,1
+73200bp0e,Dimensions,1.00,1
+73200bp0g,Icons,1.00,1
+73200bp0h,Icons,1.00,1
+73200bp0i,City,1.00,4
+73200bp0j,Dimensions,1.00,1
+73200bp0l,Dimensions,1.00,1
+73200bp0n,Dimensions,1.00,1
+73200bp0o,Dimensions,1.00,1
+73200bp0r,Star Wars,0.80,10
+73200bp0x,LEGO Ideas and CUUSOO,1.00,1
+73200bp3j,Pirates,1.00,8
+73200bp41,Castle,0.88,8
+73200bp4f,Castle,1.00,4
+73200bp60,Space,1.00,6
+73200bp61,Space,1.00,2
+73200bp62,Space,1.00,2
+73200bp63,Space,1.00,5
+73200bp6f,Space,1.00,2
+73200bp6g,The LEGO Movie,1.00,1
+73200bp6u,Space,1.00,2
+73200bp6v,Space,1.00,5
+73200bp6w,Space,1.00,12
+73200bp70,Collectible Minifigures,1.00,1
+73200bp71,City,0.85,79
+73200bp72,City,1.00,16
+73200bp89,Other,1.00,1
+73200bp8h,The LEGO Movie,0.88,16
+73200bp8i,The LEGO Movie,1.00,1
+73200bpa2,Adventurers,1.00,6
+73200bpa3,Adventurers,0.83,6
+73200bpa9,Indiana Jones,0.88,17
+73200bpaw,Legends of Chima,0.80,10
+73200bpb1,Dimensions,1.00,1
+73200bpba,Super Heroes DC,1.00,1
+73200bpbb,Super Heroes Marvel,1.00,2
+73200bpbd,Super Heroes Marvel,1.00,1
+73200bpbe,Super Heroes Marvel,1.00,1
+73200bpbf,Super Heroes Marvel,1.00,2
+73200bpbg,Super Heroes Marvel,1.00,1
+73200bpc1,Super Heroes Marvel,1.00,1
+73200bpc2g,Collectible Minifigures,1.00,1
+73200bpc34,Collectible Minifigures,1.00,1
+73200bpc39,Collectible Minifigures,1.00,2
+73200bpc44,Collectible Minifigures,1.00,1
+73200bpc4b,Collectible Minifigures,1.00,1
+73200bpc67,Collectible Minifigures,1.00,1
+73200bpc6a,Collectible Minifigures,1.00,1
+73200bpcr6,Collectible Minifigures,1.00,1
+73200bpd6e,Collectible Minifigures,1.00,1
+73200bpdd1,Collectible Minifigures,1.00,1
+73200bpde2,Collectible Minifigures,1.00,1
+73200bpde3,Collectible Minifigures,1.00,1
+73200bpde4,Collectible Minifigures,1.00,1
+73200bpdg1,Collectible Minifigures,1.00,1
+73200bpdg7,Collectible Minifigures,1.00,1
+73200bpdga,Collectible Minifigures,1.00,1
+73200bph0,Dimensions,1.00,1
+73200bphb,Harry Potter,1.00,4
+73200bphf,Harry Potter,1.00,1
+73200bpm0,The Hobbit and Lord of the Rings,1.00,5
+73200bpm1,The Hobbit and Lord of the Rings,1.00,2
+73200bpm2,The Hobbit and Lord of the Rings,1.00,3
+73200bpn2,Ninjago,0.90,10
+73200bpq0,Pharaoh's Quest,0.86,7
+73200bpq1,Pharaoh's Quest,1.00,1
+73200bps0,Star Wars,1.00,4
+73200bps1,Star Wars,1.00,5
+73200bps2,Star Wars,1.00,5
+73200bps3,Star Wars,1.00,1
+73200bps4,Star Wars,0.89,9
+73200bps5,Star Wars,1.00,2
+73200bps6,Star Wars,1.00,2
+73200bpsk,Star Wars,1.00,1
+73200bpw1,Western,0.86,7
+73200bpw2,Western,0.83,6
+73200bpw3,Western,1.00,4
+73200bpw4,Western,1.00,4
+73200bpx0,Dimensions,1.00,1
+73200bpx1,Jurassic World,0.83,6
+73200bpx3,Teenage Mutant Ninja Turtles,1.00,10
+73200bpx7,Teenage Mutant Ninja Turtles,1.00,1
+73200bpy0,Speed Champions,1.00,1
+73200bpy1,Speed Champions,1.00,2
+73200bpy2,Speed Champions,1.00,1
+73200bpy3,Speed Champions,1.00,2
+73200bpy5,Speed Champions,1.00,1
+73441p01,Friends,1.00,1
+74604p01,Collectible Minifigures,1.00,1
 74948p02,Aquazone,1.00,9
 74967p01,Promotional,1.00,1
 75174p01,Adventurers,1.00,1
@@ -4133,81 +5111,602 @@ part_id,theme,share,sets
 75979bp02,Adventurers,1.00,1
 76098bp01,Racers,1.00,4
 76098bp02,Racers,1.00,3
+76382p0002,Castle,1.00,14
+76382p0003,Castle,1.00,13
+76382p0004,Castle,1.00,4
+76382p0005,Castle,1.00,7
+76382p0006,Castle,1.00,4
+76382p0007,Castle,1.00,4
+76382p0008,Castle,1.00,3
+76382p0010,Space,1.00,7
+76382p0011,Space,1.00,3
+76382p0012,Gear,1.00,1
+76382p0013,Town,1.00,3
+76382p0015,Town,1.00,6
+76382p0016,Town,1.00,2
+76382p0017,Castle,1.00,1
+76382p0018,Ninja,1.00,1
+76382p0023,Super Heroes Marvel,1.00,1
+76382p0024,Super Heroes Marvel,1.00,1
+76382p0025,Star Wars,1.00,1
+76382p0030,Star Wars,1.00,4
+76382p0031,Super Heroes Marvel,1.00,1
+76382p0033,Icons,1.00,1
+76382p0034,Make & Create,1.00,1
+76382p0035,Super Heroes Marvel,1.00,1
+76382p0036,Super Heroes Marvel,1.00,1
+76382p0037,LEGO Ideas and CUUSOO,1.00,1
+76382p0038,Other,1.00,1
 76382p0039,Promotional,1.00,1
+76382p0040,Harry Potter,1.00,1
+76382p0041,Super Heroes Marvel,1.00,1
 76382p0042,FIRST LEGO League,1.00,1
+76382p0043,Super Heroes Marvel,1.00,1
+76382p0046,City,1.00,2
+76382p0047,Sports,1.00,1
+76382p0048,The LEGO Movie,1.00,1
+76382p0049,Ninjago,1.00,3
+76382p0051,Super Heroes DC,1.00,1
 76382p01,Freestyle,0.88,8
+76382p03,Town,1.00,2
 76382p04,Educational and Dacta,1.00,1
+76382p07,Train,1.00,3
+76382p08,Town,1.00,8
+76382p0a,Town,0.89,9
+76382p0c,Creator,1.00,1
+76382p0d,Seasonal,0.80,5
 76382p0e,Educational and Dacta,1.00,1
+76382p0g,City,0.80,10
 76382p0k,Books,1.00,1
 76382p0n,FIRST LEGO League,1.00,1
+76382p0o,City,1.00,2
 76382p0q,Educational and Dacta,1.00,2
+76382p0r,City,0.92,12
+76382p0s,Disney,1.00,1
+76382p0t,Disney,1.00,1
 76382p0v,Educational and Dacta,1.00,1
+76382p0x,Dimensions,1.00,1
+76382p1013,Island Xtreme Stunts,1.00,6
 76382p11,Educational and Dacta,1.00,1
+76382p12,Town,1.00,6
 76382p13,Educational and Dacta,1.00,1
+76382p14,Town,1.00,15
+76382p15,Ninjago,1.00,2
+76382p16,Town,1.00,9
+76382p17,Town,0.83,6
+76382p19,Train,0.89,9
+76382p1a,Town,0.86,14
 76382p1b,Educational and Dacta,0.80,5
 76382p1d,Educational and Dacta,1.00,1
 76382p1e,Universal Building Set,1.00,1
 76382p1f,Educational and Dacta,1.00,1
 76382p1g,Educational and Dacta,1.00,2
+76382p1h,Town,0.86,7
+76382p1i,Town,1.00,3
+76382p1l,LEGO Brand Store,1.00,2
+76382p1n,Town,1.00,4
+76382p1o,City,1.00,14
 76382p1s,Educational and Dacta,1.00,1
 76382p1t,Freestyle,1.00,3
 76382p1u,Educational and Dacta,1.00,2
 76382p1z,FIRST LEGO League,1.00,2
 76382p21,Educational and Dacta,1.00,1
+76382p23,Town,1.00,2
 76382p26,Educational and Dacta,1.00,1
 76382p27,Educational and Dacta,1.00,1
 76382p28,Educational and Dacta,1.00,1
+76382p29,Town,0.89,9
 76382p2a,Educational and Dacta,1.00,2
 76382p2b,Freestyle,1.00,1
+76382p2c,Town,1.00,8
 76382p2e,Educational and Dacta,1.00,1
+76382p2f,Town,1.00,5
+76382p2g,Town,1.00,8
 76382p2h,Educational and Dacta,1.00,1
+76382p2l,Dimensions,1.00,1
+76382p2m,Town,1.00,2
+76382p2n,Town,1.00,2
 76382p2p,Vikings,1.00,1
+76382p2u,Dimensions,1.00,1
+76382p2x,Icons,1.00,1
+76382p2y,Icons,1.00,1
+76382p2z,Icons,1.00,1
+76382p30,Pirates,1.00,4
+76382p31,Pirates,0.91,22
+76382p32,Pirates,1.00,12
+76382p33,Pirates,1.00,14
+76382p34,Pirates,1.00,21
+76382p35,Dimensions,1.00,1
+76382p36,Disney,1.00,1
+76382p37,Town,1.00,2
+76382p38,Pirates,1.00,6
+76382p39,Pirates,1.00,8
+76382p3b,Pirates,1.00,2
+76382p3c,Pirates,1.00,7
+76382p3d,Pirates,1.00,3
+76382p3e,Pirates,1.00,1
+76382p3f,Pirates,1.00,6
 76382p3g,Educational and Dacta,1.00,1
+76382p3h,Pirates,1.00,7
+76382p3i,Pirates,1.00,3
+76382p3j,Pirates,1.00,6
+76382p3l,Pirates,0.83,6
+76382p3m,Pirates,1.00,1
+76382p3n,Pirates,0.82,11
 76382p3o,Educational and Dacta,1.00,1
+76382p3p,Make & Create,1.00,1
+76382p3q,Pirates,1.00,11
+76382p3r,Pirates,1.00,2
+76382p3s,Pirates,1.00,3
+76382p3t,Pirates,1.00,5
 76382p3x,Pirates,1.00,1
+76382p3y,Icons,1.00,1
+76382p3z,Dimensions,1.00,1
+76382p40,Castle,1.00,19
+76382p41,Castle,1.00,15
+76382p42,Castle,1.00,14
+76382p43,Castle,0.83,12
+76382p44,Castle,1.00,4
+76382p45,Castle,1.00,4
+76382p46,Castle,1.00,14
+76382p47,Castle,0.80,5
+76382p48,Castle,1.00,7
+76382p49,Castle,1.00,5
+76382p4b,Castle,1.00,9
+76382p4c,Castle,1.00,5
+76382p4d,Castle,1.00,8
+76382p4f,Castle,1.00,17
+76382p4g,Castle,1.00,3
+76382p4h,Castle,1.00,3
+76382p4i,Castle,0.89,9
+76382p4j,Castle,1.00,6
+76382p4k,Castle,0.83,6
+76382p4n,Castle,1.00,1
 76382p4p,Seasonal,1.00,1
+76382p4q,Castle,1.00,1
+76382p4r,Castle,1.00,3
+76382p4s,Castle,1.00,2
+76382p4y,Castle,1.00,1
+76382p4z,Castle,1.00,3
+76382p50,Castle,1.00,2
+76382p51,Space,1.00,17
+76382p52,Space,0.88,16
+76382p53,Space,1.00,6
+76382p54,Space,1.00,5
+76382p55,Space,1.00,3
+76382p56,Space,1.00,2
+76382p57,Space,1.00,2
+76382p58,Space,1.00,4
+76382p59,Space,1.00,5
+76382p5a,LEGO Ideas and CUUSOO,1.00,1
+76382p5b,LEGO Ideas and CUUSOO,1.00,1
+76382p5c,LEGO Ideas and CUUSOO,1.00,1
+76382p5d,Creator,1.00,1
+76382p5e,Icons,1.00,1
+76382p5f,City,0.83,6
+76382p5g,Space,1.00,6
+76382p5j,Animal Crossing,1.00,1
+76382p5p,Harry Potter,1.00,1
+76382p5q,Monster Fighters,1.00,2
+76382p5r,Monster Fighters,1.00,1
+76382p5t,Monster Fighters,1.00,1
 76382p5v,FIRST LEGO League,1.00,1
+76382p5x,Town,1.00,1
+76382p60,Town,0.80,10
+76382p61,Space,1.00,5
+76382p62,Space,1.00,8
+76382p63,Space,1.00,5
+76382p64,Space,1.00,5
+76382p66,Space,1.00,10
+76382p67,Space,1.00,2
+76382p68,Space,1.00,10
+76382p69,Space,1.00,7
+76382p6a,Space,1.00,2
+76382p6b,Space,0.80,5
+76382p6c,Space,1.00,6
+76382p6e,Space,1.00,12
+76382p6f,Space,1.00,2
+76382p6g,The LEGO Movie,1.00,1
+76382p6h,The LEGO Movie,1.00,1
+76382p6i,City,1.00,1
+76382p6k,Space,1.00,2
+76382p6o,LEGO Ideas and CUUSOO,1.00,1
+76382p6u,Space,1.00,2
+76382p6v,Space,1.00,3
+76382p6w,Space,1.00,5
+76382p6x,Space,1.00,7
+76382p6y,City,1.00,2
 76382p71,Educational and Dacta,1.00,1
 76382p73,Freestyle,1.00,1
 76382p75,Educational and Dacta,1.00,1
+76382p76,Town,0.80,15
+76382p77,Town,0.89,9
 76382p78,Educational and Dacta,1.00,1
+76382p79,Town,1.00,2
+76382p7a,Town,1.00,5
+76382p7b,Town,1.00,7
 76382p7g,Educational and Dacta,1.00,2
 76382p7h,Educational and Dacta,1.00,2
+76382p7o,Town,1.00,2
 76382p7q,Educational and Dacta,1.00,4
+76382p7r,City,1.00,2
 76382p7s,Educational and Dacta,1.00,2
+76382p7u,City,0.84,19
 76382p7v,Educational and Dacta,1.00,4
 76382p7w,Educational and Dacta,1.00,2
 76382p7x,Educational and Dacta,1.00,1
+76382p7y,Seasonal,0.85,13
 76382p7z,Educational and Dacta,1.00,1
+76382p81,Town,1.00,9
+76382p82,Train,0.94,16
+76382p83,Train,1.00,9
+76382p84,Train,1.00,8
+76382p85,Town,0.88,8
+76382p88,Other,1.00,1
+76382p89,Other,1.00,1
+76382p8a,Town,1.00,4
+76382p8b,Town,1.00,8
+76382p8e,Town,0.88,16
+76382p8f,Town,1.00,1
 76382p8g,Educational and Dacta,1.00,1
 76382p8h,Educational and Dacta,1.00,2
+76382p8i,The LEGO Movie,0.88,16
 76382p8j,Educational and Dacta,1.00,1
 76382p8n,Educational and Dacta,1.00,4
 76382p8o,Educational and Dacta,1.00,5
+76382p8p,Town,1.00,3
 76382p8t,Educational and Dacta,1.00,3
 76382p8u,Educational and Dacta,1.00,2
 76382p8v,Educational and Dacta,1.00,1
 76382p8x,Educational and Dacta,1.00,2
+76382p90,Space,0.93,40
+76382p91,The LEGO Movie,0.86,7
+76382p92,City,0.89,9
 76382p94,Educational and Dacta,1.00,1
+76382p95,City,1.00,2
 76382p96,Educational and Dacta,1.00,3
 76382p97,FIRST LEGO League,1.00,2
+76382p9d,Chinese Traditional Festivals,1.00,1
+76382p9g,City,1.00,4
+76382p9i,Super Heroes Marvel,1.00,1
 76382p9j,FIRST LEGO League,1.00,1
 76382p9m,FIRST LEGO League,1.00,1
+76382p9o,City,1.00,17
+76382p9p,City,0.86,22
+76382p9q,City,0.94,17
+76382p9s,City,1.00,4
+76382p9t,City,1.00,8
 76382p9u,Educational and Dacta,1.00,3
 76382p9v,Educational and Dacta,1.00,2
 76382p9x,Educational and Dacta,1.00,1
 76382p9z,FIRST LEGO League,1.00,1
+76382pa1,Adventurers,1.00,17
+76382pa2,Adventurers,1.00,6
+76382pa3,Adventurers,0.89,27
+76382pa4,Adventurers,1.00,3
+76382pa5,Adventurers,1.00,9
+76382pa8,Adventurers,1.00,6
+76382pa9,Indiana Jones,0.87,15
+76382paa,Adventurers,1.00,4
+76382pab,Adventurers,1.00,2
+76382pac,Adventurers,1.00,3
+76382pad,Adventurers,1.00,5
+76382pae,Adventurers,1.00,2
+76382paf,Adventurers,1.00,3
+76382pag,Aquazone,1.00,9
+76382paj,Rock Raiders,1.00,6
+76382pak,Aquazone,1.00,3
+76382paq,Adventurers,1.00,2
+76382par,Power Miners,1.00,2
+76382pas,Power Miners,1.00,3
+76382pat,Power Miners,1.00,8
+76382pau,Power Miners,1.00,7
+76382pav,Power Miners,1.00,4
+76382paw,Legends of Chima,1.00,4
+76382pax,Adventurers,0.80,5
+76382paz,Legends of Chima,1.00,6
+76382pb0,Super Heroes DC,1.00,5
+76382pb3,Super Heroes DC,0.80,5
+76382pb5,Super Heroes DC,1.00,1
+76382pb7,Super Heroes DC,1.00,2
+76382pba,Super Heroes DC,1.00,1
+76382pbb,Super Heroes Marvel,1.00,2
+76382pbd,Super Heroes Marvel,1.00,1
+76382pbe,Super Heroes Marvel,1.00,1
+76382pbf,Super Heroes Marvel,1.00,2
+76382pbg,Super Heroes Marvel,1.00,1
+76382pbh,Super Heroes Marvel,1.00,1
+76382pbj,Super Heroes Marvel,1.00,1
+76382pbk,Gear,1.00,1
+76382pbl,Super Heroes Marvel,1.00,1
+76382pbm,Super Heroes DC,1.00,1
+76382pbn,Super Heroes DC,1.00,1
+76382pbo,Super Heroes DC,1.00,1
+76382pbp,Super Heroes Marvel,1.00,1
+76382pbq,Super Heroes Marvel,1.00,1
+76382pbr,Super Heroes Marvel,1.00,1
+76382pbs,Super Heroes Marvel,1.00,1
+76382pbt,Super Heroes Marvel,1.00,1
+76382pbu,Super Heroes Marvel,1.00,1
+76382pbv,Super Heroes Marvel,0.82,17
+76382pbw,Super Heroes DC,1.00,3
+76382pbx,Super Heroes DC,1.00,1
+76382pby,Super Heroes DC,1.00,1
+76382pbz,Super Heroes DC,1.00,1
+76382pc0,Super Heroes DC,1.00,1
+76382pc1,Super Heroes Marvel,1.00,1
+76382pc11,Collectible Minifigures,1.00,1
+76382pc14,Collectible Minifigures,1.00,1
+76382pc2,Super Heroes Marvel,1.00,1
+76382pc23,Collectible Minifigures,1.00,1
+76382pc25,Collectible Minifigures,1.00,1
+76382pc27,Collectible Minifigures,1.00,1
+76382pc2g,Collectible Minifigures,1.00,1
+76382pc39,Collectible Minifigures,1.00,3
+76382pc3g,Collectible Minifigures,1.00,1
+76382pc42,Collectible Minifigures,1.00,1
+76382pc44,Collectible Minifigures,1.00,1
+76382pc4b,Collectible Minifigures,1.00,1
+76382pc53,Collectible Minifigures,1.00,1
+76382pc5e,Collectible Minifigures,1.00,1
+76382pc6,Super Heroes Marvel,1.00,1
+76382pc67,Collectible Minifigures,1.00,1
+76382pc6a,Collectible Minifigures,1.00,1
+76382pc7c,Collectible Minifigures,1.00,1
+76382pcbd,Collectible Minifigures,1.00,1
+76382pcbf,Collectible Minifigures,1.00,1
 76382pcd,FIRST LEGO League,1.00,1
+76382pcjf,Collectible Minifigures,1.00,1
+76382pcz1,Collectible Minifigures,1.00,1
+76382pd0,Studios,0.91,11
+76382pd1,Studios,1.00,1
+76382pd17,Collectible Minifigures,1.00,1
+76382pd1e,Collectible Minifigures,1.00,1
+76382pd31,Collectible Minifigures,1.00,1
+76382pd99,Collectible Minifigures,1.00,1
+76382pda4,Collectible Minifigures,1.00,1
+76382pdb,Studios,1.00,3
+76382pdb7,Collectible Minifigures,1.00,1
+76382pdb8,Collectible Minifigures,1.00,1
+76382pde1,Collectible Minifigures,1.00,1
+76382pde5,Collectible Minifigures,1.00,1
+76382pde6,Collectible Minifigures,1.00,1
+76382pde7,Collectible Minifigures,1.00,1
+76382pde8,Collectible Minifigures,1.00,1
+76382pdf,Studios,1.00,1
+76382pdg,Studios,1.00,1
+76382pdg1,Collectible Minifigures,1.00,1
+76382pdg2,Collectible Minifigures,1.00,1
+76382pdg3,Collectible Minifigures,1.00,1
+76382pdg4,Collectible Minifigures,1.00,1
+76382pdg5,Collectible Minifigures,1.00,1
+76382pdg7,Collectible Minifigures,1.00,1
+76382pdg9,Collectible Minifigures,1.00,1
+76382pdga,Collectible Minifigures,1.00,1
+76382pdgb,Collectible Minifigures,1.00,1
+76382pdgc,Collectible Minifigures,1.00,1
+76382pf0,Castle,0.91,11
+76382pf1,Castle,0.93,14
+76382pf3,Castle,0.88,8
 76382pf4,Educational and Dacta,1.00,1
+76382pf6,Castle,1.00,4
+76382pf7,Castle,1.00,8
+76382pf8,Castle,1.00,2
+76382pf9,Castle,1.00,3
+76382pfa,Castle,1.00,2
+76382pfc,Castle,1.00,6
+76382pfe,Town,1.00,3
+76382pg0,Sports,1.00,1
+76382pg1,Sports,1.00,1
+76382pg2,Sports,1.00,1
+76382pg3,Sports,1.00,1
+76382pg4,Sports,1.00,1
+76382pg5,Sports,1.00,1
+76382pg6,Sports,1.00,2
+76382pg7,Sports,1.00,1
+76382pg8,Sports,1.00,3
+76382pg9,Sports,1.00,3
+76382pga,Sports,1.00,1
+76382pgb,Sports,1.00,1
+76382pgc,Sports,1.00,1
+76382pgd,Sports,1.00,1
+76382pge,Sports,1.00,1
+76382pgf,Sports,1.00,2
+76382pgg,Sports,1.00,1
+76382pgh,Sports,1.00,2
+76382ph0,Harry Potter,1.00,2
+76382ph1,Harry Potter,1.00,15
+76382ph2,Harry Potter,1.00,8
+76382ph3,Harry Potter,1.00,2
+76382ph4,Harry Potter,1.00,2
+76382ph5,Harry Potter,1.00,2
+76382ph6,Harry Potter,1.00,3
+76382ph7,Harry Potter,1.00,1
+76382ph9,Harry Potter,1.00,1
+76382phb,Harry Potter,1.00,4
+76382phc,Harry Potter,1.00,1
+76382phd,Harry Potter,1.00,1
+76382phe,Harry Potter,1.00,1
+76382phf,Harry Potter,1.00,1
+76382phg,Dimensions,1.00,1
+76382phi,Harry Potter,1.00,1
+76382phj,Harry Potter,1.00,1
+76382phk,Dimensions,1.00,1
+76382phl,Dimensions,1.00,1
+76382pm0,The Hobbit and Lord of the Rings,1.00,5
+76382pm2,The Hobbit and Lord of the Rings,1.00,2
+76382pm5,The Hobbit and Lord of the Rings,1.00,1
+76382pm6,The Hobbit and Lord of the Rings,1.00,1
+76382pm7,The Hobbit and Lord of the Rings,1.00,3
+76382pm8,The Hobbit and Lord of the Rings,1.00,1
+76382pma,The Hobbit and Lord of the Rings,1.00,6
+76382pmb,The Hobbit and Lord of the Rings,1.00,1
+76382pmd,Icons,1.00,1
+76382pn0,Ninja,1.00,5
+76382pn1,Ninja,1.00,7
+76382pn2,Ninjago,1.00,1
+76382pn3,Ninjago,0.86,7
+76382pn5,Ninja,1.00,10
+76382pn6,Ninja,1.00,7
+76382pn7,Ninja,1.00,1
+76382pn8,Ninjago,1.00,3
+76382pn9,Ninjago,0.80,5
+76382pna,Ninjago,1.00,3
+76382pne,Ninjago,0.80,5
+76382pq0,Pharaoh's Quest,0.86,7
+76382pq1,Pharaoh's Quest,1.00,1
+76382pq3,Pharaoh's Quest,1.00,4
+76382pq4,Pharaoh's Quest,1.00,2
+76382pq7,Pharaoh's Quest,1.00,1
+76382pr0,Star Wars,1.00,4
+76382pr2,Star Wars,1.00,3
+76382pr3,Star Wars,1.00,7
+76382pr4,Star Wars,1.00,1
+76382pr6,Star Wars,1.00,5
+76382pr7,Star Wars,1.00,2
+76382pr8,Star Wars,0.88,16
+76382pr9,Star Wars,1.00,2
+76382pra,Star Wars,0.91,11
+76382prc,Star Wars,1.00,1
+76382prd,Star Wars,1.00,3
+76382prf,Star Wars,1.00,2
+76382prg,Star Wars,1.00,4
+76382pri,Star Wars,1.00,2
+76382prj,Star Wars,1.00,2
+76382prk,Gear,1.00,1
+76382prl,Star Wars,1.00,5
+76382prm,Star Wars,1.00,5
+76382prn,Star Wars,0.86,7
+76382pro,Star Wars,1.00,1
+76382pru,Star Wars,1.00,1
+76382prx,Star Wars,1.00,2
+76382pry,Star Wars,1.00,1
+76382prz,Star Wars,1.00,1
+76382ps0,Star Wars,1.00,3
+76382ps1,Star Wars,0.88,16
+76382ps2,Star Wars,1.00,3
+76382ps3,Star Wars,1.00,4
+76382ps4,Star Wars,1.00,1
+76382ps5,Star Wars,1.00,5
+76382ps6,Star Wars,1.00,3
+76382ps7,Star Wars,0.91,11
+76382psa,Star Wars,1.00,4
+76382psb,Star Wars,1.00,3
+76382psc,Star Wars,1.00,1
+76382psd,Star Wars,1.00,2
+76382pse,Star Wars,1.00,3
+76382psf,Star Wars,1.00,1
+76382psg,Star Wars,1.00,1
+76382psh,Star Wars,1.00,1
+76382psi,Star Wars,1.00,4
+76382psj,Star Wars,1.00,1
+76382psl,Star Wars,1.00,1
+76382psm,Star Wars,1.00,1
+76382pso,Star Wars,1.00,1
+76382psq,Star Wars,1.00,1
+76382psr,Star Wars,1.00,6
+76382pst,Star Wars,1.00,1
+76382psu,Star Wars,0.83,18
+76382psv,Star Wars,1.00,1
+76382psw,Star Wars,1.00,2
+76382psx,Star Wars,1.00,3
+76382psy,Star Wars,0.80,5
 76382pt0,Master Builder Academy,1.00,1
+76382pt1,Master Builder Academy,1.00,1
 76382pt2,Educational and Dacta,1.00,3
 76382pt3,Freestyle,1.00,8
+76382pt7,Town,1.00,1
+76382pt9,Time Cruisers,1.00,4
+76382pta,Teenage Mutant Ninja Turtles,0.83,6
+76382ptb,Teenage Mutant Ninja Turtles,1.00,6
+76382ptc,Teenage Mutant Ninja Turtles,1.00,4
+76382ptd,Teenage Mutant Ninja Turtles,1.00,2
+76382pte,Teenage Mutant Ninja Turtles,1.00,1
+76382ptf,Star Wars,1.00,1
+76382ptg,Town,1.00,1
+76382pth,Train,1.00,1
+76382pti,Train,1.00,1
+76382ptk,Town,1.00,2
 76382pu0,Educational and Dacta,1.00,1
+76382pu2,Jurassic World,1.00,2
 76382pu4,FIRST LEGO League,1.00,1
+76382pu5,Creator,1.00,1
+76382pu6,City,0.82,28
+76382pu9,Modular Buildings,1.00,1
 76382pub,Other,1.00,1
 76382pue,FIRST LEGO League,1.00,1
 76382puf,FIRST LEGO League,1.00,2
+76382puh,City,0.88,8
 76382pun,Educational and Dacta,1.00,1
+76382pv0,Icons,1.00,2
+76382pv1,Icons,1.00,1
+76382pv2,Icons,1.00,1
+76382pv3,Icons,1.00,1
+76382pv4,Icons,1.00,1
+76382pw2,Western,1.00,5
+76382pw3,Western,1.00,5
+76382pw4,Western,1.00,5
+76382pw5,Western,1.00,8
+76382pw6,Western,1.00,6
+76382pw7,Western,1.00,6
+76382pw8,Western,1.00,5
+76382pw9,Western,1.00,1
+76382pwa,Western,1.00,1
+76382pwb,Western,0.83,6
+76382pwc,Western,1.00,4
+76382pwd,Western,1.00,4
+76382pwe,Western,0.80,5
+76382pwf,Western,1.00,5
+76382px0,SpongeBob SquarePants,1.00,2
+76382px1,Dimensions,1.00,1
+76382px3,Scooby-Doo,1.00,1
+76382px4,Dimensions,1.00,1
+76382px5,Dimensions,1.00,1
+76382px6,Minecraft,1.00,50
+76382px7,Minecraft,0.97,29
+76382px8,Minecraft,0.97,38
+76382pxa,Dimensions,1.00,1
+76382pxb,Dimensions,1.00,1
+76382pxd,Dimensions,1.00,1
+76382pxe,Jurassic World,0.83,6
+76382pxf,The Powerpuff Girls,1.00,1
+76382pxg,Dimensions,1.00,1
+76382pxm,Minecraft,1.00,1
+76382pxn,Minecraft,1.00,1
+76382pxq,The Powerpuff Girls,1.00,1
+76382pxr,Dimensions,1.00,1
+76382pxs,Dimensions,1.00,1
+76382pxt,Dimensions,1.00,1
+76382pxw,Dimensions,1.00,1
+76382pxx,Dimensions,1.00,1
+76382pxy,Dimensions,1.00,1
+76382pxz,Dimensions,1.00,1
+76382py0,Speed Champions,1.00,1
+76382py1,Speed Champions,1.00,1
+76382py2,Speed Champions,1.00,1
+76382py3,Speed Champions,1.00,3
+76382py5,Speed Champions,1.00,1
+76382py6,Speed Champions,1.00,1
+76382py7,Speed Champions,1.00,1
+76382py8,Speed Champions,1.00,1
+76382py9,Speed Champions,1.00,1
+76382pya,Speed Champions,1.00,1
+76382pyb,Speed Champions,1.00,1
+76382pyc,Speed Champions,1.00,1
+76382pyd,Speed Champions,1.00,1
+76382pyg,Speed Champions,1.00,1
+76382pyh,Speed Champions,1.00,1
+76382pyi,Speed Champions,1.00,1
+76382pyj,Speed Champions,1.00,1
+76382pyk,Speed Champions,1.00,1
+76382pyl,Speed Champions,1.00,2
+76382pyo,Speed Champions,1.00,1
+76382pyq,Dimensions,1.00,1
+76382pyy,Minecraft,1.00,1
+76382pyz,Minecraft,0.89,9
+76382pz4,Town,0.86,7
+76382pz6,Star Wars,1.00,1
+76382pz8,Star Wars,0.86,7
 76407p01,Sports,0.82,39
 7664p01,City,1.00,1
 76796p01,Icons,1.00,1
@@ -4258,6 +5757,7 @@ part_id,theme,share,sets
 80268p01,Technic,1.00,1
 80326p01,Icons,1.00,1
 8038p01,Collectible Minifigures,1.00,1
+80577p03,Seasonal,1.00,1
 80672ap01,Disney,1.00,1
 80672ap02,Disney,1.00,1
 80679p02,City,1.00,1
@@ -4265,6 +5765,7 @@ part_id,theme,share,sets
 80686p02,City,1.00,2
 80686p03,Monkie Kid,1.00,5
 80716p01,Collectible Minifigures,1.00,1
+80834p01,Harry Potter,1.00,1
 809,Legoland,1.00,2
 820671a,Town,1.00,1
 820671b,Town,1.00,1
@@ -4375,11 +5876,28 @@ part_id,theme,share,sets
 825ap02,Legoland,1.00,2
 826ap01,Legoland,1.00,2
 826ap02,Legoland,1.00,2
+84133p01,LEGO Brand Store,0.83,29
+84625,Pirates,0.89,18
+84637bp01,Pirates,0.96,23
+84637bp03,Ninjago,1.00,3
+84637bp04,Disney,1.00,1
+84637bp05,Harry Potter,1.00,1
 84637bp06,Pirates,1.00,1
+84638p36,Pirates,0.93,15
+84638p3a,Pirates,1.00,9
+84638pa7,Adventurers,1.00,14
+84638pak,Aquazone,1.00,5
+84638pay,Adventurers,1.00,9
 84772p01,Icons,1.00,1
+84859p01,Collectible Minifigures,1.00,1
+84860p01,Collectible Minifigures,1.00,1
+84861p01,Collectible Minifigures,1.00,1
+84862p01,Collectible Minifigures,1.00,1
+84863p01,Collectible Minifigures,1.00,1
 85080dy0,Speed Champions,1.00,1
 85080dy1,Speed Champions,1.00,1
 85582p01,Bionicle,0.91,22
+85947p01,Collectible Minifigures,1.00,1
 85959p05,Monster Fighters,1.00,1
 85983p02,Indiana Jones,1.00,1
 85984dyc,Speed Champions,1.00,1
@@ -4480,12 +5998,28 @@ part_id,theme,share,sets
 87552p01,Icons,1.00,1
 87552p02,Icons,1.00,1
 87561p01,Star Wars,1.00,6
+87566p01,Star Wars,1.00,2
+87566p02,Star Wars,1.00,3
+87567p01,Star Wars,1.00,2
+87567p02,Star Wars,1.00,3
 87568p01,Star Wars,1.00,2
 87568p02,Star Wars,1.00,2
+87568p03,Star Wars,1.00,2
+87568p04,Star Wars,1.00,2
+87569p01,Star Wars,1.00,5
+87570p01,Star Wars,1.00,2
+87570p02,Star Wars,1.00,1
 87580p01,Disney,1.00,7
 87606ps1,Star Wars,1.00,1
+87610ps1,Star Wars,1.00,2
+87610ps2,Star Wars,1.00,1
+87610ps4,Star Wars,1.00,1
+87610ps5,Star Wars,1.00,1
+87610ps6,Books,1.00,1
 87610ps7,Star Wars,1.00,1
+87610ps8,Star Wars,0.89,9
 87613p01,City,1.00,1
+87613p02,Cars,1.00,1
 87621p02,The LEGO Movie,1.00,1
 87748p01,Atlantis,1.00,2
 87748p02,Atlantis,1.00,4
@@ -4493,9 +6027,14 @@ part_id,theme,share,sets
 87748p04,Atlantis,1.00,4
 87748p05,Atlantis,1.00,4
 87748p06,Atlantis,1.00,1
+87857pk3,Disney,1.00,2
+87857pk4,Disney,1.00,1
+87990p01,Collectible Minifigures,1.00,1
+87990p02,Teenage Mutant Ninja Turtles,1.00,1
 87997p02,Collectible Minifigures,1.00,1
 87997p03,Collectible Minifigures,1.00,1
 87997p04,Collectible Minifigures,1.00,1
+87998p01,Disney,1.00,1
 88291p01,Disney,1.00,2
 88618p01c01,Disney,1.00,1
 88644p01,City,1.00,6
@@ -4511,6 +6050,11 @@ part_id,theme,share,sets
 88930pz2,Brickheadz,1.00,1
 88930pz3,Brickheadz,1.00,1
 88930pz4,Brickheadz,1.00,2
+89515p01,Collectible Minifigures,1.00,1
+89534p01,Collectible Minifigures,1.00,1
+89646p01,Collectible Minifigures,1.00,1
+89647p01,Collectible Minifigures,1.00,1
+89677p01,Collectible Minifigures,1.00,1
 89679pt0,Technic,1.00,1
 896p01,Legoland,1.00,1
 90370p02,Collectible Minifigures,1.00,1
@@ -4520,8 +6064,11 @@ part_id,theme,share,sets
 90397p04,Collectible Minifigures,1.00,1
 90397p05,Collectible Minifigures,1.00,1
 90398p01,LEGO Ideas and CUUSOO,1.00,3
+90462bpq0,Pharaoh's Quest,1.00,2
 90462bpq1,Pharaoh's Quest,1.00,1
 90462bpq2,Architecture,1.00,2
+90462bpq3,Scooby-Doo,1.00,1
+90462bpq4,Collectible Minifigures,1.00,1
 90498pb0,Super Heroes Marvel,1.00,1
 90498pb1,Super Heroes Marvel,1.00,1
 90498pt0,Technic,1.00,1
@@ -4532,13 +6079,94 @@ part_id,theme,share,sets
 91884p02,Collectible Minifigures,1.00,1
 91884p03,Collectible Minifigures,1.00,1
 91884p04,Collectible Minifigures,1.00,1
+92198p02,Friends,0.85,40
+92198p03,Friends,0.90,10
+92198p04,Friends,0.88,33
+92198p05,Friends,0.90,41
+92198p06,Friends,1.00,1
+92198p07,Friends,0.86,7
+92198p08,Friends,0.81,43
+92198p11,Friends,1.00,1
+92198p13,Elves,1.00,7
+92198p14,Elves,1.00,4
+92198p15,Elves,1.00,6
+92198p16,Elves,1.00,3
+92198p17,Elves,1.00,10
+92240,Disney,1.00,2
+92240p01,Friends,1.00,1
+92240p02,Elves,1.00,4
+92240p03,Elves,1.00,2
+92241p00,Friends,1.00,1
+92241p0b,Friends,1.00,1
+92241p0d,Seasonal,1.00,1
+92241p0e,Friends,1.00,2
+92241p0f,Friends,1.00,2
+92241p0g,Friends,1.00,1
+92241p0h,Friends,1.00,1
+92241p0i,Friends,1.00,3
+92241p0j,Friends,1.00,1
+92241p0k,Friends,1.00,4
+92241p0l,Friends,1.00,3
+92241p0s,Friends,1.00,3
+92241p0y,Friends,1.00,2
+92241p0z,Disney,1.00,2
+92241p10,Friends,0.83,6
+92241p1c,Friends,1.00,2
+92244p15,Friends,1.00,2
+92245p15,Friends,1.00,2
+92253p07,Friends,1.00,8
 92254p01,Friends,1.00,8
+92254p02,Friends,1.00,2
 92262ph1,Harry Potter,1.00,3
 92262py0,Speed Champions,1.00,1
 92263ph1,Harry Potter,1.00,3
 92263py0,Speed Champions,1.00,1
+92456p00,Friends,1.00,1
+92456p01,Friends,1.00,6
+92456p02,Friends,1.00,4
+92456p03,Friends,1.00,2
+92456p04,Friends,1.00,6
+92456p05,Friends,0.83,6
+92456p07,Friends,1.00,1
+92456p08,Wednesday,1.00,1
+92456p0a,Friends,1.00,2
+92456p0b,Friends,1.00,1
+92456p0c,Seasonal,1.00,1
+92456p0d,Seasonal,1.00,1
+92456p0e,Friends,1.00,2
+92456p0f,Friends,1.00,2
+92456p0g,Friends,1.00,1
+92456p0h,Friends,1.00,1
+92456p0i,Friends,1.00,3
+92456p0j,Friends,1.00,1
+92456p0k,Friends,1.00,4
+92456p0l,Friends,1.00,3
+92456p0m,Friends,1.00,2
+92456p0n,Friends,1.00,2
+92456p0o,Friends,1.00,2
+92456p0p,Friends,1.00,1
+92456p0q,Friends,1.00,3
+92456p0s,Friends,1.00,3
 92456p0t,Friends,1.00,1
+92456p0u,Friends,1.00,1
+92456p0v,Friends,1.00,6
+92456p0w,Seasonal,1.00,2
+92456p0x,Seasonal,1.00,1
+92456p0y,Friends,1.00,2
+92456p0z,Disney,1.00,2
+92456p10,Friends,0.83,6
 92456p11,Friends,1.00,1
+92456p12,Friends,1.00,3
+92456p13,Friends,1.00,1
+92456p15,Friends,0.83,6
+92456p16,Friends,0.88,8
+92456p17,Friends,1.00,1
+92456p18,Disney,1.00,1
+92456p19,Friends,0.83,6
+92456p20,Elves,1.00,4
+92456p21,Elves,1.00,3
+92456p22,Elves,1.00,2
+92456p23,Elves,1.00,2
 92593py0,Speed Champions,1.00,1
 925p03,Other,1.00,1
 925p04,Other,1.00,1
@@ -4566,7 +6194,33 @@ part_id,theme,share,sets
 92747p04,Dimensions,1.00,6
 92747p05,Dimensions,1.00,6
 92747p06,Dimensions,1.00,6
+92754p01,Star Wars,1.00,2
+92755p01,Star Wars,1.00,2
+92759p01,Star Wars,1.00,2
+92815p01,Friends,1.00,1
+92816p01,Friends,1.00,1
+92816p02,Friends,1.00,1
+92817p01,Friends,1.00,1
+92817p02,Friends,1.00,2
+92818p01,Friends,0.90,20
+92818p03,Seasonal,1.00,1
+92818p04,Friends,0.92,13
+92818p05,Friends,0.83,12
+92818p06,Friends,1.00,1
+92818p07,Friends,0.88,8
+92818p08,Friends,1.00,4
 92819p01,Friends,1.00,1
+92819p03,Friends,1.00,9
+92819p04,Friends,1.00,2
+92819p05,Friends,1.00,1
+92819p06,Elves,1.00,2
+92820p01,Friends,0.91,11
+92820p02,Seasonal,1.00,3
+92820p03,Friends,1.00,3
+92820p04,Friends,0.88,8
+92820p05,Friends,1.00,7
+92820p06,Friends,1.00,8
+92820p07,Friends,0.88,16
 92950p01,Icons,1.00,1
 93085p01,Disney,1.00,2
 93085p03,Friends,1.00,4
@@ -4583,7 +6237,16 @@ part_id,theme,share,sets
 93221p01,Collectible Minifigures,1.00,2
 93221p04,Collectible Minifigures,1.00,1
 93221p05,Collectible Minifigures,1.00,1
+93230p01,Collectible Minifigures,1.00,2
+93230p02,Collectible Minifigures,1.00,1
+93230p03,Super Heroes DC,1.00,1
+93230p04,Collectible Minifigures,1.00,2
+93230p05,LEGO Ideas and CUUSOO,1.00,1
+93249pq0,Pharaoh's Quest,1.00,3
+93250pq0,Pharaoh's Quest,1.00,3
 93273p01,Icons,1.00,1
+93273pk0,Cars,1.00,1
+93273pk1,Cars,1.00,2
 93273pt0,Icons,1.00,1
 93273pt1,Technic,1.00,1
 93273pt3,Technic,1.00,1
@@ -4593,36 +6256,82 @@ part_id,theme,share,sets
 93273pz3,Brickheadz,1.00,1
 93552p02,Seasonal,1.00,1
 93552p05,Seasonal,1.00,1
+93557p01,Collectible Minifigures,1.00,2
 93564p01,Collectible Minifigures,1.00,1
 93564p02,Collectible Minifigures,1.00,1
 93589p01,Promotional,1.00,1
+93595p02,Cars,1.00,3
+93595p03,Cars,1.00,1
+93598pk0,Cars,1.00,3
+93598pk1,Cars,1.00,2
+93598pk2,Cars,1.00,2
+93604pk0,Cars,1.00,1
 93606dyb,Speed Champions,1.00,1
 93606dyc,Speed Champions,1.00,1
 93606p01,Other,1.00,1
 93606p02,Star Wars,1.00,1
 93606p03,Icons,1.00,1
 93606p04,Icons,1.00,1
+95328p01,Collectible Minifigures,1.00,1
 95330p01,Collectible Minifigures,1.00,2
 95341p01,Castle,1.00,1
 95341p02,Collectible Minifigures,1.00,1
 95342p02,Collectible Minifigures,1.00,1
+95674p01,Collectible Minifigures,1.00,1
 95674p02,Super Heroes DC,1.00,1
 97122,Creator,1.00,1
 973p0k,Books,1.00,1
 973p0n,FIRST LEGO League,1.00,1
+973p0s,Disney,1.00,1
+973p1i,Town,1.00,3
 973p3o,Educational and Dacta,1.00,1
+973p48,Castle,1.00,7
+973p5p,Harry Potter,1.00,1
+973p5q,Monster Fighters,1.00,2
+973p5r,Monster Fighters,1.00,1
+973p5t,Monster Fighters,1.00,1
 973p5v,FIRST LEGO League,1.00,1
+973p6y,City,1.00,2
+973pc11,Collectible Minifigures,1.00,1
 973pcd,FIRST LEGO League,1.00,1
+973pcfd,Collectible Minifigures,1.00,1
+973pdgb,Collectible Minifigures,1.00,1
+973pdgc,Collectible Minifigures,1.00,1
+973pdhh,Collectible Minifigures,1.00,1
+973pfa,Castle,1.00,2
+973psw,Star Wars,1.00,2
 973pt3,Freestyle,1.00,8
+973pta,Teenage Mutant Ninja Turtles,0.83,6
+973ptb,Teenage Mutant Ninja Turtles,1.00,6
+973ptc,Teenage Mutant Ninja Turtles,1.00,4
+973ptd,Teenage Mutant Ninja Turtles,1.00,2
+973pte,Teenage Mutant Ninja Turtles,1.00,1
+973ptf,Star Wars,1.00,1
+973ptk,Town,1.00,2
 973pun,Educational and Dacta,1.00,1
+973pwb,Western,0.83,6
+973pwc,Western,1.00,4
+973pwd,Western,1.00,4
+973pwe,Western,0.80,5
+973pwf,Western,1.00,5
+973py1,Speed Champions,1.00,1
+973py2,Speed Champions,1.00,1
+973py3,Speed Champions,1.00,3
+973py5,Speed Champions,1.00,1
+973py6,Speed Champions,1.00,1
+97457p01,Collectible Minifigures,1.00,1
+97459p01,Collectible Minifigures,1.00,1
 98088p01,Dino,1.00,1
 98088p03,Jurassic World,1.00,1
 98089p01,Dino,1.00,1
 98089p03,Jurassic World,1.00,1
 98089p04,Jurassic World,1.00,1
 98100p01,LEGO Ideas and CUUSOO,1.00,1
+98100ps1,Star Wars,1.00,2
 98100ps2,Star Wars,1.00,3
 98100ps3,Star Wars,1.00,1
+98119p01,Star Wars,1.00,1
+98130p02,Collectible Minifigures,1.00,1
 98130p03,Collectible Minifigures,1.00,1
 98130p04,Ninjago,1.00,1
 98130p05,Ninjago,1.00,1
@@ -4721,6 +6430,7 @@ part_id,theme,share,sets
 98138pb0,Hero Factory,1.00,10
 98138pb1,Super Heroes DC,1.00,2
 98138pb2,DC Super Hero Girls,1.00,3
+98138pb5,Super Heroes Marvel,1.00,1
 98138pb6,Super Heroes DC,1.00,1
 98138pb8,Collectible Minifigures,1.00,1
 98138pb9,Super Heroes DC,1.00,1
@@ -4785,6 +6495,8 @@ part_id,theme,share,sets
 98368p01,Collectible Minifigures,1.00,1
 98372p01,Collectible Minifigures,1.00,1
 98372p02,Minecraft,1.00,1
+98376p01,Collectible Minifigures,1.00,1
+98384p01,Collectible Minifigures,1.00,1
 98386p01,Friends,1.00,3
 98388p02,Friends,1.00,3
 98388p04,Elves,1.00,1
@@ -4792,7 +6504,10 @@ part_id,theme,share,sets
 98568p01,Hero Factory,1.00,1
 98568p03,Hero Factory,1.00,1
 98570p01,Hero Factory,1.00,33
+99131p01,Sonic The Hedgehog,1.00,4
+99243p01,Collectible Minifigures,1.00,1
 99244p01,Promotional,1.00,1
+99244p02,Collectible Minifigures,1.00,1
 u454p02,System,0.80,5
 u572p01,Legoland,1.00,1
 u572p02,Legoland,1.00,1
@@ -4815,7 +6530,10 @@ u9008p03,System,1.00,2
 u9008p04,System,1.00,2
 u9009p01,System,1.00,2
 u9078p01,System,1.00,3
+u9090p01,Collectible Minifigures,1.00,1
 u9119p01,System,1.00,3
+u9209p01,Other,1.00,1
+u9209p01c01,Other,1.00,1
 u9213p01,Fabuland,1.00,4
 u9251p01,Scala,1.00,1
 u9251p02,Scala,1.00,1
