@@ -89,18 +89,10 @@ export interface SpotStatus {
   detail: string | null;
 }
 
-/** A redraw stored, published on `/api/events`. Its slot's sheets are
- *  patched afterwards, announced by a `SheetsEvent`. */
+/** A redraw stored, published on `/api/events` once its tiles are baked. */
 export interface ChangedEvent {
   part: string;
   source: string;
   sha: string;
   build: string;
-}
-
-/** A slot's sheets patched with a redrawn cell: each level's new version. */
-export interface SheetsEvent {
-  part: string;
-  source: string;
-  versions: Record<string, string>;
 }

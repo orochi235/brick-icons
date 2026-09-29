@@ -33,7 +33,7 @@ const SPEED_ROWS: SpeedRow[] = [
 
 /** Stands in for the browser's real one: `test-setup.ts`'s stub never calls
  *  back, so a test that needs a measurement supplies its own and fires it
- *  by hand, the way `CorpusWall.test.tsx` does. */
+ *  by hand. */
 class CapturingResizeObserver {
   static instances: CapturingResizeObserver[] = [];
   cb: ResizeObserverCallback;

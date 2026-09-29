@@ -36,9 +36,9 @@ function colorRows(): ColorRow[] {
 }
 
 /** The wall's view parameters -- every tuning constant that governs layout,
- *  color or feel, and was a literal scattered across `CorpusWall.tsx`,
- *  `palette.ts`, `paint.ts`, `Wall.tsx`, `levels.ts` and `useCells.ts` until
- *  this schema existed. These are view parameters, not the CLI's render
+ *  color or feel, and was a literal scattered across the retired
+ *  `CorpusWall.tsx`, `palette.ts`, `paint.ts`, `Wall.tsx`, `levels.ts` and
+ *  `useCells.ts` until this schema existed. These are view parameters, not the CLI's render
  *  flags -- `lab/src/config/nodes.ts` is a different schema for a different
  *  world and this one never touches it. */
 interface FixedParams {

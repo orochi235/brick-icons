@@ -43,7 +43,7 @@ const drawMark = (ctx: CanvasRenderingContext2D, _mark: string, cx: number, cy: 
                   r: number) => drawSticker(ctx, cx, cy, r);
 export const linkTarget = linkedPart;
 
-/** The corpus wall drawn by pezlie's `WallView`, beside `CorpusWall`. */
+/** The corpus wall, drawn by pezlie's `WallView`. */
 export function BrickWall({ client }: { client: LabClient }) {
   const initial = useMemo(() => openingState(window.location.hash, window.location.search), []);
   // A link is a hand-off: left in the bar, a reload would put back a selection

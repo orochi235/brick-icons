@@ -6077,6 +6077,12 @@ A hand edit between the markers is overwritten — edit the store instead.
 
 ## Traps
 
+- **`tests/test_lab_tally.py` reads git**, so it fails in any tree that is not
+  a real repository: a `git archive` extraction scores 5 failures. Never gate
+  on it from a materialized tree.
+- **`tests/goldens/part-years.csv` is not reproducible**: a tie on the `design`
+  route flipped row `6567` between runs of `scripts/fetch-part-years.py`
+  (seen 2026-09-15, not rechecked since).
 - **A dome's highlight comes from the light, not from a fit.** Two ways of
   placing it were measured against LDView on `4740` and are worse: the
   brightest SAMPLE's own position puts it at radius 0.37 against a true 1.18,
