@@ -42,11 +42,6 @@ default via `shade.FREEFORM_BANDS`). Smooth-region facets that no quadric
 fits are shaded from averaged vertex normals cut into 8 bands. Mike judged the
 trial sheet an improvement but too hacky to merge; do not merge it as is.
 
-Spot rendering: lab reloaded (`npm ci`, `brick-lab install`), worker at
-1666.1e04b70. The sheet masters are baked for every slot (36 masters, on
-keiei from shipped inputs, 13 slots, about 17 min) and installed in
-`out/thumbs`.
-
 Decisions made in conversation, not recorded in code:
 - The per-part render cap is 150s. Printed or large baseplates time out at it
   in every occt slot (2359p03, 2552p01–p06, 309p02, 3811p02, 3811p05,
@@ -64,28 +59,16 @@ Also open: `3811p04-print-boundary-off-by-seam`,
 `3811-front-wall-takes-corner-gradient`,
 `20401-limb-barbs-at-region-join`, `10p01-dot-stud-black-ring-instancing-off`.
 
-## 2026-09-28: spot rendering merged (main a68d64b); worker up on studio
+## 2026-09-29: spot rendering done end to end
 
 The lab's **Redraw** draws on a warm worker on the fleet
-(`brick_icons.spot_worker`, onto service `brick-spot-render`) instead of on
-this Mac or the lazy queue. Design: `docs/superpowers/specs/2026-09-29-spot-render-design.md`;
-launch recipe: DEVELOPING.md, "Spot rendering"; what is left:
-`docs/superpowers/plans/2026-09-29-spot-render.md` (Task 25).
-
-Done: fast-forwarded to main, fleet suite green but for the two known
-failures, worker up on studio answering `1664.a68d64b` (3001 occt drawn in
-11 s cold, 0.7 s warm). Left, all in the main checkout:
-
-1. **Pull and reload the lab.** `git pull`, `(cd lab && npm ci)`,
-   `brick-lab install` (rewrites the agents' PATH to reach onto; `cycle`
-   alone keeps the old plists), then `brick-lab stat` reads
-   `spot render  up at <build>`.
-2. **Write the sheet masters.** Run `scripts/bake-thumbs.py` per slot (the
-   plan's Step 3 has the estimate). Until a slot has its
-   `sheet-<level>.master.png`, every redraw there logs a warning that its
-   sheets were not patched; the drawing and its tiles are stored regardless.
-3. **Check it.** One redraw of 612p01 on `/wall` whose lightbox image and wall
-   tile both change without a reload, with a labeled before/after on the wall.
+(`brick_icons.spot_worker`, onto service `brick-spot-render`, on studio).
+Design: `docs/superpowers/specs/2026-09-29-spot-render-design.md`; launch
+recipe: DEVELOPING.md, "Spot rendering". Every slot has its sheet masters.
+Checked 2026-09-29 headless on `/wall`: redrawing 3001 occt (drawn 09-26)
+swapped the lightbox image 4 s after the click and fetched the new 8 and
+32 px tiles, with no reload, and patched `sheet-32` and its master; the
+labeled sheet is on the wall. 612p01 came back `unchanged`, already current.
 
 ## 2026-09-28: `/corpus` retired; `/wall` is the wall now
 
