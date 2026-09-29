@@ -4113,3 +4113,12 @@ title = "at the 1.4 px default stroke a fill carries a sampled boundary"
 classes = ["arc-loss"]
 filed = "2026-09-28"
 notes = "Lowering the default stroke from 2 to 1.4 px (branch line-weight-1.2) turns test_occt::test_a_fill_boundary_carries_no_sampled_boundary[4070] red: a run of 22 sub-quarter-pixel L segments in a part fill (88 of 135). The same test passes at origin/main 7c270b4, drawn at 2 px. Run on studio, not located on the canvas yet. Per the test's docstring such a run costs line commands and draws nothing; not checked on this render."
+
+[[defect]]
+id = "15068dy6-sticker-painted-over-past-5pct"
+part = "15068dy6"
+engines = ["occt"]
+status = "open"
+title = "5.1% of the sticker is painted over by the slope it is stuck to"
+filed = "2026-09-29"
+notes = "test_occt::test_a_sticker_is_not_clipped_by_the_slope_it_is_stuck_to has failed on main since 6caf2ba (unwrap a decal in its carrier's own frame, shear and all): hidden share 5.13% against a 5% bound, from under 5% at its parent. Bisected from d4c2378, where the test was added and passes. Still failing at HEAD f625326: 5.12% on this machine, and red on studio. Not looked at on the canvas: whether the extra 0.1% is real clipping or the new frame's 0.2 LDU faceting error at the sticker's edge is not known."
