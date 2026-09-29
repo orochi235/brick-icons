@@ -102,8 +102,8 @@ export function PartCardBody({ cell, source, tint = 'status', onOpen, onPart, th
   source: string;
   tint?: TintMode;
   onOpen: (id: string) => void;
-  /** Where a link to another part takes the reader. Without one the ids are
-   *  plain text, which is what `/corpus` gets. */
+  /** Where a link to another part takes the reader. Without one the ids
+   *  render as plain text. */
   onPart?: (id: string) => void;
   /** Drawn through this, so the thumbnail matches a wall drawn through it. */
   thumbFilter?: ImageFilter | null;

@@ -85,7 +85,7 @@ export function EdgeScores({ edges }: { edges: Edges }) {
           {edges.worst.map((w) => (
             <tr key={`${w.source}-${w.part}`}>
               <td>
-                <a href={`/corpus${wallHashString({ source: w.source, part: w.part })}`}>
+                <a href={`/wall${wallHashString({ source: w.source, part: w.part })}`}>
                   {w.part}
                 </a>
               </td>

@@ -672,7 +672,7 @@ it('sends a drawing with the most gaps into the wall on that part and slot', asy
   await shown(container, '.stats-edges-worst');
   const link = container.querySelector('.stats-edges-worst a')!;
   expect(link.getAttribute('href'))
-    .toBe(`/corpus${wallHashString({ source: 'white-occt', part: '99143' })}`);
+    .toBe(`/wall${wallHashString({ source: 'white-occt', part: '99143' })}`);
   expect(container.querySelector('.stats-edges-worst tbody tr')!.textContent)
     .toContain('18.2%');
 });
