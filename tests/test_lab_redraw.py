@@ -269,6 +269,21 @@ def test_a_timeout_is_an_attempt_and_leaves_the_drawing(lab, stub_spot, tmp_path
     assert heard == []
 
 
+def test_an_onto_call_timeout_is_an_attempt_and_leaves_the_drawing(
+        lab, stub_spot, tmp_path):
+    from brick_icons.lab import spot
+    client, heard = lab(stub_spot(error="no reply in 195s",
+                                  error_kind="TimeoutError"))
+    body = _redraw(client)
+    assert (body["state"], body["error"]) == ("failed", "TimeoutError")
+    assert tuple(_one(tmp_path, "SELECT state, secs, error, detail "
+                                "FROM attempts")) == \
+        (None, spot.CALL_TIMEOUT_S, "TimeoutError", "no reply in 195s")
+    assert _one(tmp_path, "SELECT commit_sha FROM runs")[0] == "9.ccccccc"
+    assert (tmp_path / "renders" / "occt" / "3001.svg").read_text() == OLD
+    assert heard == []
+
+
 def test_a_decal_with_nothing_to_draw_is_recorded_as_none(lab, stub_spot, tmp_path):
     reply = spot_protocol.reply(secs=1.0, build="9.ccccccc", state="none")
     client, heard = lab(stub_spot(reply))

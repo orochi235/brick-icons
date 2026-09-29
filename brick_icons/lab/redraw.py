@@ -23,7 +23,7 @@ from typing import Callable
 from .. import db, goldens, spot_protocol, thumbs
 from .. import requests as render_requests
 from .events import Broker
-from .spot import SpotDown, SpotError
+from .spot import CALL_TIMEOUT_S, SpotDown, SpotError
 
 log = logging.getLogger(__name__)
 
@@ -73,8 +73,13 @@ def redraw(part: str, source: str, spot, events: Broker, where: Where,
     except SpotDown as e:
         return {"state": "down", "detail": str(e)}
     except SpotError as e:
-        return {"state": "failed", "error": e.error, "detail": str(e)}
-    # Recorded only now the worker has actually replied: a down service or a
+        if e.error != "TimeoutError":
+            return {"state": "failed", "error": e.error, "detail": str(e)}
+        # onto gave up waiting on the worker: an attempt that ran out of
+        # time, as a worker's own timeout is.
+        reply = spot_protocol.reply(secs=CALL_TIMEOUT_S, build=want,
+                                    error=e.error, detail=str(e))
+    # Recorded only now the worker was actually asked: a down service or a
     # failed roll tried nothing, so nothing was asked for.
     render_requests.add(where.requests_path, part, source, build=want)
     conn = db.connect(where.corpus_db)
