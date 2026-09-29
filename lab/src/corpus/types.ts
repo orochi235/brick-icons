@@ -123,6 +123,10 @@ export interface PartDetail {
     not_applicable?: boolean;
     /** When a redraw of this slot was asked for and has not landed yet. */
     requested_at?: string | null;
+    /** Where a raster render sits on the canvas the drawings are fitted to,
+     *  in that canvas's px (`framing.placement`). Absent for an SVG. */
+    placement?: { canvas: [number, number]; x: number; y: number;
+                  w: number; h: number } | null;
   }[];
   findings: { part_id: string; engine: string;
               /** Absent from an API older than the field. */

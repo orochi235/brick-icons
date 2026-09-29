@@ -26,7 +26,7 @@ from .. import tags
 from .. import thumbs, trace
 from ..config import load_config
 from . import (cache, cells, corpus, decal, defects, diff, findings, flight,
-               goldens_status, ingest, jobs, partindex, reference, review_api,
+               framing, goldens_status, ingest, jobs, partindex, reference, review_api,
                runner, schema, sizes, stats, store)
 from .. import db as corpus_db_module
 from .. import review
@@ -516,8 +516,8 @@ def create_app(root: Path | str = ".",
             # out leaves no render, and its absence read as a part nobody had
             # asked that engine about.
             made = {r["source"]: dict(r) for r in conn.execute(
-                "SELECT source, sha256, made_at FROM renders WHERE part_id = ?",
-                (part_id,))}
+                "SELECT source, sha256, made_at, path FROM renders "
+                "WHERE part_id = ?", (part_id,))}
             tried = cells.slot_attempts(conn, part_id)
             slots = [{"source": source, "sha256": None, "made_at": None,
                       **made.get(source, {}),
@@ -564,9 +564,16 @@ def create_app(root: Path | str = ".",
                                      successor=part["successor"],
                                      predecessors=replaced)
         part["out_of_scope"] = part["category"] in cells.OUT_OF_SCOPE_CATEGORIES
+        cfg = load_config(root=str(app.state.root))
         for slot in slots:
             slot.update(states[slot["source"]])
             slot["requested_at"] = asked.get(slot["source"])
+            path = slot.pop("path", None)
+            if path and Path(path).suffix != ".svg":
+                file = Path(app.state.root) / path
+                if file.is_file():
+                    slot["placement"] = framing.placement(
+                        file, slot["sha256"], cfg.width, cfg.height, cfg.margin)
         return {"part": part, "findings": found, "edges": edges, "runs": runs,
                 "slots": slots, "features": built,
                 "defects": [d for d in defects.load(app.state.defects_path)

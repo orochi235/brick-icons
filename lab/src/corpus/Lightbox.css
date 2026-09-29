@@ -24,7 +24,6 @@
   color: var(--wzl-fg);
   font: 13px/1.5 ui-monospace, monospace;
 }
-.corpus-close { position: absolute; top: 1rem; right: 1rem; }
 /* On the ground the wall draws thumbnails on -- see `thumbGround()` in
  * paint.ts. A render is ink on transparency and this panel is dark. */
 .corpus-big {
@@ -36,6 +35,20 @@
    * different shape in every pane it appears in. */
   object-fit: contain;
   background: var(--corpus-thumb-ground, #ffffff);
+}
+/* A raster slot frames itself, so it is placed where a drawing of the part
+ * would be (`framing.placement`) and cropped to the pane. */
+.corpus-big-placed {
+  display: block;
+  position: relative;
+  overflow: hidden;
+}
+.corpus-big-placed img {
+  position: absolute;
+  left: var(--place-left);
+  top: var(--place-top);
+  width: var(--place-width);
+  height: var(--place-height);
 }
 
 /* A decal is a cut-out: its own shape is the drawing, and everything around it
@@ -122,21 +135,13 @@
 }
 .corpus-slot[data-current='true'] .corpus-big { outline: 2px solid var(--wzl-fg); }
 
-/* .corpus-close sits at right:1rem and is ~34px wide (the theme's 24px
- * control height, 12px of padding each side, plus its "x" glyph) -- 18px of
- * that box falls inside this row's own content column past the panel's 2rem
- * padding. Reserve enough on the right that the years span clears it. */
 .corpus-title-row {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
   gap: 1rem;
-  padding-right: 1.25rem;
 }
-/* Title and year read as one line, so they share a face and a size. Portaled
-   out of `.lk-lab`, so the kit's heading rule never reaches this panel and
-   both fall back to its monospace. 1.5em is the size the title already had;
-   the year comes up to meet it. */
+.corpus-title-row h2 { flex: 1; }
+.corpus-close { align-self: center; }
 .corpus-title-row h2,
 .corpus-years {
   font-family: var(--wzl-font-display);

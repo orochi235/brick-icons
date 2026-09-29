@@ -37,6 +37,28 @@ it('shows the part title and the part as every slot drew it', async () => {
   ]);
 });
 
+it('places a raster slot where a drawing of the part would sit', async () => {
+  // LDView's 212x158 on the 256x170 canvas: 6 px in from top and bottom,
+  // and the canvas itself centered in the square pane.
+  const placed = {
+    ...detail,
+    slots: [{ source: 'reference-gray', sha256: 'feedface0000', made_at: null,
+              placement: { canvas: [256, 170], x: 22, y: 6, w: 212, h: 158 } }],
+  };
+  render(box({ client: { corpusPart: () => Promise.resolve(placed), addDefect } }));
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  const img = screen.getByRole('img', { name: /reference-gray/ });
+  expect(img.closest('.corpus-big-placed')).not.toBeNull();
+  expect(img.style.getPropertyValue('--place-top')).toBe(`${((43 + 6) / 256) * 100}%`);
+  expect(img.style.getPropertyValue('--place-height')).toBe(`${(158 / 256) * 100}%`);
+});
+
+it('puts the close button on the title row', async () => {
+  render(box());
+  expect(screen.getByRole('button', { name: 'Close' })
+    .closest('.corpus-title-row')).not.toBeNull();
+});
+
 // --- the header: title row, id styling, category-as-badge -----------------
 
 it('puts the year range on the title row, not the sub-line', async () => {

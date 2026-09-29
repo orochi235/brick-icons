@@ -35,6 +35,16 @@ function renderSrc(partId: string, slot: Slot, outlineTranslucent: boolean) {
   return `/api/corpus/render/${slot.source}/${partId}.svg?${params}`;
 }
 
+/** A placement as percentages of the square pane, with the drawings' canvas
+ *  centered in it the way `object-fit: contain` centers a drawing. */
+function placementBox(p: NonNullable<Slot['placement']>) {
+  const [w, h] = p.canvas;
+  const side = Math.max(w, h);
+  const pct = (v: number) => `${(v / side) * 100}%`;
+  return { left: pct((side - w) / 2 + p.x), top: pct((side - h) / 2 + p.y),
+           width: pct(p.w), height: pct(p.h) };
+}
+
 /** What a slot with no render has to say for itself: the error that stopped
  *  it and how long it ran, or that nobody has run it. */
 function whyNothing(slot: Slot): string[] {
@@ -283,8 +293,6 @@ export function Lightbox({ partId, source, client, onClose,
     <div className="corpus-lightbox-scrim" role="presentation" onClick={onClose}>
     <div className="corpus-lightbox" role="dialog" aria-modal="true"
          aria-label={`Part ${partId}`} onClick={(e) => e.stopPropagation()}>
-      <button type="button" className="corpus-close" aria-label="Close"
-              ref={closeRef} onClick={onClose}>x</button>
       {/* The frame is up before the fetch is: a dialog that answers a click
           with a loading screen reads as slower than one that opens and fills
           in, and the id is a real heading rather than a placeholder for the
@@ -292,6 +300,8 @@ export function Lightbox({ partId, source, client, onClose,
       <div className="corpus-title-row">
         <h2>{detail?.part.title ?? partId}</h2>
         {years && <span className="corpus-years">{years}</span>}
+        <button type="button" className="corpus-close" aria-label="Close"
+                ref={closeRef} onClick={onClose}>x</button>
       </div>
       {detail && (
         <>
@@ -358,7 +368,18 @@ export function Lightbox({ partId, source, client, onClose,
                   <input type="radio" name="corpus-slot-shown" aria-label={slot.source}
                          className="corpus-slot-radio" checked={slot.source === shown}
                          onChange={() => setShown(slot.source)} />
-                  {slot.sha256 ? (
+                  {slot.sha256 && slot.placement ? (
+                    <span className="corpus-big corpus-big-placed">
+                      <img alt={`${detail.part.id} drawn by ${slot.source}`}
+                           src={renderSrc(detail.part.id, slot, outlineTranslucent)}
+                           ref={(el) => {
+                             if (!el || !slot.placement) return;
+                             for (const [k, v] of Object.entries(placementBox(slot.placement))) {
+                               el.style.setProperty(`--place-${k}`, v);
+                             }
+                           }} />
+                    </span>
+                  ) : slot.sha256 ? (
                     <img className="corpus-big" alt={`${detail.part.id} drawn by ${slot.source}`}
                          src={renderSrc(detail.part.id, slot, outlineTranslucent)} />
                   ) : (
