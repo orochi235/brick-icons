@@ -122,4 +122,25 @@ describe('createClient', () => {
     expect(made[0]!.closed).toBe(true);
     vi.unstubAllGlobals();
   });
+
+  it('keeps one throwing changed listener from starving the rest', () => {
+    const made: FakeEvents[] = [];
+    class FakeEvents {
+      listeners: Record<string, (e: MessageEvent) => void> = {};
+      closed = false;
+      constructor(public url: string) { made.push(this); }
+      addEventListener(kind: string, f: (e: MessageEvent) => void) { this.listeners[kind] = f; }
+      close() { this.closed = true; }
+    }
+    vi.stubGlobal('EventSource', FakeEvents);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const api = createClient({ fetchImpl: stub({}) as unknown as typeof fetch });
+    const heard: unknown[] = [];
+    api.onChanged(() => { throw new Error('boom'); });
+    api.onChanged((e) => heard.push(e));
+    const event = { part: '3001', source: 'occt', sha: 'ab', build: '9.c' };
+    made[0]!.listeners.changed!({ data: JSON.stringify(event) } as MessageEvent);
+    expect(heard).toEqual([event]);
+    vi.unstubAllGlobals();
+  });
 });

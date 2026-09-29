@@ -134,7 +134,15 @@ export function createClient({ base = '', fetchImpl = fetch }: ClientOptions = {
         changedSource = new EventSource(at('/api/events'));
         changedSource.addEventListener('changed', (e) => {
           const event = JSON.parse((e as MessageEvent<string>).data) as ChangedEvent;
-          for (const held of changedListeners) held(event);
+          // A snapshot, so a listener added mid-dispatch waits for the next
+          // event, and one listener throwing does not starve the rest.
+          for (const held of [...changedListeners]) {
+            try {
+              held(event);
+            } catch (err) {
+              console.error('onChanged listener threw', err);
+            }
+          }
         });
       }
       changedListeners.add(listener);
