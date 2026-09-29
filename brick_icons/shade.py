@@ -1636,6 +1636,24 @@ def _stroke_band(strokes, sil, line_px, sil_px, studs=None):
     return safe, ink
 
 
+def _donated_cut(p, W):
+    """The piece `_donate_escaped_spurs` moves: `p`, with the cut it makes
+    inside `W` simplified and `W`'s own boundary kept exact. `p` is cut from
+    `W` along the band and along `opened`'s round joins, and moved as is those
+    become the seam between two fills: a run of sub-pixel L commands under
+    the ink (4070 at 1.4 px). Decided on `p`; only the moved copy is cleaned."""
+    from shapely.geometry import box
+    x0, y0, x1, y1 = p.bounds
+    pad = 4 * DECISION_SIMPLIFY
+    shell = geom2d.difference(box(x0 - pad, y0 - pad, x1 + pad, y1 + pad), W)
+    grown = geom2d.union(p, shell).simplify(DECISION_SIMPLIFY)
+    cut = geom2d.intersection(grown, geom2d.window(W, x0 - pad, y0 - pad,
+                                                    x1 + pad, y1 + pad))
+    import shapely as _sh
+    cut = _sh.set_precision(cut, geom2d.GRID)
+    return cut if not cut.is_empty else p
+
+
 def _donate_escaped_spurs(merged, order, strokes, sil, line_px, sil_px,
                           studs=None, crumb=RESIDUE_CRUMB):
     """Reassign fill spurs whose seam escapes the drawn strokes.
@@ -1764,6 +1782,7 @@ def _donate_escaped_spurs(merged, order, strokes, sil, line_px, sil_px,
                         near(merged[best], p.bounds).buffer(0.1))
                     if stray.length > 0.05 * esc_open.length:
                         continue
+                p = _donated_cut(p, W)
                 merged[r] = geom2d.difference(merged[r], p)
                 merged[best] = geom2d.union(merged[best], p)
                 bnds[best] = merged[best].bounds
