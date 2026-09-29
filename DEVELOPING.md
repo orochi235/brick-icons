@@ -84,6 +84,57 @@ hand on another port.
 parameter the lab knows and the CLI does not is a bug by construction, and
 `tests/test_lab_schema.py` fails on it.
 
+## Spot rendering
+
+The lab's **Redraw** button draws on one warm worker on the fleet,
+`brick_icons.spot_worker`, run by onto as the service `brick-spot-render`.
+Nothing renders on this Mac. The lab calls it through `onto call`
+(`brick_icons/lab/spot.py`), stores what comes back, patches the part's cell
+into the slot's sheets, and tells open pages over `GET /api/events`.
+
+It draws origin/main: every redraw passes origin/main's sha as
+`onto call --commit`, and onto rolls the worker to it first if it is on
+another. Unpushed work cannot be spot rendered; use the CLI for that.
+
+The worker has its own tree, `brick-icons-spot`, so it never holds the
+`brick-icons` tree that census and fill jobs sync into. Give a node that tree
+once: sync it, then clone the provisioned tree's environment and parts
+library into it (APFS clones, no extra space). A roll keeps both, since git
+ignores them.
+
+    onto sync --in brick-icons-spot studio
+    ssh studio 'cd .config/onto/work && cp -cR brick-icons/.venv brick-icons-spot/ \
+      && mkdir -p brick-icons-spot/vendor && cp -cR brick-icons/vendor/ldraw brick-icons-spot/vendor/'
+
+A node with no provisioned `brick-icons` tree gets one first with
+`scripts/provision-node.sh <node>`.
+
+Start it. studio is tried first, then any node holding the tree; never this
+Mac:
+
+    onto service up brick-spot-render --in brick-icons-spot --prefer studio \
+      -- scripts/spot-worker.sh
+
+`scripts/spot-worker.sh` refuses a tree without `vendor/ldraw`, runs
+`uv sync`, then starts the worker, and onto runs it again after every roll.
+Check it:
+
+    onto call brick-spot-render '{"ping": true}'    # {"id": ..., "pong": true, "build": ...}
+    brick-lab stat                                  # spot render  up at <build>
+
+Run both with the Bash sandbox disabled, or onto reports every node offline.
+`onto service ls` lists the service and refreshes this Mac's record of where
+it runs; `onto service down brick-spot-render` stops it. `BRICK_SPOT_POOL`
+sets how many redraws draw at once (default 2); each is capped at
+`batch.RENDER_TIMEOUT_S`.
+
+A redraw keeps a lossless master of each sheet beside its WebP
+(`out/thumbs/<slot>/sheet-<level>.master.png`, about 35 MB a slot, overwritten
+in place) so that patching one cell does not re-encode every other one.
+`scripts/bake-thumbs.py` writes them. A slot baked before them refuses a
+patch until it is baked again; the drawing is still stored, and the lab's log
+says so.
+
 ## The corpus database
 
 `corpus.db` holds `parts`, `renders` (one row per part per source slot),
