@@ -1,5 +1,5 @@
-import type { Artifact, JobState, LabConfig, LdrawColor, PartHit, RenderResult,
-  SchemaField } from '@lab/api/types';
+import type { Artifact, ChangedEvent, JobState, LabConfig, LdrawColor, PartHit,
+  RedrawAnswer, RenderResult, SchemaField, SpotStatus } from '@lab/api/types';
 import type { Footprint, Stats } from '@lab/stats/types';
 import type { CellsBody, PartDetail, SheetManifest } from '@lab/corpus/types';
 import type { IngestAttempts, IngestRun } from '@lab/ingest/types';
@@ -108,12 +108,25 @@ export function createClient({ base = '', fetchImpl = fetch }: ClientOptions = {
                   post('', {}));
     },
 
-    /** Ask for a part to be drawn again in one slot. A cheap slot draws now,
-     *  as a job; anything slower is queued for the slot's next fleet round. */
-    async redraw(part: string, source: string) {
-      return json<{ local: boolean; job?: string; requested_at?: string;
-                    secs: number | null }>(
+    /** Draw a part again in one slot, on the fleet's spot worker. */
+    async redraw(part: string, source: string): Promise<RedrawAnswer> {
+      return json<RedrawAnswer>(
         fetchImpl, at('/api/corpus/redraw'), post('/api/corpus/redraw', { part, source }));
+    },
+
+    async spotStatus(): Promise<SpotStatus> {
+      return json<SpotStatus>(fetchImpl, at('/api/spot'));
+    },
+
+    /** Every stored redraw, as it lands. Returns the unsubscribe. Prefer
+     *  `useChanged`, which batches them. */
+    onChanged(listener: (event: ChangedEvent) => void): () => void {
+      if (typeof EventSource === 'undefined') return () => {};
+      const events = new EventSource(at('/api/events'));
+      events.addEventListener('changed', (e) => {
+        listener(JSON.parse((e as MessageEvent<string>).data) as ChangedEvent);
+      });
+      return () => events.close();
     },
 
     async reference(part: string, angle: string, partColor?: string) {
