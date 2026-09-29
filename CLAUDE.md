@@ -168,6 +168,11 @@ is fine. Run `onto status` once outside the sandbox before believing any of it.
 Blender appear against a node that has never launched them. It says nothing
 about load; `ssh <node> uptime` does.
 
+**A census holds the node's `brick-icons` tree**, and `onto test` answers `409 working
+tree is busy`. `-in <other>` gets a fresh tree with no `vendor/ldraw`, and its sync reset
+deletes one placed there beforehand: every part-loading test then fails `FileNotFoundError`.
+Link `vendor/ldraw` to the node's main copy *after* setup, run pytest there, delete the tree.
+
 Two more traps. The agent's PATH is not your shell's, so pass `--env PATH=...`
 covering everything the job shells out to — a missing `resvg` fails every part
 in about a second, silently. And check the deadline `onto run` prints: the agent
