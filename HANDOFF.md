@@ -53,7 +53,7 @@ Decisions made in conversation, not recorded in code:
 - /corpus is retired; /wall is the wall.
 - The reference slots are orthographic (-FOV=0.1) and stay out of the review
   queue.
-- Pezlie is taken from npm (^0.4.0); weasel is pinned exactly at 1.7.0.
+- Pezlie is taken from npm (^0.4.1); weasel is pinned exactly at 1.7.0.
 - Any repeated, loaded or long run goes to the fleet, never this Mac: that
   includes subagents' verification (briefs must name the node).
 
