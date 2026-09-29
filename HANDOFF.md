@@ -34,8 +34,11 @@ Still open:
   only for printed parts (137 of 728 design matches are printed). After the
   merge, `.venv/bin/python scripts/fetch-part-years.py`.
 - render-caption: about 14 one-off A/B scripts still post bare panels.
-- Then the full suite on the fleet, fast-forward main, and ONE combined
-  redraw of the occt slots, re-priced from post-merge timings.
+- Fleet suite on this branch (studio): 1830 passed, 3 failed -- 4070 above,
+  the known `test_a_sticker_is_not_clipped_by_the_slope_it_is_stuck_to`, and
+  a thin-wall test that paired strokes by position (fixed, 4e5b0b5). Once
+  the verdicts are in: re-freeze the goldens, fast-forward main, and ONE
+  combined redraw of the occt slots, re-priced from post-merge timings.
 
 **Parked: freeform tone bands** (branch `sphere-tone-bands`, 7f73eae, off by
 default via `shade.FREEFORM_BANDS`). Smooth-region facets that no quadric
