@@ -1,3 +1,51 @@
+## 2026-09-29: branches waiting to merge, and the decisions behind them
+
+Spot rendering is merged and the `brick-spot-render` worker is up on studio
+(see the spot entry below for the post-pull steps: `git pull`,
+`(cd lab && npm ci)`, `brick-lab install` (not `cycle`, since the agents' PATH
+changed), `brick-lab stat`, then `scripts/bake-thumbs.py` per slot to write
+the sheet masters, estimated at half a core-hour with inputs only on this
+Mac).
+
+Local branches, each finished and reviewed, NOT merged. List any with
+`git branch --no-merged origin/main`.
+
+| branch | what | open before merging |
+|---|---|---|
+| `review-orphans` | /review no longer hides entries superseded by a nonexistent entry; a re-read of the held file changes nothing | its new test in tests/test_review.py calls `render_requests.pending`, which spot rendering deleted; adapt it at merge |
+| `readme-cli` | README examples use `brick-icons` | none |
+| `line-weight-1.2` | default line and silhouette weight 1.4 (occt, white-occt, translucent-occt), occt-svelte 1.0, goldens re-frozen; `record_render` replaces a part's row across a changed config key (added without being asked; revert that hunk of af1fd58 to undo) | `test_a_fill_boundary_carries_no_sampled_boundary[4070]` fails at 1.4 (filed `4070-sampled-fill-boundary-at-1.4px`): xfail or fix is undecided. At 1.0 the stud ceiling (0.5 px) sits below the 0.75 line floor, so look at svelte's stud rings before filling it |
+| `edge-stud-band` | 30225bp1's back-wall band: paint-order witness now checked against the exact polygons | goldens moved that nobody predicted and need a verdict (3649 better, 3941p01 slightly worse, 6589 unclear, 3942bp01 neutral, plus naive 3942bp01/3941p01/3673); sheets on the wall. A pair the raster misses entirely still gets no ordering (not filed) |
+| `thin-wall-shade` | rule D: a thin wall along the silhouette takes the top tone, with its crease at the stud weight | none; shares the 10a/3857 back-wall sliver with edge-stud-band |
+| `deco-shade` | printed surfaces shade via a black-opacity layer (`--deco-shade on`, default) | textual conflict with edge-stud-band in shade.fill_ops |
+| `sphere-shading` | declared-smooth regions fit a cone/cylinder, sphere or ellipsoid; 51283 is one radial gradient with an arc outline; `scripts/count-smooth-regions.py` | conflicts in shade.py with deco-shade, thin-wall-shade and edge-stud-band. Undecided: build freeform tone bands for the regions no quadric fits (the count found freeform regions in most hair, animals and figures) |
+| `part-years` | fig-only parts dated via inventory_minifigs; `c\d\d` assemblies fall back to their base | undecided: `BORROWED_YEAR_ROUTES` in brick_icons/lab/cells.py hides every design-route year, including 29272's; hide it only for printed parts? After merging, run `.venv/bin/python scripts/fetch-part-years.py` |
+| `render-caption` | review images carry "part · size · time" in a strip; production is byte-identical | about 14 one-off A/B scripts still post bare panels (listed in that branch's HANDOFF) |
+
+Merge order suggestion: readme-cli, part-years, render-caption, review-orphans
+(adapt the test), line-weight-1.2, then the shade.py group (edge-stud-band,
+thin-wall-shade, deco-shade, sphere-shading), resolving conflicts by reading
+both sides, then the full suite on the fleet, then ONE combined redraw of the
+occt slots (the line-weight estimate was a floor of about 250 core-hours;
+re-price it from post-merge timings first).
+
+Decisions made in conversation, not recorded in code:
+- The per-part render cap is 150s. Printed or large baseplates time out at it
+  in every occt slot (2359p03, 2552p01–p06, 309p02, 3811p02, 3811p05,
+  4186p01, 51542dq0, 6024p02, 6136p01); four of them drew under the old 300s
+  in 121–231s. Undecided: raise the cap for these slots, or profile why
+  instancing doesn't speed printed baseplates.
+- /corpus is retired; /wall is the wall.
+- The reference slots are orthographic (-FOV=0.1) and stay out of the review
+  queue.
+- Pezlie is taken from npm (^0.4.0); weasel is pinned exactly at 1.7.0.
+- Any repeated, loaded or long run goes to the fleet, never this Mac: that
+  includes subagents' verification (briefs must name the node).
+
+Also open: `3811p04-print-boundary-off-by-seam`,
+`3811-front-wall-takes-corner-gradient`,
+`20401-limb-barbs-at-region-join`, `10p01-dot-stud-black-ring-instancing-off`.
+
 ## 2026-09-28: spot rendering merged (main a68d64b); worker up on studio
 
 The lab's **Redraw** draws on a warm worker on the fleet
