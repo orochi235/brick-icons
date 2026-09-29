@@ -108,3 +108,40 @@ def test_an_unknown_verb_is_an_error(home):
     got = run(SCRIPT, "frobnicate", env)
     assert got.returncode == 1
     assert "no such command: frobnicate" in got.stderr
+
+
+def test_the_agents_find_onto_where_install_links_brick_lab(home):
+    tmp_path, env = home
+    assert run(SCRIPT, "plists", env).returncode == 0
+    path = agent(tmp_path, API)["EnvironmentVariables"]["PATH"].split(":")
+    assert path[1] == str(tmp_path / "bin")
+
+
+def _curl(tmp_path, body):
+    curl = tmp_path / "nodebin" / "curl"
+    curl.write_text(body)
+    curl.chmod(0o755)
+
+
+def _spot_line(stdout):
+    (line,) = [l for l in stdout.splitlines() if l.startswith("spot render")]
+    return line
+
+
+def test_stat_reports_the_spot_worker(home):
+    tmp_path, env = home
+    _curl(tmp_path, "#!/bin/sh\n"
+                    "case \"$*\" in\n"
+                    "  */api/spot/status.txt*) printf 'up at 9.ccccccc' ;;\n"
+                    "  *) printf '200' ;;\n"
+                    "esac\n")
+    got = run(SCRIPT, "stat", env)
+    assert got.returncode == 0, got.stderr
+    assert _spot_line(got.stdout).endswith("up at 9.ccccccc")
+
+
+def test_stat_says_so_when_the_api_cannot_be_asked(home):
+    tmp_path, env = home
+    _curl(tmp_path, "#!/bin/sh\nexit 7\n")
+    got = run(SCRIPT, "stat", env)
+    assert _spot_line(got.stdout).endswith("unknown: the api did not answer")

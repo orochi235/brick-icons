@@ -47,7 +47,7 @@ $3
 	<key>EnvironmentVariables</key>
 	<dict>
 		<key>PATH</key>
-		<string>$nodedir:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+		<string>$nodedir:$bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
 	</dict>
 	<key>RunAtLoad</key>
 	<true/>
@@ -63,7 +63,8 @@ PLIST
 }
 
 write() {
-  # launchd starts with almost no PATH, and vite is a node shebang.
+  # launchd starts with almost no PATH: vite is a node shebang, and the API
+  # calls onto, which lives beside brick-lab in $bin.
   node=$(command -v node) || {
     echo "brick-lab: node is not on PATH, and vite needs it" >&2
     exit 1
@@ -115,6 +116,11 @@ answers() { # url
   echo "$code"
 }
 
+spot() { # the spot render worker, as the API sees it
+  line=$(curl -s -m 8 "http://127.0.0.1:$api_port/api/spot/status.txt") || line=
+  echo "${line:-unknown: the api did not answer}"
+}
+
 case "${1:-stat}" in
   install)
     if linked; then
@@ -150,6 +156,7 @@ case "${1:-stat}" in
     done
     printf '%-45s %s\n' 'api answers' "$(answers "http://127.0.0.1:$api_port/api/health")"
     printf '%-45s %s\n' 'front answers' "$(answers "http://localhost:$front_port/")"
+    printf '%-45s %s\n' 'spot render' "$(spot)"
     ;;
   *) echo "brick-lab: no such command: $1" >&2; exit 1 ;;
 esac
