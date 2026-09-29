@@ -1177,6 +1177,89 @@ SPUR_COVER_MARGIN = 0.5
 DECISION_SIMPLIFY = 0.05
 
 
+# A side wall narrower than this many line weights that runs along the
+# silhouette sits between its crease stroke and the silhouette stroke with
+# almost no fill showing, and its side tone only thickens that pair into one
+# heavy line (a baseplate's 4 LDU edge at label scale). Such a wall takes the
+# top's tone instead, and its crease drops to the stud tier (the StudTier
+# fill_ops was given; a part with no tier keeps its crease at full weight),
+# or the crease alone still reads as the heavy line. Width is
+# 2*area/perimeter -- a strip's height. 0 = off.
+THIN_WALL_WEIGHTS = 2.0
+THIN_WALL_CREASE = True
+# pieces this close are one band: abutting fills share an edge exactly
+BAND_JOIN = 0.05
+
+
+def _side_toned(f, style):
+    """Whether a face paints a side tone: body color, and a sideways plane
+    or a curved wall (axial ramp, tone band) rather than the top."""
+    if f.get("color", 16) != 16 or "grad_radial" in f:
+        return False
+    if "grad_axis" in f or f.get("flat_b") is not None:
+        return True
+    nv = f.get("normal")
+    return nv is not None and style.tone(nv) != style.top
+
+
+def _thin_side_walls(merged, members, ordered, sil, line_px, studs, style):
+    """Split each side-toned surface's thin pieces along the silhouette (see
+    THIN_WALL_WEIGHTS) into their own element keyed ("thin", root). Returns
+    the new keys; fill_ops paints them in the top's tone.
+
+    Thinness is judged on the whole band of side-toned pieces a piece
+    belongs to, not on the piece: a wall is often several elements (flat
+    runs and the rounded corners between them), and a short corner piece
+    reads thin by 2*area/perimeter on its own however tall the wall is."""
+    thin = []
+    if (THIN_WALL_WEIGHTS <= 0 or getattr(style, "top", None) is None
+            or sil is None or sil.is_empty):
+        return thin
+    # the outline only: a hole in the region can be a gap in the faces, and a
+    # print's holes showing body through it are not an edge (3941p01's dots)
+    from shapely.geometry import MultiLineString
+    edge = MultiLineString([p.exterior for p in getattr(sil, "geoms", [sil])
+                            if p.geom_type == "Polygon"])
+    cands, pieces = [], {}                      # (root, piece, line weight)
+    for r in list(merged):
+        if not all(_side_toned(ordered[j], style) for j in members[r]):
+            continue
+        g = merged[r]
+        pieces[r] = list(getattr(g, "geoms", [g]))
+        for p in pieces[r]:
+            if p.geom_type != "Polygon" or p.length == 0:
+                continue
+            lp = process.local_px(p, line_px, studs)
+            if p.distance(edge) < 0.5 * lp:
+                cands.append((r, p, lp))
+    if not cands:
+        return thin
+    bands = geom2d.union_all([p.buffer(BAND_JOIN) for _r, p, _lp in cands])
+    take = defaultdict(list)
+    for band in getattr(bands, "geoms", [bands]):
+        ins = [(r, p, lp) for r, p, lp in cands if band.intersects(p)]
+        u = geom2d.union_all([p for _r, p, _lp in ins])
+        lp = min(w for _r, _p, w in ins)
+        # along the silhouette, not merely touching it: a strip's long side
+        # is about half its perimeter, and a groove wall meets it at an end
+        if (2 * u.area / u.length < THIN_WALL_WEIGHTS * lp
+                and u.boundary.intersection(edge.buffer(0.5 * lp)).length
+                >= 0.25 * u.length):
+            for r, p, _lp in ins:
+                take[r].append(p)
+    for r in [r for r in merged if r in take]:
+        keep = [p for p in pieces[r] if not any(p is t for t in take[r])]
+        k = ("thin", r)
+        merged[k] = geom2d.union_all(take[r])
+        members[k] = members[r]
+        if keep:
+            merged[r] = geom2d.union_all(keep)
+        else:
+            del merged[r]
+        thin.append(k)
+    return thin
+
+
 def _merge_members(ordered, frags):
     """Merge keying for emitted fill elements: facet-group id, else identity.
     FLAT tri faces additionally union by carrier plane — subpart tilings abut
@@ -1856,8 +1939,12 @@ def face_fill(face, style, ldraw_dir):
 def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
              refits=None, loops=None, strokes=None, line_px=2.0,
              sil_px=2.0, drop=None, weld_corners=False, ldraw_dir="vendor/ldraw",
-             studs=None, crumb=RESIDUE_CRUMB):
+             studs=None, crumb=RESIDUE_CRUMB, sil_walls=True):
     """Fill ops with exact visible-fragment clipping and per-surface merging.
+
+    sil_walls: whether this drawing's own silhouette is the part's, so a thin
+    side wall along it takes the top's tone (THIN_WALL_WEIGHTS). A lone
+    instanced stud's outline is not.
 
     clip=False keeps every face whole (no occlusion subtraction) for
     translucent rendering; paint order is still farthest-first so nearer
@@ -1978,6 +2065,15 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
             ks = members[r]
             merged[r] = frags[ks[0]] if len(ks) == 1 else \
                 geom2d.union_all([frags[j] for j in ks])
+    silR = _contour_region(geoms, arcs) if clip and geoms else None
+    # before cleanup: donation and absorption then see the thin wall as the
+    # element it paints as, and the band its crease's new weight. A list, not
+    # a set: its keys hold strings, and set order follows the hash seed.
+    thin = _thin_side_walls(merged, members, ordered, silR, line_px, studs,
+                            style) if clip and sil_walls and strokes else []
+    if thin and studs is not None and THIN_WALL_CREASE:
+        studs.set_creases(geom2d.union_all(
+            [merged[k].buffer(0.5 * line_px) for k in thin]))
     if clip and loops is not None and len(loops):
         f_, ox_, oy_ = fit if fit is not None else (1.0, 0.0, 0.0)
         _loop_cut_merged(merged, [np.stack([p[:, 0] * f_ + ox_,
@@ -1986,7 +2082,6 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
     pockets = []
     if clip and strokes and merged:
         order = {r: min(ks) for r, ks in members.items() if r in merged}
-        silR = _contour_region(geoms, arcs) if geoms else None
         _donate_escaped_spurs(merged, order, strokes, silR, line_px, sil_px,
                               studs, crumb)
         vis = geom2d.union_all(list(merged.values()))
@@ -2055,81 +2150,87 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
         f = ordered[idx]
         ks = members[roots[idx]]
         emitted.update(ks)
-        geom = merged[roots[idx]]
-        if drop is not None:
-            # silhouette spur trim: fills follow the trimmed outline so no
-            # unstroked tone pokes past it (see silhouette_spur_trim)
-            geom = geom2d.difference(geom, drop)
-            if geom.is_empty:
+        for key in (roots[idx], ("thin", roots[idx])):
+            if key not in merged:
                 continue
-        if clip and f.get("color", 16) == 16:
-            # crumb cull (see RESIDUE_CRUMB): per-piece, so thin TIPS of a
-            # wide-bodied piece are untouched. Decoration is exempt for the
-            # reason given in _residue_trims — and its holes doubly so, a
-            # glyph counter being thinner than the self-stroke on any tile
-            # small enough to read as a label.
-            from shapely.geometry import Polygon as _Poly
-            er = crumb
-            core = surface_core.get(f.get("surface"))
-            pieces = []
-            for p in getattr(geom, "geoms", [geom]):
-                if p.geom_type != "Polygon":
+            geom = merged[key]
+            if drop is not None:
+                # silhouette spur trim: fills follow the trimmed outline so no
+                # unstroked tone pokes past it (see silhouette_spur_trim)
+                geom = geom2d.difference(geom, drop)
+                if geom.is_empty:
                     continue
-                # a slice of a sliced surface is judged by the surface: each
-                # is a pixel or two wide, and clipped by a nearer fill every
-                # one of them is a crumb on its own (98397's bend lost a
-                # crescent that way)
-                if p.buffer(-er).is_empty and (
-                        core is None or not p.buffer(er + 0.05).intersects(core)):
+            if clip and f.get("color", 16) == 16:
+                # crumb cull (see RESIDUE_CRUMB): per-piece, so thin TIPS of a
+                # wide-bodied piece are untouched. Decoration is exempt for the
+                # reason given in _residue_trims — and its holes doubly so, a
+                # glyph counter being thinner than the self-stroke on any tile
+                # small enough to read as a label.
+                from shapely.geometry import Polygon as _Poly
+                er = crumb
+                core = surface_core.get(f.get("surface"))
+                pieces = []
+                for p in getattr(geom, "geoms", [geom]):
+                    if p.geom_type != "Polygon":
+                        continue
+                    # a slice of a sliced surface is judged by the surface: each
+                    # is a pixel or two wide, and clipped by a nearer fill every
+                    # one of them is a crumb on its own (98397's bend lost a
+                    # crescent that way)
+                    if p.buffer(-er).is_empty and (
+                            core is None or not p.buffer(er + 0.05).intersects(core)):
+                        continue
+                    # hole counterpart of the crumb cull: a hole thinner than
+                    # the 0.8px self-stroke can never render as a hole, but its
+                    # ring's self-stroke paints a hairline of this fill's tone
+                    # across the ink (3941's axle-cross bowties) — dissolve it
+                    holes = [h for h in p.interiors
+                             if not _Poly(h).buffer(-er).is_empty]
+                    if len(holes) != len(p.interiors):
+                        p = _Poly(p.exterior, holes)
+                    pieces.append(p)
+                if not pieces:
                     continue
-                # hole counterpart of the crumb cull: a hole thinner than
-                # the 0.8px self-stroke can never render as a hole, but its
-                # ring's self-stroke paints a hairline of this fill's tone
-                # across the ink (3941's axle-cross bowties) — dissolve it
-                holes = [h for h in p.interiors
-                         if not _Poly(h).buffer(-er).is_empty]
-                if len(holes) != len(p.interiors):
-                    p = _Poly(p.exterior, holes)
-                pieces.append(p)
-            if not pieces:
+                geom = pieces[0] if len(pieces) == 1 else geom2d.union_all(pieces)
+            d = geom2d.path_d(geom, arcs, min_area=MIN_FRAG_AREA)
+            if not d:
                 continue
-            geom = pieces[0] if len(pieces) == 1 else geom2d.union_all(pieces)
-        d = geom2d.path_d(geom, arcs, min_area=MIN_FRAG_AREA)
-        if not d:
-            continue
-        # decoration is ink on a surface, not relief, so it takes no shading
-        # ramp — and the gradient branches never consulted the LDraw color,
-        # which is why a printed cylinder or cone painted in body tone
-        deco = f.get("color", 16) != 16
-        flat = getattr(style, "flat", False)
-        if "grad_radial" in f and not deco and not flat:
-            g = f["grad_radial"]
-            stops, (fx, fy) = _radial_focal_stops(
-                f["grad_samples"], style, exact=f.get("grad_exact", False))
-            flat_color = _one_color(stops)
-            if flat_color is not None:
-                ops.append({"d": d, "fill": flat_color, "depth": f["depth"]})
+            # decoration is ink on a surface, not relief, so it takes no shading
+            # ramp — and the gradient branches never consulted the LDraw color,
+            # which is why a printed cylinder or cone painted in body tone
+            deco = f.get("color", 16) != 16
+            flat = getattr(style, "flat", False)
+            if key in thin:
+                ops.append({"d": d, "fill": style.top, "depth": f["depth"],
+                            "thin_wall": True})
+            elif "grad_radial" in f and not deco and not flat:
+                g = f["grad_radial"]
+                stops, (fx, fy) = _radial_focal_stops(
+                    f["grad_samples"], style, exact=f.get("grad_exact", False))
+                flat_color = _one_color(stops)
+                if flat_color is not None:
+                    ops.append({"d": d, "fill": flat_color, "depth": f["depth"]})
+                else:
+                    ops.append({"d": d, "depth": f["depth"],
+                                "gradient": {"type": "radial", "cx": g["cx"], "cy": g["cy"],
+                                             "r": g["r"], "ratio": g["ratio"],
+                                             "fx": fx, "fy": fy, "stops": stops}})
+            elif "grad_axis" in f and not deco and not flat:
+                p0, p1 = f["grad_axis"]
+                stops = _axis_binned_stops(f["grad_samples"], style)
+                flat_color = _one_color(stops)
+                if flat_color is not None:
+                    ops.append({"d": d, "fill": flat_color, "depth": f["depth"]})
+                else:
+                    ops.append({"d": d, "depth": f["depth"],
+                                "gradient": {"x1": p0[0], "y1": p0[1],
+                                             "x2": p1[0], "y2": p1[1], "stops": stops}})
             else:
-                ops.append({"d": d, "depth": f["depth"],
-                            "gradient": {"type": "radial", "cx": g["cx"], "cy": g["cy"],
-                                         "r": g["r"], "ratio": g["ratio"],
-                                         "fx": fx, "fy": fy, "stops": stops}})
-        elif "grad_axis" in f and not deco and not flat:
-            p0, p1 = f["grad_axis"]
-            stops = _axis_binned_stops(f["grad_samples"], style)
-            flat_color = _one_color(stops)
-            if flat_color is not None:
-                ops.append({"d": d, "fill": flat_color, "depth": f["depth"]})
-            else:
-                ops.append({"d": d, "depth": f["depth"],
-                            "gradient": {"x1": p0[0], "y1": p0[1],
-                                         "x2": p1[0], "y2": p1[1], "stops": stops}})
-        else:
-            op = {"d": d, "fill": face_fill(f, style, ldraw_dir), "depth": f["depth"]}
-            if deco:
-                op["deco"] = True
-            ops.append(op)
-        ops[-1]["seam"] = process.seam_px(geom, line_px, studs)
+                op = {"d": d, "fill": face_fill(f, style, ldraw_dir), "depth": f["depth"]}
+                if deco:
+                    op["deco"] = True
+                ops.append(op)
+            ops[-1]["seam"] = process.seam_px(geom, line_px, studs)
     # junction-lens pockets paint LAST (over every surface fill, under the
     # strokes): solid ink where converging strokes trap a sliver of tone
     for g in pockets:

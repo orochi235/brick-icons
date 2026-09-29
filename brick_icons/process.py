@@ -87,17 +87,25 @@ class StudTier:
     """The lighter stroke studs draw at: `px` wide, for every op lying wholly
     inside `zone`, the union of the studs' projected footprints (same space
     as the ops). A stud is what the part DECLARED as one -- geometry under a
-    `p/stud*.dat` reference -- never a circle of the right size."""
+    `p/stud*.dat` reference -- never a circle of the right size.
+
+    `creases` is a second region the tier covers for non-silhouette ops only:
+    the creases along thin side walls, set by shade.fill_ops when it finds
+    them (see shade.THIN_WALL_WEIGHTS). It never counts as a stud footprint."""
 
     def __init__(self, zone, px):
         import shapely
         self.zone, self.px = zone, px
+        self.creases = None
         shapely.prepare(zone)
 
     def covers(self, op):
         import shapely
         xy = np.asarray(op_points(op, 5), float)
-        return bool(shapely.contains_xy(self.zone, xy[:, 0], xy[:, 1]).all())
+        if shapely.contains_xy(self.zone, xy[:, 0], xy[:, 1]).all():
+            return True
+        return (self.creases is not None and op[-1] != "sil" and
+                bool(shapely.contains_xy(self.creases, xy[:, 0], xy[:, 1]).all()))
 
     def px_at(self, geom, default):
         """The stroke width drawn around `geom`: the stud tier when it lies
@@ -109,8 +117,16 @@ class StudTier:
 
     def scaled(self, k):
         from shapely import affinity
-        return StudTier(affinity.scale(self.zone, k, k, origin=(0, 0)),
-                        self.px * k)
+        t = StudTier(affinity.scale(self.zone, k, k, origin=(0, 0)),
+                     self.px * k)
+        if self.creases is not None:
+            t.set_creases(affinity.scale(self.creases, k, k, origin=(0, 0)))
+        return t
+
+    def set_creases(self, region):
+        import shapely
+        self.creases = region
+        shapely.prepare(region)
 
 
 def local_px(geom, line_px, studs=None):

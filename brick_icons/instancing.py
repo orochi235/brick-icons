@@ -616,7 +616,7 @@ class Instancer:
                 proj=lone.proj, fit=fit, refits=lone.refits, loops=lone.loops,
                 strokes=self.strokes(ref, k), line_px=stud_px, sil_px=stud_px,
                 weld_corners=weld_corners, ldraw_dir=self.ldraw_dir,
-                crumb=crumb)
+                crumb=crumb, sil_walls=False)
 
     def clip(self, v, k, kx, ky, pad):
         """A cut stud's clip, canvas px: its footprint grown by `pad` (its
