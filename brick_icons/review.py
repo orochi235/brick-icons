@@ -176,6 +176,11 @@ def _unreviewed(source: str) -> bool:
     return db.is_reference_slot(source)
 
 
+def kept_path(source: str, part: str, sha: str, suffix: str) -> Path:
+    """Where `keep_before` puts the drawing with this sha, relative to root."""
+    return BEFORE_DIR / source / f"{part}.{sha[:8]}{suffix}"
+
+
 def keep_before(root: Path | str, source: str, part: str, path: Path | str,
                 sha: str) -> str | None:
     """Copy the displaced file to its sha-named place; the path relative to
@@ -186,7 +191,7 @@ def keep_before(root: Path | str, source: str, part: str, path: Path | str,
     src = Path(root) / path
     if not src.is_file():
         return None
-    dest = Path(root) / BEFORE_DIR / source / f"{part}.{sha[:8]}{src.suffix}"
+    dest = Path(root) / kept_path(source, part, sha, src.suffix)
     if not dest.exists():
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(src, dest)
@@ -294,6 +299,14 @@ def record_dropped(conn: sqlite3.Connection, log: Path | str, eid: str, *,
     return line
 
 
+def kept_after(row) -> str:
+    """Where the after side's copy lands if a later `store_render` writes
+    over it -- which it does whether or not that redraw is logged, so an entry
+    whose slot moved to the same pixels still has its own drawing."""
+    return str(kept_path(row["source"], row["part_id"], row["after_sha"],
+                         Path(row["after_path"]).suffix))
+
+
 def side_files(root: Path | str, row) -> tuple[Path, Path] | None:
     """The two files a row names, inside root, or None when either is gone.
     The kept copy first: the displaced path may have been written over."""
@@ -306,7 +319,7 @@ def side_files(root: Path | str, row) -> tuple[Path, Path] | None:
         return path if base in path.parents and path.is_file() else None
 
     before = inside(row["before_kept"]) or inside(row["before_path"])
-    after = inside(row["after_path"])
+    after = inside(kept_after(row)) or inside(row["after_path"])
     return (before, after) if before and after else None
 
 

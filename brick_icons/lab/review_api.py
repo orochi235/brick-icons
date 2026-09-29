@@ -126,14 +126,21 @@ def entry(conn: sqlite3.Connection, row: sqlite3.Row, records: list[dict],
     # is when the displacement was recorded, which a backfill makes today.
     after_made = (held["made_at"] if held and held["sha256"] == row["after_sha"]
                   else row["at"])
+    # Superseded only by an entry that exists. The slot's sha also moves with
+    # no line at all -- a same-pixels redraw is indexed unlogged -- and an id
+    # made up from it hid the entry from the queue behind nothing.
     superseded = None
     if held is not None and held["sha256"] != row["after_sha"]:
         later = conn.execute(
             "SELECT id FROM review WHERE part_id = ? AND source = ? "
             "AND before_sha = ? ORDER BY at DESC LIMIT 1",
             (part, source, row["after_sha"])).fetchone()
-        superseded = later["id"] if later else review.entry_id(
-            source, part, held["sha256"])
+        if later:
+            superseded = later["id"]
+        else:
+            cand = review.entry_id(source, part, held["sha256"])
+            superseded = cand if conn.execute(
+                "SELECT 1 FROM review WHERE id = ?", (cand,)).fetchone() else None
     diffed = ({"components": row["diff_components"],
                "pixels": row["diff_pixels"], "width": row["diff_width"],
                "at": row["diff_at"]}
@@ -165,7 +172,8 @@ def entry(conn: sqlite3.Connection, row: sqlite3.Row, records: list[dict],
         "after": {"path": row["after_path"], "sha256": row["after_sha"],
                   "made_at": after_made, "run_id": row["run_id"],
                   **_measurement(conn, row["run_id"], part, source),
-                  **({"content": _content(root, row["after_path"])}
+                  **({"content": _content(root, review.kept_after(row),
+                                          row["after_path"])}
                      if content else {}),
                   "edge": _edge(conn, part, source, row["after_sha"])},
         "diff": diffed,

@@ -392,3 +392,42 @@ def test_an_outline_that_moves_a_sliver_is_logged_though_it_makes_no_component(c
     db.record_render(conn, "3001", "occt", _draw(tmp_path, "out/b", "3001", moved),
                      root=tmp_path)
     assert [l["kind"] for l in review.load(tmp_path / review.DEFAULT_PATH)] == ["replaced"]
+
+
+def _flush_review():
+    import importlib.util
+    from pathlib import Path
+    path = Path(__file__).resolve().parent.parent / "scripts" / "flush-review.py"
+    spec = importlib.util.spec_from_file_location("flush_review", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_the_reaper_spares_a_kept_copy_an_entry_shows_as_its_after(conn, tmp_path):
+    """A store redraw keeps the file it writes over; the entry that file was
+    the after of is served from that copy, so it is referenced."""
+    db.store_render(conn, "3001", "occt", _draw(tmp_path, "out/a", "3001", SVG),
+                    root=tmp_path)
+    db.store_render(conn, "3001", "occt", _draw(tmp_path, "out/b", "3001", SVG2),
+                    root=tmp_path)
+    row = conn.execute("SELECT * FROM review").fetchone()
+    kept = tmp_path / review.kept_path("occt", "3001", row["after_sha"], ".svg")
+    kept.parent.mkdir(parents=True, exist_ok=True)
+    kept.write_text(SVG2)
+    assert _flush_review().unreferenced(conn, tmp_path) == []
+
+
+def test_re_reading_the_file_a_slot_holds_changes_nothing(conn, tmp_path):
+    """A watch relaunched with --overwrite over a finished tree re-records
+    every file in it. The row keeps its stamp and its run, so the slot does
+    not read as redrawn."""
+    run1 = db.start_run(conn, "census", {"dir": "out/a"}, "aaa")
+    svg = _draw(tmp_path, "out/a", "3001", SVG)
+    db.record_render(conn, "3001", "occt", svg, root=tmp_path, run_id=run1)
+    conn.execute("UPDATE renders SET made_at = '2026-01-01T00:00:00+00:00'")
+    conn.commit()
+    run2 = db.start_run(conn, "census", {"dir": "out/a", "watch": True}, "bbb")
+    db.record_render(conn, "3001", "occt", svg, root=tmp_path, run_id=run2)
+    row = conn.execute("SELECT made_at, run_id FROM renders").fetchone()
+    assert (row["made_at"], row["run_id"]) == ("2026-01-01T00:00:00+00:00", run1)
