@@ -5,9 +5,11 @@ Every outcome is a `state` the lightbox reads: stored, unchanged, none,
 failed or down. An ask the lab refuses before calling is the route's
 business, not this module's.
 
-A stored drawing is announced as `changed` before its sheets are touched:
-re-encoding a slot's sheets takes seconds, and the drawing, its tiles and the
-wall's cell poll do not wait on them. `sheets` follows once they are patched.
+A stored drawing's tiles are baked before it is announced as `changed`: the
+wall fetches them under the new sha as soon as it hears, and would cache a
+404 or the old tile under that key otherwise. Its cell on the slot's sheets
+is patched off the request thread, since re-encoding them takes seconds, and
+`sheets` follows once they are.
 """
 from __future__ import annotations
 
@@ -85,11 +87,12 @@ def redraw(part: str, source: str, spot, events: Broker, where: Where,
     finally:
         conn.close()
     if answer["state"] == "stored":
+        _bake_tiles(part, source, dest, answer["sha"], where)
         events.publish("changed", {"part": part, "source": source,
                                    "sha": answer["sha"],
                                    "build": reply["build"]})
-        patches.submit(source, lambda: _patch_wall(part, source, dest,
-                                                   answer["sha"], events, where))
+        patches.submit(source, lambda: _patch_sheets(part, source, events,
+                                                     where))
     return answer
 
 
@@ -131,12 +134,26 @@ def _take(conn, run_id: int, part: str, source: str, reply: dict,
     return {"state": "stored", "sha": sha, **said}, dest
 
 
-def _patch_wall(part: str, source: str, dest: Path, sha: str,
-                events: Broker, where: Where) -> None:
-    """The part's tiles, then its cell on the slot's sheets and their masks,
-    then `sheets`. A failure is a warning: the drawing is stored, and the
-    next full bake draws the sheets from the store."""
+def _bake_tiles(part: str, source: str, dest: Path, sha: str,
+                where: Where) -> None:
+    """The part's tiles and masks. A failure is a warning: the drawing is
+    stored, and the next bake draws its tiles from the store."""
+    try:
+        thumbs.bake_part(part, dest, where.thumbs_root / source, sha)
+    except Exception as e:                              # noqa: BLE001
+        log.warning("%s in %s is stored, but its tiles were not baked "
+                    "(%s: %s); the next bake repairs them",
+                    part, source, type(e).__name__, e)
+
+
+def _patch_sheets(part: str, source: str, events: Broker,
+                  where: Where) -> None:
+    """The part's cell on the slot's sheets, then on their masks, then
+    `sheets` for whichever of them changed. A failure is a warning: the
+    drawing is stored, and the next full bake draws the sheets from the
+    store."""
     slot = where.thumbs_root / source
+    versions = {}
     try:
         conn = db.connect(where.corpus_db)
         try:
@@ -145,7 +162,6 @@ def _patch_wall(part: str, source: str, dest: Path, sha: str,
             count = conn.execute("SELECT count(*) FROM parts").fetchone()[0]
         finally:
             conn.close()
-        thumbs.bake_part(part, dest, slot, sha)
         versions = thumbs.patch_cell(slot, part, index, count)
         masks = slot / thumbs.MASK_DIR
         if thumbs.has_sheets(masks):
@@ -154,7 +170,7 @@ def _patch_wall(part: str, source: str, dest: Path, sha: str,
         log.warning("%s in %s is stored, but its sheets were not patched "
                     "(%s: %s); the next bake repairs them",
                     part, source, type(e).__name__, e)
-        return
-    events.publish("sheets", {"part": part, "source": source,
-                              "versions": {str(level): v
-                                           for level, v in versions.items()}})
+    if versions:
+        events.publish("sheets", {"part": part, "source": source,
+                                  "versions": {str(level): v
+                                               for level, v in versions.items()}})

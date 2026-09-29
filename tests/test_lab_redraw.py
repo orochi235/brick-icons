@@ -137,15 +137,21 @@ def test_the_change_is_announced_before_the_sheets_are_patched(
     assert [kind for kind, _ in heard] == ["changed", "sheets"]
 
 
-def test_the_sheet_patch_runs_off_the_request_thread(lab, stub_spot, monkeypatch):
+def test_the_tiles_are_baked_on_the_request_thread_and_the_sheet_patch_off_it(
+        lab, stub_spot, monkeypatch):
     client, _ = lab(stub_spot(_drawn()), sheets=True)
-    threads = []
-    real = thumbs.bake_part
+    baked_on, patched_on = [], []
+    real_bake, real_patch = thumbs.bake_part, thumbs.patch_cell
 
-    def seen(*args, **kwargs):
-        threads.append(threading.current_thread())
-        return real(*args, **kwargs)
-    monkeypatch.setattr(thumbs, "bake_part", seen)
+    def bake(*args, **kwargs):
+        baked_on.append(threading.current_thread())
+        return real_bake(*args, **kwargs)
+
+    def patch(*args, **kwargs):
+        patched_on.append(threading.current_thread())
+        return real_patch(*args, **kwargs)
+    monkeypatch.setattr(thumbs, "bake_part", bake)
+    monkeypatch.setattr(thumbs, "patch_cell", patch)
     asked_on = []
     real_redraw = lab_app.redraw_mod.redraw
 
@@ -155,8 +161,64 @@ def test_the_sheet_patch_runs_off_the_request_thread(lab, stub_spot, monkeypatch
     monkeypatch.setattr(lab_app.redraw_mod, "redraw", noting)
     _redraw(client)
     client.settle()
-    (patched_on,), (route_on,) = threads, asked_on
-    assert patched_on is not route_on
+    (route_on,) = asked_on
+    assert baked_on == [route_on]
+    assert patched_on and all(t is not route_on for t in patched_on)
+
+
+def test_the_tiles_hold_the_new_drawing_when_the_change_is_heard(
+        lab, stub_spot, tmp_path):
+    ref = tmp_path / "ref"
+    new_svg = tmp_path / "new.svg"
+    new_svg.write_text(NEW)
+    thumbs.bake_part("3001", new_svg, ref, sha="ref")
+    client, _ = lab(stub_spot(_drawn()), sheets=True)
+    slot = tmp_path / "thumbs" / "occt"
+    seen = {}
+
+    def look(kind, data):
+        if kind == "changed":
+            seen.update({level: (slot / str(level) / f"3001.{thumbs.THUMB_EXT}")
+                         .read_bytes() for level in thumbs.LEVELS})
+    client.app.state.events.subscribe(look)
+    _redraw(client)
+    client.settle()
+    assert seen == {level: (ref / str(level) / f"3001.{thumbs.THUMB_EXT}")
+                    .read_bytes() for level in thumbs.LEVELS}
+
+
+def test_a_failed_tile_bake_is_logged_and_still_announced(
+        lab, stub_spot, monkeypatch, tmp_path, caplog):
+    def boom(*args, **kwargs):
+        raise RuntimeError("resvg missing")
+    client, heard = lab(stub_spot(_drawn()), sheets=True)
+    monkeypatch.setattr(thumbs, "bake_part", boom)
+    with caplog.at_level(logging.WARNING):
+        body = _redraw(client)
+        client.settle()
+    assert body["state"] == "stored"
+    assert (tmp_path / "renders" / "occt" / "3001.svg").read_text() == NEW
+    assert "resvg missing" in caplog.text
+    assert [kind for kind, _ in heard][0] == "changed"
+
+
+def test_a_failed_mask_patch_still_announces_the_patched_sheets(
+        lab, stub_spot, monkeypatch, caplog):
+    real = thumbs.patch_cell
+
+    def masks_fail(out, *args, **kwargs):
+        if out.name == thumbs.MASK_DIR:
+            raise ValueError("mask sheet refused")
+        return real(out, *args, **kwargs)
+    client, heard = lab(stub_spot(_drawn()), sheets=True)
+    monkeypatch.setattr(thumbs, "patch_cell", masks_fail)
+    monkeypatch.setattr(thumbs, "has_sheets", lambda out: True)
+    with caplog.at_level(logging.WARNING):
+        _redraw(client)
+        client.settle()
+    assert "mask sheet refused" in caplog.text
+    assert [kind for kind, _ in heard] == ["changed", "sheets"]
+    assert set(heard[1][1]["versions"]) == {"8", "32"}
 
 
 def test_the_wall_s_delta_carries_the_new_sha(lab, stub_spot):
