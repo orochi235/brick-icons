@@ -5,12 +5,18 @@ third column is always the diff -- `after` faded toward white with every
 changed pixel painted DIFF_COLOR and the changed-component count under the
 row label -- because two panels that look alike hide a one-stroke change
 and two that differ leave the reader hunting for where.
+
+A column header says what varies (`before` / `after`); a panel passed as a
+`caption.Shot` also carries part, file size and render time in a strip
+under it (brick_icons.caption), and the diff panel gets an empty strip so
+the row stays level.
 """
 from __future__ import annotations
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
+from brick_icons import caption
 from brick_icons.lab import diff as _diff
 
 # The panel is `brick_icons.lab.diff`'s, not a second one held in step with it
@@ -43,13 +49,19 @@ def diff_panel(before, after):
 
 
 def sheet(title, rows, columns=("before", "after"), out=None):
-    """rows: [(label, before, after)] -> the sheet image (saved to `out`)."""
+    """rows: [(label, before, after)] -> the sheet image (saved to `out`).
+    `before` and `after` are images or `caption.Shot`s."""
     font = ImageFont.load_default(size=16)
     small = ImageFont.load_default(size=13)
     panels = []
     for label, b, a in rows:
-        d, n, px = diff_panel(b, a)
-        panels.append((label, (n, px), [b, a, d]))
+        bi, ai = _image(b), _image(a)
+        d, n, px = diff_panel(bi, ai)
+        ims = [bi, ai, d]
+        if isinstance(b, caption.Shot) or isinstance(a, caption.Shot):
+            ims = [caption.pad(im, _text(s))
+                   for im, s in zip(ims, (b, a, None))]
+        panels.append((label, (n, px), ims))
     W = max(im.width for _l, _n, ims in panels for im in ims)
     gutter, top, left = 12, 56, 130
     heights = [max(im.height for im in ims) for _l, _n, ims in panels]
@@ -72,3 +84,11 @@ def sheet(title, rows, columns=("before", "after"), out=None):
     if out is not None:
         img.save(out)
     return img
+
+
+def _image(panel):
+    return panel.image if isinstance(panel, caption.Shot) else panel
+
+
+def _text(panel) -> str:
+    return panel.text if isinstance(panel, caption.Shot) else ""

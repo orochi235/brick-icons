@@ -568,7 +568,6 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
                     physical=None, s=None, line_mm=0.2, sil_mm=0.2,
                     fills=None, bg: str = "none", opacity: float = 1.0,
                     solid_deco: bool = False, clip_geom=None, contour=None, contour_arcs=None,
-                    label: str | None = None,
                     debug_colors: bool = False, studs=None,
                     between=None, hide=None, spare=None) -> Path:
     """The SVG drawing: fills, then `between` (instancing's placed studs),
@@ -669,15 +668,6 @@ def segments_to_svg(segs, w, h, out_path, line_px=2, sil_px=2,
         _colorize_studs(parts, *placed, mode,
                         _colorize(parts, stroke_g, mode))
     parts.append("</g>")
-    if label:
-        # render tag in fixed small print, tucked into the bottom-left corner:
-        # absolute size (1.2 mm physical, 4.8 canvas px otherwise), deliberately
-        # NOT scaled to the part — identification aid for review renders
-        fs = 1.2 / 0.4 * s if physical is not None else 4.8
-        pad = fs * 0.15
-        parts.append(f'<text x="{pad:.2f}" y="{h - pad:.2f}" '
-                     f'font-family="monospace" font-size="{fs:.2f}" '
-                     f'fill="black">{label}</text>')
     parts.append("</svg>")
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)

@@ -1,8 +1,8 @@
 #!/bin/sh
 # Render the census parts list (parts.txt) as labeled SVGs and montage them
-# into a single contact-sheet PNG for eyeball review. Each cell carries the
-# part id in small print (--part-label) so artifacts can be traced back to a
-# part without counting grid cells.
+# into a single contact-sheet PNG for eyeball review. Each cell carries a
+# caption (--part-label: part id, file size, render seconds) so artifacts can
+# be traced back to a part without counting grid cells.
 #
 # The lab's contact-sheet instrument does this interactively, with clickable
 # cells: python -m brick_icons.lab. This script remains the headless path.

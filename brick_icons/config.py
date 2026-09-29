@@ -71,7 +71,7 @@ DEFAULTS = {
     "weld_corners": False,   # broad junction weld: ink the notch at EVERY
                              # stroke T-graze, not just stub-bridged
                              # junctions (restyles stud/limb corners)
-    "part_label": False,     # stamp the part id in small print (test renders)
+    "part_label": False,     # caption review renders (brick_icons.caption)
     "debug_colors": False,   # False | "cycle" | "ramp" | "ramp=N" -- one
                              # color per drawn element, in emission order
     "fmt": "png",            # png | svg | both

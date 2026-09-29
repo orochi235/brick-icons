@@ -21,6 +21,7 @@ import argparse
 import os
 import subprocess
 import sys
+import time
 import tomllib
 from pathlib import Path
 
@@ -29,14 +30,14 @@ from PIL import Image, ImageDraw, ImageFont
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from brick_icons import db  # noqa: E402
+from brick_icons import caption, db  # noqa: E402
 
 DEFECTS = ROOT / "tests" / "goldens" / "defects.toml"
 REFERENCE = ROOT / "renders" / "reference"
 PANEL = 300
 PAD = 10
 LABEL_W = 260
-ROW_H = PANEL + 2 * PAD
+ROW_H = PANEL + 2 * PAD + caption.strip_height(caption.glyph_px(PANEL))
 
 
 def _font(size: int):
@@ -63,8 +64,10 @@ def worktree(rev: str, under: Path) -> Path:
     return wt
 
 
-def draw_part(part: str, source: str, into: Path, tree: Path | None = None) -> Path | None:
-    """Draw `part` in `source`'s canonical config, and rasterize it.
+def draw_part(part: str, source: str, into: Path, tree: Path | None = None
+              ) -> tuple[Path | None, str]:
+    """Draw `part` in `source`'s canonical config and rasterize it:
+    (the raster, its caption -- the drawing's size and the CLI's seconds).
 
     Each (part, source) gets its own directory. Sharing one meant the glob
     below took whichever slot had drawn the part first, and a sheet titled
@@ -78,18 +81,21 @@ def draw_part(part: str, source: str, into: Path, tree: Path | None = None) -> P
         argv += ["--format", "svg"]
     cwd = tree or ROOT
     env = {**os.environ, "PYTHONPATH": str(cwd)}
+    t0 = time.perf_counter()
     r = subprocess.run([str(ROOT / ".venv/bin/python"), "-m", "brick_icons.cli",
                         part, *argv, "--out", str(into)],
                        capture_output=True, text=True, cwd=cwd, env=env)
+    secs = time.perf_counter() - t0
     if r.returncode != 0:
-        return None
+        return None, caption.line(part, None, secs)
     svgs = sorted(into.glob(f"{part}.*svg"))
     if not svgs:
-        return None
+        return None, caption.line(part, None, secs)
+    text = caption.line(part, svgs[0].stat().st_size, secs)
     png = svgs[0].with_suffix(".sheet.png")
     subprocess.run(["resvg", "-w", str(PANEL * 2), str(svgs[0]), str(png)],
                    capture_output=True)
-    return png if png.exists() else None
+    return (png if png.exists() else None), text
 
 
 def _fit(path: Path | None) -> Image.Image:
@@ -155,16 +161,20 @@ def main(argv=None) -> int:
                fill="#888", font=f_small)
 
         ref = next(iter(REFERENCE.glob(f"{r['part']}.webp")), None)
-        panels = [("reference", _fit(ref))]
+        ref_text = caption.line(
+            r["part"], ref.stat().st_size if ref else None,
+            caption.stored_secs(r["part"], "reference", ref,
+                                ROOT / db.DEFAULT_PATH) if ref else None)
+        panels = [("reference", _fit(ref), ref_text)]
         if a.before:
             wt = worktree(a.before, a.tmp)
-            panels.append((f"before — {a.before}",
-                           _fit(draw_part(r["part"], source, a.tmp / "old", wt))))
-        panels.append((f"after — {source} at {head}",
-                       _fit(draw_part(r["part"], source, a.tmp))))
-        for k, (name, im) in enumerate(panels):
+            png, text = draw_part(r["part"], source, a.tmp / "old", wt)
+            panels.append((f"before — {a.before}", _fit(png), text))
+        png, text = draw_part(r["part"], source, a.tmp)
+        panels.append((f"after — {source} at {head}", _fit(png), text))
+        for k, (name, im, text) in enumerate(panels):
             x = LABEL_W + k * (PANEL + PAD)
-            sheet.paste(im, (x, y + PAD))
+            sheet.paste(caption.pad(im, text), (x, y + PAD))
             d.rectangle([x, y + PAD, x + PANEL, y + PAD + PANEL], outline="#ccc")
             d.text((x + 4, y + PAD + PANEL - 16), name, fill="#333", font=f_small)
         d.line([(0, y), (sheet.width, y)], fill="#ddd")

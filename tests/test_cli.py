@@ -39,20 +39,35 @@ def test_mono_size(tmp_path, monkeypatch):
     assert Image.open(tmp_path / "3001.mono.png").size == (120, 80)
 
 
-def test_part_label_stamped_on_outputs(tmp_path):
+def test_part_label_captions_every_output_below_the_drawing(tmp_path):
     if not Path("vendor/ldraw/parts").exists():
         pytest.skip("LDraw library absent")
-    cli.main(["3005", "--shading", "outline", "--format", "both",
-              "--mode", "gray", "--part-label", "--out", str(tmp_path)])
-    svg = (tmp_path / "3005.svg").read_text()
+    bare, labeled = tmp_path / "bare", tmp_path / "labeled"
+    argv = ["3005", "--shading", "outline", "--format", "both", "--mode", "gray"]
+    cli.main([*argv, "--out", str(bare)])
+    cli.main([*argv, "--part-label", "--out", str(labeled)])
     from brick_icons.config import DEFAULTS
-    assert f">3005  {DEFAULTS['engine']}  iso  outline</text>" in svg
-    # PNG: stamped corner differs from a blank corner (default font raster)
-    g = np.asarray(Image.open(tmp_path / "3005.gray.png").convert("L"))
-    assert (g[-14:, :40] < 128).any()               # dark label pixels bottom-left
-    cli.main(["3005", "--shading", "outline", "--format", "svg",
-              "--out", str(tmp_path / "bare")])
-    assert "<text" not in (tmp_path / "bare" / "3005.svg").read_text()
+    svg = (labeled / "3005.svg").read_text()
+    size = (bare / "3005.svg").stat().st_size / 1024
+    caption = re.search(r">(3005  [^<]*)</text>", svg).group(1)
+    assert caption.startswith(f"3005  {DEFAULTS['engine']}  iso  outline · ")
+    assert f"{size:6.1f} KB · " in caption and caption.endswith(" s")
+    assert "<text" not in (bare / "3005.svg").read_text()
+    # PNG: the drawing is untouched and the caption sits in a strip below it
+    g0 = np.asarray(Image.open(bare / "3005.gray.png").convert("L"))
+    g1 = np.asarray(Image.open(labeled / "3005.gray.png").convert("L"))
+    assert g1.shape[0] > g0.shape[0]
+    assert (g1[:g0.shape[0], :g0.shape[1]] == g0).all()
+    assert (g1[g0.shape[0]:] < 128).any()
+
+
+def test_a_production_render_never_reaches_the_caption(tmp_path, monkeypatch):
+    if not Path("vendor/ldraw/parts").exists():
+        pytest.skip("LDraw library absent")
+    from brick_icons import db
+    monkeypatch.setattr(cli.caption, "stamp_file", lambda *a: 1 / 0)
+    cli.main([*db.canonical_argv("3005", "occt"), "--out", str(tmp_path)])
+    assert "<text" not in (tmp_path / "3005.svg").read_text()
 
 
 def test_cel_mono_posterizes(tmp_path, monkeypatch):

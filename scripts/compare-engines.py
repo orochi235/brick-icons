@@ -26,8 +26,10 @@ import time
 import tomllib
 from pathlib import Path
 
+from PIL import Image
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from brick_icons import goldens  # noqa: E402
+from brick_icons import caption, goldens  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / "tests" / "goldens" / "manifest.toml"
@@ -48,13 +50,19 @@ def load_combo_parts(manifest: Path, combo: str,
     return parts, spec["args"]
 
 
+#: Seconds each (part, engine) render took, for the contact sheet's captions.
+SECS: dict[tuple[str, str], float] = {}
+
+
 def render(part: str, args: list[str], engine: str, work: Path) -> tuple[str | None, str | None]:
     out = work / f"{part}-{engine}"
     out.mkdir(parents=True, exist_ok=True)
+    t0 = time.perf_counter()
     proc = subprocess.run(
         [sys.executable, "-m", "brick_icons.cli", part, *args,
          "--engine", engine, "--out", str(out)],
         capture_output=True, text=True, cwd=ROOT)
+    SECS[(part, engine)] = time.perf_counter() - t0
     svgs = sorted(out.glob("*.svg"))
     if proc.returncode != 0 or not svgs:
         tail = (proc.stderr or proc.stdout).strip().splitlines()
@@ -117,6 +125,10 @@ def contact_sheet(parts: list[str], work: Path, out: Path) -> None:
             png = staging / f"{part}-{engine}.png"
             subprocess.run(["resvg", "--width", "700", str(src), str(png)],
                            check=True, capture_output=True)
+            with Image.open(png) as im:
+                caption.pad(im.convert("RGBA"), caption.line(
+                    part, svgs[0].stat().st_size,
+                    SECS.get((part, engine)))).save(png)
             tiles.append(str(png))
     subprocess.run(["montage", "-label", "%t", "-font", SHEET_FONT, *tiles,
                     "-tile", "4x", "-geometry", "440x440+8+8",

@@ -80,6 +80,23 @@ still uses and stays. The spot-render plan's Task 23, which would have
 made `/corpus` refetch its sheets after a redraw, is dropped for the same
 reason.
 
+## 2026-09-28: review renders carry a caption; a dozen one-off scripts do not yet
+
+`brick_icons/caption.py` stamps `part · size · seconds` in a strip below a
+review render. `--part-label` (implied by `--review`), `scripts/_sheet.py` and
+its callers, `defect-sheet.py`, `render-tree-diff.py` and `compare-engines.py`
+use it; production output never does. **Owed:** the one-off A/B and probe
+scripts that compose sheets with their own drawing code still post bare
+panels -- `engine-overlay`, `overlay-reference`, `dome-projection-options`,
+`proof-decals`, `head-ab`, `snap-render-ab`, `refit-ink-ab`,
+`thin-contour-pair`, `thin-contour-drift`, `show-decal-shards`,
+`demo-sphere-unwrap`, `unwrap-decal-mesh`, `probe-drawn-classes`,
+`probe-position-sensitivity`. Each needs its renders timed and its panels
+passed through `caption.pad` (or moved onto `_sheet.sheet` with
+`caption.Shot`s); none could be run to check the change under the session's
+CPU limit.
+
+
 ## 2026-09-28: stud instancing is the default (`--stud-instancing all`)
 
 Decided 2026-09-28: every render places studs unless it passes
