@@ -1,3 +1,14 @@
+## 2026-09-28: `/corpus` retired; `/wall` is the wall now
+
+`76efbc6` deleted the lab's `/corpus` page (`CorpusWall`) and its
+exclusive modules -- `/wall` (pezlie's `WallView`) replaced it, and commit
+`897e91b` had already taken `/corpus` off the lab menu. Everything else in
+`lab/src/corpus/` (paint, types, criteria, facts, tint, wallHash, draw2d,
+the Lightbox, PartCard, FilterBar, and the rest) is shared code `/wall`
+still uses and stays. The spot-render plan's Task 23, which would have
+made `/corpus` refetch its sheets after a redraw, is dropped for the same
+reason.
+
 ## 2026-09-28: stud instancing is the default (`--stud-instancing all`)
 
 Decided 2026-09-28: every render places studs unless it passes
