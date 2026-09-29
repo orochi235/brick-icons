@@ -1,3 +1,14 @@
+## 2026-09-28: lightbox render stats; one review test failing on main
+
+`measurements` now carries `bytes`, `objects` and `drawn_at` per drawing,
+filled at ingest and backfilled by `scripts/backfill-render-stats.py`; the
+lightbox shows them and charts the shown slot's history.
+
+**Failing on main, cause not looked into:**
+`tests/test_lab_review.py::test_the_linked_view_screens_out_a_redraw_that_changed_nothing`
+-- `POST /api/review/measure` measures 2 entries where the test expects 3.
+It fails the same at e3f836b without this branch.
+
 ## 2026-09-28: stud instancing is the default (`--stud-instancing all`)
 
 Decided 2026-09-28: every render places studs unless it passes
