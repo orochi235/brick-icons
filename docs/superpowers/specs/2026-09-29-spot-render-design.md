@@ -1,10 +1,12 @@
 # On-demand spot rendering
 
-**Status: designed 2026-09-29, not built.** Three pieces, in build order: onto
+**Status: built on `spot-render`, not yet merged.** Three pieces: onto
 service jobs (onto repo, released in onto be0cf2f), the spot render worker and
-redraw path (brick-icons), and per-cell refresh on the wall (pezlie, released
-in 0.3.0, and the lab). The brick-icons plan is
-`docs/superpowers/plans/2026-09-29-spot-render.md`.
+redraw path (brick-icons), and per-cell refresh on the wall (pezlie ^0.4.0,
+and the lab). What is left -- merge, the fleet suite, the service up, the
+end-to-end check -- is `docs/superpowers/plans/2026-09-29-spot-render.md`.
+The flow below is as built; where the build departed from the design, the
+design text was corrected rather than kept.
 
 For whoever builds or reviews this: how the lab's **Redraw** button draws a
 part on the fleet within seconds and swaps the new drawing into the lightbox
@@ -39,10 +41,21 @@ Lightbox "Redraw"
       worker: engine already imported, rolled to that commit if it was elsewhere
       ← {svg, secs, build, state, error, detail}
   → db.store_render + an attempts row               the review queue still logs displacements
-  → thumbs.bake_part + thumbs.patch_cell            that part's tiles, and its box in sheet-8 / sheet-32
-  → server-sent event: changed {part, source, sha, sheet_version}
+  → thumbs.bake_part                                that part's tiles and masks, before anything is announced
+  → server-sent event: changed {part, source, sha, build}
+  ← the POST answers
+  → in the background, one slot at a time:
+      thumbs.patch_cell                             its box in sheet-8 / sheet-32, and their masks
+      server-sent event: sheets {part, source, versions}
 Browser: the lightbox reloads the part; the wall polls its feed and redraws that cell
 ```
+
+The tiles are baked before `changed` because the wall fetches them under the
+new sha as soon as it hears, and a tile fetched early is cached, old or
+missing, under that key for good. The sheet patch, seconds of master and WebP
+writes (measured below), is the only step that runs behind. No page listens
+for `sheets`: the wall draws the new cell from its tiles, and the patched
+sheets serve the next fresh page load.
 
 A second click on the same part and slot while one is in flight joins it,
 through the lab's existing single-flight helper.
@@ -128,8 +141,10 @@ Measured by onto: a 134 ms round trip, a 1.1 s roll, and a down exit in 40 ms.
   mtime in whole seconds, which two writes within one second would share. It
   is `max(previous + 1, unix seconds)`, so a slot wiped and rebaked never
   reuses a version a browser has cached.
-- `GET /api/events` streams server-sent events. It carries `changed` for now,
-  and can later replace the 10-second cell poll.
+- `GET /api/events` streams server-sent events: `changed` and `sheets`. It
+  can later replace the 10-second cell poll. The lab serves on a
+  `uvicorn.Server` subclass that ends open streams as shutdown begins, since
+  uvicorn waits on open responses before the lifespan's exit runs.
 - `reference-gray` and `reference-lines` join `DRAWN_ELSEWHERE`, which becomes
   every slot `db.is_reference_slot` names, so a redraw of a reference slot is
   refused like the others and a new one needs no second list.
@@ -140,11 +155,11 @@ Measured by onto: a 134 ms round trip, a 1.1 s roll, and a down exit in 40 ms.
 
 ## pezlie and the lab: one cell refreshes
 
-This is the Wall page (`/wall`, pezlie's `WallView`), on pezlie 0.3.0.
+This is the Wall page (`/wall`, pezlie's `WallView`), on pezlie ^0.4.0.
 
 - pezlie keys cell images on the existing `item.sha` (`imageKey(item)` is
   `id@sha`, and tile and SVG URLs carry `shaVersion(sha)`). brick-icons adds
-  nothing to its spec.
+  nothing to its spec; there is no separate `thumbKey`.
 - On a batch of `changed` events for the slot on screen, the lab calls
   `WallHeader.poll()`, which asks `fetchItems(slot, since)` for changes at
   once. The delta carries the new sha because `record_render` stamps
@@ -157,9 +172,8 @@ This is the Wall page (`/wall`, pezlie's `WallView`), on pezlie 0.3.0.
 - Each poll that moves a sha copies every sheet level once, the 32 px one
   about 110 MB transiently (pezlie's estimate), so the lab batches events:
   the first starts a quarter-second window and the whole window is one poll.
-- The lab's own image caches (the `/corpus` wall's loose and vector thumbs)
-  key on `imageKey`. The `/corpus` wall refetches its sheets after a redraw
-  in its slot.
+- `/corpus` is retired, so nothing refetches a sheet after a redraw; its
+  loose and vector thumb caches went with it.
 - The lightbox also listens to `/api/events`, so an open lightbox updates
   whatever triggered the redraw.
 
@@ -171,9 +185,10 @@ This is the Wall page (`/wall`, pezlie's `WallView`), on pezlie 0.3.0.
 | service rolling to a new build | "updating worker…" | the request waits for the roll, then draws |
 | roll failed (exit 78) | "Redraw failed: updating worker failed:" and onto's stderr | the worker stays up on its old tree; nothing is recorded |
 | worker process died mid-request (exit 75) | nothing, the first time | retried once; a second death fails as `ProcessDied` |
-| part times out or the engine raises | "Redraw failed: timed out", or the error text | an `attempts` row records it; the stored drawing is untouched |
+| part times out, `onto call` times out (exit 124), or the engine raises | "Redraw failed: timed out", or the error text | an `attempts` row records it (an `onto call` timeout with the call's timeout as its seconds); the stored drawing is untouched |
 | new drawing identical to the stored one | "unchanged" | no sheet patch and no event; `made_at` is refreshed |
-| sheet patch fails | a warning in the API log | the drawing is stored and the event sent; the next full bake repairs the sheet |
+| tile bake fails | a warning in the API log | the drawing is stored and `changed` still sent; the next bake repairs the tiles |
+| sheet patch fails | a warning in the API log | `sheets` is sent for whichever sheets did patch; the next full bake repairs the rest. A slot baked before the lossless masters refuses every patch until `scripts/bake-thumbs.py` rebakes it |
 | browser misses an event | nothing | the 10-second cell poll still picks up the new sha |
 
 ## Testing
@@ -187,8 +202,9 @@ This is the Wall page (`/wall`, pezlie's `WallView`), on pezlie 0.3.0.
     row of the failure table, and the adapter against a fake `onto`;
   - `patch_cell` changes only that cell's box, pixel for pixel, and matches a
     full compose;
-  - one `changed` event per stored redraw.
-- **pezlie:** its own tests, in 0.3.0.
+  - one `changed` event per stored redraw, heard only once the part's tiles
+    are on disk.
+- **pezlie:** its own tests.
 - **End to end:** run once, headless, against the studio worker. Redraw
   612p01, and the lightbox and wall cell both change without a reload.
 

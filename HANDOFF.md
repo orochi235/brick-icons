@@ -1,3 +1,25 @@
+## 2026-09-28: spot rendering built on `spot-render`, not merged
+
+The lab's **Redraw** draws on a warm worker on the fleet
+(`brick_icons.spot_worker`, onto service `brick-spot-render`) instead of on
+this Mac or the lazy queue. Design: `docs/superpowers/specs/2026-09-29-spot-render-design.md`;
+launch recipe: DEVELOPING.md, "Spot rendering"; what is left:
+`docs/superpowers/plans/2026-09-29-spot-render.md` (Task 25). After the merge:
+
+1. **Write the sheet masters.** Run `scripts/bake-thumbs.py` per slot, on the
+   fleet (`onto run --kind bake`, estimated first). Until a slot has its
+   `sheet-<level>.master.png`, every redraw there logs a warning that its
+   sheets were not patched; the drawing and its tiles are stored regardless.
+2. **Start the worker.** `onto sync --in brick-icons-spot studio`, clone
+   `.venv` and `vendor/ldraw` into that tree (DEVELOPING.md has the commands),
+   then `onto service up brick-spot-render --in brick-icons-spot --prefer studio
+   -- scripts/spot-worker.sh`. Sandbox off for every `onto` command.
+3. **Check it.** `onto call brick-spot-render '{"ping": true}'` answers at
+   origin/main's build; `onto service ls` shows it on studio; `brick-lab
+   install` then `brick-lab stat` reads `spot render  up at <build>`. Then one
+   headless redraw on `/wall` whose lightbox image and wall tile both change
+   without a reload, with a labeled before/after on the wall.
+
 ## 2026-09-28: `/corpus` retired; `/wall` is the wall now
 
 `76efbc6` deleted the lab's `/corpus` page (`CorpusWall`) and its
