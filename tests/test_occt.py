@@ -332,13 +332,15 @@ def test_baseplate_edge_takes_top_tone_and_keeps_its_strokes(
                       if ln not in set(_fill_lines(s)) and "Gradient" not in ln
                       and "<stop" not in ln]
     width = re.compile(r' stroke-width="([\d.]+)"')
+    # paired by geometry, not position: the paint-order witness may reorder
+    # strokes once the wall's fill changes
     a, b = rest(off), rest(on)
-    assert len(a) == len(b)
-    moved = [(x, y) for x, y in zip(a, b) if x != y]
+    assert sorted(map(lambda s: width.sub("", s), a)) == \
+        sorted(map(lambda s: width.sub("", s), b))      # only widths change
+    moved = sorted(set(b) - set(a))
     assert moved
     tier = min(float(w) for w in width.findall(on))
-    for x, y in moved:
-        assert width.sub("", x) == width.sub("", y)       # only the width
+    for y in moved:
         assert float(width.search(y).group(1)) == tier
 
 
