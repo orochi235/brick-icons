@@ -162,6 +162,25 @@ it('undoes the focused card on the u key, and ignores it when unjudged', async (
   await waitFor(() => expect(undoJudgement).toHaveBeenCalledOnce());
 });
 
+it('takes a verdict key pressed in the moment the card is drawn', async () => {
+  const c = client([entry()]);
+  const { container } = render(<ReviewPage client={c.client} />);
+  // A MutationObserver callback runs after the commit that draws the card and
+  // before React's passive effects. Dispatched raw: fireEvent's act() would
+  // flush those effects first and hide the gap.
+  await new Promise<void>((done) => {
+    const seen = new MutationObserver(() => {
+      if (!container.querySelector('.review-card')) return;
+      seen.disconnect();
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f' }));
+      done();
+    });
+    seen.observe(container, { childList: true, subtree: true });
+  });
+  await waitFor(() => expect(c.judge)
+    .toHaveBeenCalledWith('occt/3001/bbbbbbbbbbbb', 'fixed', ''));
+});
+
 it('says so when a verdict was too old to restore', async () => {
   const { client: c, undoJudgement } = client([entry()]);
   undoJudgement.mockResolvedValue({ ...entry(), judged: null, restored: false });

@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { StatsPage } from '@lab/stats/StatsPage';
 import type { Stats } from '@lab/stats/types';
 import { wallHashString } from '@lab/corpus/wallHash';
+import { shown } from '@lab/test-utils';
 
 const body = (over: Partial<Stats> = {}): Stats => ({
   set: { size: 20, total: 24, kind: 'all', shown: { moved: false },
@@ -67,15 +68,6 @@ type Client = Parameters<typeof StatsPage>[0]['client'];
 
 const clientWith = (corpusStats: (q: URLSearchParams) => Promise<Stats>) =>
   ({ corpusStats, corpusSizes: async () => EMPTY_FOOTPRINT } as unknown as Client);
-
-/** Waits until `selector` matches. `waitFor` retries only a callback that
- *  throws, so handing it a bare `querySelector` accepted the first null. */
-const shown = (root: ParentNode, selector: string) =>
-  waitFor(() => {
-    const el = root.querySelector(selector);
-    if (!el) throw new Error(`nothing matches ${selector} yet`);
-    return el;
-  });
 
 const COST = {
   build: '1099.d500ca9+', base: 'occt', n: 1587, total: 1000,

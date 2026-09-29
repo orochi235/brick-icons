@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { LabClient } from '@lab/api/client';
 import { LabSwitcher } from '@weasel-js/labkit';
 import { PAGES } from '@lab/nav/pages';
@@ -262,8 +262,10 @@ export function ReviewPage({ client }: { client: LabClient }) {
   }, [client, load, view]);
 
   // Keys act on the focused card. Typing in the note or a control is typing,
-  // not a verdict, so anything editable swallows them.
-  useEffect(() => {
+  // not a verdict, so anything editable swallows them. A layout effect so the
+  // listener sees a card in the same commit that draws it: a passive one left
+  // a window where a key reached the listener holding the previous list.
+  useLayoutEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
       if (target && /^(TEXTAREA|INPUT|SELECT)$/.test(target.tagName)) return;
