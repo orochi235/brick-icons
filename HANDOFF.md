@@ -113,9 +113,15 @@ displaces the old row and lands on `/review` instead of sitting beside it.
 Goldens re-frozen: all 52 moved under both naive and occt, as predicted
 (every golden part draws above 1.4 px per LDU, so none sat on the 0.75 floor).
 
-**Owed, not launched:** redraws of `occt`, `white-occt` and `occt-svelte`.
-`slot-coverage.py` lists only a slot's gap, so the list for the two drawn
+**Owed, not launched:** redraws of `occt` and `white-occt`.
+`slot-coverage.py` lists only a slot's gap, so the list for those two drawn
 slots has to come from their drawn parts, launched with `--overwrite`.
+
+**In flight (launched 2026-09-29):** `occt-svelte`'s first fill, all 20,413
+never-tried parts, as tasks `slot-occt-svelte-{studio,uai,keiei}` (8/8/6
+workers, ~111 core-hours, 12 h timeout), each with its fetch stream and ingest
+watcher running here. msb-uai's uncollected tree files were saved to
+`out/msb-uai-stranded/` before its forced sync.
 
 ## 2026-09-28: lightbox render stats
 
