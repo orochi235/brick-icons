@@ -928,6 +928,32 @@ def test_order_faces_disjoint_fall_back_to_depth():
     assert out[0] is far and out[1] is near
 
 
+def test_order_faces_takes_no_depth_order_from_faces_that_only_abut():
+    """Two strips a gap apart rasterize as overlapping on a grid scaled to a
+    long diagonal, and the witness lands off one of them. Its plane read
+    there is extrapolated, and on 15068dy6 two such reads closed a cycle
+    whose release painted a wall over the sticker in front of it."""
+    import numpy as np
+    from brick_icons import shade
+    d = np.array([400.0, 200.0]) / np.hypot(400.0, 200.0)
+    nrm = np.array([-d[1], d[0]])
+
+    def strip(off, z_in, z_out, depth):
+        a, b = off * nrm, off * nrm + 447.0 * d
+        poly = np.array([a, b, b + nrm, a + nrm])
+        return {"poly": poly, "zs": np.array([z_in, z_in, z_out, z_out]),
+                "depth": depth, "kind": "tri", "normal": np.array([0, 1, -1.0])}
+
+    # `far` is flat at 12; `near` climbs steeply toward `far`, so read from
+    # its plane past its own edge it looks farther than `far`
+    far = strip(0.0, 12.0, 12.0, 12.0)
+    near = strip(-1.5, 0.0, 10.0, 5.0)
+    w = shade._overlap_witness(far["poly"], near["poly"])
+    assert isinstance(w, shade._Abutting)
+    out = shade.order_faces([near, far], eps=1e-3)
+    assert out[0] is far and out[1] is near
+
+
 def test_order_faces_cycle_break_releases_cycle_member_not_bystander():
     """When the witness graph has a genuine paint cycle, the stall-breaker
     must force-release a member of the blocking cycle — NOT the globally

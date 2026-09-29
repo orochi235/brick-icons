@@ -144,6 +144,13 @@ WITNESS_DISTANCE_REJECT = True
 #: Check the rastered witness against the exact polygons, and fall back to
 #: the exact overlap when it misses. This one does change drawings.
 WITNESS_EXACT = True
+#: A pair with no exact overlap can only tie: its witness is off one polygon,
+#: so a depth gap there is one plane extrapolated past its edge.
+ABUT_TIES_ONLY = True
+
+
+class _Abutting(tuple):
+    """A witness for two polygons with no exact overlap between them."""
 
 
 def _overlap_witness(pa, pb, ha=(), hb=(), grid=48):
@@ -216,7 +223,7 @@ def _overlap_witness(pa, pb, ha=(), hb=(), grid=48):
     ov = geom2d.to_geom(pa, ha).intersection(geom2d.to_geom(pb, hb))
     ov = geom2d._only_area(ov)
     if ov.is_empty:
-        return w
+        return _Abutting(w)
     if ov.geom_type == "MultiPolygon":
         ov = max(ov.geoms, key=lambda g: g.area)
     from shapely.ops import polylabel
@@ -463,6 +470,8 @@ def order_faces(faces, proj=None, eps=1e-6, own_occ=None):
                 continue
             a, b = (i, j) if i < j else (j, i)
             tied[b].add(a)
+        elif ABUT_TIES_ONLY and isinstance(w, _Abutting):
+            continue
         else:
             a, b = (i, j) if di > dj else (j, i)  # farther paints first
         if b not in succ[a]:
