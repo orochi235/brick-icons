@@ -8,10 +8,12 @@ from __future__ import annotations
 import json
 import re
 import time
+import weakref
 from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
 
+import uvicorn
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import (FileResponse, PlainTextResponse, Response,
@@ -95,6 +97,21 @@ class BatchRequest(BaseModel):
     force: bool = False
 
 
+#: The event brokers of every app between its lifespan's start and end.
+_serving: weakref.WeakSet[events.Broker] = weakref.WeakSet()
+
+
+class Server(uvicorn.Server):
+    """Ends the lab's event streams as shutdown begins. uvicorn waits for
+    every open response before it runs the lifespan's exit, and an event
+    stream never finishes, so every reload waited out the grace period."""
+
+    async def shutdown(self, sockets=None) -> None:
+        for broker in list(_serving):
+            broker.close()
+        await super().shutdown(sockets)
+
+
 def create_app(root: Path | str = ".",
                cache_root: Path | str = cache.DEFAULT_ROOT,
                defects_path: Path | str | None = None,
@@ -107,7 +124,10 @@ def create_app(root: Path | str = ".",
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        _serving.add(app.state.events)
         yield
+        _serving.discard(app.state.events)
+        app.state.events.close()
         app.state.sheet_patches.shutdown()
 
     app = FastAPI(title="brick-icons lab", lifespan=lifespan)

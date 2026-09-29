@@ -74,3 +74,31 @@ def test_a_closed_stream_stops_listening():
 
     asyncio.run(run())
     assert broker.listeners() == 0
+
+
+def test_closing_the_broker_ends_an_open_stream():
+    broker = events.Broker()
+
+    async def run():
+        async def connected():
+            return False
+        stream = events.stream(broker, connected)
+        await stream.__anext__()
+        asyncio.get_running_loop().call_later(0.05, broker.close)
+        rest = [frame async for frame in stream]
+        return rest
+
+    assert asyncio.run(asyncio.wait_for(run(), 2)) == []
+    assert broker.listeners() == 0
+
+
+def test_a_stream_opened_after_close_ends_at_once():
+    broker = events.Broker()
+    broker.close()
+
+    async def run():
+        async def connected():
+            return False
+        return [frame async for frame in events.stream(broker, connected)]
+
+    assert asyncio.run(asyncio.wait_for(run(), 2)) == []

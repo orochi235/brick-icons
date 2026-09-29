@@ -364,3 +364,28 @@ def test_closing_the_app_finishes_its_sheet_patches(lab, stub_spot, tmp_path):
     with client:
         _redraw(client)
     assert [kind for kind, _ in heard] == ["changed", "sheets"]
+
+
+def test_closing_the_app_ends_its_event_streams(lab, stub_spot):
+    client, _ = lab(stub_spot(_drawn()))
+    with client:
+        assert not client.app.state.events.closed()
+    assert client.app.state.events.closed()
+
+
+def test_the_server_ends_event_streams_before_it_waits_on_responses(
+        lab, stub_spot, monkeypatch):
+    import asyncio
+
+    import uvicorn
+    client, _ = lab(stub_spot(_drawn()))
+    closed_when_waiting = []
+
+    async def waiting(self):
+        closed_when_waiting.append(client.app.state.events.closed())
+    monkeypatch.setattr(uvicorn.Server, "_wait_tasks_to_complete", waiting)
+    with client:
+        server = lab_app.Server(uvicorn.Config(client.app))
+        server.servers, server.force_exit = [], True
+        asyncio.run(server.shutdown())
+    assert closed_when_waiting == [True]

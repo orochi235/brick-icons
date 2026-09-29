@@ -5,8 +5,9 @@ import argparse
 import os
 
 import uvicorn
+from uvicorn.supervisors import ChangeReload
 
-from .app import create_app
+from .app import Server, create_app
 
 #: Where `_factory` reads its root from. Reloading re-imports this module in a
 #: fresh process, which never sees the parsed arguments, so the one thing the
@@ -17,6 +18,20 @@ GRACEFUL_SHUTDOWN_S = 5
 
 def _factory():
     return create_app(root=os.environ.get(ROOT_ENV, "."))
+
+
+def _serve(app, **kwargs) -> None:
+    """`uvicorn.run`, on the lab's own `Server`."""
+    config = uvicorn.Config(app, **kwargs)
+    server = Server(config)
+    try:
+        if config.should_reload:
+            ChangeReload(config, target=server.run,
+                         sockets=[config.bind_socket()]).run()
+        else:
+            server.run()
+    except KeyboardInterrupt:
+        pass
 
 
 def main(argv=None) -> int:
@@ -45,14 +60,14 @@ def main(argv=None) -> int:
         # A reload waits for in-flight requests before the new worker starts,
         # and one proxied request that never finished held the lab dark for
         # good. Past this, the old worker drops what it still holds.
-        uvicorn.run("brick_icons.lab.__main__:_factory", factory=True, reload=True,
-                    reload_dirs=["brick_icons"], host=args.host, port=args.port,
-                    access_log=not args.quiet,
-                    timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_S)
+        _serve("brick_icons.lab.__main__:_factory", factory=True, reload=True,
+               reload_dirs=["brick_icons"], host=args.host, port=args.port,
+               access_log=not args.quiet,
+               timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_S)
     else:
-        uvicorn.run(create_app(root=args.root), host=args.host, port=args.port,
-                    access_log=not args.quiet,
-                    timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_S)
+        _serve(create_app(root=args.root), host=args.host, port=args.port,
+               access_log=not args.quiet,
+               timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_S)
     return 0
 
 
