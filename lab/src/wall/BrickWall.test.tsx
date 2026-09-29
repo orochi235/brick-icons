@@ -30,6 +30,9 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   localStorage.clear();
+  // A slot change writes its hash (BrickWall's `onChange`), which otherwise
+  // survives into the next test's `openingState` and picks its initial slot.
+  window.history.replaceState(null, '', window.location.pathname);
 });
 
 const part = (over: Partial<Cell>) => ({ id: '3001', ...over }) as Cell;
@@ -72,4 +75,23 @@ it('clears a stale notice when the engine changes', async () => {
   const group = await screen.findByRole('radiogroup', { name: 'Engine' });
   fireEvent.click(within(group).getByRole('radio', { name: 'Reference' }));
   await waitFor(() => expect(notice()?.textContent).toBe(''));
+});
+
+it('asks for the delta at once when a redraw lands in the slot on screen', async () => {
+  let tell: (e: unknown) => void = () => {};
+  const cells = vi.fn(() => Promise.resolve(
+    { cells: [], count: 0, version: 'v1', source: 'occt' }));
+  const listening = { ...client, cells,
+                      onChanged: (f: (e: unknown) => void) => { tell = f; return () => {}; } };
+  render(<BrickWall client={listening} />);
+  await screen.findByRole('radiogroup', { name: 'Engine' });
+  await waitFor(() => expect(cells).toHaveBeenCalled());
+  // Let the opening fetches settle, so the count below is only the poll's.
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  const asked = cells.mock.calls.length;
+  tell({ part: '3001', source: 'reference', sha: 'x', build: '9.c' });
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  expect(cells.mock.calls.length).toBe(asked);
+  tell({ part: '3001', source: 'occt', sha: 'x', build: '9.c' });
+  await waitFor(() => expect(cells.mock.calls.length).toBe(asked + 1));
 });

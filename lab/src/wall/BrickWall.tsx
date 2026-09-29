@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { defaultUrls, type SlotUrls, type WallHeader, WallView, type WallViewState } from 'pezlie';
 import type { LabClient } from '@lab/api/client';
 import type { LdrawColor } from '@lab/api/types';
+import { useChanged } from '@lab/api/useChanged';
 import { ColorField, loadColors } from '@lab/config/ColorRow';
 import { resolveHex } from '@lab/config/colorMatch';
 import '@lab/corpus/corpus.css';
@@ -83,6 +84,11 @@ export function BrickWall({ client }: { client: LabClient }) {
   // The header is the only thing handed `reveal`, and the card and lightbox
   // need it to follow a part link, so the latest one is kept here.
   const wall = useRef<WallHeader | null>(null);
+  // One poll per batch: each poll that moves a sha copies every sheet level.
+  useChanged(client, (events) => {
+    const shown = wall.current;
+    if (shown && events.some((event) => event.source === shown.slot)) shown.poll();
+  });
   const header = useCallback((state: WallHeader) => {
     wall.current = state;
     return (
