@@ -7,6 +7,7 @@ the library.
 from __future__ import annotations
 
 import tomllib
+from datetime import date
 from pathlib import Path
 
 DEFAULT_PATH = Path("tests/goldens/defects.toml")
@@ -106,6 +107,8 @@ def add(path: Path | str, record: dict) -> dict:
     if record.get("status", "open") not in STATUSES:
         raise ValueError(f"status must be one of {STATUSES}")
     check_classes(record.get("classes"))
+    if not record.get("filed"):
+        record = {**record, "filed": date.today().isoformat()}
     records.append(record)
     save(path, records)
     return record

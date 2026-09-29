@@ -1,3 +1,5 @@
+from datetime import date
+
 import pytest
 
 from brick_icons.lab import defects
@@ -88,6 +90,15 @@ def test_a_line_defect_round_trips(tmp_path):
     [back] = defects.load(path)
     assert back["kind"] == "line"
     assert back["points"] == record["points"]
+
+
+def test_adding_with_no_filed_date_defaults_to_today(tmp_path):
+    path = tmp_path / "defects.toml"
+    record = {k: v for k, v in ONE.items() if k != "filed"}
+    added = defects.add(path, record)
+    today = date.today().isoformat()
+    assert added["filed"] == today
+    assert defects.load(path)[0]["filed"] == today
 
 
 def test_a_defect_with_no_kind_still_loads(tmp_path):

@@ -211,6 +211,30 @@ def test_a_bad_status_is_a_400(defect_client):
     assert r.status_code == 400
 
 
+def test_a_defect_with_no_filed_date_still_saves(tmp_path):
+    """mirror_defect's db upsert needs `filed`; a record posted without one
+    must be dated before either write, not 500 after the TOML already has
+    it (the failure this reproduces without the fix)."""
+    from datetime import date
+
+    from brick_icons import db
+    from brick_icons.lab import defects
+
+    db.connect(tmp_path / "corpus.db").close()
+    client = TestClient(lab_app.create_app(
+        cache_root=tmp_path / "cache", corpus_db=tmp_path / "corpus.db",
+        defects_path=tmp_path / "defects.toml"))
+    record = {k: v for k, v in DEFECT.items() if k != "filed"}
+
+    r = client.post("/api/defects", json=record)
+
+    assert r.status_code == 200
+    today = date.today().isoformat()
+    assert r.json()["filed"] == today
+    [saved] = defects.load(tmp_path / "defects.toml")
+    assert saved["filed"] == today
+
+
 def test_batch_starts_one_job_for_the_list(client, ldraw_dir):
     body = client.post("/api/batch", json={
         "parts": ["3005", "3024"],
