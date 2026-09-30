@@ -117,11 +117,13 @@ Goldens re-frozen: all 52 moved under both naive and occt, as predicted
 `slot-coverage.py` lists only a slot's gap, so the list for those two drawn
 slots has to come from their drawn parts, launched with `--overwrite`.
 
-**In flight (launched 2026-09-29):** `occt-svelte`'s first fill, all 20,413
-never-tried parts, as tasks `slot-occt-svelte-{studio,uai,keiei}` (8/8/6
-workers, ~111 core-hours, 12 h timeout), each with its fetch stream and ingest
-watcher running here. msb-uai's uncollected tree files were saved to
-`out/msb-uai-stranded/` before its forced sync.
+**Landed (2026-09-29):** the slot's first fill, tasks
+`slot-occt-svelte-{studio,uai,keiei}`: 19,810 of 20,597 parts drawn. The slot
+was then renamed **`svelte-occt`**, qualifier first like every other slot:
+engine-first, both sides read its engine as `svelte`, so the topbar filed it
+under Reference and every engine-keyed lookup missed it. Its trees keep their
+`out/slot-occt-svelte-*` directory names; their SOURCE markers say
+`svelte-occt`, and a marker naming an unknown slot now raises.
 
 ## 2026-09-28: lightbox render stats
 

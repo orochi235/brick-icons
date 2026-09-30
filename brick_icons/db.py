@@ -34,7 +34,7 @@ PART_STATUSES = ("unreviewed", "good", "suspect", "broken", "wontfix")
 # Stickers were here and are not any more: occt draws 2,695 of the 2,701, so
 # the exclusion was hiding a drawn category from every coverage number.
 OUT_OF_SCOPE_CATEGORIES = ("|",)
-SOURCES = ("naive", "occt", "occt-svelte", "decal", "reference",
+SOURCES = ("naive", "occt", "svelte-occt", "decal", "reference",
            "reference-gray", "reference-lines",
            "translucent-naive", "translucent-occt",
            "silhouette-naive", "silhouette-occt",
@@ -609,8 +609,7 @@ _CANONICAL = {
              "--shade-style", "flat3", "--angle", "iso", "--format", "svg",
              "--line-width", "1.4", "--silhouette-width", "1.4"],
     # occt drawn lighter: the same stroke tiers under a 1.0 px line weight.
-    # Named engine-first, so its trees need the SOURCE marker to file here.
-    "occt-svelte": ["--engine", "occt", "--shading", "outline",
+    "svelte-occt": ["--engine", "occt", "--shading", "outline",
                     "--shade-style", "flat3", "--angle", "iso",
                     "--format", "svg", "--line-width", "1.0",
                     "--silhouette-width", "1.0"],
@@ -1064,6 +1063,9 @@ def census_source(census_dir: Path | str, engine: str) -> str:
         stated = ""
     if stated in SOURCES:
         return stated
+    if stated:
+        # Falling through would file the tree under silhouette-<engine>.
+        raise ValueError(f"{marker} names {stated!r}, which is not a slot")
 
     stem = Path(census_dir).name
     facet = stem.removeprefix("census").strip("-").removesuffix(engine).strip("-")

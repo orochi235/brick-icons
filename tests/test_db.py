@@ -660,12 +660,14 @@ def test_a_tree_can_state_its_slot_when_the_name_cannot(tmp_path):
 
 
 def test_a_stated_slot_has_to_be_one_we_know(tmp_path):
-    # A typo must not invent a source: renders under it would be indexed and
-    # then invisible to every query that lists the slots.
-    tree = tmp_path / "census-white-occt"
+    # A typo must not invent a source, and must not fall back to the name
+    # either: slot-occt-svelte-keiei, its marker stale after a rename, derives
+    # silhouette-occt and would overwrite it.
+    tree = tmp_path / "slot-occt-svelte-keiei"
     tree.mkdir()
-    (tree / db.SOURCE_MARKER).write_text("ocupied\n")
-    assert db.census_source(tree, "occt") == "white-occt"
+    (tree / db.SOURCE_MARKER).write_text("occt-svelte\n")
+    with pytest.raises(ValueError, match="not a slot"):
+        db.census_source(tree, "occt")
 
 
 def test_a_rebuild_indexes_the_census_renders_too(tmp_path):
