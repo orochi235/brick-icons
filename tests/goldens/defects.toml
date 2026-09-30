@@ -4173,3 +4173,30 @@ title = "the top edge's line cap is clipped where it meets the stud"
 classes = ["stroke-scale"]
 filed = "2026-09-29"
 notes = "Very slight. occt slot at fcc19b5, measured at 48x on the back-left junction (canvas px, horizontal runs): the stud rim, on the silhouette above the junction, inks 0.79-0.92 wide (y 24-27); the brick's back-left top edge arrives at 1.4 px and ends flat against it (y 28-29); the stud side below, an interior edge, is 0.70. process.contour_band cuts the silhouette band square where the boundary leaves a stud, so the heavy edge stops with a flat end instead of a cap. That is inferred from the code and these widths, not tested by changing it. Sheet: 3024 junction crops on the wall (brick-icons, 2026-09-29)."
+
+[[defect]]
+id = "41879a-shading-on-front-left-leg"
+part = "41879a"
+engines = ["occt"]
+status = "open"
+title = "shading on front left leg"
+checked = { occt = "5eb73d920a2c13ba87b51307b00dcecb8eb6e990f5a5ff761b16f8e760961d25" }
+filed = "2026-09-30"
+
+[[defect]]
+id = "41879a-missing-leg-edges"
+part = "41879a"
+engines = ["occt"]
+status = "open"
+title = "missing leg edges"
+checked = { white-occt = "142eeb2c129c4cb3ceb35e07c803e5637c79c176294724df04f11d7bdf5cf0c5" }
+filed = "2026-09-30"
+
+[[defect]]
+id = "24434-area-under-back-curve-has"
+part = "24434"
+engines = ["occt"]
+status = "open"
+title = "area under back curve has exactly one internal line where the inside hollows out; should be 0 or 2"
+checked = { occt = "6262dc0fb06bfe3bacc862a7c4582afa108706e4aec87688cb17037bfe8cceb2" }
+filed = "2026-09-30"
