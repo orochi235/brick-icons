@@ -632,7 +632,7 @@ _TRANSLUCENT_SVG = ('<svg viewBox="0 0 256 170">'
                      '</svg>')
 
 
-def test_render_route_plain_request_is_byte_identical_without_outline(tmp_path):
+def test_render_route_plain_request_is_byte_identical(tmp_path):
     render_path = "out/census/renders/naive/3001.svg"
     client = _render_client(tmp_path, render_path=render_path)
     (tmp_path / render_path).write_text(_TRANSLUCENT_SVG)
@@ -641,22 +641,25 @@ def test_render_route_plain_request_is_byte_identical_without_outline(tmp_path):
     assert r.content == (tmp_path / render_path).read_bytes()
 
 
-def test_render_route_outline_param_widens_only_zero_stroke_widths(tmp_path):
+def test_render_route_edges_off_hides_only_the_edge_groups(tmp_path):
     render_path = "out/census/renders/naive/3001.svg"
     client = _render_client(tmp_path, render_path=render_path)
-    (tmp_path / render_path).write_text(_TRANSLUCENT_SVG)
-    r = client.get("/api/corpus/render/naive/3001.svg?outline=1")
+    (tmp_path / render_path).write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg">'
+        '<g stroke-linejoin="round"><path d="M0 0" fill="#999" stroke="#999"/></g>'
+        '<g stroke="black" fill="none" stroke-linecap="round">'
+        '<path d="M0 0" stroke-width="2.00"/></g></svg>')
+    r = client.get("/api/corpus/render/naive/3001.svg?edges=0")
     assert r.status_code == 200
     assert r.headers["content-type"] == "image/svg+xml"
-    assert 'stroke-width="0.00"' not in r.text
-    # The already-visible stroke keeps its own width, not the hairline's.
-    assert r.text.count('stroke-width="0.8"') == 2
+    assert '<g visibility="hidden" stroke="black" fill="none"' in r.text
+    assert '<g stroke-linejoin="round">' in r.text
 
 
-def test_render_route_outline_param_is_a_no_op_off_svg(tmp_path):
+def test_render_route_edges_off_is_a_no_op_off_svg(tmp_path):
     r = _render_client(
         tmp_path, render_path="out/census/renders/naive/3001.webp").get(
-            "/api/corpus/render/naive/3001.svg?outline=1")
+            "/api/corpus/render/naive/3001.svg?edges=0")
     assert r.status_code == 200
     assert r.headers["content-type"] == "image/webp"
 

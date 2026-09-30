@@ -29,12 +29,12 @@ const PartOrbit = lazy(() => import('@lab/corpus/PartOrbit'));
 
 type Slot = PartDetail['slots'][number];
 
-// Zero-width strokes only hide inside a translucent slot's own render --
+// Only a translucent slot loses its edges while outlines are off --
 // `materialOf` says which slots those are, so every other slot's src is
 // untouched by the toggle.
 function renderSrc(partId: string, slot: Slot, outlineTranslucent: boolean) {
-  const outline = outlineTranslucent && materialOf(slot.source).finish === 'trans';
-  const params = `v=${slot.sha256?.slice(0, 8)}${outline ? '&outline=1' : ''}`;
+  const bare = !outlineTranslucent && materialOf(slot.source).finish === 'trans';
+  const params = `v=${slot.sha256?.slice(0, 8)}${bare ? '&edges=0' : ''}`;
   return `/api/corpus/render/${slot.source}/${partId}.svg?${params}`;
 }
 

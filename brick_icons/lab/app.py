@@ -43,22 +43,14 @@ from .. import review
 RENDER_MEDIA_TYPES = {".svg": "image/svg+xml", ".png": "image/png",
                       ".webp": "image/webp"}
 
-# Matches trace.py's/shade.py's own fine stroke (a fill's 0.8px self-stroke,
-# closing AA seams) rather than the 2px edge weight, so an outlined
-# translucent render reads as the same drawing system, not a new one.
-OUTLINE_HAIRLINE_WIDTH = "0.8"
-
-_STROKE_WIDTH_RE = re.compile(r'stroke-width="([0-9.]+)"')
+# The edge layer of an outline render: every stroke group trace.py writes
+# black and unfilled. A fill's own seam-closing self-stroke is not in one.
+_EDGE_GROUP_RE = re.compile(r'<g(?=[^>]*\bstroke="black")(?=[^>]*\bfill="none")')
 
 
-def _with_outline_hairlines(svg_text: str) -> str:
-    """A translucent render's edges are already drawn at stroke-width="0.00";
-    give only those a visible width and leave every real stroke untouched."""
-    def _widen(match: "re.Match[str]") -> str:
-        if float(match.group(1)) != 0.0:
-            return match.group(0)
-        return f'stroke-width="{OUTLINE_HAIRLINE_WIDTH}"'
-    return _STROKE_WIDTH_RE.sub(_widen, svg_text)
+def _without_edges(svg_text: str) -> str:
+    """The render with its edge groups hidden and its fills untouched."""
+    return _EDGE_GROUP_RE.sub('<g visibility="hidden"', svg_text)
 
 # How long a footprint answer stands before the next request walks again. The
 # numbers move when a census lands, not between two clicks of Reload.
@@ -757,16 +749,15 @@ def create_app(root: Path | str = ".",
 
     @app.get("/api/corpus/render/{source}/{part_id}.svg")
     def get_corpus_render(source: str, part_id: str,
-                           outline: bool = Query(False), mask: bool = Query(False)):
+                           edges: bool = Query(True), mask: bool = Query(False)):
         """A part's rendered SVG for a slot, for the wall's vector rung.
 
         The path a caller could smuggle in is never trusted -- only `source`
         and `part_id` reach the filesystem, and only after `renders` names a
         row for them, so there is nothing here to traverse with.
 
-        `?outline=1` is for a translucent slot, whose edges are already drawn
-        but at zero width; it widens only those, and is a no-op on any other
-        render (nothing there is zero-width already).
+        `?edges=0` hides the render's edge lines and keeps its fills -- the
+        lightbox's translucent views ask for it unless outlines are on.
 
         `?mask=1` is the render's decoration mask (`trace.deco_mask_svg`), or
         404 for a render that does not mark its decoration.
@@ -792,8 +783,8 @@ def create_app(root: Path | str = ".",
             if masked is None:
                 raise HTTPException(404, "this render marks no decoration")
             return Response(content=masked, media_type=media_type)
-        if outline and path.suffix == ".svg":
-            svg = _with_outline_hairlines(path.read_text())
+        if not edges and path.suffix == ".svg":
+            svg = _without_edges(path.read_text())
             return Response(content=svg, media_type=media_type)
         return FileResponse(path, media_type=media_type)
 

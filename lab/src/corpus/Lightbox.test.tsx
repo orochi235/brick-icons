@@ -744,18 +744,20 @@ it('starts with the outline checkbox off', async () => {
     .toBe(false);
 });
 
-it('adds the outline param to a translucent slot only, once checked', async () => {
+it('hides a translucent slot\'s edges only, until checked', async () => {
   render(box({ client: {
     corpusPart: () => Promise.resolve(withTranslucentSlot), addDefect } }));
   await waitFor(() => screen.getByText('Brick 2 x 4'));
-  fireEvent.click(screen.getByLabelText('Outlines in translucent views'));
   expect(screen.getByRole('img', { name: '3001 drawn by naive' }).getAttribute('src'))
     .toBe('/api/corpus/render/naive/3001.svg?v=deadbeef');
   expect(screen.getByRole('img', { name: '3001 drawn by translucent-occt' }).getAttribute('src'))
-    .toBe('/api/corpus/render/translucent-occt/3001.svg?v=f00dface&outline=1');
+    .toBe('/api/corpus/render/translucent-occt/3001.svg?v=f00dface&edges=0');
+  fireEvent.click(screen.getByLabelText('Outlines in translucent views'));
+  expect(screen.getByRole('img', { name: '3001 drawn by translucent-occt' }).getAttribute('src'))
+    .toBe('/api/corpus/render/translucent-occt/3001.svg?v=f00dface');
 });
 
-it('drops the outline param again once unchecked', async () => {
+it('hides the edges again once unchecked', async () => {
   render(box({ client: {
     corpusPart: () => Promise.resolve(withTranslucentSlot), addDefect } }));
   await waitFor(() => screen.getByText('Brick 2 x 4'));
@@ -763,7 +765,7 @@ it('drops the outline param again once unchecked', async () => {
   fireEvent.click(checkbox);
   fireEvent.click(checkbox);
   expect(screen.getByRole('img', { name: '3001 drawn by translucent-occt' }).getAttribute('src'))
-    .toBe('/api/corpus/render/translucent-occt/3001.svg?v=f00dface');
+    .toBe('/api/corpus/render/translucent-occt/3001.svg?v=f00dface&edges=0');
 });
 
 // --- a zoomed viewer on double-click ----------------------------------------
@@ -800,7 +802,7 @@ it('still opens a new tab on shift-click, and not the zoomed viewer', async () =
   open.mockRestore();
 });
 
-it('carries the outline param into the zoomed viewer for a translucent slot', async () => {
+it('carries the outline choice into the zoomed viewer for a translucent slot', async () => {
   render(box({ client: {
     corpusPart: () => Promise.resolve(withTranslucentSlot), addDefect } }));
   await waitFor(() => screen.getByText('Brick 2 x 4'));
@@ -808,7 +810,7 @@ it('carries the outline param into the zoomed viewer for a translucent slot', as
   fireEvent.doubleClick(screen.getByRole('radio', { name: 'translucent-occt' }));
   const zoomed = await screen.findByRole('dialog', { name: /translucent-occt/ });
   expect(within(zoomed).getByRole('img').getAttribute('src'))
-    .toBe('/api/corpus/render/translucent-occt/3001.svg?v=f00dface&outline=1');
+    .toBe('/api/corpus/render/translucent-occt/3001.svg?v=f00dface');
 });
 
 it('returns focus to the tile that opened the zoomed viewer, on close', async () => {
