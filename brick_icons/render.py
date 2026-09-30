@@ -67,8 +67,10 @@ LOOKS = {
               "-LightVector=-1,1,2"],
     "gray": ["-ShowHighlightLines=0", "-Lighting=1", "-UseQualityLighting=1",
              f"-LightVector={FLAT3_LIGHT}", f"-DefaultColor3={FLAT3_GRAY}"],
+    # 16 at the 2048 px snapshot: LDView's 1 px default all but vanishes once
+    # the drawing is scaled down to a lightbox thumbnail.
     "lines": ["-ShowHighlightLines=1", "-EdgesOnly=1", "-Lighting=0",
-              "-BlackHighlights=1"],
+              "-BlackHighlights=1", "-EdgeThickness=16"],
 }
 
 
