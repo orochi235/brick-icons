@@ -3099,7 +3099,9 @@ filed = "2026-09-15"
 notes = """
 2026-09-17 review better
 
-2026-09-23 review regression"""
+2026-09-23 review regression
+
+2026-09-30 at 690fb12, occt slot drawn locally (sheet on the wall, brick-icons): still open and close to right. The crown's silhouette is a chain of straight segments where the dome should curve; the chin-guard strip below the face hole shades as faceted triangles, not one ramp. Also three short stray stroke stubs: left of the face hole, on its upper rim, and beside the side boss."""
 
 [[defect]]
 id = "58367-butt-end-shades-differently-than"
