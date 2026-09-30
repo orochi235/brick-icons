@@ -187,6 +187,8 @@ export function Lightbox({ partId, source, client, onClose,
   // The radio a double-click opened the zoomed view from, so closing it can
   // hand focus back rather than dropping it to the document body.
   const zoomOpenerRef = useRef<HTMLElement | null>(null);
+  // `slots` is derived further down; the key listener pages through it.
+  const slotsRef = useRef<Slot[]>([]);
   // The part on screen now, for an answer that arrives after a switch.
   const partRef = useRef(partId);
   partRef.current = partId;
@@ -215,6 +217,19 @@ export function Lightbox({ partId, source, client, onClose,
   // which of two listeners on `window` ran first, because there is only one.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (zoomedSlot !== null && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        const drawn = slotsRef.current.filter((slot) => slot.sha256);
+        const at = drawn.findIndex((slot) => slot.source === zoomedSlot.source);
+        if (at < 0 || drawn.length < 2) return;
+        e.preventDefault();
+        const step = e.key === 'ArrowRight' ? 1 : -1;
+        const next = drawn[(at + step + drawn.length) % drawn.length]!;
+        zoomOpenerRef.current = document.querySelector<HTMLElement>(
+          `.corpus-slot[data-source="${next.source}"] input`);
+        setShown(next.source);
+        setZoomedSlot(next);
+        return;
+      }
       if (e.key !== 'Escape') return;
       if (zoomedSlot !== null) { setZoomedSlot(null); return; }
       onClose();
@@ -239,6 +254,7 @@ export function Lightbox({ partId, source, client, onClose,
   const slots = (detail?.slots ?? early ?? [])
     .filter((slot) => !slot.not_applicable || slot.source === shown)
     .sort((a, b) => chartRank(a.source) - chartRank(b.source));
+  slotsRef.current = slots;
 
   const file = async () => {
     setFlagError(null);

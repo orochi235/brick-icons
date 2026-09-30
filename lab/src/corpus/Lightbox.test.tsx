@@ -821,6 +821,24 @@ it('returns focus to the tile that opened the zoomed viewer, on close', async ()
   expect(document.activeElement).toBe(radio);
 });
 
+it('pages the zoomed viewer between drawn slots with the arrow keys', async () => {
+  render(box());
+  await waitFor(() => screen.getByText('Brick 2 x 4'));
+  fireEvent.doubleClick(screen.getByRole('radio', { name: 'silhouette-occt' }));
+  await screen.findByRole('dialog', { name: /silhouette-occt/ });
+  fireEvent.keyDown(window, { key: 'ArrowRight' });
+  const next = await screen.findByRole('dialog', { name: /naive/ });
+  expect(within(next).getByRole('img').getAttribute('src'))
+    .toBe('/api/corpus/render/naive/3001.svg?v=deadbeef');
+  fireEvent.keyDown(window, { key: 'ArrowRight' });
+  await screen.findByRole('dialog', { name: /silhouette-occt/ });
+  fireEvent.keyDown(window, { key: 'ArrowLeft' });
+  await screen.findByRole('dialog', { name: /naive/ });
+  fireEvent.keyDown(window, { key: 'Escape' });
+  expect(document.activeElement).toBe(screen.getByRole('radio', { name: 'naive' }));
+  expect((screen.getByRole('radio', { name: 'naive' }) as HTMLInputElement).checked).toBe(true);
+});
+
 // --- the age tag -------------------------------------------------------------
 
 const withReference = {
