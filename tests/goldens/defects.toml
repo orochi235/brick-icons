@@ -4152,3 +4152,22 @@ title = "the side stud's bore is not one smooth gradient"
 classes = ["banding"]
 filed = "2026-09-29"
 notes = "outline-flat3 golden at main a5739e4. The inside of the SNOT stud's hollow should shade as one smooth gradient round the bore; a lighter diagonal band breaks it partway round. Cause not looked at; 3649-light-streak-in-pin-hole-bore is a lighter streak inside a bore too, measured there as a seam between two primitives of one bore, and may be the same thing."
+
+[[defect]]
+id = "47206-tessellation-in-brow-area-makes"
+part = "47206"
+engines = ["occt"]
+status = "open"
+title = "tessellation in brow area makes this nightmare fuel"
+checked = { occt = "b536eda9f15146673a195d11652454c78e687d01bf01f3a401c00962b44e1268" }
+filed = "2026-09-30"
+
+[[defect]]
+id = "3024-silhouette-cut-square-at-stud"
+part = "3024"
+engines = ["occt"]
+status = "open"
+title = "the top edge's line cap is clipped where it meets the stud"
+classes = ["stroke-scale"]
+filed = "2026-09-29"
+notes = "Very slight. occt slot at fcc19b5, measured at 48x on the back-left junction (canvas px, horizontal runs): the stud rim, on the silhouette above the junction, inks 0.79-0.92 wide (y 24-27); the brick's back-left top edge arrives at 1.4 px and ends flat against it (y 28-29); the stud side below, an interior edge, is 0.70. process.contour_band cuts the silhouette band square where the boundary leaves a stud, so the heavy edge stops with a flat end instead of a cap. That is inferred from the code and these widths, not tested by changing it. Sheet: 3024 junction crops on the wall (brick-icons, 2026-09-29)."
