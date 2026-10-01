@@ -17,7 +17,7 @@
     "@weasel-js/labkit": "1.7.1",
     "@weasel-js/ui": "1.7.1",
     "apache-arrow": "^21.2.0",
-    "pezlie": "^0.4.4",
+    "pezlie": "^0.4.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "three": "^0.170.0"
