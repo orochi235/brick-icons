@@ -125,7 +125,8 @@ a backgrounded shell command. **Send it to a remote node.** This Mac runs the
 editor, the browsers, the lab servers and several Claude sessions at once, and
 it is the only machine whose slowness anyone feels; the fleet exists so it does
 not also grind through renders. `onto status` names a node with free cores, or
-`--any` picks one.
+`--any` picks one. A render slot's round is `scripts/refill-slot.sh <slot> any
+<task>`, which readies every node but orochi and lets onto spread the list.
 
     onto run --detach --timeout 4h --task thumb-bake --kind render \
       --icon photo.on.rectangle.angled \

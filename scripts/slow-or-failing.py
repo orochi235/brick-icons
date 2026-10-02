@@ -10,9 +10,9 @@ the whole oracle pass -- render, rasterize, compare -- not the render alone.
 Build the list at launch time, not before: an engine change that lands
 between the two moves which parts belong on it.
 
-Writes `todo.txt` (one part a line) and `batches.txt` (a dozen a line, what
-`onto run --each` takes), slowest drawing first and failures last, so a round
-cut short has spent its time on the parts most likely to finish.
+Writes `batches.txt`, one part a line for `run-slot.sh --each` (onto cuts the
+batches), slowest drawing first and failures last, so a round cut short has
+spent its time on the parts most likely to finish.
 """
 from __future__ import annotations
 
@@ -25,8 +25,6 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from brick_icons import db  # noqa: E402
-
-BATCH = 12
 
 
 def select(conn: sqlite3.Connection, source: str, since_h: float,
@@ -56,7 +54,7 @@ def main() -> int:
                     help="hours back a part's newest row may be (default 24)")
     ap.add_argument("--slow", type=float, default=120,
                     help="seconds a drawing must have taken to count (default 120)")
-    ap.add_argument("--out", type=Path, help="directory for todo.txt and batches.txt")
+    ap.add_argument("--out", type=Path, help="directory for batches.txt")
     ap.add_argument("--db", type=Path, default=None)
     a = ap.parse_args()
     conn = db.connect(a.db) if a.db else db.connect()
@@ -70,12 +68,8 @@ def main() -> int:
           f"{len(parts):5d} in all")
     if a.out:
         a.out.mkdir(parents=True, exist_ok=True)
-        (a.out / "todo.txt").write_text("".join(p + "\n" for p in parts))
-        (a.out / "batches.txt").write_text("".join(
-            ",".join(parts[i:i + BATCH]) + "\n"
-            for i in range(0, len(parts), BATCH)))
-        print(f"wrote {a.out}/todo.txt and batches.txt "
-              f"({-(-len(parts) // BATCH)} batches)")
+        (a.out / "batches.txt").write_text("".join(p + "\n" for p in parts))
+        print(f"wrote {a.out}/batches.txt ({len(parts)} parts)")
     return 0
 
 

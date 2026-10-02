@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import statistics
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -27,6 +28,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+import brick_icons  # noqa: E402
 from brick_icons import cli, db  # noqa: E402
 from brick_icons.batch import RENDER_TIMEOUT_S, outlasted  # noqa: E402
 
@@ -128,8 +130,20 @@ def _newest(builds) -> str | None:
     return max(ranked, key=lambda pair: pair[1])[0] if ranked else None
 
 
+def engine_floor() -> int | None:
+    """The commit count of the last commit that touched the engine. A drawing
+    measured at an earlier build was drawn by an engine that has since
+    changed; one measured later, or at it, is current however far HEAD has
+    moved on through lab or script commits."""
+    sha = subprocess.run(["git", "log", "-1", "--format=%H", "--", "brick_icons",
+                          ":!brick_icons/lab"],
+                         cwd=ROOT, capture_output=True, text=True).stdout.strip()
+    rank = _rank(brick_icons.build_of(sha)) if sha else -1
+    return rank if rank >= 0 else None
+
+
 def owed(conn, slot: str, scope: list[str],
-         cap: float = RENDER_TIMEOUT_S) -> dict:
+         cap: float = RENDER_TIMEOUT_S, floor: int | None = None) -> dict:
     """The slot's parts split by how much is known about each.
 
     The per-part figure is the MEAN, not the median. Render cost is savagely
@@ -191,12 +205,20 @@ def owed(conn, slot: str, scope: list[str],
         # all got FALLBACK_SECS, and must not report it as measurement.
         borrowed = "engine" if peers else "fallback"
 
+    # A reference slot is drawn by LDView or a browser, so no engine change
+    # makes its drawings old.
+    ref = db.is_reference_slot(slot) or slot in UNFILLABLE
     out = {"drawn": [], "never": [], "errored": [], "stale": [], "crashed": [],
-           "outlasted": [], "median": median, "borrowed": borrowed, "secs": {},
+           "outlasted": [], "outdated": [], "median": median, "borrowed": borrowed, "secs": {},
            "build": newest, "cap": cap}
     for pid in scope:
         if pid in drawn:
             out["drawn"].append(pid)
+            # A build with no commit count (decal's bare sha) cannot be
+            # ordered, so it is never called outdated.
+            rank = _rank(seen[pid]) if pid in seen and not ref else -1
+            if floor is not None and 0 <= rank < floor:
+                out["outdated"].append(pid)
         elif pid not in tried:
             out["never"].append(pid)
         else:
@@ -222,7 +244,10 @@ def owed(conn, slot: str, scope: list[str],
 def batch(owed_: dict, budget_secs: float, only: str = "all") -> list[str]:
     """As many owed parts as fit the budget, cheapest information first.
 
-    `only` narrows the pool to one class. `never` is the useful one: a slot
+    `only` narrows the pool to one class. `redraw` is the drawn parts whose
+    drawing predates the engine's last change, cheapest first, and a launch
+    of it needs `--overwrite` or the watcher indexes none of it. Of the fill
+    classes `never` is the useful one: a slot
     whose whole gap is `errored` has already answered every part in it, and a
     retry is worth launching only against an engine change -- silhouette-occt
     spent 43 core-hours re-crashing 1,020 parts for 52 recoveries.
@@ -233,7 +258,9 @@ def batch(owed_: dict, budget_secs: float, only: str = "all") -> list[str]:
             "never": owed_["never"],
             "errored": retry,
             "stale": owed_["stale"],
-            "crashed": owed_["crashed"]}[only]
+            "crashed": owed_["crashed"],
+            "redraw": sorted(owed_["outdated"],
+                             key=lambda p: owed_["secs"].get(p) or owed_["median"])}[only]
     picked, spent = [], 0.0
     for pid in pool:
         c = owed_["secs"].get(pid) or owed_["median"]
@@ -252,17 +279,16 @@ def main() -> int:
                     help="wall-clock hours the batch should fill (default 4)")
     ap.add_argument("--workers", type=int, default=10,
                     help="workers the job will run, for the core-hour sum")
-    ap.add_argument("--per-batch", type=int, default=12,
-                    help="parts per line; a line is one onto item")
     ap.add_argument("--only",
-                    choices=("all", "never", "errored", "stale", "crashed"),
+                    choices=("all", "never", "errored", "stale", "crashed", "redraw"),
                     default="all",
                     help="narrow the batch to parts never tried, to ones that "
                          "errored, to `stale` -- the errored ones that have "
                          "not met the slot's current revision -- or to "
                          "`crashed`, the errored ones whose latest attempt "
-                         "was ProcessDied (default: never first, then "
-                         "errored)")
+                         "was ProcessDied; or `redraw`, the drawn parts drawn "
+                         "before the engine's last change (default: never "
+                         "first, then errored)")
     ap.add_argument("--cap", type=float, default=RENDER_TIMEOUT_S,
                     help="per-part render timeout the round will run at; a "
                          "part that last timed out at this build after at "
@@ -273,24 +299,28 @@ def main() -> int:
 
     conn = db.connect(args.db)
     scope = corpus(conn)
-    print(f"corpus: {len(scope)} parts in scope\n", flush=True)
+    floor = engine_floor()
+    print(f"corpus: {len(scope)} parts in scope; the engine last changed at "
+          f"build {floor}\n", flush=True)
 
     if not args.slot:
         rows = []
         for slot in db.SOURCES:
-            o = owed(conn, slot, corpus(conn, slot))
+            o = owed(conn, slot, corpus(conn, slot), floor=floor)
             rows.append((slot, len(o["drawn"]),
-                         len(o["never"]) + len(o["errored"]), o["median"],
-                         o["borrowed"]))
-        # Emptiest first: the question this table answers is what to fill next.
-        for slot, have, miss, med, borrowed in sorted(rows, key=lambda r: -r[2]):
+                         len(o["never"]) + len(o["errored"]),
+                         len(o["outdated"]), o["median"], o["borrowed"]))
+        # Most owed first, a missing part and an outdated drawing alike: the
+        # question this table answers is what to draw next.
+        for slot, have, miss, old, med, borrowed in sorted(
+                rows, key=lambda r: -(r[2] + r[3])):
             why = UNFILLABLE.get(slot, "")
-            note = f"  {why}" if why else ("" if miss else "  full")
+            note = f"  {why}" if why else ("" if miss or old else "  full")
             # A borrowed median is the engine's, not this slot's. Marked
             # because a budget built on one is an estimate of an estimate.
             mark = "~" if borrowed else " "
-            print(f"  {slot:<18} have {have:6}  missing {miss:6}"
-                  f"  median {mark}{med:5.1f}s{note}", flush=True)
+            print(f"  {slot:<18} have {have:6}  missing {miss:6}  outdated "
+                  f"{old:6}  median {mark}{med:5.1f}s{note}", flush=True)
         print("\n  naive slots are low priority; occt is the focus.", flush=True)
         return 0
 
@@ -300,13 +330,15 @@ def main() -> int:
         ap.error(f"{args.slot} cannot be filled from here: "
                  f"{UNFILLABLE[args.slot]}")
 
-    o = owed(conn, args.slot, corpus(conn, args.slot), args.cap)
+    o = owed(conn, args.slot, corpus(conn, args.slot), args.cap, floor)
     flags = flags_for(args.slot)
     picked = batch(o, args.budget * args.workers * 3600, args.only)
     spent = sum(o["secs"].get(p) or o["median"] for p in picked)
 
     print(f"{args.slot}", flush=True)
     print(f"  drawn      {len(o['drawn']):6}", flush=True)
+    print(f"  outdated   {len(o['outdated']):6}  drawn before build {floor}, "
+          f"the engine's last change; --only redraw", flush=True)
     print(f"  never      {len(o['never']):6}", flush=True)
     print(f"  errored    {len(o['errored']):6}", flush=True)
     print(f"  crashed    {len(o['crashed']):6}  errored, and last seen "
@@ -334,12 +366,12 @@ def main() -> int:
         return 1
 
     if args.out:
-        lines = [",".join(picked[i:i + args.per_batch])
-                 for i in range(0, len(picked), args.per_batch)]
+        # One part per line: onto's --batch cuts the items, shrinking them
+        # as the list drains so the tail does not wait on one long batch.
         out = Path(args.out)
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text("\n".join(lines) + "\n")
-        print(f"  wrote {out} ({len(lines)} batches)", flush=True)
+        out.write_text("\n".join(picked) + "\n")
+        print(f"  wrote {out} ({len(picked)} parts)", flush=True)
         print(f"\n  ENGINE={flags['engine']}", flush=True)
         print(f"  SOURCE={args.slot}", flush=True)
         print(f"  EXTRA='{flags['extra']}'", flush=True)

@@ -1,12 +1,18 @@
 #!/usr/bin/env bash
 # Draw whatever a slot is still missing, sized and listed at launch time.
 #
-#     scripts/refill-slot.sh white-naive studio slot-white-naive-tail
+#     scripts/refill-slot.sh white-naive any slot-white-naive-tail
 #     scripts/refill-slot.sh occt msb-uai slot-occt-r8 --budget 6 --workers 10
+#     scripts/refill-slot.sh white-occt any slot-white-occt-r1729 --only redraw
+#
+# `any` spreads the round over every node run-slot.sh can make ready, which is
+# the default choice; a node name pins it there. `--only redraw` redraws the
+# parts drawn before the engine's last change, and passes the watcher
+# `--overwrite`, without which a redraw indexes nothing.
 #
 # The list is the point. A batch written now and launched in six hours asks a
 # node to redraw everything that landed in between, so this recomputes the gap,
-# copies the list to the node and launches in one step -- which is what makes it
+# and launches in one step -- which is what makes it
 # safe behind `queue-after.sh`:
 #
 #     scripts/queue-after.sh <job-id> -- scripts/refill-slot.sh white-naive \
@@ -26,10 +32,11 @@ task=${3:?usage: refill-slot.sh <slot> <node> <task> [options]}
 shift 3
 
 budget=6
-workers=8
+workers=  # 8 on a named node; under `any` a ceiling for the whole fleet, 32
 timeout=12h
 only=all
 cap_flag=()
+sync_from=()
 while [ $# -gt 0 ]; do
   case $1 in
     --budget)  budget=$2; shift 2 ;;
@@ -37,9 +44,12 @@ while [ $# -gt 0 ]; do
     --timeout) timeout=$2; shift 2 ;;
     --only)    only=$2; shift 2 ;;
     --cap)     cap_flag=(--cap "$2"); shift 2 ;;
+    --sync-from) sync_from=(--sync-from "$2"); shift 2 ;;
     *) echo "unknown option $1" >&2; exit 2 ;;
   esac
 done
+
+[ -n "$workers" ] || { [ "$node" = any ] && workers=32 || workers=8; }
 
 dir=out/$task
 list=$dir/batches.txt
@@ -68,19 +78,13 @@ cap=$(printf '%s\n' "$survey" | sed -n 's/^  CAP=//p' | head -1)
   echo "slot-coverage printed no ENGINE/SOURCE/CAP; nothing launched" >&2; exit 1; }
 [ -s "$list" ] || { echo "$slot has nothing left to draw" >&2; exit 1; }
 
-# One part a line: onto cuts the batches as it hands them out (--batch), each at
-# most an even share of what is left, so the last batches of a round are a part
-# or two rather than a dozen that strand one worker while the fleet sits idle.
-tr ',' '\n' < "$list" | grep . > "$list.tmp" && mv "$list.tmp" "$list"
 parts=$(grep -c . "$list")
 echo "launching $parts parts of $slot on $node as $task, ${cap}s cap"
 
-# `--each` reads the list in the node's own tree and out/ is gitignored, so it
-# has to be copied -- and the directory does not exist there either. Skipping
-# this leaves a job that dies in seconds with an empty log.
-tree="$(scripts/node-work.sh "$node")/brick-icons"
-ssh "$node" "mkdir -p '$tree/$dir'"
-scp -q "$list" "$node:$tree/$list"
+target=("$node")
+[ "$node" != any ] || target=(--any)
+wrap=(${sync_from[@]+"${sync_from[@]}"})
+[ "$only" != redraw ] || wrap+=(--overwrite)
 
 # The watchdog has to stay above the measurement cap. It kills a part that has
 # been in flight longer than HARD and records it as ProcessDied, so a default
@@ -93,18 +97,18 @@ hard=$(( cap + 300 ))
 # watchdog. EXTRA is `--look <look>` here, from the slot's canonical argv.
 if [ "$engine" = ldview ]; then
   # shellcheck disable=SC2086
-  exec scripts/run-slot.sh --detach --timeout "$timeout" --in brick-icons \
-    --task "$task" --each "$list" --batch 12 --join , --workers "$workers" --retries 1 \
+  exec scripts/run-slot.sh ${wrap[@]+"${wrap[@]}"} --detach --timeout "$timeout" --in brick-icons \
+    --task "$task" --each "$list" --workers "$workers" --retries 1 \
     --env PATH=/Users/mike/.local/bin:/opt/homebrew/bin:/usr/bin:/bin \
     --out "$dir" --to "$dir" \
-    "$node" -- .venv/bin/python scripts/ldview-batch.py --source "$source" \
+    "${target[@]}" -- .venv/bin/python scripts/ldview-batch.py --source "$source" \
       --dir "$dir" --timeout "$cap" $extra {}
 fi
 
-exec scripts/run-slot.sh --detach --timeout "$timeout" --in brick-icons \
-  --task "$task" --each "$list" --batch 12 --join , --workers "$workers" --retries 1 \
+exec scripts/run-slot.sh ${wrap[@]+"${wrap[@]}"} --detach --timeout "$timeout" --in brick-icons \
+  --task "$task" --each "$list" --workers "$workers" --retries 1 \
   --env PATH=/Users/mike/.local/bin:/opt/homebrew/bin:/usr/bin:/bin \
   --env "SOURCE=$source" --env "KEEP=$dir/renders" --env "EXTRA=$extra" \
   --env "HARD=$hard" \
   --out "$dir" --to "$dir" \
-  "$node" -- scripts/census-batch.sh "$engine" "$cap" "$dir" {}
+  "${target[@]}" -- scripts/census-batch.sh "$engine" "$cap" "$dir" {}

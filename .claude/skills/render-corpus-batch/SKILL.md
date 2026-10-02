@@ -1,13 +1,14 @@
 ---
 name: render-corpus-batch
-description: Fill a render slot's gap — survey what each slot is missing, launch a batch on the fleet sized to a wall-clock budget, wait for it, and ingest what comes back. Use on "render a batch", "fill the occt slot", "what slots are we short on", "top up the corpus", or after an engine fix that should make more parts draw.
+description: Fill a render slot's gap or redraw what an engine change outdated — survey what each slot is missing or outdated, launch a batch on the fleet sized to a wall-clock budget, wait for it, and ingest what comes back. Use on "render a batch", "fill the occt slot", "what slots are we short on", "top up the corpus", "redraw what is stale", or after an engine fix that should make more parts draw.
 ---
 
 ## Instructions
 
 A slot is one `db.SOURCES` entry — an engine crossed with a style — and a part
 is missing from it when no `renders` row files a drawing under it. This skill
-is one round of closing that gap: survey, pick, launch, wait, ingest.
+is one round of closing that gap, or of redrawing what an engine change has
+left outdated: survey, pick, launch, wait, ingest.
 
 It measures as it draws. The fill pass is `census-batch.sh`, the same pass the
 census runs, so every part comes back with a row saying how the drawing scored
@@ -15,9 +16,11 @@ against the part's own polygons. There is no draw-only route here on purpose —
 a render nobody measured is a cell on the wall that no coverage number can
 check.
 
-**Launch through `scripts/run-slot.sh`, not `onto run`.** It is `onto run` with
-the job's returns wired home as part of the launch -- the fetch stream and the
-ingest watcher -- and opting out of either is a flag you have to type.
+**Launch through `scripts/refill-slot.sh`, not `onto run`.** It computes the
+list at launch and hands it to `scripts/run-slot.sh`, which is `onto run` with
+the nodes readied and the job's returns wired home as part of the launch --
+the fetch stream and the ingest watcher -- and opting out of either is a flag
+you have to type.
 
 Two neighbors own the steps either side of this one. `onto-job` is the fleet
 mechanics — nodes, sync, detach, fetch. `ingest-renders` is step 7, and it is
@@ -28,7 +31,8 @@ in from a temp file corrupts a database somebody else is reading.
 
     .venv/bin/python scripts/slot-coverage.py
 
-Every slot, emptiest first, with what it would cost per part. `~` on a median
+Every slot, most owed first -- missing and outdated together -- with what it
+would cost per part. `~` on a median
 means the slot has no rows of its own and the figure is borrowed from its
 engine's other slots — an estimate of an estimate, fine for sizing a batch and
 not for quoting.
@@ -46,20 +50,25 @@ counts only decorated parts, because a plain brick is not missing a decal.
 low priority unless someone asked for it, and naive is also the half that
 still fails stickers.
 
-### 2. Pick a batch
+### 2. Pick what to draw
 
-    .venv/bin/python scripts/slot-coverage.py --slot occt --budget 4 \
-        --workers 10 --out out/slot-occt/batches.txt
+The survey's two columns are two different jobs. **`missing`** is a fill: parts
+with no drawing in the slot. **`outdated`** is a redraw: parts whose drawing
+was measured before the engine's last change (the last commit under
+`brick_icons/` outside `lab/`), so the slot shows a picture the engine no
+longer draws. Reference slots are never outdated -- LDView or a browser drew
+them. A slot short a few hundred parts and outdated by twenty thousand wants
+the redraw.
+
+    .venv/bin/python scripts/slot-coverage.py --slot white-occt --only redraw \
+        --budget 4 --workers 32
 
 `--budget` is wall-clock hours on `--workers` workers, and the part count
-follows from the slot's own recorded seconds. It prints `ENGINE`, `SOURCE`,
-`EXTRA` and `CAP` for the launch — copy them, do not retype them. `CAP` is the
-per-part timeout, `batch.RENDER_TIMEOUT_S` unless `--cap` says otherwise.
-**`EXTRA` is derived
-from `db._CANONICAL` through the CLI's own parser**, so it is the slot's
-canonical drawing and not one slot's flags spelled from memory: leave the
-stroke widths out and the census pass defaults them to 0, silently drawing
-`silhouette-occt` instead.
+follows from the slot's own recorded seconds. **Those seconds are history**:
+they were measured at older builds, and an engine that got faster since makes
+the estimate high -- 2026-09-30's occt redraw was budgeted at 186 core-hours
+and took about 24. Size the announcement from the last round's measured rate
+when there is one. `redraw` takes the cheapest parts first.
 
 Never-tried parts come before previously-errored ones. A part that times out
 costs its whole cap and yields nothing, so a run cut short by its deadline
@@ -75,7 +84,7 @@ round buys almost nothing. silhouette-occt reached 19,513 of 20,597 with all
 1,084 of its gap errored -- 862 of them `ProcessDied` -- and two jobs spent 43
 core-hours re-crashing them for 52 recoveries. A retry round is worth
 launching against an engine change and not otherwise; `--only never` is the
-default choice for a round nobody has a reason to aim.
+default choice for a fill nobody has a reason to aim.
 
 **`--only crashed` is the retry round for a crash fix**: the errored parts
 whose latest attempt was `ProcessDied`. Timeouts and Python exceptions stay
@@ -85,29 +94,27 @@ out, and so does a part that crashed once and has timed out since.
 A part that ran clean and drew nothing is `errored`, not `never`. It has been
 asked and it answered, so a "never tried" set counted as "has no error" will
 be wrong -- the other occt facets draw these parts fine and only the
-silhouette variant comes back empty. `--only never` writes no file and exits
-1 when the class is empty, because an empty batch list launches a job that
-dies in seconds with an empty log and reads as the node refusing the work.
+silhouette variant comes back empty. An empty class writes no file and exits
+1, because an empty batch list launches a job that dies in seconds with an
+empty log and reads as the node refusing the work.
 
 ### 3. Say what you are about to schedule, before you schedule it
 
-This spends hours of somebody else's machine. Before launching, state in one
-short block: **which slot, how many parts, which node, how many workers, the
+This spends hours of other machines. Before launching, state in one short
+block: **which slot, how many parts, which nodes, the worker ceiling, the
 expected wall-clock, and what will be true when it lands.** Then launch — this
 is an announcement, not a request for permission, unless something in it
 surprises you.
 
-    slot        white-occt      12,987 parts missing, filling all of them
-    node        studio          8 workers, ~4.5h wall clock (~36 core-hours)
+    slot        white-occt      20,386 outdated, redrawing all of them
+    nodes       the fleet       32 workers at most, ~1.5h wall clock (~25 core-hours)
     lands as    renders under white-occt + a measurement row per part
-    after       white-occt goes from 7,464 drawn to ~12,900 short of failures
+    after       white-occt drawn at build 1729 throughout
 
-**`orochi` is the user's own Mac, and it is the last node you consider, not the
-first.** It runs the editor, the browsers, the lab servers and several Claude
-sessions, and it is the only machine whose slowness anyone feels. Read its row
-in `onto status` last, and dispatch to it only when no other node can take the
-work and the job has a reason to need this checkout. A remote node being a bit
-busier is not a reason to come home.
+**`orochi` is the user's own Mac and never takes a round.** It runs the editor,
+the browsers, the lab servers and several Claude sessions, and it is the only
+machine whose slowness anyone feels. `run-slot.sh` leaves it out of `any` (see
+below); name it only when the job genuinely needs this checkout.
 
 **Check no peer session is already working that slot.** Several Claude sessions
 share this working directory and cannot see each other's processes. Read their
@@ -118,63 +125,60 @@ that are already drawn and waiting to be indexed. `store-queue/*.txt` and
 
 ### 4. Launch
 
-**`--each` reads its list in the node's own tree, and `out/` is gitignored, so
-the list never arrives on its own.** Copy it first -- the directory does not
-exist there either, so `scp` alone fails:
+One command computes the list at launch time and dispatches it:
 
-    ssh <node> 'mkdir -p ~/.config/onto/work/brick-icons/out/slot-<slot>'
-    scp out/slot-<slot>/batches.txt \
-        <node>:.config/onto/work/brick-icons/out/slot-<slot>/batches.txt
+    scripts/refill-slot.sh occt any slot-occt-r<n> --budget 4
+    scripts/refill-slot.sh white-occt any slot-white-occt-r1729 --only redraw --budget 99
 
-Skip it and the job dies in seconds with `exited -1` and an EMPTY log, which
-reads like the node refusing the work rather than a missing file. Confirm it
-landed (`onto run -in brick-icons <node> -- wc -l < out/slot-<slot>/batches.txt`)
-before launching, because once the job holds the tree lock that check 409s.
+`any` hands the round to onto, which spreads it over every node ready for it
+(`--any --spread 0`) and cuts the list into batches as it hands them out
+(`--batch 12`), so the last batches are a part or two rather than a dozen
+stranding one worker. A node name instead of `any` pins the round there.
+`--workers` is a ceiling for the whole task, 32 under `any`; onto sizes each
+node from its free cores under it. `--only redraw` also passes the watcher
+`--overwrite` (step 6b), without which a redraw indexes nothing.
 
-**The node's tree must draw at this checkout's build, and `run-slot.sh` makes
-it.** Every row records the build that drew it, and a slot counts a part stale
-when that build predates the engine's last change -- so a node trailing HEAD
-spends its whole run producing parts that land still stale. Before launching,
-the script asks the node (and each `--with` helper) for `brick_icons.build()`,
-runs `onto sync` if it differs from this checkout's or this checkout is dirty,
-and refuses to launch if the node still disagrees. It refuses `--any` for the
-same reason: a node it cannot name is a revision it cannot check. A sync that
-refuses because the node holds uncollected files stops the launch; copy those
-files off before reaching for `--force`.
+What the two scripts do so a launch cannot get them wrong -- and why a
+hand-built `onto run` is the wrong tool:
 
-Then, with the four values step 2 printed (`CAP` is the `150` here):
-
-    scripts/run-slot.sh --detach --timeout 12h --in brick-icons --task slot-occt \
-      --each out/slot-occt/batches.txt --workers 10 --retries 1 \
-      --env PATH=/Users/mike/.local/bin:/opt/homebrew/bin:/usr/bin:/bin \
-      --env SOURCE=occt --env KEEP=out/slot-occt/renders \
-      --env EXTRA='--shade-style flat3 --line-width 1.4 --silhouette-width 1.4' \
-      --out out/slot-occt --to out/slot-occt \
-      <node> -- scripts/census-batch.sh occt 150 out/slot-occt {}
-
-- **`SOURCE` is what files the drawings under the right slot, and what makes
-  the tree visible at all.** Without it the tree's name decides the slot, and a
-  name with no facet word always derives `silhouette-<engine>` — an `occt` run
-  would overwrite the oracle's rows part for part. It is also the only reason a
-  tree called `out/slot-occt` is found: the rebuild otherwise takes `out/census*`
-  and nothing else, so a fill under any other name comes all the way home and
-  indexes as nothing. `census-batch.sh` writes it to `<dir>/SOURCE` from the env
-  var, and it travels home with the tree.
-- **`KEEP` must point inside this run's own directory.** It defaults to
-  `out/census/renders`, so a launch that forgets it drops this slot's drawings
-  into the base census tree, where they index as `silhouette-<engine>`.
-- **`--env PATH` is not optional.** The agent's PATH has no `~/.local/bin`, so
-  `resvg` is missing and every part fails `FileNotFoundError` in about a second
-  — fast enough to write hundreds of error rows before anyone looks, and
-  `--skip-done` then skips those parts for good.
-- **Pass `--workers` explicitly**, and the same number the budget assumed. onto
-  divides free memory by the task's recorded peak, which is the whole run's
-  figure rather than one part's, and hands out a single worker. 8 on studio, 10
-  on msb-uai, at ~2.3G each.
-- **Give a retry pass its own directory.** A batch's JSONL is named for its
-  first part, so a retry beginning with a part that began an earlier pass's
-  batch appends to that pass's file — and `--skip-done` reads the old timeout
+- **A node joins only when its tree draws at this checkout's build.** Every
+  row records the build that drew it, so a node trailing HEAD spends its run
+  producing parts that land still outdated. `run-slot.sh` asks each enrolled
+  node for `brick_icons.build()`, runs `onto sync` where it differs or this
+  checkout is dirty, and under `any` leaves out a node it cannot ready (no
+  tree, no `.venv`, a job holding the tree, a sync refused) with the reason
+  printed. A node fetches its base from origin, so **a checkout ahead of its
+  upstream never matches**: push, or pass `--sync-from <clean worktree at
+  origin/main>`.
+- **The list reaches every readied node.** `out/` is gitignored, so no sync
+  carries it, and a job missing it died in seconds with an empty log that read
+  as the node refusing the work. `run-slot.sh` copies it to each, and passes
+  `--needs vendor/ldraw --needs .venv --needs <list>` so onto skips any node
+  without them -- which is also what keeps orochi out: it is never readied, so
+  it never holds the list.
+- **`EXTRA` is derived from `db._CANONICAL`** through the CLI's own parser and
+  read from slot-coverage's output, never retyped: leave the stroke widths out
+  and the census pass defaults them to 0, silently drawing `silhouette-occt`.
+- **`SOURCE` files the drawings under the right slot**, and is what makes the
+  tree visible at all. Without it the tree's name decides, and a name with no
+  facet word derives `silhouette-<engine>` -- an `occt` run would overwrite the
+  oracle part for part. `census-batch.sh` writes it to `<dir>/SOURCE`, and it
+  travels home with the tree.
+- **`KEEP` points inside the round's own directory.** It defaults to
+  `out/census/renders`, where a slot's drawings index as `silhouette-<engine>`.
+- **`--env PATH` carries `~/.local/bin`.** Without it `resvg` is missing and
+  every part fails `FileNotFoundError` in about a second -- fast enough to
+  write hundreds of error rows before anyone looks.
+- **`HARD` sits 300s above the cap.** The watchdog kills a part in flight past
+  it and records `ProcessDied`, so a watchdog under a raised cap buries every
+  part the cap was raised to reach, as a crash.
+- **Every round gets its own directory**, `out/<task>`. A batch's JSONL is
+  named for its first part, so a retry beginning with a part that began an
+  earlier pass's batch appends to that file -- and `--skip-done` reads the old
   rows as done and skips exactly the parts being retried.
+
+A node that is not provisioned at all -- no tree, no `.venv`, no LDraw library
+-- gets `scripts/provision-node.sh <node>` once; after that `any` takes it in.
 
 ### 5. The returns are wired at the launch, not chased afterwards
 

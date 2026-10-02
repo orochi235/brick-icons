@@ -66,7 +66,6 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--batch", metavar="FILE",
                    help="write --list as a batch file instead: one onto item "
                         "a line, the shape census-batch.sh --each reads")
-    p.add_argument("--per-batch", type=int, default=12)
     args = p.parse_args(argv)
 
     sc = _slot_coverage()
@@ -127,10 +126,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.batch:
             out = Path(args.batch)
             out.parent.mkdir(parents=True, exist_ok=True)
-            lines = [",".join(picked[i:i + args.per_batch])
-                     for i in range(0, len(picked), args.per_batch)]
-            out.write_text("\n".join(lines) + "\n" if lines else "")
-            print(f"\nwrote {out} -- {len(picked)} parts, {len(lines)} batches")
+            # One part a line; onto's --batch cuts the items.
+            out.write_text("".join(p + "\n" for p in picked))
+            print(f"\nwrote {out} -- {len(picked)} parts")
             return 0 if picked else 1
         print(f"\n{len(picked)} {args.klass} in {slot}:")
         for pid in picked:

@@ -67,8 +67,6 @@ def main() -> int:
     ap.add_argument("--engine", default="occt",
                     help="whose past results order the buckets")
     ap.add_argument("--out", default="out/census/parts.txt")
-    ap.add_argument("--batches", help="also write <n>-part batch lines here")
-    ap.add_argument("--per-batch", type=int, default=12)
     ap.add_argument("--only", choices=BUCKETS, action="append",
                     help="keep just these buckets (repeatable)")
     ap.add_argument("--include-degenerate", action="store_true",
@@ -97,11 +95,6 @@ def main() -> int:
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join(ids) + "\n")
     print(f"wrote {out}", flush=True)
-    if args.batches:
-        lines = [",".join(ids[i:i + args.per_batch])
-                 for i in range(0, len(ids), args.per_batch)]
-        Path(args.batches).write_text("\n".join(lines) + "\n")
-        print(f"wrote {args.batches} ({len(lines)} batches)", flush=True)
     return 0
 
 

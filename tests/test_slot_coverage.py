@@ -198,3 +198,37 @@ def test_a_retried_timeout_is_budgeted_at_the_cap(conn):
     conn.commit()
     o = sc.owed(conn, SLOT, sc.corpus(conn, SLOT), cap=150)
     assert o["secs"]["3001"] == 150
+
+
+def test_a_drawing_older_than_the_engines_last_change_is_outdated(conn):
+    """Measured before the floor: redrawn. At or after it: current, however
+    far HEAD has moved through commits that never touched the engine."""
+    for pid, build in (("3001", "9.a"), ("3002", "10.b"), ("3003", "11.c")):
+        _part(conn, pid)
+        _measure(conn, pid, SLOT, build=build)
+        _render(conn, pid, SLOT)
+    conn.commit()
+    o = sc.owed(conn, SLOT, sc.corpus(conn, SLOT), floor=10)
+    assert o["outdated"] == ["3001"]
+    assert sc.batch(o, 10 * 3600.0, "redraw") == ["3001"]
+
+
+def test_redraw_takes_the_cheapest_first(conn):
+    for pid, secs in (("3001", 40.0), ("3002", 5.0)):
+        _part(conn, pid)
+        _measure(conn, pid, SLOT, secs=secs, build="9.a")
+        _render(conn, pid, SLOT)
+    conn.commit()
+    o = sc.owed(conn, SLOT, sc.corpus(conn, SLOT), floor=10)
+    assert sc.batch(o, 10 * 3600.0, "redraw") == ["3002", "3001"]
+
+
+def test_a_reference_slot_is_never_outdated(conn):
+    """LDView or a browser drew it; no engine change makes it old."""
+    _part(conn, "3001")
+    _measure(conn, "3001", "reference-gray", build="9.a")
+    _render(conn, "3001", "reference-gray")
+    conn.commit()
+    o = sc.owed(conn, "reference-gray", sc.corpus(conn, "reference-gray"),
+                floor=10)
+    assert o["outdated"] == []

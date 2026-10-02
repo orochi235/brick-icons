@@ -87,15 +87,16 @@ against the census pass rather than against `hlr.visible_segments`.
 
 ### 5. Relaunch only the remainder
 
-Batch the list (a dozen parts a line — `import cadquery` is 6.2s against a
-21.6s median part), rsync it to the node because `out/` is gitignored and
-`--each` reads its list in the node's own tree, then:
+Write the list one part a line -- onto cuts the batches (`--batch 12`, which
+`run-slot.sh` sets) because `import cadquery` is 6.2s against a 21.6s median
+part -- and launch it; `run-slot.sh` readies each node, copies the list there
+and lets onto spread the round:
 
     scripts/run-slot.sh --detach --timeout 12h --in brick-icons --task <task> \
-      --each <list> --workers 10 --retries 1 \
+      --each <list> --workers 32 --retries 1 \
       --env PATH=/Users/mike/.local/bin:/opt/homebrew/bin:/usr/bin:/bin \
       --out out/<dir> --to out/<dir> \
-      <node> -- scripts/census-batch.sh <engine> 150 out/<dir> {}
+      --any -- scripts/census-batch.sh <engine> 150 out/<dir> {}
 
 `150` is `batch.RENDER_TIMEOUT_S`, the per-part cap; census-coverage's `--cap`
 defaults to it too, so the lists it wrote match the round they feed.

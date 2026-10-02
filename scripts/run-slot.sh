@@ -63,20 +63,37 @@ done
 # when that build predates the engine's last change. A node whose tree trails
 # HEAD therefore spends its whole run drawing parts that land still stale:
 # on 2026-09-13 studio sat 36 commits behind and nothing said so.
-tree=$(basename "$ROOT"); nodes=(); prev=""
+tree=$(basename "$ROOT"); nodes=(); prev=""; any=0; each=""
 for a in "${args[@]}"; do
   case $prev in
     --in|-in)     tree=$a ;;
+    --each|-each) each=$a ;;
     --with|-with) IFS=, read -ra helpers <<< "$a"; nodes+=("${helpers[@]}") ;;
   esac
   case $a in
     --in=*|-in=*)     tree=${a#*=} ;;
+    --each=*|-each=*) each=${a#*=} ;;
     --with=*|-with=*) IFS=, read -ra helpers <<< "${a#*=}"; nodes+=("${helpers[@]}") ;;
-    --any|-any) echo "run-slot: --any hides the node, so its tree revision cannot be checked; name the node" >&2; exit 2 ;;
-    --) nodes+=("$prev"); break ;;
+    --any|-any)       any=1 ;;
+    --) [ $any -eq 1 ] || nodes+=("$prev"); break ;;
   esac
   prev=$a
 done
+
+# onto cuts the list into batches itself, so a line is one part. A list from
+# before that holds 12 per line, and --batch would hand out 144 at a time.
+if [ -n "$each" ] && grep -q , "$ROOT/$each" 2>/dev/null; then
+  echo "run-slot: $each has several parts per line; write it again with slot-coverage.py --out" >&2; exit 2
+fi
+
+# Under --any, onto chooses among every node ready for the job, and readiness
+# is what this script makes: a node joins when its tree draws at this
+# checkout's build and holds the list. orochi is never prepared, so --needs
+# keeps it out.
+if [ $any -eq 1 ]; then
+  [ ${#nodes[@]} -eq 0 ] || { echo "run-slot: --any picks the nodes itself; drop --with" >&2; exit 2; }
+  while read -r n; do [ "$n" = orochi ] || nodes+=("$n"); done < <(onto nodes | awk 'NR > 1 { print $1 }')
+fi
 
 build_of() {  # node, or empty for this checkout
   local py='import brick_icons; print(brick_icons.build())'
@@ -87,37 +104,63 @@ build_of() {  # node, or empty for this checkout
   fi
 }
 
+# A named node that cannot be made ready stops the launch; under --any it is
+# left out, and the job runs on the rest.
+unready() {
+  if [ $any -eq 1 ]; then echo "run-slot: leaving $1 out: $2" >&2; return 0; fi
+  echo "run-slot: $1: $2; not launching" >&2; exit 1
+}
+
 want=$(build_of "")
+ready=()
 for node in "${nodes[@]}"; do
   have=$(build_of "$node")
   # A job already holding the node's tree refuses the probe, and pipefail used
   # to end the launch here with no output at all.
-  [ -n "$have" ] || { echo "run-slot: could not read $node:$tree's build -- is a job holding the tree? (onto jobs)" >&2; exit 1; }
+  [ -n "$have" ] || { unready "$node" "could not read $tree's build -- no tree, no .venv, or a job holds it (onto jobs)"; continue; }
   # A dirty label cannot tell two different sets of uncommitted edits apart, so
   # a dirty checkout always ships.
   if [ "$have" != "$want" ] || [ "${want%+}" != "$want" ]; then
     echo "run-slot: $node:$tree draws as ${have:-unknown}, this checkout as $want; syncing"
-    (cd "$SRC" && onto sync -in "$tree" "$node") || { echo "run-slot: sync to $node refused; not launching" >&2; exit 1; }
+    (cd "$SRC" && onto sync -in "$tree" "$node") || { unready "$node" "sync refused"; continue; }
     have=$(build_of "$node")
     if [ "$have" != "$want" ]; then
-      echo "run-slot: $node still draws as ${have:-unknown} after sync; not launching" >&2
       # A node fetches its base commit from the remote and takes the rest as a
       # patch, so its build names the last pushed commit, never an unpushed one.
       ahead=$(git -C "$SRC" rev-list --count '@{upstream}..HEAD' 2>/dev/null || echo 0)
-      [ "$ahead" = "0" ] || echo "run-slot: this checkout is $ahead commit(s) ahead of its upstream; push, then launch again" >&2
-      exit 1
+      [ "$ahead" = "0" ] || echo "run-slot: this checkout is $ahead commit(s) ahead of its upstream; push, or pass --sync-from a clean worktree" >&2
+      unready "$node" "still draws as ${have:-unknown} after sync"; continue
     fi
   fi
   echo "run-slot: $node:$tree at $have"
+  ready+=("$node")
 done
+[ ${#ready[@]} -gt 0 ] || { echo "run-slot: no node is ready; not launching" >&2; exit 1; }
+
+# out/ is gitignored, so no sync carries the list. Without it the job died in
+# seconds with an empty log, which read as the node refusing the work.
+if [ -n "$each" ]; then
+  for node in "${ready[@]}"; do
+    host=$("$ROOT/scripts/node-ssh.sh" "$node")
+    dest="$("$ROOT/scripts/node-work.sh" "$node")/$tree/$each"
+    ssh "$host" "mkdir -p '$(dirname "$dest")'" && scp -q "$ROOT/$each" "$host:$dest" \
+      || { echo "run-slot: could not copy $each to $node; not launching" >&2; exit 1; }
+  done
+fi
+
+defaults=(--kind render --icon photo.on.rectangle.angled --batch 12 --join ,)
+if [ $any -eq 1 ]; then
+  defaults+=(--spread 0 --needs vendor/ldraw --needs .venv)
+  [ -z "$each" ] || defaults+=(--needs "$each")
+fi
 
 echo "run-slot: launching $task"
 # `--to`, `--out` and the watcher's tree are relative paths, and resolving them
 # against wherever this was called from once delivered a whole job into a
 # worktree that had no corpus.db.
 cd "$ROOT"
-# First, so a caller's own --kind or --icon still wins: the last one given does.
-onto run --kind render --icon photo.on.rectangle.angled "$@"
+# First, so a caller's own flags still win: the last one given does.
+onto run "${defaults[@]}" "$@"
 
 if [ $detach -eq 0 ]; then
   echo "run-slot: not --detach, so the job already ran to completion; nothing to stream"

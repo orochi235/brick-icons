@@ -421,17 +421,15 @@ Build the list at launch, not before (occt slot only):
 
     .venv/bin/python scripts/slow-or-failing.py --out out/slot-occt-<date>
     # 10:10 today: 635 drew in >= 120 s, 459 failing, 1094 parts
-    for h in studio keiei uai; do ssh $h mkdir -p .config/onto/work/brick-icons/out/slot-occt-<date>
-      scp out/slot-occt-<date>/batches.txt $h:.config/onto/work/brick-icons/out/slot-occt-<date>/; done
     d=out/slot-occt-<date>; P=/Users/mike/.local/bin:/opt/homebrew/bin:/usr/bin:/bin
     scripts/run-slot.sh --overwrite --detach --timeout 8h --in brick-icons \
-      --task slot-occt-<date> --each $d/batches.txt --workers 10 --retries 1 \
-      --with studio,keiei --env PATH=$P --env SOURCE=occt --env KEEP=$d/renders \
+      --task slot-occt-<date> --each $d/batches.txt --workers 32 --retries 1 \
+      --env PATH=$P --env SOURCE=occt --env KEEP=$d/renders \
       --env EXTRA='--shade-style flat3 --line-width 1.4 --silhouette-width 1.4' \
-      --out $d --to $d msb-uai -- scripts/census-batch.sh occt 150 $d {}
+      --out $d --to $d --any -- scripts/census-batch.sh occt 150 $d {}
 
-Push first -- run-slot.sh launches only a pushed HEAD. Copying the list before
-run-slot.sh's sync is fine: slot-occt-0926's list survived one.
+Push first, or pass `--sync-from` a clean worktree -- a node draws only a
+pushed HEAD. run-slot.sh copies the list to every node it readies.
 
 The occt redraw will queue a large batch on /review: every drawing it
 displaces by 12 px or more.
