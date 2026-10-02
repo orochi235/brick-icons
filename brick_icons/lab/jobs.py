@@ -21,7 +21,9 @@ class Registry:
 
     def start(self, kind: str, items: list, work: Callable,
               workers: int = 1) -> str:
-        """Run `work(item, emit, cancel)` over `items` on a thread. Whatever
+        """Run `work(item, emit, cancel)` over `items` on a thread. `emit`
+        logs a message; `emit.progress(phase, fraction)` says how far the
+        item has got, kept by item index under `progress`. Whatever
         `work` returns is collected into the job's `results`, which is how a
         caller gets an answer back without closing over the not-yet-assigned
         id. `cancel` is the job's own event: an item long enough to be worth
@@ -31,7 +33,8 @@ class Registry:
         job_id = uuid.uuid4().hex[:12]
         record = {"id": job_id, "kind": kind, "state": "running",
                   "total": len(items), "done": 0, "failed": 0,
-                  "events": [], "results": [], "cancel": threading.Event(),
+                  "events": [], "results": [], "progress": {},
+                  "cancel": threading.Event(),
                   "started": time.time()}
         with self._lock:
             self._jobs[job_id] = record
@@ -51,6 +54,11 @@ class Registry:
             def emit(message, _i=index, _ok=True):
                 record["events"].append({"index": _i, "total": record["total"],
                                          "message": str(message), "ok": _ok})
+
+            def progress(phase: str, fraction: float, _i=index) -> None:
+                record["progress"][_i] = {"phase": phase,
+                                          "fraction": round(fraction, 3)}
+            emit.progress = progress
 
             try:
                 result = work(item, emit, record["cancel"])
@@ -72,7 +80,9 @@ class Registry:
         record = self._jobs.get(job_id)
         if record is None:
             return None
-        return {k: v for k, v in record.items() if k != "cancel"}
+        out = {k: v for k, v in record.items() if k != "cancel"}
+        out["progress"] = dict(out["progress"])     # a writer may be adding
+        return out
 
     def cancel(self, job_id: str) -> bool:
         record = self._jobs.get(job_id)

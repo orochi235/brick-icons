@@ -4,6 +4,7 @@ import { type Camera, panBy, zoomAt } from '@lab/panes/camera';
 import { PaneStage, type PaneState } from '@lab/panes/PaneStage';
 import { bubbleDiameter, loupeCamera, loupeCameraForImage, stageOffset,
   type Point } from '@lab/panes/loupe';
+import { useRenderProgress } from '@lab/panes/renderProgress';
 import type { Source } from '@lab/panes/sources';
 import '@lab/panes/SourcePane.css';
 
@@ -49,6 +50,20 @@ export interface SourcePaneProps {
  *  says it once instead of stopping the event on every child. */
 function startsPan(target: EventTarget | null): boolean {
   return !(target instanceof Element) || !target.closest('[data-no-drag]');
+}
+
+/** The render's own report of how far it has got, once one arrives. `quiet`
+ *  leaves the words to the stage, which already says it is rendering. */
+function Rendering({ source, quiet }: { source: Source; quiet: boolean }) {
+  const at = useRenderProgress(source.id);
+  if (!at) return quiet ? null : <span className="pane-busy">rendering…</span>;
+  return (
+    <span className="pane-busy pane-progress">
+      <progress value={at.fraction} max={1} aria-label={`${source.label} render`} />
+      <span className="pane-progress-pct">{Math.round(at.fraction * 100)}%</span>
+      <span>{at.phase}</span>
+    </span>
+  );
 }
 
 export function SourcePane({ source, state, camera, onCamera, note, busy,
@@ -104,7 +119,8 @@ export function SourcePane({ source, state, camera, onCamera, note, busy,
       <header className="pane-head">
         <strong>{source.label}</strong>
         {note ? <span className="pane-note">{note}</span> : null}
-        {busy ? <span className="pane-busy">rendering…</span> : null}
+        {busy || state.kind === 'running'
+          ? <Rendering source={source} quiet={!busy} /> : null}
       </header>
       {state.kind === 'error' ? <p className="pane-error">{state.message}</p> : null}
       <div

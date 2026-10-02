@@ -72,12 +72,10 @@ while [ "$n" -le "$MAX_RESTARTS" ]; do
       --jsonl "$DIR/$engine-$tag.jsonl" --skip-done --keep "$KEEP"
     echo $? > "$rcfile"
   } | awk -v label="$engine $tag" '
-      # plan first: its raw line is machine-directed, and echoing it unlabelled
-      # would hand onto a plan for a unit with no name
-      /^onto: plan / { printf "onto: plan %s %s\n", $3, label; next }
-      { print }
-      /^[0-9]+\/[0-9]+ / { split($1, a, "/"); printf "onto: progress %s/%s %s\n", a[1], a[2], label }
-      { fflush() }'
+      # labelled, since every shard shares one log: unlabelled they would
+      # be one bar jumping between shards
+      /^onto: (plan|progress|failed) / { printf "onto: %s %s %s\n", $2, $3, label; fflush(); next }
+      { print; fflush() }'
   [ "$(cat "$rcfile")" = "0" ] && break
   # onto prune: stop at a part boundary rather than mid-render. -n keeps this
   # a no-op under an agent that predates the marker.

@@ -99,3 +99,11 @@ def test_a_wide_job_runs_its_items_at_once():
     job_id = r.start("test", ["a", "b"], work, workers=2)
     assert _wait(r, job_id)["state"] == "done"
     assert sorted(r.get(job_id)["results"]) == ["a", "b"]
+
+
+def test_an_item_reports_progress_by_its_index():
+    def work(item, emit, cancel):
+        emit.progress("fill", 0.5)
+    r = jobs.Registry()
+    job_id = r.start("test", ["a"], work)
+    assert _wait(r, job_id)["progress"] == {1: {"phase": "fill", "fraction": 0.5}}

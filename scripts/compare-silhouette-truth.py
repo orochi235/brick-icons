@@ -45,7 +45,7 @@ from scipy import ndimage
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from brick_icons import cli, edge_truth, hlr, timing
+from brick_icons import cli, edge_truth, hlr, progress, timing
 from brick_icons import build
 from brick_icons.batch import Runner
 
@@ -130,6 +130,32 @@ def drawn_as(args) -> dict:
     return fields
 
 
+#: onto's units per part, so a part in flight moves the bar.
+UNITS = 100
+#: The render's share of a part at 5s or more; scoring is the rest. Measured
+#: over the census rows: 0.86 occt, 0.88 naive.
+RENDER_SHARE = 0.86
+
+
+#: The current part's sink, set per part by main; `one` runs in a forked child.
+_say = None
+
+
+def _onto(at: int, total: int, part: str):
+    """A `progress` sink naming the part's phase and position to onto, which
+    reads both off this item's own stdout."""
+    said = [None, None]
+
+    def say(phase: str, fraction: float) -> None:
+        done = at * UNITS + int(fraction * RENDER_SHARE * UNITS)
+        if phase != said[0]:
+            print(f"onto: item {part} {phase}"[:60], flush=True)
+        if done != said[1]:
+            print(f"onto: progress {done}/{total * UNITS}", flush=True)
+        said[:] = phase, done
+    return say
+
+
 def one(part: str, args, tmp: Path) -> dict:
     """Render and compare against the reference.
 
@@ -152,8 +178,14 @@ def one(part: str, args, tmp: Path) -> dict:
     # fixes.
     phase = {}
     timing.reset()
-    with timing.phase("render"):
-        cli.process_one(cfg, part, tmp)
+    progress.watch(_say, cfg)
+    try:
+        with timing.phase("render"):
+            cli.process_one(cfg, part, tmp)
+    finally:
+        progress.watch(None)
+    if _say:
+        _say("score", 1.0)
     # Paths, not names: `render/geometry/engine/hlr` says where in the render
     # the time went and at what depth. A parent's time includes its children,
     # so what a level does not name is its own leftover -- for `render` that
@@ -216,6 +248,7 @@ def _bare(part: str, work, args) -> dict:
 
 
 def main() -> int:
+    global _say
     ap = argparse.ArgumentParser()
     ap.add_argument("parts", nargs="*")
     ap.add_argument("--list")
@@ -292,14 +325,15 @@ def main() -> int:
     runner = Runner(args.jsonl, timeout=args.timeout, key="part", extra=extra,
                     isolate=args.isolate,
                     mem_gb=args.mem_gb) if args.jsonl else None
+    before = len(ids)
     if runner and args.skip_done:
-        before = len(ids)
         ids = runner.remaining(ids)
         print(f"resuming: {before - len(ids)} done, {len(ids)} left", flush=True)
-        # Only this process knows the absolute denominator: remaining() dedupes
-        # by key, so counting the JSONL overcounts a part that has a retry row.
-        # census-shard.sh attaches the label; onto reads it as the unit's size.
-        print(f"onto: plan {before - len(ids)}/{before}", flush=True)
+    # Only this process knows the absolute denominator: remaining() dedupes
+    # by key, so counting the JSONL overcounts a part that has a retry row.
+    # census-shard.sh attaches the label; onto reads it as the unit's size.
+    base, bad = before - len(ids), 0
+    print(f"onto: plan {base * UNITS}/{before * UNITS}", flush=True)
 
     keep = Path(args.keep) if args.keep else None
     if keep:
@@ -311,8 +345,14 @@ def main() -> int:
         for n, pid in enumerate(ids, 1):
             def work(part, tmp=tmp):
                 return one(part, args, tmp)
+            _say = _onto(base + n - 1, before, pid)
             r = runner.run(pid, work) if runner else _bare(pid, work, args)
             rows.append(r)
+            bad += "error" in r
+            print(f"onto: progress {(base + n) * UNITS}/{before * UNITS}",
+                  flush=True)
+            if bad:
+                print(f"onto: failed {bad * UNITS}/{before * UNITS}", flush=True)
             if "error" in r:
                 print(f"{n}/{len(ids)} {pid} {args.engine}@{args.angle}: "
                       f"FAILED {r['error']}: {r['detail'].splitlines()[0][:120]} "

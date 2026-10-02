@@ -8,7 +8,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 from scipy import ndimage
 
-from . import timing
+from . import progress, timing
 from . import colors, geom2d, primitives, process, quadric, unwrap
 
 
@@ -443,7 +443,8 @@ def order_faces(faces, proj=None, eps=1e-6, own_occ=None):
     pairs = _bbox_pairs(polys)
     if WITNESS_DISTANCE_REJECT:
         pairs = _pairs_within_reach(polys, boxes, pairs)
-    for i, j in pairs:
+    for k, (i, j) in enumerate(pairs):
+        progress.step(k, len(pairs))
         if ORDER_PLANE_SKIP and _planes_tie(faces, planes, boxes, i, j,
                                             own_occ, eps):
             continue
@@ -981,7 +982,8 @@ def _overlap_tree(geoms):
     return tree, keys
 
 
-def _refine_order_clips(ordered, geoms, frags, proj, fit, step=1.2):
+def _refine_order_clips(ordered, geoms, frags, proj, fit, step=1.2,
+                        tick=None):
     """Fix clips the scalar paint order got wrong.
 
     A face that passes THROUGH other geometry (3673's pin barrel runs through
@@ -1044,7 +1046,9 @@ def _refine_order_clips(ordered, geoms, frags, proj, fit, step=1.2):
     def is_print(k):
         return ordered[k].get("color", 16) != 16
 
-    for idx in sorted(geoms):
+    for n, idx in enumerate(sorted(geoms)):
+        if tick is not None:
+            tick(n, len(geoms))
         # print is ink on its carrier, placed by order_faces and its standoff:
         # it neither loses area here nor gives any up. Probed, a print on a
         # dish sits within eps of the dish at the limb and the grid flip-flops
@@ -2157,6 +2161,15 @@ def _deco_shade(f, style, under=None):
     return {"gradient": dict(spec, stops=stops)}
 
 
+#: Each clip pass's share of fill: the first, then each re-clip, whose number
+#: is unknown until the one before ends -- hence the shrinking bands. 62792
+#: spent 13.9s of 15.3s of fill in three passes of about equal cost. Each
+#: render counts its passes as `fill_clip_passes`, for the next calibration.
+_CLIP_BANDS = ((0.0, 0.55), (0.55, 0.75), (0.75, 0.88), (0.88, 0.92))
+#: The boolean clip's share of one pass; the rest is _refine_order_clips.
+_CLIP_SHARE = 0.4
+
+
 @timing.timed("fill")
 def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
              refits=None, loops=None, strokes=None, line_px=2.0,
@@ -2202,6 +2215,13 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
         ordered = sorted(faces, key=lambda f: -f["depth"])
 
     g_cache = {}
+    passes = []
+
+    def tick(lo, hi):
+        """`progress.step` across [lo, hi] of this clip pass's band."""
+        a, b = _CLIP_BANDS[min(len(passes), len(_CLIP_BANDS) - 1)]
+        return lambda i, n: progress.step(
+            int(1000 * (a + (b - a) * (lo + (hi - lo) * i / max(n, 1)))), 1000)
 
     def clip_pass(trims=None):
         frags, geoms, garea = {}, {}, {}
@@ -2228,7 +2248,9 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
         # that overlaps it; a union of all nearer faces, grown one face at a
         # time, was quadratic in face count and timed out on baseplates
         tree, keys = _overlap_tree(geoms) if clip and geoms else (None, None)
-        for idx in sorted(geoms, reverse=True):
+        clipping = tick(0.0, _CLIP_SHARE)
+        for n, idx in enumerate(sorted(geoms, reverse=True)):
+            clipping(n, len(geoms))
             g = geoms[idx]
             frag = g
             if tree is not None:
@@ -2238,7 +2260,10 @@ def fill_ops(faces, style, clip=True, ellipses=None, proj=None, fit=None,
             if geom2d.area(frag) >= MIN_FRAG_AREA:
                 frags[idx] = frag
         if clip:
-            _refine_order_clips(ordered, geoms, frags, proj, fit)
+            _refine_order_clips(ordered, geoms, frags, proj, fit,
+                                tick=tick(_CLIP_SHARE, 1.0))
+        passes.append(1)
+        timing.count("fill_clip_passes")
         return frags, garea, geoms
 
     frags, garea, geoms = clip_pass()

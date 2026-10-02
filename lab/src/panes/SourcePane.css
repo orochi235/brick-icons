@@ -27,6 +27,20 @@
 .pane-note { opacity: 0.7; }
 .pane-busy { opacity: 0.7; }
 
+/* Percent in a fixed cell and the phase last: both change while the render
+   runs, and the phase name is the one whose length varies. */
+.pane-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.pane-progress progress { width: 5rem; height: 0.4rem; }
+.pane-progress-pct {
+  min-width: 4ch;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
 /* The previous drawing, held while its replacement renders: dimmed so the
    pane never blanks between two renders of the same part. Not `stale` --
    `.mark-stale` already means a mark whose geometry no longer applies, and

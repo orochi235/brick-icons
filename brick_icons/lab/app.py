@@ -209,7 +209,7 @@ def create_app(root: Path | str = ".",
 
         def work(case, emit, cancel):
             result = runner.render(case["argv"], root=app.state.cache_root,
-                                   cancel=cancel)
+                                   cancel=cancel, watch=emit.progress)
             svg = app.state.cache_root / result["key"] / f"{req.part}.svg"
             compared = goldens_status.compare_case(svg, digests.get(case["combo"]))
             emit(f"{case['case']}: {compared['state']}")
@@ -228,7 +228,8 @@ def create_app(root: Path | str = ".",
 
         def work(item, emit, cancel):
             result = runner.render(item, root=app.state.cache_root,
-                                   force=req.force, cancel=cancel)
+                                   force=req.force, cancel=cancel,
+                                   watch=emit.progress)
             emit(f"{req.part}: {'cached' if result['cached'] else 'rendered'}")
             if not result["ok"]:
                 raise RuntimeError(result["error"])
@@ -371,7 +372,8 @@ def create_app(root: Path | str = ".",
 
         def work(item, emit, cancel):
             result = runner.render(item, root=app.state.cache_root,
-                                   force=req.force, cancel=cancel)
+                                   force=req.force, cancel=cancel,
+                                   watch=emit.progress)
             emit(f"{item[0]}: {'cached' if result['cached'] else 'rendered'}")
             if not result["ok"]:
                 raise RuntimeError(result["error"])

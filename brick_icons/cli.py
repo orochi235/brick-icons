@@ -12,7 +12,7 @@ from PIL import Image
 from shapely.geometry import Polygon
 
 from . import render, process, trace, hlr, library, shade, geom2d, unwrap, instancing
-from . import caption, transom
+from . import caption, progress, transom
 from .config import load_config, Config, DEFAULTS
 
 
@@ -136,6 +136,9 @@ def build_parser():
                         "(0,0 = frontal; positive azimuth = from the left; "
                         "default ~37,39 upper-left)")
     p.add_argument("--debug-dir", default=None)
+    p.add_argument("--progress", action="store_true", default=None,
+                   help="print how far each render has got to stderr: "
+                        "seconds, percent and the phase it is in")
     p.add_argument("--review", nargs="?", const="run", default=None,
                    choices=("one", "run", "loose"), metavar="MODE",
                    help="put each render on the transom wall as a run and "
@@ -372,6 +375,13 @@ def process_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
         caption.stamp_file(path, tag, secs)
 
 
+def _progress_printer(at: str, t0: float):
+    def show(phase: str, fraction: float) -> None:
+        print(f"{at} {time.perf_counter() - t0:6.1f}s {fraction:4.0%}  {phase}",
+              file=sys.stderr, flush=True)
+    return show
+
+
 def _written(out_dir: Path, name: str, since_ns: int) -> list[Path]:
     """The images this render wrote: `<name>.*` with a stampable suffix,
     modified since it started (a rerun overwrites the same names)."""
@@ -446,7 +456,7 @@ def _draw_one(cfg: Config, part: str, out_dir: Path, debug_dir=None,
         stud_base = process.icon_weight(cfg.line_width, px_per_ldu,
                                         cfg.stroke_ldu, 0.0)
         style = None
-        if cfg.shade_style != "none" and not cfg.wireframe:
+        if cfg.draws_fills:
             style = shade.make_style(cfg.shade_style,
                                      part_color=shade.parse_hex_color(cfg.part_color),
                                      light=cfg.light)
@@ -764,8 +774,15 @@ def main(argv=None) -> int:
     sent = []
     for i, part in enumerate(parts, 1):
         before = _listing(out_dir)
-        process_one(cfg, part, out_dir, debug_dir=args.debug_dir)
-        print(f"done: {part}")
+        t0 = time.perf_counter()
+        if args.progress:
+            progress.watch(_progress_printer(f"[{i}/{len(parts)}]", t0), cfg)
+        try:
+            process_one(cfg, part, out_dir, debug_dir=args.debug_dir)
+        finally:
+            progress.watch(None)
+        print(f"[{i}/{len(parts)}] done: {part} "
+              f"{time.perf_counter() - t0:6.1f}s", flush=True)
         if not run:
             continue
         # Whatever the render wrote, since `process_one` reports nothing about

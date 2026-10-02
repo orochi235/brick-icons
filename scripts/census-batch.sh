@@ -62,10 +62,10 @@ set -- $batch
 unset IFS
 PASSES=${PASSES:-$#}
 
-# onto reads these off this item's own stdout pipe, so an unlabelled line is
-# attributed to this worker instead of colliding with the other ten on the
-# job's shared log. Without them the only progress onto sees is the batch
-# finishing, which for 25 parts is a bar that moves once every twenty minutes.
+# The pass prints its own `onto:` lines, which onto reads off this item's
+# stdout pipe, so an unlabelled one is this worker's alone. They count 100 per
+# part and move inside one, so a bar does not sit still for a part's whole
+# render. The awk is only there to flush per line.
 rc=$(mktemp)
 worker=
 trap 'rm -f "$rc"; kill "$worker" 2>/dev/null || true' EXIT INT TERM
@@ -87,16 +87,7 @@ while :; do
       --engine "$engine" --timeout "$timeout" --mem-gb "$MEM_GB" \
       --jsonl "$jsonl" --skip-done --keep "$KEEP" ${EXTRA:-}
     echo $? > "$rc"
-  } | awk '
-      /^onto: plan / { print; fflush(); next }
-      { print }
-      /^[0-9]+\/[0-9]+ / {
-        split($1, a, "/")
-        if ($0 ~ / FAILED /) bad++
-        printf "onto: progress %s/%s\n", a[1], a[2]
-        if (bad) printf "onto: failed %d/%s\n", bad, a[2]
-      }
-      { fflush() }' &
+  } | awk '{ print; fflush() }' &
   worker=$!
 
   # .inflight's mtime is the current part's start time, and the only clock a

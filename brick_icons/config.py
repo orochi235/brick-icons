@@ -137,6 +137,11 @@ class Config:
     gamma: float
     levels: tuple | None
 
+    @property
+    def draws_fills(self) -> bool:
+        """Whether the drawing paints surface fills under its strokes."""
+        return self.shade_style != "none" and not self.wireframe
+
 
 def load_config(toml_path=None, overrides=None, root="."):
     data = dict(DEFAULTS)

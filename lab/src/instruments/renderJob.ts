@@ -1,5 +1,6 @@
 import type { LabClient, RenderResult } from '@lab/api/client';
-import { settledJob } from '@lab/api/jobPoll';
+import { jobStates } from '@lab/api/jobPoll';
+import { setRenderProgress } from '@lab/panes/renderProgress';
 import { SOURCES, sourceConfig, type SourceId } from '@lab/panes/sources';
 
 /** One finished render, tagged with the pane it belongs to and with the run
@@ -63,7 +64,17 @@ async function renderOne(
     if (signal.aborted) return [];
     const started = await client.startRender(part, sourceConfig(SOURCES[source]!, config));
 
-    const state = await settledJob(client, started.job, { signal, pollMs });
+    let state = null;
+    try {
+      for await (const seen of jobStates(client, started.job, { signal, pollMs })) {
+        state = seen;
+        const at = seen.progress?.['1'];
+        if (at) setRenderProgress(source, at);
+      }
+    } finally {
+      setRenderProgress(source, null);
+    }
+    if (state?.state === 'running') state = null;
     // Abandoning the wait leaves the render running: the server has a process
     // on it and nothing left that wants the answer. A cancel that fails is
     // still not this pane's failure -- the pane is already gone.

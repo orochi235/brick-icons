@@ -16,6 +16,7 @@ out once when the tree is read rather than at every `with`.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from contextlib import contextmanager
 from functools import wraps
 
@@ -24,12 +25,25 @@ SEP = "/"
 _phases: dict[str, float] = {}
 _counts: dict[str, int] = {}
 _stack: list[str] = []
+_listener: Callable[[str], None] | None = None
+
+
+def listen(fn: Callable[[str], None] | None) -> None:
+    """Call `fn(path)` as each phase opens, or stop with None. Kept across
+    `reset`, which clears one render's numbers and not who is watching."""
+    global _listener
+    _listener = fn
 
 
 def reset() -> None:
     _phases.clear()
     _counts.clear()
     _stack.clear()
+
+
+def current() -> str:
+    """The innermost phase open now, as its path."""
+    return SEP.join(_stack)
 
 
 def phases() -> dict[str, float]:
@@ -61,6 +75,8 @@ def phase(name: str):
         raise ValueError(f"a phase name cannot contain {SEP!r}: {name!r}")
     _stack.append(name)
     path = SEP.join(_stack)
+    if _listener is not None:
+        _listener(path)
     t = time.perf_counter()
     try:
         yield

@@ -67,6 +67,25 @@ def test_a_render_process_that_dies_is_an_error():
     assert "3" in outcome["error"]
 
 
+def _progress_then_answer(conn):
+    conn.send(("progress", "fill", 0.5))
+    conn.send({"ok": True, "error": None, "cancelled": False})
+
+
+def test_progress_on_the_pipe_is_handed_on_and_is_not_the_answer():
+    """The child sends progress tuples on the same pipe as its answer."""
+    ctx = multiprocessing.get_context("spawn")
+    receive, send = ctx.Pipe(duplex=False)
+    proc = ctx.Process(target=_progress_then_answer, args=(send,), daemon=True)
+    proc.start()
+    seen = []
+    outcome = runner._collect(proc, receive, None,
+                              lambda phase, f: seen.append((phase, f)))
+    proc.join(5)
+    assert outcome["ok"] is True
+    assert seen == [("fill", 0.5)]
+
+
 def test_a_signal_death_is_named_by_its_signal():
     assert "SIGSEGV" in runner._death(-signal.SIGSEGV)
 

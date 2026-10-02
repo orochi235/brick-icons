@@ -480,6 +480,23 @@ extraction [`decal`](#decal-extraction) performs, on a white ground, which is
 the only way to check that decoration bound to the right carrier without
 reading projected output.
 
+#### `--progress`
+
+Report how far each render has got, on stderr: seconds, percent and the phase
+it is in. The percent comes from `brick_icons/progress.py`, whose phase shares
+are measured from census rows by `scripts/calibrate-progress.py`; the slow
+phases (`faces`, `fill`) also report inside themselves.
+
+```
+$ brick-icons 62792 --shade-style flat3 --progress
+[1/1]   10.0s  41%  fill
+```
+
+A census pass prints the same report as `onto:` lines (100 units per part,
+the phase as the worker's label), so `onto top` shows a bar that moves within
+a part rather than once per part. The lab shows it as a bar in each pane's
+header while the pane renders.
+
 #### `--review [MODE]`
 
 Put each render on the [transom](https://github.com/orochi235/transom) wall
@@ -491,8 +508,8 @@ box under them, and each is reported as it is given:
 
 ```
 $ brick-icons --list parts.txt --shading outline --review
-done: 3001
-done: 3002
+[1/12] done: 3001    2.1s
+[2/12] done: 3002    1.8s
 12 on the wall as review-20260925-1552-c065; waiting on verdicts
 [1/12] 3001: better -- corner arcs read now
 [2/12] 3002: worse

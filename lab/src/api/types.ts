@@ -62,6 +62,8 @@ export interface JobState {
   failed: number;
   events: { index: number; total: number; message: string; ok: boolean }[];
   results: RenderResult[];
+  /** How far each item has got, by its 1-based index, while it runs. */
+  progress?: Record<string, { phase: string; fraction: number }>;
 }
 
 export type LabConfig = Record<string, unknown>;

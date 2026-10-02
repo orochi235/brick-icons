@@ -21,7 +21,7 @@ import threading
 import time
 from pathlib import Path
 
-from .. import batch, cli
+from .. import batch, cli, progress
 from . import cache
 
 DEFAULT_WORKERS = 4
@@ -55,7 +55,8 @@ def _death(code: int | None) -> str:
     return f"the render process exited {code}"
 
 
-def draw(argv: list[str], out_dir: Path) -> None:
+def draw(argv: list[str], out_dir: Path,
+         watch: progress.Sink | None = None) -> None:
     """One part drawn by the CLI's own path: its parser, its Config,
     `process_one`. Raises whatever the render raises."""
     args, _ = cli.build_parser().parse_known_args(argv)
@@ -63,13 +64,18 @@ def draw(argv: list[str], out_dir: Path) -> None:
     parts = cli._gather_parts(args)
     if not parts:
         raise ValueError("no part given")
-    cli.process_one(cfg, parts[0], out_dir)
+    progress.watch(watch, cfg)
+    try:
+        cli.process_one(cfg, parts[0], out_dir)
+    finally:
+        progress.watch(None)
 
 
-def _render_here(argv: list[str], out_dir: Path) -> dict:
+def _render_here(argv: list[str], out_dir: Path,
+                 watch: progress.Sink | None = None) -> dict:
     """The render itself, in whatever process is running it."""
     try:
-        draw(argv, out_dir)
+        draw(argv, out_dir, watch)
     except Exception as e:                              # noqa: BLE001
         return {"ok": False, "error": f"{type(e).__name__}: {e}",
                 "cancelled": False}
@@ -79,7 +85,9 @@ def _render_here(argv: list[str], out_dir: Path) -> dict:
 def _child(argv: list[str], out_dir: str, conn) -> None:
     batch.quiet_fatal_signals()
     try:
-        conn.send(_render_here(argv, Path(out_dir)))
+        conn.send(_render_here(
+            argv, Path(out_dir),
+            lambda phase, fraction: conn.send(("progress", phase, fraction))))
     finally:
         conn.close()
 
@@ -97,11 +105,17 @@ def _reaped(proc) -> int | None:
     return proc.exitcode
 
 
-def _collect(proc, conn, cancel: threading.Event | None) -> dict:
-    """What the child sent, or why nothing came."""
+def _collect(proc, conn, cancel: threading.Event | None,
+             watch: progress.Sink | None = None) -> dict:
+    """What the child sent, or why nothing came. Progress on the way is
+    handed to `watch`."""
     while True:
         if conn.poll(0.1):
             got = _received(conn)
+            if isinstance(got, tuple):
+                if watch is not None:
+                    watch(*got[1:])
+                continue
             if got is not None:
                 return got
             return {"ok": False, "error": _death(_reaped(proc)),
@@ -112,17 +126,21 @@ def _collect(proc, conn, cancel: threading.Event | None) -> dict:
             return {"ok": False, "error": "cancelled", "cancelled": True}
         if not proc.is_alive():
             # It may have sent as it exited, so the pipe outranks the exit code.
-            if conn.poll(0):
+            while conn.poll(0):
                 got = _received(conn)
+                if isinstance(got, tuple):
+                    continue
                 if got is not None:
                     return got
+                break
             return {"ok": False, "error": _death(_reaped(proc)),
                     "cancelled": False}
 
 
 def render(argv: list[str], root: Path | str = cache.DEFAULT_ROOT,
            force: bool = False,
-           cancel: threading.Event | None = None) -> dict:
+           cancel: threading.Event | None = None,
+           watch: progress.Sink | None = None) -> dict:
     out_dir = cache.dir_for(argv, root=root)
     existing = cache.artifacts(out_dir)
     if existing and not force:
@@ -159,7 +177,7 @@ def render(argv: list[str], root: Path | str = cache.DEFAULT_ROOT,
                             daemon=True)
         proc.start()
         try:
-            outcome = _collect(proc, receive, cancel)
+            outcome = _collect(proc, receive, cancel, watch)
         finally:
             send.close()
             receive.close()

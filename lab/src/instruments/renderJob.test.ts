@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderSignature, runRenders } from '@lab/instruments/renderJob';
 import type { LabClient, RenderResult } from '@lab/api/client';
+import { setRenderProgress } from '@lab/panes/renderProgress';
+
+vi.mock('@lab/panes/renderProgress', () => ({ setRenderProgress: vi.fn() }));
 
 function result(over: Partial<RenderResult> = {}): RenderResult {
   return {
@@ -29,6 +32,26 @@ async function collect<T>(iter: AsyncIterable<T>): Promise<T[]> {
 }
 
 describe('runRenders', () => {
+  it('hands the render\'s progress to its pane, then clears it', async () => {
+    const states = [
+      { state: 'running', progress: { 1: { phase: 'fill', fraction: 0.4 } }, results: [] },
+      { state: 'done', results: [result()] },
+    ];
+    const job = vi.fn(async () => ({
+      id: 'j1', kind: 'render', total: 1, done: 0, failed: 0, events: [],
+      ...states.shift()!,
+    }));
+    vi.mocked(setRenderProgress).mockClear();
+    await collect(runRenders({
+      client: fakeClient({ job } as Partial<LabClient>), part: '3941', config: {},
+      sources: ['occt'], signal: new AbortController().signal, pollMs: 0,
+    }));
+    expect(vi.mocked(setRenderProgress).mock.calls).toEqual([
+      ['occt', { phase: 'fill', fraction: 0.4 }],
+      ['occt', null],
+    ]);
+  });
+
   it('yields a total before any item', async () => {
     const events = await collect(runRenders({
       client: fakeClient(), part: '3941', config: {},
