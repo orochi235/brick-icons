@@ -1,3 +1,12 @@
+## 2026-10-02: the r1729 ingest watchers were stopped; nothing is ingesting those rounds
+
+Both `ingest-watch.py` watchers for `slot-silhouette-occt-r1729` and
+`slot-white-occt-r1729` were killed at 16:38 (from a levar session) for loading
+orochi. Their fleet jobs kept running; when they finish, rerun each watcher with
+`--once` in place of `--until` to fold the trees into `corpus.db`. The white
+watcher was misfiling: its log reads `slot-white-occt-r1729 -> silhouette-: ...
+0 in the slot`, though the tree's `SOURCE` says `white-occt`. Not investigated.
+
 ## 2026-09-29: the nine waiting branches merged to main (f24c1fe)
 
 readme-cli, part-years, render-caption, review-orphans, line-weight-1.2,
