@@ -1,11 +1,19 @@
-## 2026-10-02: the r1729 ingest watchers were stopped; nothing is ingesting those rounds
+## 2026-10-03: r1729 ingested; the nodes hold no render trees
 
-Both `ingest-watch.py` watchers for `slot-silhouette-occt-r1729` and
-`slot-white-occt-r1729` were killed at 16:38 (from a levar session) for loading
-orochi. Their fleet jobs kept running; when they finish, rerun each watcher with
-`--once` in place of `--until` to fold the trees into `corpus.db`. The white
-watcher was misfiling: its log reads `slot-white-occt-r1729 -> silhouette-: ...
-0 in the slot`, though the tree's `SOURCE` says `white-occt`. Not investigated.
+Both r1729 trees are indexed and baked. Regressions (a part that drew before
+and fails now; it keeps its older drawing) are listed in
+`out/regressions-slot-{silhouette,white}-occt-r1729.tsv`: 225 and 171, nearly
+all `TimeoutError` at the 150s cap. The white watcher's misfile was a tree
+with no `SOURCE` yet; the watcher now skips such a tree (1cdc926).
+
+Every `slot-*`, `census*`, `store*`, `untried*` tree was deleted from studio,
+msb-uai and keiei. Their drawings were all older than what each slot holds,
+except 175 that filled empty cells (172 silhouette-naive, 3 silhouette-occt)
+and are now indexed from `out/census/renders/`. Logs that never came home
+(old census measurements, store attempts) are in
+`out/node-leftovers/*-logs-2026-10-02.tgz`, deliberately not imported: an old
+run imported now could outrank a newer one. **silhouette-occt 105162 has no
+drawing**: its only copy was node-side and is gone; it times out at 150s.
 
 ## 2026-09-29: the nine waiting branches merged to main (f24c1fe)
 
