@@ -316,6 +316,12 @@ def watch(trees: list[Path], every: int, once: bool, bake: bool,
                       flush=True)
                 continue
             source = db.census_source(tree, "")
+            # With no engine to read, a tree whose SOURCE has not been
+            # fetched yet resolves to `silhouette-`, which is no slot.
+            if source not in db.SOURCES:
+                print(f"{time.strftime('%H:%M:%S')} {tree}: no SOURCE yet",
+                      flush=True)
+                continue
             conn = db.connect()
             try:
                 engine = _engine(tree, source)

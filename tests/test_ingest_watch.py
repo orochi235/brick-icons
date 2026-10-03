@@ -257,3 +257,17 @@ def test_a_regression_is_named_once_and_listed_in_full(tree, capsys):
     assert len(listing.read_text().splitlines()) == 26
     watch_mod._report_health(root / "out" / "slot-occt", h, told)
     assert "REGRESSED" not in capsys.readouterr().out
+
+
+def test_a_tree_whose_source_marker_has_not_landed_is_left_alone(
+        tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(watch_mod, "ROOT", tmp_path)
+    monkeypatch.chdir(tmp_path)
+    tree = tmp_path / "out" / "slot-white-occt-r9"
+    (tree / "renders" / "occt").mkdir(parents=True)
+    (tree / "renders" / "occt" / "3001.svg").write_text(SVG)
+    db.connect(tmp_path / "corpus.db").close()
+    monkeypatch.setattr(watch_mod, "_take_renders", lambda *a, **k: pytest.fail(
+        "took drawings with no slot to file them under"))
+    assert watch_mod.watch([tree], every=0, once=True, bake=False) == 0
+    assert "no SOURCE" in capsys.readouterr().out
