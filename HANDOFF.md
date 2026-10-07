@@ -45,6 +45,13 @@ own facets; gates passed, 0 goldens moved) and 4079's chair-back triangle
 6107, 3941, 19121, 51542, 3404ec01 and 52639 draw right at HEAD: close them on
 /review. New row: 1974-naive-swept-cone-occludes-uncut.
 
+`tests/test_pause.py::test_an_onto_pause_spends_none_of_an_isolated_parts_cap`
+failed twice on teitou after ef10537 (`TimeoutError`, not `ok`), and passed at
+e498e15. It renders nothing, only times a 2 s sleep against a 3.5 s cap across a
+2.5 s SIGSTOP, so the occt merge between them cannot reach it: the timing
+margin is thin under fleet load. It came in with f9c3a04 (stopped time handed
+to onto). Not touched here.
+
 vet-goldens' default `--base origin/main` is many commits behind the unpushed
 main, so gate 3 has had to be run with a hand-built `before`.
 
