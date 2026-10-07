@@ -116,6 +116,7 @@ while :; do
   last_start=
   paused_at=0
   idle_at=
+  idle_paused=0
   while kill -0 "$worker" 2>/dev/null; do
     sleep "$POLL"
     now=$(date +%s)
@@ -141,8 +142,11 @@ while :; do
         idle_at=
         continue
       fi
-      [ -n "$idle_at" ] || idle_at=$now
-      age=$(( now - idle_at ))
+      if [ -z "$idle_at" ]; then
+        idle_at=$now
+        idle_paused=$(paused_now)
+      fi
+      age=$(( now - idle_at - ($(paused_now) - idle_paused) ))
       stuck="an orphan; no part claimed"
     fi
     [ "$age" -lt "$HARD" ] && continue
