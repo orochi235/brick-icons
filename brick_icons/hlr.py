@@ -496,19 +496,77 @@ def _limb_ellipses(out, proj, fwd, half):
     return got
 
 
-def _limb_chord_spec(ell, px, py, z):
-    """A silhouette chord of a fitted region, drawn as the span of the limb
-    it cuts across and occlusion-tested along the chord itself -- the chord
-    lies on the facets, so the arc inherits exactly their visibility (see
-    arcfit's chord proxy)."""
+def _limb_span(ell, px, py):
+    """((t0, t1), t1 < t0) in degrees: the span of the limb `ell` a
+    silhouette chord with projected ends (px, py) cuts across, the short way
+    round."""
     M = np.array([[ell.u[0], ell.v[0]], [ell.u[1], ell.v[1]]])
     m = np.linalg.solve(M, np.array([px[:2] - ell.center[0],
                                      py[:2] - ell.center[1]]))
     t0, t1 = np.degrees(np.arctan2(m[1], m[0]))
-    t1 = t0 + (t1 - t0 + 180.0) % 360.0 - 180.0      # the short way round
+    t1 = t0 + (t1 - t0 + 180.0) % 360.0 - 180.0
+    return (float(t0), float(t1)), t1 < t0
+
+
+def fitted_occluders(out):
+    """(occluders, own): TriangleOccluders over out["tri"] -- one over every
+    facet no fitted surface owns, one per fitted surface over its regions'
+    facets -- and {id(fit): that surface's occluder}, which its limb skips."""
+    tris = np.asarray(out["tri"], float).reshape(-1, 3, 3)
+    ids = defaultdict(list)
+    for r in out.get("fit_quadrics", ()):
+        ids[id(r["fit"])].extend(r["ids"])
+    taken = np.zeros(len(tris), bool)
+    own = {}
+    for k, idx in ids.items():
+        taken[idx] = True
+        own[k] = primitives.TriangleOccluder(tris[idx])
+    return [primitives.TriangleOccluder(tris[~taken]), *own.values()], own
+
+
+def fitted_limb_specs(out, proj, fwd, half, own):
+    """Visibility specs for every silhouette condline of a fitted region
+    (see _fitted_limb_spec)."""
+    regions = out.get("fit_quadrics", ())
+    if not regions:
+        return []
+    limbs = _limb_ellipses(out, proj, fwd, half)
+    specs = []
+    for q in out["5"]:
+        px, py, z = proj.to_px(q)
+        p1 = np.array([px[0], py[0]]); p2 = np.array([px[1], py[1]])
+        if math.hypot(*(p2 - p1)) < 0.5 or not same_side(
+                p1, p2, np.array([px[2], py[2]]), np.array([px[3], py[3]])):
+            continue
+        spec = _fitted_limb_spec(q, px, py, z, regions, limbs, own)
+        if spec is not None:
+            specs.append(spec)
+    return specs
+
+
+def _fitted_limb_spec(q, px, py, z, regions, limbs, own):
+    """A silhouette condline of a fitted region, drawn as the span of the
+    limb it cuts across; None when no fitted region owns it. With
+    quadric.LIMB_ON_SURFACE the span is sampled on the limb and skips the
+    surface's `own` occluder (fitted_occluders); without it, along the chord."""
+    region = quadric.region_of_condline(q, regions)
+    if region is None:
+        return None
+    ell = limbs[id(region)][0]
+    if not quadric.LIMB_ON_SURFACE:
+        return _limb_chord_spec(ell, px, py, z)
+    (t0, t1), _flip = _limb_span(ell, px, py)
+    return (primitives._arc_op(ell, t0, t1, "sil"),
+            primitives._arc_depth_fn(ell), own.get(id(region["fit"])))
+
+
+def _limb_chord_spec(ell, px, py, z):
+    """A silhouette chord of a fitted region, drawn as the span of the limb
+    it cuts across and occlusion-tested along the chord itself."""
+    (t0, t1), flip = _limb_span(ell, px, py)
     tv = np.array([t0, t1])
     xs, ys, zs = (np.array([a[0], a[1]], float) for a in (px, py, z))
-    if t1 < t0:
+    if flip:
         tv, xs, ys, zs = tv[::-1], xs[::-1], ys[::-1], zs[::-1]
 
     def chord_proxy(degs, tv=tv, xs=xs, ys=ys, zs=zs):
@@ -546,7 +604,11 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
     # witness ordering, and must NOT be added here — their member surfaces
     # already cover the same geometry.
     occluders = [p.occluder() for p in analytic if p.occluder() is not None]
-    if out["tri"]:
+    own_fit = {}
+    if out["tri"] and quadric.LIMB_ON_SURFACE and out.get("fit_quadrics"):
+        tri_occ, own_fit = fitted_occluders(out)
+        occluders += tri_occ
+    elif out["tri"]:
         occluders.append(primitives.TriangleOccluder(np.array(out["tri"])))
 
     # drawn ops: analytic curves (+ a cylinder excludes itself from its
@@ -613,9 +675,10 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
         if math.hypot(*(p2 - p1)) < 0.5:
             continue
         if same_side(p1, p2, np.array([px[2], py[2]]), np.array([px[3], py[3]])):
-            region = quadric.region_of_condline(q, out.get("fit_quadrics", ()))
-            if region is not None:
-                specs.append(_limb_chord_spec(limbs[id(region)][0], px, py, z))
+            spec = _fitted_limb_spec(q, px, py, z, out.get("fit_quadrics", ()),
+                                     limbs, own_fit)
+            if spec is not None:
+                specs.append(spec)
                 continue
             specs.append((("line", float(px[0]), float(py[0]),
                            float(px[1]), float(py[1]), "sil"),

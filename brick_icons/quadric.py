@@ -55,6 +55,12 @@ MAX_AXIS_RATIO = 3.0
 #: Taper (radius change per unit length along the axis) below which a cone
 #: is reported as a cylinder.
 CYLINDER_TAPER = 0.02
+#: A fitted limb's visibility is sampled on the limb itself, with the fitted
+#: surface's own facets left out of the occluders: a sphere or ellipsoid is
+#: convex, so nothing of it lies in front of its own limb. False samples it
+#: along the silhouette chords instead, where 20401's coarse lower hemisphere
+#: sank 8 deg of its chords behind the finer upper one's facets.
+LIMB_ON_SURFACE = True
 
 
 @dataclass
@@ -292,7 +298,8 @@ def _key(p):
 
 def fitted_regions(out):
     """The regions of `out` a sphere or ellipsoid fits, each as {fit, P (its
-    vertices), keys (its vertex keys), step (its facets' angular size, deg)}.
+    vertices), keys (its vertex keys), step (its facets' angular size, deg),
+    ids (its triangles' indices into out["tri"])}.
     Empty when disarmed. Cones and cylinders are left out: their limbs are
     straight, and the silhouette chords already lie along them."""
     if not ARMED or not out.get("tri"):
@@ -310,7 +317,7 @@ def fitted_regions(out):
         edge = np.linalg.norm(T - np.roll(T, 1, axis=1), axis=2).ravel()
         step = float(np.degrees(np.median(edge) / float(np.mean(fit.radii))))
         found.append({"fit": fit, "P": P, "keys": {_key(p) for p in P},
-                      "step": step})
+                      "step": step, "ids": ids})
     _share_spheres(found)
     return found
 
