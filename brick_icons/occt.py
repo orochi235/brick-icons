@@ -2657,7 +2657,10 @@ def _merge_wall_gradients(faces):
         f.pop("_span_ring", None)
 
 
-def _absorb_tangent_planes(tangent):
+TANGENT_PLANE_GROUPS = True
+
+
+def _absorb_tangent_planes(tangent, faces=()):
     """A plane a curved wall runs tangentially into is part of that wall's
     surface, so it joins the wall's fill and its ramp rather than tone on its
     own.
@@ -2669,6 +2672,10 @@ def _absorb_tangent_planes(tangent):
     exist. The plane sits past the end of the wall's axis, where an SVG
     gradient pads with its last stop -- which is the tone at the junction, and
     constant across the plane, which is what a plane's single normal wants.
+
+    The coplanar faces of the plane's group go with it: OCCT can leave one
+    authored plane as several faces, and only the one touching the wall is
+    tangent to it. Left behind, 4079's other quad half toned on its own.
     """
     for plane, walls in tangent:
         near = [w for w in walls if "grad_axis" in w or "grad_radial" in w]
@@ -2677,13 +2684,20 @@ def _absorb_tangent_planes(tangent):
         pc = plane["poly"].mean(axis=0)
         wall = min(near, key=lambda w: float(
             np.hypot(*(w["poly"].mean(axis=0) - pc))))
-        plane["group"] = wall.get("group") or ("tangent", id(wall))
-        wall["group"] = plane["group"]
-        plane["grad_samples"] = wall["grad_samples"]
-        for k in ("grad_axis", "grad_radial", "grad_exact"):
-            plane.pop(k, None)
-            if k in wall:
-                plane[k] = wall[k]
+        old = plane.get("group")
+        same = [plane]
+        if TANGENT_PLANE_GROUPS and old is not None:
+            same += [f for f in faces if f is not plane and f.get("group") == old
+                     and f["kind"] == "occt-plane" and _same_plane(plane, f)]
+        group = wall.get("group") or ("tangent", id(wall))
+        wall["group"] = group
+        for f in same:
+            f["group"] = group
+            f["grad_samples"] = wall["grad_samples"]
+            for k in ("grad_axis", "grad_radial", "grad_exact"):
+                f.pop(k, None)
+                if k in wall:
+                    f[k] = wall[k]
 
 
 def _merge_turn_gradients(faces):
@@ -3315,7 +3329,7 @@ def ordered_faces(shape, proj, out=None, ellipses_out=None, px=None,
         f.pop("_facing", None)
     _merge_turn_gradients(faces)
     _merge_wall_gradients(faces)
-    _absorb_tangent_planes(tangent)
+    _absorb_tangent_planes(tangent, faces)
     faces = _with_decoration(faces, out, proj, own_occ, ellipses_out)
     zs = np.concatenate([f["zs"] for f in faces])
     zrange = float(zs.max() - zs.min()) or 1.0
