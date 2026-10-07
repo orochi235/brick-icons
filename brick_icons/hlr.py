@@ -546,24 +546,15 @@ def fitted_limb_specs(out, proj, fwd, half, own):
 
 def _fitted_limb_spec(q, px, py, z, regions, limbs, own):
     """A silhouette condline of a fitted region, drawn as the span of the
-    limb it cuts across; None when no fitted region owns it. With
-    quadric.LIMB_ON_SURFACE the span is sampled on the limb and skips the
-    surface's `own` occluder (fitted_occluders); without it, along the chord."""
+    limb it cuts across and occlusion-tested along the chord itself -- the
+    chord lies on the facets, so the arc inherits their visibility (see
+    arcfit's chord proxy). With quadric.LIMB_SKIPS_OWN_FACETS the test skips
+    the surface's `own` occluder (fitted_occluders). None when no fitted
+    region owns the condline."""
     region = quadric.region_of_condline(q, regions)
     if region is None:
         return None
-    ell = limbs[id(region)][0]
-    if not quadric.LIMB_ON_SURFACE:
-        return _limb_chord_spec(ell, px, py, z)
-    (t0, t1), _flip = _limb_span(ell, px, py)
-    return (primitives._arc_op(ell, t0, t1, "sil"),
-            primitives._arc_depth_fn(ell), own.get(id(region["fit"])))
-
-
-def _limb_chord_spec(ell, px, py, z):
-    """A silhouette chord of a fitted region, drawn as the span of the limb
-    it cuts across and occlusion-tested along the chord itself."""
-    (t0, t1), flip = _limb_span(ell, px, py)
+    (t0, t1), flip = _limb_span(limbs[id(region)][0], px, py)
     tv = np.array([t0, t1])
     xs, ys, zs = (np.array([a[0], a[1]], float) for a in (px, py, z))
     if flip:
@@ -572,8 +563,10 @@ def _limb_chord_spec(ell, px, py, z):
     def chord_proxy(degs, tv=tv, xs=xs, ys=ys, zs=zs):
         d = np.asarray(degs, float)
         return np.interp(d, tv, xs), np.interp(d, tv, ys), np.interp(d, tv, zs)
-    return (primitives._arc_op(ell, float(t0), float(t1), "sil"),
-            primitives._arc_depth_fn(ell), None, chord_proxy)
+    ell = limbs[id(region)][0]
+    skip = own.get(id(region["fit"])) if quadric.LIMB_SKIPS_OWN_FACETS else None
+    return (primitives._arc_op(ell, t0, t1, "sil"),
+            primitives._arc_depth_fn(ell), skip, chord_proxy)
 
 
 def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
@@ -605,7 +598,7 @@ def _visible_segments_analytic(out, right, up, fwd, render_px, cull=True):
     # already cover the same geometry.
     occluders = [p.occluder() for p in analytic if p.occluder() is not None]
     own_fit = {}
-    if out["tri"] and quadric.LIMB_ON_SURFACE and out.get("fit_quadrics"):
+    if out["tri"] and quadric.LIMB_SKIPS_OWN_FACETS and out.get("fit_quadrics"):
         tri_occ, own_fit = fitted_occluders(out)
         occluders += tri_occ
     elif out["tri"]:

@@ -55,12 +55,12 @@ MAX_AXIS_RATIO = 3.0
 #: Taper (radius change per unit length along the axis) below which a cone
 #: is reported as a cylinder.
 CYLINDER_TAPER = 0.02
-#: A fitted limb's visibility is sampled on the limb itself, with the fitted
-#: surface's own facets left out of the occluders: a sphere or ellipsoid is
-#: convex, so nothing of it lies in front of its own limb. False samples it
-#: along the silhouette chords instead, where 20401's coarse lower hemisphere
-#: sank 8 deg of its chords behind the finer upper one's facets.
-LIMB_ON_SURFACE = True
+#: A fitted limb's visibility, tested along its silhouette chords, leaves
+#: the fitted surface's own facets out of the occluders: a sphere or
+#: ellipsoid is convex, so nothing of it lies in front of its own limb. With
+#: them in, 20401's coarse lower hemisphere sank 8 deg of its chords behind
+#: the finer upper one's facets and the contour barbed through the gap.
+LIMB_SKIPS_OWN_FACETS = True
 
 
 @dataclass

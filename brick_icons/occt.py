@@ -1550,7 +1550,7 @@ def authored_loci(shape, out, right, up, held=None):
             continue
         if np.linalg.norm(pts[0] - pts[1]) > 1e-7:
             r = quadric.region_of_condline(pts, regions) if regions else None
-            if r is not None and quadric.LIMB_ON_SURFACE:
+            if r is not None and quadric.LIMB_SKIPS_OWN_FACETS:
                 continue                 # drawn by _fitted_limb_ops instead
             loci.append(_seg_locus(pts[0], pts[1], "sil", ax, ay,
                                    limbs.get(id(r)) if r is not None else None))
@@ -1561,8 +1561,8 @@ def _fitted_limb_ops(out, right, up, fwd, cull):
     """The fitted limbs' silhouette spans as arc ops in HLR's 2-D frame,
     visibility-sampled the way the naive engine samples them: HLR would test
     the chords, and a coarse region's chords sink behind a finer neighbor's
-    facets (20401's lower hemisphere). Empty unless quadric.LIMB_ON_SURFACE."""
-    if not quadric.LIMB_ON_SURFACE or not out.get("fit_quadrics") \
+    facets (20401's lower hemisphere). Empty unless quadric.LIMB_SKIPS_OWN_FACETS."""
+    if not quadric.LIMB_SKIPS_OWN_FACETS or not out.get("fit_quadrics") \
             or not out.get("tri"):
         return []
     proj = op_projection(right, up, fwd)
@@ -1573,13 +1573,26 @@ def _fitted_limb_ops(out, right, up, fwd, cull):
     if not cull:
         segs = [spec[0] for spec in specs]
     else:
-        occluders = [p.occluder() for p in out["analytic"]
-                     if p.occluder() is not None] + tri_occ
+        occluders = _prim_occluders(out["analytic"]) + tri_occ
         z = np.asarray(out["tri"], float).reshape(-1, 3) @ np.asarray(fwd, float)
         eps = 1e-3 * (float(np.ptp(z)) or 1.0)
         segs = primitives.visible_subops(specs, occluders, proj.ray_origin,
                                          fwd, eps, n=64)
     return _negate_y(segs)
+
+
+def _prim_occluders(analytic):
+    """Each primitive's occluder, a sweep frustum's built from the faces its
+    `cut` planes keep: the primitive's own occluder answers for the whole
+    frustum, and 1974's swept cones, 143 LDU tall, hid most of its limb."""
+    occ = []
+    for prim in analytic:
+        if getattr(prim, "cut", None):
+            occ += [o for o in map(_face_occluder, occt_faces(prim))
+                    if o is not None]
+        elif prim.occluder() is not None:
+            occ.append(prim.occluder())
+    return occ
 
 
 def _fragment_points(edge):
