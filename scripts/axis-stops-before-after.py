@@ -5,8 +5,9 @@ at their samples' mean offset (after), both from THIS tree.
         3649 4070 3062b:occt
 
 A part is `<id>` or `<id>:<slot>`; with no slot it is drawn in the
-outline-flat3 golden combo under occt. `before` moves each binned stop back
-to its bin's center in-process. Prints each part's changed-component count.
+outline-flat3 golden combo under --engine (occt). `before` moves each binned
+stop back to its bin's center in-process. Prints each part's changed-component
+count.
 Rasterized by resvg at --px.
 """
 import argparse
@@ -41,19 +42,19 @@ def mid_bin(fn, nbins=8):
     return wrapped
 
 
-def argv(part, slot):
+def argv(part, slot, engine):
     if slot:
         return db.canonical_argv(part, slot)
-    return [part, "--engine", "occt",
+    return [part, "--engine", engine,
             *GOLDEN["combo"]["outline-flat3"]["args"]]
 
 
-def render(part, slot, out_dir, before, px):
+def render(part, slot, out_dir, before, px, engine):
     saved = shade._axis_binned_stops
     if before:
         shade._axis_binned_stops = mid_bin(saved)
     try:
-        args = cli._parse_args(argv(part, slot))
+        args = cli._parse_args(argv(part, slot, engine))
         t0 = time.perf_counter()
         cli.process_one(cli._config_from_args(args), part, out_dir)
         secs = time.perf_counter() - t0
@@ -73,6 +74,7 @@ def main():
     ap.add_argument("parts", nargs="+")
     ap.add_argument("--out", required=True)
     ap.add_argument("--px", type=int, default=512)
+    ap.add_argument("--engine", default="occt", help="engine for a part with no slot")
     ap.add_argument("--keep", type=Path, help="keep the renders here")
     ap.add_argument("--title", default="linear-gradient stops: mid-bin (before) "
                                        "vs at their samples (after)")
@@ -86,11 +88,12 @@ def main():
             for side in ("before", "after"):
                 d = Path(tmp) / side / (slot or "golden")
                 d.mkdir(parents=True, exist_ok=True)
-                shots.append(render(part, slot, d, side == "before", a.px))
+                shots.append(render(part, slot, d, side == "before", a.px,
+                                    a.engine))
             _, n, px = diff_panel(shots[0].image, shots[1].image)
             print(f"{k}/{len(a.parts)}  {part:>12} {slot or 'golden':<12} "
                   f"{n:3d} comp {px:6d} px", flush=True)
-            rows.append((f"{part}\n{slot or 'outline-flat3 occt'}", *shots))
+            rows.append((f"{part}\n{slot or 'outline-flat3 ' + a.engine}", *shots))
     sheet(a.title, rows, out=a.out)
     print(a.out)
 
