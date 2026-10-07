@@ -6,8 +6,9 @@ so a pixel of the SVG can be traced to the face that painted it.
         --set shade.ABUT_TIES_ONLY=False 3649
 
 Writes `<out>/<part>.svg`, `.png` (resvg, --px wide, when resvg is on PATH), `.fit.json` and
-`.fill.pkl`: {"faces": [...], "ops": [...]} with each face reduced to its
-plain-data keys (callables dropped). `--set` assigns a module attribute
+`.fill.pkl`: one {"faces", "ops", "fit"} per fill_ops call -- the part's
+own, then each instanced stud's -- with each face reduced to its plain-data
+keys (callables dropped). `--set` assigns a module attribute
 before drawing; the value is a Python literal.
 """
 import argparse
@@ -59,12 +60,12 @@ def main():
     combo = tomllib.loads((ROOT / "tests/goldens/manifest.toml").read_text())
     args = combo["combo"][a.combo]["args"]
     real = shade.fill_ops
-    seen = {}
+    seen = []
 
     def spy(faces, *pa, **kw):
         ops = real(faces, *pa, **kw)
-        seen["faces"] = [plain(f) for f in faces]
-        seen["ops"] = plain(ops)
+        seen.append({"faces": [plain(f) for f in faces], "ops": plain(ops),
+                     "fit": plain(kw.get("fit"))})
         return ops
 
     shade.fill_ops = spy
@@ -75,7 +76,7 @@ def main():
         cfg = cli._config_from_args(cli._parse_args(
             [part, "--engine", a.engine, *args]))
         cli.process_one(cfg, part, a.out)
-        (a.out / f"{part}.fill.pkl").write_bytes(pickle.dumps(dict(seen)))
+        (a.out / f"{part}.fill.pkl").write_bytes(pickle.dumps(list(seen)))
         if shutil.which("resvg"):
             subprocess.run(["resvg", "--width", str(a.px), str(a.out / f"{part}.svg"),
                             str(a.out / f"{part}.png")], check=True)
