@@ -1413,7 +1413,7 @@ def draw_flattened(out, right, up, fwd, render_px=900, cull=True,
         px = 1.0 / (res.s or 1.0)
         with timing.phase("dedupe"):
             segs = dedupe_segments(res.segs, eps=0.05 * px, keep_order=True)
-        return _stylize(res, segs, cull, px, _stud_anchors(studs, res.proj))
+        return _stylize(res, segs, cull, px, _cull_anchors(res, studs))
     if engine == "cadquery":
         from . import cqsvg
         return cqsvg.visible_segments(out, right, up, render_px, cull=cull)
@@ -1428,7 +1428,7 @@ def draw_flattened(out, right, up, fwd, render_px=900, cull=True,
     with timing.phase("dedupe"):
         segs = dedupe_segments(res.segs)
     res = _stylize(res, segs, cull, px=1.0,
-                   anchors=_stud_anchors(studs, res.proj))
+                   anchors=_cull_anchors(res, studs))
     return res._replace(tri=out["tri"], tri_colors=out.get("tri_colors", ()))
 
 
@@ -1438,6 +1438,40 @@ def _stud_anchors(studs, proj):
         return None
     from . import instancing
     return instancing.shown_ops(studs, proj)
+
+
+def _declared_ends(analytic, proj):
+    """The end points of every partial arc a primitive declares, op space,
+    or None. A run whose tip lands on one stops where the library says the
+    edge stops, not where an occluder or a sub-stroke partner cut it, so the
+    orphan cull must not read that tip as fray (24434's arch slot rim, whose
+    slot pinches out at the arc's end)."""
+    if proj is None:
+        return None
+    pts = []
+    for prim in analytic:
+        if prim.withheld or prim.is_full:
+            continue
+        if prim.kind != "edge" and not prim.rims_declared:
+            continue
+        ends = np.radians([0.0, prim.sector])
+        for level in ((0.0,) if prim.kind == "edge" else (0.0, 1.0)):
+            pts.append(prim.ring_pts(ends, level))
+    if not pts:
+        return None
+    import shapely
+    x, y, _z = proj.to_px(np.vstack(pts))
+    return shapely.MultiPoint(np.stack([x, y], axis=1))
+
+
+def _cull_anchors(res, studs):
+    import shapely
+    parts = [g for g in (_stud_anchors(studs, res.proj),
+                         _declared_ends(res.analytic or (), res.proj))
+             if g is not None and not g.is_empty]
+    if not parts:
+        return None
+    return parts[0] if len(parts) == 1 else shapely.union_all(parts)
 
 
 def _stylize(res, segs, cull, px, anchors=None):
