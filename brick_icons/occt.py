@@ -3178,6 +3178,7 @@ def _same_plane(fa, fb, tol=0.02):
 
 
 QUAD_DIAGONAL_SEAMS = True
+SEAM_TOL = 2e-3       # LDU; how far off a declared seam an edge may lie
 
 
 def _quad_diagonals(out):
@@ -3231,6 +3232,8 @@ def _group_planes(shape, out, plane_by_idx):
         if c.GetType() != GeomAbs_CurveType.GeomAbs_Line:
             continue
         p, q = c.Value(c.FirstParameter()), c.Value(c.LastParameter())
+        if p.Distance(q) < 2 * SEAM_TOL:
+            continue        # a sliver lies "on" every seam through its point
         pairs.append((fa, fb))
         A.append([p.X(), p.Y(), p.Z()])
         B.append([q.X(), q.Y(), q.Z()])
@@ -3240,7 +3243,7 @@ def _group_planes(shape, out, plane_by_idx):
     if QUAD_DIAGONAL_SEAMS:
         declared += _quad_diagonals(out)
     seam = shade._seam_edge_mask(np.array(A, float), np.array(B, float),
-                                 declared)
+                                 declared, tol=SEAM_TOL)
 
     parent = {}
 
