@@ -191,3 +191,20 @@ def test_51283_outline_is_the_fitted_limb(slot, tmp_path, ldraw_dir):
     polygon: 16 chords of it came out as L commands before."""
     assert _contour_lines(_render("51283", slot, tmp_path / "on")) <= 4
     assert _contour_lines(_render("51283", slot, tmp_path / "off", armed=False)) >= 12
+
+
+@pytest.mark.parametrize("slot", ["occt", "naive"])
+def test_20401_limb_runs_unbroken_across_its_hemispheres(slot, tmp_path, ldraw_dir):
+    """20401's ball is two hemispheres of one fitted sphere, the lower one far
+    coarser. Tested against the upper hemisphere's facets, the lower limb's
+    chords sank 8 deg behind them, and the contour barbed through the gap in
+    14 L commands; with the sphere's own facets left out it is arcs alone."""
+    def render(on):
+        saved = quadric.LIMB_SKIPS_OWN_FACETS
+        quadric.LIMB_SKIPS_OWN_FACETS = on
+        try:
+            return _render("20401", slot, tmp_path / str(on))
+        finally:
+            quadric.LIMB_SKIPS_OWN_FACETS = saved
+    assert _contour_lines(render(True)) == 0
+    assert _contour_lines(render(False)) >= 8
