@@ -873,7 +873,9 @@ Two symptoms on the top face, against naive at the same pose. The front-centre s
 
 2026-09-25: at HEAD d3579aa (slot render 62642e62, in the /review queue unjudged) the occt drawing has the front-centre stud's top ellipse and the four-armed brace filled with its walls toned; naive at the same pose differs only by two body-tone slivers on that stud's top disc, which are naive's. Pair on the wall (brick-icons), 2026-09-25. Awaiting the verdict on /review.
 
-2026-09-25 review better"""
+2026-09-25 review better
+
+2026-10-07: draws right at HEAD f9c3a04. Rendered on teitou under the occt slot flags, the SVG is byte-identical to the stored slot render (out/slot-occt-r1731, sha 4a90645c), so the /review queue already holds this drawing. The front stud carries its top ellipse and the brace is filled with its walls toned. The vertical strokes and flat facets on the front stud's wall, the likely "borehole problems" of the 09-17 review, are LDraw's own geometry: stud10.dat ("Stud Truncated Laterally Curved") replaces the quarter facing out from the brick with 4 quads cut by the R20 outer wall, and on 3941 only the front stud turns that quarter toward the viewer. The LDView linework oracle (reference-lines) draws the same seams. Sheet naive / occt / diff / LDView lines on the wall (brick-icons), 2026-10-07: 28 changed components, almost all stroke-width fringe (naive draws 2 px against occt's 1.4); the chunky ones are naive's stud sliver and wall tone, not occt's. No engine change made."""
 
 [[defect]]
 id = "49612-extra-vertical-line-extending-down"
