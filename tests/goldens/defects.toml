@@ -4113,7 +4113,7 @@ engines = ["naive"]
 status = "open"
 title = "a swept cone occludes as its whole uncut frustum"
 filed = "2026-10-07"
-notes = "primitives.ConeOccluder and CylinderOccluder ignore prim.cut, the planes sweep._frustum trims a swept frustum to; occt applies them (occt._cut_to). 1974's two swept cones are 143 LDU tall uncut, against a part ~56 LDU across. Measured (chord-proxy trace, iso): with the uncut occluders 16 of 24 of 1974's silhouette chords are hidden whole by those two cones; with occluders built from the cut faces (occt._prim_occluders) all but 3 are visible. So naive hides most of 1974's fitted limb behind surface that does not exist; what else it hides there is not measured. No golden part carries a cut sweep, so the goldens cannot see this. Fix direction: honor `cut` in the occluders themselves, one definition for both engines."
+notes = "primitives.ConeOccluder and CylinderOccluder ignore prim.cut, the planes sweep._frustum trims a swept frustum to; occt applies them (occt._cut_to). 1974's two swept cones are 143 LDU tall uncut, against a part ~56 LDU across. Measured (chord-proxy trace, iso): with the uncut occluders 14 of 24 of 1974's silhouette chords are hidden whole by those two cones and 3 more in part; with occluders built from the cut faces (occt._prim_occluders) no cone hides any of them. So naive hides most of 1974's fitted limb behind surface that does not exist; what else it hides there is not measured. No golden part carries a cut sweep, so the goldens cannot see this. Fix direction: honor `cut` in the occluders themselves, one definition for both engines."
 
 [[defect]]
 id = "4070-sampled-fill-boundary-at-1.4px"
