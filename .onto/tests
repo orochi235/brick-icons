@@ -1,4 +1,4 @@
-enlist: 3
+enlist: 4
 # How `onto test` runs this repository's suite on another node.
 run: .venv/bin/python -m pytest tests
 setup: uv sync --extra occt --extra census --extra lab
