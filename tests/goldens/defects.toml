@@ -217,7 +217,7 @@ title = "underside pockets punch through the solid front wall"
 classes = ["hidden-leak"]
 checked = { silhouette-naive = "7cf78fbe417ca436080d0ad6e7ac3c0985170444131f703f5f5933a1489dc018", white-naive = "7826446c2774b5077849c21f8346dfe1cf08351d9f60edeb07d4b1f156c2cdf0" }
 filed = "2026-09-04"
-notes = "Four rectangular notches are cut into the silhouette along the bottom front edge. They are interior underside geometry escaping through a face that should occlude them -- a hidden-line miss, not a fill problem."
+notes = "Four rectangular notches are cut into the silhouette along the bottom front edge. They are interior underside geometry escaping through a face that should occlude them -- a hidden-line miss, not a fill problem. 2026-10-07, at f9c3a04: not a leak. 6107.dat declares the notches -- four openings 4 LDU tall through the bottom of the diagonal wall, each a rect2p.dat ceiling at y=20 between two rect.dat jambs (y 20-24) -- and the LDView reference shows the same four gaps. naive and occt both draw them in the silhouette and white slots, matching each other (naive-vs-occt diff is stroke width and stud seams only, no notch-shaped region). Sheet: out/p6107/6107-head-sheet.png on the wall (brick-icons). Nothing to fix; suggest closing as not-a-defect."
 
 [[defect]]
 id = "3832-doubled-stud-ellipses"
