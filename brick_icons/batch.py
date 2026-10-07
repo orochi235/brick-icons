@@ -18,7 +18,9 @@ import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
-_ARMED = None
+from brick_icons.pause import Deadline, Stopwatch, follow_stops
+
+_ARMED: Deadline | None = None
 
 #: The per-part render cap, in seconds; every launcher's default comes from here.
 RENDER_TIMEOUT_S = 150
@@ -120,8 +122,13 @@ def _on_alarm(signum, frame):
     """Installed once and never removed: SIGALRM's default action is to KILL,
     so a timer that expires in the microseconds before the itimer is disarmed
     takes the whole run down silently. Ignoring a disarmed alarm is the fix."""
-    if _ARMED:
-        raise TimeoutError(f"exceeded {_ARMED}s")
+    if _ARMED is None:
+        return
+    left = _ARMED.left()
+    if left > 0:   # onto had the job stopped; that time is not the part's
+        signal.setitimer(signal.ITIMER_REAL, left)
+        return
+    raise TimeoutError(f"exceeded {_ARMED.secs}s")
 
 
 class Runner:
@@ -199,9 +206,9 @@ class Runner:
     def call(self, item: str, work) -> dict:
         """`work(item)` under the cap, as `run` does it, with no log and no
         inflight marker: for a caller that keeps its own record."""
-        started = time.time()
+        clock = Stopwatch()
         row = self._isolated(item, work) if self.isolate else self._here(item, work)
-        row["secs"] = round(time.time() - started, 1)
+        row["secs"] = round(clock.secs(), 1)
         return row
 
     def run(self, item: str, work) -> dict:
@@ -228,7 +235,7 @@ class Runner:
         global _ARMED
         try:
             if self.timeout:
-                _ARMED = self.timeout
+                _ARMED = Deadline(self.timeout)
                 signal.setitimer(signal.ITIMER_REAL, self.timeout)
             return work(item)
         except BaseException as exc:  # an item must not end the run
@@ -283,7 +290,12 @@ class Runner:
             os.setpgid(pid, pid)
         except OSError:
             pass
-        blob, stopped = self._drain(read_fd, pid)
+        minder = follow_stops(pid)
+        try:
+            blob, stopped = self._drain(read_fd, pid)
+        finally:
+            os.kill(minder, signal.SIGKILL)
+            os.waitpid(minder, 0)
         # WNOHANG, not a blocking wait: _drain returns on a kill that did not
         # take, and blocking here would hang the batch on exactly the runaway
         # the cap exists to end. A child that survives is left to init.
@@ -338,31 +350,31 @@ class Runner:
         nobody is reading deadlocks both, so the cap that was supposed to end
         it never fires.
         """
-        deadline = time.monotonic() + self.timeout + _GRACE if self.timeout else None
+        deadline = Deadline(self.timeout + _GRACE) if self.timeout else None
         priced = 0.0
         chunks: list[bytes] = []
         stopped = ""
         try:
             while True:
                 now = time.monotonic()
-                if deadline is not None and now >= deadline:
+                left = 1.0 if deadline is None else deadline.left()
+                if left <= 0:
                     if stopped:
                         # The kill did not take. Stop waiting on a pipe held by
                         # something we cannot end; the caller reaps what it can.
                         return b"".join(chunks), stopped
                     stopped = "time"
                     self._killpg(pid)
-                    deadline = now + _GRACE   # collect a row it already wrote
+                    deadline = Deadline(_GRACE)   # collect a row it already wrote
                     continue
                 if self.mem_kb and not stopped and now - priced >= _MEM_POLL:
                     priced = now
                     if self._group_kb(pid) > self.mem_kb:
                         stopped = "memory"
                         self._killpg(pid)
-                        deadline = now + _GRACE
+                        deadline = Deadline(_GRACE)
                         continue
-                left = 1.0 if deadline is None else min(1.0, deadline - now)
-                if not select.select([fd], [], [], max(left, 0.0))[0]:
+                if not select.select([fd], [], [], min(left, 1.0))[0]:
                     continue
                 buf = os.read(fd, 1 << 16)
                 if not buf:

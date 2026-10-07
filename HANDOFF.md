@@ -1,3 +1,17 @@
+## 2026-10-07: a part's cap no longer counts time onto had it stopped
+
+`batch.Runner` reads `$ONTO_PAUSED` (`brick_icons/pause.py`): the in-process
+alarm, the parent's kill deadline, and a row's `secs` all leave out stopped
+time, so census and store pools can be launched `onto run --pausable`.
+Two things the code shows only in part:
+
+- **An isolated render follows its batch's stops through a minder process.**
+  onto SIGSTOPs only the item's process group, and the render runs in a group
+  of its own (for the group kill), so it rendered straight through a pause.
+  If onto ever stops an item's whole process tree, the minder is redundant.
+- **An expiry that sees no growth looks again a second later**, because onto
+  continues the job before it writes the new total.
+
 ## 2026-10-07: overnight defect round; four fixes wait on a verdict
 
 Merged to main: the 32062 quad-diagonal shading fix (f46d721, all three gates
