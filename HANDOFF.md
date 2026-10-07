@@ -33,6 +33,20 @@ Each waiting branch is a worktree under `.claude/worktrees/agent-*`:
   correct at HEAD; 30152a is a different defect (lens arc broken by dome tris).
 - 3024: Mike rejected both end caps. Open: make the stud hide mask accurate
   (moves every stud junction), or close the defect.
+- `worktree-agent-aff7f75ff0805990d`: occt 24434 slot-edge fix (the orphan
+  cull keeps a declared partial arc's end). Unpredicted goldens: 3673 (slot
+  lines run full length, all slots) and 4019 (arc stubs return in the hub,
+  naive). Needs Mike's verdict. The naive 24434 row is gone at HEAD.
+
+Second round, also merged: 20401's limb barbs (fitted limb tested without its
+own facets; gates passed, 0 goldens moved) and 4079's chair-back triangle
+(`occt.TANGENT_PLANE_GROUPS`; gates passed, 3941/3649 moved as predicted;
+32828's hard tone step moves to the other half of its face, noted on the row).
+6107, 3941, 19121, 51542, 3404ec01 and 52639 draw right at HEAD: close them on
+/review. New row: 1974-naive-swept-cone-occludes-uncut.
+
+vet-goldens' default `--base origin/main` is many commits behind the unpushed
+main, so gate 3 has had to be run with a hand-built `before`.
 
 ## 2026-10-03: r1729 ingested; the nodes hold no render trees
 
