@@ -5,7 +5,7 @@ so a pixel of the SVG can be traced to the face that painted it.
     .venv/bin/python scripts/fill-ops-dump.py --out out/dump \
         --set shade.ABUT_TIES_ONLY=False 3649
 
-Writes `<out>/<part>.svg`, `.png` (resvg, --px wide), `.fit.json` and
+Writes `<out>/<part>.svg`, `.png` (resvg, --px wide, when resvg is on PATH), `.fit.json` and
 `.fill.pkl`: {"faces": [...], "ops": [...]} with each face reduced to its
 plain-data keys (callables dropped). `--set` assigns a module attribute
 before drawing; the value is a Python literal.
@@ -14,6 +14,7 @@ import argparse
 import ast
 import importlib
 import pickle
+import shutil
 import subprocess
 import sys
 import time
@@ -75,8 +76,9 @@ def main():
             [part, "--engine", a.engine, *args]))
         cli.process_one(cfg, part, a.out)
         (a.out / f"{part}.fill.pkl").write_bytes(pickle.dumps(dict(seen)))
-        subprocess.run(["resvg", "--width", str(a.px), str(a.out / f"{part}.svg"),
-                        str(a.out / f"{part}.png")], check=True)
+        if shutil.which("resvg"):
+            subprocess.run(["resvg", "--width", str(a.px), str(a.out / f"{part}.svg"),
+                            str(a.out / f"{part}.png")], check=True)
         print(f"{k}/{len(a.parts)} {part} {time.perf_counter() - t0:.1f}s",
               flush=True)
 
