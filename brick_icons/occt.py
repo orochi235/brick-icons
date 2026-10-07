@@ -3177,6 +3177,26 @@ def _same_plane(fa, fb, tol=0.02):
     return abs(fa["plane"][3] - ob) < tol
 
 
+QUAD_DIAGONAL_SEAMS = True
+
+
+def _quad_diagonals(out):
+    """[(p, q)]: the diagonal each authored quad was split along. A quad is
+    one declared face, so its halves are one surface however far from planar
+    the author left it."""
+    tris, metas = out.get("tri") or [], out.get("tri_meta") or []
+    diags = []
+    for i in range(min(len(tris), len(metas)) - 1):
+        q = metas[i].get("quad")
+        if q is None or metas[i + 1].get("quad") != q:
+            continue
+        other = {sweep._key(p) for p in tris[i + 1]}
+        shared = [np.asarray(p, float) for p in tris[i] if sweep._key(p) in other]
+        if len(shared) == 2:
+            diags.append(shared)
+    return diags
+
+
 def _group_planes(shape, out, plane_by_idx):
     """Union planar faces across DECLARED conditional-line seams, and stamp
     face['group'] so shade.attach_group_gradients shades each group as one
@@ -3185,9 +3205,9 @@ def _group_planes(shape, out, plane_by_idx):
     A hand-faceted curve sews as hundreds of planes. Toned one by one they
     read flat and emit one fill element each: 3960's dome came out as 194
     same-color fills against naive's 1. The union is DECLARED-only (type-5
-    lines, plus exactly coplanar neighbours, which is naive's rule) -- a
-    dihedral test over tessellation is the explosion this engine exists to
-    avoid.
+    lines, an authored quad's own diagonal, plus exactly coplanar neighbors,
+    which is naive's rule) -- a dihedral test over tessellation is the
+    explosion this engine exists to avoid.
     """
     from . import shade
     fmap = TopTools_IndexedMapOfShape()
@@ -3216,8 +3236,11 @@ def _group_planes(shape, out, plane_by_idx):
         B.append([q.X(), q.Y(), q.Z()])
     if not pairs:
         return
+    declared = list(out.get("5") or [])
+    if QUAD_DIAGONAL_SEAMS:
+        declared += _quad_diagonals(out)
     seam = shade._seam_edge_mask(np.array(A, float), np.array(B, float),
-                                 out.get("5") or [])
+                                 declared)
 
     parent = {}
 
