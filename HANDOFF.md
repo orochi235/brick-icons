@@ -1,3 +1,29 @@
+## 2026-10-07: overnight defect round; four fixes wait on a verdict
+
+Merged to main: the 32062 quad-diagonal shading fix (f46d721, all three gates
+passed, fleet suite green), plus notes for 19121 (draws right at HEAD since
+d211c4d) and 3024. Every sheet named below is on the wall, zone brick-icons.
+Each waiting branch is a worktree under `.claude/worktrees/agent-*`:
+
+- `worktree-agent-a43f4a832169a9913`: the 4589 residue-trim fix (xfail removed).
+  It moved two goldens nobody predicted, 4019 and 4740p03, by a few pixels each
+  (zoomed sheet "4589 fix: ... movers"); they need Mike's verdict. 51542,
+  3404ec01 and 52639 draw right at HEAD; close them on /review.
+- `worktree-agent-a90b89e76e36eb397`: the bore-seam fix for 3649 and 4070
+  (`shade._axis_binned_stops`). It moved one golden nobody predicted, a
+  25 px change on 32062 (crop on the wall), which needs Mike's verdict. If
+  merged: re-vet it on top of f46d721, then re-freeze the naive `hashes.txt`
+  on ONE node. Hashes differ between nodes (3942c measured on teitou vs
+  msb-uai).
+- `worktree-agent-a4068207890902e88`: 3811, `occt.TANGENT_PLANE_TONE`, off.
+  Decision: shade flat walls from the curve ramp everywhere, or 5849 and 6091
+  get their dark strip back.
+- `worktree-agent-acdf0e7ce4124624b`: the naive 4524 ring fix fails gate 2
+  (44137 loses window lines to the stray-stub cull). Do not merge. 27448 is
+  correct at HEAD; 30152a is a different defect (lens arc broken by dome tris).
+- 3024: Mike rejected both end caps. Open: make the stud hide mask accurate
+  (moves every stud junction), or close the defect.
+
 ## 2026-10-03: r1729 ingested; the nodes hold no render trees
 
 Both r1729 trees are indexed and baked. Regressions (a part that drew before
