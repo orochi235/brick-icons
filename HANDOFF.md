@@ -3,14 +3,10 @@
 `batch.Runner` reads `$ONTO_PAUSED` (`brick_icons/pause.py`): the in-process
 alarm, the parent's kill deadline, and a row's `secs` all leave out stopped
 time, so census and store pools can be launched `onto run --pausable`.
-Two things the code shows only in part:
-
-- **An isolated render follows its batch's stops through a minder process.**
-  onto SIGSTOPs only the item's process group, and the render runs in a group
-  of its own (for the group kill), so it rendered straight through a pause.
-  If onto ever stops an item's whole process tree, the minder is redundant.
-- **An expiry that sees no growth looks again a second later**, because onto
-  continues the job before it writes the new total.
+An isolated render runs in a process group of its own, so the pause reaches
+it only on an onto build from 2026-10-07 or later, which stops a job's whole
+process tree (`onto push` puts it on the fleet). An older agent stops the
+batch and leaves the render running.
 
 ## 2026-10-07: overnight defect round; four fixes wait on a verdict
 

@@ -17,7 +17,6 @@ def paused(tmp_path, monkeypatch):
     path = tmp_path / "paused"
     path.write_text("0\n")
     monkeypatch.setenv("ONTO_PAUSED", str(path))
-    monkeypatch.setattr(pause, "_SETTLE", 0.1)
     return path
 
 
@@ -89,16 +88,39 @@ def work(item):
             fh.write("x")
         time.sleep(0.1)
     return {"item": item}
-row = batch.Runner(None, timeout=4, isolate=True).call("a", work)
+row = batch.Runner(None, timeout=3.5, isolate=True).call("a", work)
 print(row.get("error", "ok"), row["secs"])
 """
 
 
-def test_an_onto_pause_stops_the_isolated_render_and_spends_none_of_its_cap(
-        tmp_path):
-    """onto stops the item's process group and nothing else, then continues it
-    and writes the new total, in that order. The render runs in a group of its
-    own, so without a minder it rendered straight through the pause."""
+def _tree(root: int) -> list[int]:
+    """`root` and every process descended from it, whatever group each is in."""
+    out = subprocess.run(["ps", "-ax", "-o", "pid=,ppid="],
+                         capture_output=True, text=True).stdout
+    kids: dict[int, list[int]] = {}
+    for line in out.splitlines():
+        pid, ppid = map(int, line.split())
+        kids.setdefault(ppid, []).append(pid)
+    tree, todo = [], [root]
+    while todo:
+        pid = todo.pop()
+        tree.append(pid)
+        todo.extend(kids.get(pid, []))
+    return tree
+
+
+def _signal_tree(pids: list[int], sig: int) -> None:
+    for pid in pids:
+        try:
+            os.kill(pid, sig)
+        except ProcessLookupError:
+            pass
+
+
+def test_an_onto_pause_spends_none_of_an_isolated_parts_cap(tmp_path):
+    """onto stops the whole tree, writes the new total, then continues it. The
+    render's own alarm and the parent's kill deadline both sit through the
+    stop, and each has to give the stopped seconds back."""
     ticks, counter = tmp_path / "ticks", tmp_path / "paused"
     counter.write_text("0\n")
     env = {**os.environ, "ONTO_PAUSED": str(counter),
@@ -109,17 +131,18 @@ def test_an_onto_pause_stops_the_isolated_render_and_spends_none_of_its_cap(
     try:
         while not ticks.exists() or ticks.stat().st_size < 3:
             time.sleep(0.05)
-        os.killpg(proc.pid, signal.SIGSTOP)
-        time.sleep(0.5)                     # the minder's lag, and then some
+        tree = _tree(proc.pid)
+        assert len(tree) > 1                # the isolated render is in it
+        _signal_tree(tree, signal.SIGSTOP)
         before = ticks.stat().st_size
-        time.sleep(2)
+        time.sleep(2.5)
         during = ticks.stat().st_size - before
-        os.killpg(proc.pid, signal.SIGCONT)
         counter.write_text("2\n")
+        _signal_tree(tree, signal.SIGCONT)
         out, _ = proc.communicate(timeout=20)
     finally:
         if proc.poll() is None:
-            os.killpg(proc.pid, signal.SIGKILL)
+            _signal_tree(_tree(proc.pid), signal.SIGKILL)
     assert during == 0
     verdict, secs = out.split()
     assert verdict == "ok"

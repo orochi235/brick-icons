@@ -18,7 +18,7 @@ import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 
-from brick_icons.pause import Deadline, Stopwatch, follow_stops
+from brick_icons.pause import Deadline, Stopwatch
 
 _ARMED: Deadline | None = None
 
@@ -290,12 +290,7 @@ class Runner:
             os.setpgid(pid, pid)
         except OSError:
             pass
-        minder = follow_stops(pid)
-        try:
-            blob, stopped = self._drain(read_fd, pid)
-        finally:
-            os.kill(minder, signal.SIGKILL)
-            os.waitpid(minder, 0)
+        blob, stopped = self._drain(read_fd, pid)
         # WNOHANG, not a blocking wait: _drain returns on a kill that did not
         # take, and blocking here would hang the batch on exactly the runaway
         # the cap exists to end. A child that survives is left to init.
