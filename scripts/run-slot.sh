@@ -100,7 +100,8 @@ build_of() {  # node, or empty for this checkout
   if [ -z "$1" ]; then
     (cd "$SRC" && "$ROOT/.venv/bin/python" -c "$py")
   else
-    onto run -in "$tree" "$1" -- .venv/bin/python -c "$py" 2>&1 | grep -E '^[0-9]+\.[0-9a-f]+\+?$' | tail -1 || true
+    onto run -in "$tree" --kind probe --expect 1m --about "Reads which brick_icons build the node's tree holds." \
+      "$1" -- .venv/bin/python -c "$py" 2>&1 | grep -E '^[0-9]+\.[0-9a-f]+\+?$' | tail -1 || true
   fi
 }
 
