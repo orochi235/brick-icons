@@ -64,3 +64,10 @@ def test_a_record_is_json_with_only_the_kinds_present(ldraw_dir):
     assert set(got["features"]) <= set(facts.KINDS)
     assert all(any(c.values()) for c in got["features"].values())
     json.dumps(got)
+
+
+def test_a_bore_declared_inside_out_is_not_a_bar(ldraw_dir):
+    """A minifig hand's grip is a radius-4 cylinder under BFC INVERTNEXT."""
+    got = lib_facts(ldraw_dir, "3820", "30374")
+    assert "bar" not in got["3820"]["features"]
+    assert got["30374"]["features"]["bar"] == {"up": 1, "down": 0, "side": 0}

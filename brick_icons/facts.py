@@ -25,7 +25,7 @@ Which primitives are which kind, and what they miss:
 | antistud | `p/stud*` and `p/N-Mstud*` titled "Stud Tube" or "Underside" | position | receptacles with no tube: a 1 x 1 has none, a 2 x 4 has 3, not 8 |
 | pinhole | `peghole*` | axis line | holes drawn without a peghole end |
 | axlehole | `axl*hole`, `axlehol4/5`, the `axlNhol8` hole perimeters (not `axlehol8`, which an axle draws too) | axis line | the axis sign is arbitrary, so a vertical one may read up or down |
-| bar | any cylinder of radius 4 LDU, 6 LDU or longer, outside a connection or pin primitive | axis line | can't tell an inside surface (a minifig hand's grip) from a bar |
+| bar | any cylinder of radius 4 LDU, 6 LDU or longer, outside a connection or pin primitive, not under a `BFC INVERTNEXT` | axis line | a bore in a file that never declares INVERTNEXT reads as a bar |
 | clip | `clip1`..`clip16` | position | facing is the side the clip's own geometry lies on |
 
 A hole or bar is one line however many primitives draw it, so a through hole
@@ -124,7 +124,8 @@ class _Node:
 
     `pts` has one row per connection instance: origin, outward direction,
     and kind index. `bars` has one row per candidate cylinder: origin, the
-    axis column (its length), and the two in-plane columns (its radius).
+    axis column (its length), the two in-plane columns (its radius), and
+    whether an odd number of `BFC INVERTNEXT`s above it turn it inside out.
     `verts` excludes everything under a stud.
     """
     __slots__ = ("pts", "kinds", "bars", "verts")
@@ -133,7 +134,7 @@ class _Node:
         self.pts, self.kinds, self.bars, self.verts = pts, kinds, bars, verts
 
 
-_EMPTY = _Node(np.zeros((0, 6)), np.zeros(0, dtype=int), np.zeros((0, 12)),
+_EMPTY = _Node(np.zeros((0, 6)), np.zeros(0, dtype=int), np.zeros((0, 13)),
                np.zeros((0, 3)))
 
 
@@ -183,9 +184,13 @@ class Walker:
         kinds: list[np.ndarray] = []
         bars: list[np.ndarray] = []
         own: list[list[float]] = []
+        invert = False
         for raw in text.splitlines():
             tok = raw.split()
             if not tok:
+                continue
+            if tok[0] == "0":
+                invert = invert or tok[1:3] == ["BFC", "INVERTNEXT"]
                 continue
             if tok[0] in ("3", "4"):
                 n = 3 if tok[0] == "3" else 4
@@ -197,6 +202,7 @@ class Walker:
                 continue
             if tok[0] != "1" or len(tok) < 15:
                 continue
+            inv, invert = float(invert), False
             try:
                 vals = np.array(tok[2:14], dtype=float)
             except ValueError:
@@ -205,7 +211,7 @@ class Walker:
             name = " ".join(tok[14:])
             child = self._resolve(name)
             if features.family(name) == "cylinder":
-                bars.append(np.concatenate([t, M @ _Y, M @ _X, M @ _Z]))
+                bars.append(np.concatenate([t, M @ _Y, M @ _X, M @ _Z, [inv]]))
             if child is None or child == path:
                 continue
             kind = self._kind_of(child)
@@ -234,13 +240,14 @@ class Walker:
                 b = sub.bars
                 bars.append(np.concatenate(
                     [b[:, :3] @ M.T + t, b[:, 3:6] @ M.T,
-                     b[:, 6:9] @ M.T, b[:, 9:] @ M.T], axis=1))
+                     b[:, 6:9] @ M.T, b[:, 9:12] @ M.T,
+                     np.abs(b[:, 12:] - inv)], axis=1))
         if own:
             verts.append(np.array(own))
         node = _Node(
             np.vstack(pts) if pts else _EMPTY.pts,
             np.concatenate(kinds) if kinds else _EMPTY.kinds,
-            np.vstack([b.reshape(-1, 12) for b in bars]) if bars else _EMPTY.bars,
+            np.vstack([b.reshape(-1, 13) for b in bars]) if bars else _EMPTY.bars,
             _reduce(np.vstack(verts)) if verts else _EMPTY.verts)
         if _shared(path):
             self._memo[path] = node
@@ -350,10 +357,10 @@ def _bars(bars: np.ndarray, mid_y: float) -> dict:
     counts = _blank()
     if not len(bars):
         return counts
-    o, ax, u, v = bars[:, :3], bars[:, 3:6], bars[:, 6:9], bars[:, 9:]
+    o, ax, u, v = bars[:, :3], bars[:, 3:6], bars[:, 6:9], bars[:, 9:12]
     ru, rv = np.linalg.norm(u, axis=1), np.linalg.norm(v, axis=1)
     keep = ((np.abs(ru - BAR_RADIUS) < 0.1) & (np.abs(rv - BAR_RADIUS) < 0.1)
-            & (np.linalg.norm(ax, axis=1) > 1e-6))
+            & (np.linalg.norm(ax, axis=1) > 1e-6) & (bars[:, 12] < 0.5))
     o, ax = o[keep], ax[keep]
     for a, off, members in _lines(o, ax):
         spans = sorted(sorted((float(np.dot(o[i], a)),
