@@ -247,6 +247,18 @@ against the vendored LDraw tree.
 Renders are unaffected — the band is on the real part, so `--shading outline`
 still draws it.
 
+## Part facts
+
+    .venv/bin/python scripts/export-part-facts.py            # whole library
+    .venv/bin/python scripts/export-part-facts.py 87087      # one part, to stdout
+
+Writes `out/part-facts.json`: for every LDraw part, its studs, antistuds, pin
+holes, axle holes, bars and clips counted by facing (up, down, side), and its
+size in studs and plates. [collego](../collego)'s classifier reads it. The
+file is replaced whole on each run, with a per-part log beside it
+(`out/part-facts.log`). What counts as each kind, and what each misses, is
+in `brick_icons/facts.py`.
+
 ## CLI reference
 
 Defaults shown come from `labels.toml` overriding the built-ins in
