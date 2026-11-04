@@ -42,7 +42,7 @@ step "resvg + potrace"
 # Version-matched to external-deps.lock by construction: they are this
 # machine's binaries. potrace's dylib lives in the Cellar, so the copy is
 # repointed at one beside it and re-signed ad-hoc.
-ssh "$HOST" "mkdir -p $REMOTE_BIN \$HOME/.local/lib"
+ssh "$HOST" "mkdir -p $REMOTE_BIN \$HOME/.local/lib; chmod -f u+w $REMOTE_BIN/resvg $REMOTE_BIN/potrace \$HOME/.local/lib/libpotrace* || true"
 scp -q "$(command -v resvg)" "$HOST:.local/bin/resvg"
 scp -q "$(command -v potrace)" "$HOST:.local/bin/potrace"
 POTRACE_LIB=$(otool -L "$(command -v potrace)" | awk '/libpotrace/ {print $1}')
