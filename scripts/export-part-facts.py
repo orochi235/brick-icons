@@ -47,6 +47,9 @@ def main() -> int:
         def progress(msg: str) -> None:
             print(msg, flush=True)
             log.write(msg + "\n")
+            head = msg.split(" ", 1)[0]
+            if "/" in head:
+                print(f"onto: progress {head}", flush=True)
         got = dict(facts.build(ldraw, progress=progress))
         secs = time.perf_counter() - t0
         progress(f"done: {len(got)} parts in {secs:.1f}s "
