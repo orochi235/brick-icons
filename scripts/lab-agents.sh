@@ -98,7 +98,11 @@ free() { # port
 }
 
 each() { for label in "$base.lab-api" "$base.lab-front"; do "$1" "$label"; done; }
-boot() { launchctl bootstrap "$domain" "$agents/$1.plist" 2>/dev/null || true; }
+# A label left disabled in launchd's override database fails bootstrap with error 5.
+boot() {
+  launchctl enable "$domain/$1"
+  launchctl bootstrap "$domain" "$agents/$1.plist" 2>/dev/null || true
+}
 # bootout returns before launchd has let go of the label, and a bootstrap in
 # that window fails and leaves nothing loaded.
 unboot() {
