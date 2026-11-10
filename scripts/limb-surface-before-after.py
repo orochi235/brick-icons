@@ -1,6 +1,6 @@
-"""One sheet: drawings before and after a fitted limb's visibility test
-leaves the fitted surface's own facets out of the occluders, both from THIS
-tree (quadric.LIMB_SKIPS_OWN_FACETS off for `before`; nothing is stashed).
+"""One sheet: a fitted-limb fix's drawings before and after, both from THIS
+tree -- `--flag` names the quadric constant turned off for `before` (default
+LIMB_SKIPS_OWN_FACETS); nothing is stashed.
 
 A part is `<id>` or `<id>:<slot>`; the slot defaults to occt. Prints each
 row's changed-component count as it finishes.
@@ -25,16 +25,16 @@ from brick_icons.caption import Shot  # noqa: E402
 from _sheet import changed, components, sheet  # noqa: E402
 
 
-def render(part, slot, out_dir, before, width):
-    saved = quadric.LIMB_SKIPS_OWN_FACETS
-    quadric.LIMB_SKIPS_OWN_FACETS = not before
+def render(part, slot, out_dir, before, width, flag):
+    saved = getattr(quadric, flag)
+    setattr(quadric, flag, not before)
     try:
         args = cli._parse_args(db.canonical_argv(part, slot))
         t0 = time.perf_counter()
         cli.process_one(cli._config_from_args(args), part, out_dir)
         secs = time.perf_counter() - t0
     finally:
-        quadric.LIMB_SKIPS_OWN_FACETS = saved
+        setattr(quadric, flag, saved)
     svg, png = out_dir / f"{part}.svg", out_dir / f"{part}.png"
     subprocess.run(["resvg", "-w", str(width), "--background", "white",
                     str(svg), str(png)], check=True)
@@ -46,6 +46,7 @@ def main():
     ap.add_argument("parts", nargs="+")
     ap.add_argument("--out", default="out/limb-surface.png")
     ap.add_argument("--width", type=int, default=420)
+    ap.add_argument("--flag", default="LIMB_SKIPS_OWN_FACETS")
     ap.add_argument("--title", default="before / after: a fitted limb's "
                     "visibility test skips the surface's own facets")
     a = ap.parse_args()
@@ -55,8 +56,8 @@ def main():
             part, _, slot = spec.partition(":")
             slot = slot or "occt"
             try:
-                b = render(part, slot, Path(td) / f"before-{i}", True, a.width)
-                n = render(part, slot, Path(td) / f"after-{i}", False, a.width)
+                b = render(part, slot, Path(td) / f"before-{i}", True, a.width, a.flag)
+                n = render(part, slot, Path(td) / f"after-{i}", False, a.width, a.flag)
             except Exception as e:      # one bad part must not sink the sheet
                 print(f"[{i}/{len(a.parts)}] {spec} ERROR {e}", flush=True)
                 continue
