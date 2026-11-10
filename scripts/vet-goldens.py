@@ -68,6 +68,8 @@ def make_base_tree(rev: str, where: Path) -> Path:
         subprocess.run(["git", "worktree", "remove", "--force", str(where)],
                        cwd=ROOT, capture_output=True)
         shutil.rmtree(where, ignore_errors=True)
+    # a killed run leaves `where` registered after a sync deletes the directory
+    git("worktree", "prune")
     # a node's clone only has what its last sync fetched
     if subprocess.run(["git", "cat-file", "-e", f"{rev}^{{commit}}"],
                       cwd=ROOT, capture_output=True).returncode:
