@@ -4318,7 +4318,7 @@ notes = "51283's sphere is hand-authored quads (s/51283s01.dat, two mirrored hal
 id = "20401-limb-barbs-at-region-join"
 part = "20401"
 engines = ["occt", "naive"]
-status = "open"
+status = "fixed"
 title = "a fitted limb barbs where two regions of one sphere meet"
 classes = ["arc-split"]
 checked = { white-occt = "405cf900de20a1747f0f8587b9115dca2125a3a4856c255a74d429304d1f85cb" }
@@ -4326,7 +4326,9 @@ filed = "2026-09-28"
 notes = """
 Branch sphere-shading. 20401's ball is two hemispheres with no conditional line between them. Both fit one sphere (quadric._share_spheres gives them one fit and one ramp), but the limb is drawn only along conditional-line silhouette chords, so it stops ~8 deg short of the equator on each side and the contour polygon there barbs as it rejoins the arcs. 51283 shows the same kind of kink where its limb meets the collar ring. Not fixed: bridging needs a visibility test across the gap, or treating the equator as declared by the joint fit, which the declared-only rule does not yet allow. 2026-10-07 cause (measured): the condlines are there -- the lower hemisphere (s/90617s02, 26.6 deg facets) has silhouette chords right up to the equator -- but their visibility was tested along the chord, which sinks 0.48 LDU inside the joint sphere, and the upper hemisphere's finer facets (9.4 deg) hid the first ~8 deg of it; HLR does the same in occt. Fix (branch worktree-agent-ab1034595a5a8ac33, 8232e05 + 22298f0): the limb's chord test leaves out the fitted surface's own facets, every region sharing its fit (quadric.LIMB_SKIPS_OWN_FACETS; hlr.fitted_occluders): a sphere or ellipsoid is convex, so none of it can lie in front of its own limb. occt now draws fitted limbs through the same chord test (occt._fitted_limb_ops) instead of re-reading HLR fragments, with a sweep frustum's occluder built from its cut faces (occt._prim_occluders): primitives' ConeOccluder ignores prim.cut, and 1974's swept cones, 143 LDU tall uncut, hid most of its limb when tried. Sampling the limb itself instead of the chord was tried first and dropped: it drew 1974's limb over its notch. Gate 1 (out/limb-surface/gate1.png): 20401 occt 3 comp, naive 2 comp; both barbs gone, contour 14 L -> 0 L in both engines (tests/test_quadric.py::test_20401_limb_runs_unbroken_across_its_hemispheres). Gate 2 (out/limb-surface/gate2.png, occt and naive each: 32474 51283 22119 30106 20953 3960 24132 1974 2736 90370, control 3262): none worse; 1974 occt 2 comp (the white sliver between its limb and the left notch's rim closes), 2736 occt 1 comp (sub-pixel resampling of the ball's outline), the rest 0. Gate 3 (vet-goldens --base f46d721 --expect 3960,4740p03, occt and naive, out/vet/limb-surface-occt, -naive): 0 of 52 moved in either, verdict pass. Not fixed here: 32474's barbs, same look -- its hemispheres fit centers 0.248 LDU apart (coarse half residual 0.0065), past _share_spheres' 1% gate, so they stay two fits and the fine half still hides the coarse half's chords; and naive 20401's two small ticks at the bottom, where the limb meets the stud-cutout ring (present before the fix, occt does not draw them). Filed: 1974-naive-swept-cone-occludes-uncut.
 
-2026-11-09 review better"""
+2026-11-09 review better
+
+2026-11-09: closed on Mike's look at HEAD 562132e: the outline draws clean in occt and white-occt; the barbs he saw were in the Oct 3 build-1729 drawings, which predate e498e15. The strokeless slot's fill still notches: 20401-silhouette-fill-notches."""
 
 [[defect]]
 id = "1974-naive-swept-cone-occludes-uncut"
