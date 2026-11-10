@@ -1234,3 +1234,18 @@ def test_orphan_cull_keeps_a_run_whose_free_tip_lies_in_the_anchors():
     assert hlr.cull_orphan_runs([outline, edge], anchors=stud) == [outline, edge]
     far = box(30.0, 90.0, 40.0, 110.0)
     assert hlr.cull_orphan_runs([outline, edge], anchors=far) == [outline]
+
+
+def test_declared_ends_are_a_partial_arcs_end_points_in_op_space():
+    right, up, fwd = hlr.view_basis(30.0, 45.0)
+    proj = primitives.Projection(right, up, fwd, s=2.0, cx=1.0, cy=-1.0,
+                                 half=50.0)
+    quarter = primitives.Edge(R=np.eye(3) * 20.0, t=np.array([5.0, 0, 0]),
+                              sector=90.0)
+    full = primitives.Edge(R=np.eye(3) * 20.0, t=np.zeros(3))
+    got = hlr._declared_ends([quarter, full], proj)
+    want = np.array([[25.0, 0, 0], [5.0, 0, 20.0]])
+    x, y, _z = proj.to_px(want)
+    pts = np.array([(p.x, p.y) for p in got.geoms])
+    assert np.allclose(pts, np.stack([x, y], 1))
+    assert hlr._declared_ends([full], proj) is None
