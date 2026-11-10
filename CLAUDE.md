@@ -126,7 +126,7 @@ editor, the browsers, the lab servers and several Claude sessions at once, and
 it is the only machine whose slowness anyone feels; the fleet exists so it does
 not also grind through renders. `onto status` names a node with free cores, or
 `--any` picks one. A render slot's round is `scripts/refill-slot.sh <slot> any
-<task>`, which readies every node but orochi and lets onto spread the list.
+<task>`, which readies every node but this one and lets onto spread the list.
 
     onto run --detach --timeout 4h --task thumb-bake --kind render \
       --icon photo.on.rectangle.angled \
@@ -134,8 +134,8 @@ not also grind through renders. `onto status` names a node with free cores, or
       --out out/thumbs --to out/thumbs \
       msb-uai -- .venv/bin/python scripts/bake-thumbs.py
 
-This machine is enrolled as `orochi`, so `--dir "$PWD"` can run a job in place
-with no sync and no fetch. **That is the exception and it needs a reason** —
+This machine is an onto node too (`onto id` names it), so `--dir "$PWD"` can
+run a job in place with no sync and no fetch. **That is the exception and it needs a reason** —
 the job needs this checkout's uncommitted state, or it is minutes rather than
 tens of them. "Shipping the inputs would take a while" is not one: the sync is
 paid once and the node keeps what it got, while every local run is paid again

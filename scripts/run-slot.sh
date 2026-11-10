@@ -88,11 +88,12 @@ fi
 
 # Under --any, onto chooses among every node ready for the job, and readiness
 # is what this script makes: a node joins when its tree draws at this
-# checkout's build and holds the list. orochi is never prepared, so --needs
+# checkout's build and holds the list. This machine is never prepared, so --needs
 # keeps it out.
 if [ $any -eq 1 ]; then
   [ ${#nodes[@]} -eq 0 ] || { echo "run-slot: --any picks the nodes itself; drop --with" >&2; exit 2; }
-  while read -r n; do [ "$n" = orochi ] || nodes+=("$n"); done < <(onto nodes | awk 'NR > 1 { print $1 }')
+  self=$(onto id | awk '$1 == "controller" { print $2 }')
+  while read -r n; do [ "$n" = "$self" ] || nodes+=("$n"); done < <(onto nodes | awk 'NR > 1 { print $1 }')
 fi
 
 build_of() {  # node, or empty for this checkout

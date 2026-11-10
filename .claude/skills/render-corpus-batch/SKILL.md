@@ -111,7 +111,7 @@ surprises you.
     lands as    renders under white-occt + a measurement row per part
     after       white-occt drawn at build 1729 throughout
 
-**`orochi` is the user's own Mac and never takes a round.** It runs the editor,
+**The user's own Mac -- the controller, `onto id` -- never takes a round.** It runs the editor,
 the browsers, the lab servers and several Claude sessions, and it is the only
 machine whose slowness anyone feels. `run-slot.sh` leaves it out of `any` (see
 below); name it only when the job genuinely needs this checkout.
@@ -154,7 +154,7 @@ hand-built `onto run` is the wrong tool:
   carries it, and a job missing it died in seconds with an empty log that read
   as the node refusing the work. `run-slot.sh` copies it to each, and passes
   `--needs vendor/ldraw --needs .venv --needs <list>` so onto skips any node
-  without them -- which is also what keeps orochi out: it is never readied, so
+  without them -- which is also what keeps this machine out: it is never readied, so
   it never holds the list.
 - **`EXTRA` is derived from `db._CANONICAL`** through the CLI's own parser and
   read from slot-coverage's output, never retyped: leave the stroke widths out
