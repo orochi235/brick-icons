@@ -293,6 +293,10 @@ def run_fleet(a) -> int:
     rel = f"out/vet/{a.label}"
     onto = ["onto", "do", "--kind", "score", "--icon", "chart.line.text.clipboard",
             "--task", f"vet-{a.label}", "--timeout", "6h" if a.parts else "1h",
+            "--expect", "2h" if a.parts else "20m",
+            "--about", f"Gate 3 for a fix: draws the golden cases under "
+                       f"{a.engine} at {a.base or 'origin/main'} and at this "
+                       f"tree, and diffs them.",
             # a branch with no upstream has no merge-base for onto to sync
             # from; `before`'s revision is one the node can fetch
             "--ref", a.base or "origin/main",
