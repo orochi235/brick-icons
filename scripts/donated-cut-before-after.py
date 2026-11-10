@@ -1,12 +1,14 @@
-"""Before/after sheet for shade._donated_cut, both sides from THIS tree.
+"""Before/after sheet for shade._simplified_cut, both sides from THIS tree.
 
     .venv/bin/python scripts/donated-cut-before-after.py --out out/donated-cut 4070 32062
+    .venv/bin/python scripts/donated-cut-before-after.py --site residue 4589
 
-A part is `<id>` or `<id>:<slot>` (default occt). `before` moves a donated
-spur exactly as cut (`_donated_cut` disarmed in-process); `after` is the code
-as it stands. Each row is labeled with the part's worst run of sub-quarter-
-pixel fill segments and its fill L-command count, before -> after, and
-report.json holds those with the diff's changed components.
+A part is `<id>` or `<id>:<slot>` (default occt). `before` hands the piece
+over exactly as cut (`_simplified_cut` disarmed in-process, at the `--site`
+named: a donated spur, or a residue trim); `after` is the code as it stands.
+Each row is labeled with the part's worst run of sub-quarter-pixel fill
+segments and its fill L-command count, before -> after, and report.json
+holds those with the diff's changed components.
 """
 import argparse
 import importlib.util
@@ -37,15 +39,30 @@ _spec.loader.exec_module(sfr)
 WIDTH = 540
 
 
-def render_svg(part, slot, out_dir, variant):
-    real = shade._donated_cut
+def _disarmed(fn):
+    def run(*a, **kw):
+        real = shade._simplified_cut
+        shade._simplified_cut = lambda p, W: p
+        try:
+            return fn(*a, **kw)
+        finally:
+            shade._simplified_cut = real
+    return run
+
+
+SITES = {"donation": "_donate_escaped_spurs", "residue": "_residue_trims"}
+
+
+def render_svg(part, slot, out_dir, variant, site):
+    name = SITES[site]
+    real = getattr(shade, name)
     if variant == "before":
-        shade._donated_cut = lambda p, W: p
+        setattr(shade, name, _disarmed(real))
     try:
         args = cli._parse_args(db.canonical_argv(part, slot))
         cli.process_one(cli._config_from_args(args), part, out_dir)
     finally:
-        shade._donated_cut = real
+        setattr(shade, name, real)
     return (out_dir / f"{part}.svg").read_text()
 
 
@@ -71,6 +88,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("parts", nargs="+")
     ap.add_argument("--out", default="out/donated-cut")
+    ap.add_argument("--site", choices=sorted(SITES), default="donation")
     ap.add_argument("--title", default="donated spur cut: moved as cut (before) "
                                        "vs simplified (after)")
     args = ap.parse_args()
@@ -84,7 +102,7 @@ def main():
             svgs, stats = {}, {}
             for v in ("before", "after"):
                 d = Path(td) / f"{part}-{slot}-{v}"
-                svgs[v] = render_svg(part, slot, d, v)
+                svgs[v] = render_svg(part, slot, d, v, args.site)
                 worst = max((r for *_, r, _ in sfr.runs(svgs[v], floor=0)),
                             default=0)
                 stats[v] = {"worst_run": worst, "fill_L": fill_lines(svgs[v])}
