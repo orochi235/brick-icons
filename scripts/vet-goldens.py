@@ -68,6 +68,10 @@ def make_base_tree(rev: str, where: Path) -> Path:
         subprocess.run(["git", "worktree", "remove", "--force", str(where)],
                        cwd=ROOT, capture_output=True)
         shutil.rmtree(where, ignore_errors=True)
+    # a node's clone only has what its last sync fetched
+    if subprocess.run(["git", "cat-file", "-e", f"{rev}^{{commit}}"],
+                      cwd=ROOT, capture_output=True).returncode:
+        git("fetch", "origin", rev)
     git("worktree", "add", "--detach", str(where), rev)
     # The parts library is untracked, so a fresh worktree has none.
     (where / "vendor").symlink_to(ROOT / "vendor")
