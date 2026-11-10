@@ -820,8 +820,11 @@ def _axis_binned_stops(samples, style, nbins=8):
         n = np.mean(ns, axis=0)
         return style.ramp(n / (np.linalg.norm(n) or 1.0))
 
+    # Mid-bin stops moved a half-turn wall's middle sample (0.5, an edge) a
+    # sixteenth up its axis, so two spans of one bore running opposite ways stepped.
     order = sorted(runs)
-    stops = [((bi + 0.5) / nbins, band([n for _, n in runs[bi]]))
+    stops = [(float(np.mean([o for o, _ in runs[bi]])),
+              band([n for _, n in runs[bi]]))
              for bi in order]
     if stops:
         stops = [(0.0, _band_edge(runs[order[0]], band, 0))] + stops \
