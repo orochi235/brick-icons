@@ -274,6 +274,9 @@ def run_fleet(a) -> int:
            "--engine", a.engine, "--label", a.label,
            "--workers", str(a.workers)]
     if a.base:
+        # a name resolves on the node to the node's own branch: `main` drew
+        # `before` 1212 commits back
+        a.base = git("rev-parse", a.base)
         cmd += ["--base", a.base]
     if a.parts:
         # the list and its labels travel on the command line: a file here
