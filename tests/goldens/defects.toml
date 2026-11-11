@@ -177,7 +177,34 @@ arc's own to within 0.005 (eps is 0.039): the arc is lying on its own carrier
 surface and nothing is in front of it to cut it. So the question is not which
 spans survive occlusion but why an edge is drawn on that carrier at all --
 identify the primitive behind the arc, as 24434's entry had to.
-"""
+
+2026-10-07, at HEAD cff1361, against LDView's edge lines (reference-lines,
+drawn for this check): sheet "ring-whole-circle parts at HEAD: naive / occt /
+LDView edge lines" on the wall. Measured: the circle is the neck ring's
+OUTER edge at r=10.5 (4-4ring6 x1.5), not a near rim. On one half it ends at the
+2-4cyli wall and is a real edge; on the other half the top plane carries on
+into the square tab, which LDraw authors as a faceted 2-4ndis. smooth_rim_skips
+only counted a coplanar FLAT PRIMITIVE as continuing a flat circle, so the tab
+half drew as a seam line across the tab (scripts/probe-flat-rim-ops.py: the
+r=10.5 op at y=0 tests visible 1.000, the one at y=2 0.388 -- the 121/314 far
+rim above). occt draws the same whole ellipse, so it is wrong on both engines.
+
+Tried on branch worktree-agent-acdf0e7ce4124624b, 3dd9753: coplanar facets on
+the open side count as coverage, per angular bin
+(primitives.rim_flat_facet_span_bins). Gate 1 passed: 4524 white-naive 1
+region, naive 1 region, the tab half gone, matching LDView (sheet "flat edge
+circles over coplanar facets"). Gate 2 FAILED on 44137: with the hole-face
+circles cut, the orphan cull peels 5 window lines and an arc that LDView draws
+(scripts/flat-facet-seam-affected.py --diff, with and without
+--no-orphan-cull: without the cull only circle arcs move). The rule moves
+65/190 sampled parts that mix ndis with rings and 21/179 others, mostly
+Technic pin-hole faces. Gate 3 also reports 4589 wireframe UNEXPECTED (4
+regions); 3649 moved as predicted. Not mergeable as it stands. Open question
+before another try: whether the facets it counted on 44137 continue the same
+face or are a back-facing surface that shares the plane.
+
+
+2026-11-10: branch worktree-agent-acdf0e7ce4124624b (3dd9753 + 4748d43) deleted unmerged; the fix and its gate-2 failure are recorded above."""
 
 [[defect]]
 id = "27448-ring-whole-circle"
