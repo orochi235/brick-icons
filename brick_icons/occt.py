@@ -13,7 +13,9 @@ except ImportError as e:                      # pragma: no cover
         "--engine occt needs the OCCT extra: pip install -e '.[occt]'"
     ) from e
 
-from OCP.gp import gp_Pnt, gp_Dir, gp_Vec, gp_Ax2, gp_Circ, gp_Elips, gp_Pln
+from OCP.gp import gp_Pnt, gp_Dir, gp_Vec, gp_Ax2, gp_Circ, gp_Elips, gp_Pln, gp_Lin
+from OCP.IntCurvesFace import IntCurvesFace_ShapeIntersector
+from OCP.BRepExtrema import BRepExtrema_DistShapeShape
 from OCP.BRepPrimAPI import (BRepPrimAPI_MakeCylinder, BRepPrimAPI_MakeCone,
                              BRepPrimAPI_MakeTorus,
                              BRepPrimAPI_MakePrism)
@@ -1725,6 +1727,164 @@ def _drop_lines_hlr_hides(picked, spans):
         if _on_a_visible_line(pts, spans):
             keep.append((edge, locus))
     return keep
+
+
+LINE_GAP_FILL = True
+LINE_GAP_MIN = 0.05       # LDU in HLR's 2-D frame; shorter gaps are seam noise
+LINE_GAP_SAMPLES = 5      # ray tests per gap, ends included
+LINE_ON_FACE_TOL = 1e-3   # LDU; a 48-gon chord of r 10 sags 0.02
+CREASE_COS = 0.999        # two faces this far from parallel make a crease
+
+
+def _fill_line_gaps(picked, spans, loci, out, shape, right, up):
+    """(edge, locus) for the stretches of a type-2 line the shape's own
+    fragments leave out where the line is in plain view.
+
+    A line lying where coplanar faces meet can lose its edge to sewing:
+    4070's ledge crease is shared by the wall, a buried tri, the ledge top
+    and a hidden recess floor, sewing pairs them flat, and the shape keeps no
+    crease edge along the 12 LDU they share; 4070d01's sticker, flush with the
+    brick's top, does the same to the top edge. The line mask's nudged copy
+    (_straight_lines) still says where the line shows. It cannot be the only
+    word: a line that touches a face is pushed THROUGH it by the nudge, and
+    HLR only changes visibility where outlines cross, never where an edge
+    pierces a face -- 4739b's pad edges run under its studs and the copy
+    came back visible there. So every stretch is ray-tested in 3D as well.
+    """
+    if not spans:
+        return []
+    seg_loci = [l for l in loci
+                if l[0] == "seg" and l[3] == "line"
+                and not (len(l) > 4 and l[4] is not None)]
+    if not seg_loci:
+        return []
+    ax, ay = _screen_axes(right, up)
+    z, _ = projector_axes(right, up)
+    eye = np.asarray(z, float) / np.linalg.norm(z)
+    frags = []
+    for edge, locus in picked:
+        if locus[0] == "seg":
+            try:
+                frags.append(_fragment_points(edge))
+            except Exception:
+                continue
+    inter = index = None
+    extra = []
+    for seg in out.get("2", ()):
+        A, B = np.asarray(seg, float)
+        a, b = _proj2([A, B], ax, ay)
+        d = b - a
+        n2 = float(d @ d)
+        if n2 < 1e-12:
+            continue
+        mine = ("seg", a, b, "line", None)
+        locus = next((l for l in seg_loci
+                      if _on_locus(np.array([a, b]), l)), None)
+        if locus is None:
+            continue
+
+        def interval(P):
+            t = (np.asarray(P, float) - a) @ d / n2
+            return float(np.clip(t.min(), 0, 1)), float(np.clip(t.max(), 0, 1))
+        shown = [interval(np.array([p, q])) for p, q in spans
+                 if _on_locus(np.array([p, q]), mine)]
+        if not shown:
+            continue
+        have = [interval(P) for P in frags if _on_locus(P, mine)]
+        for g0, g1 in _subtract(shown, have):
+            if (g1 - g0) * math.sqrt(n2) <= LINE_GAP_MIN:
+                continue
+            if inter is None:
+                inter = IntCurvesFace_ShapeIntersector()
+                inter.Load(shape, 1e-7)
+            if not _in_view(inter, A, B, g0, g1, eye):
+                continue
+            if index is None:
+                index = _FaceIndex(shape)
+            if not _on_crease(A + 0.5 * (g0 + g1) * (B - A), index):
+                continue
+            p, q = a + g0 * d, a + g1 * d
+            ed = _line_edge((p[0], p[1], 0.0), (q[0], q[1], 0.0))
+            if ed is not None:
+                extra.append((ed, locus))
+    return extra
+
+
+def _in_view(inter, A, B, t0, t1, eye):
+    """Whether every sample of A..B over [t0, t1], moved LINE_MASK_NUDGE
+    toward the eye, has nothing in front of it."""
+    for t in np.linspace(t0, t1, LINE_GAP_SAMPLES):
+        P = A + t * (B - A) + LINE_MASK_NUDGE * eye
+        inter.Perform(gp_Lin(gp_Pnt(*map(float, P)), gp_Dir(*map(float, eye))),
+                      0.0, 1e9)
+        if inter.NbPnt():
+            return False
+    return True
+
+
+class _FaceIndex:
+    """The shape's faces with their bounding boxes, for asking which faces
+    pass through a point."""
+
+    def __init__(self, shape):
+        from OCP.Bnd import Bnd_Box
+        from OCP.BRepBndLib import BRepBndLib
+        self.faces, self.boxes = [], []
+        for f in _shape_faces(shape):
+            bb = Bnd_Box()
+            try:
+                BRepBndLib.Add_s(f, bb)
+                x0, y0, z0, x1, y1, z1 = bb.Get()
+            except Exception:
+                continue
+            self.faces.append(f)
+            self.boxes.append((x0, y0, z0, x1, y1, z1))
+        self.boxes = np.array(self.boxes, float).reshape(-1, 6)
+
+    def normals_at(self, P, tol):
+        """Unit normals of every face within `tol` of P."""
+        P = np.asarray(P, float)
+        near = np.nonzero(np.all(self.boxes[:, :3] - tol <= P, axis=1)
+                          & np.all(P <= self.boxes[:, 3:] + tol, axis=1))[0]
+        v = BRepBuilderAPI_MakeVertex(gp_Pnt(*map(float, P))).Vertex()
+        out = []
+        for k in near:
+            f = self.faces[k]
+            try:
+                d = BRepExtrema_DistShapeShape(v, f)
+                if not d.IsDone() or d.Value() >= tol:
+                    continue
+                surf = BRep_Tool.Surface_s(f)
+                proj = GeomAPI_ProjectPointOnSurf(gp_Pnt(*map(float, P)), surf)
+                u, w = proj.LowerDistanceParameters()
+                n = GeomLProp_SLProps(surf, u, w, 1, 1e-9).Normal()
+                out.append(np.array([n.X(), n.Y(), n.Z()]))
+            except Exception:
+                continue
+        return out
+
+
+def _on_crease(P, index, tol=LINE_ON_FACE_TOL):
+    """Whether P lies where two faces of different planes meet. A declared
+    crease does; a polygon chord lies on one flat face at most -- 4019's and
+    6589's rings run across the gear face, a sagitta inside the exact circle
+    substitution bounds it with."""
+    ns = index.normals_at(P, tol)
+    return any(abs(float(a @ b)) < CREASE_COS
+               for i, a in enumerate(ns) for b in ns[i + 1:])
+
+
+def _subtract(xs, ys):
+    """The parts of intervals `xs` that no interval of `ys` covers."""
+    out = []
+    for x0, x1 in xs:
+        cur = [(x0, x1)]
+        for y0, y1 in ys:
+            cur = [piece for c0, c1 in cur
+                   for piece in ((c0, min(c1, y0)), (max(c0, y1), c1))
+                   if piece[1] > piece[0]]
+        out += cur
+    return out
 
 
 def _withheld_limb_loci(out, right, up, fwd):
@@ -3623,8 +3783,10 @@ def visible_segments(out, right, up, render_px, cull=True, fwd=None, canvas_px=N
     loci = authored_loci(shape, out, right, up, held=held)
     picked = select_authored(comps.get("sharp"), loci)
     if cull:
-        picked = _drop_lines_hlr_hides(picked,
-                                       _visible_line_spans(comps.get("lines")))
+        spans = _visible_line_spans(comps.get("lines"))
+        picked = _drop_lines_hlr_hides(picked, spans)
+        if LINE_GAP_FILL:
+            picked += _fill_line_gaps(picked, spans, loci, out, shape, right, up)
     else:
         picked += select_authored(comps.get("sharp_hidden"), loci)
     picked = _drop_tangent_seams(picked, shape, right, up, out)
