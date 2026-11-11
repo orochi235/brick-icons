@@ -68,6 +68,12 @@ def make_base_tree(rev: str, where: Path) -> Path:
         subprocess.run(["git", "worktree", "remove", "--force", str(where)],
                        cwd=ROOT, capture_output=True)
         shutil.rmtree(where, ignore_errors=True)
+    # a killed run leaves `where` registered after a sync deletes the directory
+    git("worktree", "prune")
+    # a node's clone only has what its last sync fetched
+    if subprocess.run(["git", "cat-file", "-e", f"{rev}^{{commit}}"],
+                      cwd=ROOT, capture_output=True).returncode:
+        git("fetch", "origin", rev)
     git("worktree", "add", "--detach", str(where), rev)
     # The parts library is untracked, so a fresh worktree has none.
     (where / "vendor").symlink_to(ROOT / "vendor")
@@ -274,6 +280,9 @@ def run_fleet(a) -> int:
            "--engine", a.engine, "--label", a.label,
            "--workers", str(a.workers)]
     if a.base:
+        # a name resolves on the node to the node's own branch: `main` drew
+        # `before` 1212 commits back
+        a.base = git("rev-parse", a.base)
         cmd += ["--base", a.base]
     if a.parts:
         # the list and its labels travel on the command line: a file here
@@ -293,6 +302,10 @@ def run_fleet(a) -> int:
     rel = f"out/vet/{a.label}"
     onto = ["onto", "do", "--kind", "score", "--icon", "chart.line.text.clipboard",
             "--task", f"vet-{a.label}", "--timeout", "6h" if a.parts else "1h",
+            "--expect", "2h" if a.parts else "20m",
+            "--about", f"Gate 3 for a fix: draws the golden cases under "
+                       f"{a.engine} at {a.base or 'origin/main'} and at this "
+                       f"tree, and diffs them.",
             # a branch with no upstream has no merge-base for onto to sync
             # from; `before`'s revision is one the node can fetch
             "--ref", a.base or "origin/main",

@@ -401,8 +401,8 @@ def test_fill_ops_group_gradient_kept():
     ops = shade.fill_ops(fs, shade.Flat3Style())
     assert len(ops) == 1 and "gradient" in ops[0]
     stops = ops[0]["gradient"]["stops"]
-    # two bands plus the flat clamps at 0 and 1 (see _axis_binned_stops)
-    assert [o for o, _ in stops] == [0.0, 0.0625, 0.9375, 1.0]
+    # two bands, each at its own sample, plus the flat clamps at 0 and 1
+    assert [o for o, _ in stops] == [0.0, 0.0, 1.0, 1.0]
     assert stops[0][1] != stops[-1][1]
 
 
@@ -1859,6 +1859,23 @@ def test_a_monotone_ramp_ends_on_its_own_last_sample_not_the_band_average():
     stops = shade._axis_binned_stops(samples, style)
     assert stops[0][1] == style.ramp(samples[0][1])
     assert stops[-1][1] == style.ramp(samples[-1][1])
+
+
+def test_axis_stops_mirror_when_the_axis_runs_the_other_way():
+    """Two spans of one bore can run their axes opposite ways (3649's pin
+    hole, 4070's stud and the hole behind it). The same samples reversed must
+    give the same ramp reversed, or the spans step where they meet."""
+    style = shade.make_style("flat3")
+    lit = style.light / np.linalg.norm(style.light)
+    perp = np.cross(lit, [0.0, 0.0, 1.0])
+    perp /= np.linalg.norm(perp)
+    offs = [0.0, 0.038, 0.146, 0.309, 0.5, 0.691, 0.854, 0.962, 1.0]
+    samples = [(o, np.cos(np.pi / 2 * o) * lit + np.sin(np.pi / 2 * o) * perp)
+               for o in offs]
+    fwd = shade._axis_binned_stops(samples, style)
+    back = shade._axis_binned_stops([(1 - o, n) for o, n in samples], style)
+    assert [(round(1 - o, 9), c) for o, c in reversed(back)] == \
+        [(round(o, 9), c) for o, c in fwd]
 
 
 def test_a_radial_dome_lends_its_ramp_to_the_wall_inside_it():
