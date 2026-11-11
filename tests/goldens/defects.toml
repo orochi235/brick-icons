@@ -241,12 +241,15 @@ identify the primitive behind the arc, as 24434's entry had to.
 id = "6107-pockets-through-wall"
 part = "6107"
 engines = ["naive"]
-status = "open"
+status = "notabug"
 title = "underside pockets punch through the solid front wall"
 classes = ["hidden-leak"]
 checked = { silhouette-naive = "7cf78fbe417ca436080d0ad6e7ac3c0985170444131f703f5f5933a1489dc018", white-naive = "7826446c2774b5077849c21f8346dfe1cf08351d9f60edeb07d4b1f156c2cdf0" }
 filed = "2026-09-04"
-notes = "Four rectangular notches are cut into the silhouette along the bottom front edge. They are interior underside geometry escaping through a face that should occlude them -- a hidden-line miss, not a fill problem. 2026-10-07, at f9c3a04: not a leak. 6107.dat declares the notches -- four openings 4 LDU tall through the bottom of the diagonal wall, each a rect2p.dat ceiling at y=20 between two rect.dat jambs (y 20-24) -- and the LDView reference shows the same four gaps. naive and occt both draw them in the silhouette and white slots, matching each other (naive-vs-occt diff is stroke width and stud seams only, no notch-shaped region). Sheet: out/p6107/6107-head-sheet.png on the wall (brick-icons). Nothing to fix; suggest closing as not-a-defect."
+notes = """
+Four rectangular notches are cut into the silhouette along the bottom front edge. They are interior underside geometry escaping through a face that should occlude them -- a hidden-line miss, not a fill problem. 2026-10-07, at f9c3a04: not a leak. 6107.dat declares the notches -- four openings 4 LDU tall through the bottom of the diagonal wall, each a rect2p.dat ceiling at y=20 between two rect.dat jambs (y 20-24) -- and the LDView reference shows the same four gaps. naive and occt both draw them in the silhouette and white slots, matching each other (naive-vs-occt diff is stroke width and stud seams only, no notch-shaped region). Sheet: out/p6107/6107-head-sheet.png on the wall (brick-icons). Nothing to fix; suggest closing as not-a-defect.
+
+2026-11-10: closed by Mike as not a defect: the bottom notches are declared geometry (see above). http://orochi.local:8787/to/brick-icons/43838be9-fc72-4ec4-b807-0ccfbd9018ba.png"""
 
 [[defect]]
 id = "3832-doubled-stud-ellipses"
@@ -606,7 +609,7 @@ notes = """
 id = "39789-occt-has-issues-with-top"
 part = "39789"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "occt has issues with top main face"
 checked = { occt = "f89c7d68278e099fa5b160b1637e743e145a0d67473bee9eca945ac7ffa2c329", silhouette-occt = "5ecc0c54a4a0c932ed040f6fdcc42e515b4a273221874fe09f5c3c7776d3bac7", translucent-occt = "46bb85e9a242f89ab2db292c85f4fe8e1ab9f27c7b8434b2b614eca4bcc303d0", white-occt = "60571f31ff68b6aee569986779adbbdd1e760ab23bc25f1c10c880028f744684" }
 filed = "2026-09-07"
@@ -623,7 +626,9 @@ naming which primitive owns those centres.
 
 2026-09-23 review better
 
-2026-09-25: root cause found and fixed at e7e621c. The extra lines were declared edges of the underside ceiling (y=4) and the axle shafts, visible wherever only the top face covered them: UnifySameDomain merged the top into one plane whose middle axle-hole wire holds two tooth quads as islands, BRepCheck rejects that face and HLR lets an invalid face hide nothing. build_shape now gives a rejected merged face back to the faces sewn into it (5f289c9 reads the history through the healer, for 3245cpz5). Sheet on the wall: 39789-unmerge-sheet, 14 comps all on those lines. Awaiting a redraw to judge on /review."""
+2026-09-25: root cause found and fixed at e7e621c. The extra lines were declared edges of the underside ceiling (y=4) and the axle shafts, visible wherever only the top face covered them: UnifySameDomain merged the top into one plane whose middle axle-hole wire holds two tooth quads as islands, BRepCheck rejects that face and HLR lets an invalid face hide nothing. build_shape now gives a rejected merged face back to the faces sewn into it (5f289c9 reads the history through the healer, for 3245cpz5). Sheet on the wall: 39789-unmerge-sheet, 14 comps all on those lines. Awaiting a redraw to judge on /review.
+
+2026-11-10: judged right by Mike at HEAD f4a9756 (HEAD-only sheet, no fix of its own to disarm): http://orochi.local:8787/to/brick-icons/43838be9-fc72-4ec4-b807-0ccfbd9018ba.png"""
 
 [[defect]]
 id = "53119-occt-has-a-bunch-of"
@@ -899,7 +904,7 @@ notes = "Fixed by giving the merged region its carrier's occluder as its own dep
 id = "3941-top-features-unfilled"
 part = "3941"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "centre stud has no top ellipse and the brace between the studs is unfilled"
 classes = ["over-cull", "arc-loss"]
 checked = { occt = "62642e626dfb820162545d93ec3019fa21b1156e2a17b79a28a39b3bcf8094c9", silhouette-occt = "f7ef240eaef5f85396e8121958a7ec645aedaeb107d1bb5760e99b69dd5b665d", translucent-occt = "dab44897869ec37829f198984e72a11bc8119c1d55d14dc2ea48209627a4ef87", white-occt = "670e0bdd44185320a2995fd4541c6717d14cfd2de85a848798d23ba1a7d6e5b0" }
@@ -917,7 +922,9 @@ Two symptoms on the top face, against naive at the same pose. The front-centre s
 
 2026-09-25 review better
 
-2026-10-07: draws right at HEAD f9c3a04. Rendered on teitou under the occt slot flags, the SVG is byte-identical to the stored slot render (out/slot-occt-r1731, sha 4a90645c), so the /review queue already holds this drawing. The front stud carries its top ellipse and the brace is filled with its walls toned. The vertical strokes and flat facets on the front stud's wall, the likely "borehole problems" of the 09-17 review, are LDraw's own geometry: stud10.dat ("Stud Truncated Laterally Curved") replaces the quarter facing out from the brick with 4 quads cut by the R20 outer wall, and on 3941 only the front stud turns that quarter toward the viewer. The LDView linework oracle (reference-lines) draws the same seams. Sheet naive / occt / diff / LDView lines on the wall (brick-icons), 2026-10-07: 28 changed components, almost all stroke-width fringe (naive draws 2 px against occt's 1.4); the chunky ones are naive's stud sliver and wall tone, not occt's. No engine change made."""
+2026-10-07: draws right at HEAD f9c3a04. Rendered on teitou under the occt slot flags, the SVG is byte-identical to the stored slot render (out/slot-occt-r1731, sha 4a90645c), so the /review queue already holds this drawing. The front stud carries its top ellipse and the brace is filled with its walls toned. The vertical strokes and flat facets on the front stud's wall, the likely "borehole problems" of the 09-17 review, are LDraw's own geometry: stud10.dat ("Stud Truncated Laterally Curved") replaces the quarter facing out from the brick with 4 quads cut by the R20 outer wall, and on 3941 only the front stud turns that quarter toward the viewer. The LDView linework oracle (reference-lines) draws the same seams. Sheet naive / occt / diff / LDView lines on the wall (brick-icons), 2026-10-07: 28 changed components, almost all stroke-width fringe (naive draws 2 px against occt's 1.4); the chunky ones are naive's stud sliver and wall tone, not occt's. No engine change made.
+
+2026-11-10: judged right by Mike at HEAD f4a9756 (HEAD-only sheet, no fix of its own to disarm): http://orochi.local:8787/to/brick-icons/43838be9-fc72-4ec4-b807-0ccfbd9018ba.png"""
 
 [[defect]]
 id = "49612-extra-vertical-line-extending-down"
@@ -3550,7 +3557,7 @@ notes = "2026-09-24 review neutral: shading between legs is fixed but now there'
 id = "4595-interior-borehole-shading-problems-and"
 part = "4595"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "interior borehole shading problems and several unculled internal shafts"
 checked = { occt = "5371963620049729886757ff95045ac6e8027524f96773d855d28f16b27d810d", white-occt = "01d6ee04b3b7b2ae5bd3727c018e8a9d57624fb28a4091fd8c612cea38c55c6d" }
 filed = "2026-09-23"
@@ -3569,7 +3576,9 @@ notes = """
 
 2026-09-25 review better
 
-2026-09-25 review better"""
+2026-09-25 review better
+
+2026-11-10: judged right by Mike at HEAD f4a9756 (HEAD-only sheet, no fix of its own to disarm): http://orochi.local:8787/to/brick-icons/43838be9-fc72-4ec4-b807-0ccfbd9018ba.png"""
 
 [[defect]]
 id = "6542b-one-inner-ring-is-totally"
@@ -3747,7 +3756,7 @@ notes = """
 id = "19121-occt-bore-interior-flat-toned"
 part = "19121"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "the inside wall of a round bore draws flat instead of ramped"
 classes = ["shading"]
 checked = { white-occt = "0dee4b34a09404a1250b0a021688c311464d44a738fcbe42e750846110cb3f12" }
@@ -3771,7 +3780,9 @@ Repro: .venv/bin/python -m brick_icons.cli 19121 --engine occt --shading outline
 
 2026-10-07: that working-tree fix is committed as d211c4d, and the bore draws ramped at HEAD 5d2ee5b. The repro, run on msb-uai at d211c4d^ (5395fbb) and at HEAD, gives 54 changed regions over the whole part and 10 on a zoomed stud (sheet on the wall, brick-icons zone, "19121 occt: bore interior tone"). In both renders every bore interior carries a linear ramp. At HEAD it runs dark on the near-left and light on the far-right, the inverse of the outer wall, as on the inside of a tube. Most of the remaining diff is stroke weight, which changed in a later commit. Of the cohort drawn at HEAD in the occt slot, 3062b and 4589 have open studs and both bores are ramped; 4073 and 6143 have solid studs and so test nothing here. No engine change was needed; awaiting a redraw to judge on /review.
 
-2026-11-09 review better"""
+2026-11-09 review better
+
+2026-11-10: judged right by Mike at HEAD f4a9756 (HEAD-only sheet, no fix of its own to disarm): the bores ramp under occt. http://orochi.local:8787/to/brick-icons/5b9f31a2-76b0-49a3-a304-cd866f9a1336.png"""
 
 [[defect]]
 id = "004462c-decal-outlines-are-sloppy-af"
@@ -3930,11 +3941,14 @@ filed = "2026-09-25"
 id = "4079-back-of-chair-has-a"
 part = "4079"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "back of chair has a single large tri with bad/no shading"
 checked = { occt = "cf8c7af55b4a1044b77a310b7d5a79618149f50d971590db3c299cee14891a50" }
 filed = "2026-09-25"
-notes = "occt slot. 2026-10-07, branch worktree-agent-ac57590c81d65bcd7 at 86b2cdc (base main f9c3a04). MEASURED: still present at f9c3a04, so the 32062 quad-diagonal fix did not touch it. scripts/svg-paint-at.py --line across the back: the triangle is its own flat #858585 path, (-14,-40,20)-(14,-40,20)-(14,-8,20) in world LDU, while the rest of the face shares one gradient path with the 1-8cyli fillet below it. scripts/probe-plane-groups.py: OCCT leaves the authored quad -14 -40 20 / 14 -8 20 as two faces (46, 47), and occt._group_planes puts both in ONE group -- grouping is right. The split happens after it: occt._absorb_tangent_planes moves into the fillet's fill only the face whose edge is tangent to the fillet (46, edge y=-8), so 47, touching the fillet at one vertex, stays behind alone and tones flat. Fix (86b2cdc): an absorbed plane takes the coplanar faces of its own group along (occt._same_plane), behind occt.TANGENT_PLANE_GROUPS. Gate 1 (scripts/tangent-plane-before-after.py 4079): the triangle now matches the face, 1 comp / 3500 px at 420 wide. Gate 2: scripts/tangent-plane-affected.py over 4079 plus a seeded sample of unprinted parts that use 1-4cyli/1-8cyli/2-4cyli picked the parts the rule touches; sheets at 420 wide and zoomed to the change at 1400 wide. 80737 4 comp, 32174 5, 3649 2: sliver-thin strips, neutral. 3885 1, 3941 1, 58367 3: a hard-edged wedge goes, better. 32828 1 comp / 13371 px: one hard diagonal tone step on a flat face moves to the other half of the face, neither better nor worse -- the same defect class, left unresolved (cause not probed). 35189 30149 88068 47455 3847: 0 comp. Gate 3 (vet-goldens --expect 3941,3649,3941p01, out/vet/a4079-tangent, run through scripts that drew `before` from a copy of the tree with f9c3a04's occt.py, because the node cannot fetch an unpushed base; the sheet's 'HEAD (5d2ee5b)' label names the synced tree, not the base): verdict pass, only those three moved, outline-flat3 3941 1 comp / 104 px, 3941p01 1 / 104, 3649 1 / 38. Sheets on the wall (brick-icons zone, 2026-10-07)."
+notes = """
+occt slot. 2026-10-07, branch worktree-agent-ac57590c81d65bcd7 at 86b2cdc (base main f9c3a04). MEASURED: still present at f9c3a04, so the 32062 quad-diagonal fix did not touch it. scripts/svg-paint-at.py --line across the back: the triangle is its own flat #858585 path, (-14,-40,20)-(14,-40,20)-(14,-8,20) in world LDU, while the rest of the face shares one gradient path with the 1-8cyli fillet below it. scripts/probe-plane-groups.py: OCCT leaves the authored quad -14 -40 20 / 14 -8 20 as two faces (46, 47), and occt._group_planes puts both in ONE group -- grouping is right. The split happens after it: occt._absorb_tangent_planes moves into the fillet's fill only the face whose edge is tangent to the fillet (46, edge y=-8), so 47, touching the fillet at one vertex, stays behind alone and tones flat. Fix (86b2cdc): an absorbed plane takes the coplanar faces of its own group along (occt._same_plane), behind occt.TANGENT_PLANE_GROUPS. Gate 1 (scripts/tangent-plane-before-after.py 4079): the triangle now matches the face, 1 comp / 3500 px at 420 wide. Gate 2: scripts/tangent-plane-affected.py over 4079 plus a seeded sample of unprinted parts that use 1-4cyli/1-8cyli/2-4cyli picked the parts the rule touches; sheets at 420 wide and zoomed to the change at 1400 wide. 80737 4 comp, 32174 5, 3649 2: sliver-thin strips, neutral. 3885 1, 3941 1, 58367 3: a hard-edged wedge goes, better. 32828 1 comp / 13371 px: one hard diagonal tone step on a flat face moves to the other half of the face, neither better nor worse -- the same defect class, left unresolved (cause not probed). 35189 30149 88068 47455 3847: 0 comp. Gate 3 (vet-goldens --expect 3941,3649,3941p01, out/vet/a4079-tangent, run through scripts that drew `before` from a copy of the tree with f9c3a04's occt.py, because the node cannot fetch an unpushed base; the sheet's 'HEAD (5d2ee5b)' label names the synced tree, not the base): verdict pass, only those three moved, outline-flat3 3941 1 comp / 104 px, 3941p01 1 / 104, 3649 1 / 38. Sheets on the wall (brick-icons zone, 2026-10-07).
+
+2026-11-10: judged fixed by Mike at HEAD f4a9756 on a before/after from one tree (fix disarmed in-process, scripts/disarm-before-after.py): occt.TANGENT_PLANE_GROUPS off/on, 1 comp, the seat-back triangle gone. http://orochi.local:8787/to/brick-icons/3609a615-86f7-48b2-82e1-0b2b38e66b04.png"""
 
 [[defect]]
 id = "4070d01-missing-several-edge-outlines"
@@ -4177,21 +4191,27 @@ A rule that survives this judges a piece against its own face rather than an abs
 id = "51542-wall-edges-dropped-beside-studs"
 part = "51542"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "edges of a raised wall are not drawn where it stands in a stud field"
 classes = ["over-cull"]
 filed = "2026-09-27"
-notes = "The left box's wall and the walls of both pits draw with no edge strokes: main at 8c87e8c (out/vet/crumb-small) and branch stud-instancing with instancing off agree. With --stud-instancing all the edges draw (out/vet/stud-inst-occt, 51542). Cause not measured; an edge ending under a placed stud is kept from the orphan cull only when instancing is on (hlr.cull_orphan_runs anchors), which is the first place to look. 2026-10-07: gone at HEAD. scripts/instancing-ab.py at cff1361 on teitou (out/instancing-ab/head, on the wall), --stud-instancing off vs the default: with instancing on, the left box's wall and both pits draw their edge strokes; off still drops them. 13 changed components in occt, 11 in white-occt, all on those walls."
+notes = """
+The left box's wall and the walls of both pits draw with no edge strokes: main at 8c87e8c (out/vet/crumb-small) and branch stud-instancing with instancing off agree. With --stud-instancing all the edges draw (out/vet/stud-inst-occt, 51542). Cause not measured; an edge ending under a placed stud is kept from the orphan cull only when instancing is on (hlr.cull_orphan_runs anchors), which is the first place to look. 2026-10-07: gone at HEAD. scripts/instancing-ab.py at cff1361 on teitou (out/instancing-ab/head, on the wall), --stud-instancing off vs the default: with instancing on, the left box's wall and both pits draw their edge strokes; off still drops them. 13 changed components in occt, 11 in white-occt, all on those walls.
+
+2026-11-10: judged right by Mike at HEAD f4a9756 (HEAD-only sheet, no fix of its own to disarm): http://orochi.local:8787/to/brick-icons/43838be9-fc72-4ec4-b807-0ccfbd9018ba.png"""
 
 [[defect]]
 id = "3404ec01-ring-around-center-stud"
 part = "3404ec01"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "a heavy ring is drawn around the center stud"
 classes = ["stray-ink"]
 filed = "2026-09-27"
-notes = "The stud in front of the center hole draws inside a wide dark ring with a pale patch on its top; the LDView reference shows a plain stud. With --stud-instancing all the ring is gone and the stud draws like its neighbors (out/vet/stud-inst-occt, 3404ec01). Cause not measured. 2026-10-07: gone at HEAD. scripts/instancing-ab.py at cff1361 on teitou (out/instancing-ab/head, on the wall), --stud-instancing off vs the default: with instancing on, the center stud draws like its neighbors with no ring; off still draws the ring. 9 changed components in occt, 8 in white-occt."
+notes = """
+The stud in front of the center hole draws inside a wide dark ring with a pale patch on its top; the LDView reference shows a plain stud. With --stud-instancing all the ring is gone and the stud draws like its neighbors (out/vet/stud-inst-occt, 3404ec01). Cause not measured. 2026-10-07: gone at HEAD. scripts/instancing-ab.py at cff1361 on teitou (out/instancing-ab/head, on the wall), --stud-instancing off vs the default: with instancing on, the center stud draws like its neighbors with no ring; off still draws the ring. 9 changed components in occt, 8 in white-occt.
+
+2026-11-10: judged right by Mike at HEAD f4a9756 (HEAD-only sheet, no fix of its own to disarm): http://orochi.local:8787/to/brick-icons/43838be9-fc72-4ec4-b807-0ccfbd9018ba.png"""
 
 [[defect]]
 id = "52639-petal-top-shaded-dark"
@@ -4201,20 +4221,25 @@ status = "open"
 title = "one petal's top face is shaded as dark as a wall"
 classes = ["shading"]
 filed = "2026-09-27"
-notes = "The back-left petal's top fills mid-gray where the other three fill light; the LDView reference shows all four alike. With --stud-instancing all the petal fills like the others (out/vet/stud-inst-occt, 52639). Cause not measured; the part has two studs, one a fallback. 2026-10-07: gone at HEAD. scripts/instancing-ab.py at cff1361 on teitou (out/instancing-ab/head, on the wall), --stud-instancing off vs the default: with instancing on, all four petal tops fill alike; off still fills the back-left one mid-gray. 5 changed components in occt, the petal top among them."
+notes = """
+The back-left petal's top fills mid-gray where the other three fill light; the LDView reference shows all four alike. With --stud-instancing all the petal fills like the others (out/vet/stud-inst-occt, 52639). Cause not measured; the part has two studs, one a fallback. 2026-10-07: gone at HEAD. scripts/instancing-ab.py at cff1361 on teitou (out/instancing-ab/head, on the wall), --stud-instancing off vs the default: with instancing on, all four petal tops fill alike; off still fills the back-left one mid-gray. 5 changed components in occt, the petal top among them.
+
+2026-11-10: Mike, looking at HEAD f4a9756: still has a shading flaw. http://orochi.local:8787/to/brick-icons/43838be9-fc72-4ec4-b807-0ccfbd9018ba.png"""
 
 [[defect]]
 id = "4589-sampled-fill-boundary-at-placed-stud"
 part = "4589"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "the fill around a placed stud's base follows a sampled boundary, not an arc"
 classes = ["arc-loss"]
 filed = "2026-09-28"
 notes = """
 With stud instancing on (the default since 2026-09-28) two of 4589's part fills carry runs of 23 sub-quarter-pixel L segments (106 of 226), along y 40.5-41, x 97-159 of a 256x170 canvas: the base of the stud placed at (128, 38.7). With --stud-instancing off the same render has no run over 4. Nothing visible changes; the path carries line commands no arc absorbed. Inferred, not measured: the withheld stud's rim is no longer among the arc candidates the fill refit uses, so the hole it leaves in the cone top stays a polyline. test_occt::test_a_fill_boundary_carries_no_sampled_boundary[4589] is xfail on this row. 2026-10-07: the inference is wrong, measured: with instancing on, the rim the stud stands on (center 128, 38.68, rx 30.34) IS among the part fill's arc candidates; only the stud's own top rims left with it. The run is not on the rim. It is a round nub of radius ~0.5 px where the cone's left and right silhouettes meet that rim, cut by shade._residue_trims: the withheld stud no longer covers the cone's cusp tip, the tip is thinner than the opening (RESIDUE_ERODE) and is trimmed, and the trim hands it to the cone's inside surface along geom2d.opened's round joins (vertices in the nub's box: 1 after the first clip pass, 28 after the trim re-clip). Fix (branch worktree-agent-a43f4a832169a9913): the trim's cut is simplified at DECISION_SIMPLIFY with the surface's own boundary kept exact, through shade._simplified_cut (renamed from _donated_cut, the same fix for 4070's donated spur); the trim is still decided on the exact pieces. Gate 1 (scripts/donated-cut-before-after.py --site residue, out/residue-cut/gate1, on the wall): 4589 run 23 -> 3, fill L 230 -> 158, 0 components, in occt and white-occt; svelte-occt 23 -> 4. Gate 2 (out/residue-cut/gate2): 3062b 6141 85861 4588 3942c 6143 3941 4070 32062 98397, occt: 0 components on all, runs down or equal (3942c 23 -> 1, 6143 24 -> 2, 3941 24 -> 2). Gate 3: vet-goldens --base origin/main, verdict review (out/vet/residue-cut-a43f, on the wall): 2 of 52 moved, both UNEXPECTED, outline-flat3__4019 1 component (35 px, at the gear's inner ring) and outline-flat3__4740p03 1 component (53 px, at the dish's back rim). The same pair drawn from one tree with only this change disarmed (out/residue-cut/attrib) moves them the same way, 4019 1 component 41 px and 4740p03 2 components 56 px, so both are this fix's. Awaiting a person's call on those two before it goes to main.
 
-2026-11-10: merged to main in d0e57f2 after rebasing onto ac35f90. Gate 3 rerun on the merge of three fixes (4589 residue trim, 3649/4070 bore stops, 24434 declared ends), before at ac35f90: occt 19 moved / 12 unexpected, naive 19 moved / 11 unexpected, all of them the bore fix's linear-gradient stops shifting a one-pixel stop seam on stud sides and bores (out/vet/merge-1110-*; wall 7fd5ab17, 789e20db). Mike approved the movers on review."""
+2026-11-10: merged to main in d0e57f2 after rebasing onto ac35f90. Gate 3 rerun on the merge of three fixes (4589 residue trim, 3649/4070 bore stops, 24434 declared ends), before at ac35f90: occt 19 moved / 12 unexpected, naive 19 moved / 11 unexpected, all of them the bore fix's linear-gradient stops shifting a one-pixel stop seam on stud sides and bores (out/vet/merge-1110-*; wall 7fd5ab17, 789e20db). Mike approved the movers on review.
+
+2026-11-10: judged by Mike 2026-11-10 on the residue-trim sheet before merging d0e57f2: run 23 -> 3. http://orochi.local:8787/to/brick-icons/17c60cb7-306a-49dd-970e-5f0e1442866c.png"""
 
 [[defect]]
 id = "2507pa2-decal-projection-is-useless"
@@ -4238,7 +4263,7 @@ filed = "2026-09-28"
 id = "612p01-stud-wall-band-too-wide"
 part = "612p01"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "a band of wall tone shows outside every stud's outline"
 classes = ["seam"]
 checked = { silhouette-occt = "94a1337edcc123c94e2390b7041e932f2046be1069a39c7a18d9ac8cb9ee43b6" }
@@ -4246,17 +4271,22 @@ filed = "2026-09-28"
 notes = """
 Every fill paints a self-stroke 0.8 px wide in its own color to close antialias seams, so it overhangs its edge by 0.4 px. Stroke tiers (2026-09-27) put a small part's studs at the 0.2 px stud floor, whose half-width covers only 0.1 px of that: a 0.30 px band of wall gray around each stud (measured on 612p01, rasterized at 64x). Not caused by instancing: --stud-instancing off draws the same band, the same scan to the pixel. The band tracks the stud stroke and not --line-width: 0.31 px at --stud-floor 0.2, 0.16 at 0.5, 0.03 at 0.8, unchanged at --line-width 4. Fix: process.seam_px caps a fill's self-stroke at the stroke drawn around it (process.local_px; SEAM_PX when nothing is stroked). Gate 1: 612p01's band 0.31 -> 0.00 px. Gate 2 (occt flat3, studs=all): 3811, 3867, 3857, 4186, 51542, 35011 lose the band, none worse; 3001, 3941, 4740, 3460 byte-identical. Gate 3: 0 of 52 occt goldens moved (predicted 0), naive subset green. At the 0.75 px line floor the part's own seam also drops 0.8 -> 0.75, a 0.025 px change.
 
-2026-11-09 review neutral"""
+2026-11-09 review neutral
+
+2026-11-10: judged fixed by Mike at HEAD f4a9756 on a before/after from one tree (fix disarmed in-process, scripts/disarm-before-after.py): process.seam_px pinned to SEAM_PX vs HEAD; the band round each stud is gone. http://orochi.local:8787/to/brick-icons/07a96c7f-16dd-4fbf-8d24-9df3ece6b9ef.png"""
 
 [[defect]]
 id = "3811p04-colored-studs-instanced-wrong"
 part = "3811p04"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "colored studs spill a ring of their print color onto the print around them"
 classes = ["seam"]
 filed = "2026-09-28"
-notes = "Same cause as 612p01-stud-wall-band-too-wide, and most visible here because the ring is a print color on a different print (tan studs on blue and green): a colored stud's fills paint the 0.8 px self-stroke past a 0.2 px stud stroke. The definitions themselves are right: one per color (16, 9, 18, 10), placed 371/96/105/452 times, which matches the .dat's stud and stug references, and every definition fills in its own print color. Colored studs draw flat, with no wall ramp, in both --stud-instancing off and all: decoration takes no shading ramp by design (shade.fill_ops). PNGs carry no fills and are unaffected. Disarming process.seam_px reproduces the stored slot render byte-for-byte. Gate 1: 3811p04 loses the rings, 122 regions. Gate 2 (colored-stud baseplates 3811p03, 3867p01, 3867p02, 3857p01, 3857p02; 3811p02 as a printed part with plain studs): rings gone, none worse; 3811p02's white stud-top dots (studp01) grow back toward their true size, which the old seam had eaten. Gate 3: shared with 612p01, 0 of 52 goldens moved. Left over and filed apart: 3811p04-print-boundary-off-by-seam."
+notes = """
+Same cause as 612p01-stud-wall-band-too-wide, and most visible here because the ring is a print color on a different print (tan studs on blue and green): a colored stud's fills paint the 0.8 px self-stroke past a 0.2 px stud stroke. The definitions themselves are right: one per color (16, 9, 18, 10), placed 371/96/105/452 times, which matches the .dat's stud and stug references, and every definition fills in its own print color. Colored studs draw flat, with no wall ramp, in both --stud-instancing off and all: decoration takes no shading ramp by design (shade.fill_ops). PNGs carry no fills and are unaffected. Disarming process.seam_px reproduces the stored slot render byte-for-byte. Gate 1: 3811p04 loses the rings, 122 regions. Gate 2 (colored-stud baseplates 3811p03, 3867p01, 3867p02, 3857p01, 3857p02; 3811p02 as a printed part with plain studs): rings gone, none worse; 3811p02's white stud-top dots (studp01) grow back toward their true size, which the old seam had eaten. Gate 3: shared with 612p01, 0 of 52 goldens moved. Left over and filed apart: 3811p04-print-boundary-off-by-seam.
+
+2026-11-10: judged fixed by Mike at HEAD f4a9756 on a before/after from one tree (fix disarmed in-process, scripts/disarm-before-after.py): process.seam_px pinned to SEAM_PX vs HEAD, 186 comp. http://orochi.local:8787/to/brick-icons/704f582d-a367-44ac-9601-07e7a42e49c8.png"""
 
 [[defect]]
 id = "3811p04-print-boundary-off-by-seam"
@@ -4290,25 +4320,30 @@ filed = "2026-09-28"
 id = "30225bp1-back-wall-band-behind-edge-studs"
 part = "30225bp1"
 engines = ["occt", "naive"]
-status = "open"
+status = "fixed"
 title = "a gray band runs along the upper-right edge behind the edge studs"
 classes = ["hidden-leak"]
 seen = { angle = "iso", shading = "outline", shade_style = "flat3" }
 filed = "2026-09-28"
-notes = "Not the seam and not instancing: --stud-instancing off draws the same band, the same profile to the pixel. The back-right side wall (y 0..4, a planar face tangent to the corner cylinder, filled with that cylinder's gradient g2 and clamped to its #9c9c9c end stop) painted AFTER the top face. Measured at 64x on the occt slot config (flat3, lw 2, sw 2): the wall's fill is a 0.84 px strip along the edge, the 1.30 px contour hides the outer part, and 0.44 px of #9c9c9c shows between the contour and the top face; knocking out that one <path fill=url(#g2)> returns the pixel to #cccccc. It shows only in the stud fields because the road print (color 7/15) paints after the wall and covers it there. Cause: shade.order_faces takes each pair's depth at a witness from shade._overlap_witness, which rasterizes both faces on a 48-cell grid scaled to their bbox overlap. The wall is 3.5 units thick along a 447-unit diagonal, under one cell, so the witness landed 2.6 units above the wall, where the wall's plane runs in front of the top face (depth 140.9 vs 147.0), and the wall was ordered in front. The back-left wall got a witness on the other side and ordered correctly, which is why only 1:30 shows it. Fix (edge-stud-band, a93314b): the witness is checked with an even-odd point test against both exact polygons, and a miss falls back to the pole of inaccessibility of their exact overlap; a pair with no exact overlap keeps the rastered edge point (dropping it lost the coplanar tie that orders print after body, and fattened 30225bp1's crosswalk stripes). shade.WITNESS_EXACT disarms it and reproduces origin/main byte for byte. Gate 1: band gone (profile #9c9c9c -> #cccccc), crosswalk unchanged, 1 comp at 700 px. Gate 2 (occt slot, studio): 30225b and 3811p04 lose the same back-wall band (2 and 25 comps); 30225bp1, 3811, 3867, 3857, 612p01, 4186, 3001, 3020, 3024 no components. Gate 3 (predicted 0, verdict review): occt 4 of 52 moved, all outline-flat3: 3649 (a white hole in the hub fills gray, LDView agrees), 6589 (a notch's dark/mid-gray boundary moves), 3941p01 (a pre-existing light sliver beside the print grows), 3942bp01 (a print edge moves under a pixel); naive 3 of 52: print boundaries on 3942bp01 and 3941p01, a sliver on 3673. Awaiting a person's verdict on those. Not addressed: a pair whose true overlap the raster misses entirely still gets no constraint."
+notes = """
+Not the seam and not instancing: --stud-instancing off draws the same band, the same profile to the pixel. The back-right side wall (y 0..4, a planar face tangent to the corner cylinder, filled with that cylinder's gradient g2 and clamped to its #9c9c9c end stop) painted AFTER the top face. Measured at 64x on the occt slot config (flat3, lw 2, sw 2): the wall's fill is a 0.84 px strip along the edge, the 1.30 px contour hides the outer part, and 0.44 px of #9c9c9c shows between the contour and the top face; knocking out that one <path fill=url(#g2)> returns the pixel to #cccccc. It shows only in the stud fields because the road print (color 7/15) paints after the wall and covers it there. Cause: shade.order_faces takes each pair's depth at a witness from shade._overlap_witness, which rasterizes both faces on a 48-cell grid scaled to their bbox overlap. The wall is 3.5 units thick along a 447-unit diagonal, under one cell, so the witness landed 2.6 units above the wall, where the wall's plane runs in front of the top face (depth 140.9 vs 147.0), and the wall was ordered in front. The back-left wall got a witness on the other side and ordered correctly, which is why only 1:30 shows it. Fix (edge-stud-band, a93314b): the witness is checked with an even-odd point test against both exact polygons, and a miss falls back to the pole of inaccessibility of their exact overlap; a pair with no exact overlap keeps the rastered edge point (dropping it lost the coplanar tie that orders print after body, and fattened 30225bp1's crosswalk stripes). shade.WITNESS_EXACT disarms it and reproduces origin/main byte for byte. Gate 1: band gone (profile #9c9c9c -> #cccccc), crosswalk unchanged, 1 comp at 700 px. Gate 2 (occt slot, studio): 30225b and 3811p04 lose the same back-wall band (2 and 25 comps); 30225bp1, 3811, 3867, 3857, 612p01, 4186, 3001, 3020, 3024 no components. Gate 3 (predicted 0, verdict review): occt 4 of 52 moved, all outline-flat3: 3649 (a white hole in the hub fills gray, LDView agrees), 6589 (a notch's dark/mid-gray boundary moves), 3941p01 (a pre-existing light sliver beside the print grows), 3942bp01 (a print edge moves under a pixel); naive 3 of 52: print boundaries on 3942bp01 and 3941p01, a sliver on 3673. Awaiting a person's verdict on those. Not addressed: a pair whose true overlap the raster misses entirely still gets no constraint.
+
+2026-11-10: judged right by Mike at HEAD f4a9756 (HEAD-only sheet, no fix of its own to disarm): shade.WITNESS_EXACT off/on moves 0 px at the slot's current settings. http://orochi.local:8787/to/brick-icons/43838be9-fc72-4ec4-b807-0ccfbd9018ba.png http://orochi.local:8787/to/brick-icons/957db7ac-9f58-4a59-8d89-277b29b3444d.png"""
 
 [[defect]]
 id = "3811-front-wall-takes-corner-gradient"
 part = "3811"
 engines = ["occt"]
-status = "open"
+status = "wontfix"
 title = "flat front walls take the rounded corners' gradients: light on the left, dark on the right"
 classes = ["shading"]
 filed = "2026-09-28"
 notes = """
 Measured in the occt slot (--shade-style flat3, 256x170) at 7c270b4. Each flat front wall is one element with the rounded corner it meets, and it is painted with that corner's linear gradient. The right front wall (x 127.23-249.68) carries the front corner's gradient, whose axis is only 1.54 px long (x 128.77 #565656 to x 127.23 #9c9c9c); SVG pads a gradient past its axis ends, so the whole wall paints #565656. The left front wall (x 6.00-127.23) carries the left corner's gradient (axis x 6.32 to 6.00, #9c9c9c to #999999), so it paints #9c9c9c. flat3's own side tones for the walls' plane normals are #858585 (lit) and #5e5e5e. A flat plane's fill should come from its own normal, not from the curved face it is merged with. Rule D (shade.THIN_WALL_WEIGHTS, branch thin-wall-shade) paints a side wall under 2 line weights along the silhouette in the top's tone, which covers both of 3811's front walls at this canvas: the defect is moot there, and still live wherever the wall is wider (a larger canvas, or a rounded-corner part drawn big).
 
-2026-11-10: Mike ruled the fix (occt.TANGENT_PLANE_TONE, branch worktree-agent-a4068207890902e88) stays off: armed, 5849's and 6091's flat foot drops to its own darker palette tone and reads as a dark strip, a worse look than 3811's corner gradient. Branch dropped unmerged; its last rebased tip was 94c81ec. Sheet: wall 3abc6779."""
+2026-11-10: Mike ruled the fix (occt.TANGENT_PLANE_TONE, branch worktree-agent-a4068207890902e88) stays off: armed, 5849's and 6091's flat foot drops to its own darker palette tone and reads as a dark strip, a worse look than 3811's corner gradient. Branch dropped unmerged; its last rebased tip was 94c81ec. Sheet: wall 3abc6779.
+
+2026-11-10: wontfix per Mike's ruling above; the flag stays off."""
 
 [[defect]]
 id = "10p01-dot-stud-black-ring-instancing-off"
@@ -4324,31 +4359,40 @@ notes = "Seen at 409de08 plus the deco-shade branch, occt, --shade-style flat3 -
 id = "2552p01-printed-studs-draw-flat"
 part = "2552p01"
 engines = ["occt", "naive"]
-status = "open"
+status = "fixed"
 title = "printed studs and printed walls paint flat in the print color, with none of the shading a plain surface gets"
 classes = ["shading"]
 filed = "2026-09-28"
-notes = "Fixed on branch deco-shade (ad65d74, unmerged): every decoration fill gets a translucent black layer carrying the shading of the surface under it; a print on a top face gets none. Gate 1 (2552p01, occt): 198 changed regions, blue stud walls now carry the wall gradient, matching LDView -FOV=0.1. Gate 2 (occt, before = the layer disarmed in-process, same tree): 2552p02 2, p03 14, p04 14, p05 9, p06 14, 3811p04 634 (one per colored stud), 3039p03 1, 3040bp08 7, 4740p03 6, 3941p01 1, 3941p01 translucent-occt 6; identical: 10p01, 30225bp1, 3068bp01, 14769p0a. None worse. Gate 3 (vet-goldens --base 409de08, occt): 4 moved, all predicted (3941p01, 3942bp01, 3040bp08, 4740p03), 0 unexpected; naive hash gate (BRICK_GOLDENS=full) passes after re-freezing those four."
+notes = """
+Fixed on branch deco-shade (ad65d74, unmerged): every decoration fill gets a translucent black layer carrying the shading of the surface under it; a print on a top face gets none. Gate 1 (2552p01, occt): 198 changed regions, blue stud walls now carry the wall gradient, matching LDView -FOV=0.1. Gate 2 (occt, before = the layer disarmed in-process, same tree): 2552p02 2, p03 14, p04 14, p05 9, p06 14, 3811p04 634 (one per colored stud), 3039p03 1, 3040bp08 7, 4740p03 6, 3941p01 1, 3941p01 translucent-occt 6; identical: 10p01, 30225bp1, 3068bp01, 14769p0a. None worse. Gate 3 (vet-goldens --base 409de08, occt): 4 moved, all predicted (3941p01, 3942bp01, 3040bp08, 4740p03), 0 unexpected; naive hash gate (BRICK_GOLDENS=full) passes after re-freezing those four.
+
+2026-11-10: judged fixed by Mike at HEAD f4a9756 on a before/after from one tree (fix disarmed in-process, scripts/disarm-before-after.py): --deco-shade off/on, printed walls and studs take shading in occt and naive. http://orochi.local:8787/to/brick-icons/2edc32cb-74da-45ec-b98e-3b247c4b46ce.png"""
 
 [[defect]]
 id = "3811-thin-front-wall-reads-as-one-heavy-line"
 part = "3811"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "the 4 LDU front wall reads as one heavy black line at label scale"
 classes = ["shading", "stroke-scale"]
 filed = "2026-09-28"
-notes = "At the occt slot's 256x170 (0.271 px/LDU) the front wall is 0.94 px tall and carries two 0.75 px strokes, the crease and the silhouette; about 0.1 px of side tone shows between them, so the wall reads as one black line 1.8 px thick. Fix (branch thin-wall-shade, 900362b, unpushed): shade.fill_ops paints a side-toned band narrower than 2 line weights (2*area/perimeter of the whole band) that runs along the part's outer outline in the top tone, and its crease draws at the stud tier (StudTier.creases); the silhouette keeps its weight. THIN_WALL_WEIGHTS = 0 disarms. Measured by a 64x profile down each front wall (scripts/thin-wall-before-after.py): the unbroken dark run up from the silhouette is 1.80 px before, 0.84 px after (silhouette ink, then 0.41 px of top tone, then a 0.22 px crease). At 128 px the crease is sub-pixel and does not show as a separate line; the edge still thins. Gate 1: 3811 and 2552p01 move (dark run 1.80 -> 0.84 on both walls); 3020 and 3024 byte-identical. Gate 2 (occt flat3): 3857, 4186, 10a, 612p01 move the same way (dark run 1.95-3.59 -> 0.84-0.86 px), none worse; 10a and 3857 also lose a gray sliver of back wall along their back-right outline; 3867, 91405, 92438, 3958, 3029, 3070b, 6141, 3068b byte-identical. A first version judged each element alone and lit 3867's short front-corner piece of an otherwise wide wall, and caught 3941p01's print holes via holes in the silhouette region; both fixed before these runs. Gate 3: 0 of 52 occt goldens moved (predicted none), vet label thin-wall-shade-r3; naive golden byte gate and shade/process/trace/instancing/occt tests green on studio except the known test_a_sticker_is_not_clipped_by_the_slope_it_is_stuck_to (5.12%, same value with the rule disarmed)."
+notes = """
+At the occt slot's 256x170 (0.271 px/LDU) the front wall is 0.94 px tall and carries two 0.75 px strokes, the crease and the silhouette; about 0.1 px of side tone shows between them, so the wall reads as one black line 1.8 px thick. Fix (branch thin-wall-shade, 900362b, unpushed): shade.fill_ops paints a side-toned band narrower than 2 line weights (2*area/perimeter of the whole band) that runs along the part's outer outline in the top tone, and its crease draws at the stud tier (StudTier.creases); the silhouette keeps its weight. THIN_WALL_WEIGHTS = 0 disarms. Measured by a 64x profile down each front wall (scripts/thin-wall-before-after.py): the unbroken dark run up from the silhouette is 1.80 px before, 0.84 px after (silhouette ink, then 0.41 px of top tone, then a 0.22 px crease). At 128 px the crease is sub-pixel and does not show as a separate line; the edge still thins. Gate 1: 3811 and 2552p01 move (dark run 1.80 -> 0.84 on both walls); 3020 and 3024 byte-identical. Gate 2 (occt flat3): 3857, 4186, 10a, 612p01 move the same way (dark run 1.95-3.59 -> 0.84-0.86 px), none worse; 10a and 3857 also lose a gray sliver of back wall along their back-right outline; 3867, 91405, 92438, 3958, 3029, 3070b, 6141, 3068b byte-identical. A first version judged each element alone and lit 3867's short front-corner piece of an otherwise wide wall, and caught 3941p01's print holes via holes in the silhouette region; both fixed before these runs. Gate 3: 0 of 52 occt goldens moved (predicted none), vet label thin-wall-shade-r3; naive golden byte gate and shade/process/trace/instancing/occt tests green on studio except the known test_a_sticker_is_not_clipped_by_the_slope_it_is_stuck_to (5.12%, same value with the rule disarmed).
+
+2026-11-10: judged fixed by Mike at HEAD f4a9756 on a before/after from one tree (fix disarmed in-process, scripts/disarm-before-after.py): shade.THIN_WALL_WEIGHTS 0/2, 1 comp along the front edge. http://orochi.local:8787/to/brick-icons/78862006-fb0a-45f8-85b7-21bfee9856f5.png"""
 
 [[defect]]
 id = "51283-sphere-shaded-as-facets"
 part = "51283"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "a hand-faceted sphere draws as a disco ball of flat facets"
 classes = ["shading"]
 filed = "2026-09-28"
-notes = "51283's sphere is hand-authored quads (s/51283s01.dat, two mirrored halves, radius 20, cut by a collar at y=24 and a hole at the top), 192 triangles joined by conditional lines into one region. No sphere primitive, so nothing to substitute. occt grouped it correctly but sampled every plane, and a plane's view normal is flipped toward the camera, so the far half read as a mirror of the near: radial misfit 0.34, Gauss spread 0.73, and the tone-band pass posterized it facet by facet. naive (front facets only) scored 0.25/0.21 and drew a smooth dome. Fix on branch sphere-shading (a4ea684, unmerged): a declared-smooth region is fitted by quadric.classify (cone/cylinder, sphere, ellipsoid behind residual gates; 51283 sphere residual 0.0058); a fitted sphere takes a radial ramp computed from the sphere (6 falling stops), and its limb replaces the facet silhouette in both engines. Gate 1: one fill, 6 stops, contour 16 L -> 2 L. Gate 2 (22119, 20401, 30106, 20953, 3960, 24132, 1974, 32474, 2736, 90370; 3262 and 3626cp7d unchanged controls): none worse. Gate 3: 2 of 52 occt goldens moved (3960, 4740p03), both predicted. Left: a ~1 px kink where the limb meets the collar ring (the collar vertices sit at r 19.8 against the fitted 19.93); see 20401-limb-barbs-at-region-join."
+notes = """
+51283's sphere is hand-authored quads (s/51283s01.dat, two mirrored halves, radius 20, cut by a collar at y=24 and a hole at the top), 192 triangles joined by conditional lines into one region. No sphere primitive, so nothing to substitute. occt grouped it correctly but sampled every plane, and a plane's view normal is flipped toward the camera, so the far half read as a mirror of the near: radial misfit 0.34, Gauss spread 0.73, and the tone-band pass posterized it facet by facet. naive (front facets only) scored 0.25/0.21 and drew a smooth dome. Fix on branch sphere-shading (a4ea684, unmerged): a declared-smooth region is fitted by quadric.classify (cone/cylinder, sphere, ellipsoid behind residual gates; 51283 sphere residual 0.0058); a fitted sphere takes a radial ramp computed from the sphere (6 falling stops), and its limb replaces the facet silhouette in both engines. Gate 1: one fill, 6 stops, contour 16 L -> 2 L. Gate 2 (22119, 20401, 30106, 20953, 3960, 24132, 1974, 32474, 2736, 90370; 3262 and 3626cp7d unchanged controls): none worse. Gate 3: 2 of 52 occt goldens moved (3960, 4740p03), both predicted. Left: a ~1 px kink where the limb meets the collar ring (the collar vertices sit at r 19.8 against the fitted 19.93); see 20401-limb-barbs-at-region-join.
+
+2026-11-10: judged fixed by Mike at HEAD f4a9756 on a before/after from one tree (fix disarmed in-process, scripts/disarm-before-after.py): quadric.ARMED off/on, the faceted ball draws smooth with a round outline. http://orochi.local:8787/to/brick-icons/ae389abc-818c-4f9d-af7a-3e32f55e1fbb.png"""
 
 [[defect]]
 id = "20401-limb-barbs-at-region-join"
@@ -4379,11 +4423,14 @@ notes = "primitives.ConeOccluder and CylinderOccluder ignore prim.cut, the plane
 id = "4070-sampled-fill-boundary-at-1.4px"
 part = "4070"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "at the 1.4 px default stroke a fill carries a sampled boundary"
 classes = ["arc-loss"]
 filed = "2026-09-28"
-notes = "Lowering the default stroke from 2 to 1.4 px (branch line-weight-1.2) turns test_occt::test_a_fill_boundary_carries_no_sampled_boundary[4070] red: a run of 22 sub-quarter-pixel L segments in a part fill (88 of 135). The same test passes at origin/main 7c270b4, drawn at 2 px. Run on studio, not located on the canvas yet. Per the test's docstring such a run costs line commands and draws nothing; not checked on this render. 2026-09-29 cause: shade._donate_escaped_spurs moved a spur exactly as cut, along geom2d.opened's round joins (r = 0.5 x line_px); in the 0.7 px pass of a 1.4 px stroke two mirrored 0.5 px2 spurs qualify (at 1.0 px, the 2 px stroke's pass, none do), and the cut became the seam between two fills: 28 of 33 vertices under 0.25 px, circumradii 0.25-0.53. It lies under ink, so no pixel changes. Fix (branch worktree-agent-a4027bccfbbef0b72): shade._donated_cut simplifies the moved copy at DECISION_SIMPLIFY, clipped to the fill; the decision is still made on the exact piece. Gate 1 (out/donated-cut/gate1): 4070 occt run 22 -> 1, fill L 135 -> 63, 0 components (4 px); occt-svelte unchanged. Gate 2 (out/donated-cut/gate2): 32062 4589 3941 30137 4019 98397 2552p01 3062b occt, 3941 32062 occt-svelte: 0 components on all, fill L down or equal on every one, runs down or equal (3062b 22 -> 1, 32062 svelte 10 -> 1; 4589 stays 23, its own defect). Gate 3: vet-goldens --base origin/main, 0 of 52 moved, verdict pass (out/vet/donated-cut). test_shade + test_occt green on msb-uai except the sticker test (15068dy6-sticker-painted-over-past-5pct)."
+notes = """
+Lowering the default stroke from 2 to 1.4 px (branch line-weight-1.2) turns test_occt::test_a_fill_boundary_carries_no_sampled_boundary[4070] red: a run of 22 sub-quarter-pixel L segments in a part fill (88 of 135). The same test passes at origin/main 7c270b4, drawn at 2 px. Run on studio, not located on the canvas yet. Per the test's docstring such a run costs line commands and draws nothing; not checked on this render. 2026-09-29 cause: shade._donate_escaped_spurs moved a spur exactly as cut, along geom2d.opened's round joins (r = 0.5 x line_px); in the 0.7 px pass of a 1.4 px stroke two mirrored 0.5 px2 spurs qualify (at 1.0 px, the 2 px stroke's pass, none do), and the cut became the seam between two fills: 28 of 33 vertices under 0.25 px, circumradii 0.25-0.53. It lies under ink, so no pixel changes. Fix (branch worktree-agent-a4027bccfbbef0b72): shade._donated_cut simplifies the moved copy at DECISION_SIMPLIFY, clipped to the fill; the decision is still made on the exact piece. Gate 1 (out/donated-cut/gate1): 4070 occt run 22 -> 1, fill L 135 -> 63, 0 components (4 px); occt-svelte unchanged. Gate 2 (out/donated-cut/gate2): 32062 4589 3941 30137 4019 98397 2552p01 3062b occt, 3941 32062 occt-svelte: 0 components on all, fill L down or equal on every one, runs down or equal (3062b 22 -> 1, 32062 svelte 10 -> 1; 4589 stays 23, its own defect). Gate 3: vet-goldens --base origin/main, 0 of 52 moved, verdict pass (out/vet/donated-cut). test_shade + test_occt green on msb-uai except the sticker test (15068dy6-sticker-painted-over-past-5pct).
+
+2026-11-10: judged fixed by Mike at HEAD f4a9756 on a before/after from one tree (fix disarmed in-process, scripts/disarm-before-after.py): shade.DECISION_SIMPLIFY 0 vs HEAD, 0 px: the fix removes line commands, not pixels (run 22 -> 1 as recorded). http://orochi.local:8787/to/brick-icons/3672c2a9-68c2-4ae9-9fdb-8810174f50f6.png"""
 
 [[defect]]
 id = "15068dy6-sticker-painted-over-past-5pct"
@@ -4402,7 +4449,7 @@ test_occt::test_a_sticker_is_not_clipped_by_the_slope_it_is_stuck_to has failed 
 id = "3649-light-streak-in-pin-hole-bore"
 part = "3649"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "a light streak runs down the inside of a pin hole's bore"
 classes = ["seam"]
 filed = "2026-09-29"
@@ -4413,23 +4460,28 @@ outline-flat3 golden, 512x340. The part already shows this problem in at least o
 
 2026-10-07 (later), on the fleet against 4dbab76: tests/test_shade.py 116 passed. BRICK_GOLDENS=1 fails on outline-flat3__3005, which this change does move (1 region, 29 px, the stud's midline). Naive sheet, before = stops moved back mid-bin in-process, same tree: out/axis-stops/naive2/sheet.png. In outline-flat3, 17 of 23 parts move, each a band along a curved wall's middle: 3005 1, 3024 1, 32062 1, 3649 13, 3673 10, 3941 5, 3941p01 8, 3942bp01 8, 3960 4, 4019 3, 4070 3, 4589 2, 4740p03 5, 6143 1, 6589 3, 87087 4, 99781 4 regions. 3001, 3020, 3040b, 3040bp08, 3068bp00 and 50950 draw identically. The full freeze's hash list is not a clean list of movers: hashes differ between nodes (outline__3942c hashed differently on teitou and msb-uai, but identically twice on each side when both ran on msb-uai), so hashes.txt can only be re-frozen from one machine. Not re-frozen here.
 
-2026-11-10: merged to main in d0e57f2 after rebasing onto ac35f90. Gate 3 rerun on the merge of three fixes (4589 residue trim, 3649/4070 bore stops, 24434 declared ends), before at ac35f90: occt 19 moved / 12 unexpected, naive 19 moved / 11 unexpected, all of them the bore fix's linear-gradient stops shifting a one-pixel stop seam on stud sides and bores (out/vet/merge-1110-*; wall 7fd5ab17, 789e20db). Mike approved the movers on review."""
+2026-11-10: merged to main in d0e57f2 after rebasing onto ac35f90. Gate 3 rerun on the merge of three fixes (4589 residue trim, 3649/4070 bore stops, 24434 declared ends), before at ac35f90: occt 19 moved / 12 unexpected, naive 19 moved / 11 unexpected, all of them the bore fix's linear-gradient stops shifting a one-pixel stop seam on stud sides and bores (out/vet/merge-1110-*; wall 7fd5ab17, 789e20db). Mike approved the movers on review.
+
+2026-11-10: judged fixed by Mike 2026-11-10 on the axis-stops sheet before merging d0e57f2. http://orochi.local:8787/to/brick-icons/4b9b8bda-065f-4570-be98-b4db97aade8c.png"""
 
 [[defect]]
 id = "32062-butt-end-shading-split"
 part = "32062"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "the axle's rounded butt end is shaded in hard-edged pieces"
 classes = ["shading"]
 filed = "2026-09-29"
-notes = "outline-flat3 golden at main a5739e4. The lower-right butt end, a rounded cap behind the cross-section, carries a dark wedge with hard straight edges cutting through an otherwise light gradient, lower right of the cap. Cause not looked at. scripts/ray-pixel.py --line across the wedge tells a real change of surface from a tone split within one. -- 2026-10-07, branch worktree-agent-afb9809f76fd3db51 at b92e39e. MEASURED: present at main 5d2ee5b, and in renders/occt/32062.svg of 2026-09-25 (same chevron path, same gradient stops), so the 2026-09-29 shade merge did not introduce it. ray-pixel --line at x4 y545: the wedge and the lighter fill beside it are the SAME surface, ring 2 of the beveled end (axleend2.dat, LDraw 2025-09), whose quad is split into two triangles (normals 0.958/-0.056/-0.281 and 0.960/-0.066/-0.272); scripts/svg-paint-at.py puts the hard edge on the boundary of two fill paths, and scripts/probe-plane-groups.py shows occt._group_planes giving those two triangles different groups (one with ring 1, one with the end face). The diagonal is neither a type-5 line nor coplanar (dot 0.9998 < 0.9999): the -z lobe's tip vertex is authored at 0 .5 -3.2811 where the other three lobes use 3.2164, so that lobe's ring-2 quads are not planar; the other lobes' quads are and union by coplanarity. Fix (b92e39e): an authored quad's diagonal (tri_meta 'quad' pairs) counts as a declared seam in _group_planes, behind occt.QUAD_DIAGONAL_SEAMS. Gate 1: wedge gone, 5 comp / 18646 px at 1024 wide, both axle ends. Gate 2 (scripts/quad-diagonal-before-after.py, axles 3705 4519 32073 24316 18651 3706 plus 3960 3040b 4070 50950): 0 comp on 8; 24316 3 comp and 18651 6 comp, both a lobe's gradient re-spanning, and 18651 loses the same dark wedge -- judged no worse by eye. Gate 3 (vet-goldens --expect 32062, out/vet/afb98-quad-diag): 32062 outline-flat3 5 comp as predicted; UNEXPECTED 3649 outline-flat3 4 comp / 254 px, two small spots in the gear's center axle holes -- stopped there for review. Revised (2026-10-07): scripts/probe-plane-groups.py 3649 --changed showed the join came through sliver edges (two endpoints equal to 3 decimals) at the axle-hole corners, which sat within the seam tolerance of quad diagonals radiating from that vertex, so each hole's wall group fused with the gear's flat face. _group_planes now skips a straight edge shorter than twice the seam tolerance (occt.SEAM_TOL, 2e-3 LDU); with it, --changed joins no groups on 3649. Gate 3 rerun (vet-goldens --expect 32062, out/vet/afb98-quad-diag-2): verdict pass, only 32062 outline-flat3 moved, 5 comp / 4686 px as before; 3649 0 comp in all three combos. Gate 2 rerun: unchanged (32062 5, 24316 3, 18651 6, the rest including 3649 0). INFERRED, not tested: naive's shade.declared_regions has the same gap (it joins quad halves only by coplanarity). Sheets on the wall (brick-icons zone, 2026-10-07)."
+notes = """
+outline-flat3 golden at main a5739e4. The lower-right butt end, a rounded cap behind the cross-section, carries a dark wedge with hard straight edges cutting through an otherwise light gradient, lower right of the cap. Cause not looked at. scripts/ray-pixel.py --line across the wedge tells a real change of surface from a tone split within one. -- 2026-10-07, branch worktree-agent-afb9809f76fd3db51 at b92e39e. MEASURED: present at main 5d2ee5b, and in renders/occt/32062.svg of 2026-09-25 (same chevron path, same gradient stops), so the 2026-09-29 shade merge did not introduce it. ray-pixel --line at x4 y545: the wedge and the lighter fill beside it are the SAME surface, ring 2 of the beveled end (axleend2.dat, LDraw 2025-09), whose quad is split into two triangles (normals 0.958/-0.056/-0.281 and 0.960/-0.066/-0.272); scripts/svg-paint-at.py puts the hard edge on the boundary of two fill paths, and scripts/probe-plane-groups.py shows occt._group_planes giving those two triangles different groups (one with ring 1, one with the end face). The diagonal is neither a type-5 line nor coplanar (dot 0.9998 < 0.9999): the -z lobe's tip vertex is authored at 0 .5 -3.2811 where the other three lobes use 3.2164, so that lobe's ring-2 quads are not planar; the other lobes' quads are and union by coplanarity. Fix (b92e39e): an authored quad's diagonal (tri_meta 'quad' pairs) counts as a declared seam in _group_planes, behind occt.QUAD_DIAGONAL_SEAMS. Gate 1: wedge gone, 5 comp / 18646 px at 1024 wide, both axle ends. Gate 2 (scripts/quad-diagonal-before-after.py, axles 3705 4519 32073 24316 18651 3706 plus 3960 3040b 4070 50950): 0 comp on 8; 24316 3 comp and 18651 6 comp, both a lobe's gradient re-spanning, and 18651 loses the same dark wedge -- judged no worse by eye. Gate 3 (vet-goldens --expect 32062, out/vet/afb98-quad-diag): 32062 outline-flat3 5 comp as predicted; UNEXPECTED 3649 outline-flat3 4 comp / 254 px, two small spots in the gear's center axle holes -- stopped there for review. Revised (2026-10-07): scripts/probe-plane-groups.py 3649 --changed showed the join came through sliver edges (two endpoints equal to 3 decimals) at the axle-hole corners, which sat within the seam tolerance of quad diagonals radiating from that vertex, so each hole's wall group fused with the gear's flat face. _group_planes now skips a straight edge shorter than twice the seam tolerance (occt.SEAM_TOL, 2e-3 LDU); with it, --changed joins no groups on 3649. Gate 3 rerun (vet-goldens --expect 32062, out/vet/afb98-quad-diag-2): verdict pass, only 32062 outline-flat3 moved, 5 comp / 4686 px as before; 3649 0 comp in all three combos. Gate 2 rerun: unchanged (32062 5, 24316 3, 18651 6, the rest including 3649 0). INFERRED, not tested: naive's shade.declared_regions has the same gap (it joins quad halves only by coplanarity). Sheets on the wall (brick-icons zone, 2026-10-07).
+
+2026-11-10: judged fixed by Mike at HEAD f4a9756 on a before/after from one tree (fix disarmed in-process, scripts/disarm-before-after.py): occt.QUAD_DIAGONAL_SEAMS off/on, 5 comp. http://orochi.local:8787/to/brick-icons/739fcf35-ac54-4e1f-acd6-c775f2a1084d.png"""
 
 [[defect]]
 id = "4070-stud-bore-gradient-broken"
 part = "4070"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "the side stud's bore is not one smooth gradient"
 classes = ["banding"]
 filed = "2026-09-29"
@@ -4438,7 +4490,9 @@ outline-flat3 golden at main a5739e4. The inside of the SNOT stud's hollow shoul
 
 2026-10-07: it is the same thing, measured. The bore is the instanced stud's r4 interior span and the part's own r4 interior span behind it, with axes running opposite ways; their binned stops are the same list reversed (#5e at 0.3125, #89 at 0.5625, #ac at 0.6875 in one, mirrored in the other), so the middle tone sits 1/8 of the axis apart and the seam steps. See 3649-light-streak-in-pin-hole-bore for the fix (2be42c2) and its gates; here gate 1 is 4 regions (out/axis-stops/gate1/sheet.png, crop-4070.png) and the band is gone.
 
-2026-11-10: merged to main in d0e57f2 after rebasing onto ac35f90. Gate 3 rerun on the merge of three fixes (4589 residue trim, 3649/4070 bore stops, 24434 declared ends), before at ac35f90: occt 19 moved / 12 unexpected, naive 19 moved / 11 unexpected, all of them the bore fix's linear-gradient stops shifting a one-pixel stop seam on stud sides and bores (out/vet/merge-1110-*; wall 7fd5ab17, 789e20db). Mike approved the movers on review."""
+2026-11-10: merged to main in d0e57f2 after rebasing onto ac35f90. Gate 3 rerun on the merge of three fixes (4589 residue trim, 3649/4070 bore stops, 24434 declared ends), before at ac35f90: occt 19 moved / 12 unexpected, naive 19 moved / 11 unexpected, all of them the bore fix's linear-gradient stops shifting a one-pixel stop seam on stud sides and bores (out/vet/merge-1110-*; wall 7fd5ab17, 789e20db). Mike approved the movers on review.
+
+2026-11-10: judged fixed by Mike 2026-11-10 on the axis-stops sheet before merging d0e57f2 ("better"); the missing outline below the stud is 4070-missing-one-edge-outline-below. http://orochi.local:8787/to/brick-icons/4b9b8bda-065f-4570-be98-b4db97aade8c.png"""
 
 [[defect]]
 id = "47206-tessellation-in-brow-area-makes"
@@ -4484,7 +4538,7 @@ filed = "2026-09-30"
 id = "24434-area-under-back-curve-has"
 part = "24434"
 engines = ["occt"]
-status = "open"
+status = "fixed"
 title = "area under back curve has exactly one internal line where the inside hollows out; should be 0 or 2"
 checked = { occt = "6262dc0fb06bfe3bacc862a7c4582afa108706e4aec87688cb17037bfe8cceb2" }
 filed = "2026-09-30"
@@ -4496,7 +4550,9 @@ Candidate fix on branch worktree-agent-aff7f75ff0805990d: the end points of ever
 - gate 2, occt: 6182 1 comp (the same slot rim; arch from the same family); 3659, 30099, 18838, 2654a, 4032a, 6005, 3307, 15967 0 comp; 6183 white-occt 1 comp (24434 is its alias). PASS, none worse.
 - gate 3, goldens (all:occt, unprinted:white-occt, all:naive, unprinted:white-naive; --expect none): UNEXPECTED 3673 at 2 comp in all four slots (the two lines along the near pin-end slot now run to the slot's end instead of one stopping short), and 4019 at 3 comp in naive and white-naive (short arc pieces return in the hub, which looks like the fray the cull exists to remove). Everything else 0 comp. STOPPED here for review: needs a person's call on 3673 and 4019 before this goes further.
 
-2026-11-10: merged to main in d0e57f2 after rebasing onto ac35f90. Gate 3 rerun on the merge of three fixes (4589 residue trim, 3649/4070 bore stops, 24434 declared ends), before at ac35f90: occt 19 moved / 12 unexpected, naive 19 moved / 11 unexpected, all of them the bore fix's linear-gradient stops shifting a one-pixel stop seam on stud sides and bores (out/vet/merge-1110-*; wall 7fd5ab17, 789e20db). Mike approved the movers on review."""
+2026-11-10: merged to main in d0e57f2 after rebasing onto ac35f90. Gate 3 rerun on the merge of three fixes (4589 residue trim, 3649/4070 bore stops, 24434 declared ends), before at ac35f90: occt 19 moved / 12 unexpected, naive 19 moved / 11 unexpected, all of them the bore fix's linear-gradient stops shifting a one-pixel stop seam on stud sides and bores (out/vet/merge-1110-*; wall 7fd5ab17, 789e20db). Mike approved the movers on review.
+
+2026-11-10: judged by Mike 2026-11-10 on the declared-ends sheet before merging d0e57f2: the slot's front rim returns. http://orochi.local:8787/to/brick-icons/8173fcaf-6c01-4d16-a1aa-9749e015d04b.png"""
 
 [[defect]]
 id = "20401-silhouette-fill-notches"
