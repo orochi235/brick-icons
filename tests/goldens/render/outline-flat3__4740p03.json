@@ -1,29 +1,30 @@
 {
   "bbox": [
     6.0,
-    21.75,
+    21.7,
     250.0,
     156.33
   ],
   "commands": {
-    "A": 96,
-    "L": 4908,
-    "M": 280,
-    "Z": 277
+    "A": 271,
+    "L": 26040,
+    "M": 527,
+    "Z": 524
   },
   "fills": {
     "#565656": 1,
-    "#767676": 59,
-    "#cccccc": 4,
-    "#cda4de": 119,
+    "#767676": 60,
+    "#cccccc": 5,
+    "#cda4de": 121,
     "#f4f4f4": 59,
-    "gradient": 8,
+    "gradient": 240,
     "none": 4
   },
-  "gradient_stops": 91,
-  "gradients": 10,
+  "gradient_stops": 93,
+  "gradients": 11,
   "lines": 2,
-  "paths": 254,
+  "paths": 490,
+  "raster_error": "resvg not on PATH",
   "transforms": 0,
   "viewBox": "0 0 256 170"
 }

@@ -7,9 +7,9 @@
   ],
   "commands": {
     "A": 96,
-    "L": 325,
-    "M": 64,
-    "Z": 26
+    "L": 264,
+    "M": 65,
+    "Z": 27
   },
   "fills": {
     "#5e5e5e": 2,
@@ -25,6 +25,7 @@
   "gradients": 13,
   "lines": 6,
   "paths": 59,
+  "raster_error": "resvg not on PATH",
   "transforms": 0,
   "viewBox": "0 0 256 170"
 }

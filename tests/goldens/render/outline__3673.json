@@ -7,17 +7,18 @@
   ],
   "commands": {
     "A": 49,
-    "L": 90,
-    "M": 46,
+    "L": 98,
+    "M": 51,
     "Z": 1
   },
   "fills": {
-    "none": 46
+    "none": 51
   },
   "gradient_stops": 0,
   "gradients": 0,
   "lines": 13,
-  "paths": 46,
+  "paths": 51,
+  "raster_error": "resvg not on PATH",
   "transforms": 0,
   "viewBox": "0 0 256 170"
 }

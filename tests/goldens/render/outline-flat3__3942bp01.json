@@ -6,21 +6,23 @@
     164.0
   ],
   "commands": {
-    "A": 159,
-    "L": 145,
-    "M": 44,
-    "Z": 38
+    "A": 181,
+    "L": 2799,
+    "M": 58,
+    "Z": 52
   },
   "fills": {
+    "#000000": 4,
     "#b40000": 13,
     "#cccccc": 1,
-    "gradient": 19,
+    "gradient": 28,
     "none": 7
   },
-  "gradient_stops": 189,
-  "gradients": 21,
+  "gradient_stops": 274,
+  "gradients": 30,
   "lines": 14,
-  "paths": 40,
+  "paths": 53,
+  "raster_error": "resvg not on PATH",
   "transforms": 0,
   "viewBox": "0 0 256 170"
 }

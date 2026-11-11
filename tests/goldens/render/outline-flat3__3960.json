@@ -1,25 +1,26 @@
 {
   "bbox": [
     6.0,
-    13.48,
+    18.2,
     250.0,
     156.56
   ],
   "commands": {
-    "A": 53,
-    "L": 119,
-    "M": 14,
-    "Z": 9
+    "A": 54,
+    "L": 68,
+    "M": 13,
+    "Z": 8
   },
   "fills": {
     "#cccccc": 1,
     "gradient": 3,
     "none": 6
   },
-  "gradient_stops": 37,
+  "gradient_stops": 32,
   "gradients": 4,
   "lines": 2,
   "paths": 10,
+  "raster_error": "resvg not on PATH",
   "transforms": 0,
   "viewBox": "0 0 256 170"
 }

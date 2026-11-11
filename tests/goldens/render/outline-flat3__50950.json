@@ -6,8 +6,8 @@
     164.0
   ],
   "commands": {
-    "A": 10,
-    "L": 51,
+    "A": 11,
+    "L": 52,
     "M": 9,
     "Z": 5
   },
@@ -21,6 +21,7 @@
   "gradients": 1,
   "lines": 1,
   "paths": 9,
+  "raster_error": "resvg not on PATH",
   "transforms": 0,
   "viewBox": "0 0 256 170"
 }

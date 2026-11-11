@@ -20,6 +20,7 @@
   "gradients": 1,
   "lines": 4,
   "paths": 13,
+  "raster_error": "resvg not on PATH",
   "transforms": 0,
   "viewBox": "0 0 256 170"
 }
