@@ -3967,6 +3967,14 @@ status = "open"
 title = "missing one edge outline below the SNOT stud"
 checked = { occt = "c15fa8ce5f00a3074b419228db48a046d04d9e8be5744931379b009cebc566e2" }
 filed = "2026-09-25"
+notes = """
+2026-11-11, measured at HEAD ee47b38. The missing line is the ledge-top/wall crease, 3D y=20 z=-6, x -10..10 (rect.dat's edge at 0 20 -8); occt draws x -10..-6 and 6..10 and the orphan cull then peels both stubs. The middle 12 LDU is absent from HLR's visible AND hidden sets, because the shape has no crease edge there: four faces meet on it -- the wall (z=-6, out), a buried tri below it (z=-6, in), the ledge top (y=20) and the hidden recess floor (line 37, 4 16 6 20 -2 6 20 -6 -6 20 -6 -6 20 -2, y=20) -- and sewing pairs them as two coplanar pairs. With unify skipped the edge exists twice, each copy flat between opposite-facing coplanar faces, and HLR still returns no visible fragment; with unify on (production) the copies are merged away entirely. Deleting line 37 from a copy of the .dat restores the full line (http://orochi.local:8787/to/brick-icons/0b3a16b3-2310-4b33-a367-27b5ce24291b.png). The 2026-09-01 note naming (6,20,-2)->(6,4,-2) is a different edge.
+
+Tried and failed (patches in out/line-gap/patches/):
+- fill the gap from the line mask's nudged copy (_straight_lines), which HLR shows fully visible: fixes 4070 (gate 1 http://orochi.local:8787/to/brick-icons/4485a65a-efc2-4709-aa8a-ca32ec93b9a3.png) but the copy is also visible where a type-2 line runs UNDER a stud (4739b's x=15 and x=35 panel lines), so it drew stray ends at those stud bases (2 comp). Restricting it to loci with a shape fragment removed a 4070 stub from a buried recess line, not the 4739b case.
+- fill only where the shape has a hidden fragment: there is none (see above), fixes nothing.
+- pick declared lines from HLR's Rg1 (smooth) set: empty, no edge carries a continuity flag.
+Not tried: telling sewing/unify to keep a declared type-2 line as an edge between non-coplanar faces, or settling why the nudged copy reads visible inside 4739b's studs."""
 
 [[defect]]
 id = "3039pc3-missing-quad-in-yellow-spaceship"
@@ -4568,3 +4576,21 @@ notes = """
 Cause (measured): the contour snaps onto a fitted limb within quadric.limb_candidate's snap tolerance, capped at 6 px. The two hemispheres share one fit, but each region makes its own candidate and occt.visible_segments keeps the first by ellipse key. The coarse hemisphere (26.6 deg facets) sags 27 canvas px inside the limb, against 3.4 px for the fine one, so its chord vertices miss the snap and stay chords.
 
 Tried (not committed): one candidate per shared fit from the pool's coarsest region, with the cap raised to 1.25x that step's chord sag. It cleared the silhouette (5 comp) but stepped the stroked outline out at the bottom between two kinks in occt and white-occt (7 and 13 comp; wall: 74be202c). A tolerance that wide snaps the stud-cutout ring's vertices near the bottom limb too, so the next attempt has to bound the snap to the fitted region's own vertices rather than widen it."""
+
+[[defect]]
+id = "4070-snot-stud-outer-rim-faceted"
+part = "4070"
+engines = ["occt"]
+status = "open"
+title = "the SNOT stud's outer cylinder silhouette is faceted, with kinks along it"
+filed = "2026-11-11"
+notes = "Reported by Mike 2026-11-11 at HEAD ee47b38, on an 800 px occt outline-flat3 render: the side stud's outer limb has visible kinks rather than one smooth curve. Present with and without the ledge-crease experiments of the same day, so it is not theirs. Cause not looked at. Crop: http://orochi.local:8787/to/brick-icons/35cd8701-bc70-42cd-8908-e2071d1b0110.png"
+
+[[defect]]
+id = "4739b-curved-side-missing-outline"
+part = "4739b"
+engines = ["occt"]
+status = "open"
+title = "the lid's curved end edge has no outline except along its straight portion"
+filed = "2026-11-11"
+notes = "Reported by Mike 2026-11-11 at HEAD ee47b38: the curved edge of the lid's side is drawn smooth (not tessellated) but carries no stroke except where it runs straight. Present in the before panel of http://orochi.local:8787/to/brick-icons/50463878-2f7e-494c-b3c1-1f0fb323505a.png, i.e. at HEAD with no experiment armed. Cause not looked at."
