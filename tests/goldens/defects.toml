@@ -3958,6 +3958,7 @@ status = "open"
 title = "missing several edge outlines"
 checked = { occt = "bb4ac3a188b8a5fa753dcd2a1e3a0a4b5afbb6675e1e85ca57cc331ac9fdb146" }
 filed = "2026-09-25"
+notes = "2026-11-11, measured at HEAD 96cbaee. The sticker (191936e, placed by the shortcut at x=10) is a 16 x 24 LDU slab 0.25 LDU proud of the side face, covering z -6..10 over the full height y 0..24; it does not reach the foot's protruding 4 LDU (z -10..-6), and LDView agrees (http://orochi.local:8787/to/brick-icons/32a73bff-2704-4a34-bc70-3f7e9e59473b.png). Its box5-12 body declares no edges. Per authored line on the side face, shape fragments vs the line mask's nudged copy: the top edge (10,0,-6)->(10,0,10) has NO shape fragment but its nudged copy is visible end to end -- the slab's top face is coplanar with the brick top, the same tie that loses 4070's ledge crease (see 4070-missing-one-edge-outline-below). The right vertical (10,y,10) and the bottom edge's far 80% are hidden in both, genuinely, behind the 0.25 LDU slab; the slab's own corners are undeclared, so nothing replaces them."
 
 [[defect]]
 id = "4070-missing-one-edge-outline-below"
